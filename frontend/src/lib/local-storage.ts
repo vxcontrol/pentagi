@@ -24,6 +24,15 @@ export function getStorageItem<T>(key: string, schema: z.ZodType<T>): null | T {
     }
 }
 
+/** Remove `key` from `localStorage`. Silently no-ops on failure. */
+export function removeStorageItem(key: string): void {
+    try {
+        localStorage.removeItem(key);
+    } catch {
+        /* localStorage may be unavailable */
+    }
+}
+
 /** Serialize `value` to JSON and store it in `localStorage`. Silently no-ops on failure. */
 export function setStorageItem(key: string, value: unknown): void {
     try {

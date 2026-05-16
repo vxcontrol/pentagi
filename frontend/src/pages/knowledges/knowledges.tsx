@@ -1,28 +1,33 @@
 import type { ColumnDef } from '@tanstack/react-table';
 
-import { ArrowDown, ArrowUp, Ellipsis, LibraryBig, Loader2, Pencil, Plus, Trash } from 'lucide-react';
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Ellipsis, LibraryBig, Loader2, Pencil, PencilLine, Plus, Trash } from 'lucide-react';
+import { useCallback, useRef, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 
 import type { BadgeVariant } from '@/components/ui/badge';
 
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
+import { HeaderButton } from '@/components/shared/header-button';
+import { InlineEditInput } from '@/components/shared/inline-edit';
 import { Badge } from '@/components/ui/badge';
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage } from '@/components/ui/breadcrumb';
 import { Button } from '@/components/ui/button';
 import { ContextMenuItem, ContextMenuSeparator } from '@/components/ui/context-menu';
-import { DataTable } from '@/components/ui/data-table';
+import { DataTable, DataTableColumnHeader } from '@/components/ui/data-table';
 import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
+    DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Separator } from '@/components/ui/separator';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { StatusCard } from '@/components/ui/status-card';
 import { KnowledgeDocType } from '@/graphql/types';
-import { cycleColumnSort } from '@/lib/table-sort';
+import { useTableState } from '@/hooks/use-table-state';
+import { mergeHrefWithSearchParams } from '@/lib/url-params';
 import { type Knowledge, useKnowledges } from '@/providers/knowledges-provider';
 
 const docTypeBadgeVariant: Record<KnowledgeDocType, BadgeVariant> = {
@@ -49,19 +54,73 @@ const docTypeSubtype = (k: Knowledge): null | string => {
 
 const Knowledges = () => {
     const navigate = useNavigate();
-    const { deleteKnowledge, isLoading, knowledges } = useKnowledges();
+    const location = useLocation();
+    const { deleteKnowledge, isLoading, knowledges, updateKnowledge } = useKnowledges();
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
     const [deletingKnowledge, setDeletingKnowledge] = useState<Knowledge | null>(null);
     const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
+    const [editingKnowledgeId, setEditingKnowledgeId] = useState<null | string>(null);
+    const [isRenameLoading, setIsRenameLoading] = useState(false);
+    const editingInputRef = useRef<HTMLInputElement>(null);
 
-    const handleOpen = (id: string) => {
-        navigate(`/knowledges/${id}`);
-    };
+    const { filter, setFilter } = useTableState();
 
-    const handleDeleteDialogOpen = (knowledge: Knowledge) => {
+    const handleOpen = useCallback(
+        (id: string) => {
+            navigate(mergeHrefWithSearchParams(`/knowledges/${id}`, new URLSearchParams(location.search)));
+        },
+        [navigate, location.search],
+    );
+
+    const handleDeleteDialogOpen = useCallback((knowledge: Knowledge) => {
         setDeletingKnowledge(knowledge);
         setIsDeleteDialogOpen(true);
-    };
+    }, []);
+
+    const handleKnowledgeRenameStart = useCallback((knowledge: Knowledge) => {
+        setEditingKnowledgeId(knowledge.id);
+    }, []);
+
+    const handleKnowledgeRenameCancel = useCallback(() => {
+        setEditingKnowledgeId(null);
+    }, []);
+
+    const handleKnowledgeRenameSave = useCallback(async () => {
+        const newQuestion = editingInputRef.current?.value.trim();
+
+        if (!editingKnowledgeId || !newQuestion) {
+            return;
+        }
+
+        const knowledge = knowledges.find((k) => k.id === editingKnowledgeId);
+
+        if (!knowledge) {
+            return;
+        }
+
+        if (newQuestion === knowledge.question) {
+            setEditingKnowledgeId(null);
+
+            return;
+        }
+
+        setIsRenameLoading(true);
+
+        try {
+            // Backend requires `content` on update (it always re-embeds), so we
+            // pass it through unchanged from the cached document.
+            await updateKnowledge(editingKnowledgeId, {
+                content: knowledge.content,
+                question: newQuestion,
+            });
+            toast.success('Knowledge renamed successfully');
+            setEditingKnowledgeId(null);
+        } catch {
+            // Error already handled in provider with toast
+        } finally {
+            setIsRenameLoading(false);
+        }
+    }, [editingKnowledgeId, knowledges, updateKnowledge]);
 
     const handleDelete = async () => {
         if (!deletingKnowledge) {
@@ -111,32 +170,39 @@ const Knowledges = () => {
                     </div>
                 );
             },
-            header: ({ column }) => {
-                const sorted = column.getIsSorted();
-
-                return (
-                    <Button
-                        className="text-muted-foreground hover:text-primary flex items-center gap-2 p-0 no-underline hover:no-underline"
-                        onClick={() => cycleColumnSort(column)}
-                        variant="link"
-                    >
-                        Type
-                        {sorted === 'asc' ? (
-                            <ArrowDown className="size-4" />
-                        ) : sorted === 'desc' ? (
-                            <ArrowUp className="size-4" />
-                        ) : null}
-                    </Button>
-                );
-            },
+            header: ({ column }) => (
+                <DataTableColumnHeader
+                    column={column}
+                    title="Type"
+                />
+            ),
             maxSize: 180,
+            meta: { columnMenuLabel: 'Type', searchable: true },
             minSize: 110,
             size: 130,
         },
         {
             accessorKey: 'question',
             cell: ({ row }) => {
+                const knowledge = row.original;
+                const isEditing = editingKnowledgeId === knowledge.id;
                 const question = row.getValue('question') as string;
+
+                if (isEditing) {
+                    return (
+                        <div onClick={(e) => e.stopPropagation()}>
+                            <InlineEditInput
+                                autoFocus
+                                busy={isRenameLoading}
+                                defaultValue={question}
+                                inputRef={editingInputRef}
+                                onCancel={handleKnowledgeRenameCancel}
+                                onSave={handleKnowledgeRenameSave}
+                                placeholder="Knowledge question"
+                            />
+                        </div>
+                    );
+                }
 
                 return (
                     <div
@@ -147,24 +213,13 @@ const Knowledges = () => {
                     </div>
                 );
             },
-            header: ({ column }) => {
-                const sorted = column.getIsSorted();
-
-                return (
-                    <Button
-                        className="text-muted-foreground hover:text-primary flex items-center gap-2 p-0 no-underline hover:no-underline"
-                        onClick={() => cycleColumnSort(column)}
-                        variant="link"
-                    >
-                        Question
-                        {sorted === 'asc' ? (
-                            <ArrowDown className="size-4" />
-                        ) : sorted === 'desc' ? (
-                            <ArrowUp className="size-4" />
-                        ) : null}
-                    </Button>
-                );
-            },
+            header: ({ column }) => (
+                <DataTableColumnHeader
+                    column={column}
+                    title="Question"
+                />
+            ),
+            meta: { columnMenuLabel: 'Question', searchable: true },
             minSize: 180,
             size: 280,
         },
@@ -187,6 +242,7 @@ const Knowledges = () => {
                 <span className="text-muted-foreground inline-flex items-center text-sm font-medium">Preview</span>
             ),
             maxSize: 800,
+            meta: { columnMenuLabel: 'Preview', searchable: true },
             minSize: 160,
             size: 380,
         },
@@ -214,9 +270,14 @@ const Knowledges = () => {
                 );
             },
             enableSorting: false,
-            header: () => null,
+            header: () => (
+                <span className="text-muted-foreground inline-flex items-center justify-end text-sm font-medium">
+                    Flags
+                </span>
+            ),
             id: 'flags',
             maxSize: 200,
+            meta: { columnMenuLabel: 'Flags' },
             minSize: 110,
             size: 150,
         },
@@ -245,6 +306,11 @@ const Knowledges = () => {
                                     <Pencil />
                                     Edit
                                 </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleKnowledgeRenameStart(k)}>
+                                    <PencilLine />
+                                    Rename
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
                                 <DropdownMenuItem
                                     disabled={deletingIds.has(k.id)}
                                     onClick={() => handleDeleteDialogOpen(k)}
@@ -282,6 +348,10 @@ const Knowledges = () => {
                 <Pencil />
                 Edit
             </ContextMenuItem>
+            <ContextMenuItem onClick={() => handleKnowledgeRenameStart(k)}>
+                <PencilLine />
+                Rename
+            </ContextMenuItem>
             <ContextMenuSeparator />
             <ContextMenuItem
                 disabled={deletingIds.has(k.id)}
@@ -295,30 +365,28 @@ const Knowledges = () => {
 
     const pageHeader = (
         <header className="bg-background sticky top-0 z-10 flex h-12 w-full shrink-0 items-center gap-2 border-b transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
-            <div className="flex items-center gap-2 px-4">
-                <SidebarTrigger className="-ml-1" />
+            <div className="flex min-w-0 flex-1 items-center gap-2 px-4">
+                <SidebarTrigger className="-ml-1 shrink-0" />
                 <Separator
-                    className="h-4"
+                    className="h-4 shrink-0"
                     orientation="vertical"
                 />
-                <Breadcrumb>
-                    <BreadcrumbList>
-                        <BreadcrumbItem>
-                            <LibraryBig className="size-4" />
-                            <BreadcrumbPage>Knowledges</BreadcrumbPage>
+                <Breadcrumb className="min-w-0 flex-1">
+                    <BreadcrumbList className="min-w-0 flex-nowrap">
+                        <BreadcrumbItem className="min-w-0">
+                            <LibraryBig className="size-4 shrink-0" />
+                            <BreadcrumbPage className="min-w-0 truncate">Knowledges</BreadcrumbPage>
                         </BreadcrumbItem>
                     </BreadcrumbList>
                 </Breadcrumb>
             </div>
-            <div className="ml-auto flex items-center gap-2 px-4">
-                <Button
+            <div className="flex shrink-0 items-center gap-2 px-4">
+                <HeaderButton
+                    icon={<Plus />}
+                    label="New Knowledge"
                     onClick={() => navigate('/knowledges/new')}
-                    size="sm"
                     variant="secondary"
-                >
-                    <Plus />
-                    New Knowledge
-                </Button>
+                />
             </div>
         </header>
     );
@@ -369,9 +437,14 @@ const Knowledges = () => {
                 <DataTable
                     columns={columns}
                     data={knowledges}
-                    filterColumn="question"
                     filterPlaceholder="Filter knowledge documents..."
-                    onRowClick={(k) => handleOpen(k.id)}
+                    filterValue={filter}
+                    onFilterChange={setFilter}
+                    onRowClick={(k) => {
+                        if (editingKnowledgeId !== k.id) {
+                            handleOpen(k.id);
+                        }
+                    }}
                     renderRowContextMenu={renderRowContextMenu}
                 />
 

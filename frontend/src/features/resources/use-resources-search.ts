@@ -1,43 +1,37 @@
-import { zodResolver } from '@hookform/resolvers/zod';
-import { useCallback } from 'react';
-import { useForm, type UseFormReturn } from 'react-hook-form';
-import { z } from 'zod';
-
-import { useDebouncedValue } from '@/hooks/use-debounced-value';
+import { useTableState } from '@/hooks/use-table-state';
 
 import { SEARCH_DEBOUNCE_MS } from './resources-constants';
 
-const resourcesSearchFormSchema = z.object({
-    search: z.string(),
-});
-
-export type ResourcesSearchFormValues = z.infer<typeof resourcesSearchFormSchema>;
-
 interface UseResourcesSearchResult {
     debouncedQuery: string;
-    form: UseFormReturn<ResourcesSearchFormValues>;
     rawQuery: string;
     resetSearch: () => void;
+    setQuery: (value: string) => void;
 }
 
-/** Owns the search form and exposes a debounced version of the typed query. */
+/**
+ * Search state for the Resources file manager.
+ *
+ * Backed by `useTableState` so the query lives in the URL (`?q=`) with a
+ * localStorage fallback — the FileManager survives reloads with the same
+ * filter active and shareable links keep working. The debounce delay is
+ * preserved (`SEARCH_DEBOUNCE_MS`) so the existing client-side tree filter
+ * still gets the throttled value it expects.
+ *
+ * `clearPageOnFilterChange: false` because Resources has no `?page=` to
+ * reset — leaving the default would also work (deleting a non-existent
+ * param is a no-op), but the explicit setting documents intent.
+ */
 export const useResourcesSearch = (): UseResourcesSearchResult => {
-    const form = useForm<ResourcesSearchFormValues>({
-        defaultValues: { search: '' },
-        resolver: zodResolver(resourcesSearchFormSchema),
+    const { debouncedFilter, filter, resetFilter, setFilter } = useTableState({
+        clearPageOnFilterChange: false,
+        debounceMs: SEARCH_DEBOUNCE_MS,
     });
 
-    const rawQuery = form.watch('search');
-    const debouncedQuery = useDebouncedValue(rawQuery, SEARCH_DEBOUNCE_MS);
-
-    const resetSearch = useCallback(() => {
-        form.reset({ search: '' });
-    }, [form]);
-
     return {
-        debouncedQuery,
-        form,
-        rawQuery,
-        resetSearch,
+        debouncedQuery: debouncedFilter,
+        rawQuery: filter,
+        resetSearch: resetFilter,
+        setQuery: setFilter,
     };
 };

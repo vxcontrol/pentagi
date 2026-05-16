@@ -3,6 +3,7 @@ import { Save } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { type FieldPath, type SubmitHandler, useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 import { z } from 'zod';
 
 import type {
@@ -11,14 +12,14 @@ import type {
     UpdateKnowledgeDocumentInput,
 } from '@/graphql/types';
 
-import { UnsavedChangesDialog } from '@/components/shared/unsaved-changes-dialog';
-import { Button } from '@/components/ui/button';
+import { HeaderButton } from '@/components/shared/header-button';
+import { UnsavedChangesDialog, useUnsavedChangesGuard } from '@/components/shared/unsaved-changes';
 import { Form } from '@/components/ui/form';
 import { Spinner } from '@/components/ui/spinner';
-import { KnowledgeAnswerType, KnowledgeDocType, KnowledgeGuideType } from '@/graphql/types';
+import { KnowledgeAnswerType, KnowledgeDocType, KnowledgeGuideType, useAnonymizeTextMutation } from '@/graphql/types';
 import { useBreakpoint } from '@/hooks/use-breakpoint';
-import { useUnsavedChangesGuard } from '@/hooks/use-unsaved-changes-guard';
 import { Log } from '@/lib/log';
+import { useUser } from '@/providers/user-provider';
 
 import { KnowledgeFormLayoutDesktop, KnowledgeFormLayoutMobile } from './knowledge-form-layout';
 import { KnowledgeHeader } from './knowledge-header';
@@ -59,7 +60,9 @@ export const formSchema = z
             .string()
             .trim()
             .min(1, { message: 'Content is required' })
-            .max(KNOWLEDGE_LIMITS.content, { message: `Content must be ${KNOWLEDGE_LIMITS.content} characters or fewer` }),
+            .max(KNOWLEDGE_LIMITS.content, {
+                message: `Content must be ${KNOWLEDGE_LIMITS.content} characters or fewer`,
+            }),
         description: optionalTrimmed(KNOWLEDGE_LIMITS.description, 'Description'),
         docType: z.nativeEnum(KnowledgeDocType),
         guideType: z.nativeEnum(KnowledgeGuideType).optional(),
@@ -67,7 +70,9 @@ export const formSchema = z
             .string()
             .trim()
             .min(1, { message: 'Question is required' })
-            .max(KNOWLEDGE_LIMITS.question, { message: `Question must be ${KNOWLEDGE_LIMITS.question} characters or fewer` }),
+            .max(KNOWLEDGE_LIMITS.question, {
+                message: `Question must be ${KNOWLEDGE_LIMITS.question} characters or fewer`,
+            }),
     })
     .superRefine((value, ctx) => {
         const requiredByDocType: Partial<Record<KnowledgeDocType, { field: FieldPath<FormValues>; message: string }>> =
@@ -187,14 +192,17 @@ interface KnowledgeFormProps {
     initialValues: FormValues;
     isNew: boolean;
     knowledge?: KnowledgeDocumentFragmentFragment | null;
-    knowledgeName: null | string;
     onSubmit: (values: FormValues, dirtyFields: DirtyFlags) => Promise<SubmitResult>;
 }
 
-export const KnowledgeForm = ({ initialValues, isNew, knowledge, knowledgeName, onSubmit }: KnowledgeFormProps) => {
+export const KnowledgeForm = ({ initialValues, isNew, knowledge, onSubmit }: KnowledgeFormProps) => {
     const navigate = useNavigate();
     const { isDesktop } = useBreakpoint();
     const [isSaving, setIsSaving] = useState(false);
+    const [isAnonymizing, setIsAnonymizing] = useState(false);
+    const [anonymizeMutation] = useAnonymizeTextMutation();
+    const { authInfo } = useUser();
+    const canAnonymize = authInfo?.privileges?.includes('anonymize.call') ?? false;
 
     const form = useForm<FormValues>({
         defaultValues: initialValues,
@@ -204,7 +212,20 @@ export const KnowledgeForm = ({ initialValues, isNew, knowledge, knowledgeName, 
         // markdown editor) — same UX after the first interaction, no waste
         // on initial mount or untouched fields.
         mode: 'onTouched',
+        resetOptions: {
+            // When `values` changes (e.g. a GraphQL subscription pushes an
+            // updated document after an inline rename from the header),
+            // refresh the form's defaults but keep any unsaved edits the
+            // user is still working on. Without this, an external update
+            // would silently wipe their in-flight changes.
+            keepDirtyValues: true,
+        },
         resolver: zodResolver(formSchema),
+        // `values` reactively syncs the form with `initialValues`. The page
+        // recomputes `initialValues` from `knowledge` whenever the cache
+        // refreshes (rename, refetch, etc.), and RHF reapplies the new
+        // values on top of the form respecting `resetOptions` above.
+        values: initialValues,
     });
 
     const { control, formState, handleSubmit, reset } = form;
@@ -313,15 +334,54 @@ export const KnowledgeForm = ({ initialValues, isNew, knowledge, knowledgeName, 
     const canSubmit = !isSaving && isValid && (isNew || isDirty);
 
     const saveButton = (
-        <Button
+        <HeaderButton
             disabled={!canSubmit}
-            size="sm"
+            icon={isSaving ? <Spinner variant="circle" /> : <Save aria-hidden="true" />}
+            label={isNew ? 'Create' : 'Save'}
             type="submit"
-        >
-            {isSaving ? <Spinner variant="circle" /> : <Save aria-hidden="true" />}
-            {isNew ? 'Create' : 'Save'}
-        </Button>
+        />
     );
+
+    // Subscribe to `content` so the anonymize button toggles its disabled
+    // state as the user types. `form.watch('content')` triggers a re-render
+    // on every keystroke, which is what we want for snappy UX.
+    const contentValue = form.watch('content');
+    const isAnonymizeDisabled = isAnonymizing || isSaving || !contentValue?.trim();
+
+    const handleAnonymize = useCallback(async () => {
+        const currentContent = form.getValues('content');
+
+        if (!currentContent?.trim()) {
+            return;
+        }
+
+        setIsAnonymizing(true);
+
+        try {
+            const { data } = await anonymizeMutation({ variables: { text: currentContent } });
+            const anonymizedContent = data?.anonymizeText;
+
+            if (anonymizedContent == null) {
+                toast.error('Anonymizer returned no result');
+
+                return;
+            }
+
+            if (anonymizedContent === currentContent) {
+                toast.info('No sensitive data detected');
+
+                return;
+            }
+
+            form.setValue('content', anonymizedContent, { shouldDirty: true, shouldValidate: true });
+            toast.success('Content anonymized');
+        } catch (error) {
+            Log.error('Failed to anonymize content', error);
+            toast.error(error instanceof Error ? error.message : 'Failed to anonymize content');
+        } finally {
+            setIsAnonymizing(false);
+        }
+    }, [anonymizeMutation, form]);
 
     return (
         <>
@@ -335,8 +395,13 @@ export const KnowledgeForm = ({ initialValues, isNew, knowledge, knowledgeName, 
                     onSubmit={handleSubmit(onSubmitWithGuard)}
                 >
                     <KnowledgeHeader
+                        canAnonymize={canAnonymize}
+                        isAnonymizeDisabled={isAnonymizeDisabled}
+                        isAnonymizing={isAnonymizing}
                         isNew={isNew}
-                        knowledgeName={knowledgeName}
+                        knowledge={knowledge}
+                        onAnonymize={handleAnonymize}
+                        onBeforeNavigateAway={() => skipNextBlockRef.current()}
                         saveButton={saveButton}
                     />
                     {isDesktop ? (

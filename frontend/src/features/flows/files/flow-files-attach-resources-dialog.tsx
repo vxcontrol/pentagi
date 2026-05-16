@@ -2,9 +2,7 @@ import { FolderInput, Search, X } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 
 import { FileManager, type FileNode } from '@/components/shared/file-manager';
-import { OverwriteConfirmDialog } from '@/components/shared/overwrite-confirm-dialog';
-import { OverwriteCtaButtons } from '@/components/shared/overwrite-cta-buttons';
-import { useOverwriteAction } from '@/components/shared/use-overwrite-action';
+import { OverwriteButtons, OverwriteDialog, useOverwrite } from '@/components/shared/overwrite';
 import { Button } from '@/components/ui/button';
 import {
     Dialog,
@@ -86,7 +84,7 @@ const FlowFilesAttachResourcesDialogBody = ({
      * the backend) and the resource paths (used by preflight against the
      * flow's existing cache mirror).
      */
-    const overwriteAction = useOverwriteAction<AttachPlan>({
+    const overwriteAction = useOverwrite<AttachPlan>({
         execute: async ({ ids }, force) => attach({ ids: [...ids], shouldOverwrite: force }),
         findConflicts: ({ resourcePaths }) => findAttachConflicts(resourcePaths, cachedFiles),
         onSuccess: () => {
@@ -253,7 +251,7 @@ const FlowFilesAttachResourcesDialogBody = ({
                         >
                             Cancel
                         </Button>
-                        <OverwriteCtaButtons
+                        <OverwriteButtons
                             isDisabled={isAttachDisabled}
                             isProcessing={isAttaching}
                             onOverwrite={handleOverwrite}
@@ -266,7 +264,7 @@ const FlowFilesAttachResourcesDialogBody = ({
                 </DialogFooter>
             </DialogContent>
 
-            <OverwriteConfirmDialog
+            <OverwriteDialog
                 conflicts={overwriteAction.conflicts}
                 onCancel={overwriteAction.resetConflicts}
                 onReplaceAll={overwriteAction.handleReplaceAll}

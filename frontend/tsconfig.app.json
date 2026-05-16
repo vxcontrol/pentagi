@@ -25,12 +25,8 @@
 
         "baseUrl": ".",
         "paths": {
-            "@/*": ["./src/*"],
-            "@env": ["./env.ts"],
-            "@pkg": ["./package.json"],
-
-            "@/ui/*": ["./src/components/ui/*"]
+            "@/*": ["./src/*"]
         }
     },
-    "include": ["src", "./env.ts", "types/**/*.d.ts"]
+    "include": ["src", "types/**/*.d.ts"]
 }

@@ -64,7 +64,6 @@ export default defineConfig(({ mode }) => {
                     manualChunks: {
                         'apollo-client': ['@apollo/client', 'graphql', 'graphql-ws'],
                         markdown: ['react-markdown', 'rehype-highlight', 'rehype-raw', 'rehype-slug', 'remark-gfm'],
-                        pdf: ['html2pdf.js'],
                         'radix-ui': [
                             '@radix-ui/react-accordion',
                             '@radix-ui/react-avatar',

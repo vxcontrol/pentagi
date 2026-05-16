@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import type { OverwriteConflict } from '@/components/shared/overwrite-confirm-dialog';
+import type { OverwriteConflict } from './overwrite-dialog';
 
 /**
  * Discriminated outcome of a server action that supports an overwrite flag.
@@ -23,14 +23,14 @@ export type OverwriteOutcome =
  * Anonymous fallback descriptor used when a 409 sneaks through after a clean
  * preflight and the caller didn't provide `synthesizeFallbackConflicts`. Falls
  * back to the count-based copy ("N items already exist...") in
- * `OverwriteConfirmDialog`.
+ * `OverwriteDialog`.
  */
 const ANONYMOUS_FALLBACK_CONFLICT: OverwriteConflict = {
     destination: '',
     destinationName: 'an item',
 };
 
-interface UseOverwriteActionOptions<TPlan> {
+interface UseOverwriteOptions<TPlan> {
     /**
      * Execute the REST call. Receives the plan + a boolean `force` flag.
      * Should return a discriminated outcome — see `OverwriteOutcome`.
@@ -39,7 +39,7 @@ interface UseOverwriteActionOptions<TPlan> {
     /**
      * Pure function: inspect the local snapshot and return any destinations
      * that would conflict. Empty array → primary execute proceeds with
-     * `force=false`; non-empty → the OverwriteConfirmDialog is opened
+     * `force=false`; non-empty → the OverwriteDialog is opened
      * pre-populated with these descriptors.
      */
     findConflicts: (plan: TPlan) => OverwriteConflict[];
@@ -54,22 +54,22 @@ interface UseOverwriteActionOptions<TPlan> {
     synthesizeFallbackConflicts?: (plan: TPlan) => OverwriteConflict[];
 }
 
-interface UseOverwriteActionResult<TPlan> {
-    /** Live conflict descriptors. Wire to `<OverwriteConfirmDialog conflicts={…} />`. */
+interface UseOverwriteResult<TPlan> {
+    /** Live conflict descriptors. Wire to `<OverwriteDialog conflicts={…} />`. */
     conflicts: OverwriteConflict[];
     /**
      * Execute the action with `force=true` immediately, bypassing the
      * preflight and the conflict prompt. Wire to the secondary CTA.
      */
     forceExecute: (plan: TPlan) => Promise<void>;
-    /** Wire to the `onReplaceAll` handler of `<OverwriteConfirmDialog />`. */
+    /** Wire to the `onReplaceAll` handler of `<OverwriteDialog />`. */
     handleReplaceAll: () => Promise<void>;
     /**
      * Execute the action with the preflight + race-fallback workflow. Wire
      * to the primary CTA.
      */
     primaryExecute: (plan: TPlan) => Promise<void>;
-    /** Wire to the `onCancel` handler of `<OverwriteConfirmDialog />`. */
+    /** Wire to the `onCancel` handler of `<OverwriteDialog />`. */
     resetConflicts: () => void;
 }
 
@@ -80,7 +80,7 @@ interface UseOverwriteActionResult<TPlan> {
  * Workflow:
  *   1. The user clicks the **primary CTA** → `primaryExecute(plan)` runs.
  *      `findConflicts` is consulted on the local snapshot first; if anything
- *      collides, the OverwriteConfirmDialog opens with those descriptors.
+ *      collides, the OverwriteDialog opens with those descriptors.
  *      Otherwise `execute(plan, false)` is dispatched. A 409 from the server
  *      (race) auto-opens the dialog with `synthesizeFallbackConflicts` (or an
  *      anonymous fallback).
@@ -95,9 +95,7 @@ interface UseOverwriteActionResult<TPlan> {
  * to wrap them in `useCallback`. This keeps the hook ergonomic at the call
  * site without sacrificing reference stability for the returned actions.
  */
-export const useOverwriteAction = <TPlan>(
-    options: UseOverwriteActionOptions<TPlan>,
-): UseOverwriteActionResult<TPlan> => {
+export const useOverwrite = <TPlan>(options: UseOverwriteOptions<TPlan>): UseOverwriteResult<TPlan> => {
     const [conflicts, setConflicts] = useState<OverwriteConflict[]>([]);
     const [pendingPlan, setPendingPlan] = useState<null | TPlan>(null);
 

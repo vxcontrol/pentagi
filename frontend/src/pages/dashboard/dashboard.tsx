@@ -1,12 +1,12 @@
 import { LayoutDashboard } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage } from '@/components/ui/breadcrumb';
 import { Separator } from '@/components/ui/separator';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { UsageStatsPeriod } from '@/graphql/types';
-import { getPeriodStorageKey } from '@/lib/storage-keys';
+import { usePageStorageKeys } from '@/hooks/use-page-storage-keys';
 import { DashboardAnalytics } from '@/pages/dashboard/dashboard-analytics';
 import { DashboardOverview } from '@/pages/dashboard/dashboard-overview';
 
@@ -41,7 +41,7 @@ const savePeriod = (storageKey: string, value: UsageStatsPeriod): void => {
 };
 
 const Dashboard = () => {
-    const periodStorageKey = useMemo(() => getPeriodStorageKey(), []);
+    const { period: periodStorageKey } = usePageStorageKeys();
     const [activeTab, setActiveTab] = useState('analytics');
     const [period, setPeriod] = useState<UsageStatsPeriod>(() => loadPeriod(periodStorageKey));
 

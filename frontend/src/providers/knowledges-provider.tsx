@@ -46,8 +46,13 @@ export const KnowledgesProvider = ({ children }: KnowledgesProviderProps) => {
 
     const shouldFetch = Boolean(authInfo && authInfo.type !== 'guest' && isAuthenticated());
 
+    // Override the client's default `nextFetchPolicy: 'cache-first'`: since
+    // subscriptions are scoped to this provider, the cache can drift while the
+    // user is on other pages (AI agents write documents during flow runs).
+    // Re-mounting the provider on return to /knowledges should refresh.
     const { data, loading: isLoading } = useKnowledgeDocumentsQuery({
         fetchPolicy: 'cache-and-network',
+        nextFetchPolicy: 'cache-and-network',
         skip: !shouldFetch,
         variables: { withContent: true },
     });

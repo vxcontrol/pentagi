@@ -35,6 +35,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { StatusCard } from '@/components/ui/status-card';
 import { useDeletePromptMutation, useSettingsPromptsQuery } from '@/graphql/types';
+import { usePageStorageKeys } from '@/hooks/use-page-storage-keys';
 // Types for table data
 type AgentPromptTableData = {
     displayName: string; // Formatted display name
@@ -69,6 +70,10 @@ const SettingsPrompts = () => {
     const { data, error, loading: isLoading } = useSettingsPromptsQuery();
     const [deletePrompt, { loading: isDeleteLoading }] = useDeletePromptMutation();
     const navigate = useNavigate();
+    // Shared base key for the route; each DataTable appends its own suffix so
+    // sorting / column visibility / search-column narrowing live in distinct
+    // slots even though the page mounts two tables.
+    const { table: tableStorageBase } = usePageStorageKeys();
 
     // Reset dialog states
     const [resetDialogOpen, setResetDialogOpen] = useState(false);
@@ -357,6 +362,7 @@ const SettingsPrompts = () => {
                     </Button>
                 );
             },
+            meta: { columnMenuLabel: 'Agent Name', searchable: true },
             size: 200,
         },
         {
@@ -371,6 +377,7 @@ const SettingsPrompts = () => {
                 );
             },
             header: 'System Prompt',
+            meta: { columnMenuLabel: 'System Prompt', searchable: true },
             size: 100,
         },
         {
@@ -385,6 +392,7 @@ const SettingsPrompts = () => {
                 );
             },
             header: 'Human Prompt',
+            meta: { columnMenuLabel: 'Human Prompt', searchable: true },
             size: 100,
         },
         {
@@ -527,6 +535,7 @@ const SettingsPrompts = () => {
                     </Button>
                 );
             },
+            meta: { columnMenuLabel: 'Tool Name', searchable: true },
             size: 300,
         },
         {
@@ -541,6 +550,7 @@ const SettingsPrompts = () => {
                 );
             },
             header: 'Prompt',
+            meta: { columnMenuLabel: 'Prompt', searchable: true },
             size: 100,
         },
         {
@@ -851,11 +861,11 @@ const SettingsPrompts = () => {
                         <DataTable<AgentPromptTableData>
                             columns={agentColumns}
                             data={agentPrompts}
-                            filterColumn="displayName"
-                            filterPlaceholder="Filter agent names..."
+                            filterPlaceholder="Filter agents..."
                             initialPageSize={1000}
                             renderRowContextMenu={renderAgentRowContextMenu}
                             renderSubComponent={renderAgentSubComponent}
+                            storageKey={`${tableStorageBase}:agents`}
                         />
                     </div>
                 )}
@@ -872,11 +882,11 @@ const SettingsPrompts = () => {
                         <DataTable<ToolPromptTableData>
                             columns={toolColumns}
                             data={toolPrompts}
-                            filterColumn="displayName"
-                            filterPlaceholder="Filter tool names..."
+                            filterPlaceholder="Filter tools..."
                             initialPageSize={1000}
                             renderRowContextMenu={renderToolRowContextMenu}
                             renderSubComponent={renderToolSubComponent}
+                            storageKey={`${tableStorageBase}:tools`}
                         />
                     </div>
                 )}

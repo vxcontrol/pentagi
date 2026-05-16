@@ -4,8 +4,6 @@ import { format, isToday } from 'date-fns';
 import { enUS } from 'date-fns/locale';
 import {
     AlertCircle,
-    ArrowDown,
-    ArrowUp,
     CalendarIcon,
     Check,
     Copy,
@@ -19,7 +17,6 @@ import {
     X,
 } from 'lucide-react';
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 
 import type { ApiTokenFragmentFragment } from '@/graphql/types';
@@ -30,7 +27,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { ContextMenuItem, ContextMenuSeparator } from '@/components/ui/context-menu';
-import { DataTable } from '@/components/ui/data-table';
+import { DataTable, DataTableColumnHeader } from '@/components/ui/data-table';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
     DropdownMenu,
@@ -54,6 +51,7 @@ import {
     useDeleteApiTokenMutation,
     useUpdateApiTokenMutation,
 } from '@/graphql/types';
+import { useTableState } from '@/hooks/use-table-state';
 import { cn } from '@/lib/utils';
 import { baseUrl } from '@/models/api';
 
@@ -143,8 +141,8 @@ const copyToClipboard = async (text: string): Promise<boolean> => {
 const SettingsAPITokensHeader = ({ onCreateClick }: { onCreateClick: () => void }) => {
     return (
         <div className="flex items-center justify-between gap-4">
-            <div className="flex flex-col gap-2">
-                <p className="text-muted-foreground">Manage API tokens for programmatic access</p>
+            <div className="flex min-w-0 flex-1 flex-col gap-2">
+                <p className="text-muted-foreground truncate">Manage API tokens for programmatic access</p>
                 <div className="flex gap-4 text-sm">
                     <a
                         className="text-primary inline-flex items-center gap-1 underline hover:no-underline"
@@ -168,6 +166,7 @@ const SettingsAPITokensHeader = ({ onCreateClick }: { onCreateClick: () => void 
             </div>
 
             <Button
+                className="shrink-0"
                 onClick={onCreateClick}
                 variant="secondary"
             >
@@ -191,7 +190,6 @@ const createNewTokenPlaceholder: APIToken = {
 };
 
 const SettingsAPITokens = () => {
-    const [searchParams, setSearchParams] = useSearchParams();
     const { data, error, loading: isLoading } = useApiTokensQuery();
     const [createAPIToken, { error: createError, loading: isCreateLoading }] = useCreateApiTokenMutation();
     const [updateAPIToken, { error: updateError, loading: isUpdateLoading }] = useUpdateApiTokenMutation();
@@ -209,48 +207,7 @@ const SettingsAPITokens = () => {
     const editingInputRef = useRef<HTMLInputElement>(null);
     const creatingInputRef = useRef<HTMLInputElement>(null);
 
-    // Get current page from URL
-    const currentPage = useMemo(() => {
-        const page = searchParams.get('page');
-
-        return page ? Math.max(0, Number.parseInt(page, 10) - 1) : 0;
-    }, [searchParams]);
-
-    // Handle page change
-    const handlePageChange = useCallback(
-        (pageIndex: number) => {
-            const newParams = new URLSearchParams(searchParams);
-
-            if (pageIndex === 0) {
-                newParams.delete('page');
-            } else {
-                newParams.set('page', String(pageIndex + 1));
-            }
-
-            setSearchParams(newParams);
-        },
-        [searchParams, setSearchParams],
-    );
-
-    // Three-way sorting handler: null -> asc -> desc -> null
-    const handleColumnSort = useCallback(
-        (column: {
-            clearSorting: () => void;
-            getIsSorted: () => 'asc' | 'desc' | false;
-            toggleSorting: (desc?: boolean) => void;
-        }) => {
-            const sorted = column.getIsSorted();
-
-            if (sorted === 'asc') {
-                column.toggleSorting(true);
-            } else if (sorted === 'desc') {
-                column.clearSorting();
-            } else {
-                column.toggleSorting(false);
-            }
-        },
-        [],
-    );
+    const { filter, pageIndex: currentPage, setFilter, setPage: handlePageChange } = useTableState();
 
     useApiTokenCreatedSubscription({
         onData: ({ client }) => {
@@ -432,24 +389,13 @@ const SettingsAPITokens = () => {
                     );
                 },
                 enableHiding: false,
-                header: ({ column }) => {
-                    const sorted = column.getIsSorted();
-
-                    return (
-                        <Button
-                            className="text-muted-foreground hover:text-primary flex items-center gap-2 p-0 no-underline hover:no-underline"
-                            onClick={() => handleColumnSort(column)}
-                            variant="link"
-                        >
-                            Name
-                            {sorted === 'asc' ? (
-                                <ArrowDown className="size-4" />
-                            ) : sorted === 'desc' ? (
-                                <ArrowUp className="size-4" />
-                            ) : null}
-                        </Button>
-                    );
-                },
+                header: ({ column }) => (
+                    <DataTableColumnHeader
+                        column={column}
+                        title="Name"
+                    />
+                ),
+                meta: { searchable: true },
                 size: 300,
             },
             {
@@ -478,24 +424,13 @@ const SettingsAPITokens = () => {
                     );
                 },
                 enableHiding: false,
-                header: ({ column }) => {
-                    const sorted = column.getIsSorted();
-
-                    return (
-                        <Button
-                            className="text-muted-foreground hover:text-primary flex items-center gap-2 p-0 no-underline hover:no-underline"
-                            onClick={() => handleColumnSort(column)}
-                            variant="link"
-                        >
-                            Token ID
-                            {sorted === 'asc' ? (
-                                <ArrowDown className="size-4" />
-                            ) : sorted === 'desc' ? (
-                                <ArrowUp className="size-4" />
-                            ) : null}
-                        </Button>
-                    );
-                },
+                header: ({ column }) => (
+                    <DataTableColumnHeader
+                        column={column}
+                        title="Token ID"
+                    />
+                ),
+                meta: { columnMenuLabel: 'Token ID', searchable: true },
                 size: 200,
             },
             {
@@ -539,24 +474,13 @@ const SettingsAPITokens = () => {
 
                     return <Badge variant={statusDisplay.variant}>{statusDisplay.label}</Badge>;
                 },
-                header: ({ column }) => {
-                    const sorted = column.getIsSorted();
-
-                    return (
-                        <Button
-                            className="text-muted-foreground hover:text-primary flex items-center gap-2 p-0 no-underline hover:no-underline"
-                            onClick={() => handleColumnSort(column)}
-                            variant="link"
-                        >
-                            Status
-                            {sorted === 'asc' ? (
-                                <ArrowDown className="size-4" />
-                            ) : sorted === 'desc' ? (
-                                <ArrowUp className="size-4" />
-                            ) : null}
-                        </Button>
-                    );
-                },
+                header: ({ column }) => (
+                    <DataTableColumnHeader
+                        column={column}
+                        title="Status"
+                    />
+                ),
+                meta: { searchable: true },
                 size: 120,
             },
             {
@@ -620,24 +544,12 @@ const SettingsAPITokens = () => {
                         </Tooltip>
                     );
                 },
-                header: ({ column }) => {
-                    const sorted = column.getIsSorted();
-
-                    return (
-                        <Button
-                            className="text-muted-foreground hover:text-primary flex items-center gap-2 p-0 no-underline hover:no-underline"
-                            onClick={() => handleColumnSort(column)}
-                            variant="link"
-                        >
-                            Expires
-                            {sorted === 'asc' ? (
-                                <ArrowDown className="size-4" />
-                            ) : sorted === 'desc' ? (
-                                <ArrowUp className="size-4" />
-                            ) : null}
-                        </Button>
-                    );
-                },
+                header: ({ column }) => (
+                    <DataTableColumnHeader
+                        column={column}
+                        title="Expires"
+                    />
+                ),
                 size: 150,
                 sortingFn: (rowA, rowB) => {
                     const expiresA = getTokenExpirationDate(rowA.original);
@@ -669,24 +581,13 @@ const SettingsAPITokens = () => {
                         </Tooltip>
                     );
                 },
-                header: ({ column }) => {
-                    const sorted = column.getIsSorted();
-
-                    return (
-                        <Button
-                            className="text-muted-foreground hover:text-primary flex items-center gap-2 p-0 no-underline hover:no-underline"
-                            onClick={() => handleColumnSort(column)}
-                            variant="link"
-                        >
-                            Created
-                            {sorted === 'asc' ? (
-                                <ArrowDown className="size-4" />
-                            ) : sorted === 'desc' ? (
-                                <ArrowUp className="size-4" />
-                            ) : null}
-                        </Button>
-                    );
-                },
+                header: ({ column }) => (
+                    <DataTableColumnHeader
+                        column={column}
+                        title="Created"
+                    />
+                ),
+                meta: { columnMenuLabel: 'Created' },
                 size: 120,
                 sortingFn: (rowA, rowB) => {
                     const dateA = new Date(rowA.getValue('createdAt') as string);
@@ -809,7 +710,6 @@ const SettingsAPITokens = () => {
             editingTokenId,
             handleCancelCreate,
             handleCancelEdit,
-            handleColumnSort,
             handleCopyTokenId,
             handleCreate,
             handleDeleteDialogOpen,
@@ -918,8 +818,9 @@ const SettingsAPITokens = () => {
             <DataTable<APIToken>
                 columns={columns}
                 data={creatingToken ? [createNewTokenPlaceholder, ...tokens] : tokens}
-                filterColumn="name"
-                filterPlaceholder="Filter token names..."
+                filterPlaceholder="Filter tokens..."
+                filterValue={filter}
+                onFilterChange={setFilter}
                 onPageChange={handlePageChange}
                 pageIndex={currentPage}
                 renderRowContextMenu={renderRowContextMenu}

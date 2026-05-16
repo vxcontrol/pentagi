@@ -4,11 +4,9 @@ import { useEffect, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 
 import type { FileNode } from '@/components/shared/file-manager';
-import type { OverwriteConflict } from '@/components/shared/overwrite-confirm-dialog';
+import type { OverwriteConflict } from '@/components/shared/overwrite';
 
-import { OverwriteConfirmDialog } from '@/components/shared/overwrite-confirm-dialog';
-import { OverwriteCtaButtons } from '@/components/shared/overwrite-cta-buttons';
-import { useOverwriteAction } from '@/components/shared/use-overwrite-action';
+import { OverwriteButtons, OverwriteDialog, useOverwrite } from '@/components/shared/overwrite';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
@@ -135,7 +133,7 @@ const ResourcesMoveDialogForm = ({ files, onClose }: ResourcesMoveDialogFormProp
      * with a single atomic batch request. Backend handles `sources[]` in one
      * DB transaction (all-or-nothing) — no per-source aggregation needed here.
      */
-    const overwriteAction = useOverwriteAction<MovePlan>({
+    const overwriteAction = useOverwrite<MovePlan>({
         execute: (plan, force) => move(plan.sources, plan.destination, force),
         // Local preflight: filter out targets that match an item we're moving
         // (those are no-ops, not conflicts) and keep the ones already taken
@@ -232,7 +230,7 @@ const ResourcesMoveDialogForm = ({ files, onClose }: ResourcesMoveDialogFormProp
                             >
                                 Cancel
                             </Button>
-                            <OverwriteCtaButtons
+                            <OverwriteButtons
                                 isDisabled={isSubmitDisabled}
                                 isProcessing={isMoving}
                                 onOverwrite={() => {
@@ -248,7 +246,7 @@ const ResourcesMoveDialogForm = ({ files, onClose }: ResourcesMoveDialogFormProp
                 </Form>
             </DialogContent>
 
-            <OverwriteConfirmDialog
+            <OverwriteDialog
                 conflicts={overwriteAction.conflicts}
                 onCancel={overwriteAction.resetConflicts}
                 onReplaceAll={overwriteAction.handleReplaceAll}

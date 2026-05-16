@@ -1,21 +1,43 @@
 import {
+    type Column,
     type ColumnDef,
-    type ColumnFiltersState,
     type ExpandedState,
+    type FilterFn,
     flexRender,
     getCoreRowModel,
     getExpandedRowModel,
     getFilteredRowModel,
     getPaginationRowModel,
     getSortedRowModel,
-    type Table as ReactTable,
     type Row,
     type SortingState,
     useReactTable,
     type VisibilityState,
 } from '@tanstack/react-table';
-import { ChevronDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Search, X } from 'lucide-react';
-import { Fragment, type ReactElement, type ReactNode, useCallback, useMemo, useRef, useState } from 'react';
+import {
+    ArrowDown,
+    ArrowUp,
+    ChevronDown,
+    ChevronLeft,
+    ChevronRight,
+    ChevronsLeft,
+    ChevronsRight,
+    ListFilter,
+    Search,
+    X,
+} from 'lucide-react';
+import {
+    Fragment,
+    type ReactElement,
+    type ReactNode,
+    useCallback,
+    useEffect,
+    useId,
+    useMemo,
+    useRef,
+    useState,
+} from 'react';
+import { useLocation } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
 import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from '@/components/ui/context-menu';
@@ -28,51 +50,164 @@ import {
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { useEffectAfterMount } from '@/hooks/use-effect-after-mount';
-import { getColumnStorageKey, getPageStorageKey, getSortingStorageKey } from '@/lib/storage-keys';
-import {
-    loadColumnVisibility,
-    loadPageState,
-    loadSorting,
-    saveColumnVisibility,
-    savePageState,
-    saveSorting,
-} from '@/lib/table-storage';
+import { useLatestRef } from '@/hooks/use-latest-ref';
+import { usePageStorageKeys } from '@/hooks/use-page-storage-keys';
+import { migrateLegacyTableState, updateTableState } from '@/lib/table-state';
 import { cn } from '@/lib/utils';
+
+/**
+ * Composite value stored in TanStack's `state.globalFilter`. Bundling `query`
+ * and the active `columns` set together makes the predicate self-contained:
+ * any change to either field produces a new object reference, which is what
+ * TanStack watches to re-run the filter pipeline. This sidesteps the trap
+ * where a closure-only narrowing (`getColumnCanGlobalFilter`) updates silently
+ * and the rows stay stale.
+ */
+type DataTableGlobalFilter = { columns: string[]; query: string };
 
 interface DataTableProps<TData, TValue = unknown> {
     columns: ColumnDef<TData, TValue>[];
     columnVisibility?: VisibilityState;
     data: TData[];
-    filterColumn?: string;
+    /**
+     * Search target(s) for the filter input. Three modes:
+     * - `string` (legacy single-column): the input searches only this column;
+     *   the column-picker dropdown is not rendered. Backward-compatible with
+     *   pre-multi-column call sites.
+     * - `string[]` (explicit multi-column): the input searches across all
+     *   listed columns with OR semantics; a "Search in" dropdown lets the
+     *   user narrow the set.
+     * - `undefined` (zero-config multi-column): candidate columns are picked
+     *   from those with `columnDef.meta.searchable === true`. If none match,
+     *   the search input is not rendered at all.
+     *
+     * When provided, every column id must exist in `columns`.
+     */
+    filterColumn?: string | string[];
     filterPlaceholder?: string;
+    /**
+     * Controlled filter value. When provided together with `onFilterChange`
+     * the parent owns the source of truth — typically `useTableQueryFilter`
+     * for URL/storage-backed filters. The value flows through TanStack's
+     * `state.globalFilter`, so `DataTableFilter` stays uniform regardless
+     * of whether the table is single- or multi-column.
+     */
+    filterValue?: string;
     initialPageSize?: number;
     initialSorting?: SortingState;
     onColumnVisibilityChange?: (visibility: VisibilityState) => void;
+    onFilterChange?: (value: string) => void;
     onPageChange?: (pageIndex: number) => void;
     onRowClick?: (row: TData) => void;
     pageIndex?: number;
     renderRowContextMenu?: (row: TData) => ReactNode;
     renderSubComponent?: (props: { row: Row<TData> }) => ReactElement;
+    /**
+     * Storage slot for sorting / column visibility / page size / search-column
+     * narrowing. Defaults to `usePageStorageKeys().table` — i.e.
+     * `table_4_<pathname>` — which is correct for any route that owns exactly
+     * one DataTable. Pages that mount multiple DataTables on the same route
+     * (e.g. `/settings/prompts`) must pass distinct keys per instance, or
+     * their persisted state will alias and overwrite each other.
+     *
+     * Recommended composition for multi-table routes — take the route base
+     * through `usePageStorageKeys` and append a per-table suffix instead of
+     * hard-coding the `table_4_<path>` prefix:
+     *
+     * ```tsx
+     * const { table: base } = usePageStorageKeys();
+     * <DataTable storageKey={`${base}:agents`} … />
+     * <DataTable storageKey={`${base}:tools`} … />
+     * ```
+     */
+    storageKey?: string;
 }
 
 const PAGE_SIZE_OPTIONS = [10, 15, 20, 50, 100] as const;
 
-interface DataTableFilterProps<TData> {
-    column: string;
-    placeholder: string;
-    table: ReactTable<TData>;
-}
+const columnPickerLabel = <TData,>(column: Column<TData, unknown>): string =>
+    column.columnDef.meta?.columnMenuLabel ?? column.id;
 
 /**
- * Search input bound to a single TanStack Table column. Reads/writes the column's
- * filter value directly — purely cosmetic shell around the table's existing
- * filter API. Extracted out of `DataTable` so the toolbar JSX doesn't have to
- * inline an IIFE just to capture the current `filterValue` once.
+ * Resolve a `ColumnDef`'s id the way TanStack does internally: explicit `id`
+ * wins, then `accessorKey` when it's a plain string. Display columns and
+ * `accessorFn` columns without an explicit id resolve to `undefined` —
+ * callers filter those out before passing the id to APIs that require one.
  */
-const DataTableFilter = <TData,>({ column, placeholder, table }: DataTableFilterProps<TData>) => {
-    const tableColumn = table.getColumn(column);
-    const filterValue = (tableColumn?.getFilterValue() as string) ?? '';
+const getColumnId = <TData, TValue>(column: ColumnDef<TData, TValue>): string | undefined => {
+    const withId = column as { id?: string };
+
+    if (withId.id) {
+        return withId.id;
+    }
+
+    const withAccessor = column as { accessorKey?: string };
+
+    return typeof withAccessor.accessorKey === 'string' ? withAccessor.accessorKey : undefined;
+};
+
+interface DataTableFilterProps {
+    onQueryChange: (value: string) => void;
+    placeholder: string;
+    query: string;
+}
+
+const FILTER_DEBOUNCE_MS = 150;
+// Hard cap on the filter query length. 200 chars is more than any realistic
+// search term and protects against pathological inputs (paste of a multi-KB
+// chunk) that would otherwise blow past URL limits — browsers handle ~8 KB,
+// reverse-proxies typically cap at 2–4 KB, so a 5 KB share-link becomes
+// unreliable. `<input maxLength>` truncates typing and paste at the DOM
+// boundary, which is the only entry point users have here.
+const FILTER_MAX_LENGTH = 200;
+
+/**
+ * Search input for the table's global filter. Keystrokes update an internal
+ * `localValue` state synchronously so the input feels instant; the debounced
+ * mirror is what we propagate upstream via `onQueryChange`. The previous
+ * design committed every keystroke straight into `useTableQueryFilter`, which
+ * synchronously walked the router and re-rendered the entire route subtree —
+ * with the Flows page that ran ~250 ms per keystroke, so consecutive
+ * keypresses queued behind the in-flight reconciliation and showed up as
+ * input-delay INP. Debouncing the commit drops the upstream cascade rate
+ * from per-keystroke to once per typing pause.
+ *
+ * External `query` changes (X button, programmatic clear, URL back-button,
+ * route swap) are reconciled into `localValue` through the sync effect: we
+ * skip when the incoming value matches what we last emitted, so our own
+ * round-trip through the parent doesn't fight with active typing.
+ */
+const DataTableFilter = ({ onQueryChange, placeholder, query }: DataTableFilterProps) => {
+    const [localValue, setLocalValue] = useState(query);
+    const debouncedValue = useDebouncedValue(localValue, FILTER_DEBOUNCE_MS);
+    const lastEmittedReference = useRef(query);
+    // Generated per-instance so pages with multiple DataTables (e.g.
+    // /settings/prompts) don't end up with duplicate `id` attributes — that
+    // breaks `getElementById`, a11y semantics, and any test selector that
+    // relies on the input id.
+    const fieldId = useId();
+
+    useEffect(() => {
+        if (query !== lastEmittedReference.current) {
+            setLocalValue(query);
+            lastEmittedReference.current = query;
+        }
+    }, [query]);
+
+    useEffect(() => {
+        if (debouncedValue !== lastEmittedReference.current) {
+            lastEmittedReference.current = debouncedValue;
+            onQueryChange(debouncedValue);
+        }
+    }, [debouncedValue, onQueryChange]);
+
+    const handleClear = useCallback(() => {
+        setLocalValue('');
+        lastEmittedReference.current = '';
+        onQueryChange('');
+    }, [onQueryChange]);
 
     return (
         <InputGroup className="max-w-sm">
@@ -80,16 +215,20 @@ const DataTableFilter = <TData,>({ column, placeholder, table }: DataTableFilter
                 <Search />
             </InputGroupAddon>
             <InputGroupInput
+                aria-label={placeholder}
                 autoComplete="off"
-                onChange={(event) => tableColumn?.setFilterValue(event.target.value)}
+                id={fieldId}
+                maxLength={FILTER_MAX_LENGTH}
+                name={fieldId}
+                onChange={(event) => setLocalValue(event.target.value)}
                 placeholder={placeholder}
                 type="text"
-                value={filterValue}
+                value={localValue}
             />
-            {filterValue ? (
+            {localValue ? (
                 <InputGroupAddon align="inline-end">
                     <InputGroupButton
-                        onClick={() => tableColumn?.setFilterValue('')}
+                        onClick={handleClear}
                         type="button"
                     >
                         <X />
@@ -100,63 +239,251 @@ const DataTableFilter = <TData,>({ column, placeholder, table }: DataTableFilter
     );
 };
 
+interface DataTableColumnHeaderProps<TData, TValue> {
+    /** TanStack column. Sorting state and the cycle action both target it. */
+    column: Column<TData, TValue>;
+    /** Visible label rendered as the button text. Named after the shadcn convention. */
+    title: ReactNode;
+}
+
+/**
+ * Cycle a TanStack column through `none → asc → desc → none`. Pure with
+ * respect to React (no hooks called) so a header `onClick` can invoke it
+ * directly without `useCallback`/`useMemo` ceremony. Exported alongside
+ * {@link DataTableColumnHeader} so a custom header can drive the same
+ * sort cycle without duplicating the if/else.
+ */
+export function cycleColumnSort<TData, TValue = unknown>(column: Column<TData, TValue>): void {
+    const sorted = column.getIsSorted();
+
+    if (sorted === 'asc') {
+        column.toggleSorting(true);
+
+        return;
+    }
+
+    if (sorted === 'desc') {
+        column.clearSorting();
+
+        return;
+    }
+
+    column.toggleSorting(false);
+}
+
 function DataTable<TData, TValue = unknown>({
     columns,
     columnVisibility: externalColumnVisibility,
     data,
-    filterColumn = 'name',
+    filterColumn,
     filterPlaceholder = 'Filter...',
+    filterValue: externalFilterValue,
     initialPageSize = 10,
     initialSorting = [],
     onColumnVisibilityChange,
+    onFilterChange,
     onPageChange,
     onRowClick,
     pageIndex: externalPageIndex,
     renderRowContextMenu,
     renderSubComponent,
+    storageKey: explicitStorageKey,
 }: DataTableProps<TData, TValue>) {
     const isColumnVisibilityControlled = externalColumnVisibility !== undefined;
     const isPageControlled = externalPageIndex !== undefined;
+    const isFilterControlled = externalFilterValue !== undefined && onFilterChange !== undefined;
     const isRowInteractive = !!onRowClick || !!renderSubComponent;
 
-    const sortingKey = useMemo(() => getSortingStorageKey(), []);
-    const columnKey = useMemo(() => getColumnStorageKey(), []);
-    const pageKey = useMemo(() => getPageStorageKey(), []);
+    const { pathname } = useLocation();
+    // Reuse the pathname we just read instead of letting the hook subscribe
+    // independently — react-router caches `useLocation` so the cost is
+    // negligible, but the explicit pass keeps the data flow obvious and
+    // makes it easy to migrate the table to a different storage scope (e.g.
+    // a workspace-prefixed path) without grepping for every subscription.
+    //
+    // When `storageKey` is passed by the parent it wins — multi-table routes
+    // (e.g. /settings/prompts) need distinct slots per instance, otherwise
+    // their sorting / visibility / search-column narrowing alias and
+    // overwrite each other under the shared `table_4_<path>` key.
+    const { table: defaultTableKey } = usePageStorageKeys({ pathname });
+    const tableKey = explicitStorageKey ?? defaultTableKey;
 
-    const [sorting, setSorting] = useState<SortingState>(() => loadSorting(sortingKey) ?? initialSorting);
-    const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
+    // Run the legacy → unified migration exactly once on mount via `useState`
+    // lazy init. The lazy initializer runs in a single commit, so the
+    // localStorage hit happens once even under StrictMode's double-invoke.
+    // After mount, the `useEffect` below re-runs migration when `tableKey`
+    // rotates (route change inside a persistent layout).
+    const [initialState] = useState(() => migrateLegacyTableState(pathname, tableKey));
+
+    const [sorting, setSorting] = useState<SortingState>(() => initialState.sorting ?? initialSorting);
+    const [internalGlobalFilter, setInternalGlobalFilter] = useState<string>('');
+    const [searchColumns, setSearchColumns] = useState<string[]>(() => initialState.searchColumns ?? []);
+    const [internalColumnVisibility, setInternalColumnVisibility] = useState<VisibilityState>(() =>
+        isColumnVisibilityControlled ? {} : (initialState.columnVisibility ?? {}),
+    );
+    const [pagination, setPagination] = useState(() => ({
+        pageIndex: isPageControlled ? (externalPageIndex ?? 0) : 0,
+        pageSize: initialState.pageSize ?? initialPageSize,
+    }));
     const [rowSelection, setRowSelection] = useState({});
     const [expanded, setExpanded] = useState<ExpandedState>({});
 
-    const [internalColumnVisibility, setInternalColumnVisibility] = useState<VisibilityState>(() =>
-        isColumnVisibilityControlled ? {} : (loadColumnVisibility(columnKey) ?? {}),
+    // Resolve the set of column ids the search input may target.
+    // Priority: explicit array prop > legacy single-string prop > columns with
+    // `meta.searchable === true`. Falls through to `[]` when no opt-in exists,
+    // which suppresses the search input entirely (see JSX below).
+    const searchCandidateIds = useMemo<string[]>(() => {
+        if (Array.isArray(filterColumn)) {
+            return filterColumn;
+        }
+
+        if (typeof filterColumn === 'string') {
+            return [filterColumn];
+        }
+
+        return columns
+            .filter((column) => column.meta?.searchable === true)
+            .map(getColumnId)
+            .filter((id): id is string => typeof id === 'string');
+    }, [columns, filterColumn]);
+
+    const isMultiMode = Array.isArray(filterColumn) || (filterColumn === undefined && searchCandidateIds.length > 0);
+
+    // Rebase `searchColumns` whenever the set of candidates changes (column
+    // reconfiguration, HMR, or a hydrated localStorage entry that references
+    // ids the current page no longer exposes). The empty-array sentinel — our
+    // "search everywhere" state — is preserved as-is; non-empty selections are
+    // pruned to the still-valid intersection. Return `prev` unchanged when the
+    // intersection equals the input so we don't trigger a spurious storage
+    // write through the persistence effect below.
+    useEffect(() => {
+        setSearchColumns((prev) => {
+            if (prev.length === 0) {
+                return prev;
+            }
+
+            const filtered = prev.filter((id) => searchCandidateIds.includes(id));
+
+            return filtered.length === prev.length ? prev : filtered;
+        });
+    }, [searchCandidateIds]);
+
+    // Track which tableKey we've already migrated + seeded from. When the
+    // key rotates (route change inside a persistent layout, or an explicit
+    // override) we re-run the migration for the new path and refresh local
+    // state with whatever's stored under the new key.
+    const seededForKeyReference = useRef(tableKey);
+
+    useEffect(() => {
+        if (seededForKeyReference.current === tableKey) {
+            return;
+        }
+
+        seededForKeyReference.current = tableKey;
+        const stored = migrateLegacyTableState(pathname, tableKey);
+
+        setSorting(stored.sorting ?? initialSorting);
+        setSearchColumns(stored.searchColumns ?? []);
+
+        if (!isColumnVisibilityControlled) {
+            setInternalColumnVisibility(stored.columnVisibility ?? {});
+        }
+
+        setPagination((previous) => ({
+            ...previous,
+            pageSize: stored.pageSize ?? initialPageSize,
+        }));
+    }, [initialPageSize, initialSorting, isColumnVisibilityControlled, pathname, tableKey]);
+
+    // Compose the query and the active column set into a single TanStack
+    // state value. New object identity on any change is exactly what TanStack
+    // watches to re-run the filter pipeline — no imperative `setGlobalFilter`
+    // pokes, no closure-only narrowing that updates silently. The `columns`
+    // field follows the same "empty selection = search everywhere" sentinel
+    // as `searchColumns`, resolved once here for the predicate's convenience.
+    const effectiveQuery = isFilterControlled ? (externalFilterValue ?? '') : internalGlobalFilter;
+
+    const effectiveGlobalFilter = useMemo<DataTableGlobalFilter>(
+        () => ({
+            columns: searchColumns.length > 0 ? searchColumns : searchCandidateIds,
+            query: effectiveQuery,
+        }),
+        [effectiveQuery, searchCandidateIds, searchColumns],
     );
 
-    const [pagination, setPagination] = useState(() => {
-        const stored = loadPageState(pageKey);
+    const effectiveGlobalFilterReference = useLatestRef(effectiveGlobalFilter);
 
-        return {
-            pageIndex: isPageControlled ? (externalPageIndex ?? 0) : (stored?.page ?? 0),
-            pageSize: stored?.pageSize ?? initialPageSize,
-        };
-    });
+    // Funnel every TanStack global-filter change through the right sink. The
+    // updater arrives in three shapes:
+    //   * a raw string from `DataTableFilter` (input.onChange → setGlobalFilter)
+    //   * a function `(prev: DataTableGlobalFilter) => DataTableGlobalFilter`
+    //     from any TanStack-internal mutation (e.g. `table.resetGlobalFilter`)
+    //   * a bare composite object from a programmatic write
+    // We resolve it down to the `query` string at the boundary — controlled
+    // parents and internal state both speak strings.
+    const handleGlobalFilterChange = useCallback(
+        (updater: unknown) => {
+            const resolveQuery = (value: unknown): string => {
+                if (typeof value === 'string') {
+                    return value;
+                }
+
+                if (value && typeof value === 'object' && 'query' in value) {
+                    return String((value as { query: unknown }).query ?? '');
+                }
+
+                return '';
+            };
+
+            const nextRaw =
+                typeof updater === 'function'
+                    ? (updater as (previous: DataTableGlobalFilter) => unknown)(effectiveGlobalFilterReference.current)
+                    : updater;
+            const nextQuery = resolveQuery(nextRaw);
+
+            if (isFilterControlled) {
+                onFilterChange?.(nextQuery);
+            } else {
+                setInternalGlobalFilter(nextQuery);
+            }
+        },
+        [effectiveGlobalFilterReference, isFilterControlled, onFilterChange],
+    );
+
+    // Persist sorting + column visibility + page size into the unified
+    // `table_4_<path>` slot. Skipping the first render is intentional: a
+    // fresh mount would otherwise overwrite the seeded values with the
+    // same payload on the next commit.
+    useEffectAfterMount(() => {
+        updateTableState(tableKey, { sorting });
+    }, [sorting, tableKey]);
 
     useEffectAfterMount(() => {
-        saveSorting(sortingKey, sorting);
-    }, [sorting, sortingKey]);
-
-    useEffectAfterMount(() => {
-        if (!isColumnVisibilityControlled) {
-            saveColumnVisibility(columnKey, internalColumnVisibility);
+        if (isColumnVisibilityControlled) {
+            return;
         }
-    }, [internalColumnVisibility, columnKey, isColumnVisibilityControlled]);
 
+        updateTableState(tableKey, { columnVisibility: internalColumnVisibility });
+    }, [internalColumnVisibility, isColumnVisibilityControlled, tableKey]);
+
+    // Only persist a non-default pageSize. `updateTableState` clears the
+    // field when handed `undefined`, so the storage slot stays empty until
+    // the user actively picks a different page size. Without this guard the
+    // StrictMode dev double-invoke of `useEffectAfterMount` would seed
+    // `{ pageSize: 10 }` on every fresh mount — harmless in prod, noisy in
+    // dev tooling and surprising when inspecting storage.
     useEffectAfterMount(() => {
-        savePageState(pageKey, {
-            page: isPageControlled ? 0 : pagination.pageIndex,
-            pageSize: pagination.pageSize,
+        updateTableState(tableKey, {
+            pageSize: pagination.pageSize === initialPageSize ? undefined : pagination.pageSize,
         });
-    }, [pagination.pageIndex, pagination.pageSize, pageKey, isPageControlled]);
+    }, [initialPageSize, pagination.pageSize, tableKey]);
+
+    // Empty array is the "default for everyone" sentinel — `updateTableState`
+    // collapses `[]` to a delete so the storage slot stays empty until the
+    // user actively narrows the search column set.
+    useEffectAfterMount(() => {
+        updateTableState(tableKey, { searchColumns });
+    }, [searchColumns, tableKey]);
 
     const columnVisibility = externalColumnVisibility ?? internalColumnVisibility;
 
@@ -183,12 +510,7 @@ function DataTable<TData, TValue = unknown>({
         }
     }, [externalPageIndex]);
 
-    const handlePageSizeChange = useCallback((newPageSize: number) => {
-        setPagination({ pageIndex: 0, pageSize: newPageSize });
-    }, []);
-
-    const paginationReference = useRef(pagination);
-    paginationReference.current = pagination;
+    const paginationReference = useLatestRef(pagination);
 
     const handlePaginationChange = useCallback(
         (
@@ -204,8 +526,40 @@ function DataTable<TData, TValue = unknown>({
                 onPageChange(newPagination.pageIndex);
             }
         },
-        [onPageChange],
+        [onPageChange, paginationReference],
     );
+
+    // Route page-size changes through the same channel as TanStack's
+    // pagination mutations so `onPageChange` fires when the URL-driven
+    // pageIndex needs to drop to 0. Without this, picking "All" on a high
+    // page leaves `?page=5` stranded in the URL even though the display
+    // correctly clamps to "Page 1 of 1".
+    const handlePageSizeChange = useCallback(
+        (newPageSize: number) => {
+            handlePaginationChange({ pageIndex: 0, pageSize: newPageSize });
+        },
+        [handlePaginationChange],
+    );
+
+    // Case-insensitive substring predicate that consults the composite
+    // filter for both "what to look for" and "where to look". Returning
+    // `true` for the empty query keeps the default "no filter = all rows"
+    // behaviour identical to TanStack's built-in `includesString`.
+    const globalFilterFn = useCallback<FilterFn<TData>>((row, columnId, filter: DataTableGlobalFilter) => {
+        if (!filter.query) {
+            return true;
+        }
+
+        if (!filter.columns.includes(columnId)) {
+            return false;
+        }
+
+        const value = row.getValue(columnId);
+
+        return String(value ?? '')
+            .toLowerCase()
+            .includes(filter.query.toLowerCase());
+    }, []);
 
     const table = useReactTable({
         autoResetPageIndex: false,
@@ -217,16 +571,17 @@ function DataTable<TData, TValue = unknown>({
         getFilteredRowModel: getFilteredRowModel(),
         getPaginationRowModel: getPaginationRowModel(),
         getSortedRowModel: getSortedRowModel(),
-        onColumnFiltersChange: setColumnFilters,
+        globalFilterFn,
         onColumnVisibilityChange: handleColumnVisibilityChange,
         onExpandedChange: setExpanded,
+        onGlobalFilterChange: handleGlobalFilterChange,
         onPaginationChange: handlePaginationChange,
         onRowSelectionChange: setRowSelection,
         onSortingChange: setSorting,
         state: {
-            columnFilters,
             columnVisibility,
             expanded,
+            globalFilter: effectiveGlobalFilter,
             pagination,
             rowSelection,
             sorting,
@@ -247,18 +602,107 @@ function DataTable<TData, TValue = unknown>({
     const pageSizeValue = pagination.pageSize >= data.length && data.length > 0 ? 'all' : String(pagination.pageSize);
 
     const totalRows = table.getFilteredRowModel().rows.length;
-    const rangeStart = totalRows > 0 ? pagination.pageIndex * pagination.pageSize + 1 : 0;
-    const rangeEnd = Math.min((pagination.pageIndex + 1) * pagination.pageSize, totalRows);
+    const pageCount = table.getPageCount();
+
+    // `pagination.pageIndex` is mirrored from `?page=` (controlled) or the
+    // user's clicks (uncontrolled). Either source can point past the actual
+    // end of the dataset — hand-typed URLs, a filter narrowing results, or a
+    // page-size bump to "All" while we were on a high page. Derive a clamped
+    // view for the display values so the user never sees "Page 999 of 31",
+    // and reconcile the source of truth via the effect below.
+    const safePageIndex = pageCount > 0 ? Math.min(Math.max(0, pagination.pageIndex), pageCount - 1) : 0;
+    const rangeStart = totalRows > 0 ? safePageIndex * pagination.pageSize + 1 : 0;
+    const rangeEnd = Math.min((safePageIndex + 1) * pagination.pageSize, totalRows);
+
+    // Reconcile the canonical pageIndex once we know `pageCount`. The write
+    // has to happen in an effect because `setSearchParams` (controlled mode)
+    // and `setPagination` (uncontrolled) both mutate state outside the render
+    // pipeline, which React forbids during render. The early return makes the
+    // effect a no-op on every render where the URL is already in range, so
+    // the cost on the happy path is one comparison.
+    //
+    // Controlled mode compares the URL (`externalPageIndex`) — the canonical
+    // source of truth — rather than the internal mirror, because internal
+    // state can drop to a clamped value via `handlePageSizeChange` while the
+    // URL still points at the stale page. Uncontrolled mode keeps comparing
+    // the internal pageIndex since there's no other source.
+    useEffect(() => {
+        if (pageCount === 0) {
+            return;
+        }
+
+        if (isPageControlled) {
+            if (externalPageIndex !== undefined && externalPageIndex !== safePageIndex) {
+                onPageChange?.(safePageIndex);
+            }
+
+            return;
+        }
+
+        if (pagination.pageIndex !== safePageIndex) {
+            setPagination((previous) => ({ ...previous, pageIndex: safePageIndex }));
+        }
+    }, [externalPageIndex, isPageControlled, onPageChange, pageCount, pagination.pageIndex, safePageIndex]);
 
     return (
         <div className="w-full">
-            <div className="flex items-center gap-4 py-4">
-                {filterColumn ? (
+            <div className="flex items-center gap-2 py-4">
+                {searchCandidateIds.length > 0 ? (
                     <DataTableFilter
-                        column={filterColumn}
+                        onQueryChange={(value) => table.setGlobalFilter(value)}
                         placeholder={filterPlaceholder}
-                        table={table}
+                        query={effectiveQuery}
                     />
+                ) : null}
+                {isMultiMode && searchCandidateIds.length > 1 ? (
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button
+                                aria-label="Search in"
+                                size="icon"
+                                variant="outline"
+                            >
+                                <ListFilter />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                            {searchCandidateIds.map((id) => {
+                                const column = table.getColumn(id);
+
+                                if (!column) {
+                                    return null;
+                                }
+
+                                const isChecked = searchColumns.length === 0 ? true : searchColumns.includes(id);
+
+                                return (
+                                    <DropdownMenuCheckboxItem
+                                        checked={isChecked}
+                                        className={column.columnDef.meta?.columnMenuLabel ? undefined : 'capitalize'}
+                                        key={id}
+                                        onCheckedChange={(value) => {
+                                            setSearchColumns((prev) => {
+                                                // Treat the empty-selection
+                                                // sentinel as "all candidates"
+                                                // before mutating, so the user
+                                                // never lands in a state where
+                                                // unchecking one box silently
+                                                // re-enables every column.
+                                                const base = prev.length === 0 ? [...searchCandidateIds] : prev;
+
+                                                return value
+                                                    ? Array.from(new Set([id, ...base]))
+                                                    : base.filter((x) => x !== id);
+                                            });
+                                        }}
+                                        onSelect={(event) => event.preventDefault()}
+                                    >
+                                        {columnPickerLabel(column)}
+                                    </DropdownMenuCheckboxItem>
+                                );
+                            })}
+                        </DropdownMenuContent>
+                    </DropdownMenu>
                 ) : null}
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -276,12 +720,12 @@ function DataTable<TData, TValue = unknown>({
                             .map((column) => (
                                 <DropdownMenuCheckboxItem
                                     checked={column.getIsVisible()}
-                                    className="capitalize"
+                                    className={column.columnDef.meta?.columnMenuLabel ? undefined : 'capitalize'}
                                     key={column.id}
                                     onCheckedChange={(value) => column.toggleVisibility(!!value)}
                                     onSelect={(event) => event.preventDefault()}
                                 >
-                                    {column.id}
+                                    {columnPickerLabel(column)}
                                 </DropdownMenuCheckboxItem>
                             ))}
                     </DropdownMenuContent>
@@ -424,9 +868,16 @@ function DataTable<TData, TValue = unknown>({
                         </SelectContent>
                     </Select>
                 </div>
-                <div className="flex items-center justify-center text-xs font-medium lg:w-20">
-                    Page {pagination.pageIndex + 1} of {table.getPageCount()}
-                </div>
+                {pageCount > 0 ? (
+                    <div className="flex items-center justify-center text-xs font-medium lg:w-20">
+                        Page {safePageIndex + 1} of {pageCount}
+                    </div>
+                ) : (
+                    <div
+                        aria-hidden
+                        className="lg:w-20"
+                    />
+                )}
                 <div className="flex items-center gap-1">
                     <Button
                         disabled={!table.getCanPreviousPage()}
@@ -466,4 +917,35 @@ function DataTable<TData, TValue = unknown>({
     );
 }
 
-export { DataTable };
+/**
+ * Reusable header for sortable `DataTable` columns. Wraps the conventional
+ * "label + asc/desc arrow + onClick → cycleColumnSort" pattern so every list
+ * page reuses one component instead of repeating ~20 lines per column header.
+ *
+ * The header reads sort direction directly from `column.getIsSorted()` so the
+ * caller does not have to plumb it. The arrow icon mirrors the TanStack
+ * convention: `asc` shows ↓ ("ascending continues to grow downward") and
+ * `desc` shows ↑. No arrow means "not sorted by this column".
+ *
+ * Naming follows the canonical shadcn `DataTableColumnHeader` (see
+ * https://ui.shadcn.com/docs/components/data-table) so call sites read like
+ * the upstream docs — only the click model is simpler here (none → asc →
+ * desc → none toggle vs. a dropdown menu).
+ */
+function DataTableColumnHeader<TData, TValue = unknown>({ column, title }: DataTableColumnHeaderProps<TData, TValue>) {
+    const sorted = column.getIsSorted();
+
+    return (
+        <Button
+            className="text-muted-foreground hover:text-primary flex items-center gap-2 p-0 no-underline hover:no-underline"
+            onClick={() => cycleColumnSort(column)}
+            variant="link"
+        >
+            {title}
+            {sorted === 'asc' ? <ArrowDown className="size-4" /> : null}
+            {sorted === 'desc' ? <ArrowUp className="size-4" /> : null}
+        </Button>
+    );
+}
+
+export { DataTable, DataTableColumnHeader };

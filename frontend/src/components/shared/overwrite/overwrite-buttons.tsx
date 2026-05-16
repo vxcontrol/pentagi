@@ -4,7 +4,7 @@ import { Loader2, Replace } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 
-interface OverwriteCtaButtonsProps {
+interface OverwriteButtonsProps {
     /**
      * When `true` both buttons are greyed-out and clicks are ignored. Use to
      * disable the CTAs based on form validity, selection emptiness, or any
@@ -47,7 +47,7 @@ interface OverwriteCtaButtonsProps {
  * The component owns the spinner / icon swap, so callers don't repeat that
  * boilerplate in five different dialogs.
  */
-export const OverwriteCtaButtons = ({
+export const OverwriteButtons = ({
     isDisabled,
     isProcessing,
     onOverwrite,
@@ -56,7 +56,7 @@ export const OverwriteCtaButtons = ({
     primaryIcon: PrimaryIcon,
     primaryLabel,
     primaryType = 'button',
-}: OverwriteCtaButtonsProps) => {
+}: OverwriteButtonsProps) => {
     const disabled = isDisabled || isProcessing;
 
     return (

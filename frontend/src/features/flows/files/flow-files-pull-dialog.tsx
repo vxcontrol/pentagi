@@ -7,9 +7,7 @@ import {
     type FileManagerBulkAction,
     type FileNode,
 } from '@/components/shared/file-manager';
-import { OverwriteConfirmDialog } from '@/components/shared/overwrite-confirm-dialog';
-import { OverwriteCtaButtons } from '@/components/shared/overwrite-cta-buttons';
-import { useOverwriteAction } from '@/components/shared/use-overwrite-action';
+import { OverwriteButtons, OverwriteDialog, useOverwrite } from '@/components/shared/overwrite';
 import {
     Autocomplete,
     AutocompleteContent,
@@ -97,7 +95,7 @@ const getParentContainerPath = (path: string): string => {
  * is open so closing it discards every transient field without an imperative reset.
  *
  * The actual overwrite orchestration (preflight → execute → ConflictDialog
- * fallback) is delegated to {@link useOverwriteAction}; this component only
+ * fallback) is delegated to {@link useOverwrite}; this component only
  * owns the listing browser UI and the per-action plan derivation.
  */
 const FlowFilesPullDialogForm = ({ cachedFiles, flowId, onClose, onSuccess }: FlowFilesPullDialogFormProps) => {
@@ -169,7 +167,7 @@ const FlowFilesPullDialogForm = ({ cachedFiles, flowId, onClose, onSuccess }: Fl
      * close-on-success — this dialog just provides the plan (paths) and the
      * three pure helpers (find / execute / synthesize).
      */
-    const overwriteAction = useOverwriteAction<readonly string[]>({
+    const overwriteAction = useOverwrite<readonly string[]>({
         execute: (paths, force) => pull(paths, force),
         findConflicts: (paths) => findPullConflicts(paths, cachedFiles),
         onSuccess: onClose,
@@ -430,7 +428,7 @@ const FlowFilesPullDialogForm = ({ cachedFiles, flowId, onClose, onSuccess }: Fl
                     >
                         Cancel
                     </Button>
-                    <OverwriteCtaButtons
+                    <OverwriteButtons
                         isDisabled={isPullDisabled}
                         isProcessing={isPulling}
                         onOverwrite={() => {
@@ -446,7 +444,7 @@ const FlowFilesPullDialogForm = ({ cachedFiles, flowId, onClose, onSuccess }: Fl
                 </DialogFooter>
             </DialogContent>
 
-            <OverwriteConfirmDialog
+            <OverwriteDialog
                 conflicts={overwriteAction.conflicts}
                 onCancel={overwriteAction.resetConflicts}
                 onReplaceAll={overwriteAction.handleReplaceAll}

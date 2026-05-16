@@ -5,8 +5,8 @@ import type { AgentLogFragmentFragment } from '@/graphql/types';
 
 import Markdown from '@/components/shared/markdown';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { copyMessageToClipboard } from '@/lib/clipboard';
 import { formatDate } from '@/lib/utils/format';
-import { copyMessageToClipboard } from '@/lib/сlipboard';
 
 import FlowAgentIcon from './flow-agent-icon';
 

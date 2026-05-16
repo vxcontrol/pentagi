@@ -8,7 +8,7 @@ export interface OverwriteConflict {
     destinationName: string;
 }
 
-interface OverwriteConfirmDialogProps {
+interface OverwriteDialogProps {
     /**
      * Overrides the auto-generated confirm button label. Defaults to
      * `"Replace"` for a single conflict and `"Replace all"` for a batch.
@@ -57,14 +57,14 @@ const buildDefaultConfirmText = (count: number): string => (count > 1 ? 'Replace
  * file-manager UX and keeps the user from being prompted N times for the
  * same destination directory.
  */
-export const OverwriteConfirmDialog = ({
+export const OverwriteDialog = ({
     confirmText,
     conflicts,
     description,
     onCancel,
     onReplaceAll,
     title = 'Replace existing item?',
-}: OverwriteConfirmDialogProps) => (
+}: OverwriteDialogProps) => (
     <ConfirmationDialog
         cancelText="Cancel"
         confirmIcon={<Replace />}

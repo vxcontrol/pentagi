@@ -2,7 +2,7 @@ import { ChevronDown, Copy, FileSymlink, Folder, FolderPlus, FolderUp, Loader2, 
 import { useCallback, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
-import type { OverwriteConflict } from '@/components/shared/overwrite-confirm-dialog';
+import type { OverwriteConflict } from '@/components/shared/overwrite';
 
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
 import {
@@ -23,8 +23,8 @@ import {
     formatModifiedAbsolute,
     formatModifiedRelative,
 } from '@/components/shared/file-manager';
-import { OverwriteConfirmDialog } from '@/components/shared/overwrite-confirm-dialog';
-import { useOverwriteAction } from '@/components/shared/use-overwrite-action';
+import { HeaderButton } from '@/components/shared/header-button';
+import { OverwriteDialog, useOverwrite } from '@/components/shared/overwrite';
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage } from '@/components/ui/breadcrumb';
 import { Button } from '@/components/ui/button';
 import {
@@ -36,7 +36,6 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { FileDropZone } from '@/components/ui/file-drop-zone';
-import { Form, FormControl, FormField, FormItem } from '@/components/ui/form';
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group';
 import { Separator } from '@/components/ui/separator';
 import { SidebarTrigger } from '@/components/ui/sidebar';
@@ -50,9 +49,9 @@ import { useResourcesSearch } from '@/features/resources/use-resources-search';
 import { useResourcesUpload } from '@/features/resources/use-resources-upload';
 import { useEffectAfterMount } from '@/hooks/use-effect-after-mount';
 import { useFilesDragAndDrop } from '@/hooks/use-files-drag-and-drop';
+import { usePageStorageKeys } from '@/hooks/use-page-storage-keys';
 import { copyToClipboard } from '@/lib/report';
-import { getColumnStorageKey } from '@/lib/storage-keys';
-import { loadColumnVisibility, saveColumnVisibility } from '@/lib/table-storage';
+import { migrateLegacyViewOptions, saveViewOptions } from '@/lib/view-options-storage';
 import { useResources } from '@/providers/resources-provider';
 
 /**
@@ -64,8 +63,9 @@ import { useResources } from '@/providers/resources-provider';
  *                              the FileManager default) when `true`, or as an
  *                              absolute, minute-precision timestamp when `false`
  *
- * All flags persist into the same `column` storage bucket because the schema is
- * `Record<string, boolean>` — adding more toggles later does not require a new key.
+ * All flags persist into the page's `viewOptions` storage bucket; the schema
+ * is `Record<string, boolean>` so adding more toggles later does not require
+ * a new key.
  */
 interface ResourcesViewOptions {
     foldersFirst: boolean;
@@ -73,6 +73,8 @@ interface ResourcesViewOptions {
     modified: boolean;
     size: boolean;
 }
+
+const RESOURCES_PATH = '/resources';
 
 /** Defaults match FileManager's out-of-the-box behaviour (relative dates, folders first, both columns visible). */
 const defaultViewOptions: ResourcesViewOptions = {
@@ -84,8 +86,8 @@ const defaultViewOptions: ResourcesViewOptions = {
 
 type ResourcesViewOptionKey = keyof ResourcesViewOptions;
 
-const loadViewOptions = (storageKey: string): ResourcesViewOptions => {
-    const stored = loadColumnVisibility(storageKey) ?? {};
+const seedViewOptions = (storageKey: string): ResourcesViewOptions => {
+    const stored = migrateLegacyViewOptions(RESOURCES_PATH, storageKey);
 
     return {
         foldersFirst: stored.foldersFirst ?? defaultViewOptions.foldersFirst,
@@ -111,14 +113,14 @@ const Resources = () => {
     const [filesToMove, setFilesToMove] = useState<FileNode[] | null>(null);
     const [filesToCopy, setFilesToCopy] = useState<FileNode[] | null>(null);
 
-    const viewOptionsStorageKey = useMemo(() => getColumnStorageKey('/resources'), []);
-    const [viewOptions, setViewOptions] = useState<ResourcesViewOptions>(() => loadViewOptions(viewOptionsStorageKey));
+    const { viewOptions: viewOptionsStorageKey } = usePageStorageKeys();
+    const [viewOptions, setViewOptions] = useState<ResourcesViewOptions>(() => seedViewOptions(viewOptionsStorageKey));
 
     useEffectAfterMount(() => {
         // Cast: `ResourcesViewOptions` is structurally a `Record<string, boolean>`
         // but TS doesn't widen object types with declared keys to an index
         // signature implicitly.
-        saveColumnVisibility(viewOptionsStorageKey, viewOptions as unknown as Record<string, boolean>);
+        saveViewOptions(viewOptionsStorageKey, viewOptions as unknown as Record<string, boolean>);
     }, [viewOptions, viewOptionsStorageKey]);
 
     const toggleViewOption = useCallback((option: ResourcesViewOptionKey) => {
@@ -183,7 +185,7 @@ const Resources = () => {
         targets: OverwriteConflict[];
     }
 
-    const dndMoveAction = useOverwriteAction<DndMovePlan>({
+    const dndMoveAction = useOverwrite<DndMovePlan>({
         execute: (plan, force) => move(plan.sources, plan.destination, force),
         findConflicts: (plan) => {
             const movedPaths = new Set(plan.sources);
@@ -381,40 +383,37 @@ const Resources = () => {
 
     const pageHeader = (
         <header className="bg-background sticky top-0 z-10 flex h-12 w-full shrink-0 items-center gap-2 border-b transition-[width,height] ease-linear">
-            <div className="flex items-center gap-2 px-4">
-                <SidebarTrigger className="-ml-1" />
+            <div className="flex min-w-0 flex-1 items-center gap-2 px-4">
+                <SidebarTrigger className="-ml-1 shrink-0" />
                 <Separator
-                    className="h-4"
+                    className="h-4 shrink-0"
                     orientation="vertical"
                 />
-                <Breadcrumb>
-                    <BreadcrumbList>
-                        <BreadcrumbItem>
-                            <Folder className="size-4" />
-                            <BreadcrumbPage>Resources</BreadcrumbPage>
+                <Breadcrumb className="min-w-0 flex-1">
+                    <BreadcrumbList className="min-w-0 flex-nowrap">
+                        <BreadcrumbItem className="min-w-0">
+                            <Folder className="size-4 shrink-0" />
+                            <BreadcrumbPage className="min-w-0 truncate">Resources</BreadcrumbPage>
                         </BreadcrumbItem>
                     </BreadcrumbList>
                 </Breadcrumb>
             </div>
-            <div className="ml-auto flex items-center gap-2 px-4">
-                <Button
+            <div className="flex shrink-0 items-center gap-2 px-4">
+                <HeaderButton
                     disabled={upload.isUploading}
+                    icon={<FolderPlus />}
+                    label="New folder"
                     onClick={() => setIsMkdirOpen(true)}
-                    size="sm"
                     variant="outline"
-                >
-                    <FolderPlus />
-                    New folder
-                </Button>
-                <Button
+                />
+                <HeaderButton
+                    aria-label={upload.isUploading ? 'Uploading...' : 'Upload files'}
                     disabled={upload.isUploading}
+                    icon={upload.isUploading ? <Loader2 className="animate-spin" /> : <Upload />}
+                    label={upload.isUploading ? 'Uploading...' : 'Upload files'}
                     onClick={upload.openFilePicker}
-                    size="sm"
                     variant="secondary"
-                >
-                    {upload.isUploading ? <Loader2 className="animate-spin" /> : <Upload />}
-                    {upload.isUploading ? 'Uploading...' : 'Upload files'}
-                </Button>
+                />
             </div>
         </header>
     );
@@ -472,39 +471,29 @@ const Resources = () => {
                 )}
 
                 <div className="flex items-center gap-2">
-                    <Form {...search.form}>
-                        <FormField
-                            control={search.form.control}
-                            name="search"
-                            render={({ field }) => (
-                                <FormItem className="max-w-sm flex-1">
-                                    <FormControl>
-                                        <InputGroup>
-                                            <InputGroupAddon>
-                                                <Search />
-                                            </InputGroupAddon>
-                                            <InputGroupInput
-                                                {...field}
-                                                autoComplete="off"
-                                                placeholder="Search resources..."
-                                                type="text"
-                                            />
-                                            {field.value && (
-                                                <InputGroupAddon align="inline-end">
-                                                    <InputGroupButton
-                                                        onClick={search.resetSearch}
-                                                        type="button"
-                                                    >
-                                                        <X />
-                                                    </InputGroupButton>
-                                                </InputGroupAddon>
-                                            )}
-                                        </InputGroup>
-                                    </FormControl>
-                                </FormItem>
-                            )}
+                    <InputGroup className="max-w-sm flex-1">
+                        <InputGroupAddon>
+                            <Search />
+                        </InputGroupAddon>
+                        <InputGroupInput
+                            aria-label="Search resources"
+                            autoComplete="off"
+                            onChange={(event) => search.setQuery(event.target.value)}
+                            placeholder="Search resources..."
+                            type="text"
+                            value={search.rawQuery}
                         />
-                    </Form>
+                        {search.rawQuery ? (
+                            <InputGroupAddon align="inline-end">
+                                <InputGroupButton
+                                    onClick={search.resetSearch}
+                                    type="button"
+                                >
+                                    <X />
+                                </InputGroupButton>
+                            </InputGroupAddon>
+                        ) : null}
+                    </InputGroup>
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                             <Button
@@ -585,7 +574,7 @@ const Resources = () => {
                     onClose={() => setFilesToCopy(null)}
                 />
 
-                <OverwriteConfirmDialog
+                <OverwriteDialog
                     conflicts={dndMoveAction.conflicts}
                     onCancel={dndMoveAction.resetConflicts}
                     onReplaceAll={dndMoveAction.handleReplaceAll}

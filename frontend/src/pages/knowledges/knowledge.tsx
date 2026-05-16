@@ -32,7 +32,6 @@ const Knowledge = () => {
     });
 
     const knowledge = data?.knowledgeDocument ?? null;
-    const knowledgeName = knowledge?.question ?? null;
 
     const initialValues = useMemo<FormValues>(
         () => (knowledge ? documentToFormValues(knowledge) : newDocumentDefaults),
@@ -70,7 +69,7 @@ const Knowledge = () => {
         return (
             <KnowledgeLayout
                 isNew={false}
-                knowledgeName={knowledgeName}
+                knowledge={knowledge}
             >
                 <div className="flex flex-1 items-center justify-center">
                     <Spinner variant="circle" />
@@ -83,7 +82,7 @@ const Knowledge = () => {
         return (
             <KnowledgeLayout
                 isNew={false}
-                knowledgeName={knowledgeName}
+                knowledge={knowledge}
             >
                 <div className="flex flex-1 items-center justify-center p-4">
                     <Card className="w-full max-w-2xl">
@@ -106,7 +105,6 @@ const Knowledge = () => {
             isNew={isNew}
             key={knowledgeId ?? 'new'}
             knowledge={knowledge}
-            knowledgeName={knowledgeName}
             onSubmit={handleSubmit}
         />
     );
