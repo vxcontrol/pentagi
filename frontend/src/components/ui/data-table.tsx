@@ -44,7 +44,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { useEffectAfterMount } from '@/hooks/use-effect-after-mount';
 import { useLatestRef } from '@/hooks/use-latest-ref';
 import { usePageStorageKeys } from '@/hooks/use-page-storage-keys';
-import { getColumnId } from '@/lib/column-utils';
 import { migrateLegacyTableState, updateTableState } from '@/lib/table-state';
 import { cn } from '@/lib/utils';
 
@@ -101,6 +100,24 @@ const PAGE_SIZE_OPTIONS = [10, 15, 20, 50, 100] as const;
 
 const columnPickerLabel = <TData,>(column: Column<TData, unknown>): string =>
     column.columnDef.meta?.columnMenuLabel ?? column.id;
+
+/**
+ * Resolve a `ColumnDef`'s id the way TanStack does internally: explicit `id`
+ * wins, then `accessorKey` when it's a plain string. Display columns and
+ * `accessorFn` columns without an explicit id resolve to `undefined` —
+ * callers filter those out before passing the id to APIs that require one.
+ */
+const getColumnId = <TData, TValue>(column: ColumnDef<TData, TValue>): string | undefined => {
+    const withId = column as { id?: string };
+
+    if (withId.id) {
+        return withId.id;
+    }
+
+    const withAccessor = column as { accessorKey?: string };
+
+    return typeof withAccessor.accessorKey === 'string' ? withAccessor.accessorKey : undefined;
+};
 
 interface DataTableFilterProps<TData> {
     placeholder: string;
