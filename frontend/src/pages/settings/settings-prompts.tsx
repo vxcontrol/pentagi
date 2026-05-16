@@ -860,6 +860,7 @@ const SettingsPrompts = () => {
                             initialPageSize={1000}
                             renderRowContextMenu={renderAgentRowContextMenu}
                             renderSubComponent={renderAgentSubComponent}
+                            storageKey="table_4_/settings/prompts:agents"
                         />
                     </div>
                 )}
@@ -880,6 +881,7 @@ const SettingsPrompts = () => {
                             initialPageSize={1000}
                             renderRowContextMenu={renderToolRowContextMenu}
                             renderSubComponent={renderToolSubComponent}
+                            storageKey="table_4_/settings/prompts:tools"
                         />
                     </div>
                 )}

@@ -280,8 +280,8 @@ describe('DataTable — empty results', () => {
         expect(screen.getByText('No results')).toBeInTheDocument();
     });
 
-    it('exposes name and id on the filter field when filterColumn is set', () => {
-        render(
+    it('assigns a non-empty unique id and matching name to the filter field', () => {
+        const { unmount } = render(
             <DataTable<Row>
                 columns={COLUMNS}
                 data={ROWS}
@@ -294,9 +294,30 @@ describe('DataTable — empty results', () => {
             { wrapper: Wrapper },
         );
 
-        const input = screen.getByRole('textbox');
-        expect(input).toHaveAttribute('name', 'search');
-        expect(input).toHaveAttribute('id', 'data-table-search');
+        const firstInput = screen.getByRole('textbox');
+        const firstId = firstInput.getAttribute('id');
+        // `useId` returns a non-empty stable string; `name` mirrors it so pages
+        // with multiple DataTables don't collide on either attribute.
+        expect(firstId).toBeTruthy();
+        expect(firstInput).toHaveAttribute('name', firstId);
+        unmount();
+
+        // Render a second instance and confirm the id is different — proves
+        // multi-table pages get unique ids per instance.
+        render(
+            <DataTable<Row>
+                columns={COLUMNS}
+                data={ROWS}
+                filterColumn="name"
+                filterValue=""
+                onFilterChange={() => {
+                    /* no-op */
+                }}
+            />,
+            { wrapper: Wrapper },
+        );
+        const secondInput = screen.getByRole('textbox');
+        expect(secondInput.getAttribute('id')).not.toBe(firstId);
     });
 });
 

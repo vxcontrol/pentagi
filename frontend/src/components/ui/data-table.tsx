@@ -26,7 +26,17 @@ import {
     Search,
     X,
 } from 'lucide-react';
-import { Fragment, type ReactElement, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+    Fragment,
+    type ReactElement,
+    type ReactNode,
+    useCallback,
+    useEffect,
+    useId,
+    useMemo,
+    useRef,
+    useState,
+} from 'react';
 import { useLocation } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
@@ -94,6 +104,15 @@ interface DataTableProps<TData, TValue = unknown> {
     pageIndex?: number;
     renderRowContextMenu?: (row: TData) => ReactNode;
     renderSubComponent?: (props: { row: Row<TData> }) => ReactElement;
+    /**
+     * Storage slot for sorting / column visibility / page size / search-column
+     * narrowing. Defaults to `usePageStorageKeys().table` — i.e.
+     * `table_4_<pathname>` — which is correct for any route that owns exactly
+     * one DataTable. Pages that mount multiple DataTables on the same route
+     * (e.g. `/settings/prompts`) must pass distinct keys per instance, or
+     * their persisted state will alias and overwrite each other.
+     */
+    storageKey?: string;
 }
 
 const PAGE_SIZE_OPTIONS = [10, 15, 20, 50, 100] as const;
@@ -147,6 +166,11 @@ const DataTableFilter = ({ onQueryChange, placeholder, query }: DataTableFilterP
     const [localValue, setLocalValue] = useState(query);
     const debouncedValue = useDebouncedValue(localValue, FILTER_DEBOUNCE_MS);
     const lastEmittedReference = useRef(query);
+    // Generated per-instance so pages with multiple DataTables (e.g.
+    // /settings/prompts) don't end up with duplicate `id` attributes — that
+    // breaks `getElementById`, a11y semantics, and any test selector that
+    // relies on the input id.
+    const fieldId = useId();
 
     useEffect(() => {
         if (query !== lastEmittedReference.current) {
@@ -176,8 +200,8 @@ const DataTableFilter = ({ onQueryChange, placeholder, query }: DataTableFilterP
             <InputGroupInput
                 aria-label={placeholder}
                 autoComplete="off"
-                id="data-table-search"
-                name="search"
+                id={fieldId}
+                name={fieldId}
                 onChange={(event) => setLocalValue(event.target.value)}
                 placeholder={placeholder}
                 type="text"
@@ -245,6 +269,7 @@ function DataTable<TData, TValue = unknown>({
     pageIndex: externalPageIndex,
     renderRowContextMenu,
     renderSubComponent,
+    storageKey: explicitStorageKey,
 }: DataTableProps<TData, TValue>) {
     const isColumnVisibilityControlled = externalColumnVisibility !== undefined;
     const isPageControlled = externalPageIndex !== undefined;
@@ -257,7 +282,13 @@ function DataTable<TData, TValue = unknown>({
     // negligible, but the explicit pass keeps the data flow obvious and
     // makes it easy to migrate the table to a different storage scope (e.g.
     // a workspace-prefixed path) without grepping for every subscription.
-    const { table: tableKey } = usePageStorageKeys({ pathname });
+    //
+    // When `storageKey` is passed by the parent it wins — multi-table routes
+    // (e.g. /settings/prompts) need distinct slots per instance, otherwise
+    // their sorting / visibility / search-column narrowing alias and
+    // overwrite each other under the shared `table_4_<path>` key.
+    const { table: defaultTableKey } = usePageStorageKeys({ pathname });
+    const tableKey = explicitStorageKey ?? defaultTableKey;
 
     // Run the legacy → unified migration exactly once on mount via `useState`
     // lazy init. The lazy initializer runs in a single commit, so the
