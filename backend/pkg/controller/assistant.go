@@ -565,7 +565,6 @@ func (aw *assistantWorker) Finish(ctx context.Context) error {
 	}
 
 	aw.cancel()
-	close(aw.input)
 	aw.wg.Wait()
 
 	if err := aw.SetStatus(ctx, database.AssistantStatusFinished); err != nil {
