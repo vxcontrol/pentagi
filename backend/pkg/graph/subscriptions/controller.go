@@ -422,10 +422,15 @@ func (c *channel[T]) Publish(ctx context.Context, id int64, data T) {
 	defer c.mx.RUnlock()
 
 	for _, ch := range c.subs[id] {
+		timer := time.NewTimer(defSendTimeout)
 		select {
 		case ch <- data:
+			timer.Stop()
 		case <-ctx.Done():
+			timer.Stop()
 			return
+		case <-timer.C:
+			// subscriber is slow or disconnected; drop the event after timeout
 		}
 	}
 }
@@ -436,10 +441,15 @@ func (c *channel[T]) Broadcast(ctx context.Context, data T) {
 
 	for _, subs := range c.subs {
 		for _, ch := range subs {
+			timer := time.NewTimer(defSendTimeout)
 			select {
 			case ch <- data:
+				timer.Stop()
 			case <-ctx.Done():
+				timer.Stop()
 				return
+			case <-timer.C:
+				// subscriber is slow or disconnected; drop the event after timeout
 			}
 		}
 	}
