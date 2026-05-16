@@ -397,6 +397,7 @@ const SettingsAPITokens = () => {
                         title="Name"
                     />
                 ),
+                meta: { searchable: true },
                 size: 300,
             },
             {
@@ -431,6 +432,7 @@ const SettingsAPITokens = () => {
                         title="Token ID"
                     />
                 ),
+                meta: { columnMenuLabel: 'Token ID', searchable: true },
                 size: 200,
             },
             {
@@ -480,6 +482,7 @@ const SettingsAPITokens = () => {
                         title="Status"
                     />
                 ),
+                meta: { searchable: true },
                 size: 120,
             },
             {
@@ -817,8 +820,7 @@ const SettingsAPITokens = () => {
             <DataTable<APIToken>
                 columns={columns}
                 data={creatingToken ? [createNewTokenPlaceholder, ...tokens] : tokens}
-                filterColumn="name"
-                filterPlaceholder="Filter token names..."
+                filterPlaceholder="Filter tokens..."
                 filterValue={filter}
                 onFilterChange={setFilter}
                 onPageChange={handlePageChange}
