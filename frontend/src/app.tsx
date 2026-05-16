@@ -57,13 +57,11 @@ const RootLayout = () => (
     <UserProvider>
         <FavoritesProvider>
             <TemplatesProvider>
-                <KnowledgesProvider>
-                    <ResourcesProvider>
-                        <Suspense fallback={<PageLoader />}>
-                            <Outlet />
-                        </Suspense>
-                    </ResourcesProvider>
-                </KnowledgesProvider>
+                <ResourcesProvider>
+                    <Suspense fallback={<PageLoader />}>
+                        <Outlet />
+                    </Suspense>
+                </ResourcesProvider>
             </TemplatesProvider>
         </FavoritesProvider>
     </UserProvider>
@@ -99,6 +97,12 @@ const FlowWithProvider = () => (
     <FlowProvider>
         <Flow />
     </FlowProvider>
+);
+
+const KnowledgesLayout = () => (
+    <KnowledgesProvider>
+        <Outlet />
+    </KnowledgesProvider>
 );
 
 const router = createBrowserRouter(
@@ -138,14 +142,16 @@ const router = createBrowserRouter(
                         path="templates/:templateId"
                     />
 
-                    <Route
-                        element={<Knowledges />}
-                        path="knowledges"
-                    />
-                    <Route
-                        element={<Knowledge />}
-                        path="knowledges/:knowledgeId"
-                    />
+                    <Route element={<KnowledgesLayout />}>
+                        <Route
+                            element={<Knowledges />}
+                            path="knowledges"
+                        />
+                        <Route
+                            element={<Knowledge />}
+                            path="knowledges/:knowledgeId"
+                        />
+                    </Route>
 
                     <Route
                         element={<Resources />}
