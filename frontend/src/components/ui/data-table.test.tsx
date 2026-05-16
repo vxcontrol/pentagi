@@ -1,7 +1,7 @@
 import type { Column, ColumnDef } from '@tanstack/react-table';
 import type { ReactNode } from 'react';
 
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -80,7 +80,7 @@ describe('DataTable — controlled filter projection', () => {
         expect(screen.getByText('Charlie')).toBeInTheDocument();
     });
 
-    it('invokes `onFilterChange` with the typed value as the user edits the input', async () => {
+    it('invokes `onFilterChange` with the typed value after the debounce settles', async () => {
         const onFilterChange = vi.fn();
         const user = userEvent.setup();
 
@@ -99,12 +99,14 @@ describe('DataTable — controlled filter projection', () => {
         const input = screen.getByPlaceholderText('Filter name...');
         await user.type(input, 'al');
 
-        // userEvent fires keystroke-by-keystroke; the last call carries the
-        // full input — controlled-mode parents receive every intermediate
-        // value because the input is controlled by the column filter API.
-        expect(onFilterChange).toHaveBeenCalled();
+        // The input debounces its commit to the parent — intermediate values
+        // never reach `onFilterChange`. After the debounce settles, the parent
+        // sees exactly one call carrying the final value.
+        await waitFor(() => {
+            expect(onFilterChange).toHaveBeenCalled();
+        });
         const lastCall = onFilterChange.mock.calls.at(-1);
-        expect(lastCall?.[0]).toBe('l');
+        expect(lastCall?.[0]).toBe('al');
     });
 
     it('clears the filter when the trailing X button is clicked', async () => {
@@ -151,10 +153,13 @@ describe('DataTable — uncontrolled filter is still routed through the same inp
         const input = screen.getByPlaceholderText('Filter...');
         await user.type(input, 'Bra');
 
-        // The input is uncontrolled here — TanStack reflects the value back
-        // via `column.getFilterValue()`, and only matching rows survive.
+        // Wait for the input's debounced commit; Bravo was in the initial
+        // render, so the only authoritative signal is the disappearance of
+        // the non-matching row.
+        await waitFor(() => {
+            expect(screen.queryByText('Alpha')).not.toBeInTheDocument();
+        });
         expect(screen.getByText('Bravo')).toBeInTheDocument();
-        expect(screen.queryByText('Alpha')).not.toBeInTheDocument();
     });
 });
 
@@ -330,9 +335,14 @@ describe('DataTable — multi-column search', () => {
         // must surface Charlie even though her `name` doesn't contain it.
         await user.type(input, 'reader');
 
-        expect(screen.getByText('Charlie')).toBeInTheDocument();
-        expect(screen.queryByText('Alpha')).not.toBeInTheDocument();
+        // Wait for the non-matching rows to disappear; Alpha and Bravo are
+        // present in the initial render, so finding Charlie is not enough —
+        // we need to confirm the filter actually narrowed the row set.
+        await waitFor(() => {
+            expect(screen.queryByText('Alpha')).not.toBeInTheDocument();
+        });
         expect(screen.queryByText('Bravo')).not.toBeInTheDocument();
+        expect(screen.getByText('Charlie')).toBeInTheDocument();
     });
 
     it('narrows the search when the picker disables a candidate', async () => {
@@ -357,7 +367,7 @@ describe('DataTable — multi-column search', () => {
         const input = screen.getByPlaceholderText('Filter...');
         await user.type(input, 'reader');
 
-        expect(screen.getByText('No results.')).toBeInTheDocument();
+        expect(await screen.findByText('No results.')).toBeInTheDocument();
     });
 
     it('persists the narrowed search column set to the unified storage slot', async () => {
@@ -391,7 +401,7 @@ describe('DataTable — multi-column search', () => {
         // "admin" appears only in `role` on Alpha. Confirm the multi-column
         // search surfaces her *before* we narrow the picker.
         await user.type(screen.getByPlaceholderText('Filter...'), 'admin');
-        expect(screen.getByText('Alpha')).toBeInTheDocument();
+        expect(await screen.findByText('Alpha')).toBeInTheDocument();
 
         // Now uncheck `Role`. The previous closure-based implementation kept
         // Alpha visible here because `state.globalFilter` stayed equal and
@@ -401,7 +411,9 @@ describe('DataTable — multi-column search', () => {
         await user.click(screen.getByRole('button', { name: /Search in/ }));
         await user.click(await screen.findByRole('menuitemcheckbox', { name: /role/i }));
 
-        expect(screen.queryByText('Alpha')).not.toBeInTheDocument();
+        await waitFor(() => {
+            expect(screen.queryByText('Alpha')).not.toBeInTheDocument();
+        });
     });
 
     it('prunes stale ids from persisted searchColumns when the candidate set shrinks', () => {
@@ -447,9 +459,13 @@ describe('DataTable — multi-column search', () => {
         await user.type(input, 'user');
 
         // "user" matches Bravo's role; Alpha and Charlie don't contain it.
-        expect(screen.getByText('Bravo')).toBeInTheDocument();
-        expect(screen.queryByText('Alpha')).not.toBeInTheDocument();
+        // Wait for them to disappear instead of relying on `Bravo` being
+        // present (it was in the initial render too).
+        await waitFor(() => {
+            expect(screen.queryByText('Alpha')).not.toBeInTheDocument();
+        });
         expect(screen.queryByText('Charlie')).not.toBeInTheDocument();
+        expect(screen.getByText('Bravo')).toBeInTheDocument();
     });
 
     it('hides the input entirely when filterColumn is undefined and no column opts in', () => {

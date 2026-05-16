@@ -9,7 +9,6 @@ import {
     getFilteredRowModel,
     getPaginationRowModel,
     getSortedRowModel,
-    type Table as ReactTable,
     type Row,
     type SortingState,
     useReactTable,
@@ -41,6 +40,7 @@ import {
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { useEffectAfterMount } from '@/hooks/use-effect-after-mount';
 import { useLatestRef } from '@/hooks/use-latest-ref';
 import { usePageStorageKeys } from '@/hooks/use-page-storage-keys';
@@ -119,20 +119,54 @@ const getColumnId = <TData, TValue>(column: ColumnDef<TData, TValue>): string | 
     return typeof withAccessor.accessorKey === 'string' ? withAccessor.accessorKey : undefined;
 };
 
-interface DataTableFilterProps<TData> {
+interface DataTableFilterProps {
+    onQueryChange: (value: string) => void;
     placeholder: string;
-    table: ReactTable<TData>;
+    query: string;
 }
 
+const FILTER_DEBOUNCE_MS = 150;
+
 /**
- * Search input bound to TanStack's `state.globalFilter`. Reads `.query` out of
- * the composite filter value and writes back a raw string — the normalising
- * `onGlobalFilterChange` handler upstream takes care of folding it back into
- * the composite shape (and forwarding the parent-visible string in
- * controlled mode).
+ * Search input for the table's global filter. Keystrokes update an internal
+ * `localValue` state synchronously so the input feels instant; the debounced
+ * mirror is what we propagate upstream via `onQueryChange`. The previous
+ * design committed every keystroke straight into `useTableQueryFilter`, which
+ * synchronously walked the router and re-rendered the entire route subtree —
+ * with the Flows page that ran ~250 ms per keystroke, so consecutive
+ * keypresses queued behind the in-flight reconciliation and showed up as
+ * input-delay INP. Debouncing the commit drops the upstream cascade rate
+ * from per-keystroke to once per typing pause.
+ *
+ * External `query` changes (X button, programmatic clear, URL back-button,
+ * route swap) are reconciled into `localValue` through the sync effect: we
+ * skip when the incoming value matches what we last emitted, so our own
+ * round-trip through the parent doesn't fight with active typing.
  */
-const DataTableFilter = <TData,>({ placeholder, table }: DataTableFilterProps<TData>) => {
-    const filterValue = (table.getState().globalFilter as DataTableGlobalFilter | undefined)?.query ?? '';
+const DataTableFilter = ({ onQueryChange, placeholder, query }: DataTableFilterProps) => {
+    const [localValue, setLocalValue] = useState(query);
+    const debouncedValue = useDebouncedValue(localValue, FILTER_DEBOUNCE_MS);
+    const lastEmittedReference = useRef(query);
+
+    useEffect(() => {
+        if (query !== lastEmittedReference.current) {
+            setLocalValue(query);
+            lastEmittedReference.current = query;
+        }
+    }, [query]);
+
+    useEffect(() => {
+        if (debouncedValue !== lastEmittedReference.current) {
+            lastEmittedReference.current = debouncedValue;
+            onQueryChange(debouncedValue);
+        }
+    }, [debouncedValue, onQueryChange]);
+
+    const handleClear = useCallback(() => {
+        setLocalValue('');
+        lastEmittedReference.current = '';
+        onQueryChange('');
+    }, [onQueryChange]);
 
     return (
         <InputGroup className="max-w-sm">
@@ -144,15 +178,15 @@ const DataTableFilter = <TData,>({ placeholder, table }: DataTableFilterProps<TD
                 autoComplete="off"
                 id="data-table-search"
                 name="search"
-                onChange={(event) => table.setGlobalFilter(event.target.value)}
+                onChange={(event) => setLocalValue(event.target.value)}
                 placeholder={placeholder}
                 type="text"
-                value={filterValue}
+                value={localValue}
             />
-            {filterValue ? (
+            {localValue ? (
                 <InputGroupAddon align="inline-end">
                     <InputGroupButton
-                        onClick={() => table.setGlobalFilter('')}
+                        onClick={handleClear}
                         type="button"
                     >
                         <X />
@@ -563,22 +597,26 @@ function DataTable<TData, TValue = unknown>({
 
     return (
         <div className="w-full">
-            <div className="flex items-center gap-4 py-4">
+            <div className="flex items-center gap-2 py-4">
                 {searchCandidateIds.length > 0 ? (
                     <DataTableFilter
+                        onQueryChange={(value) => table.setGlobalFilter(value)}
                         placeholder={filterPlaceholder}
-                        table={table}
+                        query={effectiveQuery}
                     />
                 ) : null}
                 {isMultiMode && searchCandidateIds.length > 1 ? (
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                            <Button variant="outline">
-                                <ListFilter className="mr-2" />
-                                Search in <ChevronDown className="ml-2" />
+                            <Button
+                                aria-label="Search in"
+                                size="icon"
+                                variant="outline"
+                            >
+                                <ListFilter />
                             </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="start">
+                        <DropdownMenuContent align="end">
                             {searchCandidateIds.map((id) => {
                                 const column = table.getColumn(id);
 
