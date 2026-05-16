@@ -2,6 +2,7 @@ import {
     type Column,
     type ColumnDef,
     type ExpandedState,
+    type FilterFn,
     flexRender,
     getCoreRowModel,
     getExpandedRowModel,
@@ -11,7 +12,6 @@ import {
     type Table as ReactTable,
     type Row,
     type SortingState,
-    type Updater,
     useReactTable,
     type VisibilityState,
 } from '@tanstack/react-table';
@@ -44,8 +44,19 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { useEffectAfterMount } from '@/hooks/use-effect-after-mount';
 import { useLatestRef } from '@/hooks/use-latest-ref';
 import { usePageStorageKeys } from '@/hooks/use-page-storage-keys';
+import { getColumnId } from '@/lib/column-utils';
 import { migrateLegacyTableState, updateTableState } from '@/lib/table-state';
 import { cn } from '@/lib/utils';
+
+/**
+ * Composite value stored in TanStack's `state.globalFilter`. Bundling `query`
+ * and the active `columns` set together makes the predicate self-contained:
+ * any change to either field produces a new object reference, which is what
+ * TanStack watches to re-run the filter pipeline. This sidesteps the trap
+ * where a closure-only narrowing (`getColumnCanGlobalFilter`) updates silently
+ * and the rows stay stale.
+ */
+type DataTableGlobalFilter = { columns: string[]; query: string };
 
 interface DataTableProps<TData, TValue = unknown> {
     columns: ColumnDef<TData, TValue>[];
@@ -97,14 +108,14 @@ interface DataTableFilterProps<TData> {
 }
 
 /**
- * Search input bound to TanStack's `state.globalFilter`. Reads/writes through
- * `table.setGlobalFilter` exclusively — `DataTable`'s `onGlobalFilterChange`
- * funnels the write to the parent (`onFilterChange`) when the table is in
- * controlled-filter mode, so this component stays uniform regardless of
- * single- vs multi-column mode.
+ * Search input bound to TanStack's `state.globalFilter`. Reads `.query` out of
+ * the composite filter value and writes back a raw string — the normalising
+ * `onGlobalFilterChange` handler upstream takes care of folding it back into
+ * the composite shape (and forwarding the parent-visible string in
+ * controlled mode).
  */
 const DataTableFilter = <TData,>({ placeholder, table }: DataTableFilterProps<TData>) => {
-    const filterValue = (table.getState().globalFilter as string | undefined) ?? '';
+    const filterValue = (table.getState().globalFilter as DataTableGlobalFilter | undefined)?.query ?? '';
 
     return (
         <InputGroup className="max-w-sm">
@@ -232,21 +243,30 @@ function DataTable<TData, TValue = unknown>({
 
         return columns
             .filter((column) => column.meta?.searchable === true)
-            .map((column) => {
-                const withId = column as { id?: string };
-
-                if (withId.id) {
-                    return withId.id;
-                }
-
-                const withAccessor = column as { accessorKey?: string };
-
-                return typeof withAccessor.accessorKey === 'string' ? withAccessor.accessorKey : undefined;
-            })
+            .map(getColumnId)
             .filter((id): id is string => typeof id === 'string');
     }, [columns, filterColumn]);
 
     const isMultiMode = Array.isArray(filterColumn) || (filterColumn === undefined && searchCandidateIds.length > 0);
+
+    // Rebase `searchColumns` whenever the set of candidates changes (column
+    // reconfiguration, HMR, or a hydrated localStorage entry that references
+    // ids the current page no longer exposes). The empty-array sentinel — our
+    // "search everywhere" state — is preserved as-is; non-empty selections are
+    // pruned to the still-valid intersection. Return `prev` unchanged when the
+    // intersection equals the input so we don't trigger a spurious storage
+    // write through the persistence effect below.
+    useEffect(() => {
+        setSearchColumns((prev) => {
+            if (prev.length === 0) {
+                return prev;
+            }
+
+            const filtered = prev.filter((id) => searchCandidateIds.includes(id));
+
+            return filtered.length === prev.length ? prev : filtered;
+        });
+    }, [searchCandidateIds]);
 
     // Track which tableKey we've already migrated + seeded from. When the
     // key rotates (route change inside a persistent layout, or an explicit
@@ -275,32 +295,59 @@ function DataTable<TData, TValue = unknown>({
         }));
     }, [initialPageSize, initialSorting, isColumnVisibilityControlled, pathname, tableKey]);
 
-    // Effective global filter: controlled-mode parents own the value via
-    // `useTableQueryFilter` (URL `?q=`), uncontrolled tables drive it from
-    // internal state. Either way TanStack reads from `state.globalFilter`
-    // exclusively.
-    const effectiveGlobalFilter = isFilterControlled ? (externalFilterValue ?? '') : internalGlobalFilter;
+    // Compose the query and the active column set into a single TanStack
+    // state value. New object identity on any change is exactly what TanStack
+    // watches to re-run the filter pipeline — no imperative `setGlobalFilter`
+    // pokes, no closure-only narrowing that updates silently. The `columns`
+    // field follows the same "empty selection = search everywhere" sentinel
+    // as `searchColumns`, resolved once here for the predicate's convenience.
+    const effectiveQuery = isFilterControlled ? (externalFilterValue ?? '') : internalGlobalFilter;
 
-    const externalFilterValueReference = useLatestRef(externalFilterValue);
+    const effectiveGlobalFilter = useMemo<DataTableGlobalFilter>(
+        () => ({
+            columns: searchColumns.length > 0 ? searchColumns : searchCandidateIds,
+            query: effectiveQuery,
+        }),
+        [effectiveQuery, searchCandidateIds, searchColumns],
+    );
 
-    // Funnel every TanStack global-filter change through the right sink:
-    // parent callback in controlled mode, internal state otherwise. The
-    // updater signature mirrors TanStack's own — we resolve the function
-    // form against the latest external value before calling `onFilterChange`,
-    // so the parent always sees the next string, not a function.
+    const effectiveGlobalFilterReference = useLatestRef(effectiveGlobalFilter);
+
+    // Funnel every TanStack global-filter change through the right sink. The
+    // updater arrives in three shapes:
+    //   * a raw string from `DataTableFilter` (input.onChange → setGlobalFilter)
+    //   * a function `(prev: DataTableGlobalFilter) => DataTableGlobalFilter`
+    //     from any TanStack-internal mutation (e.g. `table.resetGlobalFilter`)
+    //   * a bare composite object from a programmatic write
+    // We resolve it down to the `query` string at the boundary — controlled
+    // parents and internal state both speak strings.
     const handleGlobalFilterChange = useCallback(
-        (updater: Updater<string>) => {
-            if (!isFilterControlled) {
-                setInternalGlobalFilter(updater);
+        (updater: unknown) => {
+            const resolveQuery = (value: unknown): string => {
+                if (typeof value === 'string') {
+                    return value;
+                }
 
-                return;
+                if (value && typeof value === 'object' && 'query' in value) {
+                    return String((value as { query: unknown }).query ?? '');
+                }
+
+                return '';
+            };
+
+            const nextRaw =
+                typeof updater === 'function'
+                    ? (updater as (previous: DataTableGlobalFilter) => unknown)(effectiveGlobalFilterReference.current)
+                    : updater;
+            const nextQuery = resolveQuery(nextRaw);
+
+            if (isFilterControlled) {
+                onFilterChange?.(nextQuery);
+            } else {
+                setInternalGlobalFilter(nextQuery);
             }
-
-            const previous = externalFilterValueReference.current ?? '';
-            const next = typeof updater === 'function' ? updater(previous) : updater;
-            onFilterChange?.(next);
         },
-        [externalFilterValueReference, isFilterControlled, onFilterChange],
+        [effectiveGlobalFilterReference, isFilterControlled, onFilterChange],
     );
 
     // Persist sorting + column visibility + page size into the unified
@@ -394,29 +441,29 @@ function DataTable<TData, TValue = unknown>({
         [handlePaginationChange],
     );
 
-    // Active column set for the global filter: when the user has narrowed via
-    // the picker, honour the explicit list; otherwise fall back to all
-    // candidates ("empty selection = search everywhere"). Bake the predicate
-    // into per-column `enableGlobalFilter` so TanStack re-evaluates the row
-    // model whenever the set changes — a `getColumnCanGlobalFilter` closure
-    // alone would update silently because `state.globalFilter` stays equal.
-    const tanstackColumns = useMemo<ColumnDef<TData, TValue>[]>(() => {
-        const active = searchColumns.length > 0 ? searchColumns : searchCandidateIds;
+    // Case-insensitive substring predicate that consults the composite
+    // filter for both "what to look for" and "where to look". Returning
+    // `true` for the empty query keeps the default "no filter = all rows"
+    // behaviour identical to TanStack's built-in `includesString`.
+    const globalFilterFn = useCallback<FilterFn<TData>>((row, columnId, filter: DataTableGlobalFilter) => {
+        if (!filter.query) {
+            return true;
+        }
 
-        return columns.map((column) => {
-            const withId = column as { id?: string };
-            const withAccessor = column as { accessorKey?: string };
-            const columnId =
-                withId.id ?? (typeof withAccessor.accessorKey === 'string' ? withAccessor.accessorKey : undefined);
-            const enableGlobalFilter = typeof columnId === 'string' && active.includes(columnId);
+        if (!filter.columns.includes(columnId)) {
+            return false;
+        }
 
-            return { ...column, enableGlobalFilter };
-        });
-    }, [columns, searchCandidateIds, searchColumns]);
+        const value = row.getValue(columnId);
+
+        return String(value ?? '')
+            .toLowerCase()
+            .includes(filter.query.toLowerCase());
+    }, []);
 
     const table = useReactTable({
         autoResetPageIndex: false,
-        columns: tanstackColumns,
+        columns,
         data,
         enableSortingRemoval: true,
         getCoreRowModel: getCoreRowModel(),
@@ -424,7 +471,7 @@ function DataTable<TData, TValue = unknown>({
         getFilteredRowModel: getFilteredRowModel(),
         getPaginationRowModel: getPaginationRowModel(),
         getSortedRowModel: getSortedRowModel(),
-        globalFilterFn: 'includesString',
+        globalFilterFn,
         onColumnVisibilityChange: handleColumnVisibilityChange,
         onExpandedChange: setExpanded,
         onGlobalFilterChange: handleGlobalFilterChange,

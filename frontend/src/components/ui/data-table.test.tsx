@@ -377,6 +377,51 @@ describe('DataTable — multi-column search', () => {
         expect(stored.searchColumns).toEqual(['name']);
     });
 
+    it('refilters immediately when the picker disables a column that an already-typed query matched (regression for d4c1b13)', async () => {
+        const user = userEvent.setup();
+        render(
+            <DataTable<MultiRow>
+                columns={MULTI_COLUMNS}
+                data={MULTI_ROWS}
+                filterPlaceholder="Filter..."
+            />,
+            { wrapper: Wrapper },
+        );
+
+        // "admin" appears only in `role` on Alpha. Confirm the multi-column
+        // search surfaces her *before* we narrow the picker.
+        await user.type(screen.getByPlaceholderText('Filter...'), 'admin');
+        expect(screen.getByText('Alpha')).toBeInTheDocument();
+
+        // Now uncheck `Role`. The previous closure-based implementation kept
+        // Alpha visible here because `state.globalFilter` stayed equal and
+        // TanStack short-circuited the filter pipeline. The composite-value
+        // implementation produces a new `globalFilter` object reference, so
+        // the pipeline re-runs and Alpha must disappear without retyping.
+        await user.click(screen.getByRole('button', { name: /Search in/ }));
+        await user.click(await screen.findByRole('menuitemcheckbox', { name: /role/i }));
+
+        expect(screen.queryByText('Alpha')).not.toBeInTheDocument();
+    });
+
+    it('prunes stale ids from persisted searchColumns when the candidate set shrinks', () => {
+        // Pre-seed storage as if a previous version of this page exposed a
+        // `deleted` column the user had selected. Today's columns no longer
+        // include it — the rebase effect must trim the persisted entry.
+        localStorage.setItem('table_4_/flows', JSON.stringify({ searchColumns: ['name', 'role', 'deleted'] }));
+
+        render(
+            <DataTable<MultiRow>
+                columns={MULTI_COLUMNS}
+                data={MULTI_ROWS}
+            />,
+            { wrapper: Wrapper },
+        );
+
+        const stored = JSON.parse(localStorage.getItem('table_4_/flows') ?? '{}');
+        expect(stored.searchColumns).toEqual(['name', 'role']);
+    });
+
     it('activates multi-column mode when filterColumn is an array (without meta.searchable)', async () => {
         const user = userEvent.setup();
         const PLAIN_COLUMNS: ColumnDef<MultiRow>[] = [
