@@ -357,6 +357,7 @@ const SettingsPrompts = () => {
                     </Button>
                 );
             },
+            meta: { columnMenuLabel: 'Agent Name', searchable: true },
             size: 200,
         },
         {
@@ -371,6 +372,7 @@ const SettingsPrompts = () => {
                 );
             },
             header: 'System Prompt',
+            meta: { columnMenuLabel: 'System Prompt', searchable: true },
             size: 100,
         },
         {
@@ -385,6 +387,7 @@ const SettingsPrompts = () => {
                 );
             },
             header: 'Human Prompt',
+            meta: { columnMenuLabel: 'Human Prompt', searchable: true },
             size: 100,
         },
         {
@@ -527,6 +530,7 @@ const SettingsPrompts = () => {
                     </Button>
                 );
             },
+            meta: { columnMenuLabel: 'Tool Name', searchable: true },
             size: 300,
         },
         {
@@ -541,6 +545,7 @@ const SettingsPrompts = () => {
                 );
             },
             header: 'Prompt',
+            meta: { columnMenuLabel: 'Prompt', searchable: true },
             size: 100,
         },
         {
@@ -851,8 +856,7 @@ const SettingsPrompts = () => {
                         <DataTable<AgentPromptTableData>
                             columns={agentColumns}
                             data={agentPrompts}
-                            filterColumn="displayName"
-                            filterPlaceholder="Filter agent names..."
+                            filterPlaceholder="Filter agents..."
                             initialPageSize={1000}
                             renderRowContextMenu={renderAgentRowContextMenu}
                             renderSubComponent={renderAgentSubComponent}
@@ -872,8 +876,7 @@ const SettingsPrompts = () => {
                         <DataTable<ToolPromptTableData>
                             columns={toolColumns}
                             data={toolPrompts}
-                            filterColumn="displayName"
-                            filterPlaceholder="Filter tool names..."
+                            filterPlaceholder="Filter tools..."
                             initialPageSize={1000}
                             renderRowContextMenu={renderToolRowContextMenu}
                             renderSubComponent={renderToolSubComponent}
