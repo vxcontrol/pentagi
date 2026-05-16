@@ -49,6 +49,7 @@ type FlowWorker interface {
 	PutResources(ctx context.Context, resources []database.UserResource) error
 	Stop(ctx context.Context) error
 	Rename(ctx context.Context, title string) error
+	WaitTaskCompletion(ctx context.Context) error
 }
 
 type assistantProvider struct {
@@ -327,39 +328,40 @@ func (ap *assistantProvider) getAssistantSystemPrompt(ctx context.Context) (stri
 	}
 
 	systemAssistantTmpl, err := ap.fp.Prompter().RenderTemplate(templates.PromptTypeAssistant, map[string]any{
-		"SearchToolName":            tools.SearchToolName,
-		"PentesterToolName":         tools.PentesterToolName,
-		"CoderToolName":             tools.CoderToolName,
-		"AdviceToolName":            tools.AdviceToolName,
-		"MemoristToolName":          tools.MemoristToolName,
-		"MaintenanceToolName":       tools.MaintenanceToolName,
-		"TerminalToolName":          tools.TerminalToolName,
-		"FileToolName":              tools.FileToolName,
-		"GoogleToolName":            tools.GoogleToolName,
-		"DuckDuckGoToolName":        tools.DuckDuckGoToolName,
-		"TavilyToolName":            tools.TavilyToolName,
-		"TraversaalToolName":        tools.TraversaalToolName,
-		"PerplexityToolName":        tools.PerplexityToolName,
-		"BrowserToolName":           tools.BrowserToolName,
-		"SearchInMemoryToolName":    tools.SearchInMemoryToolName,
-		"SearchGuideToolName":       tools.SearchGuideToolName,
-		"SearchAnswerToolName":      tools.SearchAnswerToolName,
-		"SearchCodeToolName":        tools.SearchCodeToolName,
-		"SummarizationToolName":     cast.SummarizationToolName,
-		"SummarizedContentPrefix":   strings.ReplaceAll(csum.SummarizedContentPrefix, "\n", "\\n"),
-		"UseAgents":                 useAgents,
-		"DockerImage":               ap.fp.Image(),
-		"Cwd":                       docker.WorkFolderPathInContainer,
-		"ContainerPorts":            ap.fp.getContainerPortsDescription(),
-		"ExecutionContext":          executionContext,
-		"Lang":                      ap.fp.Language(),
-		"CurrentTime":               getCurrentTime(),
-		"FlowManagerEnabled":        ap.flowWorker != nil,
-		"GetFlowStatusToolName":     tools.GetFlowStatusToolName,
-		"StopFlowToolName":          tools.StopFlowToolName,
-		"SubmitFlowInputToolName":   tools.SubmitFlowInputToolName,
-		"PatchFlowSubtasksToolName": tools.PatchFlowSubtasksToolName,
-		"UserFiles":                 ap.fp.userFilesListing(),
+		"SearchToolName":             tools.SearchToolName,
+		"PentesterToolName":          tools.PentesterToolName,
+		"CoderToolName":              tools.CoderToolName,
+		"AdviceToolName":             tools.AdviceToolName,
+		"MemoristToolName":           tools.MemoristToolName,
+		"MaintenanceToolName":        tools.MaintenanceToolName,
+		"TerminalToolName":           tools.TerminalToolName,
+		"FileToolName":               tools.FileToolName,
+		"GoogleToolName":             tools.GoogleToolName,
+		"DuckDuckGoToolName":         tools.DuckDuckGoToolName,
+		"TavilyToolName":             tools.TavilyToolName,
+		"TraversaalToolName":         tools.TraversaalToolName,
+		"PerplexityToolName":         tools.PerplexityToolName,
+		"BrowserToolName":            tools.BrowserToolName,
+		"SearchInMemoryToolName":     tools.SearchInMemoryToolName,
+		"SearchGuideToolName":        tools.SearchGuideToolName,
+		"SearchAnswerToolName":       tools.SearchAnswerToolName,
+		"SearchCodeToolName":         tools.SearchCodeToolName,
+		"SummarizationToolName":      cast.SummarizationToolName,
+		"SummarizedContentPrefix":    strings.ReplaceAll(csum.SummarizedContentPrefix, "\n", "\\n"),
+		"UseAgents":                  useAgents,
+		"DockerImage":                ap.fp.Image(),
+		"Cwd":                        docker.WorkFolderPathInContainer,
+		"ContainerPorts":             ap.fp.getContainerPortsDescription(),
+		"ExecutionContext":           executionContext,
+		"Lang":                       ap.fp.Language(),
+		"CurrentTime":                getCurrentTime(),
+		"FlowManagerEnabled":         ap.flowWorker != nil,
+		"GetFlowStatusToolName":      tools.GetFlowStatusToolName,
+		"StopFlowToolName":           tools.StopFlowToolName,
+		"SubmitFlowInputToolName":    tools.SubmitFlowInputToolName,
+		"PatchFlowSubtasksToolName":  tools.PatchFlowSubtasksToolName,
+		"WaitFlowCompletionToolName": tools.WaitFlowCompletionToolName,
+		"UserFiles":                  ap.fp.userFilesListing(),
 	})
 	if err != nil {
 		logger.WithError(err).Error("failed to get system prompt for assistant template")
@@ -428,6 +430,7 @@ func (ap *assistantProvider) buildFlowManagerHandlers() tools.FlowManagerHandler
 		StopFlow:      ap.stopAssistantFlow,
 		SendFlowInput: ap.sendAssistantFlowInput,
 		PatchSubtasks: ap.patchAssistantFlowSubtasks,
+		WaitFlow:      ap.waitAssistantFlowCompletion,
 	}
 }
 
@@ -489,6 +492,24 @@ func (ap *assistantProvider) stopAssistantFlow(ctx context.Context, reason strin
 	}
 
 	return nil
+}
+
+func (ap *assistantProvider) waitAssistantFlowCompletion(ctx context.Context) error {
+	logger := logrus.WithContext(ctx).WithFields(logrus.Fields{
+		"provider":     ap.fp.Type(),
+		"assistant_id": ap.id,
+		"flow_id":      ap.fp.ID(),
+		"msg_chain_id": ap.msgChainID,
+	})
+
+	logger.Debug("waiting for flow task completion from assistant")
+
+	if ap.flowWorker == nil {
+		logger.Error("flow worker is not set")
+		return fmt.Errorf("flow worker is not set")
+	}
+
+	return ap.flowWorker.WaitTaskCompletion(ctx)
 }
 
 func (ap *assistantProvider) sendAssistantFlowInput(ctx context.Context, input string) error {

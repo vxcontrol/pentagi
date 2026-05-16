@@ -9,45 +9,46 @@ import (
 )
 
 const (
-	FinalyToolName            = "done"
-	AskUserToolName           = "ask"
-	MaintenanceToolName       = "maintenance"
-	MaintenanceResultToolName = "maintenance_result"
-	CoderToolName             = "coder"
-	CodeResultToolName        = "code_result"
-	PentesterToolName         = "pentester"
-	HackResultToolName        = "hack_result"
-	AdviceToolName            = "advice"
-	MemoristToolName          = "memorist"
-	MemoristResultToolName    = "memorist_result"
-	BrowserToolName           = "browser"
-	GoogleToolName            = "google"
-	DuckDuckGoToolName        = "duckduckgo"
-	TavilyToolName            = "tavily"
-	TraversaalToolName        = "traversaal"
-	PerplexityToolName        = "perplexity"
-	SearxngToolName           = "searxng"
-	SploitusToolName          = "sploitus"
-	SearchToolName            = "search"
-	SearchResultToolName      = "search_result"
-	EnricherResultToolName    = "enricher_result"
-	SearchInMemoryToolName    = "search_in_memory"
-	SearchGuideToolName       = "search_guide"
-	StoreGuideToolName        = "store_guide"
-	SearchAnswerToolName      = "search_answer"
-	StoreAnswerToolName       = "store_answer"
-	SearchCodeToolName        = "search_code"
-	StoreCodeToolName         = "store_code"
-	GraphitiSearchToolName    = "graphiti_search"
-	ReportResultToolName      = "report_result"
-	SubtaskListToolName       = "subtask_list"
-	SubtaskPatchToolName      = "subtask_patch"
-	TerminalToolName          = "terminal"
-	FileToolName              = "file"
-	GetFlowStatusToolName     = "get_flow_status"
-	StopFlowToolName          = "stop_flow"
-	SubmitFlowInputToolName   = "submit_flow_input"
-	PatchFlowSubtasksToolName = "patch_flow_subtasks"
+	FinalyToolName             = "done"
+	AskUserToolName            = "ask"
+	MaintenanceToolName        = "maintenance"
+	MaintenanceResultToolName  = "maintenance_result"
+	CoderToolName              = "coder"
+	CodeResultToolName         = "code_result"
+	PentesterToolName          = "pentester"
+	HackResultToolName         = "hack_result"
+	AdviceToolName             = "advice"
+	MemoristToolName           = "memorist"
+	MemoristResultToolName     = "memorist_result"
+	BrowserToolName            = "browser"
+	GoogleToolName             = "google"
+	DuckDuckGoToolName         = "duckduckgo"
+	TavilyToolName             = "tavily"
+	TraversaalToolName         = "traversaal"
+	PerplexityToolName         = "perplexity"
+	SearxngToolName            = "searxng"
+	SploitusToolName           = "sploitus"
+	SearchToolName             = "search"
+	SearchResultToolName       = "search_result"
+	EnricherResultToolName     = "enricher_result"
+	SearchInMemoryToolName     = "search_in_memory"
+	SearchGuideToolName        = "search_guide"
+	StoreGuideToolName         = "store_guide"
+	SearchAnswerToolName       = "search_answer"
+	StoreAnswerToolName        = "store_answer"
+	SearchCodeToolName         = "search_code"
+	StoreCodeToolName          = "store_code"
+	GraphitiSearchToolName     = "graphiti_search"
+	ReportResultToolName       = "report_result"
+	SubtaskListToolName        = "subtask_list"
+	SubtaskPatchToolName       = "subtask_patch"
+	TerminalToolName           = "terminal"
+	FileToolName               = "file"
+	GetFlowStatusToolName      = "get_flow_status"
+	StopFlowToolName           = "stop_flow"
+	SubmitFlowInputToolName    = "submit_flow_input"
+	PatchFlowSubtasksToolName  = "patch_flow_subtasks"
+	WaitFlowCompletionToolName = "wait_flow_completion"
 )
 
 type ToolType int
@@ -93,45 +94,46 @@ func GetToolType(name string) ToolType {
 }
 
 var toolsTypeMapping = map[string]ToolType{
-	FinalyToolName:            BarrierToolType,
-	AskUserToolName:           BarrierToolType,
-	MaintenanceToolName:       AgentToolType,
-	MaintenanceResultToolName: StoreAgentResultToolType,
-	CoderToolName:             AgentToolType,
-	CodeResultToolName:        StoreAgentResultToolType,
-	PentesterToolName:         AgentToolType,
-	HackResultToolName:        StoreAgentResultToolType,
-	AdviceToolName:            AgentToolType,
-	MemoristToolName:          AgentToolType,
-	MemoristResultToolName:    StoreAgentResultToolType,
-	BrowserToolName:           SearchNetworkToolType,
-	GoogleToolName:            SearchNetworkToolType,
-	DuckDuckGoToolName:        SearchNetworkToolType,
-	TavilyToolName:            SearchNetworkToolType,
-	TraversaalToolName:        SearchNetworkToolType,
-	PerplexityToolName:        SearchNetworkToolType,
-	SearxngToolName:           SearchNetworkToolType,
-	SploitusToolName:          SearchNetworkToolType,
-	SearchToolName:            AgentToolType,
-	SearchResultToolName:      StoreAgentResultToolType,
-	EnricherResultToolName:    StoreAgentResultToolType,
-	SearchInMemoryToolName:    SearchVectorDbToolType,
-	SearchGuideToolName:       SearchVectorDbToolType,
-	StoreGuideToolName:        StoreVectorDbToolType,
-	SearchAnswerToolName:      SearchVectorDbToolType,
-	StoreAnswerToolName:       StoreVectorDbToolType,
-	SearchCodeToolName:        SearchVectorDbToolType,
-	StoreCodeToolName:         StoreVectorDbToolType,
-	GraphitiSearchToolName:    SearchVectorDbToolType,
-	ReportResultToolName:      StoreAgentResultToolType,
-	SubtaskListToolName:       StoreAgentResultToolType,
-	SubtaskPatchToolName:      StoreAgentResultToolType,
-	TerminalToolName:          EnvironmentToolType,
-	FileToolName:              EnvironmentToolType,
-	GetFlowStatusToolName:     EnvironmentToolType,
-	StopFlowToolName:          EnvironmentToolType,
-	SubmitFlowInputToolName:   EnvironmentToolType,
-	PatchFlowSubtasksToolName: EnvironmentToolType,
+	FinalyToolName:             BarrierToolType,
+	AskUserToolName:            BarrierToolType,
+	MaintenanceToolName:        AgentToolType,
+	MaintenanceResultToolName:  StoreAgentResultToolType,
+	CoderToolName:              AgentToolType,
+	CodeResultToolName:         StoreAgentResultToolType,
+	PentesterToolName:          AgentToolType,
+	HackResultToolName:         StoreAgentResultToolType,
+	AdviceToolName:             AgentToolType,
+	MemoristToolName:           AgentToolType,
+	MemoristResultToolName:     StoreAgentResultToolType,
+	BrowserToolName:            SearchNetworkToolType,
+	GoogleToolName:             SearchNetworkToolType,
+	DuckDuckGoToolName:         SearchNetworkToolType,
+	TavilyToolName:             SearchNetworkToolType,
+	TraversaalToolName:         SearchNetworkToolType,
+	PerplexityToolName:         SearchNetworkToolType,
+	SearxngToolName:            SearchNetworkToolType,
+	SploitusToolName:           SearchNetworkToolType,
+	SearchToolName:             AgentToolType,
+	SearchResultToolName:       StoreAgentResultToolType,
+	EnricherResultToolName:     StoreAgentResultToolType,
+	SearchInMemoryToolName:     SearchVectorDbToolType,
+	SearchGuideToolName:        SearchVectorDbToolType,
+	StoreGuideToolName:         StoreVectorDbToolType,
+	SearchAnswerToolName:       SearchVectorDbToolType,
+	StoreAnswerToolName:        StoreVectorDbToolType,
+	SearchCodeToolName:         SearchVectorDbToolType,
+	StoreCodeToolName:          StoreVectorDbToolType,
+	GraphitiSearchToolName:     SearchVectorDbToolType,
+	ReportResultToolName:       StoreAgentResultToolType,
+	SubtaskListToolName:        StoreAgentResultToolType,
+	SubtaskPatchToolName:       StoreAgentResultToolType,
+	TerminalToolName:           EnvironmentToolType,
+	FileToolName:               EnvironmentToolType,
+	GetFlowStatusToolName:      EnvironmentToolType,
+	StopFlowToolName:           EnvironmentToolType,
+	SubmitFlowInputToolName:    EnvironmentToolType,
+	PatchFlowSubtasksToolName:  EnvironmentToolType,
+	WaitFlowCompletionToolName: EnvironmentToolType,
 }
 
 var reflector = &jsonschema.Reflector{
@@ -417,6 +419,15 @@ var registryDefinitions = map[string]llms.FunctionDefinition{
 			"After patching, submit new input to trigger execution of the updated plan. " +
 			"Returns an error if a task is currently running — cancel it first.",
 		Parameters: reflector.Reflect(&PatchFlowSubtasksAction{}),
+	},
+	WaitFlowCompletionToolName: {
+		Name: WaitFlowCompletionToolName,
+		Description: "Block until the currently running automation task completes (or the timeout expires). " +
+			"Use this when you need to wait for the automation to finish before inspecting its results or taking further action. " +
+			"Returns immediately with an informational message if no tasks exist or if no task is currently running — " +
+			"use " + GetFlowStatusToolName + " first to confirm the flow state before calling this tool. " +
+			"On return, always call " + GetFlowStatusToolName + " with detail='summary' to inspect the final status.",
+		Parameters: reflector.Reflect(&WaitFlowCompletionAction{}),
 	},
 }
 

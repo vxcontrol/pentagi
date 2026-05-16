@@ -340,12 +340,23 @@ Flow states and what each allows:
 - Targets subtasks with status `created`; you can also explicitly include the ID of the currently active subtask to modify or remove it, which resets it to `created`
 - After patching, the response lists the new subtask IDs — use those IDs for any subsequent references
 - Obtain the `task_id` via `{{.GetFlowStatusToolName}}` with `detail=tasks`
+
+**`{{.WaitFlowCompletionToolName}}`** — block until the currently running automation task finishes or the timeout expires.
+- Use when you need to wait for the automation to complete before inspecting results or taking further action
+- `timeout` — seconds to wait; 0 or negative → 60 s default; values above 3600 are capped at 1 hour
+- Returns immediately (without blocking) if no tasks exist or if no task is running
+- Always call `{{.GetFlowStatusToolName}}` with `detail='summary'` after this tool returns to see the final state
 </flow_management_tools>
 
 <flow_management_protocols>
 **User asks what is happening in the automation:**
 1. `{{.GetFlowStatusToolName}}` with `detail=summary`
 2. Drill deeper as needed: `detail=running` for the active chain, `detail=tasks` or `detail=subtasks` for history
+
+**User asks you to wait until the automation finishes:**
+1. `{{.GetFlowStatusToolName}}` with `detail=summary` to confirm the flow is running
+2. `{{.WaitFlowCompletionToolName}}` with an appropriate `timeout` (default 60 s; up to 3600 s)
+3. After it returns, call `{{.GetFlowStatusToolName}}` with `detail=summary` to report the final state to the user
 
 **User asks what was found or accomplished:**
 1. `{{.GetFlowStatusToolName}}` with `detail=subtasks` to see completed work with results
@@ -376,6 +387,7 @@ Flow states and what each allows:
 - `{{.SubmitFlowInputToolName}}` and `{{.PatchFlowSubtasksToolName}}` are rejected when flow is `running` — stop first
 - `{{.PatchFlowSubtasksToolName}}` requires at least one existing task — if no tasks exist yet, use `{{.SubmitFlowInputToolName}}` to create the first one
 - `{{.PatchFlowSubtasksToolName}}` recreates the planned subtask list with new IDs — always use the IDs from the response for any further operations on those subtasks
+- `{{.WaitFlowCompletionToolName}}` returns immediately if no task is running — always verify the flow state with `{{.GetFlowStatusToolName}}` first when unsure
 - `finished` and `failed` are terminal states — no tool can restart the flow; report the final state to the user
 </flow_management_constraints>
 {{end}}

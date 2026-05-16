@@ -121,6 +121,7 @@ var PromptVariables = map[PromptType][]string{
 		"StopFlowToolName",
 		"SubmitFlowInputToolName",
 		"PatchFlowSubtasksToolName",
+		"WaitFlowCompletionToolName",
 		"UserFiles",
 	},
 	PromptTypePentester: {

@@ -50,6 +50,7 @@ type FlowWorker interface {
 	Finish(ctx context.Context) error
 	Stop(ctx context.Context) error
 	Rename(ctx context.Context, title string) error
+	WaitTaskCompletion(ctx context.Context) error
 }
 
 type flowWorker struct {
@@ -62,6 +63,8 @@ type flowWorker struct {
 	taskMX  *sync.Mutex
 	taskST  context.CancelFunc
 	taskWG  *sync.WaitGroup
+	taskCMX sync.Mutex
+	taskCCH chan struct{}
 	input   chan flowInput
 	flowCtx *FlowContext
 	dataDir string
@@ -250,6 +253,7 @@ func NewFlowWorker(
 		taskMX:  &sync.Mutex{},
 		taskST:  func() {},
 		taskWG:  &sync.WaitGroup{},
+		taskCCH: make(chan struct{}),
 		input:   make(chan flowInput),
 		flowCtx: flowCtx,
 		dataDir: fwc.cfg.DataDir,
@@ -403,6 +407,7 @@ func LoadFlowWorker(ctx context.Context, flow database.Flow, fwc flowWorkerCtx) 
 		taskMX:  &sync.Mutex{},
 		taskST:  func() {},
 		taskWG:  &sync.WaitGroup{},
+		taskCCH: make(chan struct{}),
 		input:   make(chan flowInput),
 		flowCtx: flowCtx,
 		dataDir: fwc.cfg.DataDir,
@@ -879,6 +884,35 @@ func (fw *flowWorker) finish() error {
 	return nil
 }
 
+// signalTaskComplete broadcasts task completion to all goroutines currently
+// blocked in WaitTaskCompletion. It replaces the shared channel so that future
+// callers block on a fresh channel until the next task finishes.
+func (fw *flowWorker) signalTaskComplete() {
+	fw.taskCMX.Lock()
+	old := fw.taskCCH
+	fw.taskCCH = make(chan struct{})
+	fw.taskCMX.Unlock()
+	close(old)
+}
+
+// WaitTaskCompletion blocks until the currently running task completes,
+// the supplied context expires, or the flow worker itself is stopped.
+// Multiple concurrent callers are all unblocked at once when a task finishes.
+func (fw *flowWorker) WaitTaskCompletion(ctx context.Context) error {
+	fw.taskCMX.Lock()
+	ch := fw.taskCCH
+	fw.taskCMX.Unlock()
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-ch:
+		return nil
+	case <-fw.ctx.Done():
+		return nil
+	}
+}
+
 func (fw *flowWorker) worker() {
 	defer fw.wg.Done()
 
@@ -986,6 +1020,7 @@ func (fw *flowWorker) runTask(spanName, input string, task TaskWorker) error {
 
 	fw.taskWG.Add(1)
 	defer fw.taskWG.Done()
+	defer fw.signalTaskComplete()
 
 	if err := task.Run(ctx); err != nil {
 		// if task is stopped by user and it's not finished yet

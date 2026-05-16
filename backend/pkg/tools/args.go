@@ -271,6 +271,12 @@ type SubmitFlowInputAction struct {
 	Message string `json:"message" jsonschema:"required,title=Input message" jsonschema_description:"Engagement-log entry — a 1-2 short sentence running commentary describing what is being submitted to the automation. Written in the engagement language declared by your system prompt."`
 }
 
+// WaitFlowCompletionAction defines arguments for the wait_flow_completion tool.
+type WaitFlowCompletionAction struct {
+	Timeout Int64  `json:"timeout" jsonschema:"required,type=integer" jsonschema_description:"How long to wait for the running automation task to finish, in seconds. Use 0 or a negative value to apply the default timeout of 60 seconds. Values above 3600 are capped at 3600 seconds (1 hour)."`
+	Message string `json:"message" jsonschema:"required,title=Wait message" jsonschema_description:"Engagement-log entry — a 1-2 short sentence running commentary explaining why you are waiting for the automation to finish. Written in the engagement language declared by your system prompt."`
+}
+
 // PatchFlowSubtasksAction defines arguments for the patch_flow_subtasks tool.
 type PatchFlowSubtasksAction struct {
 	TaskID     int64              `json:"task_id" jsonschema:"required,type=integer" jsonschema_description:"ID of the task whose subtask plan to modify. Obtain this from get_flow_status with detail='tasks'."`

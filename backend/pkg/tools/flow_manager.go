@@ -23,21 +23,23 @@ func NewFlowStatusTool(flowID int64, db database.Querier, summarizer SummarizeHa
 }
 
 const (
-	msgLogLimitNormal     = 10
-	msgLogLimitVerbose    = 50
-	flowOperationTimeout  = 15 * time.Second
-	taskReadyPollInterval = 5 * time.Second
-	taskReadyPollTimeout  = 2 * time.Minute
-	msgLogsLimit          = 16 * 1024  // 16 KB
-	summaryLimit          = 32 * 1024  // 32 KB
-	taskListLimit         = 32 * 1024  // 32 KB
-	subtasksListLimit     = 48 * 1024  // 48 KB
-	plannedListLimit      = 32 * 1024  // 32 KB
-	runningInfoLimit      = 48 * 1024  // 48 KB
-	inputLimit            = 8 * 1024   // 8 KB
-	descriptionLimit      = 4 * 1024   // 4 KB
-	resultLimit           = 8 * 1024   // 8 KB
-	summarizationLimit    = 128 * 1024 // 128 KB hard limit
+	msgLogLimitNormal      = 10
+	msgLogLimitVerbose     = 50
+	flowOperationTimeout   = 15 * time.Second
+	taskReadyPollInterval  = 5 * time.Second
+	taskReadyPollTimeout   = 2 * time.Minute
+	waitFlowDefaultTimeout = 1 * time.Minute
+	waitFlowMaxTimeout     = 1 * time.Hour
+	msgLogsLimit           = 16 * 1024  // 16 KB
+	summaryLimit           = 32 * 1024  // 32 KB
+	taskListLimit          = 32 * 1024  // 32 KB
+	subtasksListLimit      = 48 * 1024  // 48 KB
+	plannedListLimit       = 32 * 1024  // 32 KB
+	runningInfoLimit       = 48 * 1024  // 48 KB
+	inputLimit             = 8 * 1024   // 8 KB
+	descriptionLimit       = 4 * 1024   // 4 KB
+	resultLimit            = 8 * 1024   // 8 KB
+	summarizationLimit     = 128 * 1024 // 128 KB hard limit
 )
 
 func (t *flowStatusTool) Handle(ctx context.Context, name string, args json.RawMessage) (string, error) {
@@ -497,6 +499,86 @@ func truncateText(s string, maxLen int) string {
 		return s
 	}
 	return s[:maxLen] + "..."
+}
+
+// waitFlowCompletionTool implements wait_flow_completion — blocks until the
+// currently running task finishes or the caller-supplied timeout expires.
+type waitFlowCompletionTool struct {
+	flowID  int64
+	db      database.Querier
+	handler func(ctx context.Context) error
+}
+
+func NewWaitFlowCompletionTool(
+	flowID int64,
+	db database.Querier,
+	handler func(ctx context.Context) error,
+) *waitFlowCompletionTool {
+	return &waitFlowCompletionTool{flowID: flowID, db: db, handler: handler}
+}
+
+func (t *waitFlowCompletionTool) Handle(ctx context.Context, name string, args json.RawMessage) (string, error) {
+	var action WaitFlowCompletionAction
+	if err := json.Unmarshal(args, &action); err != nil {
+		return "", fmt.Errorf("failed to parse %s args: %w", WaitFlowCompletionToolName, err)
+	}
+
+	timeout := time.Duration(action.Timeout.Int64()) * time.Second
+	switch {
+	case timeout <= 0:
+		timeout = waitFlowDefaultTimeout
+	case timeout > waitFlowMaxTimeout:
+		timeout = waitFlowMaxTimeout
+	}
+
+	tasks, err := t.db.GetFlowTasks(ctx, t.flowID)
+	if err != nil {
+		return "", fmt.Errorf("failed to check flow status: %w", err)
+	}
+
+	if len(tasks) == 0 {
+		return fmt.Sprintf(
+			"The automation has not been created yet — no tasks exist. "+
+				"Use %s to submit the first task description and start the automation.",
+			SubmitFlowInputToolName), nil
+	}
+
+	isRunning := false
+	for _, task := range tasks {
+		if task.Status == database.TaskStatusRunning {
+			isRunning = true
+			break
+		}
+	}
+
+	if !isRunning {
+		return fmt.Sprintf(
+			"The automation is not currently running — no task has status 'running'. "+
+				"Call %s with detail='summary' to assess the current flow state before proceeding.",
+			GetFlowStatusToolName), nil
+	}
+
+	waitCtx, waitCancel := context.WithTimeout(ctx, timeout)
+	defer waitCancel()
+
+	if err := t.handler(waitCtx); err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			return fmt.Sprintf(
+				"The automation task is still running after waiting %s. "+
+					"Call %s with detail='running' to see what the agent is doing right now.",
+				timeout, GetFlowStatusToolName), nil
+		}
+		if errors.Is(err, context.Canceled) {
+			return "", fmt.Errorf(
+				"wait cancelled — the assistant session was interrupted while waiting for the automation")
+		}
+		return "", fmt.Errorf("wait for flow completion failed: %w", err)
+	}
+
+	return fmt.Sprintf(
+		"The automation task has completed. "+
+			"Call %s with detail='summary' to see the final status and results.",
+		GetFlowStatusToolName), nil
 }
 
 // stopFlowTool implements stop_flow.
