@@ -93,8 +93,8 @@
         "zod": "^4.4.3"
     },
     "devDependencies": {
-        "@commitlint/cli": "^20.0.0",
-        "@commitlint/config-conventional": "^20.0.0",
+        "@commitlint/cli": "^21.0.1",
+        "@commitlint/config-conventional": "^21.0.1",
         "@eslint/eslintrc": "^3.3.1",
         "@eslint/js": "^9.39.4",
         "@graphql-codegen/cli": "^7.0.0",
