@@ -22,6 +22,7 @@ import { z } from 'zod';
 import type { AgentPrompt, AgentPrompts, DefaultPrompt, PromptType } from '@/graphql/types';
 
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
+import { PageTitle } from '@/components/shared/page-title';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -629,35 +630,44 @@ const SettingsPrompt = () => {
     // Loading state
     if (loading) {
         return (
-            <StatusCard
-                description="Please wait while we fetch prompt information"
-                icon={<Loader2 className="text-muted-foreground size-16 animate-spin" />}
-                title="Loading prompt data..."
-            />
+            <>
+                <PageTitle>{promptInfo?.displayName ?? 'Prompt'}</PageTitle>
+                <StatusCard
+                    description="Please wait while we fetch prompt information"
+                    icon={<Loader2 className="text-muted-foreground size-16 animate-spin" />}
+                    title="Loading prompt data..."
+                />
+            </>
         );
     }
 
     // Error state
     if (error) {
         return (
-            <Alert variant="destructive">
-                <AlertCircle className="size-4" />
-                <AlertTitle>Error loading prompt data</AlertTitle>
-                <AlertDescription>{error.message}</AlertDescription>
-            </Alert>
+            <>
+                <PageTitle>{promptInfo?.displayName ?? 'Prompt'}</PageTitle>
+                <Alert variant="destructive">
+                    <AlertCircle className="size-4" />
+                    <AlertTitle>Error loading prompt data</AlertTitle>
+                    <AlertDescription>{error.message}</AlertDescription>
+                </Alert>
+            </>
         );
     }
 
     // Prompt not found state
     if (!promptInfo) {
         return (
-            <Alert variant="destructive">
-                <AlertCircle className="size-4" />
-                <AlertTitle>Prompt not found</AlertTitle>
-                <AlertDescription>
-                    The prompt "{promptId}" could not be found or is not supported for editing.
-                </AlertDescription>
-            </Alert>
+            <>
+                <PageTitle>{promptInfo?.displayName ?? 'Prompt'}</PageTitle>
+                <Alert variant="destructive">
+                    <AlertCircle className="size-4" />
+                    <AlertTitle>Prompt not found</AlertTitle>
+                    <AlertDescription>
+                        The prompt "{promptId}" could not be found or is not supported for editing.
+                    </AlertDescription>
+                </Alert>
+            </>
         );
     }
 
@@ -749,6 +759,7 @@ const SettingsPrompt = () => {
 
     return (
         <div className="flex flex-col gap-4">
+            <PageTitle>{promptInfo.displayName}</PageTitle>
             <div className="flex flex-col gap-2">
                 <h2 className="flex items-center gap-2 text-lg font-semibold">
                     {promptInfo.type === 'agent' ? (

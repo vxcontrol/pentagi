@@ -21,6 +21,7 @@ import { useNavigate } from 'react-router-dom';
 import type { AgentPrompt, AgentPrompts, DefaultPrompt, PromptType } from '@/graphql/types';
 
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
+import { PageTitle } from '@/components/shared/page-title';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -805,6 +806,7 @@ const SettingsPrompts = () => {
     if (isLoading) {
         return (
             <div className="flex flex-col gap-4">
+                <PageTitle>Prompts</PageTitle>
                 <SettingsPromptsHeader />
                 <StatusCard
                     description="Please wait while we fetch your prompt templates"
@@ -818,6 +820,7 @@ const SettingsPrompts = () => {
     if (error) {
         return (
             <div className="flex flex-col gap-4">
+                <PageTitle>Prompts</PageTitle>
                 <SettingsPromptsHeader />
                 <Alert variant="destructive">
                     <AlertCircle className="size-4" />
@@ -834,6 +837,7 @@ const SettingsPrompts = () => {
     if (agentPrompts.length === 0 && toolPrompts.length === 0) {
         return (
             <div className="flex flex-col gap-4">
+                <PageTitle>Prompts</PageTitle>
                 <SettingsPromptsHeader />
                 <StatusCard
                     description="Prompt templates could not be loaded"
@@ -846,6 +850,7 @@ const SettingsPrompts = () => {
 
     return (
         <Fragment>
+            <PageTitle>Prompts</PageTitle>
             <div className="flex flex-col gap-6">
                 <SettingsPromptsHeader />
 

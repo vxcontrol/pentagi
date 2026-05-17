@@ -22,6 +22,7 @@ import { toast } from 'sonner';
 import type { ApiTokenFragmentFragment } from '@/graphql/types';
 
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
+import { PageTitle } from '@/components/shared/page-title';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -754,6 +755,7 @@ const SettingsAPITokens = () => {
     if (isLoading) {
         return (
             <div className="flex flex-col gap-4">
+                <PageTitle>API tokens</PageTitle>
                 <SettingsAPITokensHeader onCreateClick={handleCreateNew} />
                 <StatusCard
                     description="Please wait while we fetch your API tokens"
@@ -767,6 +769,7 @@ const SettingsAPITokens = () => {
     if (error) {
         return (
             <div className="flex flex-col gap-4">
+                <PageTitle>API tokens</PageTitle>
                 <SettingsAPITokensHeader onCreateClick={handleCreateNew} />
                 <Alert variant="destructive">
                     <AlertCircle className="size-4" />
@@ -782,6 +785,7 @@ const SettingsAPITokens = () => {
     if (tokens.length === 0 && !creatingToken) {
         return (
             <div className="flex flex-col gap-4">
+                <PageTitle>API tokens</PageTitle>
                 <SettingsAPITokensHeader onCreateClick={handleCreateNew} />
                 <StatusCard
                     action={
@@ -803,6 +807,7 @@ const SettingsAPITokens = () => {
 
     return (
         <div className="flex flex-col gap-4">
+            <PageTitle>API tokens</PageTitle>
             <SettingsAPITokensHeader onCreateClick={handleCreateNew} />
 
             {(createError || updateError || deleteError || deleteErrorMessage) && (

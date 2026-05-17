@@ -10,6 +10,7 @@ import type { BadgeVariant } from '@/components/ui/badge';
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
 import { HeaderButton } from '@/components/shared/header-button';
 import { InlineEditInput } from '@/components/shared/inline-edit';
+import { PageTitle } from '@/components/shared/page-title';
 import { Badge } from '@/components/ui/badge';
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage } from '@/components/ui/breadcrumb';
 import { Button } from '@/components/ui/button';
@@ -394,6 +395,7 @@ const Knowledges = () => {
     if (isLoading && !knowledges.length) {
         return (
             <>
+                <PageTitle>Knowledges</PageTitle>
                 {pageHeader}
                 <div className="flex flex-col gap-4 p-4">
                     <StatusCard
@@ -409,6 +411,7 @@ const Knowledges = () => {
     if (!knowledges.length) {
         return (
             <>
+                <PageTitle>Knowledges</PageTitle>
                 {pageHeader}
                 <div className="flex flex-col gap-4 p-4">
                     <StatusCard
@@ -432,6 +435,7 @@ const Knowledges = () => {
 
     return (
         <>
+            <PageTitle>Knowledges</PageTitle>
             {pageHeader}
             <div className="flex flex-col gap-4 p-4 pt-0">
                 <DataTable

@@ -26,6 +26,7 @@ import type {
 } from '@/graphql/types';
 
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
+import { PageTitle } from '@/components/shared/page-title';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -1368,21 +1369,27 @@ const SettingsProvider = () => {
 
     if (loading) {
         return (
-            <StatusCard
-                description="Please wait while we fetch provider configuration"
-                icon={<Loader2 className="text-muted-foreground size-16 animate-spin" />}
-                title="Loading provider data..."
-            />
+            <>
+                <PageTitle>{providerName ?? 'Provider'}</PageTitle>
+                <StatusCard
+                    description="Please wait while we fetch provider configuration"
+                    icon={<Loader2 className="text-muted-foreground size-16 animate-spin" />}
+                    title="Loading provider data..."
+                />
+            </>
         );
     }
 
     if (error) {
         return (
-            <Alert variant="destructive">
-                <AlertCircle className="size-4" />
-                <AlertTitle>Error loading provider data</AlertTitle>
-                <AlertDescription>{error.message}</AlertDescription>
-            </Alert>
+            <>
+                <PageTitle>{providerName ?? 'Provider'}</PageTitle>
+                <Alert variant="destructive">
+                    <AlertCircle className="size-4" />
+                    <AlertTitle>Error loading provider data</AlertTitle>
+                    <AlertDescription>{error.message}</AlertDescription>
+                </Alert>
+            </>
         );
     }
 
@@ -1394,6 +1401,7 @@ const SettingsProvider = () => {
 
     return (
         <>
+            <PageTitle>{providerName ?? 'Provider'}</PageTitle>
             <div className="flex flex-col gap-4">
                 <div className="flex flex-col gap-2">
                     <h2 className="flex items-center gap-2 text-lg font-semibold">

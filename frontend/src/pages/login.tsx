@@ -2,6 +2,7 @@ import { Loader2 } from 'lucide-react';
 import { useLocation, useSearchParams } from 'react-router-dom';
 
 import Logo from '@/components/icons/logo';
+import { PageTitle } from '@/components/shared/page-title';
 import LoginForm from '@/features/authentication/login-form';
 import { getSafeReturnUrl } from '@/lib/utils/auth';
 import { useUser } from '@/providers/user-provider';
@@ -17,6 +18,7 @@ const Login = () => {
 
     return (
         <div className="flex h-dvh w-full items-center justify-center">
+            <PageTitle>Login</PageTitle>
             <div className="h-dvh w-full lg:grid lg:grid-cols-2">
                 <div className="flex items-center justify-center px-4 py-12">
                     {!isLoading ? (

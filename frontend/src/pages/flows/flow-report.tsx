@@ -3,6 +3,7 @@ import { useParams, useSearchParams } from 'react-router-dom';
 
 import Logo from '@/components/icons/logo';
 import Markdown from '@/components/shared/markdown';
+import { PageTitle } from '@/components/shared/page-title';
 import { useFlowReportQuery } from '@/graphql/types';
 import { Log } from '@/lib/log';
 import { generateFileName, generatePDFFromMarkdown, generateReport } from '@/lib/report';
@@ -93,6 +94,7 @@ const FlowReport = () => {
     if (state === 'loading' || state === 'generating') {
         return (
             <div className="min-h-screen bg-linear-to-br from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
+                <PageTitle>Flow report</PageTitle>
                 <div className="flex min-h-screen flex-col items-center justify-center p-8">
                     <Logo className="animate-logo-spin mb-8 size-16 text-white" />
                     <div className="flex flex-col gap-4 text-center">
@@ -114,6 +116,7 @@ const FlowReport = () => {
     if (state === 'error') {
         return (
             <div className="min-h-screen bg-linear-to-br from-red-50 via-white to-orange-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
+                <PageTitle>Flow report</PageTitle>
                 <div className="flex min-h-screen flex-col items-center justify-center p-8">
                     <Logo className="mb-8 size-16" />
                     <div className="flex flex-col gap-4 text-center">
@@ -135,6 +138,7 @@ const FlowReport = () => {
 
     return (
         <div className="min-h-screen bg-white dark:bg-gray-900">
+            <PageTitle>Flow report</PageTitle>
             <div className="h-screen w-full overflow-auto p-8">
                 <div className="mx-auto max-w-4xl">
                     <div className="prose prose-slate dark:prose-invert max-w-none">

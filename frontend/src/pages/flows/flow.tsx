@@ -29,6 +29,7 @@ import {
 } from '@/components/shared/detail-navigation';
 import { HeaderButton } from '@/components/shared/header-button';
 import { InlineEditInput, useInlineEdit } from '@/components/shared/inline-edit';
+import { PageTitle } from '@/components/shared/page-title';
 import { Badge } from '@/components/ui/badge';
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage } from '@/components/ui/breadcrumb';
 import { Button } from '@/components/ui/button';
@@ -303,6 +304,7 @@ const Flow = () => {
 
     return (
         <>
+            <PageTitle>{flowTitle ? `Flow #${flowId} — ${flowTitle}` : 'Flow'}</PageTitle>
             <header className="bg-background sticky top-0 z-10 flex h-12 w-full shrink-0 items-center gap-2 border-b transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
                 <div className="flex w-full items-center justify-between gap-2 px-4">
                     <div className="flex min-w-0 flex-1 items-center gap-2">

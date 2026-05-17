@@ -25,6 +25,7 @@ import {
 } from '@/components/shared/file-manager';
 import { HeaderButton } from '@/components/shared/header-button';
 import { OverwriteDialog, useOverwrite } from '@/components/shared/overwrite';
+import { PageTitle } from '@/components/shared/page-title';
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage } from '@/components/ui/breadcrumb';
 import { Button } from '@/components/ui/button';
 import {
@@ -448,6 +449,7 @@ const Resources = () => {
 
     return (
         <>
+            <PageTitle>Resources</PageTitle>
             {pageHeader}
             <div
                 className="relative flex h-[calc(100dvh-3rem)] flex-col gap-4 p-4"
