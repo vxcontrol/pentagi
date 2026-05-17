@@ -1,11 +1,12 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { FolderPlus, Loader2 } from 'lucide-react';
+import { FolderPlus } from 'lucide-react';
 import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { FormSubmitButton } from '@/components/ui/form-submit-button';
 import { Input } from '@/components/ui/input';
 
 import { resourcesMkdirFormSchema, type ResourcesMkdirFormValues, useResourcesMkdir } from './use-resources-mkdir';
@@ -68,8 +69,6 @@ function ResourcesMkdirDialogForm({ defaultParentPath, onClose }: ResourcesMkdir
         }
     });
 
-    const isSubmitDisabled = !form.formState.isValid || isCreating;
-
     return (
         <DialogContent>
             <DialogHeader>
@@ -120,13 +119,10 @@ function ResourcesMkdirDialogForm({ defaultParentPath, onClose }: ResourcesMkdir
                         >
                             Cancel
                         </Button>
-                        <Button
-                            disabled={isSubmitDisabled}
-                            type="submit"
-                        >
-                            {isCreating ? <Loader2 className="animate-spin" /> : <FolderPlus />}
+                        <FormSubmitButton>
+                            <FolderPlus />
                             Create
-                        </Button>
+                        </FormSubmitButton>
                     </div>
                 </form>
             </Form>

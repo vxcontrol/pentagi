@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Eye, EyeOff, Loader2 } from 'lucide-react';
+import { Eye, EyeOff } from 'lucide-react';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
@@ -7,6 +7,7 @@ import * as z from 'zod';
 
 import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { FormSubmitButton } from '@/components/ui/form-submit-button';
 import { Input } from '@/components/ui/input';
 import { api, type ApiErrorResponse, type ApiHttpError } from '@/lib/axios';
 
@@ -64,7 +65,6 @@ export function PasswordChangeForm({
     onSuccess,
     showSkip = false,
 }: PasswordChangeFormProps) {
-    const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<null | string>(null);
     const [showCurrentPassword, setShowCurrentPassword] = useState(false);
     const [showNewPassword, setShowNewPassword] = useState(false);
@@ -80,7 +80,6 @@ export function PasswordChangeForm({
     });
 
     const handleSubmit = async (values: PasswordChangeFormValues) => {
-        setIsSubmitting(true);
         setError(null);
 
         try {
@@ -133,8 +132,6 @@ export function PasswordChangeForm({
             }
 
             setError(errorMessage);
-        } finally {
-            setIsSubmitting(false);
         }
     };
 
@@ -272,13 +269,9 @@ export function PasswordChangeForm({
                             Cancel
                         </Button>
                     )}
-                    <Button
-                        disabled={isSubmitting || (!form.formState.isValid && form.formState.isSubmitted)}
-                        type="submit"
-                    >
-                        {isSubmitting && <Loader2 className="mr-2 size-4 animate-spin" />}
+                    <FormSubmitButton>
                         <span>Update Password</span>
-                    </Button>
+                    </FormSubmitButton>
                 </div>
             </form>
         </Form>

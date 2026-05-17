@@ -1,5 +1,4 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Loader2 } from 'lucide-react';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
@@ -11,6 +10,7 @@ import Github from '@/components/icons/github';
 import Google from '@/components/icons/google';
 import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { FormSubmitButton } from '@/components/ui/form-submit-button';
 import { Input } from '@/components/ui/input';
 import { useUser } from '@/providers/user-provider';
 
@@ -76,7 +76,6 @@ function LoginForm({ providers, returnUrl = '/flows/new' }: LoginFormProps) {
 
     const handleSubmit = async (values: z.infer<typeof formSchema>) => {
         setError(null);
-        setIsSubmitting(true);
 
         try {
             const result = await login(values);
@@ -96,8 +95,6 @@ function LoginForm({ providers, returnUrl = '/flows/new' }: LoginFormProps) {
             navigate(returnUrl);
         } catch {
             setError(errorMessage);
-        } finally {
-            setIsSubmitting(false);
         }
     };
 
@@ -188,7 +185,7 @@ function LoginForm({ providers, returnUrl = '/flows/new' }: LoginFormProps) {
                                 .filter((provider) => providers.includes(provider.id))
                                 .map((provider) => (
                                     <Button
-                                        disabled={isSubmitting}
+                                        disabled={isSubmitting || form.formState.isSubmitting}
                                         key={provider.id}
                                         onClick={() => handleProviderLogin(provider.id)}
                                         type="button"
@@ -248,14 +245,9 @@ function LoginForm({ providers, returnUrl = '/flows/new' }: LoginFormProps) {
                         )}
                     />
 
-                    <Button
-                        className="w-full"
-                        disabled={isSubmitting || (!form.formState.isValid && form.formState.isSubmitted)}
-                        type="submit"
-                    >
-                        {isSubmitting && <Loader2 className="animate-spin" />}
+                    <FormSubmitButton className="w-full">
                         <span>Sign in</span>
-                    </Button>
+                    </FormSubmitButton>
 
                     {error && <FormMessage>{error}</FormMessage>}
                 </div>
