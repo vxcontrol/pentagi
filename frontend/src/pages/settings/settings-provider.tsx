@@ -33,6 +33,7 @@ import { Button } from '@/components/ui/button';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { FormSubmitButton } from '@/components/ui/form-submit-button';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -1802,15 +1803,14 @@ function SettingsProvider() {
                     >
                         Cancel
                     </Button>
-                    <Button
-                        disabled={isLoading}
+                    <FormSubmitButton
                         form="provider-form"
-                        type="submit"
+                        icon={<Save className="size-4" />}
+                        loading={isLoading}
                         variant="secondary"
                     >
-                        {isLoading ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
                         {isLoading ? 'Saving...' : isNew ? 'Create Provider' : 'Update Provider'}
-                    </Button>
+                    </FormSubmitButton>
                 </div>
             </div>
 

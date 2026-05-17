@@ -26,6 +26,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Form, FormControl, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { FormSubmitButton } from '@/components/ui/form-submit-button';
 import { StatusCard } from '@/components/ui/status-card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
@@ -901,26 +902,24 @@ function SettingsPrompt() {
                             Cancel
                         </Button>
                         {activeTab === 'system' && (
-                            <Button
-                                disabled={isLoading}
+                            <FormSubmitButton
                                 form="system-prompt-form"
-                                type="submit"
+                                icon={<Save className="size-4" />}
+                                loading={isLoading}
                                 variant="secondary"
                             >
-                                {isLoading ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
                                 {isLoading ? 'Saving...' : 'Save Changes'}
-                            </Button>
+                            </FormSubmitButton>
                         )}
                         {activeTab === 'human' && promptInfo?.type === 'agent' && promptInfo?.hasHuman && (
-                            <Button
-                                disabled={isLoading}
+                            <FormSubmitButton
                                 form="human-prompt-form"
-                                type="submit"
+                                icon={<Save className="size-4" />}
+                                loading={isLoading}
                                 variant="secondary"
                             >
-                                {isLoading ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
                                 {isLoading ? 'Saving...' : 'Save Changes'}
-                            </Button>
+                            </FormSubmitButton>
                         )}
                     </div>
                 </div>

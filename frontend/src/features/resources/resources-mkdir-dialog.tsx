@@ -119,10 +119,7 @@ function ResourcesMkdirDialogForm({ defaultParentPath, onClose }: ResourcesMkdir
                         >
                             Cancel
                         </Button>
-                        <FormSubmitButton>
-                            <FolderPlus />
-                            Create
-                        </FormSubmitButton>
+                        <FormSubmitButton icon={<FolderPlus />}>Create</FormSubmitButton>
                     </div>
                 </form>
             </Form>
