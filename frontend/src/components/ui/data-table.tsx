@@ -31,6 +31,7 @@ import {
     type ReactElement,
     type ReactNode,
     useCallback,
+    useDeferredValue,
     useEffect,
     useId,
     useMemo,
@@ -413,6 +414,15 @@ function DataTable<TData, TValue = unknown>({
 
     const effectiveGlobalFilterReference = useLatestRef(effectiveGlobalFilter);
 
+    // Hand the filter pipeline a deferred snapshot so TanStack's row-model
+    // recomputation runs at low priority. With large datasets (≈350 flows,
+    // 180 knowledges) every keystroke through the debounce previously committed
+    // the heavy `getFilteredRowModel()` pass on the urgent track, occasionally
+    // dropping the next keystroke. `useDeferredValue` lets React surface the
+    // stale rows + responsive UI while the new filter resolves in the
+    // background; once it commits, the deferred snapshot catches up.
+    const deferredGlobalFilter = useDeferredValue(effectiveGlobalFilter);
+
     // Funnel every TanStack global-filter change through the right sink. The
     // updater arrives in three shapes:
     //   * a raw string from `DataTableFilter` (input.onChange → setGlobalFilter)
@@ -581,7 +591,7 @@ function DataTable<TData, TValue = unknown>({
         state: {
             columnVisibility,
             expanded,
-            globalFilter: effectiveGlobalFilter,
+            globalFilter: deferredGlobalFilter,
             pagination,
             rowSelection,
             sorting,
