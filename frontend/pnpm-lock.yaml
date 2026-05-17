@@ -168,7 +168,7 @@ importers:
         specifier: ^0.55.1
         version: 0.55.1
       react:
-        specifier: ^19.0.0
+        specifier: ^19.2.6
         version: 19.2.6
       react-day-picker:
         specifier: ^9.13.2
@@ -177,7 +177,7 @@ importers:
         specifier: ^4.0.6
         version: 4.2.2(@types/react@19.2.14)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
       react-dom:
-        specifier: ^19.0.0
+        specifier: ^19.2.6
         version: 19.2.6(react@19.2.6)
       react-hook-form:
         specifier: ^7.56.4
@@ -289,10 +289,10 @@ importers:
         specifier: ^22.0.0
         version: 22.19.19
       '@types/react':
-        specifier: ^19.0.0
+        specifier: ^19.2.0
         version: 19.2.14
       '@types/react-dom':
-        specifier: ^19.0.0
+        specifier: ^19.2.0
         version: 19.2.3(@types/react@19.2.14)
       '@typescript-eslint/eslint-plugin':
         specifier: ^8.46.4
