@@ -115,6 +115,7 @@ function Dashboard() {
                                     {periodOptions.map(({ icon: Icon, label, value }) => (
                                         <TabsTrigger
                                             aria-label={label}
+                                            className="aspect-square px-0 sm:aspect-auto sm:px-3"
                                             key={value}
                                             value={value}
                                         >
