@@ -33,7 +33,7 @@ type SidebarContext = {
 
 const SidebarContext = React.createContext<null | SidebarContext>(null);
 
-const useSidebar = () => {
+function useSidebar() {
     const context = React.useContext(SidebarContext);
 
     if (!context) {
@@ -41,7 +41,7 @@ const useSidebar = () => {
     }
 
     return context;
-};
+}
 
 // Helper function to read sidebar state from cookies
 const getSidebarState = (): boolean | undefined => {

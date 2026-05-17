@@ -82,10 +82,10 @@ const buildUploadSuccessMessage = (uploadedCount: number, dir?: string) => {
  * each upload so the consumer can remount the hidden `<input>` and clear it
  * declaratively.
  */
-export const useResourcesUpload = ({
+export function useResourcesUpload({
     defaultDir,
     onSuccess,
-}: UseResourcesUploadParams = {}): UseResourcesUploadResult => {
+}: UseResourcesUploadParams = {}): UseResourcesUploadResult {
     const inputRef = useRef<HTMLInputElement | null>(null);
     const [isUploading, setIsUploading] = useState(false);
     const [fileInputKey, setFileInputKey] = useState(0);
@@ -217,4 +217,4 @@ export const useResourcesUpload = ({
         openFilePickerForDir,
         uploadFiles,
     };
-};
+}

@@ -46,7 +46,7 @@ const RESOURCES_ERROR_TOAST_ID = 'resources-error';
  * once we no longer need the snake_case → camelCase conversion that REST
  * requires (see `restResourceEntryToFragment`).
  */
-export const ResourcesProvider = ({ children }: ResourcesProviderProps) => {
+export function ResourcesProvider({ children }: ResourcesProviderProps) {
     const { authInfo, isAuthenticated } = useUser();
 
     const shouldFetchResources = Boolean(authInfo && authInfo.type !== 'guest' && isAuthenticated());
@@ -159,9 +159,9 @@ export const ResourcesProvider = ({ children }: ResourcesProviderProps) => {
     );
 
     return <ResourcesContext.Provider value={value}>{children}</ResourcesContext.Provider>;
-};
+}
 
-export const useResources = () => {
+export function useResources() {
     const context = useContext(ResourcesContext);
 
     if (context === undefined) {
@@ -169,4 +169,4 @@ export const useResources = () => {
     }
 
     return context;
-};
+}

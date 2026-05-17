@@ -18,8 +18,8 @@ interface UseResourcesRealtimeParams {
  * The Apollo subscription-cache link in `lib/apollo.ts` writes incoming entries
  * straight into the `resources` query cache, so callers don't need extra refetch.
  */
-export const useResourcesRealtime = ({ isPaused }: UseResourcesRealtimeParams): void => {
+export function useResourcesRealtime({ isPaused }: UseResourcesRealtimeParams): void {
     useResourceAddedSubscription({ skip: isPaused });
     useResourceUpdatedSubscription({ skip: isPaused });
     useResourceDeletedSubscription({ skip: isPaused });
-};
+}

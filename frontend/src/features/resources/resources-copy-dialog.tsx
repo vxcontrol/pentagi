@@ -109,7 +109,33 @@ const buildCopyPlan = (files: readonly [FileNode, ...FileNode[]], values: Resour
     targets: computeTargets(files, values.destination),
 });
 
-const ResourcesCopyDialogForm = ({ files, onClose }: ResourcesCopyDialogFormProps) => {
+export function ResourcesCopyDialog({ files, onClose }: ResourcesCopyDialogProps) {
+    const handleDialogOpenChange = (nextOpen: boolean) => {
+        if (!nextOpen) {
+            onClose();
+        }
+    };
+
+    // Narrow to a non-empty tuple so the inner form can index `files[0]` without
+    // optional-chain noise. The Dialog only mounts when this guard passes.
+    const nonEmptyFiles = files && files.length > 0 ? (files as [FileNode, ...FileNode[]]) : null;
+
+    return (
+        <Dialog
+            onOpenChange={handleDialogOpenChange}
+            open={!!nonEmptyFiles}
+        >
+            {nonEmptyFiles && (
+                <ResourcesCopyDialogForm
+                    files={nonEmptyFiles}
+                    onClose={onClose}
+                />
+            )}
+        </Dialog>
+    );
+}
+
+function ResourcesCopyDialogForm({ files, onClose }: ResourcesCopyDialogFormProps) {
     const { copy, isCopying } = useResourcesCopy();
     const { resources } = useResources();
     const isMulti = files.length > 1;
@@ -248,30 +274,4 @@ const ResourcesCopyDialogForm = ({ files, onClose }: ResourcesCopyDialogFormProp
             />
         </>
     );
-};
-
-export const ResourcesCopyDialog = ({ files, onClose }: ResourcesCopyDialogProps) => {
-    const handleDialogOpenChange = (nextOpen: boolean) => {
-        if (!nextOpen) {
-            onClose();
-        }
-    };
-
-    // Narrow to a non-empty tuple so the inner form can index `files[0]` without
-    // optional-chain noise. The Dialog only mounts when this guard passes.
-    const nonEmptyFiles = files && files.length > 0 ? (files as [FileNode, ...FileNode[]]) : null;
-
-    return (
-        <Dialog
-            onOpenChange={handleDialogOpenChange}
-            open={!!nonEmptyFiles}
-        >
-            {nonEmptyFiles && (
-                <ResourcesCopyDialogForm
-                    files={nonEmptyFiles}
-                    onClose={onClose}
-                />
-            )}
-        </Dialog>
-    );
-};
+}

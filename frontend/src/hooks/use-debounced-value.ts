@@ -7,7 +7,7 @@ import { useEffect, useState } from 'react';
  * cancels the previous one. When the component unmounts, the pending timer is cleared,
  * so callers do not need to manage cancellation themselves.
  */
-export const useDebouncedValue = <Value>(value: Value, delayMs: number): Value => {
+export function useDebouncedValue<Value>(value: Value, delayMs: number): Value {
     const [debouncedValue, setDebouncedValue] = useState<Value>(value);
 
     useEffect(() => {
@@ -21,4 +21,4 @@ export const useDebouncedValue = <Value>(value: Value, delayMs: number): Value =
     }, [value, delayMs]);
 
     return debouncedValue;
-};
+}

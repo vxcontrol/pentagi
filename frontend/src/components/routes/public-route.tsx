@@ -4,7 +4,7 @@ import { Navigate, useSearchParams } from 'react-router-dom';
 import { getSafeReturnUrl } from '@/lib/utils/auth';
 import { useUser } from '@/providers/user-provider';
 
-const PublicRoute = ({ children }: { children: React.ReactNode }) => {
+function PublicRoute({ children }: { children: React.ReactNode }) {
     const [searchParams] = useSearchParams();
     const { authInfo, isAuthenticated, isLoading } = useUser();
 
@@ -41,6 +41,6 @@ const PublicRoute = ({ children }: { children: React.ReactNode }) => {
     }
 
     return children;
-};
+}
 
 export default PublicRoute;

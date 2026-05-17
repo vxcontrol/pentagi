@@ -67,7 +67,7 @@ const renderKnowledgeItem = (item: Knowledge, isCurrent: boolean): ReactNode => 
     </>
 );
 
-export const KnowledgeHeader = ({
+export function KnowledgeHeader({
     canAnonymize = false,
     isAnonymizeDisabled = false,
     isAnonymizing = false,
@@ -76,7 +76,7 @@ export const KnowledgeHeader = ({
     onAnonymize,
     onBeforeNavigateAway,
     saveButton,
-}: KnowledgeHeaderProps) => {
+}: KnowledgeHeaderProps) {
     const navigate = useNavigate();
     const { isMobile } = useBreakpoint();
     const { deleteKnowledge, updateKnowledge } = useKnowledges();
@@ -327,4 +327,4 @@ export const KnowledgeHeader = ({
             />
         </>
     );
-};
+}

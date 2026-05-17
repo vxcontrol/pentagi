@@ -26,7 +26,7 @@ const searchFormSchema = z.object({
     search: z.string(),
 });
 
-const FlowTerminal = () => {
+function FlowTerminal() {
     const { flowData, flowId } = useFlow();
 
     const terminalLogs = useMemo(() => flowData?.terminalLogs ?? [], [flowData?.terminalLogs]);
@@ -256,6 +256,6 @@ const FlowTerminal = () => {
             )}
         </div>
     );
-};
+}
 
 export default FlowTerminal;

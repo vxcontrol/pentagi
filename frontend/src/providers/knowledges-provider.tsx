@@ -41,7 +41,7 @@ interface KnowledgesProviderProps {
 
 const KnowledgesContext = createContext<KnowledgesContextValue | undefined>(undefined);
 
-export const KnowledgesProvider = ({ children }: KnowledgesProviderProps) => {
+export function KnowledgesProvider({ children }: KnowledgesProviderProps) {
     const { authInfo, isAuthenticated } = useUser();
 
     const shouldFetch = Boolean(authInfo && authInfo.type !== 'guest' && isAuthenticated());
@@ -131,9 +131,9 @@ export const KnowledgesProvider = ({ children }: KnowledgesProviderProps) => {
     );
 
     return <KnowledgesContext.Provider value={value}>{children}</KnowledgesContext.Provider>;
-};
+}
 
-export const useKnowledges = () => {
+export function useKnowledges() {
     const context = useContext(KnowledgesContext);
 
     if (context === undefined) {
@@ -141,4 +141,4 @@ export const useKnowledges = () => {
     }
 
     return context;
-};
+}

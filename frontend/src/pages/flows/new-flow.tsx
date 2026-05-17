@@ -12,7 +12,7 @@ import { useFlows } from '@/providers/flows-provider';
 import { useProviders } from '@/providers/providers-provider';
 import { useSystemSettings } from '@/providers/system-settings-provider';
 
-const NewFlow = () => {
+function NewFlow() {
     const navigate = useNavigate();
 
     const { selectedProvider } = useProviders();
@@ -110,6 +110,6 @@ const NewFlow = () => {
             </div>
         </>
     );
-};
+}
 
 export default NewFlow;

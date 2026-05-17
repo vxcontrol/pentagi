@@ -30,11 +30,11 @@ interface FileManagerSkeletonProps {
     isCheckboxVisible?: boolean;
 }
 
-export const FileManagerSkeleton = ({
+export function FileManagerSkeleton({
     columns,
     hasActions = false,
     isCheckboxVisible = false,
-}: FileManagerSkeletonProps) => {
+}: FileManagerSkeletonProps) {
     const isSizeVisible = columns?.isSizeVisible ?? true;
     const isModifiedVisible = columns?.isModifiedVisible ?? true;
     const gridTemplate = buildFileManagerGridTemplate(isSizeVisible, isModifiedVisible, hasActions);
@@ -118,4 +118,4 @@ export const FileManagerSkeleton = ({
             </div>
         </div>
     );
-};
+}

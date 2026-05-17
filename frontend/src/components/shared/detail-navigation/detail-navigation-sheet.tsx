@@ -25,12 +25,12 @@ interface DetailNavigationSheetProps<T extends { id: string }> {
  * Initial focus on open targets the current entry (if it's part of the
  * filtered subset) so users land oriented inside their own context.
  */
-export const DetailNavigationSheet = <T extends { id: string }>({
+export function DetailNavigationSheet<T extends { id: string }>({
     controller,
     renderItem,
     sheetIcon,
     sheetTitle,
-}: DetailNavigationSheetProps<T>) => {
+}: DetailNavigationSheetProps<T>) {
     // Destructure at the top so existing `useMemo` / `useEffect` deps below
     // read individual fields rather than the controller object — keeps the
     // identity story the same as before the refactor.
@@ -307,4 +307,4 @@ export const DetailNavigationSheet = <T extends { id: string }>({
             </SheetContent>
         </Sheet>
     );
-};
+}

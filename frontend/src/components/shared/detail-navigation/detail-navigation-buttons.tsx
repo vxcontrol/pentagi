@@ -27,11 +27,11 @@ interface DetailNavigationButtonsProps<T extends { id: string }> {
  * dropdown row (`size="sm"`) — same a11y contract, same tooltips, same
  * keyboard semantics in both places.
  */
-export const DetailNavigationButtons = <T extends { id: string }>({
+export function DetailNavigationButtons<T extends { id: string }>({
     controller,
     sheetTitle,
     size = 'default',
-}: DetailNavigationButtonsProps<T>) => {
+}: DetailNavigationButtonsProps<T>) {
     const lowerTitle = sheetTitle.toLowerCase();
     const isSm = size === 'sm';
     const sideButtonSize = isSm ? 'size-7' : 'size-8';
@@ -88,4 +88,4 @@ export const DetailNavigationButtons = <T extends { id: string }>({
             </Tooltip>
         </div>
     );
-};
+}

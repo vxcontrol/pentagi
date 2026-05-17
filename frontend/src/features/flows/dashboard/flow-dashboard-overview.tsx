@@ -19,28 +19,7 @@ import {
 } from '@/graphql/types';
 import { formatCost, formatDuration, formatNumber, formatTokenCount } from '@/lib/utils/format';
 
-const UsageStatsRow = ({ label, stats }: { label: string; stats: UsageStatsFragmentFragment }) => (
-    <TableRow>
-        <TableCell className="font-medium">{label}</TableCell>
-        <TableCell className="text-right">{formatTokenCount(stats.totalUsageIn)}</TableCell>
-        <TableCell className="text-right">{formatTokenCount(stats.totalUsageOut)}</TableCell>
-        <TableCell className="text-right">{formatTokenCount(stats.totalUsageCacheIn)}</TableCell>
-        <TableCell className="text-right">{formatTokenCount(stats.totalUsageCacheOut)}</TableCell>
-        <TableCell className="text-right">{formatCost(stats.totalUsageCostIn)}</TableCell>
-        <TableCell className="text-right">{formatCost(stats.totalUsageCostOut)}</TableCell>
-        <TableCell className="text-right font-semibold">
-            {formatCost(stats.totalUsageCostIn + stats.totalUsageCostOut)}
-        </TableCell>
-    </TableRow>
-);
-
-const LoadingTable = () => (
-    <div className="flex items-center justify-center py-8">
-        <Loader2 className="text-muted-foreground size-6 animate-spin" />
-    </div>
-);
-
-export const FlowDashboardOverview = ({ flowId }: { flowId: string }) => {
+export function FlowDashboardOverview({ flowId }: { flowId: string }) {
     const { data: usageData, loading: usageLoading } = useUsageStatsByFlowQuery({
         variables: { flowId },
     });
@@ -316,4 +295,29 @@ export const FlowDashboardOverview = ({ flowId }: { flowId: string }) => {
             )}
         </div>
     );
-};
+}
+
+function LoadingTable() {
+    return (
+        <div className="flex items-center justify-center py-8">
+            <Loader2 className="text-muted-foreground size-6 animate-spin" />
+        </div>
+    );
+}
+
+function UsageStatsRow({ label, stats }: { label: string; stats: UsageStatsFragmentFragment }) {
+    return (
+        <TableRow>
+            <TableCell className="font-medium">{label}</TableCell>
+            <TableCell className="text-right">{formatTokenCount(stats.totalUsageIn)}</TableCell>
+            <TableCell className="text-right">{formatTokenCount(stats.totalUsageOut)}</TableCell>
+            <TableCell className="text-right">{formatTokenCount(stats.totalUsageCacheIn)}</TableCell>
+            <TableCell className="text-right">{formatTokenCount(stats.totalUsageCacheOut)}</TableCell>
+            <TableCell className="text-right">{formatCost(stats.totalUsageCostIn)}</TableCell>
+            <TableCell className="text-right">{formatCost(stats.totalUsageCostOut)}</TableCell>
+            <TableCell className="text-right font-semibold">
+                {formatCost(stats.totalUsageCostIn + stats.totalUsageCostOut)}
+            </TableCell>
+        </TableRow>
+    );
+}

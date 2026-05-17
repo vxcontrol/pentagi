@@ -157,7 +157,7 @@ const buildVisibleActions = (
 ): FileManagerAction[] =>
     actions.filter((action) => (file.isDir ? action.appliesToDirs === true : action.appliesToFiles !== false));
 
-const FileManagerRowImpl = ({
+function FileManagerRowImpl({
     actions,
     activeRowPath,
     dirCheckboxState,
@@ -170,7 +170,7 @@ const FileManagerRowImpl = ({
     isSelected,
     posInSet,
     setSize,
-}: FileManagerRowProps) => {
+}: FileManagerRowProps) {
     const {
         formatModified = defaultFormatModified,
         gridTemplate,
@@ -529,7 +529,7 @@ const FileManagerRowImpl = ({
             <ContextMenuContent>{contextItems}</ContextMenuContent>
         </ContextMenu>
     );
-};
+}
 
 FileManagerRowImpl.displayName = 'FileManagerRow';
 

@@ -21,11 +21,11 @@ interface UseFlowFilesRealtimeParams {
  * call so the parent component does not need to repeat the same `skip`/`variables` pair
  * three times.
  */
-export const useFlowFilesRealtime = ({ flowId, isPaused }: UseFlowFilesRealtimeParams): void => {
+export function useFlowFilesRealtime({ flowId, isPaused }: UseFlowFilesRealtimeParams): void {
     const variables = useMemo(() => ({ flowId: flowId ?? '' }), [flowId]);
     const isSkipped = isPaused || !flowId;
 
     useFlowFileAddedSubscription({ skip: isSkipped, variables });
     useFlowFileUpdatedSubscription({ skip: isSkipped, variables });
     useFlowFileDeletedSubscription({ skip: isSkipped, variables });
-};
+}

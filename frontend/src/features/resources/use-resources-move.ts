@@ -44,7 +44,7 @@ interface UseResourcesMoveResult {
 }
 
 /** Wraps `PUT /resources/move` for rename / move / batch-move operations. */
-export const useResourcesMove = (): UseResourcesMoveResult => {
+export function useResourcesMove(): UseResourcesMoveResult {
     const [isMoving, setIsMoving] = useState(false);
 
     const move = useCallback(
@@ -95,4 +95,4 @@ export const useResourcesMove = (): UseResourcesMoveResult => {
         isMoving,
         move,
     };
-};
+}

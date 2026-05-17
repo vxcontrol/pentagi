@@ -32,7 +32,7 @@ interface FileManagerTreeNodeProps {
  * recursion into a component (instead of an inline `renderNode` function) keeps
  * `FileManager` lean and gives React DevTools a real boundary to inspect.
  */
-export const FileManagerTreeNode = ({
+export function FileManagerTreeNode({
     actions,
     activeRowPath,
     bindNodeDnd,
@@ -45,7 +45,7 @@ export const FileManagerTreeNode = ({
     posInSet,
     selectedPaths,
     setSize,
-}: FileManagerTreeNodeProps) => {
+}: FileManagerTreeNodeProps) {
     const isExpanded = expandedPaths.has(node.path);
     const isSelected = selectedPaths.has(node.path);
     const renderChildren = node.isDir && isExpanded && node.children.length > 0;
@@ -95,4 +95,4 @@ export const FileManagerTreeNode = ({
                 ))}
         </>
     );
-};
+}

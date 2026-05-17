@@ -111,7 +111,7 @@ const renderEmptyAreaItems = (items: readonly FileManagerEmptyAreaAction[]): Rea
     return nodes;
 };
 
-export const FileManager = ({
+export function FileManager({
     actions,
     bulkActions,
     className,
@@ -135,7 +135,7 @@ export const FileManager = ({
     search,
     sorting: controlledSorting,
     sortStorageKey,
-}: FileManagerProps) => {
+}: FileManagerProps) {
     const effectiveBulkActions = bulkActions ?? EMPTY_BULK_ACTIONS;
     const hasBulkActions = effectiveBulkActions.length > 0;
     const isCheckboxVisible = enableSelection ?? hasBulkActions;
@@ -581,4 +581,4 @@ export const FileManager = ({
             )}
         </div>
     );
-};
+}

@@ -3,45 +3,6 @@ import { useImperativeHandle } from 'react';
 
 import { cn } from '@/lib/utils';
 
-interface UseTextareaProps {
-    maxHeight?: number;
-    minHeight?: number;
-    textareaRef: React.MutableRefObject<HTMLTextAreaElement | null>;
-    triggerAutoSize: string;
-}
-
-const useTextarea = ({
-    maxHeight = Number.MAX_SAFE_INTEGER,
-    minHeight = 0,
-    textareaRef,
-    triggerAutoSize,
-}: UseTextareaProps) => {
-    const initRef = React.useRef(true);
-
-    React.useEffect(() => {
-        const offsetBorder = 0;
-        const textareaElement = textareaRef.current;
-
-        if (!textareaElement) {
-            return;
-        }
-
-        if (initRef.current) {
-            textareaElement.style.minHeight = `${minHeight + offsetBorder}px`;
-
-            if (maxHeight > minHeight) {
-                textareaElement.style.maxHeight = `${maxHeight}px`;
-            }
-
-            initRef.current = false;
-        }
-
-        textareaElement.style.height = `${minHeight + offsetBorder}px`;
-        const scrollHeight = textareaElement.scrollHeight;
-        textareaElement.style.height = scrollHeight > maxHeight ? `${maxHeight}px` : `${scrollHeight + offsetBorder}px`;
-    }, [triggerAutoSize, maxHeight, minHeight, textareaRef]);
-};
-
 type TextareaProps = React.ComponentProps<'textarea'> & {
     maxHeight?: number;
     minHeight?: number;
@@ -52,6 +13,13 @@ type TextareaRef = {
     minHeight: number;
     textarea: HTMLTextAreaElement;
 };
+
+interface UseTextareaProps {
+    maxHeight?: number;
+    minHeight?: number;
+    textareaRef: React.MutableRefObject<HTMLTextAreaElement | null>;
+    triggerAutoSize: string;
+}
 
 function Textarea({
     className,
@@ -99,6 +67,38 @@ function Textarea({
             value={value}
         />
     );
+}
+
+function useTextarea({
+    maxHeight = Number.MAX_SAFE_INTEGER,
+    minHeight = 0,
+    textareaRef,
+    triggerAutoSize,
+}: UseTextareaProps) {
+    const initRef = React.useRef(true);
+
+    React.useEffect(() => {
+        const offsetBorder = 0;
+        const textareaElement = textareaRef.current;
+
+        if (!textareaElement) {
+            return;
+        }
+
+        if (initRef.current) {
+            textareaElement.style.minHeight = `${minHeight + offsetBorder}px`;
+
+            if (maxHeight > minHeight) {
+                textareaElement.style.maxHeight = `${maxHeight}px`;
+            }
+
+            initRef.current = false;
+        }
+
+        textareaElement.style.height = `${minHeight + offsetBorder}px`;
+        const scrollHeight = textareaElement.scrollHeight;
+        textareaElement.style.height = scrollHeight > maxHeight ? `${maxHeight}px` : `${scrollHeight + offsetBorder}px`;
+    }, [triggerAutoSize, maxHeight, minHeight, textareaRef]);
 }
 
 export { Textarea };

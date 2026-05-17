@@ -36,7 +36,7 @@ interface UseFileManagerKeyboardNavigationArgs {
  * for directories, Space → toggle the row's checkbox (only when checkboxes are shown),
  * Ctrl/Cmd+A → select all, Escape → clear selection.
  */
-export const useFileManagerKeyboardNavigation = ({
+export function useFileManagerKeyboardNavigation({
     expandedPaths,
     flatVisible,
     focusRow,
@@ -50,8 +50,8 @@ export const useFileManagerKeyboardNavigation = ({
     onToggleSelection,
     resolvedActiveRow,
     visibleTree,
-}: UseFileManagerKeyboardNavigationArgs) =>
-    useCallback(
+}: UseFileManagerKeyboardNavigationArgs) {
+    return useCallback(
         (event: ReactKeyboardEvent<HTMLDivElement>) => {
             if (event.key === 'Escape') {
                 onClearSelection();
@@ -189,3 +189,4 @@ export const useFileManagerKeyboardNavigation = ({
             visibleTree,
         ],
     );
+}

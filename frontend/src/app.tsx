@@ -48,62 +48,74 @@ const SettingsPrompts = lazy(() => import('@/pages/settings/settings-prompts'));
 const SettingsProvider = lazy(() => import('@/pages/settings/settings-provider'));
 const SettingsProviders = lazy(() => import('@/pages/settings/settings-providers'));
 
+function FlowWithProvider() {
+    return (
+        <FlowProvider>
+            <Flow />
+        </FlowProvider>
+    );
+}
+
+function KnowledgesLayout() {
+    return (
+        <KnowledgesProvider>
+            <Outlet />
+        </KnowledgesProvider>
+    );
+}
+
+function ProtectedAppLayout() {
+    return (
+        <ProtectedRoute>
+            <SystemSettingsProvider>
+                <ProvidersProvider>
+                    <SidebarFlowsProvider>
+                        <AppLayout />
+                    </SidebarFlowsProvider>
+                </ProvidersProvider>
+            </SystemSettingsProvider>
+        </ProtectedRoute>
+    );
+}
+
+function ProtectedReportLayout() {
+    return (
+        <ProtectedRoute>
+            <SystemSettingsProvider>
+                <FlowReport />
+            </SystemSettingsProvider>
+        </ProtectedRoute>
+    );
+}
+
+function PublicLoginLayout() {
+    return (
+        <PublicRoute>
+            <Login />
+        </PublicRoute>
+    );
+}
+
 // Root layout for the data router. Everything that previously sat between
 // `<BrowserRouter>` and `<Routes>` (providers, Suspense) lives here so it has
 // access to router hooks (`useNavigate`, `useLocation`, ...) while still being
 // rendered under the data router. This is what enables `useBlocker` and other
 // data-router-only features inside our pages.
-const RootLayout = () => (
-    <UserProvider>
-        <FavoritesProvider>
-            <TemplatesProvider>
-                <ResourcesProvider>
-                    <Suspense fallback={<PageLoader />}>
-                        <Outlet />
-                    </Suspense>
-                </ResourcesProvider>
-            </TemplatesProvider>
-        </FavoritesProvider>
-    </UserProvider>
-);
-
-const ProtectedAppLayout = () => (
-    <ProtectedRoute>
-        <SystemSettingsProvider>
-            <ProvidersProvider>
-                <SidebarFlowsProvider>
-                    <AppLayout />
-                </SidebarFlowsProvider>
-            </ProvidersProvider>
-        </SystemSettingsProvider>
-    </ProtectedRoute>
-);
-
-const ProtectedReportLayout = () => (
-    <ProtectedRoute>
-        <SystemSettingsProvider>
-            <FlowReport />
-        </SystemSettingsProvider>
-    </ProtectedRoute>
-);
-
-const PublicLoginLayout = () => (
-    <PublicRoute>
-        <Login />
-    </PublicRoute>
-);
-
-const FlowWithProvider = () => (
-    <FlowProvider>
-        <Flow />
-    </FlowProvider>
-);
-
-const KnowledgesLayout = () => (
-    <KnowledgesProvider>
-        <Outlet />
-    </KnowledgesProvider>
-);
+function RootLayout() {
+    return (
+        <UserProvider>
+            <FavoritesProvider>
+                <TemplatesProvider>
+                    <ResourcesProvider>
+                        <Suspense fallback={<PageLoader />}>
+                            <Outlet />
+                        </Suspense>
+                    </ResourcesProvider>
+                </TemplatesProvider>
+            </FavoritesProvider>
+        </UserProvider>
+    );
+}
 
 const router = createBrowserRouter(
     createRoutesFromElements(
@@ -236,13 +248,15 @@ const router = createBrowserRouter(
     ),
 );
 
-const App = () => (
-    <ApolloProvider client={client}>
-        <ThemeProvider>
-            <Toaster />
-            <RouterProvider router={router} />
-        </ThemeProvider>
-    </ApolloProvider>
-);
+function App() {
+    return (
+        <ApolloProvider client={client}>
+            <ThemeProvider>
+                <Toaster />
+                <RouterProvider router={router} />
+            </ThemeProvider>
+        </ApolloProvider>
+    );
+}
 
 export default App;

@@ -130,16 +130,16 @@ type UseNavigationResult<T> = NavigationResult<T>;
  * keystroke, and `getSearchableText` is naturally module-scoped at the
  * feature level (see `use-flow-detail-navigation` etc.).
  */
-export const useNavigation = <T>({
+export function useNavigation<T>({
     currentId,
     getId,
     getSearchableText,
     items,
     query,
     sortFn,
-}: UseNavigationOptions<T>): UseNavigationResult<T> => {
+}: UseNavigationOptions<T>): UseNavigationResult<T> {
     return useMemo(
         () => computeNavigation({ currentId, getId, getSearchableText, items, query, sortFn }),
         [currentId, getId, getSearchableText, items, query, sortFn],
     );
-};
+}

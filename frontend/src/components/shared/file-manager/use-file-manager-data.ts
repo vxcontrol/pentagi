@@ -92,7 +92,7 @@ interface UseFileManagerDataResult {
  * Computing it inside would force a circular dependency between the data hook
  * and the expansion hook. The host derives it with a single `useMemo`.
  */
-export const useFileManagerData = ({
+export function useFileManagerData({
     columns,
     files,
     hasActions,
@@ -100,7 +100,7 @@ export const useFileManagerData = ({
     rootGroups,
     searchQuery,
     sorting,
-}: UseFileManagerDataArgs): UseFileManagerDataResult => {
+}: UseFileManagerDataArgs): UseFileManagerDataResult {
     const isSizeVisible = columns?.isSizeVisible ?? true;
     const isModifiedVisible = columns?.isModifiedVisible ?? true;
 
@@ -164,4 +164,4 @@ export const useFileManagerData = ({
         trimmedSearch,
         visibleTree,
     };
-};
+}

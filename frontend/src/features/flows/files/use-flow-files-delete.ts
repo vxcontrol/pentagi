@@ -54,7 +54,7 @@ const deleteFlowFilesRequest = (flowId: string, paths: readonly string[]) =>
  * No imperative refetch is performed: the GraphQL `flowFileDeleted` subscription
  * is wired into the Apollo cache and removes the deleted entries automatically.
  */
-export const useFlowFilesDelete = ({ flowId, onAfterDelete }: UseFlowFilesDeleteParams): UseFlowFilesDeleteResult => {
+export function useFlowFilesDelete({ flowId, onAfterDelete }: UseFlowFilesDeleteParams): UseFlowFilesDeleteResult {
     const [fileToDelete, setFileToDelete] = useState<FileNode | null>(null);
 
     const requestDelete = useCallback((file: FileNode) => {
@@ -113,4 +113,4 @@ export const useFlowFilesDelete = ({ flowId, onAfterDelete }: UseFlowFilesDelete
         fileToDelete,
         requestDelete,
     };
-};
+}

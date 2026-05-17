@@ -79,7 +79,7 @@ const formatFullDateTime = (dateString: string) => {
     return format(date, 'd MMM yyyy, HH:mm:ss', { locale: enUS });
 };
 
-const Flows = () => {
+function Flows() {
     const navigate = useNavigate();
     const location = useLocation();
     const { deleteFlow, finishFlow, flows, isLoading } = useFlows();
@@ -697,6 +697,6 @@ const Flows = () => {
             </div>
         </>
     );
-};
+}
 
 export default Flows;

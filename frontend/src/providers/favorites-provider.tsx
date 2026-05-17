@@ -27,7 +27,7 @@ const FavoritesContext = createContext<FavoritesContextValue | undefined>(undefi
 
 const FAVORITES_STORAGE_KEY = 'favorites';
 
-export const FavoritesProvider = ({ children }: FavoritesProviderProps) => {
+export function FavoritesProvider({ children }: FavoritesProviderProps) {
     const { authInfo, isAuthenticated } = useUser();
 
     // Only fetch user preferences if user is authenticated and not a guest
@@ -209,9 +209,9 @@ export const FavoritesProvider = ({ children }: FavoritesProviderProps) => {
     );
 
     return <FavoritesContext.Provider value={value}>{children}</FavoritesContext.Provider>;
-};
+}
 
-export const useFavorites = () => {
+export function useFavorites() {
     const context = useContext(FavoritesContext);
 
     if (context === undefined) {
@@ -219,4 +219,4 @@ export const useFavorites = () => {
     }
 
     return context;
-};
+}

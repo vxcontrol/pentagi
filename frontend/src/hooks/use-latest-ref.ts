@@ -27,7 +27,7 @@ import { type RefObject, useEffect, useRef } from 'react';
  * Reading the ref during render breaks React's snapshot guarantee (the ref may
  * be updated by a concurrent render before the current one commits).
  */
-export const useLatestRef = <T>(value: T): RefObject<T> => {
+export function useLatestRef<T>(value: T): RefObject<T> {
     const ref = useRef(value);
 
     useEffect(() => {
@@ -35,4 +35,4 @@ export const useLatestRef = <T>(value: T): RefObject<T> => {
     }, [value]);
 
     return ref;
-};
+}

@@ -53,7 +53,7 @@ const docTypeSubtype = (k: Knowledge): null | string => {
     return null;
 };
 
-const Knowledges = () => {
+function Knowledges() {
     const navigate = useNavigate();
     const location = useLocation();
     const { deleteKnowledge, isLoading, knowledges, updateKnowledge } = useKnowledges();
@@ -464,6 +464,6 @@ const Knowledges = () => {
             </div>
         </>
     );
-};
+}
 
 export default Knowledges;

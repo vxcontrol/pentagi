@@ -68,13 +68,52 @@ const LANGUAGES = [
     'yaml',
 ] as const;
 
+interface KnowledgeContentFieldProps {
+    control: Control<FormValues>;
+    /** When `true`, the editor stretches to fill its parent (desktop split view). */
+    fillParent?: boolean;
+    isSaving: boolean;
+    showLabel?: boolean;
+}
+
 interface KnowledgeMetaFieldsProps {
     control: Control<FormValues>;
     isNew: boolean;
     isSaving: boolean;
 }
 
-export const KnowledgeMetaFields = ({ control, isNew, isSaving }: KnowledgeMetaFieldsProps) => {
+export function KnowledgeContentField({
+    control,
+    fillParent = false,
+    isSaving,
+    showLabel = false,
+}: KnowledgeContentFieldProps) {
+    return (
+        <FormField
+            control={control}
+            name="content"
+            render={({ field }) => (
+                <FormItem className={fillParent ? 'flex min-h-0 flex-1 flex-col' : undefined}>
+                    {showLabel ? <FormLabel>Content</FormLabel> : null}
+                    <FormControl>
+                        <MarkdownEditor
+                            className={fillParent ? 'min-h-0 flex-1' : 'min-h-[280px]'}
+                            contentClassName={fillParent ? undefined : 'min-h-[240px]'}
+                            disabled={isSaving}
+                            onBlur={field.onBlur}
+                            onChange={field.onChange}
+                            placeholder="Knowledge content (will be embedded into the vector store)"
+                            value={field.value}
+                        />
+                    </FormControl>
+                    <FormMessage />
+                </FormItem>
+            )}
+        />
+    );
+}
+
+export function KnowledgeMetaFields({ control, isNew, isSaving }: KnowledgeMetaFieldsProps) {
     // Targeted subscription: only this component re-renders when docType changes,
     // not the whole form. The full-form `useWatch` from the original code
     // re-rendered on every keystroke in the markdown editor.
@@ -305,41 +344,4 @@ export const KnowledgeMetaFields = ({ control, isNew, isSaving }: KnowledgeMetaF
             />
         </div>
     );
-};
-
-interface KnowledgeContentFieldProps {
-    control: Control<FormValues>;
-    /** When `true`, the editor stretches to fill its parent (desktop split view). */
-    fillParent?: boolean;
-    isSaving: boolean;
-    showLabel?: boolean;
 }
-
-export const KnowledgeContentField = ({
-    control,
-    fillParent = false,
-    isSaving,
-    showLabel = false,
-}: KnowledgeContentFieldProps) => (
-    <FormField
-        control={control}
-        name="content"
-        render={({ field }) => (
-            <FormItem className={fillParent ? 'flex min-h-0 flex-1 flex-col' : undefined}>
-                {showLabel ? <FormLabel>Content</FormLabel> : null}
-                <FormControl>
-                    <MarkdownEditor
-                        className={fillParent ? 'min-h-0 flex-1' : 'min-h-[280px]'}
-                        contentClassName={fillParent ? undefined : 'min-h-[240px]'}
-                        disabled={isSaving}
-                        onBlur={field.onBlur}
-                        onChange={field.onChange}
-                        placeholder="Knowledge content (will be embedded into the vector store)"
-                        value={field.value}
-                    />
-                </FormControl>
-                <FormMessage />
-            </FormItem>
-        )}
-    />
-);

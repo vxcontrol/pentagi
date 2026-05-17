@@ -8,7 +8,7 @@ interface FileManagerHighlightedNameProps {
     query?: string;
 }
 
-export const FileManagerHighlightedName = ({ className, name, query }: FileManagerHighlightedNameProps) => {
+export function FileManagerHighlightedName({ className, name, query }: FileManagerHighlightedNameProps) {
     if (!query?.trim()) {
         return <span className={cn('truncate', className)}>{name}</span>;
     }
@@ -43,4 +43,4 @@ export const FileManagerHighlightedName = ({ className, name, query }: FileManag
     }
 
     return <span className={cn('truncate', className)}>{segments}</span>;
-};
+}

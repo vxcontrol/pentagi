@@ -26,7 +26,7 @@ const containsSearchValue = (text: null | string | undefined, searchValue: strin
     return text.toLowerCase().includes(searchValue.toLowerCase().trim());
 };
 
-const FlowAgent = ({ log, searchValue = '' }: FlowAgentProps) => {
+function FlowAgent({ log, searchValue = '' }: FlowAgentProps) {
     const { createdAt, executor, initiator, result, subtaskId, task, taskId } = log;
 
     // Memoize search checks to avoid recalculating on every render
@@ -147,6 +147,6 @@ const FlowAgent = ({ log, searchValue = '' }: FlowAgentProps) => {
             </div>
         </div>
     );
-};
+}
 
 export default memo(FlowAgent);

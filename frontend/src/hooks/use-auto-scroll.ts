@@ -9,10 +9,10 @@ interface ScrollTracker {
     resetKey: null | string | undefined;
 }
 
-export const useAutoScroll = <T extends IdentifiableItem>(
+export function useAutoScroll<T extends IdentifiableItem>(
     items: T[] | undefined,
     resetKey: null | string | undefined,
-) => {
+) {
     const containerElementRef = useRef<HTMLDivElement | null>(null);
     const endRef = useRef<HTMLDivElement>(null);
 
@@ -124,4 +124,4 @@ export const useAutoScroll = <T extends IdentifiableItem>(
         isScrolledToBottom,
         scrollToEnd,
     } as const;
-};
+}

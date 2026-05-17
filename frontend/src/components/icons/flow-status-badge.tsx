@@ -10,15 +10,17 @@ const STATUS_LABELS: Record<StatusType, string> = {
     [StatusType.Waiting]: 'Waiting',
 };
 
-export const FlowStatusBadge = ({ className, status }: { className?: string; status: StatusType }) => (
-    <Badge
-        className={className}
-        variant="outline"
-    >
-        <FlowStatusIcon
-            className="size-3"
-            status={status}
-        />
-        {STATUS_LABELS[status]}
-    </Badge>
-);
+export function FlowStatusBadge({ className, status }: { className?: string; status: StatusType }) {
+    return (
+        <Badge
+            className={className}
+            variant="outline"
+        >
+            <FlowStatusIcon
+                className="size-3"
+                status={status}
+            />
+            {STATUS_LABELS[status]}
+        </Badge>
+    );
+}

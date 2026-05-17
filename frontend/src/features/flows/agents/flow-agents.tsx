@@ -25,7 +25,7 @@ const searchFormSchema = z.object({
     search: z.string(),
 });
 
-const FlowAgents = () => {
+function FlowAgents() {
     const { flowData, flowId } = useFlow();
 
     const logs = useMemo(() => flowData?.agentLogs ?? [], [flowData?.agentLogs]);
@@ -265,6 +265,6 @@ const FlowAgents = () => {
             )}
         </div>
     );
-};
+}
 
 export default FlowAgents;

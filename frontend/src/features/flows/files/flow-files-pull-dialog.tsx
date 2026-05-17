@@ -90,6 +90,30 @@ const getParentContainerPath = (path: string): string => {
     return path.slice(0, idx);
 };
 
+export function FlowFilesPullDialog({ cachedFiles, flowId, isOpen, onClose, onSuccess }: FlowFilesPullDialogProps) {
+    const handleDialogOpenChange = (nextOpen: boolean) => {
+        if (!nextOpen) {
+            onClose();
+        }
+    };
+
+    return (
+        <Dialog
+            onOpenChange={handleDialogOpenChange}
+            open={isOpen}
+        >
+            {isOpen && (
+                <FlowFilesPullDialogForm
+                    cachedFiles={cachedFiles}
+                    flowId={flowId}
+                    onClose={onClose}
+                    onSuccess={onSuccess}
+                />
+            )}
+        </Dialog>
+    );
+}
+
 /**
  * Inner component holding the live browser state. Mounted only while the dialog
  * is open so closing it discards every transient field without an imperative reset.
@@ -98,7 +122,7 @@ const getParentContainerPath = (path: string): string => {
  * fallback) is delegated to {@link useOverwrite}; this component only
  * owns the listing browser UI and the per-action plan derivation.
  */
-const FlowFilesPullDialogForm = ({ cachedFiles, flowId, onClose, onSuccess }: FlowFilesPullDialogFormProps) => {
+function FlowFilesPullDialogForm({ cachedFiles, flowId, onClose, onSuccess }: FlowFilesPullDialogFormProps) {
     const [currentPath, setCurrentPath] = useState<string>(CONTAINER_DEFAULT_PATH);
     const [pathInputValue, setPathInputValue] = useState<string>(CONTAINER_DEFAULT_PATH);
     const [selectedPaths, setSelectedPaths] = useState<ReadonlySet<string>>(() => new Set<string>());
@@ -451,28 +475,4 @@ const FlowFilesPullDialogForm = ({ cachedFiles, flowId, onClose, onSuccess }: Fl
             />
         </>
     );
-};
-
-export const FlowFilesPullDialog = ({ cachedFiles, flowId, isOpen, onClose, onSuccess }: FlowFilesPullDialogProps) => {
-    const handleDialogOpenChange = (nextOpen: boolean) => {
-        if (!nextOpen) {
-            onClose();
-        }
-    };
-
-    return (
-        <Dialog
-            onOpenChange={handleDialogOpenChange}
-            open={isOpen}
-        >
-            {isOpen && (
-                <FlowFilesPullDialogForm
-                    cachedFiles={cachedFiles}
-                    flowId={flowId}
-                    onClose={onClose}
-                    onSuccess={onSuccess}
-                />
-            )}
-        </Dialog>
-    );
-};
+}

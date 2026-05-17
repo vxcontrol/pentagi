@@ -32,7 +32,7 @@ const searchFormSchema = z.object({
     search: z.string(),
 });
 
-const FlowAutomationMessages = ({ className }: FlowAutomationMessagesProps) => {
+function FlowAutomationMessages({ className }: FlowAutomationMessagesProps) {
     const { flowData, flowId, flowStatus, stopAutomation, submitAutomationMessage } = useFlow();
 
     const logs = useMemo(() => flowData?.messageLogs ?? [], [flowData?.messageLogs]);
@@ -347,6 +347,6 @@ const FlowAutomationMessages = ({ className }: FlowAutomationMessagesProps) => {
             </div>
         </div>
     );
-};
+}
 
 export default FlowAutomationMessages;

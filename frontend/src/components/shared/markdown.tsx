@@ -96,7 +96,7 @@ const escapeRegExp = (string: string): string => {
     return string.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&');
 };
 
-const Markdown = ({ children, className, searchValue }: MarkdownProps) => {
+function Markdown({ children, className, searchValue }: MarkdownProps) {
     // Memoize the escaped search value to avoid recalculating regex
     const processedSearch = useMemo(() => {
         const trimmedSearch = searchValue?.trim();
@@ -281,6 +281,6 @@ const Markdown = ({ children, className, searchValue }: MarkdownProps) => {
             </ReactMarkdown>
         </div>
     );
-};
+}
 
 export default Markdown;

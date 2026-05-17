@@ -17,54 +17,7 @@ import {
 } from '@/graphql/types';
 import { formatCost, formatDuration, formatNumber, formatTokenCount } from '@/lib/utils/format';
 
-const UsageStatsRow = ({ label, stats }: { label: string; stats: UsageStatsFragmentFragment }) => (
-    <TableRow>
-        <TableCell className="font-medium">{label}</TableCell>
-        <TableCell className="text-right">{formatTokenCount(stats.totalUsageIn)}</TableCell>
-        <TableCell className="text-right">{formatTokenCount(stats.totalUsageOut)}</TableCell>
-        <TableCell className="text-right">{formatTokenCount(stats.totalUsageCacheIn)}</TableCell>
-        <TableCell className="text-right">{formatTokenCount(stats.totalUsageCacheOut)}</TableCell>
-        <TableCell className="text-right">{formatCost(stats.totalUsageCostIn)}</TableCell>
-        <TableCell className="text-right">{formatCost(stats.totalUsageCostOut)}</TableCell>
-        <TableCell className="text-right font-semibold">
-            {formatCost(stats.totalUsageCostIn + stats.totalUsageCostOut)}
-        </TableCell>
-    </TableRow>
-);
-
-const UsageStatsTable = ({ rows }: { rows: Array<{ label: string; stats: UsageStatsFragmentFragment }> }) => (
-    <Table>
-        <TableHeader>
-            <TableRow>
-                <TableHead className="whitespace-nowrap">Name</TableHead>
-                <TableHead className="text-right whitespace-nowrap">Tokens In</TableHead>
-                <TableHead className="text-right whitespace-nowrap">Tokens Out</TableHead>
-                <TableHead className="text-right whitespace-nowrap">Cache In</TableHead>
-                <TableHead className="text-right whitespace-nowrap">Cache Out</TableHead>
-                <TableHead className="text-right whitespace-nowrap">Cost In</TableHead>
-                <TableHead className="text-right whitespace-nowrap">Cost Out</TableHead>
-                <TableHead className="text-right whitespace-nowrap">Total Cost</TableHead>
-            </TableRow>
-        </TableHeader>
-        <TableBody>
-            {rows.map((row) => (
-                <UsageStatsRow
-                    key={row.label}
-                    label={row.label}
-                    stats={row.stats}
-                />
-            ))}
-        </TableBody>
-    </Table>
-);
-
-const LoadingTable = () => (
-    <div className="flex items-center justify-center py-8">
-        <Loader2 className="text-muted-foreground size-6 animate-spin" />
-    </div>
-);
-
-export const DashboardOverview = () => {
+export function DashboardOverview() {
     const { data: usageTotalData, loading: usageTotalLoading } = useUsageStatsTotalQuery();
     const { data: usageByProviderData, loading: usageByProviderLoading } = useUsageStatsByProviderQuery();
     const { data: usageByModelData, loading: usageByModelLoading } = useUsageStatsByModelQuery();
@@ -204,4 +157,57 @@ export const DashboardOverview = () => {
             </Card>
         </div>
     );
-};
+}
+
+function LoadingTable() {
+    return (
+        <div className="flex items-center justify-center py-8">
+            <Loader2 className="text-muted-foreground size-6 animate-spin" />
+        </div>
+    );
+}
+
+function UsageStatsRow({ label, stats }: { label: string; stats: UsageStatsFragmentFragment }) {
+    return (
+        <TableRow>
+            <TableCell className="font-medium">{label}</TableCell>
+            <TableCell className="text-right">{formatTokenCount(stats.totalUsageIn)}</TableCell>
+            <TableCell className="text-right">{formatTokenCount(stats.totalUsageOut)}</TableCell>
+            <TableCell className="text-right">{formatTokenCount(stats.totalUsageCacheIn)}</TableCell>
+            <TableCell className="text-right">{formatTokenCount(stats.totalUsageCacheOut)}</TableCell>
+            <TableCell className="text-right">{formatCost(stats.totalUsageCostIn)}</TableCell>
+            <TableCell className="text-right">{formatCost(stats.totalUsageCostOut)}</TableCell>
+            <TableCell className="text-right font-semibold">
+                {formatCost(stats.totalUsageCostIn + stats.totalUsageCostOut)}
+            </TableCell>
+        </TableRow>
+    );
+}
+
+function UsageStatsTable({ rows }: { rows: Array<{ label: string; stats: UsageStatsFragmentFragment }> }) {
+    return (
+        <Table>
+            <TableHeader>
+                <TableRow>
+                    <TableHead className="whitespace-nowrap">Name</TableHead>
+                    <TableHead className="text-right whitespace-nowrap">Tokens In</TableHead>
+                    <TableHead className="text-right whitespace-nowrap">Tokens Out</TableHead>
+                    <TableHead className="text-right whitespace-nowrap">Cache In</TableHead>
+                    <TableHead className="text-right whitespace-nowrap">Cache Out</TableHead>
+                    <TableHead className="text-right whitespace-nowrap">Cost In</TableHead>
+                    <TableHead className="text-right whitespace-nowrap">Cost Out</TableHead>
+                    <TableHead className="text-right whitespace-nowrap">Total Cost</TableHead>
+                </TableRow>
+            </TableHeader>
+            <TableBody>
+                {rows.map((row) => (
+                    <UsageStatsRow
+                        key={row.label}
+                        label={row.label}
+                        stats={row.stats}
+                    />
+                ))}
+            </TableBody>
+        </Table>
+    );
+}

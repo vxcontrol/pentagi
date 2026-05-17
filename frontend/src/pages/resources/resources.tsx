@@ -98,7 +98,7 @@ const seedViewOptions = (storageKey: string): ResourcesViewOptions => {
     };
 };
 
-const Resources = () => {
+function Resources() {
     const { isInitialLoading, resources } = useResources();
     const search = useResourcesSearch();
 
@@ -594,6 +594,6 @@ const Resources = () => {
             </div>
         </>
     );
-};
+}
 
 export default Resources;

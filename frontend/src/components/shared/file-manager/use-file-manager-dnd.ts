@@ -207,13 +207,13 @@ const resolveDropTargetDir = (
  * `dragenter` / a child file's `dragenter` write to the same counter, so moving
  * the cursor between them keeps the highlight stable.
  */
-export const useFileManagerDnd = ({
+export function useFileManagerDnd({
     findNode,
     onClearSelection,
     onExternalFileDrop,
     onMoveItems,
     selectedPaths,
-}: UseFileManagerDndParams): UseFileManagerDndResult => {
+}: UseFileManagerDndParams): UseFileManagerDndResult {
     // `isEnabled` keeps its legacy meaning ("internal move DnD is on") so
     // existing consumers (e.g. row `draggable` flag, container root-drop
     // wiring) keep working unchanged. External-file drops live on a separate
@@ -728,4 +728,4 @@ export const useFileManagerDnd = ({
         },
         isEnabled,
     };
-};
+}

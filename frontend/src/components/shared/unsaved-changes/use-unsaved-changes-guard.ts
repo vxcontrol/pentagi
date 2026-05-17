@@ -34,11 +34,11 @@ export interface UseUnsavedChangesGuardArgs {
  * Designed to be UI-agnostic: pair with `<UnsavedChangesDialog>` (or any
  * custom dialog) by wiring the returned handlers.
  */
-export const useUnsavedChangesGuard = ({
+export function useUnsavedChangesGuard({
     isDirty,
     isFormValid,
     onSave,
-}: UseUnsavedChangesGuardArgs): UnsavedChangesGuard => {
+}: UseUnsavedChangesGuardArgs): UnsavedChangesGuard {
     const allowNextRef = useRef(false);
     const isDirtyRef = useRef(isDirty);
 
@@ -138,4 +138,4 @@ export const useUnsavedChangesGuard = ({
         isSavingFromDialog,
         skipNextBlock,
     };
-};
+}

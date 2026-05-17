@@ -14,7 +14,7 @@ interface SettingsContextType {
 
 const SystemSettingsContext = createContext<SettingsContextType | undefined>(undefined);
 
-export const SystemSettingsProvider = ({ children }: { children: ReactNode }) => {
+export function SystemSettingsProvider({ children }: { children: ReactNode }) {
     const { isAuthenticated } = useUser();
 
     // Load settings via GraphQL query only when user is authenticated
@@ -32,9 +32,9 @@ export const SystemSettingsProvider = ({ children }: { children: ReactNode }) =>
             {children}
         </SystemSettingsContext>
     );
-};
+}
 
-export const useSystemSettings = () => {
+export function useSystemSettings() {
     const context = use(SystemSettingsContext);
 
     if (context === undefined) {
@@ -42,4 +42,4 @@ export const useSystemSettings = () => {
     }
 
     return context;
-};
+}

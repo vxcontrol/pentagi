@@ -26,7 +26,7 @@ const FLOW_FILES_ERROR_TOAST_ID = 'flow-files-error';
  * it stays `true` only while the very first response is in flight (no cached data
  * yet), so subsequent background `refetch` calls do not flash the skeleton.
  */
-export const useFlowFilesData = ({ flowId }: UseFlowFilesDataParams): UseFlowFilesDataResult => {
+export function useFlowFilesData({ flowId }: UseFlowFilesDataParams): UseFlowFilesDataResult {
     const flowFilesVariables = useMemo(() => ({ flowId: flowId ?? '' }), [flowId]);
 
     const {
@@ -63,4 +63,4 @@ export const useFlowFilesData = ({ flowId }: UseFlowFilesDataParams): UseFlowFil
         isLoading,
         refetchFiles,
     };
-};
+}

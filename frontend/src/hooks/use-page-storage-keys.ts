@@ -46,7 +46,7 @@ interface UsePageStorageKeysOptions {
  * `sorting_4_`, `filter_4_`, `page_4_` slots are migrated into the unified
  * key on first mount (see `migrateLegacyTableState`).
  */
-export const usePageStorageKeys = (options: UsePageStorageKeysOptions = {}): PageStorageKeys => {
+export function usePageStorageKeys(options: UsePageStorageKeysOptions = {}): PageStorageKeys {
     const { pathname: livePathname } = useLocation();
     const { pathname: override, useTopLevel = false } = options;
 
@@ -60,4 +60,4 @@ export const usePageStorageKeys = (options: UsePageStorageKeysOptions = {}): Pag
             viewOptions: getViewOptionsStorageKey(effective),
         };
     }, [livePathname, override, useTopLevel]);
-};
+}

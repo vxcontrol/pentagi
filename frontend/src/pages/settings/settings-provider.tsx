@@ -64,6 +64,13 @@ interface ControllerProps {
     name: string;
 }
 
+interface FormComboboxItemProps extends BaseFieldProps, BaseInputProps {
+    allowCustom?: boolean;
+    contentClass?: string;
+    description?: string;
+    options: string[];
+}
+
 interface FormInputNumberItemProps extends BaseFieldProps, NumberInputProps {
     description?: string;
     valueType?: 'float' | 'integer';
@@ -71,6 +78,20 @@ interface FormInputNumberItemProps extends BaseFieldProps, NumberInputProps {
 
 interface FormInputStringItemProps extends BaseFieldProps, BaseInputProps {
     description?: string;
+}
+
+interface FormModelComboboxItemProps extends BaseFieldProps, BaseInputProps {
+    allowCustom?: boolean;
+    contentClass?: string;
+    description?: string;
+    onOptionSelect?: (option: ModelOption) => void;
+    options: ModelOption[];
+}
+
+interface ModelOption {
+    name: string;
+    price?: null | { cacheRead: number; cacheWrite: number; input: number; output: number };
+    thinking?: boolean;
 }
 
 interface NumberInputProps extends BaseInputProps {
@@ -81,102 +102,7 @@ interface NumberInputProps extends BaseInputProps {
 
 type Provider = ProviderConfigFragmentFragment;
 
-const FormInputStringItem: React.FC<FormInputStringItemProps> = ({
-    control,
-    description,
-    disabled,
-    label,
-    name,
-    placeholder,
-}) => {
-    const { field, fieldState } = useController({
-        control,
-        defaultValue: undefined,
-        disabled,
-        name,
-    });
-
-    const inputProps = { placeholder };
-
-    return (
-        <FormItem>
-            <FormLabel>{label}</FormLabel>
-            <FormControl>
-                <Input
-                    {...field}
-                    {...inputProps}
-                    value={field.value ?? ''}
-                />
-            </FormControl>
-            {description && <FormDescription>{description}</FormDescription>}
-            {fieldState.error && <FormMessage>{fieldState.error.message}</FormMessage>}
-        </FormItem>
-    );
-};
-
-const FormInputNumberItem: React.FC<FormInputNumberItemProps> = ({
-    control,
-    description,
-    disabled,
-    label,
-    max,
-    min,
-    name,
-    placeholder,
-    step,
-    valueType = 'float',
-}) => {
-    const { field, fieldState } = useController({
-        control,
-        defaultValue: undefined,
-        disabled,
-        name,
-    });
-
-    const parseValue = (value: string) => {
-        if (value === '') {
-            return null;
-        }
-
-        return valueType === 'float' ? Number.parseFloat(value) : Number.parseInt(value);
-    };
-
-    const inputProps = {
-        max,
-        min,
-        placeholder,
-        step,
-        type: 'number' as const,
-    };
-
-    return (
-        <FormItem>
-            <FormLabel>{label}</FormLabel>
-            <FormControl>
-                <Input
-                    {...field}
-                    {...inputProps}
-                    onChange={(event) => {
-                        const { value } = event.target;
-                        field.onChange(parseValue(value));
-                    }}
-                    value={field.value ?? ''}
-                />
-            </FormControl>
-            {description && <FormDescription>{description}</FormDescription>}
-            {fieldState.error && <FormMessage>{fieldState.error.message}</FormMessage>}
-        </FormItem>
-    );
-};
-
-interface FormComboboxItemProps extends BaseFieldProps, BaseInputProps {
-    allowCustom?: boolean;
-    contentClass?: string;
-    description?: string;
-    options: string[];
-}
-
-const FormComboboxItem: React.FC<FormComboboxItemProps> = ({
+function FormComboboxItem({
     allowCustom = true,
     contentClass,
     control,
@@ -186,7 +112,7 @@ const FormComboboxItem: React.FC<FormComboboxItemProps> = ({
     name,
     options,
     placeholder,
-}) => {
+}: FormComboboxItemProps) {
     const { field, fieldState } = useController({
         control,
         defaultValue: undefined,
@@ -285,23 +211,90 @@ const FormComboboxItem: React.FC<FormComboboxItemProps> = ({
             {fieldState.error && <FormMessage>{fieldState.error.message}</FormMessage>}
         </FormItem>
     );
-};
-
-interface FormModelComboboxItemProps extends BaseFieldProps, BaseInputProps {
-    allowCustom?: boolean;
-    contentClass?: string;
-    description?: string;
-    onOptionSelect?: (option: ModelOption) => void;
-    options: ModelOption[];
 }
 
-interface ModelOption {
-    name: string;
-    price?: null | { cacheRead: number; cacheWrite: number; input: number; output: number };
-    thinking?: boolean;
+function FormInputNumberItem({
+    control,
+    description,
+    disabled,
+    label,
+    max,
+    min,
+    name,
+    placeholder,
+    step,
+    valueType = 'float',
+}: FormInputNumberItemProps) {
+    const { field, fieldState } = useController({
+        control,
+        defaultValue: undefined,
+        disabled,
+        name,
+    });
+
+    const parseValue = (value: string) => {
+        if (value === '') {
+            return null;
+        }
+
+        return valueType === 'float' ? Number.parseFloat(value) : Number.parseInt(value);
+    };
+
+    const inputProps = {
+        max,
+        min,
+        placeholder,
+        step,
+        type: 'number' as const,
+    };
+
+    return (
+        <FormItem>
+            <FormLabel>{label}</FormLabel>
+            <FormControl>
+                <Input
+                    {...field}
+                    {...inputProps}
+                    onChange={(event) => {
+                        const { value } = event.target;
+                        field.onChange(parseValue(value));
+                    }}
+                    value={field.value ?? ''}
+                />
+            </FormControl>
+            {description && <FormDescription>{description}</FormDescription>}
+            {fieldState.error && <FormMessage>{fieldState.error.message}</FormMessage>}
+        </FormItem>
+    );
 }
 
-const FormModelComboboxItem: React.FC<FormModelComboboxItemProps> = ({
+function FormInputStringItem({ control, description, disabled, label, name, placeholder }: FormInputStringItemProps) {
+    const { field, fieldState } = useController({
+        control,
+        defaultValue: undefined,
+        disabled,
+        name,
+    });
+
+    const inputProps = { placeholder };
+
+    return (
+        <FormItem>
+            <FormLabel>{label}</FormLabel>
+            <FormControl>
+                <Input
+                    {...field}
+                    {...inputProps}
+                    value={field.value ?? ''}
+                />
+            </FormControl>
+            {description && <FormDescription>{description}</FormDescription>}
+            {fieldState.error && <FormMessage>{fieldState.error.message}</FormMessage>}
+        </FormItem>
+    );
+}
+
+function FormModelComboboxItem({
     allowCustom = true,
     contentClass,
     control,
@@ -312,7 +305,7 @@ const FormModelComboboxItem: React.FC<FormModelComboboxItemProps> = ({
     onOptionSelect,
     options,
     placeholder,
-}) => {
+}: FormModelComboboxItemProps) {
     const { field, fieldState } = useController({
         control,
         defaultValue: undefined,
@@ -465,7 +458,7 @@ const FormModelComboboxItem: React.FC<FormModelComboboxItemProps> = ({
             {fieldState.error && <FormMessage>{fieldState.error.message}</FormMessage>}
         </FormItem>
     );
-};
+}
 
 // Define agent configuration schema
 const agentConfigSchema = z
@@ -668,7 +661,7 @@ interface TestResultsDialogProps {
 }
 
 // Component to render test results dialog
-const TestResultsDialog = ({ handleOpenChange, isOpen, results }: TestResultsDialogProps) => {
+function TestResultsDialog({ handleOpenChange, isOpen, results }: TestResultsDialogProps) {
     if (!results) {
         return null;
     }
@@ -791,7 +784,7 @@ const TestResultsDialog = ({ handleOpenChange, isOpen, results }: TestResultsDia
             </DialogContent>
         </Dialog>
     );
-};
+}
 
 // Static mapping of agent keys to GraphQL enum types
 const agentTypesMap: Record<string, AgentConfigType> = {
@@ -824,7 +817,7 @@ const extractAgentTypes = (agents: unknown): null | string[] => {
     return types.length > 0 ? types : null;
 };
 
-const SettingsProvider = () => {
+function SettingsProvider() {
     const { providerId } = useParams<{ providerId: string }>();
     const navigate = useNavigate();
     const [searchParams, setSearchParams] = useSearchParams();
@@ -1850,6 +1843,6 @@ const SettingsProvider = () => {
             />
         </>
     );
-};
+}
 
 export default SettingsProvider;

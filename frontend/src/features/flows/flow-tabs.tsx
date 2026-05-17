@@ -19,7 +19,7 @@ interface FlowTabsProps {
     onTabChange: (tab: string) => void;
 }
 
-const FlowTabs = ({ activeTab, onTabChange }: FlowTabsProps) => {
+function FlowTabs({ activeTab, onTabChange }: FlowTabsProps) {
     const { isDesktop } = useBreakpoint();
 
     const previousActiveTabRef = useRef<string>(activeTab);
@@ -134,6 +134,6 @@ const FlowTabs = ({ activeTab, onTabChange }: FlowTabsProps) => {
             </TabsContent>
         </Tabs>
     );
-};
+}
 
 export default FlowTabs;

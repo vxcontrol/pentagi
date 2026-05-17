@@ -22,12 +22,12 @@ export interface DetailNavigationToolbarProps<T extends { id: string }> {
  * Renders `null` when the controller reports `itemsEmpty` — saves the user
  * from a momentary "–/0" flash while the parent provider's data is in flight.
  */
-export const DetailNavigationToolbar = <T extends { id: string }>({
+export function DetailNavigationToolbar<T extends { id: string }>({
     controller,
     renderItem,
     sheetIcon,
     sheetTitle,
-}: DetailNavigationToolbarProps<T>) => {
+}: DetailNavigationToolbarProps<T>) {
     if (controller.itemsEmpty) {
         return null;
     }
@@ -46,4 +46,4 @@ export const DetailNavigationToolbar = <T extends { id: string }>({
             />
         </>
     );
-};
+}

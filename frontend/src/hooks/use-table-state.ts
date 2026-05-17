@@ -80,7 +80,7 @@ interface UseTableStateResult {
  * mutating it) should keep using `useTableQueryFilterReader` — no shared
  * URL writes, no race.
  */
-export const useTableState = (options: UseTableStateOptions = {}): UseTableStateResult => {
+export function useTableState(options: UseTableStateOptions = {}): UseTableStateResult {
     const {
         clearPageOnFilterChange = true,
         debounceMs = 200,
@@ -320,4 +320,4 @@ export const useTableState = (options: UseTableStateOptions = {}): UseTableState
         }),
         [debouncedFilter, filter, pageIndex, resetFilter, setFilter, setPage, update],
     );
-};
+}

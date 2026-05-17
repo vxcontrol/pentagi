@@ -40,7 +40,11 @@ interface AssistantsDropdownProps {
     selectedAssistantId: null | string;
 }
 
-const AssistantsDropdown = ({
+interface FlowAssistantMessagesProps {
+    className?: string;
+}
+
+function AssistantsDropdown({
     assistants,
     isAssistantCreating,
     isDisabled,
@@ -49,7 +53,7 @@ const AssistantsDropdown = ({
     onAssistantSelect,
     providers,
     selectedAssistantId,
-}: AssistantsDropdownProps) => {
+}: AssistantsDropdownProps) {
     const [isOpen, setIsOpen] = useState(false);
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [currentAssistant, setCurrentAssistant] = useState<AssistantFragmentFragment | null>(null);
@@ -272,17 +276,13 @@ const AssistantsDropdown = ({
             />
         </>
     );
-};
-
-interface FlowAssistantMessagesProps {
-    className?: string;
 }
 
 const searchFormSchema = z.object({
     search: z.string(),
 });
 
-const FlowAssistantMessages = ({ className }: FlowAssistantMessagesProps) => {
+function FlowAssistantMessages({ className }: FlowAssistantMessagesProps) {
     const { providers } = useProviders();
 
     const {
@@ -685,6 +685,6 @@ const FlowAssistantMessages = ({ className }: FlowAssistantMessagesProps) => {
             </div>
         </div>
     );
-};
+}
 
 export default FlowAssistantMessages;

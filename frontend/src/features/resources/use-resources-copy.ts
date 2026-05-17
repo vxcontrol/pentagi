@@ -44,7 +44,7 @@ interface UseResourcesCopyResult {
 }
 
 /** Wraps `POST /resources/copy` for single and batch copy operations. */
-export const useResourcesCopy = (): UseResourcesCopyResult => {
+export function useResourcesCopy(): UseResourcesCopyResult {
     const [isCopying, setIsCopying] = useState(false);
 
     const copy = useCallback(
@@ -91,4 +91,4 @@ export const useResourcesCopy = (): UseResourcesCopyResult => {
         copy,
         isCopying,
     };
-};
+}

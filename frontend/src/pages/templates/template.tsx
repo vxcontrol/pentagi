@@ -241,7 +241,7 @@ const renderTemplateItem = (item: Template, isCurrent: boolean): ReactNode => (
     <span className={isCurrent ? 'truncate font-medium' : 'truncate'}>{item.title}</span>
 );
 
-const Template = () => {
+function Template() {
     const navigate = useNavigate();
     const { templateId } = useParams<{ templateId?: string }>();
     const { createTemplate, deleteTemplate, updateTemplate } = useTemplates();
@@ -802,6 +802,6 @@ const Template = () => {
             />
         </>
     );
-};
+}
 
 export default Template;

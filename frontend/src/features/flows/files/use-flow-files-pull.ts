@@ -30,7 +30,7 @@ interface UseFlowFilesPullResult {
  * always sends the array as `paths` in the body (single-path callers just pass
  * a 1-element array), matching the wire shape the rest of our file APIs use.
  */
-export const useFlowFilesPull = ({ flowId, onSuccess }: UseFlowFilesPullParams): UseFlowFilesPullResult => {
+export function useFlowFilesPull({ flowId, onSuccess }: UseFlowFilesPullParams): UseFlowFilesPullResult {
     const [isPulling, setIsPulling] = useState(false);
 
     const pull = useCallback(
@@ -85,4 +85,4 @@ export const useFlowFilesPull = ({ flowId, onSuccess }: UseFlowFilesPullParams):
         isPulling,
         pull,
     };
-};
+}

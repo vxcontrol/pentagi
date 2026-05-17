@@ -7,7 +7,7 @@ import LoginForm from '@/features/authentication/login-form';
 import { getSafeReturnUrl } from '@/lib/utils/auth';
 import { useUser } from '@/providers/user-provider';
 
-const Login = () => {
+function Login() {
     const [searchParams] = useSearchParams();
     const location = useLocation();
     const { authInfo, isLoading } = useUser();
@@ -36,6 +36,6 @@ const Login = () => {
             </div>
         </div>
     );
-};
+}
 
 export default Login;

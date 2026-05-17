@@ -267,12 +267,12 @@ const parseLogsWithCache = (logs: string[]): ParsedLine[] => {
  * Provides a read-only code viewer with search functionality, theme support, and ANSI color rendering.
  * Compatible with the existing Terminal component API.
  */
-const MonacoTerminal = ({
+function MonacoTerminal({
     className,
     logs,
     ref,
     searchValue,
-}: MonacoTerminalProps & { ref?: React.RefObject<MonacoTerminalRef | null> }) => {
+}: MonacoTerminalProps & { ref?: React.RefObject<MonacoTerminalRef | null> }) {
     const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
     const monacoRef = useRef<Monaco | null>(null);
     const { theme } = useTheme();
@@ -567,6 +567,6 @@ const MonacoTerminal = ({
             />
         </div>
     );
-};
+}
 
 export default MonacoTerminal;

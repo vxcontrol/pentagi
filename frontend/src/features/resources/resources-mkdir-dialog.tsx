@@ -25,7 +25,29 @@ interface ResourcesMkdirDialogProps {
 const buildDefaultPath = (defaultParentPath: string): string =>
     defaultParentPath ? `${defaultParentPath.replace(/\/+$/u, '')}/new-folder` : 'new-folder';
 
-const ResourcesMkdirDialogForm = ({ defaultParentPath, onClose }: ResourcesMkdirDialogFormProps) => {
+export function ResourcesMkdirDialog({ defaultParentPath = '', isOpen, onClose }: ResourcesMkdirDialogProps) {
+    const handleDialogOpenChange = (nextOpen: boolean) => {
+        if (!nextOpen) {
+            onClose();
+        }
+    };
+
+    return (
+        <Dialog
+            onOpenChange={handleDialogOpenChange}
+            open={isOpen}
+        >
+            {isOpen && (
+                <ResourcesMkdirDialogForm
+                    defaultParentPath={defaultParentPath}
+                    onClose={onClose}
+                />
+            )}
+        </Dialog>
+    );
+}
+
+function ResourcesMkdirDialogForm({ defaultParentPath, onClose }: ResourcesMkdirDialogFormProps) {
     const { isCreating, mkdir } = useResourcesMkdir();
 
     const form = useForm<ResourcesMkdirFormValues>({
@@ -110,26 +132,4 @@ const ResourcesMkdirDialogForm = ({ defaultParentPath, onClose }: ResourcesMkdir
             </Form>
         </DialogContent>
     );
-};
-
-export const ResourcesMkdirDialog = ({ defaultParentPath = '', isOpen, onClose }: ResourcesMkdirDialogProps) => {
-    const handleDialogOpenChange = (nextOpen: boolean) => {
-        if (!nextOpen) {
-            onClose();
-        }
-    };
-
-    return (
-        <Dialog
-            onOpenChange={handleDialogOpenChange}
-            open={isOpen}
-        >
-            {isOpen && (
-                <ResourcesMkdirDialogForm
-                    defaultParentPath={defaultParentPath}
-                    onClose={onClose}
-                />
-            )}
-        </Dialog>
-    );
-};
+}

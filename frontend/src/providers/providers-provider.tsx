@@ -20,7 +20,7 @@ interface ProvidersProviderProps {
     children: React.ReactNode;
 }
 
-export const ProvidersProvider = ({ children }: ProvidersProviderProps) => {
+export function ProvidersProvider({ children }: ProvidersProviderProps) {
     const { isAuthenticated } = useUser();
 
     const { data: providersData } = useProvidersQuery({
@@ -72,9 +72,9 @@ export const ProvidersProvider = ({ children }: ProvidersProviderProps) => {
     };
 
     return <ProvidersContext.Provider value={value}>{children}</ProvidersContext.Provider>;
-};
+}
 
-export const useProviders = () => {
+export function useProviders() {
     const context = useContext(ProvidersContext);
 
     if (context === undefined) {
@@ -82,4 +82,4 @@ export const useProviders = () => {
     }
 
     return context;
-};
+}

@@ -27,7 +27,7 @@ interface UseFlowFilesSearchResult {
  * remount the subtree (via `key={flowId}` on the surrounding component) when the
  * flow changes, which clears form state without an imperative effect.
  */
-export const useFlowFilesSearch = (): UseFlowFilesSearchResult => {
+export function useFlowFilesSearch(): UseFlowFilesSearchResult {
     const form = useForm<FlowFilesSearchFormValues>({
         defaultValues: { search: '' },
         resolver: zodResolver(flowFilesSearchFormSchema),
@@ -46,4 +46,4 @@ export const useFlowFilesSearch = (): UseFlowFilesSearchResult => {
         rawQuery,
         resetSearch,
     };
-};
+}

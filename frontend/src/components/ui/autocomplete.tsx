@@ -15,35 +15,16 @@ import { Popover, PopoverAnchor } from '@/components/ui/popover';
 import { useLatestRef } from '@/hooks/use-latest-ref';
 import { cn } from '@/lib/utils';
 
-/**
- * Radix-style controllable state. When `controlled` is `undefined` the hook
- * owns the state; otherwise the parent does and we forward updates via
- * `onChange`. `onChange` always fires so fully-controlled consumers can
- * observe every set (e.g. for logging).
- *
- * Mirrors `@radix-ui/react-use-controllable-state` without pulling in the
- * dependency for a couple of state slots.
- */
-const useControllable = <T,>(controlled: T | undefined, defaultValue: T, onChange?: (value: T) => void) => {
-    const [internal, setInternal] = React.useState<T>(defaultValue);
-    const isControlled = controlled !== undefined;
-    const value = isControlled ? (controlled as T) : internal;
-
-    const onChangeRef = useLatestRef(onChange);
-
-    const set = React.useCallback(
-        (next: T) => {
-            if (!isControlled) {
-                setInternal(next);
-            }
-
-            onChangeRef.current?.(next);
-        },
-        [isControlled, onChangeRef],
-    );
-
-    return [value, set] as const;
-};
+interface AutocompleteContextValue {
+    commit: (value: string) => void;
+    inputId: string;
+    inputRef: React.RefObject<HTMLInputElement | null>;
+    inputValue: string;
+    open: boolean;
+    openOnFocus: boolean;
+    setInputValue: (value: string) => void;
+    setOpen: (open: boolean) => void;
+}
 
 /**
  * Free-text input with a popover dropdown of substring-filtered suggestions.
@@ -71,20 +52,39 @@ const useControllable = <T,>(controlled: T | undefined, defaultValue: T, onChang
  *  </Autocomplete>
  */
 
-interface AutocompleteContextValue {
-    commit: (value: string) => void;
-    inputId: string;
-    inputRef: React.RefObject<HTMLInputElement | null>;
-    inputValue: string;
-    open: boolean;
-    openOnFocus: boolean;
-    setInputValue: (value: string) => void;
-    setOpen: (open: boolean) => void;
+/**
+ * Radix-style controllable state. When `controlled` is `undefined` the hook
+ * owns the state; otherwise the parent does and we forward updates via
+ * `onChange`. `onChange` always fires so fully-controlled consumers can
+ * observe every set (e.g. for logging).
+ *
+ * Mirrors `@radix-ui/react-use-controllable-state` without pulling in the
+ * dependency for a couple of state slots.
+ */
+function useControllable<T>(controlled: T | undefined, defaultValue: T, onChange?: (value: T) => void) {
+    const [internal, setInternal] = React.useState<T>(defaultValue);
+    const isControlled = controlled !== undefined;
+    const value = isControlled ? (controlled as T) : internal;
+
+    const onChangeRef = useLatestRef(onChange);
+
+    const set = React.useCallback(
+        (next: T) => {
+            if (!isControlled) {
+                setInternal(next);
+            }
+
+            onChangeRef.current?.(next);
+        },
+        [isControlled, onChangeRef],
+    );
+
+    return [value, set] as const;
 }
 
 const AutocompleteContext = React.createContext<AutocompleteContextValue | null>(null);
 
-const useAutocompleteContext = (): AutocompleteContextValue => {
+function useAutocompleteContext(): AutocompleteContextValue {
     const ctx = React.useContext(AutocompleteContext);
 
     if (!ctx) {
@@ -92,7 +92,7 @@ const useAutocompleteContext = (): AutocompleteContextValue => {
     }
 
     return ctx;
-};
+}
 
 // Case-insensitive substring matcher used as the default. cmdk ships
 // `command-score` (fuzzy/subsequence), which is great for command palettes

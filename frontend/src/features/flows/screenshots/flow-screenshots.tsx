@@ -18,7 +18,7 @@ const searchFormSchema = z.object({
     search: z.string(),
 });
 
-const FlowScreenshots = () => {
+function FlowScreenshots() {
     const { flowData, flowId } = useFlow();
 
     const screenshots = useMemo(() => flowData?.screenshots ?? [], [flowData?.screenshots]);
@@ -171,6 +171,6 @@ const FlowScreenshots = () => {
             )}
         </div>
     );
-};
+}
 
 export default FlowScreenshots;

@@ -27,7 +27,7 @@ import { useTableState } from '@/hooks/use-table-state';
 import { mergeHrefWithSearchParams } from '@/lib/url-params';
 import { type Template, useTemplates } from '@/providers/templates-provider';
 
-const Templates = () => {
+function Templates() {
     const navigate = useNavigate();
     const location = useLocation();
     const { deleteTemplate, templates, updateTemplate } = useTemplates();
@@ -327,6 +327,6 @@ const Templates = () => {
             </div>
         </>
     );
-};
+}
 
 export default Templates;

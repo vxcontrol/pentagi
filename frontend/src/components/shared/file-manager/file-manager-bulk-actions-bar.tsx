@@ -16,6 +16,12 @@ import type { FileManagerBulkAction, FileManagerLabels, FileNode } from './file-
 
 import { dedupeOverlappingPaths, formatFileSize, pluralizeItemsEnglish } from './file-manager-utils';
 
+interface BulkActionButtonProps {
+    action: FileManagerBulkAction;
+    isDisabled: boolean;
+    onClick: (action: FileManagerBulkAction) => void;
+}
+
 interface FileManagerBulkActionsBarProps {
     actions: readonly FileManagerBulkAction[];
     files: FileNode[];
@@ -44,14 +50,14 @@ interface ResolvedAction {
  *     a directory never ships together with one of its descendants — the
  *     caller deletes / moves / etc. only the parent.
  */
-export const FileManagerBulkActionsBar = ({
+export function FileManagerBulkActionsBar({
     actions,
     files,
     labels,
     onClearSelection,
     selectedPaths,
     selectionTotalBytes,
-}: FileManagerBulkActionsBarProps) => {
+}: FileManagerBulkActionsBarProps) {
     const [pendingAction, setPendingAction] = useState<FileManagerBulkAction | null>(null);
 
     // Resolve the deduped FileNode[] once per render — every action callback,
@@ -207,12 +213,6 @@ export const FileManagerBulkActionsBar = ({
             )}
         </>
     );
-};
-
-interface BulkActionButtonProps {
-    action: FileManagerBulkAction;
-    isDisabled: boolean;
-    onClick: (action: FileManagerBulkAction) => void;
 }
 
 /**
@@ -220,7 +220,7 @@ interface BulkActionButtonProps {
  * variant (no `label` text on narrow screens) can be added later without bloating
  * the parent's JSX.
  */
-const BulkActionButton = ({ action, isDisabled, onClick }: BulkActionButtonProps) => {
+function BulkActionButton({ action, isDisabled, onClick }: BulkActionButtonProps) {
     const Icon = action.icon as ComponentType<{ className?: string }> | undefined;
     const button = (
         <Button
@@ -248,4 +248,4 @@ const BulkActionButton = ({ action, isDisabled, onClick }: BulkActionButtonProps
             <TooltipContent>{action.label}</TooltipContent>
         </Tooltip>
     );
-};
+}

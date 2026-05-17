@@ -39,10 +39,10 @@ const isFileDragEvent = (event: React.DragEvent<HTMLDivElement>): boolean =>
  * to remount the subtree (via `key={...}` on the surrounding component) which discards
  * both the counter and the `isDragging` state.
  */
-export const useFilesDragAndDrop = ({
+export function useFilesDragAndDrop({
     canAcceptDrop,
     onDrop,
-}: UseFilesDragAndDropParams): UseFilesDragAndDropResult => {
+}: UseFilesDragAndDropParams): UseFilesDragAndDropResult {
     const dragCounterRef = useRef(0);
     const [isDragging, setIsDragging] = useState(false);
 
@@ -128,4 +128,4 @@ export const useFilesDragAndDrop = ({
         },
         isDragging,
     };
-};
+}

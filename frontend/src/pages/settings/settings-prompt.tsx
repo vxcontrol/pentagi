@@ -12,7 +12,6 @@ import {
     Wrench,
     XCircle,
 } from 'lucide-react';
-import * as React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ReactDiffViewer from 'react-diff-viewer-continued';
 import { useController, useForm, useFormState } from 'react-hook-form';
@@ -71,14 +70,7 @@ type HumanFormData = z.infer<typeof humanFormSchema>;
 
 type SystemFormData = z.infer<typeof systemFormSchema>;
 
-const FormTextareaItem: React.FC<FormTextareaItemProps> = ({
-    className,
-    control,
-    disabled,
-    label,
-    name,
-    placeholder,
-}) => {
+function FormTextareaItem({ className, control, disabled, label, name, placeholder }: FormTextareaItemProps) {
     const { field, fieldState } = useController({
         control,
         defaultValue: '',
@@ -100,7 +92,7 @@ const FormTextareaItem: React.FC<FormTextareaItemProps> = ({
             {fieldState.error && <FormMessage>{fieldState.error.message}</FormMessage>}
         </FormItem>
     );
-};
+}
 
 // Helper function to format display name
 const formatName = (key: string): string => {
@@ -136,40 +128,7 @@ interface VariablesProps {
     variables: string[];
 }
 
-const Variables: React.FC<VariablesProps> = ({ currentTemplate, onVariableClick, variables }) => {
-    if (variables.length === 0) {
-        return null;
-    }
-
-    const usedVariables = getUsedVariables(currentTemplate);
-
-    return (
-        <div className="bg-muted/50 mb-4 rounded-md border p-3">
-            <h4 className="text-muted-foreground mb-2 text-sm font-medium">Available Variables:</h4>
-            <div className="flex flex-wrap gap-1">
-                {variables.map((variable) => {
-                    const isUsed = usedVariables.has(variable);
-
-                    return (
-                        <code
-                            className={`cursor-pointer rounded border px-2 py-1 font-mono text-xs transition-colors ${
-                                isUsed
-                                    ? 'border-green-300 bg-green-100 text-green-800 hover:bg-green-200'
-                                    : 'bg-background text-foreground hover:bg-accent'
-                            }`}
-                            key={variable}
-                            onClick={() => onVariableClick(variable)}
-                        >
-                            {`{{.${variable}}}`}
-                        </code>
-                    );
-                })}
-            </div>
-        </div>
-    );
-};
-
-const SettingsPrompt = () => {
+function SettingsPrompt() {
     const { promptId } = useParams<{ promptId: string }>();
     const navigate = useNavigate();
 
@@ -1074,6 +1033,39 @@ const SettingsPrompt = () => {
             </Dialog>
         </div>
     );
-};
+}
+
+function Variables({ currentTemplate, onVariableClick, variables }: VariablesProps) {
+    if (variables.length === 0) {
+        return null;
+    }
+
+    const usedVariables = getUsedVariables(currentTemplate);
+
+    return (
+        <div className="bg-muted/50 mb-4 rounded-md border p-3">
+            <h4 className="text-muted-foreground mb-2 text-sm font-medium">Available Variables:</h4>
+            <div className="flex flex-wrap gap-1">
+                {variables.map((variable) => {
+                    const isUsed = usedVariables.has(variable);
+
+                    return (
+                        <code
+                            className={`cursor-pointer rounded border px-2 py-1 font-mono text-xs transition-colors ${
+                                isUsed
+                                    ? 'border-green-300 bg-green-100 text-green-800 hover:bg-green-200'
+                                    : 'bg-background text-foreground hover:bg-accent'
+                            }`}
+                            key={variable}
+                            onClick={() => onVariableClick(variable)}
+                        >
+                            {`{{.${variable}}}`}
+                        </code>
+                    );
+                })}
+            </div>
+        </div>
+    );
+}
 
 export default SettingsPrompt;

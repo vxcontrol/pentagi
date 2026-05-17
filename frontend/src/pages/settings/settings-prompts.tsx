@@ -59,15 +59,7 @@ type ToolPromptTableData = {
     template: string;
 };
 
-const SettingsPromptsHeader = () => {
-    return (
-        <div className="flex items-center justify-between">
-            <p className="text-muted-foreground">Manage system and custom prompt templates</p>
-        </div>
-    );
-};
-
-const SettingsPrompts = () => {
+function SettingsPrompts() {
     const { data, error, loading: isLoading } = useSettingsPromptsQuery();
     const [deletePrompt, { loading: isDeleteLoading }] = useDeletePromptMutation();
     const navigate = useNavigate();
@@ -919,6 +911,14 @@ const SettingsPrompts = () => {
             />
         </Fragment>
     );
-};
+}
+
+function SettingsPromptsHeader() {
+    return (
+        <div className="flex items-center justify-between">
+            <p className="text-muted-foreground">Manage system and custom prompt templates</p>
+        </div>
+    );
+}
 
 export default SettingsPrompts;

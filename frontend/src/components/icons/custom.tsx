@@ -4,7 +4,7 @@ interface CustomProps extends React.SVGProps<SVGSVGElement> {
     className?: string;
 }
 
-const Custom = ({ className, ...props }: CustomProps) => {
+function Custom({ className, ...props }: CustomProps) {
     return (
         <svg
             className={cn(className)}
@@ -21,6 +21,6 @@ const Custom = ({ className, ...props }: CustomProps) => {
             />
         </svg>
     );
-};
+}
 
 export default Custom;

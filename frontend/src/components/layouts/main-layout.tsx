@@ -3,7 +3,7 @@ import { Outlet } from 'react-router-dom';
 import { MainSidebar } from '@/components/layouts/main-sidebar';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 
-const MainLayout = () => {
+function MainLayout() {
     return (
         <SidebarProvider>
             <MainSidebar />
@@ -12,6 +12,6 @@ const MainLayout = () => {
             </SidebarInset>
         </SidebarProvider>
     );
-};
+}
 
 export default MainLayout;

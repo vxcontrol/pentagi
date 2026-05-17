@@ -55,7 +55,7 @@ const buildUploadSuccessMessage = (uploadedCount: number, firstFileName?: string
  * is wired into the Apollo cache (see `lib/apollo.ts`) and appends the newly
  * uploaded entries automatically.
  */
-export const useFlowFilesUpload = ({ flowId }: UseFlowFilesUploadParams): UseFlowFilesUploadResult => {
+export function useFlowFilesUpload({ flowId }: UseFlowFilesUploadParams): UseFlowFilesUploadResult {
     const inputRef = useRef<HTMLInputElement | null>(null);
     const [isUploading, setIsUploading] = useState(false);
     const [fileInputKey, setFileInputKey] = useState(0);
@@ -134,4 +134,4 @@ export const useFlowFilesUpload = ({ flowId }: UseFlowFilesUploadParams): UseFlo
         openFilePicker,
         uploadFiles,
     };
-};
+}

@@ -50,12 +50,12 @@ interface UseFileManagerSortingResult {
  *   3. **Controlled** — `controlledSorting` is set. The hook reflects that
  *      value verbatim and fires `onSortingChange` on user interaction.
  */
-export const useFileManagerSorting = ({
+export function useFileManagerSorting({
     controlledSorting,
     initialSorting = null,
     onSortingChange,
     sortStorageKey,
-}: UseFileManagerSortingArgs): UseFileManagerSortingResult => {
+}: UseFileManagerSortingArgs): UseFileManagerSortingResult {
     const isControlled = controlledSorting !== undefined;
 
     // `localStorage` access is guarded inside `loadFileManagerSorting`, so the
@@ -115,7 +115,7 @@ export const useFileManagerSorting = ({
     }, []);
 
     return { sorting, toggleSort };
-};
+}
 
 /** Pure reducer for the header three-state cycle. Exported for unit tests. */
 export const computeNextSort = (current: FileManagerSortState, column: FileManagerSortColumn): FileManagerSortState => {

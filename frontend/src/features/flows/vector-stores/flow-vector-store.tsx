@@ -67,7 +67,7 @@ const containsSearchValue = (text: null | string | undefined, searchValue: strin
     return text.toLowerCase().includes(searchValue.toLowerCase().trim());
 };
 
-const FlowVectorStore = ({ log, searchValue = '' }: FlowVectorStoreProps) => {
+function FlowVectorStore({ log, searchValue = '' }: FlowVectorStoreProps) {
     const { action, createdAt, executor, initiator, query, result, subtaskId, taskId } = log;
 
     // Memoize search checks to avoid recalculating on every render
@@ -189,6 +189,6 @@ const FlowVectorStore = ({ log, searchValue = '' }: FlowVectorStoreProps) => {
             </div>
         </div>
     );
-};
+}
 
 export default memo(FlowVectorStore);

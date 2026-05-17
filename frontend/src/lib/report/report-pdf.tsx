@@ -607,7 +607,7 @@ const renderPDFContent = (parsed: ParsedContent[]) => {
 };
 
 // PDF Document component
-const PDFReportDocument = ({ content }: { content: string }) => {
+function PDFReportDocument({ content }: { content: string }) {
     const parsed = parseMarkdownTokens(content);
     const elements = renderPDFContent(parsed);
 
@@ -621,7 +621,7 @@ const PDFReportDocument = ({ content }: { content: string }) => {
             </Page>
         </Document>
     );
-};
+}
 
 // Main function to generate PDF from markdown
 export const generatePDFFromMarkdownNew = async (content: string, fileName: string): Promise<void> => {

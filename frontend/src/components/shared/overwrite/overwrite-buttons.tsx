@@ -47,7 +47,7 @@ interface OverwriteButtonsProps {
  * The component owns the spinner / icon swap, so callers don't repeat that
  * boilerplate in five different dialogs.
  */
-export const OverwriteButtons = ({
+export function OverwriteButtons({
     isDisabled,
     isProcessing,
     onOverwrite,
@@ -56,7 +56,7 @@ export const OverwriteButtons = ({
     primaryIcon: PrimaryIcon,
     primaryLabel,
     primaryType = 'button',
-}: OverwriteButtonsProps) => {
+}: OverwriteButtonsProps) {
     const disabled = isDisabled || isProcessing;
 
     return (
@@ -80,4 +80,4 @@ export const OverwriteButtons = ({
             </Button>
         </>
     );
-};
+}

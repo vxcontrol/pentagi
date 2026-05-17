@@ -63,35 +63,7 @@ interface FlowMenuItemProps {
     onToggleFavorite: (flowId: string) => void;
 }
 
-const FlowMenuItem = ({ activeFlowId, flow, isFavorite, onToggleFavorite }: FlowMenuItemProps) => {
-    return (
-        <SidebarMenuItem>
-            <SidebarMenuButton
-                asChild
-                isActive={activeFlowId === Number(flow.id)}
-            >
-                <Link to={`/flows/${flow.id}`}>
-                    <span className="-mx-2 w-8 shrink-0 text-center text-xs group-data-[state=expanded]:hidden">
-                        {flow.id}
-                    </span>
-                    <span className="text-muted-foreground bg-background dark:bg-muted -my-0.5 -ml-0.5 h-5 min-w-5 shrink-0 rounded-md px-px py-0.5 text-center text-xs group-data-[state=collapsed]:hidden">
-                        {flow.id}
-                    </span>
-                    <span className="truncate">{flow.title}</span>
-                </Link>
-            </SidebarMenuButton>
-            <SidebarMenuAction
-                className="data-[state=open]:bg-accent rounded-sm"
-                onClick={() => onToggleFavorite(flow.id)}
-                showOnHover
-            >
-                <Star className={isFavorite ? 'fill-yellow-500 stroke-yellow-500' : ''} />
-            </SidebarMenuAction>
-        </SidebarMenuItem>
-    );
-};
-
-export const MainSidebar = () => {
+export function MainSidebar() {
     const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
     const isDashboardActive = useMatch('/dashboard');
     const isFlowsActive = useMatch('/flows/*');
@@ -426,4 +398,32 @@ export const MainSidebar = () => {
             </Dialog>
         </Sidebar>
     );
-};
+}
+
+function FlowMenuItem({ activeFlowId, flow, isFavorite, onToggleFavorite }: FlowMenuItemProps) {
+    return (
+        <SidebarMenuItem>
+            <SidebarMenuButton
+                asChild
+                isActive={activeFlowId === Number(flow.id)}
+            >
+                <Link to={`/flows/${flow.id}`}>
+                    <span className="-mx-2 w-8 shrink-0 text-center text-xs group-data-[state=expanded]:hidden">
+                        {flow.id}
+                    </span>
+                    <span className="text-muted-foreground bg-background dark:bg-muted -my-0.5 -ml-0.5 h-5 min-w-5 shrink-0 rounded-md px-px py-0.5 text-center text-xs group-data-[state=collapsed]:hidden">
+                        {flow.id}
+                    </span>
+                    <span className="truncate">{flow.title}</span>
+                </Link>
+            </SidebarMenuButton>
+            <SidebarMenuAction
+                className="data-[state=open]:bg-accent rounded-sm"
+                onClick={() => onToggleFavorite(flow.id)}
+                showOnHover
+            >
+                <Star className={isFavorite ? 'fill-yellow-500 stroke-yellow-500' : ''} />
+            </SidebarMenuAction>
+        </SidebarMenuItem>
+    );
+}

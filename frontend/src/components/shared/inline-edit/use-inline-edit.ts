@@ -44,9 +44,9 @@ interface UseInlineEditResult<TElement extends HTMLElement = HTMLInputElement> {
  * Pass the entity id as `resetKey` so navigation between items closes any
  * stale editor automatically.
  */
-export const useInlineEdit = <TElement extends HTMLElement = HTMLInputElement>({
+export function useInlineEdit<TElement extends HTMLElement = HTMLInputElement>({
     resetKey,
-}: UseInlineEditOptions = {}): UseInlineEditResult<TElement> => {
+}: UseInlineEditOptions = {}): UseInlineEditResult<TElement> {
     const [isEditing, setIsEditing] = useState(false);
     const inputRef = useRef<null | TElement>(null);
 
@@ -109,4 +109,4 @@ export const useInlineEdit = <TElement extends HTMLElement = HTMLInputElement>({
     );
 
     return { handleDropdownCloseAutoFocus, inputRef, isEditing, startEdit, stopEdit };
-};
+}

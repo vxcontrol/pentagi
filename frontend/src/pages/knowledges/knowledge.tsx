@@ -19,7 +19,7 @@ import { KnowledgeLayout } from '@/features/knowledges/knowledge-layout';
 import { useKnowledgeDocumentQuery } from '@/graphql/types';
 import { useKnowledges } from '@/providers/knowledges-provider';
 
-const Knowledge = () => {
+function Knowledge() {
     const navigate = useNavigate();
     const { knowledgeId } = useParams<{ knowledgeId?: string }>();
     const { createKnowledge, updateKnowledge } = useKnowledges();
@@ -118,6 +118,6 @@ const Knowledge = () => {
             />
         </>
     );
-};
+}
 
 export default Knowledge;

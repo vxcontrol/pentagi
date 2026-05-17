@@ -37,7 +37,7 @@ import { useFlowFilesRealtime } from './use-flow-files-realtime';
 import { useFlowFilesSearch } from './use-flow-files-search';
 import { useFlowFilesUpload } from './use-flow-files-upload';
 
-const FlowFiles = () => {
+function FlowFiles() {
     const { flowId, flowStatus } = useFlow();
     const [isPullDialogOpen, setIsPullDialogOpen] = useState(false);
     const [isAttachResourcesDialogOpen, setIsAttachResourcesDialogOpen] = useState(false);
@@ -367,6 +367,6 @@ const FlowFiles = () => {
             />
         </div>
     );
-};
+}
 
 export default FlowFiles;

@@ -52,7 +52,7 @@ interface UseFlowFilesPromoteResult {
  * Wraps the "promote flow file → user resource" REST call (`POST /files/to-resources`)
  * with toast notifications and a loading flag.
  */
-export const useFlowFilesPromote = ({ flowId }: UseFlowFilesPromoteParams): UseFlowFilesPromoteResult => {
+export function useFlowFilesPromote({ flowId }: UseFlowFilesPromoteParams): UseFlowFilesPromoteResult {
     const [isPromoting, setIsPromoting] = useState(false);
 
     const promote = useCallback(
@@ -103,4 +103,4 @@ export const useFlowFilesPromote = ({ flowId }: UseFlowFilesPromoteParams): UseF
         isPromoting,
         promote,
     };
-};
+}

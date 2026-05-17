@@ -25,7 +25,7 @@ const searchFormSchema = z.object({
     search: z.string(),
 });
 
-const FlowVectorStores = () => {
+function FlowVectorStores() {
     const { flowData, flowId } = useFlow();
 
     const logs = useMemo(() => flowData?.vectorStoreLogs ?? [], [flowData?.vectorStoreLogs]);
@@ -268,6 +268,6 @@ const FlowVectorStores = () => {
             )}
         </div>
     );
-};
+}
 
 export default FlowVectorStores;

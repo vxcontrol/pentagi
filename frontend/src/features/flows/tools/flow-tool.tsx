@@ -23,7 +23,7 @@ const containsSearchValue = (text: null | string | undefined, searchValue: strin
     return text.toLowerCase().includes(searchValue.toLowerCase().trim());
 };
 
-const FlowTool = ({ log, searchValue = '' }: FlowToolProps) => {
+function FlowTool({ log, searchValue = '' }: FlowToolProps) {
     const { createdAt, engine, executor, initiator, query, result, subtaskId, taskId } = log;
 
     // Memoize search checks to avoid recalculating on every render
@@ -148,6 +148,6 @@ const FlowTool = ({ log, searchValue = '' }: FlowToolProps) => {
             </div>
         </div>
     );
-};
+}
 
 export default memo(FlowTool);

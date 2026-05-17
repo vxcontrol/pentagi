@@ -70,7 +70,7 @@ export interface FlowFormProps {
 
 export type FlowFormValues = z.infer<typeof formSchema>;
 
-export const FlowForm = ({
+export function FlowForm({
     defaultValues,
     isCanceling,
     isDisabled,
@@ -81,7 +81,7 @@ export const FlowForm = ({
     onSubmit,
     placeholder = 'Describe what you would like PentAGI to test...',
     type,
-}: FlowFormProps) => {
+}: FlowFormProps) {
     const { providers, setSelectedProvider } = useProviders();
     const { templates } = useTemplates();
     const { resources } = useResources();
@@ -813,4 +813,4 @@ export const FlowForm = ({
             />
         </Form>
     );
-};
+}

@@ -11,7 +11,7 @@ import { generateFileName, generatePDFFromMarkdown, generateReport } from '@/lib
 type PdfPhase = 'done' | 'error' | 'idle';
 type ReportState = 'content' | 'error' | 'generating' | 'loading';
 
-const FlowReport = () => {
+function FlowReport() {
     const { flowId } = useParams<{ flowId: string }>();
     const [searchParams] = useSearchParams();
     const download = searchParams.has('download');
@@ -148,6 +148,6 @@ const FlowReport = () => {
             </div>
         </div>
     );
-};
+}
 
 export default FlowReport;

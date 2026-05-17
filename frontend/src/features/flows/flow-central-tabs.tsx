@@ -5,7 +5,7 @@ import FlowAssistantMessages from '@/features/flows/messages/flow-assistant-mess
 import FlowAutomationMessages from '@/features/flows/messages/flow-automation-messages';
 import { useFlowTabDetection } from '@/hooks/use-flow-tab-detection';
 
-const FlowCentralTabs = () => {
+function FlowCentralTabs() {
     const { handleTabChange, resolvedTab } = useFlowTabDetection();
 
     return (
@@ -45,6 +45,6 @@ const FlowCentralTabs = () => {
             </TabsContent>
         </Tabs>
     );
-};
+}
 
 export default FlowCentralTabs;

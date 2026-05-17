@@ -27,7 +27,7 @@ interface UseResourcesMkdirResult {
 }
 
 /** Wraps `POST /resources/mkdir` (idempotent — returns existing dir on hit). */
-export const useResourcesMkdir = (): UseResourcesMkdirResult => {
+export function useResourcesMkdir(): UseResourcesMkdirResult {
     const [isCreating, setIsCreating] = useState(false);
 
     const mkdir = useCallback(async ({ path }: ResourcesMkdirFormValues): Promise<boolean> => {
@@ -54,4 +54,4 @@ export const useResourcesMkdir = (): UseResourcesMkdirResult => {
         isCreating,
         mkdir,
     };
-};
+}

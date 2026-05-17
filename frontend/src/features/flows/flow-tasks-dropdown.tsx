@@ -26,7 +26,7 @@ interface FlowTasksDropdownProps {
     value?: FlowTasksDropdownValue;
 }
 
-const FlowTasksDropdown = ({ disabled, onChange, value }: FlowTasksDropdownProps) => {
+function FlowTasksDropdown({ disabled, onChange, value }: FlowTasksDropdownProps) {
     const { flowData } = useFlow();
     const tasks = useMemo(() => flowData?.tasks ?? [], [flowData?.tasks]);
     const [isOpen, setIsOpen] = useState(false);
@@ -225,6 +225,6 @@ const FlowTasksDropdown = ({ disabled, onChange, value }: FlowTasksDropdownProps
             </PopoverContent>
         </Popover>
     );
-};
+}
 
 export default FlowTasksDropdown;

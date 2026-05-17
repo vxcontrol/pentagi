@@ -15,7 +15,7 @@ const getHref = (item: Flow) => `/flows/${item.id}`;
  * Pass `null` instead of an id while the page is in a non-viewing state
  * (e.g. `/flows/new`) so the controller reports an unmatched current item.
  */
-export const useFlowDetailNavigation = (currentId: null | string | undefined) => {
+export function useFlowDetailNavigation(currentId: null | string | undefined) {
     const { flows } = useFlows();
 
     return useDetailNavigation<Flow>({
@@ -26,4 +26,4 @@ export const useFlowDetailNavigation = (currentId: null | string | undefined) =>
         getSearchableText,
         items: flows,
     });
-};
+}

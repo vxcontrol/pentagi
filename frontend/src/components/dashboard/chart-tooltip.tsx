@@ -8,7 +8,7 @@ export type ChartTooltipPayloadEntry = {
     value: number;
 };
 
-export const ChartTooltip = ({
+export function ChartTooltip({
     active,
     formatter,
     label,
@@ -24,7 +24,7 @@ export const ChartTooltip = ({
     onFirstActive?: () => void;
     payload?: Array<ChartTooltipPayloadEntry>;
     sessionKey?: number;
-}) => {
+}) {
     // Store in ref to avoid stale closures in effects
     const onFirstActiveRef = useRef(onFirstActive);
     useEffect(() => {
@@ -72,4 +72,4 @@ export const ChartTooltip = ({
             ))}
         </div>
     );
-};
+}

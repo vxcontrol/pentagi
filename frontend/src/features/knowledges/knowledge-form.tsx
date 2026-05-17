@@ -195,7 +195,7 @@ interface KnowledgeFormProps {
     onSubmit: (values: FormValues, dirtyFields: DirtyFlags) => Promise<SubmitResult>;
 }
 
-export const KnowledgeForm = ({ initialValues, isNew, knowledge, onSubmit }: KnowledgeFormProps) => {
+export function KnowledgeForm({ initialValues, isNew, knowledge, onSubmit }: KnowledgeFormProps) {
     const navigate = useNavigate();
     const { isDesktop } = useBreakpoint();
     const [isSaving, setIsSaving] = useState(false);
@@ -432,4 +432,4 @@ export const KnowledgeForm = ({ initialValues, isNew, knowledge, onSubmit }: Kno
             />
         </>
     );
-};
+}

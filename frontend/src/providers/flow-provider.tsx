@@ -61,7 +61,7 @@ interface FlowProviderProps {
     children: React.ReactNode;
 }
 
-export const FlowProvider = ({ children }: FlowProviderProps) => {
+export function FlowProvider({ children }: FlowProviderProps) {
     const { flowId } = useParams();
 
     const [selectedAssistantIds, setSelectedAssistantIds] = useState<Record<string, null | string>>({});
@@ -413,9 +413,9 @@ export const FlowProvider = ({ children }: FlowProviderProps) => {
     );
 
     return <FlowContext.Provider value={value}>{children}</FlowContext.Provider>;
-};
+}
 
-export const useFlow = () => {
+export function useFlow() {
     const context = useContext(FlowContext);
 
     if (context === undefined) {
@@ -423,4 +423,4 @@ export const useFlow = () => {
     }
 
     return context;
-};
+}

@@ -20,13 +20,15 @@ interface KnowledgeLayoutProps {
  * renders the header inline because the form must be the parent of every
  * input.
  */
-export const KnowledgeLayout = ({ children, className, isNew, knowledge, saveButton }: KnowledgeLayoutProps) => (
-    <div className={cn('flex min-h-[100dvh] flex-col', className)}>
-        <KnowledgeHeader
-            isNew={isNew}
-            knowledge={knowledge}
-            saveButton={saveButton}
-        />
-        {children}
-    </div>
-);
+export function KnowledgeLayout({ children, className, isNew, knowledge, saveButton }: KnowledgeLayoutProps) {
+    return (
+        <div className={cn('flex min-h-[100dvh] flex-col', className)}>
+            <KnowledgeHeader
+                isNew={isNew}
+                knowledge={knowledge}
+                saveButton={saveButton}
+            />
+            {children}
+        </div>
+    );
+}

@@ -41,7 +41,7 @@ const savePeriod = (storageKey: string, value: UsageStatsPeriod): void => {
     }
 };
 
-const Dashboard = () => {
+function Dashboard() {
     const { period: periodStorageKey } = usePageStorageKeys();
     const [activeTab, setActiveTab] = useState('analytics');
     const [period, setPeriod] = useState<UsageStatsPeriod>(() => loadPeriod(periodStorageKey));
@@ -115,6 +115,6 @@ const Dashboard = () => {
             </div>
         </>
     );
-};
+}
 
 export default Dashboard;

@@ -107,7 +107,34 @@ const buildPromotePlan = (
     targets: computeTargets(files, values.destination),
 });
 
-const FlowFilesPromoteDialogForm = ({ files, flowId, onClose }: FlowFilesPromoteDialogFormProps) => {
+export function FlowFilesPromoteDialog({ files, flowId, onClose }: FlowFilesPromoteDialogProps) {
+    const handleDialogOpenChange = (nextOpen: boolean) => {
+        if (!nextOpen) {
+            onClose();
+        }
+    };
+
+    // Narrow to a non-empty tuple so the inner form can index `files[0]` without
+    // optional-chain noise. The Dialog only mounts when this guard passes.
+    const nonEmptyFiles = files && files.length > 0 ? (files as [FileNode, ...FileNode[]]) : null;
+
+    return (
+        <Dialog
+            onOpenChange={handleDialogOpenChange}
+            open={!!nonEmptyFiles}
+        >
+            {nonEmptyFiles && (
+                <FlowFilesPromoteDialogForm
+                    files={nonEmptyFiles}
+                    flowId={flowId}
+                    onClose={onClose}
+                />
+            )}
+        </Dialog>
+    );
+}
+
+function FlowFilesPromoteDialogForm({ files, flowId, onClose }: FlowFilesPromoteDialogFormProps) {
     const { isPromoting, promote } = useFlowFilesPromote({ flowId });
     const { resources } = useResources();
     const isMulti = files.length > 1;
@@ -257,31 +284,4 @@ const FlowFilesPromoteDialogForm = ({ files, flowId, onClose }: FlowFilesPromote
             />
         </>
     );
-};
-
-export const FlowFilesPromoteDialog = ({ files, flowId, onClose }: FlowFilesPromoteDialogProps) => {
-    const handleDialogOpenChange = (nextOpen: boolean) => {
-        if (!nextOpen) {
-            onClose();
-        }
-    };
-
-    // Narrow to a non-empty tuple so the inner form can index `files[0]` without
-    // optional-chain noise. The Dialog only mounts when this guard passes.
-    const nonEmptyFiles = files && files.length > 0 ? (files as [FileNode, ...FileNode[]]) : null;
-
-    return (
-        <Dialog
-            onOpenChange={handleDialogOpenChange}
-            open={!!nonEmptyFiles}
-        >
-            {nonEmptyFiles && (
-                <FlowFilesPromoteDialogForm
-                    files={nonEmptyFiles}
-                    flowId={flowId}
-                    onClose={onClose}
-                />
-            )}
-        </Dialog>
-    );
-};
+}

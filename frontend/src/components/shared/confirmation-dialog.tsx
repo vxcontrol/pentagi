@@ -33,7 +33,7 @@ interface ConfirmationDialogProps {
     title?: string;
 }
 
-const ConfirmationDialog = ({
+function ConfirmationDialog({
     cancelIcon,
     cancelText = 'Cancel',
     cancelVariant = 'outline',
@@ -47,7 +47,7 @@ const ConfirmationDialog = ({
     itemName = 'this',
     itemType = 'item',
     title = 'Confirm Action',
-}: ConfirmationDialogProps) => {
+}: ConfirmationDialogProps) {
     const [isProcessing, setIsProcessing] = useState(false);
 
     const defaultDescription = description || (
@@ -129,6 +129,6 @@ const ConfirmationDialog = ({
             </DialogContent>
         </Dialog>
     );
-};
+}
 
 export default ConfirmationDialog;

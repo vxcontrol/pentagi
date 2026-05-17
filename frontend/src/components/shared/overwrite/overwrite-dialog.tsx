@@ -57,29 +57,31 @@ const buildDefaultConfirmText = (count: number): string => (count > 1 ? 'Replace
  * file-manager UX and keeps the user from being prompted N times for the
  * same destination directory.
  */
-export const OverwriteDialog = ({
+export function OverwriteDialog({
     confirmText,
     conflicts,
     description,
     onCancel,
     onReplaceAll,
     title = 'Replace existing item?',
-}: OverwriteDialogProps) => (
-    <ConfirmationDialog
-        cancelText="Cancel"
-        confirmIcon={<Replace />}
-        confirmText={confirmText ?? buildDefaultConfirmText(conflicts.length)}
-        confirmVariant="destructive"
-        description={description ?? buildDefaultDescription(conflicts)}
-        handleConfirm={async () => {
-            await onReplaceAll();
-        }}
-        handleOpenChange={(nextOpen) => {
-            if (!nextOpen) {
-                onCancel();
-            }
-        }}
-        isOpen={conflicts.length > 0}
-        title={title}
-    />
-);
+}: OverwriteDialogProps) {
+    return (
+        <ConfirmationDialog
+            cancelText="Cancel"
+            confirmIcon={<Replace />}
+            confirmText={confirmText ?? buildDefaultConfirmText(conflicts.length)}
+            confirmVariant="destructive"
+            description={description ?? buildDefaultDescription(conflicts)}
+            handleConfirm={async () => {
+                await onReplaceAll();
+            }}
+            handleOpenChange={(nextOpen) => {
+                if (!nextOpen) {
+                    onCancel();
+                }
+            }}
+            isOpen={conflicts.length > 0}
+            title={title}
+        />
+    );
+}

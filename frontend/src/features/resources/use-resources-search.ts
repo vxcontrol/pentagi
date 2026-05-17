@@ -22,7 +22,7 @@ interface UseResourcesSearchResult {
  * reset — leaving the default would also work (deleting a non-existent
  * param is a no-op), but the explicit setting documents intent.
  */
-export const useResourcesSearch = (): UseResourcesSearchResult => {
+export function useResourcesSearch(): UseResourcesSearchResult {
     const { debouncedFilter, filter, resetFilter, setFilter } = useTableState({
         clearPageOnFilterChange: false,
         debounceMs: SEARCH_DEBOUNCE_MS,
@@ -34,4 +34,4 @@ export const useResourcesSearch = (): UseResourcesSearchResult => {
         resetSearch: resetFilter,
         setQuery: setFilter,
     };
-};
+}

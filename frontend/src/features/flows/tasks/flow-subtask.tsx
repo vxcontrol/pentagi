@@ -22,7 +22,7 @@ const containsSearchValue = (text: null | string | undefined, searchValue: strin
     return text.toLowerCase().includes(searchValue.toLowerCase().trim());
 };
 
-const FlowSubtask = ({ searchValue = '', subtask }: FlowSubtaskProps) => {
+function FlowSubtask({ searchValue = '', subtask }: FlowSubtaskProps) {
     const { description, id, result, status, title } = subtask;
     const [isDetailsVisible, setIsDetailsVisible] = useState(false);
     const hasDetails = description || result;
@@ -132,6 +132,6 @@ const FlowSubtask = ({ searchValue = '', subtask }: FlowSubtaskProps) => {
             <div className="absolute top-0 left-[calc((--spacing(2.5))-0.5px)] h-full border-l group-last:hidden"></div>
         </div>
     );
-};
+}
 
 export default memo(FlowSubtask);

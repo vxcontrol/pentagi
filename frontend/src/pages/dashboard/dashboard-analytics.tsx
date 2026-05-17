@@ -37,38 +37,27 @@ const formatDateLabel = (dateString: string): string => {
 
 const axisTickStyle = { fill: 'var(--color-muted-foreground)', fontSize: 12 };
 
-// Disables tooltip animation on chart entry and re-enables it only after the
-// tooltip has rendered at the correct position for the first time in the session.
-// This prevents the tooltip from flying from (0,0) to the cursor on entry,
-// while keeping smooth follow animation for all subsequent movements.
-const useChartTooltipAnimation = () => {
-    const [isAnimationActive, setIsAnimationActive] = useState(false);
-    const [sessionKey, setSessionKey] = useState(0);
-    const rafRef = useRef<number | undefined>(undefined);
-
-    const onMouseEnter = () => {
-        cancelAnimationFrame(rafRef.current!);
-        setIsAnimationActive(false);
-        setSessionKey((k) => k + 1);
-    };
-
-    const onMouseLeave = () => {
-        cancelAnimationFrame(rafRef.current!);
-        setIsAnimationActive(false);
-    };
-
-    // Called by ChartTooltip the first time it becomes visible in this session.
-    // One rAF ensures the tooltip has painted at its initial position before
-    // animation is re-enabled for subsequent cursor movements.
-    const onFirstActive = () => {
-        cancelAnimationFrame(rafRef.current!);
-        rafRef.current = requestAnimationFrame(() => setIsAnimationActive(true));
-    };
-
-    return { isAnimationActive, onFirstActive, onMouseEnter, onMouseLeave, sessionKey };
+type FlowExecution = {
+    flowId: string;
+    flowTitle: string;
+    tasks: Array<{
+        subtasks: Array<{
+            subtaskId: string;
+            subtaskTitle: string;
+            totalDurationSeconds: number;
+            totalToolcallsCount: number;
+        }>;
+        taskId: string;
+        taskTitle: string;
+        totalDurationSeconds: number;
+        totalToolcallsCount: number;
+    }>;
+    totalAssistantsCount: number;
+    totalDurationSeconds: number;
+    totalToolcallsCount: number;
 };
 
-export const DashboardAnalytics = ({ period }: { period: UsageStatsPeriod }) => {
+export function DashboardAnalytics({ period }: { period: UsageStatsPeriod }) {
     const { data: usageByPeriodData, loading: usageByPeriodLoading } = useUsageStatsByPeriodQuery({
         variables: { period },
     });
@@ -372,29 +361,9 @@ export const DashboardAnalytics = ({ period }: { period: UsageStatsPeriod }) => 
             </Card>
         </div>
     );
-};
+}
 
-type FlowExecution = {
-    flowId: string;
-    flowTitle: string;
-    tasks: Array<{
-        subtasks: Array<{
-            subtaskId: string;
-            subtaskTitle: string;
-            totalDurationSeconds: number;
-            totalToolcallsCount: number;
-        }>;
-        taskId: string;
-        taskTitle: string;
-        totalDurationSeconds: number;
-        totalToolcallsCount: number;
-    }>;
-    totalAssistantsCount: number;
-    totalDurationSeconds: number;
-    totalToolcallsCount: number;
-};
-
-const FlowExecutionItem = ({ flow, flowMeta }: { flow: FlowExecution; flowMeta?: FlowFragmentFragment }) => {
+function FlowExecutionItem({ flow, flowMeta }: { flow: FlowExecution; flowMeta?: FlowFragmentFragment }) {
     const [isOpen, setIsOpen] = useState(false);
     const taskCount = flow.tasks.length;
     const subtaskCount = flow.tasks.reduce((sum, task) => sum + task.subtasks.length, 0);
@@ -442,9 +411,9 @@ const FlowExecutionItem = ({ flow, flowMeta }: { flow: FlowExecution; flowMeta?:
             </CollapsibleContent>
         </Collapsible>
     );
-};
+}
 
-const TaskExecutionItem = ({ task }: { task: FlowExecution['tasks'][number] }) => {
+function TaskExecutionItem({ task }: { task: FlowExecution['tasks'][number] }) {
     const [isOpen, setIsOpen] = useState(false);
     const hasSubtasks = task.subtasks.length > 0;
 
@@ -502,4 +471,35 @@ const TaskExecutionItem = ({ task }: { task: FlowExecution['tasks'][number] }) =
             )}
         </Collapsible>
     );
-};
+}
+
+// Disables tooltip animation on chart entry and re-enables it only after the
+// tooltip has rendered at the correct position for the first time in the session.
+// This prevents the tooltip from flying from (0,0) to the cursor on entry,
+// while keeping smooth follow animation for all subsequent movements.
+function useChartTooltipAnimation() {
+    const [isAnimationActive, setIsAnimationActive] = useState(false);
+    const [sessionKey, setSessionKey] = useState(0);
+    const rafRef = useRef<number | undefined>(undefined);
+
+    const onMouseEnter = () => {
+        cancelAnimationFrame(rafRef.current!);
+        setIsAnimationActive(false);
+        setSessionKey((k) => k + 1);
+    };
+
+    const onMouseLeave = () => {
+        cancelAnimationFrame(rafRef.current!);
+        setIsAnimationActive(false);
+    };
+
+    // Called by ChartTooltip the first time it becomes visible in this session.
+    // One rAF ensures the tooltip has painted at its initial position before
+    // animation is re-enabled for subsequent cursor movements.
+    const onFirstActive = () => {
+        cancelAnimationFrame(rafRef.current!);
+        rafRef.current = requestAnimationFrame(() => setIsAnimationActive(true));
+    };
+
+    return { isAnimationActive, onFirstActive, onMouseEnter, onMouseLeave, sessionKey };
+}

@@ -39,7 +39,7 @@ const UserContext = createContext<undefined | UserContextType>(undefined);
 
 export const AUTH_STORAGE_KEY = 'auth';
 
-export const UserProvider = ({ children }: { children: ReactNode }) => {
+export function UserProvider({ children }: { children: ReactNode }) {
     const navigate = useNavigate();
     const location = useLocation();
     const [authInfo, setAuthInfo] = useState<AuthInfo | null>(null);
@@ -396,9 +396,9 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
             {children}
         </UserContext>
     );
-};
+}
 
-export const useUser = () => {
+export function useUser() {
     const context = use(UserContext);
 
     if (context === undefined) {
@@ -406,4 +406,4 @@ export const useUser = () => {
     }
 
     return context;
-};
+}

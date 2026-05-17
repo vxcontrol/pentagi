@@ -72,11 +72,11 @@ interface UseFileManagerSelectionArgs {
  * latest-ref pointers needed to keep the callbacks reference-stable across
  * expand/collapse and tree-shape changes.
  */
-export const useFileManagerSelection = ({
+export function useFileManagerSelection({
     allSelectablePaths,
     dirSubtreePaths,
     flatVisible,
-}: UseFileManagerSelectionArgs): UseFileManagerSelection => {
+}: UseFileManagerSelectionArgs): UseFileManagerSelection {
     const [rawSelectedPaths, setRawSelectedPaths] = useState<Set<string>>(() => new Set());
     const lastClickedRef = useRef<null | string>(null);
 
@@ -188,4 +188,4 @@ export const useFileManagerSelection = ({
         setSelection,
         toggleSelectAll,
     };
-};
+}

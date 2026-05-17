@@ -139,7 +139,7 @@ const copyToClipboard = async (text: string): Promise<boolean> => {
     }
 };
 
-const SettingsAPITokensHeader = ({ onCreateClick }: { onCreateClick: () => void }) => {
+function SettingsAPITokensHeader({ onCreateClick }: { onCreateClick: () => void }) {
     return (
         <div className="flex items-center justify-between gap-4">
             <div className="flex min-w-0 flex-1 flex-col gap-2">
@@ -176,7 +176,7 @@ const SettingsAPITokensHeader = ({ onCreateClick }: { onCreateClick: () => void 
             </Button>
         </div>
     );
-};
+}
 
 const createNewTokenPlaceholder: APIToken = {
     createdAt: new Date().toISOString(),
@@ -190,7 +190,7 @@ const createNewTokenPlaceholder: APIToken = {
     userId: '0',
 };
 
-const SettingsAPITokens = () => {
+function SettingsAPITokens() {
     const { data, error, loading: isLoading } = useApiTokensQuery();
     const [createAPIToken, { error: createError, loading: isCreateLoading }] = useCreateApiTokenMutation();
     const [updateAPIToken, { error: updateError, loading: isUpdateLoading }] = useUpdateApiTokenMutation();
@@ -889,6 +889,6 @@ const SettingsAPITokens = () => {
             />
         </div>
     );
-};
+}
 
 export default SettingsAPITokens;

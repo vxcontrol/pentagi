@@ -73,122 +73,7 @@ const renderFlowItem = (item: FlowItem, isCurrent: boolean): ReactNode => (
     </>
 );
 
-const FlowReportDropdown = () => {
-    const { flowData, flowId } = useFlow();
-    const flow = flowData?.flow;
-    const tasks = flowData?.tasks ?? [];
-
-    // Check if flow is available for report generation
-    const isReportDisabled = !flow || !flowId;
-
-    // Report export handlers
-    const handleCopyToClipboard = async () => {
-        if (isReportDisabled) {
-            return;
-        }
-
-        const reportContent = generateReport(tasks, flow);
-        const success = await copyToClipboard(reportContent);
-
-        if (success) {
-            toast.success('Report copied to clipboard');
-        } else {
-            Log.error('Failed to copy report to clipboard');
-            toast.error('Failed to copy report to clipboard');
-        }
-    };
-
-    const handleDownloadMD = () => {
-        if (isReportDisabled || !flow) {
-            return;
-        }
-
-        try {
-            // Generate report content
-            const reportContent = generateReport(tasks, flow);
-
-            // Generate file name
-            const baseFileName = generateFileName(flow);
-            const fileName = `${baseFileName}.md`;
-
-            // Download file
-            downloadTextFile(reportContent, fileName, 'text/markdown; charset=UTF-8');
-        } catch (error) {
-            Log.error('Failed to download markdown report:', error);
-        }
-    };
-
-    const handleDownloadPDF = () => {
-        if (isReportDisabled || !flow || !flowId) {
-            return;
-        }
-
-        // Open new tab (not popup) with report page and download flag
-        const url = `/flows/${flowId}/report?download=true&silent=true`;
-        window.open(url, '_blank');
-    };
-
-    const handleOpenWebView = () => {
-        if (isReportDisabled || !flowId) {
-            return;
-        }
-
-        // Open new tab with report page for web viewing
-        const url = `/flows/${flowId}/report`;
-        window.open(url, '_blank');
-    };
-
-    return (
-        <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-                <HeaderButton
-                    className="shrink-0"
-                    disabled={isReportDisabled}
-                    endIcon={<ChevronDown className="opacity-50" />}
-                    icon={<NotepadText />}
-                    label="Report"
-                    variant="ghost"
-                />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-                <DropdownMenuItem
-                    className="flex items-center gap-2"
-                    disabled={isReportDisabled}
-                    onClick={handleOpenWebView}
-                >
-                    <ExternalLink className="size-4" />
-                    Open web view
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                    className="flex items-center gap-2"
-                    disabled={isReportDisabled}
-                    onClick={handleCopyToClipboard}
-                >
-                    <Copy className="size-4" />
-                    Copy to clipboard
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                    className="flex items-center gap-2"
-                    disabled={isReportDisabled}
-                    onClick={handleDownloadMD}
-                >
-                    <Download className="size-4" />
-                    Download MD
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                    className="flex items-center gap-2"
-                    disabled={isReportDisabled}
-                    onClick={handleDownloadPDF}
-                >
-                    <Download className="size-4" />
-                    Download PDF
-                </DropdownMenuItem>
-            </DropdownMenuContent>
-        </DropdownMenu>
-    );
-};
-
-const Flow = () => {
+function Flow() {
     const { isDesktop, isMobile } = useBreakpoint();
     const navigate = useNavigate();
 
@@ -533,6 +418,121 @@ const Flow = () => {
             />
         </>
     );
-};
+}
+
+function FlowReportDropdown() {
+    const { flowData, flowId } = useFlow();
+    const flow = flowData?.flow;
+    const tasks = flowData?.tasks ?? [];
+
+    // Check if flow is available for report generation
+    const isReportDisabled = !flow || !flowId;
+
+    // Report export handlers
+    const handleCopyToClipboard = async () => {
+        if (isReportDisabled) {
+            return;
+        }
+
+        const reportContent = generateReport(tasks, flow);
+        const success = await copyToClipboard(reportContent);
+
+        if (success) {
+            toast.success('Report copied to clipboard');
+        } else {
+            Log.error('Failed to copy report to clipboard');
+            toast.error('Failed to copy report to clipboard');
+        }
+    };
+
+    const handleDownloadMD = () => {
+        if (isReportDisabled || !flow) {
+            return;
+        }
+
+        try {
+            // Generate report content
+            const reportContent = generateReport(tasks, flow);
+
+            // Generate file name
+            const baseFileName = generateFileName(flow);
+            const fileName = `${baseFileName}.md`;
+
+            // Download file
+            downloadTextFile(reportContent, fileName, 'text/markdown; charset=UTF-8');
+        } catch (error) {
+            Log.error('Failed to download markdown report:', error);
+        }
+    };
+
+    const handleDownloadPDF = () => {
+        if (isReportDisabled || !flow || !flowId) {
+            return;
+        }
+
+        // Open new tab (not popup) with report page and download flag
+        const url = `/flows/${flowId}/report?download=true&silent=true`;
+        window.open(url, '_blank');
+    };
+
+    const handleOpenWebView = () => {
+        if (isReportDisabled || !flowId) {
+            return;
+        }
+
+        // Open new tab with report page for web viewing
+        const url = `/flows/${flowId}/report`;
+        window.open(url, '_blank');
+    };
+
+    return (
+        <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+                <HeaderButton
+                    className="shrink-0"
+                    disabled={isReportDisabled}
+                    endIcon={<ChevronDown className="opacity-50" />}
+                    icon={<NotepadText />}
+                    label="Report"
+                    variant="ghost"
+                />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                    className="flex items-center gap-2"
+                    disabled={isReportDisabled}
+                    onClick={handleOpenWebView}
+                >
+                    <ExternalLink className="size-4" />
+                    Open web view
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                    className="flex items-center gap-2"
+                    disabled={isReportDisabled}
+                    onClick={handleCopyToClipboard}
+                >
+                    <Copy className="size-4" />
+                    Copy to clipboard
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                    className="flex items-center gap-2"
+                    disabled={isReportDisabled}
+                    onClick={handleDownloadMD}
+                >
+                    <Download className="size-4" />
+                    Download MD
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                    className="flex items-center gap-2"
+                    disabled={isReportDisabled}
+                    onClick={handleDownloadPDF}
+                >
+                    <Download className="size-4" />
+                    Download PDF
+                </DropdownMenuItem>
+            </DropdownMenuContent>
+        </DropdownMenu>
+    );
+}
 
 export default Flow;

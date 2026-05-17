@@ -36,11 +36,11 @@ interface UseFileManagerExpansionArgs {
  *   1) `rootGroups[].defaultOpen` — initial group expansion,
  *   2) on-search auto-expansion of every directory inside the filtered tree.
  */
-export const useFileManagerExpansion = ({
+export function useFileManagerExpansion({
     isFiltering,
     normalizedRootGroups,
     visibleTree,
-}: UseFileManagerExpansionArgs): UseFileManagerExpansion => {
+}: UseFileManagerExpansionArgs): UseFileManagerExpansion {
     const [overrides, setOverrides] = useState<Map<string, boolean>>(() => new Map());
 
     const expandedPaths = useMemo(() => {
@@ -98,4 +98,4 @@ export const useFileManagerExpansion = ({
     }, []);
 
     return { expandedPaths, setExpansion, toggleExpand };
-};
+}

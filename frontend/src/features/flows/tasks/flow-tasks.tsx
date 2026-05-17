@@ -27,7 +27,7 @@ const containsSearchValue = (text: null | string | undefined, searchValue: strin
     return text.toLowerCase().includes(searchValue.toLowerCase().trim());
 };
 
-const FlowTasks = () => {
+function FlowTasks() {
     const { flowData, flowId } = useFlow();
 
     const tasks = useMemo(() => flowData?.tasks ?? [], [flowData?.tasks]);
@@ -190,6 +190,6 @@ const FlowTasks = () => {
             )}
         </div>
     );
-};
+}
 
 export default FlowTasks;

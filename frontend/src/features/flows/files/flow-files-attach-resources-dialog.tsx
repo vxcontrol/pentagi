@@ -46,12 +46,42 @@ interface FlowFilesAttachResourcesDialogProps {
 
 const EMPTY_SELECTION: ReadonlySet<string> = new Set();
 
-const FlowFilesAttachResourcesDialogBody = ({
+export function FlowFilesAttachResourcesDialog({
+    cachedFiles,
+    flowId,
+    isOpen,
+    onClose,
+    onSuccess,
+}: FlowFilesAttachResourcesDialogProps) {
+    const handleDialogOpenChange = (nextOpen: boolean) => {
+        if (!nextOpen) {
+            onClose();
+        }
+    };
+
+    return (
+        <Dialog
+            onOpenChange={handleDialogOpenChange}
+            open={isOpen}
+        >
+            {isOpen && (
+                <FlowFilesAttachResourcesDialogBody
+                    cachedFiles={cachedFiles}
+                    flowId={flowId}
+                    onClose={onClose}
+                    onSuccess={onSuccess}
+                />
+            )}
+        </Dialog>
+    );
+}
+
+function FlowFilesAttachResourcesDialogBody({
     cachedFiles,
     flowId,
     onClose,
     onSuccess,
-}: Omit<FlowFilesAttachResourcesDialogProps, 'isOpen'>) => {
+}: Omit<FlowFilesAttachResourcesDialogProps, 'isOpen'>) {
     const { error: resourcesError, isInitialLoading: isResourcesLoading, resources } = useResources();
     const { attach, isAttaching } = useFlowFilesAttachResources({ flowId });
 
@@ -271,36 +301,6 @@ const FlowFilesAttachResourcesDialogBody = ({
             />
         </>
     );
-};
-
-export const FlowFilesAttachResourcesDialog = ({
-    cachedFiles,
-    flowId,
-    isOpen,
-    onClose,
-    onSuccess,
-}: FlowFilesAttachResourcesDialogProps) => {
-    const handleDialogOpenChange = (nextOpen: boolean) => {
-        if (!nextOpen) {
-            onClose();
-        }
-    };
-
-    return (
-        <Dialog
-            onOpenChange={handleDialogOpenChange}
-            open={isOpen}
-        >
-            {isOpen && (
-                <FlowFilesAttachResourcesDialogBody
-                    cachedFiles={cachedFiles}
-                    flowId={flowId}
-                    onClose={onClose}
-                    onSuccess={onSuccess}
-                />
-            )}
-        </Dialog>
-    );
-};
+}
 
 export type { FlowFilesAttachResourcesDialogProps };

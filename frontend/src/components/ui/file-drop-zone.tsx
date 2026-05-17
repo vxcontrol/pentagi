@@ -29,7 +29,7 @@ export interface FileDropZoneProps {
  * The button uses `onBrowse` to open the file picker (typically wired to
  * `useResourcesUpload().openFilePicker`).
  */
-export const FileDropZone = ({
+export function FileDropZone({
     actionLabel = 'Browse files',
     className,
     description = 'or click the button to choose files from your computer',
@@ -38,33 +38,35 @@ export const FileDropZone = ({
     isUploading = false,
     onBrowse,
     title = 'Drag and drop your files',
-}: FileDropZoneProps) => (
-    <div
-        className={cn(
-            'bg-card flex flex-col items-center justify-center rounded-md border-2 border-dashed px-6 py-12 text-center transition-all duration-200',
-            isDragging
-                ? 'border-foreground bg-muted/50'
-                : 'border-muted-foreground/25 hover:border-muted-foreground/40',
-            className,
-        )}
-    >
-        <UploadCloudIcon
+}: FileDropZoneProps) {
+    return (
+        <div
             className={cn(
-                'text-muted-foreground mb-3 size-10 transition-transform duration-200',
-                isDragging && 'text-foreground scale-110',
+                'bg-card flex flex-col items-center justify-center rounded-md border-2 border-dashed px-6 py-12 text-center transition-all duration-200',
+                isDragging
+                    ? 'border-foreground bg-muted/50'
+                    : 'border-muted-foreground/25 hover:border-muted-foreground/40',
+                className,
             )}
-        />
-        <span className="text-sm font-medium">{isDragging ? 'Drop files here' : title}</span>
-        <span className="text-muted-foreground mt-1 max-w-md text-xs">{description}</span>
-        <Button
-            className="mt-4 h-7 text-xs"
-            disabled={isUploading}
-            onClick={onBrowse}
-            size="sm"
-            variant="outline"
         >
-            {actionLabel}
-        </Button>
-        {hint && <span className="text-muted-foreground mt-3 text-xs">{hint}</span>}
-    </div>
-);
+            <UploadCloudIcon
+                className={cn(
+                    'text-muted-foreground mb-3 size-10 transition-transform duration-200',
+                    isDragging && 'text-foreground scale-110',
+                )}
+            />
+            <span className="text-sm font-medium">{isDragging ? 'Drop files here' : title}</span>
+            <span className="text-muted-foreground mt-1 max-w-md text-xs">{description}</span>
+            <Button
+                className="mt-4 h-7 text-xs"
+                disabled={isUploading}
+                onClick={onBrowse}
+                size="sm"
+                variant="outline"
+            >
+                {actionLabel}
+            </Button>
+            {hint && <span className="text-muted-foreground mt-3 text-xs">{hint}</span>}
+        </div>
+    );
+}

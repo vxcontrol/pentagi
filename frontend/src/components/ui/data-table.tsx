@@ -164,82 +164,6 @@ const FILTER_DEBOUNCE_MS = 150;
 // boundary, which is the only entry point users have here.
 const FILTER_MAX_LENGTH = 200;
 
-/**
- * Search input for the table's global filter. Keystrokes update an internal
- * `localValue` state synchronously so the input feels instant; the debounced
- * mirror is what we propagate upstream via `onQueryChange`. The previous
- * design committed every keystroke straight into `useTableQueryFilter`, which
- * synchronously walked the router and re-rendered the entire route subtree —
- * with the Flows page that ran ~250 ms per keystroke, so consecutive
- * keypresses queued behind the in-flight reconciliation and showed up as
- * input-delay INP. Debouncing the commit drops the upstream cascade rate
- * from per-keystroke to once per typing pause.
- *
- * External `query` changes (X button, programmatic clear, URL back-button,
- * route swap) are reconciled into `localValue` through the sync effect: we
- * skip when the incoming value matches what we last emitted, so our own
- * round-trip through the parent doesn't fight with active typing.
- */
-const DataTableFilter = ({ onQueryChange, placeholder, query }: DataTableFilterProps) => {
-    const [localValue, setLocalValue] = useState(query);
-    const debouncedValue = useDebouncedValue(localValue, FILTER_DEBOUNCE_MS);
-    const lastEmittedReference = useRef(query);
-    // Generated per-instance so pages with multiple DataTables (e.g.
-    // /settings/prompts) don't end up with duplicate `id` attributes — that
-    // breaks `getElementById`, a11y semantics, and any test selector that
-    // relies on the input id.
-    const fieldId = useId();
-
-    useEffect(() => {
-        if (query !== lastEmittedReference.current) {
-            setLocalValue(query);
-            lastEmittedReference.current = query;
-        }
-    }, [query]);
-
-    useEffect(() => {
-        if (debouncedValue !== lastEmittedReference.current) {
-            lastEmittedReference.current = debouncedValue;
-            onQueryChange(debouncedValue);
-        }
-    }, [debouncedValue, onQueryChange]);
-
-    const handleClear = useCallback(() => {
-        setLocalValue('');
-        lastEmittedReference.current = '';
-        onQueryChange('');
-    }, [onQueryChange]);
-
-    return (
-        <InputGroup className="max-w-sm">
-            <InputGroupAddon>
-                <Search />
-            </InputGroupAddon>
-            <InputGroupInput
-                aria-label={placeholder}
-                autoComplete="off"
-                id={fieldId}
-                maxLength={FILTER_MAX_LENGTH}
-                name={fieldId}
-                onChange={(event) => setLocalValue(event.target.value)}
-                placeholder={placeholder}
-                type="text"
-                value={localValue}
-            />
-            {localValue ? (
-                <InputGroupAddon align="inline-end">
-                    <InputGroupButton
-                        onClick={handleClear}
-                        type="button"
-                    >
-                        <X />
-                    </InputGroupButton>
-                </InputGroupAddon>
-            ) : null}
-        </InputGroup>
-    );
-};
-
 interface DataTableColumnHeaderProps<TData, TValue> {
     /** TanStack column. Sorting state and the cycle action both target it. */
     column: Column<TData, TValue>;
@@ -955,6 +879,82 @@ function DataTableColumnHeader<TData, TValue = unknown>({ column, title }: DataT
             {sorted === 'asc' ? <ArrowDown className="size-4" /> : null}
             {sorted === 'desc' ? <ArrowUp className="size-4" /> : null}
         </Button>
+    );
+}
+
+/**
+ * Search input for the table's global filter. Keystrokes update an internal
+ * `localValue` state synchronously so the input feels instant; the debounced
+ * mirror is what we propagate upstream via `onQueryChange`. The previous
+ * design committed every keystroke straight into `useTableQueryFilter`, which
+ * synchronously walked the router and re-rendered the entire route subtree —
+ * with the Flows page that ran ~250 ms per keystroke, so consecutive
+ * keypresses queued behind the in-flight reconciliation and showed up as
+ * input-delay INP. Debouncing the commit drops the upstream cascade rate
+ * from per-keystroke to once per typing pause.
+ *
+ * External `query` changes (X button, programmatic clear, URL back-button,
+ * route swap) are reconciled into `localValue` through the sync effect: we
+ * skip when the incoming value matches what we last emitted, so our own
+ * round-trip through the parent doesn't fight with active typing.
+ */
+function DataTableFilter({ onQueryChange, placeholder, query }: DataTableFilterProps) {
+    const [localValue, setLocalValue] = useState(query);
+    const debouncedValue = useDebouncedValue(localValue, FILTER_DEBOUNCE_MS);
+    const lastEmittedReference = useRef(query);
+    // Generated per-instance so pages with multiple DataTables (e.g.
+    // /settings/prompts) don't end up with duplicate `id` attributes — that
+    // breaks `getElementById`, a11y semantics, and any test selector that
+    // relies on the input id.
+    const fieldId = useId();
+
+    useEffect(() => {
+        if (query !== lastEmittedReference.current) {
+            setLocalValue(query);
+            lastEmittedReference.current = query;
+        }
+    }, [query]);
+
+    useEffect(() => {
+        if (debouncedValue !== lastEmittedReference.current) {
+            lastEmittedReference.current = debouncedValue;
+            onQueryChange(debouncedValue);
+        }
+    }, [debouncedValue, onQueryChange]);
+
+    const handleClear = useCallback(() => {
+        setLocalValue('');
+        lastEmittedReference.current = '';
+        onQueryChange('');
+    }, [onQueryChange]);
+
+    return (
+        <InputGroup className="max-w-sm">
+            <InputGroupAddon>
+                <Search />
+            </InputGroupAddon>
+            <InputGroupInput
+                aria-label={placeholder}
+                autoComplete="off"
+                id={fieldId}
+                maxLength={FILTER_MAX_LENGTH}
+                name={fieldId}
+                onChange={(event) => setLocalValue(event.target.value)}
+                placeholder={placeholder}
+                type="text"
+                value={localValue}
+            />
+            {localValue ? (
+                <InputGroupAddon align="inline-end">
+                    <InputGroupButton
+                        onClick={handleClear}
+                        type="button"
+                    >
+                        <X />
+                    </InputGroupButton>
+                </InputGroupAddon>
+            ) : null}
+        </InputGroup>
     );
 }
 

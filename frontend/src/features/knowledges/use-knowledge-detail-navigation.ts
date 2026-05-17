@@ -11,7 +11,7 @@ const getHref = (item: Knowledge) => `/knowledges/${item.id}`;
  * filters on `question` and the header shows the same, so `getLabel`
  * doubles as the default searchable text.
  */
-export const useKnowledgeDetailNavigation = (currentId: null | string | undefined) => {
+export function useKnowledgeDetailNavigation(currentId: null | string | undefined) {
     const { knowledges } = useKnowledges();
 
     return useDetailNavigation<Knowledge>({
@@ -20,4 +20,4 @@ export const useKnowledgeDetailNavigation = (currentId: null | string | undefine
         getLabel,
         items: knowledges,
     });
-};
+}

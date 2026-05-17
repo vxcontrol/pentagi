@@ -32,10 +32,10 @@ interface UseFlowFilesAttachResourcesResult {
  * so callers can branch between success, a 409 conflict that warrants a user
  * prompt, and any other failure (already toasted).
  */
-export const useFlowFilesAttachResources = ({
+export function useFlowFilesAttachResources({
     flowId,
     onSuccess,
-}: UseFlowFilesAttachResourcesParams): UseFlowFilesAttachResourcesResult => {
+}: UseFlowFilesAttachResourcesParams): UseFlowFilesAttachResourcesResult {
     const [isAttaching, setIsAttaching] = useState(false);
 
     const attach = useCallback(
@@ -97,4 +97,4 @@ export const useFlowFilesAttachResources = ({
         attach,
         isAttaching,
     };
-};
+}

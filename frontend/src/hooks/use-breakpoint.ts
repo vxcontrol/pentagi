@@ -24,7 +24,7 @@ const getBreakpoint = (width: number): BreakpointName => {
     return breakpoint?.name ?? BreakpointName.desktop;
 };
 
-export const useBreakpoint = () => {
+export function useBreakpoint() {
     const [breakpoint, setBreakpoint] = useState<BreakpointName>(() => {
         if (typeof window === 'undefined') {
             return BreakpointName.desktop;
@@ -71,4 +71,4 @@ export const useBreakpoint = () => {
         isMobile: breakpoint === BreakpointName.mobile,
         isTablet: breakpoint === BreakpointName.tablet,
     };
-};
+}

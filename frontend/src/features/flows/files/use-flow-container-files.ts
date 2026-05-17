@@ -44,7 +44,7 @@ interface UseFlowContainerFilesResult {
  * When `flowId` is `null` or `paths` is empty, the hook idles: no request
  * is issued, `files` stays an empty array, `isLoading` stays `false`.
  */
-export const useFlowContainerFiles = ({ flowId, paths }: UseFlowContainerFilesParams): UseFlowContainerFilesResult => {
+export function useFlowContainerFiles({ flowId, paths }: UseFlowContainerFilesParams): UseFlowContainerFilesResult {
     const [files, setFiles] = useState<FileNode[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<Error | null>(null);
@@ -120,4 +120,4 @@ export const useFlowContainerFiles = ({ flowId, paths }: UseFlowContainerFilesPa
         isLoading,
         refetch: fetchListing,
     };
-};
+}

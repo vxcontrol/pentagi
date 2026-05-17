@@ -80,53 +80,7 @@ const formatFullDateTime = (dateString: string) => {
     return format(date, 'd MMM yyyy, HH:mm:ss', { locale: enUS });
 };
 
-const SettingsProvidersHeader = () => {
-    const navigate = useNavigate();
-
-    const handleProviderCreate = (providerType: string) => {
-        navigate(`/settings/providers/new?type=${providerType}`);
-    };
-
-    return (
-        <div className="flex items-center justify-between gap-4">
-            <p className="text-muted-foreground min-w-0 flex-1 truncate">Manage language model providers</p>
-
-            <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                    <Button
-                        className="shrink-0"
-                        variant="secondary"
-                    >
-                        Create Provider
-                        <ChevronDown className="size-4" />
-                    </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent
-                    align="end"
-                    style={{
-                        width: 'var(--radix-dropdown-menu-trigger-width)',
-                    }}
-                >
-                    {providerTypes.map(({ label, type }) => {
-                        const Icon = providerIcons[type];
-
-                        return (
-                            <DropdownMenuItem
-                                key={type}
-                                onClick={() => handleProviderCreate(type)}
-                            >
-                                {Icon && <Icon className="size-4" />}
-                                {label}
-                            </DropdownMenuItem>
-                        );
-                    })}
-                </DropdownMenuContent>
-            </DropdownMenu>
-        </div>
-    );
-};
-
-const SettingsProviders = () => {
+function SettingsProviders() {
     const { data, error, loading: isLoading } = useSettingsProvidersQuery();
     const [deleteProvider, { error: deleteError, loading: isDeleteLoading }] = useDeleteProviderMutation();
     const [deleteErrorMessage, setDeleteErrorMessage] = useState<null | string>(null);
@@ -524,6 +478,52 @@ const SettingsProviders = () => {
             />
         </div>
     );
-};
+}
+
+function SettingsProvidersHeader() {
+    const navigate = useNavigate();
+
+    const handleProviderCreate = (providerType: string) => {
+        navigate(`/settings/providers/new?type=${providerType}`);
+    };
+
+    return (
+        <div className="flex items-center justify-between gap-4">
+            <p className="text-muted-foreground min-w-0 flex-1 truncate">Manage language model providers</p>
+
+            <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                    <Button
+                        className="shrink-0"
+                        variant="secondary"
+                    >
+                        Create Provider
+                        <ChevronDown className="size-4" />
+                    </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent
+                    align="end"
+                    style={{
+                        width: 'var(--radix-dropdown-menu-trigger-width)',
+                    }}
+                >
+                    {providerTypes.map(({ label, type }) => {
+                        const Icon = providerIcons[type];
+
+                        return (
+                            <DropdownMenuItem
+                                key={type}
+                                onClick={() => handleProviderCreate(type)}
+                            >
+                                {Icon && <Icon className="size-4" />}
+                                {label}
+                            </DropdownMenuItem>
+                        );
+                    })}
+                </DropdownMenuContent>
+            </DropdownMenu>
+        </div>
+    );
+}
 
 export default SettingsProviders;

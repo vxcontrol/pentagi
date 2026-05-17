@@ -150,7 +150,7 @@ const defaultGetId = (item: { id: string }): string => item.id;
  * version at fire time — but it forfeits `useNavigation`'s internal
  * memoization on `getSearchableText`.
  */
-export const useDetailNavigation = <T extends { id: string }>({
+export function useDetailNavigation<T extends { id: string }>({
     currentId,
     defaultOpen,
     getHref,
@@ -162,7 +162,7 @@ export const useDetailNavigation = <T extends { id: string }>({
     open,
     parentPath,
     sortFn,
-}: UseDetailNavigationOptions<T>): DetailNavigationController<T> => {
+}: UseDetailNavigationOptions<T>): DetailNavigationController<T> {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
 
@@ -320,4 +320,4 @@ export const useDetailNavigation = <T extends { id: string }>({
             total,
         ],
     );
-};
+}

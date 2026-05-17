@@ -3,7 +3,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import Logo from '@/components/icons/logo';
 import { PageTitle } from '@/components/shared/page-title';
 
-const OAuthResult = () => {
+function OAuthResult() {
     const [statusMessage, setStatusMessage] = useState('Authentication in progress...');
     const messageRef = useRef(statusMessage);
     const prevMessageRef = useRef(statusMessage);
@@ -116,6 +116,6 @@ const OAuthResult = () => {
             <div className="fixed bottom-4 text-sm text-white">{statusMessage}</div>
         </div>
     );
-};
+}
 
 export default OAuthResult;

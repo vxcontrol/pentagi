@@ -60,7 +60,7 @@ interface LoginFormProps {
     returnUrl?: string;
 }
 
-const LoginForm = ({ providers, returnUrl = '/flows/new' }: LoginFormProps) => {
+function LoginForm({ providers, returnUrl = '/flows/new' }: LoginFormProps) {
     const form = useForm<z.infer<typeof formSchema>>({
         defaultValues: {
             mail: '',
@@ -262,6 +262,6 @@ const LoginForm = ({ providers, returnUrl = '/flows/new' }: LoginFormProps) => {
             </form>
         </Form>
     );
-};
+}
 
 export default LoginForm;

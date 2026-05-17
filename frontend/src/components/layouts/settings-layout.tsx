@@ -53,29 +53,8 @@ const menuItems: readonly MenuItem[] = [
     },
 ] as const;
 
-// Individual menu item component to properly use hooks
-const SettingsSidebarMenuItem = ({ item }: SettingsSidebarMenuItemProps) => {
-    const location = useLocation();
-    // Check if current path starts with item path (for nested routes)
-    const isActive = location.pathname.startsWith(item.path);
-
-    return (
-        <SidebarMenuItem>
-            <SidebarMenuButton
-                asChild
-                isActive={isActive}
-            >
-                <NavLink to={item.path}>
-                    {item.icon}
-                    {item.title}
-                </NavLink>
-            </SidebarMenuButton>
-        </SidebarMenuItem>
-    );
-};
-
 // Settings header component
-const SettingsHeader = () => {
+function SettingsHeader() {
     const location = useLocation();
     const params = useParams();
 
@@ -120,10 +99,28 @@ const SettingsHeader = () => {
             <h1 className="text-lg font-semibold">{title}</h1>
         </header>
     );
-};
+}
+
+// Settings layout component
+function SettingsLayout() {
+    return (
+        <SidebarProvider>
+            <div className="flex h-screen w-full overflow-hidden">
+                <SettingsSidebar />
+                <SidebarInset className="flex flex-1 flex-col">
+                    <SettingsHeader />
+                    {/* Content area for nested routes */}
+                    <main className="min-h-0 flex-1 overflow-auto p-4">
+                        <Outlet />
+                    </main>
+                </SidebarInset>
+            </div>
+        </SidebarProvider>
+    );
+}
 
 // Settings sidebar component
-const SettingsSidebar = () => {
+function SettingsSidebar() {
     return (
         <Sidebar collapsible="icon">
             <SidebarHeader>
@@ -162,24 +159,27 @@ const SettingsSidebar = () => {
             </SidebarFooter>
         </Sidebar>
     );
-};
+}
 
-// Settings layout component
-const SettingsLayout = () => {
+// Individual menu item component to properly use hooks
+function SettingsSidebarMenuItem({ item }: SettingsSidebarMenuItemProps) {
+    const location = useLocation();
+    // Check if current path starts with item path (for nested routes)
+    const isActive = location.pathname.startsWith(item.path);
+
     return (
-        <SidebarProvider>
-            <div className="flex h-screen w-full overflow-hidden">
-                <SettingsSidebar />
-                <SidebarInset className="flex flex-1 flex-col">
-                    <SettingsHeader />
-                    {/* Content area for nested routes */}
-                    <main className="min-h-0 flex-1 overflow-auto p-4">
-                        <Outlet />
-                    </main>
-                </SidebarInset>
-            </div>
-        </SidebarProvider>
+        <SidebarMenuItem>
+            <SidebarMenuButton
+                asChild
+                isActive={isActive}
+            >
+                <NavLink to={item.path}>
+                    {item.icon}
+                    {item.title}
+                </NavLink>
+            </SidebarMenuButton>
+        </SidebarMenuItem>
     );
-};
+}
 
 export default SettingsLayout;

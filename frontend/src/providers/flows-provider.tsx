@@ -36,7 +36,7 @@ interface FlowsProviderProps {
     children: React.ReactNode;
 }
 
-export const FlowsProvider = ({ children }: FlowsProviderProps) => {
+export function FlowsProvider({ children }: FlowsProviderProps) {
     // Query for flows list
     const {
         data: flowsData,
@@ -243,9 +243,9 @@ export const FlowsProvider = ({ children }: FlowsProviderProps) => {
     );
 
     return <FlowsContext.Provider value={value}>{children}</FlowsContext.Provider>;
-};
+}
 
-export const useFlows = () => {
+export function useFlows() {
     const context = useContext(FlowsContext);
 
     if (context === undefined) {
@@ -253,4 +253,4 @@ export const useFlows = () => {
     }
 
     return context;
-};
+}

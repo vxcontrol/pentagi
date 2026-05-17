@@ -24,12 +24,12 @@ const initialState: ThemeProviderState = {
 
 export const ThemeProviderContext = createContext<ThemeProviderState>(initialState);
 
-export const ThemeProvider = ({
+export function ThemeProvider({
     children,
     defaultTheme = 'system',
     storageKey = 'theme',
     ...props
-}: ThemeProviderProps) => {
+}: ThemeProviderProps) {
     const [theme, setTheme] = useState<Theme>(() => {
         const storedTheme = localStorage.getItem(storageKey);
 
@@ -80,4 +80,4 @@ export const ThemeProvider = ({
             {children}
         </ThemeProviderContext.Provider>
     );
-};
+}

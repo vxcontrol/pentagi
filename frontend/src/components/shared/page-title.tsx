@@ -15,6 +15,6 @@ interface PageTitleProps {
  * the browser tab, history, and shareable links reflect the actual page —
  * instead of the static "PentAGI" coming from index.html.
  */
-export const PageTitle = ({ children }: PageTitleProps) => (
-    <title>{children ? `${children} — ${APP_NAME}` : APP_NAME}</title>
-);
+export function PageTitle({ children }: PageTitleProps) {
+    return <title>{children ? `${children} — ${APP_NAME}` : APP_NAME}</title>;
+}

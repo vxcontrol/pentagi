@@ -53,7 +53,7 @@ interface InlineEditInputProps {
  * not from React state, which avoids a re-render per keystroke for a value
  * that's only relevant once.
  */
-export const InlineEditInput = ({
+export function InlineEditInput({
     autoFocus = false,
     busy = false,
     className,
@@ -63,7 +63,7 @@ export const InlineEditInput = ({
     onCancel,
     onSave,
     placeholder,
-}: InlineEditInputProps) => {
+}: InlineEditInputProps) {
     const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
         if (event.key === 'Enter') {
             event.preventDefault();
@@ -110,4 +110,4 @@ export const InlineEditInput = ({
             </InputGroupAddon>
         </InputGroup>
     );
-};
+}

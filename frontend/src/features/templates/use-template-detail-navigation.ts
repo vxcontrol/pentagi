@@ -13,7 +13,7 @@ const getHref = (item: Template) => `/templates/${item.id}`;
  * doubles as the default searchable text (no explicit `getSearchableText`
  * needed).
  */
-export const useTemplateDetailNavigation = (currentId: null | string | undefined) => {
+export function useTemplateDetailNavigation(currentId: null | string | undefined) {
     const { templates } = useTemplates();
 
     return useDetailNavigation<Template>({
@@ -23,4 +23,4 @@ export const useTemplateDetailNavigation = (currentId: null | string | undefined
         getLabel,
         items: templates,
     });
-};
+}

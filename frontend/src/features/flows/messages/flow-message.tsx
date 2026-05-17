@@ -27,7 +27,7 @@ const containsSearchValue = (text: null | string | undefined, searchValue: strin
     return text.toLowerCase().includes(searchValue.toLowerCase().trim());
 };
 
-const FlowMessage = ({ log, searchValue = '' }: FlowMessageProps) => {
+function FlowMessage({ log, searchValue = '' }: FlowMessageProps) {
     const { createdAt, message, result, resultFormat = ResultFormat.Plain, thinking, type } = log;
     const isReportMessage = type === MessageLogType.Report;
 
@@ -223,6 +223,6 @@ const FlowMessage = ({ log, searchValue = '' }: FlowMessageProps) => {
             </div>
         </div>
     );
-};
+}
 
 export default memo(FlowMessage);

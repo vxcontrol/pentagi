@@ -36,13 +36,13 @@ interface UseTableQueryFilterReaderResult {
  * atomic multi-field updates that the previous split design couldn't do
  * race-free.
  */
-export const useTableQueryFilterReader = ({
+export function useTableQueryFilterReader({
     debounceMs = 200,
     paramName = URL_PARAMS.QUERY,
-}: UseTableQueryFilterReaderOptions = {}): UseTableQueryFilterReaderResult => {
+}: UseTableQueryFilterReaderOptions = {}): UseTableQueryFilterReaderResult {
     const [searchParams] = useSearchParams();
     const filter = searchParams.get(paramName) ?? '';
     const debouncedFilter = useDebouncedValue(filter, debounceMs);
 
     return useMemo(() => ({ debouncedFilter, filter }), [debouncedFilter, filter]);
-};
+}

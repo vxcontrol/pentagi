@@ -45,7 +45,7 @@ const deleteResourcesRequest = (paths: readonly string[]) =>
  * No imperative refetch is performed: the GraphQL `resourceDeleted` subscription
  * is wired into the Apollo cache and removes the deleted entries automatically.
  */
-export const useResourcesDelete = ({ onAfterDelete }: UseResourcesDeleteParams = {}): UseResourcesDeleteResult => {
+export function useResourcesDelete({ onAfterDelete }: UseResourcesDeleteParams = {}): UseResourcesDeleteResult {
     const [fileToDelete, setFileToDelete] = useState<FileNode | null>(null);
 
     const requestDelete = useCallback((file: FileNode) => {
@@ -101,4 +101,4 @@ export const useResourcesDelete = ({ onAfterDelete }: UseResourcesDeleteParams =
         fileToDelete,
         requestDelete,
     };
-};
+}

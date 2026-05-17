@@ -95,7 +95,7 @@ interface UseOverwriteResult<TPlan> {
  * to wrap them in `useCallback`. This keeps the hook ergonomic at the call
  * site without sacrificing reference stability for the returned actions.
  */
-export const useOverwrite = <TPlan>(options: UseOverwriteOptions<TPlan>): UseOverwriteResult<TPlan> => {
+export function useOverwrite<TPlan>(options: UseOverwriteOptions<TPlan>): UseOverwriteResult<TPlan> {
     const [conflicts, setConflicts] = useState<OverwriteConflict[]>([]);
     const [pendingPlan, setPendingPlan] = useState<null | TPlan>(null);
 
@@ -189,4 +189,4 @@ export const useOverwrite = <TPlan>(options: UseOverwriteOptions<TPlan>): UseOve
         primaryExecute,
         resetConflicts,
     };
-};
+}
