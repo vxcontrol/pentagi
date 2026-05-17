@@ -72,7 +72,7 @@
         "marked": "^18.0.3",
         "monaco-editor": "^0.55.1",
         "react": "^19.2.6",
-        "react-day-picker": "^9.13.2",
+        "react-day-picker": "^10.0.1",
         "react-diff-viewer-continued": "^4.0.6",
         "react-dom": "^19.2.6",
         "react-hook-form": "^7.56.4",
