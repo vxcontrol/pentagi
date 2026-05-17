@@ -18,7 +18,7 @@
         "test:watch": "vitest"
     },
     "dependencies": {
-        "@apollo/client": "^3.13.8",
+        "@apollo/client": "^4.1.9",
         "@hookform/resolvers": "^5.2.2",
         "@monaco-editor/react": "^4.7.0",
         "@radix-ui/react-accordion": "^1.2.11",
