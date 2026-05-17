@@ -1,4 +1,4 @@
-import { Calendar, CalendarDays, CalendarRange, LayoutDashboard, type LucideIcon } from 'lucide-react';
+import { LayoutDashboard } from 'lucide-react';
 import { useState, useTransition } from 'react';
 
 import { PageTitle } from '@/components/shared/page-title';
@@ -12,10 +12,10 @@ import { cn } from '@/lib/utils';
 import { DashboardAnalytics } from '@/pages/dashboard/dashboard-analytics';
 import { DashboardOverview } from '@/pages/dashboard/dashboard-overview';
 
-const periodOptions: { icon: LucideIcon; label: string; value: UsageStatsPeriod }[] = [
-    { icon: CalendarDays, label: 'Week', value: UsageStatsPeriod.Week },
-    { icon: Calendar, label: 'Month', value: UsageStatsPeriod.Month },
-    { icon: CalendarRange, label: 'Quarter', value: UsageStatsPeriod.Quarter },
+const periodOptions: { label: string; value: UsageStatsPeriod }[] = [
+    { label: 'Week', value: UsageStatsPeriod.Week },
+    { label: 'Month', value: UsageStatsPeriod.Month },
+    { label: 'Quarter', value: UsageStatsPeriod.Quarter },
 ];
 
 const VALID_PERIODS = new Set<string>(Object.values(UsageStatsPeriod));
@@ -112,17 +112,19 @@ function Dashboard() {
                                 value={period}
                             >
                                 <TabsList>
-                                    {periodOptions.map(({ icon: Icon, label, value }) => (
+                                    {periodOptions.map(({ label, value }) => (
                                         <TabsTrigger
                                             aria-label={label}
-                                            className="aspect-square px-0 sm:aspect-auto sm:px-3"
+                                            className="size-7 px-0 sm:size-auto sm:px-3"
                                             key={value}
                                             value={value}
                                         >
-                                            <Icon
+                                            <span
                                                 aria-hidden="true"
-                                                className="size-4 sm:hidden"
-                                            />
+                                                className="sm:hidden"
+                                            >
+                                                {label[0]}
+                                            </span>
                                             <span className="hidden sm:inline">{label}</span>
                                         </TabsTrigger>
                                     ))}
