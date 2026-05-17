@@ -569,6 +569,4 @@ const MonacoTerminal = ({
     );
 };
 
-MonacoTerminal.displayName = 'MonacoTerminal';
-
 export default MonacoTerminal;

@@ -86,7 +86,5 @@ const Terminal = ({
     );
 };
 
-Terminal.displayName = 'Terminal';
-
 export type { TerminalRef };
 export default Terminal;
