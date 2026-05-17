@@ -2,9 +2,9 @@ import * as React from 'react';
 
 import { cn } from '@/lib/utils';
 
-export type InputProps = React.InputHTMLAttributes<HTMLInputElement>;
+export type InputProps = React.ComponentProps<'input'>;
 
-const Input = ({ className, ref, type, ...props }: InputProps & { ref?: React.Ref<HTMLInputElement> }) => {
+function Input({ className, type, ...props }: InputProps) {
     return (
         <input
             className={cn(
@@ -14,13 +14,10 @@ const Input = ({ className, ref, type, ...props }: InputProps & { ref?: React.Re
                     '[appearance:textfield] [&::-webkit-inner-spin-button]:m-0 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:m-0 [&::-webkit-outer-spin-button]:appearance-none',
                 className,
             )}
-            ref={ref}
             type={type}
             {...props}
         />
     );
-};
-
-Input.displayName = 'Input';
+}
 
 export { Input };

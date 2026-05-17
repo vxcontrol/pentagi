@@ -95,7 +95,12 @@ const resetUndoHistory = (editor: Editor): void => {
     view.dispatch(newState.tr.setMeta('addToHistory', false));
 };
 
-const MarkdownEditor = ({
+interface MarkdownEditorToolbarProps {
+    disabled?: boolean;
+    editor: Editor;
+}
+
+function MarkdownEditor({
     autoFocus,
     className,
     contentClassName,
@@ -106,7 +111,7 @@ const MarkdownEditor = ({
     ref,
     showToolbar = true,
     value,
-}: MarkdownEditorProps & { ref?: Ref<MarkdownEditorHandle> }) => {
+}: MarkdownEditorProps & { ref?: Ref<MarkdownEditorHandle> }) {
     const onChangeRef = useRef(onChange);
     const onBlurRef = useRef(onBlur);
     // Tracks the last markdown the editor reported externally. We compare
@@ -296,16 +301,9 @@ const MarkdownEditor = ({
             />
         </div>
     );
-};
-
-MarkdownEditor.displayName = 'MarkdownEditor';
-
-interface MarkdownEditorToolbarProps {
-    disabled?: boolean;
-    editor: Editor;
 }
 
-const MarkdownEditorToolbar = ({ disabled, editor }: MarkdownEditorToolbarProps) => {
+function MarkdownEditorToolbar({ disabled, editor }: MarkdownEditorToolbarProps) {
     const handleSetLink = useCallback(() => {
         const previousUrl = editor.getAttributes('link').href as string | undefined;
         const url = window.prompt('URL', previousUrl ?? '');
@@ -491,6 +489,6 @@ const MarkdownEditorToolbar = ({ disabled, editor }: MarkdownEditorToolbarProps)
             </div>
         </div>
     );
-};
+}
 
 export { MarkdownEditor };

@@ -42,7 +42,7 @@ const useTextarea = ({
     }, [triggerAutoSize, maxHeight, minHeight, textareaRef]);
 };
 
-type TextareaProps = React.TextareaHTMLAttributes<HTMLTextAreaElement> & {
+type TextareaProps = React.ComponentProps<'textarea'> & {
     maxHeight?: number;
     minHeight?: number;
 };
@@ -53,7 +53,7 @@ type TextareaRef = {
     textarea: HTMLTextAreaElement;
 };
 
-const Textarea = ({
+function Textarea({
     className,
     maxHeight = 118,
     minHeight = 38,
@@ -61,7 +61,7 @@ const Textarea = ({
     ref,
     value,
     ...props
-}: TextareaProps & { ref?: React.Ref<TextareaRef> }) => {
+}: TextareaProps & { ref?: React.Ref<TextareaRef> }) {
     const textareaRef = React.useRef<HTMLTextAreaElement | null>(null);
     const [triggerAutoSize, setTriggerAutoSize] = React.useState('');
 
@@ -99,8 +99,6 @@ const Textarea = ({
             value={value}
         />
     );
-};
-
-Textarea.displayName = 'Textarea';
+}
 
 export { Textarea };

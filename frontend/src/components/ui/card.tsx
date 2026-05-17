@@ -2,82 +2,58 @@ import * as React from 'react';
 
 import { cn } from '@/lib/utils';
 
-const Card = ({
-    className,
-    ref,
-    ...props
-}: React.HTMLAttributes<HTMLDivElement> & { ref?: React.Ref<HTMLDivElement> }) => (
-    <div
-        className={cn('bg-card text-card-foreground rounded-xl border shadow-sm', className)}
-        ref={ref}
-        {...props}
-    />
-);
-Card.displayName = 'Card';
+function Card({ className, ...props }: React.ComponentProps<'div'>) {
+    return (
+        <div
+            className={cn('bg-card text-card-foreground rounded-xl border shadow-sm', className)}
+            {...props}
+        />
+    );
+}
 
-const CardHeader = ({
-    className,
-    ref,
-    ...props
-}: React.HTMLAttributes<HTMLDivElement> & { ref?: React.Ref<HTMLDivElement> }) => (
-    <div
-        className={cn('flex flex-col gap-1.5 p-4', className)}
-        ref={ref}
-        {...props}
-    />
-);
-CardHeader.displayName = 'CardHeader';
+function CardContent({ className, ...props }: React.ComponentProps<'div'>) {
+    return (
+        <div
+            className={cn('p-4 pt-0', className)}
+            {...props}
+        />
+    );
+}
 
-const CardTitle = ({
-    className,
-    ref,
-    ...props
-}: React.HTMLAttributes<HTMLHeadingElement> & { ref?: React.Ref<HTMLParagraphElement> }) => (
-    <h3
-        className={cn('leading-none font-semibold tracking-tight', className)}
-        ref={ref}
-        {...props}
-    />
-);
-CardTitle.displayName = 'CardTitle';
+function CardDescription({ className, ...props }: React.ComponentProps<'p'>) {
+    return (
+        <p
+            className={cn('text-muted-foreground text-sm', className)}
+            {...props}
+        />
+    );
+}
 
-const CardDescription = ({
-    className,
-    ref,
-    ...props
-}: React.HTMLAttributes<HTMLParagraphElement> & { ref?: React.Ref<HTMLParagraphElement> }) => (
-    <p
-        className={cn('text-muted-foreground text-sm', className)}
-        ref={ref}
-        {...props}
-    />
-);
-CardDescription.displayName = 'CardDescription';
+function CardFooter({ className, ...props }: React.ComponentProps<'div'>) {
+    return (
+        <div
+            className={cn('flex items-center p-4 pt-0', className)}
+            {...props}
+        />
+    );
+}
 
-const CardContent = ({
-    className,
-    ref,
-    ...props
-}: React.HTMLAttributes<HTMLDivElement> & { ref?: React.Ref<HTMLDivElement> }) => (
-    <div
-        className={cn('p-4 pt-0', className)}
-        ref={ref}
-        {...props}
-    />
-);
-CardContent.displayName = 'CardContent';
+function CardHeader({ className, ...props }: React.ComponentProps<'div'>) {
+    return (
+        <div
+            className={cn('flex flex-col gap-1.5 p-4', className)}
+            {...props}
+        />
+    );
+}
 
-const CardFooter = ({
-    className,
-    ref,
-    ...props
-}: React.HTMLAttributes<HTMLDivElement> & { ref?: React.Ref<HTMLDivElement> }) => (
-    <div
-        className={cn('flex items-center p-4 pt-0', className)}
-        ref={ref}
-        {...props}
-    />
-);
-CardFooter.displayName = 'CardFooter';
+function CardTitle({ className, ...props }: React.ComponentProps<'h3'>) {
+    return (
+        <h3
+            className={cn('leading-none font-semibold tracking-tight', className)}
+            {...props}
+        />
+    );
+}
 
 export { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle };

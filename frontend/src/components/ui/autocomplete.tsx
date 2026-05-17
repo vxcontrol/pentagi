@@ -119,6 +119,38 @@ const substringFilter = (value: string, search: string, keywords?: string[]): nu
     return 0;
 };
 
+export type AutocompleteContentProps = React.ComponentProps<typeof PopoverPrimitive.Content> & {
+    /**
+     * Class name for the inner cmdk `List`. Use this to override the default
+     * max-height (`max-h-[280px]`) per usage site.
+     */
+    listClassName?: string;
+};
+
+export type AutocompleteEmptyProps = React.ComponentProps<typeof CommandEmpty>;
+
+export type AutocompleteGroupProps = React.ComponentProps<typeof CommandGroup>;
+
+export type AutocompleteInputProps = Omit<
+    React.ComponentProps<'input'>,
+    'defaultValue' | 'onChange' | 'type' | 'value'
+>;
+
+export type AutocompleteItemProps = Omit<React.ComponentProps<typeof CommandItem>, 'onSelect' | 'value'> & {
+    /**
+     * Optional custom select handler. When provided, you become responsible
+     * for committing the value (the default behaviour is a no-op so you can
+     * decide whether to commit, navigate, etc.). When omitted, the item
+     * commits its own `value` via `Autocomplete.onCommit`.
+     */
+    onSelect?: (value: string) => void;
+    /**
+     * The value committed when this item is chosen. Also fed into cmdk's
+     * filter (so make sure it matches what the user is likely to type).
+     */
+    value: string;
+};
+
 export interface AutocompleteProps {
     children: React.ReactNode;
     defaultOpen?: boolean;
@@ -154,7 +186,9 @@ export interface AutocompleteProps {
     value?: string;
 }
 
-const Autocomplete = ({
+export type AutocompleteSeparatorProps = React.ComponentProps<typeof CommandSeparator>;
+
+function Autocomplete({
     children,
     defaultOpen = false,
     defaultValue = '',
@@ -166,7 +200,7 @@ const Autocomplete = ({
     openOnFocus = true,
     shouldFilter,
     value: valueProp,
-}: AutocompleteProps) => {
+}: AutocompleteProps) {
     const [inputValue, setInputValue] = useControllable<string>(valueProp, defaultValue, onValueChange);
     const [open, setOpen] = useControllable<boolean>(openProp, defaultOpen, onOpenChange);
     const inputRef = React.useRef<HTMLInputElement | null>(null);
@@ -230,16 +264,156 @@ const Autocomplete = ({
             </Popover>
         </AutocompleteContext.Provider>
     );
-};
+}
 
-Autocomplete.displayName = 'Autocomplete';
+function AutocompleteContent({
+    align = 'start',
+    children,
+    className,
+    listClassName,
+    onFocusOutside,
+    onInteractOutside,
+    onOpenAutoFocus,
+    ref,
+    sideOffset = 4,
+    ...props
+}: AutocompleteContentProps) {
+    const { inputRef } = useAutocompleteContext();
+    const contentRef = React.useRef<null | React.ComponentRef<typeof PopoverPrimitive.Content>>(null);
+    const composedRef = React.useCallback(
+        (node: null | React.ComponentRef<typeof PopoverPrimitive.Content>) => {
+            contentRef.current = node;
 
-export type AutocompleteInputProps = Omit<
-    React.InputHTMLAttributes<HTMLInputElement>,
-    'defaultValue' | 'onChange' | 'type' | 'value'
->;
+            if (typeof ref === 'function') {
+                ref(node);
+            } else if (ref) {
+                (ref as React.MutableRefObject<typeof node>).current = node;
+            }
+        },
+        [ref],
+    );
 
-const AutocompleteInput = ({
+    return (
+        /*
+         * Render inline — NO `PopoverPrimitive.Portal`. When the autocomplete
+         * lives inside a Radix `Dialog`, the dialog locks scroll on `body`
+         * (`body { pointer-events: none }` + a wheel/touch interceptor on
+         * the document). A portal'd popover ends up on `body`, outside the
+         * dialog DOM, and inherits the lock — wheel events on the suggestion
+         * list never fire and the user can't scroll. Rendering inline keeps
+         * the popover inside the dialog content, where the scroll lock
+         * doesn't apply, while Radix Popper still positions it correctly
+         * relative to the anchor (the visible input).
+         *
+         * Styles are copied verbatim from `components/ui/popover.tsx` so
+         * appearance and animations stay consistent with shadcn defaults.
+         */
+        <PopoverPrimitive.Content
+            align={align}
+            className={cn(
+                'bg-popover text-popover-foreground data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-50 origin-(--radix-popover-content-transform-origin) rounded-md border shadow-md outline-hidden',
+                // Width matches the input (anchor); max-h keeps the popover
+                // inside the viewport when the suggestion list is large.
+                'max-h-(--radix-popover-content-available-height) w-(--radix-popover-trigger-width) min-w-(--radix-popover-trigger-width) overflow-hidden p-0',
+                className,
+            )}
+            onFocusOutside={(event) => {
+                onFocusOutside?.(event);
+
+                if (event.defaultPrevented) {
+                    return;
+                }
+
+                // Radix `DismissableLayer` treats the anchor input as
+                // "outside" (it isn't a Trigger), and its React-tree flag
+                // races on Content's own focusin when our `CommandList`
+                // synchronously bounces focus back to the input — both
+                // produce spurious `focusOutside` events that would
+                // dismiss the popover. Treat focus on the anchor input
+                // or anywhere inside Content as "inside".
+                //
+                // Radix dispatches this event directly on the focused
+                // element (`bubbles: false`), so `event.target` IS it.
+                const focusTarget = event.target as Node | null;
+                const focusInsideInput = !!(focusTarget && inputRef.current?.contains(focusTarget));
+                const focusInsideContent = !!(focusTarget && contentRef.current?.contains(focusTarget));
+
+                if (focusInsideInput || focusInsideContent) {
+                    event.preventDefault();
+                }
+            }}
+            onInteractOutside={(event) => {
+                onInteractOutside?.(event);
+
+                if (event.defaultPrevented) {
+                    return;
+                }
+
+                // Clicking the input itself shouldn't dismiss the popover —
+                // Radix treats the anchor as "outside" since it isn't a
+                // Trigger. The real pointer target is the focused
+                // element via `event.target` (custom event is
+                // dispatched on the target, `bubbles: false`).
+                const interactTarget = event.target as Node | null;
+
+                if (interactTarget && inputRef.current?.contains(interactTarget)) {
+                    event.preventDefault();
+                }
+            }}
+            onOpenAutoFocus={(event) => {
+                onOpenAutoFocus?.(event);
+
+                if (event.defaultPrevented) {
+                    return;
+                }
+
+                // Keep focus on the input so typing keeps working immediately.
+                event.preventDefault();
+            }}
+            ref={composedRef}
+            sideOffset={sideOffset}
+            {...props}
+        >
+            {/*
+             * Explicit max-height + scroll on the cmdk list. shadcn's
+             * `CommandList` defaults to `max-h-[300px] overflow-y-auto`, but
+             * re-applying it here lets consumers override the cap via
+             * `listClassName` without losing scroll behaviour, and pins the
+             * list so a long suggestion set scrolls inside the popover
+             * instead of pushing the popover past the viewport.
+             */}
+            <CommandList
+                className={cn('max-h-[280px] overflow-x-hidden overflow-y-auto', listClassName)}
+                onFocus={(event) => {
+                    // cmdk re-focuses the input by id when its value
+                    // changes (`document.getElementById(inputId).focus()`),
+                    // falling back to the list when the lookup fails — and
+                    // it fails as soon as a wrapper like `FormControl`
+                    // overrides the input's id via Radix Slot. The listbox
+                    // then steals focus and typing breaks. Per the
+                    // aria-activedescendant pattern the listbox shouldn't
+                    // hold real focus (tabindex=-1), so bounce it back.
+                    // `target === currentTarget` skips legitimate child focus.
+                    if (event.target === event.currentTarget) {
+                        inputRef.current?.focus();
+                    }
+                }}
+            >
+                {children}
+            </CommandList>
+        </PopoverPrimitive.Content>
+    );
+}
+
+function AutocompleteEmpty(props: AutocompleteEmptyProps) {
+    return <CommandEmpty {...props} />;
+}
+
+function AutocompleteGroup(props: AutocompleteGroupProps) {
+    return <CommandGroup {...props} />;
+}
+
+function AutocompleteInput({
     className,
     id,
     onFocus,
@@ -247,7 +421,7 @@ const AutocompleteInput = ({
     onPointerDown,
     ref: forwardedRef,
     ...props
-}: AutocompleteInputProps & { ref?: React.Ref<HTMLInputElement> }) => {
+}: AutocompleteInputProps & { ref?: React.Ref<HTMLInputElement> }) {
     const { commit, inputId, inputRef, inputValue, open, openOnFocus, setInputValue, setOpen } =
         useAutocompleteContext();
 
@@ -386,206 +560,9 @@ const AutocompleteInput = ({
             </CommandPrimitive.Input>
         </PopoverAnchor>
     );
-};
+}
 
-AutocompleteInput.displayName = 'AutocompleteInput';
-
-export type AutocompleteContentProps = React.ComponentPropsWithoutRef<typeof PopoverPrimitive.Content> & {
-    /**
-     * Class name for the inner cmdk `List`. Use this to override the default
-     * max-height (`max-h-[280px]`) per usage site.
-     */
-    listClassName?: string;
-};
-
-const AutocompleteContent = ({
-    align = 'start',
-    children,
-    className,
-    listClassName,
-    onFocusOutside,
-    onInteractOutside,
-    onOpenAutoFocus,
-    ref,
-    sideOffset = 4,
-    ...props
-}: AutocompleteContentProps & { ref?: React.Ref<React.ElementRef<typeof PopoverPrimitive.Content>> }) => {
-    const { inputRef } = useAutocompleteContext();
-    const contentRef = React.useRef<null | React.ElementRef<typeof PopoverPrimitive.Content>>(null);
-    const composedRef = React.useCallback(
-        (node: null | React.ElementRef<typeof PopoverPrimitive.Content>) => {
-            contentRef.current = node;
-
-            if (typeof ref === 'function') {
-                ref(node);
-            } else if (ref) {
-                (ref as React.MutableRefObject<typeof node>).current = node;
-            }
-        },
-        [ref],
-    );
-
-    return (
-        /*
-         * Render inline — NO `PopoverPrimitive.Portal`. When the autocomplete
-         * lives inside a Radix `Dialog`, the dialog locks scroll on `body`
-         * (`body { pointer-events: none }` + a wheel/touch interceptor on
-         * the document). A portal'd popover ends up on `body`, outside the
-         * dialog DOM, and inherits the lock — wheel events on the suggestion
-         * list never fire and the user can't scroll. Rendering inline keeps
-         * the popover inside the dialog content, where the scroll lock
-         * doesn't apply, while Radix Popper still positions it correctly
-         * relative to the anchor (the visible input).
-         *
-         * Styles are copied verbatim from `components/ui/popover.tsx` so
-         * appearance and animations stay consistent with shadcn defaults.
-         */
-        <PopoverPrimitive.Content
-            align={align}
-            className={cn(
-                'bg-popover text-popover-foreground data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-50 origin-(--radix-popover-content-transform-origin) rounded-md border shadow-md outline-hidden',
-                // Width matches the input (anchor); max-h keeps the popover
-                // inside the viewport when the suggestion list is large.
-                'max-h-(--radix-popover-content-available-height) w-(--radix-popover-trigger-width) min-w-(--radix-popover-trigger-width) overflow-hidden p-0',
-                className,
-            )}
-            onFocusOutside={(event) => {
-                onFocusOutside?.(event);
-
-                if (event.defaultPrevented) {
-                    return;
-                }
-
-                // Radix `DismissableLayer` treats the anchor input as
-                // "outside" (it isn't a Trigger), and its React-tree flag
-                // races on Content's own focusin when our `CommandList`
-                // synchronously bounces focus back to the input — both
-                // produce spurious `focusOutside` events that would
-                // dismiss the popover. Treat focus on the anchor input
-                // or anywhere inside Content as "inside".
-                //
-                // Radix dispatches this event directly on the focused
-                // element (`bubbles: false`), so `event.target` IS it.
-                const focusTarget = event.target as Node | null;
-                const focusInsideInput = !!(focusTarget && inputRef.current?.contains(focusTarget));
-                const focusInsideContent = !!(focusTarget && contentRef.current?.contains(focusTarget));
-
-                if (focusInsideInput || focusInsideContent) {
-                    event.preventDefault();
-                }
-            }}
-            onInteractOutside={(event) => {
-                onInteractOutside?.(event);
-
-                if (event.defaultPrevented) {
-                    return;
-                }
-
-                // Clicking the input itself shouldn't dismiss the popover —
-                // Radix treats the anchor as "outside" since it isn't a
-                // Trigger. The real pointer target is the focused
-                // element via `event.target` (custom event is
-                // dispatched on the target, `bubbles: false`).
-                const interactTarget = event.target as Node | null;
-
-                if (interactTarget && inputRef.current?.contains(interactTarget)) {
-                    event.preventDefault();
-                }
-            }}
-            onOpenAutoFocus={(event) => {
-                onOpenAutoFocus?.(event);
-
-                if (event.defaultPrevented) {
-                    return;
-                }
-
-                // Keep focus on the input so typing keeps working immediately.
-                event.preventDefault();
-            }}
-            ref={composedRef}
-            sideOffset={sideOffset}
-            {...props}
-        >
-            {/*
-             * Explicit max-height + scroll on the cmdk list. shadcn's
-             * `CommandList` defaults to `max-h-[300px] overflow-y-auto`, but
-             * re-applying it here lets consumers override the cap via
-             * `listClassName` without losing scroll behaviour, and pins the
-             * list so a long suggestion set scrolls inside the popover
-             * instead of pushing the popover past the viewport.
-             */}
-            <CommandList
-                className={cn('max-h-[280px] overflow-x-hidden overflow-y-auto', listClassName)}
-                onFocus={(event) => {
-                    // cmdk re-focuses the input by id when its value
-                    // changes (`document.getElementById(inputId).focus()`),
-                    // falling back to the list when the lookup fails — and
-                    // it fails as soon as a wrapper like `FormControl`
-                    // overrides the input's id via Radix Slot. The listbox
-                    // then steals focus and typing breaks. Per the
-                    // aria-activedescendant pattern the listbox shouldn't
-                    // hold real focus (tabindex=-1), so bounce it back.
-                    // `target === currentTarget` skips legitimate child focus.
-                    if (event.target === event.currentTarget) {
-                        inputRef.current?.focus();
-                    }
-                }}
-            >
-                {children}
-            </CommandList>
-        </PopoverPrimitive.Content>
-    );
-};
-
-AutocompleteContent.displayName = 'AutocompleteContent';
-
-export type AutocompleteEmptyProps = React.ComponentPropsWithoutRef<typeof CommandEmpty>;
-
-const AutocompleteEmpty = ({
-    ref,
-    ...props
-}: AutocompleteEmptyProps & { ref?: React.Ref<React.ElementRef<typeof CommandEmpty>> }) => (
-    <CommandEmpty
-        ref={ref}
-        {...props}
-    />
-);
-AutocompleteEmpty.displayName = 'AutocompleteEmpty';
-
-export type AutocompleteGroupProps = React.ComponentPropsWithoutRef<typeof CommandGroup>;
-
-const AutocompleteGroup = ({
-    ref,
-    ...props
-}: AutocompleteGroupProps & { ref?: React.Ref<React.ElementRef<typeof CommandGroup>> }) => (
-    <CommandGroup
-        ref={ref}
-        {...props}
-    />
-);
-AutocompleteGroup.displayName = 'AutocompleteGroup';
-
-export type AutocompleteItemProps = Omit<React.ComponentPropsWithoutRef<typeof CommandItem>, 'onSelect' | 'value'> & {
-    /**
-     * Optional custom select handler. When provided, you become responsible
-     * for committing the value (the default behaviour is a no-op so you can
-     * decide whether to commit, navigate, etc.). When omitted, the item
-     * commits its own `value` via `Autocomplete.onCommit`.
-     */
-    onSelect?: (value: string) => void;
-    /**
-     * The value committed when this item is chosen. Also fed into cmdk's
-     * filter (so make sure it matches what the user is likely to type).
-     */
-    value: string;
-};
-
-const AutocompleteItem = ({
-    onSelect,
-    ref,
-    value,
-    ...props
-}: AutocompleteItemProps & { ref?: React.Ref<React.ElementRef<typeof CommandItem>> }) => {
+function AutocompleteItem({ onSelect, value, ...props }: AutocompleteItemProps) {
     const { commit } = useAutocompleteContext();
 
     return (
@@ -599,27 +576,15 @@ const AutocompleteItem = ({
 
                 commit(selected);
             }}
-            ref={ref}
             value={value}
             {...props}
         />
     );
-};
+}
 
-AutocompleteItem.displayName = 'AutocompleteItem';
-
-export type AutocompleteSeparatorProps = React.ComponentPropsWithoutRef<typeof CommandSeparator>;
-
-const AutocompleteSeparator = ({
-    ref,
-    ...props
-}: AutocompleteSeparatorProps & { ref?: React.Ref<React.ElementRef<typeof CommandSeparator>> }) => (
-    <CommandSeparator
-        ref={ref}
-        {...props}
-    />
-);
-AutocompleteSeparator.displayName = 'AutocompleteSeparator';
+function AutocompleteSeparator(props: AutocompleteSeparatorProps) {
+    return <CommandSeparator {...props} />;
+}
 
 export {
     Autocomplete,
