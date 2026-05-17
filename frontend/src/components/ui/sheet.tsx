@@ -15,10 +15,13 @@ const SheetClose = SheetPrimitive.Close;
 
 const SheetPortal = SheetPrimitive.Portal;
 
-const SheetOverlay = React.forwardRef<
-    React.ElementRef<typeof SheetPrimitive.Overlay>,
-    React.ComponentPropsWithoutRef<typeof SheetPrimitive.Overlay>
->(({ className, ...props }, ref) => (
+const SheetOverlay = ({
+    className,
+    ref,
+    ...props
+}: React.ComponentPropsWithoutRef<typeof SheetPrimitive.Overlay> & {
+    ref?: React.Ref<React.ElementRef<typeof SheetPrimitive.Overlay>>;
+}) => (
     <SheetPrimitive.Overlay
         className={cn(
             'data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 fixed inset-0 z-50 bg-black/80',
@@ -27,7 +30,7 @@ const SheetOverlay = React.forwardRef<
         {...props}
         ref={ref}
     />
-));
+);
 SheetOverlay.displayName = SheetPrimitive.Overlay.displayName;
 
 const sheetVariants = cva(
@@ -53,23 +56,29 @@ interface SheetContentProps
     overlay?: boolean;
 }
 
-const SheetContent = React.forwardRef<React.ElementRef<typeof SheetPrimitive.Content>, SheetContentProps>(
-    ({ children, className, container, overlay = true, side = 'right', ...props }, ref) => (
-        <SheetPortal container={container ?? undefined}>
-            {overlay && <SheetOverlay />}
-            <SheetPrimitive.Content
-                className={cn(sheetVariants({ side }), className)}
-                ref={ref}
-                {...props}
-            >
-                <SheetPrimitive.Close className="ring-offset-background focus:ring-ring data-[state=open]:bg-secondary absolute top-4 right-4 rounded-sm opacity-70 transition-opacity hover:opacity-100 focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none">
-                    <Cross2Icon className="h-4 w-4" />
-                    <span className="sr-only">Close</span>
-                </SheetPrimitive.Close>
-                {children}
-            </SheetPrimitive.Content>
-        </SheetPortal>
-    ),
+const SheetContent = ({
+    children,
+    className,
+    container,
+    overlay = true,
+    ref,
+    side = 'right',
+    ...props
+}: SheetContentProps & { ref?: React.Ref<React.ElementRef<typeof SheetPrimitive.Content>> }) => (
+    <SheetPortal container={container ?? undefined}>
+        {overlay && <SheetOverlay />}
+        <SheetPrimitive.Content
+            className={cn(sheetVariants({ side }), className)}
+            ref={ref}
+            {...props}
+        >
+            <SheetPrimitive.Close className="ring-offset-background focus:ring-ring data-[state=open]:bg-secondary absolute top-4 right-4 rounded-sm opacity-70 transition-opacity hover:opacity-100 focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none">
+                <Cross2Icon className="h-4 w-4" />
+                <span className="sr-only">Close</span>
+            </SheetPrimitive.Close>
+            {children}
+        </SheetPrimitive.Content>
+    </SheetPortal>
 );
 SheetContent.displayName = SheetPrimitive.Content.displayName;
 
@@ -89,28 +98,34 @@ const SheetFooter = ({ className, ...props }: React.HTMLAttributes<HTMLDivElemen
 );
 SheetFooter.displayName = 'SheetFooter';
 
-const SheetTitle = React.forwardRef<
-    React.ElementRef<typeof SheetPrimitive.Title>,
-    React.ComponentPropsWithoutRef<typeof SheetPrimitive.Title>
->(({ className, ...props }, ref) => (
+const SheetTitle = ({
+    className,
+    ref,
+    ...props
+}: React.ComponentPropsWithoutRef<typeof SheetPrimitive.Title> & {
+    ref?: React.Ref<React.ElementRef<typeof SheetPrimitive.Title>>;
+}) => (
     <SheetPrimitive.Title
         className={cn('text-foreground text-lg font-semibold', className)}
         ref={ref}
         {...props}
     />
-));
+);
 SheetTitle.displayName = SheetPrimitive.Title.displayName;
 
-const SheetDescription = React.forwardRef<
-    React.ElementRef<typeof SheetPrimitive.Description>,
-    React.ComponentPropsWithoutRef<typeof SheetPrimitive.Description>
->(({ className, ...props }, ref) => (
+const SheetDescription = ({
+    className,
+    ref,
+    ...props
+}: React.ComponentPropsWithoutRef<typeof SheetPrimitive.Description> & {
+    ref?: React.Ref<React.ElementRef<typeof SheetPrimitive.Description>>;
+}) => (
     <SheetPrimitive.Description
         className={cn('text-muted-foreground text-sm', className)}
         ref={ref}
         {...props}
     />
-));
+);
 SheetDescription.displayName = SheetPrimitive.Description.displayName;
 
 export {

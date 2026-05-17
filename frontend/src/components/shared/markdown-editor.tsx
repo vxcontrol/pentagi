@@ -22,7 +22,7 @@ import {
     Strikethrough,
     Undo,
 } from 'lucide-react';
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef } from 'react';
+import { type Ref, useCallback, useEffect, useImperativeHandle, useRef } from 'react';
 import { Markdown } from 'tiptap-markdown';
 
 import { Separator } from '@/components/ui/separator';
@@ -95,212 +95,208 @@ const resetUndoHistory = (editor: Editor): void => {
     view.dispatch(newState.tr.setMeta('addToHistory', false));
 };
 
-const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(
-    (
-        {
-            autoFocus,
-            className,
-            contentClassName,
-            disabled,
-            onBlur,
-            onChange,
-            placeholder = 'Write something…',
-            showToolbar = true,
-            value,
-        },
-        ref,
-    ) => {
-        const onChangeRef = useRef(onChange);
-        const onBlurRef = useRef(onBlur);
-        // Tracks the last markdown the editor reported externally. We compare
-        // against this to suppress echo updates: tiptap-markdown can re-serialize
-        // content slightly differently than the input string (whitespace/list
-        // markers/hard breaks/etc.), and we don't want to flag those
-        // normalizations as user edits — that would falsely flip RHF's
-        // `isDirty` flag.
-        //
-        // The baseline is the editor's own serialized markdown, NOT the raw
-        // input `value`. Comparing user edits against the canonical
-        // (post-normalization) form is what makes the comparison correct.
-        const lastEmittedRef = useRef<string>(value);
+const MarkdownEditor = ({
+    autoFocus,
+    className,
+    contentClassName,
+    disabled,
+    onBlur,
+    onChange,
+    placeholder = 'Write something…',
+    ref,
+    showToolbar = true,
+    value,
+}: MarkdownEditorProps & { ref?: Ref<MarkdownEditorHandle> }) => {
+    const onChangeRef = useRef(onChange);
+    const onBlurRef = useRef(onBlur);
+    // Tracks the last markdown the editor reported externally. We compare
+    // against this to suppress echo updates: tiptap-markdown can re-serialize
+    // content slightly differently than the input string (whitespace/list
+    // markers/hard breaks/etc.), and we don't want to flag those
+    // normalizations as user edits — that would falsely flip RHF's
+    // `isDirty` flag.
+    //
+    // The baseline is the editor's own serialized markdown, NOT the raw
+    // input `value`. Comparing user edits against the canonical
+    // (post-normalization) form is what makes the comparison correct.
+    const lastEmittedRef = useRef<string>(value);
 
-        // Tiptap dispatches transactions for the initial content during view
-        // construction. Those `onUpdate` calls are echoes of the initial
-        // parse, not real user edits — forwarding them to RHF would mark
-        // the form dirty on mount. We start forwarding edits only after
-        // `onCreate` has captured the canonical baseline.
-        const isInitializedRef = useRef(false);
+    // Tiptap dispatches transactions for the initial content during view
+    // construction. Those `onUpdate` calls are echoes of the initial
+    // parse, not real user edits — forwarding them to RHF would mark
+    // the form dirty on mount. We start forwarding edits only after
+    // `onCreate` has captured the canonical baseline.
+    const isInitializedRef = useRef(false);
 
-        // Tracks whether we have already cleared the undo stack on initial
-        // mount. After the first sync useEffect run we set this to true; on
-        // subsequent renders we only clear the stack when an external value
-        // arrived (see `shouldExternalSync` below).
-        const hasResetInitialHistoryRef = useRef(false);
+    // Tracks whether we have already cleared the undo stack on initial
+    // mount. After the first sync useEffect run we set this to true; on
+    // subsequent renders we only clear the stack when an external value
+    // arrived (see `shouldExternalSync` below).
+    const hasResetInitialHistoryRef = useRef(false);
 
-        useEffect(() => {
-            onChangeRef.current = onChange;
-            onBlurRef.current = onBlur;
-        }, [onChange, onBlur]);
+    useEffect(() => {
+        onChangeRef.current = onChange;
+        onBlurRef.current = onBlur;
+    }, [onChange, onBlur]);
 
-        const editor = useEditor({
-            content: value,
-            editable: !disabled,
-            extensions: [
-                StarterKit.configure({
-                    codeBlock: { HTMLAttributes: { class: 'hljs' } },
-                }),
-                Placeholder.configure({
-                    emptyEditorClass: 'is-editor-empty',
-                    placeholder,
-                }),
-                Markdown.configure({
-                    breaks: true,
-                    html: false,
-                    linkify: true,
-                    tightLists: true,
-                    transformCopiedText: true,
-                    // Plain text pasted from the OS clipboard is left as-is.
-                    // With `transformPastedText: true`, a leading "- " (or
-                    // "1. ", "> ", etc.) would be parsed as markdown and
-                    // turn the paste into a list/blockquote — almost never
-                    // what the user wants for knowledge documents.
-                    transformPastedText: false,
-                }),
-            ],
-            immediatelyRender: false,
-            onBlur: () => onBlurRef.current?.(),
-            onCreate: ({ editor: instance }) => {
-                lastEmittedRef.current = instance.storage.markdown.getMarkdown();
-                isInitializedRef.current = true;
-            },
-            onUpdate: ({ editor: instance }) => {
-                if (!isInitializedRef.current) {
-                    return;
-                }
-
-                const next = instance.storage.markdown.getMarkdown();
-
-                if (next === lastEmittedRef.current) {
-                    return;
-                }
-
-                lastEmittedRef.current = next;
-                onChangeRef.current?.(next);
-            },
-        });
-
-        useImperativeHandle(
-            ref,
-            () => ({
-                focus: () => editor?.commands.focus(),
-                getEditor: () => editor,
+    const editor = useEditor({
+        content: value,
+        editable: !disabled,
+        extensions: [
+            StarterKit.configure({
+                codeBlock: { HTMLAttributes: { class: 'hljs' } },
             }),
-            [editor],
-        );
-
-        // Keep external value in sync (e.g. on form reset). Avoid resetting if
-        // the editor already reflects the same markdown to keep cursor stable.
-        useEffect(() => {
-            if (!editor) {
+            Placeholder.configure({
+                emptyEditorClass: 'is-editor-empty',
+                placeholder,
+            }),
+            Markdown.configure({
+                breaks: true,
+                html: false,
+                linkify: true,
+                tightLists: true,
+                transformCopiedText: true,
+                // Plain text pasted from the OS clipboard is left as-is.
+                // With `transformPastedText: true`, a leading "- " (or
+                // "1. ", "> ", etc.) would be parsed as markdown and
+                // turn the paste into a list/blockquote — almost never
+                // what the user wants for knowledge documents.
+                transformPastedText: false,
+            }),
+        ],
+        immediatelyRender: false,
+        onBlur: () => onBlurRef.current?.(),
+        onCreate: ({ editor: instance }) => {
+            lastEmittedRef.current = instance.storage.markdown.getMarkdown();
+            isInitializedRef.current = true;
+        },
+        onUpdate: ({ editor: instance }) => {
+            if (!isInitializedRef.current) {
                 return;
             }
 
-            const current = editor.storage.markdown.getMarkdown();
-            const shouldExternalSync = current !== value;
+            const next = instance.storage.markdown.getMarkdown();
 
-            if (shouldExternalSync) {
-                editor.commands.setContent(value, { emitUpdate: false });
-            }
-
-            // The editor's own serialized markdown is the canonical form —
-            // subsequent user edits will be compared against this
-            // representation, not the (possibly non-normalized) input
-            // `value`. Storing the raw `value` here would cause the first
-            // user keystroke to also re-emit the round-trip normalization.
-            lastEmittedRef.current = editor.storage.markdown.getMarkdown();
-
-            // Clear the undo stack:
-            //   - on initial mount, to discard the construction-time
-            //     transactions dispatched by extensions like `trailingNode`
-            //     plus the initial `setContent` we just ran above;
-            //   - on every external `setContent` (e.g. parent calls
-            //     form.reset(serverDocument)), because that transaction is
-            //     not a user edit either.
-            //
-            // We MUST NOT reset on every render: when the user types,
-            // `value` changes too, and resetting then would erase the
-            // user's own undo history.
-            if (!hasResetInitialHistoryRef.current || shouldExternalSync) {
-                hasResetInitialHistoryRef.current = true;
-                resetUndoHistory(editor);
-            }
-        }, [editor, value]);
-
-        useEffect(() => {
-            if (!editor) {
+            if (next === lastEmittedRef.current) {
                 return;
             }
 
-            editor.setEditable(!disabled);
-        }, [editor, disabled]);
+            lastEmittedRef.current = next;
+            onChangeRef.current?.(next);
+        },
+    });
 
-        useEffect(() => {
-            if (autoFocus && editor) {
-                editor.commands.focus('end');
-            }
-            // `autoFocus` is intentionally omitted from the deps — it's a
-            // mount-time prop, equivalent to the native `<input autoFocus>`
-            // attribute. We don't want a parent flipping `autoFocus` later
-            // to steal focus back into the editor.
-            // eslint-disable-next-line react-hooks/exhaustive-deps
-        }, [editor]);
+    useImperativeHandle(
+        ref,
+        () => ({
+            focus: () => editor?.commands.focus(),
+            getEditor: () => editor,
+        }),
+        [editor],
+    );
 
-        // While tiptap is initializing (`useEditor` returns `null` on the
-        // first render with `immediatelyRender: false`), render a placeholder
-        // with the same outer classes so the bounding box is already correct
-        // and the parent layout doesn't jump when the editor mounts.
+    // Keep external value in sync (e.g. on form reset). Avoid resetting if
+    // the editor already reflects the same markdown to keep cursor stable.
+    useEffect(() => {
         if (!editor) {
-            return (
-                <div
-                    aria-busy="true"
-                    className={cn(
-                        'border-input dark:bg-input/30 group/markdown-editor flex w-full flex-col overflow-hidden rounded-md border shadow-2xs outline-hidden transition-[color,box-shadow]',
-                        disabled && 'pointer-events-none opacity-60',
-                        className,
-                    )}
-                    data-slot="markdown-editor"
-                />
-            );
+            return;
         }
 
+        const current = editor.storage.markdown.getMarkdown();
+        const shouldExternalSync = current !== value;
+
+        if (shouldExternalSync) {
+            editor.commands.setContent(value, { emitUpdate: false });
+        }
+
+        // The editor's own serialized markdown is the canonical form —
+        // subsequent user edits will be compared against this
+        // representation, not the (possibly non-normalized) input
+        // `value`. Storing the raw `value` here would cause the first
+        // user keystroke to also re-emit the round-trip normalization.
+        lastEmittedRef.current = editor.storage.markdown.getMarkdown();
+
+        // Clear the undo stack:
+        //   - on initial mount, to discard the construction-time
+        //     transactions dispatched by extensions like `trailingNode`
+        //     plus the initial `setContent` we just ran above;
+        //   - on every external `setContent` (e.g. parent calls
+        //     form.reset(serverDocument)), because that transaction is
+        //     not a user edit either.
+        //
+        // We MUST NOT reset on every render: when the user types,
+        // `value` changes too, and resetting then would erase the
+        // user's own undo history.
+        if (!hasResetInitialHistoryRef.current || shouldExternalSync) {
+            hasResetInitialHistoryRef.current = true;
+            resetUndoHistory(editor);
+        }
+    }, [editor, value]);
+
+    useEffect(() => {
+        if (!editor) {
+            return;
+        }
+
+        editor.setEditable(!disabled);
+    }, [editor, disabled]);
+
+    useEffect(() => {
+        if (autoFocus && editor) {
+            editor.commands.focus('end');
+        }
+        // `autoFocus` is intentionally omitted from the deps — it's a
+        // mount-time prop, equivalent to the native `<input autoFocus>`
+        // attribute. We don't want a parent flipping `autoFocus` later
+        // to steal focus back into the editor.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [editor]);
+
+    // While tiptap is initializing (`useEditor` returns `null` on the
+    // first render with `immediatelyRender: false`), render a placeholder
+    // with the same outer classes so the bounding box is already correct
+    // and the parent layout doesn't jump when the editor mounts.
+    if (!editor) {
         return (
             <div
+                aria-busy="true"
                 className={cn(
                     'border-input dark:bg-input/30 group/markdown-editor flex w-full flex-col overflow-hidden rounded-md border shadow-2xs outline-hidden transition-[color,box-shadow]',
-                    'focus-within:ring-ring focus-within:ring-1',
                     disabled && 'pointer-events-none opacity-60',
                     className,
                 )}
                 data-slot="markdown-editor"
-            >
-                {showToolbar ? (
-                    <MarkdownEditorToolbar
-                        disabled={disabled}
-                        editor={editor}
-                    />
-                ) : null}
-                <EditorContent
-                    className={cn(
-                        'prose prose-sm dark:prose-invert tiptap-content max-w-none min-w-0 flex-1 overflow-auto px-3 py-2',
-                        '[&_.ProseMirror]:min-h-full [&_.ProseMirror]:outline-none',
-                        contentClassName,
-                    )}
+            />
+        );
+    }
+
+    return (
+        <div
+            className={cn(
+                'border-input dark:bg-input/30 group/markdown-editor flex w-full flex-col overflow-hidden rounded-md border shadow-2xs outline-hidden transition-[color,box-shadow]',
+                'focus-within:ring-ring focus-within:ring-1',
+                disabled && 'pointer-events-none opacity-60',
+                className,
+            )}
+            data-slot="markdown-editor"
+        >
+            {showToolbar ? (
+                <MarkdownEditorToolbar
+                    disabled={disabled}
                     editor={editor}
                 />
-            </div>
-        );
-    },
-);
+            ) : null}
+            <EditorContent
+                className={cn(
+                    'prose prose-sm dark:prose-invert tiptap-content max-w-none min-w-0 flex-1 overflow-auto px-3 py-2',
+                    '[&_.ProseMirror]:min-h-full [&_.ProseMirror]:outline-none',
+                    contentClassName,
+                )}
+                editor={editor}
+            />
+        </div>
+    );
+};
 
 MarkdownEditor.displayName = 'MarkdownEditor';
 

@@ -53,50 +53,54 @@ type TextareaRef = {
     textarea: HTMLTextAreaElement;
 };
 
-const Textarea = React.forwardRef<TextareaRef, TextareaProps>(
-    (
-        { className, maxHeight = 118, minHeight = 38, onChange, value, ...props }: TextareaProps,
-        ref: React.Ref<TextareaRef>,
-    ) => {
-        const textareaRef = React.useRef<HTMLTextAreaElement | null>(null);
-        const [triggerAutoSize, setTriggerAutoSize] = React.useState('');
+const Textarea = ({
+    className,
+    maxHeight = 118,
+    minHeight = 38,
+    onChange,
+    ref,
+    value,
+    ...props
+}: TextareaProps & { ref?: React.Ref<TextareaRef> }) => {
+    const textareaRef = React.useRef<HTMLTextAreaElement | null>(null);
+    const [triggerAutoSize, setTriggerAutoSize] = React.useState('');
 
-        useTextarea({
-            maxHeight,
-            minHeight,
-            textareaRef,
-            triggerAutoSize: triggerAutoSize,
-        });
+    useTextarea({
+        maxHeight,
+        minHeight,
+        textareaRef,
+        triggerAutoSize: triggerAutoSize,
+    });
 
-        useImperativeHandle(ref, () => ({
-            focus: () => textareaRef?.current?.focus(),
-            maxHeight,
-            minHeight,
-            textarea: textareaRef.current as HTMLTextAreaElement,
-        }));
+    useImperativeHandle(ref, () => ({
+        focus: () => textareaRef?.current?.focus(),
+        maxHeight,
+        minHeight,
+        textarea: textareaRef.current as HTMLTextAreaElement,
+    }));
 
-        React.useEffect(() => {
-            // eslint-disable-next-line react-hooks/set-state-in-effect -- syncs internal auto-size trigger with controlled value prop
-            setTriggerAutoSize(value as string);
-        }, [props?.defaultValue, value]);
+    React.useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- syncs internal auto-size trigger with controlled value prop
+        setTriggerAutoSize(value as string);
+    }, [props?.defaultValue, value]);
 
-        return (
-            <textarea
-                className={cn(
-                    'border-input placeholder:text-muted-foreground focus-visible:ring-ring flex w-full resize-none rounded-md border bg-transparent px-3 py-2 text-sm shadow-xs focus-visible:ring-1 focus-visible:outline-hidden disabled:cursor-not-allowed disabled:opacity-50',
-                    className,
-                )}
-                ref={textareaRef}
-                {...props}
-                onChange={(e) => {
-                    setTriggerAutoSize(e.target.value);
-                    onChange?.(e);
-                }}
-                value={value}
-            />
-        );
-    },
-);
+    return (
+        <textarea
+            className={cn(
+                'border-input placeholder:text-muted-foreground focus-visible:ring-ring flex w-full resize-none rounded-md border bg-transparent px-3 py-2 text-sm shadow-xs focus-visible:ring-1 focus-visible:outline-hidden disabled:cursor-not-allowed disabled:opacity-50',
+                className,
+            )}
+            ref={textareaRef}
+            {...props}
+            onChange={(e) => {
+                setTriggerAutoSize(e.target.value);
+                onChange?.(e);
+            }}
+            value={value}
+        />
+    );
+};
+
 Textarea.displayName = 'Textarea';
 
 export { Textarea };
