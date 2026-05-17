@@ -76,6 +76,7 @@ const Textarea = React.forwardRef<TextareaRef, TextareaProps>(
         }));
 
         React.useEffect(() => {
+            // eslint-disable-next-line react-hooks/set-state-in-effect -- syncs internal auto-size trigger with controlled value prop
             setTriggerAutoSize(value as string);
         }, [props?.defaultValue, value]);
 

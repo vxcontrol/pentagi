@@ -67,6 +67,7 @@ export const ResourcesProvider = ({ children }: ResourcesProviderProps) => {
 
         let isCancelled = false;
 
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional mount-time loading flag for the REST hydration below
         setRestLoading(true);
         setRestError(null);
 

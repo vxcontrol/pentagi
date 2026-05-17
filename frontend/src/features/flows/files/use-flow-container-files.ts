@@ -104,10 +104,13 @@ export const useFlowContainerFiles = ({ flowId, paths }: UseFlowContainerFilesPa
     }, [flowId, paths]);
 
     useEffect(() => {
+        // fetchListing is an async callback that handles its own loading state via setState
+        // after await — not synchronously inside the effect body. We also depend on the
+        // stable `pathsKey` instead of the array reference so identical contents don't
+        // re-fire the request on every render. `flowId` triggers a fresh fetch when the
+        // user switches flows.
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         void fetchListing();
-        // We deliberately depend on the stable `pathsKey` instead of the array
-        // reference so identical contents don't re-fire the request on every
-        // render. `flowId` triggers a fresh fetch when the user switches flows.
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [flowId, pathsKey]);
 

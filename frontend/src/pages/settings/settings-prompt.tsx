@@ -341,6 +341,7 @@ const SettingsPrompt = () => {
     const humanTemplate = humanForm.watch('template');
 
     // Determine prompt type and get prompt data
+    // eslint-disable-next-line react-hooks/preserve-manual-memoization -- branching reads from data.settingsPrompts that the compiler can't statically prove stable
     const promptInfo = useMemo(() => {
         if (!promptId || !data?.settingsPrompts) {
             return null;

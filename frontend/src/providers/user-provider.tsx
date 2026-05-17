@@ -141,6 +141,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     // Refresh auth info when on login page to get fresh OAuth providers list
     useEffect(() => {
         if (location.pathname === '/login' && !isLoading) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect -- refreshAuthInfo's setState runs after an async fetch, not synchronously
             refreshAuthInfo();
         }
     }, [location.pathname, isLoading, refreshAuthInfo]);
