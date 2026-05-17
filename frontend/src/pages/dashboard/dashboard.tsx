@@ -1,5 +1,5 @@
 import { LayoutDashboard } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useTransition } from 'react';
 
 import { PageTitle } from '@/components/shared/page-title';
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage } from '@/components/ui/breadcrumb';
@@ -8,6 +8,7 @@ import { SidebarTrigger } from '@/components/ui/sidebar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { UsageStatsPeriod } from '@/graphql/types';
 import { usePageStorageKeys } from '@/hooks/use-page-storage-keys';
+import { cn } from '@/lib/utils';
 import { DashboardAnalytics } from '@/pages/dashboard/dashboard-analytics';
 import { DashboardOverview } from '@/pages/dashboard/dashboard-overview';
 
@@ -45,12 +46,32 @@ function Dashboard() {
     const { period: periodStorageKey } = usePageStorageKeys();
     const [activeTab, setActiveTab] = useState('analytics');
     const [period, setPeriod] = useState<UsageStatsPeriod>(() => loadPeriod(periodStorageKey));
+    // Both transitions wrap heavy re-renders: switching activeTab swaps the
+    // entire Analytics/Overview subtree (Analytics alone pulls a ~386 kB chunk
+    // with four Recharts views), and switching period invalidates the analytics
+    // query and re-paints every chart. Without a transition the Tab click feels
+    // stuck because React commits the heavy work on the urgent track; with one,
+    // the trigger button itself updates instantly and the new content streams
+    // in. We surface the pending state as a subtle opacity dim on the
+    // transitioning region so the user sees that work is in flight.
+    const [isTabPending, startTabTransition] = useTransition();
+    const [isPeriodPending, startPeriodTransition] = useTransition();
+
+    const handleTabChange = (value: string) => {
+        startTabTransition(() => {
+            setActiveTab(value);
+        });
+    };
 
     const handlePeriodChange = (value: string) => {
         const next = value as UsageStatsPeriod;
-        setPeriod(next);
         savePeriod(periodStorageKey, next);
+        startPeriodTransition(() => {
+            setPeriod(next);
+        });
     };
+
+    const isPending = isTabPending || isPeriodPending;
 
     return (
         <>
@@ -76,7 +97,7 @@ function Dashboard() {
             <div className="flex flex-col gap-6 p-4">
                 <Tabs
                     className="w-full"
-                    onValueChange={setActiveTab}
+                    onValueChange={handleTabChange}
                     value={activeTab}
                 >
                     <div className="flex items-center justify-between">
@@ -104,13 +125,18 @@ function Dashboard() {
                         )}
                     </div>
 
-                    <TabsContent value="analytics">
-                        <DashboardAnalytics period={period} />
-                    </TabsContent>
+                    <div
+                        aria-busy={isPending}
+                        className={cn('transition-opacity', isPending && 'opacity-60')}
+                    >
+                        <TabsContent value="analytics">
+                            <DashboardAnalytics period={period} />
+                        </TabsContent>
 
-                    <TabsContent value="overview">
-                        <DashboardOverview />
-                    </TabsContent>
+                        <TabsContent value="overview">
+                            <DashboardOverview />
+                        </TabsContent>
+                    </div>
                 </Tabs>
             </div>
         </>
