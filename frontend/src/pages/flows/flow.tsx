@@ -330,7 +330,7 @@ const Flow = () => {
                                     {isEditingTitle && flow ? (
                                         <InlineEditInput
                                             busy={isRenameLoading}
-                                            className="w-64 min-w-0 max-w-full flex-1"
+                                            className="w-64 max-w-full min-w-0 flex-1"
                                             defaultValue={flowTitle}
                                             inputRef={editingInputRef}
                                             onCancel={handleFlowRenameCancel}
@@ -341,7 +341,7 @@ const Flow = () => {
                                         <Tooltip>
                                             <TooltipTrigger asChild>
                                                 <BreadcrumbPage
-                                                    className="min-w-0 cursor-text select-none truncate"
+                                                    className="min-w-0 cursor-text truncate select-none"
                                                     onDoubleClick={handleFlowRenameStart}
                                                 >
                                                     {flowTitle || 'Select a flow'}

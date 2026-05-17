@@ -58,7 +58,10 @@ export const DetailNavigationButtons = <T extends { id: string }>({
                 <TooltipTrigger asChild>
                     <Button
                         aria-label={`Open ${lowerTitle} list (${controller.positionLabel})`}
-                        className={cn(middleHeight, 'min-w-12 rounded-none border-x px-2 font-mono text-xs tabular-nums')}
+                        className={cn(
+                            middleHeight,
+                            'min-w-12 rounded-none border-x px-2 font-mono text-xs tabular-nums',
+                        )}
                         disabled={!controller.hasEntries}
                         onClick={controller.openSheet}
                         variant="outline"

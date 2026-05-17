@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-import { Ellipsis, LibraryBig, Loader2, Pencil, Trash, HatGlasses } from 'lucide-react';
+import { Ellipsis, HatGlasses, LibraryBig, Loader2, Pencil, Trash } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
