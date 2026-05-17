@@ -68,7 +68,7 @@
         "lodash": "^4.18.1",
         "lowlight": "^3.3.0",
         "lru-cache": "^11.1.0",
-        "lucide-react": "^0.553.0",
+        "lucide-react": "^1.16.0",
         "marked": "^17.0.3",
         "monaco-editor": "^0.55.1",
         "react": "^19.2.6",
