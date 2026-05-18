@@ -1,4 +1,4 @@
-import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo } from 'react';
+import { createContext, type ReactNode, startTransition, useCallback, useContext, useEffect, useMemo, useOptimistic } from 'react';
 import { toast } from 'sonner';
 
 import {
@@ -51,11 +51,25 @@ export function FavoritesProvider({ children }: FavoritesProviderProps) {
     });
 
     // Get favorite flow IDs from GraphQL as numbers
-    const favoriteFlowIds = useMemo(() => {
+    const actualFavoriteFlowIds = useMemo(() => {
         const ids = userPreferencesData?.settingsUser?.favoriteFlows ?? [];
 
         return ids.map((id) => +id);
     }, [userPreferencesData?.settingsUser?.favoriteFlows]);
+
+    // Surface the optimistic set so star-clicks flip in the UI before the
+    // mutation + subscription round-trip lands. React rolls back to
+    // `actualFavoriteFlowIds` automatically if the transition's action throws.
+    const [favoriteFlowIds, applyOptimisticFavorite] = useOptimistic(
+        actualFavoriteFlowIds,
+        (current: number[], action: { id: number; type: 'add' | 'remove' }) => {
+            if (action.type === 'add') {
+                return current.includes(action.id) ? current : [...current, action.id];
+            }
+
+            return current.filter((id) => id !== action.id);
+        },
+    );
 
     // Migration: sync localStorage favorites to backend on first load
     useEffect(() => {
@@ -131,39 +145,49 @@ export function FavoritesProvider({ children }: FavoritesProviderProps) {
     const addFavoriteFlow = useCallback(
         async (flowId: number | string) => {
             const id = typeof flowId === 'string' ? flowId : flowId.toString();
+            const numericId = typeof flowId === 'string' ? +flowId : flowId;
 
-            try {
-                await addFavoriteFlowMutation({
-                    variables: { flowId: id },
-                });
-            } catch (error) {
-                const errorMessage = error instanceof Error ? error.message : 'Failed to add favorite';
-                toast.error('Failed to add to favorites', {
-                    description: errorMessage,
-                });
-                Log.error('Error adding favorite flow:', error);
-            }
+            startTransition(async () => {
+                applyOptimisticFavorite({ id: numericId, type: 'add' });
+
+                try {
+                    await addFavoriteFlowMutation({
+                        variables: { flowId: id },
+                    });
+                } catch (error) {
+                    const errorMessage = error instanceof Error ? error.message : 'Failed to add favorite';
+                    toast.error('Failed to add to favorites', {
+                        description: errorMessage,
+                    });
+                    Log.error('Error adding favorite flow:', error);
+                }
+            });
         },
-        [addFavoriteFlowMutation],
+        [addFavoriteFlowMutation, applyOptimisticFavorite],
     );
 
     const removeFavoriteFlow = useCallback(
         async (flowId: number | string) => {
             const id = typeof flowId === 'string' ? flowId : flowId.toString();
+            const numericId = typeof flowId === 'string' ? +flowId : flowId;
 
-            try {
-                await deleteFavoriteFlowMutation({
-                    variables: { flowId: id },
-                });
-            } catch (error) {
-                const errorMessage = error instanceof Error ? error.message : 'Failed to remove favorite';
-                toast.error('Failed to remove from favorites', {
-                    description: errorMessage,
-                });
-                Log.error('Error removing favorite flow:', error);
-            }
+            startTransition(async () => {
+                applyOptimisticFavorite({ id: numericId, type: 'remove' });
+
+                try {
+                    await deleteFavoriteFlowMutation({
+                        variables: { flowId: id },
+                    });
+                } catch (error) {
+                    const errorMessage = error instanceof Error ? error.message : 'Failed to remove favorite';
+                    toast.error('Failed to remove from favorites', {
+                        description: errorMessage,
+                    });
+                    Log.error('Error removing favorite flow:', error);
+                }
+            });
         },
-        [deleteFavoriteFlowMutation],
+        [applyOptimisticFavorite, deleteFavoriteFlowMutation],
     );
 
     const toggleFavoriteFlow = useCallback(

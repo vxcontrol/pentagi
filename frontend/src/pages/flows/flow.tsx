@@ -15,7 +15,7 @@ import {
     Star,
     Trash,
 } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { startTransition, useCallback, useEffect, useOptimistic, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
@@ -82,7 +82,12 @@ function Flow() {
     const { isFavoriteFlow, toggleFavoriteFlow } = useFavorites();
 
     const flow = flowData?.flow;
-    const flowTitle = flow?.title ?? '';
+    const actualFlowTitle = flow?.title ?? '';
+    // Surface an optimistic title while the rename mutation is in flight so the
+    // breadcrumb, document title and edit affordance flip immediately on Save.
+    // If the mutation rejects, React rolls back to `actualFlowTitle` on its own
+    // and we surface the toast below — no manual reconciliation needed.
+    const [flowTitle, setOptimisticFlowTitle] = useOptimistic(actualFlowTitle, (_current, next: string) => next);
     const isFlowRunning = flow ? ![StatusType.Failed, StatusType.Finished].includes(flow.status) : false;
 
     // Single controller drives the desktop toolbar AND the mobile dropdown
@@ -117,23 +122,33 @@ function Flow() {
             return;
         }
 
-        try {
-            const { data } = await renameFlowMutation({
-                variables: {
-                    flowId,
-                    title: newTitle,
-                },
-            });
+        // Drop the new title into the optimistic state immediately so the
+        // breadcrumb/tab/PageTitle flip before the network round-trip. The
+        // optimistic value lives only inside this transition — once the
+        // mutation settles, useOptimistic falls back to the Apollo cache
+        // (which the mutation response has already updated on success, or
+        // left untouched on error).
+        startTransition(async () => {
+            setOptimisticFlowTitle(newTitle);
 
-            if (data?.renameFlow === ResultType.Success) {
-                toast.success('Flow renamed successfully');
-                handleFlowRenameCancel();
+            try {
+                const { data } = await renameFlowMutation({
+                    variables: {
+                        flowId,
+                        title: newTitle,
+                    },
+                });
+
+                if (data?.renameFlow === ResultType.Success) {
+                    toast.success('Flow renamed successfully');
+                    handleFlowRenameCancel();
+                }
+            } catch (error) {
+                const errorMessage = error instanceof Error ? error.message : 'Failed to rename flow';
+                toast.error(errorMessage);
             }
-        } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : 'Failed to rename flow';
-            toast.error(errorMessage);
-        }
-    }, [editingInputRef, flowId, handleFlowRenameCancel, renameFlowMutation]);
+        });
+    }, [editingInputRef, flowId, handleFlowRenameCancel, renameFlowMutation, setOptimisticFlowTitle]);
 
     const handleFlowFinish = useCallback(async () => {
         if (!flow) {
