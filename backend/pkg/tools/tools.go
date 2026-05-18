@@ -172,6 +172,7 @@ type flowToolsExecutor struct {
 
 	db             database.Querier
 	cfg            *config.Config
+	embedder       embeddings.Embedder
 	store          *pgvector.Store
 	graphitiClient *graphiti.Client
 	image          string
@@ -392,6 +393,7 @@ func (fte *flowToolsExecutor) SetImage(image string) {
 }
 
 func (fte *flowToolsExecutor) SetEmbedder(embedder embeddings.Embedder) {
+	fte.embedder = embedder
 	if !embedder.IsAvailable() {
 		return
 	}
@@ -865,6 +867,9 @@ func (fte *flowToolsExecutor) GetAssistantExecutor(cfg AssistantExecutorConfig) 
 			fte.userID, fte.flowID, nil, nil,
 			fte.replacer,
 			fte.store,
+			fte.embedder,
+			fte.db,
+			fte.cfg.EmbeddingMaxTextBytes,
 			fte.vslp,
 			fte.knp,
 		)
@@ -877,6 +882,9 @@ func (fte *flowToolsExecutor) GetAssistantExecutor(cfg AssistantExecutorConfig) 
 			fte.userID, fte.flowID, nil, nil,
 			fte.replacer,
 			fte.store,
+			fte.embedder,
+			fte.db,
+			fte.cfg.EmbeddingMaxTextBytes,
 			fte.vslp,
 			fte.knp,
 		)
@@ -889,6 +897,9 @@ func (fte *flowToolsExecutor) GetAssistantExecutor(cfg AssistantExecutorConfig) 
 			fte.userID, fte.flowID, nil, nil,
 			fte.replacer,
 			fte.store,
+			fte.embedder,
+			fte.db,
+			fte.cfg.EmbeddingMaxTextBytes,
 			fte.vslp,
 			fte.knp,
 		)
@@ -1174,6 +1185,9 @@ func (fte *flowToolsExecutor) GetInstallerExecutor(cfg InstallerExecutorConfig) 
 		cfg.SubtaskID,
 		fte.replacer,
 		fte.store,
+		fte.embedder,
+		fte.db,
+		fte.cfg.EmbeddingMaxTextBytes,
 		fte.vslp,
 		fte.knp,
 	)
@@ -1279,6 +1293,9 @@ func (fte *flowToolsExecutor) GetCoderExecutor(cfg CoderExecutorConfig) (Context
 		cfg.SubtaskID,
 		fte.replacer,
 		fte.store,
+		fte.embedder,
+		fte.db,
+		fte.cfg.EmbeddingMaxTextBytes,
 		fte.vslp,
 		fte.knp,
 	)
@@ -1401,6 +1418,9 @@ func (fte *flowToolsExecutor) GetPentesterExecutor(cfg PentesterExecutorConfig) 
 		cfg.SubtaskID,
 		fte.replacer,
 		fte.store,
+		fte.embedder,
+		fte.db,
+		fte.cfg.EmbeddingMaxTextBytes,
 		fte.vslp,
 		fte.knp,
 	)
@@ -1578,6 +1598,9 @@ func (fte *flowToolsExecutor) GetSearcherExecutor(cfg SearcherExecutorConfig) (C
 		cfg.SubtaskID,
 		fte.replacer,
 		fte.store,
+		fte.embedder,
+		fte.db,
+		fte.cfg.EmbeddingMaxTextBytes,
 		fte.vslp,
 		fte.knp,
 	)

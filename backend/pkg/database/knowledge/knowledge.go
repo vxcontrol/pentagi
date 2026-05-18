@@ -14,8 +14,8 @@ import (
 	"pentagi/pkg/graph/subscriptions"
 	"pentagi/pkg/providers/embeddings"
 
+	"github.com/google/uuid"
 	"github.com/sqlc-dev/pqtype"
-	"github.com/vxcontrol/langchaingo/schema"
 	"github.com/vxcontrol/langchaingo/vectorstores"
 )
 
@@ -54,10 +54,11 @@ type KnowledgeStore interface {
 }
 
 type knowledgeStore struct {
-	db       database.Querier
-	store    vectorstores.VectorStore // may be nil when no embedder is configured
-	embedder embeddings.Embedder      // used for computing new embeddings on create/update
-	newKnp   PublisherFactory
+	db                database.Querier
+	store             vectorstores.VectorStore // may be nil when no embedder is configured
+	embedder          embeddings.Embedder      // used for computing new embeddings on create/update
+	newKnp            PublisherFactory
+	maxEmbeddingBytes int
 }
 
 // NewKnowledgeStore constructs a KnowledgeStore.
@@ -66,17 +67,25 @@ type knowledgeStore struct {
 //     list/get/delete still work.
 //   - newKnp is called with the acting user's ID on each write to create a
 //     correctly scoped event publisher.
+//   - maxEmbeddingBytes is the maximum byte size of text sent to the embedding
+//     model. Text is truncated to this limit before embedding to avoid token
+//     limit errors; the full original text is always stored in the database.
 func NewKnowledgeStore(
 	db database.Querier,
 	store vectorstores.VectorStore,
 	embedder embeddings.Embedder,
 	newKnp PublisherFactory,
+	maxEmbeddingBytes int,
 ) KnowledgeStore {
+	if maxEmbeddingBytes <= 0 {
+		maxEmbeddingBytes = 8192
+	}
 	return &knowledgeStore{
-		db:       db,
-		store:    store,
-		embedder: embedder,
-		newKnp:   newKnp,
+		db:                db,
+		store:             store,
+		embedder:          embedder,
+		newKnp:            newKnp,
+		maxEmbeddingBytes: maxEmbeddingBytes,
 	}
 }
 
@@ -347,6 +356,12 @@ func (ks *knowledgeStore) doSearch(ctx context.Context, userID int64, query stri
 		limit = defaultSearchLimit
 	}
 
+	// Truncate query to embedding size limit to avoid token limit errors.
+	// The search quality is preserved since the most relevant context is at the start.
+	if len(query) > ks.maxEmbeddingBytes {
+		query = query[:ks.maxEmbeddingBytes]
+	}
+
 	// Compute query embedding.
 	vecs, err := ks.embedder.EmbedDocuments(ctx, []string{query})
 	if err != nil {
@@ -443,7 +458,7 @@ func passesSearchFilter(doc *model.KnowledgeDocument, filter *model.KnowledgeFil
 // ---- CreateDocument ---------------------------------------------------------
 
 func (ks *knowledgeStore) CreateDocument(ctx context.Context, userID int64, input model.CreateKnowledgeDocumentInput) (*model.KnowledgeDocument, error) {
-	if err := ks.requireStore(); err != nil {
+	if err := ks.requireEmbedder(); err != nil {
 		return nil, err
 	}
 
@@ -470,19 +485,36 @@ func (ks *knowledgeStore) CreateDocument(ctx context.Context, userID int64, inpu
 	meta.PartSize = len(content)
 	meta.TotalSize = len(content)
 
-	metaMap := metaToMap(meta)
-	ids, err := ks.store.AddDocuments(ctx, []schema.Document{{
-		PageContent: content,
-		Metadata:    metaMap,
-	}})
+	// Truncate to embedding size limit for vector computation; full content goes to DB.
+	embeddingText := content
+	if len(embeddingText) > ks.maxEmbeddingBytes {
+		embeddingText = embeddingText[:ks.maxEmbeddingBytes]
+	}
+	vecs, err := ks.embedder.EmbedDocuments(ctx, []string{embeddingText})
+	if err != nil {
+		return nil, fmt.Errorf("knowledge: compute embedding: %w", err)
+	}
+	if len(vecs) == 0 {
+		return nil, fmt.Errorf("knowledge: embedder returned no vectors")
+	}
+
+	cmJSON, err := metaToJSON(meta)
+	if err != nil {
+		return nil, fmt.Errorf("knowledge: marshal cmetadata: %w", err)
+	}
+
+	id := uuid.New()
+	docID, err := ks.db.InsertKnowledgeDocument(ctx, database.InsertKnowledgeDocumentParams{
+		Uuid:      id,
+		Document:  nsOf(content),
+		Embedding: formatVector(vecs[0]),
+		Cmetadata: cmJSON.RawMessage,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("knowledge: create document: %w", err)
 	}
-	if len(ids) == 0 {
-		return nil, fmt.Errorf("knowledge: create returned no IDs")
-	}
 
-	doc := metaToModelDoc(ids[0], content, meta)
+	doc := metaToModelDoc(docID, content, meta)
 	ks.newKnp(userID).KnowledgeDocumentCreated(ctx, doc)
 	return doc, nil
 }
@@ -591,8 +623,13 @@ func (ks *knowledgeStore) doUpdate(ctx context.Context, userID int64, id string,
 		meta.TotalSize = existing.TotalSize + deltaContentLen
 	}
 
-	// Compute new embedding.
-	vecs, err := ks.embedder.EmbedDocuments(ctx, []string{content})
+	// Compute new embedding. Truncate to maxEmbeddingBytes to avoid token limit
+	// errors; the full content is stored in the document column.
+	embeddingText := content
+	if len(embeddingText) > ks.maxEmbeddingBytes {
+		embeddingText = embeddingText[:ks.maxEmbeddingBytes]
+	}
+	vecs, err := ks.embedder.EmbedDocuments(ctx, []string{embeddingText})
 	if err != nil {
 		return nil, fmt.Errorf("knowledge: compute embedding: %w", err)
 	}

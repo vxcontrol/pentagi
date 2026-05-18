@@ -8,7 +8,9 @@ package database
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 
+	"github.com/google/uuid"
 	"github.com/sqlc-dev/pqtype"
 )
 
@@ -35,8 +37,8 @@ WHERE uuid::text = $1
 `
 
 // Delete a knowledge document by UUID (admin — no user_id check).
-func (q *Queries) DeleteKnowledgeDocument(ctx context.Context, uuid sql.NullString) error {
-	_, err := q.db.ExecContext(ctx, deleteKnowledgeDocument, uuid)
+func (q *Queries) DeleteKnowledgeDocument(ctx context.Context, argUuid sql.NullString) error {
+	_, err := q.db.ExecContext(ctx, deleteKnowledgeDocument, argUuid)
 	return err
 }
 
@@ -76,8 +78,8 @@ type GetKnowledgeDocumentRow struct {
 }
 
 // Fetch a single knowledge document by its UUID (admin view — no user_id check).
-func (q *Queries) GetKnowledgeDocument(ctx context.Context, uuid string) (GetKnowledgeDocumentRow, error) {
-	row := q.db.QueryRowContext(ctx, getKnowledgeDocument, uuid)
+func (q *Queries) GetKnowledgeDocument(ctx context.Context, argUuid string) (GetKnowledgeDocumentRow, error) {
+	row := q.db.QueryRowContext(ctx, getKnowledgeDocument, argUuid)
 	var i GetKnowledgeDocumentRow
 	err := row.Scan(&i.ID, &i.Document, &i.Cmetadata)
 	return i, err
@@ -112,6 +114,41 @@ func (q *Queries) GetUserKnowledgeDocument(ctx context.Context, arg GetUserKnowl
 	var i GetUserKnowledgeDocumentRow
 	err := row.Scan(&i.ID, &i.Document, &i.Cmetadata)
 	return i, err
+}
+
+const insertKnowledgeDocument = `-- name: InsertKnowledgeDocument :one
+INSERT INTO langchain_pg_embedding (uuid, document, embedding, cmetadata, collection_id)
+SELECT
+  $1::uuid,
+  $2,
+  $3::vector,
+  $4::json,
+  c.uuid
+FROM langchain_pg_collection c
+WHERE c.name = 'langchain'
+RETURNING uuid::text AS id
+`
+
+type InsertKnowledgeDocumentParams struct {
+	Uuid      uuid.UUID       `json:"uuid"`
+	Document  sql.NullString  `json:"document"`
+	Embedding interface{}     `json:"embedding"`
+	Cmetadata json.RawMessage `json:"cmetadata"`
+}
+
+// Insert a document with a pre-computed embedding vector and return its UUID.
+// embedding must be formatted as a PostgreSQL vector literal: '[f1,f2,...]'
+// cmetadata must be valid JSON text.
+func (q *Queries) InsertKnowledgeDocument(ctx context.Context, arg InsertKnowledgeDocumentParams) (string, error) {
+	row := q.db.QueryRowContext(ctx, insertKnowledgeDocument,
+		arg.Uuid,
+		arg.Document,
+		arg.Embedding,
+		arg.Cmetadata,
+	)
+	var id string
+	err := row.Scan(&id)
+	return id, err
 }
 
 const listAllKnowledgeDocuments = `-- name: ListAllKnowledgeDocuments :many

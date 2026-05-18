@@ -2619,23 +2619,23 @@ PentAGI opens two independent connection pools to the same Postgres instance:
 
 | Pool | Env var | Default | Used by |
 |---|---|---|---|
-| Shared `sql.DB` | `DB_MAX_OPEN_CONNS` | `25` | All sqlc queries and GORM handlers share a single `*sql.DB` |
-| Shared `pgxpool` | `DB_VECTOR_MAX_CONNS` | `10` | All pgvector stores (agent memory + knowledge API) share a single pool |
+| Shared `sql.DB` | `DATABASE_MAX_OPEN_CONNS` | `25` | All sqlc queries and GORM handlers share a single `*sql.DB` |
+| Shared `pgxpool` | `DATABASE_VECTOR_MAX_CONNS` | `10` | All pgvector stores (agent memory + knowledge API) share a single pool |
 
 Additional tuning knob:
-- `DB_MAX_IDLE_CONNS` — maximum idle connections kept open in the `sql.DB` pool between requests (default: `5`).
+- `DATABASE_MAX_IDLE_CONNS` — maximum idle connections kept open in the `sql.DB` pool between requests (default: `5`).
 
 **Budget for the stock `vxcontrol/pgvector` image** (`max_connections = 100`, `superuser_reserved_connections = 3`):
 
 ```
 Available for client connections  = 97
-  pentagi sql.DB  (DB_MAX_OPEN_CONNS)   = 25
-  pentagi pgxpool (DB_VECTOR_MAX_CONNS) = 10
-  pgexporter                            =  3
-  autovacuum workers                    =  3
+  pentagi sql.DB  (DATABASE_MAX_OPEN_CONNS)   = 25
+  pentagi pgxpool (DATABASE_VECTOR_MAX_CONNS) = 10
+  pgexporter                                  =  3
+  autovacuum workers                          =  3
   ─────────────────────────────────────────
-  Total consumed                        = 41
-  Free buffer                           = 56  (≈ 58 %)
+  Total consumed                              = 41
+  Free buffer                                 = 56  (≈ 58 %)
 ```
 
 The defaults are sized for **10 parallel flows** with concurrent API requests. If you run more flows or deploy multiple PentAGI instances against the same Postgres, raise `max_connections` via the `command` override in `docker-compose.yml` and increase the pool sizes proportionally:
@@ -3084,6 +3084,7 @@ EMBEDDING_URL=                  # Optional custom API endpoint
 EMBEDDING_KEY=                  # API key for the provider (if required)
 EMBEDDING_BATCH_SIZE=100        # Number of documents to process in a batch
 EMBEDDING_STRIP_NEW_LINES=true  # Whether to remove new lines from text before embedding
+EMBEDDING_MAX_TEXT_BYTES=8192   # Max bytes of text sent to embedding model per document (byte proxy for token limit)
 
 # Advanced settings
 PROXY_URL=                      # Optional proxy for all API calls

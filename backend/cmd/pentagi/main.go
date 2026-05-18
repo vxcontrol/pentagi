@@ -20,6 +20,7 @@ import (
 	"pentagi/pkg/docker"
 	"pentagi/pkg/graph/subscriptions"
 	obs "pentagi/pkg/observability"
+	"pentagi/pkg/observability/profiling"
 	"pentagi/pkg/providers"
 	router "pentagi/pkg/server"
 	"pentagi/pkg/version"
@@ -123,6 +124,8 @@ func main() {
 	}
 
 	log.Println("Database schema updated successfully")
+
+	go profiling.Start()
 
 	client, err := docker.NewDockerClient(ctx, queries, cfg)
 	if err != nil {

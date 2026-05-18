@@ -1197,6 +1197,7 @@ type EmbedderConfig struct {
 	Model         loader.EnvVar // EMBEDDING_MODEL
 	BatchSize     loader.EnvVar // EMBEDDING_BATCH_SIZE
 	StripNewLines loader.EnvVar // EMBEDDING_STRIP_NEW_LINES
+	MaxTextBytes  loader.EnvVar // EMBEDDING_MAX_TEXT_BYTES
 
 	// computed fields (not directly mapped to env vars)
 	Configured bool
@@ -1212,6 +1213,7 @@ func (c *controller) GetEmbedderConfig() *EmbedderConfig {
 	config.Model, _ = c.GetVar("EMBEDDING_MODEL")
 	config.BatchSize, _ = c.GetVar("EMBEDDING_BATCH_SIZE")
 	config.StripNewLines, _ = c.GetVar("EMBEDDING_STRIP_NEW_LINES")
+	config.MaxTextBytes, _ = c.GetVar("EMBEDDING_MAX_TEXT_BYTES")
 	config.Installed = c.checker.PentagiInstalled
 
 	// Determine if configured based on provider requirements
@@ -1259,6 +1261,9 @@ func (c *controller) UpdateEmbedderConfig(config *EmbedderConfig) error {
 	if err := c.SetVar("EMBEDDING_STRIP_NEW_LINES", config.StripNewLines.Value); err != nil {
 		return fmt.Errorf("failed to set EMBEDDING_STRIP_NEW_LINES: %w", err)
 	}
+	if err := c.SetVar("EMBEDDING_MAX_TEXT_BYTES", config.MaxTextBytes.Value); err != nil {
+		return fmt.Errorf("failed to set EMBEDDING_MAX_TEXT_BYTES: %w", err)
+	}
 
 	return nil
 }
@@ -1271,6 +1276,7 @@ func (c *controller) ResetEmbedderConfig() *EmbedderConfig {
 		"EMBEDDING_MODEL",
 		"EMBEDDING_BATCH_SIZE",
 		"EMBEDDING_STRIP_NEW_LINES",
+		"EMBEDDING_MAX_TEXT_BYTES",
 	}
 
 	if err := c.ResetVars(vars); err != nil {
@@ -2215,6 +2221,7 @@ func (c *controller) getVariableDescription(varName string) string {
 		"EMBEDDING_MODEL":           locale.EnvDesc_EMBEDDING_MODEL,
 		"EMBEDDING_BATCH_SIZE":      locale.EnvDesc_EMBEDDING_BATCH_SIZE,
 		"EMBEDDING_STRIP_NEW_LINES": locale.EnvDesc_EMBEDDING_STRIP_NEW_LINES,
+		"EMBEDDING_MAX_TEXT_BYTES":  locale.EnvDesc_EMBEDDING_MAX_TEXT_BYTES,
 
 		"ASK_USER": locale.EnvDesc_ASK_USER,
 
@@ -2455,6 +2462,7 @@ var criticalVariables = map[string]bool{
 	"EMBEDDING_MODEL":           true,
 	"EMBEDDING_BATCH_SIZE":      true,
 	"EMBEDDING_STRIP_NEW_LINES": true,
+	"EMBEDDING_MAX_TEXT_BYTES":  true,
 
 	// Docker configuration changes
 	"DOCKER_INSIDE":                    true,

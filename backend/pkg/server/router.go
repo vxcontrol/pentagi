@@ -148,7 +148,7 @@ func NewRouter(
 		}
 	}
 	var knowledgeStore knowledge.KnowledgeStore
-	knowledgeStore = knowledge.NewKnowledgeStore(db, pgStore, embedder, subscriptions.NewKnowledgePublisher)
+	knowledgeStore = knowledge.NewKnowledgeStore(db, pgStore, embedder, subscriptions.NewKnowledgePublisher, cfg.EmbeddingMaxTextBytes)
 
 	// ---- Anonymizer replacer ------------------------------------------------
 	// Shared singleton used by the GraphQL anonymizeText mutation.

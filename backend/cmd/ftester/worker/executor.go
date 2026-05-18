@@ -46,6 +46,7 @@ type toolExecutor struct {
 	dockerClient   docker.DockerClient
 	handlers       providers.FlowProviderHandlers
 	store          *pgvector.Store
+	embedder       embeddings.Embedder
 	graphitiClient *graphiti.Client
 	proxies        mocks.ProxyProviders
 	userID         int64
@@ -103,6 +104,7 @@ func newToolExecutor(
 		dockerClient:   dockerClient,
 		handlers:       handlers,
 		store:          store,
+		embedder:       embedder,
 		graphitiClient: graphitiClient,
 		proxies:        proxies,
 		userID:         userID,
@@ -247,6 +249,9 @@ func (te *toolExecutor) GetTool(ctx context.Context, funcName string) (tools.Too
 			te.subtaskID,
 			te.replacer,
 			te.store,
+			te.embedder,
+			te.db,
+			te.cfg.EmbeddingMaxTextBytes,
 			te.proxies.GetVectorStoreLogProvider(),
 			te.proxies.GetKnowledgeProvider(),
 		), nil
@@ -259,6 +264,9 @@ func (te *toolExecutor) GetTool(ctx context.Context, funcName string) (tools.Too
 			te.subtaskID,
 			te.replacer,
 			te.store,
+			te.embedder,
+			te.db,
+			te.cfg.EmbeddingMaxTextBytes,
 			te.proxies.GetVectorStoreLogProvider(),
 			te.proxies.GetKnowledgeProvider(),
 		), nil
@@ -271,6 +279,9 @@ func (te *toolExecutor) GetTool(ctx context.Context, funcName string) (tools.Too
 			te.subtaskID,
 			te.replacer,
 			te.store,
+			te.embedder,
+			te.db,
+			te.cfg.EmbeddingMaxTextBytes,
 			te.proxies.GetVectorStoreLogProvider(),
 			te.proxies.GetKnowledgeProvider(),
 		), nil

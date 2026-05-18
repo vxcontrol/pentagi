@@ -72,6 +72,7 @@ type Config struct {
 	EmbeddingStripNewLines bool   `env:"EMBEDDING_STRIP_NEW_LINES" envDefault:"true"`
 	EmbeddingBatchSize     int    `env:"EMBEDDING_BATCH_SIZE" envDefault:"512"`
 	EmbeddingProvider      string `env:"EMBEDDING_PROVIDER" envDefault:"openai"`
+	EmbeddingMaxTextBytes  int    `env:"EMBEDDING_MAX_TEXT_BYTES" envDefault:"8192"`
 
 	// === Chain Summarization Engine ===
 	SummarizerPreserveLast   bool `env:"SUMMARIZER_PRESERVE_LAST" envDefault:"true"`
@@ -226,13 +227,9 @@ type Config struct {
 	AgentPlanningStepEnabled bool `env:"AGENT_PLANNING_STEP_ENABLED" envDefault:"false"`
 
 	// === Database Connection Pool Sizing ===
-	// See backend/docs/database.md §Connection Pooling for budget calculation and
-	// operational commands. Both sqlc (Queries) and GORM share a single *sql.DB,
-	// so DB_MAX_OPEN_CONNS is the total sql.DB budget for the process.
-	// Ensure DB_MAX_OPEN_CONNS + DB_VECTOR_MAX_CONNS < Postgres max_connections.
-	DBMaxOpenConns    int `env:"DB_MAX_OPEN_CONNS"    envDefault:"25"`
-	DBMaxIdleConns    int `env:"DB_MAX_IDLE_CONNS"    envDefault:"5"`
-	DBVectorMaxConns  int `env:"DB_VECTOR_MAX_CONNS"  envDefault:"10"`
+	DBMaxOpenConns   int `env:"DATABASE_MAX_OPEN_CONNS" envDefault:"25"`
+	DBMaxIdleConns   int `env:"DATABASE_MAX_IDLE_CONNS" envDefault:"5"`
+	DBVectorMaxConns int `env:"DATABASE_VECTOR_MAX_CONNS" envDefault:"10"`
 
 	// PgxPool is the shared pgxpool.Pool for all pgvector stores. Populated by
 	// main after pool creation; NOT sourced from environment variables.

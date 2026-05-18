@@ -138,3 +138,18 @@ DELETE FROM langchain_pg_embedding
 WHERE collection_id = (SELECT uuid FROM langchain_pg_collection WHERE name = 'langchain')
   AND COALESCE(cmetadata ->> 'doc_type', '') = 'memory'
   AND (cmetadata ->> 'flow_id') = sqlc.arg(flow_id);
+
+-- name: InsertKnowledgeDocument :one
+-- Insert a document with a pre-computed embedding vector and return its UUID.
+-- embedding must be formatted as a PostgreSQL vector literal: '[f1,f2,...]'
+-- cmetadata must be valid JSON text.
+INSERT INTO langchain_pg_embedding (uuid, document, embedding, cmetadata, collection_id)
+SELECT
+  sqlc.arg(uuid)::uuid,
+  sqlc.arg(document),
+  sqlc.arg(embedding)::vector,
+  sqlc.arg(cmetadata)::json,
+  c.uuid
+FROM langchain_pg_collection c
+WHERE c.name = 'langchain'
+RETURNING uuid::text AS id;

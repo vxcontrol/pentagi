@@ -1203,10 +1203,10 @@ PentAGI opens two independent connection pools to the same Postgres instance:
 
 | Pool | Env var | Default | Used by |
 |---|---|---|---|
-| Shared `sql.DB` | `DB_MAX_OPEN_CONNS` | `25` | sqlc `Queries` and GORM — both clients are backed by the **same** `*sql.DB` created in `main.go` |
-| Shared `pgxpool` | `DB_VECTOR_MAX_CONNS` | `10` | All `pgvector.Store` instances: every flow/assistant tool executor + knowledge API |
+| Shared `sql.DB` | `DATABASE_MAX_OPEN_CONNS` | `25` | sqlc `Queries` and GORM — both clients are backed by the **same** `*sql.DB` created in `main.go` |
+| Shared `pgxpool` | `DATABASE_VECTOR_MAX_CONNS` | `10` | All `pgvector.Store` instances: every flow/assistant tool executor + knowledge API |
 
-Additional knob: `DB_MAX_IDLE_CONNS` (default `5`) — idle connections kept open between requests.
+Additional knob: `DATABASE_MAX_IDLE_CONNS` (default `5`) — idle connections kept open between requests.
 
 `NewGorm` accepts the already-configured `*sql.DB` so GORM never opens its own pool:
 
@@ -1234,13 +1234,13 @@ instead of opening individual `pgx.Connect` calls per executor.
 
 ```
 Available for client connections  = 97
-  pentagi  sql.DB  (DB_MAX_OPEN_CONNS)    = 25
-  pentagi  pgxpool (DB_VECTOR_MAX_CONNS)  = 10
-  pgexporter                              =  3
-  autovacuum workers                      =  3
+  pentagi  sql.DB  (DATABASE_MAX_OPEN_CONNS)    = 25
+  pentagi  pgxpool (DATABASE_VECTOR_MAX_CONNS)  = 10
+  pgexporter                                    =  3
+  autovacuum workers                            =  3
   ─────────────────────────────────────────────
-  Total consumed                          = 41
-  Free buffer                             = 56  (≈ 58%)
+  Total consumed                                = 41
+  Free buffer                                   = 56  (≈ 58%)
 ```
 
 Defaults are sized for 10 parallel flows with concurrent API requests. To inspect the live

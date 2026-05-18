@@ -127,17 +127,17 @@ The environment variables documented below remain the source of truth for config
 
 These settings control basic application behavior and are foundational for the system's operation.
 
-| Option         | Environment Variable | Default Value                                                                | Description                                                              |
-| -------------- | -------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| DatabaseURL    | `DATABASE_URL`       | `postgres://pentagiuser:pentagipass@pgvector:5432/pentagidb?sslmode=disable` | Connection string for the PostgreSQL database with pgvector extension    |
-| DBMaxOpenConns | `DB_MAX_OPEN_CONNS`  | `25`                                                                         | Maximum open connections in the shared `sql.DB` pool (sqlc + GORM combined). See [database.md §Connection Pooling](database.md#connection-pooling). |
-| DBMaxIdleConns | `DB_MAX_IDLE_CONNS`  | `5`                                                                          | Maximum idle connections kept open between requests                      |
-| DBVectorMaxConns | `DB_VECTOR_MAX_CONNS` | `10`                                                                       | Maximum connections in the shared `pgxpool` for all pgvector stores      |
-| Debug          | `DEBUG`              | `false`                                                                      | Enables debug mode with additional logging                               |
-| DataDir        | `DATA_DIR`           | `./data`                                                                     | Directory for storing persistent data                                    |
-| AskUser        | `ASK_USER`           | `false`                                                                      | When enabled, requires explicit user confirmation for certain operations |
-| InstallationID | `INSTALLATION_ID`    | *(none)*                                                                     | Unique installation identifier for PentAGI Cloud API communication       |
-| LicenseKey     | `LICENSE_KEY`        | *(none)*                                                                     | License key for PentAGI Cloud API authentication and feature activation  |
+| Option           | Environment Variable        | Default Value                                                                | Description                                                              |
+| ---------------- | --------------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| DatabaseURL      | `DATABASE_URL`              | `postgres://pentagiuser:pentagipass@pgvector:5432/pentagidb?sslmode=disable` | Connection string for the PostgreSQL database with pgvector extension    |
+| DBMaxOpenConns   | `DATABASE_MAX_OPEN_CONNS`   | `25`                                                                         | Maximum open connections in the shared `sql.DB` pool (sqlc + GORM combined). See [database.md §Connection Pooling](database.md#connection-pooling). |
+| DBMaxIdleConns   | `DATABASE_MAX_IDLE_CONNS`   | `5`                                                                          | Maximum idle connections kept open between requests                      |
+| DBVectorMaxConns | `DATABASE_VECTOR_MAX_CONNS` | `10`                                                                         | Maximum connections in the shared `pgxpool` for all pgvector stores      |
+| Debug            | `DEBUG`                     | `false`                                                                      | Enables debug mode with additional logging                               |
+| DataDir          | `DATA_DIR`                  | `./data`                                                                     | Directory for storing persistent data                                    |
+| AskUser          | `ASK_USER`                  | `false`                                                                      | When enabled, requires explicit user confirmation for certain operations |
+| InstallationID   | `INSTALLATION_ID`           | *(none)*                                                                     | Unique installation identifier for PentAGI Cloud API communication       |
+| LicenseKey       | `LICENSE_KEY`               | *(none)*                                                                     | License key for PentAGI Cloud API authentication and feature activation  |
 
 ### Usage Details
 
@@ -870,6 +870,7 @@ These settings control the vector embedding service used for semantic search and
 | EmbeddingStripNewLines | `EMBEDDING_STRIP_NEW_LINES` | `true`        | Whether to strip newlines before embedding (improves quality)              |
 | EmbeddingBatchSize     | `EMBEDDING_BATCH_SIZE`      | `512`         | Batch size for embedding operations (affects memory usage and performance) |
 | EmbeddingProvider      | `EMBEDDING_PROVIDER`        | `openai`      | Provider for embeddings (openai, ollama, mistral, jina, huggingface)       |
+| EmbeddingMaxTextBytes  | `EMBEDDING_MAX_TEXT_BYTES`  | `8192`        | Maximum byte size of text sent to the embedding model per document. Acts as a byte-level proxy for token limits (e.g. 8192 tokens for OpenAI models). When a stored document exceeds this limit the heavy content field (Guide/Answer/Code) is truncated to fit before computing the vector; the full original text is always preserved in the database. Reduce if your model has a smaller context window. |
 
 ### Usage Details
 

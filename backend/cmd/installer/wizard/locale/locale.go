@@ -1662,6 +1662,9 @@ Choose carefully as changing providers requires reindexing all stored data.`
 	EmbedderFormStripNewLines     = "Strip New Lines"
 	EmbedderFormStripNewLinesDesc = "Remove line breaks from text before embedding (true/false)"
 
+	EmbedderFormMaxTextBytes     = "Max Text Bytes"
+	EmbedderFormMaxTextBytesDesc = "Maximum number of bytes per text chunk sent to the embedding API (e.g. 8192)"
+
 	EmbedderFormHelpTitle   = "Embedding Configuration"
 	EmbedderFormHelpContent = `Configure text vectorization for semantic search and knowledge storage.
 
@@ -2242,6 +2245,7 @@ const (
 	EnvDesc_EMBEDDING_MODEL           = "Embedding Model"
 	EnvDesc_EMBEDDING_BATCH_SIZE      = "Embedding Batch Size"
 	EnvDesc_EMBEDDING_STRIP_NEW_LINES = "Embedding Strip New Lines"
+	EnvDesc_EMBEDDING_MAX_TEXT_BYTES  = "Embedding Max Text Bytes"
 
 	EnvDesc_ASK_USER = "Human-in-the-loop"
 
