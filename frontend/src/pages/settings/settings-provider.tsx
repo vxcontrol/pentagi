@@ -26,7 +26,6 @@ import type {
 } from '@/graphql/types';
 
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
-import { PageTitle } from '@/components/shared/page-title';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -1363,27 +1362,21 @@ function SettingsProvider() {
 
     if (loading) {
         return (
-            <>
-                <PageTitle>{isNew ? 'New provider' : providerName || 'Provider'}</PageTitle>
-                <StatusCard
-                    description="Please wait while we fetch provider configuration"
-                    icon={<Loader2 className="text-muted-foreground size-16 animate-spin" />}
-                    title="Loading provider data..."
-                />
-            </>
+            <StatusCard
+                description="Please wait while we fetch provider configuration"
+                icon={<Loader2 className="text-muted-foreground size-16 animate-spin" />}
+                title="Loading provider data..."
+            />
         );
     }
 
     if (error) {
         return (
-            <>
-                <PageTitle>{isNew ? 'New provider' : providerName || 'Provider'}</PageTitle>
-                <Alert variant="destructive">
-                    <AlertCircle className="size-4" />
-                    <AlertTitle>Error loading provider data</AlertTitle>
-                    <AlertDescription>{error.message}</AlertDescription>
-                </Alert>
-            </>
+            <Alert variant="destructive">
+                <AlertCircle className="size-4" />
+                <AlertTitle>Error loading provider data</AlertTitle>
+                <AlertDescription>{error.message}</AlertDescription>
+            </Alert>
         );
     }
 
@@ -1395,7 +1388,6 @@ function SettingsProvider() {
 
     return (
         <>
-            <PageTitle>{isNew ? 'New provider' : providerName || 'Provider'}</PageTitle>
             <div className="flex flex-col gap-4">
                 <div className="flex flex-col gap-2">
                     <h2 className="flex items-center gap-2 text-lg font-semibold">

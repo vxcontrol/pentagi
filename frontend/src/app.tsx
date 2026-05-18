@@ -15,6 +15,13 @@ import MainLayout from '@/components/layouts/main-layout';
 import SettingsLayout from '@/components/layouts/settings-layout';
 import ProtectedRoute from '@/components/routes/protected-route';
 import PublicRoute from '@/components/routes/public-route';
+import {
+    DocumentTitle,
+    FlowTitle,
+    KnowledgeTitle,
+    ProviderTitle,
+    TemplateTitle,
+} from '@/components/shared/document-title';
 import PageLoader from '@/components/shared/page-loader';
 import { Toaster } from '@/components/ui/sonner';
 import client from '@/lib/apollo';
@@ -107,6 +114,11 @@ function RootLayout() {
             <FavoritesProvider>
                 <TemplatesProvider>
                     <ResourcesProvider>
+                        {/* Document <title> driven by route handles — lives in the
+                            shell so it survives navigation between sibling detail
+                            routes (templates/:id → templates/:id') without
+                            flashing a generic fallback during data fetch. */}
+                        <DocumentTitle />
                         <Suspense fallback={<PageLoader />}>
                             <Outlet />
                         </Suspense>
@@ -141,6 +153,7 @@ const router = createBrowserRouter(
                         />
                         <Route
                             element={<FlowWithProvider />}
+                            handle={{ titleComponent: FlowTitle }}
                             path="flows/:flowId"
                         />
                     </Route>
@@ -151,6 +164,7 @@ const router = createBrowserRouter(
                     />
                     <Route
                         element={<Template />}
+                        handle={{ titleComponent: TemplateTitle }}
                         path="templates/:templateId"
                     />
 
@@ -161,6 +175,7 @@ const router = createBrowserRouter(
                         />
                         <Route
                             element={<Knowledge />}
+                            handle={{ titleComponent: KnowledgeTitle }}
                             path="knowledges/:knowledgeId"
                         />
                     </Route>
@@ -191,6 +206,7 @@ const router = createBrowserRouter(
                     />
                     <Route
                         element={<SettingsProvider />}
+                        handle={{ titleComponent: ProviderTitle }}
                         path="providers/:providerId"
                     />
                     <Route

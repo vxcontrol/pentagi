@@ -26,7 +26,6 @@ import {
     DetailNavigationToolbar,
 } from '@/components/shared/detail-navigation';
 import { InlineEditInput, useInlineEdit } from '@/components/shared/inline-edit';
-import { PageTitle } from '@/components/shared/page-title';
 import { Badge } from '@/components/ui/badge';
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage } from '@/components/ui/breadcrumb';
 import { Button } from '@/components/ui/button';
@@ -660,7 +659,6 @@ function Template() {
     if (!isNew && isLoadingTemplate) {
         return (
             <>
-                <PageTitle>{isNew ? 'New template' : (templateName ?? 'Template')}</PageTitle>
                 {pageHeader}
                 <div className="flex min-h-[calc(100dvh-3rem)] items-center justify-center">
                     <Spinner variant="circle" />
@@ -673,7 +671,6 @@ function Template() {
     if (!isNew && !isLoadingTemplate && !templateData?.flowTemplate) {
         return (
             <>
-                <PageTitle>{isNew ? 'New template' : (templateName ?? 'Template')}</PageTitle>
                 {pageHeader}
                 <div className="flex min-h-[calc(100dvh-3rem)] items-center justify-center p-4">
                     <Card className="w-full max-w-2xl">
@@ -690,7 +687,6 @@ function Template() {
 
     return (
         <>
-            <PageTitle>{isNew ? 'New template' : (templateName ?? 'Template')}</PageTitle>
             {pageHeader}
             <div className="flex min-h-[calc(100dvh-3rem)]">
                 <div className="flex min-w-0 flex-1 items-center justify-center p-4">
