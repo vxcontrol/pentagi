@@ -402,7 +402,7 @@ const FlowExecutionItem = memo(function FlowExecutionItem({
             // content-visibility: auto lets the browser skip layout & paint for
             // rows outside the viewport. With ~130+ rows this is the cheapest
             // possible virtualization — no deps, no measurement, no scroll math.
-            className="[content-visibility:auto] [contain-intrinsic-size:auto_56px]"
+            className="[contain-intrinsic-size:auto_56px] [content-visibility:auto]"
             onOpenChange={setIsOpen}
             open={isOpen}
         >

@@ -386,9 +386,7 @@ function SettingsAPITokens() {
                                 id={editNameFieldId}
                                 key={`edit-name-input-${token.tokenId}`}
                                 name="token-name"
-                                onChange={(event) =>
-                                    setEditFormData((prev) => ({ ...prev, name: event.target.value }))
-                                }
+                                onChange={(event) => setEditFormData((prev) => ({ ...prev, name: event.target.value }))}
                                 placeholder="Token name (optional)"
                                 value={editFormData.name}
                             />
@@ -617,25 +615,23 @@ function SettingsAPITokens() {
 
                     if (isCreating) {
                         return (
-                            <div className="flex justify-end gap-1">
+                            <div className="flex justify-end">
                                 <Button
-                                    className="size-8 p-0"
+                                    className="shrink-0"
                                     disabled={isCreateLoading || !createFormData.expiresAt}
                                     onClick={handleCreate}
+                                    size="icon-sm"
                                     variant="ghost"
                                 >
-                                    {isCreateLoading ? (
-                                        <Loader2 className="size-4 animate-spin" />
-                                    ) : (
-                                        <Check className="size-4" />
-                                    )}
+                                    {isCreateLoading ? <Loader2 className="animate-spin" /> : <Check />}
                                 </Button>
                                 <Button
-                                    className="size-8 p-0"
+                                    className="shrink-0"
                                     onClick={handleCancelCreate}
+                                    size="icon-sm"
                                     variant="ghost"
                                 >
-                                    <X className="size-4" />
+                                    <X />
                                 </Button>
                             </div>
                         );
@@ -643,25 +639,23 @@ function SettingsAPITokens() {
 
                     if (isEditing) {
                         return (
-                            <div className="flex justify-end gap-1">
+                            <div className="flex justify-end">
                                 <Button
-                                    className="size-8 p-0"
+                                    className="shrink-0"
                                     disabled={isUpdateLoading}
                                     onClick={() => handleSave(token.tokenId)}
+                                    size="icon-sm"
                                     variant="ghost"
                                 >
-                                    {isUpdateLoading ? (
-                                        <Loader2 className="size-4 animate-spin" />
-                                    ) : (
-                                        <Check className="size-4" />
-                                    )}
+                                    {isUpdateLoading ? <Loader2 className="animate-spin" /> : <Check />}
                                 </Button>
                                 <Button
-                                    className="size-8 p-0"
+                                    className="shrink-0"
                                     onClick={handleCancelEdit}
+                                    size="icon-sm"
                                     variant="ghost"
                                 >
-                                    <X className="size-4" />
+                                    <X />
                                 </Button>
                             </div>
                         );
@@ -672,7 +666,8 @@ function SettingsAPITokens() {
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                     <Button
-                                        className="size-8 p-0"
+                                        className="shrink-0"
+                                        size="icon-sm"
                                         variant="ghost"
                                     >
                                         <span className="sr-only">Open menu</span>
@@ -684,7 +679,7 @@ function SettingsAPITokens() {
                                     className="min-w-24"
                                 >
                                     <DropdownMenuItem onClick={() => handleEdit(token)}>
-                                        <Pencil className="size-3" />
+                                        <Pencil />
                                         Edit
                                     </DropdownMenuItem>
                                     <DropdownMenuSeparator />
@@ -694,12 +689,12 @@ function SettingsAPITokens() {
                                     >
                                         {isDeleteLoading && deletingToken?.tokenId === token.tokenId ? (
                                             <>
-                                                <Loader2 className="size-4 animate-spin" />
+                                                <Loader2 className="animate-spin" />
                                                 Deleting...
                                             </>
                                         ) : (
                                             <>
-                                                <Trash className="size-4" />
+                                                <Trash />
                                                 Delete
                                             </>
                                         )}

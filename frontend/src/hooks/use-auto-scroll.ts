@@ -9,10 +9,7 @@ interface ScrollTracker {
     resetKey: null | string | undefined;
 }
 
-export function useAutoScroll<T extends IdentifiableItem>(
-    items: T[] | undefined,
-    resetKey: null | string | undefined,
-) {
+export function useAutoScroll<T extends IdentifiableItem>(items: T[] | undefined, resetKey: null | string | undefined) {
     const containerElementRef = useRef<HTMLDivElement | null>(null);
     const endRef = useRef<HTMLDivElement>(null);
 

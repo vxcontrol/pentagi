@@ -17,11 +17,11 @@ import {
 import {
     ArrowDown,
     ArrowUp,
-    ChevronDown,
     ChevronLeft,
     ChevronRight,
     ChevronsLeft,
     ChevronsRight,
+    ColumnsSettings,
     ListFilter,
     Search,
     X,
@@ -593,6 +593,7 @@ function DataTable<TData, TValue = unknown>({
                         <DropdownMenuTrigger asChild>
                             <Button
                                 aria-label="Search in"
+                                className="shrink-0"
                                 size="icon"
                                 variant="outline"
                             >
@@ -641,10 +642,12 @@ function DataTable<TData, TValue = unknown>({
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                         <Button
-                            className="ml-auto"
+                            aria-label="Columns"
+                            className="ml-auto shrink-0"
+                            size="icon"
                             variant="outline"
                         >
-                            Columns <ChevronDown className="ml-2" />
+                            <ColumnsSettings />
                         </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
