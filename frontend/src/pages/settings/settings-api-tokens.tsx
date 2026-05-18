@@ -1,5 +1,6 @@
 import type { ColumnDef } from '@tanstack/react-table';
 
+import { zodResolver } from '@hookform/resolvers/zod';
 import { format, isToday } from 'date-fns';
 import { enUS } from 'date-fns/locale';
 import {
@@ -17,7 +18,9 @@ import {
     X,
 } from 'lucide-react';
 import { useCallback, useId, useMemo, useState } from 'react';
+import { type Control, Controller, useForm, useFormState } from 'react-hook-form';
 import { toast } from 'sonner';
+import * as z from 'zod';
 
 import type { ApiTokenFragmentFragment } from '@/graphql/types';
 
@@ -58,15 +61,30 @@ import { baseUrl } from '@/models/api';
 
 type APIToken = ApiTokenFragmentFragment;
 
-interface CreateFormData {
-    expiresAt: Date | null;
-    name: string;
-}
+const tokenNameSchema = z.string().trim().max(255, 'Token name must be 255 characters or less').default('');
 
-interface EditFormData {
-    name: string;
-    status: TokenStatusEnum;
-}
+const createTokenFormSchema = z.object({
+    // Nullable in the form state (the date picker starts empty) but required
+    // for submission — the refine drives `formState.isValid`, which gates the
+    // Create button without manual checks. Kept as `Date | null` in the
+    // inferred type so `defaultValues` can be `null` without a cast.
+    expiresAt: z
+        .date()
+        .nullable()
+        .refine((value) => value !== null, { message: 'Expiration date is required' }),
+    name: tokenNameSchema,
+});
+
+const editTokenFormSchema = z.object({
+    name: tokenNameSchema,
+    status: z.nativeEnum(TokenStatusEnum),
+});
+
+type CreateTokenFormValues = z.infer<typeof createTokenFormSchema>;
+type EditTokenFormValues = z.infer<typeof editTokenFormSchema>;
+
+const CREATE_TOKEN_DEFAULTS: CreateTokenFormValues = { expiresAt: null, name: '' };
+const EDIT_TOKEN_DEFAULTS: EditTokenFormValues = { name: '', status: TokenStatusEnum.Active };
 
 const isTokenExpired = (token: APIToken): boolean => {
     const expiresAt = new Date(token.createdAt);
@@ -191,6 +209,81 @@ const createNewTokenPlaceholder: APIToken = {
     userId: '0',
 };
 
+// Inline-row action buttons live in their own components so the validity
+// subscription via `useFormState` re-renders only this small subtree on form
+// changes, not the entire `SettingsAPITokens` parent / DataTable.
+function CreateRowActions({
+    control,
+    isLoading,
+    onCancel,
+    onSubmit,
+}: {
+    control: Control<CreateTokenFormValues>;
+    isLoading: boolean;
+    onCancel: () => void;
+    onSubmit: () => void;
+}) {
+    const { isValid } = useFormState({ control });
+
+    return (
+        <div className="flex justify-end">
+            <Button
+                className="shrink-0"
+                disabled={isLoading || !isValid}
+                onClick={onSubmit}
+                size="icon-sm"
+                variant="ghost"
+            >
+                {isLoading ? <Loader2 className="animate-spin" /> : <Check />}
+            </Button>
+            <Button
+                className="shrink-0"
+                onClick={onCancel}
+                size="icon-sm"
+                variant="ghost"
+            >
+                <X />
+            </Button>
+        </div>
+    );
+}
+
+function EditRowActions({
+    control,
+    isLoading,
+    onCancel,
+    onSubmit,
+}: {
+    control: Control<EditTokenFormValues>;
+    isLoading: boolean;
+    onCancel: () => void;
+    onSubmit: () => void;
+}) {
+    const { isValid } = useFormState({ control });
+
+    return (
+        <div className="flex justify-end">
+            <Button
+                className="shrink-0"
+                disabled={isLoading || !isValid}
+                onClick={onSubmit}
+                size="icon-sm"
+                variant="ghost"
+            >
+                {isLoading ? <Loader2 className="animate-spin" /> : <Check />}
+            </Button>
+            <Button
+                className="shrink-0"
+                onClick={onCancel}
+                size="icon-sm"
+                variant="ghost"
+            >
+                <X />
+            </Button>
+        </div>
+    );
+}
+
 function SettingsAPITokens() {
     const { data, error, loading: isLoading } = useApiTokensQuery();
     const [createAPIToken, { error: createError, loading: isCreateLoading }] = useCreateApiTokenMutation();
@@ -199,17 +292,30 @@ function SettingsAPITokens() {
 
     const [editingTokenId, setEditingTokenId] = useState<null | string>(null);
     const [creatingToken, setCreatingToken] = useState(false);
-    const [editFormData, setEditFormData] = useState<EditFormData>({ name: '', status: TokenStatusEnum.Active });
-    const [createFormData, setCreateFormData] = useState<CreateFormData>({ expiresAt: null, name: '' });
     const [tokenSecret, setTokenSecret] = useState<null | string>(null);
     const [showTokenDialog, setShowTokenDialog] = useState(false);
     const [deleteErrorMessage, setDeleteErrorMessage] = useState<null | string>(null);
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
     const [deletingToken, setDeletingToken] = useState<APIToken | null>(null);
+
     // Stable per-instance ids — keep label/for and a11y warnings clean even when
     // the row re-mounts due to subscription-driven refetches.
     const createNameFieldId = useId();
     const editNameFieldId = useId();
+
+    // Form state lives in the parent so that subscription-driven DataTable
+    // re-renders and row remounts cannot drop user input. <Controller> in each
+    // cell re-subscribes to this state on remount — no values are lost.
+    const createForm = useForm<CreateTokenFormValues>({
+        defaultValues: CREATE_TOKEN_DEFAULTS,
+        mode: 'onChange',
+        resolver: zodResolver(createTokenFormSchema),
+    });
+    const editForm = useForm<EditTokenFormValues>({
+        defaultValues: EDIT_TOKEN_DEFAULTS,
+        mode: 'onChange',
+        resolver: zodResolver(editTokenFormSchema),
+    });
 
     const { filter, pageIndex: currentPage, setFilter, setPage: handlePageChange } = useTableState();
 
@@ -231,68 +337,80 @@ function SettingsAPITokens() {
         },
     });
 
-    const handleEdit = useCallback((token: APIToken) => {
-        setEditingTokenId(token.tokenId);
-        setEditFormData({
-            name: token.name ?? '',
-            status: token.status,
-        });
-    }, []);
+    const handleEdit = useCallback(
+        (token: APIToken) => {
+            setEditingTokenId(token.tokenId);
+            editForm.reset({ name: token.name ?? '', status: token.status });
+        },
+        [editForm],
+    );
 
     const handleCancelEdit = useCallback(() => {
         setEditingTokenId(null);
-        setEditFormData({ name: '', status: TokenStatusEnum.Active });
-    }, []);
+        editForm.reset(EDIT_TOKEN_DEFAULTS);
+    }, [editForm]);
 
     const handleSave = useCallback(
         async (tokenId: string) => {
-            const name = editFormData.name.trim() || null;
+            const valid = await editForm.trigger();
+
+            if (!valid) {
+                return;
+            }
+
+            const values = editForm.getValues();
 
             try {
                 await updateAPIToken({
                     refetchQueries: ['apiTokens'],
                     variables: {
                         input: {
-                            name,
-                            status: editFormData.status,
+                            name: values.name.trim() || null,
+                            status: values.status,
                         },
                         tokenId,
                     },
                 });
 
                 setEditingTokenId(null);
-                setEditFormData({ name: '', status: TokenStatusEnum.Active });
+                editForm.reset(EDIT_TOKEN_DEFAULTS);
             } catch (error) {
                 console.error('Failed to update token:', error);
             }
         },
-        [editFormData.name, editFormData.status, updateAPIToken],
+        [editForm, updateAPIToken],
     );
 
     const handleCreateNew = useCallback(() => {
         setCreatingToken(true);
-        setCreateFormData({ expiresAt: null, name: '' });
-    }, []);
+        createForm.reset(CREATE_TOKEN_DEFAULTS);
+    }, [createForm]);
 
     const handleCancelCreate = useCallback(() => {
         setCreatingToken(false);
-        setCreateFormData({ expiresAt: null, name: '' });
-    }, []);
+        createForm.reset(CREATE_TOKEN_DEFAULTS);
+    }, [createForm]);
 
     const handleCreate = useCallback(async () => {
-        if (!createFormData.expiresAt) {
+        const valid = await createForm.trigger();
+
+        if (!valid) {
             return;
         }
 
-        const name = createFormData.name.trim() || null;
+        const values = createForm.getValues();
+
+        if (!values.expiresAt) {
+            return;
+        }
 
         try {
-            const ttl = calculateTTL(createFormData.expiresAt);
+            const ttl = calculateTTL(values.expiresAt);
             const result = await createAPIToken({
                 refetchQueries: ['apiTokens'],
                 variables: {
                     input: {
-                        name,
+                        name: values.name.trim() || null,
                         ttl,
                     },
                 },
@@ -304,11 +422,11 @@ function SettingsAPITokens() {
             }
 
             setCreatingToken(false);
-            setCreateFormData({ expiresAt: null, name: '' });
+            createForm.reset(CREATE_TOKEN_DEFAULTS);
         } catch (error) {
             console.error('Failed to create token:', error);
         }
-    }, [createAPIToken, createFormData.expiresAt, createFormData.name]);
+    }, [createAPIToken, createForm]);
 
     const handleDeleteDialogOpen = useCallback((token: APIToken) => {
         setDeletingToken(token);
@@ -361,34 +479,38 @@ function SettingsAPITokens() {
 
                     if (isCreating) {
                         return (
-                            <Input
-                                autoComplete="off"
-                                autoFocus
-                                className="h-8"
-                                id={createNameFieldId}
-                                key="create-name-input"
-                                name="token-name"
-                                onChange={(event) =>
-                                    setCreateFormData((prev) => ({ ...prev, name: event.target.value }))
-                                }
-                                placeholder="Token name (optional)"
-                                value={createFormData.name}
+                            <Controller
+                                control={createForm.control}
+                                name="name"
+                                render={({ field }) => (
+                                    <Input
+                                        {...field}
+                                        autoComplete="off"
+                                        autoFocus
+                                        className="h-8"
+                                        id={createNameFieldId}
+                                        placeholder="Token name (optional)"
+                                    />
+                                )}
                             />
                         );
                     }
 
                     if (isEditing) {
                         return (
-                            <Input
-                                autoComplete="off"
-                                autoFocus
-                                className="h-8"
-                                id={editNameFieldId}
-                                key={`edit-name-input-${token.tokenId}`}
-                                name="token-name"
-                                onChange={(event) => setEditFormData((prev) => ({ ...prev, name: event.target.value }))}
-                                placeholder="Token name (optional)"
-                                value={editFormData.name}
+                            <Controller
+                                control={editForm.control}
+                                name="name"
+                                render={({ field }) => (
+                                    <Input
+                                        {...field}
+                                        autoComplete="off"
+                                        autoFocus
+                                        className="h-8"
+                                        id={editNameFieldId}
+                                        placeholder="Token name (optional)"
+                                    />
+                                )}
                             />
                         );
                     }
@@ -464,22 +586,26 @@ function SettingsAPITokens() {
                         }
 
                         return (
-                            <Select
-                                onValueChange={(value) =>
-                                    setEditFormData((prev) => ({ ...prev, status: value as TokenStatusEnum }))
-                                }
-                                value={editFormData.status}
-                            >
-                                <SelectTrigger className="h-8 w-32">
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectGroup>
-                                        <SelectItem value={TokenStatusEnum.Active}>active</SelectItem>
-                                        <SelectItem value={TokenStatusEnum.Revoked}>revoked</SelectItem>
-                                    </SelectGroup>
-                                </SelectContent>
-                            </Select>
+                            <Controller
+                                control={editForm.control}
+                                name="status"
+                                render={({ field }) => (
+                                    <Select
+                                        onValueChange={field.onChange}
+                                        value={field.value}
+                                    >
+                                        <SelectTrigger className="h-8 w-32">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectGroup>
+                                                <SelectItem value={TokenStatusEnum.Active}>active</SelectItem>
+                                                <SelectItem value={TokenStatusEnum.Revoked}>revoked</SelectItem>
+                                            </SelectGroup>
+                                        </SelectContent>
+                                    </Select>
+                                )}
+                            />
                         );
                     }
 
@@ -507,37 +633,37 @@ function SettingsAPITokens() {
                         tomorrow.setHours(0, 0, 0, 0);
 
                         return (
-                            <Popover>
-                                <PopoverTrigger asChild>
-                                    <Button
-                                        className={cn(
-                                            'h-8 w-full justify-start text-left font-normal',
-                                            !createFormData.expiresAt && 'text-muted-foreground',
-                                        )}
-                                        variant="outline"
-                                    >
-                                        <CalendarIcon className="mr-2 size-4" />
-                                        {createFormData.expiresAt ? (
-                                            createFormData.expiresAt.toLocaleDateString()
-                                        ) : (
-                                            <span>Pick date</span>
-                                        )}
-                                    </Button>
-                                </PopoverTrigger>
-                                <PopoverContent
-                                    align="start"
-                                    className="w-auto p-0"
-                                >
-                                    <Calendar
-                                        disabled={{ before: tomorrow }}
-                                        mode="single"
-                                        onSelect={(date) => {
-                                            setCreateFormData((prev) => ({ ...prev, expiresAt: date || null }));
-                                        }}
-                                        selected={createFormData.expiresAt || undefined}
-                                    />
-                                </PopoverContent>
-                            </Popover>
+                            <Controller
+                                control={createForm.control}
+                                name="expiresAt"
+                                render={({ field }) => (
+                                    <Popover>
+                                        <PopoverTrigger asChild>
+                                            <Button
+                                                className={cn(
+                                                    'h-8 w-full justify-start text-left font-normal',
+                                                    !field.value && 'text-muted-foreground',
+                                                )}
+                                                variant="outline"
+                                            >
+                                                <CalendarIcon className="mr-2 size-4" />
+                                                {field.value ? field.value.toLocaleDateString() : <span>Pick date</span>}
+                                            </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent
+                                            align="start"
+                                            className="w-auto p-0"
+                                        >
+                                            <Calendar
+                                                disabled={{ before: tomorrow }}
+                                                mode="single"
+                                                onSelect={(date) => field.onChange(date ?? null)}
+                                                selected={field.value ?? undefined}
+                                            />
+                                        </PopoverContent>
+                                    </Popover>
+                                )}
+                            />
                         );
                     }
 
@@ -615,49 +741,23 @@ function SettingsAPITokens() {
 
                     if (isCreating) {
                         return (
-                            <div className="flex justify-end">
-                                <Button
-                                    className="shrink-0"
-                                    disabled={isCreateLoading || !createFormData.expiresAt}
-                                    onClick={handleCreate}
-                                    size="icon-sm"
-                                    variant="ghost"
-                                >
-                                    {isCreateLoading ? <Loader2 className="animate-spin" /> : <Check />}
-                                </Button>
-                                <Button
-                                    className="shrink-0"
-                                    onClick={handleCancelCreate}
-                                    size="icon-sm"
-                                    variant="ghost"
-                                >
-                                    <X />
-                                </Button>
-                            </div>
+                            <CreateRowActions
+                                control={createForm.control}
+                                isLoading={isCreateLoading}
+                                onCancel={handleCancelCreate}
+                                onSubmit={handleCreate}
+                            />
                         );
                     }
 
                     if (isEditing) {
                         return (
-                            <div className="flex justify-end">
-                                <Button
-                                    className="shrink-0"
-                                    disabled={isUpdateLoading}
-                                    onClick={() => handleSave(token.tokenId)}
-                                    size="icon-sm"
-                                    variant="ghost"
-                                >
-                                    {isUpdateLoading ? <Loader2 className="animate-spin" /> : <Check />}
-                                </Button>
-                                <Button
-                                    className="shrink-0"
-                                    onClick={handleCancelEdit}
-                                    size="icon-sm"
-                                    variant="ghost"
-                                >
-                                    <X />
-                                </Button>
-                            </div>
+                            <EditRowActions
+                                control={editForm.control}
+                                isLoading={isUpdateLoading}
+                                onCancel={handleCancelEdit}
+                                onSubmit={() => handleSave(token.tokenId)}
+                            />
                         );
                     }
 
@@ -712,12 +812,10 @@ function SettingsAPITokens() {
             },
         ],
         [
-            createFormData.expiresAt,
-            createFormData.name,
+            createForm.control,
             createNameFieldId,
             deletingToken,
-            editFormData.name,
-            editFormData.status,
+            editForm.control,
             editNameFieldId,
             editingTokenId,
             handleCancelCreate,
@@ -901,5 +999,8 @@ function SettingsAPITokens() {
         </div>
     );
 }
+
+// Helper subcomponents so we can use useFormState/useWatch without subscribing
+// the whole table to every keystroke. Each watches its own form's validity.
 
 export default SettingsAPITokens;
