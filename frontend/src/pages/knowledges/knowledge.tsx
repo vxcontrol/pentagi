@@ -1,8 +1,7 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { toast } from 'sonner';
 
-import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
 import { Spinner } from '@/components/ui/spinner';
 import {
     type DirtyFlags,
@@ -32,6 +31,13 @@ function Knowledge() {
     });
 
     const knowledge = data?.knowledgeDocument ?? null;
+
+    useEffect(() => {
+        if (!isNew && !isLoadingKnowledge && !knowledge) {
+            toast.error('Knowledge document not found');
+            navigate('/knowledges', { replace: true });
+        }
+    }, [isNew, isLoadingKnowledge, knowledge, navigate]);
 
     const initialValues = useMemo<FormValues>(
         () => (knowledge ? documentToFormValues(knowledge) : newDocumentDefaults),
@@ -65,7 +71,7 @@ function Knowledge() {
         [createKnowledge, isNew, knowledgeId, updateKnowledge],
     );
 
-    if (!isNew && isLoadingKnowledge) {
+    if (!isNew && !knowledge) {
         return (
             <KnowledgeLayout
                 isNew={false}
@@ -73,27 +79,6 @@ function Knowledge() {
             >
                 <div className="flex flex-1 items-center justify-center">
                     <Spinner variant="circle" />
-                </div>
-            </KnowledgeLayout>
-        );
-    }
-
-    if (!isNew && !knowledge) {
-        return (
-            <KnowledgeLayout
-                isNew={false}
-                knowledge={knowledge}
-            >
-                <div className="flex flex-1 items-center justify-center p-4">
-                    <Card className="w-full max-w-2xl">
-                        <CardContent className="flex flex-col items-center gap-4 pt-6 text-center">
-                            <h2 className="text-xl font-semibold">Knowledge not found</h2>
-                            <p className="text-muted-foreground">
-                                The knowledge document you are looking for does not exist.
-                            </p>
-                            <Button onClick={() => navigate('/knowledges')}>Back to Knowledges</Button>
-                        </CardContent>
-                    </Card>
                 </div>
             </KnowledgeLayout>
         );
