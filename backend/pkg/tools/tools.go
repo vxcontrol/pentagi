@@ -382,15 +382,26 @@ func (fte *flowToolsExecutor) SetEmbedder(embedder embeddings.Embedder) {
 	}
 
 	if fte.store != nil {
-		fte.store.Close()
+		// Do NOT close the store when it is backed by the shared pgxpool — calling
+		// Close() on that store would terminate the pool for every other executor.
+		// With a per-connection URL the store owns its connection and must close it.
+		if fte.cfg.PgxPool == nil {
+			fte.store.Close()
+		}
+		fte.store = nil
 	}
 
-	store, err := pgvector.New(
-		context.Background(),
-		pgvector.WithConnectionURL(fte.cfg.DatabaseURL),
+	opts := []pgvector.Option{
 		pgvector.WithEmbedder(embedder),
 		pgvector.WithCollectionName("langchain"),
-	)
+	}
+	if fte.cfg.PgxPool != nil {
+		opts = append(opts, pgvector.WithConn(fte.cfg.PgxPool))
+	} else {
+		opts = append(opts, pgvector.WithConnectionURL(fte.cfg.DatabaseURL))
+	}
+
+	store, err := pgvector.New(context.Background(), opts...)
 	if err == nil {
 		fte.store = &store
 	}
@@ -682,7 +693,13 @@ func (fte *flowToolsExecutor) cachedResourcesDir() (string, error) {
 
 func (fte *flowToolsExecutor) Release(ctx context.Context) error {
 	if fte.store != nil {
-		fte.store.Close()
+		// Do NOT close the store when it is backed by the shared pgxpool — the pool
+		// outlives individual flows and is shared by all executors. Only close when
+		// the store owns its own connection (no shared pool configured).
+		if fte.cfg.PgxPool == nil {
+			fte.store.Close()
+		}
+		fte.store = nil
 	}
 
 	// TODO: here better to get flow containers list and purge all of them

@@ -2613,6 +2613,61 @@ Optional:
 - `SERVER_PORT` - Port to run the server (default: `8443`)
 - `SERVER_USE_SSL` - Enable SSL for the server (default: `false`)
 
+##### PostgreSQL / pgvector connection pool sizing
+
+PentAGI opens two independent connection pools to the same Postgres instance:
+
+| Pool | Env var | Default | Used by |
+|---|---|---|---|
+| Shared `sql.DB` | `DB_MAX_OPEN_CONNS` | `25` | All sqlc queries and GORM handlers share a single `*sql.DB` |
+| Shared `pgxpool` | `DB_VECTOR_MAX_CONNS` | `10` | All pgvector stores (agent memory + knowledge API) share a single pool |
+
+Additional tuning knob:
+- `DB_MAX_IDLE_CONNS` — maximum idle connections kept open in the `sql.DB` pool between requests (default: `5`).
+
+**Budget for the stock `vxcontrol/pgvector` image** (`max_connections = 100`, `superuser_reserved_connections = 3`):
+
+```
+Available for client connections  = 97
+  pentagi sql.DB  (DB_MAX_OPEN_CONNS)   = 25
+  pentagi pgxpool (DB_VECTOR_MAX_CONNS) = 10
+  pgexporter                            =  3
+  autovacuum workers                    =  3
+  ─────────────────────────────────────────
+  Total consumed                        = 41
+  Free buffer                           = 56  (≈ 58 %)
+```
+
+The defaults are sized for **10 parallel flows** with concurrent API requests. If you run more flows or deploy multiple PentAGI instances against the same Postgres, raise `max_connections` via the `command` override in `docker-compose.yml` and increase the pool sizes proportionally:
+
+```yaml
+pgvector:
+  image: vxcontrol/pgvector:latest
+  command: postgres -c max_connections=200
+```
+
+To inspect the live connection budget on a running deployment:
+
+```bash
+# Postgres limits
+docker exec pgvector sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c \
+  "SELECT name, setting FROM pg_settings
+   WHERE name IN ('"'"'max_connections'"'"', '"'"'superuser_reserved_connections'"'"');"'
+
+# Current usage vs. available
+docker exec pgvector sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c \
+  "SELECT max_conn, used, max_conn - used AS available
+   FROM (SELECT current_setting('"'"'max_connections'"'"')::int AS max_conn,
+                count(*) AS used FROM pg_stat_activity) t;"'
+
+# Breakdown by client
+docker exec pgvector sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c \
+  "SELECT application_name, client_addr, state, count(*)
+   FROM pg_stat_activity
+   WHERE pid <> pg_backend_pid()
+   GROUP BY 1, 2, 3 ORDER BY count DESC;"'
+```
+
 #### Frontend Configuration
 
 Edit the configuration for `frontend` in `.vscode/launch.json` file:

@@ -10,6 +10,7 @@ import (
 
 	"github.com/caarlos0/env/v10"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
 	"github.com/vxcontrol/cloud/anonymizer/patterns"
 	"github.com/vxcontrol/cloud/sdk"
@@ -223,6 +224,19 @@ type Config struct {
 
 	// === Agent Planning Phase Configuration ===
 	AgentPlanningStepEnabled bool `env:"AGENT_PLANNING_STEP_ENABLED" envDefault:"false"`
+
+	// === Database Connection Pool Sizing ===
+	// See backend/docs/database.md §Connection Pooling for budget calculation and
+	// operational commands. Both sqlc (Queries) and GORM share a single *sql.DB,
+	// so DB_MAX_OPEN_CONNS is the total sql.DB budget for the process.
+	// Ensure DB_MAX_OPEN_CONNS + DB_VECTOR_MAX_CONNS < Postgres max_connections.
+	DBMaxOpenConns    int `env:"DB_MAX_OPEN_CONNS"    envDefault:"25"`
+	DBMaxIdleConns    int `env:"DB_MAX_IDLE_CONNS"    envDefault:"5"`
+	DBVectorMaxConns  int `env:"DB_VECTOR_MAX_CONNS"  envDefault:"10"`
+
+	// PgxPool is the shared pgxpool.Pool for all pgvector stores. Populated by
+	// main after pool creation; NOT sourced from environment variables.
+	PgxPool *pgxpool.Pool `env:"-"`
 }
 
 func NewConfig() (*Config, error) {

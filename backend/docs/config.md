@@ -130,6 +130,9 @@ These settings control basic application behavior and are foundational for the s
 | Option         | Environment Variable | Default Value                                                                | Description                                                              |
 | -------------- | -------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
 | DatabaseURL    | `DATABASE_URL`       | `postgres://pentagiuser:pentagipass@pgvector:5432/pentagidb?sslmode=disable` | Connection string for the PostgreSQL database with pgvector extension    |
+| DBMaxOpenConns | `DB_MAX_OPEN_CONNS`  | `25`                                                                         | Maximum open connections in the shared `sql.DB` pool (sqlc + GORM combined). See [database.md §Connection Pooling](database.md#connection-pooling). |
+| DBMaxIdleConns | `DB_MAX_IDLE_CONNS`  | `5`                                                                          | Maximum idle connections kept open between requests                      |
+| DBVectorMaxConns | `DB_VECTOR_MAX_CONNS` | `10`                                                                       | Maximum connections in the shared `pgxpool` for all pgvector stores      |
 | Debug          | `DEBUG`              | `false`                                                                      | Enables debug mode with additional logging                               |
 | DataDir        | `DATA_DIR`           | `./data`                                                                     | Directory for storing persistent data                                    |
 | AskUser        | `ASK_USER`           | `false`                                                                      | When enabled, requires explicit user confirmation for certain operations |
@@ -138,21 +141,27 @@ These settings control basic application behavior and are foundational for the s
 
 ### Usage Details
 
-- **DatabaseURL**: This is a critical setting used throughout the application for all database connections. It's used to:
-  - Initialize the primary SQL database connection in `main.go`
-  - Create GORM ORM instances for model operations
-  - Configure pgvector connectivity for embedding operations
-  - Set up connection pools in various tools and executors
+- **DatabaseURL**: This is a critical setting used throughout the application for all database connections. It is used to:
+  - Initialize the single shared `sql.DB` connection pool in `main.go` (used by both sqlc `Queries` and GORM)
+  - Seed the shared `pgxpool.Pool` for all pgvector stores (agent memory + knowledge API)
+
+  For connection pool sizing and operational monitoring commands see [database.md §Connection Pooling](database.md#connection-pooling).
 
 ```go
-// In main.go for SQL connection
+// In main.go — one pool shared by sqlc Queries and GORM
 db, err := sql.Open("postgres", cfg.DatabaseURL)
+db.SetMaxOpenConns(cfg.DBMaxOpenConns)
+db.SetMaxIdleConns(cfg.DBMaxIdleConns)
+db.SetConnMaxLifetime(time.Hour)
 
-// In main.go for GORM connection
-orm, err := database.NewGorm(cfg.DatabaseURL, "postgres")
+queries := database.New(db)
+orm, err := database.NewGorm(db)   // GORM wraps the same *sql.DB
 
-// In tools for vector database operations
-pgvector.WithConnectionURL(fte.cfg.DatabaseURL)
+// Shared pgxpool for all pgvector stores
+pgPoolConfig, _ := pgxpool.ParseConfig(cfg.DatabaseURL)
+pgPoolConfig.MaxConns = int32(cfg.DBVectorMaxConns)
+pgPool, _ := pgxpool.NewWithConfig(ctx, pgPoolConfig)
+cfg.PgxPool = pgPool               // passed to tools and router
 ```
 
 - **Debug**: Controls debug mode throughout the application, enabling additional logging and development features:

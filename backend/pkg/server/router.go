@@ -132,12 +132,16 @@ func NewRouter(
 	embedder := providers.Embedder()
 	var pgStore *pgvector.Store
 	if embedder.IsAvailable() {
-		if s, err := pgvector.New(
-			context.Background(),
-			pgvector.WithConnectionURL(cfg.DatabaseURL),
+		opts := []pgvector.Option{
 			pgvector.WithEmbedder(embedder),
 			pgvector.WithCollectionName("langchain"),
-		); err == nil {
+		}
+		if cfg.PgxPool != nil {
+			opts = append(opts, pgvector.WithConn(cfg.PgxPool))
+		} else {
+			opts = append(opts, pgvector.WithConnectionURL(cfg.DatabaseURL))
+		}
+		if s, err := pgvector.New(context.Background(), opts...); err == nil {
 			pgStore = &s
 		} else {
 			logrus.WithError(err).Warn("failed to initialise pgvector store for knowledge API; embedding operations will be unavailable")
