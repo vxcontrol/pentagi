@@ -21,7 +21,6 @@ import { z } from 'zod';
 import type { AgentPrompt, AgentPrompts, DefaultPrompt, PromptType } from '@/graphql/types';
 
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
-import { PageTitle } from '@/components/shared/page-title';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -38,6 +37,7 @@ import {
     useValidatePromptMutation,
 } from '@/graphql/types';
 import { cn } from '@/lib/utils';
+import { formatPromptId } from '@/lib/utils/format-prompt-id';
 
 // Form schemas for each tab
 const systemFormSchema = z.object({
@@ -94,11 +94,6 @@ function FormTextareaItem({ className, control, disabled, label, name, placehold
         </FormItem>
     );
 }
-
-// Helper function to format display name
-const formatName = (key: string): string => {
-    return key.replaceAll(/([A-Z])/g, ' $1').replace(/^./, (str) => str.toUpperCase());
-};
 
 // Helper function to extract used variables from template
 const getUsedVariables = (template: string | undefined): Set<string> => {
@@ -328,7 +323,7 @@ function SettingsPrompt() {
                 data: agentData,
                 defaultHumanTemplate: (agentData as AgentPrompts)?.human?.template || '',
                 defaultSystemTemplate: agentData?.system?.template || '',
-                displayName: formatName(promptId),
+                displayName: formatPromptId(promptId),
                 hasHuman: !!(agentData as AgentPrompts)?.human,
                 humanTemplate: userHumanPrompt?.template || (agentData as AgentPrompts)?.human?.template || '',
                 systemTemplate: userSystemPrompt?.template || agentData?.system?.template || '',
@@ -348,7 +343,7 @@ function SettingsPrompt() {
                 data: toolData,
                 defaultHumanTemplate: '',
                 defaultSystemTemplate: toolData?.template || '',
-                displayName: formatName(promptId),
+                displayName: formatPromptId(promptId),
                 hasHuman: false,
                 humanTemplate: '',
                 systemTemplate: userToolPrompt?.template || toolData?.template || '',
@@ -591,7 +586,6 @@ function SettingsPrompt() {
     if (loading) {
         return (
             <>
-                <PageTitle>{promptInfo?.displayName ?? 'Prompt'}</PageTitle>
                 <StatusCard
                     description="Please wait while we fetch prompt information"
                     icon={<Loader2 className="text-muted-foreground size-16 animate-spin" />}
@@ -605,7 +599,6 @@ function SettingsPrompt() {
     if (error) {
         return (
             <>
-                <PageTitle>{promptInfo?.displayName ?? 'Prompt'}</PageTitle>
                 <Alert variant="destructive">
                     <AlertCircle className="size-4" />
                     <AlertTitle>Error loading prompt data</AlertTitle>
@@ -619,7 +612,6 @@ function SettingsPrompt() {
     if (!promptInfo) {
         return (
             <>
-                <PageTitle>{promptInfo?.displayName ?? 'Prompt'}</PageTitle>
                 <Alert variant="destructive">
                     <AlertCircle className="size-4" />
                     <AlertTitle>Prompt not found</AlertTitle>
@@ -719,7 +711,6 @@ function SettingsPrompt() {
 
     return (
         <div className="flex flex-col gap-4">
-            <PageTitle>{promptInfo.displayName}</PageTitle>
             <div className="flex flex-col gap-2">
                 <h2 className="flex items-center gap-2 text-lg font-semibold">
                     {promptInfo.type === 'agent' ? (

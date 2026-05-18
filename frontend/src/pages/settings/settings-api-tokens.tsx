@@ -25,7 +25,6 @@ import * as z from 'zod';
 import type { ApiTokenFragmentFragment } from '@/graphql/types';
 
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
-import { PageTitle } from '@/components/shared/page-title';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -864,7 +863,6 @@ function SettingsAPITokens() {
     if (isLoading) {
         return (
             <div className="flex flex-col gap-4">
-                <PageTitle>API tokens</PageTitle>
                 <SettingsAPITokensHeader onCreateClick={handleCreateNew} />
                 <StatusCard
                     description="Please wait while we fetch your API tokens"
@@ -878,7 +876,6 @@ function SettingsAPITokens() {
     if (error) {
         return (
             <div className="flex flex-col gap-4">
-                <PageTitle>API tokens</PageTitle>
                 <SettingsAPITokensHeader onCreateClick={handleCreateNew} />
                 <Alert variant="destructive">
                     <AlertCircle className="size-4" />
@@ -894,7 +891,6 @@ function SettingsAPITokens() {
     if (tokens.length === 0 && !creatingToken) {
         return (
             <div className="flex flex-col gap-4">
-                <PageTitle>API tokens</PageTitle>
                 <SettingsAPITokensHeader onCreateClick={handleCreateNew} />
                 <StatusCard
                     action={
@@ -916,7 +912,6 @@ function SettingsAPITokens() {
 
     return (
         <div className="flex flex-col gap-4">
-            <PageTitle>API tokens</PageTitle>
             <SettingsAPITokensHeader onCreateClick={handleCreateNew} />
 
             {(createError || updateError || deleteError || deleteErrorMessage) && (

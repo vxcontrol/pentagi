@@ -19,7 +19,6 @@ import Ollama from '@/components/icons/ollama';
 import OpenAi from '@/components/icons/open-ai';
 import Qwen from '@/components/icons/qwen';
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
-import { PageTitle } from '@/components/shared/page-title';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -390,7 +389,6 @@ function SettingsProviders() {
     if (isLoading) {
         return (
             <div className="flex flex-col gap-4">
-                <PageTitle>Providers</PageTitle>
                 <SettingsProvidersHeader />
                 <StatusCard
                     description="Please wait while we fetch your provider configurations"
@@ -404,7 +402,6 @@ function SettingsProviders() {
     if (error) {
         return (
             <div className="flex flex-col gap-4">
-                <PageTitle>Providers</PageTitle>
                 <SettingsProvidersHeader />
                 <Alert variant="destructive">
                     <AlertCircle className="size-4" />
@@ -421,7 +418,6 @@ function SettingsProviders() {
     if (providers.length === 0) {
         return (
             <div className="flex flex-col gap-4">
-                <PageTitle>Providers</PageTitle>
                 <SettingsProvidersHeader />
                 <StatusCard
                     action={
@@ -443,7 +439,6 @@ function SettingsProviders() {
 
     return (
         <div className="flex flex-col gap-4">
-            <PageTitle>Providers</PageTitle>
             <SettingsProvidersHeader />
 
             {/* Delete Error Alert */}

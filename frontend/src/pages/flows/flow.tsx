@@ -122,7 +122,7 @@ function Flow() {
         }
 
         // Drop the new title into the optimistic state immediately so the
-        // breadcrumb/tab/PageTitle flip before the network round-trip. The
+        // breadcrumb and document title flip before the network round-trip. The
         // optimistic value lives only inside this transition — once the
         // mutation settles, useOptimistic falls back to the Apollo cache
         // (which the mutation response has already updated on success, or

@@ -1,7 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import Logo from '@/components/icons/logo';
-import { PageTitle } from '@/components/shared/page-title';
 
 function OAuthResult() {
     const [statusMessage, setStatusMessage] = useState('Authentication in progress...');
@@ -111,7 +110,6 @@ function OAuthResult() {
 
     return (
         <div className="flex h-screen w-full items-center justify-center bg-linear-to-r from-slate-800 to-slate-950">
-            <PageTitle>OAuth</PageTitle>
             <Logo className="animate-logo-spin m-auto size-32 text-white delay-10000" />
             <div className="fixed bottom-4 text-sm text-white">{statusMessage}</div>
         </div>

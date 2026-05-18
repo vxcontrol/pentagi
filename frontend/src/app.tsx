@@ -15,16 +15,12 @@ import MainLayout from '@/components/layouts/main-layout';
 import SettingsLayout from '@/components/layouts/settings-layout';
 import ProtectedRoute from '@/components/routes/protected-route';
 import PublicRoute from '@/components/routes/public-route';
-import {
-    DocumentTitle,
-    FlowTitle,
-    KnowledgeTitle,
-    ProviderTitle,
-    TemplateTitle,
-} from '@/components/shared/document-title';
+import { DocumentTitle } from '@/components/shared/document-title';
 import PageLoader from '@/components/shared/page-loader';
+import { FlowTitle, KnowledgeTitle, ProviderTitle, TemplateTitle } from '@/components/shared/resource-titles';
 import { Toaster } from '@/components/ui/sonner';
 import client from '@/lib/apollo';
+import { formatPromptId } from '@/lib/utils/format-prompt-id';
 import { FavoritesProvider } from '@/providers/favorites-provider';
 import { FlowProvider } from '@/providers/flow-provider';
 import { KnowledgesProvider } from '@/providers/knowledges-provider';
@@ -138,6 +134,7 @@ const router = createBrowserRouter(
                 <Route element={<MainLayout />}>
                     <Route
                         element={<Dashboard />}
+                        handle={{ title: 'Dashboard' }}
                         path="dashboard"
                     />
 
@@ -145,10 +142,12 @@ const router = createBrowserRouter(
                     <Route element={<FlowsLayout />}>
                         <Route
                             element={<Flows />}
+                            handle={{ title: 'Flows' }}
                             path="flows"
                         />
                         <Route
                             element={<NewFlow />}
+                            handle={{ title: 'New flow' }}
                             path="flows/new"
                         />
                         <Route
@@ -160,6 +159,7 @@ const router = createBrowserRouter(
 
                     <Route
                         element={<Templates />}
+                        handle={{ title: 'Templates' }}
                         path="templates"
                     />
                     <Route
@@ -171,6 +171,7 @@ const router = createBrowserRouter(
                     <Route element={<KnowledgesLayout />}>
                         <Route
                             element={<Knowledges />}
+                            handle={{ title: 'Knowledges' }}
                             path="knowledges"
                         />
                         <Route
@@ -182,6 +183,7 @@ const router = createBrowserRouter(
 
                     <Route
                         element={<Resources />}
+                        handle={{ title: 'Resources' }}
                         path="resources"
                     />
                 </Route>
@@ -202,6 +204,7 @@ const router = createBrowserRouter(
                     />
                     <Route
                         element={<SettingsProviders />}
+                        handle={{ title: 'Providers' }}
                         path="providers"
                     />
                     <Route
@@ -211,14 +214,20 @@ const router = createBrowserRouter(
                     />
                     <Route
                         element={<SettingsPrompts />}
+                        handle={{ title: 'Prompts' }}
                         path="prompts"
                     />
                     <Route
                         element={<SettingsPrompt />}
+                        handle={{
+                            title: (params: Record<string, string | undefined>) =>
+                                params.promptId ? formatPromptId(params.promptId) : 'Prompt',
+                        }}
                         path="prompts/:promptId"
                     />
                     <Route
                         element={<SettingsAPITokens />}
+                        handle={{ title: 'API tokens' }}
                         path="api-tokens"
                     />
                     {/* Catch-all route for unknown settings paths */}
@@ -237,17 +246,20 @@ const router = createBrowserRouter(
             {/* report routes */}
             <Route
                 element={<ProtectedReportLayout />}
+                handle={{ title: 'Flow report' }}
                 path="flows/:flowId/report"
             />
 
             {/* public routes */}
             <Route
                 element={<PublicLoginLayout />}
+                handle={{ title: 'Login' }}
                 path="login"
             />
 
             <Route
                 element={<OAuthResult />}
+                handle={{ title: 'OAuth' }}
                 path="oauth/result"
             />
 

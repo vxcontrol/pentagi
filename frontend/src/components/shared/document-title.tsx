@@ -2,124 +2,82 @@ import type { ComponentType } from 'react';
 
 import { useMatches } from 'react-router-dom';
 
-import {
-    useFlowQuery,
-    useFlowTemplateQuery,
-    useKnowledgeDocumentQuery,
-    useSettingsProvidersQuery,
-} from '@/graphql/types';
-
 const APP_NAME = 'PentAGI';
 
 export interface RouteHandleWithTitle {
-    titleComponent: TitleComponent;
+    /**
+     * Static string or a pure function of route params. Use for routes
+     * where the title is known synchronously — listing pages, /new routes,
+     * params-derived titles like `/settings/prompts/:promptId`.
+     */
+    title?: TitleResolver;
+    /**
+     * Component that renders `<title>` and may subscribe to Apollo cache or
+     * other reactive sources. Use when the title depends on resource data
+     * that needs to react to cache updates after the page mounts.
+     */
+    titleComponent?: TitleComponent;
 }
 
 type RouteParams = Record<string, string | undefined>;
 
 type TitleComponent = ComponentType<{ params: RouteParams }>;
 
-const hasTitleComponent = (handle: unknown): handle is RouteHandleWithTitle =>
+type TitleResolver = ((params: RouteParams) => string) | string;
+
+const hasTitle = (handle: unknown): handle is { title: TitleResolver } => {
+    if (typeof handle !== 'object' || handle === null || !('title' in handle)) {
+        return false;
+    }
+
+    const value = (handle as { title: unknown }).title;
+
+    return typeof value === 'string' || typeof value === 'function';
+};
+
+const hasTitleComponent = (handle: unknown): handle is { titleComponent: TitleComponent } =>
     typeof handle === 'object' &&
     handle !== null &&
     'titleComponent' in handle &&
-    typeof (handle as RouteHandleWithTitle).titleComponent === 'function';
+    typeof (handle as { titleComponent: unknown }).titleComponent === 'function';
 
 const renderTitle = (label: null | string) => <title>{label ? `${label} — ${APP_NAME}` : APP_NAME}</title>;
 
 /**
- * Renders the document `<title>` driven by react-router route handles. Walks
- * matches deepest-first; the first match exposing `handle.titleComponent`
- * wins. Lives in the app shell so it survives navigation between sibling
- * detail routes — that's what fixes the previous "Provider — PentAGI"
- * flash when DetailNavigation switches between siblings and the destination
- * page unmounts/remounts during data fetch.
+ * Renders the document `<title>` driven by react-router route handles. The
+ * deepest match exposing `handle.title` or `handle.titleComponent` wins.
  *
- * Routes without a `titleComponent` keep using `<PageTitle>` inside the page
- * component — the migration is route-by-route.
+ * - `handle.title: string` — static (e.g. "Dashboard").
+ * - `handle.title: (params) => string` — derived from route params
+ *   (e.g. `/settings/prompts/:promptId` formatting the id).
+ * - `handle.titleComponent` — reactive component that subscribes to Apollo
+ *   cache for resource-driven titles that need to react to cache updates.
+ *
+ * Living in the app shell, this component survives navigation between
+ * sibling detail routes — fixing the previous "Provider — PentAGI" flash
+ * during DetailNavigation prev/next.
  */
 export function DocumentTitle() {
     const matches = useMatches();
+    const match = matches.findLast((m) => hasTitleComponent(m.handle) || hasTitle(m.handle));
 
-    for (let i = matches.length - 1; i >= 0; i--) {
-        const handle = matches[i].handle;
-
-        if (hasTitleComponent(handle)) {
-            const TitleComponent = handle.titleComponent;
-
-            return <TitleComponent params={matches[i].params} />;
-        }
+    if (!match) {
+        return renderTitle(null);
     }
 
-    return null;
-}
+    const handle = match.handle;
 
-// Per-resource title components read the same Apollo cache the destination
-// page is about to populate. `fetchPolicy: 'cache-only'` avoids a duplicate
-// HTTP request — the page's own query fills the cache, this subscription
-// reacts to it. The variables shape mirrors the page so cache lookups hit.
+    if (hasTitleComponent(handle)) {
+        const TitleComponent = handle.titleComponent;
 
-export function FlowTitle({ params }: { params: RouteParams }) {
-    const flowId = params.flowId;
-    const { data } = useFlowQuery({
-        fetchPolicy: 'cache-only',
-        skip: !flowId,
-        variables: flowId ? { id: flowId } : undefined,
-    });
-
-    const flowTitle = data?.flow?.title;
-
-    return renderTitle(flowTitle && flowId ? `Flow #${flowId} — ${flowTitle}` : 'Flow');
-}
-
-export function KnowledgeTitle({ params }: { params: RouteParams }) {
-    const knowledgeId = params.knowledgeId;
-    const isNew = knowledgeId === 'new';
-    const { data } = useKnowledgeDocumentQuery({
-        fetchPolicy: 'cache-only',
-        skip: isNew || !knowledgeId,
-        variables: !isNew && knowledgeId ? { id: knowledgeId } : undefined,
-    });
-
-    if (isNew) {
-        return renderTitle('New knowledge');
+        return <TitleComponent params={match.params} />;
     }
 
-    return renderTitle(data?.knowledgeDocument?.question || 'Knowledge');
-}
+    if (hasTitle(handle)) {
+        const resolved = typeof handle.title === 'function' ? handle.title(match.params) : handle.title;
 
-export function ProviderTitle({ params }: { params: RouteParams }) {
-    const providerId = params.providerId;
-    const isNew = providerId === 'new';
-    const { data } = useSettingsProvidersQuery({
-        fetchPolicy: 'cache-only',
-        skip: isNew,
-    });
-
-    if (isNew) {
-        return renderTitle('New provider');
+        return renderTitle(resolved);
     }
 
-    // Provider detail isn't a separate query — `settingsProviders` returns the
-    // full list and the page filters by id. We do the same here so a single
-    // cache entry serves both.
-    const provider = data?.settingsProviders.userDefined?.find((candidate) => candidate.id == providerId);
-
-    return renderTitle(provider?.name || 'Provider');
-}
-
-export function TemplateTitle({ params }: { params: RouteParams }) {
-    const templateId = params.templateId;
-    const isNew = templateId === 'new';
-    const { data } = useFlowTemplateQuery({
-        fetchPolicy: 'cache-only',
-        skip: isNew || !templateId,
-        variables: templateId && !isNew ? { templateId } : undefined,
-    });
-
-    if (isNew) {
-        return renderTitle('New template');
-    }
-
-    return renderTitle(data?.flowTemplate?.title || 'Template');
+    return renderTitle(null);
 }
