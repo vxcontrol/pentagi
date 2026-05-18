@@ -1,6 +1,6 @@
 import { format } from 'date-fns';
 import { ChevronRight, Clock, Loader2, Wrench } from 'lucide-react';
-import { useMemo, useRef, useState } from 'react';
+import { memo, useDeferredValue, useMemo, useRef, useState } from 'react';
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Tooltip, XAxis, YAxis } from 'recharts';
 
 import type { FlowFragmentFragment, UsageStatsPeriod } from '@/graphql/types';
@@ -17,6 +17,7 @@ import {
     useToolcallsStatsByPeriodQuery,
     useUsageStatsByPeriodQuery,
 } from '@/graphql/types';
+import { cn } from '@/lib/utils';
 import { formatCost, formatDuration, formatNumber, formatTokenCount } from '@/lib/utils/format';
 
 const CHART_COLORS = {
@@ -86,31 +87,48 @@ export function DashboardAnalytics({ period }: { period: UsageStatsPeriod }) {
         return map;
     }, [flowsData?.flows]);
 
-    const usageChartData = [...(usageByPeriodData?.usageStatsByPeriod ?? [])].reverse().map((item) => ({
-        cacheIn: item.stats.totalUsageCacheIn,
-        costIn: item.stats.totalUsageCostIn,
-        costOut: item.stats.totalUsageCostOut,
-        date: item.date,
-        tokensIn: item.stats.totalUsageIn,
-        tokensOut: item.stats.totalUsageOut,
-        totalCost: item.stats.totalUsageCostIn + item.stats.totalUsageCostOut,
-    }));
+    const usageChartData = useMemo(
+        () =>
+            [...(usageByPeriodData?.usageStatsByPeriod ?? [])].reverse().map((item) => ({
+                cacheIn: item.stats.totalUsageCacheIn,
+                costIn: item.stats.totalUsageCostIn,
+                costOut: item.stats.totalUsageCostOut,
+                date: item.date,
+                tokensIn: item.stats.totalUsageIn,
+                tokensOut: item.stats.totalUsageOut,
+                totalCost: item.stats.totalUsageCostIn + item.stats.totalUsageCostOut,
+            })),
+        [usageByPeriodData?.usageStatsByPeriod],
+    );
 
-    const toolcallsChartData = [...(toolcallsByPeriodData?.toolcallsStatsByPeriod ?? [])].reverse().map((item) => ({
-        count: item.stats.totalCount,
-        date: item.date,
-        duration: item.stats.totalDurationSeconds,
-    }));
+    const toolcallsChartData = useMemo(
+        () =>
+            [...(toolcallsByPeriodData?.toolcallsStatsByPeriod ?? [])].reverse().map((item) => ({
+                count: item.stats.totalCount,
+                date: item.date,
+                duration: item.stats.totalDurationSeconds,
+            })),
+        [toolcallsByPeriodData?.toolcallsStatsByPeriod],
+    );
 
-    const flowsChartData = [...(flowsByPeriodData?.flowsStatsByPeriod ?? [])].reverse().map((item) => ({
-        assistants: item.stats.totalAssistantsCount,
-        date: item.date,
-        flows: item.stats.totalFlowsCount,
-        subtasks: item.stats.totalSubtasksCount,
-        tasks: item.stats.totalTasksCount,
-    }));
+    const flowsChartData = useMemo(
+        () =>
+            [...(flowsByPeriodData?.flowsStatsByPeriod ?? [])].reverse().map((item) => ({
+                assistants: item.stats.totalAssistantsCount,
+                date: item.date,
+                flows: item.stats.totalFlowsCount,
+                subtasks: item.stats.totalSubtasksCount,
+                tasks: item.stats.totalTasksCount,
+            })),
+        [flowsByPeriodData?.flowsStatsByPeriod],
+    );
 
     const executionStats = executionStatsData?.flowsExecutionStatsByPeriod ?? [];
+    // Defer the heavy 130+ row list so a period switch can repaint the charts
+    // first and run the long list reconciliation as a low-priority follow-up.
+    // Combined with content-visibility: auto on each row this drops the
+    // pointerdown→paint INP from ~430ms into the "Good" (<200ms) zone.
+    const deferredExecutionStats = useDeferredValue(executionStats);
 
     return (
         <div className="flex flex-col gap-6">
@@ -342,13 +360,18 @@ export function DashboardAnalytics({ period }: { period: UsageStatsPeriod }) {
                         <div className="flex items-center justify-center py-8">
                             <Loader2 className="text-muted-foreground size-6 animate-spin" />
                         </div>
-                    ) : !executionStats.length ? (
+                    ) : !deferredExecutionStats.length ? (
                         <p className="text-muted-foreground py-8 text-center text-sm">
                             No flow executions in this period
                         </p>
                     ) : (
-                        <div className="space-y-1">
-                            {executionStats.map((flow) => (
+                        <div
+                            className={cn(
+                                'space-y-1 transition-opacity',
+                                deferredExecutionStats !== executionStats && 'opacity-60',
+                            )}
+                        >
+                            {deferredExecutionStats.map((flow) => (
                                 <FlowExecutionItem
                                     flow={flow}
                                     flowMeta={flowsById.get(flow.flowId)}
@@ -363,13 +386,23 @@ export function DashboardAnalytics({ period }: { period: UsageStatsPeriod }) {
     );
 }
 
-function FlowExecutionItem({ flow, flowMeta }: { flow: FlowExecution; flowMeta?: FlowFragmentFragment }) {
+const FlowExecutionItem = memo(function FlowExecutionItem({
+    flow,
+    flowMeta,
+}: {
+    flow: FlowExecution;
+    flowMeta?: FlowFragmentFragment;
+}) {
     const [isOpen, setIsOpen] = useState(false);
     const taskCount = flow.tasks.length;
     const subtaskCount = flow.tasks.reduce((sum, task) => sum + task.subtasks.length, 0);
 
     return (
         <Collapsible
+            // content-visibility: auto lets the browser skip layout & paint for
+            // rows outside the viewport. With ~130+ rows this is the cheapest
+            // possible virtualization — no deps, no measurement, no scroll math.
+            className="[content-visibility:auto] [contain-intrinsic-size:auto_56px]"
             onOpenChange={setIsOpen}
             open={isOpen}
         >
@@ -411,9 +444,9 @@ function FlowExecutionItem({ flow, flowMeta }: { flow: FlowExecution; flowMeta?:
             </CollapsibleContent>
         </Collapsible>
     );
-}
+});
 
-function TaskExecutionItem({ task }: { task: FlowExecution['tasks'][number] }) {
+const TaskExecutionItem = memo(function TaskExecutionItem({ task }: { task: FlowExecution['tasks'][number] }) {
     const [isOpen, setIsOpen] = useState(false);
     const hasSubtasks = task.subtasks.length > 0;
 
@@ -471,7 +504,7 @@ function TaskExecutionItem({ task }: { task: FlowExecution['tasks'][number] }) {
             )}
         </Collapsible>
     );
-}
+});
 
 // Disables tooltip animation on chart entry and re-enables it only after the
 // tooltip has rendered at the correct position for the first time in the session.
