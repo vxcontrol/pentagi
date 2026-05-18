@@ -301,6 +301,32 @@ func ConvertVectorStoreLog(log database.Vecstorelog) *model.VectorStoreLog {
 	}
 }
 
+func ConvertToolCallLogs(logs []database.Toolcall) []*model.ToolCallLog {
+	glogs := make([]*model.ToolCallLog, 0, len(logs))
+	for _, log := range logs {
+		glogs = append(glogs, ConvertToolCallLog(log))
+	}
+
+	return glogs
+}
+
+func ConvertToolCallLog(log database.Toolcall) *model.ToolCallLog {
+	return &model.ToolCallLog{
+		ID:              log.ID,
+		CallID:          log.CallID,
+		Status:          model.ToolCallStatus(log.Status),
+		Name:            log.Name,
+		Args:            string(log.Args),
+		Result:          log.Result,
+		DurationSeconds: log.DurationSeconds,
+		FlowID:          log.FlowID,
+		TaskID:          database.NullInt64ToInt64(log.TaskID),
+		SubtaskID:       database.NullInt64ToInt64(log.SubtaskID),
+		CreatedAt:       log.CreatedAt.Time,
+		UpdatedAt:       log.UpdatedAt.Time,
+	}
+}
+
 func ConvertAssistantLogs(logs []database.Assistantlog) []*model.AssistantLog {
 	glogs := make([]*model.AssistantLog, 0, len(logs))
 	for _, log := range logs {

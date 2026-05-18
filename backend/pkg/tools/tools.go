@@ -141,6 +141,19 @@ type VectorStoreLogProvider interface {
 	) (int64, error)
 }
 
+type ToolCallLogProvider interface {
+	PutLog(
+		ctx context.Context,
+		callID string,
+		name string,
+		args json.RawMessage,
+		taskID *int64,
+		subtaskID *int64,
+	) (int64, error)
+	UpdateLogSuccess(ctx context.Context, id int64, result string, durationSeconds float64) error
+	UpdateLogFailed(ctx context.Context, id int64, result string, durationSeconds float64) error
+}
+
 type KnowledgeProvider interface {
 	KnowledgeDocumentCreated(ctx context.Context, doc *model.KnowledgeDocument)
 }
@@ -154,6 +167,7 @@ type flowToolsExecutor struct {
 	slp    SearchLogProvider
 	tlp    TermLogProvider
 	vslp   VectorStoreLogProvider
+	tclp   ToolCallLogProvider
 	knp    KnowledgeProvider
 
 	db             database.Querier
@@ -312,6 +326,7 @@ type FlowToolsExecutor interface {
 	SetSearchLogProvider(slp SearchLogProvider)
 	SetTermLogProvider(tlp TermLogProvider)
 	SetVectorStoreLogProvider(vslp VectorStoreLogProvider)
+	SetToolCallLogProvider(tclp ToolCallLogProvider)
 	SetKnowledgeProvider(knp KnowledgeProvider)
 	SetGraphitiClient(client *graphiti.Client)
 
@@ -433,6 +448,10 @@ func (fte *flowToolsExecutor) SetTermLogProvider(tlp TermLogProvider) {
 
 func (fte *flowToolsExecutor) SetVectorStoreLogProvider(vslp VectorStoreLogProvider) {
 	fte.vslp = vslp
+}
+
+func (fte *flowToolsExecutor) SetToolCallLogProvider(tclp ToolCallLogProvider) {
+	fte.tclp = tclp
 }
 
 func (fte *flowToolsExecutor) SetKnowledgeProvider(knp KnowledgeProvider) {
@@ -745,6 +764,7 @@ func (fte *flowToolsExecutor) GetCustomExecutor(cfg CustomExecutorConfig) (Conte
 		taskID:      cfg.TaskID,
 		subtaskID:   cfg.SubtaskID,
 		mlp:         fte.mlp,
+		tclp:        fte.tclp,
 		vslp:        fte.vslp,
 		db:          fte.db,
 		store:       fte.store,
@@ -983,6 +1003,7 @@ func (fte *flowToolsExecutor) GetAssistantExecutor(cfg AssistantExecutorConfig) 
 		userID:      fte.userID,
 		flowID:      fte.flowID,
 		mlp:         fte.mlp,
+		tclp:        fte.tclp,
 		vslp:        fte.vslp,
 		db:          fte.db,
 		store:       fte.store,
@@ -1030,6 +1051,7 @@ func (fte *flowToolsExecutor) GetPrimaryExecutor(cfg PrimaryExecutorConfig) (Con
 		taskID:    &cfg.TaskID,
 		subtaskID: &cfg.SubtaskID,
 		mlp:       fte.mlp,
+		tclp:      fte.tclp,
 		vslp:      fte.vslp,
 		db:        fte.db,
 		store:     fte.store,
@@ -1105,6 +1127,7 @@ func (fte *flowToolsExecutor) GetInstallerExecutor(cfg InstallerExecutorConfig) 
 		taskID:    cfg.TaskID,
 		subtaskID: cfg.SubtaskID,
 		mlp:       fte.mlp,
+		tclp:      fte.tclp,
 		vslp:      fte.vslp,
 		db:        fte.db,
 		store:     fte.store,
@@ -1207,6 +1230,7 @@ func (fte *flowToolsExecutor) GetCoderExecutor(cfg CoderExecutorConfig) (Context
 		taskID:    cfg.TaskID,
 		subtaskID: cfg.SubtaskID,
 		mlp:       fte.mlp,
+		tclp:      fte.tclp,
 		vslp:      fte.vslp,
 		db:        fte.db,
 		store:     fte.store,
@@ -1326,6 +1350,7 @@ func (fte *flowToolsExecutor) GetPentesterExecutor(cfg PentesterExecutorConfig) 
 		taskID:    cfg.TaskID,
 		subtaskID: cfg.SubtaskID,
 		mlp:       fte.mlp,
+		tclp:      fte.tclp,
 		vslp:      fte.vslp,
 		db:        fte.db,
 		store:     fte.store,
@@ -1427,6 +1452,7 @@ func (fte *flowToolsExecutor) GetSearcherExecutor(cfg SearcherExecutorConfig) (C
 		taskID:    cfg.TaskID,
 		subtaskID: cfg.SubtaskID,
 		mlp:       fte.mlp,
+		tclp:      fte.tclp,
 		vslp:      fte.vslp,
 		db:        fte.db,
 		store:     fte.store,
@@ -1595,6 +1621,7 @@ func (fte *flowToolsExecutor) GetGeneratorExecutor(cfg GeneratorExecutorConfig) 
 		flowID: fte.flowID,
 		taskID: &cfg.TaskID,
 		mlp:    fte.mlp,
+		tclp:   fte.tclp,
 		vslp:   fte.vslp,
 		db:     fte.db,
 		store:  fte.store,
@@ -1662,6 +1689,7 @@ func (fte *flowToolsExecutor) GetRefinerExecutor(cfg RefinerExecutorConfig) (Con
 		flowID: fte.flowID,
 		taskID: &cfg.TaskID,
 		mlp:    fte.mlp,
+		tclp:   fte.tclp,
 		vslp:   fte.vslp,
 		db:     fte.db,
 		store:  fte.store,
@@ -1726,6 +1754,7 @@ func (fte *flowToolsExecutor) GetMemoristExecutor(cfg MemoristExecutorConfig) (C
 		taskID:    cfg.TaskID,
 		subtaskID: cfg.SubtaskID,
 		mlp:       fte.mlp,
+		tclp:      fte.tclp,
 		vslp:      fte.vslp,
 		db:        fte.db,
 		store:     fte.store,
@@ -1796,6 +1825,7 @@ func (fte *flowToolsExecutor) GetEnricherExecutor(cfg EnricherExecutorConfig) (C
 		taskID:    cfg.TaskID,
 		subtaskID: cfg.SubtaskID,
 		mlp:       fte.mlp,
+		tclp:      fte.tclp,
 		vslp:      fte.vslp,
 		db:        fte.db,
 		store:     fte.store,
@@ -1864,6 +1894,7 @@ func (fte *flowToolsExecutor) GetReporterExecutor(cfg ReporterExecutorConfig) (C
 		taskID:      cfg.TaskID,
 		subtaskID:   cfg.SubtaskID,
 		mlp:         fte.mlp,
+		tclp:        fte.tclp,
 		vslp:        fte.vslp,
 		db:          fte.db,
 		store:       fte.store,

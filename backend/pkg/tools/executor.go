@@ -137,6 +137,7 @@ type customExecutor struct {
 
 	db    database.Querier
 	mlp   MsgLogProvider
+	tclp  ToolCallLogProvider
 	store *pgvector.Store
 	vslp  VectorStoreLogProvider
 
@@ -289,15 +290,7 @@ func (ce *customExecutor) Execute(
 		}
 	}
 
-	tc, err := ce.db.CreateToolcall(ctx, database.CreateToolcallParams{
-		CallID:    id,
-		Status:    database.ToolcallStatusRunning,
-		Name:      name,
-		Args:      args,
-		FlowID:    ce.flowID,
-		TaskID:    database.Int64ToNullInt64(ce.taskID),
-		SubtaskID: database.Int64ToNullInt64(ce.subtaskID),
-	})
+	tcID, err := ce.tclp.PutLog(ctx, id, name, args, ce.taskID, ce.subtaskID)
 	if err != nil {
 		obsWrapper.end("", err, time.Since(startTime).Seconds())
 		return "", fmt.Errorf("failed to create toolcall: %w", err)
@@ -308,11 +301,7 @@ func (ce *customExecutor) Execute(
 		result, err := handler(ctx, name, args)
 		if err != nil {
 			durationDelta := time.Since(startTime).Seconds()
-			_, _ = ce.db.UpdateToolcallFailedResult(ctx, database.UpdateToolcallFailedResultParams{
-				Result:          fmt.Sprintf("failed to execute handler: %s", err.Error()),
-				DurationSeconds: durationDelta,
-				ID:              tc.ID,
-			})
+			_ = ce.tclp.UpdateLogFailed(ctx, tcID, fmt.Sprintf("failed to execute handler: %s", err.Error()), durationDelta)
 			return "", resultFormat, fmt.Errorf("failed to execute handler: %w", err)
 		}
 
@@ -326,11 +315,7 @@ func (ce *customExecutor) Execute(
 			result, err = ce.summarizer(ctx, summarizePrompt)
 			if err != nil {
 				durationDelta := time.Since(startTime).Seconds()
-				_, _ = ce.db.UpdateToolcallFailedResult(ctx, database.UpdateToolcallFailedResultParams{
-					Result:          fmt.Sprintf("failed to summarize result: %s", err.Error()),
-					DurationSeconds: durationDelta,
-					ID:              tc.ID,
-				})
+				_ = ce.tclp.UpdateLogFailed(ctx, tcID, fmt.Sprintf("failed to summarize result: %s", err.Error()), durationDelta)
 				return "", resultFormat, fmt.Errorf("failed to summarize result: %w", err)
 			}
 			resultFormat = database.MsglogResultFormatMarkdown
@@ -345,11 +330,7 @@ func (ce *customExecutor) Execute(
 		}
 
 		durationDelta := time.Since(startTime).Seconds()
-		_, err = ce.db.UpdateToolcallFinishedResult(ctx, database.UpdateToolcallFinishedResultParams{
-			Result:          result,
-			DurationSeconds: durationDelta,
-			ID:              tc.ID,
-		})
+		err = ce.tclp.UpdateLogSuccess(ctx, tcID, result, durationDelta)
 		if err != nil {
 			return "", resultFormat, fmt.Errorf("failed to update toolcall result: %w", err)
 		}

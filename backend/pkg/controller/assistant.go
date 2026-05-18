@@ -214,6 +214,7 @@ func NewAssistantWorker(ctx context.Context, awc newAssistantWorkerCtx) (Assista
 	executor.SetSearchLogProvider(workers.slw)
 	executor.SetTermLogProvider(workers.tlw)
 	executor.SetVectorStoreLogProvider(workers.vslw)
+	executor.SetToolCallLogProvider(workers.tclw)
 	executor.SetKnowledgeProvider(pub)
 	executor.SetGraphitiClient(awc.provs.GraphitiClient())
 
@@ -355,6 +356,7 @@ func LoadAssistantWorker(
 	executor.SetSearchLogProvider(workers.slw)
 	executor.SetTermLogProvider(workers.tlw)
 	executor.SetVectorStoreLogProvider(workers.vslw)
+	executor.SetToolCallLogProvider(workers.tclw)
 	executor.SetKnowledgeProvider(pub)
 
 	var msgChainID int64

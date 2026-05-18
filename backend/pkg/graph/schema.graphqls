@@ -153,6 +153,13 @@ enum VectorStoreAction {
   store
 }
 
+enum ToolCallStatus {
+  received
+  running
+  finished
+  failed
+}
+
 # ==================== Core System Types ====================
 
 type Settings {
@@ -328,6 +335,21 @@ type VectorStoreLog {
   taskId: ID
   subtaskId: ID
   createdAt: Time!
+}
+
+type ToolCallLog {
+  id: ID!
+  callId: String!
+  status: ToolCallStatus!
+  name: String!
+  args: String!
+  result: String!
+  durationSeconds: Float!
+  flowId: ID!
+  taskId: ID
+  subtaskId: ID
+  createdAt: Time!
+  updatedAt: Time!
 }
 
 type Screenshot {
@@ -931,6 +953,7 @@ type Query {
   agentLogs(flowId: ID!): [AgentLog!]
   searchLogs(flowId: ID!): [SearchLog!]
   vectorStoreLogs(flowId: ID!): [VectorStoreLog!]
+  toolCallLogs(flowId: ID!): [ToolCallLog!]
   assistantLogs(flowId: ID!, assistantId: ID!): [AssistantLog!]
 
   # Usage statistics and analytics
@@ -1056,6 +1079,8 @@ type Subscription {
   agentLogAdded(flowId: ID!): AgentLog!
   searchLogAdded(flowId: ID!): SearchLog!
   vectorStoreLogAdded(flowId: ID!): VectorStoreLog!
+  toolCallLogAdded(flowId: ID!): ToolCallLog!
+  toolCallLogUpdated(flowId: ID!): ToolCallLog!
   assistantLogAdded(flowId: ID!): AssistantLog!
   assistantLogUpdated(flowId: ID!): AssistantLog!
 

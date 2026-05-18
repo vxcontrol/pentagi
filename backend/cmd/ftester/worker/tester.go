@@ -81,6 +81,7 @@ func NewTester(
 	flowExecutor.SetSearchLogProvider(proxies.GetSearchLogProvider())
 	flowExecutor.SetTermLogProvider(proxies.GetTermLogProvider())
 	flowExecutor.SetVectorStoreLogProvider(proxies.GetVectorStoreLogProvider())
+	flowExecutor.SetToolCallLogProvider(proxies.GetToolCallLogProvider())
 	flowExecutor.SetKnowledgeProvider(proxies.GetKnowledgeProvider())
 	flowExecutor.SetGraphitiClient(providerController.GraphitiClient())
 

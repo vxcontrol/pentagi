@@ -1485,6 +1485,26 @@ func (r *queryResolver) VectorStoreLogs(ctx context.Context, flowID int64) ([]*m
 	return converter.ConvertVectorStoreLogs(logs), nil
 }
 
+// ToolCallLogs is the resolver for the toolCallLogs field.
+func (r *queryResolver) ToolCallLogs(ctx context.Context, flowID int64) ([]*model.ToolCallLog, error) {
+	uid, err := validatePermissionWithFlowID(ctx, "toolcalls.view", flowID, r.DB)
+	if err != nil {
+		return nil, err
+	}
+
+	r.Logger.WithFields(logrus.Fields{
+		"uid":  uid,
+		"flow": flowID,
+	}).Debug("get tool call logs")
+
+	logs, err := r.DB.GetFlowToolcalls(ctx, flowID)
+	if err != nil {
+		return nil, err
+	}
+
+	return converter.ConvertToolCallLogs(logs), nil
+}
+
 // AssistantLogs is the resolver for the assistantLogs field.
 func (r *queryResolver) AssistantLogs(ctx context.Context, flowID int64, assistantID int64) ([]*model.AssistantLog, error) {
 	uid, err := validatePermissionWithFlowID(ctx, "assistantlogs.view", flowID, r.DB)
@@ -2653,6 +2673,26 @@ func (r *subscriptionResolver) VectorStoreLogAdded(ctx context.Context, flowID i
 	}
 
 	return r.Subscriptions.NewFlowSubscriber(uid, flowID).VectorStoreLogAdded(ctx)
+}
+
+// ToolCallLogAdded is the resolver for the toolCallLogAdded field.
+func (r *subscriptionResolver) ToolCallLogAdded(ctx context.Context, flowID int64) (<-chan *model.ToolCallLog, error) {
+	uid, err := validatePermissionWithFlowID(ctx, "toolcalls.subscribe", flowID, r.DB)
+	if err != nil {
+		return nil, err
+	}
+
+	return r.Subscriptions.NewFlowSubscriber(uid, flowID).ToolCallLogAdded(ctx)
+}
+
+// ToolCallLogUpdated is the resolver for the toolCallLogUpdated field.
+func (r *subscriptionResolver) ToolCallLogUpdated(ctx context.Context, flowID int64) (<-chan *model.ToolCallLog, error) {
+	uid, err := validatePermissionWithFlowID(ctx, "toolcalls.subscribe", flowID, r.DB)
+	if err != nil {
+		return nil, err
+	}
+
+	return r.Subscriptions.NewFlowSubscriber(uid, flowID).ToolCallLogUpdated(ctx)
 }
 
 // AssistantLogAdded is the resolver for the assistantLogAdded field.

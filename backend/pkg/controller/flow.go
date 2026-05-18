@@ -101,6 +101,7 @@ type flowProviderControllers struct {
 	slc  SearchLogController
 	tlc  TermLogController
 	vslc VectorStoreLogController
+	tclc ToolCallLogController
 	sc   ScreenshotController
 }
 
@@ -110,6 +111,7 @@ type flowProviderWorkers struct {
 	slw  FlowSearchLogWorker
 	tlw  FlowTermLogWorker
 	vslw FlowVectorStoreLogWorker
+	tclw FlowToolCallLogWorker
 	sw   FlowScreenshotWorker
 }
 
@@ -226,6 +228,7 @@ func NewFlowWorker(
 	executor.SetSearchLogProvider(workers.slw)
 	executor.SetTermLogProvider(workers.tlw)
 	executor.SetVectorStoreLogProvider(workers.vslw)
+	executor.SetToolCallLogProvider(workers.tclw)
 	executor.SetKnowledgeProvider(pub)
 	executor.SetGraphitiClient(fwc.provs.GraphitiClient())
 
@@ -380,6 +383,7 @@ func LoadFlowWorker(ctx context.Context, flow database.Flow, fwc flowWorkerCtx) 
 	executor.SetSearchLogProvider(workers.slw)
 	executor.SetTermLogProvider(workers.tlw)
 	executor.SetVectorStoreLogProvider(workers.vslw)
+	executor.SetToolCallLogProvider(workers.tclw)
 	executor.SetKnowledgeProvider(pub)
 	executor.SetGraphitiClient(fwc.provs.GraphitiClient())
 
@@ -1087,6 +1091,11 @@ func newFlowProviderWorkers(
 		return nil, fmt.Errorf("failed to create flow vector store log: %w", err)
 	}
 
+	tclw, err := cnts.tclc.NewFlowToolCallLog(ctx, flowID, pub)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create flow tool call log: %w", err)
+	}
+
 	sw, err := cnts.sc.NewFlowScreenshot(ctx, flowID, pub)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create flow screenshot: %w", err)
@@ -1098,6 +1107,7 @@ func newFlowProviderWorkers(
 		slw:  slw,
 		tlw:  tlw,
 		vslw: vslw,
+		tclw: tclw,
 		sw:   sw,
 	}, nil
 }
@@ -1132,6 +1142,11 @@ func getFlowProviderWorkers(
 		return nil, fmt.Errorf("failed to get flow vector store log: %w", err)
 	}
 
+	tclw, err := cnts.tclc.GetFlowToolCallLog(ctx, flowID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get flow tool call log: %w", err)
+	}
+
 	sw, err := cnts.sc.GetFlowScreenshot(ctx, flowID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get flow screenshot: %w", err)
@@ -1143,6 +1158,7 @@ func getFlowProviderWorkers(
 		slw:  slw,
 		tlw:  tlw,
 		vslw: vslw,
+		tclw: tclw,
 		sw:   sw,
 	}, nil
 }

@@ -527,6 +527,21 @@ type TestResult struct {
 	Error     *string `json:"error,omitempty"`
 }
 
+type ToolCallLog struct {
+	ID              int64          `json:"id"`
+	CallID          string         `json:"callId"`
+	Status          ToolCallStatus `json:"status"`
+	Name            string         `json:"name"`
+	Args            string         `json:"args"`
+	Result          string         `json:"result"`
+	DurationSeconds float64        `json:"durationSeconds"`
+	FlowID          int64          `json:"flowId"`
+	TaskID          *int64         `json:"taskId,omitempty"`
+	SubtaskID       *int64         `json:"subtaskId,omitempty"`
+	CreatedAt       time.Time      `json:"createdAt"`
+	UpdatedAt       time.Time      `json:"updatedAt"`
+}
+
 type ToolcallsStats struct {
 	TotalCount           int     `json:"totalCount"`
 	TotalDurationSeconds float64 `json:"totalDurationSeconds"`
@@ -1461,6 +1476,51 @@ func (e *TokenStatus) UnmarshalGQL(v interface{}) error {
 }
 
 func (e TokenStatus) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+type ToolCallStatus string
+
+const (
+	ToolCallStatusReceived ToolCallStatus = "received"
+	ToolCallStatusRunning  ToolCallStatus = "running"
+	ToolCallStatusFinished ToolCallStatus = "finished"
+	ToolCallStatusFailed   ToolCallStatus = "failed"
+)
+
+var AllToolCallStatus = []ToolCallStatus{
+	ToolCallStatusReceived,
+	ToolCallStatusRunning,
+	ToolCallStatusFinished,
+	ToolCallStatusFailed,
+}
+
+func (e ToolCallStatus) IsValid() bool {
+	switch e {
+	case ToolCallStatusReceived, ToolCallStatusRunning, ToolCallStatusFinished, ToolCallStatusFailed:
+		return true
+	}
+	return false
+}
+
+func (e ToolCallStatus) String() string {
+	return string(e)
+}
+
+func (e *ToolCallStatus) UnmarshalGQL(v interface{}) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = ToolCallStatus(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid ToolCallStatus", str)
+	}
+	return nil
+}
+
+func (e ToolCallStatus) MarshalGQL(w io.Writer) {
 	fmt.Fprint(w, strconv.Quote(e.String()))
 }
 

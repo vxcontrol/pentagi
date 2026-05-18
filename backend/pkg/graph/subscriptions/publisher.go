@@ -109,6 +109,14 @@ func (p *flowPublisher) VectorStoreLogAdded(ctx context.Context, vectorStoreLog 
 	p.ctrl.vecStoreLogAdded.Publish(ctx, p.flowID, converter.ConvertVectorStoreLog(vectorStoreLog))
 }
 
+func (p *flowPublisher) ToolCallLogAdded(ctx context.Context, toolCallLog database.Toolcall) {
+	p.ctrl.toolCallLogAdded.Publish(ctx, p.flowID, converter.ConvertToolCallLog(toolCallLog))
+}
+
+func (p *flowPublisher) ToolCallLogUpdated(ctx context.Context, toolCallLog database.Toolcall) {
+	p.ctrl.toolCallLogUpdated.Publish(ctx, p.flowID, converter.ConvertToolCallLog(toolCallLog))
+}
+
 func (p *flowPublisher) AssistantLogAdded(ctx context.Context, assistantLog database.Assistantlog) {
 	p.ctrl.assistantLogAdded.Publish(ctx, p.flowID, converter.ConvertAssistantLog(assistantLog, false))
 }

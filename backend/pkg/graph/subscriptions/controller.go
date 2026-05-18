@@ -64,6 +64,8 @@ type FlowSubscriber interface {
 	AgentLogAdded(ctx context.Context) (<-chan *model.AgentLog, error)
 	SearchLogAdded(ctx context.Context) (<-chan *model.SearchLog, error)
 	VectorStoreLogAdded(ctx context.Context) (<-chan *model.VectorStoreLog, error)
+	ToolCallLogAdded(ctx context.Context) (<-chan *model.ToolCallLog, error)
+	ToolCallLogUpdated(ctx context.Context) (<-chan *model.ToolCallLog, error)
 	AssistantLogAdded(ctx context.Context) (<-chan *model.AssistantLog, error)
 	AssistantLogUpdated(ctx context.Context) (<-chan *model.AssistantLog, error)
 	FlowContext
@@ -125,6 +127,8 @@ type FlowPublisher interface {
 	AgentLogAdded(ctx context.Context, agentLog database.Agentlog)
 	SearchLogAdded(ctx context.Context, searchLog database.Searchlog)
 	VectorStoreLogAdded(ctx context.Context, vectorStoreLog database.Vecstorelog)
+	ToolCallLogAdded(ctx context.Context, toolCallLog database.Toolcall)
+	ToolCallLogUpdated(ctx context.Context, toolCallLog database.Toolcall)
 	AssistantLogAdded(ctx context.Context, assistantLog database.Assistantlog)
 	AssistantLogUpdated(ctx context.Context, assistantLog database.Assistantlog, appendPart bool)
 	KnowledgeDocumentCreated(ctx context.Context, doc *model.KnowledgeDocument)
@@ -209,6 +213,8 @@ type controller struct {
 	agentLogAdded       Channel[*model.AgentLog]
 	searchLogAdded      Channel[*model.SearchLog]
 	vecStoreLogAdded    Channel[*model.VectorStoreLog]
+	toolCallLogAdded    Channel[*model.ToolCallLog]
+	toolCallLogUpdated  Channel[*model.ToolCallLog]
 	assistantLogAdded   Channel[*model.AssistantLog]
 	assistantLogUpdated Channel[*model.AssistantLog]
 
@@ -264,6 +270,8 @@ func NewSubscriptionsController() SubscriptionsController {
 		agentLogAdded:       NewChannel[*model.AgentLog](),
 		searchLogAdded:      NewChannel[*model.SearchLog](),
 		vecStoreLogAdded:    NewChannel[*model.VectorStoreLog](),
+		toolCallLogAdded:    NewChannel[*model.ToolCallLog](),
+		toolCallLogUpdated:  NewChannel[*model.ToolCallLog](),
 		assistantLogAdded:   NewChannel[*model.AssistantLog](),
 		assistantLogUpdated: NewChannel[*model.AssistantLog](),
 

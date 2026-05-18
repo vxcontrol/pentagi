@@ -101,6 +101,8 @@ type Querier interface {
 	GetFlowTemplate(ctx context.Context, arg GetFlowTemplateParams) (FlowTemplate, error)
 	GetFlowTemplatesByUserID(ctx context.Context, userID int64) ([]FlowTemplate, error)
 	GetFlowTermLogs(ctx context.Context, flowID int64) ([]Termlog, error)
+	GetFlowToolcall(ctx context.Context, arg GetFlowToolcallParams) (Toolcall, error)
+	GetFlowToolcalls(ctx context.Context, flowID int64) ([]Toolcall, error)
 	// ==================== Toolcalls Analytics Queries ====================
 	// Get total execution time and count of toolcalls for a specific flow
 	GetFlowToolcallsStats(ctx context.Context, flowID int64) (GetFlowToolcallsStatsRow, error)

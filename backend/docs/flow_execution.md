@@ -485,6 +485,7 @@ graph TB
         SearchLogCtrl[Search Log Controller]
         TermLogCtrl[Terminal Log Controller]
         VectorLogCtrl[Vector Store Log Controller]
+        ToolCallLogCtrl[Tool Call Log Controller]
         ScreenshotCtrl[Screenshot Controller]
         AssistantLogCtrl[Assistant Log Controller]
     end
@@ -495,6 +496,7 @@ graph TB
         SearchLogWorker[Flow Search Log Worker]  
         TermLogWorker[Flow Terminal Log Worker]
         VectorLogWorker[Flow Vector Store Log Worker]
+        ToolCallLogWorker[Flow Tool Call Log Worker]
         ScreenshotWorker[Flow Screenshot Worker]
         AssistantLogWorker[Flow Assistant Log Worker]
     end
@@ -505,6 +507,7 @@ graph TB
         SearchLogDB[(Search Logs<br/>Engine + Query + Result)]
         TermLogDB[(Terminal Logs<br/>Stdin/Stdout)]
         VectorLogDB[(Vector Store Logs<br/>Retrieve/Store actions)]
+        ToolCallLogDB[(Tool Call Logs<br/>received/running/finished/failed)]
         ScreenshotDB[(Screenshots<br/>Browser captures)]
         AssistantLogDB[(Assistant Logs<br/>Interactive conversation)]
     end
@@ -519,6 +522,7 @@ graph TB
     FlowCtrl --> SearchLogCtrl
     FlowCtrl --> TermLogCtrl
     FlowCtrl --> VectorLogCtrl
+    FlowCtrl --> ToolCallLogCtrl
     FlowCtrl --> ScreenshotCtrl
     FlowCtrl --> AssistantLogCtrl
     
@@ -527,6 +531,7 @@ graph TB
     SearchLogCtrl --> SearchLogWorker
     TermLogCtrl --> TermLogWorker
     VectorLogCtrl --> VectorLogWorker
+    ToolCallLogCtrl --> ToolCallLogWorker
     ScreenshotCtrl --> ScreenshotWorker
     AssistantLogCtrl --> AssistantLogWorker
     
@@ -535,6 +540,7 @@ graph TB
     SearchLogWorker --> SearchLogDB
     TermLogWorker --> TermLogDB
     VectorLogWorker --> VectorLogDB
+    ToolCallLogWorker --> ToolCallLogDB
     ScreenshotWorker --> ScreenshotDB
     AssistantLogWorker --> AssistantLogDB
     
@@ -543,6 +549,7 @@ graph TB
     Subtask --> SearchLogWorker
     Subtask --> TermLogWorker
     Subtask --> VectorLogWorker
+    Subtask --> ToolCallLogWorker
     Subtask --> ScreenshotWorker
     Assistant --> AssistantLogWorker
     
@@ -551,6 +558,7 @@ graph TB
     SearchLogWorker --> Publisher
     TermLogWorker --> Publisher
     VectorLogWorker --> Publisher
+    ToolCallLogWorker --> Publisher
     ScreenshotWorker --> Publisher
     AssistantLogWorker --> Publisher
     
@@ -813,6 +821,7 @@ graph LR
         GraphQLSubs --> TerminalLogAdded[Terminal Log Added]
         GraphQLSubs --> SearchLogAdded[Search Log Added]
         GraphQLSubs --> VectorStoreLogAdded[Vector Store Log Added]
+        GraphQLSubs --> ToolCallLogAdded[Tool Call Log Added/Updated]
         GraphQLSubs --> ScreenshotAdded[Screenshot Added]
         GraphQLSubs --> AssistantLogAdded[Assistant Log Added/Updated]
     end
@@ -1189,7 +1198,7 @@ The Flow execution system represents a sophisticated orchestration platform that
 - **Vector knowledge system** - 4 storage types with semantic search and metadata filtering
 - **Comprehensive tool ecosystem** - 44+ tools across 7 categories with automatic memory storage
 - **GraphQL subscriptions** - Real-time Flow/Task/Log updates via WebSocket connections
-- **Logging architecture** - 7-layer logging system with Controller/Worker pattern
+- **Logging architecture** - 8-layer logging system with Controller/Worker pattern
 
 ### Critical Technical Details
 
@@ -1215,7 +1224,7 @@ The Flow execution system represents a sophisticated orchestration platform that
 
 **Flow Publisher Integration**:
 - **Centralized Updates**: Single publisher coordinates all Flow-related real-time updates
-- **Event Types**: 8 different event types (Flow, Task, Agent logs, Message logs, etc.)
+- **Event Types**: 10 different event types (Flow, Task, Agent logs, Message logs, Tool Call logs, etc.)
 - **User-scoped**: Each user gets their own publisher instance for proper isolation
 - **WebSocket Distribution**: Efficient real-time delivery to frontend clients
 
@@ -1240,7 +1249,7 @@ The Flow execution system represents a sophisticated orchestration platform that
 - **Graceful degradation**: Automatic fallbacks to simpler operational modes
 
 **Real-time & Observability**:
-- **7-layer logging**: Comprehensive tracking from agent interactions to terminal commands
+- **8-layer logging**: Comprehensive tracking from agent interactions to terminal commands
 - **GraphQL subscriptions**: Real-time updates via WebSocket connections
 - **Streaming architecture**: Progressive response delivery with thinking/content separation
 - **Vector observability**: Complete tracking of knowledge storage and retrieval operations

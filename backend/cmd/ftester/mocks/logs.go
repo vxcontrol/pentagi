@@ -18,6 +18,7 @@ type ProxyProviders interface {
 	GetSearchLogProvider() tools.SearchLogProvider
 	GetTermLogProvider() tools.TermLogProvider
 	GetVectorStoreLogProvider() tools.VectorStoreLogProvider
+	GetToolCallLogProvider() tools.ToolCallLogProvider
 	GetKnowledgeProvider() tools.KnowledgeProvider
 }
 
@@ -29,6 +30,7 @@ type proxyProviders struct {
 	searchLog         *proxySearchLogProvider
 	termLog           *proxyTermLogProvider
 	vectorStoreLog    *proxyVectorStoreLogProvider
+	toolCallLog       *proxyToolCallLogProvider
 	knowledgeProvider *proxyKnowledgeProvider
 }
 
@@ -41,6 +43,7 @@ func NewProxyProviders() ProxyProviders {
 		searchLog:         &proxySearchLogProvider{},
 		termLog:           &proxyTermLogProvider{},
 		vectorStoreLog:    &proxyVectorStoreLogProvider{},
+		toolCallLog:       &proxyToolCallLogProvider{},
 		knowledgeProvider: &proxyKnowledgeProvider{},
 	}
 }
@@ -67,6 +70,10 @@ func (p *proxyProviders) GetTermLogProvider() tools.TermLogProvider {
 
 func (p *proxyProviders) GetVectorStoreLogProvider() tools.VectorStoreLogProvider {
 	return p.vectorStoreLog
+}
+
+func (p *proxyProviders) GetToolCallLogProvider() tools.ToolCallLogProvider {
+	return p.toolCallLog
 }
 
 func (p *proxyProviders) GetKnowledgeProvider() tools.KnowledgeProvider {
@@ -267,6 +274,44 @@ func (p *proxyVectorStoreLogProvider) PutLog(
 	}
 
 	return 0, nil
+}
+
+// proxyToolCallLogProvider is a proxy implementation of ToolCallLogProvider
+type proxyToolCallLogProvider struct{}
+
+// PutLog implements the ToolCallLogProvider interface
+func (p *proxyToolCallLogProvider) PutLog(ctx context.Context, callID string, name string, args json.RawMessage, taskID *int64, subtaskID *int64) (int64, error) {
+	terminal.PrintInfo("Tool call log saved:")
+	terminal.PrintKeyValue("Call ID", callID)
+	terminal.PrintKeyValue("Name", name)
+	terminal.PrintKeyValue("Args", string(args))
+
+	if taskID != nil {
+		terminal.PrintKeyValueFormat("Task ID", "%d", *taskID)
+	}
+	if subtaskID != nil {
+		terminal.PrintKeyValueFormat("Subtask ID", "%d", *subtaskID)
+	}
+
+	return 0, nil
+}
+
+// UpdateLogSuccess implements the ToolCallLogProvider interface
+func (p *proxyToolCallLogProvider) UpdateLogSuccess(ctx context.Context, id int64, result string, durationSeconds float64) error {
+	terminal.PrintInfo("Tool call log success updated:")
+	terminal.PrintKeyValueFormat("ID", "%d", id)
+	terminal.PrintKeyValue("Result", result)
+	terminal.PrintKeyValueFormat("Duration Seconds", "%f", durationSeconds)
+	return nil
+}
+
+// UpdateLogFailed implements the ToolCallLogProvider interface
+func (p *proxyToolCallLogProvider) UpdateLogFailed(ctx context.Context, id int64, result string, durationSeconds float64) error {
+	terminal.PrintInfo("Tool call log failed updated:")
+	terminal.PrintKeyValueFormat("ID", "%d", id)
+	terminal.PrintKeyValue("Result", result)
+	terminal.PrintKeyValueFormat("Duration Seconds", "%f", durationSeconds)
+	return nil
 }
 
 // proxyKnowledgeProvider is a proxy implementation of KnowledgeProvider

@@ -66,6 +66,7 @@ type flowController struct {
 	slc    SearchLogController
 	tlc    TermLogController
 	vslc   VectorStoreLogController
+	tclc   ToolCallLogController
 	sc     ScreenshotController
 }
 
@@ -90,6 +91,7 @@ func NewFlowController(
 		slc:    NewSearchLogController(db),
 		tlc:    NewTermLogController(db),
 		vslc:   NewVectorStoreLogController(db),
+		tclc:   NewToolCallLogController(db),
 		sc:     NewScreenshotController(db),
 	}
 }
@@ -114,6 +116,7 @@ func (fc *flowController) LoadFlows(ctx context.Context) error {
 				slc:  fc.slc,
 				tlc:  fc.tlc,
 				vslc: fc.vslc,
+				tclc: fc.tclc,
 				sc:   fc.sc,
 			},
 		})
@@ -164,6 +167,7 @@ func (fc *flowController) CreateFlow(
 				slc:  fc.slc,
 				tlc:  fc.tlc,
 				vslc: fc.vslc,
+				tclc: fc.tclc,
 				sc:   fc.sc,
 			},
 		},
@@ -210,6 +214,7 @@ func (fc *flowController) CreateAssistant(
 			slc:  fc.slc,
 			tlc:  fc.tlc,
 			vslc: fc.vslc,
+			tclc: fc.tclc,
 			sc:   fc.sc,
 		},
 	}

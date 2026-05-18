@@ -112,6 +112,14 @@ func (s *flowSubscriber) VectorStoreLogAdded(ctx context.Context) (<-chan *model
 	return s.ctrl.vecStoreLogAdded.Subscribe(ctx, s.flowID), nil
 }
 
+func (s *flowSubscriber) ToolCallLogAdded(ctx context.Context) (<-chan *model.ToolCallLog, error) {
+	return s.ctrl.toolCallLogAdded.Subscribe(ctx, s.flowID), nil
+}
+
+func (s *flowSubscriber) ToolCallLogUpdated(ctx context.Context) (<-chan *model.ToolCallLog, error) {
+	return s.ctrl.toolCallLogUpdated.Subscribe(ctx, s.flowID), nil
+}
+
 func (s *flowSubscriber) AssistantLogAdded(ctx context.Context) (<-chan *model.AssistantLog, error) {
 	return s.ctrl.assistantLogAdded.Subscribe(ctx, s.flowID), nil
 }

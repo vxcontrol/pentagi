@@ -904,6 +904,10 @@ func (p *captureFlowPublisher) AgentLogAdded(_ context.Context, _ database.Agent
 func (p *captureFlowPublisher) SearchLogAdded(_ context.Context, _ database.Searchlog)   {}
 func (p *captureFlowPublisher) VectorStoreLogAdded(_ context.Context, _ database.Vecstorelog) {
 }
+func (p *captureFlowPublisher) ToolCallLogAdded(_ context.Context, _ database.Toolcall) {
+}
+func (p *captureFlowPublisher) ToolCallLogUpdated(_ context.Context, _ database.Toolcall) {
+}
 func (p *captureFlowPublisher) AssistantLogAdded(_ context.Context, _ database.Assistantlog) {}
 func (p *captureFlowPublisher) AssistantLogUpdated(_ context.Context, _ database.Assistantlog, _ bool) {
 }
