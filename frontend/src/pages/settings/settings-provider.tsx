@@ -1364,7 +1364,7 @@ function SettingsProvider() {
     if (loading) {
         return (
             <>
-                <PageTitle>{providerName ?? 'Provider'}</PageTitle>
+                <PageTitle>{isNew ? 'New provider' : (providerName || 'Provider')}</PageTitle>
                 <StatusCard
                     description="Please wait while we fetch provider configuration"
                     icon={<Loader2 className="text-muted-foreground size-16 animate-spin" />}
@@ -1377,7 +1377,7 @@ function SettingsProvider() {
     if (error) {
         return (
             <>
-                <PageTitle>{providerName ?? 'Provider'}</PageTitle>
+                <PageTitle>{isNew ? 'New provider' : (providerName || 'Provider')}</PageTitle>
                 <Alert variant="destructive">
                     <AlertCircle className="size-4" />
                     <AlertTitle>Error loading provider data</AlertTitle>
@@ -1395,7 +1395,7 @@ function SettingsProvider() {
 
     return (
         <>
-            <PageTitle>{providerName ?? 'Provider'}</PageTitle>
+            <PageTitle>{isNew ? 'New provider' : (providerName || 'Provider')}</PageTitle>
             <div className="flex flex-col gap-4">
                 <div className="flex flex-col gap-2">
                     <h2 className="flex items-center gap-2 text-lg font-semibold">

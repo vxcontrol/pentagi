@@ -69,7 +69,7 @@ function Knowledge() {
     if (!isNew && isLoadingKnowledge) {
         return (
             <>
-                <PageTitle>{knowledge?.question ?? 'Knowledge'}</PageTitle>
+                <PageTitle>{isNew ? 'New knowledge' : (knowledge?.question ?? 'Knowledge')}</PageTitle>
                 <KnowledgeLayout
                     isNew={false}
                     knowledge={knowledge}
@@ -85,7 +85,7 @@ function Knowledge() {
     if (!isNew && !knowledge) {
         return (
             <>
-                <PageTitle>{knowledge?.question ?? 'Knowledge'}</PageTitle>
+                <PageTitle>{isNew ? 'New knowledge' : (knowledge?.question ?? 'Knowledge')}</PageTitle>
                 <KnowledgeLayout
                     isNew={false}
                     knowledge={knowledge}
@@ -108,7 +108,7 @@ function Knowledge() {
 
     return (
         <>
-            <PageTitle>{knowledge?.question ?? 'Knowledge'}</PageTitle>
+            <PageTitle>{isNew ? 'New knowledge' : (knowledge?.question ?? 'Knowledge')}</PageTitle>
             <KnowledgeForm
                 initialValues={initialValues}
                 isNew={isNew}

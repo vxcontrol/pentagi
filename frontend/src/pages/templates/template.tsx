@@ -660,7 +660,7 @@ function Template() {
     if (!isNew && isLoadingTemplate) {
         return (
             <>
-                <PageTitle>{templateName ?? 'Template'}</PageTitle>
+                <PageTitle>{isNew ? 'New template' : (templateName ?? 'Template')}</PageTitle>
                 {pageHeader}
                 <div className="flex min-h-[calc(100dvh-3rem)] items-center justify-center">
                     <Spinner variant="circle" />
@@ -673,7 +673,7 @@ function Template() {
     if (!isNew && !isLoadingTemplate && !templateData?.flowTemplate) {
         return (
             <>
-                <PageTitle>{templateName ?? 'Template'}</PageTitle>
+                <PageTitle>{isNew ? 'New template' : (templateName ?? 'Template')}</PageTitle>
                 {pageHeader}
                 <div className="flex min-h-[calc(100dvh-3rem)] items-center justify-center p-4">
                     <Card className="w-full max-w-2xl">
@@ -690,7 +690,7 @@ function Template() {
 
     return (
         <>
-            <PageTitle>{templateName ?? 'Template'}</PageTitle>
+            <PageTitle>{isNew ? 'New template' : (templateName ?? 'Template')}</PageTitle>
             {pageHeader}
             <div className="flex min-h-[calc(100dvh-3rem)]">
                 <div className="flex min-w-0 flex-1 items-center justify-center p-4">
