@@ -16,7 +16,7 @@ import {
     Trash,
     X,
 } from 'lucide-react';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useId, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
 import type { ApiTokenFragmentFragment } from '@/graphql/types';
@@ -64,6 +64,7 @@ interface CreateFormData {
 }
 
 interface EditFormData {
+    name: string;
     status: TokenStatusEnum;
 }
 
@@ -198,15 +199,17 @@ function SettingsAPITokens() {
 
     const [editingTokenId, setEditingTokenId] = useState<null | string>(null);
     const [creatingToken, setCreatingToken] = useState(false);
-    const [editFormData, setEditFormData] = useState<EditFormData>({ status: TokenStatusEnum.Active });
+    const [editFormData, setEditFormData] = useState<EditFormData>({ name: '', status: TokenStatusEnum.Active });
     const [createFormData, setCreateFormData] = useState<CreateFormData>({ expiresAt: null, name: '' });
     const [tokenSecret, setTokenSecret] = useState<null | string>(null);
     const [showTokenDialog, setShowTokenDialog] = useState(false);
     const [deleteErrorMessage, setDeleteErrorMessage] = useState<null | string>(null);
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
     const [deletingToken, setDeletingToken] = useState<APIToken | null>(null);
-    const editingInputRef = useRef<HTMLInputElement>(null);
-    const creatingInputRef = useRef<HTMLInputElement>(null);
+    // Stable per-instance ids — keep label/for and a11y warnings clean even when
+    // the row re-mounts due to subscription-driven refetches.
+    const createNameFieldId = useId();
+    const editNameFieldId = useId();
 
     const { filter, pageIndex: currentPage, setFilter, setPage: handlePageChange } = useTableState();
 
@@ -231,18 +234,19 @@ function SettingsAPITokens() {
     const handleEdit = useCallback((token: APIToken) => {
         setEditingTokenId(token.tokenId);
         setEditFormData({
+            name: token.name ?? '',
             status: token.status,
         });
     }, []);
 
     const handleCancelEdit = useCallback(() => {
         setEditingTokenId(null);
-        setEditFormData({ status: TokenStatusEnum.Active });
+        setEditFormData({ name: '', status: TokenStatusEnum.Active });
     }, []);
 
     const handleSave = useCallback(
         async (tokenId: string) => {
-            const name = editingInputRef.current?.value.trim() || null;
+            const name = editFormData.name.trim() || null;
 
             try {
                 await updateAPIToken({
@@ -257,12 +261,12 @@ function SettingsAPITokens() {
                 });
 
                 setEditingTokenId(null);
-                setEditFormData({ status: TokenStatusEnum.Active });
+                setEditFormData({ name: '', status: TokenStatusEnum.Active });
             } catch (error) {
                 console.error('Failed to update token:', error);
             }
         },
-        [editFormData.status, updateAPIToken],
+        [editFormData.name, editFormData.status, updateAPIToken],
     );
 
     const handleCreateNew = useCallback(() => {
@@ -280,7 +284,7 @@ function SettingsAPITokens() {
             return;
         }
 
-        const name = creatingInputRef.current?.value.trim() || null;
+        const name = createFormData.name.trim() || null;
 
         try {
             const ttl = calculateTTL(createFormData.expiresAt);
@@ -304,7 +308,7 @@ function SettingsAPITokens() {
         } catch (error) {
             console.error('Failed to create token:', error);
         }
-    }, [createAPIToken, createFormData.expiresAt]);
+    }, [createAPIToken, createFormData.expiresAt, createFormData.name]);
 
     const handleDeleteDialogOpen = useCallback((token: APIToken) => {
         setDeletingToken(token);
@@ -358,27 +362,35 @@ function SettingsAPITokens() {
                     if (isCreating) {
                         return (
                             <Input
+                                autoComplete="off"
                                 autoFocus
                                 className="h-8"
-                                defaultValue=""
+                                id={createNameFieldId}
                                 key="create-name-input"
+                                name="token-name"
+                                onChange={(event) =>
+                                    setCreateFormData((prev) => ({ ...prev, name: event.target.value }))
+                                }
                                 placeholder="Token name (optional)"
-                                ref={creatingInputRef}
+                                value={createFormData.name}
                             />
                         );
                     }
 
                     if (isEditing) {
-                        const tokenName = token.name || '';
-
                         return (
                             <Input
+                                autoComplete="off"
                                 autoFocus
                                 className="h-8"
-                                defaultValue={tokenName}
+                                id={editNameFieldId}
                                 key={`edit-name-input-${token.tokenId}`}
+                                name="token-name"
+                                onChange={(event) =>
+                                    setEditFormData((prev) => ({ ...prev, name: event.target.value }))
+                                }
                                 placeholder="Token name (optional)"
-                                ref={editingInputRef}
+                                value={editFormData.name}
                             />
                         );
                     }
@@ -706,8 +718,12 @@ function SettingsAPITokens() {
         ],
         [
             createFormData.expiresAt,
+            createFormData.name,
+            createNameFieldId,
             deletingToken,
+            editFormData.name,
             editFormData.status,
+            editNameFieldId,
             editingTokenId,
             handleCancelCreate,
             handleCancelEdit,
