@@ -100,16 +100,17 @@ describe('DocumentTitle', () => {
         await waitFor(() => expect(document.title).toBe('API tokens — PentAGI'));
     });
 
-    it('renders a title from handle.titleComponent', async () => {
+    it('renders a title from a PascalCase-named component', async () => {
+        // PascalCase-named function = component (apolloTitle returns one).
         function CustomTitle({ params }: { params: Record<string, string | undefined> }) {
-            // React 19 only hoists <title> when the child is a single string
-            // (not text + interpolation + text), so compute the string ahead.
+            // React 19 only hoists <title> when the child is a single string,
+            // so compute the string ahead of the JSX.
             return <title>{`Custom #${params.id} — PentAGI`}</title>;
         }
 
         renderAt('/items/42', [
             {
-                children: [{ element: <span>page</span>, handle: { titleComponent: CustomTitle }, path: 'items/:id' }],
+                children: [{ element: <span>page</span>, handle: { title: CustomTitle }, path: 'items/:id' }],
                 element: (
                     <>
                         <DocumentTitle />
@@ -123,20 +124,17 @@ describe('DocumentTitle', () => {
         await waitFor(() => expect(document.title).toBe('Custom #42 — PentAGI'));
     });
 
-    it('prefers titleComponent over static title when both are present on the same handle', async () => {
-        function CustomTitle() {
-            return <title>From component — PentAGI</title>;
+    it('treats a lowercase-named function as a plain resolver, not a component', async () => {
+        // A named function starting with a lowercase letter is detected as a
+        // resolver: DocumentTitle calls it with params and wraps the returned
+        // string with the standard "X — PentAGI" template.
+        function resolveTitle(params: Record<string, string | undefined>) {
+            return `Item ${params.id}`;
         }
 
-        renderAt('/x', [
+        renderAt('/items/7', [
             {
-                children: [
-                    {
-                        element: <span>page</span>,
-                        handle: { title: 'From static', titleComponent: CustomTitle },
-                        path: 'x',
-                    },
-                ],
+                children: [{ element: <span>page</span>, handle: { title: resolveTitle }, path: 'items/:id' }],
                 element: (
                     <>
                         <DocumentTitle />
@@ -147,7 +145,7 @@ describe('DocumentTitle', () => {
             },
         ]);
 
-        await waitFor(() => expect(document.title).toBe('From component — PentAGI'));
+        await waitFor(() => expect(document.title).toBe('Item 7 — PentAGI'));
     });
 
     it('falls back to APP_NAME when handle.title returns an empty string', async () => {

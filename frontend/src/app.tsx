@@ -17,10 +17,9 @@ import ProtectedRoute from '@/components/routes/protected-route';
 import PublicRoute from '@/components/routes/public-route';
 import { DocumentTitle } from '@/components/shared/document-title';
 import PageLoader from '@/components/shared/page-loader';
-import { FlowTitle, KnowledgeTitle, ProviderTitle, TemplateTitle } from '@/components/shared/resource-titles';
 import { Toaster } from '@/components/ui/sonner';
 import client from '@/lib/apollo';
-import { formatPromptId } from '@/lib/utils/format-prompt-id';
+import { routeTitles } from '@/lib/route-titles';
 import { FavoritesProvider } from '@/providers/favorites-provider';
 import { FlowProvider } from '@/providers/flow-provider';
 import { KnowledgesProvider } from '@/providers/knowledges-provider';
@@ -134,7 +133,7 @@ const router = createBrowserRouter(
                 <Route element={<MainLayout />}>
                     <Route
                         element={<Dashboard />}
-                        handle={{ title: 'Dashboard' }}
+                        handle={routeTitles.dashboard}
                         path="dashboard"
                     />
 
@@ -142,48 +141,48 @@ const router = createBrowserRouter(
                     <Route element={<FlowsLayout />}>
                         <Route
                             element={<Flows />}
-                            handle={{ title: 'Flows' }}
+                            handle={routeTitles.flows}
                             path="flows"
                         />
                         <Route
                             element={<NewFlow />}
-                            handle={{ title: 'New flow' }}
+                            handle={routeTitles.newFlow}
                             path="flows/new"
                         />
                         <Route
                             element={<FlowWithProvider />}
-                            handle={{ titleComponent: FlowTitle }}
+                            handle={routeTitles.flow}
                             path="flows/:flowId"
                         />
                     </Route>
 
                     <Route
                         element={<Templates />}
-                        handle={{ title: 'Templates' }}
+                        handle={routeTitles.templates}
                         path="templates"
                     />
                     <Route
                         element={<Template />}
-                        handle={{ titleComponent: TemplateTitle }}
+                        handle={routeTitles.template}
                         path="templates/:templateId"
                     />
 
                     <Route element={<KnowledgesLayout />}>
                         <Route
                             element={<Knowledges />}
-                            handle={{ title: 'Knowledges' }}
+                            handle={routeTitles.knowledges}
                             path="knowledges"
                         />
                         <Route
                             element={<Knowledge />}
-                            handle={{ titleComponent: KnowledgeTitle }}
+                            handle={routeTitles.knowledge}
                             path="knowledges/:knowledgeId"
                         />
                     </Route>
 
                     <Route
                         element={<Resources />}
-                        handle={{ title: 'Resources' }}
+                        handle={routeTitles.resources}
                         path="resources"
                     />
                 </Route>
@@ -204,30 +203,27 @@ const router = createBrowserRouter(
                     />
                     <Route
                         element={<SettingsProviders />}
-                        handle={{ title: 'Providers' }}
+                        handle={routeTitles.providers}
                         path="providers"
                     />
                     <Route
                         element={<SettingsProvider />}
-                        handle={{ titleComponent: ProviderTitle }}
+                        handle={routeTitles.provider}
                         path="providers/:providerId"
                     />
                     <Route
                         element={<SettingsPrompts />}
-                        handle={{ title: 'Prompts' }}
+                        handle={routeTitles.prompts}
                         path="prompts"
                     />
                     <Route
                         element={<SettingsPrompt />}
-                        handle={{
-                            title: (params: Record<string, string | undefined>) =>
-                                params.promptId ? formatPromptId(params.promptId) : 'Prompt',
-                        }}
+                        handle={routeTitles.prompt}
                         path="prompts/:promptId"
                     />
                     <Route
                         element={<SettingsAPITokens />}
-                        handle={{ title: 'API tokens' }}
+                        handle={routeTitles.apiTokens}
                         path="api-tokens"
                     />
                     {/* Catch-all route for unknown settings paths */}
@@ -246,20 +242,20 @@ const router = createBrowserRouter(
             {/* report routes */}
             <Route
                 element={<ProtectedReportLayout />}
-                handle={{ title: 'Flow report' }}
+                handle={routeTitles.flowReport}
                 path="flows/:flowId/report"
             />
 
             {/* public routes */}
             <Route
                 element={<PublicLoginLayout />}
-                handle={{ title: 'Login' }}
+                handle={routeTitles.login}
                 path="login"
             />
 
             <Route
                 element={<OAuthResult />}
-                handle={{ title: 'OAuth' }}
+                handle={routeTitles.oauth}
                 path="oauth/result"
             />
 

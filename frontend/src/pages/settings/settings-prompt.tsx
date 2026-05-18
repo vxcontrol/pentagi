@@ -36,8 +36,8 @@ import {
     useUpdatePromptMutation,
     useValidatePromptMutation,
 } from '@/graphql/types';
+import { formatPromptId } from '@/lib/route-titles/format-prompt-id';
 import { cn } from '@/lib/utils';
-import { formatPromptId } from '@/lib/utils/format-prompt-id';
 
 // Form schemas for each tab
 const systemFormSchema = z.object({
