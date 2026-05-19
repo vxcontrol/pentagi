@@ -139,7 +139,10 @@ export function InputSearch({
     return (
         <InputGroup
             className={cn(
-                'h-7 w-auto shrink-0 py-1 transition-[background-color,border-color,box-shadow] duration-100',
+                // Mirror the `size="sm"` button geometry used by `HeaderButton`
+                // so the search control lines up vertically with sibling
+                // actions in any page header (h-8 / rounded-md / px-3).
+                'h-8 w-auto shrink-0 transition-[background-color,border-color,box-shadow] duration-100',
                 isExpanded
                     ? 'border-input dark:bg-input/30 shadow-xs'
                     : 'border-transparent shadow-none dark:bg-transparent',
@@ -148,7 +151,12 @@ export function InputSearch({
         >
             <InputGroupAddon
                 align="inline-start"
-                className={cn(!isExpanded && 'mr-1.5 -ml-1.5')}
+                // Collapsed trigger sits flush with the addon edge — the
+                // addon's default `pl-3` would otherwise add a 12 px gutter
+                // that wastes header real estate when only the icon is on
+                // screen. `has-[>button]:ml-[-0.45rem]` already handles the
+                // analogous adjustment when expanded.
+                className={cn(!isExpanded && '-mx-1.5')}
             >
                 {isExpanded ? (
                     <Search
@@ -158,9 +166,8 @@ export function InputSearch({
                 ) : (
                     <InputGroupButton
                         aria-label={ariaLabel}
-                        className="text-foreground -mx-1.5 size-7"
                         onClick={expand}
-                        size="icon-xs"
+                        size="icon-sm"
                         type="button"
                         variant="ghost"
                     >
@@ -179,7 +186,12 @@ export function InputSearch({
             >
                 <InputGroupInput
                     aria-label={ariaLabel}
-                    className="min-w-0 py-0 pl-2"
+                    // `Input` defaults to `h-9` — that's 4 px taller than our
+                    // `h-8` group, which would let the input edge poke past
+                    // the bordered group container. Pin it to the group's
+                    // height; the `min-w-0` is to keep flexbox from
+                    // bottoming out on the implicit `min-content` width.
+                    className="h-8 min-w-0 py-0 pl-2"
                     onChange={(event) => onSearchChange(event.target.value)}
                     onKeyDown={handleInputKeyDown}
                     placeholder={placeholder}
