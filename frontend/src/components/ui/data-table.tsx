@@ -705,6 +705,8 @@ function DataTable<TData, TValue = unknown>({
                                         className={cn(
                                             'group hover:bg-muted/50 data-[state=open]:bg-muted/50 has-[[data-state=open]]:bg-muted/50',
                                             isRowInteractive && 'cursor-pointer',
+                                            contextMenuContent &&
+                                                'pointer-coarse:select-none pointer-coarse:[-webkit-touch-callout:none]',
                                         )}
                                         {...(row.getIsSelected() ? { 'data-state': 'selected' } : {})}
                                         onClick={() => handleRowClick(row)}
