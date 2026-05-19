@@ -2,7 +2,7 @@ import type { ColumnDef } from '@tanstack/react-table';
 
 import { Ellipsis, LibraryBig, Loader2, Pencil, PencilLine, Plus, Trash } from 'lucide-react';
 import { useCallback, useRef, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 
 import type { BadgeVariant } from '@/components/ui/badge';
@@ -27,7 +27,7 @@ import { SidebarTrigger } from '@/components/ui/sidebar';
 import { StatusCard } from '@/components/ui/status-card';
 import { KnowledgeDocType } from '@/graphql/types';
 import { useTableState } from '@/hooks/use-table-state';
-import { mergeHrefWithSearchParams } from '@/lib/url-params';
+import { mergeHrefWithSearchParams, URL_PARAMS } from '@/lib/url-params';
 import { type Knowledge, useKnowledges } from '@/providers/knowledges-provider';
 
 const docTypeBadgeVariant: Record<KnowledgeDocType, BadgeVariant> = {
@@ -63,7 +63,16 @@ function Knowledges() {
     const [isRenameLoading, setIsRenameLoading] = useState(false);
     const editingInputRef = useRef<HTMLInputElement>(null);
 
-    const { filter, setFilter } = useTableState();
+    // When the user lands on a `?qs=` link (server semantic search) we
+    // must suppress the storage→URL `?q=` restore. Re-injecting a previous
+    // session's client filter on top of a fresh semantic-search URL would
+    // silently narrow the result set behind the user's back.
+    // `useTableState` reads `skipRestore` once at mount via a ref, so a
+    // later toggle (user clears `?qs=`) won't replay the restore.
+    const [initialParams] = useSearchParams();
+    const { filter, setFilter } = useTableState({
+        skipRestore: initialParams.has(URL_PARAMS.SEARCH),
+    });
 
     const handleOpen = useCallback(
         (id: string) => {

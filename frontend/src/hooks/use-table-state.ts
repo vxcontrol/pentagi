@@ -37,6 +37,18 @@ interface UseTableStateOptions {
     /** Query string param for the 1-based page number. Default `URL_PARAMS.PAGE` (`'page'`). */
     pageParamName?: string;
     /**
+     * Suppresses the one-time storage → URL restore on mount. Use on pages
+     * that route the `?q=` filter alongside a sibling URL parameter with
+     * its own filter semantics — e.g. `/knowledges` combines `?q=` (client
+     * text filter) with `?qs=` (server semantic search). Restoring a
+     * previously-typed `?q=` on top of a freshly-opened `?qs=` link would
+     * silently narrow the search result the user navigated to. The caller
+     * decides per-mount whether restore should fire; the value is captured
+     * via a ref at mount time so a later toggle doesn't replay a restore
+     * the user has since worked past.
+     */
+    skipRestore?: boolean;
+    /**
      * Stable storage key for persisting the filter value (a fresh tab without
      * `?<filterParamName>=` resumes from here). Defaults to
      * `usePageStorageKeys().table` — i.e. `table_4_<current pathname>`.
@@ -86,6 +98,7 @@ export function useTableState(options: UseTableStateOptions = {}): UseTableState
         debounceMs = 200,
         filterParamName = URL_PARAMS.QUERY,
         pageParamName = URL_PARAMS.PAGE,
+        skipRestore = false,
         storageKey: explicitStorageKey,
     } = options;
 
@@ -154,6 +167,11 @@ export function useTableState(options: UseTableStateOptions = {}): UseTableState
     // exactly once per storageKey rotation — `restoredForKeyReference`
     // guards against repeating the replay on every render.
     const restoredForKeyReference = useRef<null | string>(null);
+    // Snapshot the `skipRestore` decision at mount via a ref so a later
+    // toggle (e.g. the user clearing `?qs=`) doesn't fire the restore
+    // mid-session — by then they've already engaged with the page and a
+    // surprise URL mutation would be jarring.
+    const skipRestoreRef = useRef(skipRestore);
 
     useEffect(() => {
         if (restoredForKeyReference.current === storageKey) {
@@ -161,6 +179,10 @@ export function useTableState(options: UseTableStateOptions = {}): UseTableState
         }
 
         restoredForKeyReference.current = storageKey;
+
+        if (skipRestoreRef.current) {
+            return;
+        }
 
         if (filter.length > 0) {
             // URL already has a value — that beats storage. Mirror it back
