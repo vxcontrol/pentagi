@@ -11,6 +11,13 @@ export const URL_PARAMS = {
     PAGE: 'page',
     /** `?q=` — free-text filter applied by `useTableQueryFilter`. */
     QUERY: 'q',
+    /**
+     * `?qs=` — server-side semantic search query. Triggers a vector-store
+     * lookup (e.g. `searchKnowledge`) instead of the regular list query.
+     * Orthogonal to `?q=`: when both are present, the client text filter
+     * further narrows the server-returned subset on the page.
+     */
+    SEARCH: 'qs',
 } as const;
 
 /**
