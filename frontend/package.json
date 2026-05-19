@@ -71,6 +71,7 @@
         "lucide-react": "^1.16.0",
         "marked": "^18.0.3",
         "monaco-editor": "^0.55.1",
+        "motion": "^12.39.0",
         "react": "^19.2.6",
         "react-day-picker": "^10.0.1",
         "react-diff-viewer-continued": "^4.2.2",

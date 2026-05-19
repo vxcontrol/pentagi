@@ -22,6 +22,7 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { InputSearch } from '@/components/ui/input-search';
 import { Separator } from '@/components/ui/separator';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { StatusCard } from '@/components/ui/status-card';
@@ -69,10 +70,42 @@ function Knowledges() {
     // silently narrow the result set behind the user's back.
     // `useTableState` reads `skipRestore` once at mount via a ref, so a
     // later toggle (user clears `?qs=`) won't replay the restore.
-    const [initialParams] = useSearchParams();
+    const [searchParams, setSearchParams] = useSearchParams();
     const { filter, setFilter } = useTableState({
-        skipRestore: initialParams.has(URL_PARAMS.SEARCH),
+        skipRestore: searchParams.has(URL_PARAMS.SEARCH),
     });
+
+    // Source-of-truth for the semantic-search input is the URL. The
+    // `KnowledgesProvider` reads the same `?qs=` and debounces it before
+    // hitting `searchKnowledge`, so we keep the input's `value` un-debounced
+    // here — the user gets instant feedback in the box, the network only
+    // fires after 400 ms of inactivity.
+    const semanticQuery = searchParams.get(URL_PARAMS.SEARCH) ?? '';
+    const handleSemanticQueryChange = useCallback(
+        (value: string) => {
+            setSearchParams(
+                (prev) => {
+                    const next = new URLSearchParams(prev);
+
+                    if (value.trim().length === 0) {
+                        // Drop the param entirely so the URL stays canonical
+                        // (`/knowledges`, not `/knowledges?qs=`) — list-mode
+                        // and the cache key both prefer the absent form.
+                        next.delete(URL_PARAMS.SEARCH);
+                    } else {
+                        next.set(URL_PARAMS.SEARCH, value);
+                    }
+
+                    return next;
+                },
+                // Replace so typing keystrokes don't pile up in the history
+                // stack — each char would otherwise be its own back-button
+                // stop. Same convention as `useTableState` uses for `?q=`.
+                { replace: true },
+            );
+        },
+        [setSearchParams],
+    );
 
     const handleOpen = useCallback(
         (id: string) => {
@@ -390,6 +423,18 @@ function Knowledges() {
                 </Breadcrumb>
             </div>
             <div className="flex shrink-0 items-center gap-2 px-4">
+                <InputSearch
+                    ariaLabel="Search knowledge documents"
+                    // Use Mod+K — Mod+F is reserved as the page-wide default
+                    // because we don't want to conflict with the browser's
+                    // own find-in-page on every screen, but this list is one
+                    // of the few that benefits from a dedicated shortcut.
+                    hotkey="k"
+                    maxWidth={220}
+                    onSearchChange={handleSemanticQueryChange}
+                    placeholder="Semantic search..."
+                    searchQuery={semanticQuery}
+                />
                 <HeaderButton
                     icon={<Plus />}
                     label="New Knowledge"
