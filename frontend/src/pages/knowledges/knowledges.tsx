@@ -313,7 +313,7 @@ function Knowledges() {
             },
             enableSorting: false,
             header: () => (
-                <span className="text-muted-foreground inline-flex items-center justify-end text-sm font-medium">
+                <span className="text-muted-foreground inline-flex w-full items-center justify-end text-sm font-medium">
                     Flags
                 </span>
             ),

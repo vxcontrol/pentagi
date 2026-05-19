@@ -23,7 +23,6 @@ import {
     ChevronsRight,
     ColumnsSettings,
     ListFilter,
-    Search,
     X,
 } from 'lucide-react';
 import {
@@ -938,9 +937,6 @@ function DataTableFilter({ onQueryChange, placeholder, query }: DataTableFilterP
 
     return (
         <InputGroup className="max-w-sm">
-            <InputGroupAddon>
-                <Search />
-            </InputGroupAddon>
             <InputGroupInput
                 aria-label={placeholder}
                 autoComplete="off"
