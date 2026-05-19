@@ -241,7 +241,7 @@ function Flow() {
                                         <Tooltip>
                                             <TooltipTrigger asChild>
                                                 <BreadcrumbPage
-                                                    className="min-w-0 cursor-text truncate select-none"
+                                                    className="max-w-64 min-w-0 cursor-text truncate select-none"
                                                     onDoubleClick={handleFlowRenameStart}
                                                 >
                                                     {flowTitle || 'Select a flow'}
