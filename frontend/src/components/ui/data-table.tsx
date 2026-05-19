@@ -702,8 +702,11 @@ function DataTable<TData, TValue = unknown>({
 
                                 const tableRow = (
                                     <TableRow
-                                        className={cn('group hover:bg-muted/50', isRowInteractive && 'cursor-pointer')}
-                                        data-state={row.getIsSelected() && 'selected'}
+                                        className={cn(
+                                            'group hover:bg-muted/50 data-[state=open]:bg-muted/50 has-[[data-state=open]]:bg-muted/50',
+                                            isRowInteractive && 'cursor-pointer',
+                                        )}
+                                        {...(row.getIsSelected() ? { 'data-state': 'selected' } : {})}
                                         onClick={() => handleRowClick(row)}
                                     >
                                         {row.getVisibleCells().map((cell) => (
