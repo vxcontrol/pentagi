@@ -471,7 +471,7 @@ function Knowledges() {
                                 onClick={() => navigate('/knowledges/new')}
                                 variant="secondary"
                             >
-                                <Plus className="size-4" />
+                                <Plus />
                                 New Knowledge
                             </Button>
                         }
