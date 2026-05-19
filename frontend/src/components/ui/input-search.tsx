@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group';
+import { Kbd, KbdGroup } from '@/components/ui/kbd';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { isMac } from '@/lib/utils/platform';
@@ -60,18 +61,29 @@ export function InputSearch({
 
     const expand = useCallback(() => setIsExpanded(true), []);
 
-    // Hint shown over the collapsed trigger. The hotkey suffix mirrors the
+    // Hint shown over the collapsed trigger. The hotkey badge mirrors the
     // platform's modifier glyph (⌘ on Apple, Ctrl elsewhere) so the tooltip
     // is actionable — the user sees the exact keys they can press without
-    // having to discover them by trial.
-    const tooltipText = useMemo(() => {
+    // having to discover them by trial. `<Kbd>` already self-themes for
+    // `[data-slot=tooltip-content]` containers (see `components/ui/kbd.tsx`),
+    // so no extra styling is needed to make the chip readable on the dark
+    // tooltip surface.
+    const tooltipContent = useMemo(() => {
         if (!hotkey) {
             return placeholder;
         }
 
         const modifier = isMac() ? '⌘' : 'Ctrl';
 
-        return `${placeholder} (${modifier} ${hotkey.toUpperCase()})`;
+        return (
+            <>
+                {placeholder}{' '}
+                <KbdGroup>
+                    <Kbd>{modifier}</Kbd>
+                    <Kbd>{hotkey.toUpperCase()}</Kbd>
+                </KbdGroup>
+            </>
+        );
     }, [hotkey, placeholder]);
 
     // Focus the input the frame after it appears. `rAF` defers past the same
@@ -203,7 +215,7 @@ export function InputSearch({
                                 <Search aria-hidden="true" />
                             </InputGroupButton>
                         </TooltipTrigger>
-                        <TooltipContent>{tooltipText}</TooltipContent>
+                        <TooltipContent>{tooltipContent}</TooltipContent>
                     </Tooltip>
                 )}
             </InputGroupAddon>
