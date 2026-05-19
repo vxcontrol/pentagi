@@ -5,8 +5,16 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group';
 import { Kbd, KbdGroup } from '@/components/ui/kbd';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { cn } from '@/lib/utils';
 import { isMac } from '@/lib/utils/platform';
+
+// Burst-typing protection: keystrokes hit `localValue` synchronously for an
+// instant UI response; the debounced mirror is what we propagate upstream
+// (which may walk the router and re-render the whole page subtree). Mirrors
+// `FILTER_DEBOUNCE_MS` in `data-table.tsx` so both search inputs on a page
+// share a single "feels responsive" target.
+const COMMIT_DEBOUNCE_MS = 150;
 
 interface InputSearchProps {
     /** Accessible label for the trigger button + the input. */
@@ -58,6 +66,42 @@ export function InputSearch({
     // shared link with `?qs=foo` should land expanded, not behind the icon.
     const [isExpanded, setIsExpanded] = useState(() => searchQuery.trim().length > 0);
     const inputRef = useRef<HTMLInputElement>(null);
+
+    // Local mirror of the controlled `searchQuery`. Keystrokes set this
+    // synchronously so the caret never lags; the debounced shadow below is
+    // what we hand back to the parent. Mirrors `DataTableFilter`'s approach
+    // — without it, parents that funnel `onSearchChange` through the router
+    // (URL → re-render → controlled value snaps back) can drop characters
+    // when typing faster than the round-trip.
+    const [localValue, setLocalValue] = useState(searchQuery);
+    const debouncedLocalValue = useDebouncedValue(localValue, COMMIT_DEBOUNCE_MS);
+    // Tracks the last value we either emitted upstream or accepted from the
+    // parent, so the two sync effects below can distinguish "our own
+    // round-trip arrived" from "the parent reset me from elsewhere" without
+    // a race.
+    const lastEmittedReference = useRef(searchQuery);
+
+    // External → local sync. The parent owns the source of truth (URL,
+    // upstream state, etc.); when *they* change it (Esc clear, programmatic
+    // wipe of `?qs=`, back button), reset the local mirror. Skip when the
+    // incoming value matches what we last emitted — that's our own commit
+    // coming home and overwriting in-flight typing would lose characters.
+    useEffect(() => {
+        if (searchQuery !== lastEmittedReference.current) {
+            setLocalValue(searchQuery);
+            lastEmittedReference.current = searchQuery;
+        }
+    }, [searchQuery]);
+
+    // Local → external emit, debounced. We only call `onSearchChange` when
+    // the debounced value differs from what's already upstream — otherwise
+    // every external reset would round-trip back through this effect.
+    useEffect(() => {
+        if (debouncedLocalValue !== lastEmittedReference.current) {
+            lastEmittedReference.current = debouncedLocalValue;
+            onSearchChange(debouncedLocalValue);
+        }
+    }, [debouncedLocalValue, onSearchChange]);
 
     const expand = useCallback(() => setIsExpanded(true), []);
 
@@ -129,14 +173,14 @@ export function InputSearch({
     }, [expand, hotkey]);
 
     // Blur collapses when the value is empty — the classic "lost interest"
-    // exit. Without this handler, opening the trigger but never typing would
-    // leave the input expanded forever once focus moved away (the effect
-    // below only re-runs on `searchQuery` changes, which a no-op blur isn't).
+    // exit. Reads `localValue`, not the prop: a user who typed then blurred
+    // before the debounce flushed still has visible text in the field, and
+    // collapsing that out from under them would feel like a data-loss bug.
     const handleInputBlur = useCallback(() => {
-        if (searchQuery.trim().length === 0) {
+        if (localValue.trim().length === 0) {
             setIsExpanded(false);
         }
-    }, [searchQuery]);
+    }, [localValue]);
 
     // Belt-and-braces for programmatic clears: if the controlled query drops
     // to empty while focus is somewhere else entirely (e.g. another effect
@@ -153,8 +197,9 @@ export function InputSearch({
     }, [searchQuery]);
 
     // Escape: first press clears the value, second press collapses + blurs.
-    // This matches the muscle memory of native search controls and keeps the
-    // keyboard a viable exit path for users who never reach for the mouse.
+    // Decision and emit both run against `localValue` so the keypress feels
+    // instant: clear is unconditional and side-steps the debounce, going
+    // straight to the parent without waiting on the next tick.
     const handleInputKeyDown = useCallback(
         (event: React.KeyboardEvent<HTMLInputElement>) => {
             if (event.key !== 'Escape') {
@@ -163,7 +208,9 @@ export function InputSearch({
 
             event.preventDefault();
 
-            if (searchQuery.length > 0) {
+            if (localValue.length > 0) {
+                setLocalValue('');
+                lastEmittedReference.current = '';
                 onSearchChange('');
 
                 return;
@@ -172,7 +219,7 @@ export function InputSearch({
             inputRef.current?.blur();
             setIsExpanded(false);
         },
-        [onSearchChange, searchQuery],
+        [localValue, onSearchChange],
     );
 
     return (
@@ -237,13 +284,13 @@ export function InputSearch({
                     // bottoming out on the implicit `min-content` width.
                     className="h-8 min-w-0 py-0 pl-2"
                     onBlur={handleInputBlur}
-                    onChange={(event) => onSearchChange(event.target.value)}
+                    onChange={(event) => setLocalValue(event.target.value)}
                     onKeyDown={handleInputKeyDown}
                     placeholder={placeholder}
                     ref={inputRef}
                     style={{ width: typeof maxWidth === 'number' ? `${maxWidth}px` : maxWidth }}
                     type="text"
-                    value={searchQuery}
+                    value={localValue}
                 />
             </motion.div>
         </InputGroup>
