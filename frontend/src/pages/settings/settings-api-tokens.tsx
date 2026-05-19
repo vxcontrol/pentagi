@@ -781,6 +781,10 @@ function SettingsAPITokens() {
                                         <Pencil />
                                         Edit
                                     </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => handleCopyTokenId(token.tokenId)}>
+                                        <Copy />
+                                        Copy Token ID
+                                    </DropdownMenuItem>
                                     <DropdownMenuSeparator />
                                     <DropdownMenuItem
                                         disabled={isDeleteLoading && deletingToken?.tokenId === token.tokenId}
