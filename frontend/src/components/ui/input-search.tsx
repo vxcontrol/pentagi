@@ -100,9 +100,20 @@ export function InputSearch({
         return () => document.removeEventListener('keydown', handleKeyDown);
     }, [expand, hotkey]);
 
-    // Collapse the moment the query becomes empty and the input has lost
-    // focus — covers both user-driven blur and programmatic clears (e.g. the
-    // URL `?qs=` dropping out from under us). One effect, no duplication.
+    // Blur collapses when the value is empty — the classic "lost interest"
+    // exit. Without this handler, opening the trigger but never typing would
+    // leave the input expanded forever once focus moved away (the effect
+    // below only re-runs on `searchQuery` changes, which a no-op blur isn't).
+    const handleInputBlur = useCallback(() => {
+        if (searchQuery.trim().length === 0) {
+            setIsExpanded(false);
+        }
+    }, [searchQuery]);
+
+    // Belt-and-braces for programmatic clears: if the controlled query drops
+    // to empty while focus is somewhere else entirely (e.g. another effect
+    // wipes `?qs=` from the URL), this still collapses. The user-blur path
+    // above handles the common case.
     useEffect(() => {
         if (searchQuery.trim().length > 0) {
             return;
@@ -192,6 +203,7 @@ export function InputSearch({
                     // height; the `min-w-0` is to keep flexbox from
                     // bottoming out on the implicit `min-content` width.
                     className="h-8 min-w-0 py-0 pl-2"
+                    onBlur={handleInputBlur}
                     onChange={(event) => onSearchChange(event.target.value)}
                     onKeyDown={handleInputKeyDown}
                     placeholder={placeholder}
