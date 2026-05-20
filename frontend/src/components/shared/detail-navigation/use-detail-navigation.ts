@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
+import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { useLatestRef } from '@/hooks/use-latest-ref';
 import { useTableQueryFilterReader } from '@/hooks/use-table-query-filter';
 import { mergeHrefWithSearchParams } from '@/lib/url-params';
@@ -8,13 +9,24 @@ import { mergeHrefWithSearchParams } from '@/lib/url-params';
 import { useNavigation } from './use-navigation';
 
 /**
+ * Default debounce for the in-sheet local search. Shorter than the URL filter's
+ * 200 ms (`useTableQueryFilterReader`) — local search doesn't round-trip
+ * through `history` / re-render the route subtree, so we can afford to react
+ * faster while still coalescing burst typing.
+ */
+const DEFAULT_SEARCH_DEBOUNCE_MS = 150;
+
+/**
  * Headless controller for a detail page that walks a filtered list.
  *
  * Owns:
- *   - the filtered/sorted subset (pure `computeNavigation`),
+ *   - the filtered/sorted subset (pure `computeNavigation`), narrowed by
+ *     the URL filter AND an optional in-controller local search,
  *   - the resolved Prev / Next sibling ids and the pre-formatted position
  *     label (so leaf components don't recompute),
  *   - the sheet open state (controllable via `open` / `onOpenChange`),
+ *   - the local search query state (controllable via `searchQuery` /
+ *     `onSearchQueryChange`), with its own debounce independent of the URL,
  *   - navigation actions that thread the current `?<filter>=` into every
  *     prev / next / item-select destination.
  *
@@ -24,6 +36,8 @@ import { useNavigation } from './use-navigation';
  * controller can rely on referential equality for downstream memos.
  */
 export interface DetailNavigationController<T extends { id: string }> {
+    /** Reset the local search to an empty string. Convenience for "X" buttons. */
+    clearSearchQuery: () => void;
     closeSheet: () => void;
     /** Active `currentId` coerced to a string, or `null` when absent. */
     currentId: null | string;
@@ -33,6 +47,11 @@ export interface DetailNavigationController<T extends { id: string }> {
     currentItem: null | T;
     /** Debounced URL filter the controller is filtering against. */
     debouncedFilter: string;
+    /**
+     * Debounced version of {@link searchQuery} — this is what actually narrows
+     * `filteredItems`. Combined with `debouncedFilter` via AND.
+     */
+    debouncedSearchQuery: string;
     /** Sorted+filtered subset that drives prev / next / sheet listing. */
     filteredItems: readonly T[];
     /** Stable id accessor (defaults to `item.id` when not supplied). */
@@ -53,6 +72,8 @@ export interface DetailNavigationController<T extends { id: string }> {
     handleItemSelect: (item: T) => void;
     /** `true` iff `filteredItems.length > 0`. */
     hasEntries: boolean;
+    /** `true` iff `debouncedSearchQuery` is non-empty (UI hints / clear button). */
+    isSearchActive: boolean;
     isSheetOpen: boolean;
 
     /**
@@ -69,6 +90,13 @@ export interface DetailNavigationController<T extends { id: string }> {
     positionLabel: string;
     /** ID of the previous filtered sibling, or `null` at the start / off-subset. */
     prevId: null | string;
+    /**
+     * Current local search value (raw, **not** debounced) — bind directly to
+     * an `<input value={...}>` for instant caret feedback. The debounced
+     * mirror is what filters the list, see {@link debouncedSearchQuery}.
+     */
+    searchQuery: string;
+    setSearchQuery: (value: string) => void;
     setSheetOpen: (open: boolean) => void;
 
     /** Same as `filteredItems.length`, named explicitly for clarity. */
@@ -79,12 +107,21 @@ interface UseDetailNavigationOptions<T extends { id: string }> {
     currentId: null | string | undefined;
     /** Initial value for the uncontrolled case. Defaults to `false`. */
     defaultOpen?: boolean;
+    /** Initial local search value for the uncontrolled case. Defaults to `''`. */
+    defaultSearchQuery?: string;
     getHref: (item: T) => string;
     getId?: (item: T) => string;
     getLabel: (item: T) => string;
     getSearchableText?: (item: T) => null | string | undefined;
     items: readonly T[];
     onOpenChange?: (open: boolean) => void;
+
+    /**
+     * Fires on every `setSearchQuery` call — useful when the consumer wants
+     * to mirror the value into URL params, localStorage, or analytics. Like
+     * `onOpenChange`, it fires in both controlled and uncontrolled mode.
+     */
+    onSearchQueryChange?: (query: string) => void;
 
     /**
      * Controlled-mode opt-in for the sheet. When `open` is `undefined` the
@@ -96,6 +133,22 @@ interface UseDetailNavigationOptions<T extends { id: string }> {
      * `@/components/ui/autocomplete.tsx`.
      */
     open?: boolean;
+
+    /**
+     * Debounce (ms) applied between the raw `searchQuery` typed by the user
+     * and the `debouncedSearchQuery` that actually filters `filteredItems`.
+     * Defaults to {@link DEFAULT_SEARCH_DEBOUNCE_MS}. Pass `0` for instant
+     * filtering on small lists.
+     */
+    searchDebounceMs?: number;
+
+    /**
+     * Controlled-mode opt-in for the local search query — same `undefined`
+     * → uncontrolled / value → controlled convention as `open`. Use this
+     * when the consumer wants to surface the search outside the sheet (e.g.
+     * a page-level search box that also drives sibling navigation).
+     */
+    searchQuery?: string;
     sortFn?: (a: T, b: T) => number;
 }
 
@@ -133,13 +186,17 @@ const defaultGetId = (item: { id: string }): string => item.id;
 export function useDetailNavigation<T extends { id: string }>({
     currentId,
     defaultOpen,
+    defaultSearchQuery,
     getHref,
     getId,
     getLabel,
     getSearchableText,
     items,
     onOpenChange,
+    onSearchQueryChange,
     open,
+    searchDebounceMs,
+    searchQuery,
     sortFn,
 }: UseDetailNavigationOptions<T>): DetailNavigationController<T> {
     const navigate = useNavigate();
@@ -156,12 +213,43 @@ export function useDetailNavigation<T extends { id: string }>({
         [getSearchableText, getLabel],
     );
 
+    // Controllable local search (same pattern as the sheet's `open` below).
+    // Uncontrolled is the common case — most consumers want the controller to
+    // own the value so the in-sheet input "just works". Controlled callers
+    // (e.g. a page that mirrors the value to its own URL param) pass
+    // `searchQuery` and observe via `onSearchQueryChange`.
+    const onSearchQueryChangeRef = useLatestRef(onSearchQueryChange);
+    const [internalSearchQuery, setInternalSearchQuery] = useState(defaultSearchQuery ?? '');
+    const isSearchControlled = searchQuery !== undefined;
+    const activeSearchQuery = isSearchControlled ? searchQuery : internalSearchQuery;
+    const debouncedSearchQuery = useDebouncedValue(activeSearchQuery, searchDebounceMs ?? DEFAULT_SEARCH_DEBOUNCE_MS);
+
+    const setSearchQuery = useCallback(
+        (next: string) => {
+            if (!isSearchControlled) {
+                setInternalSearchQuery(next);
+            }
+
+            onSearchQueryChangeRef.current?.(next);
+        },
+        [isSearchControlled, onSearchQueryChangeRef],
+    );
+    const clearSearchQuery = useCallback(() => setSearchQuery(''), [setSearchQuery]);
+
+    // Stabilise the query tuple so `useNavigation`'s `useMemo` only refires
+    // when either source actually moved. Inline `[a, b]` per render would
+    // defeat the memo even when both strings are unchanged.
+    const queryTerms = useMemo(
+        () => [debouncedFilter, debouncedSearchQuery] as const,
+        [debouncedFilter, debouncedSearchQuery],
+    );
+
     const { currentIndex, currentItem, filteredItems, nextId, prevId, total } = useNavigation<T>({
         currentId,
         getId: resolvedGetId,
         getSearchableText: resolvedGetSearchableText,
         items,
-        query: debouncedFilter,
+        query: queryTerms,
         sortFn,
     });
 
@@ -243,14 +331,17 @@ export function useDetailNavigation<T extends { id: string }>({
     const normalizedCurrentId = currentId != null ? String(currentId) : null;
     const hasEntries = filteredItems.length > 0;
     const itemsEmpty = items.length === 0;
+    const isSearchActive = debouncedSearchQuery.length > 0;
 
     return useMemo<DetailNavigationController<T>>(
         () => ({
+            clearSearchQuery,
             closeSheet,
             currentId: normalizedCurrentId,
             currentIndex,
             currentItem,
             debouncedFilter,
+            debouncedSearchQuery,
             filteredItems,
             getId: resolvedGetId,
             getLabel,
@@ -259,21 +350,27 @@ export function useDetailNavigation<T extends { id: string }>({
             goToPrev,
             handleItemSelect,
             hasEntries,
+            isSearchActive,
             isSheetOpen,
             itemsEmpty,
             nextId,
             openSheet,
             positionLabel,
             prevId,
+            searchQuery: activeSearchQuery,
+            setSearchQuery,
             setSheetOpen,
             total,
         }),
         [
+            activeSearchQuery,
+            clearSearchQuery,
             closeSheet,
             normalizedCurrentId,
             currentIndex,
             currentItem,
             debouncedFilter,
+            debouncedSearchQuery,
             filteredItems,
             resolvedGetId,
             getLabel,
@@ -282,12 +379,14 @@ export function useDetailNavigation<T extends { id: string }>({
             goToPrev,
             handleItemSelect,
             hasEntries,
+            isSearchActive,
             isSheetOpen,
             itemsEmpty,
             nextId,
             openSheet,
             positionLabel,
             prevId,
+            setSearchQuery,
             setSheetOpen,
             total,
         ],

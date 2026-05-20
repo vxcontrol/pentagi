@@ -47,6 +47,7 @@ export function DetailNavigationButtons<T extends { id: string }>({
                         disabled={!controller.prevId}
                         onClick={controller.goToPrev}
                         size="icon"
+                        type="button"
                         variant="outline"
                     >
                         <ChevronLeft />
@@ -64,6 +65,7 @@ export function DetailNavigationButtons<T extends { id: string }>({
                         )}
                         disabled={!controller.hasEntries}
                         onClick={controller.openSheet}
+                        type="button"
                         variant="outline"
                     >
                         {controller.positionLabel}
@@ -79,6 +81,7 @@ export function DetailNavigationButtons<T extends { id: string }>({
                         disabled={!controller.nextId}
                         onClick={controller.goToNext}
                         size="icon"
+                        type="button"
                         variant="outline"
                     >
                         <ChevronRight />

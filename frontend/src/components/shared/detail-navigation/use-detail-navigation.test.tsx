@@ -443,6 +443,227 @@ describe('useDetailNavigation — current item bookkeeping', () => {
     });
 });
 
+describe('useDetailNavigation — local search (uncontrolled)', () => {
+    it('starts with an empty searchQuery and `isSearchActive=false` by default', () => {
+        const { result } = renderHook(
+            () =>
+                useDetailNavigation<Item>({
+                    currentId: 'b',
+                    getHref,
+                    getLabel,
+                    getSearchableText,
+                    items: ITEMS,
+                }),
+            { wrapper: renderInRoute(['/items/b']) },
+        );
+
+        expect(result.current.searchQuery).toBe('');
+        expect(result.current.debouncedSearchQuery).toBe('');
+        expect(result.current.isSearchActive).toBe(false);
+        // Without a query, the full subset is visible.
+        expect(result.current.filteredItems.map((item) => item.id)).toEqual(['a', 'b', 'c']);
+    });
+
+    it('honours defaultSearchQuery on first render and surfaces it as active', async () => {
+        const { result } = renderHook(
+            () =>
+                useDetailNavigation<Item>({
+                    currentId: 'b',
+                    defaultSearchQuery: 'bravo',
+                    getHref,
+                    getLabel,
+                    getSearchableText,
+                    items: ITEMS,
+                    searchDebounceMs: 0,
+                }),
+            { wrapper: renderInRoute(['/items/b']) },
+        );
+
+        expect(result.current.searchQuery).toBe('bravo');
+
+        await waitFor(() => {
+            expect(result.current.debouncedSearchQuery).toBe('bravo');
+        });
+        expect(result.current.isSearchActive).toBe(true);
+        expect(result.current.filteredItems.map((item) => item.id)).toEqual(['b']);
+    });
+
+    it('setSearchQuery + debounce narrows filteredItems', async () => {
+        const { result } = renderHook(
+            () =>
+                useDetailNavigation<Item>({
+                    currentId: 'a',
+                    getHref,
+                    getLabel,
+                    getSearchableText,
+                    items: ITEMS,
+                    searchDebounceMs: 0,
+                }),
+            { wrapper: renderInRoute(['/items/a']) },
+        );
+
+        act(() => {
+            result.current.setSearchQuery('cha');
+        });
+
+        // searchQuery (raw) flips instantly for the input value.
+        expect(result.current.searchQuery).toBe('cha');
+
+        await waitFor(() => {
+            expect(result.current.filteredItems.map((item) => item.id)).toEqual(['c']);
+        });
+        // Current id 'a' is no longer in the subset → -1 / null neighbours.
+        expect(result.current.currentIndex).toBe(-1);
+        expect(result.current.prevId).toBeNull();
+        expect(result.current.nextId).toBeNull();
+    });
+
+    it('clearSearchQuery resets the value and restores the full subset', async () => {
+        const { result } = renderHook(
+            () =>
+                useDetailNavigation<Item>({
+                    currentId: 'a',
+                    defaultSearchQuery: 'pha',
+                    getHref,
+                    getLabel,
+                    getSearchableText,
+                    items: ITEMS,
+                    searchDebounceMs: 0,
+                }),
+            { wrapper: renderInRoute(['/items/a']) },
+        );
+
+        await waitFor(() => {
+            expect(result.current.filteredItems.map((item) => item.id)).toEqual(['a']);
+        });
+
+        act(() => {
+            result.current.clearSearchQuery();
+        });
+
+        expect(result.current.searchQuery).toBe('');
+
+        await waitFor(() => {
+            expect(result.current.filteredItems.map((item) => item.id)).toEqual(['a', 'b', 'c']);
+        });
+    });
+
+    it('combines URL filter and local search with AND semantics', async () => {
+        // URL ?q=a narrows to Alpha + Bravo + Charlie. Local "bra" then keeps
+        // only Bravo. Without AND we'd see Alpha (matches `a`) or Bravo+Charlie
+        // (matches local in isolation).
+        const { result } = renderHook(
+            () =>
+                useDetailNavigation<Item>({
+                    currentId: 'b',
+                    getHref,
+                    getLabel,
+                    getSearchableText,
+                    items: ITEMS,
+                    searchDebounceMs: 0,
+                }),
+            { wrapper: renderInRoute(['/items/b?q=a']) },
+        );
+
+        await waitFor(() => {
+            expect(result.current.debouncedFilter).toBe('a');
+        });
+
+        act(() => {
+            result.current.setSearchQuery('bra');
+        });
+
+        await waitFor(() => {
+            expect(result.current.filteredItems.map((item) => item.id)).toEqual(['b']);
+        });
+    });
+});
+
+describe('useDetailNavigation — local search (controlled)', () => {
+    it('respects the controlled searchQuery and fires onSearchQueryChange', () => {
+        const onSearchQueryChange = vi.fn();
+
+        const { rerender, result } = renderHook(
+            ({ searchQuery }: { searchQuery: string }) =>
+                useDetailNavigation<Item>({
+                    currentId: 'b',
+                    getHref,
+                    getLabel,
+                    getSearchableText,
+                    items: ITEMS,
+                    onSearchQueryChange,
+                    searchDebounceMs: 0,
+                    searchQuery,
+                }),
+            {
+                initialProps: { searchQuery: 'bravo' },
+                wrapper: renderInRoute(['/items/b']),
+            },
+        );
+
+        expect(result.current.searchQuery).toBe('bravo');
+
+        act(() => {
+            result.current.setSearchQuery('charlie');
+        });
+
+        // Parent owns the value — controller does not flip without a prop change.
+        expect(result.current.searchQuery).toBe('bravo');
+        // But the consumer is told to update.
+        expect(onSearchQueryChange).toHaveBeenLastCalledWith('charlie');
+
+        rerender({ searchQuery: 'charlie' });
+        expect(result.current.searchQuery).toBe('charlie');
+    });
+
+    it('fires onSearchQueryChange in uncontrolled mode too', () => {
+        const onSearchQueryChange = vi.fn();
+
+        const { result } = renderHook(
+            () =>
+                useDetailNavigation<Item>({
+                    currentId: 'b',
+                    getHref,
+                    getLabel,
+                    getSearchableText,
+                    items: ITEMS,
+                    onSearchQueryChange,
+                }),
+            { wrapper: renderInRoute(['/items/b']) },
+        );
+
+        act(() => {
+            result.current.setSearchQuery('alpha');
+        });
+
+        expect(onSearchQueryChange).toHaveBeenLastCalledWith('alpha');
+        expect(result.current.searchQuery).toBe('alpha');
+    });
+});
+
+describe('useDetailNavigation — local search identity stability', () => {
+    it('keeps setSearchQuery / clearSearchQuery identity-stable across re-renders', () => {
+        const { rerender, result } = renderHook(
+            () =>
+                useDetailNavigation<Item>({
+                    currentId: 'b',
+                    getHref,
+                    getLabel,
+                    getSearchableText,
+                    items: ITEMS,
+                }),
+            { wrapper: renderInRoute(['/items/b']) },
+        );
+
+        const firstSet = result.current.setSearchQuery;
+        const firstClear = result.current.clearSearchQuery;
+        rerender();
+
+        expect(result.current.setSearchQuery).toBe(firstSet);
+        expect(result.current.clearSearchQuery).toBe(firstClear);
+    });
+});
+
 describe('useDetailNavigation — navigation back to list does not leak the filter', () => {
     it('keeps the URL `?q=` intact after a navigate inside the same router', async () => {
         const Harness = () => {

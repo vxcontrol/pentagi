@@ -7,7 +7,14 @@ import { DetailNavigationSheet } from './detail-navigation-sheet';
 
 export interface DetailNavigationToolbarProps<T extends { id: string }> {
     controller: DetailNavigationController<T>;
+    /**
+     * Forwarded to `<DetailNavigationSheet>` — controls the in-sheet search
+     * input. Defaults to `true`; pass `false` to opt out.
+     */
+    hasSearch?: boolean;
     renderItem?: (item: T, isCurrent: boolean) => ReactNode;
+    /** Forwarded placeholder for the in-sheet search input. */
+    searchPlaceholder?: string;
     sheetIcon?: ReactNode;
     sheetTitle: string;
 }
@@ -24,7 +31,9 @@ export interface DetailNavigationToolbarProps<T extends { id: string }> {
  */
 export function DetailNavigationToolbar<T extends { id: string }>({
     controller,
+    hasSearch,
     renderItem,
+    searchPlaceholder,
     sheetIcon,
     sheetTitle,
 }: DetailNavigationToolbarProps<T>) {
@@ -40,7 +49,9 @@ export function DetailNavigationToolbar<T extends { id: string }>({
             />
             <DetailNavigationSheet
                 controller={controller}
+                hasSearch={hasSearch}
                 renderItem={renderItem}
+                searchPlaceholder={searchPlaceholder}
                 sheetIcon={sheetIcon}
                 sheetTitle={sheetTitle}
             />

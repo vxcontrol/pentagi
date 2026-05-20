@@ -12,12 +12,17 @@ interface NavigationInput<T> {
     getSearchableText?: (item: T) => null | string | undefined;
     items: readonly T[];
     /**
-     * Free-text filter to narrow the navigable subset. Empty / `undefined` is
-     * treated as "no filter" and every item passes. Matching reuses
-     * `createTextMatcher`, so behaviour matches the list page's column
-     * filter (substring, case + diacritic insensitive).
+     * Free-text filter(s) to narrow the navigable subset. Accepts:
+     *   - `undefined` / empty string / empty array → no filter, every item passes;
+     *   - a single string → substring match (case + diacritic insensitive);
+     *   - a `readonly string[]` → AND of every non-empty entry. Empty strings
+     *     inside the array are ignored, so callers can pass
+     *     `[urlFilter, localSearch]` without checking emptiness at the call site.
+     *
+     * Matching reuses `createTextMatcher`, so behaviour stays in lockstep with
+     * the list page's column filter regardless of how many sources combine here.
      */
-    query?: string;
+    query?: readonly string[] | string;
     sortFn?: (a: T, b: T) => number;
 }
 
@@ -48,10 +53,24 @@ export const computeNavigation = <T>({
     query,
     sortFn,
 }: NavigationInput<T>): NavigationResult<T> => {
-    const hasQuery = query !== undefined && query.length > 0;
+    // Normalise `string | string[] | undefined` to a list of non-empty terms.
+    // Empties are dropped here once so the hot `items.filter` below never
+    // re-checks them — and callers can splice `[urlFilter, localSearch]`
+    // straight through without short-circuiting at the call site.
+    const queryTerms = query === undefined ? [] : Array.isArray(query) ? query : [query as string];
+    const activeTerms = queryTerms.filter((term): term is string => term.length > 0);
+    const hasQuery = activeTerms.length > 0;
+    // Build each matcher once at the top of the filter pass — `createTextMatcher`
+    // normalises the term, so doing it inside the per-item loop would burn
+    // O(items × terms) on the same work.
+    const matchers = hasQuery && getSearchableText ? activeTerms.map(createTextMatcher) : null;
     const filtered =
-        hasQuery && getSearchableText
-            ? items.filter((item) => createTextMatcher(query)(getSearchableText(item)))
+        matchers && getSearchableText
+            ? items.filter((item) => {
+                  const text = getSearchableText(item);
+
+                  return matchers.every((match) => match(text));
+              })
             : items;
     const ordered = sortFn ? [...filtered].sort(sortFn) : filtered;
 
@@ -98,8 +117,12 @@ interface UseNavigationOptions<T> {
      */
     getSearchableText?: (item: T) => null | string | undefined;
     items: readonly T[];
-    /** Free-text filter. Empty / `undefined` → unfiltered. */
-    query?: string;
+    /**
+     * Free-text filter. Accepts a single string or an array (AND of every
+     * non-empty entry). Empty / `undefined` / `[]` → unfiltered. See
+     * {@link NavigationInput.query} for details.
+     */
+    query?: readonly string[] | string;
     /**
      * Optional comparator. When omitted, the input array order is preserved —
      * the navigation walks `items` exactly as the caller arranged them, which

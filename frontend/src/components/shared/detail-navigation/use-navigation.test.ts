@@ -258,6 +258,63 @@ describe('computeNavigation', () => {
         expect(result.currentIndex).toBe(0);
     });
 
+    it('treats an empty array query as "no filter"', () => {
+        const result = computeNavigation({
+            currentId: 'c',
+            getId,
+            getSearchableText: getTitle,
+            items: ROWS,
+            query: [],
+        });
+
+        expect(result.filteredItems.map(getId)).toEqual(['a', 'b', 'c', 'd']);
+        expect(result.currentIndex).toBe(2);
+    });
+
+    it('ANDs every non-empty term when `query` is an array', () => {
+        // Both terms must match the haystack — substring "a" matches Alpha,
+        // Bravo, Charlie; substring "ph" then narrows to just Alpha.
+        const result = computeNavigation({
+            currentId: 'a',
+            getId,
+            getSearchableText: getTitle,
+            items: ROWS,
+            query: ['a', 'ph'],
+        });
+
+        expect(result.filteredItems.map(getId)).toEqual(['a']);
+        expect(result.currentIndex).toBe(0);
+        expect(result.prevId).toBeNull();
+        expect(result.nextId).toBeNull();
+    });
+
+    it('drops empty strings from an array query without throwing', () => {
+        // Callers can pass `[urlFilter, localSearch]` straight through; either
+        // one being empty must not turn the whole filter off — the other term
+        // is still expected to narrow.
+        const result = computeNavigation({
+            currentId: 'b',
+            getId,
+            getSearchableText: getTitle,
+            items: ROWS,
+            query: ['', 'bravo', ''],
+        });
+
+        expect(result.filteredItems.map(getId)).toEqual(['b']);
+    });
+
+    it('falls back to "no filter" when every array term is empty', () => {
+        const result = computeNavigation({
+            currentId: 'a',
+            getId,
+            getSearchableText: getTitle,
+            items: ROWS,
+            query: ['', '', ''],
+        });
+
+        expect(result.filteredItems.map(getId)).toEqual(['a', 'b', 'c', 'd']);
+    });
+
     it('matches numeric item ids with string currentId', () => {
         type NumRow = { id: number; title: string };
         const rows: readonly NumRow[] = [

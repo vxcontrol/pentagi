@@ -1,6 +1,8 @@
+import { Search, X } from 'lucide-react';
 import { type KeyboardEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
+import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { cn } from '@/lib/utils';
@@ -9,7 +11,15 @@ import type { DetailNavigationController } from './use-detail-navigation';
 
 interface DetailNavigationSheetProps<T extends { id: string }> {
     controller: DetailNavigationController<T>;
+    /**
+     * Render a free-text search input in the sheet header that drives
+     * `controller.setSearchQuery`. Defaults to `true` — pass `false` to opt
+     * out for the rare consumer that wants the sheet to stay URL-filter-only.
+     */
+    hasSearch?: boolean;
     renderItem?: (item: T, isCurrent: boolean) => ReactNode;
+    /** Placeholder for the in-sheet search input. Defaults to "Search…". */
+    searchPlaceholder?: string;
     sheetIcon?: ReactNode;
     sheetTitle: string;
 }
@@ -27,7 +37,9 @@ interface DetailNavigationSheetProps<T extends { id: string }> {
  */
 export function DetailNavigationSheet<T extends { id: string }>({
     controller,
+    hasSearch = true,
     renderItem,
+    searchPlaceholder = 'Search…',
     sheetIcon,
     sheetTitle,
 }: DetailNavigationSheetProps<T>) {
@@ -35,6 +47,7 @@ export function DetailNavigationSheet<T extends { id: string }>({
     // read individual fields rather than the controller object — keeps the
     // identity story the same as before the refactor.
     const {
+        clearSearchQuery,
         currentId,
         currentIndex,
         filteredItems: items,
@@ -42,15 +55,20 @@ export function DetailNavigationSheet<T extends { id: string }>({
         getLabel,
         handleItemSelect: onItemSelect,
         isSheetOpen: open,
+        searchQuery,
+        setSearchQuery,
         setSheetOpen: onOpenChange,
         total,
     } = controller;
 
     const listRef = useRef<HTMLUListElement>(null);
+    const searchInputRef = useRef<HTMLInputElement>(null);
     const buttonRefs = useRef(new Map<string, HTMLButtonElement>());
     const [focusedId, setFocusedId] = useState<null | string>(null);
 
     const hasEntries = items.length > 0;
+    const trimmedQuery = searchQuery.trim();
+    const hasClearButton = hasSearch && trimmedQuery.length > 0;
 
     // Build an `id → index` map once per `items`/`getId` change so both the
     // per-render membership check below and the keyboard handler's lookup
@@ -126,8 +144,32 @@ export function DetailNavigationSheet<T extends { id: string }>({
 
     // After roving focus moves, push the focus into the DOM. `rAF` defers past
     // Radix's own focus management so we don't fight its open-time focus trap.
+    //
+    // Gate: only auto-focus an option when the user's focus is already
+    // somewhere that *expects* roving (a list option) or has not yet landed
+    // (`document.activeElement === document.body` right after open, before
+    // Radix moves focus into the dialog). Crucially, we must NOT steal focus
+    // when the user is typing in the search input: every keystroke that
+    // flushes the debounce can re-target `focusedId` (when `currentId` falls
+    // out of the filtered subset, render-phase reconciliation snaps focus to
+    // the first survivor). Without this gate, focus jumps out of the input
+    // mid-type and the user can only enter a few characters before losing
+    // their place — exact repro: type "aes" with current flow 837 visible,
+    // focus moves to button 836 at the 150 ms debounce boundary.
+    //
+    // The fix is at the cause, not the symptom: a local input mirror (the
+    // `InputSearch` / `DataTableFilter` pattern) would keep keystrokes from
+    // being dropped during a state round-trip, but it would not stop this
+    // effect from yanking focus away. The two patterns solve different bugs.
     useEffect(() => {
         if (!open || focusedId === null) {
+            return;
+        }
+
+        const activeEl = document.activeElement;
+        const focusIsOnSearchInput = activeEl !== null && activeEl === searchInputRef.current;
+
+        if (focusIsOnSearchInput) {
             return;
         }
 
@@ -206,6 +248,61 @@ export function DetailNavigationSheet<T extends { id: string }>({
         [onItemSelect],
     );
 
+    // ArrowDown from the input jumps focus into the listbox so keyboard
+    // users can flow `type → arrow down → enter` without hunting for the
+    // list. We move focus *here* synchronously (not in the auto-focus
+    // effect) because that effect now skips when focus is on the search
+    // input — otherwise it would yank focus mid-type. Escape is *not*
+    // handled here — Radix listens for it on a native document handler
+    // that React-level `stopPropagation` cannot reach. See
+    // `handleEscapeKeyDown` below, wired through `onEscapeKeyDown`.
+    const handleSearchKeyDown = useCallback(
+        (event: React.KeyboardEvent<HTMLInputElement>) => {
+            if (event.key === 'ArrowDown' && hasEntries) {
+                event.preventDefault();
+                const first = items[0];
+
+                if (!first) {
+                    return;
+                }
+
+                const firstId = String(getId(first));
+                setFocusedId(firstId);
+                // Button refs for the current items are already mounted —
+                // this handler fires during a real user keystroke, so the
+                // listbox commit that wired them up has already happened.
+                buttonRefs.current.get(firstId)?.focus();
+            }
+        },
+        [getId, hasEntries, items],
+    );
+
+    // Intercept Esc at the Radix-Content level so we can clear a non-empty
+    // search before the dialog's built-in "close on Esc" fires. Once the
+    // query is empty, we let Radix close as usual — matches the two-step
+    // Esc affordance of `InputSearch` (clear, then dismiss).
+    const handleEscapeKeyDown = useCallback(
+        (event: KeyboardEvent) => {
+            if (hasSearch && trimmedQuery.length > 0) {
+                event.preventDefault();
+                clearSearchQuery();
+            }
+        },
+        [clearSearchQuery, hasSearch, trimmedQuery.length],
+    );
+
+    const handleSearchChange = useCallback(
+        (event: React.ChangeEvent<HTMLInputElement>) => {
+            setSearchQuery(event.target.value);
+        },
+        [setSearchQuery],
+    );
+
+    const handleSearchClear = useCallback(() => {
+        clearSearchQuery();
+        searchInputRef.current?.focus();
+    }, [clearSearchQuery]);
+
     // One stable callback ref reused for every button. The previous shape —
     // `setButtonRef(id) => (node) => …` — manufactured a new closure per id
     // on every render, which made React re-attach refs (a `delete` + `set`
@@ -241,9 +338,10 @@ export function DetailNavigationSheet<T extends { id: string }>({
                 // listbox of items, the `SheetTitle` already describes it.
                 aria-describedby={undefined}
                 className="flex w-full max-w-sm flex-col gap-0 p-0 sm:max-w-sm"
+                onEscapeKeyDown={handleEscapeKeyDown}
                 side="right"
             >
-                <SheetHeader className="border-b p-4">
+                <SheetHeader className="gap-3 border-b p-4">
                     <SheetTitle className="flex items-center gap-2 pr-8 text-base">
                         {sheetIcon}
                         <span>{sheetTitle}</span>
@@ -254,6 +352,39 @@ export function DetailNavigationSheet<T extends { id: string }>({
                             {total}
                         </Badge>
                     </SheetTitle>
+                    {hasSearch ? (
+                        <InputGroup className="h-9">
+                            <InputGroupAddon align="inline-start">
+                                <Search
+                                    aria-hidden="true"
+                                    className="text-muted-foreground"
+                                />
+                            </InputGroupAddon>
+                            <InputGroupInput
+                                aria-label={searchPlaceholder}
+                                className="h-9 py-0"
+                                onChange={handleSearchChange}
+                                onKeyDown={handleSearchKeyDown}
+                                placeholder={searchPlaceholder}
+                                ref={searchInputRef}
+                                type="text"
+                                value={searchQuery}
+                            />
+                            {hasClearButton ? (
+                                <InputGroupAddon align="inline-end">
+                                    <InputGroupButton
+                                        aria-label="Clear search"
+                                        onClick={handleSearchClear}
+                                        size="icon-sm"
+                                        type="button"
+                                        variant="ghost"
+                                    >
+                                        <X aria-hidden="true" />
+                                    </InputGroupButton>
+                                </InputGroupAddon>
+                            ) : null}
+                        </InputGroup>
+                    ) : null}
                 </SheetHeader>
                 {hasEntries ? (
                     <ScrollArea className="flex-1">
@@ -301,7 +432,9 @@ export function DetailNavigationSheet<T extends { id: string }>({
                     </ScrollArea>
                 ) : (
                     <div className="text-muted-foreground flex flex-1 items-center justify-center px-4 text-center text-sm">
-                        No items match the current filter.
+                        {trimmedQuery.length > 0
+                            ? `No items match "${trimmedQuery}".`
+                            : 'No items match the current filter.'}
                     </div>
                 )}
             </SheetContent>
