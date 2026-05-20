@@ -561,8 +561,7 @@ function DataTable<TData, TValue = unknown>({
         if (isPageControlled) {
             if (externalPageIndex !== undefined) {
                 const externalOutOfRange = externalPageIndex < 0 || externalPageIndex > lastPageIndex;
-                const internalOutOfRange =
-                    pagination.pageIndex < 0 || pagination.pageIndex > lastPageIndex;
+                const internalOutOfRange = pagination.pageIndex < 0 || pagination.pageIndex > lastPageIndex;
 
                 if (externalOutOfRange && internalOutOfRange && externalPageIndex !== lastPageIndex) {
                     onPageChange?.(lastPageIndex, { replace: true });
@@ -810,7 +809,7 @@ function DataTable<TData, TValue = unknown>({
                     </Select>
                 </div>
                 {pageCount > 0 ? (
-                    <div className="flex items-center justify-center text-xs font-medium lg:w-20">
+                    <div className="flex items-center justify-center text-xs font-medium lg:w-24">
                         Page {safePageIndex + 1} of {pageCount}
                     </div>
                 ) : (
