@@ -20,17 +20,16 @@ interface RenderResult {
     update: ReturnType<typeof useTableState>['update'];
 }
 
-const useStateWithLocation = (options: { debounceMs?: number; storageKey?: string } = {}): RenderResult => {
+const useStateWithLocation = (options: { debounceMs?: number } = {}): RenderResult => {
     const { debouncedFilter, filter, pageIndex, resetFilter, setFilter, setPage, update } = useTableState({
         debounceMs: options.debounceMs ?? SHORT_DEBOUNCE_MS,
-        storageKey: options.storageKey ?? STORAGE_KEY,
     });
     const { search } = useLocation();
 
     return { debouncedFilter, filter, pageIndex, resetFilter, search, setFilter, setPage, update };
 };
 
-const renderWithRouter = (initialEntries: string[], options?: { debounceMs?: number; storageKey?: string }) => {
+const renderWithRouter = (initialEntries: string[], options?: { debounceMs?: number }) => {
     const Wrapper = ({ children }: { children: ReactNode }) => (
         <MemoryRouter initialEntries={initialEntries}>{children}</MemoryRouter>
     );
@@ -207,37 +206,35 @@ describe('useTableState — atomic `update` (race regression)', () => {
     });
 });
 
-describe('useTableState — storage roundtrip', () => {
-    it('restores `?q=` from storage when the URL is empty', async () => {
+describe('useTableState — filter is URL-only', () => {
+    // Filter is an ad-hoc query, not a preference. We deliberately do NOT
+    // mirror it into storage or replay it from storage on mount — a fresh
+    // navigation to `/flows` should land on an empty filter even if the user
+    // typed something there earlier in the session. Sorting / column
+    // visibility / page size still persist via `lib/table-state`.
+
+    it('does not restore `?q=` from storage on mount', async () => {
         localStorage.setItem(STORAGE_KEY, JSON.stringify({ filter: 'alpha' }));
         const { result } = renderWithRouter(['/flows']);
-        await waitFor(() => {
-            expect(new URLSearchParams(result.current.search).get('q')).toBe('alpha');
-        });
+        await act(async () => Promise.resolve());
+        expect(result.current.filter).toBe('');
+        expect(new URLSearchParams(result.current.search).has('q')).toBe(false);
     });
 
-    it('does not restore when the URL already has `?q=`', async () => {
+    it('honours `?q=` from the URL regardless of what is in storage', async () => {
         localStorage.setItem(STORAGE_KEY, JSON.stringify({ filter: 'stored' }));
         const { result } = renderWithRouter(['/flows?q=urlwin']);
         await act(async () => Promise.resolve());
         expect(result.current.filter).toBe('urlwin');
     });
 
-    it('persists the URL filter into storage once typing settles', async () => {
+    it('does not write the typed filter into storage', async () => {
         const { result } = renderWithRouter(['/flows']);
         act(() => result.current.setFilter('alpha'));
         await waitFor(() => {
-            expect(readStoredFilter(STORAGE_KEY)).toBe('alpha');
+            expect(new URLSearchParams(result.current.search).get('q')).toBe('alpha');
         });
-    });
-
-    it('clears the storage entry when the filter is set back to empty', async () => {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({ filter: 'alpha' }));
-        const { result } = renderWithRouter(['/flows?q=alpha']);
-        act(() => result.current.setFilter(''));
-        await waitFor(() => {
-            expect(readStoredFilter(STORAGE_KEY)).toBeNull();
-        });
+        expect(readStoredFilter(STORAGE_KEY)).toBeNull();
     });
 });
 

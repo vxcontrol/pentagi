@@ -2,9 +2,6 @@ import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
-import { useEffectAfterMount } from '@/hooks/use-effect-after-mount';
-import { usePageStorageKeys } from '@/hooks/use-page-storage-keys';
-import { loadTableState, updateTableState } from '@/lib/table-state';
 import { URL_PARAMS } from '@/lib/url-params';
 
 /**
@@ -36,24 +33,6 @@ interface UseTableStateOptions {
     filterParamName?: string;
     /** Query string param for the 1-based page number. Default `URL_PARAMS.PAGE` (`'page'`). */
     pageParamName?: string;
-    /**
-     * Suppresses the one-time storage → URL restore on mount. Use on pages
-     * that route the `?q=` filter alongside a sibling URL parameter with
-     * its own filter semantics — e.g. `/knowledges` combines `?q=` (client
-     * text filter) with `?qs=` (server semantic search). Restoring a
-     * previously-typed `?q=` on top of a freshly-opened `?qs=` link would
-     * silently narrow the search result the user navigated to. The caller
-     * decides per-mount whether restore should fire; the value is captured
-     * via a ref at mount time so a later toggle doesn't replay a restore
-     * the user has since worked past.
-     */
-    skipRestore?: boolean;
-    /**
-     * Stable storage key for persisting the filter value (a fresh tab without
-     * `?<filterParamName>=` resumes from here). Defaults to
-     * `usePageStorageKeys().table` — i.e. `table_4_<current pathname>`.
-     */
-    storageKey?: string;
 }
 
 interface UseTableStateResult {
@@ -73,7 +52,12 @@ interface UseTableStateResult {
 }
 
 /**
- * Unified URL + storage state for tables.
+ * Unified URL state for tables — filter + page index live in the query string,
+ * never in storage. A fresh visit to the page without `?q=` shows an empty
+ * filter; only shared URLs (or the user's own back/forward) restore the prior
+ * filter. View preferences (sorting, column visibility, page size, search
+ * columns) still persist via `lib/table-state` — only the ad-hoc query is
+ * URL-only.
  *
  * Replaces the split `useTableQueryFilter` / `usePagination` pair. The split
  * design suffered from a batching race: react-router v6 feeds every
@@ -98,13 +82,9 @@ export function useTableState(options: UseTableStateOptions = {}): UseTableState
         debounceMs = 200,
         filterParamName = URL_PARAMS.QUERY,
         pageParamName = URL_PARAMS.PAGE,
-        skipRestore = false,
-        storageKey: explicitStorageKey,
     } = options;
 
     const [searchParams, setSearchParams] = useSearchParams();
-    const { table: defaultStorageKey } = usePageStorageKeys();
-    const storageKey = explicitStorageKey ?? defaultStorageKey;
 
     const filter = searchParams.get(filterParamName) ?? '';
     const debouncedFilter = useDebouncedValue(filter, debounceMs);
@@ -161,59 +141,6 @@ export function useTableState(options: UseTableStateOptions = {}): UseTableState
         next.delete(pageParamName);
         setSearchParams(next, { replace: true });
     }, [pageParamName, readLatestParams, searchParams, setSearchParams]);
-
-    // Replay the persisted filter into the URL when (a) the URL doesn't
-    // already carry one, and (b) the storage has a non-empty value. Run
-    // exactly once per storageKey rotation — `restoredForKeyReference`
-    // guards against repeating the replay on every render.
-    const restoredForKeyReference = useRef<null | string>(null);
-    // Snapshot the `skipRestore` decision at mount via a ref so a later
-    // toggle (e.g. the user clearing `?qs=`) doesn't fire the restore
-    // mid-session — by then they've already engaged with the page and a
-    // surprise URL mutation would be jarring.
-    const skipRestoreRef = useRef(skipRestore);
-
-    useEffect(() => {
-        if (restoredForKeyReference.current === storageKey) {
-            return;
-        }
-
-        restoredForKeyReference.current = storageKey;
-
-        if (skipRestoreRef.current) {
-            return;
-        }
-
-        if (filter.length > 0) {
-            // URL already has a value — that beats storage. Mirror it back
-            // into storage so a fresh tab without `?q=` resumes from this
-            // intent (shared filtered links).
-            updateTableState(storageKey, { filter });
-
-            return;
-        }
-
-        const stored = loadTableState(storageKey).filter;
-
-        if (!stored || stored.length === 0) {
-            return;
-        }
-
-        const next = readLatestParams();
-
-        next.set(filterParamName, stored);
-        // Replace, not push: restoring prior state shouldn't add a history
-        // entry the user didn't ask for.
-        setSearchParams(next, { replace: true });
-    }, [filter, filterParamName, readLatestParams, setSearchParams, storageKey]);
-
-    // Persist the URL filter into storage on every commit. Skipping the
-    // first render is intentional: a fresh-mount empty `filter` would wipe
-    // a freshly-restored storage entry before the restore effect above has
-    // had a chance to replay it into the URL.
-    useEffectAfterMount(() => {
-        updateTableState(storageKey, { filter: filter.length > 0 ? filter : undefined });
-    }, [filter, storageKey]);
 
     // Coalesce every `update(...)` call fired in the same microtask into one
     // `setSearchParams`. The first call schedules the flush; subsequent calls

@@ -64,16 +64,8 @@ function Knowledges() {
     const [isRenameLoading, setIsRenameLoading] = useState(false);
     const editingInputRef = useRef<HTMLInputElement>(null);
 
-    // When the user lands on a `?qs=` link (server semantic search) we
-    // must suppress the storage→URL `?q=` restore. Re-injecting a previous
-    // session's client filter on top of a fresh semantic-search URL would
-    // silently narrow the result set behind the user's back.
-    // `useTableState` reads `skipRestore` once at mount via a ref, so a
-    // later toggle (user clears `?qs=`) won't replay the restore.
     const [searchParams, setSearchParams] = useSearchParams();
-    const { filter, setFilter } = useTableState({
-        skipRestore: searchParams.has(URL_PARAMS.SEARCH),
-    });
+    const { filter, setFilter } = useTableState();
 
     // Source-of-truth for the semantic-search input is the URL. The
     // `KnowledgesProvider` reads the same `?qs=` and debounces it before
