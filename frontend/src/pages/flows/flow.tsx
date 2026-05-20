@@ -51,6 +51,7 @@ import { useBreakpoint } from '@/hooks/use-breakpoint';
 import { useFlowTabDetection } from '@/hooks/use-flow-tab-detection';
 import { Log } from '@/lib/log';
 import { copyToClipboard, downloadTextFile, generateFileName, generateReport } from '@/lib/report';
+import { cn } from '@/lib/utils';
 import { formatName } from '@/lib/utils/format';
 import { useFavorites } from '@/providers/favorites-provider';
 import { useFlow } from '@/providers/flow-provider';
@@ -62,7 +63,9 @@ const renderFlowItem = (item: FlowItem, isCurrent: boolean): ReactNode => (
             className="size-3 shrink-0"
             status={item.status}
         />
-        <span className={isCurrent ? 'truncate font-medium' : 'truncate'}>{item.title || `Flow #${item.id}`}</span>
+        <span className={cn('min-w-0 flex-1 truncate', isCurrent && 'font-medium')}>
+            {item.title || `Flow #${item.id}`}
+        </span>
         <Badge
             className="ml-auto shrink-0 font-mono text-[10px]"
             variant="outline"

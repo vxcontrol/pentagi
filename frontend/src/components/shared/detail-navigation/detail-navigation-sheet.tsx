@@ -3,7 +3,6 @@ import { type KeyboardEvent, type ReactNode, useCallback, useEffect, useMemo, us
 
 import { Badge } from '@/components/ui/badge';
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { cn } from '@/lib/utils';
 
@@ -387,7 +386,7 @@ export function DetailNavigationSheet<T extends { id: string }>({
                     ) : null}
                 </SheetHeader>
                 {hasEntries ? (
-                    <ScrollArea className="flex-1">
+                    <div className="min-w-0 flex-1 overflow-y-auto">
                         <ul
                             aria-label={sheetTitle}
                             className="flex flex-col gap-0.5 p-2"
@@ -402,13 +401,14 @@ export function DetailNavigationSheet<T extends { id: string }>({
 
                                 return (
                                     <li
+                                        className="min-w-0"
                                         key={id}
                                         role="presentation"
                                     >
                                         <button
                                             aria-selected={isCurrent}
                                             className={cn(
-                                                'hover:bg-muted/50 focus-visible:ring-ring flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm focus-visible:ring-2 focus-visible:outline-hidden',
+                                                'hover:bg-muted/50 focus-visible:ring-ring flex w-full min-w-0 items-center gap-2 rounded-md px-3 py-2 text-left text-sm focus-visible:ring-2 focus-visible:outline-hidden',
                                                 isCurrent && 'bg-muted text-foreground font-medium',
                                             )}
                                             data-item-id={id}
@@ -422,14 +422,14 @@ export function DetailNavigationSheet<T extends { id: string }>({
                                             {renderItem ? (
                                                 renderItem(item, isCurrent)
                                             ) : (
-                                                <span className="truncate">{getLabel(item)}</span>
+                                                <span className="min-w-0 flex-1 truncate">{getLabel(item)}</span>
                                             )}
                                         </button>
                                     </li>
                                 );
                             })}
                         </ul>
-                    </ScrollArea>
+                    </div>
                 ) : (
                     <div className="text-muted-foreground flex flex-1 items-center justify-center px-4 text-center text-sm">
                         {trimmedQuery.length > 0

@@ -237,7 +237,7 @@ Action plan:
 ];
 
 const renderTemplateItem = (item: Template, isCurrent: boolean): ReactNode => (
-    <span className={isCurrent ? 'truncate font-medium' : 'truncate'}>{item.title}</span>
+    <span className={cn('min-w-0 flex-1 truncate', isCurrent && 'font-medium')}>{item.title}</span>
 );
 
 function Template() {

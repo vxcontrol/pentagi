@@ -30,6 +30,7 @@ import { SidebarTrigger } from '@/components/ui/sidebar';
 import { Spinner } from '@/components/ui/spinner';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useBreakpoint } from '@/hooks/use-breakpoint';
+import { cn } from '@/lib/utils';
 import { type Knowledge, useKnowledges } from '@/providers/knowledges-provider';
 
 import { useKnowledgeDetailNavigation } from './use-knowledge-detail-navigation';
@@ -63,7 +64,7 @@ const renderKnowledgeItem = (item: Knowledge, isCurrent: boolean): ReactNode => 
         >
             {item.docType}
         </Badge>
-        <span className={isCurrent ? 'truncate font-medium' : 'truncate'}>{item.question}</span>
+        <span className={cn('min-w-0 flex-1 truncate', isCurrent && 'font-medium')}>{item.question}</span>
     </>
 );
 
