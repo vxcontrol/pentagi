@@ -1,4 +1,15 @@
-import { ChevronDown, Copy, FileSymlink, Folder, FolderPlus, FolderUp, Loader2, Search, Upload, X } from 'lucide-react';
+import {
+    ColumnsSettings,
+    Copy,
+    FileSymlink,
+    Folder,
+    FolderPlus,
+    FolderUp,
+    Loader2,
+    Search,
+    Upload,
+    X,
+} from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -472,9 +483,6 @@ function Resources() {
 
                 <div className="flex items-center gap-2">
                     <InputGroup className="max-w-sm flex-1">
-                        <InputGroupAddon>
-                            <Search />
-                        </InputGroupAddon>
                         <InputGroupInput
                             aria-label="Search resources"
                             autoComplete="off"
@@ -498,9 +506,10 @@ function Resources() {
                         <DropdownMenuTrigger asChild>
                             <Button
                                 className="ml-auto"
+                                size="icon"
                                 variant="outline"
                             >
-                                Columns <ChevronDown className="ml-2" />
+                                <ColumnsSettings />
                             </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
