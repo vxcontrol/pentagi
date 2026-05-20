@@ -1,7 +1,5 @@
 import type { ColumnDef } from '@tanstack/react-table';
 
-import { format, isToday } from 'date-fns';
-import { enUS } from 'date-fns/locale';
 import { Ellipsis, Eye, GitFork, Loader2, Pause, Pencil, PencilLine, Plus, Star, Trash } from 'lucide-react';
 import { CheckCircle2, XCircle } from 'lucide-react';
 import { useCallback, useMemo, useRef, useState } from 'react';
@@ -33,6 +31,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { ResultType, StatusType, type TerminalFragmentFragment, useRenameFlowMutation } from '@/graphql/types';
 import { useTableState } from '@/hooks/use-table-state';
 import { mergeHrefWithSearchParams } from '@/lib/url-params';
+import { formatDate } from '@/lib/utils/format';
 import { useFavorites } from '@/providers/favorites-provider';
 import { type Flow, useFlows } from '@/providers/flows-provider';
 
@@ -60,22 +59,6 @@ const statusConfig: Record<
         label: 'Waiting',
         variant: 'outline',
     },
-};
-
-const formatDateTime = (dateString: string) => {
-    const date = new Date(dateString);
-
-    if (isToday(date)) {
-        return format(date, 'HH:mm:ss', { locale: enUS });
-    }
-
-    return format(date, 'd MMM yyyy', { locale: enUS });
-};
-
-const formatFullDateTime = (dateString: string) => {
-    const date = new Date(dateString);
-
-    return format(date, 'd MMM yyyy, HH:mm:ss', { locale: enUS });
 };
 
 function Flows() {
@@ -367,16 +350,7 @@ function Flows() {
                 cell: ({ row }) => {
                     const dateString = row.getValue('createdAt') as string;
 
-                    return (
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <div className="cursor-default text-sm">{formatDateTime(dateString)}</div>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                                <div className="text-xs">{formatFullDateTime(dateString)}</div>
-                            </TooltipContent>
-                        </Tooltip>
-                    );
+                    return <div className="text-sm">{formatDate(new Date(dateString))}</div>;
                 },
                 header: ({ column }) => (
                     <DataTableColumnHeader
@@ -400,16 +374,7 @@ function Flows() {
                 cell: ({ row }) => {
                     const dateString = row.getValue('updatedAt') as string;
 
-                    return (
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <div className="cursor-default text-sm">{formatDateTime(dateString)}</div>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                                <div className="text-xs">{formatFullDateTime(dateString)}</div>
-                            </TooltipContent>
-                        </Tooltip>
-                    );
+                    return <div className="text-sm">{formatDate(new Date(dateString))}</div>;
                 },
                 header: ({ column }) => (
                     <DataTableColumnHeader

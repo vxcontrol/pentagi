@@ -1,7 +1,7 @@
 import type { ColumnDef } from '@tanstack/react-table';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { format, isToday } from 'date-fns';
+import { format } from 'date-fns';
 import { enUS } from 'date-fns/locale';
 import {
     AlertCircle,
@@ -43,7 +43,6 @@ import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { StatusCard } from '@/components/ui/status-card';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import {
     TokenStatus as TokenStatusEnum,
     useApiTokenCreatedSubscription,
@@ -56,6 +55,7 @@ import {
 } from '@/graphql/types';
 import { useTableState } from '@/hooks/use-table-state';
 import { cn } from '@/lib/utils';
+import { formatDate } from '@/lib/utils/format';
 import { baseUrl } from '@/models/api';
 
 type APIToken = ApiTokenFragmentFragment;
@@ -119,22 +119,6 @@ const getStatusDisplay = (
     }
 
     return { label: token.status, variant: 'secondary' };
-};
-
-const formatDateTime = (dateString: string) => {
-    const date = new Date(dateString);
-
-    if (isToday(date)) {
-        return format(date, 'HH:mm:ss', { locale: enUS });
-    }
-
-    return format(date, 'd MMM yyyy', { locale: enUS });
-};
-
-const formatFullDateTime = (dateString: string) => {
-    const date = new Date(dateString);
-
-    return format(date, 'd MMM yyyy, HH:mm:ss', { locale: enUS });
 };
 
 const calculateTTL = (expiresAt: Date): number => {
@@ -673,16 +657,7 @@ function SettingsAPITokens() {
                     const expiresAt = getTokenExpirationDate(token);
                     const expiresAtString = expiresAt.toISOString();
 
-                    return (
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <div className="cursor-default text-sm">{formatDateTime(expiresAtString)}</div>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                                <div className="text-xs">{formatFullDateTime(expiresAtString)}</div>
-                            </TooltipContent>
-                        </Tooltip>
-                    );
+                    return <div className="text-sm">{formatDate(new Date(expiresAtString))}</div>;
                 },
                 header: ({ column }) => (
                     <DataTableColumnHeader
@@ -710,16 +685,7 @@ function SettingsAPITokens() {
 
                     const dateString = row.getValue('createdAt') as string;
 
-                    return (
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <div className="cursor-default text-sm">{formatDateTime(dateString)}</div>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                                <div className="text-xs">{formatFullDateTime(dateString)}</div>
-                            </TooltipContent>
-                        </Tooltip>
-                    );
+                    return <div className="text-sm">{formatDate(new Date(dateString))}</div>;
                 },
                 header: ({ column }) => (
                     <DataTableColumnHeader
