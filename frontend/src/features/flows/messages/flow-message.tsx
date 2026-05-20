@@ -18,7 +18,6 @@ interface FlowMessageProps {
     searchValue?: string;
 }
 
-// Helper function to check if text contains search value (case-insensitive)
 const containsSearchValue = (text: null | string | undefined, searchValue: string): boolean => {
     if (!text || !searchValue.trim()) {
         return false;
@@ -31,7 +30,6 @@ function FlowMessage({ log, searchValue = '' }: FlowMessageProps) {
     const { createdAt, message, result, resultFormat = ResultFormat.Plain, thinking, type } = log;
     const isReportMessage = type === MessageLogType.Report;
 
-    // Memoize search checks to avoid recalculating on every render
     const searchChecks = useMemo(() => {
         const trimmedSearch = searchValue.trim();
 
@@ -77,7 +75,6 @@ function FlowMessage({ log, searchValue = '' }: FlowMessageProps) {
         }
     }
 
-    // Use useCallback to memoize the toggle functions
     const toggleDetails = useCallback(() => {
         setIsDetailsVisible((prev) => !prev);
     }, []);
@@ -95,15 +92,11 @@ function FlowMessage({ log, searchValue = '' }: FlowMessageProps) {
         });
     }, [thinking, message, result, resultFormat]);
 
-    // Determine if thinking should be shown
-    // Show thinking if: thinking exists AND (message is empty OR thinking is manually toggled visible)
     const shouldShowThinking = thinking && (!message || isThinkingVisible);
 
-    // Determine if thinking toggle button should be shown
-    // Show button only if thinking exists AND message is not empty
     const shouldShowThinkingToggle = thinking && message;
 
-    // Only render details content when it's visible to reduce DOM nodes
+    // Gate by visibility so the (potentially heavy) details subtree isn't in the DOM when collapsed.
     const renderDetailsContent = () => {
         if (!isDetailsVisible) {
             return null;

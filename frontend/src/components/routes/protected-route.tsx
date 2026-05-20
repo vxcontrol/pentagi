@@ -8,7 +8,6 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
     const location = useLocation();
     const { isAuthenticated, isLoading } = useUser();
 
-    // Wait for initial auth check to complete
     if (isLoading) {
         return null;
     }

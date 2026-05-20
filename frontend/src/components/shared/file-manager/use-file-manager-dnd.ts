@@ -255,8 +255,6 @@ export function useFileManagerDnd({
         setDraggingPaths(new Set());
     }, []);
 
-    // ── per-node handlers ───────────────────────────────────────────────────────
-
     const handleNodeDragStart = useCallback(
         (node: FileManagerInternalNode, event: ReactDragEvent<HTMLDivElement>): void => {
             if (!isEnabled || node.isGroupRoot) {
@@ -623,8 +621,6 @@ export function useFileManagerDnd({
             resetDragState,
         ],
     );
-
-    // ── container-level handlers (root drop area) ───────────────────────────────
 
     const handleContainerDragEnter = useCallback(
         (event: ReactDragEvent<HTMLDivElement>): void => {

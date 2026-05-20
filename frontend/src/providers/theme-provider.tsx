@@ -33,7 +33,6 @@ export function ThemeProvider({
     const [theme, setTheme] = useState<Theme>(() => {
         const storedTheme = localStorage.getItem(storageKey);
 
-        // If no stored theme, use system (default)
         if (!storedTheme) {
             return 'system';
         }
@@ -60,10 +59,8 @@ export function ThemeProvider({
     const value = {
         setTheme: (theme: Theme) => {
             if (theme === 'system') {
-                // Remove from localStorage when system is selected
                 localStorage.removeItem(storageKey);
             } else {
-                // Store only light or dark themes
                 localStorage.setItem(storageKey, theme);
             }
 

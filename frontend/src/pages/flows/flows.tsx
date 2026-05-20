@@ -605,7 +605,6 @@ function Flows() {
         );
     }
 
-    // Check if flows list is empty
     if (flows.length === 0) {
         return (
             <>

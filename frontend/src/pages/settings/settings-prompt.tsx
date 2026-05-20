@@ -39,7 +39,6 @@ import {
 import { formatPromptId } from '@/lib/route-titles/format-prompt-id';
 import { cn } from '@/lib/utils';
 
-// Form schemas for each tab
 const systemFormSchema = z.object({
     template: z.string().min(1, 'System template is required'),
 });
@@ -56,7 +55,6 @@ interface BaseTextareaProps {
     placeholder?: string;
 }
 
-// Universal field components using useController
 interface ControllerProps {
     control: any;
     disabled?: boolean;
@@ -95,7 +93,6 @@ function FormTextareaItem({ className, control, disabled, label, name, placehold
     );
 }
 
-// Helper function to extract used variables from template
 const getUsedVariables = (template: string | undefined): Set<string> => {
     const usedVariables = new Set<string>();
 
@@ -117,7 +114,6 @@ const getUsedVariables = (template: string | undefined): Set<string> => {
     return usedVariables;
 };
 
-// Variables Component
 interface VariablesProps {
     currentTemplate: string;
     onVariableClick: (variable: string) => void;
@@ -128,14 +124,12 @@ function SettingsPrompt() {
     const { promptId } = useParams<{ promptId: string }>();
     const navigate = useNavigate();
 
-    // GraphQL queries and mutations
     const { data, error, loading } = useSettingsPromptsQuery();
     const [createPrompt, { error: createError, loading: isCreateLoading }] = useCreatePromptMutation();
     const [updatePrompt, { error: updateError, loading: isUpdateLoading }] = useUpdatePromptMutation();
     const [deletePrompt, { error: deleteError, loading: isDeleteLoading }] = useDeletePromptMutation();
     const [validatePrompt, { error: validateError, loading: isValidateLoading }] = useValidatePromptMutation();
 
-    // Local state management
     const [submitError, setSubmitError] = useState<null | string>(null);
     const [activeTab, setActiveTab] = useState<'human' | 'system'>('system');
     const [resetDialogOpen, setResetDialogOpen] = useState(false);
@@ -149,7 +143,6 @@ function SettingsPrompt() {
 
     const isLoading = isCreateLoading || isUpdateLoading || isDeleteLoading || isValidateLoading;
 
-    // Helper function to handle variable insertion/selection
     const handleVariableClick = (variable: string, field: any, formId: string) => {
         const textarea = document.querySelector(`#${formId} textarea`) as HTMLTextAreaElement;
 
@@ -157,16 +150,13 @@ function SettingsPrompt() {
             const currentValue = field.value || '';
             const variablePattern = `{{.${variable}}}`;
 
-            // Check if variable is already used
             const variableIndex = currentValue.indexOf(variablePattern);
 
             if (variableIndex !== -1) {
-                // Variable exists - select it and scroll to it
                 textarea.focus();
                 textarea.setSelectionRange(variableIndex, variableIndex + variablePattern.length);
 
-                // Scroll to center the selection
-                const lineHeight = 20; // Approximate line height
+                const lineHeight = 20;
                 const textBeforeSelection = currentValue.slice(0, Math.max(0, variableIndex));
                 const linesBeforeSelection = textBeforeSelection.split('\n').length - 1;
                 const selectionTop = linesBeforeSelection * lineHeight;
@@ -175,14 +165,13 @@ function SettingsPrompt() {
 
                 textarea.scrollTop = scrollTop;
             } else {
-                // Variable doesn't exist - insert it at cursor position (no scrolling)
                 const start = textarea.selectionStart;
                 const end = textarea.selectionEnd;
                 const newValue =
                     currentValue.slice(0, Math.max(0, start)) + variablePattern + currentValue.slice(Math.max(0, end));
                 field.onChange(newValue);
 
-                // Focus and set cursor position after the inserted variable (no scrolling)
+                // preventScroll: avoid yanking the user away from where they were typing.
                 setTimeout(() => {
                     textarea.focus({ preventScroll: true });
                     textarea.setSelectionRange(start + variablePattern.length, start + variablePattern.length);
@@ -191,7 +180,6 @@ function SettingsPrompt() {
         }
     };
 
-    // Handle reset to default prompt
     const handleReset = () => {
         setResetDialogOpen(true);
     };
@@ -209,14 +197,12 @@ function SettingsPrompt() {
                     refetchQueries: ['settingsPrompts'],
                     variables: { promptId: promptInfo.userSystemPrompt.id },
                 });
-                // Reset form to default value
                 systemForm.setValue('template', promptInfo.defaultSystemTemplate);
             } else if (activeTab === 'human' && promptInfo.userHumanPrompt) {
                 await deletePrompt({
                     refetchQueries: ['settingsPrompts'],
                     variables: { promptId: promptInfo.userHumanPrompt.id },
                 });
-                // Reset form to default value
                 humanForm.setValue('template', promptInfo.defaultHumanTemplate);
             }
 
@@ -228,7 +214,6 @@ function SettingsPrompt() {
         }
     };
 
-    // Handle validate prompt
     const handleValidate = async () => {
         if (!promptInfo) {
             return;
@@ -272,7 +257,6 @@ function SettingsPrompt() {
         }
     };
 
-    // Form instances for each tab
     const systemForm = useForm<SystemFormData>({
         defaultValues: {
             template: '',
@@ -287,16 +271,13 @@ function SettingsPrompt() {
         resolver: zodResolver(humanFormSchema),
     });
 
-    // Reactive dirty state across both forms
     const { isDirty: isSystemDirty } = useFormState({ control: systemForm.control });
     const { isDirty: isHumanDirty } = useFormState({ control: humanForm.control });
     const isDirty = isSystemDirty || isHumanDirty;
 
-    // Watch form values to detect used variables
     const systemTemplate = systemForm.watch('template');
     const humanTemplate = humanForm.watch('template');
 
-    // Determine prompt type and get prompt data
     // eslint-disable-next-line react-hooks/preserve-manual-memoization -- branching reads from data.settingsPrompts that the compiler can't statically prove stable
     const promptInfo = useMemo(() => {
         if (!promptId || !data?.settingsPrompts) {
@@ -311,11 +292,9 @@ function SettingsPrompt() {
 
         const { agents, tools } = defaultPrompts;
 
-        // Check if it's an agent prompt
         const agentData = agents?.[promptId as keyof typeof agents] as AgentPrompt | AgentPrompts | undefined;
 
         if (agentData) {
-            // Check if we have user-defined system or human prompts
             const userSystemPrompt = userDefined?.find((p) => p.type === agentData.system.type);
             const userHumanPrompt = userDefined?.find((p) => p.type === (agentData as AgentPrompts)?.human?.type);
 
@@ -333,7 +312,6 @@ function SettingsPrompt() {
             };
         }
 
-        // Check if it's a tool prompt
         const toolData = tools?.[promptId as keyof typeof tools] as DefaultPrompt | undefined;
 
         if (toolData) {
@@ -356,7 +334,6 @@ function SettingsPrompt() {
         return null;
     }, [promptId, data?.settingsPrompts]);
 
-    // Compute variables data based on active tab and prompt info
     const variablesData = useMemo(() => {
         if (!promptInfo) {
             return null;
@@ -382,7 +359,6 @@ function SettingsPrompt() {
         return { currentTemplate, formId, variables };
     }, [promptInfo, activeTab, systemTemplate, humanTemplate]);
 
-    // Handle variable click with useCallback for better performance
     const handleVariableClickCallback = useCallback(
         (variable: string) => {
             if (!variablesData) {
@@ -404,7 +380,6 @@ function SettingsPrompt() {
         [activeTab, systemTemplate, humanTemplate, variablesData, systemForm, humanForm],
     );
 
-    // Fill forms with current prompt data when available
     useEffect(() => {
         if (promptInfo) {
             systemForm.reset({
@@ -417,7 +392,8 @@ function SettingsPrompt() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [promptInfo]);
 
-    // Push a blocker entry when form is dirty to manage browser back
+    // Push a synthetic history entry while the form is dirty so a browser-back can be intercepted
+    // by popstate below — react-router's blocker doesn't cover the native back gesture.
     useEffect(() => {
         if (isDirty && !hasPushedBlockerStateRef.current) {
             window.history.pushState({ __pentagiBlock__: true }, '');
@@ -425,7 +401,6 @@ function SettingsPrompt() {
         }
     }, [isDirty]);
 
-    // Intercept browser back to show confirmation dialog
     useEffect(() => {
         const handlePopState = () => {
             if (!isDirty) {
@@ -480,7 +455,6 @@ function SettingsPrompt() {
         setIsLeaveDialogOpen(open);
     };
 
-    // Form submission handlers
     const handleSystemSubmit = async (formData: SystemFormData) => {
         if (!promptInfo) {
             return;
@@ -488,7 +462,7 @@ function SettingsPrompt() {
 
         const isUpdate = !!promptInfo.userSystemPrompt;
 
-        // For creation, check if the template is identical to the default
+        // Submitting an unchanged template would create a no-op userDefined row that masks the default.
         if (!isUpdate && formData.template === promptInfo.defaultSystemTemplate) {
             return;
         }
@@ -496,7 +470,6 @@ function SettingsPrompt() {
         try {
             setSubmitError(null);
 
-            // Get the real type from data
             let promptType: PromptType;
 
             if (promptInfo.type === 'agent') {
@@ -508,7 +481,6 @@ function SettingsPrompt() {
             }
 
             if (isUpdate) {
-                // Update existing user-defined prompt
                 await updatePrompt({
                     refetchQueries: ['settingsPrompts'],
                     variables: {
@@ -517,7 +489,6 @@ function SettingsPrompt() {
                     },
                 });
             } else {
-                // Create new user-defined prompt
                 await createPrompt({
                     refetchQueries: ['settingsPrompts'],
                     variables: {
@@ -539,7 +510,7 @@ function SettingsPrompt() {
 
         const isUpdate = !!promptInfo.userHumanPrompt;
 
-        // For creation, check if the template is identical to the default
+        // Submitting an unchanged template would create a no-op userDefined row that masks the default.
         if (!isUpdate && formData.template === promptInfo.defaultHumanTemplate) {
             return;
         }
@@ -547,7 +518,6 @@ function SettingsPrompt() {
         try {
             setSubmitError(null);
 
-            // Get the real human prompt type from data
             const agentData = promptInfo.data as AgentPrompts;
             const humanPromptType = agentData.human?.type;
 
@@ -558,7 +528,6 @@ function SettingsPrompt() {
             }
 
             if (isUpdate) {
-                // Update existing user-defined prompt
                 await updatePrompt({
                     refetchQueries: ['settingsPrompts'],
                     variables: {
@@ -567,7 +536,6 @@ function SettingsPrompt() {
                     },
                 });
             } else {
-                // Create new user-defined prompt
                 await createPrompt({
                     refetchQueries: ['settingsPrompts'],
                     variables: {
@@ -582,7 +550,6 @@ function SettingsPrompt() {
         }
     };
 
-    // Loading state
     if (loading) {
         return (
             <>
@@ -595,7 +562,6 @@ function SettingsPrompt() {
         );
     }
 
-    // Error state
     if (error) {
         return (
             <>
@@ -608,7 +574,6 @@ function SettingsPrompt() {
         );
     }
 
-    // Prompt not found state
     if (!promptInfo) {
         return (
             <>
@@ -623,11 +588,10 @@ function SettingsPrompt() {
         );
     }
 
-    // Templates for diff based on active tab
     const currentTemplate = activeTab === 'system' ? systemTemplate : humanTemplate;
     const defaultTemplate = activeTab === 'system' ? promptInfo.defaultSystemTemplate : promptInfo.defaultHumanTemplate;
 
-    // Styles for ReactDiffViewer aligned with shadcn (Tailwind CSS vars)
+    // ReactDiffViewer styles aligned with shadcn — uses Tailwind CSS vars rather than hard-coded colors.
     const diffStyles = {
         content: {
             fontFamily:

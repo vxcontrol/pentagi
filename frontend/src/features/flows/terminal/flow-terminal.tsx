@@ -30,7 +30,6 @@ function FlowTerminal() {
     const { flowData, flowId } = useFlow();
 
     const terminalLogs = useMemo(() => flowData?.terminalLogs ?? [], [flowData?.terminalLogs]);
-    // Separate state for immediate input value and debounced search value
     const [debouncedSearchValue, setDebouncedSearchValue] = useState('');
     const terminalRef = useRef<null | { findNext: () => void; findPrevious: () => void }>(null);
 
@@ -48,7 +47,6 @@ function FlowTerminal() {
     const searchValue = form.watch('search');
     const filter = form.watch('filter');
 
-    // Create debounced function to update search value
     const debouncedUpdateSearch = useMemo(
         () =>
             debounce((value: string) => {
@@ -57,7 +55,6 @@ function FlowTerminal() {
         [],
     );
 
-    // Update debounced search value when input value changes
     useEffect(() => {
         debouncedUpdateSearch(searchValue);
 
@@ -66,14 +63,12 @@ function FlowTerminal() {
         };
     }, [searchValue, debouncedUpdateSearch]);
 
-    // Cleanup debounced function on unmount
     useEffect(() => {
         return () => {
             debouncedUpdateSearch.cancel();
         };
     }, [debouncedUpdateSearch]);
 
-    // Clear search when flow changes to prevent stale search state
     useEffect(() => {
         form.reset({
             filter: {

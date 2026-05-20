@@ -38,7 +38,6 @@ function FlowScreenshots() {
 
     const searchValue = form.watch('search');
 
-    // Create debounced function to update search value
     const debouncedUpdateSearch = useMemo(
         () =>
             debounce((value: string) => {
@@ -47,7 +46,6 @@ function FlowScreenshots() {
         [],
     );
 
-    // Update debounced search value when input value changes
     useEffect(() => {
         debouncedUpdateSearch(searchValue);
 
@@ -56,22 +54,18 @@ function FlowScreenshots() {
         };
     }, [searchValue, debouncedUpdateSearch]);
 
-    // Cleanup debounced function on unmount
     useEffect(() => {
         return () => {
             debouncedUpdateSearch.cancel();
         };
     }, [debouncedUpdateSearch]);
 
-    // Clear search when flow changes to prevent stale search state
     useEffect(() => {
         form.reset({ search: '' });
         setDebouncedSearchValue('');
         debouncedUpdateSearch.cancel();
     }, [flowId, form, debouncedUpdateSearch]);
 
-    // Memoize filtered screenshots to avoid recomputing on every render
-    // Use debouncedSearchValue for filtering to improve performance
     const filteredScreenshots = useMemo(() => {
         const search = debouncedSearchValue.toLowerCase().trim();
 

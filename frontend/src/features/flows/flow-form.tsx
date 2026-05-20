@@ -210,7 +210,6 @@ export function FlowForm({
         },
     });
 
-    // Update form values from defaultValues if user hasn't manually changed them
     useEffect(() => {
         if (!defaultValues) {
             return;

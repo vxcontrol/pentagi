@@ -17,7 +17,6 @@ const SystemSettingsContext = createContext<SettingsContextType | undefined>(und
 export function SystemSettingsProvider({ children }: { children: ReactNode }) {
     const { isAuthenticated } = useUser();
 
-    // Load settings via GraphQL query only when user is authenticated
     const { data: settingsData, loading } = useSettingsQuery({
         skip: !isAuthenticated(),
     });

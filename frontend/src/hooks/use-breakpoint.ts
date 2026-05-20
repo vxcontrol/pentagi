@@ -36,7 +36,6 @@ export function useBreakpoint() {
     const prevWidthRef = useRef<number>(typeof window !== 'undefined' ? window.innerWidth : 0);
     const breakpointRef = useRef<BreakpointName>(breakpoint);
 
-    // Move state update logic outside of useEffect
     const updateBreakpointState = useCallback((newBreakpoint: BreakpointName) => {
         if (breakpointRef.current !== newBreakpoint) {
             breakpointRef.current = newBreakpoint;

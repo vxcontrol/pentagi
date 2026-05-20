@@ -17,7 +17,6 @@ interface FlowAgentProps {
     searchValue?: string;
 }
 
-// Helper function to check if text contains search value (case-insensitive)
 const containsSearchValue = (text: null | string | undefined, searchValue: string): boolean => {
     if (!text || !searchValue.trim()) {
         return false;
@@ -29,7 +28,6 @@ const containsSearchValue = (text: null | string | undefined, searchValue: strin
 function FlowAgent({ log, searchValue = '' }: FlowAgentProps) {
     const { createdAt, executor, initiator, result, subtaskId, task, taskId } = log;
 
-    // Memoize search checks to avoid recalculating on every render
     const searchChecks = useMemo(() => {
         const trimmedSearch = searchValue.trim();
 
@@ -63,13 +61,9 @@ function FlowAgent({ log, searchValue = '' }: FlowAgentProps) {
         }
     }
 
-    // Determine if we should show full task or preview
-    // Show full task if: search found in task OR details are manually visible OR task is short
     const shouldShowFullTask = searchChecks.hasTaskMatch || isDetailsVisible || task.length <= taskPreviewLength;
     const taskToShow = shouldShowFullTask ? task : `${task.slice(0, taskPreviewLength)}...`;
 
-    // Determine if we should show details toggle
-    // Show toggle if: result exists OR task is longer than preview length
     const shouldShowDetailsToggle = result || task.length > taskPreviewLength;
 
     const handleCopy = useCallback(async () => {

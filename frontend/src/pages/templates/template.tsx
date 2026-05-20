@@ -270,7 +270,6 @@ function Template() {
         stopEdit: handleTemplateRenameCancel,
     } = useInlineEdit({ resetKey: templateId });
 
-    // Fetch template data when editing
     const { data: templateData, loading: isLoadingTemplate } = useFlowTemplateQuery({
         skip: isNew || !templateId,
         variables: templateId && !isNew ? { templateId } : undefined,
@@ -284,7 +283,6 @@ function Template() {
 
     const { control, formState, getValues, handleSubmit: handleFormSubmit, reset, setValue } = form;
 
-    // Load template data into form when query completes
     useEffect(() => {
         if (isNew || !templateData?.flowTemplate) {
             return;
@@ -294,7 +292,6 @@ function Template() {
         reset({ text, title }, { keepDefaultValues: false });
     }, [templateData, isNew, reset]);
 
-    // Check if form has unsaved changes
     const hasUnsavedChanges = formState.isDirty;
     const templateName = templateData?.flowTemplate?.title ?? null;
 
@@ -655,7 +652,6 @@ function Template() {
         [isMobile, isAsideOpen, asideContent],
     );
 
-    // Show loading spinner when fetching template data
     if (!isNew && isLoadingTemplate) {
         return (
             <>
@@ -667,7 +663,6 @@ function Template() {
         );
     }
 
-    // Handle template not found
     if (!isNew && !isLoadingTemplate && !templateData?.flowTemplate) {
         return (
             <>

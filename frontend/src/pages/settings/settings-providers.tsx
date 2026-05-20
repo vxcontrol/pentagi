@@ -267,11 +267,9 @@ function SettingsProviders() {
             return <div className="text-muted-foreground p-4 text-sm">No agent configuration available</div>;
         }
 
-        // Convert camelCase key to display name (e.g., 'simpleJson' -> 'Simple Json')
         const getName = (key: string): string =>
             key.replaceAll(/([A-Z])/g, ' $1').replace(/^./, (item) => item.toUpperCase());
 
-        // Recursively extract all fields from an object, flattening nested objects
         const getFields = (obj: any, prefix = ''): { label: string; value: boolean | number | string }[] => {
             if (!obj || typeof obj !== 'object') {
                 return [];
@@ -288,7 +286,6 @@ function SettingsProviders() {
                 });
         };
 
-        // Dynamically create agent types from object keys
         const agentTypes = Object.entries(agents)
             .filter(([key]) => key !== '__typename')
             .map(([key, data]) => ({
@@ -304,7 +301,6 @@ function SettingsProviders() {
                 <hr className="border-muted-foreground/20 my-4" />
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5">
                     {agentTypes.map(({ data, key, name }) => {
-                        // Get all fields from data, including nested objects
                         const fields = data ? getFields(data) : [];
 
                         return (
@@ -384,7 +380,6 @@ function SettingsProviders() {
 
     const providers = data?.settingsProviders?.userDefined || [];
 
-    // Check if providers list is empty
     if (providers.length === 0) {
         return (
             <div className="flex flex-col gap-4">

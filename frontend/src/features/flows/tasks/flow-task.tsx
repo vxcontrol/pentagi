@@ -15,7 +15,6 @@ interface FlowTaskProps {
     task: TaskFragmentFragment;
 }
 
-// Helper function to check if text contains search value (case-insensitive)
 const containsSearchValue = (text: null | string | undefined, searchValue: string): boolean => {
     if (!text || !searchValue.trim()) {
         return false;
@@ -28,7 +27,6 @@ function FlowTask({ searchValue = '', task }: FlowTaskProps) {
     const { id, result, status, subtasks, title } = task;
     const [isDetailsVisible, setIsDetailsVisible] = useState(false);
 
-    // Memoize search checks to avoid recalculating on every render
     const searchChecks = useMemo(() => {
         const trimmedSearch = searchValue.trim();
 
@@ -62,7 +60,6 @@ function FlowTask({ searchValue = '', task }: FlowTaskProps) {
     const sortedSubtasks = [...(subtasks || [])].sort((a, b) => +a.id - +b.id);
     const hasSubtasks = subtasks && subtasks.length > 0;
 
-    // Calculate completed subtasks count
     const completedSubtasksCount = useMemo(() => {
         if (!subtasks?.length) {
             return 0;
@@ -71,7 +68,6 @@ function FlowTask({ searchValue = '', task }: FlowTaskProps) {
         return subtasks.filter((subtask) => [StatusType.Failed, StatusType.Finished].includes(subtask.status)).length;
     }, [subtasks]);
 
-    // Calculate progress based on completed subtasks
     const progress = useMemo(() => {
         if (!subtasks?.length) {
             return 0;

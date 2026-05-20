@@ -1,12 +1,8 @@
-// ── REST API paths ──────────────────────────────────────────────────────────
-
 export const RESOURCES_API_PATH = '/resources/';
 export const RESOURCES_MKDIR_API_PATH = '/resources/mkdir';
 export const RESOURCES_MOVE_API_PATH = '/resources/move';
 export const RESOURCES_COPY_API_PATH = '/resources/copy';
 export const RESOURCES_DOWNLOAD_API_PATH = '/resources/download';
-
-// ── UI constants ────────────────────────────────────────────────────────────
 
 export const SEARCH_DEBOUNCE_MS = 300;
 

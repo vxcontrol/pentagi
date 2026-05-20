@@ -13,7 +13,6 @@ interface FlowSubtaskProps {
     subtask: SubtaskFragmentFragment;
 }
 
-// Helper function to check if text contains search value (case-insensitive)
 const containsSearchValue = (text: null | string | undefined, searchValue: string): boolean => {
     if (!text || !searchValue.trim()) {
         return false;
@@ -27,7 +26,6 @@ function FlowSubtask({ searchValue = '', subtask }: FlowSubtaskProps) {
     const [isDetailsVisible, setIsDetailsVisible] = useState(false);
     const hasDetails = description || result;
 
-    // Memoize search checks to avoid recalculating on every render
     const searchChecks = useMemo(() => {
         const trimmedSearch = searchValue.trim();
 

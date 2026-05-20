@@ -52,7 +52,6 @@ interface MarkdownProps {
     searchValue?: string;
 }
 
-// List of all elements that should have text highlighting
 const textElements = [
     'p',
     'span',
@@ -91,13 +90,11 @@ const textElements = [
     'dd',
 ];
 
-// Function to escape special regex characters
 const escapeRegExp = (string: string): string => {
     return string.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&');
 };
 
 function Markdown({ children, className, searchValue }: MarkdownProps) {
-    // Memoize the escaped search value to avoid recalculating regex
     const processedSearch = useMemo(() => {
         const trimmedSearch = searchValue?.trim();
 
@@ -112,7 +109,6 @@ function Markdown({ children, className, searchValue }: MarkdownProps) {
         };
     }, [searchValue]);
 
-    // Function to create highlighted text components with subtle highlighting
     const createHighlightedText = useCallback(
         (text: string) => {
             if (!processedSearch) {
@@ -122,13 +118,11 @@ function Markdown({ children, className, searchValue }: MarkdownProps) {
             const parts = text.split(processedSearch.regex);
 
             return parts.map((part, index) => {
-                // Use case-insensitive comparison to match the filtering logic
                 if (part.toLowerCase() === processedSearch.trimmed.toLowerCase()) {
                     return (
                         <span
                             key={`highlight-${index}`}
                             style={{
-                                // Much more subtle highlighting - very pale yellow with slight border
                                 backgroundColor: 'rgba(255, 255, 0, 0.15)',
                                 borderRadius: '2px',
                                 boxShadow: 'inset 0 0 0 1px rgba(255, 255, 0, 0.25)',
@@ -146,7 +140,6 @@ function Markdown({ children, className, searchValue }: MarkdownProps) {
         [processedSearch],
     );
 
-    // Optimized helper function to process text nodes recursively
     const processTextNode = useMemo(() => {
         const fn = (nodeChildren: any): any => {
             if (!processedSearch) {
@@ -199,7 +192,6 @@ function Markdown({ children, className, searchValue }: MarkdownProps) {
         return fn;
     }, [processedSearch, createHighlightedText]);
 
-    // Create a simple component renderer factory to avoid recreating functions
     const createComponentRenderer = useCallback(
         (ComponentName: string) => {
             const Component = ComponentName as React.ElementType;
@@ -217,17 +209,16 @@ function Markdown({ children, className, searchValue }: MarkdownProps) {
         [processTextNode],
     );
 
-    // Memoize components to avoid recreating them on every render
     const customComponents = useMemo(() => {
         const components: Record<string, any> = {};
 
         if (processedSearch) {
-            // Create components for all text elements using the factory
             textElements.forEach((element) => {
                 components[element] = createComponentRenderer(element);
             });
 
-            // Don't highlight inside code blocks and preserve their content
+            // Code blocks pass through untouched — highlighting injected `<span>`s into a `<code>`
+            // breaks rehype-highlight's tokenization and the rendered listing.
             components.code = ({ children: nodeChildren, ...props }: any) => {
                 return <code {...props}>{nodeChildren}</code>;
             };

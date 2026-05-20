@@ -18,7 +18,6 @@ import {
     SidebarTrigger,
 } from '@/components/ui/sidebar';
 
-// Types
 export interface MenuItem {
     icon?: React.ReactNode;
     id: string;
@@ -31,7 +30,6 @@ interface SettingsSidebarMenuItemProps {
     item: MenuItem;
 }
 
-// Settings menu items definition
 const menuItems: readonly MenuItem[] = [
     {
         icon: <Plug className="size-4" />,
@@ -53,16 +51,13 @@ const menuItems: readonly MenuItem[] = [
     },
 ] as const;
 
-// Settings header component
 function SettingsHeader() {
     const location = useLocation();
     const params = useParams();
 
-    // Memoize title calculation for better performance
     const title = useMemo(() => {
         const path = location.pathname;
 
-        // Check for specific nested routes
         if (path === '/settings/providers/new') {
             return 'Create Provider';
         }
@@ -83,7 +78,6 @@ function SettingsHeader() {
             return 'PentAGI API';
         }
 
-        // Find matching main section
         const activeItem = menuItems.find((item) => path.startsWith(item.path));
 
         return activeItem?.title ?? 'Settings';
@@ -101,7 +95,6 @@ function SettingsHeader() {
     );
 }
 
-// Settings layout component
 function SettingsLayout() {
     return (
         <SidebarProvider>
@@ -109,7 +102,6 @@ function SettingsLayout() {
                 <SettingsSidebar />
                 <SidebarInset className="flex flex-1 flex-col">
                     <SettingsHeader />
-                    {/* Content area for nested routes */}
                     <main className="min-h-0 flex-1 overflow-auto p-4">
                         <Outlet />
                     </main>
@@ -119,7 +111,6 @@ function SettingsLayout() {
     );
 }
 
-// Settings sidebar component
 function SettingsSidebar() {
     return (
         <Sidebar collapsible="icon">
@@ -161,10 +152,8 @@ function SettingsSidebar() {
     );
 }
 
-// Individual menu item component to properly use hooks
 function SettingsSidebarMenuItem({ item }: SettingsSidebarMenuItemProps) {
     const location = useLocation();
-    // Check if current path starts with item path (for nested routes)
     const isActive = location.pathname.startsWith(item.path);
 
     return (

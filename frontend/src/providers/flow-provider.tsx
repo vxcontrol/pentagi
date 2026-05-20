@@ -95,20 +95,16 @@ export function FlowProvider({ children }: FlowProviderProps) {
 
         const explicitSelection = selectedAssistantIds[flowId];
 
-        // If there's an explicit selection (including null for "no selection")
         if (explicitSelection !== undefined) {
-            // If explicitly set to null, return null
             if (explicitSelection === null) {
                 return null;
             }
 
-            // If the selected assistant still exists in the list, return it
             if (assistants.some((assistant) => assistant.id === explicitSelection)) {
                 return explicitSelection;
             }
         }
 
-        // Otherwise, auto-select the first assistant
         return assistants?.[0]?.id ?? null;
     }, [flowId, selectedAssistantIds, assistants]);
 
@@ -119,15 +115,13 @@ export function FlowProvider({ children }: FlowProviderProps) {
         variables: { assistantId: selectedAssistantId ?? '', flowId: flowId ?? '' },
     });
 
-    // Subscriptions — skip until the initial flow query has loaded
-    // to ensure cache fields exist before subscription data arrives
+    // Skip subscriptions until the initial flow query has loaded so cache fields exist
+    // before subscription deltas arrive.
     const subscriptionVariables = useMemo(() => ({ flowId: flowId || '' }), [flowId]);
     const subscriptionSkip = !flowId || isLoading;
 
-    // Global flow subscription - updates flow status (e.g., when stopped/finished)
     useFlowUpdatedSubscription();
 
-    // Flow-specific subscriptions that depend on the selected flow
     useTaskCreatedSubscription({ skip: subscriptionSkip, variables: subscriptionVariables });
     useTaskUpdatedSubscription({ skip: subscriptionSkip, variables: subscriptionVariables });
     useScreenshotAddedSubscription({ skip: subscriptionSkip, variables: subscriptionVariables });
@@ -138,7 +132,6 @@ export function FlowProvider({ children }: FlowProviderProps) {
     useSearchLogAddedSubscription({ skip: subscriptionSkip, variables: subscriptionVariables });
     useVectorStoreLogAddedSubscription({ skip: subscriptionSkip, variables: subscriptionVariables });
 
-    // Assistant-specific subscriptions
     useAssistantCreatedSubscription({ skip: subscriptionSkip, variables: subscriptionVariables });
     useAssistantUpdatedSubscription({ skip: subscriptionSkip, variables: subscriptionVariables });
     useAssistantDeletedSubscription({ skip: subscriptionSkip, variables: subscriptionVariables });
@@ -167,7 +160,6 @@ export function FlowProvider({ children }: FlowProviderProps) {
         selectAssistant(null);
     }, [flowId, selectAssistant]);
 
-    // Mutations
     const [putUserInput] = usePutUserInputMutation();
     const [stopFlowMutation] = useStopFlowMutation();
     const [createAssistantMutation] = useCreateAssistantMutation();
@@ -177,7 +169,6 @@ export function FlowProvider({ children }: FlowProviderProps) {
 
     const flowStatus = useMemo(() => flowData?.flow?.status, [flowData?.flow?.status]);
 
-    // Show toast notification when flow loading error occurs.
     // A single Postgres "no rows in result set" surfaces here every time a sibling
     // query/subscription retries against an invalid flow id; without a stable
     // toast id Sonner would stack 8 copies of the same message before the page
@@ -304,7 +295,6 @@ export function FlowProvider({ children }: FlowProviderProps) {
                         useAgents,
                     },
                 });
-                // Cache will be automatically updated via subscriptions
             } catch (error) {
                 const description =
                     error instanceof Error ? error.message : 'An error occurred while calling assistant';
@@ -330,7 +320,6 @@ export function FlowProvider({ children }: FlowProviderProps) {
                         flowId,
                     },
                 });
-                // Cache will be automatically updated via mutation policy and subscriptions
             } catch (error) {
                 const description =
                     error instanceof Error ? error.message : 'An error occurred while stopping assistant';

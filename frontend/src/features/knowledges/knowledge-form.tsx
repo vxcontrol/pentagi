@@ -24,10 +24,6 @@ import { useUser } from '@/providers/user-provider';
 import { KnowledgeFormLayoutDesktop, KnowledgeFormLayoutMobile } from './knowledge-form-layout';
 import { KnowledgeHeader } from './knowledge-header';
 
-// ---------------------------------------------------------------------------
-// Schema, types, pure helpers
-// ---------------------------------------------------------------------------
-
 // Length limits mirror the REST validation tags on the Go side
 // (`backend/pkg/server/models/knowledge.go`). The GraphQL layer itself does
 // not enforce them, so without these the user could submit a payload that
@@ -178,10 +174,6 @@ export const formValuesToUpdateInput = (values: FormValues, dirty: DirtyFlags): 
 
     return input;
 };
-
-// ---------------------------------------------------------------------------
-// Form component
-// ---------------------------------------------------------------------------
 
 export interface SubmitResult {
     document?: KnowledgeDocumentFragmentFragment;

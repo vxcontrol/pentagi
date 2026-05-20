@@ -26,7 +26,6 @@ export const getCleanTerminalText = (terminalContent: string): Promise<string> =
         let isResolved = false;
 
         const cleanup = () => {
-            // Clear timeouts if they exist
             if (timeoutId) {
                 clearTimeout(timeoutId);
                 timeoutId = null;
@@ -37,23 +36,22 @@ export const getCleanTerminalText = (terminalContent: string): Promise<string> =
                 safetyTimeoutId = null;
             }
 
-            // Dispose terminal
             if (hiddenTerminal) {
                 try {
                     hiddenTerminal.dispose();
                 } catch {
-                    // Ignore disposal errors
+                    // xterm's dispose can throw if the addon graph is mid-update; swallow it
+                    // because cleanup runs from finalizers we don't want to abort.
                 }
 
                 hiddenTerminal = null;
             }
 
-            // Remove DOM element
             if (hiddenDiv && hiddenDiv.parentNode) {
                 try {
                     hiddenDiv.remove();
                 } catch {
-                    // Ignore removal errors
+                    // see above
                 }
 
                 hiddenDiv = null;
@@ -69,7 +67,6 @@ export const getCleanTerminalText = (terminalContent: string): Promise<string> =
         };
 
         try {
-            // Create a hidden terminal instance
             hiddenTerminal = new XTerminal({
                 cols: 120,
                 convertEol: true,
@@ -77,7 +74,6 @@ export const getCleanTerminalText = (terminalContent: string): Promise<string> =
                 rows: 50,
             });
 
-            // Create a hidden div to mount the terminal
             hiddenDiv = document.createElement('div');
             hiddenDiv.style.position = 'absolute';
             hiddenDiv.style.left = '-9999px';
@@ -85,17 +81,14 @@ export const getCleanTerminalText = (terminalContent: string): Promise<string> =
             hiddenDiv.style.visibility = 'hidden';
             document.body.append(hiddenDiv);
 
-            // Open terminal and write content
             hiddenTerminal.open(hiddenDiv);
-
-            // Write the terminal content
             hiddenTerminal.write(terminalContent);
 
-            // Small delay to ensure content is processed
+            // Tiny delay lets xterm finish its render pipeline so `buffer.active` reflects the write.
             timeoutId = setTimeout(() => {
                 try {
                     if (isResolved) {
-                        return; // Already resolved/rejected
+                        return;
                     }
 
                     if (!hiddenTerminal) {
@@ -104,7 +97,6 @@ export const getCleanTerminalText = (terminalContent: string): Promise<string> =
                         return;
                     }
 
-                    // Extract clean text from terminal buffer
                     let cleanText = '';
                     const buffer = hiddenTerminal.buffer.active;
 
@@ -114,8 +106,9 @@ export const getCleanTerminalText = (terminalContent: string): Promise<string> =
                         if (line) {
                             const lineText = line.translateToString(true).trimEnd();
 
+                            // Skip leading empty lines but keep blank lines once we have content
+                            // so paragraph spacing inside the output survives the round-trip.
                             if (lineText || cleanText) {
-                                // Include empty lines only if we have content
                                 cleanText += `${lineText}\n`;
                             }
                         }
@@ -123,12 +116,10 @@ export const getCleanTerminalText = (terminalContent: string): Promise<string> =
 
                     safeResolve(`\`\`\`bash\n${cleanText.trimEnd()}\n\`\`\``);
                 } catch {
-                    // Fallback to original content
                     safeResolve(terminalContent);
                 }
             }, 100);
 
-            // Add timeout safety net (10 seconds max)
             safetyTimeoutId = setTimeout(() => {
                 if (!isResolved) {
                     console.warn('Terminal text extraction timed out, falling back to original content');
@@ -136,7 +127,6 @@ export const getCleanTerminalText = (terminalContent: string): Promise<string> =
                 }
             }, 1000);
         } catch {
-            // Fallback to original content on any initialization error
             safeResolve(terminalContent);
         }
     });
@@ -149,17 +139,14 @@ export const formatMessageForClipboard = async (messageData: CopyableMessage): P
     const { message, result, resultFormat = ResultFormat.Plain, thinking } = messageData;
     let content = '';
 
-    // Add thinking if present
     if (thinking && thinking.trim()) {
         content += `<details>\n<summary>Thinking</summary>\n\n${thinking.trim()}\n\n</details>\n\n`;
     }
 
-    // Add main message
     if (message && message.trim()) {
         content += message.trim();
     }
 
-    // Add result if present
     if (result && result.trim()) {
         if (content) {
             content += '\n\n';
@@ -167,12 +154,10 @@ export const formatMessageForClipboard = async (messageData: CopyableMessage): P
 
         let resultContent = result.trim();
 
-        // Handle terminal format specially to get clean text
         if (resultFormat === ResultFormat.Terminal) {
             try {
                 resultContent = await getCleanTerminalText(result);
             } catch {
-                // Fallback to original result
                 resultContent = result.trim();
             }
         }

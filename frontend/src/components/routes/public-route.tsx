@@ -8,7 +8,6 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
     const [searchParams] = useSearchParams();
     const { authInfo, isAuthenticated, isLoading } = useUser();
 
-    // Wait for initial auth check to complete
     if (isLoading) {
         return null;
     }

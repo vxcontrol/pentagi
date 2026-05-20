@@ -21,7 +21,6 @@ function NewFlow() {
     const [isLoading, setIsLoading] = useState(false);
     const [flowType, setFlowType] = useState<'assistant' | 'automation'>('automation');
 
-    // Calculate default useAgents value (only for assistant type)
     const shouldUseAgents = useMemo(() => {
         return settings?.assistantUseAgents ?? false;
     }, [settings?.assistantUseAgents]);
@@ -37,7 +36,6 @@ function NewFlow() {
             const flowId = flowType === 'automation' ? await createFlow(values) : await createFlowWithAssistant(values);
 
             if (flowId) {
-                // Navigate to the new flow page with tab parameter
                 navigate(`/flows/${flowId}?tab=${flowType}`);
             }
         } finally {

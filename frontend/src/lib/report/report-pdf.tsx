@@ -71,7 +71,6 @@ const splitByCJK = (text: string): TextSegment[] => {
     return segments.length > 0 ? segments : [{ isCJK: false, text }];
 };
 
-// PDF styles for @react-pdf/renderer - Enhanced beautiful styles
 const pdfStyles = StyleSheet.create({
     bold: {
         fontWeight: 'bold',
@@ -193,7 +192,7 @@ const pdfStyles = StyleSheet.create({
     },
 });
 
-// Map of emoji to text replacements for PDF rendering
+// @react-pdf/renderer has spotty emoji glyph support — substitute readable text tags instead.
 const emojiMap: Record<string, string> = {
     '⏳': '[WAIT]',
     '⚠️': '[WARN]',
@@ -212,7 +211,6 @@ const emojiMap: Record<string, string> = {
     '🚀': '[START]',
 };
 
-// Replace emojis with text equivalents for PDF
 const replaceEmojis = (text: string): string => {
     let result = text;
 
@@ -223,7 +221,6 @@ const replaceEmojis = (text: string): string => {
     return result;
 };
 
-// Inline token types for rich text formatting
 interface InlineToken {
     bold?: boolean;
     code?: boolean;
@@ -233,7 +230,6 @@ interface InlineToken {
     type: 'text';
 }
 
-// Parsed content interface with support for inline formatting
 interface ParsedContent {
     content?: string;
     inlineTokens?: InlineToken[];
@@ -243,12 +239,10 @@ interface ParsedContent {
     type: string;
 }
 
-// Parse inline markdown formatting (bold, italic, code, links)
 const parseInlineTokens = (text: string): InlineToken[] => {
     const tokens: InlineToken[] = [];
     const inlineTokens = marked.lexer(text, { breaks: false });
 
-    // If lexer returns a paragraph token, use its tokens property
     const firstToken = inlineTokens[0];
 
     if (firstToken && firstToken.type === 'paragraph' && 'tokens' in firstToken) {
@@ -304,7 +298,6 @@ const parseInlineTokens = (text: string): InlineToken[] => {
                 }
 
                 default: {
-                    // For other inline types, try to extract text
                     if ('text' in token) {
                         tokens.push({
                             text: replaceEmojis(String(token.text || '')),
@@ -315,7 +308,6 @@ const parseInlineTokens = (text: string): InlineToken[] => {
             }
         });
     } else {
-        // Fallback: return plain text
         tokens.push({
             text: replaceEmojis(text),
             type: 'text',
@@ -325,7 +317,6 @@ const parseInlineTokens = (text: string): InlineToken[] => {
     return tokens;
 };
 
-// Parse markdown using marked library and convert tokens
 const parseMarkdownTokens = (markdown: string): ParsedContent[] => {
     const tokens = marked.lexer(markdown);
     const result: ParsedContent[] = [];
@@ -377,12 +368,10 @@ const parseMarkdownTokens = (markdown: string): ParsedContent[] => {
             }
 
             case 'space': {
-                // Skip empty lines
                 break;
             }
 
             default: {
-                // For other types, try to extract text if available
                 if ('text' in token && typeof token.text === 'string') {
                     result.push({
                         inlineTokens: parseInlineTokens(token.text),
@@ -398,7 +387,11 @@ const parseMarkdownTokens = (markdown: string): ParsedContent[] => {
     return result;
 };
 
-// Render a raw text string, splitting CJK segments to switch font family
+/**
+ * Splits CJK segments out so each chunk renders with the matching font family —
+ * Noto Sans for Latin/Cyrillic, Noto Sans SC for CJK. CJK fonts have no true italic
+ * variant, so italic is dropped for those segments.
+ */
 const renderTextWithCJK = (
     text: string,
     baseFamily: string,
@@ -410,13 +403,11 @@ const renderTextWithCJK = (
     const segments = splitByCJK(text);
 
     if (segments.length === 1 && !segments[0]?.isCJK) {
-        // Fast path: no CJK — return plain string so the parent Text handles it
         return text;
     }
 
     return segments.map((seg, idx) => {
         const family = seg.isCJK ? (bold ? 'NotoSansSC' : 'NotoSansSC') : bold ? boldFamily : baseFamily;
-        // CJK fonts have no true italic; skip italic for CJK segments
         const style: Record<string, string> = { fontFamily: family };
 
         if (bold && !seg.isCJK) {
@@ -438,12 +429,10 @@ const renderTextWithCJK = (
     });
 };
 
-// Helper function to render inline tokens with formatting
 const renderInlineTokens = (tokens: InlineToken[], keyPrefix: string) => {
     return tokens.map((token, idx) => {
         const textContent = token.text;
 
-        // Collect all applicable styles
         const appliedStyles = [];
 
         if (token.code) {
@@ -462,7 +451,6 @@ const renderInlineTokens = (tokens: InlineToken[], keyPrefix: string) => {
             appliedStyles.push(pdfStyles.link);
         }
 
-        // If we have any styles, wrap in Text component with CJK-aware rendering
         if (appliedStyles.length > 0) {
             const isBold = !!token.bold;
             const isItalic = !!token.italic;
@@ -488,7 +476,6 @@ const renderInlineTokens = (tokens: InlineToken[], keyPrefix: string) => {
             );
         }
 
-        // Plain text: render with CJK-aware font split (returns string if no CJK)
         const rendered = renderTextWithCJK(textContent, 'NotoSans', 'NotoSans', `${keyPrefix}-inline-${idx}`);
 
         if (typeof rendered === 'string') {
@@ -499,7 +486,6 @@ const renderInlineTokens = (tokens: InlineToken[], keyPrefix: string) => {
     });
 };
 
-// Render parsed markdown as React PDF components
 const renderPDFContent = (parsed: ParsedContent[]) => {
     const elements = parsed
         .map((item, index) => {
@@ -606,7 +592,6 @@ const renderPDFContent = (parsed: ParsedContent[]) => {
     return elements;
 };
 
-// PDF Document component
 function PDFReportDocument({ content }: { content: string }) {
     const parsed = parseMarkdownTokens(content);
     const elements = renderPDFContent(parsed);
@@ -623,13 +608,11 @@ function PDFReportDocument({ content }: { content: string }) {
     );
 }
 
-// Main function to generate PDF from markdown
 export const generatePDFFromMarkdownNew = async (content: string, fileName: string): Promise<void> => {
     try {
         const doc = <PDFReportDocument content={content} />;
         const blob = await pdf(doc).toBlob();
 
-        // Download
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
@@ -645,7 +628,6 @@ export const generatePDFFromMarkdownNew = async (content: string, fileName: stri
     }
 };
 
-// Generate PDF as blob
 export const generatePDFBlobNew = async (content: string): Promise<Blob> => {
     try {
         const doc = <PDFReportDocument content={content} />;

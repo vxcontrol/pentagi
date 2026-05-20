@@ -25,7 +25,6 @@ function FlowTabs({ activeTab, onTabChange }: FlowTabsProps) {
     const previousActiveTabRef = useRef<string>(activeTab);
 
     useEffect(() => {
-        // Only handle actual tab changes
         if (activeTab === previousActiveTabRef.current) {
             return;
         }

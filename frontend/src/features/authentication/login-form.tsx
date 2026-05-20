@@ -125,7 +125,6 @@ function LoginForm({ providers, returnUrl = '/flows/new' }: LoginFormProps) {
 
     const handlePasswordChangeSuccess = () => {
         if (authInfo?.user) {
-            // Update auth info with password_change_required set to false
             const updatedAuthData = {
                 ...authInfo,
                 user: {

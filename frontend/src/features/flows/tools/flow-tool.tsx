@@ -14,7 +14,6 @@ interface FlowToolProps {
     searchValue?: string;
 }
 
-// Helper function to check if text contains search value (case-insensitive)
 const containsSearchValue = (text: null | string | undefined, searchValue: string): boolean => {
     if (!text || !searchValue.trim()) {
         return false;
@@ -26,7 +25,6 @@ const containsSearchValue = (text: null | string | undefined, searchValue: strin
 function FlowTool({ log, searchValue = '' }: FlowToolProps) {
     const { createdAt, engine, executor, initiator, query, result, subtaskId, taskId } = log;
 
-    // Memoize search checks to avoid recalculating on every render
     const searchChecks = useMemo(() => {
         const trimmedSearch = searchValue.trim();
 

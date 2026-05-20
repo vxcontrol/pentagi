@@ -294,7 +294,6 @@ export function FileManager({
 
     const stableHandleOpenDirectory = onOpenDirectory ? handleOpenDirectory : undefined;
 
-    // ── roving tabindex / keyboard navigation ────────────────────────────────
     const [activeRowPath, setActiveRowPath] = useState<null | string>(null);
     const containerRef = useRef<HTMLDivElement | null>(null);
 

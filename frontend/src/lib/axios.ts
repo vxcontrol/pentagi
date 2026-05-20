@@ -41,8 +41,6 @@ export interface ApiSuccessResponse<T> {
     status: 'success';
 }
 
-// ── shared instance ──────────────────────────────────────────────────────────
-
 /**
  * Central axios instance for all REST calls in the app.
  *
@@ -179,8 +177,6 @@ export const api = {
     put: <T, B = unknown>(url: string, body?: B, config?: AxiosRequestConfig) =>
         axios.put<T, ApiResponse<T>, B>(url, body, config),
 };
-
-// ── helpers ──────────────────────────────────────────────────────────────────
 
 export const isApiSuccess = <T>(response: ApiResponse<T>): response is ApiSuccessResponse<T> =>
     response.status === 'success';

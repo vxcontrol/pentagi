@@ -12,7 +12,6 @@ function Login() {
     const { authInfo, isLoading } = useUser();
     const authProviders = authInfo?.providers || [];
 
-    // Extract the return URL from either location state or query parameters
     const returnUrl = getSafeReturnUrl((location.state?.from as string) || searchParams.get('returnUrl'), '/flows/new');
 
     return (

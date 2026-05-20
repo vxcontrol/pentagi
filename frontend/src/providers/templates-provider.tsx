@@ -42,18 +42,15 @@ export function TemplatesProvider({ children }: TemplatesProviderProps) {
 
     const shouldFetchTemplates = Boolean(authInfo && authInfo.type !== 'guest' && isAuthenticated());
 
-    // GraphQL query for templates
     const { data: templatesData, loading: isLoadingTemplates } = useFlowTemplatesQuery({
         fetchPolicy: 'cache-and-network',
         skip: !shouldFetchTemplates,
     });
 
-    // GraphQL mutations
     const [createTemplateMutation] = useCreateFlowTemplateMutation();
     const [updateTemplateMutation] = useUpdateFlowTemplateMutation();
     const [deleteTemplateMutation] = useDeleteFlowTemplateMutation();
 
-    // GraphQL subscriptions (only for authenticated users)
     useFlowTemplateCreatedSubscription({
         skip: !shouldFetchTemplates,
     });
@@ -66,7 +63,6 @@ export function TemplatesProvider({ children }: TemplatesProviderProps) {
         skip: !shouldFetchTemplates,
     });
 
-    // Convert GraphQL templates to Template interface
     const templates = useMemo(() => {
         const rawTemplates = templatesData?.flowTemplates ?? [];
 

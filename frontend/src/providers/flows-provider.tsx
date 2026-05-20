@@ -37,7 +37,6 @@ interface FlowsProviderProps {
 }
 
 export function FlowsProvider({ children }: FlowsProviderProps) {
-    // Query for flows list
     const {
         data: flowsData,
         error: flowsError,
@@ -54,7 +53,6 @@ export function FlowsProvider({ children }: FlowsProviderProps) {
     useFlowDeletedSubscription();
     useFlowUpdatedSubscription();
 
-    // Show toast notification when flows loading error occurs
     useEffect(() => {
         if (flowsError) {
             toast.error('Error loading flows', {
@@ -64,7 +62,6 @@ export function FlowsProvider({ children }: FlowsProviderProps) {
         }
     }, [flowsError]);
 
-    // Mutations
     const [createFlowMutation] = useCreateFlowMutation();
     const [createAssistantMutation] = useCreateAssistantMutation();
     const [deleteFlowMutation] = useDeleteFlowMutation();
@@ -206,7 +203,6 @@ export function FlowsProvider({ children }: FlowsProviderProps) {
                 await finishFlowMutation({
                     variables: { flowId },
                 });
-                // Cache will be automatically updated via mutation policy and flowUpdated subscription
 
                 toast.success('Flow finished successfully', {
                     description: flowDescription,

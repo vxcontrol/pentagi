@@ -17,7 +17,6 @@ interface SidebarFlowsProviderProps {
 }
 
 export function SidebarFlowsProvider({ children }: SidebarFlowsProviderProps) {
-    // Single query for sidebar flows with cache-first policy
     // Subscriptions are handled by FlowsProvider in FlowsLayout
     const { data: flowsData } = useFlowsQuery({
         fetchPolicy: 'cache-first',
