@@ -29,17 +29,39 @@ interface ApolloTitleOpts<TData, TVars extends Record<string, unknown>> {
     variables: (params: RouteParams) => null | TVars;
 }
 
+// Terser drops the `function ApolloTitle()` name in production builds, so
+// `DocumentTitle` cannot rely on `fn.name` to distinguish a reactive title
+// component from a plain `(params) => string` resolver. This explicit marker
+// survives minification because Vite preserves property names by default,
+// and Terser leaves Symbol-keyed properties alone even under aggressive
+// `mangle.properties`. `Symbol.for` is used so an accidental double-bundle
+// (worker, SSR boundary) still resolves to the same key.
+const APOLLO_TITLE_MARKER = Symbol.for('pentagi.apolloTitle');
+
+export type ApolloTitleComponent = ComponentType<{ params: RouteParams }> & {
+    readonly [APOLLO_TITLE_MARKER]: true;
+};
+
+/**
+ * Type guard for components produced by {@link apolloTitle}. `DocumentTitle`
+ * uses this to decide whether to render `<TitleComp params={...} />` or call
+ * the value as a `(params) => string` resolver. Keep the marker private to
+ * this module — callers should only depend on this guard.
+ */
+export const isApolloTitle = (value: unknown): value is ApolloTitleComponent =>
+    typeof value === 'function' && (value as { [APOLLO_TITLE_MARKER]?: unknown })[APOLLO_TITLE_MARKER] === true;
+
 /**
  * Factory for Apollo-cache-driven `<title>` components used by route handles.
  *
- * Returns a named `ApolloTitle` component so `DocumentTitle` can detect it as
- * a component (PascalCase convention) versus a plain `(params) => string`
- * resolver.
+ * Tags the returned component with an internal marker so `DocumentTitle`
+ * (via {@link isApolloTitle}) can identify it as a component and render via
+ * JSX rather than treating it as a `(params) => string` resolver.
  */
 export function apolloTitle<TData, TVars extends Record<string, unknown>>(
     opts: ApolloTitleOpts<TData, TVars>,
-): ComponentType<{ params: RouteParams }> {
-    return function ApolloTitle({ params }: { params: RouteParams }) {
+): ApolloTitleComponent {
+    function ApolloTitle({ params }: { params: RouteParams }) {
         const vars = opts.variables(params);
         const { data } = opts.useQuery(
             vars === null
@@ -48,5 +70,7 @@ export function apolloTitle<TData, TVars extends Record<string, unknown>>(
         );
 
         return renderTitle(opts.select(data, params));
-    };
+    }
+
+    return Object.assign(ApolloTitle, { [APOLLO_TITLE_MARKER]: true as const });
 }

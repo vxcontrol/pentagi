@@ -20,9 +20,11 @@ export interface RouteTitleHandle {
  *   - `string` — fully static, known at build time.
  *   - `(params) => string` — derived synchronously from URL params.
  *   - `ComponentType<{ params }>` — reactive (e.g. subscribes to Apollo
- *     cache for resource-driven titles). Must be PascalCase-named so the
- *     runtime detector in `DocumentTitle` distinguishes it from a plain
- *     resolver function.
+ *     cache for resource-driven titles). Must be produced by `apolloTitle()`
+ *     so the marker it attaches lets `DocumentTitle` distinguish a component
+ *     from a `(params) => string` resolver at runtime. A hand-rolled component
+ *     function will be misdetected as a resolver and called with raw params —
+ *     always route reactive titles through `apolloTitle()`.
  */
 export type TitleResolver = ((params: RouteParams) => string) | ComponentType<{ params: RouteParams }> | string;
 

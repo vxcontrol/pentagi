@@ -2,6 +2,7 @@ import type { ComponentType } from 'react';
 
 import { useMatches } from 'react-router-dom';
 
+import { isApolloTitle } from '@/lib/route-titles/apollo-title';
 import { renderTitle, type RouteParams } from '@/lib/route-titles/render-title';
 
 type TitleComponent = ComponentType<{ params: RouteParams }>;
@@ -16,17 +17,6 @@ const hasTitle = (handle: unknown): handle is { title: TitleResolver } => {
     const value = (handle as { title: unknown }).title;
 
     return typeof value === 'string' || typeof value === 'function';
-};
-
-// Distinguishes a React component from a plain resolver by the PascalCase
-// convention — components must start with an uppercase letter (Apollo title
-// factories return named `ApolloTitle`, regular resolvers are anonymous
-// arrow functions). This mirrors how React itself differentiates them in
-// JSX, so we don't need an extra marker on the function.
-const isTitleComponent = (fn: (params: RouteParams) => unknown): fn is TitleComponent => {
-    const first = fn.name.charAt(0);
-
-    return first === first.toUpperCase() && first !== first.toLowerCase();
 };
 
 /**
@@ -61,7 +51,7 @@ export function DocumentTitle() {
         return renderTitle(value);
     }
 
-    if (isTitleComponent(value)) {
+    if (isApolloTitle(value)) {
         const TitleComp = value;
 
         return <TitleComp params={match.params} />;

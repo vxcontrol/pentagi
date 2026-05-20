@@ -2,6 +2,8 @@ import { render, waitFor } from '@testing-library/react';
 import { createMemoryRouter, Outlet, RouterProvider } from 'react-router-dom';
 import { describe, expect, it } from 'vitest';
 
+import { apolloTitle } from '@/lib/route-titles/apollo-title';
+
 import { DocumentTitle } from './document-title';
 
 const renderAt = (initialPath: string, routes: Parameters<typeof createMemoryRouter>[0]) => {
@@ -100,13 +102,16 @@ describe('DocumentTitle', () => {
         await waitFor(() => expect(document.title).toBe('API tokens — PentAGI'));
     });
 
-    it('renders a title from a PascalCase-named component', async () => {
-        // PascalCase-named function = component (apolloTitle returns one).
-        function CustomTitle({ params }: { params: Record<string, string | undefined> }) {
-            // React 19 only hoists <title> when the child is a single string,
-            // so compute the string ahead of the JSX.
-            return <title>{`Custom #${params.id} — PentAGI`}</title>;
-        }
+    it('renders a title component produced by apolloTitle()', async () => {
+        // End-to-end check that the public factory wires the marker correctly
+        // and `DocumentTitle` recognizes it. A stubbed `useQuery` returns
+        // canned data so the test is hermetic.
+        const CustomTitle = apolloTitle<{ name: string }, Record<string, never>>({
+            select: (data, { id }) => `Custom #${id} ${data?.name ?? ''}`.trim(),
+            // Minimal stub — only `data` is read downstream.
+            useQuery: (() => ({ data: { name: 'thing' } })) as never,
+            variables: () => ({}),
+        });
 
         renderAt('/items/42', [
             {
@@ -121,16 +126,13 @@ describe('DocumentTitle', () => {
             },
         ]);
 
-        await waitFor(() => expect(document.title).toBe('Custom #42 — PentAGI'));
+        await waitFor(() => expect(document.title).toBe('Custom #42 thing — PentAGI'));
     });
 
-    it('treats a lowercase-named function as a plain resolver, not a component', async () => {
-        // A named function starting with a lowercase letter is detected as a
-        // resolver: DocumentTitle calls it with params and wraps the returned
-        // string with the standard "X — PentAGI" template.
-        function resolveTitle(params: Record<string, string | undefined>) {
-            return `Item ${params.id}`;
-        }
+    it('treats an unmarked function as a plain resolver, not a component', async () => {
+        // Without the marker, DocumentTitle calls the function with params and
+        // wraps the returned string with the standard "X — PentAGI" template.
+        const resolveTitle = (params: Record<string, string | undefined>) => `Item ${params.id}`;
 
         renderAt('/items/7', [
             {
