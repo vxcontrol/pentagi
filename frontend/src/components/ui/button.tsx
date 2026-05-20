@@ -38,12 +38,20 @@ export interface ButtonProps extends React.ComponentProps<'button'>, VariantProp
     asChild?: boolean;
 }
 
-function Button({ asChild = false, className, size, variant, ...props }: ButtonProps) {
+function Button({ asChild = false, className, size, type, variant, ...props }: ButtonProps) {
     const Comp = asChild ? Slot : 'button';
 
     return (
         <Comp
             className={cn(buttonVariants({ className, size, variant }))}
+            // HTML's default `type` for a `<button>` inside a `<form>` is `submit`,
+            // which silently submits the form on every click — every nav cluster,
+            // toggle, or dropdown trigger placed inside a form would post the
+            // form. The library convention (cf. `InputGroupButton`) is to default
+            // to `"button"` and require explicit `type="submit"` for the rare
+            // genuine submit buttons. `asChild` consumers control their own
+            // element, so we only set the default when we render a real button.
+            type={asChild ? type : (type ?? 'button')}
             {...props}
         />
     );
