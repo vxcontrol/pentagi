@@ -135,7 +135,7 @@ function SettingsProviders() {
         () => [
             {
                 accessorKey: 'name',
-                cell: ({ row }) => <div className="font-medium">{row.getValue('name')}</div>,
+                cell: ({ row }) => <div className="truncate font-medium">{row.getValue('name')}</div>,
                 enableHiding: false,
                 header: ({ column }) => (
                     <DataTableColumnHeader
@@ -143,19 +143,24 @@ function SettingsProviders() {
                         title="Name"
                     />
                 ),
+                // Name flexes to fill remaining width — fixed `size` would push
+                // the Type column off-screen on narrow viewports (e.g. 375px).
                 meta: { searchable: true },
-                size: 400,
             },
             {
                 accessorKey: 'type',
                 cell: ({ row }) => {
                     const providerType = row.getValue('type') as ProviderType;
                     const Icon = providerIcons[providerType];
+                    const label = providerTypes.find((p) => p.type === providerType)?.label || providerType;
 
                     return (
-                        <Badge variant="outline">
-                            {Icon && <Icon className="mr-1 size-3" />}
-                            {providerTypes.find((p) => p.type === providerType)?.label || providerType}
+                        <Badge
+                            className="max-w-full whitespace-nowrap"
+                            variant="outline"
+                        >
+                            {Icon && <Icon className="mr-1 size-3 shrink-0" />}
+                            <span className="truncate">{label}</span>
                         </Badge>
                     );
                 },
@@ -166,6 +171,7 @@ function SettingsProviders() {
                     />
                 ),
                 meta: { searchable: true },
+                minSize: 110,
                 size: 160,
             },
             {

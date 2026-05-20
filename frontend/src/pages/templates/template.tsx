@@ -746,6 +746,7 @@ function Template() {
                                                         />
                                                         <InputGroupAddon align="block-end">
                                                             <InputGroupButton
+                                                                aria-label={isNew ? 'Create template' : 'Save template'}
                                                                 className="ml-auto"
                                                                 disabled={
                                                                     isSaving ||
@@ -753,10 +754,15 @@ function Template() {
                                                                     (!isNew && !hasUnsavedChanges)
                                                                 }
                                                                 size="icon-xs"
+                                                                title={isNew ? 'Create template' : 'Save template'}
                                                                 type="submit"
                                                                 variant="default"
                                                             >
-                                                                {isSaving ? <Spinner variant="circle" /> : <Save />}
+                                                                {isSaving ? (
+                                                                    <Spinner variant="circle" />
+                                                                ) : (
+                                                                    <Save aria-hidden="true" />
+                                                                )}
                                                             </InputGroupButton>
                                                         </InputGroupAddon>
                                                     </InputGroup>

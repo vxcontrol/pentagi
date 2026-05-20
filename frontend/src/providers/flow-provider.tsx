@@ -177,12 +177,18 @@ export function FlowProvider({ children }: FlowProviderProps) {
 
     const flowStatus = useMemo(() => flowData?.flow?.status, [flowData?.flow?.status]);
 
-    // Show toast notification when flow loading error occurs
+    // Show toast notification when flow loading error occurs.
+    // A single Postgres "no rows in result set" surfaces here every time a sibling
+    // query/subscription retries against an invalid flow id; without a stable
+    // toast id Sonner would stack 8 copies of the same message before the page
+    // redirects. Surface a friendly message and drop the raw SQL detail entirely.
     useEffect(() => {
         if (flowError) {
-            const description = flowError.message || 'An error occurred while loading flow';
-            toast.error('Failed to load flow', {
-                description,
+            const raw = flowError.message ?? '';
+            const isNotFound = /no rows in result set|not found/i.test(raw);
+            toast.error(isNotFound ? 'Flow not found' : 'Failed to load flow', {
+                description: isNotFound ? undefined : raw || undefined,
+                id: 'flow-load-error',
             });
             Log.error('Error loading flow:', flowError);
         }

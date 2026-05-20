@@ -646,7 +646,11 @@ function SettingsAPITokens() {
                                                 variant="outline"
                                             >
                                                 <CalendarIcon className="mr-2 size-4" />
-                                                {field.value ? field.value.toLocaleDateString() : <span>Pick date</span>}
+                                                {field.value ? (
+                                                    format(field.value, 'd MMM yyyy', { locale: enUS })
+                                                ) : (
+                                                    <span>Pick date</span>
+                                                )}
                                             </Button>
                                         </PopoverTrigger>
                                         <PopoverContent

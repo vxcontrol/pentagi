@@ -94,9 +94,15 @@ function Sidebar({
                 {...props}
             >
                 <SheetContent
-                    className="bg-sidebar text-sidebar-foreground w-(--sidebar-width) p-0 [&>button]:hidden"
+                    // The mobile drawer always has full label width — mark it as
+                    // `data-state="expanded"` so descendants relying on
+                    // `group-data-[state=expanded|collapsed]` selectors (e.g.
+                    // duplicated id badges in FlowMenuItem) collapse to the
+                    // expanded branch instead of rendering both spans.
+                    className="group bg-sidebar text-sidebar-foreground w-(--sidebar-width) p-0 [&>button]:hidden"
                     data-mobile="true"
                     data-sidebar="sidebar"
+                    data-state="expanded"
                     side={side}
                     style={
                         {
@@ -347,12 +353,27 @@ function SidebarProvider({
     }, [isMobile, setOpen, setOpenMobile]);
 
     // Adds a keyboard shortcut to toggle the sidebar.
+    // Skip when focus is in a text input or rich editor — Ctrl+B there means
+    // Bold (markdown editor / Tiptap), not "toggle sidebar". Without this guard
+    // the global handler hijacks every editor's native bold shortcut.
     React.useEffect(() => {
         const handleKeyDown = (event: KeyboardEvent) => {
-            if (event.key === SIDEBAR_KEYBOARD_SHORTCUT && (event.metaKey || event.ctrlKey)) {
-                event.preventDefault();
-                toggleSidebar();
+            if (event.key !== SIDEBAR_KEYBOARD_SHORTCUT || !(event.metaKey || event.ctrlKey)) {
+                return;
             }
+
+            const target = event.target as HTMLElement | null;
+
+            if (target) {
+                const tag = target.tagName;
+
+                if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable) {
+                    return;
+                }
+            }
+
+            event.preventDefault();
+            toggleSidebar();
         };
 
         window.addEventListener('keydown', handleKeyDown);

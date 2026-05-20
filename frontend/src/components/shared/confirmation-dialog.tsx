@@ -46,13 +46,19 @@ function ConfirmationDialog({
     isOpen,
     itemName = 'this',
     itemType = 'item',
-    title = 'Confirm Action',
+    title,
 }: ConfirmationDialogProps) {
     const [isProcessing, setIsProcessing] = useState(false);
 
+    // Derive a contextual title from confirm verb + item type so callers don't
+    // see "Confirm Action" for a Delete prompt or a Save prompt. Explicit
+    // `title` always wins.
+    const verb = confirmText.trim();
+    const resolvedTitle = title ?? (verb && verb !== 'Confirm' ? `${verb} ${itemType}` : 'Confirm Action');
+
     const defaultDescription = description || (
         <>
-            Are you sure you want to perform this action on{' '}
+            Are you sure you want to {verb.toLowerCase() || 'perform this action on'}{' '}
             <strong className="text-foreground font-semibold">{itemName}</strong> {itemType}?
         </>
     );
@@ -102,7 +108,7 @@ function ConfirmationDialog({
         >
             <DialogContent className="sm:max-w-md">
                 <DialogHeader>
-                    <DialogTitle>{title}</DialogTitle>
+                    <DialogTitle>{resolvedTitle}</DialogTitle>
                     <DialogDescription>{defaultDescription}</DialogDescription>
                 </DialogHeader>
 
