@@ -16,7 +16,7 @@ interface RenderResult {
     resetFilter: () => void;
     search: string;
     setFilter: (value: string) => void;
-    setPage: (page: number) => void;
+    setPage: ReturnType<typeof useTableState>['setPage'];
     update: ReturnType<typeof useTableState>['update'];
 }
 
@@ -255,5 +255,21 @@ describe('useTableState — `?page=1` canonicalization', () => {
             expect(new URLSearchParams(result.current.search).has('page')).toBe(false);
         });
         expect(result.current.pageIndex).toBe(0);
+    });
+});
+
+describe('useTableState — setPage replace option', () => {
+    it('setPage(n, { replace: true }) writes the URL without leaving a history entry the user can step back onto', async () => {
+        // Out-of-range clamping calls `setPage(lastPage, { replace: true })`
+        // — without `replace`, pressing back from the clamped URL would land
+        // on the original out-of-range URL and re-trigger the clamp,
+        // trapping the back-button. We can't directly assert "no history
+        // entry" from `MemoryRouter`, but we can confirm the option flows
+        // through to a successful URL write so the call site contract holds.
+        const { result } = renderWithRouter(['/flows?page=999']);
+        act(() => result.current.setPage(78, { replace: true }));
+        await waitFor(() => {
+            expect(new URLSearchParams(result.current.search).get('page')).toBe('79');
+        });
     });
 });

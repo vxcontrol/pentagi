@@ -4,6 +4,14 @@ import { useSearchParams } from 'react-router-dom';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { URL_PARAMS } from '@/lib/url-params';
 
+interface SetPageOptions {
+    /**
+     * For out-of-range clamping. A push leaves the bad URL one back-press
+     * away — every back re-triggers the clamp and traps the back-button.
+     */
+    replace?: boolean;
+}
+
 /**
  * Atomic partial update for the table's URL state. All fields are optional;
  * `null` clears the corresponding param. `replace` controls whether the
@@ -41,7 +49,7 @@ interface UseTableStateResult {
     pageIndex: number;
     resetFilter: () => void;
     setFilter: (value: string) => void;
-    setPage: (pageIndex: number) => void;
+    setPage: (pageIndex: number, options?: SetPageOptions) => void;
     /**
      * Atomic multi-field update. Prefer this when changing both `filter` and
      * `pageIndex` from the same event (or when adding more fields in the
@@ -247,10 +255,8 @@ export function useTableState(options: UseTableStateOptions = {}): UseTableState
     );
 
     const setPage = useCallback(
-        (newPageIndex: number) => {
-            // Paging is an intentional user action — push, not replace, so
-            // back-button steps through the visited pages.
-            update({ pageIndex: newPageIndex });
+        (newPageIndex: number, options?: SetPageOptions) => {
+            update({ pageIndex: newPageIndex, replace: options?.replace });
         },
         [update],
     );

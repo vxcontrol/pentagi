@@ -99,7 +99,7 @@ interface DataTableProps<TData, TValue = unknown> {
     initialSorting?: SortingState;
     onColumnVisibilityChange?: (visibility: VisibilityState) => void;
     onFilterChange?: (value: string) => void;
-    onPageChange?: (pageIndex: number) => void;
+    onPageChange?: (pageIndex: number, options?: { replace?: boolean }) => void;
     onRowClick?: (row: TData) => void;
     pageIndex?: number;
     renderRowContextMenu?: (row: TData) => ReactNode;
@@ -547,26 +547,26 @@ function DataTable<TData, TValue = unknown>({
     const rangeStart = totalRows > 0 ? safePageIndex * pagination.pageSize + 1 : 0;
     const rangeEnd = Math.min((safePageIndex + 1) * pagination.pageSize, totalRows);
 
-    // Reconcile the canonical pageIndex once we know `pageCount`. The write
-    // has to happen in an effect because `setSearchParams` (controlled mode)
-    // and `setPagination` (uncontrolled) both mutate state outside the render
-    // pipeline, which React forbids during render. The early return makes the
-    // effect a no-op on every render where the URL is already in range, so
-    // the cost on the happy path is one comparison.
-    //
-    // Controlled mode compares the URL (`externalPageIndex`) — the canonical
-    // source of truth — rather than the internal mirror, because internal
-    // state can drop to a clamped value via `handlePageSizeChange` while the
-    // URL still points at the stale page. Uncontrolled mode keeps comparing
-    // the internal pageIndex since there's no other source.
+    // Controlled clamping requires both URL and internal mirror to agree on
+    // out-of-range. The two update asynchronously in opposite orders (popstate
+    // URL-first, page-size mirror-first), so a single-source check echoes the
+    // stale value over the fresh one and oscillates.
     useEffect(() => {
         if (pageCount === 0) {
             return;
         }
 
+        const lastPageIndex = pageCount - 1;
+
         if (isPageControlled) {
-            if (externalPageIndex !== undefined && externalPageIndex !== safePageIndex) {
-                onPageChange?.(safePageIndex);
+            if (externalPageIndex !== undefined) {
+                const externalOutOfRange = externalPageIndex < 0 || externalPageIndex > lastPageIndex;
+                const internalOutOfRange =
+                    pagination.pageIndex < 0 || pagination.pageIndex > lastPageIndex;
+
+                if (externalOutOfRange && internalOutOfRange && externalPageIndex !== lastPageIndex) {
+                    onPageChange?.(lastPageIndex, { replace: true });
+                }
             }
 
             return;

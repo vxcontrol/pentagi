@@ -1,7 +1,7 @@
 import type { Column, ColumnDef } from '@tanstack/react-table';
 import type { ReactNode } from 'react';
 
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -212,7 +212,7 @@ describe('DataTable — sorting state persists to storage', () => {
 });
 
 describe('DataTable — controlled pageIndex reconciliation', () => {
-    it('asks the parent to clamp an out-of-range controlled pageIndex on mount', () => {
+    it('asks the parent to clamp an out-of-range controlled pageIndex on mount, with replace semantics', () => {
         const onPageChange = vi.fn();
 
         render(
@@ -226,9 +226,12 @@ describe('DataTable — controlled pageIndex reconciliation', () => {
         );
 
         // 3 rows / default pageSize 10 → 1 page. The URL-driven pageIndex 9
-        // is out of range, so the parent must be told to drop to 0 so the
-        // canonical URL no longer points past the dataset.
-        expect(onPageChange).toHaveBeenCalledWith(0);
+        // is out of range AND the internal mirror (initialized from the prop)
+        // is out of range too — both sources agree, so the parent must be told
+        // to drop to 0. The `replace: true` flag is critical: the user never
+        // intentionally landed on the out-of-range URL, so we don't want a
+        // history entry that would trap the back-button on the bad URL.
+        expect(onPageChange).toHaveBeenCalledWith(0, { replace: true });
     });
 
     it('clears the URL page when picking "All" on a high page in controlled mode', async () => {
@@ -261,8 +264,67 @@ describe('DataTable — controlled pageIndex reconciliation', () => {
         await user.click(option);
 
         // "All" collapses the dataset to a single page; the parent has to
-        // hear about pageIndex 0 so `?page=2` is dropped from the URL.
+        // hear about pageIndex 0 so `?page=2` is dropped from the URL. This
+        // is an intentional user action — no `replace` flag, so back-button
+        // can step out of the new page-size choice.
         expect(onPageChange).toHaveBeenCalledWith(0);
+        // And it must be the *only* call. Regression: an earlier version
+        // raced the prop-sync effect against the clamping effect and emitted
+        // a second `onPageChange(lastPageIndex, { replace: true })` from the
+        // clamping path while the URL was still pointing at the stale page —
+        // which oscillated `/flows?page=N` → `/flows` → `/flows?page=N` on
+        // every render.
+        expect(onPageChange).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not echo a stale pageIndex back to the URL after the parent navigates to a valid page', async () => {
+        // Regression for the original infinite-render bug: on browser-back
+        // from `?page=2` to `/flows`, the controlled `pageIndex` prop drops
+        // from 1 → 0 in the parent, but the table's internal mirror is still
+        // 1 for one render (the prop-sync effect runs after commit). A naive
+        // clamping effect compared the URL (0) to its internal mirror (1) and
+        // pushed onPageChange(1), which sent the URL back to `?page=2` — and
+        // then the cycle repeated. With the "both agree on out-of-range"
+        // guard we must NOT call `onPageChange` here, since neither source
+        // is actually out of range.
+        const manyRows: Row[] = Array.from({ length: 25 }, (_, index) => ({
+            id: String(index + 1),
+            name: `Row ${index + 1}`,
+        }));
+        const onPageChange = vi.fn();
+
+        const { rerender } = render(
+            <DataTable<Row>
+                columns={COLUMNS}
+                data={manyRows}
+                onPageChange={onPageChange}
+                pageIndex={1}
+            />,
+            { wrapper: Wrapper },
+        );
+
+        // No spurious reconcile on the initial mount — page 2 of 3 is valid.
+        expect(onPageChange).not.toHaveBeenCalled();
+
+        // Simulate the popstate landing in the parent: re-render with the
+        // new in-range `pageIndex={0}`. The internal mirror is still 1 here.
+        rerender(
+            <DataTable<Row>
+                columns={COLUMNS}
+                data={manyRows}
+                onPageChange={onPageChange}
+                pageIndex={0}
+            />,
+        );
+
+        // Flush all pending effects and microtasks so both the prop-sync and
+        // clamping effects get a chance to fire. If the clamping logic still
+        // raced the prop-sync, it would have called `onPageChange(1)` by now.
+        await act(async () => {
+            await Promise.resolve();
+        });
+
+        expect(onPageChange).not.toHaveBeenCalled();
     });
 });
 
