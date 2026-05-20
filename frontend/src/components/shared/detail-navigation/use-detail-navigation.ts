@@ -2,7 +2,6 @@ import { useCallback, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import { useLatestRef } from '@/hooks/use-latest-ref';
-import { usePageStorageKeys } from '@/hooks/use-page-storage-keys';
 import { useTableQueryFilterReader } from '@/hooks/use-table-query-filter';
 import { mergeHrefWithSearchParams } from '@/lib/url-params';
 
@@ -76,15 +75,6 @@ export interface DetailNavigationController<T extends { id: string }> {
     total: number;
 }
 
-/**
- * Restricts the override to strings that start with a `/`. Pure-string types
- * (`string`) would let an empty `""` or a bare `"flows"` slip through and
- * either collide on the shared `filter_4_` key or generate a different slot
- * than the actual list page. Template-literal types catch this at compile
- * time without runtime guards.
- */
-type ParentPath = `/${string}`;
-
 interface UseDetailNavigationOptions<T extends { id: string }> {
     currentId: null | string | undefined;
     /** Initial value for the uncontrolled case. Defaults to `false`. */
@@ -106,15 +96,6 @@ interface UseDetailNavigationOptions<T extends { id: string }> {
      * `@/components/ui/autocomplete.tsx`.
      */
     open?: boolean;
-    /**
-     * Optional override for the parent list path used to look up the shared
-     * filter storage slot. Defaults to the top-level segment of the current
-     * pathname, which works for top-level routes (`/flows`, `/templates`,
-     * `/knowledges`). Nested routes (`/admin/flows/:id`) must pass an
-     * explicit value here because the default would key into `/admin`
-     * rather than `/admin/flows`.
-     */
-    parentPath?: ParentPath;
     sortFn?: (a: T, b: T) => number;
 }
 
@@ -127,12 +108,11 @@ const defaultGetId = (item: { id: string }): string => item.id;
 /**
  * Build the headless `DetailNavigationController<T>` for a detail page.
  *
- * Bundles the four moving parts every detail page repeats:
- *   1. resolving the parent list's storage slot via `usePageStorageKeys`,
- *   2. subscribing to the URL filter through `useTableQueryFilterReader`
+ * Bundles the three moving parts every detail page repeats:
+ *   1. subscribing to the URL filter through `useTableQueryFilterReader`
  *      (read-only — the detail page never mutates the filter from here),
- *   3. running the pure `useNavigation` core against the filtered subset,
- *   4. wiring identity-stable `goToPrev` / `goToNext` / `handleItemSelect`
+ *   2. running the pure `useNavigation` core against the filtered subset,
+ *   3. wiring identity-stable `goToPrev` / `goToNext` / `handleItemSelect`
  *      with `?<filter>=` forwarded through `mergeHrefWithSearchParams`.
  *
  * The returned controller drives `<DetailNavigationToolbar>`,
@@ -160,20 +140,12 @@ export function useDetailNavigation<T extends { id: string }>({
     items,
     onOpenChange,
     open,
-    parentPath,
     sortFn,
 }: UseDetailNavigationOptions<T>): DetailNavigationController<T> {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
 
-    // `parentPath` is typed as `/${string}` so the empty / unprefixed case
-    // is rejected at compile time — we only need to branch on presence here.
-    const hasExplicitParentPath = parentPath !== undefined;
-    const { table: filterStorageKey } = usePageStorageKeys({
-        pathname: hasExplicitParentPath ? parentPath : undefined,
-        useTopLevel: !hasExplicitParentPath,
-    });
-    const { debouncedFilter } = useTableQueryFilterReader({ storageKey: filterStorageKey });
+    const { debouncedFilter } = useTableQueryFilterReader();
 
     // Memoize so passing `getId={undefined}` keeps the reference stable when
     // the caller re-renders for unrelated reasons. Without the memo the
