@@ -1196,7 +1196,7 @@ llm, _ := openai.New(
 )
 
 resp, _ := llm.GenerateContent(ctx, messages,
-    llms.WithModel("deepseek-reasoner"),
+    llms.WithModel("deepseek-v4-pro"),
 )
 
 // Reasoning extracted from <think>...</think> tags automatically

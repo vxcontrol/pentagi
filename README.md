@@ -1845,23 +1845,28 @@ DEEPSEEK_SERVER_URL=https://api.deepseek.com
 # With LiteLLM proxy
 DEEPSEEK_API_KEY=your_litellm_key
 DEEPSEEK_SERVER_URL=http://litellm-proxy:4000
-DEEPSEEK_PROVIDER=deepseek  # Adds prefix to model names (deepseek/deepseek-chat) for LiteLLM
+DEEPSEEK_PROVIDER=deepseek  # Adds prefix to model names (deepseek/deepseek-v4-flash) for LiteLLM
 ```
 
 #### Supported Models
 
-PentAGI supports 2 DeepSeek-V3.2 models with tool calling, streaming, thinking modes, and context caching. Both models are used in default configuration.
+PentAGI supports 2 DeepSeek V4 models with tool calling, streaming, thinking modes, and context caching. Both models are used in default configuration.
 
-| Model ID              | Thinking | Context | Max Output | Price (Input/Output/Cache) | Use Case                                        |
-| --------------------- | -------- | ------- | ---------- | -------------------------- | ----------------------------------------------- |
-| `deepseek-chat`*      | ❌        | 128K    | 8K         | $0.28/$0.42/$0.03          | General dialogue, code generation, tool calling |
-| `deepseek-reasoner`*  | ✅        | 128K    | 64K        | $0.28/$0.42/$0.03          | Advanced reasoning, complex logic, security analysis |
+| Model ID              | Thinking | Context | Price (Input/Output/Cache) | Use Case                                             |
+| --------------------- | -------- | ------- | -------------------------- | ---------------------------------------------------- |
+| `deepseek-v4-flash`*  | ❌        | 128K    | $0.28/$0.42/$0.03          | General dialogue, code generation, tool calling      |
+| `deepseek-v4-pro`*    | ✅        | 128K    | $0.28/$0.42/$0.03          | Advanced reasoning, complex logic, security analysis |
 
 **Prices**: Per 1M tokens. Cache pricing is for prompt caching (10% of input cost). Models with thinking support include reinforcement learning chain-of-thought reasoning.
 
+> The legacy model names `deepseek-chat` and `deepseek-reasoner` are scheduled
+> for deprecation by DeepSeek on 2026-07-24. Existing user configurations
+> referencing the legacy names continue to work until then; the defaults above
+> use the current V4 names.
+
 **Key Features**:
 - **Automatic Prompt Caching**: 40-60% cost reduction on repeated context (10% of input price)
-- **Extended Thinking**: Reinforcement learning CoT for complex security analysis (deepseek-reasoner)
+- **Extended Thinking**: Reinforcement learning CoT for complex security analysis (deepseek-v4-pro)
 - **Strong Coding**: Optimized for code generation and exploit development
 - **Tool Calling**: Seamless integration with 20+ pentesting tools via function calling
 - **Streaming**: Real-time response streaming for interactive workflows
@@ -2715,7 +2720,7 @@ With `LLM_SERVER_PROVIDER=moonshot`, the system automatically prefixes all model
 
 When using LiteLLM proxy, set the corresponding `*_PROVIDER` variable to enable model prefixing:
 
-- `deepseek` - for DeepSeek models (`DEEPSEEK_PROVIDER=deepseek` → `deepseek/deepseek-chat`)
+- `deepseek` - for DeepSeek models (`DEEPSEEK_PROVIDER=deepseek` → `deepseek/deepseek-v4-flash`)
 - `zai` - for GLM models (`GLM_PROVIDER=zai` → `zai/glm-4`)
 - `moonshot` - for Kimi models (`KIMI_PROVIDER=moonshot` → `moonshot/kimi-k2.5`)
 - `dashscope` - for Qwen models (`QWEN_PROVIDER=dashscope` → `dashscope/qwen-plus`)
@@ -2730,7 +2735,7 @@ When using LiteLLM proxy, set the corresponding `*_PROVIDER` variable to enable 
 # Use DeepSeek models via LiteLLM proxy with model prefixing
 DEEPSEEK_API_KEY=your_litellm_proxy_key
 DEEPSEEK_SERVER_URL=http://litellm-proxy:4000
-DEEPSEEK_PROVIDER=deepseek  # Models become deepseek/deepseek-chat, deepseek/deepseek-reasoner for LiteLLM
+DEEPSEEK_PROVIDER=deepseek  # Models become deepseek/deepseek-v4-flash, deepseek/deepseek-v4-pro for LiteLLM
 
 # Direct DeepSeek API usage (no prefix needed)
 DEEPSEEK_API_KEY=your_deepseek_api_key

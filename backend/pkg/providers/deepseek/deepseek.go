@@ -19,7 +19,7 @@ import (
 //go:embed config.yml models.yml
 var configFS embed.FS
 
-const DeepSeekAgentModel = "deepseek-chat"
+const DeepSeekAgentModel = "deepseek-v4-flash"
 
 const DeepSeekToolCallIDTemplate = "call_{r:2:d}_{r:24:b}"
 

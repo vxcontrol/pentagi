@@ -504,7 +504,7 @@ Key Advantages:
 
 LiteLLM Integration:
 • Set Provider Name to 'deepseek' when using LiteLLM proxy
-• Enables model prefix (e.g., deepseek/deepseek-chat) without modifying config.yml
+• Enables model prefix (e.g., deepseek/deepseek-v4-flash) without modifying config.yml
 • Optional for direct DeepSeek API usage
 
 Best for: Teams requiring multilingual support, cost-conscious deployments, Chinese language security testing
