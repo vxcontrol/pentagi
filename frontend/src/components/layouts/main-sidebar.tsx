@@ -378,9 +378,12 @@ export function MainSidebar() {
             <SidebarRail />
 
             <input
+                aria-hidden="true"
                 className="hidden"
                 key={resourcesUpload.fileInputKey}
                 multiple
+                name="resource-upload"
+                tabIndex={-1}
                 type="file"
                 {...resourcesUpload.fileInputProps}
             />

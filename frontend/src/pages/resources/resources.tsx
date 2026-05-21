@@ -465,9 +465,12 @@ function Resources() {
                 {...dragHandlers}
             >
                 <input
+                    aria-hidden="true"
                     className="hidden"
                     key={upload.fileInputKey}
                     multiple
+                    name="resource-upload"
+                    tabIndex={-1}
                     type="file"
                     {...upload.fileInputProps}
                 />
