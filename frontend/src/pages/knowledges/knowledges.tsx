@@ -324,11 +324,11 @@ function Knowledges() {
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                                 <Button
+                                    aria-label="Open menu"
                                     className="size-8 p-0"
                                     onClick={(event) => event.stopPropagation()}
                                     variant="ghost"
                                 >
-                                    <span className="sr-only">Open menu</span>
                                     <Ellipsis />
                                 </Button>
                             </DropdownMenuTrigger>

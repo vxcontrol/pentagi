@@ -740,11 +740,11 @@ function SettingsAPITokens() {
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                     <Button
+                                        aria-label="Open menu"
                                         className="shrink-0"
                                         size="icon-sm"
                                         variant="ghost"
                                     >
-                                        <span className="sr-only">Open menu</span>
                                         <Ellipsis />
                                     </Button>
                                 </DropdownMenuTrigger>
