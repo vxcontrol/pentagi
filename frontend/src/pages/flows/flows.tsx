@@ -420,6 +420,7 @@ function Flows() {
                                         onClick={(e) => e.stopPropagation()}
                                         variant="ghost"
                                     >
+                                        <span className="sr-only">Open menu</span>
                                         <Ellipsis />
                                     </Button>
                                 </DropdownMenuTrigger>

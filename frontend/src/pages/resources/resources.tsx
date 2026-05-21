@@ -505,6 +505,7 @@ function Resources() {
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                             <Button
+                                aria-label="Column settings"
                                 className="ml-auto"
                                 size="icon"
                                 variant="outline"

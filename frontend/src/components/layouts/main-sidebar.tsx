@@ -333,18 +333,21 @@ export function MainSidebar() {
                                     >
                                         <TabsList className="h-7 p-0.5">
                                             <TabsTrigger
+                                                aria-label="System theme"
                                                 className="h-6 px-2"
                                                 value="system"
                                             >
                                                 <Monitor className="size-4" />
                                             </TabsTrigger>
                                             <TabsTrigger
+                                                aria-label="Light theme"
                                                 className="h-6 px-2"
                                                 value="light"
                                             >
                                                 <Sun className="size-4" />
                                             </TabsTrigger>
                                             <TabsTrigger
+                                                aria-label="Dark theme"
                                                 className="h-6 px-2"
                                                 value="dark"
                                             >
@@ -418,6 +421,8 @@ function FlowMenuItem({ activeFlowId, flow, isFavorite, onToggleFavorite }: Flow
                 </Link>
             </SidebarMenuButton>
             <SidebarMenuAction
+                aria-label="Toggle favorite"
+                aria-pressed={isFavorite}
                 className="data-[state=open]:bg-accent rounded-sm"
                 onClick={() => onToggleFavorite(flow.id)}
                 showOnHover

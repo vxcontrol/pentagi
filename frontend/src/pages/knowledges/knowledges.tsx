@@ -328,6 +328,7 @@ function Knowledges() {
                                     onClick={(event) => event.stopPropagation()}
                                     variant="ghost"
                                 >
+                                    <span className="sr-only">Open menu</span>
                                     <Ellipsis />
                                 </Button>
                             </DropdownMenuTrigger>
