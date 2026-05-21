@@ -37,23 +37,20 @@ interface TemplatesProviderProps {
 
 const TemplatesContext = createContext<TemplatesContextValue | undefined>(undefined);
 
-export const TemplatesProvider = ({ children }: TemplatesProviderProps) => {
+export function TemplatesProvider({ children }: TemplatesProviderProps) {
     const { authInfo, isAuthenticated } = useUser();
 
     const shouldFetchTemplates = Boolean(authInfo && authInfo.type !== 'guest' && isAuthenticated());
 
-    // GraphQL query for templates
     const { data: templatesData, loading: isLoadingTemplates } = useFlowTemplatesQuery({
         fetchPolicy: 'cache-and-network',
         skip: !shouldFetchTemplates,
     });
 
-    // GraphQL mutations
     const [createTemplateMutation] = useCreateFlowTemplateMutation();
     const [updateTemplateMutation] = useUpdateFlowTemplateMutation();
     const [deleteTemplateMutation] = useDeleteFlowTemplateMutation();
 
-    // GraphQL subscriptions (only for authenticated users)
     useFlowTemplateCreatedSubscription({
         skip: !shouldFetchTemplates,
     });
@@ -66,7 +63,6 @@ export const TemplatesProvider = ({ children }: TemplatesProviderProps) => {
         skip: !shouldFetchTemplates,
     });
 
-    // Convert GraphQL templates to Template interface
     const templates = useMemo(() => {
         const rawTemplates = templatesData?.flowTemplates ?? [];
 
@@ -167,9 +163,9 @@ export const TemplatesProvider = ({ children }: TemplatesProviderProps) => {
     );
 
     return <TemplatesContext.Provider value={value}>{children}</TemplatesContext.Provider>;
-};
+}
 
-export const useTemplates = () => {
+export function useTemplates() {
     const context = useContext(TemplatesContext);
 
     if (context === undefined) {
@@ -177,4 +173,4 @@ export const useTemplates = () => {
     }
 
     return context;
-};
+}

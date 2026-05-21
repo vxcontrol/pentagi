@@ -11,6 +11,7 @@ import (
 	"pentagi/pkg/config"
 	"pentagi/pkg/controller"
 	"pentagi/pkg/database"
+	"pentagi/pkg/database/knowledge"
 	"pentagi/pkg/graph"
 	"pentagi/pkg/graph/subscriptions"
 	"pentagi/pkg/providers"
@@ -28,6 +29,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/sirupsen/logrus"
 	"github.com/vektah/gqlparser/v2/ast"
+	"github.com/vxcontrol/cloud/anonymizer"
 )
 
 var (
@@ -56,6 +58,8 @@ func NewGraphqlService(
 	providers providers.ProviderController,
 	controller controller.FlowController,
 	subscriptions subscriptions.SubscriptionsController,
+	knowledgeStore knowledge.KnowledgeStore,
+	replacer anonymizer.Replacer,
 ) *GraphqlService {
 	srv := handler.New(graph.NewExecutableSchema(graph.Config{Resolvers: &graph.Resolver{
 		DB:              db,
@@ -66,6 +70,8 @@ func NewGraphqlService(
 		ProvidersCtrl:   providers,
 		Controller:      controller,
 		Subscriptions:   subscriptions,
+		Knowledge:       knowledgeStore,
+		Replacer:        replacer,
 	}}))
 
 	component := "pentagi-gql"

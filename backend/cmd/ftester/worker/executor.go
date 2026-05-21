@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"pentagi/cmd/ftester/mocks"
 	"pentagi/pkg/config"
@@ -45,8 +46,10 @@ type toolExecutor struct {
 	dockerClient   docker.DockerClient
 	handlers       providers.FlowProviderHandlers
 	store          *pgvector.Store
+	embedder       embeddings.Embedder
 	graphitiClient *graphiti.Client
 	proxies        mocks.ProxyProviders
+	userID         int64
 	flowID         int64
 	taskID         *int64
 	subtaskID      *int64
@@ -60,7 +63,7 @@ func newToolExecutor(
 	dockerClient docker.DockerClient,
 	handlers providers.FlowProviderHandlers,
 	proxies mocks.ProxyProviders,
-	flowID int64,
+	userID, flowID int64,
 	taskID, subtaskID *int64,
 	embedder embeddings.Embedder,
 	graphitiClient *graphiti.Client,
@@ -71,6 +74,7 @@ func newToolExecutor(
 			context.Background(),
 			pgvector.WithConnectionURL(cfg.DatabaseURL),
 			pgvector.WithEmbedder(embedder),
+			pgvector.WithCollectionName("langchain"),
 		)
 		if err != nil {
 			logrus.WithError(err).Error("failed to create pgvector store")
@@ -100,8 +104,10 @@ func newToolExecutor(
 		dockerClient:   dockerClient,
 		handlers:       handlers,
 		store:          store,
+		embedder:       embedder,
 		graphitiClient: graphitiClient,
 		proxies:        proxies,
+		userID:         userID,
 		flowID:         flowID,
 		taskID:         taskID,
 		subtaskID:      subtaskID,
@@ -135,6 +141,7 @@ func (te *toolExecutor) GetTool(ctx context.Context, funcName string) (tools.Too
 			containerLID,
 			te.dockerClient,
 			te.proxies.GetTermLogProvider(),
+			time.Duration(te.cfg.TerminalToolTimeout)*time.Second,
 		), nil
 
 	case tools.FileToolName:
@@ -147,6 +154,7 @@ func (te *toolExecutor) GetTool(ctx context.Context, funcName string) (tools.Too
 			containerLID,
 			te.dockerClient,
 			te.proxies.GetTermLogProvider(),
+			time.Duration(te.cfg.TerminalToolTimeout)*time.Second,
 		), nil
 
 	case tools.BrowserToolName:
@@ -235,32 +243,47 @@ func (te *toolExecutor) GetTool(ctx context.Context, funcName string) (tools.Too
 
 	case tools.SearchGuideToolName:
 		return tools.NewGuideTool(
+			te.userID,
 			te.flowID,
 			te.taskID,
 			te.subtaskID,
 			te.replacer,
 			te.store,
+			te.embedder,
+			te.db,
+			te.cfg.EmbeddingMaxTextBytes,
 			te.proxies.GetVectorStoreLogProvider(),
+			te.proxies.GetKnowledgeProvider(),
 		), nil
 
 	case tools.SearchAnswerToolName:
 		return tools.NewSearchTool(
+			te.userID,
 			te.flowID,
 			te.taskID,
 			te.subtaskID,
 			te.replacer,
 			te.store,
+			te.embedder,
+			te.db,
+			te.cfg.EmbeddingMaxTextBytes,
 			te.proxies.GetVectorStoreLogProvider(),
+			te.proxies.GetKnowledgeProvider(),
 		), nil
 
 	case tools.SearchCodeToolName:
 		return tools.NewCodeTool(
+			te.userID,
 			te.flowID,
 			te.taskID,
 			te.subtaskID,
 			te.replacer,
 			te.store,
+			te.embedder,
+			te.db,
+			te.cfg.EmbeddingMaxTextBytes,
 			te.proxies.GetVectorStoreLogProvider(),
+			te.proxies.GetKnowledgeProvider(),
 		), nil
 
 	case tools.GraphitiSearchToolName:

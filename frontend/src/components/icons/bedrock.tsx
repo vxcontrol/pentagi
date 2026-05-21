@@ -4,7 +4,7 @@ interface BedrockProps extends React.SVGProps<SVGSVGElement> {
     className?: string;
 }
 
-const Bedrock = ({ className, ...props }: BedrockProps) => {
+function Bedrock({ className, ...props }: BedrockProps) {
     return (
         <svg
             className={cn(className)}
@@ -21,6 +21,6 @@ const Bedrock = ({ className, ...props }: BedrockProps) => {
             />
         </svg>
     );
-};
+}
 
 export default Bedrock;

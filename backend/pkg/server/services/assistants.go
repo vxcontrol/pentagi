@@ -3,6 +3,7 @@ package services
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"slices"
 	"strconv"
@@ -233,7 +234,7 @@ func (s *AssistantService) GetFlowAssistant(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param flowID path int true "flow id" minimum(0)
+// @Param flowID path int true "flow id (use 0 to create a new flow together with the assistant)" minimum(0)
 // @Param json body models.CreateAssistant true "assistant model to create"
 // @Success 201 {object} response.successResp{data=models.AssistantFlow} "assistant created successful"
 // @Failure 400 {object} response.errorResp "invalid assistant request data"
@@ -244,7 +245,7 @@ func (s *AssistantService) CreateFlowAssistant(c *gin.Context) {
 	var (
 		err             error
 		flowID          uint64
-		assistant       models.AssistantFlow
+		resp            models.AssistantFlow
 		createAssistant models.CreateAssistant
 	)
 
@@ -266,14 +267,42 @@ func (s *AssistantService) CreateFlowAssistant(c *gin.Context) {
 		return
 	}
 
+	uid := c.GetUint64("uid")
 	privs := c.GetStringSlice("prm")
-	if !slices.Contains(privs, "assistants.create") {
-		logger.FromContext(c).Errorf("error filtering user role permissions: permission not found")
-		response.Error(c, response.ErrNotPermitted, nil)
-		return
+
+	if flowID == 0 {
+		// Creating a new flow together with the assistant requires both permissions.
+		if !slices.Contains(privs, "assistants.create") || !slices.Contains(privs, "flows.create") {
+			logger.FromContext(c).Errorf("error filtering user role permissions: permission not found")
+			response.Error(c, response.ErrNotPermitted, nil)
+			return
+		}
+	} else {
+		if !slices.Contains(privs, "assistants.create") {
+			logger.FromContext(c).Errorf("error filtering user role permissions: permission not found")
+			response.Error(c, response.ErrNotPermitted, nil)
+			return
+		}
+
+		// Verify the flow exists and belongs to the user (unless admin).
+		var flow models.Flow
+		var flowScope func(db *gorm.DB) *gorm.DB
+		if slices.Contains(privs, "flows.admin") {
+			flowScope = func(db *gorm.DB) *gorm.DB { return db.Where("id = ?", flowID) }
+		} else {
+			flowScope = func(db *gorm.DB) *gorm.DB { return db.Where("id = ? AND user_id = ?", flowID, uid) }
+		}
+		if err = s.db.Model(&flow).Scopes(flowScope).Take(&flow).Error; err != nil {
+			logger.FromContext(c).WithError(err).Errorf("error getting flow by id")
+			if gorm.IsRecordNotFoundError(err) {
+				response.Error(c, response.ErrFlowsNotFound, err)
+			} else {
+				response.Error(c, response.ErrInternal, err)
+			}
+			return
+		}
 	}
 
-	uid := c.GetUint64("uid")
 	prvname := provider.ProviderName(createAssistant.Provider)
 
 	prv, err := s.pc.GetProvider(c, prvname, int64(uid))
@@ -284,6 +313,13 @@ func (s *AssistantService) CreateFlowAssistant(c *gin.Context) {
 	}
 	prvtype := prv.Type()
 
+	dbResources, err := validateServiceResources(s.db, uid, privs, createAssistant.ResourceIDs)
+	if err != nil {
+		logger.FromContext(c).WithError(err).Errorf("error validating resource ids")
+		response.Error(c, response.ErrAssistantsInvalidRequest, err)
+		return
+	}
+
 	aw, err := s.fc.CreateAssistant(
 		c,
 		int64(uid),
@@ -293,6 +329,7 @@ func (s *AssistantService) CreateFlowAssistant(c *gin.Context) {
 		prvname,
 		prvtype,
 		createAssistant.Functions,
+		dbResources,
 	)
 	if err != nil {
 		logger.FromContext(c).WithError(err).Errorf("error creating assistant")
@@ -300,14 +337,19 @@ func (s *AssistantService) CreateFlowAssistant(c *gin.Context) {
 		return
 	}
 
-	err = s.db.Model(&assistant).Where("id = ?", aw.GetAssistantID()).Take(&assistant).Error
-	if err != nil {
+	if err = s.db.Model(&resp.Assistant).Where("id = ?", aw.GetAssistantID()).Take(&resp.Assistant).Error; err != nil {
 		logger.FromContext(c).WithError(err).Errorf("error getting assistant by id")
 		response.Error(c, response.ErrInternal, err)
 		return
 	}
 
-	response.Success(c, http.StatusCreated, assistant)
+	if err = s.db.Model(&resp.Flow).Where("id = ?", resp.Assistant.FlowID).Take(&resp.Flow).Error; err != nil {
+		logger.FromContext(c).WithError(err).Errorf("error getting flow by id")
+		response.Error(c, response.ErrInternal, err)
+		return
+	}
+
+	response.Success(c, http.StatusCreated, resp)
 }
 
 // PatchAssistant is a function to patch assistant
@@ -416,7 +458,14 @@ func (s *AssistantService) PatchAssistant(c *gin.Context) {
 			return
 		}
 
-		if err := aw.PutInput(c, *patchAssistant.Input, patchAssistant.UseAgents); err != nil {
+		dbResources, err := validateServiceResources(s.db, uid, privs, patchAssistant.ResourceIDs)
+		if err != nil {
+			logger.FromContext(c).WithError(err).Errorf("error validating resource ids")
+			response.Error(c, response.ErrAssistantsInvalidRequest, err)
+			return
+		}
+
+		if err := aw.PutInput(c, *patchAssistant.Input, patchAssistant.UseAgents, dbResources); err != nil {
 			logger.FromContext(c).WithError(err).Errorf("error sending input to assistant")
 			response.Error(c, response.ErrInternal, err)
 			return
@@ -583,4 +632,53 @@ func convertAssistantToDatabase(assistant models.Assistant) (database.Assistant,
 		ModelProviderType:  database.ProviderType(assistant.ModelProviderType),
 		ToolCallIDTemplate: assistant.ToolCallIDTemplate,
 	}, nil
+}
+
+// validateServiceResources fetches and validates user resource ownership for REST handlers.
+// It mirrors the logic in validateUserResources from the graph package but works with *gorm.DB.
+// privs must contain at least "resources.view" or "resources.admin"; otherwise permission is denied.
+// "resources.admin" bypasses the user_id ownership check.
+func validateServiceResources(db *gorm.DB, uid uint64, privs []string, ids []uint64) ([]database.UserResource, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+
+	isAdmin := slices.Contains(privs, "resources.admin")
+	if !isAdmin && !slices.Contains(privs, "resources.view") && len(ids) > 0 {
+		return nil, fmt.Errorf("permission 'resources.view' required to use resource IDs")
+	}
+
+	var recs []models.UserResource
+	if err := db.Model(&models.UserResource{}).Where("id IN (?)", ids).Find(&recs).Error; err != nil {
+		return nil, fmt.Errorf("failed to fetch resources: %w", err)
+	}
+
+	found := make(map[uint64]models.UserResource, len(recs))
+	for _, r := range recs {
+		found[r.ID] = r
+	}
+
+	result := make([]database.UserResource, 0, len(ids))
+	for _, id := range ids {
+		r, ok := found[id]
+		if !ok {
+			return nil, fmt.Errorf("resource %d not found", id)
+		}
+		if !isAdmin && r.UserID != uid {
+			return nil, fmt.Errorf("resource %d not accessible", id)
+		}
+		result = append(result, database.UserResource{
+			ID:        int64(r.ID),
+			UserID:    int64(r.UserID),
+			Hash:      r.Hash,
+			Name:      r.Name,
+			Path:      r.Path,
+			Size:      r.Size,
+			IsDir:     r.IsDir,
+			CreatedAt: database.TimeToNullTime(r.CreatedAt),
+			UpdatedAt: database.TimeToNullTime(r.UpdatedAt),
+		})
+	}
+
+	return result, nil
 }

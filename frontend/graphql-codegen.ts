@@ -7,6 +7,8 @@ const config: CodegenConfig = {
             config: {
                 dedupeFragments: true,
                 exportFragmentSpreadSubTypes: true,
+                apolloReactCommonImportFrom: '@apollo/client/react',
+                apolloReactHooksImportFrom: '@apollo/client/react',
                 inlineFragmentTypes: 'combine',
                 preResolveTypes: true,
                 skipTypename: true,

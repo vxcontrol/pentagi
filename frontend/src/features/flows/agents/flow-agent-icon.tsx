@@ -48,7 +48,7 @@ const icons: Record<AgentType, LucideIcon> = {
 };
 const defaultIcon = HelpCircle;
 
-const FlowAgentIcon = ({ className, type, tooltip = type }: FlowAgentIconProps) => {
+function FlowAgentIcon({ className, type, tooltip = type }: FlowAgentIconProps) {
     const Icon = type ? icons[type] || defaultIcon : defaultIcon;
     const iconElement = <Icon className={cn('size-3 shrink-0', className)} />;
 
@@ -62,6 +62,6 @@ const FlowAgentIcon = ({ className, type, tooltip = type }: FlowAgentIconProps) 
             <TooltipContent>{formatName(tooltip)}</TooltipContent>
         </Tooltip>
     );
-};
+}
 
 export default FlowAgentIcon;

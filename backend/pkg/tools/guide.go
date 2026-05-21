@@ -4,11 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"strings"
 
 	"pentagi/pkg/database"
+	"pentagi/pkg/graph/model"
 	obs "pentagi/pkg/observability"
 	"pentagi/pkg/observability/langfuse"
+	"pentagi/pkg/providers/embeddings"
 
 	"github.com/sirupsen/logrus"
 	"github.com/vxcontrol/cloud/anonymizer"
@@ -26,27 +29,41 @@ const (
 )
 
 type guide struct {
-	flowID    int64
-	taskID    *int64
-	subtaskID *int64
-	replacer  anonymizer.Replacer
-	store     *pgvector.Store
-	vslp      VectorStoreLogProvider
+	userID            int64
+	flowID            int64
+	taskID            *int64
+	subtaskID         *int64
+	replacer          anonymizer.Replacer
+	store             *pgvector.Store
+	embedder          embeddings.Embedder
+	db                database.Querier
+	maxEmbeddingBytes int
+	vslp              VectorStoreLogProvider
+	knp               KnowledgeProvider
 }
 
 func NewGuideTool(
-	flowID int64, taskID, subtaskID *int64,
+	userID int64, flowID int64, taskID, subtaskID *int64,
 	replacer anonymizer.Replacer,
 	store *pgvector.Store,
+	embedder embeddings.Embedder,
+	db database.Querier,
+	maxEmbeddingBytes int,
 	vslp VectorStoreLogProvider,
+	knp KnowledgeProvider,
 ) Tool {
 	return &guide{
-		flowID:    flowID,
-		taskID:    taskID,
-		subtaskID: subtaskID,
-		replacer:  replacer,
-		store:     store,
-		vslp:      vslp,
+		userID:            userID,
+		flowID:            flowID,
+		taskID:            taskID,
+		subtaskID:         subtaskID,
+		replacer:          replacer,
+		store:             store,
+		embedder:          embedder,
+		db:                db,
+		maxEmbeddingBytes: maxEmbeddingBytes,
+		vslp:              vslp,
+		knp:               knp,
 	}
 }
 
@@ -208,16 +225,25 @@ func (g *guide) Handle(ctx context.Context, name string, args json.RawMessage) (
 
 		guide := fmt.Sprintf("Question:\n%s\n\nGuide:\n%s", action.Question, action.Guide)
 
+		// Anonymize before anything else so all downstream paths (including error
+		// branches that emit langfuse events) only ever expose the anonymized form.
+		var (
+			anonymizedGuide     = g.replacer.ReplaceString(guide)
+			anonymizedQuestion  = g.replacer.ReplaceString(action.Question)
+			anonymizedGuideOnly = g.replacer.ReplaceString(action.Guide) // used in slow-path embedding text
+		)
+
+		eventMetadata := map[string]any{
+			"tool_name":  name,
+			"message":    action.Message,
+			"doc_type":   guideVectorStoreDefaultType,
+			"guide_type": action.Type,
+		}
 		opts := []langfuse.EventOption{
 			langfuse.WithEventName("store guide to vector store"),
 			langfuse.WithEventInput(action.Question),
-			langfuse.WithEventOutput(guide),
-			langfuse.WithEventMetadata(map[string]any{
-				"tool_name":  name,
-				"message":    action.Message,
-				"doc_type":   guideVectorStoreDefaultType,
-				"guide_type": action.Type,
-			}),
+			langfuse.WithEventOutput(anonymizedGuide),
+			langfuse.WithEventMetadata(eventMetadata),
 		}
 
 		logger = logger.WithFields(logrus.Fields{
@@ -226,46 +252,82 @@ func (g *guide) Handle(ctx context.Context, name string, args json.RawMessage) (
 			"guide": action.Guide[:min(len(action.Guide), 1000)],
 		})
 
+		// Build common metadata for the document.
+		metadata := map[string]any{
+			"user_id":    g.userID,
+			"flow_id":    g.flowID,
+			"doc_type":   guideVectorStoreDefaultType,
+			"guide_type": action.Type,
+			"question":   anonymizedQuestion,
+			"part_size":  len(anonymizedGuide),
+			"total_size": len(anonymizedGuide),
+		}
+		if g.taskID != nil {
+			metadata["task_id"] = *g.taskID
+		}
+		if g.subtaskID != nil {
+			metadata["subtask_id"] = *g.subtaskID
+		}
+
 		var (
-			anonymizedGuide    = g.replacer.ReplaceString(guide)
-			anonymizedQuestion = g.replacer.ReplaceString(action.Question)
+			docs []schema.Document
+			ids  []string
+			err  error
 		)
 
-		docs, err := documentloaders.NewText(strings.NewReader(anonymizedGuide)).Load(ctx)
-		if err != nil {
-			observation.Event(append(opts,
-				langfuse.WithEventStatus(err.Error()),
-				langfuse.WithEventLevel(langfuse.ObservationLevelError),
-			)...)
-			logger.WithError(err).Error("failed to load document")
-			return "", fmt.Errorf("failed to load document: %w", err)
-		}
+		if len(anonymizedGuide) <= g.maxEmbeddingBytes || g.embedder == nil {
+			// Fast path: document fits within the embedding limit.
+			docs, err = documentloaders.NewText(strings.NewReader(anonymizedGuide)).Load(ctx)
+			if err != nil {
+				observation.Event(append(opts,
+					langfuse.WithEventStatus(err.Error()),
+					langfuse.WithEventLevel(langfuse.ObservationLevelError),
+				)...)
+				logger.WithError(err).Error("failed to load document")
+				return "", fmt.Errorf("failed to load document: %w", err)
+			}
+			for i := range docs {
+				if docs[i].Metadata == nil {
+					docs[i].Metadata = map[string]any{}
+				}
+				maps.Copy(docs[i].Metadata, metadata)
+				docs[i].Metadata["part_size"] = len(docs[i].PageContent)
+			}
+			ids, err = g.store.AddDocuments(ctx, docs)
+			eventMetadata["ids"] = ids
+			if err != nil {
+				observation.Event(append(opts,
+					langfuse.WithEventStatus(err.Error()),
+					langfuse.WithEventLevel(langfuse.ObservationLevelError),
+				)...)
+				logger.WithError(err).Error("failed to store guide")
+				return "", fmt.Errorf("failed to store guide: %w", err)
+			}
+		} else {
+			// Slow path: Guide field exceeds embedding limit.
+			// Template: "Question:\n{question}\n\nGuide:\n{guide}"
+			prefix := "Question:\n" + anonymizedQuestion + "\n\nGuide:\n"
+			available := max(g.maxEmbeddingBytes-len(prefix), 0)
+			embeddingText := prefix + truncateForEmbedding(anonymizedGuideOnly, available)
 
-		for _, doc := range docs {
-			if doc.Metadata == nil {
-				doc.Metadata = map[string]any{}
+			id, err := storeDocumentWithEmbeddingLimit(ctx, g.db, g.embedder,
+				embeddingText, anonymizedGuide, metadata)
+			if err != nil {
+				observation.Event(append(opts,
+					langfuse.WithEventStatus(err.Error()),
+					langfuse.WithEventLevel(langfuse.ObservationLevelError),
+				)...)
+				logger.WithError(err).Error("failed to store guide with embedding limit")
+				return "", fmt.Errorf("failed to store guide: %w", err)
 			}
-			doc.Metadata["flow_id"] = g.flowID
-			if g.taskID != nil {
-				doc.Metadata["task_id"] = *g.taskID
+			ids = []string{id}
+			docs = []schema.Document{
+				{
+					PageContent: anonymizedGuide,
+					Metadata:    metadata,
+				},
 			}
-			if g.subtaskID != nil {
-				doc.Metadata["subtask_id"] = *g.subtaskID
-			}
-			doc.Metadata["doc_type"] = guideVectorStoreDefaultType
-			doc.Metadata["guide_type"] = action.Type
-			doc.Metadata["question"] = anonymizedQuestion
-			doc.Metadata["part_size"] = len(doc.PageContent)
-			doc.Metadata["total_size"] = len(anonymizedGuide)
-		}
-
-		if _, err := g.store.AddDocuments(ctx, docs); err != nil {
-			observation.Event(append(opts,
-				langfuse.WithEventStatus(err.Error()),
-				langfuse.WithEventLevel(langfuse.ObservationLevelError),
-			)...)
-			logger.WithError(err).Error("failed to store guide")
-			return "", fmt.Errorf("failed to store guide: %w", err)
+			eventMetadata["ids"] = ids
 		}
 
 		observation.Event(append(opts,
@@ -273,6 +335,29 @@ func (g *guide) Handle(ctx context.Context, name string, args json.RawMessage) (
 			langfuse.WithEventLevel(langfuse.ObservationLevelDebug),
 			langfuse.WithEventOutput(docs),
 		)...)
+
+		if g.knp != nil {
+			guideType := model.KnowledgeGuideType(action.Type)
+			for _, id := range ids {
+				knDoc := &model.KnowledgeDocument{
+					ID:        id,
+					UserID:    g.userID,
+					DocType:   model.KnowledgeDocTypeGuide,
+					Content:   anonymizedGuide,
+					Question:  anonymizedQuestion,
+					GuideType: &guideType,
+					PartSize:  len(anonymizedGuide),
+					TotalSize: len(anonymizedGuide),
+					Manual:    false,
+				}
+				if g.flowID != 0 {
+					knDoc.FlowID = &g.flowID
+				}
+				knDoc.TaskID = g.taskID
+				knDoc.SubtaskID = g.subtaskID
+				g.knp.KnowledgeDocumentCreated(ctx, knDoc)
+			}
+		}
 
 		if agentCtx, ok := GetAgentContext(ctx); ok {
 			data := map[string]any{

@@ -1,3 +1,18 @@
+-- name: GetFlowToolcalls :many
+SELECT
+  tc.*
+FROM toolcalls tc
+INNER JOIN flows f ON tc.flow_id = f.id
+WHERE tc.flow_id = $1 AND f.deleted_at IS NULL
+ORDER BY tc.created_at ASC;
+
+-- name: GetFlowToolcall :one
+SELECT
+  tc.*
+FROM toolcalls tc
+INNER JOIN flows f ON tc.flow_id = f.id
+WHERE tc.id = $1 AND tc.flow_id = $2 AND f.deleted_at IS NULL;
+
 -- name: GetSubtaskToolcalls :many
 SELECT
   tc.*

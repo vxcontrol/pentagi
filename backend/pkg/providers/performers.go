@@ -291,7 +291,7 @@ func (fp *flowProvider) performSubtasksRefiner(
 				logger.WithError(err).Error("failed to unmarshal subtask patch")
 				return "", fmt.Errorf("failed to unmarshal subtask patch: %w", err)
 			}
-			if err := ValidateSubtaskPatch(subtaskPatch); err != nil {
+			if err := subtaskPatch.Validate(); err != nil {
 				logger.WithError(err).Error("invalid subtask patch")
 				return "", fmt.Errorf("invalid subtask patch: %w", err)
 			}

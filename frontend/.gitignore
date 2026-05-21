@@ -13,6 +13,7 @@ dist
 dist-ssr
 ssl
 *.local
+*.tsbuildinfo
 
 # Editor directories and files
 .DS_Store

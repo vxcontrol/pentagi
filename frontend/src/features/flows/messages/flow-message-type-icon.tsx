@@ -40,7 +40,7 @@ const messageTypeIcons: Record<MessageLogType, LucideIcon> = {
 };
 const defaultIcon = Brain;
 
-const FlowMessageTypeIcon = ({ className, type, tooltip = type }: MessageTypeIconProps) => {
+function FlowMessageTypeIcon({ className, type, tooltip = type }: MessageTypeIconProps) {
     const Icon = type ? messageTypeIcons[type] || defaultIcon : defaultIcon;
     const iconElement = <Icon className={cn('size-3 shrink-0', className)} />;
 
@@ -54,6 +54,6 @@ const FlowMessageTypeIcon = ({ className, type, tooltip = type }: MessageTypeIco
             <TooltipContent>{formatName(tooltip)}</TooltipContent>
         </Tooltip>
     );
-};
+}
 
 export default FlowMessageTypeIcon;

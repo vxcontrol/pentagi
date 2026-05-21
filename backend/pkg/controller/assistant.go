@@ -31,7 +31,7 @@ type AssistantWorker interface {
 	GetTitle() string
 	GetStatus(ctx context.Context) (database.AssistantStatus, error)
 	SetStatus(ctx context.Context, status database.AssistantStatus) error
-	PutInput(ctx context.Context, input string, useAgents bool) error
+	PutInput(ctx context.Context, input string, useAgents bool, resources []database.UserResource) error
 	Finish(ctx context.Context) error
 	Stop(ctx context.Context) error
 }
@@ -46,6 +46,7 @@ type assistantWorker struct {
 	db      database.Querier
 	wg      *sync.WaitGroup
 	pub     subscriptions.FlowPublisher
+	fw      FlowWorker
 	ctx     context.Context
 	cancel  context.CancelFunc
 	runMX   *sync.Mutex
@@ -63,6 +64,8 @@ type newAssistantWorkerCtx struct {
 	prvname   provider.ProviderName
 	prvtype   provider.ProviderType
 	functions *tools.Functions
+	resources []database.UserResource
+	fw        FlowWorker
 
 	flowWorkerCtx
 }
@@ -70,6 +73,7 @@ type newAssistantWorkerCtx struct {
 type assistantWorkerCtx struct {
 	userID int64
 	flowID int64
+	fw     FlowWorker
 
 	// prompter is an optional reusable prompter for the user. When non-nil,
 	// LoadAssistantWorker uses it instead of issuing another GetUserPrompts
@@ -164,7 +168,7 @@ func NewAssistantWorker(ctx context.Context, awc newAssistantWorkerCtx) (Assista
 	if err != nil {
 		return nil, wrapErrorEndSpan(ctx, assistantSpan, "failed to build user prompter", err)
 	}
-	executor, err := tools.NewFlowToolsExecutor(awc.db, awc.cfg, awc.docker, awc.functions, awc.flowID)
+	executor, err := tools.NewFlowToolsExecutor(awc.db, awc.cfg, awc.docker, awc.functions, awc.userID, awc.flowID)
 	if err != nil {
 		return nil, wrapErrorEndSpan(ctx, assistantSpan, "failed to create flow tools executor", err)
 	}
@@ -209,6 +213,7 @@ func NewAssistantWorker(ctx context.Context, awc newAssistantWorkerCtx) (Assista
 
 	assistantProvider.SetAgentLogProvider(workers.alw)
 	assistantProvider.SetMsgLogProvider(aslw)
+	assistantProvider.SetFlowWorker(awc.fw)
 
 	executor.SetImage(container.Image)
 	executor.SetEmbedder(assistantProvider.Embedder())
@@ -218,6 +223,8 @@ func NewAssistantWorker(ctx context.Context, awc newAssistantWorkerCtx) (Assista
 	executor.SetSearchLogProvider(workers.slw)
 	executor.SetTermLogProvider(workers.tlw)
 	executor.SetVectorStoreLogProvider(workers.vslw)
+	executor.SetToolCallLogProvider(workers.tclw)
+	executor.SetKnowledgeProvider(pub)
 	executor.SetGraphitiClient(awc.provs.GraphitiClient())
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -232,6 +239,7 @@ func NewAssistantWorker(ctx context.Context, awc newAssistantWorkerCtx) (Assista
 		db:      awc.db,
 		wg:      &sync.WaitGroup{},
 		pub:     pub,
+		fw:      awc.fw,
 		ctx:     ctx,
 		cancel:  cancel,
 		runMX:   &sync.Mutex{},
@@ -253,7 +261,7 @@ func NewAssistantWorker(ctx context.Context, awc newAssistantWorkerCtx) (Assista
 	aw.wg.Add(1)
 	go aw.worker()
 
-	if err := aw.PutInput(ctx, awc.input, awc.useAgents); err != nil {
+	if err := aw.PutInput(ctx, awc.input, awc.useAgents, awc.resources); err != nil {
 		return nil, wrapErrorEndSpan(ctx, assistantSpan, "failed to run assistant worker", err)
 	}
 
@@ -335,7 +343,7 @@ func LoadAssistantWorker(
 			return nil, wrapErrorEndSpan(ctx, assistantSpan, "failed to build user prompter", err)
 		}
 	}
-	executor, err := tools.NewFlowToolsExecutor(awc.db, awc.cfg, awc.docker, functions, awc.flowID)
+	executor, err := tools.NewFlowToolsExecutor(awc.db, awc.cfg, awc.docker, functions, awc.userID, awc.flowID)
 	if err != nil {
 		return nil, wrapErrorEndSpan(ctx, assistantSpan, "failed to create flow tools executor", err)
 	}
@@ -353,6 +361,7 @@ func LoadAssistantWorker(
 
 	assistantProvider.SetAgentLogProvider(workers.alw)
 	assistantProvider.SetMsgLogProvider(aslw)
+	assistantProvider.SetFlowWorker(awc.fw)
 
 	executor.SetImage(container.Image)
 	executor.SetEmbedder(assistantProvider.Embedder())
@@ -362,6 +371,8 @@ func LoadAssistantWorker(
 	executor.SetSearchLogProvider(workers.slw)
 	executor.SetTermLogProvider(workers.tlw)
 	executor.SetVectorStoreLogProvider(workers.vslw)
+	executor.SetToolCallLogProvider(workers.tclw)
+	executor.SetKnowledgeProvider(pub)
 
 	var msgChainID int64
 	pmsgChainID := database.NullInt64ToInt64(assistant.MsgchainID)
@@ -384,6 +395,7 @@ func LoadAssistantWorker(
 		db:      awc.db,
 		wg:      &sync.WaitGroup{},
 		pub:     pub,
+		fw:      awc.fw,
 		ctx:     ctx,
 		cancel:  cancel,
 		runMX:   &sync.Mutex{},
@@ -523,9 +535,15 @@ func (aw *assistantWorker) SetStatus(ctx context.Context, status database.Assist
 	return nil
 }
 
-func (aw *assistantWorker) PutInput(ctx context.Context, input string, useAgents bool) error {
+func (aw *assistantWorker) PutInput(ctx context.Context, input string, useAgents bool, resources []database.UserResource) error {
 	ctx, span := obs.Observer.NewSpan(ctx, obs.SpanKindInternal, "controller.assistantWorker.PutInput")
 	defer span.End()
+
+	if aw.fw != nil {
+		if err := aw.fw.PutResources(ctx, resources); err != nil {
+			aw.logger.WithError(err).Warn("failed to copy resources before assistant input")
+		}
+	}
 
 	ain := assistantInput{input: input, useAgents: useAgents, done: make(chan error, 1)}
 	select {
@@ -564,7 +582,6 @@ func (aw *assistantWorker) Finish(ctx context.Context) error {
 	}
 
 	aw.cancel()
-	close(aw.input)
 	aw.wg.Wait()
 
 	if err := aw.SetStatus(ctx, database.AssistantStatusFinished); err != nil {

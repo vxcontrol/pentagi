@@ -101,6 +101,12 @@ func (m *ServerSettingsFormModel) BuildForm() tea.Cmd {
 		config.HTTPClientTimeout,
 		false,
 	))
+	fields = append(fields, m.createTextField("terminal_tool_timeout",
+		locale.ServerSettingsTerminalToolTimeout,
+		locale.ServerSettingsTerminalToolTimeoutDesc,
+		config.TerminalToolTimeout,
+		false,
+	))
 
 	// external ssl settings
 	fields = append(fields, m.createTextField("external_ssl_ca_path",
@@ -281,6 +287,14 @@ func (m *ServerSettingsFormModel) GetCurrentConfiguration() string {
 		sections = append(sections, fmt.Sprintf("• %s: %s", locale.ServerSettingsHTTPClientTimeoutHint, httpTimeout))
 	}
 
+	if terminalTimeout := cfg.TerminalToolTimeout.Value; terminalTimeout != "" {
+		terminalTimeout = m.GetStyles().Info.Render(terminalTimeout + "s")
+		sections = append(sections, fmt.Sprintf("• %s: %s", locale.ServerSettingsTerminalToolTimeoutHint, terminalTimeout))
+	} else if terminalTimeout := cfg.TerminalToolTimeout.Default; terminalTimeout != "" {
+		terminalTimeout = m.GetStyles().Muted.Render(terminalTimeout + "s")
+		sections = append(sections, fmt.Sprintf("• %s: %s", locale.ServerSettingsTerminalToolTimeoutHint, terminalTimeout))
+	}
+
 	if externalSSLCAPath := cfg.ExternalSSLCAPath.Value; externalSSLCAPath != "" {
 		externalSSLCAPath = m.GetStyles().Info.Render(externalSSLCAPath)
 		sections = append(sections, fmt.Sprintf("• %s: %s", locale.ServerSettingsExternalSSLCAPathHint, externalSSLCAPath))
@@ -352,6 +366,8 @@ func (m *ServerSettingsFormModel) GetHelpContent() string {
 			sections = append(sections, locale.ServerSettingsProxyURLHelp)
 		case "http_client_timeout":
 			sections = append(sections, locale.ServerSettingsHTTPClientTimeoutHelp)
+		case "terminal_tool_timeout":
+			sections = append(sections, locale.ServerSettingsTerminalToolTimeoutHelp)
 		case "external_ssl_ca_path":
 			sections = append(sections, locale.ServerSettingsExternalSSLCAPathHelp)
 		case "external_ssl_insecure":
@@ -382,6 +398,7 @@ func (m *ServerSettingsFormModel) HandleSave() error {
 		CookieSigningSalt:   cfg.CookieSigningSalt,
 		ProxyURL:            cfg.ProxyURL,
 		HTTPClientTimeout:   cfg.HTTPClientTimeout,
+		TerminalToolTimeout: cfg.TerminalToolTimeout,
 		ExternalSSLCAPath:   cfg.ExternalSSLCAPath,
 		ExternalSSLInsecure: cfg.ExternalSSLInsecure,
 		SSLDir:              cfg.SSLDir,
@@ -430,6 +447,15 @@ func (m *ServerSettingsFormModel) HandleSave() error {
 				}
 			}
 			newCfg.HTTPClientTimeout.Value = value
+		case "terminal_tool_timeout":
+			if value != "" {
+				if timeout, err := strconv.Atoi(value); err != nil {
+					return fmt.Errorf("invalid terminal tool timeout: must be a number")
+				} else if timeout < 0 {
+					return fmt.Errorf("invalid terminal tool timeout: must be >= 0")
+				}
+			}
+			newCfg.TerminalToolTimeout.Value = value
 		case "external_ssl_ca_path":
 			newCfg.ExternalSSLCAPath.Value = value
 		case "external_ssl_insecure":

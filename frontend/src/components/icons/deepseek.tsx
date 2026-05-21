@@ -4,7 +4,7 @@ interface DeepSeekProps extends React.SVGProps<SVGSVGElement> {
     className?: string;
 }
 
-const DeepSeek = ({ className, ...props }: DeepSeekProps) => {
+function DeepSeek({ className, ...props }: DeepSeekProps) {
     return (
         <svg
             className={cn(className)}
@@ -20,6 +20,6 @@ const DeepSeek = ({ className, ...props }: DeepSeekProps) => {
             </g>
         </svg>
     );
-};
+}
 
 export default DeepSeek;

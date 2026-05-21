@@ -67,7 +67,11 @@ const injectedColorClasses = new Set<string>();
 const rgbStringToHex = (rgb: string): string =>
     rgb
         .split(',')
-        .map((part) => Math.min(255, Math.max(0, parseInt(part.trim(), 10))).toString(16).padStart(2, '0'))
+        .map((part) =>
+            Math.min(255, Math.max(0, parseInt(part.trim(), 10)))
+                .toString(16)
+                .padStart(2, '0'),
+        )
         .join('');
 
 /**
@@ -263,12 +267,12 @@ const parseLogsWithCache = (logs: string[]): ParsedLine[] => {
  * Provides a read-only code viewer with search functionality, theme support, and ANSI color rendering.
  * Compatible with the existing Terminal component API.
  */
-const MonacoTerminal = ({
+function MonacoTerminal({
     className,
     logs,
     ref,
     searchValue,
-}: MonacoTerminalProps & { ref?: React.RefObject<MonacoTerminalRef | null> }) => {
+}: MonacoTerminalProps & { ref?: React.RefObject<MonacoTerminalRef | null> }) {
     const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
     const monacoRef = useRef<Monaco | null>(null);
     const { theme } = useTheme();
@@ -277,19 +281,15 @@ const MonacoTerminal = ({
     const searchWidgetRef = useRef<null | { findNext: () => void; findPrevious: () => void }>(null);
     const decorationsCollectionRef = useRef<monaco.editor.IEditorDecorationsCollection | null>(null);
 
-    // Parse ANSI codes from logs with module-level caching
     const parsedContent = useMemo(() => parseLogsWithCache(logs), [logs]);
 
-    // Memoized plain text content extraction
     const content = useMemo(() => parsedContent.map((line) => line.text).join('\n'), [parsedContent]);
 
-    // Monaco editor mount handler - wrapped in useCallback for stability
     const handleEditorDidMount: OnMount = useCallback((editor, monacoInstance) => {
         editorRef.current = editor;
         monacoRef.current = monacoInstance;
         setIsEditorReady(true);
 
-        // Configure editor for optimal performance and word wrapping
         editor.updateOptions({
             automaticLayout: true,
             folding: false,
@@ -317,7 +317,6 @@ const MonacoTerminal = ({
             wrappingStrategy: 'simple', // Use simple strategy for better performance
         });
 
-        // Inject ANSI decoration CSS styles once (static set of classes)
         const ansiStyleId = 'monaco-terminal-ansi-styles';
 
         if (!document.getElementById(ansiStyleId)) {
@@ -328,7 +327,6 @@ const MonacoTerminal = ({
             document.head.appendChild(ansiStyleElement);
         }
 
-        // Inject padding and background styles
         const terminalStyleId = 'monaco-terminal-custom-styles';
 
         if (!document.getElementById(terminalStyleId)) {
@@ -348,7 +346,6 @@ const MonacoTerminal = ({
             document.head.appendChild(terminalStyleElement);
         }
 
-        // Store search widget reference
         searchWidgetRef.current = {
             findNext: () => {
                 try {
@@ -369,7 +366,6 @@ const MonacoTerminal = ({
         };
     }, []);
 
-    // Expose methods to parent component via ref
     useImperativeHandle(
         ref,
         () => ({
@@ -387,10 +383,8 @@ const MonacoTerminal = ({
         [],
     );
 
-    // Cache for tracking which lines have been decorated
     const decoratedLinesCountRef = useRef<number>(0);
 
-    // Apply ANSI color decorations incrementally
     useEffect(() => {
         if (!isEditorReady || !editorRef.current || !monacoRef.current) {
             return;
@@ -402,7 +396,6 @@ const MonacoTerminal = ({
         try {
             const decoratedCount = decoratedLinesCountRef.current;
 
-            // If content was cleared or reduced, reset decorations
             if (parsedContent.length < decoratedCount) {
                 if (decorationsCollectionRef.current) {
                     decorationsCollectionRef.current.clear();
@@ -411,12 +404,13 @@ const MonacoTerminal = ({
                 decoratedLinesCountRef.current = 0;
             }
 
-            // If no new lines to decorate, skip
             if (parsedContent.length <= decoratedLinesCountRef.current) {
                 return;
             }
 
-            // Build decorations only for new lines (incremental)
+            // Incremental: only decorate the tail of `parsedContent` past `decoratedLinesCountRef`.
+            // Re-applying the full set on every log append turns large terminals into a stutter
+            // because Monaco re-runs the decoration delta over every line.
             const newDecorations: monaco.editor.IModelDeltaDecoration[] = [];
 
             for (let index = decoratedLinesCountRef.current; index < parsedContent.length; index++) {
@@ -441,25 +435,20 @@ const MonacoTerminal = ({
                 }
             }
 
-            // Apply new decorations incrementally
             if (newDecorations.length) {
                 if (decorationsCollectionRef.current) {
-                    // Append new decorations to existing collection
                     decorationsCollectionRef.current.append(newDecorations);
                 } else {
-                    // Create new collection if it doesn't exist
                     decorationsCollectionRef.current = editor.createDecorationsCollection(newDecorations);
                 }
             }
 
-            // Update decorated lines count
             decoratedLinesCountRef.current = parsedContent.length;
         } catch (error: unknown) {
             Log.error('Monaco apply decorations failed:', error);
         }
     }, [parsedContent, isEditorReady]);
 
-    // Auto-scroll to bottom when new logs are added
     useEffect(() => {
         if (!isEditorReady || !editorRef.current) {
             return;
@@ -467,13 +456,13 @@ const MonacoTerminal = ({
 
         const editor = editorRef.current;
 
-        // Only scroll if new logs were added (not on initial render or when logs were cleared)
+        // Auto-scroll only on appends — not on the initial mount (`prev === 0`) and not when logs
+        // shrink (cleared), so we don't fight a user who scrolled up before more output arrives.
         if (logs.length > prevLogsLengthRef.current && prevLogsLengthRef.current > 0) {
             try {
                 const lineCount = editor.getModel()?.getLineCount() ?? 0;
 
                 if (lineCount > 0) {
-                    // Scroll to the last line (1 = Smooth scroll type)
                     editor.revealLine(lineCount, 1);
                 }
             } catch (error: unknown) {
@@ -484,7 +473,6 @@ const MonacoTerminal = ({
         prevLogsLengthRef.current = logs.length;
     }, [logs, isEditorReady]);
 
-    // Handle search functionality
     useEffect(() => {
         if (!isEditorReady || !editorRef.current || !monacoRef.current) {
             return;
@@ -494,10 +482,8 @@ const MonacoTerminal = ({
 
         if (searchValue?.trim()) {
             try {
-                // Use Monaco's built-in find functionality
                 const searchText = searchValue.trim();
 
-                // Create find options
                 const findOptions = {
                     isRegex: false,
                     matchCase: false,
@@ -506,11 +492,10 @@ const MonacoTerminal = ({
                     wholeWord: false,
                 };
 
-                // Trigger find action with the search string
                 editor.trigger('monaco-terminal', 'actions.find', findOptions);
 
-                // Automatically jump to first match using requestAnimationFrame
-                // for better timing than arbitrary setTimeout delays
+                // rAF (instead of setTimeout) lets Monaco finish mounting the find widget before
+                // we issue the jump-to-first-match — fewer flaky races at log-bursty moments.
                 requestAnimationFrame(() => {
                     editor.trigger('monaco-terminal', 'editor.action.nextMatchFindAction', {});
                 });
@@ -518,7 +503,6 @@ const MonacoTerminal = ({
                 Log.error('Monaco search failed:', error);
             }
         } else {
-            // Close find widget when search is cleared
             try {
                 editor.trigger('monaco-terminal', 'closeFindWidget', {});
             } catch (error: unknown) {
@@ -527,20 +511,17 @@ const MonacoTerminal = ({
         }
     }, [searchValue, isEditorReady]);
 
-    // Cleanup on unmount
     useEffect(() => {
         return () => {
-            // Clear decorations collection
             if (decorationsCollectionRef.current) {
                 decorationsCollectionRef.current.clear();
                 decorationsCollectionRef.current = null;
             }
 
-            // Reset incremental decorations counter
             decoratedLinesCountRef.current = 0;
 
-            // Note: We don't remove shared styles as they persist across instances
-            // parsedLogsCache uses WeakMap so it's automatically cleaned up
+            // Shared <style> tags are deliberately left attached — multiple instances share them
+            // and the WeakMap-backed parseLogsWithCache cleans itself up.
         };
     }, []);
 
@@ -563,8 +544,6 @@ const MonacoTerminal = ({
             />
         </div>
     );
-};
-
-MonacoTerminal.displayName = 'MonacoTerminal';
+}
 
 export default MonacoTerminal;

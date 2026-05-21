@@ -27,6 +27,32 @@ const (
 	minImgContentSize  = 2048
 )
 
+// nonHTMLExtensions lists URL path suffixes that point to resources the scraper
+// cannot render as text. When a URL matches, the browser tool returns a
+// descriptive hint instead of a generic "content too small" error.
+var nonHTMLExtensions = []string{
+	".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx",
+	".zip", ".tar", ".gz", ".bz2", ".rar", ".7z",
+	".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".svg", ".ico",
+	".mp3", ".mp4", ".avi", ".mov", ".mkv", ".wav",
+	".exe", ".bin", ".dll", ".so", ".dmg", ".apk",
+}
+
+// isBinaryURL returns true when the URL points to a known non-HTML resource.
+func isBinaryURL(rawURL string) bool {
+	lower := strings.ToLower(rawURL)
+	// strip query string for extension matching
+	if idx := strings.Index(lower, "?"); idx != -1 {
+		lower = lower[:idx]
+	}
+	for _, ext := range nonHTMLExtensions {
+		if strings.HasSuffix(lower, ext) {
+			return true
+		}
+	}
+	return false
+}
+
 var localZones = []string{
 	".localdomain",
 	".local",
@@ -334,6 +360,13 @@ func (b *browser) saveScreenshotData(screenshot []byte) (string, error) {
 }
 
 func (b *browser) getMD(targetURL string) (string, error) {
+	if isBinaryURL(targetURL) {
+		return "", fmt.Errorf(
+			"the URL appears to point to a binary/non-HTML resource (e.g. PDF, image, archive) " +
+				"that cannot be rendered as markdown. Use the terminal tool with curl/wget to download it instead",
+		)
+	}
+
 	scraperURL, err := b.resolveUrl(targetURL)
 	if err != nil {
 		return "", fmt.Errorf("failed to resolve url: %w", err)
@@ -349,13 +382,23 @@ func (b *browser) getMD(targetURL string) (string, error) {
 		return "", fmt.Errorf("failed to fetch content by url '%s': %w", targetURL, err)
 	}
 	if len(content) < minMdContentSize {
-		return "", fmt.Errorf("content size is less than minimum: %d bytes", minMdContentSize)
+		return fmt.Sprintf(
+			"[WARNING: page returned very little content (%d bytes), it may be a redirect, error page, or near-empty]\n\n%s",
+			len(content), string(content),
+		), nil
 	}
 
 	return string(content), nil
 }
 
 func (b *browser) getHTML(targetURL string) (string, error) {
+	if isBinaryURL(targetURL) {
+		return "", fmt.Errorf(
+			"the URL appears to point to a binary/non-HTML resource (e.g. PDF, image, archive) " +
+				"that cannot be rendered as HTML. Use the terminal tool with curl/wget to download it instead",
+		)
+	}
+
 	scraperURL, err := b.resolveUrl(targetURL)
 	if err != nil {
 		return "", fmt.Errorf("failed to resolve url: %w", err)
@@ -371,7 +414,10 @@ func (b *browser) getHTML(targetURL string) (string, error) {
 		return "", fmt.Errorf("failed to fetch content by url '%s': %w", targetURL, err)
 	}
 	if len(content) < minHtmlContentSize {
-		return "", fmt.Errorf("content size is less than minimum: %d bytes", minHtmlContentSize)
+		return fmt.Sprintf(
+			"[WARNING: page returned very little HTML content (%d bytes), it may be a redirect, error page, or near-empty]\n\n%s",
+			len(content), string(content),
+		), nil
 	}
 
 	return string(content), nil

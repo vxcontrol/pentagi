@@ -20,10 +20,12 @@ import (
 	"pentagi/pkg/docker"
 	"pentagi/pkg/graph/subscriptions"
 	obs "pentagi/pkg/observability"
+	"pentagi/pkg/observability/profiling"
 	"pentagi/pkg/providers"
 	router "pentagi/pkg/server"
 	"pentagi/pkg/version"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	_ "github.com/lib/pq"
 	"github.com/pressly/goose/v3"
 	"github.com/sirupsen/logrus"
@@ -80,16 +82,36 @@ func main() {
 		log.Fatalf("Unable to open database: %v\n", err)
 	}
 
-	db.SetMaxOpenConns(20)
-	db.SetMaxIdleConns(5)
+	db.SetMaxOpenConns(cfg.DBMaxOpenConns)
+	db.SetMaxIdleConns(cfg.DBMaxIdleConns)
 	db.SetConnMaxLifetime(time.Hour)
 
 	queries := database.New(db)
 
-	orm, err := database.NewGorm(cfg.DatabaseURL, "postgres")
+	// Pass the same *sql.DB to GORM so both sqlc and GORM share one connection
+	// pool. Previously each opened its own *sql.DB, consuming up to 40
+	// Postgres connections. Now together they consume at most DBMaxOpenConns.
+	orm, err := database.NewGorm(db, cfg.Debug)
 	if err != nil {
 		log.Fatalf("Unable to open database with gorm: %v\n", err)
 	}
+
+	// Create a shared pgxpool for all pgvector stores so that each executor
+	// reuses pooled connections instead of opening a dedicated pgx.Connect.
+	pgPoolConfig, err := pgxpool.ParseConfig(cfg.DatabaseURL)
+	if err != nil {
+		log.Fatalf("Failed to parse pgxpool config: %v\n", err)
+	}
+	pgPoolConfig.MaxConns = int32(cfg.DBVectorMaxConns)
+	pgPool, err := pgxpool.NewWithConfig(ctx, pgPoolConfig)
+	if err != nil {
+		log.Fatalf("Failed to create pgxpool: %v\n", err)
+	}
+	defer pgPool.Close()
+
+	// Attach the live pool to the config so router and tool executors can use
+	// pgvector.WithConn(cfg.PgxPool) without any interface changes.
+	cfg.PgxPool = pgPool
 
 	goose.SetBaseFS(migrations.EmbedMigrations)
 
@@ -102,6 +124,8 @@ func main() {
 	}
 
 	log.Println("Database schema updated successfully")
+
+	go profiling.Start()
 
 	client, err := docker.NewDockerClient(ctx, queries, cfg)
 	if err != nil {
@@ -119,14 +143,14 @@ func main() {
 		log.Fatalf("Active flows restoration failed: %v", err)
 	}
 
-	r := router.NewRouter(queries, orm, cfg, providers, controller, subscriptions)
+	r := router.NewRouter(queries, orm, cfg, providers, controller, subscriptions, client)
 
 	// Launch HTTP/HTTPS server in background goroutine
 	serverErrChan := make(chan error, 1)
 	go func() {
 		listen := net.JoinHostPort(cfg.ServerHost, strconv.Itoa(cfg.ServerPort))
 		logrus.Infof("API server listening on %s", listen)
-		
+
 		var startErr error
 		if cfg.ServerUseSSL && cfg.ServerSSLCrt != "" && cfg.ServerSSLKey != "" {
 			logrus.Info("Starting server with TLS enabled")
@@ -135,7 +159,7 @@ func main() {
 			logrus.Info("Starting server without TLS (HTTP only)")
 			startErr = r.Run(listen)
 		}
-		
+
 		if startErr != nil {
 			serverErrChan <- fmt.Errorf("API server startup failed: %w", startErr)
 		}

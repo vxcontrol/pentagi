@@ -365,10 +365,10 @@ func TestContentMD_BothSucceed_ReturnsContentAndScreenshot(t *testing.T) {
 	}
 }
 
-func TestGetHTML_UsesCorrectMinContentSize(t *testing.T) {
+func TestGetHTML_SmallContent_ReturnsWarning(t *testing.T) {
 	// Serve HTML content that is larger than minMdContentSize (50)
-	// but smaller than minHtmlContentSize (300).
-	// With the fix, getHTML should reject this; before the fix it would accept it.
+	// but smaller than minHtmlContentSize (300). With the updated behaviour,
+	// getHTML must return the content with a WARNING prefix instead of an error.
 	smallHTML := strings.Repeat("x", minMdContentSize+10) // 60 bytes: > 50, < 300
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -382,12 +382,147 @@ func TestGetHTML_UsesCorrectMinContentSize(t *testing.T) {
 		scPubURL: ts.URL,
 	}
 
+	result, err := b.getHTML("https://example.com/page")
+	if err != nil {
+		t.Fatalf("getHTML() should not error for small-but-non-empty content, got: %v", err)
+	}
+	if !strings.Contains(result, "[WARNING:") {
+		t.Errorf("getHTML() should prefix result with WARNING for small content, got: %q", result)
+	}
+	if !strings.Contains(result, smallHTML) {
+		t.Errorf("getHTML() should include the actual content in the result")
+	}
+}
+
+func TestGetHTML_EmptyContent_ReturnsError(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		// intentionally write nothing — callScraper detects empty body and errors
+	}))
+	defer ts.Close()
+
+	b := &browser{flowID: 1, scPubURL: ts.URL}
+
 	_, err := b.getHTML("https://example.com/page")
 	if err == nil {
-		t.Fatal("getHTML() should reject content smaller than minHtmlContentSize")
+		t.Fatal("getHTML() should error for empty content")
 	}
-	if !strings.Contains(err.Error(), fmt.Sprintf("%d bytes", minHtmlContentSize)) {
-		t.Errorf("getHTML() error should reference minHtmlContentSize (%d), got: %v", minHtmlContentSize, err)
+	// callScraper wraps the error as "failed to fetch content by url '...': empty response body..."
+	if !strings.Contains(err.Error(), "failed to fetch content") {
+		t.Errorf("getHTML() error should come from callScraper, got: %v", err)
+	}
+}
+
+func TestGetHTML_BinaryURL_ReturnsError(t *testing.T) {
+	b := &browser{flowID: 1, scPubURL: "http://127.0.0.1:1"}
+
+	_, err := b.getHTML("https://example.com/report.pdf")
+	if err == nil {
+		t.Fatal("getHTML() should error for binary URL")
+	}
+	if !strings.Contains(err.Error(), "binary") {
+		t.Errorf("getHTML() error should mention binary resource, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "curl") {
+		t.Errorf("getHTML() error should hint about curl/wget, got: %v", err)
+	}
+}
+
+func TestGetMD_SmallContent_ReturnsWarning(t *testing.T) {
+	tiny := strings.Repeat("x", minMdContentSize-1) // just below minimum, but not 0
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, tiny)
+	}))
+	defer ts.Close()
+
+	b := &browser{flowID: 1, scPubURL: ts.URL}
+
+	result, err := b.getMD("https://example.com/page")
+	if err != nil {
+		t.Fatalf("getMD() should not error for small-but-non-empty content, got: %v", err)
+	}
+	if !strings.Contains(result, "[WARNING:") {
+		t.Errorf("getMD() should prefix result with WARNING for small content, got: %q", result)
+	}
+	if !strings.Contains(result, tiny) {
+		t.Errorf("getMD() should include the actual content in the result")
+	}
+}
+
+func TestGetMD_EmptyContent_ReturnsError(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		// intentionally write nothing — callScraper detects empty body and errors
+	}))
+	defer ts.Close()
+
+	b := &browser{flowID: 1, scPubURL: ts.URL}
+
+	_, err := b.getMD("https://example.com/page")
+	if err == nil {
+		t.Fatal("getMD() should error for empty content")
+	}
+	if !strings.Contains(err.Error(), "failed to fetch content") {
+		t.Errorf("getMD() error should come from callScraper, got: %v", err)
+	}
+}
+
+func TestGetMD_BinaryURL_ReturnsError(t *testing.T) {
+	b := &browser{flowID: 1, scPubURL: "http://127.0.0.1:1"}
+
+	for _, url := range []string{
+		"https://example.com/file.pdf",
+		"https://host.io/archive.zip",
+		"https://cdn.example.com/image.png",
+		"https://example.com/data.xlsx?token=abc",
+	} {
+		_, err := b.getMD(url)
+		if err == nil {
+			t.Errorf("getMD(%q) should error for binary URL", url)
+			continue
+		}
+		if !strings.Contains(err.Error(), "binary") {
+			t.Errorf("getMD(%q) error should mention binary resource, got: %v", url, err)
+		}
+	}
+}
+
+func TestIsBinaryURL(t *testing.T) {
+	tests := []struct {
+		url  string
+		want bool
+	}{
+		{"https://example.com/report.pdf", true},
+		{"https://example.com/REPORT.PDF", true},
+		{"https://cdn.example.com/image.png", true},
+		{"https://cdn.example.com/photo.jpg", true},
+		{"https://cdn.example.com/photo.JPEG", true},
+		{"https://example.com/archive.zip", true},
+		{"https://example.com/data.xlsx", true},
+		{"https://example.com/slides.pptx", true},
+		{"https://example.com/file.exe", true},
+		{"https://example.com/lib.so", true},
+		{"https://example.com/video.mp4", true},
+		// query string is stripped before extension check
+		{"https://example.com/file.pdf?token=abc&download=1", true},
+		// non-binary URLs
+		{"https://example.com/page", false},
+		{"https://example.com/report.html", false},
+		{"https://example.com/api/data.json", false},
+		{"https://example.com/path/to/index", false},
+		// pdf in path component but not as suffix
+		{"https://example.com/pdf-guide/intro", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.url, func(t *testing.T) {
+			got := isBinaryURL(tt.url)
+			if got != tt.want {
+				t.Errorf("isBinaryURL(%q) = %v, want %v", tt.url, got, tt.want)
+			}
+		})
 	}
 }
 

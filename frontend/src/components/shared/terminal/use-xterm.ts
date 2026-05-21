@@ -102,10 +102,7 @@ export function useXterm({ theme }: { theme: 'dark' | 'light' | 'system' }): Use
         const openLink = (event: MouseEvent, uri: string) => {
             const uriLower = uri.toLowerCase();
 
-            if (
-                (mac ? event.metaKey : event.ctrlKey) &&
-                SAFE_PROTOCOLS.some((p) => uriLower.startsWith(p))
-            ) {
+            if ((mac ? event.metaKey : event.ctrlKey) && SAFE_PROTOCOLS.some((p) => uriLower.startsWith(p))) {
                 window.open(uri, '_blank', 'noopener,noreferrer');
             }
         };

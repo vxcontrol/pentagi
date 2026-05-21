@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Eye, EyeOff, Loader2 } from 'lucide-react';
+import { Eye, EyeOff } from 'lucide-react';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
@@ -7,22 +7,9 @@ import * as z from 'zod';
 
 import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { FormSubmitButton } from '@/components/ui/form-submit-button';
 import { Input } from '@/components/ui/input';
-import { axios } from '@/lib/axios';
-
-interface AxiosErrorResponse {
-    message?: string;
-    response?: {
-        data?: ErrorResponse;
-    };
-}
-
-interface ErrorResponse {
-    code?: string;
-    error?: string;
-    msg?: string;
-    status?: string;
-}
+import { api, type ApiErrorResponse, type ApiHttpError } from '@/lib/axios';
 
 const passwordChangeSchema = z
     .object({
@@ -78,7 +65,6 @@ export function PasswordChangeForm({
     onSuccess,
     showSkip = false,
 }: PasswordChangeFormProps) {
-    const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<null | string>(null);
     const [showCurrentPassword, setShowCurrentPassword] = useState(false);
     const [showNewPassword, setShowNewPassword] = useState(false);
@@ -94,11 +80,10 @@ export function PasswordChangeForm({
     });
 
     const handleSubmit = async (values: PasswordChangeFormValues) => {
-        setIsSubmitting(true);
         setError(null);
 
         try {
-            await axios.put('/user/password', {
+            await api.put('/user/password', {
                 confirm_password: values.confirmPassword,
                 current_password: values.currentPassword,
                 password: values.newPassword,
@@ -115,16 +100,14 @@ export function PasswordChangeForm({
                 onSuccess();
             }
         } catch (err: unknown) {
-            const error = err as AxiosErrorResponse;
-            const responseData = error.response?.data;
+            const error = err as ApiHttpError;
+            const responseData = error.response?.data as ApiErrorResponse | undefined;
 
             let errorMessage = 'Failed to change password';
 
-            // Always prefer the msg from the response if available
             if (responseData?.msg) {
                 errorMessage = responseData.msg;
             } else if (responseData?.code) {
-                // Fallback to code-based messages
                 switch (responseData.code) {
                     case 'AuthRequired':
                         errorMessage = 'Authentication required';
@@ -149,8 +132,6 @@ export function PasswordChangeForm({
             }
 
             setError(errorMessage);
-        } finally {
-            setIsSubmitting(false);
         }
     };
 
@@ -288,13 +269,9 @@ export function PasswordChangeForm({
                             Cancel
                         </Button>
                     )}
-                    <Button
-                        disabled={isSubmitting || (!form.formState.isValid && form.formState.isSubmitted)}
-                        type="submit"
-                    >
-                        {isSubmitting && <Loader2 className="mr-2 size-4 animate-spin" />}
+                    <FormSubmitButton>
                         <span>Update Password</span>
-                    </Button>
+                    </FormSubmitButton>
                 </div>
             </form>
         </Form>

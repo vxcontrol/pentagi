@@ -1,5 +1,5 @@
 import { Copy } from 'lucide-react';
-import { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 
 import type { VectorStoreLogFragmentFragment } from '@/graphql/types';
 
@@ -7,8 +7,8 @@ import Markdown from '@/components/shared/markdown';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import FlowAgentIcon from '@/features/flows/agents/flow-agent-icon';
 import { VectorStoreAction } from '@/graphql/types';
+import { copyMessageToClipboard } from '@/lib/clipboard';
 import { formatDate } from '@/lib/utils/format';
-import { copyMessageToClipboard } from '@/lib/сlipboard';
 
 import FlowVectorStoreActionIcon from './flow-vector-store-action-icon';
 
@@ -58,7 +58,6 @@ interface FlowVectorStoreProps {
     searchValue?: string;
 }
 
-// Helper function to check if text contains search value (case-insensitive)
 const containsSearchValue = (text: null | string | undefined, searchValue: string): boolean => {
     if (!text || !searchValue.trim()) {
         return false;
@@ -67,10 +66,9 @@ const containsSearchValue = (text: null | string | undefined, searchValue: strin
     return text.toLowerCase().includes(searchValue.toLowerCase().trim());
 };
 
-const FlowVectorStore = ({ log, searchValue = '' }: FlowVectorStoreProps) => {
+function FlowVectorStore({ log, searchValue = '' }: FlowVectorStoreProps) {
     const { action, createdAt, executor, initiator, query, result, subtaskId, taskId } = log;
 
-    // Memoize search checks to avoid recalculating on every render
     const searchChecks = useMemo(() => {
         const trimmedSearch = searchValue.trim();
 
@@ -85,21 +83,23 @@ const FlowVectorStore = ({ log, searchValue = '' }: FlowVectorStoreProps) => {
     }, [searchValue, query, result]);
 
     const [isDetailsVisible, setIsDetailsVisible] = useState(false);
+    const [prevSearchValue, setPrevSearchValue] = useState(searchValue);
+    const [prevHasResultMatch, setPrevHasResultMatch] = useState(searchChecks.hasResultMatch);
 
-    // Auto-expand details if they contain search matches
-    useEffect(() => {
+    if (searchValue !== prevSearchValue || searchChecks.hasResultMatch !== prevHasResultMatch) {
+        setPrevSearchValue(searchValue);
+        setPrevHasResultMatch(searchChecks.hasResultMatch);
+
         const trimmedSearch = searchValue.trim();
 
         if (trimmedSearch) {
-            // Expand result block only if it contains the search term
             if (searchChecks.hasResultMatch) {
                 setIsDetailsVisible(true);
             }
         } else {
-            // Reset to default state when search is cleared
             setIsDetailsVisible(false);
         }
-    }, [searchValue, searchChecks.hasResultMatch]);
+    }
 
     const description = getDescription(log);
 
@@ -187,6 +187,6 @@ const FlowVectorStore = ({ log, searchValue = '' }: FlowVectorStoreProps) => {
             </div>
         </div>
     );
-};
+}
 
 export default memo(FlowVectorStore);

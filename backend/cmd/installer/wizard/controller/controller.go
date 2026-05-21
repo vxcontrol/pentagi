@@ -1197,6 +1197,7 @@ type EmbedderConfig struct {
 	Model         loader.EnvVar // EMBEDDING_MODEL
 	BatchSize     loader.EnvVar // EMBEDDING_BATCH_SIZE
 	StripNewLines loader.EnvVar // EMBEDDING_STRIP_NEW_LINES
+	MaxTextBytes  loader.EnvVar // EMBEDDING_MAX_TEXT_BYTES
 
 	// computed fields (not directly mapped to env vars)
 	Configured bool
@@ -1212,6 +1213,7 @@ func (c *controller) GetEmbedderConfig() *EmbedderConfig {
 	config.Model, _ = c.GetVar("EMBEDDING_MODEL")
 	config.BatchSize, _ = c.GetVar("EMBEDDING_BATCH_SIZE")
 	config.StripNewLines, _ = c.GetVar("EMBEDDING_STRIP_NEW_LINES")
+	config.MaxTextBytes, _ = c.GetVar("EMBEDDING_MAX_TEXT_BYTES")
 	config.Installed = c.checker.PentagiInstalled
 
 	// Determine if configured based on provider requirements
@@ -1259,6 +1261,9 @@ func (c *controller) UpdateEmbedderConfig(config *EmbedderConfig) error {
 	if err := c.SetVar("EMBEDDING_STRIP_NEW_LINES", config.StripNewLines.Value); err != nil {
 		return fmt.Errorf("failed to set EMBEDDING_STRIP_NEW_LINES: %w", err)
 	}
+	if err := c.SetVar("EMBEDDING_MAX_TEXT_BYTES", config.MaxTextBytes.Value); err != nil {
+		return fmt.Errorf("failed to set EMBEDDING_MAX_TEXT_BYTES: %w", err)
+	}
 
 	return nil
 }
@@ -1271,6 +1276,7 @@ func (c *controller) ResetEmbedderConfig() *EmbedderConfig {
 		"EMBEDDING_MODEL",
 		"EMBEDDING_BATCH_SIZE",
 		"EMBEDDING_STRIP_NEW_LINES",
+		"EMBEDDING_MAX_TEXT_BYTES",
 	}
 
 	if err := c.ResetVars(vars); err != nil {
@@ -1913,6 +1919,7 @@ type ServerSettingsConfig struct {
 	CookieSigningSalt   loader.EnvVar // COOKIE_SIGNING_SALT
 	ProxyURL            loader.EnvVar // PROXY_URL
 	HTTPClientTimeout   loader.EnvVar // HTTP_CLIENT_TIMEOUT
+	TerminalToolTimeout loader.EnvVar // TERMINAL_TOOL_TIMEOUT
 	ExternalSSLCAPath   loader.EnvVar // EXTERNAL_SSL_CA_PATH
 	ExternalSSLInsecure loader.EnvVar // EXTERNAL_SSL_INSECURE
 	SSLDir              loader.EnvVar // PENTAGI_SSL_DIR
@@ -1934,6 +1941,7 @@ func (c *controller) GetServerSettingsConfig() *ServerSettingsConfig {
 		"COOKIE_SIGNING_SALT",
 		"PROXY_URL",
 		"HTTP_CLIENT_TIMEOUT",
+		"TERMINAL_TOOL_TIMEOUT",
 		"EXTERNAL_SSL_CA_PATH",
 		"EXTERNAL_SSL_INSECURE",
 		"PENTAGI_SSL_DIR",
@@ -1949,6 +1957,7 @@ func (c *controller) GetServerSettingsConfig() *ServerSettingsConfig {
 		"PENTAGI_DATA_DIR":      "pentagi-data",
 		"PENTAGI_SSL_DIR":       "pentagi-ssl",
 		"HTTP_CLIENT_TIMEOUT":   "600",
+		"TERMINAL_TOOL_TIMEOUT": "600",
 		"EXTERNAL_SSL_INSECURE": "false",
 	}
 
@@ -1968,6 +1977,7 @@ func (c *controller) GetServerSettingsConfig() *ServerSettingsConfig {
 		CookieSigningSalt:   vars["COOKIE_SIGNING_SALT"],
 		ProxyURL:            vars["PROXY_URL"],
 		HTTPClientTimeout:   vars["HTTP_CLIENT_TIMEOUT"],
+		TerminalToolTimeout: vars["TERMINAL_TOOL_TIMEOUT"],
 		ExternalSSLCAPath:   vars["EXTERNAL_SSL_CA_PATH"],
 		ExternalSSLInsecure: vars["EXTERNAL_SSL_INSECURE"],
 		SSLDir:              vars["PENTAGI_SSL_DIR"],
@@ -2007,6 +2017,7 @@ func (c *controller) UpdateServerSettingsConfig(config *ServerSettingsConfig) er
 		"COOKIE_SIGNING_SALT":   config.CookieSigningSalt.Value,
 		"PROXY_URL":             proxyURL,
 		"HTTP_CLIENT_TIMEOUT":   config.HTTPClientTimeout.Value,
+		"TERMINAL_TOOL_TIMEOUT": config.TerminalToolTimeout.Value,
 		"EXTERNAL_SSL_CA_PATH":  config.ExternalSSLCAPath.Value,
 		"EXTERNAL_SSL_INSECURE": config.ExternalSSLInsecure.Value,
 		"PENTAGI_SSL_DIR":       config.SSLDir.Value,
@@ -2031,6 +2042,7 @@ func (c *controller) ResetServerSettingsConfig() *ServerSettingsConfig {
 		"COOKIE_SIGNING_SALT",
 		"PROXY_URL",
 		"HTTP_CLIENT_TIMEOUT",
+		"TERMINAL_TOOL_TIMEOUT",
 		"EXTERNAL_SSL_CA_PATH",
 		"EXTERNAL_SSL_INSECURE",
 		"PENTAGI_SSL_DIR",
@@ -2209,6 +2221,7 @@ func (c *controller) getVariableDescription(varName string) string {
 		"EMBEDDING_MODEL":           locale.EnvDesc_EMBEDDING_MODEL,
 		"EMBEDDING_BATCH_SIZE":      locale.EnvDesc_EMBEDDING_BATCH_SIZE,
 		"EMBEDDING_STRIP_NEW_LINES": locale.EnvDesc_EMBEDDING_STRIP_NEW_LINES,
+		"EMBEDDING_MAX_TEXT_BYTES":  locale.EnvDesc_EMBEDDING_MAX_TEXT_BYTES,
 
 		"ASK_USER": locale.EnvDesc_ASK_USER,
 
@@ -2449,6 +2462,7 @@ var criticalVariables = map[string]bool{
 	"EMBEDDING_MODEL":           true,
 	"EMBEDDING_BATCH_SIZE":      true,
 	"EMBEDDING_STRIP_NEW_LINES": true,
+	"EMBEDDING_MAX_TEXT_BYTES":  true,
 
 	// Docker configuration changes
 	"DOCKER_INSIDE":                    true,

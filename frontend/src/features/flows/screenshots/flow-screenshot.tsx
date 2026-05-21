@@ -14,7 +14,7 @@ interface FlowScreenshotProps {
     screenshot: ScreenshotFragmentFragment;
 }
 
-const FlowScreenshot = ({ screenshot }: FlowScreenshotProps) => {
+function FlowScreenshot({ screenshot }: FlowScreenshotProps) {
     const [isExpanded, setIsExpanded] = useState(false);
     const [isVisible, setIsVisible] = useState(false);
     const imageRef = useRef<HTMLDivElement>(null);
@@ -94,6 +94,6 @@ const FlowScreenshot = ({ screenshot }: FlowScreenshotProps) => {
             </div>
         </div>
     );
-};
+}
 
 export default memo(FlowScreenshot);

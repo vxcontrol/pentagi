@@ -11,7 +11,7 @@ import { useFlows } from '@/providers/flows-provider';
 import { useProviders } from '@/providers/providers-provider';
 import { useSystemSettings } from '@/providers/system-settings-provider';
 
-const NewFlow = () => {
+function NewFlow() {
     const navigate = useNavigate();
 
     const { selectedProvider } = useProviders();
@@ -21,7 +21,6 @@ const NewFlow = () => {
     const [isLoading, setIsLoading] = useState(false);
     const [flowType, setFlowType] = useState<'assistant' | 'automation'>('automation');
 
-    // Calculate default useAgents value (only for assistant type)
     const shouldUseAgents = useMemo(() => {
         return settings?.assistantUseAgents ?? false;
     }, [settings?.assistantUseAgents]);
@@ -37,7 +36,6 @@ const NewFlow = () => {
             const flowId = flowType === 'automation' ? await createFlow(values) : await createFlowWithAssistant(values);
 
             if (flowId) {
-                // Navigate to the new flow page with tab parameter
                 navigate(`/flows/${flowId}?tab=${flowType}`);
             }
         } finally {
@@ -48,15 +46,15 @@ const NewFlow = () => {
     return (
         <>
             <header className="bg-background sticky top-0 z-10 flex h-12 shrink-0 items-center gap-2 border-b px-4">
-                <SidebarTrigger className="-ml-1" />
+                <SidebarTrigger className="-ml-1 shrink-0" />
                 <Separator
-                    className="mr-2 h-4"
+                    className="mr-2 h-4 shrink-0"
                     orientation="vertical"
                 />
-                <Breadcrumb>
-                    <BreadcrumbList>
-                        <BreadcrumbItem>
-                            <BreadcrumbPage>New flow</BreadcrumbPage>
+                <Breadcrumb className="min-w-0 flex-1">
+                    <BreadcrumbList className="min-w-0 flex-nowrap">
+                        <BreadcrumbItem className="min-w-0">
+                            <BreadcrumbPage className="min-w-0 truncate">New flow</BreadcrumbPage>
                         </BreadcrumbItem>
                     </BreadcrumbList>
                 </Breadcrumb>
@@ -108,6 +106,6 @@ const NewFlow = () => {
             </div>
         </>
     );
-};
+}
 
 export default NewFlow;

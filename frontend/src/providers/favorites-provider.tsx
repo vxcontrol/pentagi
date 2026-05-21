@@ -1,4 +1,13 @@
-import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo } from 'react';
+import {
+    createContext,
+    type ReactNode,
+    startTransition,
+    useCallback,
+    useContext,
+    useEffect,
+    useMemo,
+    useOptimistic,
+} from 'react';
 import { toast } from 'sonner';
 
 import {
@@ -27,37 +36,43 @@ const FavoritesContext = createContext<FavoritesContextValue | undefined>(undefi
 
 const FAVORITES_STORAGE_KEY = 'favorites';
 
-export const FavoritesProvider = ({ children }: FavoritesProviderProps) => {
+export function FavoritesProvider({ children }: FavoritesProviderProps) {
     const { authInfo, isAuthenticated } = useUser();
 
-    // Only fetch user preferences if user is authenticated and not a guest
-    // authInfo must exist and type must be 'user' or 'api' (not 'guest' and not null/undefined)
-    // Also check isAuthenticated() to ensure session is valid
     const shouldFetchPreferences = Boolean(authInfo && authInfo.type !== 'guest' && isAuthenticated());
 
-    // GraphQL query for user preferences
     const { data: userPreferencesData, loading: isLoadingPreferences } = useSettingsUserQuery({
         fetchPolicy: 'cache-and-network',
         skip: !shouldFetchPreferences,
     });
 
-    // GraphQL mutations
     const [addFavoriteFlowMutation] = useAddFavoriteFlowMutation();
     const [deleteFavoriteFlowMutation] = useDeleteFavoriteFlowMutation();
 
-    // GraphQL subscription (only for authenticated users)
     useSettingsUserUpdatedSubscription({
         skip: !shouldFetchPreferences,
     });
 
-    // Get favorite flow IDs from GraphQL as numbers
-    const favoriteFlowIds = useMemo(() => {
+    const actualFavoriteFlowIds = useMemo(() => {
         const ids = userPreferencesData?.settingsUser?.favoriteFlows ?? [];
 
         return ids.map((id) => +id);
     }, [userPreferencesData?.settingsUser?.favoriteFlows]);
 
-    // Migration: sync localStorage favorites to backend on first load
+    // Surface the optimistic set so star-clicks flip in the UI before the
+    // mutation + subscription round-trip lands. React rolls back to
+    // `actualFavoriteFlowIds` automatically if the transition's action throws.
+    const [favoriteFlowIds, applyOptimisticFavorite] = useOptimistic(
+        actualFavoriteFlowIds,
+        (current: number[], action: { id: number; type: 'add' | 'remove' }) => {
+            if (action.type === 'add') {
+                return current.includes(action.id) ? current : [...current, action.id];
+            }
+
+            return current.filter((id) => id !== action.id);
+        },
+    );
+
     useEffect(() => {
         const migrateLocalStorageFavorites = async () => {
             try {
@@ -73,7 +88,6 @@ export const FavoritesProvider = ({ children }: FavoritesProviderProps) => {
                     return;
                 }
 
-                // Get current user's favorites from localStorage
                 const userIds = Object.keys(parsed);
 
                 if (userIds.length === 0) {
@@ -93,15 +107,12 @@ export const FavoritesProvider = ({ children }: FavoritesProviderProps) => {
                 const localFavorites = parsed[userId]?.flows ?? [];
 
                 if (localFavorites.length === 0) {
-                    // No local favorites to migrate
                     localStorage.removeItem(FAVORITES_STORAGE_KEY);
 
                     return;
                 }
 
-                // Migrate each favorite to backend
                 for (const flow of localFavorites) {
-                    // Check if already in backend
                     if (!favoriteFlowIds.includes(flow.id)) {
                         try {
                             await addFavoriteFlowMutation({
@@ -113,7 +124,6 @@ export const FavoritesProvider = ({ children }: FavoritesProviderProps) => {
                     }
                 }
 
-                // Clear localStorage after successful migration
                 localStorage.removeItem(FAVORITES_STORAGE_KEY);
                 Log.info('Successfully migrated favorites from localStorage to backend');
             } catch (error) {
@@ -121,8 +131,6 @@ export const FavoritesProvider = ({ children }: FavoritesProviderProps) => {
             }
         };
 
-        // Only run migration if we have loaded preferences and localStorage data exists
-        // and user is authenticated (not a guest)
         if (!isLoadingPreferences && userPreferencesData && shouldFetchPreferences) {
             migrateLocalStorageFavorites();
         }
@@ -131,39 +139,49 @@ export const FavoritesProvider = ({ children }: FavoritesProviderProps) => {
     const addFavoriteFlow = useCallback(
         async (flowId: number | string) => {
             const id = typeof flowId === 'string' ? flowId : flowId.toString();
+            const numericId = typeof flowId === 'string' ? +flowId : flowId;
 
-            try {
-                await addFavoriteFlowMutation({
-                    variables: { flowId: id },
-                });
-            } catch (error) {
-                const errorMessage = error instanceof Error ? error.message : 'Failed to add favorite';
-                toast.error('Failed to add to favorites', {
-                    description: errorMessage,
-                });
-                Log.error('Error adding favorite flow:', error);
-            }
+            startTransition(async () => {
+                applyOptimisticFavorite({ id: numericId, type: 'add' });
+
+                try {
+                    await addFavoriteFlowMutation({
+                        variables: { flowId: id },
+                    });
+                } catch (error) {
+                    const errorMessage = error instanceof Error ? error.message : 'Failed to add favorite';
+                    toast.error('Failed to add to favorites', {
+                        description: errorMessage,
+                    });
+                    Log.error('Error adding favorite flow:', error);
+                }
+            });
         },
-        [addFavoriteFlowMutation],
+        [addFavoriteFlowMutation, applyOptimisticFavorite],
     );
 
     const removeFavoriteFlow = useCallback(
         async (flowId: number | string) => {
             const id = typeof flowId === 'string' ? flowId : flowId.toString();
+            const numericId = typeof flowId === 'string' ? +flowId : flowId;
 
-            try {
-                await deleteFavoriteFlowMutation({
-                    variables: { flowId: id },
-                });
-            } catch (error) {
-                const errorMessage = error instanceof Error ? error.message : 'Failed to remove favorite';
-                toast.error('Failed to remove from favorites', {
-                    description: errorMessage,
-                });
-                Log.error('Error removing favorite flow:', error);
-            }
+            startTransition(async () => {
+                applyOptimisticFavorite({ id: numericId, type: 'remove' });
+
+                try {
+                    await deleteFavoriteFlowMutation({
+                        variables: { flowId: id },
+                    });
+                } catch (error) {
+                    const errorMessage = error instanceof Error ? error.message : 'Failed to remove favorite';
+                    toast.error('Failed to remove from favorites', {
+                        description: errorMessage,
+                    });
+                    Log.error('Error removing favorite flow:', error);
+                }
+            });
         },
-        [deleteFavoriteFlowMutation],
+        [applyOptimisticFavorite, deleteFavoriteFlowMutation],
     );
 
     const toggleFavoriteFlow = useCallback(
@@ -209,9 +227,9 @@ export const FavoritesProvider = ({ children }: FavoritesProviderProps) => {
     );
 
     return <FavoritesContext.Provider value={value}>{children}</FavoritesContext.Provider>;
-};
+}
 
-export const useFavorites = () => {
+export function useFavorites() {
     const context = useContext(FavoritesContext);
 
     if (context === undefined) {
@@ -219,4 +237,4 @@ export const useFavorites = () => {
     }
 
     return context;
-};
+}

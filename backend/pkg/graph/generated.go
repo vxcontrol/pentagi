@@ -241,6 +241,15 @@ type ComplexityRoot struct {
 		TotalToolcallsCount  func(childComplexity int) int
 	}
 
+	FlowFile struct {
+		ID         func(childComplexity int) int
+		IsDir      func(childComplexity int) int
+		ModifiedAt func(childComplexity int) int
+		Name       func(childComplexity int) int
+		Path       func(childComplexity int) int
+		Size       func(childComplexity int) int
+	}
+
 	FlowStats struct {
 		TotalAssistantsCount func(childComplexity int) int
 		TotalSubtasksCount   func(childComplexity int) int
@@ -271,6 +280,29 @@ type ComplexityRoot struct {
 		TotalDurationSeconds func(childComplexity int) int
 	}
 
+	KnowledgeDocument struct {
+		AnswerType  func(childComplexity int) int
+		CodeLang    func(childComplexity int) int
+		Content     func(childComplexity int) int
+		Description func(childComplexity int) int
+		DocType     func(childComplexity int) int
+		FlowID      func(childComplexity int) int
+		GuideType   func(childComplexity int) int
+		ID          func(childComplexity int) int
+		Manual      func(childComplexity int) int
+		PartSize    func(childComplexity int) int
+		Question    func(childComplexity int) int
+		SubtaskID   func(childComplexity int) int
+		TaskID      func(childComplexity int) int
+		TotalSize   func(childComplexity int) int
+		UserID      func(childComplexity int) int
+	}
+
+	KnowledgeDocumentWithScore struct {
+		Document func(childComplexity int) int
+		Score    func(childComplexity int) int
+	}
+
 	MessageLog struct {
 		CreatedAt    func(childComplexity int) int
 		FlowID       func(childComplexity int) int
@@ -282,6 +314,13 @@ type ComplexityRoot struct {
 		TaskID       func(childComplexity int) int
 		Thinking     func(childComplexity int) int
 		Type         func(childComplexity int) int
+	}
+
+	ModelAgentsUsageStats struct {
+		AgentTypes func(childComplexity int) int
+		Model      func(childComplexity int) int
+		Provider   func(childComplexity int) int
+		Stats      func(childComplexity int) int
 	}
 
 	ModelConfig struct {
@@ -306,33 +345,37 @@ type ComplexityRoot struct {
 	}
 
 	Mutation struct {
-		AddFavoriteFlow    func(childComplexity int, flowID int64) int
-		CallAssistant      func(childComplexity int, flowID int64, assistantID int64, input string, useAgents bool) int
-		CreateAPIToken     func(childComplexity int, input model.CreateAPITokenInput) int
-		CreateAssistant    func(childComplexity int, flowID int64, modelProvider string, input string, useAgents bool) int
-		CreateFlow         func(childComplexity int, modelProvider string, input string) int
-		CreateFlowTemplate func(childComplexity int, input model.CreateFlowTemplateInput) int
-		CreatePrompt       func(childComplexity int, typeArg model.PromptType, template string) int
-		CreateProvider     func(childComplexity int, name string, typeArg model.ProviderType, agents model.AgentsConfig) int
-		DeleteAPIToken     func(childComplexity int, tokenID string) int
-		DeleteAssistant    func(childComplexity int, flowID int64, assistantID int64) int
-		DeleteFavoriteFlow func(childComplexity int, flowID int64) int
-		DeleteFlow         func(childComplexity int, flowID int64) int
-		DeleteFlowTemplate func(childComplexity int, templateID int64) int
-		DeletePrompt       func(childComplexity int, promptID int64) int
-		DeleteProvider     func(childComplexity int, providerID int64) int
-		FinishFlow         func(childComplexity int, flowID int64) int
-		PutUserInput       func(childComplexity int, flowID int64, input string, modelProvider *string) int
-		RenameFlow         func(childComplexity int, flowID int64, title string) int
-		StopAssistant      func(childComplexity int, flowID int64, assistantID int64) int
-		StopFlow           func(childComplexity int, flowID int64) int
-		TestAgent          func(childComplexity int, typeArg model.ProviderType, agentType model.AgentConfigType, agent model.AgentConfig) int
-		TestProvider       func(childComplexity int, typeArg model.ProviderType, agents model.AgentsConfig) int
-		UpdateAPIToken     func(childComplexity int, tokenID string, input model.UpdateAPITokenInput) int
-		UpdateFlowTemplate func(childComplexity int, templateID int64, input model.UpdateFlowTemplateInput) int
-		UpdatePrompt       func(childComplexity int, promptID int64, template string) int
-		UpdateProvider     func(childComplexity int, providerID int64, name string, agents model.AgentsConfig) int
-		ValidatePrompt     func(childComplexity int, typeArg model.PromptType, template string) int
+		AddFavoriteFlow         func(childComplexity int, flowID int64) int
+		AnonymizeText           func(childComplexity int, text string) int
+		CallAssistant           func(childComplexity int, flowID int64, assistantID int64, input string, useAgents bool, resourceIds []int64) int
+		CreateAPIToken          func(childComplexity int, input model.CreateAPITokenInput) int
+		CreateAssistant         func(childComplexity int, flowID int64, modelProvider string, input string, useAgents bool, resourceIds []int64) int
+		CreateFlow              func(childComplexity int, modelProvider string, input string, resourceIds []int64) int
+		CreateFlowTemplate      func(childComplexity int, input model.CreateFlowTemplateInput) int
+		CreateKnowledgeDocument func(childComplexity int, input model.CreateKnowledgeDocumentInput) int
+		CreatePrompt            func(childComplexity int, typeArg model.PromptType, template string) int
+		CreateProvider          func(childComplexity int, name string, typeArg model.ProviderType, agents model.AgentsConfig) int
+		DeleteAPIToken          func(childComplexity int, tokenID string) int
+		DeleteAssistant         func(childComplexity int, flowID int64, assistantID int64) int
+		DeleteFavoriteFlow      func(childComplexity int, flowID int64) int
+		DeleteFlow              func(childComplexity int, flowID int64) int
+		DeleteFlowTemplate      func(childComplexity int, templateID int64) int
+		DeleteKnowledgeDocument func(childComplexity int, id string) int
+		DeletePrompt            func(childComplexity int, promptID int64) int
+		DeleteProvider          func(childComplexity int, providerID int64) int
+		FinishFlow              func(childComplexity int, flowID int64) int
+		PutUserInput            func(childComplexity int, flowID int64, input string, modelProvider *string, resourceIds []int64) int
+		RenameFlow              func(childComplexity int, flowID int64, title string) int
+		StopAssistant           func(childComplexity int, flowID int64, assistantID int64) int
+		StopFlow                func(childComplexity int, flowID int64) int
+		TestAgent               func(childComplexity int, typeArg model.ProviderType, agentType model.AgentConfigType, agent model.AgentConfig) int
+		TestProvider            func(childComplexity int, typeArg model.ProviderType, agents model.AgentsConfig) int
+		UpdateAPIToken          func(childComplexity int, tokenID string, input model.UpdateAPITokenInput) int
+		UpdateFlowTemplate      func(childComplexity int, templateID int64, input model.UpdateFlowTemplateInput) int
+		UpdateKnowledgeDocument func(childComplexity int, id string, input model.UpdateKnowledgeDocumentInput) int
+		UpdatePrompt            func(childComplexity int, promptID int64, template string) int
+		UpdateProvider          func(childComplexity int, providerID int64, name string, agents model.AgentsConfig) int
+		ValidatePrompt          func(childComplexity int, typeArg model.PromptType, template string) int
 	}
 
 	PromptValidationResult struct {
@@ -423,6 +466,7 @@ type ComplexityRoot struct {
 		AssistantLogs                   func(childComplexity int, flowID int64, assistantID int64) int
 		Assistants                      func(childComplexity int, flowID int64) int
 		Flow                            func(childComplexity int, flowID int64) int
+		FlowFiles                       func(childComplexity int, flowID int64) int
 		FlowStatsByFlow                 func(childComplexity int, flowID int64) int
 		FlowTemplate                    func(childComplexity int, templateID int64) int
 		FlowTemplates                   func(childComplexity int) int
@@ -430,9 +474,13 @@ type ComplexityRoot struct {
 		FlowsExecutionStatsByPeriod     func(childComplexity int, period model.UsageStatsPeriod) int
 		FlowsStatsByPeriod              func(childComplexity int, period model.UsageStatsPeriod) int
 		FlowsStatsTotal                 func(childComplexity int) int
+		KnowledgeDocument               func(childComplexity int, id string) int
+		KnowledgeDocuments              func(childComplexity int, filter *model.KnowledgeFilter, withContent bool) int
 		MessageLogs                     func(childComplexity int, flowID int64) int
 		Providers                       func(childComplexity int) int
+		Resources                       func(childComplexity int, path *string, recursive *bool) int
 		Screenshots                     func(childComplexity int, flowID int64) int
+		SearchKnowledge                 func(childComplexity int, query string, filter *model.KnowledgeFilter, limit *int) int
 		SearchLogs                      func(childComplexity int, flowID int64) int
 		Settings                        func(childComplexity int) int
 		SettingsPrompts                 func(childComplexity int) int
@@ -440,6 +488,7 @@ type ComplexityRoot struct {
 		SettingsUser                    func(childComplexity int) int
 		Tasks                           func(childComplexity int, flowID int64) int
 		TerminalLogs                    func(childComplexity int, flowID int64) int
+		ToolCallLogs                    func(childComplexity int, flowID int64) int
 		ToolcallsStatsByFlow            func(childComplexity int, flowID int64) int
 		ToolcallsStatsByFunction        func(childComplexity int) int
 		ToolcallsStatsByFunctionForFlow func(childComplexity int, flowID int64) int
@@ -449,6 +498,7 @@ type ComplexityRoot struct {
 		UsageStatsByAgentTypeForFlow    func(childComplexity int, flowID int64) int
 		UsageStatsByFlow                func(childComplexity int, flowID int64) int
 		UsageStatsByModel               func(childComplexity int) int
+		UsageStatsByModelAgentsForFlow  func(childComplexity int, flowID int64) int
 		UsageStatsByPeriod              func(childComplexity int, period model.UsageStatsPeriod) int
 		UsageStatsByProvider            func(childComplexity int) int
 		UsageStatsTotal                 func(childComplexity int) int
@@ -488,36 +538,49 @@ type ComplexityRoot struct {
 		AssistantUseAgents func(childComplexity int) int
 		Debug              func(childComplexity int) int
 		DockerInside       func(childComplexity int) int
+		IsDevelopMode      func(childComplexity int) int
+		Version            func(childComplexity int) int
 	}
 
 	Subscription struct {
-		APITokenCreated     func(childComplexity int) int
-		APITokenDeleted     func(childComplexity int) int
-		APITokenUpdated     func(childComplexity int) int
-		AgentLogAdded       func(childComplexity int, flowID int64) int
-		AssistantCreated    func(childComplexity int, flowID int64) int
-		AssistantDeleted    func(childComplexity int, flowID int64) int
-		AssistantLogAdded   func(childComplexity int, flowID int64) int
-		AssistantLogUpdated func(childComplexity int, flowID int64) int
-		AssistantUpdated    func(childComplexity int, flowID int64) int
-		FlowCreated         func(childComplexity int) int
-		FlowDeleted         func(childComplexity int) int
-		FlowTemplateCreated func(childComplexity int) int
-		FlowTemplateDeleted func(childComplexity int) int
-		FlowTemplateUpdated func(childComplexity int) int
-		FlowUpdated         func(childComplexity int) int
-		MessageLogAdded     func(childComplexity int, flowID int64) int
-		MessageLogUpdated   func(childComplexity int, flowID int64) int
-		ProviderCreated     func(childComplexity int) int
-		ProviderDeleted     func(childComplexity int) int
-		ProviderUpdated     func(childComplexity int) int
-		ScreenshotAdded     func(childComplexity int, flowID int64) int
-		SearchLogAdded      func(childComplexity int, flowID int64) int
-		SettingsUserUpdated func(childComplexity int) int
-		TaskCreated         func(childComplexity int, flowID int64) int
-		TaskUpdated         func(childComplexity int, flowID int64) int
-		TerminalLogAdded    func(childComplexity int, flowID int64) int
-		VectorStoreLogAdded func(childComplexity int, flowID int64) int
+		APITokenCreated          func(childComplexity int) int
+		APITokenDeleted          func(childComplexity int) int
+		APITokenUpdated          func(childComplexity int) int
+		AgentLogAdded            func(childComplexity int, flowID int64) int
+		AssistantCreated         func(childComplexity int, flowID int64) int
+		AssistantDeleted         func(childComplexity int, flowID int64) int
+		AssistantLogAdded        func(childComplexity int, flowID int64) int
+		AssistantLogUpdated      func(childComplexity int, flowID int64) int
+		AssistantUpdated         func(childComplexity int, flowID int64) int
+		FlowCreated              func(childComplexity int) int
+		FlowDeleted              func(childComplexity int) int
+		FlowFileAdded            func(childComplexity int, flowID int64) int
+		FlowFileDeleted          func(childComplexity int, flowID int64) int
+		FlowFileUpdated          func(childComplexity int, flowID int64) int
+		FlowTemplateCreated      func(childComplexity int) int
+		FlowTemplateDeleted      func(childComplexity int) int
+		FlowTemplateUpdated      func(childComplexity int) int
+		FlowUpdated              func(childComplexity int) int
+		KnowledgeDocumentCreated func(childComplexity int) int
+		KnowledgeDocumentDeleted func(childComplexity int) int
+		KnowledgeDocumentUpdated func(childComplexity int) int
+		MessageLogAdded          func(childComplexity int, flowID int64) int
+		MessageLogUpdated        func(childComplexity int, flowID int64) int
+		ProviderCreated          func(childComplexity int) int
+		ProviderDeleted          func(childComplexity int) int
+		ProviderUpdated          func(childComplexity int) int
+		ResourceAdded            func(childComplexity int) int
+		ResourceDeleted          func(childComplexity int) int
+		ResourceUpdated          func(childComplexity int) int
+		ScreenshotAdded          func(childComplexity int, flowID int64) int
+		SearchLogAdded           func(childComplexity int, flowID int64) int
+		SettingsUserUpdated      func(childComplexity int) int
+		TaskCreated              func(childComplexity int, flowID int64) int
+		TaskUpdated              func(childComplexity int, flowID int64) int
+		TerminalLogAdded         func(childComplexity int, flowID int64) int
+		ToolCallLogAdded         func(childComplexity int, flowID int64) int
+		ToolCallLogUpdated       func(childComplexity int, flowID int64) int
+		VectorStoreLogAdded      func(childComplexity int, flowID int64) int
 	}
 
 	Subtask struct {
@@ -588,6 +651,21 @@ type ComplexityRoot struct {
 		Type      func(childComplexity int) int
 	}
 
+	ToolCallLog struct {
+		Args            func(childComplexity int) int
+		CallID          func(childComplexity int) int
+		CreatedAt       func(childComplexity int) int
+		DurationSeconds func(childComplexity int) int
+		FlowID          func(childComplexity int) int
+		ID              func(childComplexity int) int
+		Name            func(childComplexity int) int
+		Result          func(childComplexity int) int
+		Status          func(childComplexity int) int
+		SubtaskID       func(childComplexity int) int
+		TaskID          func(childComplexity int) int
+		UpdatedAt       func(childComplexity int) int
+	}
+
 	ToolcallsStats struct {
 		TotalCount           func(childComplexity int) int
 		TotalDurationSeconds func(childComplexity int) int
@@ -630,6 +708,17 @@ type ComplexityRoot struct {
 		UpdatedAt func(childComplexity int) int
 	}
 
+	UserResource struct {
+		CreatedAt func(childComplexity int) int
+		ID        func(childComplexity int) int
+		IsDir     func(childComplexity int) int
+		Name      func(childComplexity int) int
+		Path      func(childComplexity int) int
+		Size      func(childComplexity int) int
+		UpdatedAt func(childComplexity int) int
+		UserID    func(childComplexity int) int
+	}
+
 	VectorStoreLog struct {
 		Action    func(childComplexity int) int
 		CreatedAt func(childComplexity int) int
@@ -646,14 +735,14 @@ type ComplexityRoot struct {
 }
 
 type MutationResolver interface {
-	CreateFlow(ctx context.Context, modelProvider string, input string) (*model.Flow, error)
-	PutUserInput(ctx context.Context, flowID int64, input string, modelProvider *string) (model.ResultType, error)
+	CreateFlow(ctx context.Context, modelProvider string, input string, resourceIds []int64) (*model.Flow, error)
+	PutUserInput(ctx context.Context, flowID int64, input string, modelProvider *string, resourceIds []int64) (model.ResultType, error)
 	StopFlow(ctx context.Context, flowID int64) (model.ResultType, error)
 	FinishFlow(ctx context.Context, flowID int64) (model.ResultType, error)
 	DeleteFlow(ctx context.Context, flowID int64) (model.ResultType, error)
 	RenameFlow(ctx context.Context, flowID int64, title string) (model.ResultType, error)
-	CreateAssistant(ctx context.Context, flowID int64, modelProvider string, input string, useAgents bool) (*model.FlowAssistant, error)
-	CallAssistant(ctx context.Context, flowID int64, assistantID int64, input string, useAgents bool) (model.ResultType, error)
+	CreateAssistant(ctx context.Context, flowID int64, modelProvider string, input string, useAgents bool, resourceIds []int64) (*model.FlowAssistant, error)
+	CallAssistant(ctx context.Context, flowID int64, assistantID int64, input string, useAgents bool, resourceIds []int64) (model.ResultType, error)
 	StopAssistant(ctx context.Context, flowID int64, assistantID int64) (*model.Assistant, error)
 	DeleteAssistant(ctx context.Context, flowID int64, assistantID int64) (model.ResultType, error)
 	TestAgent(ctx context.Context, typeArg model.ProviderType, agentType model.AgentConfigType, agent model.AgentConfig) (*model.AgentTestResult, error)
@@ -673,6 +762,10 @@ type MutationResolver interface {
 	CreateFlowTemplate(ctx context.Context, input model.CreateFlowTemplateInput) (*model.FlowTemplate, error)
 	UpdateFlowTemplate(ctx context.Context, templateID int64, input model.UpdateFlowTemplateInput) (*model.FlowTemplate, error)
 	DeleteFlowTemplate(ctx context.Context, templateID int64) (model.ResultType, error)
+	CreateKnowledgeDocument(ctx context.Context, input model.CreateKnowledgeDocumentInput) (*model.KnowledgeDocument, error)
+	UpdateKnowledgeDocument(ctx context.Context, id string, input model.UpdateKnowledgeDocumentInput) (*model.KnowledgeDocument, error)
+	DeleteKnowledgeDocument(ctx context.Context, id string) (model.ResultType, error)
+	AnonymizeText(ctx context.Context, text string) (string, error)
 }
 type QueryResolver interface {
 	Providers(ctx context.Context) ([]*model.Provider, error)
@@ -680,12 +773,14 @@ type QueryResolver interface {
 	Flows(ctx context.Context) ([]*model.Flow, error)
 	Flow(ctx context.Context, flowID int64) (*model.Flow, error)
 	Tasks(ctx context.Context, flowID int64) ([]*model.Task, error)
+	FlowFiles(ctx context.Context, flowID int64) ([]*model.FlowFile, error)
 	Screenshots(ctx context.Context, flowID int64) ([]*model.Screenshot, error)
 	TerminalLogs(ctx context.Context, flowID int64) ([]*model.TerminalLog, error)
 	MessageLogs(ctx context.Context, flowID int64) ([]*model.MessageLog, error)
 	AgentLogs(ctx context.Context, flowID int64) ([]*model.AgentLog, error)
 	SearchLogs(ctx context.Context, flowID int64) ([]*model.SearchLog, error)
 	VectorStoreLogs(ctx context.Context, flowID int64) ([]*model.VectorStoreLog, error)
+	ToolCallLogs(ctx context.Context, flowID int64) ([]*model.ToolCallLog, error)
 	AssistantLogs(ctx context.Context, flowID int64, assistantID int64) ([]*model.AssistantLog, error)
 	UsageStatsTotal(ctx context.Context) (*model.UsageStats, error)
 	UsageStatsByPeriod(ctx context.Context, period model.UsageStatsPeriod) ([]*model.DailyUsageStats, error)
@@ -694,6 +789,7 @@ type QueryResolver interface {
 	UsageStatsByAgentType(ctx context.Context) ([]*model.AgentTypeUsageStats, error)
 	UsageStatsByFlow(ctx context.Context, flowID int64) (*model.UsageStats, error)
 	UsageStatsByAgentTypeForFlow(ctx context.Context, flowID int64) ([]*model.AgentTypeUsageStats, error)
+	UsageStatsByModelAgentsForFlow(ctx context.Context, flowID int64) ([]*model.ModelAgentsUsageStats, error)
 	ToolcallsStatsTotal(ctx context.Context) (*model.ToolcallsStats, error)
 	ToolcallsStatsByPeriod(ctx context.Context, period model.UsageStatsPeriod) ([]*model.DailyToolcallsStats, error)
 	ToolcallsStatsByFunction(ctx context.Context) ([]*model.FunctionToolcallsStats, error)
@@ -711,6 +807,10 @@ type QueryResolver interface {
 	APITokens(ctx context.Context) ([]*model.APIToken, error)
 	FlowTemplate(ctx context.Context, templateID int64) (*model.FlowTemplate, error)
 	FlowTemplates(ctx context.Context) ([]*model.FlowTemplate, error)
+	Resources(ctx context.Context, path *string, recursive *bool) ([]*model.UserResource, error)
+	KnowledgeDocuments(ctx context.Context, filter *model.KnowledgeFilter, withContent bool) ([]*model.KnowledgeDocument, error)
+	KnowledgeDocument(ctx context.Context, id string) (*model.KnowledgeDocument, error)
+	SearchKnowledge(ctx context.Context, query string, filter *model.KnowledgeFilter, limit *int) ([]*model.KnowledgeDocumentWithScore, error)
 }
 type SubscriptionResolver interface {
 	FlowCreated(ctx context.Context) (<-chan *model.Flow, error)
@@ -721,6 +821,9 @@ type SubscriptionResolver interface {
 	AssistantCreated(ctx context.Context, flowID int64) (<-chan *model.Assistant, error)
 	AssistantUpdated(ctx context.Context, flowID int64) (<-chan *model.Assistant, error)
 	AssistantDeleted(ctx context.Context, flowID int64) (<-chan *model.Assistant, error)
+	FlowFileAdded(ctx context.Context, flowID int64) (<-chan *model.FlowFile, error)
+	FlowFileUpdated(ctx context.Context, flowID int64) (<-chan *model.FlowFile, error)
+	FlowFileDeleted(ctx context.Context, flowID int64) (<-chan *model.FlowFile, error)
 	ScreenshotAdded(ctx context.Context, flowID int64) (<-chan *model.Screenshot, error)
 	TerminalLogAdded(ctx context.Context, flowID int64) (<-chan *model.TerminalLog, error)
 	MessageLogAdded(ctx context.Context, flowID int64) (<-chan *model.MessageLog, error)
@@ -728,6 +831,8 @@ type SubscriptionResolver interface {
 	AgentLogAdded(ctx context.Context, flowID int64) (<-chan *model.AgentLog, error)
 	SearchLogAdded(ctx context.Context, flowID int64) (<-chan *model.SearchLog, error)
 	VectorStoreLogAdded(ctx context.Context, flowID int64) (<-chan *model.VectorStoreLog, error)
+	ToolCallLogAdded(ctx context.Context, flowID int64) (<-chan *model.ToolCallLog, error)
+	ToolCallLogUpdated(ctx context.Context, flowID int64) (<-chan *model.ToolCallLog, error)
 	AssistantLogAdded(ctx context.Context, flowID int64) (<-chan *model.AssistantLog, error)
 	AssistantLogUpdated(ctx context.Context, flowID int64) (<-chan *model.AssistantLog, error)
 	ProviderCreated(ctx context.Context) (<-chan *model.ProviderConfig, error)
@@ -740,6 +845,12 @@ type SubscriptionResolver interface {
 	FlowTemplateCreated(ctx context.Context) (<-chan *model.FlowTemplate, error)
 	FlowTemplateUpdated(ctx context.Context) (<-chan *model.FlowTemplate, error)
 	FlowTemplateDeleted(ctx context.Context) (<-chan *model.FlowTemplate, error)
+	ResourceAdded(ctx context.Context) (<-chan *model.UserResource, error)
+	ResourceUpdated(ctx context.Context) (<-chan *model.UserResource, error)
+	ResourceDeleted(ctx context.Context) (<-chan *model.UserResource, error)
+	KnowledgeDocumentCreated(ctx context.Context) (<-chan *model.KnowledgeDocument, error)
+	KnowledgeDocumentUpdated(ctx context.Context) (<-chan *model.KnowledgeDocument, error)
+	KnowledgeDocumentDeleted(ctx context.Context) (<-chan *model.KnowledgeDocument, error)
 }
 
 type executableSchema struct {
@@ -1657,6 +1768,48 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.FlowExecutionStats.TotalToolcallsCount(childComplexity), true
 
+	case "FlowFile.id":
+		if e.complexity.FlowFile.ID == nil {
+			break
+		}
+
+		return e.complexity.FlowFile.ID(childComplexity), true
+
+	case "FlowFile.isDir":
+		if e.complexity.FlowFile.IsDir == nil {
+			break
+		}
+
+		return e.complexity.FlowFile.IsDir(childComplexity), true
+
+	case "FlowFile.modifiedAt":
+		if e.complexity.FlowFile.ModifiedAt == nil {
+			break
+		}
+
+		return e.complexity.FlowFile.ModifiedAt(childComplexity), true
+
+	case "FlowFile.name":
+		if e.complexity.FlowFile.Name == nil {
+			break
+		}
+
+		return e.complexity.FlowFile.Name(childComplexity), true
+
+	case "FlowFile.path":
+		if e.complexity.FlowFile.Path == nil {
+			break
+		}
+
+		return e.complexity.FlowFile.Path(childComplexity), true
+
+	case "FlowFile.size":
+		if e.complexity.FlowFile.Size == nil {
+			break
+		}
+
+		return e.complexity.FlowFile.Size(childComplexity), true
+
 	case "FlowStats.totalAssistantsCount":
 		if e.complexity.FlowStats.TotalAssistantsCount == nil {
 			break
@@ -1783,6 +1936,125 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.FunctionToolcallsStats.TotalDurationSeconds(childComplexity), true
 
+	case "KnowledgeDocument.answerType":
+		if e.complexity.KnowledgeDocument.AnswerType == nil {
+			break
+		}
+
+		return e.complexity.KnowledgeDocument.AnswerType(childComplexity), true
+
+	case "KnowledgeDocument.codeLang":
+		if e.complexity.KnowledgeDocument.CodeLang == nil {
+			break
+		}
+
+		return e.complexity.KnowledgeDocument.CodeLang(childComplexity), true
+
+	case "KnowledgeDocument.content":
+		if e.complexity.KnowledgeDocument.Content == nil {
+			break
+		}
+
+		return e.complexity.KnowledgeDocument.Content(childComplexity), true
+
+	case "KnowledgeDocument.description":
+		if e.complexity.KnowledgeDocument.Description == nil {
+			break
+		}
+
+		return e.complexity.KnowledgeDocument.Description(childComplexity), true
+
+	case "KnowledgeDocument.docType":
+		if e.complexity.KnowledgeDocument.DocType == nil {
+			break
+		}
+
+		return e.complexity.KnowledgeDocument.DocType(childComplexity), true
+
+	case "KnowledgeDocument.flowId":
+		if e.complexity.KnowledgeDocument.FlowID == nil {
+			break
+		}
+
+		return e.complexity.KnowledgeDocument.FlowID(childComplexity), true
+
+	case "KnowledgeDocument.guideType":
+		if e.complexity.KnowledgeDocument.GuideType == nil {
+			break
+		}
+
+		return e.complexity.KnowledgeDocument.GuideType(childComplexity), true
+
+	case "KnowledgeDocument.id":
+		if e.complexity.KnowledgeDocument.ID == nil {
+			break
+		}
+
+		return e.complexity.KnowledgeDocument.ID(childComplexity), true
+
+	case "KnowledgeDocument.manual":
+		if e.complexity.KnowledgeDocument.Manual == nil {
+			break
+		}
+
+		return e.complexity.KnowledgeDocument.Manual(childComplexity), true
+
+	case "KnowledgeDocument.partSize":
+		if e.complexity.KnowledgeDocument.PartSize == nil {
+			break
+		}
+
+		return e.complexity.KnowledgeDocument.PartSize(childComplexity), true
+
+	case "KnowledgeDocument.question":
+		if e.complexity.KnowledgeDocument.Question == nil {
+			break
+		}
+
+		return e.complexity.KnowledgeDocument.Question(childComplexity), true
+
+	case "KnowledgeDocument.subtaskId":
+		if e.complexity.KnowledgeDocument.SubtaskID == nil {
+			break
+		}
+
+		return e.complexity.KnowledgeDocument.SubtaskID(childComplexity), true
+
+	case "KnowledgeDocument.taskId":
+		if e.complexity.KnowledgeDocument.TaskID == nil {
+			break
+		}
+
+		return e.complexity.KnowledgeDocument.TaskID(childComplexity), true
+
+	case "KnowledgeDocument.totalSize":
+		if e.complexity.KnowledgeDocument.TotalSize == nil {
+			break
+		}
+
+		return e.complexity.KnowledgeDocument.TotalSize(childComplexity), true
+
+	case "KnowledgeDocument.userId":
+		if e.complexity.KnowledgeDocument.UserID == nil {
+			break
+		}
+
+		return e.complexity.KnowledgeDocument.UserID(childComplexity), true
+
+	case "KnowledgeDocumentWithScore.document":
+		if e.complexity.KnowledgeDocumentWithScore.Document == nil {
+			break
+		}
+
+		return e.complexity.KnowledgeDocumentWithScore.Document(childComplexity), true
+
+	case "KnowledgeDocumentWithScore.score":
+		if e.complexity.KnowledgeDocumentWithScore.Score == nil {
+			break
+		}
+
+		return e.complexity.KnowledgeDocumentWithScore.Score(childComplexity), true
+
 	case "MessageLog.createdAt":
 		if e.complexity.MessageLog.CreatedAt == nil {
 			break
@@ -1852,6 +2124,34 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.MessageLog.Type(childComplexity), true
+
+	case "ModelAgentsUsageStats.agentTypes":
+		if e.complexity.ModelAgentsUsageStats.AgentTypes == nil {
+			break
+		}
+
+		return e.complexity.ModelAgentsUsageStats.AgentTypes(childComplexity), true
+
+	case "ModelAgentsUsageStats.model":
+		if e.complexity.ModelAgentsUsageStats.Model == nil {
+			break
+		}
+
+		return e.complexity.ModelAgentsUsageStats.Model(childComplexity), true
+
+	case "ModelAgentsUsageStats.provider":
+		if e.complexity.ModelAgentsUsageStats.Provider == nil {
+			break
+		}
+
+		return e.complexity.ModelAgentsUsageStats.Provider(childComplexity), true
+
+	case "ModelAgentsUsageStats.stats":
+		if e.complexity.ModelAgentsUsageStats.Stats == nil {
+			break
+		}
+
+		return e.complexity.ModelAgentsUsageStats.Stats(childComplexity), true
 
 	case "ModelConfig.description":
 		if e.complexity.ModelConfig.Description == nil {
@@ -1949,6 +2249,18 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Mutation.AddFavoriteFlow(childComplexity, args["flowId"].(int64)), true
 
+	case "Mutation.anonymizeText":
+		if e.complexity.Mutation.AnonymizeText == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_anonymizeText_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Mutation.AnonymizeText(childComplexity, args["text"].(string)), true
+
 	case "Mutation.callAssistant":
 		if e.complexity.Mutation.CallAssistant == nil {
 			break
@@ -1959,7 +2271,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			return 0, false
 		}
 
-		return e.complexity.Mutation.CallAssistant(childComplexity, args["flowId"].(int64), args["assistantId"].(int64), args["input"].(string), args["useAgents"].(bool)), true
+		return e.complexity.Mutation.CallAssistant(childComplexity, args["flowId"].(int64), args["assistantId"].(int64), args["input"].(string), args["useAgents"].(bool), args["resourceIds"].([]int64)), true
 
 	case "Mutation.createAPIToken":
 		if e.complexity.Mutation.CreateAPIToken == nil {
@@ -1983,7 +2295,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			return 0, false
 		}
 
-		return e.complexity.Mutation.CreateAssistant(childComplexity, args["flowId"].(int64), args["modelProvider"].(string), args["input"].(string), args["useAgents"].(bool)), true
+		return e.complexity.Mutation.CreateAssistant(childComplexity, args["flowId"].(int64), args["modelProvider"].(string), args["input"].(string), args["useAgents"].(bool), args["resourceIds"].([]int64)), true
 
 	case "Mutation.createFlow":
 		if e.complexity.Mutation.CreateFlow == nil {
@@ -1995,7 +2307,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			return 0, false
 		}
 
-		return e.complexity.Mutation.CreateFlow(childComplexity, args["modelProvider"].(string), args["input"].(string)), true
+		return e.complexity.Mutation.CreateFlow(childComplexity, args["modelProvider"].(string), args["input"].(string), args["resourceIds"].([]int64)), true
 
 	case "Mutation.createFlowTemplate":
 		if e.complexity.Mutation.CreateFlowTemplate == nil {
@@ -2008,6 +2320,18 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.Mutation.CreateFlowTemplate(childComplexity, args["input"].(model.CreateFlowTemplateInput)), true
+
+	case "Mutation.createKnowledgeDocument":
+		if e.complexity.Mutation.CreateKnowledgeDocument == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_createKnowledgeDocument_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Mutation.CreateKnowledgeDocument(childComplexity, args["input"].(model.CreateKnowledgeDocumentInput)), true
 
 	case "Mutation.createPrompt":
 		if e.complexity.Mutation.CreatePrompt == nil {
@@ -2093,6 +2417,18 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Mutation.DeleteFlowTemplate(childComplexity, args["templateId"].(int64)), true
 
+	case "Mutation.deleteKnowledgeDocument":
+		if e.complexity.Mutation.DeleteKnowledgeDocument == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_deleteKnowledgeDocument_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Mutation.DeleteKnowledgeDocument(childComplexity, args["id"].(string)), true
+
 	case "Mutation.deletePrompt":
 		if e.complexity.Mutation.DeletePrompt == nil {
 			break
@@ -2139,7 +2475,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			return 0, false
 		}
 
-		return e.complexity.Mutation.PutUserInput(childComplexity, args["flowId"].(int64), args["input"].(string), args["modelProvider"].(*string)), true
+		return e.complexity.Mutation.PutUserInput(childComplexity, args["flowId"].(int64), args["input"].(string), args["modelProvider"].(*string), args["resourceIds"].([]int64)), true
 
 	case "Mutation.renameFlow":
 		if e.complexity.Mutation.RenameFlow == nil {
@@ -2224,6 +2560,18 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.Mutation.UpdateFlowTemplate(childComplexity, args["templateId"].(int64), args["input"].(model.UpdateFlowTemplateInput)), true
+
+	case "Mutation.updateKnowledgeDocument":
+		if e.complexity.Mutation.UpdateKnowledgeDocument == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_updateKnowledgeDocument_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Mutation.UpdateKnowledgeDocument(childComplexity, args["id"].(string), args["input"].(model.UpdateKnowledgeDocumentInput)), true
 
 	case "Mutation.updatePrompt":
 		if e.complexity.Mutation.UpdatePrompt == nil {
@@ -2706,6 +3054,18 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Query.Flow(childComplexity, args["flowId"].(int64)), true
 
+	case "Query.flowFiles":
+		if e.complexity.Query.FlowFiles == nil {
+			break
+		}
+
+		args, err := ec.field_Query_flowFiles_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Query.FlowFiles(childComplexity, args["flowId"].(int64)), true
+
 	case "Query.flowStatsByFlow":
 		if e.complexity.Query.FlowStatsByFlow == nil {
 			break
@@ -2775,6 +3135,30 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Query.FlowsStatsTotal(childComplexity), true
 
+	case "Query.knowledgeDocument":
+		if e.complexity.Query.KnowledgeDocument == nil {
+			break
+		}
+
+		args, err := ec.field_Query_knowledgeDocument_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Query.KnowledgeDocument(childComplexity, args["id"].(string)), true
+
+	case "Query.knowledgeDocuments":
+		if e.complexity.Query.KnowledgeDocuments == nil {
+			break
+		}
+
+		args, err := ec.field_Query_knowledgeDocuments_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Query.KnowledgeDocuments(childComplexity, args["filter"].(*model.KnowledgeFilter), args["withContent"].(bool)), true
+
 	case "Query.messageLogs":
 		if e.complexity.Query.MessageLogs == nil {
 			break
@@ -2794,6 +3178,18 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Query.Providers(childComplexity), true
 
+	case "Query.resources":
+		if e.complexity.Query.Resources == nil {
+			break
+		}
+
+		args, err := ec.field_Query_resources_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Query.Resources(childComplexity, args["path"].(*string), args["recursive"].(*bool)), true
+
 	case "Query.screenshots":
 		if e.complexity.Query.Screenshots == nil {
 			break
@@ -2805,6 +3201,18 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.Query.Screenshots(childComplexity, args["flowId"].(int64)), true
+
+	case "Query.searchKnowledge":
+		if e.complexity.Query.SearchKnowledge == nil {
+			break
+		}
+
+		args, err := ec.field_Query_searchKnowledge_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Query.SearchKnowledge(childComplexity, args["query"].(string), args["filter"].(*model.KnowledgeFilter), args["limit"].(*int)), true
 
 	case "Query.searchLogs":
 		if e.complexity.Query.SearchLogs == nil {
@@ -2869,6 +3277,18 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.Query.TerminalLogs(childComplexity, args["flowId"].(int64)), true
+
+	case "Query.toolCallLogs":
+		if e.complexity.Query.ToolCallLogs == nil {
+			break
+		}
+
+		args, err := ec.field_Query_toolCallLogs_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Query.ToolCallLogs(childComplexity, args["flowId"].(int64)), true
 
 	case "Query.toolcallsStatsByFlow":
 		if e.complexity.Query.ToolcallsStatsByFlow == nil {
@@ -2957,6 +3377,18 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.Query.UsageStatsByModel(childComplexity), true
+
+	case "Query.usageStatsByModelAgentsForFlow":
+		if e.complexity.Query.UsageStatsByModelAgentsForFlow == nil {
+			break
+		}
+
+		args, err := ec.field_Query_usageStatsByModelAgentsForFlow_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Query.UsageStatsByModelAgentsForFlow(childComplexity, args["flowId"].(int64)), true
 
 	case "Query.usageStatsByPeriod":
 		if e.complexity.Query.UsageStatsByPeriod == nil {
@@ -3157,6 +3589,20 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Settings.DockerInside(childComplexity), true
 
+	case "Settings.isDevelopMode":
+		if e.complexity.Settings.IsDevelopMode == nil {
+			break
+		}
+
+		return e.complexity.Settings.IsDevelopMode(childComplexity), true
+
+	case "Settings.version":
+		if e.complexity.Settings.Version == nil {
+			break
+		}
+
+		return e.complexity.Settings.Version(childComplexity), true
+
 	case "Subscription.apiTokenCreated":
 		if e.complexity.Subscription.APITokenCreated == nil {
 			break
@@ -3264,6 +3710,42 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Subscription.FlowDeleted(childComplexity), true
 
+	case "Subscription.flowFileAdded":
+		if e.complexity.Subscription.FlowFileAdded == nil {
+			break
+		}
+
+		args, err := ec.field_Subscription_flowFileAdded_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Subscription.FlowFileAdded(childComplexity, args["flowId"].(int64)), true
+
+	case "Subscription.flowFileDeleted":
+		if e.complexity.Subscription.FlowFileDeleted == nil {
+			break
+		}
+
+		args, err := ec.field_Subscription_flowFileDeleted_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Subscription.FlowFileDeleted(childComplexity, args["flowId"].(int64)), true
+
+	case "Subscription.flowFileUpdated":
+		if e.complexity.Subscription.FlowFileUpdated == nil {
+			break
+		}
+
+		args, err := ec.field_Subscription_flowFileUpdated_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Subscription.FlowFileUpdated(childComplexity, args["flowId"].(int64)), true
+
 	case "Subscription.flowTemplateCreated":
 		if e.complexity.Subscription.FlowTemplateCreated == nil {
 			break
@@ -3291,6 +3773,27 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.Subscription.FlowUpdated(childComplexity), true
+
+	case "Subscription.knowledgeDocumentCreated":
+		if e.complexity.Subscription.KnowledgeDocumentCreated == nil {
+			break
+		}
+
+		return e.complexity.Subscription.KnowledgeDocumentCreated(childComplexity), true
+
+	case "Subscription.knowledgeDocumentDeleted":
+		if e.complexity.Subscription.KnowledgeDocumentDeleted == nil {
+			break
+		}
+
+		return e.complexity.Subscription.KnowledgeDocumentDeleted(childComplexity), true
+
+	case "Subscription.knowledgeDocumentUpdated":
+		if e.complexity.Subscription.KnowledgeDocumentUpdated == nil {
+			break
+		}
+
+		return e.complexity.Subscription.KnowledgeDocumentUpdated(childComplexity), true
 
 	case "Subscription.messageLogAdded":
 		if e.complexity.Subscription.MessageLogAdded == nil {
@@ -3336,6 +3839,27 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.Subscription.ProviderUpdated(childComplexity), true
+
+	case "Subscription.resourceAdded":
+		if e.complexity.Subscription.ResourceAdded == nil {
+			break
+		}
+
+		return e.complexity.Subscription.ResourceAdded(childComplexity), true
+
+	case "Subscription.resourceDeleted":
+		if e.complexity.Subscription.ResourceDeleted == nil {
+			break
+		}
+
+		return e.complexity.Subscription.ResourceDeleted(childComplexity), true
+
+	case "Subscription.resourceUpdated":
+		if e.complexity.Subscription.ResourceUpdated == nil {
+			break
+		}
+
+		return e.complexity.Subscription.ResourceUpdated(childComplexity), true
 
 	case "Subscription.screenshotAdded":
 		if e.complexity.Subscription.ScreenshotAdded == nil {
@@ -3403,6 +3927,30 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.Subscription.TerminalLogAdded(childComplexity, args["flowId"].(int64)), true
+
+	case "Subscription.toolCallLogAdded":
+		if e.complexity.Subscription.ToolCallLogAdded == nil {
+			break
+		}
+
+		args, err := ec.field_Subscription_toolCallLogAdded_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Subscription.ToolCallLogAdded(childComplexity, args["flowId"].(int64)), true
+
+	case "Subscription.toolCallLogUpdated":
+		if e.complexity.Subscription.ToolCallLogUpdated == nil {
+			break
+		}
+
+		args, err := ec.field_Subscription_toolCallLogUpdated_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Subscription.ToolCallLogUpdated(childComplexity, args["flowId"].(int64)), true
 
 	case "Subscription.vectorStoreLogAdded":
 		if e.complexity.Subscription.VectorStoreLogAdded == nil {
@@ -3745,6 +4293,90 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.TestResult.Type(childComplexity), true
 
+	case "ToolCallLog.args":
+		if e.complexity.ToolCallLog.Args == nil {
+			break
+		}
+
+		return e.complexity.ToolCallLog.Args(childComplexity), true
+
+	case "ToolCallLog.callId":
+		if e.complexity.ToolCallLog.CallID == nil {
+			break
+		}
+
+		return e.complexity.ToolCallLog.CallID(childComplexity), true
+
+	case "ToolCallLog.createdAt":
+		if e.complexity.ToolCallLog.CreatedAt == nil {
+			break
+		}
+
+		return e.complexity.ToolCallLog.CreatedAt(childComplexity), true
+
+	case "ToolCallLog.durationSeconds":
+		if e.complexity.ToolCallLog.DurationSeconds == nil {
+			break
+		}
+
+		return e.complexity.ToolCallLog.DurationSeconds(childComplexity), true
+
+	case "ToolCallLog.flowId":
+		if e.complexity.ToolCallLog.FlowID == nil {
+			break
+		}
+
+		return e.complexity.ToolCallLog.FlowID(childComplexity), true
+
+	case "ToolCallLog.id":
+		if e.complexity.ToolCallLog.ID == nil {
+			break
+		}
+
+		return e.complexity.ToolCallLog.ID(childComplexity), true
+
+	case "ToolCallLog.name":
+		if e.complexity.ToolCallLog.Name == nil {
+			break
+		}
+
+		return e.complexity.ToolCallLog.Name(childComplexity), true
+
+	case "ToolCallLog.result":
+		if e.complexity.ToolCallLog.Result == nil {
+			break
+		}
+
+		return e.complexity.ToolCallLog.Result(childComplexity), true
+
+	case "ToolCallLog.status":
+		if e.complexity.ToolCallLog.Status == nil {
+			break
+		}
+
+		return e.complexity.ToolCallLog.Status(childComplexity), true
+
+	case "ToolCallLog.subtaskId":
+		if e.complexity.ToolCallLog.SubtaskID == nil {
+			break
+		}
+
+		return e.complexity.ToolCallLog.SubtaskID(childComplexity), true
+
+	case "ToolCallLog.taskId":
+		if e.complexity.ToolCallLog.TaskID == nil {
+			break
+		}
+
+		return e.complexity.ToolCallLog.TaskID(childComplexity), true
+
+	case "ToolCallLog.updatedAt":
+		if e.complexity.ToolCallLog.UpdatedAt == nil {
+			break
+		}
+
+		return e.complexity.ToolCallLog.UpdatedAt(childComplexity), true
+
 	case "ToolcallsStats.totalCount":
 		if e.complexity.ToolcallsStats.TotalCount == nil {
 			break
@@ -3934,6 +4566,62 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.UserPrompt.UpdatedAt(childComplexity), true
 
+	case "UserResource.createdAt":
+		if e.complexity.UserResource.CreatedAt == nil {
+			break
+		}
+
+		return e.complexity.UserResource.CreatedAt(childComplexity), true
+
+	case "UserResource.id":
+		if e.complexity.UserResource.ID == nil {
+			break
+		}
+
+		return e.complexity.UserResource.ID(childComplexity), true
+
+	case "UserResource.isDir":
+		if e.complexity.UserResource.IsDir == nil {
+			break
+		}
+
+		return e.complexity.UserResource.IsDir(childComplexity), true
+
+	case "UserResource.name":
+		if e.complexity.UserResource.Name == nil {
+			break
+		}
+
+		return e.complexity.UserResource.Name(childComplexity), true
+
+	case "UserResource.path":
+		if e.complexity.UserResource.Path == nil {
+			break
+		}
+
+		return e.complexity.UserResource.Path(childComplexity), true
+
+	case "UserResource.size":
+		if e.complexity.UserResource.Size == nil {
+			break
+		}
+
+		return e.complexity.UserResource.Size(childComplexity), true
+
+	case "UserResource.updatedAt":
+		if e.complexity.UserResource.UpdatedAt == nil {
+			break
+		}
+
+		return e.complexity.UserResource.UpdatedAt(childComplexity), true
+
+	case "UserResource.userId":
+		if e.complexity.UserResource.UserID == nil {
+			break
+		}
+
+		return e.complexity.UserResource.UserID(childComplexity), true
+
 	case "VectorStoreLog.action":
 		if e.complexity.VectorStoreLog.Action == nil {
 			break
@@ -4023,10 +4711,13 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 		ec.unmarshalInputAgentsConfigInput,
 		ec.unmarshalInputCreateAPITokenInput,
 		ec.unmarshalInputCreateFlowTemplateInput,
+		ec.unmarshalInputCreateKnowledgeDocumentInput,
+		ec.unmarshalInputKnowledgeFilter,
 		ec.unmarshalInputModelPriceInput,
 		ec.unmarshalInputReasoningConfigInput,
 		ec.unmarshalInputUpdateAPITokenInput,
 		ec.unmarshalInputUpdateFlowTemplateInput,
+		ec.unmarshalInputUpdateKnowledgeDocumentInput,
 	)
 	first := true
 
@@ -4192,6 +4883,38 @@ func (ec *executionContext) field_Mutation_addFavoriteFlow_argsFlowID(
 	return zeroVal, nil
 }
 
+func (ec *executionContext) field_Mutation_anonymizeText_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	arg0, err := ec.field_Mutation_anonymizeText_argsText(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["text"] = arg0
+	return args, nil
+}
+func (ec *executionContext) field_Mutation_anonymizeText_argsText(
+	ctx context.Context,
+	rawArgs map[string]interface{},
+) (string, error) {
+	// We won't call the directive if the argument is null.
+	// Set call_argument_directives_with_null to true to call directives
+	// even if the argument is null.
+	_, ok := rawArgs["text"]
+	if !ok {
+		var zeroVal string
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("text"))
+	if tmp, ok := rawArgs["text"]; ok {
+		return ec.unmarshalNString2string(ctx, tmp)
+	}
+
+	var zeroVal string
+	return zeroVal, nil
+}
+
 func (ec *executionContext) field_Mutation_callAssistant_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
 	var err error
 	args := map[string]interface{}{}
@@ -4215,6 +4938,11 @@ func (ec *executionContext) field_Mutation_callAssistant_args(ctx context.Contex
 		return nil, err
 	}
 	args["useAgents"] = arg3
+	arg4, err := ec.field_Mutation_callAssistant_argsResourceIds(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["resourceIds"] = arg4
 	return args, nil
 }
 func (ec *executionContext) field_Mutation_callAssistant_argsFlowID(
@@ -4305,6 +5033,28 @@ func (ec *executionContext) field_Mutation_callAssistant_argsUseAgents(
 	return zeroVal, nil
 }
 
+func (ec *executionContext) field_Mutation_callAssistant_argsResourceIds(
+	ctx context.Context,
+	rawArgs map[string]interface{},
+) ([]int64, error) {
+	// We won't call the directive if the argument is null.
+	// Set call_argument_directives_with_null to true to call directives
+	// even if the argument is null.
+	_, ok := rawArgs["resourceIds"]
+	if !ok {
+		var zeroVal []int64
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("resourceIds"))
+	if tmp, ok := rawArgs["resourceIds"]; ok {
+		return ec.unmarshalOID2ᚕint64ᚄ(ctx, tmp)
+	}
+
+	var zeroVal []int64
+	return zeroVal, nil
+}
+
 func (ec *executionContext) field_Mutation_createAPIToken_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
 	var err error
 	args := map[string]interface{}{}
@@ -4360,6 +5110,11 @@ func (ec *executionContext) field_Mutation_createAssistant_args(ctx context.Cont
 		return nil, err
 	}
 	args["useAgents"] = arg3
+	arg4, err := ec.field_Mutation_createAssistant_argsResourceIds(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["resourceIds"] = arg4
 	return args, nil
 }
 func (ec *executionContext) field_Mutation_createAssistant_argsFlowID(
@@ -4450,6 +5205,28 @@ func (ec *executionContext) field_Mutation_createAssistant_argsUseAgents(
 	return zeroVal, nil
 }
 
+func (ec *executionContext) field_Mutation_createAssistant_argsResourceIds(
+	ctx context.Context,
+	rawArgs map[string]interface{},
+) ([]int64, error) {
+	// We won't call the directive if the argument is null.
+	// Set call_argument_directives_with_null to true to call directives
+	// even if the argument is null.
+	_, ok := rawArgs["resourceIds"]
+	if !ok {
+		var zeroVal []int64
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("resourceIds"))
+	if tmp, ok := rawArgs["resourceIds"]; ok {
+		return ec.unmarshalOID2ᚕint64ᚄ(ctx, tmp)
+	}
+
+	var zeroVal []int64
+	return zeroVal, nil
+}
+
 func (ec *executionContext) field_Mutation_createFlowTemplate_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
 	var err error
 	args := map[string]interface{}{}
@@ -4495,6 +5272,11 @@ func (ec *executionContext) field_Mutation_createFlow_args(ctx context.Context, 
 		return nil, err
 	}
 	args["input"] = arg1
+	arg2, err := ec.field_Mutation_createFlow_argsResourceIds(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["resourceIds"] = arg2
 	return args, nil
 }
 func (ec *executionContext) field_Mutation_createFlow_argsModelProvider(
@@ -4538,6 +5320,60 @@ func (ec *executionContext) field_Mutation_createFlow_argsInput(
 	}
 
 	var zeroVal string
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Mutation_createFlow_argsResourceIds(
+	ctx context.Context,
+	rawArgs map[string]interface{},
+) ([]int64, error) {
+	// We won't call the directive if the argument is null.
+	// Set call_argument_directives_with_null to true to call directives
+	// even if the argument is null.
+	_, ok := rawArgs["resourceIds"]
+	if !ok {
+		var zeroVal []int64
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("resourceIds"))
+	if tmp, ok := rawArgs["resourceIds"]; ok {
+		return ec.unmarshalOID2ᚕint64ᚄ(ctx, tmp)
+	}
+
+	var zeroVal []int64
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Mutation_createKnowledgeDocument_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	arg0, err := ec.field_Mutation_createKnowledgeDocument_argsInput(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg0
+	return args, nil
+}
+func (ec *executionContext) field_Mutation_createKnowledgeDocument_argsInput(
+	ctx context.Context,
+	rawArgs map[string]interface{},
+) (model.CreateKnowledgeDocumentInput, error) {
+	// We won't call the directive if the argument is null.
+	// Set call_argument_directives_with_null to true to call directives
+	// even if the argument is null.
+	_, ok := rawArgs["input"]
+	if !ok {
+		var zeroVal model.CreateKnowledgeDocumentInput
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("input"))
+	if tmp, ok := rawArgs["input"]; ok {
+		return ec.unmarshalNCreateKnowledgeDocumentInput2pentagiᚋpkgᚋgraphᚋmodelᚐCreateKnowledgeDocumentInput(ctx, tmp)
+	}
+
+	var zeroVal model.CreateKnowledgeDocumentInput
 	return zeroVal, nil
 }
 
@@ -4873,6 +5709,38 @@ func (ec *executionContext) field_Mutation_deleteFlow_argsFlowID(
 	return zeroVal, nil
 }
 
+func (ec *executionContext) field_Mutation_deleteKnowledgeDocument_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	arg0, err := ec.field_Mutation_deleteKnowledgeDocument_argsID(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg0
+	return args, nil
+}
+func (ec *executionContext) field_Mutation_deleteKnowledgeDocument_argsID(
+	ctx context.Context,
+	rawArgs map[string]interface{},
+) (string, error) {
+	// We won't call the directive if the argument is null.
+	// Set call_argument_directives_with_null to true to call directives
+	// even if the argument is null.
+	_, ok := rawArgs["id"]
+	if !ok {
+		var zeroVal string
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("id"))
+	if tmp, ok := rawArgs["id"]; ok {
+		return ec.unmarshalNString2string(ctx, tmp)
+	}
+
+	var zeroVal string
+	return zeroVal, nil
+}
+
 func (ec *executionContext) field_Mutation_deletePrompt_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
 	var err error
 	args := map[string]interface{}{}
@@ -4987,6 +5855,11 @@ func (ec *executionContext) field_Mutation_putUserInput_args(ctx context.Context
 		return nil, err
 	}
 	args["modelProvider"] = arg2
+	arg3, err := ec.field_Mutation_putUserInput_argsResourceIds(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["resourceIds"] = arg3
 	return args, nil
 }
 func (ec *executionContext) field_Mutation_putUserInput_argsFlowID(
@@ -5052,6 +5925,28 @@ func (ec *executionContext) field_Mutation_putUserInput_argsModelProvider(
 	}
 
 	var zeroVal *string
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Mutation_putUserInput_argsResourceIds(
+	ctx context.Context,
+	rawArgs map[string]interface{},
+) ([]int64, error) {
+	// We won't call the directive if the argument is null.
+	// Set call_argument_directives_with_null to true to call directives
+	// even if the argument is null.
+	_, ok := rawArgs["resourceIds"]
+	if !ok {
+		var zeroVal []int64
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("resourceIds"))
+	if tmp, ok := rawArgs["resourceIds"]; ok {
+		return ec.unmarshalOID2ᚕint64ᚄ(ctx, tmp)
+	}
+
+	var zeroVal []int64
 	return zeroVal, nil
 }
 
@@ -5468,6 +6363,65 @@ func (ec *executionContext) field_Mutation_updateFlowTemplate_argsInput(
 	return zeroVal, nil
 }
 
+func (ec *executionContext) field_Mutation_updateKnowledgeDocument_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	arg0, err := ec.field_Mutation_updateKnowledgeDocument_argsID(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg0
+	arg1, err := ec.field_Mutation_updateKnowledgeDocument_argsInput(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg1
+	return args, nil
+}
+func (ec *executionContext) field_Mutation_updateKnowledgeDocument_argsID(
+	ctx context.Context,
+	rawArgs map[string]interface{},
+) (string, error) {
+	// We won't call the directive if the argument is null.
+	// Set call_argument_directives_with_null to true to call directives
+	// even if the argument is null.
+	_, ok := rawArgs["id"]
+	if !ok {
+		var zeroVal string
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("id"))
+	if tmp, ok := rawArgs["id"]; ok {
+		return ec.unmarshalNString2string(ctx, tmp)
+	}
+
+	var zeroVal string
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Mutation_updateKnowledgeDocument_argsInput(
+	ctx context.Context,
+	rawArgs map[string]interface{},
+) (model.UpdateKnowledgeDocumentInput, error) {
+	// We won't call the directive if the argument is null.
+	// Set call_argument_directives_with_null to true to call directives
+	// even if the argument is null.
+	_, ok := rawArgs["input"]
+	if !ok {
+		var zeroVal model.UpdateKnowledgeDocumentInput
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("input"))
+	if tmp, ok := rawArgs["input"]; ok {
+		return ec.unmarshalNUpdateKnowledgeDocumentInput2pentagiᚋpkgᚋgraphᚋmodelᚐUpdateKnowledgeDocumentInput(ctx, tmp)
+	}
+
+	var zeroVal model.UpdateKnowledgeDocumentInput
+	return zeroVal, nil
+}
+
 func (ec *executionContext) field_Mutation_updatePrompt_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
 	var err error
 	args := map[string]interface{}{}
@@ -5859,6 +6813,38 @@ func (ec *executionContext) field_Query_assistants_argsFlowID(
 	return zeroVal, nil
 }
 
+func (ec *executionContext) field_Query_flowFiles_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	arg0, err := ec.field_Query_flowFiles_argsFlowID(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["flowId"] = arg0
+	return args, nil
+}
+func (ec *executionContext) field_Query_flowFiles_argsFlowID(
+	ctx context.Context,
+	rawArgs map[string]interface{},
+) (int64, error) {
+	// We won't call the directive if the argument is null.
+	// Set call_argument_directives_with_null to true to call directives
+	// even if the argument is null.
+	_, ok := rawArgs["flowId"]
+	if !ok {
+		var zeroVal int64
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("flowId"))
+	if tmp, ok := rawArgs["flowId"]; ok {
+		return ec.unmarshalNID2int64(ctx, tmp)
+	}
+
+	var zeroVal int64
+	return zeroVal, nil
+}
+
 func (ec *executionContext) field_Query_flowStatsByFlow_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
 	var err error
 	args := map[string]interface{}{}
@@ -6019,6 +7005,97 @@ func (ec *executionContext) field_Query_flowsStatsByPeriod_argsPeriod(
 	return zeroVal, nil
 }
 
+func (ec *executionContext) field_Query_knowledgeDocument_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	arg0, err := ec.field_Query_knowledgeDocument_argsID(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg0
+	return args, nil
+}
+func (ec *executionContext) field_Query_knowledgeDocument_argsID(
+	ctx context.Context,
+	rawArgs map[string]interface{},
+) (string, error) {
+	// We won't call the directive if the argument is null.
+	// Set call_argument_directives_with_null to true to call directives
+	// even if the argument is null.
+	_, ok := rawArgs["id"]
+	if !ok {
+		var zeroVal string
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("id"))
+	if tmp, ok := rawArgs["id"]; ok {
+		return ec.unmarshalNString2string(ctx, tmp)
+	}
+
+	var zeroVal string
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Query_knowledgeDocuments_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	arg0, err := ec.field_Query_knowledgeDocuments_argsFilter(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["filter"] = arg0
+	arg1, err := ec.field_Query_knowledgeDocuments_argsWithContent(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["withContent"] = arg1
+	return args, nil
+}
+func (ec *executionContext) field_Query_knowledgeDocuments_argsFilter(
+	ctx context.Context,
+	rawArgs map[string]interface{},
+) (*model.KnowledgeFilter, error) {
+	// We won't call the directive if the argument is null.
+	// Set call_argument_directives_with_null to true to call directives
+	// even if the argument is null.
+	_, ok := rawArgs["filter"]
+	if !ok {
+		var zeroVal *model.KnowledgeFilter
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("filter"))
+	if tmp, ok := rawArgs["filter"]; ok {
+		return ec.unmarshalOKnowledgeFilter2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐKnowledgeFilter(ctx, tmp)
+	}
+
+	var zeroVal *model.KnowledgeFilter
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Query_knowledgeDocuments_argsWithContent(
+	ctx context.Context,
+	rawArgs map[string]interface{},
+) (bool, error) {
+	// We won't call the directive if the argument is null.
+	// Set call_argument_directives_with_null to true to call directives
+	// even if the argument is null.
+	_, ok := rawArgs["withContent"]
+	if !ok {
+		var zeroVal bool
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("withContent"))
+	if tmp, ok := rawArgs["withContent"]; ok {
+		return ec.unmarshalNBoolean2bool(ctx, tmp)
+	}
+
+	var zeroVal bool
+	return zeroVal, nil
+}
+
 func (ec *executionContext) field_Query_messageLogs_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
 	var err error
 	args := map[string]interface{}{}
@@ -6051,6 +7128,65 @@ func (ec *executionContext) field_Query_messageLogs_argsFlowID(
 	return zeroVal, nil
 }
 
+func (ec *executionContext) field_Query_resources_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	arg0, err := ec.field_Query_resources_argsPath(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["path"] = arg0
+	arg1, err := ec.field_Query_resources_argsRecursive(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["recursive"] = arg1
+	return args, nil
+}
+func (ec *executionContext) field_Query_resources_argsPath(
+	ctx context.Context,
+	rawArgs map[string]interface{},
+) (*string, error) {
+	// We won't call the directive if the argument is null.
+	// Set call_argument_directives_with_null to true to call directives
+	// even if the argument is null.
+	_, ok := rawArgs["path"]
+	if !ok {
+		var zeroVal *string
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("path"))
+	if tmp, ok := rawArgs["path"]; ok {
+		return ec.unmarshalOString2ᚖstring(ctx, tmp)
+	}
+
+	var zeroVal *string
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Query_resources_argsRecursive(
+	ctx context.Context,
+	rawArgs map[string]interface{},
+) (*bool, error) {
+	// We won't call the directive if the argument is null.
+	// Set call_argument_directives_with_null to true to call directives
+	// even if the argument is null.
+	_, ok := rawArgs["recursive"]
+	if !ok {
+		var zeroVal *bool
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("recursive"))
+	if tmp, ok := rawArgs["recursive"]; ok {
+		return ec.unmarshalOBoolean2ᚖbool(ctx, tmp)
+	}
+
+	var zeroVal *bool
+	return zeroVal, nil
+}
+
 func (ec *executionContext) field_Query_screenshots_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
 	var err error
 	args := map[string]interface{}{}
@@ -6080,6 +7216,92 @@ func (ec *executionContext) field_Query_screenshots_argsFlowID(
 	}
 
 	var zeroVal int64
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Query_searchKnowledge_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	arg0, err := ec.field_Query_searchKnowledge_argsQuery(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["query"] = arg0
+	arg1, err := ec.field_Query_searchKnowledge_argsFilter(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["filter"] = arg1
+	arg2, err := ec.field_Query_searchKnowledge_argsLimit(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["limit"] = arg2
+	return args, nil
+}
+func (ec *executionContext) field_Query_searchKnowledge_argsQuery(
+	ctx context.Context,
+	rawArgs map[string]interface{},
+) (string, error) {
+	// We won't call the directive if the argument is null.
+	// Set call_argument_directives_with_null to true to call directives
+	// even if the argument is null.
+	_, ok := rawArgs["query"]
+	if !ok {
+		var zeroVal string
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("query"))
+	if tmp, ok := rawArgs["query"]; ok {
+		return ec.unmarshalNString2string(ctx, tmp)
+	}
+
+	var zeroVal string
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Query_searchKnowledge_argsFilter(
+	ctx context.Context,
+	rawArgs map[string]interface{},
+) (*model.KnowledgeFilter, error) {
+	// We won't call the directive if the argument is null.
+	// Set call_argument_directives_with_null to true to call directives
+	// even if the argument is null.
+	_, ok := rawArgs["filter"]
+	if !ok {
+		var zeroVal *model.KnowledgeFilter
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("filter"))
+	if tmp, ok := rawArgs["filter"]; ok {
+		return ec.unmarshalOKnowledgeFilter2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐKnowledgeFilter(ctx, tmp)
+	}
+
+	var zeroVal *model.KnowledgeFilter
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Query_searchKnowledge_argsLimit(
+	ctx context.Context,
+	rawArgs map[string]interface{},
+) (*int, error) {
+	// We won't call the directive if the argument is null.
+	// Set call_argument_directives_with_null to true to call directives
+	// even if the argument is null.
+	_, ok := rawArgs["limit"]
+	if !ok {
+		var zeroVal *int
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("limit"))
+	if tmp, ok := rawArgs["limit"]; ok {
+		return ec.unmarshalOInt2ᚖint(ctx, tmp)
+	}
+
+	var zeroVal *int
 	return zeroVal, nil
 }
 
@@ -6158,6 +7380,38 @@ func (ec *executionContext) field_Query_terminalLogs_args(ctx context.Context, r
 	return args, nil
 }
 func (ec *executionContext) field_Query_terminalLogs_argsFlowID(
+	ctx context.Context,
+	rawArgs map[string]interface{},
+) (int64, error) {
+	// We won't call the directive if the argument is null.
+	// Set call_argument_directives_with_null to true to call directives
+	// even if the argument is null.
+	_, ok := rawArgs["flowId"]
+	if !ok {
+		var zeroVal int64
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("flowId"))
+	if tmp, ok := rawArgs["flowId"]; ok {
+		return ec.unmarshalNID2int64(ctx, tmp)
+	}
+
+	var zeroVal int64
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Query_toolCallLogs_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	arg0, err := ec.field_Query_toolCallLogs_argsFlowID(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["flowId"] = arg0
+	return args, nil
+}
+func (ec *executionContext) field_Query_toolCallLogs_argsFlowID(
 	ctx context.Context,
 	rawArgs map[string]interface{},
 ) (int64, error) {
@@ -6318,6 +7572,38 @@ func (ec *executionContext) field_Query_usageStatsByFlow_args(ctx context.Contex
 	return args, nil
 }
 func (ec *executionContext) field_Query_usageStatsByFlow_argsFlowID(
+	ctx context.Context,
+	rawArgs map[string]interface{},
+) (int64, error) {
+	// We won't call the directive if the argument is null.
+	// Set call_argument_directives_with_null to true to call directives
+	// even if the argument is null.
+	_, ok := rawArgs["flowId"]
+	if !ok {
+		var zeroVal int64
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("flowId"))
+	if tmp, ok := rawArgs["flowId"]; ok {
+		return ec.unmarshalNID2int64(ctx, tmp)
+	}
+
+	var zeroVal int64
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Query_usageStatsByModelAgentsForFlow_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	arg0, err := ec.field_Query_usageStatsByModelAgentsForFlow_argsFlowID(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["flowId"] = arg0
+	return args, nil
+}
+func (ec *executionContext) field_Query_usageStatsByModelAgentsForFlow_argsFlowID(
 	ctx context.Context,
 	rawArgs map[string]interface{},
 ) (int64, error) {
@@ -6595,6 +7881,102 @@ func (ec *executionContext) field_Subscription_assistantUpdated_argsFlowID(
 	return zeroVal, nil
 }
 
+func (ec *executionContext) field_Subscription_flowFileAdded_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	arg0, err := ec.field_Subscription_flowFileAdded_argsFlowID(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["flowId"] = arg0
+	return args, nil
+}
+func (ec *executionContext) field_Subscription_flowFileAdded_argsFlowID(
+	ctx context.Context,
+	rawArgs map[string]interface{},
+) (int64, error) {
+	// We won't call the directive if the argument is null.
+	// Set call_argument_directives_with_null to true to call directives
+	// even if the argument is null.
+	_, ok := rawArgs["flowId"]
+	if !ok {
+		var zeroVal int64
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("flowId"))
+	if tmp, ok := rawArgs["flowId"]; ok {
+		return ec.unmarshalNID2int64(ctx, tmp)
+	}
+
+	var zeroVal int64
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Subscription_flowFileDeleted_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	arg0, err := ec.field_Subscription_flowFileDeleted_argsFlowID(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["flowId"] = arg0
+	return args, nil
+}
+func (ec *executionContext) field_Subscription_flowFileDeleted_argsFlowID(
+	ctx context.Context,
+	rawArgs map[string]interface{},
+) (int64, error) {
+	// We won't call the directive if the argument is null.
+	// Set call_argument_directives_with_null to true to call directives
+	// even if the argument is null.
+	_, ok := rawArgs["flowId"]
+	if !ok {
+		var zeroVal int64
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("flowId"))
+	if tmp, ok := rawArgs["flowId"]; ok {
+		return ec.unmarshalNID2int64(ctx, tmp)
+	}
+
+	var zeroVal int64
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Subscription_flowFileUpdated_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	arg0, err := ec.field_Subscription_flowFileUpdated_argsFlowID(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["flowId"] = arg0
+	return args, nil
+}
+func (ec *executionContext) field_Subscription_flowFileUpdated_argsFlowID(
+	ctx context.Context,
+	rawArgs map[string]interface{},
+) (int64, error) {
+	// We won't call the directive if the argument is null.
+	// Set call_argument_directives_with_null to true to call directives
+	// even if the argument is null.
+	_, ok := rawArgs["flowId"]
+	if !ok {
+		var zeroVal int64
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("flowId"))
+	if tmp, ok := rawArgs["flowId"]; ok {
+		return ec.unmarshalNID2int64(ctx, tmp)
+	}
+
+	var zeroVal int64
+	return zeroVal, nil
+}
+
 func (ec *executionContext) field_Subscription_messageLogAdded_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
 	var err error
 	args := map[string]interface{}{}
@@ -6798,6 +8180,70 @@ func (ec *executionContext) field_Subscription_terminalLogAdded_args(ctx context
 	return args, nil
 }
 func (ec *executionContext) field_Subscription_terminalLogAdded_argsFlowID(
+	ctx context.Context,
+	rawArgs map[string]interface{},
+) (int64, error) {
+	// We won't call the directive if the argument is null.
+	// Set call_argument_directives_with_null to true to call directives
+	// even if the argument is null.
+	_, ok := rawArgs["flowId"]
+	if !ok {
+		var zeroVal int64
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("flowId"))
+	if tmp, ok := rawArgs["flowId"]; ok {
+		return ec.unmarshalNID2int64(ctx, tmp)
+	}
+
+	var zeroVal int64
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Subscription_toolCallLogAdded_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	arg0, err := ec.field_Subscription_toolCallLogAdded_argsFlowID(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["flowId"] = arg0
+	return args, nil
+}
+func (ec *executionContext) field_Subscription_toolCallLogAdded_argsFlowID(
+	ctx context.Context,
+	rawArgs map[string]interface{},
+) (int64, error) {
+	// We won't call the directive if the argument is null.
+	// Set call_argument_directives_with_null to true to call directives
+	// even if the argument is null.
+	_, ok := rawArgs["flowId"]
+	if !ok {
+		var zeroVal int64
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("flowId"))
+	if tmp, ok := rawArgs["flowId"]; ok {
+		return ec.unmarshalNID2int64(ctx, tmp)
+	}
+
+	var zeroVal int64
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Subscription_toolCallLogUpdated_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	arg0, err := ec.field_Subscription_toolCallLogUpdated_argsFlowID(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["flowId"] = arg0
+	return args, nil
+}
+func (ec *executionContext) field_Subscription_toolCallLogUpdated_argsFlowID(
 	ctx context.Context,
 	rawArgs map[string]interface{},
 ) (int64, error) {
@@ -13272,6 +14718,270 @@ func (ec *executionContext) fieldContext_FlowExecutionStats_tasks(_ context.Cont
 	return fc, nil
 }
 
+func (ec *executionContext) _FlowFile_id(ctx context.Context, field graphql.CollectedField, obj *model.FlowFile) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_FlowFile_id(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.ID, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_FlowFile_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FlowFile",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FlowFile_name(ctx context.Context, field graphql.CollectedField, obj *model.FlowFile) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_FlowFile_name(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Name, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_FlowFile_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FlowFile",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FlowFile_path(ctx context.Context, field graphql.CollectedField, obj *model.FlowFile) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_FlowFile_path(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Path, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_FlowFile_path(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FlowFile",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FlowFile_size(ctx context.Context, field graphql.CollectedField, obj *model.FlowFile) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_FlowFile_size(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Size, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(int)
+	fc.Result = res
+	return ec.marshalNInt2int(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_FlowFile_size(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FlowFile",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FlowFile_isDir(ctx context.Context, field graphql.CollectedField, obj *model.FlowFile) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_FlowFile_isDir(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.IsDir, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(bool)
+	fc.Result = res
+	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_FlowFile_isDir(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FlowFile",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _FlowFile_modifiedAt(ctx context.Context, field graphql.CollectedField, obj *model.FlowFile) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_FlowFile_modifiedAt(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.ModifiedAt, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(time.Time)
+	fc.Result = res
+	return ec.marshalNTime2timeᚐTime(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_FlowFile_modifiedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FlowFile",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Time does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _FlowStats_totalTasksCount(ctx context.Context, field graphql.CollectedField, obj *model.FlowStats) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_FlowStats_totalTasksCount(ctx, field)
 	if err != nil {
@@ -14064,6 +15774,765 @@ func (ec *executionContext) fieldContext_FunctionToolcallsStats_avgDurationSecon
 	return fc, nil
 }
 
+func (ec *executionContext) _KnowledgeDocument_id(ctx context.Context, field graphql.CollectedField, obj *model.KnowledgeDocument) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_KnowledgeDocument_id(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.ID, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_KnowledgeDocument_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "KnowledgeDocument",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _KnowledgeDocument_docType(ctx context.Context, field graphql.CollectedField, obj *model.KnowledgeDocument) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_KnowledgeDocument_docType(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.DocType, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(model.KnowledgeDocType)
+	fc.Result = res
+	return ec.marshalNKnowledgeDocType2pentagiᚋpkgᚋgraphᚋmodelᚐKnowledgeDocType(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_KnowledgeDocument_docType(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "KnowledgeDocument",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type KnowledgeDocType does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _KnowledgeDocument_content(ctx context.Context, field graphql.CollectedField, obj *model.KnowledgeDocument) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_KnowledgeDocument_content(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Content, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_KnowledgeDocument_content(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "KnowledgeDocument",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _KnowledgeDocument_question(ctx context.Context, field graphql.CollectedField, obj *model.KnowledgeDocument) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_KnowledgeDocument_question(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Question, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_KnowledgeDocument_question(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "KnowledgeDocument",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _KnowledgeDocument_description(ctx context.Context, field graphql.CollectedField, obj *model.KnowledgeDocument) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_KnowledgeDocument_description(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Description, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*string)
+	fc.Result = res
+	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_KnowledgeDocument_description(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "KnowledgeDocument",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _KnowledgeDocument_userId(ctx context.Context, field graphql.CollectedField, obj *model.KnowledgeDocument) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_KnowledgeDocument_userId(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.UserID, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(int64)
+	fc.Result = res
+	return ec.marshalNID2int64(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_KnowledgeDocument_userId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "KnowledgeDocument",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _KnowledgeDocument_flowId(ctx context.Context, field graphql.CollectedField, obj *model.KnowledgeDocument) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_KnowledgeDocument_flowId(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.FlowID, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*int64)
+	fc.Result = res
+	return ec.marshalOID2ᚖint64(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_KnowledgeDocument_flowId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "KnowledgeDocument",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _KnowledgeDocument_taskId(ctx context.Context, field graphql.CollectedField, obj *model.KnowledgeDocument) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_KnowledgeDocument_taskId(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.TaskID, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*int64)
+	fc.Result = res
+	return ec.marshalOID2ᚖint64(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_KnowledgeDocument_taskId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "KnowledgeDocument",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _KnowledgeDocument_subtaskId(ctx context.Context, field graphql.CollectedField, obj *model.KnowledgeDocument) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_KnowledgeDocument_subtaskId(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.SubtaskID, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*int64)
+	fc.Result = res
+	return ec.marshalOID2ᚖint64(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_KnowledgeDocument_subtaskId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "KnowledgeDocument",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _KnowledgeDocument_guideType(ctx context.Context, field graphql.CollectedField, obj *model.KnowledgeDocument) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_KnowledgeDocument_guideType(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.GuideType, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*model.KnowledgeGuideType)
+	fc.Result = res
+	return ec.marshalOKnowledgeGuideType2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐKnowledgeGuideType(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_KnowledgeDocument_guideType(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "KnowledgeDocument",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type KnowledgeGuideType does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _KnowledgeDocument_answerType(ctx context.Context, field graphql.CollectedField, obj *model.KnowledgeDocument) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_KnowledgeDocument_answerType(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.AnswerType, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*model.KnowledgeAnswerType)
+	fc.Result = res
+	return ec.marshalOKnowledgeAnswerType2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐKnowledgeAnswerType(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_KnowledgeDocument_answerType(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "KnowledgeDocument",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type KnowledgeAnswerType does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _KnowledgeDocument_codeLang(ctx context.Context, field graphql.CollectedField, obj *model.KnowledgeDocument) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_KnowledgeDocument_codeLang(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.CodeLang, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*string)
+	fc.Result = res
+	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_KnowledgeDocument_codeLang(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "KnowledgeDocument",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _KnowledgeDocument_partSize(ctx context.Context, field graphql.CollectedField, obj *model.KnowledgeDocument) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_KnowledgeDocument_partSize(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.PartSize, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(int)
+	fc.Result = res
+	return ec.marshalNInt2int(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_KnowledgeDocument_partSize(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "KnowledgeDocument",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _KnowledgeDocument_totalSize(ctx context.Context, field graphql.CollectedField, obj *model.KnowledgeDocument) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_KnowledgeDocument_totalSize(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.TotalSize, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(int)
+	fc.Result = res
+	return ec.marshalNInt2int(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_KnowledgeDocument_totalSize(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "KnowledgeDocument",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _KnowledgeDocument_manual(ctx context.Context, field graphql.CollectedField, obj *model.KnowledgeDocument) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_KnowledgeDocument_manual(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Manual, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(bool)
+	fc.Result = res
+	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_KnowledgeDocument_manual(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "KnowledgeDocument",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _KnowledgeDocumentWithScore_score(ctx context.Context, field graphql.CollectedField, obj *model.KnowledgeDocumentWithScore) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_KnowledgeDocumentWithScore_score(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Score, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(float64)
+	fc.Result = res
+	return ec.marshalNFloat2float64(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_KnowledgeDocumentWithScore_score(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "KnowledgeDocumentWithScore",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Float does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _KnowledgeDocumentWithScore_document(ctx context.Context, field graphql.CollectedField, obj *model.KnowledgeDocumentWithScore) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_KnowledgeDocumentWithScore_document(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Document, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(*model.KnowledgeDocument)
+	fc.Result = res
+	return ec.marshalNKnowledgeDocument2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐKnowledgeDocument(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_KnowledgeDocumentWithScore_document(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "KnowledgeDocumentWithScore",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_KnowledgeDocument_id(ctx, field)
+			case "docType":
+				return ec.fieldContext_KnowledgeDocument_docType(ctx, field)
+			case "content":
+				return ec.fieldContext_KnowledgeDocument_content(ctx, field)
+			case "question":
+				return ec.fieldContext_KnowledgeDocument_question(ctx, field)
+			case "description":
+				return ec.fieldContext_KnowledgeDocument_description(ctx, field)
+			case "userId":
+				return ec.fieldContext_KnowledgeDocument_userId(ctx, field)
+			case "flowId":
+				return ec.fieldContext_KnowledgeDocument_flowId(ctx, field)
+			case "taskId":
+				return ec.fieldContext_KnowledgeDocument_taskId(ctx, field)
+			case "subtaskId":
+				return ec.fieldContext_KnowledgeDocument_subtaskId(ctx, field)
+			case "guideType":
+				return ec.fieldContext_KnowledgeDocument_guideType(ctx, field)
+			case "answerType":
+				return ec.fieldContext_KnowledgeDocument_answerType(ctx, field)
+			case "codeLang":
+				return ec.fieldContext_KnowledgeDocument_codeLang(ctx, field)
+			case "partSize":
+				return ec.fieldContext_KnowledgeDocument_partSize(ctx, field)
+			case "totalSize":
+				return ec.fieldContext_KnowledgeDocument_totalSize(ctx, field)
+			case "manual":
+				return ec.fieldContext_KnowledgeDocument_manual(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type KnowledgeDocument", field.Name)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _MessageLog_id(ctx context.Context, field graphql.CollectedField, obj *model.MessageLog) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_MessageLog_id(ctx, field)
 	if err != nil {
@@ -14490,6 +16959,196 @@ func (ec *executionContext) fieldContext_MessageLog_createdAt(_ context.Context,
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return nil, errors.New("field of type Time does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModelAgentsUsageStats_model(ctx context.Context, field graphql.CollectedField, obj *model.ModelAgentsUsageStats) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_ModelAgentsUsageStats_model(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Model, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_ModelAgentsUsageStats_model(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModelAgentsUsageStats",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModelAgentsUsageStats_provider(ctx context.Context, field graphql.CollectedField, obj *model.ModelAgentsUsageStats) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_ModelAgentsUsageStats_provider(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Provider, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_ModelAgentsUsageStats_provider(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModelAgentsUsageStats",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModelAgentsUsageStats_agentTypes(ctx context.Context, field graphql.CollectedField, obj *model.ModelAgentsUsageStats) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_ModelAgentsUsageStats_agentTypes(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.AgentTypes, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.([]model.AgentType)
+	fc.Result = res
+	return ec.marshalNAgentType2ᚕpentagiᚋpkgᚋgraphᚋmodelᚐAgentTypeᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_ModelAgentsUsageStats_agentTypes(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModelAgentsUsageStats",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type AgentType does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModelAgentsUsageStats_stats(ctx context.Context, field graphql.CollectedField, obj *model.ModelAgentsUsageStats) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_ModelAgentsUsageStats_stats(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Stats, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(*model.UsageStats)
+	fc.Result = res
+	return ec.marshalNUsageStats2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐUsageStats(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_ModelAgentsUsageStats_stats(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModelAgentsUsageStats",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "totalUsageIn":
+				return ec.fieldContext_UsageStats_totalUsageIn(ctx, field)
+			case "totalUsageOut":
+				return ec.fieldContext_UsageStats_totalUsageOut(ctx, field)
+			case "totalUsageCacheIn":
+				return ec.fieldContext_UsageStats_totalUsageCacheIn(ctx, field)
+			case "totalUsageCacheOut":
+				return ec.fieldContext_UsageStats_totalUsageCacheOut(ctx, field)
+			case "totalUsageCostIn":
+				return ec.fieldContext_UsageStats_totalUsageCostIn(ctx, field)
+			case "totalUsageCostOut":
+				return ec.fieldContext_UsageStats_totalUsageCostOut(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type UsageStats", field.Name)
 		},
 	}
 	return fc, nil
@@ -15049,7 +17708,7 @@ func (ec *executionContext) _Mutation_createFlow(ctx context.Context, field grap
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Mutation().CreateFlow(rctx, fc.Args["modelProvider"].(string), fc.Args["input"].(string))
+		return ec.resolvers.Mutation().CreateFlow(rctx, fc.Args["modelProvider"].(string), fc.Args["input"].(string), fc.Args["resourceIds"].([]int64))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -15120,7 +17779,7 @@ func (ec *executionContext) _Mutation_putUserInput(ctx context.Context, field gr
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Mutation().PutUserInput(rctx, fc.Args["flowId"].(int64), fc.Args["input"].(string), fc.Args["modelProvider"].(*string))
+		return ec.resolvers.Mutation().PutUserInput(rctx, fc.Args["flowId"].(int64), fc.Args["input"].(string), fc.Args["modelProvider"].(*string), fc.Args["resourceIds"].([]int64))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -15395,7 +18054,7 @@ func (ec *executionContext) _Mutation_createAssistant(ctx context.Context, field
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Mutation().CreateAssistant(rctx, fc.Args["flowId"].(int64), fc.Args["modelProvider"].(string), fc.Args["input"].(string), fc.Args["useAgents"].(bool))
+		return ec.resolvers.Mutation().CreateAssistant(rctx, fc.Args["flowId"].(int64), fc.Args["modelProvider"].(string), fc.Args["input"].(string), fc.Args["useAgents"].(bool), fc.Args["resourceIds"].([]int64))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -15456,7 +18115,7 @@ func (ec *executionContext) _Mutation_callAssistant(ctx context.Context, field g
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Mutation().CallAssistant(rctx, fc.Args["flowId"].(int64), fc.Args["assistantId"].(int64), fc.Args["input"].(string), fc.Args["useAgents"].(bool))
+		return ec.resolvers.Mutation().CallAssistant(rctx, fc.Args["flowId"].(int64), fc.Args["assistantId"].(int64), fc.Args["input"].(string), fc.Args["useAgents"].(bool), fc.Args["resourceIds"].([]int64))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -16720,6 +19379,290 @@ func (ec *executionContext) fieldContext_Mutation_deleteFlowTemplate(ctx context
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_deleteFlowTemplate_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_createKnowledgeDocument(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Mutation_createKnowledgeDocument(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Mutation().CreateKnowledgeDocument(rctx, fc.Args["input"].(model.CreateKnowledgeDocumentInput))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(*model.KnowledgeDocument)
+	fc.Result = res
+	return ec.marshalNKnowledgeDocument2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐKnowledgeDocument(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Mutation_createKnowledgeDocument(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_KnowledgeDocument_id(ctx, field)
+			case "docType":
+				return ec.fieldContext_KnowledgeDocument_docType(ctx, field)
+			case "content":
+				return ec.fieldContext_KnowledgeDocument_content(ctx, field)
+			case "question":
+				return ec.fieldContext_KnowledgeDocument_question(ctx, field)
+			case "description":
+				return ec.fieldContext_KnowledgeDocument_description(ctx, field)
+			case "userId":
+				return ec.fieldContext_KnowledgeDocument_userId(ctx, field)
+			case "flowId":
+				return ec.fieldContext_KnowledgeDocument_flowId(ctx, field)
+			case "taskId":
+				return ec.fieldContext_KnowledgeDocument_taskId(ctx, field)
+			case "subtaskId":
+				return ec.fieldContext_KnowledgeDocument_subtaskId(ctx, field)
+			case "guideType":
+				return ec.fieldContext_KnowledgeDocument_guideType(ctx, field)
+			case "answerType":
+				return ec.fieldContext_KnowledgeDocument_answerType(ctx, field)
+			case "codeLang":
+				return ec.fieldContext_KnowledgeDocument_codeLang(ctx, field)
+			case "partSize":
+				return ec.fieldContext_KnowledgeDocument_partSize(ctx, field)
+			case "totalSize":
+				return ec.fieldContext_KnowledgeDocument_totalSize(ctx, field)
+			case "manual":
+				return ec.fieldContext_KnowledgeDocument_manual(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type KnowledgeDocument", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_createKnowledgeDocument_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_updateKnowledgeDocument(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Mutation_updateKnowledgeDocument(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Mutation().UpdateKnowledgeDocument(rctx, fc.Args["id"].(string), fc.Args["input"].(model.UpdateKnowledgeDocumentInput))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(*model.KnowledgeDocument)
+	fc.Result = res
+	return ec.marshalNKnowledgeDocument2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐKnowledgeDocument(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Mutation_updateKnowledgeDocument(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_KnowledgeDocument_id(ctx, field)
+			case "docType":
+				return ec.fieldContext_KnowledgeDocument_docType(ctx, field)
+			case "content":
+				return ec.fieldContext_KnowledgeDocument_content(ctx, field)
+			case "question":
+				return ec.fieldContext_KnowledgeDocument_question(ctx, field)
+			case "description":
+				return ec.fieldContext_KnowledgeDocument_description(ctx, field)
+			case "userId":
+				return ec.fieldContext_KnowledgeDocument_userId(ctx, field)
+			case "flowId":
+				return ec.fieldContext_KnowledgeDocument_flowId(ctx, field)
+			case "taskId":
+				return ec.fieldContext_KnowledgeDocument_taskId(ctx, field)
+			case "subtaskId":
+				return ec.fieldContext_KnowledgeDocument_subtaskId(ctx, field)
+			case "guideType":
+				return ec.fieldContext_KnowledgeDocument_guideType(ctx, field)
+			case "answerType":
+				return ec.fieldContext_KnowledgeDocument_answerType(ctx, field)
+			case "codeLang":
+				return ec.fieldContext_KnowledgeDocument_codeLang(ctx, field)
+			case "partSize":
+				return ec.fieldContext_KnowledgeDocument_partSize(ctx, field)
+			case "totalSize":
+				return ec.fieldContext_KnowledgeDocument_totalSize(ctx, field)
+			case "manual":
+				return ec.fieldContext_KnowledgeDocument_manual(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type KnowledgeDocument", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_updateKnowledgeDocument_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_deleteKnowledgeDocument(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Mutation_deleteKnowledgeDocument(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Mutation().DeleteKnowledgeDocument(rctx, fc.Args["id"].(string))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(model.ResultType)
+	fc.Result = res
+	return ec.marshalNResultType2pentagiᚋpkgᚋgraphᚋmodelᚐResultType(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Mutation_deleteKnowledgeDocument(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ResultType does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_deleteKnowledgeDocument_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_anonymizeText(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Mutation_anonymizeText(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Mutation().AnonymizeText(rctx, fc.Args["text"].(string))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Mutation_anonymizeText(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_anonymizeText_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -19695,6 +22638,75 @@ func (ec *executionContext) fieldContext_Query_tasks(ctx context.Context, field 
 	return fc, nil
 }
 
+func (ec *executionContext) _Query_flowFiles(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Query_flowFiles(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Query().FlowFiles(rctx, fc.Args["flowId"].(int64))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.([]*model.FlowFile)
+	fc.Result = res
+	return ec.marshalNFlowFile2ᚕᚖpentagiᚋpkgᚋgraphᚋmodelᚐFlowFileᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Query_flowFiles(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_FlowFile_id(ctx, field)
+			case "name":
+				return ec.fieldContext_FlowFile_name(ctx, field)
+			case "path":
+				return ec.fieldContext_FlowFile_path(ctx, field)
+			case "size":
+				return ec.fieldContext_FlowFile_size(ctx, field)
+			case "isDir":
+				return ec.fieldContext_FlowFile_isDir(ctx, field)
+			case "modifiedAt":
+				return ec.fieldContext_FlowFile_modifiedAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type FlowFile", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_flowFiles_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Query_screenshots(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_Query_screenshots(ctx, field)
 	if err != nil {
@@ -20123,6 +23135,84 @@ func (ec *executionContext) fieldContext_Query_vectorStoreLogs(ctx context.Conte
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Query_vectorStoreLogs_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_toolCallLogs(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Query_toolCallLogs(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Query().ToolCallLogs(rctx, fc.Args["flowId"].(int64))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.([]*model.ToolCallLog)
+	fc.Result = res
+	return ec.marshalOToolCallLog2ᚕᚖpentagiᚋpkgᚋgraphᚋmodelᚐToolCallLogᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Query_toolCallLogs(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_ToolCallLog_id(ctx, field)
+			case "callId":
+				return ec.fieldContext_ToolCallLog_callId(ctx, field)
+			case "status":
+				return ec.fieldContext_ToolCallLog_status(ctx, field)
+			case "name":
+				return ec.fieldContext_ToolCallLog_name(ctx, field)
+			case "args":
+				return ec.fieldContext_ToolCallLog_args(ctx, field)
+			case "result":
+				return ec.fieldContext_ToolCallLog_result(ctx, field)
+			case "durationSeconds":
+				return ec.fieldContext_ToolCallLog_durationSeconds(ctx, field)
+			case "flowId":
+				return ec.fieldContext_ToolCallLog_flowId(ctx, field)
+			case "taskId":
+				return ec.fieldContext_ToolCallLog_taskId(ctx, field)
+			case "subtaskId":
+				return ec.fieldContext_ToolCallLog_subtaskId(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_ToolCallLog_createdAt(ctx, field)
+			case "updatedAt":
+				return ec.fieldContext_ToolCallLog_updatedAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type ToolCallLog", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_toolCallLogs_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -20598,6 +23688,71 @@ func (ec *executionContext) fieldContext_Query_usageStatsByAgentTypeForFlow(ctx 
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Query_usageStatsByAgentTypeForFlow_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_usageStatsByModelAgentsForFlow(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Query_usageStatsByModelAgentsForFlow(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Query().UsageStatsByModelAgentsForFlow(rctx, fc.Args["flowId"].(int64))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.([]*model.ModelAgentsUsageStats)
+	fc.Result = res
+	return ec.marshalNModelAgentsUsageStats2ᚕᚖpentagiᚋpkgᚋgraphᚋmodelᚐModelAgentsUsageStatsᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Query_usageStatsByModelAgentsForFlow(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "model":
+				return ec.fieldContext_ModelAgentsUsageStats_model(ctx, field)
+			case "provider":
+				return ec.fieldContext_ModelAgentsUsageStats_provider(ctx, field)
+			case "agentTypes":
+				return ec.fieldContext_ModelAgentsUsageStats_agentTypes(ctx, field)
+			case "stats":
+				return ec.fieldContext_ModelAgentsUsageStats_stats(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type ModelAgentsUsageStats", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_usageStatsByModelAgentsForFlow_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -21189,8 +24344,12 @@ func (ec *executionContext) fieldContext_Query_settings(_ context.Context, field
 				return ec.fieldContext_Settings_debug(ctx, field)
 			case "askUser":
 				return ec.fieldContext_Settings_askUser(ctx, field)
+			case "version":
+				return ec.fieldContext_Settings_version(ctx, field)
 			case "dockerInside":
 				return ec.fieldContext_Settings_dockerInside(ctx, field)
+			case "isDevelopMode":
+				return ec.fieldContext_Settings_isDevelopMode(ctx, field)
 			case "assistantUseAgents":
 				return ec.fieldContext_Settings_assistantUseAgents(ctx, field)
 			}
@@ -21610,6 +24769,314 @@ func (ec *executionContext) fieldContext_Query_flowTemplates(_ context.Context, 
 			}
 			return nil, fmt.Errorf("no field named %q was found under type FlowTemplate", field.Name)
 		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_resources(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Query_resources(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Query().Resources(rctx, fc.Args["path"].(*string), fc.Args["recursive"].(*bool))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.([]*model.UserResource)
+	fc.Result = res
+	return ec.marshalNUserResource2ᚕᚖpentagiᚋpkgᚋgraphᚋmodelᚐUserResourceᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Query_resources(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_UserResource_id(ctx, field)
+			case "userId":
+				return ec.fieldContext_UserResource_userId(ctx, field)
+			case "name":
+				return ec.fieldContext_UserResource_name(ctx, field)
+			case "path":
+				return ec.fieldContext_UserResource_path(ctx, field)
+			case "size":
+				return ec.fieldContext_UserResource_size(ctx, field)
+			case "isDir":
+				return ec.fieldContext_UserResource_isDir(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_UserResource_createdAt(ctx, field)
+			case "updatedAt":
+				return ec.fieldContext_UserResource_updatedAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type UserResource", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_resources_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_knowledgeDocuments(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Query_knowledgeDocuments(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Query().KnowledgeDocuments(rctx, fc.Args["filter"].(*model.KnowledgeFilter), fc.Args["withContent"].(bool))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.([]*model.KnowledgeDocument)
+	fc.Result = res
+	return ec.marshalNKnowledgeDocument2ᚕᚖpentagiᚋpkgᚋgraphᚋmodelᚐKnowledgeDocumentᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Query_knowledgeDocuments(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_KnowledgeDocument_id(ctx, field)
+			case "docType":
+				return ec.fieldContext_KnowledgeDocument_docType(ctx, field)
+			case "content":
+				return ec.fieldContext_KnowledgeDocument_content(ctx, field)
+			case "question":
+				return ec.fieldContext_KnowledgeDocument_question(ctx, field)
+			case "description":
+				return ec.fieldContext_KnowledgeDocument_description(ctx, field)
+			case "userId":
+				return ec.fieldContext_KnowledgeDocument_userId(ctx, field)
+			case "flowId":
+				return ec.fieldContext_KnowledgeDocument_flowId(ctx, field)
+			case "taskId":
+				return ec.fieldContext_KnowledgeDocument_taskId(ctx, field)
+			case "subtaskId":
+				return ec.fieldContext_KnowledgeDocument_subtaskId(ctx, field)
+			case "guideType":
+				return ec.fieldContext_KnowledgeDocument_guideType(ctx, field)
+			case "answerType":
+				return ec.fieldContext_KnowledgeDocument_answerType(ctx, field)
+			case "codeLang":
+				return ec.fieldContext_KnowledgeDocument_codeLang(ctx, field)
+			case "partSize":
+				return ec.fieldContext_KnowledgeDocument_partSize(ctx, field)
+			case "totalSize":
+				return ec.fieldContext_KnowledgeDocument_totalSize(ctx, field)
+			case "manual":
+				return ec.fieldContext_KnowledgeDocument_manual(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type KnowledgeDocument", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_knowledgeDocuments_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_knowledgeDocument(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Query_knowledgeDocument(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Query().KnowledgeDocument(rctx, fc.Args["id"].(string))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(*model.KnowledgeDocument)
+	fc.Result = res
+	return ec.marshalNKnowledgeDocument2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐKnowledgeDocument(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Query_knowledgeDocument(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_KnowledgeDocument_id(ctx, field)
+			case "docType":
+				return ec.fieldContext_KnowledgeDocument_docType(ctx, field)
+			case "content":
+				return ec.fieldContext_KnowledgeDocument_content(ctx, field)
+			case "question":
+				return ec.fieldContext_KnowledgeDocument_question(ctx, field)
+			case "description":
+				return ec.fieldContext_KnowledgeDocument_description(ctx, field)
+			case "userId":
+				return ec.fieldContext_KnowledgeDocument_userId(ctx, field)
+			case "flowId":
+				return ec.fieldContext_KnowledgeDocument_flowId(ctx, field)
+			case "taskId":
+				return ec.fieldContext_KnowledgeDocument_taskId(ctx, field)
+			case "subtaskId":
+				return ec.fieldContext_KnowledgeDocument_subtaskId(ctx, field)
+			case "guideType":
+				return ec.fieldContext_KnowledgeDocument_guideType(ctx, field)
+			case "answerType":
+				return ec.fieldContext_KnowledgeDocument_answerType(ctx, field)
+			case "codeLang":
+				return ec.fieldContext_KnowledgeDocument_codeLang(ctx, field)
+			case "partSize":
+				return ec.fieldContext_KnowledgeDocument_partSize(ctx, field)
+			case "totalSize":
+				return ec.fieldContext_KnowledgeDocument_totalSize(ctx, field)
+			case "manual":
+				return ec.fieldContext_KnowledgeDocument_manual(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type KnowledgeDocument", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_knowledgeDocument_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_searchKnowledge(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Query_searchKnowledge(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Query().SearchKnowledge(rctx, fc.Args["query"].(string), fc.Args["filter"].(*model.KnowledgeFilter), fc.Args["limit"].(*int))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.([]*model.KnowledgeDocumentWithScore)
+	fc.Result = res
+	return ec.marshalNKnowledgeDocumentWithScore2ᚕᚖpentagiᚋpkgᚋgraphᚋmodelᚐKnowledgeDocumentWithScoreᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Query_searchKnowledge(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "score":
+				return ec.fieldContext_KnowledgeDocumentWithScore_score(ctx, field)
+			case "document":
+				return ec.fieldContext_KnowledgeDocumentWithScore_document(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type KnowledgeDocumentWithScore", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_searchKnowledge_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
 	}
 	return fc, nil
 }
@@ -22649,6 +26116,50 @@ func (ec *executionContext) fieldContext_Settings_askUser(_ context.Context, fie
 	return fc, nil
 }
 
+func (ec *executionContext) _Settings_version(ctx context.Context, field graphql.CollectedField, obj *model.Settings) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Settings_version(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Version, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Settings_version(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Settings",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Settings_dockerInside(ctx context.Context, field graphql.CollectedField, obj *model.Settings) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_Settings_dockerInside(ctx, field)
 	if err != nil {
@@ -22681,6 +26192,50 @@ func (ec *executionContext) _Settings_dockerInside(ctx context.Context, field gr
 }
 
 func (ec *executionContext) fieldContext_Settings_dockerInside(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Settings",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Settings_isDevelopMode(ctx context.Context, field graphql.CollectedField, obj *model.Settings) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Settings_isDevelopMode(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.IsDevelopMode, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(bool)
+	fc.Result = res
+	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Settings_isDevelopMode(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Settings",
 		Field:      field,
@@ -23398,6 +26953,255 @@ func (ec *executionContext) fieldContext_Subscription_assistantDeleted(ctx conte
 	return fc, nil
 }
 
+func (ec *executionContext) _Subscription_flowFileAdded(ctx context.Context, field graphql.CollectedField) (ret func(ctx context.Context) graphql.Marshaler) {
+	fc, err := ec.fieldContext_Subscription_flowFileAdded(ctx, field)
+	if err != nil {
+		return nil
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = nil
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Subscription().FlowFileAdded(rctx, fc.Args["flowId"].(int64))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return nil
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return nil
+	}
+	return func(ctx context.Context) graphql.Marshaler {
+		select {
+		case res, ok := <-resTmp.(<-chan *model.FlowFile):
+			if !ok {
+				return nil
+			}
+			return graphql.WriterFunc(func(w io.Writer) {
+				w.Write([]byte{'{'})
+				graphql.MarshalString(field.Alias).MarshalGQL(w)
+				w.Write([]byte{':'})
+				ec.marshalNFlowFile2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐFlowFile(ctx, field.Selections, res).MarshalGQL(w)
+				w.Write([]byte{'}'})
+			})
+		case <-ctx.Done():
+			return nil
+		}
+	}
+}
+
+func (ec *executionContext) fieldContext_Subscription_flowFileAdded(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Subscription",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_FlowFile_id(ctx, field)
+			case "name":
+				return ec.fieldContext_FlowFile_name(ctx, field)
+			case "path":
+				return ec.fieldContext_FlowFile_path(ctx, field)
+			case "size":
+				return ec.fieldContext_FlowFile_size(ctx, field)
+			case "isDir":
+				return ec.fieldContext_FlowFile_isDir(ctx, field)
+			case "modifiedAt":
+				return ec.fieldContext_FlowFile_modifiedAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type FlowFile", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Subscription_flowFileAdded_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Subscription_flowFileUpdated(ctx context.Context, field graphql.CollectedField) (ret func(ctx context.Context) graphql.Marshaler) {
+	fc, err := ec.fieldContext_Subscription_flowFileUpdated(ctx, field)
+	if err != nil {
+		return nil
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = nil
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Subscription().FlowFileUpdated(rctx, fc.Args["flowId"].(int64))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return nil
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return nil
+	}
+	return func(ctx context.Context) graphql.Marshaler {
+		select {
+		case res, ok := <-resTmp.(<-chan *model.FlowFile):
+			if !ok {
+				return nil
+			}
+			return graphql.WriterFunc(func(w io.Writer) {
+				w.Write([]byte{'{'})
+				graphql.MarshalString(field.Alias).MarshalGQL(w)
+				w.Write([]byte{':'})
+				ec.marshalNFlowFile2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐFlowFile(ctx, field.Selections, res).MarshalGQL(w)
+				w.Write([]byte{'}'})
+			})
+		case <-ctx.Done():
+			return nil
+		}
+	}
+}
+
+func (ec *executionContext) fieldContext_Subscription_flowFileUpdated(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Subscription",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_FlowFile_id(ctx, field)
+			case "name":
+				return ec.fieldContext_FlowFile_name(ctx, field)
+			case "path":
+				return ec.fieldContext_FlowFile_path(ctx, field)
+			case "size":
+				return ec.fieldContext_FlowFile_size(ctx, field)
+			case "isDir":
+				return ec.fieldContext_FlowFile_isDir(ctx, field)
+			case "modifiedAt":
+				return ec.fieldContext_FlowFile_modifiedAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type FlowFile", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Subscription_flowFileUpdated_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Subscription_flowFileDeleted(ctx context.Context, field graphql.CollectedField) (ret func(ctx context.Context) graphql.Marshaler) {
+	fc, err := ec.fieldContext_Subscription_flowFileDeleted(ctx, field)
+	if err != nil {
+		return nil
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = nil
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Subscription().FlowFileDeleted(rctx, fc.Args["flowId"].(int64))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return nil
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return nil
+	}
+	return func(ctx context.Context) graphql.Marshaler {
+		select {
+		case res, ok := <-resTmp.(<-chan *model.FlowFile):
+			if !ok {
+				return nil
+			}
+			return graphql.WriterFunc(func(w io.Writer) {
+				w.Write([]byte{'{'})
+				graphql.MarshalString(field.Alias).MarshalGQL(w)
+				w.Write([]byte{':'})
+				ec.marshalNFlowFile2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐFlowFile(ctx, field.Selections, res).MarshalGQL(w)
+				w.Write([]byte{'}'})
+			})
+		case <-ctx.Done():
+			return nil
+		}
+	}
+}
+
+func (ec *executionContext) fieldContext_Subscription_flowFileDeleted(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Subscription",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_FlowFile_id(ctx, field)
+			case "name":
+				return ec.fieldContext_FlowFile_name(ctx, field)
+			case "path":
+				return ec.fieldContext_FlowFile_path(ctx, field)
+			case "size":
+				return ec.fieldContext_FlowFile_size(ctx, field)
+			case "isDir":
+				return ec.fieldContext_FlowFile_isDir(ctx, field)
+			case "modifiedAt":
+				return ec.fieldContext_FlowFile_modifiedAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type FlowFile", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Subscription_flowFileDeleted_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Subscription_screenshotAdded(ctx context.Context, field graphql.CollectedField) (ret func(ctx context.Context) graphql.Marshaler) {
 	fc, err := ec.fieldContext_Subscription_screenshotAdded(ctx, field)
 	if err != nil {
@@ -24019,6 +27823,196 @@ func (ec *executionContext) fieldContext_Subscription_vectorStoreLogAdded(ctx co
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Subscription_vectorStoreLogAdded_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Subscription_toolCallLogAdded(ctx context.Context, field graphql.CollectedField) (ret func(ctx context.Context) graphql.Marshaler) {
+	fc, err := ec.fieldContext_Subscription_toolCallLogAdded(ctx, field)
+	if err != nil {
+		return nil
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = nil
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Subscription().ToolCallLogAdded(rctx, fc.Args["flowId"].(int64))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return nil
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return nil
+	}
+	return func(ctx context.Context) graphql.Marshaler {
+		select {
+		case res, ok := <-resTmp.(<-chan *model.ToolCallLog):
+			if !ok {
+				return nil
+			}
+			return graphql.WriterFunc(func(w io.Writer) {
+				w.Write([]byte{'{'})
+				graphql.MarshalString(field.Alias).MarshalGQL(w)
+				w.Write([]byte{':'})
+				ec.marshalNToolCallLog2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐToolCallLog(ctx, field.Selections, res).MarshalGQL(w)
+				w.Write([]byte{'}'})
+			})
+		case <-ctx.Done():
+			return nil
+		}
+	}
+}
+
+func (ec *executionContext) fieldContext_Subscription_toolCallLogAdded(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Subscription",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_ToolCallLog_id(ctx, field)
+			case "callId":
+				return ec.fieldContext_ToolCallLog_callId(ctx, field)
+			case "status":
+				return ec.fieldContext_ToolCallLog_status(ctx, field)
+			case "name":
+				return ec.fieldContext_ToolCallLog_name(ctx, field)
+			case "args":
+				return ec.fieldContext_ToolCallLog_args(ctx, field)
+			case "result":
+				return ec.fieldContext_ToolCallLog_result(ctx, field)
+			case "durationSeconds":
+				return ec.fieldContext_ToolCallLog_durationSeconds(ctx, field)
+			case "flowId":
+				return ec.fieldContext_ToolCallLog_flowId(ctx, field)
+			case "taskId":
+				return ec.fieldContext_ToolCallLog_taskId(ctx, field)
+			case "subtaskId":
+				return ec.fieldContext_ToolCallLog_subtaskId(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_ToolCallLog_createdAt(ctx, field)
+			case "updatedAt":
+				return ec.fieldContext_ToolCallLog_updatedAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type ToolCallLog", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Subscription_toolCallLogAdded_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Subscription_toolCallLogUpdated(ctx context.Context, field graphql.CollectedField) (ret func(ctx context.Context) graphql.Marshaler) {
+	fc, err := ec.fieldContext_Subscription_toolCallLogUpdated(ctx, field)
+	if err != nil {
+		return nil
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = nil
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Subscription().ToolCallLogUpdated(rctx, fc.Args["flowId"].(int64))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return nil
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return nil
+	}
+	return func(ctx context.Context) graphql.Marshaler {
+		select {
+		case res, ok := <-resTmp.(<-chan *model.ToolCallLog):
+			if !ok {
+				return nil
+			}
+			return graphql.WriterFunc(func(w io.Writer) {
+				w.Write([]byte{'{'})
+				graphql.MarshalString(field.Alias).MarshalGQL(w)
+				w.Write([]byte{':'})
+				ec.marshalNToolCallLog2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐToolCallLog(ctx, field.Selections, res).MarshalGQL(w)
+				w.Write([]byte{'}'})
+			})
+		case <-ctx.Done():
+			return nil
+		}
+	}
+}
+
+func (ec *executionContext) fieldContext_Subscription_toolCallLogUpdated(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Subscription",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_ToolCallLog_id(ctx, field)
+			case "callId":
+				return ec.fieldContext_ToolCallLog_callId(ctx, field)
+			case "status":
+				return ec.fieldContext_ToolCallLog_status(ctx, field)
+			case "name":
+				return ec.fieldContext_ToolCallLog_name(ctx, field)
+			case "args":
+				return ec.fieldContext_ToolCallLog_args(ctx, field)
+			case "result":
+				return ec.fieldContext_ToolCallLog_result(ctx, field)
+			case "durationSeconds":
+				return ec.fieldContext_ToolCallLog_durationSeconds(ctx, field)
+			case "flowId":
+				return ec.fieldContext_ToolCallLog_flowId(ctx, field)
+			case "taskId":
+				return ec.fieldContext_ToolCallLog_taskId(ctx, field)
+			case "subtaskId":
+				return ec.fieldContext_ToolCallLog_subtaskId(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_ToolCallLog_createdAt(ctx, field)
+			case "updatedAt":
+				return ec.fieldContext_ToolCallLog_updatedAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type ToolCallLog", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Subscription_toolCallLogUpdated_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -24932,6 +28926,504 @@ func (ec *executionContext) fieldContext_Subscription_flowTemplateDeleted(_ cont
 				return ec.fieldContext_FlowTemplate_updatedAt(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type FlowTemplate", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Subscription_resourceAdded(ctx context.Context, field graphql.CollectedField) (ret func(ctx context.Context) graphql.Marshaler) {
+	fc, err := ec.fieldContext_Subscription_resourceAdded(ctx, field)
+	if err != nil {
+		return nil
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = nil
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Subscription().ResourceAdded(rctx)
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return nil
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return nil
+	}
+	return func(ctx context.Context) graphql.Marshaler {
+		select {
+		case res, ok := <-resTmp.(<-chan *model.UserResource):
+			if !ok {
+				return nil
+			}
+			return graphql.WriterFunc(func(w io.Writer) {
+				w.Write([]byte{'{'})
+				graphql.MarshalString(field.Alias).MarshalGQL(w)
+				w.Write([]byte{':'})
+				ec.marshalNUserResource2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐUserResource(ctx, field.Selections, res).MarshalGQL(w)
+				w.Write([]byte{'}'})
+			})
+		case <-ctx.Done():
+			return nil
+		}
+	}
+}
+
+func (ec *executionContext) fieldContext_Subscription_resourceAdded(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Subscription",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_UserResource_id(ctx, field)
+			case "userId":
+				return ec.fieldContext_UserResource_userId(ctx, field)
+			case "name":
+				return ec.fieldContext_UserResource_name(ctx, field)
+			case "path":
+				return ec.fieldContext_UserResource_path(ctx, field)
+			case "size":
+				return ec.fieldContext_UserResource_size(ctx, field)
+			case "isDir":
+				return ec.fieldContext_UserResource_isDir(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_UserResource_createdAt(ctx, field)
+			case "updatedAt":
+				return ec.fieldContext_UserResource_updatedAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type UserResource", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Subscription_resourceUpdated(ctx context.Context, field graphql.CollectedField) (ret func(ctx context.Context) graphql.Marshaler) {
+	fc, err := ec.fieldContext_Subscription_resourceUpdated(ctx, field)
+	if err != nil {
+		return nil
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = nil
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Subscription().ResourceUpdated(rctx)
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return nil
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return nil
+	}
+	return func(ctx context.Context) graphql.Marshaler {
+		select {
+		case res, ok := <-resTmp.(<-chan *model.UserResource):
+			if !ok {
+				return nil
+			}
+			return graphql.WriterFunc(func(w io.Writer) {
+				w.Write([]byte{'{'})
+				graphql.MarshalString(field.Alias).MarshalGQL(w)
+				w.Write([]byte{':'})
+				ec.marshalNUserResource2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐUserResource(ctx, field.Selections, res).MarshalGQL(w)
+				w.Write([]byte{'}'})
+			})
+		case <-ctx.Done():
+			return nil
+		}
+	}
+}
+
+func (ec *executionContext) fieldContext_Subscription_resourceUpdated(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Subscription",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_UserResource_id(ctx, field)
+			case "userId":
+				return ec.fieldContext_UserResource_userId(ctx, field)
+			case "name":
+				return ec.fieldContext_UserResource_name(ctx, field)
+			case "path":
+				return ec.fieldContext_UserResource_path(ctx, field)
+			case "size":
+				return ec.fieldContext_UserResource_size(ctx, field)
+			case "isDir":
+				return ec.fieldContext_UserResource_isDir(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_UserResource_createdAt(ctx, field)
+			case "updatedAt":
+				return ec.fieldContext_UserResource_updatedAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type UserResource", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Subscription_resourceDeleted(ctx context.Context, field graphql.CollectedField) (ret func(ctx context.Context) graphql.Marshaler) {
+	fc, err := ec.fieldContext_Subscription_resourceDeleted(ctx, field)
+	if err != nil {
+		return nil
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = nil
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Subscription().ResourceDeleted(rctx)
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return nil
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return nil
+	}
+	return func(ctx context.Context) graphql.Marshaler {
+		select {
+		case res, ok := <-resTmp.(<-chan *model.UserResource):
+			if !ok {
+				return nil
+			}
+			return graphql.WriterFunc(func(w io.Writer) {
+				w.Write([]byte{'{'})
+				graphql.MarshalString(field.Alias).MarshalGQL(w)
+				w.Write([]byte{':'})
+				ec.marshalNUserResource2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐUserResource(ctx, field.Selections, res).MarshalGQL(w)
+				w.Write([]byte{'}'})
+			})
+		case <-ctx.Done():
+			return nil
+		}
+	}
+}
+
+func (ec *executionContext) fieldContext_Subscription_resourceDeleted(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Subscription",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_UserResource_id(ctx, field)
+			case "userId":
+				return ec.fieldContext_UserResource_userId(ctx, field)
+			case "name":
+				return ec.fieldContext_UserResource_name(ctx, field)
+			case "path":
+				return ec.fieldContext_UserResource_path(ctx, field)
+			case "size":
+				return ec.fieldContext_UserResource_size(ctx, field)
+			case "isDir":
+				return ec.fieldContext_UserResource_isDir(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_UserResource_createdAt(ctx, field)
+			case "updatedAt":
+				return ec.fieldContext_UserResource_updatedAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type UserResource", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Subscription_knowledgeDocumentCreated(ctx context.Context, field graphql.CollectedField) (ret func(ctx context.Context) graphql.Marshaler) {
+	fc, err := ec.fieldContext_Subscription_knowledgeDocumentCreated(ctx, field)
+	if err != nil {
+		return nil
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = nil
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Subscription().KnowledgeDocumentCreated(rctx)
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return nil
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return nil
+	}
+	return func(ctx context.Context) graphql.Marshaler {
+		select {
+		case res, ok := <-resTmp.(<-chan *model.KnowledgeDocument):
+			if !ok {
+				return nil
+			}
+			return graphql.WriterFunc(func(w io.Writer) {
+				w.Write([]byte{'{'})
+				graphql.MarshalString(field.Alias).MarshalGQL(w)
+				w.Write([]byte{':'})
+				ec.marshalNKnowledgeDocument2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐKnowledgeDocument(ctx, field.Selections, res).MarshalGQL(w)
+				w.Write([]byte{'}'})
+			})
+		case <-ctx.Done():
+			return nil
+		}
+	}
+}
+
+func (ec *executionContext) fieldContext_Subscription_knowledgeDocumentCreated(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Subscription",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_KnowledgeDocument_id(ctx, field)
+			case "docType":
+				return ec.fieldContext_KnowledgeDocument_docType(ctx, field)
+			case "content":
+				return ec.fieldContext_KnowledgeDocument_content(ctx, field)
+			case "question":
+				return ec.fieldContext_KnowledgeDocument_question(ctx, field)
+			case "description":
+				return ec.fieldContext_KnowledgeDocument_description(ctx, field)
+			case "userId":
+				return ec.fieldContext_KnowledgeDocument_userId(ctx, field)
+			case "flowId":
+				return ec.fieldContext_KnowledgeDocument_flowId(ctx, field)
+			case "taskId":
+				return ec.fieldContext_KnowledgeDocument_taskId(ctx, field)
+			case "subtaskId":
+				return ec.fieldContext_KnowledgeDocument_subtaskId(ctx, field)
+			case "guideType":
+				return ec.fieldContext_KnowledgeDocument_guideType(ctx, field)
+			case "answerType":
+				return ec.fieldContext_KnowledgeDocument_answerType(ctx, field)
+			case "codeLang":
+				return ec.fieldContext_KnowledgeDocument_codeLang(ctx, field)
+			case "partSize":
+				return ec.fieldContext_KnowledgeDocument_partSize(ctx, field)
+			case "totalSize":
+				return ec.fieldContext_KnowledgeDocument_totalSize(ctx, field)
+			case "manual":
+				return ec.fieldContext_KnowledgeDocument_manual(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type KnowledgeDocument", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Subscription_knowledgeDocumentUpdated(ctx context.Context, field graphql.CollectedField) (ret func(ctx context.Context) graphql.Marshaler) {
+	fc, err := ec.fieldContext_Subscription_knowledgeDocumentUpdated(ctx, field)
+	if err != nil {
+		return nil
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = nil
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Subscription().KnowledgeDocumentUpdated(rctx)
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return nil
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return nil
+	}
+	return func(ctx context.Context) graphql.Marshaler {
+		select {
+		case res, ok := <-resTmp.(<-chan *model.KnowledgeDocument):
+			if !ok {
+				return nil
+			}
+			return graphql.WriterFunc(func(w io.Writer) {
+				w.Write([]byte{'{'})
+				graphql.MarshalString(field.Alias).MarshalGQL(w)
+				w.Write([]byte{':'})
+				ec.marshalNKnowledgeDocument2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐKnowledgeDocument(ctx, field.Selections, res).MarshalGQL(w)
+				w.Write([]byte{'}'})
+			})
+		case <-ctx.Done():
+			return nil
+		}
+	}
+}
+
+func (ec *executionContext) fieldContext_Subscription_knowledgeDocumentUpdated(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Subscription",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_KnowledgeDocument_id(ctx, field)
+			case "docType":
+				return ec.fieldContext_KnowledgeDocument_docType(ctx, field)
+			case "content":
+				return ec.fieldContext_KnowledgeDocument_content(ctx, field)
+			case "question":
+				return ec.fieldContext_KnowledgeDocument_question(ctx, field)
+			case "description":
+				return ec.fieldContext_KnowledgeDocument_description(ctx, field)
+			case "userId":
+				return ec.fieldContext_KnowledgeDocument_userId(ctx, field)
+			case "flowId":
+				return ec.fieldContext_KnowledgeDocument_flowId(ctx, field)
+			case "taskId":
+				return ec.fieldContext_KnowledgeDocument_taskId(ctx, field)
+			case "subtaskId":
+				return ec.fieldContext_KnowledgeDocument_subtaskId(ctx, field)
+			case "guideType":
+				return ec.fieldContext_KnowledgeDocument_guideType(ctx, field)
+			case "answerType":
+				return ec.fieldContext_KnowledgeDocument_answerType(ctx, field)
+			case "codeLang":
+				return ec.fieldContext_KnowledgeDocument_codeLang(ctx, field)
+			case "partSize":
+				return ec.fieldContext_KnowledgeDocument_partSize(ctx, field)
+			case "totalSize":
+				return ec.fieldContext_KnowledgeDocument_totalSize(ctx, field)
+			case "manual":
+				return ec.fieldContext_KnowledgeDocument_manual(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type KnowledgeDocument", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Subscription_knowledgeDocumentDeleted(ctx context.Context, field graphql.CollectedField) (ret func(ctx context.Context) graphql.Marshaler) {
+	fc, err := ec.fieldContext_Subscription_knowledgeDocumentDeleted(ctx, field)
+	if err != nil {
+		return nil
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = nil
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Subscription().KnowledgeDocumentDeleted(rctx)
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return nil
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return nil
+	}
+	return func(ctx context.Context) graphql.Marshaler {
+		select {
+		case res, ok := <-resTmp.(<-chan *model.KnowledgeDocument):
+			if !ok {
+				return nil
+			}
+			return graphql.WriterFunc(func(w io.Writer) {
+				w.Write([]byte{'{'})
+				graphql.MarshalString(field.Alias).MarshalGQL(w)
+				w.Write([]byte{':'})
+				ec.marshalNKnowledgeDocument2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐKnowledgeDocument(ctx, field.Selections, res).MarshalGQL(w)
+				w.Write([]byte{'}'})
+			})
+		case <-ctx.Done():
+			return nil
+		}
+	}
+}
+
+func (ec *executionContext) fieldContext_Subscription_knowledgeDocumentDeleted(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Subscription",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_KnowledgeDocument_id(ctx, field)
+			case "docType":
+				return ec.fieldContext_KnowledgeDocument_docType(ctx, field)
+			case "content":
+				return ec.fieldContext_KnowledgeDocument_content(ctx, field)
+			case "question":
+				return ec.fieldContext_KnowledgeDocument_question(ctx, field)
+			case "description":
+				return ec.fieldContext_KnowledgeDocument_description(ctx, field)
+			case "userId":
+				return ec.fieldContext_KnowledgeDocument_userId(ctx, field)
+			case "flowId":
+				return ec.fieldContext_KnowledgeDocument_flowId(ctx, field)
+			case "taskId":
+				return ec.fieldContext_KnowledgeDocument_taskId(ctx, field)
+			case "subtaskId":
+				return ec.fieldContext_KnowledgeDocument_subtaskId(ctx, field)
+			case "guideType":
+				return ec.fieldContext_KnowledgeDocument_guideType(ctx, field)
+			case "answerType":
+				return ec.fieldContext_KnowledgeDocument_answerType(ctx, field)
+			case "codeLang":
+				return ec.fieldContext_KnowledgeDocument_codeLang(ctx, field)
+			case "partSize":
+				return ec.fieldContext_KnowledgeDocument_partSize(ctx, field)
+			case "totalSize":
+				return ec.fieldContext_KnowledgeDocument_totalSize(ctx, field)
+			case "manual":
+				return ec.fieldContext_KnowledgeDocument_manual(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type KnowledgeDocument", field.Name)
 		},
 	}
 	return fc, nil
@@ -27018,6 +31510,528 @@ func (ec *executionContext) fieldContext_TestResult_error(_ context.Context, fie
 	return fc, nil
 }
 
+func (ec *executionContext) _ToolCallLog_id(ctx context.Context, field graphql.CollectedField, obj *model.ToolCallLog) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_ToolCallLog_id(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.ID, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(int64)
+	fc.Result = res
+	return ec.marshalNID2int64(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_ToolCallLog_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ToolCallLog",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ToolCallLog_callId(ctx context.Context, field graphql.CollectedField, obj *model.ToolCallLog) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_ToolCallLog_callId(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.CallID, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_ToolCallLog_callId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ToolCallLog",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ToolCallLog_status(ctx context.Context, field graphql.CollectedField, obj *model.ToolCallLog) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_ToolCallLog_status(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Status, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(model.ToolCallStatus)
+	fc.Result = res
+	return ec.marshalNToolCallStatus2pentagiᚋpkgᚋgraphᚋmodelᚐToolCallStatus(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_ToolCallLog_status(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ToolCallLog",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ToolCallStatus does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ToolCallLog_name(ctx context.Context, field graphql.CollectedField, obj *model.ToolCallLog) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_ToolCallLog_name(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Name, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_ToolCallLog_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ToolCallLog",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ToolCallLog_args(ctx context.Context, field graphql.CollectedField, obj *model.ToolCallLog) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_ToolCallLog_args(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Args, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_ToolCallLog_args(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ToolCallLog",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ToolCallLog_result(ctx context.Context, field graphql.CollectedField, obj *model.ToolCallLog) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_ToolCallLog_result(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Result, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_ToolCallLog_result(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ToolCallLog",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ToolCallLog_durationSeconds(ctx context.Context, field graphql.CollectedField, obj *model.ToolCallLog) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_ToolCallLog_durationSeconds(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.DurationSeconds, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(float64)
+	fc.Result = res
+	return ec.marshalNFloat2float64(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_ToolCallLog_durationSeconds(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ToolCallLog",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Float does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ToolCallLog_flowId(ctx context.Context, field graphql.CollectedField, obj *model.ToolCallLog) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_ToolCallLog_flowId(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.FlowID, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(int64)
+	fc.Result = res
+	return ec.marshalNID2int64(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_ToolCallLog_flowId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ToolCallLog",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ToolCallLog_taskId(ctx context.Context, field graphql.CollectedField, obj *model.ToolCallLog) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_ToolCallLog_taskId(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.TaskID, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*int64)
+	fc.Result = res
+	return ec.marshalOID2ᚖint64(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_ToolCallLog_taskId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ToolCallLog",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ToolCallLog_subtaskId(ctx context.Context, field graphql.CollectedField, obj *model.ToolCallLog) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_ToolCallLog_subtaskId(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.SubtaskID, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*int64)
+	fc.Result = res
+	return ec.marshalOID2ᚖint64(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_ToolCallLog_subtaskId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ToolCallLog",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ToolCallLog_createdAt(ctx context.Context, field graphql.CollectedField, obj *model.ToolCallLog) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_ToolCallLog_createdAt(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.CreatedAt, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(time.Time)
+	fc.Result = res
+	return ec.marshalNTime2timeᚐTime(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_ToolCallLog_createdAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ToolCallLog",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Time does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ToolCallLog_updatedAt(ctx context.Context, field graphql.CollectedField, obj *model.ToolCallLog) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_ToolCallLog_updatedAt(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.UpdatedAt, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(time.Time)
+	fc.Result = res
+	return ec.marshalNTime2timeᚐTime(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_ToolCallLog_updatedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ToolCallLog",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Time does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _ToolcallsStats_totalCount(ctx context.Context, field graphql.CollectedField, obj *model.ToolcallsStats) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_ToolcallsStats_totalCount(ctx, field)
 	if err != nil {
@@ -28292,6 +33306,358 @@ func (ec *executionContext) _UserPrompt_updatedAt(ctx context.Context, field gra
 func (ec *executionContext) fieldContext_UserPrompt_updatedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "UserPrompt",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Time does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _UserResource_id(ctx context.Context, field graphql.CollectedField, obj *model.UserResource) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_UserResource_id(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.ID, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(int64)
+	fc.Result = res
+	return ec.marshalNID2int64(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_UserResource_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "UserResource",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _UserResource_userId(ctx context.Context, field graphql.CollectedField, obj *model.UserResource) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_UserResource_userId(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.UserID, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(int64)
+	fc.Result = res
+	return ec.marshalNID2int64(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_UserResource_userId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "UserResource",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _UserResource_name(ctx context.Context, field graphql.CollectedField, obj *model.UserResource) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_UserResource_name(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Name, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_UserResource_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "UserResource",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _UserResource_path(ctx context.Context, field graphql.CollectedField, obj *model.UserResource) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_UserResource_path(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Path, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_UserResource_path(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "UserResource",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _UserResource_size(ctx context.Context, field graphql.CollectedField, obj *model.UserResource) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_UserResource_size(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Size, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(int)
+	fc.Result = res
+	return ec.marshalNInt2int(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_UserResource_size(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "UserResource",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _UserResource_isDir(ctx context.Context, field graphql.CollectedField, obj *model.UserResource) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_UserResource_isDir(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.IsDir, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(bool)
+	fc.Result = res
+	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_UserResource_isDir(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "UserResource",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _UserResource_createdAt(ctx context.Context, field graphql.CollectedField, obj *model.UserResource) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_UserResource_createdAt(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.CreatedAt, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(time.Time)
+	fc.Result = res
+	return ec.marshalNTime2timeᚐTime(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_UserResource_createdAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "UserResource",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Time does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _UserResource_updatedAt(ctx context.Context, field graphql.CollectedField, obj *model.UserResource) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_UserResource_updatedAt(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.UpdatedAt, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(time.Time)
+	fc.Result = res
+	return ec.marshalNTime2timeᚐTime(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_UserResource_updatedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "UserResource",
 		Field:      field,
 		IsMethod:   false,
 		IsResolver: false,
@@ -30836,6 +36202,137 @@ func (ec *executionContext) unmarshalInputCreateFlowTemplateInput(ctx context.Co
 	return it, nil
 }
 
+func (ec *executionContext) unmarshalInputCreateKnowledgeDocumentInput(ctx context.Context, obj interface{}) (model.CreateKnowledgeDocumentInput, error) {
+	var it model.CreateKnowledgeDocumentInput
+	asMap := map[string]interface{}{}
+	for k, v := range obj.(map[string]interface{}) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"docType", "content", "question", "description", "guideType", "answerType", "codeLang"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "docType":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("docType"))
+			data, err := ec.unmarshalNKnowledgeDocType2pentagiᚋpkgᚋgraphᚋmodelᚐKnowledgeDocType(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.DocType = data
+		case "content":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("content"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Content = data
+		case "question":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("question"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Question = data
+		case "description":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("description"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Description = data
+		case "guideType":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("guideType"))
+			data, err := ec.unmarshalOKnowledgeGuideType2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐKnowledgeGuideType(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.GuideType = data
+		case "answerType":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("answerType"))
+			data, err := ec.unmarshalOKnowledgeAnswerType2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐKnowledgeAnswerType(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.AnswerType = data
+		case "codeLang":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("codeLang"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.CodeLang = data
+		}
+	}
+
+	return it, nil
+}
+
+func (ec *executionContext) unmarshalInputKnowledgeFilter(ctx context.Context, obj interface{}) (model.KnowledgeFilter, error) {
+	var it model.KnowledgeFilter
+	asMap := map[string]interface{}{}
+	for k, v := range obj.(map[string]interface{}) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"docTypes", "guideTypes", "answerTypes", "codeLangs", "flowId", "manual"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "docTypes":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("docTypes"))
+			data, err := ec.unmarshalOKnowledgeDocType2ᚕpentagiᚋpkgᚋgraphᚋmodelᚐKnowledgeDocTypeᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.DocTypes = data
+		case "guideTypes":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("guideTypes"))
+			data, err := ec.unmarshalOKnowledgeGuideType2ᚕpentagiᚋpkgᚋgraphᚋmodelᚐKnowledgeGuideTypeᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.GuideTypes = data
+		case "answerTypes":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("answerTypes"))
+			data, err := ec.unmarshalOKnowledgeAnswerType2ᚕpentagiᚋpkgᚋgraphᚋmodelᚐKnowledgeAnswerTypeᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.AnswerTypes = data
+		case "codeLangs":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("codeLangs"))
+			data, err := ec.unmarshalOString2ᚕstringᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.CodeLangs = data
+		case "flowId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("flowId"))
+			data, err := ec.unmarshalOID2ᚖint64(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.FlowID = data
+		case "manual":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("manual"))
+			data, err := ec.unmarshalOBoolean2ᚖbool(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Manual = data
+		}
+	}
+
+	return it, nil
+}
+
 func (ec *executionContext) unmarshalInputModelPriceInput(ctx context.Context, obj interface{}) (model.ModelPrice, error) {
 	var it model.ModelPrice
 	asMap := map[string]interface{}{}
@@ -30980,6 +36477,75 @@ func (ec *executionContext) unmarshalInputUpdateFlowTemplateInput(ctx context.Co
 				return it, err
 			}
 			it.Text = data
+		}
+	}
+
+	return it, nil
+}
+
+func (ec *executionContext) unmarshalInputUpdateKnowledgeDocumentInput(ctx context.Context, obj interface{}) (model.UpdateKnowledgeDocumentInput, error) {
+	var it model.UpdateKnowledgeDocumentInput
+	asMap := map[string]interface{}{}
+	for k, v := range obj.(map[string]interface{}) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"content", "question", "description", "docType", "guideType", "answerType", "codeLang"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "content":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("content"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Content = data
+		case "question":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("question"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Question = data
+		case "description":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("description"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Description = data
+		case "docType":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("docType"))
+			data, err := ec.unmarshalOKnowledgeDocType2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐKnowledgeDocType(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.DocType = data
+		case "guideType":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("guideType"))
+			data, err := ec.unmarshalOKnowledgeGuideType2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐKnowledgeGuideType(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.GuideType = data
+		case "answerType":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("answerType"))
+			data, err := ec.unmarshalOKnowledgeAnswerType2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐKnowledgeAnswerType(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.AnswerType = data
+		case "codeLang":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("codeLang"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.CodeLang = data
 		}
 	}
 
@@ -32273,6 +37839,70 @@ func (ec *executionContext) _FlowExecutionStats(ctx context.Context, sel ast.Sel
 	return out
 }
 
+var flowFileImplementors = []string{"FlowFile"}
+
+func (ec *executionContext) _FlowFile(ctx context.Context, sel ast.SelectionSet, obj *model.FlowFile) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, flowFileImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("FlowFile")
+		case "id":
+			out.Values[i] = ec._FlowFile_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "name":
+			out.Values[i] = ec._FlowFile_name(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "path":
+			out.Values[i] = ec._FlowFile_path(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "size":
+			out.Values[i] = ec._FlowFile_size(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "isDir":
+			out.Values[i] = ec._FlowFile_isDir(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "modifiedAt":
+			out.Values[i] = ec._FlowFile_modifiedAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
 var flowStatsImplementors = []string{"FlowStats"}
 
 func (ec *executionContext) _FlowStats(ctx context.Context, sel ast.SelectionSet, obj *model.FlowStats) graphql.Marshaler {
@@ -32499,6 +38129,138 @@ func (ec *executionContext) _FunctionToolcallsStats(ctx context.Context, sel ast
 	return out
 }
 
+var knowledgeDocumentImplementors = []string{"KnowledgeDocument"}
+
+func (ec *executionContext) _KnowledgeDocument(ctx context.Context, sel ast.SelectionSet, obj *model.KnowledgeDocument) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, knowledgeDocumentImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("KnowledgeDocument")
+		case "id":
+			out.Values[i] = ec._KnowledgeDocument_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "docType":
+			out.Values[i] = ec._KnowledgeDocument_docType(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "content":
+			out.Values[i] = ec._KnowledgeDocument_content(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "question":
+			out.Values[i] = ec._KnowledgeDocument_question(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "description":
+			out.Values[i] = ec._KnowledgeDocument_description(ctx, field, obj)
+		case "userId":
+			out.Values[i] = ec._KnowledgeDocument_userId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "flowId":
+			out.Values[i] = ec._KnowledgeDocument_flowId(ctx, field, obj)
+		case "taskId":
+			out.Values[i] = ec._KnowledgeDocument_taskId(ctx, field, obj)
+		case "subtaskId":
+			out.Values[i] = ec._KnowledgeDocument_subtaskId(ctx, field, obj)
+		case "guideType":
+			out.Values[i] = ec._KnowledgeDocument_guideType(ctx, field, obj)
+		case "answerType":
+			out.Values[i] = ec._KnowledgeDocument_answerType(ctx, field, obj)
+		case "codeLang":
+			out.Values[i] = ec._KnowledgeDocument_codeLang(ctx, field, obj)
+		case "partSize":
+			out.Values[i] = ec._KnowledgeDocument_partSize(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "totalSize":
+			out.Values[i] = ec._KnowledgeDocument_totalSize(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "manual":
+			out.Values[i] = ec._KnowledgeDocument_manual(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var knowledgeDocumentWithScoreImplementors = []string{"KnowledgeDocumentWithScore"}
+
+func (ec *executionContext) _KnowledgeDocumentWithScore(ctx context.Context, sel ast.SelectionSet, obj *model.KnowledgeDocumentWithScore) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, knowledgeDocumentWithScoreImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("KnowledgeDocumentWithScore")
+		case "score":
+			out.Values[i] = ec._KnowledgeDocumentWithScore_score(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "document":
+			out.Values[i] = ec._KnowledgeDocumentWithScore_document(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
 var messageLogImplementors = []string{"MessageLog"}
 
 func (ec *executionContext) _MessageLog(ctx context.Context, sel ast.SelectionSet, obj *model.MessageLog) graphql.Marshaler {
@@ -32548,6 +38310,60 @@ func (ec *executionContext) _MessageLog(ctx context.Context, sel ast.SelectionSe
 			out.Values[i] = ec._MessageLog_subtaskId(ctx, field, obj)
 		case "createdAt":
 			out.Values[i] = ec._MessageLog_createdAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var modelAgentsUsageStatsImplementors = []string{"ModelAgentsUsageStats"}
+
+func (ec *executionContext) _ModelAgentsUsageStats(ctx context.Context, sel ast.SelectionSet, obj *model.ModelAgentsUsageStats) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, modelAgentsUsageStatsImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("ModelAgentsUsageStats")
+		case "model":
+			out.Values[i] = ec._ModelAgentsUsageStats_model(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "provider":
+			out.Values[i] = ec._ModelAgentsUsageStats_provider(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "agentTypes":
+			out.Values[i] = ec._ModelAgentsUsageStats_agentTypes(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "stats":
+			out.Values[i] = ec._ModelAgentsUsageStats_stats(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -32928,6 +38744,34 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		case "deleteFlowTemplate":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_deleteFlowTemplate(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "createKnowledgeDocument":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_createKnowledgeDocument(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "updateKnowledgeDocument":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_updateKnowledgeDocument(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "deleteKnowledgeDocument":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_deleteKnowledgeDocument(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "anonymizeText":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_anonymizeText(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
@@ -33612,6 +39456,28 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "flowFiles":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_flowFiles(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "screenshots":
 			field := field
 
@@ -33717,6 +39583,25 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 					}
 				}()
 				res = ec._Query_vectorStoreLogs(ctx, field)
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "toolCallLogs":
+			field := field
+
+			innerFunc := func(ctx context.Context, _ *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_toolCallLogs(ctx, field)
 				return res
 			}
 
@@ -33887,6 +39772,28 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 					}
 				}()
 				res = ec._Query_usageStatsByAgentTypeForFlow(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "usageStatsByModelAgentsForFlow":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_usageStatsByModelAgentsForFlow(ctx, field)
 				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}
@@ -34267,6 +40174,94 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "resources":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_resources(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "knowledgeDocuments":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_knowledgeDocuments(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "knowledgeDocument":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_knowledgeDocument(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "searchKnowledge":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_searchKnowledge(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "__type":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Query___type(ctx, field)
@@ -34498,8 +40493,18 @@ func (ec *executionContext) _Settings(ctx context.Context, sel ast.SelectionSet,
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "version":
+			out.Values[i] = ec._Settings_version(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "dockerInside":
 			out.Values[i] = ec._Settings_dockerInside(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "isDevelopMode":
+			out.Values[i] = ec._Settings_isDevelopMode(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -34560,6 +40565,12 @@ func (ec *executionContext) _Subscription(ctx context.Context, sel ast.Selection
 		return ec._Subscription_assistantUpdated(ctx, fields[0])
 	case "assistantDeleted":
 		return ec._Subscription_assistantDeleted(ctx, fields[0])
+	case "flowFileAdded":
+		return ec._Subscription_flowFileAdded(ctx, fields[0])
+	case "flowFileUpdated":
+		return ec._Subscription_flowFileUpdated(ctx, fields[0])
+	case "flowFileDeleted":
+		return ec._Subscription_flowFileDeleted(ctx, fields[0])
 	case "screenshotAdded":
 		return ec._Subscription_screenshotAdded(ctx, fields[0])
 	case "terminalLogAdded":
@@ -34574,6 +40585,10 @@ func (ec *executionContext) _Subscription(ctx context.Context, sel ast.Selection
 		return ec._Subscription_searchLogAdded(ctx, fields[0])
 	case "vectorStoreLogAdded":
 		return ec._Subscription_vectorStoreLogAdded(ctx, fields[0])
+	case "toolCallLogAdded":
+		return ec._Subscription_toolCallLogAdded(ctx, fields[0])
+	case "toolCallLogUpdated":
+		return ec._Subscription_toolCallLogUpdated(ctx, fields[0])
 	case "assistantLogAdded":
 		return ec._Subscription_assistantLogAdded(ctx, fields[0])
 	case "assistantLogUpdated":
@@ -34598,6 +40613,18 @@ func (ec *executionContext) _Subscription(ctx context.Context, sel ast.Selection
 		return ec._Subscription_flowTemplateUpdated(ctx, fields[0])
 	case "flowTemplateDeleted":
 		return ec._Subscription_flowTemplateDeleted(ctx, fields[0])
+	case "resourceAdded":
+		return ec._Subscription_resourceAdded(ctx, fields[0])
+	case "resourceUpdated":
+		return ec._Subscription_resourceUpdated(ctx, fields[0])
+	case "resourceDeleted":
+		return ec._Subscription_resourceDeleted(ctx, fields[0])
+	case "knowledgeDocumentCreated":
+		return ec._Subscription_knowledgeDocumentCreated(ctx, fields[0])
+	case "knowledgeDocumentUpdated":
+		return ec._Subscription_knowledgeDocumentUpdated(ctx, fields[0])
+	case "knowledgeDocumentDeleted":
+		return ec._Subscription_knowledgeDocumentDeleted(ctx, fields[0])
 	default:
 		panic("unknown field " + strconv.Quote(fields[0].Name))
 	}
@@ -35061,6 +41088,94 @@ func (ec *executionContext) _TestResult(ctx context.Context, sel ast.SelectionSe
 	return out
 }
 
+var toolCallLogImplementors = []string{"ToolCallLog"}
+
+func (ec *executionContext) _ToolCallLog(ctx context.Context, sel ast.SelectionSet, obj *model.ToolCallLog) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, toolCallLogImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("ToolCallLog")
+		case "id":
+			out.Values[i] = ec._ToolCallLog_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "callId":
+			out.Values[i] = ec._ToolCallLog_callId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "status":
+			out.Values[i] = ec._ToolCallLog_status(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "name":
+			out.Values[i] = ec._ToolCallLog_name(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "args":
+			out.Values[i] = ec._ToolCallLog_args(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "result":
+			out.Values[i] = ec._ToolCallLog_result(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "durationSeconds":
+			out.Values[i] = ec._ToolCallLog_durationSeconds(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "flowId":
+			out.Values[i] = ec._ToolCallLog_flowId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "taskId":
+			out.Values[i] = ec._ToolCallLog_taskId(ctx, field, obj)
+		case "subtaskId":
+			out.Values[i] = ec._ToolCallLog_subtaskId(ctx, field, obj)
+		case "createdAt":
+			out.Values[i] = ec._ToolCallLog_createdAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "updatedAt":
+			out.Values[i] = ec._ToolCallLog_updatedAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
 var toolcallsStatsImplementors = []string{"ToolcallsStats"}
 
 func (ec *executionContext) _ToolcallsStats(ctx context.Context, sel ast.SelectionSet, obj *model.ToolcallsStats) graphql.Marshaler {
@@ -35340,6 +41455,80 @@ func (ec *executionContext) _UserPrompt(ctx context.Context, sel ast.SelectionSe
 			}
 		case "updatedAt":
 			out.Values[i] = ec._UserPrompt_updatedAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var userResourceImplementors = []string{"UserResource"}
+
+func (ec *executionContext) _UserResource(ctx context.Context, sel ast.SelectionSet, obj *model.UserResource) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, userResourceImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("UserResource")
+		case "id":
+			out.Values[i] = ec._UserResource_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "userId":
+			out.Values[i] = ec._UserResource_userId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "name":
+			out.Values[i] = ec._UserResource_name(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "path":
+			out.Values[i] = ec._UserResource_path(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "size":
+			out.Values[i] = ec._UserResource_size(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "isDir":
+			out.Values[i] = ec._UserResource_isDir(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "createdAt":
+			out.Values[i] = ec._UserResource_createdAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "updatedAt":
+			out.Values[i] = ec._UserResource_updatedAt(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -35935,6 +42124,67 @@ func (ec *executionContext) marshalNAgentType2pentagiᚋpkgᚋgraphᚋmodelᚐAg
 	return v
 }
 
+func (ec *executionContext) unmarshalNAgentType2ᚕpentagiᚋpkgᚋgraphᚋmodelᚐAgentTypeᚄ(ctx context.Context, v interface{}) ([]model.AgentType, error) {
+	var vSlice []interface{}
+	if v != nil {
+		vSlice = graphql.CoerceList(v)
+	}
+	var err error
+	res := make([]model.AgentType, len(vSlice))
+	for i := range vSlice {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
+		res[i], err = ec.unmarshalNAgentType2pentagiᚋpkgᚋgraphᚋmodelᚐAgentType(ctx, vSlice[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
+}
+
+func (ec *executionContext) marshalNAgentType2ᚕpentagiᚋpkgᚋgraphᚋmodelᚐAgentTypeᚄ(ctx context.Context, sel ast.SelectionSet, v []model.AgentType) graphql.Marshaler {
+	ret := make(graphql.Array, len(v))
+	var wg sync.WaitGroup
+	isLen1 := len(v) == 1
+	if !isLen1 {
+		wg.Add(len(v))
+	}
+	for i := range v {
+		i := i
+		fc := &graphql.FieldContext{
+			Index:  &i,
+			Result: &v[i],
+		}
+		ctx := graphql.WithFieldContext(ctx, fc)
+		f := func(i int) {
+			defer func() {
+				if r := recover(); r != nil {
+					ec.Error(ctx, ec.Recover(ctx, r))
+					ret = nil
+				}
+			}()
+			if !isLen1 {
+				defer wg.Done()
+			}
+			ret[i] = ec.marshalNAgentType2pentagiᚋpkgᚋgraphᚋmodelᚐAgentType(ctx, sel, v[i])
+		}
+		if isLen1 {
+			f(i)
+		} else {
+			go f(i)
+		}
+
+	}
+	wg.Wait()
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
 func (ec *executionContext) marshalNAgentTypeUsageStats2ᚕᚖpentagiᚋpkgᚋgraphᚋmodelᚐAgentTypeUsageStatsᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.AgentTypeUsageStats) graphql.Marshaler {
 	ret := make(graphql.Array, len(v))
 	var wg sync.WaitGroup
@@ -36064,6 +42314,11 @@ func (ec *executionContext) unmarshalNCreateAPITokenInput2pentagiᚋpkgᚋgraph�
 
 func (ec *executionContext) unmarshalNCreateFlowTemplateInput2pentagiᚋpkgᚋgraphᚋmodelᚐCreateFlowTemplateInput(ctx context.Context, v interface{}) (model.CreateFlowTemplateInput, error) {
 	res, err := ec.unmarshalInputCreateFlowTemplateInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) unmarshalNCreateKnowledgeDocumentInput2pentagiᚋpkgᚋgraphᚋmodelᚐCreateKnowledgeDocumentInput(ctx context.Context, v interface{}) (model.CreateKnowledgeDocumentInput, error) {
+	res, err := ec.unmarshalInputCreateKnowledgeDocumentInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
@@ -36356,6 +42611,64 @@ func (ec *executionContext) marshalNFlowExecutionStats2ᚖpentagiᚋpkgᚋgraph�
 	return ec._FlowExecutionStats(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalNFlowFile2pentagiᚋpkgᚋgraphᚋmodelᚐFlowFile(ctx context.Context, sel ast.SelectionSet, v model.FlowFile) graphql.Marshaler {
+	return ec._FlowFile(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNFlowFile2ᚕᚖpentagiᚋpkgᚋgraphᚋmodelᚐFlowFileᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.FlowFile) graphql.Marshaler {
+	ret := make(graphql.Array, len(v))
+	var wg sync.WaitGroup
+	isLen1 := len(v) == 1
+	if !isLen1 {
+		wg.Add(len(v))
+	}
+	for i := range v {
+		i := i
+		fc := &graphql.FieldContext{
+			Index:  &i,
+			Result: &v[i],
+		}
+		ctx := graphql.WithFieldContext(ctx, fc)
+		f := func(i int) {
+			defer func() {
+				if r := recover(); r != nil {
+					ec.Error(ctx, ec.Recover(ctx, r))
+					ret = nil
+				}
+			}()
+			if !isLen1 {
+				defer wg.Done()
+			}
+			ret[i] = ec.marshalNFlowFile2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐFlowFile(ctx, sel, v[i])
+		}
+		if isLen1 {
+			f(i)
+		} else {
+			go f(i)
+		}
+
+	}
+	wg.Wait()
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNFlowFile2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐFlowFile(ctx context.Context, sel ast.SelectionSet, v *model.FlowFile) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._FlowFile(ctx, sel, v)
+}
+
 func (ec *executionContext) marshalNFlowStats2pentagiᚋpkgᚋgraphᚋmodelᚐFlowStats(ctx context.Context, sel ast.SelectionSet, v model.FlowStats) graphql.Marshaler {
 	return ec._FlowStats(ctx, sel, &v)
 }
@@ -36558,6 +42871,148 @@ func (ec *executionContext) marshalNInt2int(ctx context.Context, sel ast.Selecti
 	return res
 }
 
+func (ec *executionContext) unmarshalNKnowledgeAnswerType2pentagiᚋpkgᚋgraphᚋmodelᚐKnowledgeAnswerType(ctx context.Context, v interface{}) (model.KnowledgeAnswerType, error) {
+	var res model.KnowledgeAnswerType
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNKnowledgeAnswerType2pentagiᚋpkgᚋgraphᚋmodelᚐKnowledgeAnswerType(ctx context.Context, sel ast.SelectionSet, v model.KnowledgeAnswerType) graphql.Marshaler {
+	return v
+}
+
+func (ec *executionContext) unmarshalNKnowledgeDocType2pentagiᚋpkgᚋgraphᚋmodelᚐKnowledgeDocType(ctx context.Context, v interface{}) (model.KnowledgeDocType, error) {
+	var res model.KnowledgeDocType
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNKnowledgeDocType2pentagiᚋpkgᚋgraphᚋmodelᚐKnowledgeDocType(ctx context.Context, sel ast.SelectionSet, v model.KnowledgeDocType) graphql.Marshaler {
+	return v
+}
+
+func (ec *executionContext) marshalNKnowledgeDocument2pentagiᚋpkgᚋgraphᚋmodelᚐKnowledgeDocument(ctx context.Context, sel ast.SelectionSet, v model.KnowledgeDocument) graphql.Marshaler {
+	return ec._KnowledgeDocument(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNKnowledgeDocument2ᚕᚖpentagiᚋpkgᚋgraphᚋmodelᚐKnowledgeDocumentᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.KnowledgeDocument) graphql.Marshaler {
+	ret := make(graphql.Array, len(v))
+	var wg sync.WaitGroup
+	isLen1 := len(v) == 1
+	if !isLen1 {
+		wg.Add(len(v))
+	}
+	for i := range v {
+		i := i
+		fc := &graphql.FieldContext{
+			Index:  &i,
+			Result: &v[i],
+		}
+		ctx := graphql.WithFieldContext(ctx, fc)
+		f := func(i int) {
+			defer func() {
+				if r := recover(); r != nil {
+					ec.Error(ctx, ec.Recover(ctx, r))
+					ret = nil
+				}
+			}()
+			if !isLen1 {
+				defer wg.Done()
+			}
+			ret[i] = ec.marshalNKnowledgeDocument2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐKnowledgeDocument(ctx, sel, v[i])
+		}
+		if isLen1 {
+			f(i)
+		} else {
+			go f(i)
+		}
+
+	}
+	wg.Wait()
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNKnowledgeDocument2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐKnowledgeDocument(ctx context.Context, sel ast.SelectionSet, v *model.KnowledgeDocument) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._KnowledgeDocument(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNKnowledgeDocumentWithScore2ᚕᚖpentagiᚋpkgᚋgraphᚋmodelᚐKnowledgeDocumentWithScoreᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.KnowledgeDocumentWithScore) graphql.Marshaler {
+	ret := make(graphql.Array, len(v))
+	var wg sync.WaitGroup
+	isLen1 := len(v) == 1
+	if !isLen1 {
+		wg.Add(len(v))
+	}
+	for i := range v {
+		i := i
+		fc := &graphql.FieldContext{
+			Index:  &i,
+			Result: &v[i],
+		}
+		ctx := graphql.WithFieldContext(ctx, fc)
+		f := func(i int) {
+			defer func() {
+				if r := recover(); r != nil {
+					ec.Error(ctx, ec.Recover(ctx, r))
+					ret = nil
+				}
+			}()
+			if !isLen1 {
+				defer wg.Done()
+			}
+			ret[i] = ec.marshalNKnowledgeDocumentWithScore2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐKnowledgeDocumentWithScore(ctx, sel, v[i])
+		}
+		if isLen1 {
+			f(i)
+		} else {
+			go f(i)
+		}
+
+	}
+	wg.Wait()
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNKnowledgeDocumentWithScore2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐKnowledgeDocumentWithScore(ctx context.Context, sel ast.SelectionSet, v *model.KnowledgeDocumentWithScore) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._KnowledgeDocumentWithScore(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNKnowledgeGuideType2pentagiᚋpkgᚋgraphᚋmodelᚐKnowledgeGuideType(ctx context.Context, v interface{}) (model.KnowledgeGuideType, error) {
+	var res model.KnowledgeGuideType
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNKnowledgeGuideType2pentagiᚋpkgᚋgraphᚋmodelᚐKnowledgeGuideType(ctx context.Context, sel ast.SelectionSet, v model.KnowledgeGuideType) graphql.Marshaler {
+	return v
+}
+
 func (ec *executionContext) marshalNMessageLog2pentagiᚋpkgᚋgraphᚋmodelᚐMessageLog(ctx context.Context, sel ast.SelectionSet, v model.MessageLog) graphql.Marshaler {
 	return ec._MessageLog(ctx, sel, &v)
 }
@@ -36580,6 +43035,60 @@ func (ec *executionContext) unmarshalNMessageLogType2pentagiᚋpkgᚋgraphᚋmod
 
 func (ec *executionContext) marshalNMessageLogType2pentagiᚋpkgᚋgraphᚋmodelᚐMessageLogType(ctx context.Context, sel ast.SelectionSet, v model.MessageLogType) graphql.Marshaler {
 	return v
+}
+
+func (ec *executionContext) marshalNModelAgentsUsageStats2ᚕᚖpentagiᚋpkgᚋgraphᚋmodelᚐModelAgentsUsageStatsᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.ModelAgentsUsageStats) graphql.Marshaler {
+	ret := make(graphql.Array, len(v))
+	var wg sync.WaitGroup
+	isLen1 := len(v) == 1
+	if !isLen1 {
+		wg.Add(len(v))
+	}
+	for i := range v {
+		i := i
+		fc := &graphql.FieldContext{
+			Index:  &i,
+			Result: &v[i],
+		}
+		ctx := graphql.WithFieldContext(ctx, fc)
+		f := func(i int) {
+			defer func() {
+				if r := recover(); r != nil {
+					ec.Error(ctx, ec.Recover(ctx, r))
+					ret = nil
+				}
+			}()
+			if !isLen1 {
+				defer wg.Done()
+			}
+			ret[i] = ec.marshalNModelAgentsUsageStats2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐModelAgentsUsageStats(ctx, sel, v[i])
+		}
+		if isLen1 {
+			f(i)
+		} else {
+			go f(i)
+		}
+
+	}
+	wg.Wait()
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNModelAgentsUsageStats2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐModelAgentsUsageStats(ctx context.Context, sel ast.SelectionSet, v *model.ModelAgentsUsageStats) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._ModelAgentsUsageStats(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNModelConfig2ᚕᚖpentagiᚋpkgᚋgraphᚋmodelᚐModelConfigᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.ModelConfig) graphql.Marshaler {
@@ -37282,6 +43791,30 @@ func (ec *executionContext) marshalNTokenStatus2pentagiᚋpkgᚋgraphᚋmodelᚐ
 	return v
 }
 
+func (ec *executionContext) marshalNToolCallLog2pentagiᚋpkgᚋgraphᚋmodelᚐToolCallLog(ctx context.Context, sel ast.SelectionSet, v model.ToolCallLog) graphql.Marshaler {
+	return ec._ToolCallLog(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNToolCallLog2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐToolCallLog(ctx context.Context, sel ast.SelectionSet, v *model.ToolCallLog) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._ToolCallLog(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNToolCallStatus2pentagiᚋpkgᚋgraphᚋmodelᚐToolCallStatus(ctx context.Context, v interface{}) (model.ToolCallStatus, error) {
+	var res model.ToolCallStatus
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNToolCallStatus2pentagiᚋpkgᚋgraphᚋmodelᚐToolCallStatus(ctx context.Context, sel ast.SelectionSet, v model.ToolCallStatus) graphql.Marshaler {
+	return v
+}
+
 func (ec *executionContext) marshalNToolcallsStats2pentagiᚋpkgᚋgraphᚋmodelᚐToolcallsStats(ctx context.Context, sel ast.SelectionSet, v model.ToolcallsStats) graphql.Marshaler {
 	return ec._ToolcallsStats(ctx, sel, &v)
 }
@@ -37313,6 +43846,11 @@ func (ec *executionContext) unmarshalNUpdateAPITokenInput2pentagiᚋpkgᚋgraph�
 
 func (ec *executionContext) unmarshalNUpdateFlowTemplateInput2pentagiᚋpkgᚋgraphᚋmodelᚐUpdateFlowTemplateInput(ctx context.Context, v interface{}) (model.UpdateFlowTemplateInput, error) {
 	res, err := ec.unmarshalInputUpdateFlowTemplateInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) unmarshalNUpdateKnowledgeDocumentInput2pentagiᚋpkgᚋgraphᚋmodelᚐUpdateKnowledgeDocumentInput(ctx context.Context, v interface{}) (model.UpdateKnowledgeDocumentInput, error) {
+	res, err := ec.unmarshalInputUpdateKnowledgeDocumentInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
@@ -37366,6 +43904,64 @@ func (ec *executionContext) marshalNUserPrompt2ᚖpentagiᚋpkgᚋgraphᚋmodel�
 		return graphql.Null
 	}
 	return ec._UserPrompt(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNUserResource2pentagiᚋpkgᚋgraphᚋmodelᚐUserResource(ctx context.Context, sel ast.SelectionSet, v model.UserResource) graphql.Marshaler {
+	return ec._UserResource(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNUserResource2ᚕᚖpentagiᚋpkgᚋgraphᚋmodelᚐUserResourceᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.UserResource) graphql.Marshaler {
+	ret := make(graphql.Array, len(v))
+	var wg sync.WaitGroup
+	isLen1 := len(v) == 1
+	if !isLen1 {
+		wg.Add(len(v))
+	}
+	for i := range v {
+		i := i
+		fc := &graphql.FieldContext{
+			Index:  &i,
+			Result: &v[i],
+		}
+		ctx := graphql.WithFieldContext(ctx, fc)
+		f := func(i int) {
+			defer func() {
+				if r := recover(); r != nil {
+					ec.Error(ctx, ec.Recover(ctx, r))
+					ret = nil
+				}
+			}()
+			if !isLen1 {
+				defer wg.Done()
+			}
+			ret[i] = ec.marshalNUserResource2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐUserResource(ctx, sel, v[i])
+		}
+		if isLen1 {
+			f(i)
+		} else {
+			go f(i)
+		}
+
+	}
+	wg.Wait()
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNUserResource2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐUserResource(ctx context.Context, sel ast.SelectionSet, v *model.UserResource) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._UserResource(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalNVectorStoreAction2pentagiᚋpkgᚋgraphᚋmodelᚐVectorStoreAction(ctx context.Context, v interface{}) (model.VectorStoreAction, error) {
@@ -37889,6 +44485,44 @@ func (ec *executionContext) marshalOFlowTemplate2ᚖpentagiᚋpkgᚋgraphᚋmode
 	return ec._FlowTemplate(ctx, sel, v)
 }
 
+func (ec *executionContext) unmarshalOID2ᚕint64ᚄ(ctx context.Context, v interface{}) ([]int64, error) {
+	if v == nil {
+		return nil, nil
+	}
+	var vSlice []interface{}
+	if v != nil {
+		vSlice = graphql.CoerceList(v)
+	}
+	var err error
+	res := make([]int64, len(vSlice))
+	for i := range vSlice {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
+		res[i], err = ec.unmarshalNID2int64(ctx, vSlice[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
+}
+
+func (ec *executionContext) marshalOID2ᚕint64ᚄ(ctx context.Context, sel ast.SelectionSet, v []int64) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	ret := make(graphql.Array, len(v))
+	for i := range v {
+		ret[i] = ec.marshalNID2int64(ctx, sel, v[i])
+	}
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
 func (ec *executionContext) unmarshalOID2ᚖint64(ctx context.Context, v interface{}) (*int64, error) {
 	if v == nil {
 		return nil, nil
@@ -37919,6 +44553,263 @@ func (ec *executionContext) marshalOInt2ᚖint(ctx context.Context, sel ast.Sele
 	}
 	res := graphql.MarshalInt(*v)
 	return res
+}
+
+func (ec *executionContext) unmarshalOKnowledgeAnswerType2ᚕpentagiᚋpkgᚋgraphᚋmodelᚐKnowledgeAnswerTypeᚄ(ctx context.Context, v interface{}) ([]model.KnowledgeAnswerType, error) {
+	if v == nil {
+		return nil, nil
+	}
+	var vSlice []interface{}
+	if v != nil {
+		vSlice = graphql.CoerceList(v)
+	}
+	var err error
+	res := make([]model.KnowledgeAnswerType, len(vSlice))
+	for i := range vSlice {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
+		res[i], err = ec.unmarshalNKnowledgeAnswerType2pentagiᚋpkgᚋgraphᚋmodelᚐKnowledgeAnswerType(ctx, vSlice[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
+}
+
+func (ec *executionContext) marshalOKnowledgeAnswerType2ᚕpentagiᚋpkgᚋgraphᚋmodelᚐKnowledgeAnswerTypeᚄ(ctx context.Context, sel ast.SelectionSet, v []model.KnowledgeAnswerType) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	ret := make(graphql.Array, len(v))
+	var wg sync.WaitGroup
+	isLen1 := len(v) == 1
+	if !isLen1 {
+		wg.Add(len(v))
+	}
+	for i := range v {
+		i := i
+		fc := &graphql.FieldContext{
+			Index:  &i,
+			Result: &v[i],
+		}
+		ctx := graphql.WithFieldContext(ctx, fc)
+		f := func(i int) {
+			defer func() {
+				if r := recover(); r != nil {
+					ec.Error(ctx, ec.Recover(ctx, r))
+					ret = nil
+				}
+			}()
+			if !isLen1 {
+				defer wg.Done()
+			}
+			ret[i] = ec.marshalNKnowledgeAnswerType2pentagiᚋpkgᚋgraphᚋmodelᚐKnowledgeAnswerType(ctx, sel, v[i])
+		}
+		if isLen1 {
+			f(i)
+		} else {
+			go f(i)
+		}
+
+	}
+	wg.Wait()
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) unmarshalOKnowledgeAnswerType2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐKnowledgeAnswerType(ctx context.Context, v interface{}) (*model.KnowledgeAnswerType, error) {
+	if v == nil {
+		return nil, nil
+	}
+	var res = new(model.KnowledgeAnswerType)
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalOKnowledgeAnswerType2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐKnowledgeAnswerType(ctx context.Context, sel ast.SelectionSet, v *model.KnowledgeAnswerType) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return v
+}
+
+func (ec *executionContext) unmarshalOKnowledgeDocType2ᚕpentagiᚋpkgᚋgraphᚋmodelᚐKnowledgeDocTypeᚄ(ctx context.Context, v interface{}) ([]model.KnowledgeDocType, error) {
+	if v == nil {
+		return nil, nil
+	}
+	var vSlice []interface{}
+	if v != nil {
+		vSlice = graphql.CoerceList(v)
+	}
+	var err error
+	res := make([]model.KnowledgeDocType, len(vSlice))
+	for i := range vSlice {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
+		res[i], err = ec.unmarshalNKnowledgeDocType2pentagiᚋpkgᚋgraphᚋmodelᚐKnowledgeDocType(ctx, vSlice[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
+}
+
+func (ec *executionContext) marshalOKnowledgeDocType2ᚕpentagiᚋpkgᚋgraphᚋmodelᚐKnowledgeDocTypeᚄ(ctx context.Context, sel ast.SelectionSet, v []model.KnowledgeDocType) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	ret := make(graphql.Array, len(v))
+	var wg sync.WaitGroup
+	isLen1 := len(v) == 1
+	if !isLen1 {
+		wg.Add(len(v))
+	}
+	for i := range v {
+		i := i
+		fc := &graphql.FieldContext{
+			Index:  &i,
+			Result: &v[i],
+		}
+		ctx := graphql.WithFieldContext(ctx, fc)
+		f := func(i int) {
+			defer func() {
+				if r := recover(); r != nil {
+					ec.Error(ctx, ec.Recover(ctx, r))
+					ret = nil
+				}
+			}()
+			if !isLen1 {
+				defer wg.Done()
+			}
+			ret[i] = ec.marshalNKnowledgeDocType2pentagiᚋpkgᚋgraphᚋmodelᚐKnowledgeDocType(ctx, sel, v[i])
+		}
+		if isLen1 {
+			f(i)
+		} else {
+			go f(i)
+		}
+
+	}
+	wg.Wait()
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) unmarshalOKnowledgeDocType2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐKnowledgeDocType(ctx context.Context, v interface{}) (*model.KnowledgeDocType, error) {
+	if v == nil {
+		return nil, nil
+	}
+	var res = new(model.KnowledgeDocType)
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalOKnowledgeDocType2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐKnowledgeDocType(ctx context.Context, sel ast.SelectionSet, v *model.KnowledgeDocType) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return v
+}
+
+func (ec *executionContext) unmarshalOKnowledgeFilter2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐKnowledgeFilter(ctx context.Context, v interface{}) (*model.KnowledgeFilter, error) {
+	if v == nil {
+		return nil, nil
+	}
+	res, err := ec.unmarshalInputKnowledgeFilter(ctx, v)
+	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) unmarshalOKnowledgeGuideType2ᚕpentagiᚋpkgᚋgraphᚋmodelᚐKnowledgeGuideTypeᚄ(ctx context.Context, v interface{}) ([]model.KnowledgeGuideType, error) {
+	if v == nil {
+		return nil, nil
+	}
+	var vSlice []interface{}
+	if v != nil {
+		vSlice = graphql.CoerceList(v)
+	}
+	var err error
+	res := make([]model.KnowledgeGuideType, len(vSlice))
+	for i := range vSlice {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
+		res[i], err = ec.unmarshalNKnowledgeGuideType2pentagiᚋpkgᚋgraphᚋmodelᚐKnowledgeGuideType(ctx, vSlice[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
+}
+
+func (ec *executionContext) marshalOKnowledgeGuideType2ᚕpentagiᚋpkgᚋgraphᚋmodelᚐKnowledgeGuideTypeᚄ(ctx context.Context, sel ast.SelectionSet, v []model.KnowledgeGuideType) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	ret := make(graphql.Array, len(v))
+	var wg sync.WaitGroup
+	isLen1 := len(v) == 1
+	if !isLen1 {
+		wg.Add(len(v))
+	}
+	for i := range v {
+		i := i
+		fc := &graphql.FieldContext{
+			Index:  &i,
+			Result: &v[i],
+		}
+		ctx := graphql.WithFieldContext(ctx, fc)
+		f := func(i int) {
+			defer func() {
+				if r := recover(); r != nil {
+					ec.Error(ctx, ec.Recover(ctx, r))
+					ret = nil
+				}
+			}()
+			if !isLen1 {
+				defer wg.Done()
+			}
+			ret[i] = ec.marshalNKnowledgeGuideType2pentagiᚋpkgᚋgraphᚋmodelᚐKnowledgeGuideType(ctx, sel, v[i])
+		}
+		if isLen1 {
+			f(i)
+		} else {
+			go f(i)
+		}
+
+	}
+	wg.Wait()
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) unmarshalOKnowledgeGuideType2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐKnowledgeGuideType(ctx context.Context, v interface{}) (*model.KnowledgeGuideType, error) {
+	if v == nil {
+		return nil, nil
+	}
+	var res = new(model.KnowledgeGuideType)
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalOKnowledgeGuideType2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐKnowledgeGuideType(ctx context.Context, sel ast.SelectionSet, v *model.KnowledgeGuideType) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return v
 }
 
 func (ec *executionContext) marshalOMessageLog2ᚕᚖpentagiᚋpkgᚋgraphᚋmodelᚐMessageLogᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.MessageLog) graphql.Marshaler {
@@ -38225,6 +45116,44 @@ func (ec *executionContext) marshalOSearchLog2ᚕᚖpentagiᚋpkgᚋgraphᚋmode
 	return ret
 }
 
+func (ec *executionContext) unmarshalOString2ᚕstringᚄ(ctx context.Context, v interface{}) ([]string, error) {
+	if v == nil {
+		return nil, nil
+	}
+	var vSlice []interface{}
+	if v != nil {
+		vSlice = graphql.CoerceList(v)
+	}
+	var err error
+	res := make([]string, len(vSlice))
+	for i := range vSlice {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
+		res[i], err = ec.unmarshalNString2string(ctx, vSlice[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
+}
+
+func (ec *executionContext) marshalOString2ᚕstringᚄ(ctx context.Context, sel ast.SelectionSet, v []string) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	ret := make(graphql.Array, len(v))
+	for i := range v {
+		ret[i] = ec.marshalNString2string(ctx, sel, v[i])
+	}
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
 func (ec *executionContext) unmarshalOString2ᚖstring(ctx context.Context, v interface{}) (*string, error) {
 	if v == nil {
 		return nil, nil
@@ -38459,6 +45388,53 @@ func (ec *executionContext) marshalOTokenStatus2ᚖpentagiᚋpkgᚋgraphᚋmodel
 		return graphql.Null
 	}
 	return v
+}
+
+func (ec *executionContext) marshalOToolCallLog2ᚕᚖpentagiᚋpkgᚋgraphᚋmodelᚐToolCallLogᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.ToolCallLog) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	ret := make(graphql.Array, len(v))
+	var wg sync.WaitGroup
+	isLen1 := len(v) == 1
+	if !isLen1 {
+		wg.Add(len(v))
+	}
+	for i := range v {
+		i := i
+		fc := &graphql.FieldContext{
+			Index:  &i,
+			Result: &v[i],
+		}
+		ctx := graphql.WithFieldContext(ctx, fc)
+		f := func(i int) {
+			defer func() {
+				if r := recover(); r != nil {
+					ec.Error(ctx, ec.Recover(ctx, r))
+					ret = nil
+				}
+			}()
+			if !isLen1 {
+				defer wg.Done()
+			}
+			ret[i] = ec.marshalNToolCallLog2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐToolCallLog(ctx, sel, v[i])
+		}
+		if isLen1 {
+			f(i)
+		} else {
+			go f(i)
+		}
+
+	}
+	wg.Wait()
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
 }
 
 func (ec *executionContext) marshalOUserPrompt2ᚕᚖpentagiᚋpkgᚋgraphᚋmodelᚐUserPromptᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.UserPrompt) graphql.Marshaler {

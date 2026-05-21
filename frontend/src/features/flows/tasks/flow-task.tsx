@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 
 import type { TaskFragmentFragment } from '@/graphql/types';
 
@@ -15,7 +15,6 @@ interface FlowTaskProps {
     task: TaskFragmentFragment;
 }
 
-// Helper function to check if text contains search value (case-insensitive)
 const containsSearchValue = (text: null | string | undefined, searchValue: string): boolean => {
     if (!text || !searchValue.trim()) {
         return false;
@@ -24,11 +23,10 @@ const containsSearchValue = (text: null | string | undefined, searchValue: strin
     return text.toLowerCase().includes(searchValue.toLowerCase().trim());
 };
 
-const FlowTask = ({ searchValue = '', task }: FlowTaskProps) => {
+function FlowTask({ searchValue = '', task }: FlowTaskProps) {
     const { id, result, status, subtasks, title } = task;
     const [isDetailsVisible, setIsDetailsVisible] = useState(false);
 
-    // Memoize search checks to avoid recalculating on every render
     const searchChecks = useMemo(() => {
         const trimmedSearch = searchValue.trim();
 
@@ -41,25 +39,27 @@ const FlowTask = ({ searchValue = '', task }: FlowTaskProps) => {
         };
     }, [searchValue, result]);
 
-    // Auto-expand details if they contain search matches
-    useEffect(() => {
+    const [prevSearchValue, setPrevSearchValue] = useState(searchValue);
+    const [prevHasResultMatch, setPrevHasResultMatch] = useState(searchChecks.hasResultMatch);
+
+    if (searchValue !== prevSearchValue || searchChecks.hasResultMatch !== prevHasResultMatch) {
+        setPrevSearchValue(searchValue);
+        setPrevHasResultMatch(searchChecks.hasResultMatch);
+
         const trimmedSearch = searchValue.trim();
 
         if (trimmedSearch) {
-            // Expand result block only if it contains the search term
             if (searchChecks.hasResultMatch) {
                 setIsDetailsVisible(true);
             }
         } else {
-            // Reset to default state when search is cleared
             setIsDetailsVisible(false);
         }
-    }, [searchValue, searchChecks.hasResultMatch]);
+    }
 
     const sortedSubtasks = [...(subtasks || [])].sort((a, b) => +a.id - +b.id);
     const hasSubtasks = subtasks && subtasks.length > 0;
 
-    // Calculate completed subtasks count
     const completedSubtasksCount = useMemo(() => {
         if (!subtasks?.length) {
             return 0;
@@ -68,7 +68,6 @@ const FlowTask = ({ searchValue = '', task }: FlowTaskProps) => {
         return subtasks.filter((subtask) => [StatusType.Failed, StatusType.Finished].includes(subtask.status)).length;
     }, [subtasks]);
 
-    // Calculate progress based on completed subtasks
     const progress = useMemo(() => {
         if (!subtasks?.length) {
             return 0;
@@ -148,6 +147,6 @@ const FlowTask = ({ searchValue = '', task }: FlowTaskProps) => {
             )}
         </div>
     );
-};
+}
 
 export default memo(FlowTask);

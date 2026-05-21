@@ -3,7 +3,9 @@
 fragment settingsFragment on Settings {
     debug
     askUser
+    version
     dockerInside
+    isDevelopMode
     assistantUseAgents
 }
 
@@ -87,6 +89,26 @@ fragment screenshotFragment on Screenshot {
     name
     url
     createdAt
+}
+
+fragment flowFileFragment on FlowFile {
+    id
+    name
+    path
+    size
+    isDir
+    modifiedAt
+}
+
+fragment userResourceFragment on UserResource {
+    id
+    userId
+    name
+    path
+    size
+    isDir
+    createdAt
+    updatedAt
 }
 
 fragment agentLogFragment on AgentLog {
@@ -397,6 +419,15 @@ fragment agentTypeUsageStatsFragment on AgentTypeUsageStats {
     }
 }
 
+fragment modelAgentsUsageStatsFragment on ModelAgentsUsageStats {
+    model
+    provider
+    agentTypes
+    stats {
+        ...usageStatsFragment
+    }
+}
+
 fragment toolcallsStatsFragment on ToolcallsStats {
     totalCount
     totalDurationSeconds
@@ -462,6 +493,31 @@ fragment flowExecutionStatsFragment on FlowExecutionStats {
     totalAssistantsCount
     tasks {
         ...taskExecutionStatsFragment
+    }
+}
+
+fragment knowledgeDocumentFragment on KnowledgeDocument {
+    id
+    docType
+    content
+    question
+    description
+    userId
+    flowId
+    taskId
+    subtaskId
+    guideType
+    answerType
+    codeLang
+    partSize
+    totalSize
+    manual
+}
+
+fragment knowledgeDocumentWithScoreFragment on KnowledgeDocumentWithScore {
+    score
+    document {
+        ...knowledgeDocumentFragment
     }
 }
 
@@ -763,6 +819,18 @@ query tasks($flowId: ID!) {
     }
 }
 
+query flowFiles($flowId: ID!) {
+    flowFiles(flowId: $flowId) {
+        ...flowFileFragment
+    }
+}
+
+query resources($path: String, $recursive: Boolean) {
+    resources(path: $path, recursive: $recursive) {
+        ...userResourceFragment
+    }
+}
+
 query assistants($flowId: ID!) {
     assistants(flowId: $flowId) {
         ...assistantFragment
@@ -823,6 +891,12 @@ query usageStatsByFlow($flowId: ID!) {
 query usageStatsByAgentTypeForFlow($flowId: ID!) {
     usageStatsByAgentTypeForFlow(flowId: $flowId) {
         ...agentTypeUsageStatsFragment
+    }
+}
+
+query usageStatsByModelAgentsForFlow($flowId: ID!) {
+    usageStatsByModelAgentsForFlow(flowId: $flowId) {
+        ...modelAgentsUsageStatsFragment
     }
 }
 
@@ -892,6 +966,26 @@ query apiToken($tokenId: String!) {
     }
 }
 
+# ==================== Knowledge ====================
+
+query knowledgeDocuments($filter: KnowledgeFilter, $withContent: Boolean!) {
+    knowledgeDocuments(filter: $filter, withContent: $withContent) {
+        ...knowledgeDocumentFragment
+    }
+}
+
+query knowledgeDocument($id: String!) {
+    knowledgeDocument(id: $id) {
+        ...knowledgeDocumentFragment
+    }
+}
+
+query searchKnowledge($query: String!, $filter: KnowledgeFilter, $limit: Int) {
+    searchKnowledge(query: $query, filter: $filter, limit: $limit) {
+        ...knowledgeDocumentWithScoreFragment
+    }
+}
+
 fragment userPreferencesFragment on UserPreferences {
     id
     favoriteFlows
@@ -913,6 +1007,10 @@ mutation addFavoriteFlow($flowId: ID!) {
 
 mutation deleteFavoriteFlow($flowId: ID!) {
     deleteFavoriteFlow(flowId: $flowId)
+}
+
+mutation anonymizeText($text: String!) {
+    anonymizeText(text: $text)
 }
 
 # ==================== Flow Templates ====================
@@ -947,8 +1045,8 @@ mutation deleteFlowTemplate($templateId: ID!) {
 
 # ==================== Flows ====================
 
-mutation createFlow($modelProvider: String!, $input: String!) {
-    createFlow(modelProvider: $modelProvider, input: $input) {
+mutation createFlow($modelProvider: String!, $input: String!, $resourceIds: [ID!]) {
+    createFlow(modelProvider: $modelProvider, input: $input, resourceIds: $resourceIds) {
         ...flowFragment
     }
 }
@@ -957,8 +1055,8 @@ mutation deleteFlow($flowId: ID!) {
     deleteFlow(flowId: $flowId)
 }
 
-mutation putUserInput($flowId: ID!, $input: String!, $modelProvider: String) {
-    putUserInput(flowId: $flowId, input: $input, modelProvider: $modelProvider)
+mutation putUserInput($flowId: ID!, $input: String!, $modelProvider: String, $resourceIds: [ID!]) {
+    putUserInput(flowId: $flowId, input: $input, modelProvider: $modelProvider, resourceIds: $resourceIds)
 }
 
 mutation finishFlow($flowId: ID!) {
@@ -973,8 +1071,8 @@ mutation renameFlow($flowId: ID!, $title: String!) {
     renameFlow(flowId: $flowId, title: $title)
 }
 
-mutation createAssistant($flowId: ID!, $modelProvider: String!, $input: String!, $useAgents: Boolean!) {
-    createAssistant(flowId: $flowId, modelProvider: $modelProvider, input: $input, useAgents: $useAgents) {
+mutation createAssistant($flowId: ID!, $modelProvider: String!, $input: String!, $useAgents: Boolean!, $resourceIds: [ID!]) {
+    createAssistant(flowId: $flowId, modelProvider: $modelProvider, input: $input, useAgents: $useAgents, resourceIds: $resourceIds) {
         flow {
             ...flowFragment
         }
@@ -984,8 +1082,8 @@ mutation createAssistant($flowId: ID!, $modelProvider: String!, $input: String!,
     }
 }
 
-mutation callAssistant($flowId: ID!, $assistantId: ID!, $input: String!, $useAgents: Boolean!) {
-    callAssistant(flowId: $flowId, assistantId: $assistantId, input: $input, useAgents: $useAgents)
+mutation callAssistant($flowId: ID!, $assistantId: ID!, $input: String!, $useAgents: Boolean!, $resourceIds: [ID!]) {
+    callAssistant(flowId: $flowId, assistantId: $assistantId, input: $input, useAgents: $useAgents, resourceIds: $resourceIds)
 }
 
 mutation stopAssistant($flowId: ID!, $assistantId: ID!) {
@@ -1064,6 +1162,22 @@ mutation deleteAPIToken($tokenId: String!) {
     deleteAPIToken(tokenId: $tokenId)
 }
 
+mutation createKnowledgeDocument($input: CreateKnowledgeDocumentInput!) {
+    createKnowledgeDocument(input: $input) {
+        ...knowledgeDocumentFragment
+    }
+}
+
+mutation updateKnowledgeDocument($id: String!, $input: UpdateKnowledgeDocumentInput!) {
+    updateKnowledgeDocument(id: $id, input: $input) {
+        ...knowledgeDocumentFragment
+    }
+}
+
+mutation deleteKnowledgeDocument($id: String!) {
+    deleteKnowledgeDocument(id: $id)
+}
+
 # ==================== Subscriptions ====================
 
 subscription terminalLogAdded($flowId: ID!) {
@@ -1123,6 +1237,24 @@ subscription assistantUpdated($flowId: ID!) {
 subscription assistantDeleted($flowId: ID!) {
     assistantDeleted(flowId: $flowId) {
         ...assistantFragment
+    }
+}
+
+subscription flowFileAdded($flowId: ID!) {
+    flowFileAdded(flowId: $flowId) {
+        ...flowFileFragment
+    }
+}
+
+subscription flowFileUpdated($flowId: ID!) {
+    flowFileUpdated(flowId: $flowId) {
+        ...flowFileFragment
+    }
+}
+
+subscription flowFileDeleted($flowId: ID!) {
+    flowFileDeleted(flowId: $flowId) {
+        ...flowFileFragment
     }
 }
 
@@ -1231,5 +1363,41 @@ subscription flowTemplateUpdated {
 subscription flowTemplateDeleted {
     flowTemplateDeleted {
         ...flowTemplateFragment
+    }
+}
+
+subscription resourceAdded {
+    resourceAdded {
+        ...userResourceFragment
+    }
+}
+
+subscription resourceUpdated {
+    resourceUpdated {
+        ...userResourceFragment
+    }
+}
+
+subscription resourceDeleted {
+    resourceDeleted {
+        ...userResourceFragment
+    }
+}
+
+subscription knowledgeDocumentCreated {
+    knowledgeDocumentCreated {
+        ...knowledgeDocumentFragment
+    }
+}
+
+subscription knowledgeDocumentUpdated {
+    knowledgeDocumentUpdated {
+        ...knowledgeDocumentFragment
+    }
+}
+
+subscription knowledgeDocumentDeleted {
+    knowledgeDocumentDeleted {
+        ...knowledgeDocumentFragment
     }
 }

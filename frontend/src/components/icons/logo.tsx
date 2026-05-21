@@ -4,7 +4,7 @@ interface LogoProps extends React.SVGProps<SVGSVGElement> {
     className?: string;
 }
 
-const Logo = ({ className, ...props }: LogoProps) => {
+function Logo({ className, ...props }: LogoProps) {
     return (
         <svg
             className={cn(className)}
@@ -62,6 +62,6 @@ const Logo = ({ className, ...props }: LogoProps) => {
             <path d="M62.6376 74.5946C63.4358 71.9794 64.8135 69.6169 66.621 67.6569L41.7766 53.3129C41.3861 54.5729 40.8502 55.8094 40.1628 57C39.4754 58.1906 38.6726 59.273 37.7766 60.2411L62.6376 74.5946Z" />
         </svg>
     );
-};
+}
 
 export default Logo;

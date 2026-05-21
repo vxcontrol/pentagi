@@ -1,6 +1,7 @@
 package router
 
 import (
+	"context"
 	"encoding/gob"
 	"net"
 	"net/http"
@@ -16,6 +17,8 @@ import (
 	"pentagi/pkg/config"
 	"pentagi/pkg/controller"
 	"pentagi/pkg/database"
+	"pentagi/pkg/database/knowledge"
+	"pentagi/pkg/docker"
 	"pentagi/pkg/graph/subscriptions"
 	"pentagi/pkg/providers"
 	"pentagi/pkg/server/auth"
@@ -34,6 +37,9 @@ import (
 	"github.com/sirupsen/logrus"
 	ginSwagger "github.com/swaggo/gin-swagger"
 	"github.com/swaggo/gin-swagger/swaggerFiles"
+	"github.com/vxcontrol/cloud/anonymizer"
+	"github.com/vxcontrol/cloud/anonymizer/patterns"
+	"github.com/vxcontrol/langchaingo/vectorstores/pgvector"
 )
 
 const baseURL = "/api/v1"
@@ -49,6 +55,8 @@ var frontendRoutes = []string{
 	"/flows",
 	"/settings",
 	"/templates",
+	"/resources",
+	"/knowledges",
 	"/dashboard",
 }
 
@@ -79,6 +87,7 @@ func NewRouter(
 	providers providers.ProviderController,
 	controller controller.FlowController,
 	subscriptions subscriptions.SubscriptionsController,
+	dockerClient docker.DockerClient,
 ) *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
 	if cfg.Debug {
@@ -116,6 +125,47 @@ func NewRouter(
 		oauthClients[githubClient.ProviderName()] = githubClient
 	}
 
+	// ---- Knowledge (pgvector) store -----------------------------------------
+	// Shared by both the GraphQL and REST layers.
+	// Store and embedder are nil when no embedding provider is configured;
+	// the knowledge store handles that gracefully (embedding-dependent ops error).
+	embedder := providers.Embedder()
+	var pgStore *pgvector.Store
+	if embedder.IsAvailable() {
+		opts := []pgvector.Option{
+			pgvector.WithEmbedder(embedder),
+			pgvector.WithCollectionName("langchain"),
+		}
+		if cfg.PgxPool != nil {
+			opts = append(opts, pgvector.WithConn(cfg.PgxPool))
+		} else {
+			opts = append(opts, pgvector.WithConnectionURL(cfg.DatabaseURL))
+		}
+		if s, err := pgvector.New(context.Background(), opts...); err == nil {
+			pgStore = &s
+		} else {
+			logrus.WithError(err).Warn("failed to initialise pgvector store for knowledge API; embedding operations will be unavailable")
+		}
+	}
+	var knowledgeStore knowledge.KnowledgeStore
+	knowledgeStore = knowledge.NewKnowledgeStore(db, pgStore, embedder, subscriptions.NewKnowledgePublisher, cfg.EmbeddingMaxTextBytes)
+
+	// ---- Anonymizer replacer ------------------------------------------------
+	// Shared singleton used by the GraphQL anonymizeText mutation.
+	// Falls back to a no-op nil replacer on failure so the rest of the server still starts correctly.
+	var textReplacer anonymizer.Replacer
+	if allPatterns, err := patterns.LoadPatterns(patterns.PatternListTypeAll); err != nil {
+		logrus.WithError(err).Warn("failed to load anonymizer patterns; anonymizeText mutation will be unavailable")
+	} else {
+		allPatterns.Patterns = append(allPatterns.Patterns, cfg.GetSecretPatterns()...)
+
+		if r, err := anonymizer.NewReplacer(allPatterns.Regexes(), allPatterns.Names()); err != nil {
+			logrus.WithError(err).Warn("failed to create anonymizer replacer; anonymizeText mutation will be unavailable")
+		} else {
+			textReplacer = r
+		}
+	}
+
 	// services
 	authService := services.NewAuthService(
 		services.AuthServiceConfig{
@@ -129,10 +179,14 @@ func NewRouter(
 	userService := services.NewUserService(orm, userCache)
 	roleService := services.NewRoleService(orm)
 	providerService := services.NewProviderService(providers)
+	settingsService := services.NewSettingsService(cfg)
 	flowService := services.NewFlowService(orm, providers, controller, subscriptions)
+	flowFileService := services.NewFlowFileService(orm, cfg.DataDir, dockerClient, subscriptions)
+	resourceService := services.NewResourceService(orm, cfg.DataDir, subscriptions)
 	taskService := services.NewTaskService(orm)
 	subtaskService := services.NewSubtaskService(orm)
 	containerService := services.NewContainerService(orm)
+	toolcallService := services.NewToolcallService(orm)
 	assistantService := services.NewAssistantService(orm, providers, controller, subscriptions)
 	agentlogService := services.NewAgentlogService(orm)
 	assistantlogService := services.NewAssistantlogService(orm)
@@ -144,8 +198,10 @@ func NewRouter(
 	promptService := services.NewPromptService(orm)
 	analyticsService := services.NewAnalyticsService(orm)
 	tokenService := services.NewTokenService(orm, cfg.CookieSigningSalt, tokenCache, subscriptions)
+	knowledgeService := services.NewKnowledgeService(orm, knowledgeStore)
+	anonymizerService := services.NewAnonymizerService(textReplacer)
 	graphqlService := services.NewGraphqlService(
-		db, cfg, baseURL, cfg.CorsOrigins, tokenCache, providers, controller, subscriptions,
+		db, cfg, baseURL, cfg.CorsOrigins, tokenCache, providers, controller, subscriptions, knowledgeStore, textReplacer,
 	)
 
 	router := gin.Default()
@@ -221,11 +277,16 @@ func NewRouter(
 	{
 		setGraphqlGroup(privateGroup, graphqlService)
 
+		setKnowledgeGroup(privateGroup, knowledgeService)
 		setProvidersGroup(privateGroup, providerService)
+		setSettingsGroup(privateGroup, settingsService)
 		setFlowsGroup(privateGroup, flowService)
+		setFlowFilesGroup(privateGroup, flowFileService)
+		setResourcesGroup(privateGroup, resourceService)
 		setTasksGroup(privateGroup, taskService)
 		setSubtasksGroup(privateGroup, subtaskService)
 		setContainersGroup(privateGroup, containerService)
+		setToolcallsGroup(privateGroup, toolcallService)
 		setAssistantsGroup(privateGroup, assistantService)
 		setAgentlogsGroup(privateGroup, agentlogService)
 		setAssistantlogsGroup(privateGroup, assistantlogService)
@@ -235,6 +296,7 @@ func NewRouter(
 		setVecstorelogsGroup(privateGroup, vecstorelogService)
 		setScreenshotsGroup(privateGroup, screenshotService)
 		setPromptsGroup(privateGroup, promptService)
+		setAnonymizeGroup(privateGroup, anonymizerService)
 		setAnalyticsGroup(privateGroup, analyticsService)
 	}
 
@@ -307,10 +369,29 @@ func NewRouter(
 	return router
 }
 
+func setKnowledgeGroup(parent *gin.RouterGroup, svc *services.KnowledgeService) {
+	kg := parent.Group("/knowledge")
+	{
+		kg.GET("/", svc.ListDocuments)
+		kg.GET("/:id", svc.GetDocument)
+		kg.POST("/", svc.CreateDocument)
+		kg.POST("/search", svc.SearchDocuments)
+		kg.PUT("/:id", svc.UpdateDocument)
+		kg.DELETE("/:id", svc.DeleteDocument)
+	}
+}
+
 func setProvidersGroup(parent *gin.RouterGroup, svc *services.ProviderService) {
 	providersGroup := parent.Group("/providers")
 	{
 		providersGroup.GET("/", svc.GetProviders)
+	}
+}
+
+func setSettingsGroup(parent *gin.RouterGroup, svc *services.SettingsService) {
+	settingsGroup := parent.Group("/settings")
+	{
+		settingsGroup.GET("/", svc.GetSettings)
 	}
 }
 
@@ -367,6 +448,33 @@ func setFlowsGroup(parent *gin.RouterGroup, svc *services.FlowService) {
 	}
 }
 
+func setFlowFilesGroup(parent *gin.RouterGroup, svc *services.FlowFileService) {
+	flowFilesGroup := parent.Group("/flows/:flowID/files")
+	{
+		flowFilesGroup.GET("/", svc.GetFlowFiles)
+		flowFilesGroup.GET("/container", svc.GetFlowContainerFiles)
+		flowFilesGroup.POST("/", svc.UploadFlowFiles)
+		flowFilesGroup.DELETE("/", svc.DeleteFlowFile)
+		flowFilesGroup.GET("/download", svc.DownloadFlowFile)
+		flowFilesGroup.POST("/pull", svc.PullFlowFiles)
+		flowFilesGroup.POST("/resources", svc.AddResourcesToFlow)
+		flowFilesGroup.POST("/to-resources", svc.AddResourceFromFlow)
+	}
+}
+
+func setResourcesGroup(parent *gin.RouterGroup, svc *services.ResourceService) {
+	rg := parent.Group("/resources")
+	{
+		rg.GET("/", svc.ListResources)
+		rg.POST("/", svc.UploadResources)
+		rg.POST("/mkdir", svc.MkdirResource)
+		rg.PUT("/move", svc.MoveResource)
+		rg.POST("/copy", svc.CopyResource)
+		rg.DELETE("/", svc.DeleteResource)
+		rg.GET("/download", svc.DownloadResource)
+	}
+}
+
 func setContainersGroup(parent *gin.RouterGroup, svc *services.ContainerService) {
 	containersViewGroup := parent.Group("/containers")
 	{
@@ -377,6 +485,19 @@ func setContainersGroup(parent *gin.RouterGroup, svc *services.ContainerService)
 	{
 		flowContainersViewGroup.GET("/", svc.GetFlowContainers)
 		flowContainersViewGroup.GET("/:containerID", svc.GetFlowContainer)
+	}
+}
+
+func setToolcallsGroup(parent *gin.RouterGroup, svc *services.ToolcallService) {
+	toolcallsViewGroup := parent.Group("/toolcalls")
+	{
+		toolcallsViewGroup.GET("/", svc.GetToolcalls)
+	}
+
+	flowToolcallsViewGroup := parent.Group("/flows/:flowID/toolcalls")
+	{
+		flowToolcallsViewGroup.GET("/", svc.GetFlowToolcalls)
+		flowToolcallsViewGroup.GET("/:toolcallID", svc.GetFlowToolcall)
 	}
 }
 
@@ -486,6 +607,13 @@ func setScreenshotsGroup(parent *gin.RouterGroup, svc *services.ScreenshotServic
 		flowScreenshotsViewGroup.GET("/", svc.GetFlowScreenshots)
 		flowScreenshotsViewGroup.GET("/:screenshotID", svc.GetFlowScreenshot)
 		flowScreenshotsViewGroup.GET("/:screenshotID/file", svc.GetFlowScreenshotFile)
+	}
+}
+
+func setAnonymizeGroup(parent *gin.RouterGroup, svc *services.AnonymizerService) {
+	group := parent.Group("/anonymize")
+	{
+		group.POST("/text", svc.AnonymizeText)
 	}
 }
 

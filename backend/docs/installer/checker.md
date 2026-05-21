@@ -75,7 +75,22 @@ type CheckHandler interface {
 Three-tier verification process:
 1. **DNS Resolution**: Tests ability to resolve docker.io
 2. **HTTP Connectivity**: Verifies HTTPS access (proxy-aware)
-3. **Docker Pull Test**: Attempts to pull a small test image
+3. **Docker Pull Test**: Attempts to pull `debian:latest` (the default worker image) when both Docker clients are available
+
+#### Restricted Network Troubleshooting
+
+The current checker validates Docker Hub reachability by resolving `docker.io`, making an HTTPS connectivity check, and — when both Docker clients are available — attempting a pull of `debian:latest` (the default worker image). This means the installer can fail network validation even when the host has general internet access but Docker itself is not configured for the target network.
+
+Recommended remediation order:
+
+1. Confirm general internet access and DNS resolution for `docker.io`
+2. If your environment requires an outbound proxy for installer or PentAGI HTTP traffic, set the `PROXY_URL` environment variable. To route Docker image pulls through a proxy, configure the Docker daemon or Docker Desktop proxy separately — Docker does not use `PROXY_URL` for registry access.
+3. If Docker Hub is blocked or rate-limited, configure an organization-approved Docker registry mirror or registry proxy at the Docker daemon / Docker Desktop level
+4. Restart Docker and rerun the installer checks
+
+PentAGI variables such as `PENTAGI_IMAGE`, `DOCKER_DEFAULT_IMAGE`, and `DOCKER_DEFAULT_IMAGE_FOR_PENTEST` do not replace Docker daemon registry configuration. They only influence the PentAGI application image or worker image selection after Docker is already able to pull the required images. Note that the main Compose stack already includes a service from `quay.io` (`postgres-exporter`), and the optional observability stack includes an image from `gcr.io`. A Docker Hub mirror alone is therefore not sufficient for a full deployment — those registries also need to be reachable or individually mirrored.
+
+See Docker's official documentation for [registry mirrors](https://docs.docker.com/docker-hub/image-library/mirror/) and [daemon proxy configuration](https://docs.docker.com/engine/daemon/proxy/).
 
 ### 5. Update Availability Checks
 - Communicates with update server to check latest versions

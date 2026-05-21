@@ -147,6 +147,16 @@ type CreateFlowTemplateInput struct {
 	Text  string `json:"text"`
 }
 
+type CreateKnowledgeDocumentInput struct {
+	DocType     KnowledgeDocType     `json:"docType"`
+	Content     string               `json:"content"`
+	Question    string               `json:"question"`
+	Description *string              `json:"description,omitempty"`
+	GuideType   *KnowledgeGuideType  `json:"guideType,omitempty"`
+	AnswerType  *KnowledgeAnswerType `json:"answerType,omitempty"`
+	CodeLang    *string              `json:"codeLang,omitempty"`
+}
+
 type DailyFlowsStats struct {
 	Date  time.Time   `json:"date"`
 	Stats *FlowsStats `json:"stats"`
@@ -210,6 +220,15 @@ type FlowExecutionStats struct {
 	Tasks                []*TaskExecutionStats `json:"tasks"`
 }
 
+type FlowFile struct {
+	ID         string    `json:"id"`
+	Name       string    `json:"name"`
+	Path       string    `json:"path"`
+	Size       int       `json:"size"`
+	IsDir      bool      `json:"isDir"`
+	ModifiedAt time.Time `json:"modifiedAt"`
+}
+
 type FlowStats struct {
 	TotalTasksCount      int `json:"totalTasksCount"`
 	TotalSubtasksCount   int `json:"totalSubtasksCount"`
@@ -240,6 +259,38 @@ type FunctionToolcallsStats struct {
 	AvgDurationSeconds   float64 `json:"avgDurationSeconds"`
 }
 
+type KnowledgeDocument struct {
+	ID          string               `json:"id"`
+	DocType     KnowledgeDocType     `json:"docType"`
+	Content     string               `json:"content"`
+	Question    string               `json:"question"`
+	Description *string              `json:"description,omitempty"`
+	UserID      int64                `json:"userId"`
+	FlowID      *int64               `json:"flowId,omitempty"`
+	TaskID      *int64               `json:"taskId,omitempty"`
+	SubtaskID   *int64               `json:"subtaskId,omitempty"`
+	GuideType   *KnowledgeGuideType  `json:"guideType,omitempty"`
+	AnswerType  *KnowledgeAnswerType `json:"answerType,omitempty"`
+	CodeLang    *string              `json:"codeLang,omitempty"`
+	PartSize    int                  `json:"partSize"`
+	TotalSize   int                  `json:"totalSize"`
+	Manual      bool                 `json:"manual"`
+}
+
+type KnowledgeDocumentWithScore struct {
+	Score    float64            `json:"score"`
+	Document *KnowledgeDocument `json:"document"`
+}
+
+type KnowledgeFilter struct {
+	DocTypes    []KnowledgeDocType    `json:"docTypes,omitempty"`
+	GuideTypes  []KnowledgeGuideType  `json:"guideTypes,omitempty"`
+	AnswerTypes []KnowledgeAnswerType `json:"answerTypes,omitempty"`
+	CodeLangs   []string              `json:"codeLangs,omitempty"`
+	FlowID      *int64                `json:"flowId,omitempty"`
+	Manual      *bool                 `json:"manual,omitempty"`
+}
+
 type MessageLog struct {
 	ID           int64          `json:"id"`
 	Type         MessageLogType `json:"type"`
@@ -251,6 +302,13 @@ type MessageLog struct {
 	TaskID       *int64         `json:"taskId,omitempty"`
 	SubtaskID    *int64         `json:"subtaskId,omitempty"`
 	CreatedAt    time.Time      `json:"createdAt"`
+}
+
+type ModelAgentsUsageStats struct {
+	Model      string      `json:"model"`
+	Provider   string      `json:"provider"`
+	AgentTypes []AgentType `json:"agentTypes"`
+	Stats      *UsageStats `json:"stats"`
 }
 
 type ModelConfig struct {
@@ -390,10 +448,12 @@ type SearchLog struct {
 }
 
 type Settings struct {
-	Debug              bool `json:"debug"`
-	AskUser            bool `json:"askUser"`
-	DockerInside       bool `json:"dockerInside"`
-	AssistantUseAgents bool `json:"assistantUseAgents"`
+	Debug              bool   `json:"debug"`
+	AskUser            bool   `json:"askUser"`
+	Version            string `json:"version"`
+	DockerInside       bool   `json:"dockerInside"`
+	IsDevelopMode      bool   `json:"isDevelopMode"`
+	AssistantUseAgents bool   `json:"assistantUseAgents"`
 }
 
 type Subscription struct {
@@ -467,6 +527,21 @@ type TestResult struct {
 	Error     *string `json:"error,omitempty"`
 }
 
+type ToolCallLog struct {
+	ID              int64          `json:"id"`
+	CallID          string         `json:"callId"`
+	Status          ToolCallStatus `json:"status"`
+	Name            string         `json:"name"`
+	Args            string         `json:"args"`
+	Result          string         `json:"result"`
+	DurationSeconds float64        `json:"durationSeconds"`
+	FlowID          int64          `json:"flowId"`
+	TaskID          *int64         `json:"taskId,omitempty"`
+	SubtaskID       *int64         `json:"subtaskId,omitempty"`
+	CreatedAt       time.Time      `json:"createdAt"`
+	UpdatedAt       time.Time      `json:"updatedAt"`
+}
+
 type ToolcallsStats struct {
 	TotalCount           int     `json:"totalCount"`
 	TotalDurationSeconds float64 `json:"totalDurationSeconds"`
@@ -497,6 +572,16 @@ type UpdateFlowTemplateInput struct {
 	Text  string `json:"text"`
 }
 
+type UpdateKnowledgeDocumentInput struct {
+	Content     string               `json:"content"`
+	Question    *string              `json:"question,omitempty"`
+	Description *string              `json:"description,omitempty"`
+	DocType     *KnowledgeDocType    `json:"docType,omitempty"`
+	GuideType   *KnowledgeGuideType  `json:"guideType,omitempty"`
+	AnswerType  *KnowledgeAnswerType `json:"answerType,omitempty"`
+	CodeLang    *string              `json:"codeLang,omitempty"`
+}
+
 type UsageStats struct {
 	TotalUsageIn       int     `json:"totalUsageIn"`
 	TotalUsageOut      int     `json:"totalUsageOut"`
@@ -517,6 +602,17 @@ type UserPrompt struct {
 	Template  string     `json:"template"`
 	CreatedAt time.Time  `json:"createdAt"`
 	UpdatedAt time.Time  `json:"updatedAt"`
+}
+
+type UserResource struct {
+	ID        int64     `json:"id"`
+	UserID    int64     `json:"userId"`
+	Name      string    `json:"name"`
+	Path      string    `json:"path"`
+	Size      int       `json:"size"`
+	IsDir     bool      `json:"isDir"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
 }
 
 type VectorStoreLog struct {
@@ -660,6 +756,145 @@ func (e *AgentType) UnmarshalGQL(v interface{}) error {
 }
 
 func (e AgentType) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+type KnowledgeAnswerType string
+
+const (
+	KnowledgeAnswerTypeGuide         KnowledgeAnswerType = "guide"
+	KnowledgeAnswerTypeVulnerability KnowledgeAnswerType = "vulnerability"
+	KnowledgeAnswerTypeCode          KnowledgeAnswerType = "code"
+	KnowledgeAnswerTypeTool          KnowledgeAnswerType = "tool"
+	KnowledgeAnswerTypeOther         KnowledgeAnswerType = "other"
+)
+
+var AllKnowledgeAnswerType = []KnowledgeAnswerType{
+	KnowledgeAnswerTypeGuide,
+	KnowledgeAnswerTypeVulnerability,
+	KnowledgeAnswerTypeCode,
+	KnowledgeAnswerTypeTool,
+	KnowledgeAnswerTypeOther,
+}
+
+func (e KnowledgeAnswerType) IsValid() bool {
+	switch e {
+	case KnowledgeAnswerTypeGuide, KnowledgeAnswerTypeVulnerability, KnowledgeAnswerTypeCode, KnowledgeAnswerTypeTool, KnowledgeAnswerTypeOther:
+		return true
+	}
+	return false
+}
+
+func (e KnowledgeAnswerType) String() string {
+	return string(e)
+}
+
+func (e *KnowledgeAnswerType) UnmarshalGQL(v interface{}) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = KnowledgeAnswerType(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid KnowledgeAnswerType", str)
+	}
+	return nil
+}
+
+func (e KnowledgeAnswerType) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+type KnowledgeDocType string
+
+const (
+	KnowledgeDocTypeAnswer KnowledgeDocType = "answer"
+	KnowledgeDocTypeGuide  KnowledgeDocType = "guide"
+	KnowledgeDocTypeCode   KnowledgeDocType = "code"
+)
+
+var AllKnowledgeDocType = []KnowledgeDocType{
+	KnowledgeDocTypeAnswer,
+	KnowledgeDocTypeGuide,
+	KnowledgeDocTypeCode,
+}
+
+func (e KnowledgeDocType) IsValid() bool {
+	switch e {
+	case KnowledgeDocTypeAnswer, KnowledgeDocTypeGuide, KnowledgeDocTypeCode:
+		return true
+	}
+	return false
+}
+
+func (e KnowledgeDocType) String() string {
+	return string(e)
+}
+
+func (e *KnowledgeDocType) UnmarshalGQL(v interface{}) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = KnowledgeDocType(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid KnowledgeDocType", str)
+	}
+	return nil
+}
+
+func (e KnowledgeDocType) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+type KnowledgeGuideType string
+
+const (
+	KnowledgeGuideTypeInstall     KnowledgeGuideType = "install"
+	KnowledgeGuideTypeConfigure   KnowledgeGuideType = "configure"
+	KnowledgeGuideTypeUse         KnowledgeGuideType = "use"
+	KnowledgeGuideTypePentest     KnowledgeGuideType = "pentest"
+	KnowledgeGuideTypeDevelopment KnowledgeGuideType = "development"
+	KnowledgeGuideTypeOther       KnowledgeGuideType = "other"
+)
+
+var AllKnowledgeGuideType = []KnowledgeGuideType{
+	KnowledgeGuideTypeInstall,
+	KnowledgeGuideTypeConfigure,
+	KnowledgeGuideTypeUse,
+	KnowledgeGuideTypePentest,
+	KnowledgeGuideTypeDevelopment,
+	KnowledgeGuideTypeOther,
+}
+
+func (e KnowledgeGuideType) IsValid() bool {
+	switch e {
+	case KnowledgeGuideTypeInstall, KnowledgeGuideTypeConfigure, KnowledgeGuideTypeUse, KnowledgeGuideTypePentest, KnowledgeGuideTypeDevelopment, KnowledgeGuideTypeOther:
+		return true
+	}
+	return false
+}
+
+func (e KnowledgeGuideType) String() string {
+	return string(e)
+}
+
+func (e *KnowledgeGuideType) UnmarshalGQL(v interface{}) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = KnowledgeGuideType(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid KnowledgeGuideType", str)
+	}
+	return nil
+}
+
+func (e KnowledgeGuideType) MarshalGQL(w io.Writer) {
 	fmt.Fprint(w, strconv.Quote(e.String()))
 }
 
@@ -1241,6 +1476,51 @@ func (e *TokenStatus) UnmarshalGQL(v interface{}) error {
 }
 
 func (e TokenStatus) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+type ToolCallStatus string
+
+const (
+	ToolCallStatusReceived ToolCallStatus = "received"
+	ToolCallStatusRunning  ToolCallStatus = "running"
+	ToolCallStatusFinished ToolCallStatus = "finished"
+	ToolCallStatusFailed   ToolCallStatus = "failed"
+)
+
+var AllToolCallStatus = []ToolCallStatus{
+	ToolCallStatusReceived,
+	ToolCallStatusRunning,
+	ToolCallStatusFinished,
+	ToolCallStatusFailed,
+}
+
+func (e ToolCallStatus) IsValid() bool {
+	switch e {
+	case ToolCallStatusReceived, ToolCallStatusRunning, ToolCallStatusFinished, ToolCallStatusFailed:
+		return true
+	}
+	return false
+}
+
+func (e ToolCallStatus) String() string {
+	return string(e)
+}
+
+func (e *ToolCallStatus) UnmarshalGQL(v interface{}) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = ToolCallStatus(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid ToolCallStatus", str)
+	}
+	return nil
+}
+
+func (e ToolCallStatus) MarshalGQL(w io.Writer) {
 	fmt.Fprint(w, strconv.Quote(e.String()))
 }
 

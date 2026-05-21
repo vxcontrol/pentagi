@@ -357,7 +357,14 @@ func (s *FlowService) CreateFlow(c *gin.Context) {
 	}
 	prvtype := prv.Type()
 
-	fw, err := s.fc.CreateFlow(c, int64(uid), createFlow.Input, prvname, prvtype, createFlow.Functions)
+	dbResources, err := validateServiceResources(s.db, uid, privs, createFlow.ResourceIDs)
+	if err != nil {
+		logger.FromContext(c).WithError(err).Errorf("error validating resource ids")
+		response.Error(c, response.ErrFlowsInvalidRequest, err)
+		return
+	}
+
+	fw, err := s.fc.CreateFlow(c, int64(uid), createFlow.Input, prvname, prvtype, createFlow.Functions, dbResources)
 	if err != nil {
 		logger.FromContext(c).WithError(err).Errorf("error creating flow")
 		response.Error(c, response.ErrInternal, err)
@@ -478,7 +485,14 @@ func (s *FlowService) PatchFlow(c *gin.Context) {
 			}
 		}
 
-		if err := fw.PutInput(c, *patchFlow.Input, prv); err != nil {
+		dbResources, err := validateServiceResources(s.db, uid, privs, patchFlow.ResourceIDs)
+		if err != nil {
+			logger.FromContext(c).WithError(err).Errorf("error validating resource ids")
+			response.Error(c, response.ErrFlowsInvalidRequest, err)
+			return
+		}
+
+		if err := fw.PutInput(c, *patchFlow.Input, prv, dbResources); err != nil {
 			logger.FromContext(c).WithError(err).Errorf("error sending input to flow")
 			response.Error(c, response.ErrInternal, err)
 			return
@@ -586,6 +600,18 @@ func (s *FlowService) DeleteFlow(c *gin.Context) {
 			response.Error(c, response.ErrInternal, err)
 		}
 		return
+	}
+
+	// Best-effort cleanup: remove accumulated long-term memory documents for this
+	// flow from the vector store. They will never be re-used after the flow is gone.
+	if err := s.db.Exec(
+		`DELETE FROM langchain_pg_embedding
+		 WHERE collection_id = (SELECT uuid FROM langchain_pg_collection WHERE name = 'langchain')
+		   AND COALESCE(cmetadata ->> 'doc_type', '') = 'memory'
+		   AND (cmetadata ->> 'flow_id') = ?`,
+		strconv.FormatUint(flow.ID, 10),
+	).Error; err != nil {
+		logger.FromContext(c).WithError(err).Warnf("failed to clean up memory documents for deleted flow %d", flow.ID)
 	}
 
 	flowDB, err := convertFlowToDatabase(flow)

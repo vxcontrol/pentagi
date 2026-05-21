@@ -32,6 +32,7 @@ import { Button } from '@/components/ui/button';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { FormSubmitButton } from '@/components/ui/form-submit-button';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -56,11 +57,17 @@ interface BaseInputProps {
     placeholder?: string;
 }
 
-// Universal field components using useController
 interface ControllerProps {
     control: any;
     disabled?: boolean;
     name: string;
+}
+
+interface FormComboboxItemProps extends BaseFieldProps, BaseInputProps {
+    allowCustom?: boolean;
+    contentClass?: string;
+    description?: string;
+    options: string[];
 }
 
 interface FormInputNumberItemProps extends BaseFieldProps, NumberInputProps {
@@ -72,6 +79,20 @@ interface FormInputStringItemProps extends BaseFieldProps, BaseInputProps {
     description?: string;
 }
 
+interface FormModelComboboxItemProps extends BaseFieldProps, BaseInputProps {
+    allowCustom?: boolean;
+    contentClass?: string;
+    description?: string;
+    onOptionSelect?: (option: ModelOption) => void;
+    options: ModelOption[];
+}
+
+interface ModelOption {
+    name: string;
+    price?: null | { cacheRead: number; cacheWrite: number; input: number; output: number };
+    thinking?: boolean;
+}
+
 interface NumberInputProps extends BaseInputProps {
     max?: string;
     min?: string;
@@ -80,102 +101,7 @@ interface NumberInputProps extends BaseInputProps {
 
 type Provider = ProviderConfigFragmentFragment;
 
-const FormInputStringItem: React.FC<FormInputStringItemProps> = ({
-    control,
-    description,
-    disabled,
-    label,
-    name,
-    placeholder,
-}) => {
-    const { field, fieldState } = useController({
-        control,
-        defaultValue: undefined,
-        disabled,
-        name,
-    });
-
-    const inputProps = { placeholder };
-
-    return (
-        <FormItem>
-            <FormLabel>{label}</FormLabel>
-            <FormControl>
-                <Input
-                    {...field}
-                    {...inputProps}
-                    value={field.value ?? ''}
-                />
-            </FormControl>
-            {description && <FormDescription>{description}</FormDescription>}
-            {fieldState.error && <FormMessage>{fieldState.error.message}</FormMessage>}
-        </FormItem>
-    );
-};
-
-const FormInputNumberItem: React.FC<FormInputNumberItemProps> = ({
-    control,
-    description,
-    disabled,
-    label,
-    max,
-    min,
-    name,
-    placeholder,
-    step,
-    valueType = 'float',
-}) => {
-    const { field, fieldState } = useController({
-        control,
-        defaultValue: undefined,
-        disabled,
-        name,
-    });
-
-    const parseValue = (value: string) => {
-        if (value === '') {
-            return null;
-        }
-
-        return valueType === 'float' ? Number.parseFloat(value) : Number.parseInt(value);
-    };
-
-    const inputProps = {
-        max,
-        min,
-        placeholder,
-        step,
-        type: 'number' as const,
-    };
-
-    return (
-        <FormItem>
-            <FormLabel>{label}</FormLabel>
-            <FormControl>
-                <Input
-                    {...field}
-                    {...inputProps}
-                    onChange={(event) => {
-                        const { value } = event.target;
-                        field.onChange(parseValue(value));
-                    }}
-                    value={field.value ?? ''}
-                />
-            </FormControl>
-            {description && <FormDescription>{description}</FormDescription>}
-            {fieldState.error && <FormMessage>{fieldState.error.message}</FormMessage>}
-        </FormItem>
-    );
-};
-
-interface FormComboboxItemProps extends BaseFieldProps, BaseInputProps {
-    allowCustom?: boolean;
-    contentClass?: string;
-    description?: string;
-    options: string[];
-}
-
-const FormComboboxItem: React.FC<FormComboboxItemProps> = ({
+function FormComboboxItem({
     allowCustom = true,
     contentClass,
     control,
@@ -185,7 +111,7 @@ const FormComboboxItem: React.FC<FormComboboxItemProps> = ({
     name,
     options,
     placeholder,
-}) => {
+}: FormComboboxItemProps) {
     const { field, fieldState } = useController({
         control,
         defaultValue: undefined,
@@ -196,7 +122,6 @@ const FormComboboxItem: React.FC<FormComboboxItemProps> = ({
     const [isOpen, setIsOpen] = useState(false);
     const [search, setSearch] = useState('');
 
-    // Filter options based on search
     const filteredOptions = options.filter((option) => option?.toLowerCase().includes(search?.toLowerCase()));
 
     const displayValue = field.value ?? '';
@@ -284,23 +209,90 @@ const FormComboboxItem: React.FC<FormComboboxItemProps> = ({
             {fieldState.error && <FormMessage>{fieldState.error.message}</FormMessage>}
         </FormItem>
     );
-};
-
-interface FormModelComboboxItemProps extends BaseFieldProps, BaseInputProps {
-    allowCustom?: boolean;
-    contentClass?: string;
-    description?: string;
-    onOptionSelect?: (option: ModelOption) => void;
-    options: ModelOption[];
 }
 
-interface ModelOption {
-    name: string;
-    price?: null | { cacheRead: number; cacheWrite: number; input: number; output: number };
-    thinking?: boolean;
+function FormInputNumberItem({
+    control,
+    description,
+    disabled,
+    label,
+    max,
+    min,
+    name,
+    placeholder,
+    step,
+    valueType = 'float',
+}: FormInputNumberItemProps) {
+    const { field, fieldState } = useController({
+        control,
+        defaultValue: undefined,
+        disabled,
+        name,
+    });
+
+    const parseValue = (value: string) => {
+        if (value === '') {
+            return null;
+        }
+
+        return valueType === 'float' ? Number.parseFloat(value) : Number.parseInt(value);
+    };
+
+    const inputProps = {
+        max,
+        min,
+        placeholder,
+        step,
+        type: 'number' as const,
+    };
+
+    return (
+        <FormItem>
+            <FormLabel>{label}</FormLabel>
+            <FormControl>
+                <Input
+                    {...field}
+                    {...inputProps}
+                    onChange={(event) => {
+                        const { value } = event.target;
+                        field.onChange(parseValue(value));
+                    }}
+                    value={field.value ?? ''}
+                />
+            </FormControl>
+            {description && <FormDescription>{description}</FormDescription>}
+            {fieldState.error && <FormMessage>{fieldState.error.message}</FormMessage>}
+        </FormItem>
+    );
 }
 
-const FormModelComboboxItem: React.FC<FormModelComboboxItemProps> = ({
+function FormInputStringItem({ control, description, disabled, label, name, placeholder }: FormInputStringItemProps) {
+    const { field, fieldState } = useController({
+        control,
+        defaultValue: undefined,
+        disabled,
+        name,
+    });
+
+    const inputProps = { placeholder };
+
+    return (
+        <FormItem>
+            <FormLabel>{label}</FormLabel>
+            <FormControl>
+                <Input
+                    {...field}
+                    {...inputProps}
+                    value={field.value ?? ''}
+                />
+            </FormControl>
+            {description && <FormDescription>{description}</FormDescription>}
+            {fieldState.error && <FormMessage>{fieldState.error.message}</FormMessage>}
+        </FormItem>
+    );
+}
+
+function FormModelComboboxItem({
     allowCustom = true,
     contentClass,
     control,
@@ -311,7 +303,7 @@ const FormModelComboboxItem: React.FC<FormModelComboboxItemProps> = ({
     onOptionSelect,
     options,
     placeholder,
-}) => {
+}: FormModelComboboxItemProps) {
     const { field, fieldState } = useController({
         control,
         defaultValue: undefined,
@@ -322,13 +314,13 @@ const FormModelComboboxItem: React.FC<FormModelComboboxItemProps> = ({
     const [isOpen, setIsOpen] = useState(false);
     const [search, setSearch] = useState('');
 
-    // Filter options based on search
     const filteredOptions = options.filter((option) => option.name?.toLowerCase().includes(search?.toLowerCase()));
 
     const displayValue = field.value ?? '';
 
-    // Format price for display
-    const formatPrice = (price?: null | { cacheRead: number; cacheWrite: number; input: number; output: number }): string => {
+    const formatPrice = (
+        price?: null | { cacheRead: number; cacheWrite: number; input: number; output: number },
+    ): string => {
         if (!price || ((!price.input || price.input === 0) && (!price.output || price.output === 0))) {
             return 'free';
         }
@@ -338,8 +330,7 @@ const FormModelComboboxItem: React.FC<FormModelComboboxItemProps> = ({
         };
 
         const basePrice = `$${formatValue(price.input)}/$${formatValue(price.output)}`;
-        
-        // Add cache prices if available
+
         const hasCachePrices = (price.cacheRead && price.cacheRead > 0) || (price.cacheWrite && price.cacheWrite > 0);
 
         if (hasCachePrices) {
@@ -462,9 +453,8 @@ const FormModelComboboxItem: React.FC<FormModelComboboxItemProps> = ({
             {fieldState.error && <FormMessage>{fieldState.error.message}</FormMessage>}
         </FormItem>
     );
-};
+}
 
-// Define agent configuration schema
 const agentConfigSchema = z
     .object({
         frequencyPenalty: z.preprocess(
@@ -541,7 +531,6 @@ const agentConfigSchema = z
     })
     .optional();
 
-// Define form schema
 const formSchema = z.object({
     agents: z.record(z.string(), agentConfigSchema).optional(),
     name: z.preprocess(
@@ -551,15 +540,12 @@ const formSchema = z.object({
     type: z.preprocess((value) => value || '', z.string().min(1, 'Provider type is required')),
 });
 
-// Type for agents field in form
 type FormAgents = FormData['agents'];
 
 type FormData = z.infer<typeof formSchema>;
 
-// Convert camelCase key to display name (e.g., 'simpleJson' -> 'Simple Json')
 const getName = (key: string): string => key.replaceAll(/([A-Z])/g, ' $1').replace(/^./, (item) => item.toUpperCase());
 
-// Helper function to convert string to ReasoningEffort enum
 const getReasoningEffort = (effort: null | string | undefined): null | ReasoningEffort => {
     if (!effort) {
         return null;
@@ -584,7 +570,6 @@ const getReasoningEffort = (effort: null | string | undefined): null | Reasoning
     }
 };
 
-// Helper function to convert form data to GraphQL input
 const transformFormToGraphQL = (
     formData: FormData,
 ): {
@@ -600,7 +585,7 @@ const transformFormToGraphQL = (
                 maxLength: data?.maxLength ?? null,
                 maxTokens: data?.maxTokens ?? null,
                 minLength: data?.minLength ?? null,
-                model: data!.model, // After filter, data and model are guaranteed to exist
+                model: data!.model,
                 presencePenalty: data?.presencePenalty ?? null,
                 price:
                     data?.price &&
@@ -637,7 +622,6 @@ const transformFormToGraphQL = (
     };
 };
 
-// Helper function to recursively remove __typename from objects
 const normalizeGraphQLData = (obj: unknown): unknown => {
     if (obj === null || obj === undefined) {
         return obj;
@@ -664,13 +648,11 @@ interface TestResultsDialogProps {
     results: any;
 }
 
-// Component to render test results dialog
-const TestResultsDialog = ({ handleOpenChange, isOpen, results }: TestResultsDialogProps) => {
+function TestResultsDialog({ handleOpenChange, isOpen, results }: TestResultsDialogProps) {
     if (!results) {
         return null;
     }
 
-    // Transform results object to array, removing __typename
     const agentResults = Object.entries(results)
         .filter(([key]) => key !== '__typename')
         .map(([agentType, agentData]: [string, any]) => ({
@@ -788,9 +770,8 @@ const TestResultsDialog = ({ handleOpenChange, isOpen, results }: TestResultsDia
             </DialogContent>
         </Dialog>
     );
-};
+}
 
-// Static mapping of agent keys to GraphQL enum types
 const agentTypesMap: Record<string, AgentConfigType> = {
     adviser: AgentConfigType.Adviser,
     assistant: AgentConfigType.Assistant,
@@ -807,7 +788,6 @@ const agentTypesMap: Record<string, AgentConfigType> = {
     simpleJson: AgentConfigType.SimpleJson,
 };
 
-// Helper function to extract agent types from agents object
 const extractAgentTypes = (agents: unknown): null | string[] => {
     if (!agents || typeof agents !== 'object') {
         return null;
@@ -821,7 +801,7 @@ const extractAgentTypes = (agents: unknown): null | string[] => {
     return types.length > 0 ? types : null;
 };
 
-const SettingsProvider = () => {
+function SettingsProvider() {
     const { providerId } = useParams<{ providerId: string }>();
     const navigate = useNavigate();
     const [searchParams, setSearchParams] = useSearchParams();
@@ -857,7 +837,8 @@ const SettingsProvider = () => {
 
     const { isDirty } = useFormState({ control });
 
-    // Maintain a blocker state at the top of history when form is dirty
+    // Push a synthetic history entry while the form is dirty so a browser-back can be intercepted
+    // by popstate below — react-router's blocker doesn't cover the native back gesture.
     useEffect(() => {
         if (isDirty && !hasPushedBlockerStateRef.current) {
             window.history.pushState({ __pentagiBlock__: true }, '');
@@ -865,7 +846,6 @@ const SettingsProvider = () => {
         }
     }, [isDirty]);
 
-    // Intercept browser back using popstate when form is dirty
     useEffect(() => {
         const handlePopState = () => {
             if (!isDirty) {
@@ -873,16 +853,14 @@ const SettingsProvider = () => {
             }
 
             if (allowBrowserLeaveRef.current) {
-                // Allow single leave without blocking
                 allowBrowserLeaveRef.current = false;
 
                 return;
             }
 
-            // User navigated back off the blocker entry to the previous one; go forward to stay
             setPendingBrowserBack(true);
             setIsLeaveDialogOpen(true);
-            // Return to the blocker entry
+            // Restore the blocker entry so the user stays on the page until they confirm.
             window.history.forward();
         };
 
@@ -893,13 +871,10 @@ const SettingsProvider = () => {
         };
     }, [isDirty]);
 
-    // Watch selected type
     const selectedType = useWatch({ control, name: 'type' });
 
-    // Watch provider name for delete confirmation dialog
     const providerName = useWatch({ control, name: 'name' });
 
-    // Read query parameters for form initialization (stable)
     const formQueryParams = useMemo(
         () => ({
             id: searchParams.get('id'),
@@ -908,37 +883,29 @@ const SettingsProvider = () => {
         [searchParams],
     );
 
-    // Get dynamic agent types from data
     const getAgentTypes = () => {
-        // Try to get agents from specific sources in priority order
         const agentsSource =
-            // For new providers, use default provider for selected type
             (isNew &&
                 selectedType &&
                 data?.settingsProviders?.default?.[selectedType as keyof typeof data.settingsProviders.default]
                     ?.agents) ||
-            // For existing providers, use current provider's agents
             (!isNew &&
                 providerId &&
                 data?.settingsProviders?.userDefined?.find((p: Provider) => p.id == providerId)?.agents) ||
-            // Fallback to any available default provider
             (data?.settingsProviders?.default &&
                 Object.values(data.settingsProviders.default).find((provider) => provider?.agents)?.agents) ||
             null;
 
-        // Extract and return agent types, or fallback to hardcoded list
         return extractAgentTypes(agentsSource) ?? Object.keys(agentTypesMap);
     };
 
     const agentTypes = getAgentTypes();
 
-    // Get available models filtered by selected provider type
     const availableModels = useMemo(() => {
         if (!data?.settingsProviders?.models || !selectedType) {
             return [];
         }
 
-        // Filter models by selected provider type
         const { models } = data.settingsProviders;
         const providerModels = models[selectedType as keyof typeof models];
 
@@ -959,11 +926,10 @@ const SettingsProvider = () => {
                     : null,
                 thinking: model.thinking,
             }))
-            .filter((model) => model.name) // Remove any models without names
+            .filter((model) => model.name)
             .sort((a, b) => a.name.localeCompare(b.name));
     }, [data, selectedType]);
 
-    // Fill agents when provider type is selected (only for new providers)
     useEffect(() => {
         if (!isNew || !selectedType || !data?.settingsProviders?.default || availableModels.length === 0) {
             return;
@@ -977,14 +943,9 @@ const SettingsProvider = () => {
                 Object.entries(defaultProvider.agents)
                     .filter(([key]) => key !== '__typename')
                     .map(([key, data]) => {
-                        // const agent = Object.fromEntries(
-                        //     Object.entries(data).filter(([key]) => key !== '__typename'),
-                        // ) as AgentConfigInput;
                         const agent = { ...data };
 
-                        // Check if the model from defaultProvider exists in availableModels
                         if (agent.model && !availableModels.find((m) => m.name === agent.model)) {
-                            // Use first available model if default model not found
                             agent.model = availableModels[0]?.name || agent.model;
                         }
 
@@ -997,10 +958,8 @@ const SettingsProvider = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [availableModels, data, isNew, selectedType]);
 
-    // Update query parameter when type changes (only for new providers)
     useEffect(() => {
         if (!isNew) {
-            // Clear query parameters for existing providers
             if (searchParams.size > 0) {
                 setSearchParams({});
             }
@@ -1008,21 +967,18 @@ const SettingsProvider = () => {
             return;
         }
 
-        // Don't update query params if we're copying from existing provider
         const queryId = searchParams.get('id');
 
         if (queryId) {
             return;
         }
 
-        // Don't update query params on initial load if we're reading from query params
         const queryType = searchParams.get('type');
 
         if (!selectedType && queryType) {
             return;
         }
 
-        // Update query parameter based on selected type
         setSearchParams((prev) => {
             const params = new URLSearchParams(prev);
 
@@ -1034,9 +990,8 @@ const SettingsProvider = () => {
 
             return params;
         });
-    }, [selectedType, setSearchParams, isNew, searchParams]); // Include searchParams since we read from it
+    }, [selectedType, setSearchParams, isNew, searchParams]);
 
-    // Fill form with data when available
     useEffect(() => {
         if (!data?.settingsProviders) {
             return;
@@ -1045,11 +1000,9 @@ const SettingsProvider = () => {
         const providers = data.settingsProviders;
 
         if (isNew || !providerId) {
-            // For new provider, start with empty form but check for type query parameter
             const queryType = formQueryParams.type ?? undefined;
             const queryId = formQueryParams.id;
 
-            // If we have an id in query params, copy from existing provider
             if (queryId && data?.settingsProviders?.userDefined) {
                 const sourceProvider = data.settingsProviders.userDefined.find((p: Provider) => p.id == queryId);
 
@@ -1075,8 +1028,8 @@ const SettingsProvider = () => {
                 });
             }
 
-            // Default new provider form - but only if selectedType is not set
-            // to avoid conflicts with agent filling useEffect
+            // Bail out of the empty-form reset when `selectedType` is set — the agent-filling
+            // effect above is the source of truth in that case and would fight us.
             if (!selectedType) {
                 reset({
                     agents: {},
@@ -1107,8 +1060,7 @@ const SettingsProvider = () => {
     }, [data, formQueryParams, isNew, providerId, selectedType]);
 
     const handleSubmit = async () => {
-        // Get all form data including disabled fields
-        // Note: getValues() excludes disabled fields, watch() includes them
+        // watch() — not getValues() — because disabled fields must be included in the payload.
         const formData = watch();
 
         try {
@@ -1117,13 +1069,11 @@ const SettingsProvider = () => {
             const mutationData = transformFormToGraphQL(formData);
 
             if (isNew) {
-                // Create new provider
                 await createProvider({
                     refetchQueries: ['settingsProviders'],
                     variables: mutationData,
                 });
             } else {
-                // Update existing provider
                 await updateProvider({
                     refetchQueries: ['settingsProviders'],
                     variables: {
@@ -1133,7 +1083,6 @@ const SettingsProvider = () => {
                 });
             }
 
-            // Navigate back to providers list on success
             navigate('/settings/providers');
         } catch (error) {
             console.error('Submit error:', error);
@@ -1162,7 +1111,6 @@ const SettingsProvider = () => {
                 variables: { providerId },
             });
 
-            // Navigate back to providers list on success
             navigate('/settings/providers');
         } catch (error) {
             console.error('Delete error:', error);
@@ -1170,26 +1118,21 @@ const SettingsProvider = () => {
         }
     };
 
-    // Test entire provider (all agents)
     const handleTest = async () => {
-        // Trigger form validation
         const isValid = await trigger();
 
         if (!isValid) {
             const { errors } = formState;
 
-            // Helper function to format field names for display
             const formatFieldName = (fieldPath: string): string => {
                 return fieldPath
                     .split('.')
                     .map((part) => {
-                        // Capitalize first letter and add spaces before uppercase letters
                         return part.charAt(0).toUpperCase() + part.slice(1).replaceAll(/([A-Z])/g, ' $1');
                     })
                     .join(' → ');
             };
 
-            // Show validation errors to user
             const errorMessages = Object.entries(errors)
                 .map(([field, error]: [string, any]) => {
                     if (error?.message) {
@@ -1197,7 +1140,6 @@ const SettingsProvider = () => {
                     }
 
                     if (error && typeof error === 'object') {
-                        // Handle nested errors (like agents.simple.model)
                         return Object.entries(error)
                             .map(([subField, subError]: [string, any]) => {
                                 if (subError?.message) {
@@ -1236,7 +1178,6 @@ const SettingsProvider = () => {
         try {
             setSubmitError(null);
 
-            // Get form data and transform it - including disabled fields
             const formData = watch();
             const { agents, type } = transformFormToGraphQL(formData);
             const result = await testProvider({
@@ -1254,9 +1195,7 @@ const SettingsProvider = () => {
         }
     };
 
-    // Test a single agent (uses testAgent where supported, otherwise falls back to filtered provider test)
     const handleTestAgent = async (agentKey: string) => {
-        // Validate only fields for this agent and general required fields
         const isValid = await trigger();
 
         if (!isValid) {
@@ -1312,7 +1251,7 @@ const SettingsProvider = () => {
         try {
             setSubmitError(null);
             setCurrentAgentKey(agentKey);
-            // Note: getValues() excludes disabled fields, watch() includes them
+            // watch() — not getValues() — because disabled fields must be included in the payload.
             const formData = watch();
             const { agents, type } = transformFormToGraphQL(formData);
 
@@ -1347,7 +1286,7 @@ const SettingsProvider = () => {
         if (pendingBrowserBack) {
             allowBrowserLeaveRef.current = true;
             setPendingBrowserBack(false);
-            // Skip the blocker entry and go to the real previous page
+            // Step over the synthetic blocker entry into the actual previous page.
             window.history.go(-2);
 
             return;
@@ -1799,15 +1738,14 @@ const SettingsProvider = () => {
                     >
                         Cancel
                     </Button>
-                    <Button
-                        disabled={isLoading}
+                    <FormSubmitButton
                         form="provider-form"
-                        type="submit"
+                        icon={<Save className="size-4" />}
+                        loading={isLoading}
                         variant="secondary"
                     >
-                        {isLoading ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
                         {isLoading ? 'Saving...' : isNew ? 'Create Provider' : 'Update Provider'}
-                    </Button>
+                    </FormSubmitButton>
                 </div>
             </div>
 
@@ -1840,6 +1778,6 @@ const SettingsProvider = () => {
             />
         </>
     );
-};
+}
 
 export default SettingsProvider;

@@ -5,11 +5,14 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"pentagi/pkg/database"
 	obs "pentagi/pkg/observability"
 	"pentagi/pkg/providers"
 	"pentagi/pkg/tools"
+
+	"github.com/sirupsen/logrus"
 )
 
 type FlowUpdater interface {
@@ -284,6 +287,7 @@ func (tw *taskWorker) Run(ctx context.Context) error {
 	for len(tw.stc.ListSubtasks(ctx)) < providers.TasksNumberLimit+3 {
 		st, err := tw.stc.PopSubtask(ctx, tw)
 		if err != nil {
+			tw.handleInterrupting(err)
 			return err
 		}
 
@@ -293,6 +297,7 @@ func (tw *taskWorker) Run(ctx context.Context) error {
 		}
 
 		if err := st.Run(ctx); err != nil {
+			tw.handleInterrupting(err)
 			return err
 		}
 
@@ -312,6 +317,7 @@ func (tw *taskWorker) Run(ctx context.Context) error {
 
 	jobResult, err := tw.taskCtx.Provider.GetTaskResult(ctx, tw.taskCtx.TaskID)
 	if err != nil {
+		tw.handleInterrupting(err)
 		return fmt.Errorf("failed to get task %d result: %w", tw.taskCtx.TaskID, err)
 	}
 
@@ -323,10 +329,12 @@ func (tw *taskWorker) Run(ctx context.Context) error {
 	}
 
 	if err := tw.SetResult(ctx, jobResult.Result); err != nil {
+		tw.handleInterrupting(err)
 		return err
 	}
 
 	if err := tw.SetStatus(ctx, taskStatus); err != nil {
+		tw.handleInterrupting(err)
 		return err
 	}
 
@@ -341,10 +349,33 @@ func (tw *taskWorker) Run(ctx context.Context) error {
 		format,
 	)
 	if err != nil {
+		tw.handleInterrupting(err)
 		return fmt.Errorf("failed to put report for task %d: %w", tw.taskCtx.TaskID, err)
 	}
 
 	return nil
+}
+
+// handleInterrupting sets this task (and the flow via taskWorker.SetStatus)
+// to Waiting when err is context.Canceled or context.DeadlineExceeded. Skips if the task is
+// already marked completed in memory (Finished/Failed) so we do not revive a finished task.
+func (tw *taskWorker) handleInterrupting(err error) {
+	if err == nil {
+		return
+	}
+	if !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
+		return
+	}
+	if tw.IsCompleted() {
+		return
+	}
+
+	resetCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if errSt := tw.SetStatus(resetCtx, database.TaskStatusWaiting); errSt != nil {
+		logrus.WithError(errSt).Warn("failed to set task waiting after run interrupt")
+	}
 }
 
 func (tw *taskWorker) Finish(ctx context.Context) error {

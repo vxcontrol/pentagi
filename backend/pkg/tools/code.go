@@ -4,11 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"strings"
 
 	"pentagi/pkg/database"
+	"pentagi/pkg/graph/model"
 	obs "pentagi/pkg/observability"
 	"pentagi/pkg/observability/langfuse"
+	"pentagi/pkg/providers/embeddings"
 
 	"github.com/sirupsen/logrus"
 	"github.com/vxcontrol/cloud/anonymizer"
@@ -26,28 +29,43 @@ const (
 )
 
 type code struct {
-	flowID    int64
-	taskID    *int64
-	subtaskID *int64
-	replacer  anonymizer.Replacer
-	store     *pgvector.Store
-	vslp      VectorStoreLogProvider
+	userID            int64
+	flowID            int64
+	taskID            *int64
+	subtaskID         *int64
+	replacer          anonymizer.Replacer
+	store             *pgvector.Store
+	embedder          embeddings.Embedder
+	db                database.Querier
+	maxEmbeddingBytes int
+	vslp              VectorStoreLogProvider
+	knp               KnowledgeProvider
 }
 
 func NewCodeTool(
+	userID int64,
 	flowID int64,
 	taskID, subtaskID *int64,
 	replacer anonymizer.Replacer,
 	store *pgvector.Store,
+	embedder embeddings.Embedder,
+	db database.Querier,
+	maxEmbeddingBytes int,
 	vslp VectorStoreLogProvider,
+	knp KnowledgeProvider,
 ) Tool {
 	return &code{
-		flowID:    flowID,
-		taskID:    taskID,
-		subtaskID: subtaskID,
-		replacer:  replacer,
-		store:     store,
-		vslp:      vslp,
+		userID:            userID,
+		flowID:            flowID,
+		taskID:            taskID,
+		subtaskID:         subtaskID,
+		replacer:          replacer,
+		store:             store,
+		embedder:          embedder,
+		db:                db,
+		maxEmbeddingBytes: maxEmbeddingBytes,
+		vslp:              vslp,
+		knp:               knp,
 	}
 }
 
@@ -208,22 +226,28 @@ func (c *code) Handle(ctx context.Context, name string, args json.RawMessage) (s
 			return "", fmt.Errorf("failed to unmarshal %s store code action arguments: %w", name, err)
 		}
 
-		buffer := strings.Builder{}
-		buffer.WriteString(action.Explanation)
-		buffer.WriteString(fmt.Sprintf("\n\n```%s\n\n", action.Lang))
-		buffer.WriteString(action.Code)
-		buffer.WriteString("\n```")
+		renderedCode := c.renderCode(action.Explanation, action.Lang, action.Code)
 
+		// Anonymize before anything else so all downstream paths (including error
+		// branches that emit langfuse events) only ever expose the anonymized form.
+		var (
+			anonymizedCode        = c.replacer.ReplaceString(renderedCode)
+			anonymizedQuestion    = c.replacer.ReplaceString(action.Question)
+			anonymizedDescription = c.replacer.ReplaceString(action.Description)
+		)
+
+		eventMetadata := map[string]any{
+			"tool_name":   name,
+			"code_lang":   action.Lang,
+			"message":     action.Message,
+			"description": anonymizedDescription,
+			"doc_type":    codeVectorStoreDefaultType,
+		}
 		opts := []langfuse.EventOption{
 			langfuse.WithEventName("store code samples to vector store"),
 			langfuse.WithEventInput(action.Question),
-			langfuse.WithEventOutput(buffer.String()),
-			langfuse.WithEventMetadata(map[string]any{
-				"tool_name": name,
-				"code_lang": action.Lang,
-				"message":   action.Message,
-				"doc_type":  codeVectorStoreDefaultType,
-			}),
+			langfuse.WithEventOutput(anonymizedCode),
+			langfuse.WithEventMetadata(eventMetadata),
 		}
 
 		logger = logger.WithFields(logrus.Fields{
@@ -232,47 +256,81 @@ func (c *code) Handle(ctx context.Context, name string, args json.RawMessage) (s
 			"code":  action.Code[:min(len(action.Code), 1000)],
 		})
 
+		// Build common metadata for the document.
+		metadata := map[string]any{
+			"user_id":     c.userID,
+			"flow_id":     c.flowID,
+			"doc_type":    codeVectorStoreDefaultType,
+			"code_lang":   action.Lang,
+			"question":    anonymizedQuestion,
+			"description": anonymizedDescription,
+			"part_size":   len(anonymizedCode),
+			"total_size":  len(anonymizedCode),
+		}
+		if c.taskID != nil {
+			metadata["task_id"] = *c.taskID
+		}
+		if c.subtaskID != nil {
+			metadata["subtask_id"] = *c.subtaskID
+		}
+
 		var (
-			anonymizedCode     = c.replacer.ReplaceString(buffer.String())
-			anonymizedQuestion = c.replacer.ReplaceString(action.Question)
+			docs []schema.Document
+			err  error
+			ids  []string
 		)
 
-		docs, err := documentloaders.NewText(strings.NewReader(anonymizedCode)).Load(ctx)
-		if err != nil {
-			observation.Event(append(opts,
-				langfuse.WithEventStatus(err.Error()),
-				langfuse.WithEventLevel(langfuse.ObservationLevelError),
-			)...)
-			logger.WithError(err).Error("failed to load document")
-			return "", fmt.Errorf("failed to load document: %w", err)
-		}
+		if len(anonymizedCode) <= c.maxEmbeddingBytes || c.embedder == nil {
+			// Fast path: document fits within the embedding limit — use AddDocuments normally.
+			docs, err = documentloaders.NewText(strings.NewReader(anonymizedCode)).Load(ctx)
+			if err != nil {
+				observation.Event(append(opts,
+					langfuse.WithEventStatus(err.Error()),
+					langfuse.WithEventLevel(langfuse.ObservationLevelError),
+				)...)
+				logger.WithError(err).Error("failed to load document")
+				return "", fmt.Errorf("failed to load document: %w", err)
+			}
+			for i := range docs {
+				if docs[i].Metadata == nil {
+					docs[i].Metadata = map[string]any{}
+				}
+				maps.Copy(docs[i].Metadata, metadata)
+				docs[i].Metadata["part_size"] = len(docs[i].PageContent)
+			}
+			ids, err = c.store.AddDocuments(ctx, docs)
+			eventMetadata["ids"] = ids
+			if err != nil {
+				observation.Event(append(opts,
+					langfuse.WithEventStatus(err.Error()),
+					langfuse.WithEventLevel(langfuse.ObservationLevelError),
+				)...)
+				logger.WithError(err).Error("failed to store code sample")
+				return "", fmt.Errorf("failed to store code sample: %w", err)
+			}
+		} else {
+			// Slow path: document exceeds embedding limit — embed truncated text,
+			// store the full anonymized document in the database.
+			embeddingText := truncateForEmbedding(anonymizedCode, c.maxEmbeddingBytes)
 
-		for _, doc := range docs {
-			if doc.Metadata == nil {
-				doc.Metadata = map[string]any{}
+			id, err := storeDocumentWithEmbeddingLimit(ctx, c.db, c.embedder,
+				embeddingText, anonymizedCode, metadata)
+			if err != nil {
+				observation.Event(append(opts,
+					langfuse.WithEventStatus(err.Error()),
+					langfuse.WithEventLevel(langfuse.ObservationLevelError),
+				)...)
+				logger.WithError(err).Error("failed to store code sample with embedding limit")
+				return "", fmt.Errorf("failed to store code sample: %w", err)
 			}
-			doc.Metadata["flow_id"] = c.flowID
-			if c.taskID != nil {
-				doc.Metadata["task_id"] = *c.taskID
+			ids = []string{id}
+			docs = []schema.Document{
+				{
+					PageContent: anonymizedCode,
+					Metadata:    metadata,
+				},
 			}
-			if c.subtaskID != nil {
-				doc.Metadata["subtask_id"] = *c.subtaskID
-			}
-			doc.Metadata["doc_type"] = codeVectorStoreDefaultType
-			doc.Metadata["code_lang"] = action.Lang
-			doc.Metadata["question"] = anonymizedQuestion
-			doc.Metadata["description"] = action.Description
-			doc.Metadata["part_size"] = len(doc.PageContent)
-			doc.Metadata["total_size"] = len(anonymizedCode)
-		}
-
-		if _, err := c.store.AddDocuments(ctx, docs); err != nil {
-			observation.Event(append(opts,
-				langfuse.WithEventStatus(err.Error()),
-				langfuse.WithEventLevel(langfuse.ObservationLevelError),
-			)...)
-			logger.WithError(err).Error("failed to store code sample")
-			return "", fmt.Errorf("failed to store code sample: %w", err)
+			eventMetadata["ids"] = ids
 		}
 
 		observation.Event(append(opts,
@@ -280,6 +338,30 @@ func (c *code) Handle(ctx context.Context, name string, args json.RawMessage) (s
 			langfuse.WithEventLevel(langfuse.ObservationLevelDebug),
 			langfuse.WithEventOutput(docs),
 		)...)
+
+		if c.knp != nil {
+			codeLang := action.Lang
+			for _, id := range ids {
+				knDoc := &model.KnowledgeDocument{
+					ID:          id,
+					UserID:      c.userID,
+					DocType:     model.KnowledgeDocTypeCode,
+					Content:     anonymizedCode,
+					Question:    anonymizedQuestion,
+					Description: &anonymizedDescription,
+					CodeLang:    &codeLang,
+					PartSize:    len(anonymizedCode),
+					TotalSize:   len(anonymizedCode),
+					Manual:      false,
+				}
+				if c.flowID != 0 {
+					knDoc.FlowID = &c.flowID
+				}
+				knDoc.TaskID = c.taskID
+				knDoc.SubtaskID = c.subtaskID
+				c.knp.KnowledgeDocumentCreated(ctx, knDoc)
+			}
+		}
 
 		if agentCtx, ok := GetAgentContext(ctx); ok {
 			data := map[string]any{
@@ -304,7 +386,7 @@ func (c *code) Handle(ctx context.Context, name string, args json.RawMessage) (s
 				filtersData,
 				action.Question,
 				database.VecstoreActionTypeStore,
-				buffer.String(),
+				renderedCode,
 				c.taskID,
 				c.subtaskID,
 			)
@@ -320,4 +402,16 @@ func (c *code) Handle(ctx context.Context, name string, args json.RawMessage) (s
 
 func (c *code) IsAvailable() bool {
 	return c.store != nil
+}
+
+func (c *code) renderCode(explanation, lang, code string) string {
+	buffer := strings.Builder{}
+	buffer.WriteString(explanation)
+	buffer.WriteString("\n\n")
+	buffer.WriteString("```")
+	buffer.WriteString(lang)
+	buffer.WriteString("\n")
+	buffer.WriteString(code)
+	buffer.WriteString("\n```")
+	return buffer.String()
 }

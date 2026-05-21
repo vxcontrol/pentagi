@@ -19,7 +19,7 @@ const icons: Record<VectorStoreAction, LucideIcon> = {
 };
 const defaultIcon = HardDrive;
 
-const FlowVectorStoreActionIcon = ({ action, className, tooltip = action }: FlowVectorStoreActionIconProps) => {
+function FlowVectorStoreActionIcon({ action, className, tooltip = action }: FlowVectorStoreActionIconProps) {
     const Icon = action ? icons[action] || defaultIcon : defaultIcon;
     const iconElement = <Icon className={cn('size-3 shrink-0', tooltip && 'cursor-pointer', className)} />;
 
@@ -33,6 +33,6 @@ const FlowVectorStoreActionIcon = ({ action, className, tooltip = action }: Flow
             <TooltipContent>{formatName(tooltip)}</TooltipContent>
         </Tooltip>
     );
-};
+}
 
 export default FlowVectorStoreActionIcon;

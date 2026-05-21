@@ -136,6 +136,84 @@ func (q *Queries) GetCallToolcall(ctx context.Context, callID string) (Toolcall,
 	return i, err
 }
 
+const getFlowToolcall = `-- name: GetFlowToolcall :one
+SELECT
+  tc.id, tc.call_id, tc.status, tc.name, tc.args, tc.result, tc.flow_id, tc.task_id, tc.subtask_id, tc.created_at, tc.updated_at, tc.duration_seconds
+FROM toolcalls tc
+INNER JOIN flows f ON tc.flow_id = f.id
+WHERE tc.id = $1 AND tc.flow_id = $2 AND f.deleted_at IS NULL
+`
+
+type GetFlowToolcallParams struct {
+	ID     int64 `json:"id"`
+	FlowID int64 `json:"flow_id"`
+}
+
+func (q *Queries) GetFlowToolcall(ctx context.Context, arg GetFlowToolcallParams) (Toolcall, error) {
+	row := q.db.QueryRowContext(ctx, getFlowToolcall, arg.ID, arg.FlowID)
+	var i Toolcall
+	err := row.Scan(
+		&i.ID,
+		&i.CallID,
+		&i.Status,
+		&i.Name,
+		&i.Args,
+		&i.Result,
+		&i.FlowID,
+		&i.TaskID,
+		&i.SubtaskID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DurationSeconds,
+	)
+	return i, err
+}
+
+const getFlowToolcalls = `-- name: GetFlowToolcalls :many
+SELECT
+  tc.id, tc.call_id, tc.status, tc.name, tc.args, tc.result, tc.flow_id, tc.task_id, tc.subtask_id, tc.created_at, tc.updated_at, tc.duration_seconds
+FROM toolcalls tc
+INNER JOIN flows f ON tc.flow_id = f.id
+WHERE tc.flow_id = $1 AND f.deleted_at IS NULL
+ORDER BY tc.created_at ASC
+`
+
+func (q *Queries) GetFlowToolcalls(ctx context.Context, flowID int64) ([]Toolcall, error) {
+	rows, err := q.db.QueryContext(ctx, getFlowToolcalls, flowID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Toolcall
+	for rows.Next() {
+		var i Toolcall
+		if err := rows.Scan(
+			&i.ID,
+			&i.CallID,
+			&i.Status,
+			&i.Name,
+			&i.Args,
+			&i.Result,
+			&i.FlowID,
+			&i.TaskID,
+			&i.SubtaskID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DurationSeconds,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getFlowToolcallsStats = `-- name: GetFlowToolcallsStats :one
 
 SELECT

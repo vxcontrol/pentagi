@@ -84,10 +84,11 @@ func (a Assistant) Validate(db *gorm.DB) {
 // CreateAssistant is model to contain assistant creation paylaod
 // nolint:lll
 type CreateAssistant struct {
-	Input     string           `form:"input" json:"input" validate:"required" example:"user input for running assistant"`
-	Provider  string           `form:"provider" json:"provider" validate:"required" example:"openai"`
-	UseAgents bool             `form:"use_agents" json:"use_agents" validate:"omitempty" example:"true"`
-	Functions *tools.Functions `form:"functions,omitempty" json:"functions,omitempty" validate:"omitempty,valid"`
+	Input       string           `form:"input" json:"input" validate:"required" example:"user input for running assistant"`
+	Provider    string           `form:"provider" json:"provider" validate:"required" example:"openai"`
+	UseAgents   bool             `form:"use_agents" json:"use_agents" validate:"omitempty" example:"true"`
+	Functions   *tools.Functions `form:"functions,omitempty" json:"functions,omitempty" validate:"omitempty,valid"`
+	ResourceIDs []uint64         `form:"resource_ids,omitempty" json:"resource_ids,omitempty" validate:"omitempty" swaggertype:"array,integer"`
 }
 
 // Valid is function to control input/output data
@@ -98,9 +99,10 @@ func (ca CreateAssistant) Valid() error {
 // PatchAssistant is model to contain assistant patching paylaod
 // nolint:lll
 type PatchAssistant struct {
-	Action    string  `form:"action" json:"action" validate:"required,oneof=stop input" enums:"stop,input" default:"stop"`
-	Input     *string `form:"input,omitempty" json:"input,omitempty" validate:"required_if=Action input" example:"user input for waiting assistant"`
-	UseAgents bool    `form:"use_agents" json:"use_agents" validate:"omitempty" example:"true"`
+	Action      string   `form:"action" json:"action" validate:"required,oneof=stop input" enums:"stop,input" default:"stop"`
+	Input       *string  `form:"input,omitempty" json:"input,omitempty" validate:"required_if=Action input" example:"user input for waiting assistant"`
+	UseAgents   bool     `form:"use_agents" json:"use_agents" validate:"omitempty" example:"true"`
+	ResourceIDs []uint64 `form:"resource_ids,omitempty" json:"resource_ids,omitempty" validate:"omitempty" swaggertype:"array,integer"`
 }
 
 // Valid is function to control input/output data

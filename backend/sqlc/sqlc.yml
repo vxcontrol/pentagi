@@ -23,6 +23,14 @@ sql:
             go_type: "float64"
           - db_type: "bigint"
             go_type: "int64"
+          # pgvector extension type — never selected in queries, but sqlc needs a mapping
+          # to generate the LangchainPgEmbedding model struct in models.go.
+          - db_type: "pg_catalog.vector"
+            go_type: "string"
+            nullable: true
+          - db_type: "vector"
+            go_type: "string"
+            nullable: true
     
     # Database connection for sqlc analysis
     database:

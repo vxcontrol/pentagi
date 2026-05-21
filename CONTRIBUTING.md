@@ -28,7 +28,7 @@ When adding new dependencies, ensure they use compatible licenses:
 1. Update dependencies:
    ```bash
    cd backend && go mod tidy
-   cd ../frontend && npm install
+   cd ../frontend && pnpm install
    ```
 
 2. Generate license reports:

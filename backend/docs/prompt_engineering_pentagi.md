@@ -94,6 +94,7 @@ A comprehensive framework for designing high-performance prompts within the Pent
 
 **Security and Operational Boundaries**
 - Explicitly state the **scope** of permitted actions and **security constraints**. Reference `security-tools.mdc` for general tool security context.
+- For engagement-level boundaries, start from the reusable [scope-of-work pentest prompt template](../../examples/prompts/scope_of_work_pentest.md) and adapt the allowed targets, out-of-scope targets, stop conditions, and evidence expectations before the flow starts.
 - Define **Docker container limitations** within `<container_constraints>`, populated by template variables like `{{.DockerImage}}`, `{{.Cwd}}`, `{{.ContainerPorts}}`. Specify restrictions clearly (e.g., "No direct host access," "No GUI applications," "No UDP scanning").
 - Specify **forbidden actions** clearly. Use **ALL CAPS** for critical security warnings, permissions, or prohibitions (e.g., "DO NOT attempt to install new software packages," "ONLY execute commands related to the current SubTask").
 - Emphasize working **strictly within the scope of the current `SubTask`**. The agent must understand its current objective based on `{{.ExecutionContext}}` and not attempt actions related to other SubTasks or the overall Flow goal unless explicitly instructed within the current SubTask. Reference `data-models.mdc` and `controller.md` for task/subtask relationships.
@@ -366,6 +367,20 @@ A comprehensive framework for designing high-performance prompts within the Pent
 - **Focus**: Hands-on security testing, execution of tools (`nmap`, `sqlmap`, etc.), vulnerability exploitation, evidence collection and documentation.
 - **Key Sections**: `KNOWLEDGE MANAGEMENT` (Memory Protocol), `OPERATIONAL ENVIRONMENT` (Container Constraints), `COMMAND EXECUTION RULES` (Terminal Protocol), `PENETRATION TESTING TOOLS` (list available), `TEAM COLLABORATION`, `DELEGATION PROTOCOL`, `SUMMARIZATION AWARENESS PROTOCOL`, `COMPLETION REQUIREMENTS` (using `{{.HackResultToolName}}`).
 - **Critical Instructions**: Check memory first, strictly adhere to terminal rules & container constraints, use only listed available tools, delegate appropriately (e.g., exploit development to Coder), provide detailed, evidence-backed exploitation reports using `{{.HackResultToolName}}`.
+
+#### Pentesting Methodology Checklist for Prompt Authors
+- Encode authorization boundaries explicitly. Prompts should remind the agent to test only approved targets, respect engagement scope, and avoid destructive actions unless the task requires them.
+- Start with coverage before exploitation. Instruct the agent to map routes, roles, inputs, file handling, integrations, and trust boundaries before choosing attack paths.
+- Organize testing by attack surface. Good prompts group checks around authentication, access control, injection, cross-site scripting, server-side request forgery, file processing, and business logic instead of presenting a random payload dump.
+- Prefer low-risk validation first. Reflection markers, controlled payloads, timing checks, and out-of-band verification should be used deliberately to confirm hypotheses before deeper exploitation.
+- Require evidence at every stage. Prompts should ask for captured requests, responses, tool output, prerequisites, and impact notes so confirmed findings can move directly into a report.
+- Use memory and iteration intentionally. The agent should record confirmed dead ends, revisit promising leads with new context, and avoid repeating the same failed checks.
+- End with actionable reporting. A strong pentesting prompt tells the agent to summarize what was confirmed, what remains unverified, how the issue can be reproduced, and which follow-up actions are justified.
+
+#### Recommended Reference Material
+- Use public methodology resources such as [HackTricks](https://book.hacktricks.wiki/en/index.html) and [Pentest Book](https://pentestbook.six2dez.com/) as inspiration for attack-surface coverage and testing depth.
+- Translate those references into concise phases, priorities, and verification rules for the agent instead of copying long checklists into the system prompt verbatim.
+- Keep prompt examples aligned with live PentAGI assets such as [`backend/pkg/templates/prompts/pentester.tmpl`](../pkg/templates/prompts/pentester.tmpl) and [`examples/prompts/base_web_pentest.md`](../../examples/prompts/base_web_pentest.md).
 
 ### Searcher Agent
 - **Focus**: Highly efficient information retrieval (internal memory & external sources), source evaluation and prioritization, synthesis of findings.

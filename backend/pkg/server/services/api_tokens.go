@@ -138,7 +138,7 @@ func (s *TokenService) CreateToken(c *gin.Context) {
 	s.tokenCache.InvalidateUser(apiToken.UserID)
 
 	if s.ss != nil {
-		publisher := s.ss.NewFlowPublisher(int64(apiToken.UserID), 0)
+		publisher := s.ss.NewAPITokenPublisher(int64(apiToken.UserID))
 		publisher.APITokenCreated(c, database.APITokenWithSecret{
 			ApiToken: convertAPITokenToDatabase(apiToken),
 			Token:    token,
@@ -348,7 +348,7 @@ func (s *TokenService) UpdateToken(c *gin.Context) {
 	}
 
 	if s.ss != nil {
-		publisher := s.ss.NewFlowPublisher(int64(token.UserID), 0)
+		publisher := s.ss.NewAPITokenPublisher(int64(token.UserID))
 		publisher.APITokenUpdated(c, convertAPITokenToDatabase(token))
 	}
 
@@ -401,7 +401,7 @@ func (s *TokenService) DeleteToken(c *gin.Context) {
 	s.tokenCache.InvalidateUser(token.UserID)
 
 	if s.ss != nil {
-		publisher := s.ss.NewFlowPublisher(int64(token.UserID), 0)
+		publisher := s.ss.NewAPITokenPublisher(int64(token.UserID))
 		publisher.APITokenDeleted(c, convertAPITokenToDatabase(token))
 	}
 

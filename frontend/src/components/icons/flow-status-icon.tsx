@@ -21,7 +21,7 @@ const statusIcons: Record<StatusType, { className: string; icon: LucideIcon }> =
 };
 const defaultIcon = { className: 'text-muted-foreground', icon: CircleOff };
 
-export const FlowStatusIcon = ({ className = 'size-4', status, tooltip }: FlowStatusIconProps) => {
+export function FlowStatusIcon({ className = 'size-4', status, tooltip }: FlowStatusIconProps) {
     if (!status) {
         return null;
     }
@@ -39,4 +39,4 @@ export const FlowStatusIcon = ({ className = 'size-4', status, tooltip }: FlowSt
             <TooltipContent>{tooltip}</TooltipContent>
         </Tooltip>
     );
-};
+}
