@@ -74,18 +74,7 @@ interface DataTableProps<TData, TValue = unknown> {
     columns: ColumnDef<TData, TValue>[];
     columnVisibility?: VisibilityState;
     data: TData[];
-    /**
-     * Empty-state copy. When provided, the bare "No results." cell is replaced
-     * with a shadcn `<Empty>` block whose title and description adapt to whether
-     * a filter is currently active:
-     * - filter empty + filter active → "No matches" + `No <entityName> match "<query>". Try a different query.`
-     * - filter empty + no filter      → `No <entityName> yet.`
-     *
-     * Pass the plural lowercase form (`"flows"`, `"knowledge documents"`,
-     * `"API tokens"`) so the generated copy reads naturally. Omitting the prop
-     * preserves the legacy `"No results."` fallback for callers that have not
-     * migrated yet.
-     */
+    /** Plural lowercase, e.g. `"flows"`, `"knowledge documents"`, `"API tokens"`. */
     empty?: { entityName?: string };
     /**
      * Search target(s) for the filter input. Three modes:
@@ -175,18 +164,6 @@ interface DataTableFilterProps {
     query: string;
 }
 
-/**
- * Renders the body-row "no data" cell content. Two axes:
- * - `filterValue` empty/non-empty: distinguishes a truly empty dataset from a
- *   filter that excluded every row.
- * - `entityName` provided/omitted: callers that pass `empty.entityName` get the
- *   shadcn `<Empty>` block with a filter-aware copy; callers that don't keep
- *   the legacy bare `"No results."` label so existing tests stay green.
- *
- * Kept inline (rather than exported) because the props are tightly coupled to
- * `DataTable`'s internal `effectiveQuery` and the layout assumes it lives
- * inside a `<TableCell>` with `colSpan={columns.length}`.
- */
 function DataTableEmptyState({ entityName, filterValue }: DataTableEmptyStateProps) {
     if (!entityName) {
         return <>No results.</>;
