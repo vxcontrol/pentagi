@@ -6,6 +6,7 @@ import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '
 import { Kbd, KbdGroup } from '@/components/ui/kbd';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
+import { useLatestRef } from '@/hooks/use-latest-ref';
 import { cn } from '@/lib/utils';
 import { isMac } from '@/lib/utils/platform';
 
@@ -80,6 +81,13 @@ export function InputSearch({
     // round-trip arrived" from "the parent reset me from elsewhere" without
     // a race.
     const lastEmittedReference = useRef(searchQuery);
+    // Mirror onto a ref so the emit effect can depend on `debouncedLocalValue`
+    // alone. Parents commonly pass an inline arrow; listing it in deps would
+    // re-run the emit effect on every parent render with a stale
+    // `debouncedLocalValue` (still holding the pre-clear value), letting a
+    // synchronous Esc / programmatic clear race the debounce timer and
+    // resurrect the previous query. See same fix in `DataTableFilter`.
+    const onSearchChangeReference = useLatestRef(onSearchChange);
 
     // External → local sync. The parent owns the source of truth (URL,
     // upstream state, etc.); when *they* change it (Esc clear, programmatic
@@ -99,9 +107,9 @@ export function InputSearch({
     useEffect(() => {
         if (debouncedLocalValue !== lastEmittedReference.current) {
             lastEmittedReference.current = debouncedLocalValue;
-            onSearchChange(debouncedLocalValue);
+            onSearchChangeReference.current(debouncedLocalValue);
         }
-    }, [debouncedLocalValue, onSearchChange]);
+    }, [debouncedLocalValue, onSearchChangeReference]);
 
     const expand = useCallback(() => setIsExpanded(true), []);
 
@@ -211,7 +219,7 @@ export function InputSearch({
             if (localValue.length > 0) {
                 setLocalValue('');
                 lastEmittedReference.current = '';
-                onSearchChange('');
+                onSearchChangeReference.current('');
 
                 return;
             }
@@ -219,7 +227,7 @@ export function InputSearch({
             inputRef.current?.blur();
             setIsExpanded(false);
         },
-        [localValue, onSearchChange],
+        [localValue, onSearchChangeReference],
     );
 
     return (

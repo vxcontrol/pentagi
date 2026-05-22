@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { useState } from 'react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -134,6 +135,64 @@ describe('DataTable — controlled filter projection', () => {
         await user.click(clearButton);
 
         expect(onFilterChange).toHaveBeenCalledWith('');
+    });
+
+    it('does not resurrect the previous query after the X clears past a settled debounce', async () => {
+        // Regression for the X-clear race: parents typically funnel
+        // `onFilterChange` through an inline arrow (`(v) => setUrl(v)`), which
+        // is a fresh reference per render. The emit effect inside the filter
+        // input used to list that handler in its deps; combined with
+        // `useDebouncedValue` (a `useState` that lags behind `localValue` by
+        // a `setTimeout`), the very next parent render after `handleClear`
+        // saw `debouncedValue='alpha'` while `lastEmitted=''` and re-emitted
+        // `'alpha'` — the user saw the URL/value snap back briefly.
+        const emitted: string[] = [];
+        const user = userEvent.setup();
+
+        const Host = () => {
+            const [value, setValue] = useState('');
+
+            return (
+                <DataTable<Row>
+                    columns={COLUMNS}
+                    data={ROWS}
+                    filterColumn="name"
+                    filterPlaceholder="Filter..."
+                    filterValue={value}
+                    // Intentionally a fresh inline arrow per render —
+                    // mirrors how pages wire this up.
+                    onFilterChange={(next) => {
+                        emitted.push(next);
+                        setValue(next);
+                    }}
+                />
+            );
+        };
+
+        render(<Host />, { wrapper: Wrapper });
+
+        const input = screen.getByPlaceholderText('Filter...');
+        await user.type(input, 'alpha');
+
+        // Wait until the debounce has flushed and the parent has committed
+        // 'alpha' upstream. From here the bug needs `debouncedValue` to be
+        // stuck at the old value across the clear+next-render boundary.
+        await waitFor(() => expect(emitted.at(-1)).toBe('alpha'));
+
+        const inputGroup = input.closest('[data-slot="input-group"]');
+        const clearButton = within(inputGroup as HTMLElement).getByRole('button');
+
+        await user.click(clearButton);
+
+        // Give the debounce timer and any follow-up effects plenty of time
+        // to misfire. With the fix in place no further 'alpha' emission
+        // should appear; only the trailing '' clear is expected.
+        await new Promise((resolve) => setTimeout(resolve, 400));
+
+        const after = emitted.slice(emitted.indexOf('alpha') + 1);
+        expect(after).not.toContain('alpha');
+        expect(after.at(-1)).toBe('');
+        expect((input as HTMLInputElement).value).toBe('');
     });
 });
 

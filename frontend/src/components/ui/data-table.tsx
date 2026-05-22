@@ -953,6 +953,17 @@ function DataTableFilter({ onQueryChange, placeholder, query }: DataTableFilterP
     const [localValue, setLocalValue] = useState(query);
     const debouncedValue = useDebouncedValue(localValue, FILTER_DEBOUNCE_MS);
     const lastEmittedReference = useRef(query);
+    // Stash the handler in a ref so the emit effect can depend on
+    // `debouncedValue` alone. Parents typically pass an inline arrow
+    // (`onQueryChange={(v) => table.setGlobalFilter(v)}`), which is a fresh
+    // reference each render. If the effect listed it in deps, the X-button
+    // clear race resurrected the previous query: handleClear sets
+    // `lastEmitted=''` synchronously, but `debouncedValue` is `useState`
+    // inside `useDebouncedValue` and stays at the old value until its
+    // own setTimeout fires — so the very next parent render (with a new
+    // inline `onQueryChange`) triggered the effect, saw
+    // `debouncedValue='jwt' !== lastEmitted=''`, and re-emitted `'jwt'`.
+    const onQueryChangeReference = useLatestRef(onQueryChange);
     // Generated per-instance so pages with multiple DataTables (e.g.
     // /settings/prompts) don't end up with duplicate `id` attributes — that
     // breaks `getElementById`, a11y semantics, and any test selector that
@@ -969,15 +980,15 @@ function DataTableFilter({ onQueryChange, placeholder, query }: DataTableFilterP
     useEffect(() => {
         if (debouncedValue !== lastEmittedReference.current) {
             lastEmittedReference.current = debouncedValue;
-            onQueryChange(debouncedValue);
+            onQueryChangeReference.current(debouncedValue);
         }
-    }, [debouncedValue, onQueryChange]);
+    }, [debouncedValue, onQueryChangeReference]);
 
     const handleClear = useCallback(() => {
         setLocalValue('');
         lastEmittedReference.current = '';
-        onQueryChange('');
-    }, [onQueryChange]);
+        onQueryChangeReference.current('');
+    }, [onQueryChangeReference]);
 
     return (
         <InputGroup className="max-w-sm">
