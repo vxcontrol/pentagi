@@ -34,7 +34,7 @@ export type TitleResolver = ((params: RouteParams) => string) | ComponentType<{ 
  * from this registry onto the matching <Route>.
  */
 export const routeTitles = {
-    apiTokens: { title: 'API tokens' },
+    apiTokens: { title: 'API Tokens' },
     dashboard: { title: 'Dashboard' },
     flow: {
         title: apolloTitle({

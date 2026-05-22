@@ -877,7 +877,7 @@ function SettingsProvider() {
 
     const formQueryParams = useMemo(
         () => ({
-            id: searchParams.get('id'),
+            clone: searchParams.get('clone'),
             type: searchParams.get('type'),
         }),
         [searchParams],
@@ -1001,7 +1001,7 @@ function SettingsProvider() {
 
         if (isNew || !providerId) {
             const queryType = formQueryParams.type ?? undefined;
-            const queryId = formQueryParams.id;
+            const queryId = formQueryParams.clone;
 
             if (queryId && data?.settingsProviders?.userDefined) {
                 const sourceProvider = data.settingsProviders.userDefined.find((p: Provider) => p.id == queryId);

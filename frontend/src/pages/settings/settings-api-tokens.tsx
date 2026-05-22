@@ -504,7 +504,9 @@ function SettingsAPITokens() {
 
                     return (
                         <div className="font-medium">
-                            {token.name || <span className="text-muted-foreground">(unnamed)</span>}
+                            {token.name || (
+                                <span className="text-muted-foreground font-normal italic">(unnamed)</span>
+                            )}
                         </div>
                     );
                 },

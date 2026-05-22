@@ -600,7 +600,7 @@ function Resources() {
                     isOpen={!!deletion.fileToDelete}
                     itemName={deletion.fileToDelete?.name}
                     itemType={deletion.fileToDelete?.isDir ? 'directory' : 'resource'}
-                    title={deletion.fileToDelete?.isDir ? 'Delete Directory' : 'Delete Resource'}
+                    title={deletion.fileToDelete?.isDir ? 'Delete directory' : 'Delete resource'}
                 />
             </div>
         </>
