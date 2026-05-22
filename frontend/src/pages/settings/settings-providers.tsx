@@ -103,7 +103,7 @@ function SettingsProviders() {
 
     const handleProviderClone = useCallback(
         (providerId: string) => {
-            navigate(`/settings/providers/new?clone=${providerId}`);
+            navigate(`/settings/providers/new?id=${providerId}`);
         },
         [navigate],
     );
