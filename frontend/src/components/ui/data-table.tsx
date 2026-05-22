@@ -28,6 +28,7 @@ import {
     X,
 } from 'lucide-react';
 import {
+    type ChangeEvent,
     Fragment,
     type ReactElement,
     type ReactNode,
@@ -53,7 +54,6 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { useEffectAfterMount } from '@/hooks/use-effect-after-mount';
 import { useLatestRef } from '@/hooks/use-latest-ref';
 import { usePageStorageKeys } from '@/hooks/use-page-storage-keys';
@@ -934,35 +934,40 @@ function DataTableColumnHeader<TData, TValue = unknown>({ column, title }: DataT
 }
 
 /**
- * Search input for the table's global filter. Keystrokes update an internal
- * `localValue` state synchronously so the input feels instant; the debounced
- * mirror is what we propagate upstream via `onQueryChange`. The previous
- * design committed every keystroke straight into `useTableQueryFilter`, which
- * synchronously walked the router and re-rendered the entire route subtree —
- * with the Flows page that ran ~250 ms per keystroke, so consecutive
- * keypresses queued behind the in-flight reconciliation and showed up as
- * input-delay INP. Debouncing the commit drops the upstream cascade rate
- * from per-keystroke to once per typing pause.
+ * Search input for the table's global filter. Two storage cells, one
+ * outbound path:
  *
- * External `query` changes (X button, programmatic clear, URL back-button,
- * route swap) are reconciled into `localValue` through the sync effect: we
- * skip when the incoming value matches what we last emitted, so our own
- * round-trip through the parent doesn't fight with active typing.
+ *   1. `localValue` — `useState`, drives the controlled input. Updated
+ *      synchronously on every keystroke so the caret never lags.
+ *   2. `pendingTimerRef` — the *only* pending emit. `handleChange` schedules
+ *      it; everything else (`handleClear`, external `query` change, unmount)
+ *      cancels it synchronously before doing its own thing.
+ *
+ * The earlier design layered `useDebouncedValue` (its own delayed `useState`)
+ * plus a `lastEmittedReference` ref and two opposing `useEffect`s on top of
+ * the same value. That introduced a third storage cell (`debouncedValue`)
+ * which lagged behind `localValue` by a `setTimeout` and could be read out
+ * of phase: a synchronous clear ran while `debouncedValue` still held the
+ * pre-clear text, so the emit effect re-fired and resurrected it. Moving
+ * the debounce into an imperative timer eliminates that hidden cell —
+ * there is no "stale debounced value" to read from any effect.
+ *
+ * Why we debounce at all: previously every keystroke synchronously walked
+ * `useTableQueryFilter` → router → route subtree, ~250 ms per keystroke on
+ * Flows. The debounce drops upstream commits to once per typing pause.
  */
 function DataTableFilter({ onQueryChange, placeholder, query }: DataTableFilterProps) {
     const [localValue, setLocalValue] = useState(query);
-    const debouncedValue = useDebouncedValue(localValue, FILTER_DEBOUNCE_MS);
+    // Tracks the last value we successfully emitted upstream so the
+    // external-sync effect can tell "the parent confirmed our own commit"
+    // (skip) from "the parent changed `query` independently — back button,
+    // shared link, sibling control" (accept and override local edits).
+    // Mutated only inside `emit`, so the invariant is local to one function.
     const lastEmittedReference = useRef(query);
-    // Stash the handler in a ref so the emit effect can depend on
-    // `debouncedValue` alone. Parents typically pass an inline arrow
-    // (`onQueryChange={(v) => table.setGlobalFilter(v)}`), which is a fresh
-    // reference each render. If the effect listed it in deps, the X-button
-    // clear race resurrected the previous query: handleClear sets
-    // `lastEmitted=''` synchronously, but `debouncedValue` is `useState`
-    // inside `useDebouncedValue` and stays at the old value until its
-    // own setTimeout fires — so the very next parent render (with a new
-    // inline `onQueryChange`) triggered the effect, saw
-    // `debouncedValue='jwt' !== lastEmitted=''`, and re-emitted `'jwt'`.
+    const pendingTimerReference = useRef<null | number>(null);
+    // The handler from the parent is typically an inline arrow, so its
+    // identity churns every render. We never want effect deps to depend on
+    // that — read the latest one through this ref instead.
     const onQueryChangeReference = useLatestRef(onQueryChange);
     // Generated per-instance so pages with multiple DataTables (e.g.
     // /settings/prompts) don't end up with duplicate `id` attributes — that
@@ -970,25 +975,69 @@ function DataTableFilter({ onQueryChange, placeholder, query }: DataTableFilterP
     // relies on the input id.
     const fieldId = useId();
 
-    useEffect(() => {
-        if (query !== lastEmittedReference.current) {
-            setLocalValue(query);
-            lastEmittedReference.current = query;
+    const cancelPendingEmit = useCallback(() => {
+        if (pendingTimerReference.current !== null) {
+            window.clearTimeout(pendingTimerReference.current);
+            pendingTimerReference.current = null;
         }
-    }, [query]);
+    }, []);
 
+    // Single outbound path. Always cancels any pending debounce so the
+    // caller's value wins; skips no-ops where the parent already holds the
+    // same string. Records what went out so external-sync can recognise
+    // the round-trip.
+    const emit = useCallback(
+        (next: string) => {
+            cancelPendingEmit();
+
+            if (next === lastEmittedReference.current) {
+                return;
+            }
+
+            lastEmittedReference.current = next;
+            onQueryChangeReference.current(next);
+        },
+        [cancelPendingEmit, onQueryChangeReference],
+    );
+
+    // External → local sync. Runs only when `query` is something we didn't
+    // emit ourselves — that's the signal an outside source (back button,
+    // sibling control, programmatic clear) moved the source of truth out
+    // from under us. Any in-flight debounce of locally-typed text is dropped
+    // synchronously; the external value wins, by design.
     useEffect(() => {
-        if (debouncedValue !== lastEmittedReference.current) {
-            lastEmittedReference.current = debouncedValue;
-            onQueryChangeReference.current(debouncedValue);
+        if (query === lastEmittedReference.current) {
+            return;
         }
-    }, [debouncedValue, onQueryChangeReference]);
+
+        cancelPendingEmit();
+        lastEmittedReference.current = query;
+        setLocalValue(query);
+    }, [query, cancelPendingEmit]);
+
+    // Cancel any pending timer on unmount so it can't fire into a dead
+    // component (React would warn, and the upstream parent might still
+    // accept the emit).
+    useEffect(() => cancelPendingEmit, [cancelPendingEmit]);
+
+    const handleChange = useCallback(
+        (event: ChangeEvent<HTMLInputElement>) => {
+            const next = event.target.value;
+
+            setLocalValue(next);
+            cancelPendingEmit();
+            pendingTimerReference.current = window.setTimeout(() => {
+                pendingTimerReference.current = null;
+                emit(next);
+            }, FILTER_DEBOUNCE_MS);
+        },
+        [cancelPendingEmit, emit],
+    );
 
     const handleClear = useCallback(() => {
         setLocalValue('');
-        lastEmittedReference.current = '';
-        onQueryChangeReference.current('');
-    }, [onQueryChangeReference]);
+        emit('');
+    }, [emit]);
 
     return (
         <InputGroup className="max-w-sm">
@@ -998,7 +1047,7 @@ function DataTableFilter({ onQueryChange, placeholder, query }: DataTableFilterP
                 id={fieldId}
                 maxLength={FILTER_MAX_LENGTH}
                 name={fieldId}
-                onChange={(event) => setLocalValue(event.target.value)}
+                onChange={handleChange}
                 placeholder={placeholder}
                 type="text"
                 value={localValue}

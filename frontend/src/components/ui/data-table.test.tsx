@@ -137,46 +137,60 @@ describe('DataTable — controlled filter projection', () => {
         expect(onFilterChange).toHaveBeenCalledWith('');
     });
 
+    // The next four tests exercise every race window the inline-arrow +
+    // useDebouncedValue + two-effects design used to leak through. They
+    // share a `Host` shape — a parent that mirrors the controlled value to
+    // local state and hands `DataTableFilter` a fresh inline `onFilterChange`
+    // per render (the same pattern real callers use through
+    // `useTableQueryFilter`). The tests assert on the sequence of emitted
+    // values rather than on internal state, so they remain valid even if
+    // the underlying implementation changes shape again.
+
+    interface FilterHostProps {
+        emitted: string[];
+        initialValue?: string;
+        onSetValueRef?: (setter: (next: string) => void) => void;
+    }
+
+    const FilterHost = ({ emitted, initialValue = '', onSetValueRef }: FilterHostProps) => {
+        const [value, setValue] = useState(initialValue);
+
+        // Expose `setValue` for tests that need to mutate the controlled
+        // prop without typing into the input (simulating an external source
+        // like back-button or sibling control).
+        if (onSetValueRef) {
+            onSetValueRef(setValue);
+        }
+
+        return (
+            <DataTable<Row>
+                columns={COLUMNS}
+                data={ROWS}
+                filterColumn="name"
+                filterPlaceholder="Filter..."
+                filterValue={value}
+                onFilterChange={(next) => {
+                    emitted.push(next);
+                    setValue(next);
+                }}
+            />
+        );
+    };
+
     it('does not resurrect the previous query after the X clears past a settled debounce', async () => {
-        // Regression for the X-clear race: parents typically funnel
-        // `onFilterChange` through an inline arrow (`(v) => setUrl(v)`), which
-        // is a fresh reference per render. The emit effect inside the filter
-        // input used to list that handler in its deps; combined with
-        // `useDebouncedValue` (a `useState` that lags behind `localValue` by
-        // a `setTimeout`), the very next parent render after `handleClear`
-        // saw `debouncedValue='alpha'` while `lastEmitted=''` and re-emitted
-        // `'alpha'` — the user saw the URL/value snap back briefly.
+        // Regression for the X-clear race seen in the browser:
+        // typed → debounce flushes → URL=?q=alpha → X click. The old design
+        // re-emitted 'alpha' on the next parent render (new inline handler,
+        // stale `debouncedValue`). With the new single-timer path, X clear
+        // cancels any in-flight emit synchronously.
         const emitted: string[] = [];
         const user = userEvent.setup();
 
-        const Host = () => {
-            const [value, setValue] = useState('');
-
-            return (
-                <DataTable<Row>
-                    columns={COLUMNS}
-                    data={ROWS}
-                    filterColumn="name"
-                    filterPlaceholder="Filter..."
-                    filterValue={value}
-                    // Intentionally a fresh inline arrow per render —
-                    // mirrors how pages wire this up.
-                    onFilterChange={(next) => {
-                        emitted.push(next);
-                        setValue(next);
-                    }}
-                />
-            );
-        };
-
-        render(<Host />, { wrapper: Wrapper });
+        render(<FilterHost emitted={emitted} />, { wrapper: Wrapper });
 
         const input = screen.getByPlaceholderText('Filter...');
         await user.type(input, 'alpha');
 
-        // Wait until the debounce has flushed and the parent has committed
-        // 'alpha' upstream. From here the bug needs `debouncedValue` to be
-        // stuck at the old value across the clear+next-render boundary.
         await waitFor(() => expect(emitted.at(-1)).toBe('alpha'));
 
         const inputGroup = input.closest('[data-slot="input-group"]');
@@ -184,15 +198,100 @@ describe('DataTable — controlled filter projection', () => {
 
         await user.click(clearButton);
 
-        // Give the debounce timer and any follow-up effects plenty of time
-        // to misfire. With the fix in place no further 'alpha' emission
-        // should appear; only the trailing '' clear is expected.
         await new Promise((resolve) => setTimeout(resolve, 400));
 
         const after = emitted.slice(emitted.indexOf('alpha') + 1);
         expect(after).not.toContain('alpha');
         expect(after.at(-1)).toBe('');
         expect((input as HTMLInputElement).value).toBe('');
+    });
+
+    it('drops a pending typed emit when the X is clicked before the debounce flushes', async () => {
+        // The pre-refactor code relied on `useDebouncedValue`'s internal
+        // setTimeout, which `handleClear` had no way to cancel. So if a user
+        // typed quickly and immediately clicked X, the still-pending timer
+        // would land *after* the clear, re-emitting the typed value. The
+        // refactor cancels the pending timer inside `handleClear` → `emit`.
+        const emitted: string[] = [];
+        const user = userEvent.setup();
+
+        render(<FilterHost emitted={emitted} />, { wrapper: Wrapper });
+
+        const input = screen.getByPlaceholderText('Filter...');
+        await user.type(input, 'bravo', { delay: 5 });
+        // No `waitFor` here — we want the X click to happen mid-debounce,
+        // before any emit has reached the parent.
+        expect(emitted).toEqual([]);
+
+        const inputGroup = input.closest('[data-slot="input-group"]');
+        const clearButton = within(inputGroup as HTMLElement).getByRole('button');
+
+        await user.click(clearButton);
+
+        // Wait long enough for any stale timer to have fired by now.
+        await new Promise((resolve) => setTimeout(resolve, 400));
+
+        // The clear may emit '' (if the parent's filterValue was previously
+        // non-empty — irrelevant here, but harmless), but it must never
+        // emit any partial of 'bravo'.
+        expect(emitted.some((value) => value.length > 0)).toBe(false);
+        expect((input as HTMLInputElement).value).toBe('');
+    });
+
+    it('lets an external change win when it lands mid-debounce', async () => {
+        // If the parent flips `filterValue` while we're still holding a
+        // pending debounce of locally-typed text, the external value wins
+        // and the pending emit is dropped. Without this guarantee, the
+        // pending timer would later fire and clobber the external value.
+        const emitted: string[] = [];
+        const user = userEvent.setup();
+        let setValueExternal: ((next: string) => void) | undefined;
+
+        render(
+            <FilterHost
+                emitted={emitted}
+                onSetValueRef={(setter) => {
+                    setValueExternal = setter;
+                }}
+            />,
+            { wrapper: Wrapper },
+        );
+
+        const input = screen.getByPlaceholderText('Filter...');
+        await user.type(input, 'cha', { delay: 5 });
+
+        // While the debounce is still pending, simulate an external write
+        // (e.g. back-button popping to a different `?q=`).
+        expect(setValueExternal).toBeDefined();
+        act(() => setValueExternal!('external'));
+
+        // Give any leftover timer enough time to fire.
+        await new Promise((resolve) => setTimeout(resolve, 400));
+
+        // The pending typed value must never have escaped upstream.
+        expect(emitted).not.toContain('cha');
+        // The input snaps to the external value.
+        expect((input as HTMLInputElement).value).toBe('external');
+    });
+
+    it('honours typed input when it eventually matches an unrelated external value', async () => {
+        // A subtler invariant: if the user types something that happens to
+        // equal a value the parent previously set externally, the typed
+        // emit must still fire — we shouldn't dedupe against a value the
+        // parent already knows about, only against the value we last sent.
+        const emitted: string[] = [];
+        const user = userEvent.setup();
+
+        render(<FilterHost emitted={emitted} initialValue="seed" />, { wrapper: Wrapper });
+
+        const input = screen.getByPlaceholderText('Filter...');
+        // Clear what's in the input and type the same string fresh.
+        await user.clear(input);
+        await waitFor(() => expect(emitted.at(-1)).toBe(''));
+        await user.type(input, 'seed');
+
+        await waitFor(() => expect(emitted.at(-1)).toBe('seed'));
+        expect((input as HTMLInputElement).value).toBe('seed');
     });
 });
 
