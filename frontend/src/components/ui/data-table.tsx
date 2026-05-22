@@ -54,6 +54,7 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { useDebouncedCallback } from '@/hooks/use-debounced-callback';
 import { useEffectAfterMount } from '@/hooks/use-effect-after-mount';
 import { useLatestRef } from '@/hooks/use-latest-ref';
 import { usePageStorageKeys } from '@/hooks/use-page-storage-keys';
@@ -934,110 +935,81 @@ function DataTableColumnHeader<TData, TValue = unknown>({ column, title }: DataT
 }
 
 /**
- * Search input for the table's global filter. Two storage cells, one
- * outbound path:
+ * Search input for the table's global filter.
  *
- *   1. `localValue` — `useState`, drives the controlled input. Updated
+ * Controlled debounced input — the kind the React docs warn you cannot
+ * model with `useDeferredValue` alone, because we want to throttle the
+ * *side-effect* (URL writes via the parent's `onQueryChange`) rather than
+ * the render of the filtered rows (`useDeferredValue` already handles the
+ * latter at the table level — see `deferredGlobalFilter` above). React's
+ * own recommendation for this case is plain debouncing.
+ *
+ * The whole component is two state cells and one effect:
+ *
+ *   1. `localValue` (`useState`) — drives the controlled input, updates
  *      synchronously on every keystroke so the caret never lags.
- *   2. `pendingTimerRef` — the *only* pending emit. `handleChange` schedules
- *      it; everything else (`handleClear`, external `query` change, unmount)
- *      cancels it synchronously before doing its own thing.
+ *   2. `lastEmittedReference` (`useRef`) — records the most recent value
+ *      we've handed upstream so the external-sync effect can distinguish
+ *      "this is our own commit coming back through the router" (skip)
+ *      from "something outside changed the source of truth" (accept,
+ *      override any in-flight typing).
+ *   3. One `useEffect` reconciling external `query` with local state.
  *
- * The earlier design layered `useDebouncedValue` (its own delayed `useState`)
- * plus a `lastEmittedReference` ref and two opposing `useEffect`s on top of
- * the same value. That introduced a third storage cell (`debouncedValue`)
- * which lagged behind `localValue` by a `setTimeout` and could be read out
- * of phase: a synchronous clear ran while `debouncedValue` still held the
- * pre-clear text, so the emit effect re-fired and resurrected it. Moving
- * the debounce into an imperative timer eliminates that hidden cell —
- * there is no "stale debounced value" to read from any effect.
- *
- * Why we debounce at all: previously every keystroke synchronously walked
- * `useTableQueryFilter` → router → route subtree, ~250 ms per keystroke on
- * Flows. The debounce drops upstream commits to once per typing pause.
+ * Everything timer-related lives inside `useDebouncedCallback`, which
+ * exposes a single `.cancel()` we call from the only two places that need
+ * to override the schedule — external sync and `handleClear`. There is no
+ * stale `debouncedValue` cell for an effect to read out of phase, which
+ * was the entire class of races the previous design carried.
  */
 function DataTableFilter({ onQueryChange, placeholder, query }: DataTableFilterProps) {
     const [localValue, setLocalValue] = useState(query);
-    // Tracks the last value we successfully emitted upstream so the
-    // external-sync effect can tell "the parent confirmed our own commit"
-    // (skip) from "the parent changed `query` independently — back button,
-    // shared link, sibling control" (accept and override local edits).
-    // Mutated only inside `emit`, so the invariant is local to one function.
     const lastEmittedReference = useRef(query);
-    const pendingTimerReference = useRef<null | number>(null);
-    // The handler from the parent is typically an inline arrow, so its
-    // identity churns every render. We never want effect deps to depend on
-    // that — read the latest one through this ref instead.
-    const onQueryChangeReference = useLatestRef(onQueryChange);
     // Generated per-instance so pages with multiple DataTables (e.g.
     // /settings/prompts) don't end up with duplicate `id` attributes — that
     // breaks `getElementById`, a11y semantics, and any test selector that
     // relies on the input id.
     const fieldId = useId();
 
-    const cancelPendingEmit = useCallback(() => {
-        if (pendingTimerReference.current !== null) {
-            window.clearTimeout(pendingTimerReference.current);
-            pendingTimerReference.current = null;
+    const debouncedEmit = useDebouncedCallback((next: string) => {
+        if (next === lastEmittedReference.current) {
+            return;
         }
-    }, []);
 
-    // Single outbound path. Always cancels any pending debounce so the
-    // caller's value wins; skips no-ops where the parent already holds the
-    // same string. Records what went out so external-sync can recognise
-    // the round-trip.
-    const emit = useCallback(
-        (next: string) => {
-            cancelPendingEmit();
-
-            if (next === lastEmittedReference.current) {
-                return;
-            }
-
-            lastEmittedReference.current = next;
-            onQueryChangeReference.current(next);
-        },
-        [cancelPendingEmit, onQueryChangeReference],
-    );
+        lastEmittedReference.current = next;
+        onQueryChange(next);
+    }, FILTER_DEBOUNCE_MS);
 
     // External → local sync. Runs only when `query` is something we didn't
-    // emit ourselves — that's the signal an outside source (back button,
-    // sibling control, programmatic clear) moved the source of truth out
-    // from under us. Any in-flight debounce of locally-typed text is dropped
+    // emit ourselves: back button, programmatic clear, sibling control.
+    // Any in-flight debounce of locally-typed text is cancelled
     // synchronously; the external value wins, by design.
     useEffect(() => {
         if (query === lastEmittedReference.current) {
             return;
         }
 
-        cancelPendingEmit();
+        debouncedEmit.cancel();
         lastEmittedReference.current = query;
         setLocalValue(query);
-    }, [query, cancelPendingEmit]);
-
-    // Cancel any pending timer on unmount so it can't fire into a dead
-    // component (React would warn, and the upstream parent might still
-    // accept the emit).
-    useEffect(() => cancelPendingEmit, [cancelPendingEmit]);
+    }, [query, debouncedEmit]);
 
     const handleChange = useCallback(
         (event: ChangeEvent<HTMLInputElement>) => {
-            const next = event.target.value;
-
-            setLocalValue(next);
-            cancelPendingEmit();
-            pendingTimerReference.current = window.setTimeout(() => {
-                pendingTimerReference.current = null;
-                emit(next);
-            }, FILTER_DEBOUNCE_MS);
+            setLocalValue(event.target.value);
+            debouncedEmit(event.target.value);
         },
-        [cancelPendingEmit, emit],
+        [debouncedEmit],
     );
 
     const handleClear = useCallback(() => {
         setLocalValue('');
-        emit('');
-    }, [emit]);
+        debouncedEmit.cancel();
+
+        if (lastEmittedReference.current !== '') {
+            lastEmittedReference.current = '';
+            onQueryChange('');
+        }
+    }, [debouncedEmit, onQueryChange]);
 
     return (
         <InputGroup className="max-w-sm">

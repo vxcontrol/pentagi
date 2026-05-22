@@ -5,14 +5,14 @@ import { type ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } f
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group';
 import { Kbd, KbdGroup } from '@/components/ui/kbd';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { useLatestRef } from '@/hooks/use-latest-ref';
+import { useDebouncedCallback } from '@/hooks/use-debounced-callback';
 import { cn } from '@/lib/utils';
 import { isMac } from '@/lib/utils/platform';
 
 // Keystrokes hit `localValue` synchronously for an instant UI response; the
-// outbound emit goes through a timer ref (see `pendingTimerReference`). Same
-// shape as `DataTableFilter`; mirrors `FILTER_DEBOUNCE_MS` so both search
-// inputs on a page share one "feels responsive" target.
+// upstream emit is debounced via `useDebouncedCallback` (see below). Same
+// shape and timing as `DataTableFilter` so both search inputs on a page
+// share one "feels responsive" target.
 const COMMIT_DEBOUNCE_MS = 150;
 
 interface InputSearchProps {
@@ -67,53 +67,36 @@ export function InputSearch({
     const inputRef = useRef<HTMLInputElement>(null);
 
     // Same two-cell shape as `DataTableFilter`: `localValue` drives the input
-    // (synchronous, instant caret response); `pendingTimerReference` is the
-    // only outbound emit in flight. `lastEmittedReference` records the most
-    // recent value we've handed upstream so the external-sync effect can
-    // distinguish our own round-trip from a true external change.
+    // (synchronous, instant caret response); `lastEmittedReference` records
+    // the most recent value we handed upstream so the external-sync effect
+    // can distinguish our own round-trip from a true external change. All
+    // timer logic lives inside `useDebouncedCallback` — see its docstring
+    // for the rationale.
     const [localValue, setLocalValue] = useState(searchQuery);
     const lastEmittedReference = useRef(searchQuery);
-    const pendingTimerReference = useRef<null | number>(null);
-    const onSearchChangeReference = useLatestRef(onSearchChange);
 
-    const cancelPendingEmit = useCallback(() => {
-        if (pendingTimerReference.current !== null) {
-            window.clearTimeout(pendingTimerReference.current);
-            pendingTimerReference.current = null;
+    const debouncedEmit = useDebouncedCallback((next: string) => {
+        if (next === lastEmittedReference.current) {
+            return;
         }
-    }, []);
 
-    const emit = useCallback(
-        (next: string) => {
-            cancelPendingEmit();
-
-            if (next === lastEmittedReference.current) {
-                return;
-            }
-
-            lastEmittedReference.current = next;
-            onSearchChangeReference.current(next);
-        },
-        [cancelPendingEmit, onSearchChangeReference],
-    );
+        lastEmittedReference.current = next;
+        onSearchChange(next);
+    }, COMMIT_DEBOUNCE_MS);
 
     // External → local sync. Runs only when `searchQuery` is something we
     // didn't emit ourselves — programmatic wipe of `?qs=`, back button,
     // sibling control. Any in-flight debounce of locally-typed text is
-    // dropped synchronously; the external value wins, by design.
+    // cancelled synchronously; the external value wins, by design.
     useEffect(() => {
         if (searchQuery === lastEmittedReference.current) {
             return;
         }
 
-        cancelPendingEmit();
+        debouncedEmit.cancel();
         lastEmittedReference.current = searchQuery;
         setLocalValue(searchQuery);
-    }, [searchQuery, cancelPendingEmit]);
-
-    // Cancel any pending timer on unmount so it can't fire into a dead
-    // component.
-    useEffect(() => cancelPendingEmit, [cancelPendingEmit]);
+    }, [searchQuery, debouncedEmit]);
 
     const expand = useCallback(() => setIsExpanded(true), []);
 
@@ -210,22 +193,15 @@ export function InputSearch({
 
     const handleChange = useCallback(
         (event: ChangeEvent<HTMLInputElement>) => {
-            const next = event.target.value;
-
-            setLocalValue(next);
-            cancelPendingEmit();
-            pendingTimerReference.current = window.setTimeout(() => {
-                pendingTimerReference.current = null;
-                emit(next);
-            }, COMMIT_DEBOUNCE_MS);
+            setLocalValue(event.target.value);
+            debouncedEmit(event.target.value);
         },
-        [cancelPendingEmit, emit],
+        [debouncedEmit],
     );
 
     // Escape: first press clears the value, second press collapses + blurs.
-    // Clear goes through `emit('')`, which cancels any pending debounce
-    // synchronously — no chance for an in-flight typed value to land after
-    // the Esc.
+    // The clear path cancels any pending debounce synchronously, then emits
+    // `''` directly — no chance for an in-flight typed value to land after.
     const handleInputKeyDown = useCallback(
         (event: React.KeyboardEvent<HTMLInputElement>) => {
             if (event.key !== 'Escape') {
@@ -236,7 +212,12 @@ export function InputSearch({
 
             if (localValue.length > 0) {
                 setLocalValue('');
-                emit('');
+                debouncedEmit.cancel();
+
+                if (lastEmittedReference.current !== '') {
+                    lastEmittedReference.current = '';
+                    onSearchChange('');
+                }
 
                 return;
             }
@@ -244,7 +225,7 @@ export function InputSearch({
             inputRef.current?.blur();
             setIsExpanded(false);
         },
-        [emit, localValue],
+        [debouncedEmit, localValue, onSearchChange],
     );
 
     return (
