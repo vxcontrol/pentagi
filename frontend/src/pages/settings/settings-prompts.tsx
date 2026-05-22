@@ -830,6 +830,7 @@ function SettingsPrompts() {
                         <DataTable<AgentPromptTableData>
                             columns={agentColumns}
                             data={agentPrompts}
+                            empty={{ entityName: 'agent prompts' }}
                             filterPlaceholder="Filter agents..."
                             initialPageSize={1000}
                             renderRowContextMenu={renderAgentRowContextMenu}
@@ -850,6 +851,7 @@ function SettingsPrompts() {
                         <DataTable<ToolPromptTableData>
                             columns={toolColumns}
                             data={toolPrompts}
+                            empty={{ entityName: 'tool prompts' }}
                             filterPlaceholder="Filter tools..."
                             initialPageSize={1000}
                             renderRowContextMenu={renderToolRowContextMenu}

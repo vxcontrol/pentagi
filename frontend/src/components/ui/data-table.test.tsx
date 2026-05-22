@@ -342,6 +342,61 @@ describe('DataTable — empty results', () => {
         expect(screen.getByText('No results')).toBeInTheDocument();
     });
 
+    it('renders the bare "No results." cell when `empty.entityName` is omitted (legacy fallback)', () => {
+        render(
+            <DataTable<Row>
+                columns={COLUMNS}
+                data={[]}
+            />,
+            { wrapper: Wrapper },
+        );
+
+        expect(screen.getByText('No results.')).toBeInTheDocument();
+        // The shadcn Empty title is NOT rendered without `entityName`.
+        expect(screen.queryByText('No matches')).not.toBeInTheDocument();
+    });
+
+    it('renders a data-empty Empty block ("No <entity> yet") when `entityName` is set and no filter is active', () => {
+        render(
+            <DataTable<Row>
+                columns={COLUMNS}
+                data={[]}
+                empty={{ entityName: 'flows' }}
+            />,
+            { wrapper: Wrapper },
+        );
+
+        expect(screen.getByText('No flows yet')).toBeInTheDocument();
+        // No filter ⇒ no "match" description.
+        expect(screen.queryByText(/Try a different query/)).not.toBeInTheDocument();
+        // Pagination footer also uses the entity copy.
+        expect(screen.getByText('No flows')).toBeInTheDocument();
+    });
+
+    it('renders a filter-empty Empty block ("No <entity> match …") when `entityName` is set and a filter is active', async () => {
+        const user = userEvent.setup();
+        render(
+            <DataTable<Row>
+                columns={COLUMNS}
+                data={ROWS}
+                empty={{ entityName: 'flows' }}
+                filterColumn="name"
+                filterPlaceholder="Filter..."
+            />,
+            { wrapper: Wrapper },
+        );
+
+        const input = screen.getByPlaceholderText('Filter...');
+        // No row in ROWS has the substring "ZZZZZZ" — guarantees an empty subset.
+        await user.type(input, 'ZZZZZZ');
+
+        expect(await screen.findByText('No matches')).toBeInTheDocument();
+        // Description cites the query and offers the next-step hint.
+        const description = await screen.findByText(/Try a different query/);
+        expect(description).toHaveTextContent('ZZZZZZ');
+        expect(description.textContent).toMatch(/^No flows match/);
+    });
+
     it('assigns a non-empty unique id and matching name to the filter field', () => {
         const { unmount } = render(
             <DataTable<Row>

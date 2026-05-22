@@ -637,6 +637,7 @@ function Flows() {
                 <DataTable<Flow>
                     columns={columns}
                     data={flows}
+                    empty={{ entityName: 'flows' }}
                     filterPlaceholder="Filter flows..."
                     filterValue={filter}
                     onFilterChange={setFilter}

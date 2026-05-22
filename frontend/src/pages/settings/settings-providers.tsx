@@ -418,6 +418,7 @@ function SettingsProviders() {
             <DataTable<Provider>
                 columns={columns}
                 data={providers}
+                empty={{ entityName: 'providers' }}
                 filterPlaceholder="Filter providers..."
                 filterValue={filter}
                 onFilterChange={setFilter}

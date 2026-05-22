@@ -302,6 +302,7 @@ function Templates() {
                 <DataTable
                     columns={columns}
                     data={templates}
+                    empty={{ entityName: 'templates' }}
                     filterPlaceholder="Filter templates..."
                     filterValue={filter}
                     onFilterChange={setFilter}

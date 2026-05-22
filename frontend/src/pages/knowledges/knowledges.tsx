@@ -484,6 +484,7 @@ function Knowledges() {
                 <DataTable
                     columns={columns}
                     data={knowledges}
+                    empty={{ entityName: 'knowledge documents' }}
                     filterPlaceholder="Filter knowledge documents..."
                     filterValue={filter}
                     onFilterChange={setFilter}

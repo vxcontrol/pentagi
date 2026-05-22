@@ -908,6 +908,7 @@ function SettingsAPITokens() {
             <DataTable<APIToken>
                 columns={columns}
                 data={creatingToken ? [createNewTokenPlaceholder, ...tokens] : tokens}
+                empty={{ entityName: 'API tokens' }}
                 filterPlaceholder="Filter tokens..."
                 filterValue={filter}
                 onFilterChange={setFilter}

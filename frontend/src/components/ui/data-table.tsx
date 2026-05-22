@@ -22,7 +22,9 @@ import {
     ChevronsLeft,
     ChevronsRight,
     ColumnsSettings,
+    Inbox,
     ListFilter,
+    Search,
     X,
 } from 'lucide-react';
 import {
@@ -47,6 +49,7 @@ import {
     DropdownMenuContent,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -71,6 +74,19 @@ interface DataTableProps<TData, TValue = unknown> {
     columns: ColumnDef<TData, TValue>[];
     columnVisibility?: VisibilityState;
     data: TData[];
+    /**
+     * Empty-state copy. When provided, the bare "No results." cell is replaced
+     * with a shadcn `<Empty>` block whose title and description adapt to whether
+     * a filter is currently active:
+     * - filter empty + filter active → "No matches" + `No <entityName> match "<query>". Try a different query.`
+     * - filter empty + no filter      → `No <entityName> yet.`
+     *
+     * Pass the plural lowercase form (`"flows"`, `"knowledge documents"`,
+     * `"API tokens"`) so the generated copy reads naturally. Omitting the prop
+     * preserves the legacy `"No results."` fallback for callers that have not
+     * migrated yet.
+     */
+    empty?: { entityName?: string };
     /**
      * Search target(s) for the filter input. Three modes:
      * - `string` (legacy single-column): the input searches only this column;
@@ -148,10 +164,52 @@ const getColumnId = <TData, TValue>(column: ColumnDef<TData, TValue>): string | 
     return typeof withAccessor.accessorKey === 'string' ? withAccessor.accessorKey : undefined;
 };
 
+interface DataTableEmptyStateProps {
+    entityName?: string;
+    filterValue: string;
+}
+
 interface DataTableFilterProps {
     onQueryChange: (value: string) => void;
     placeholder: string;
     query: string;
+}
+
+/**
+ * Renders the body-row "no data" cell content. Two axes:
+ * - `filterValue` empty/non-empty: distinguishes a truly empty dataset from a
+ *   filter that excluded every row.
+ * - `entityName` provided/omitted: callers that pass `empty.entityName` get the
+ *   shadcn `<Empty>` block with a filter-aware copy; callers that don't keep
+ *   the legacy bare `"No results."` label so existing tests stay green.
+ *
+ * Kept inline (rather than exported) because the props are tightly coupled to
+ * `DataTable`'s internal `effectiveQuery` and the layout assumes it lives
+ * inside a `<TableCell>` with `colSpan={columns.length}`.
+ */
+function DataTableEmptyState({ entityName, filterValue }: DataTableEmptyStateProps) {
+    if (!entityName) {
+        return <>No results.</>;
+    }
+
+    const hasFilter = filterValue.length > 0;
+    const Icon = hasFilter ? Search : Inbox;
+
+    return (
+        <Empty className="border-0 p-0 md:p-0">
+            <EmptyHeader>
+                <EmptyMedia variant="icon">
+                    <Icon />
+                </EmptyMedia>
+                <EmptyTitle>{hasFilter ? 'No matches' : `No ${entityName} yet`}</EmptyTitle>
+                {hasFilter ? (
+                    <EmptyDescription>
+                        No {entityName} match <code>{filterValue}</code>. Try a different query.
+                    </EmptyDescription>
+                ) : null}
+            </EmptyHeader>
+        </Empty>
+    );
 }
 
 const FILTER_DEBOUNCE_MS = 150;
@@ -199,6 +257,7 @@ function DataTable<TData, TValue = unknown>({
     columns,
     columnVisibility: externalColumnVisibility,
     data,
+    empty,
     filterColumn,
     filterPlaceholder = 'Filter...',
     filterValue: externalFilterValue,
@@ -760,10 +819,13 @@ function DataTable<TData, TValue = unknown>({
                         ) : (
                             <TableRow>
                                 <TableCell
-                                    className="h-24 text-center"
+                                    className={cn('text-center', empty?.entityName ? 'py-12' : 'h-24')}
                                     colSpan={columns.length}
                                 >
-                                    No results.
+                                    <DataTableEmptyState
+                                        entityName={empty?.entityName}
+                                        filterValue={effectiveQuery.trim()}
+                                    />
                                 </TableCell>
                             </TableRow>
                         )}
@@ -776,6 +838,8 @@ function DataTable<TData, TValue = unknown>({
                         <>
                             Showing {rangeStart}–{rangeEnd} of {totalRows}
                         </>
+                    ) : empty?.entityName ? (
+                        `No ${empty.entityName}`
                     ) : (
                         'No results'
                     )}
