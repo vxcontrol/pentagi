@@ -5,9 +5,9 @@ simple:
   n: 1
   max_tokens: 8192
   price:
-    input: 0.28
-    output: 0.42
-    cache_read: 0.028
+    input: 0.14
+    output: 0.28
+    cache_read: 0.0028
 
 simple_json:
   model: deepseek-v4-flash
@@ -17,45 +17,45 @@ simple_json:
   max_tokens: 4096
   json: true
   price:
-    input: 0.28
-    output: 0.42
-    cache_read: 0.028
+    input: 0.14
+    output: 0.28
+    cache_read: 0.0028
 
 primary_agent:
   model: deepseek-v4-pro
   n: 1
   max_tokens: 16384
   price:
-    input: 0.28
-    output: 0.42
-    cache_read: 0.028
+    input: 0.435
+    output: 0.87
+    cache_read: 0.003625
 
 assistant:
   model: deepseek-v4-pro
   n: 1
   max_tokens: 16384
   price:
-    input: 0.28
-    output: 0.42
-    cache_read: 0.028
+    input: 0.435
+    output: 0.87
+    cache_read: 0.003625
 
 generator:
   model: deepseek-v4-pro
   n: 1
   max_tokens: 32768
   price:
-    input: 0.28
-    output: 0.42
-    cache_read: 0.028
+    input: 0.435
+    output: 0.87
+    cache_read: 0.003625
 
 refiner:
   model: deepseek-v4-pro
   n: 1
   max_tokens: 20480
   price:
-    input: 0.28
-    output: 0.42
-    cache_read: 0.028
+    input: 0.435
+    output: 0.87
+    cache_read: 0.003625
 
 adviser:
   model: deepseek-v4-flash
@@ -64,18 +64,18 @@ adviser:
   n: 1
   max_tokens: 8192
   price:
-    input: 0.28
-    output: 0.42
-    cache_read: 0.028
+    input: 0.14
+    output: 0.28
+    cache_read: 0.0028
 
 reflector:
   model: deepseek-v4-pro
   n: 1
   max_tokens: 4096
   price:
-    input: 0.28
-    output: 0.42
-    cache_read: 0.028
+    input: 0.435
+    output: 0.87
+    cache_read: 0.003625
 
 searcher:
   model: deepseek-v4-flash
@@ -84,9 +84,9 @@ searcher:
   n: 1
   max_tokens: 4096
   price:
-    input: 0.28
-    output: 0.42
-    cache_read: 0.028
+    input: 0.14
+    output: 0.28
+    cache_read: 0.0028
 
 enricher:
   model: deepseek-v4-flash
@@ -95,33 +95,33 @@ enricher:
   n: 1
   max_tokens: 4096
   price:
-    input: 0.28
-    output: 0.42
-    cache_read: 0.028
+    input: 0.14
+    output: 0.28
+    cache_read: 0.0028
 
 coder:
   model: deepseek-v4-pro
   n: 1
   max_tokens: 20480
   price:
-    input: 0.28
-    output: 0.42
-    cache_read: 0.028
+    input: 0.435
+    output: 0.87
+    cache_read: 0.003625
 
 installer:
   model: deepseek-v4-pro
   n: 1
   max_tokens: 16384
   price:
-    input: 0.28
-    output: 0.42
-    cache_read: 0.028
+    input: 0.435
+    output: 0.87
+    cache_read: 0.003625
 
 pentester:
   model: deepseek-v4-pro
   n: 1
   max_tokens: 16384
   price:
-    input: 0.28
-    output: 0.42
-    cache_read: 0.028
+    input: 0.435
+    output: 0.87
+    cache_read: 0.003625

@@ -1854,10 +1854,10 @@ PentAGI supports 2 DeepSeek V4 models with tool calling, streaming, thinking mod
 
 | Model ID              | Thinking | Context | Price (Input/Output/Cache) | Use Case                                             |
 | --------------------- | -------- | ------- | -------------------------- | ---------------------------------------------------- |
-| `deepseek-v4-flash`*  | ❌        | 128K    | $0.28/$0.42/$0.03          | General dialogue, code generation, tool calling      |
-| `deepseek-v4-pro`*    | ✅        | 128K    | $0.28/$0.42/$0.03          | Advanced reasoning, complex logic, security analysis |
+| `deepseek-v4-flash`*  | ❌        | 1M      | $0.14/$0.28/$0.0028        | General dialogue, code generation, tool calling      |
+| `deepseek-v4-pro`*    | ✅        | 1M      | $0.435/$0.87/$0.003625     | Advanced reasoning, complex logic, security analysis |
 
-**Prices**: Per 1M tokens. Cache pricing is for prompt caching (10% of input cost). Models with thinking support include reinforcement learning chain-of-thought reasoning.
+**Prices**: Per 1M tokens. Cache pricing applies to prompt tokens served from cache and is heavily discounted versus input price. Models with thinking support include reinforcement learning chain-of-thought reasoning.
 
 > The legacy model names `deepseek-chat` and `deepseek-reasoner` are scheduled
 > for deprecation by DeepSeek on 2026-07-24. Existing user configurations
@@ -1865,7 +1865,7 @@ PentAGI supports 2 DeepSeek V4 models with tool calling, streaming, thinking mod
 > use the current V4 names.
 
 **Key Features**:
-- **Automatic Prompt Caching**: 40-60% cost reduction on repeated context (10% of input price)
+- **Automatic Prompt Caching**: Significant cost reduction on repeated context via cache-hit pricing far below input price
 - **Extended Thinking**: Reinforcement learning CoT for complex security analysis (deepseek-v4-pro)
 - **Strong Coding**: Optimized for code generation and exploit development
 - **Tool Calling**: Seamless integration with 20+ pentesting tools via function calling

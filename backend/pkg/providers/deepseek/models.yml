@@ -1,15 +1,15 @@
 - name: deepseek-v4-flash
-  description: DeepSeek V4 Flash - Cost-efficient general-purpose model suitable for dialogue, code generation, and tool calling. Supports JSON output and tool calls. 128K context.
+  description: DeepSeek V4 Flash - Cost-efficient general-purpose model suitable for dialogue, code generation, and tool calling. Supports JSON output and tool calls. 1M context, up to 384K output tokens.
   thinking: false
   price:
-    input: 0.28
-    output: 0.42
-    cache_read: 0.028
+    input: 0.14
+    output: 0.28
+    cache_read: 0.0028
 
 - name: deepseek-v4-pro
-  description: DeepSeek V4 Pro - Higher-tier reasoning model suitable for complex logic, mathematical reasoning, and security analysis. 128K context.
+  description: DeepSeek V4 Pro - Higher-tier reasoning model suitable for complex logic, mathematical reasoning, and security analysis. 1M context, up to 384K output tokens.
   thinking: true
   price:
-    input: 0.28
-    output: 0.42
-    cache_read: 0.028
+    input: 0.435
+    output: 0.87
+    cache_read: 0.003625
