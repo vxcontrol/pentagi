@@ -492,8 +492,8 @@ Setup options: Local installation from https://10.10.10.10:11434 or cloud regist
 	LLMFormDeepSeekHelp = `DeepSeek provides advanced AI models with strong reasoning capabilities and multilingual support.
 
 Default PentAGI Models:
-• DeepSeek-Chat: Flagship model for general-purpose tasks with strong coding and reasoning capabilities
-• DeepSeek-Reasoner: Advanced reasoning model for complex security analysis
+• deepseek-v4-flash: Cost-efficient general-purpose model for dialogue, code generation, and tool calling
+• deepseek-v4-pro: Higher-tier reasoning model for complex logic, mathematical reasoning, and security analysis
 • Cost-effective pricing with competitive performance compared to leading models
 
 Key Advantages:

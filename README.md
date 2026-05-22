@@ -1850,7 +1850,7 @@ DEEPSEEK_PROVIDER=deepseek  # Adds prefix to model names (deepseek/deepseek-v4-f
 
 #### Supported Models
 
-PentAGI supports 2 DeepSeek V4 models with tool calling, streaming, thinking modes, and context caching. Both models are used in default configuration.
+PentAGI supports 2 DeepSeek V4 models with tool calling, streaming, thinking modes, and context caching. Models marked with `*` are used in default configuration.
 
 | Model ID              | Thinking | Context | Price (Input/Output/Cache) | Use Case                                             |
 | --------------------- | -------- | ------- | -------------------------- | ---------------------------------------------------- |
