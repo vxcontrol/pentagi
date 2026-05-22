@@ -1567,6 +1567,16 @@ ANTHROPIC_API_KEY=your_anthropic_api_key
 PROXY_URL=http://your-proxy:8080
 ```
 
+> [!NOTE]
+> **Google Vertex AI for Claude models**
+>
+> PentAGI does not currently expose a dedicated Google Vertex AI configuration path for Anthropic Claude in `.env`. There is no separate Vertex AI API key field at this time, and the existing Anthropic variables (`ANTHROPIC_API_KEY`, `ANTHROPIC_SERVER_URL`) target the direct Anthropic API. Supported routes for Claude are:
+>
+> - **Direct Anthropic API**: `ANTHROPIC_API_KEY` and `ANTHROPIC_SERVER_URL` (see above).
+> - **AWS Bedrock**: `BEDROCK_*` variables (see [AWS Bedrock Provider Configuration](#aws-bedrock-provider-configuration)).
+>
+> If you need to use Vertex AI today, the safest supported workaround is to expose Vertex AI through an OpenAI-compatible proxy or gateway that translates Vertex AI calls into the Chat Completions format while preserving the chat and tool-call behavior PentAGI relies on, then point the Custom LLM provider at that gateway via `LLM_SERVER_URL`, `LLM_SERVER_KEY`, and `LLM_SERVER_MODEL`. This path is only as reliable as the gateway you choose.
+
 #### Supported Models
 
 PentAGI supports 10 Claude models with tool calling, streaming, extended thinking, adaptive thinking, and prompt caching. Models marked with `*` are used in default configuration.
