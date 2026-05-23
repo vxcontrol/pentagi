@@ -211,6 +211,7 @@ function CreateRowActions({
     return (
         <div className="flex justify-end">
             <Button
+                aria-label={isLoading ? 'Submitting…' : 'Submit'}
                 className="shrink-0"
                 disabled={isLoading || !isValid}
                 onClick={onSubmit}
@@ -220,6 +221,7 @@ function CreateRowActions({
                 {isLoading ? <Loader2 className="animate-spin" /> : <Check />}
             </Button>
             <Button
+                aria-label="Cancel"
                 className="shrink-0"
                 onClick={onCancel}
                 size="icon-sm"
@@ -247,6 +249,7 @@ function EditRowActions({
     return (
         <div className="flex justify-end">
             <Button
+                aria-label={isLoading ? 'Submitting…' : 'Submit'}
                 className="shrink-0"
                 disabled={isLoading || !isValid}
                 onClick={onSubmit}
@@ -256,6 +259,7 @@ function EditRowActions({
                 {isLoading ? <Loader2 className="animate-spin" /> : <Check />}
             </Button>
             <Button
+                aria-label="Cancel"
                 className="shrink-0"
                 onClick={onCancel}
                 size="icon-sm"
@@ -500,7 +504,7 @@ function SettingsAPITokens() {
 
                     return (
                         <div className="font-medium">
-                            {token.name || <span className="text-muted-foreground">(unnamed)</span>}
+                            {token.name || <span className="text-muted-foreground font-normal italic">(unnamed)</span>}
                         </div>
                     );
                 },
@@ -530,6 +534,7 @@ function SettingsAPITokens() {
                         <div className="flex items-center gap-2">
                             <code className="text-sm">{tokenId}</code>
                             <Button
+                                aria-label="Copy token ID"
                                 className="size-6 p-0"
                                 onClick={() => handleCopyTokenId(tokenId)}
                                 variant="ghost"
@@ -735,11 +740,11 @@ function SettingsAPITokens() {
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                     <Button
+                                        aria-label="Open menu"
                                         className="shrink-0"
                                         size="icon-sm"
                                         variant="ghost"
                                     >
-                                        <span className="sr-only">Open menu</span>
                                         <Ellipsis />
                                     </Button>
                                 </DropdownMenuTrigger>
@@ -901,6 +906,7 @@ function SettingsAPITokens() {
             <DataTable<APIToken>
                 columns={columns}
                 data={creatingToken ? [createNewTokenPlaceholder, ...tokens] : tokens}
+                empty={{ entityName: 'API tokens' }}
                 filterPlaceholder="Filter tokens..."
                 filterValue={filter}
                 onFilterChange={setFilter}

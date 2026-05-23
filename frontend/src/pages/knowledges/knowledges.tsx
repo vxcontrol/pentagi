@@ -324,6 +324,7 @@ function Knowledges() {
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                                 <Button
+                                    aria-label="Open menu"
                                     className="size-8 p-0"
                                     onClick={(event) => event.stopPropagation()}
                                     variant="ghost"
@@ -483,6 +484,7 @@ function Knowledges() {
                 <DataTable
                     columns={columns}
                     data={knowledges}
+                    empty={{ entityName: 'knowledge documents' }}
                     filterPlaceholder="Filter knowledge documents..."
                     filterValue={filter}
                     onFilterChange={setFilter}

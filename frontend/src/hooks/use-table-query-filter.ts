@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { useDebounce } from 'use-debounce';
 
-import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { URL_PARAMS } from '@/lib/url-params';
 
 interface UseTableQueryFilterReaderOptions {
@@ -34,7 +34,7 @@ export function useTableQueryFilterReader({
 }: UseTableQueryFilterReaderOptions = {}): UseTableQueryFilterReaderResult {
     const [searchParams] = useSearchParams();
     const filter = searchParams.get(paramName) ?? '';
-    const debouncedFilter = useDebouncedValue(filter, debounceMs);
+    const [debouncedFilter] = useDebounce(filter, debounceMs);
 
     return useMemo(() => ({ debouncedFilter, filter }), [debouncedFilter, filter]);
 }

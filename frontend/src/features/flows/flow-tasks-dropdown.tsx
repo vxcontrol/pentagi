@@ -114,6 +114,8 @@ function FlowTasksDropdown({ disabled, onChange, value }: FlowTasksDropdownProps
         >
             <PopoverTrigger asChild>
                 <Button
+                    aria-label="Filter tasks"
+                    aria-pressed={hasActiveFilters}
                     disabled={disabled}
                     size="icon"
                     variant="outline"

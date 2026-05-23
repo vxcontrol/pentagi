@@ -5,72 +5,20 @@ export type Incremental<T> = T | { [P in keyof T]?: P extends ' $fragmentName' |
 import { gql } from '@apollo/client';
 import type * as ApolloReactCommon from '@apollo/client/react';
 import * as ApolloReactHooks from '@apollo/client/react';
-export type Maybe<T> = T | null;
-export type InputMaybe<T> = Maybe<T>;
 const defaultOptions = {} as const;
-/** All built-in and custom scalars, mapped to their actual values */
-export type Scalars = {
-    ID: { input: string; output: string };
-    String: { input: string; output: string };
-    Boolean: { input: boolean; output: boolean };
-    Int: { input: number; output: number };
-    Float: { input: number; output: number };
-    Time: { input: unknown; output: unknown };
-};
-
-export type ApiToken = {
-    createdAt: Scalars['Time']['output'];
-    id: Scalars['ID']['output'];
-    name?: Maybe<Scalars['String']['output']>;
-    roleId: Scalars['ID']['output'];
-    status: TokenStatus;
-    tokenId: Scalars['String']['output'];
-    ttl: Scalars['Int']['output'];
-    updatedAt: Scalars['Time']['output'];
-    userId: Scalars['ID']['output'];
-};
-
-export type ApiTokenWithSecret = {
-    createdAt: Scalars['Time']['output'];
-    id: Scalars['ID']['output'];
-    name?: Maybe<Scalars['String']['output']>;
-    roleId: Scalars['ID']['output'];
-    status: TokenStatus;
-    token: Scalars['String']['output'];
-    tokenId: Scalars['String']['output'];
-    ttl: Scalars['Int']['output'];
-    updatedAt: Scalars['Time']['output'];
-    userId: Scalars['ID']['output'];
-};
-
-export type AgentConfig = {
-    frequencyPenalty?: Maybe<Scalars['Float']['output']>;
-    maxLength?: Maybe<Scalars['Int']['output']>;
-    maxTokens?: Maybe<Scalars['Int']['output']>;
-    minLength?: Maybe<Scalars['Int']['output']>;
-    model: Scalars['String']['output'];
-    presencePenalty?: Maybe<Scalars['Float']['output']>;
-    price?: Maybe<ModelPrice>;
-    reasoning?: Maybe<ReasoningConfig>;
-    repetitionPenalty?: Maybe<Scalars['Float']['output']>;
-    temperature?: Maybe<Scalars['Float']['output']>;
-    topK?: Maybe<Scalars['Int']['output']>;
-    topP?: Maybe<Scalars['Float']['output']>;
-};
-
 export type AgentConfigInput = {
-    frequencyPenalty?: InputMaybe<Scalars['Float']['input']>;
-    maxLength?: InputMaybe<Scalars['Int']['input']>;
-    maxTokens?: InputMaybe<Scalars['Int']['input']>;
-    minLength?: InputMaybe<Scalars['Int']['input']>;
-    model: Scalars['String']['input'];
-    presencePenalty?: InputMaybe<Scalars['Float']['input']>;
-    price?: InputMaybe<ModelPriceInput>;
-    reasoning?: InputMaybe<ReasoningConfigInput>;
-    repetitionPenalty?: InputMaybe<Scalars['Float']['input']>;
-    temperature?: InputMaybe<Scalars['Float']['input']>;
-    topK?: InputMaybe<Scalars['Int']['input']>;
-    topP?: InputMaybe<Scalars['Float']['input']>;
+    frequencyPenalty?: number | null | undefined;
+    maxLength?: number | null | undefined;
+    maxTokens?: number | null | undefined;
+    minLength?: number | null | undefined;
+    model: string;
+    presencePenalty?: number | null | undefined;
+    price?: ModelPriceInput | null | undefined;
+    reasoning?: ReasoningConfigInput | null | undefined;
+    repetitionPenalty?: number | null | undefined;
+    temperature?: number | null | undefined;
+    topK?: number | null | undefined;
+    topP?: number | null | undefined;
 };
 
 export enum AgentConfigType {
@@ -88,31 +36,6 @@ export enum AgentConfigType {
     Simple = 'simple',
     SimpleJson = 'simple_json',
 }
-
-export type AgentLog = {
-    createdAt: Scalars['Time']['output'];
-    executor: AgentType;
-    flowId: Scalars['ID']['output'];
-    id: Scalars['ID']['output'];
-    initiator: AgentType;
-    result: Scalars['String']['output'];
-    subtaskId?: Maybe<Scalars['ID']['output']>;
-    task: Scalars['String']['output'];
-    taskId?: Maybe<Scalars['ID']['output']>;
-};
-
-export type AgentPrompt = {
-    system: DefaultPrompt;
-};
-
-export type AgentPrompts = {
-    human: DefaultPrompt;
-    system: DefaultPrompt;
-};
-
-export type AgentTestResult = {
-    tests: Array<TestResult>;
-};
 
 export enum AgentType {
     Adviser = 'adviser',
@@ -132,27 +55,6 @@ export enum AgentType {
     ToolCallFixer = 'tool_call_fixer',
 }
 
-export type AgentTypeUsageStats = {
-    agentType: AgentType;
-    stats: UsageStats;
-};
-
-export type AgentsConfig = {
-    adviser: AgentConfig;
-    assistant: AgentConfig;
-    coder: AgentConfig;
-    enricher: AgentConfig;
-    generator: AgentConfig;
-    installer: AgentConfig;
-    pentester: AgentConfig;
-    primaryAgent: AgentConfig;
-    refiner: AgentConfig;
-    reflector: AgentConfig;
-    searcher: AgentConfig;
-    simple: AgentConfig;
-    simpleJson: AgentConfig;
-};
-
 export type AgentsConfigInput = {
     adviser: AgentConfigInput;
     assistant: AgentConfigInput;
@@ -169,168 +71,24 @@ export type AgentsConfigInput = {
     simpleJson: AgentConfigInput;
 };
 
-export type AgentsPrompts = {
-    adviser: AgentPrompts;
-    assistant: AgentPrompt;
-    coder: AgentPrompts;
-    enricher: AgentPrompts;
-    generator: AgentPrompts;
-    installer: AgentPrompts;
-    memorist: AgentPrompts;
-    pentester: AgentPrompts;
-    primaryAgent: AgentPrompt;
-    refiner: AgentPrompts;
-    reflector: AgentPrompts;
-    reporter: AgentPrompts;
-    searcher: AgentPrompts;
-    summarizer: AgentPrompt;
-    toolCallFixer: AgentPrompts;
-};
-
-export type Assistant = {
-    createdAt: Scalars['Time']['output'];
-    flowId: Scalars['ID']['output'];
-    id: Scalars['ID']['output'];
-    provider: Provider;
-    status: StatusType;
-    title: Scalars['String']['output'];
-    updatedAt: Scalars['Time']['output'];
-    useAgents: Scalars['Boolean']['output'];
-};
-
-export type AssistantLog = {
-    appendPart: Scalars['Boolean']['output'];
-    assistantId: Scalars['ID']['output'];
-    createdAt: Scalars['Time']['output'];
-    flowId: Scalars['ID']['output'];
-    id: Scalars['ID']['output'];
-    message: Scalars['String']['output'];
-    result: Scalars['String']['output'];
-    resultFormat: ResultFormat;
-    thinking?: Maybe<Scalars['String']['output']>;
-    type: MessageLogType;
-};
-
 export type CreateApiTokenInput = {
-    name?: InputMaybe<Scalars['String']['input']>;
-    ttl: Scalars['Int']['input'];
+    name?: string | null | undefined;
+    ttl: number;
 };
 
 export type CreateFlowTemplateInput = {
-    text: Scalars['String']['input'];
-    title: Scalars['String']['input'];
+    text: string;
+    title: string;
 };
 
 export type CreateKnowledgeDocumentInput = {
-    answerType?: InputMaybe<KnowledgeAnswerType>;
-    codeLang?: InputMaybe<Scalars['String']['input']>;
-    content: Scalars['String']['input'];
-    description?: InputMaybe<Scalars['String']['input']>;
+    answerType?: KnowledgeAnswerType | null | undefined;
+    codeLang?: string | null | undefined;
+    content: string;
+    description?: string | null | undefined;
     docType: KnowledgeDocType;
-    guideType?: InputMaybe<KnowledgeGuideType>;
-    question: Scalars['String']['input'];
-};
-
-export type DailyFlowsStats = {
-    date: Scalars['Time']['output'];
-    stats: FlowsStats;
-};
-
-export type DailyToolcallsStats = {
-    date: Scalars['Time']['output'];
-    stats: ToolcallsStats;
-};
-
-export type DailyUsageStats = {
-    date: Scalars['Time']['output'];
-    stats: UsageStats;
-};
-
-export type DefaultPrompt = {
-    template: Scalars['String']['output'];
-    type: PromptType;
-    variables: Array<Scalars['String']['output']>;
-};
-
-export type DefaultPrompts = {
-    agents: AgentsPrompts;
-    tools: ToolsPrompts;
-};
-
-export type DefaultProvidersConfig = {
-    anthropic: ProviderConfig;
-    bedrock?: Maybe<ProviderConfig>;
-    custom?: Maybe<ProviderConfig>;
-    deepseek?: Maybe<ProviderConfig>;
-    gemini?: Maybe<ProviderConfig>;
-    glm?: Maybe<ProviderConfig>;
-    kimi?: Maybe<ProviderConfig>;
-    ollama?: Maybe<ProviderConfig>;
-    openai: ProviderConfig;
-    qwen?: Maybe<ProviderConfig>;
-};
-
-export type Flow = {
-    createdAt: Scalars['Time']['output'];
-    id: Scalars['ID']['output'];
-    provider: Provider;
-    status: StatusType;
-    terminals?: Maybe<Array<Terminal>>;
-    title: Scalars['String']['output'];
-    updatedAt: Scalars['Time']['output'];
-};
-
-export type FlowAssistant = {
-    assistant: Assistant;
-    flow: Flow;
-};
-
-export type FlowExecutionStats = {
-    flowId: Scalars['ID']['output'];
-    flowTitle: Scalars['String']['output'];
-    tasks: Array<TaskExecutionStats>;
-    totalAssistantsCount: Scalars['Int']['output'];
-    totalDurationSeconds: Scalars['Float']['output'];
-    totalToolcallsCount: Scalars['Int']['output'];
-};
-
-export type FlowFile = {
-    id: Scalars['String']['output'];
-    isDir: Scalars['Boolean']['output'];
-    modifiedAt: Scalars['Time']['output'];
-    name: Scalars['String']['output'];
-    path: Scalars['String']['output'];
-    size: Scalars['Int']['output'];
-};
-
-export type FlowStats = {
-    totalAssistantsCount: Scalars['Int']['output'];
-    totalSubtasksCount: Scalars['Int']['output'];
-    totalTasksCount: Scalars['Int']['output'];
-};
-
-export type FlowTemplate = {
-    createdAt: Scalars['Time']['output'];
-    id: Scalars['ID']['output'];
-    text: Scalars['String']['output'];
-    title: Scalars['String']['output'];
-    updatedAt: Scalars['Time']['output'];
-    userId: Scalars['ID']['output'];
-};
-
-export type FlowsStats = {
-    totalAssistantsCount: Scalars['Int']['output'];
-    totalFlowsCount: Scalars['Int']['output'];
-    totalSubtasksCount: Scalars['Int']['output'];
-    totalTasksCount: Scalars['Int']['output'];
-};
-
-export type FunctionToolcallsStats = {
-    avgDurationSeconds: Scalars['Float']['output'];
-    functionName: Scalars['String']['output'];
-    isAgent: Scalars['Boolean']['output'];
-    totalCount: Scalars['Int']['output'];
-    totalDurationSeconds: Scalars['Float']['output'];
+    guideType?: KnowledgeGuideType | null | undefined;
+    question: string;
 };
 
 export enum KnowledgeAnswerType {
@@ -347,36 +105,13 @@ export enum KnowledgeDocType {
     Guide = 'guide',
 }
 
-export type KnowledgeDocument = {
-    answerType?: Maybe<KnowledgeAnswerType>;
-    codeLang?: Maybe<Scalars['String']['output']>;
-    content: Scalars['String']['output'];
-    description?: Maybe<Scalars['String']['output']>;
-    docType: KnowledgeDocType;
-    flowId?: Maybe<Scalars['ID']['output']>;
-    guideType?: Maybe<KnowledgeGuideType>;
-    id: Scalars['String']['output'];
-    manual: Scalars['Boolean']['output'];
-    partSize: Scalars['Int']['output'];
-    question: Scalars['String']['output'];
-    subtaskId?: Maybe<Scalars['ID']['output']>;
-    taskId?: Maybe<Scalars['ID']['output']>;
-    totalSize: Scalars['Int']['output'];
-    userId: Scalars['ID']['output'];
-};
-
-export type KnowledgeDocumentWithScore = {
-    document: KnowledgeDocument;
-    score: Scalars['Float']['output'];
-};
-
 export type KnowledgeFilter = {
-    answerTypes?: InputMaybe<Array<KnowledgeAnswerType>>;
-    codeLangs?: InputMaybe<Array<Scalars['String']['input']>>;
-    docTypes?: InputMaybe<Array<KnowledgeDocType>>;
-    flowId?: InputMaybe<Scalars['ID']['input']>;
-    guideTypes?: InputMaybe<Array<KnowledgeGuideType>>;
-    manual?: InputMaybe<Scalars['Boolean']['input']>;
+    answerTypes?: Array<KnowledgeAnswerType> | null | undefined;
+    codeLangs?: Array<string> | null | undefined;
+    docTypes?: Array<KnowledgeDocType> | null | undefined;
+    flowId?: string | number | null | undefined;
+    guideTypes?: Array<KnowledgeGuideType> | null | undefined;
+    manual?: boolean | null | undefined;
 };
 
 export enum KnowledgeGuideType {
@@ -387,19 +122,6 @@ export enum KnowledgeGuideType {
     Pentest = 'pentest',
     Use = 'use',
 }
-
-export type MessageLog = {
-    createdAt: Scalars['Time']['output'];
-    flowId: Scalars['ID']['output'];
-    id: Scalars['ID']['output'];
-    message: Scalars['String']['output'];
-    result: Scalars['String']['output'];
-    resultFormat: ResultFormat;
-    subtaskId?: Maybe<Scalars['ID']['output']>;
-    taskId?: Maybe<Scalars['ID']['output']>;
-    thinking?: Maybe<Scalars['String']['output']>;
-    type: MessageLogType;
-};
 
 export enum MessageLogType {
     Advice = 'advice',
@@ -415,226 +137,11 @@ export enum MessageLogType {
     Thoughts = 'thoughts',
 }
 
-export type ModelAgentsUsageStats = {
-    agentTypes: Array<AgentType>;
-    model: Scalars['String']['output'];
-    provider: Scalars['String']['output'];
-    stats: UsageStats;
-};
-
-export type ModelConfig = {
-    description?: Maybe<Scalars['String']['output']>;
-    name: Scalars['String']['output'];
-    price?: Maybe<ModelPrice>;
-    releaseDate?: Maybe<Scalars['Time']['output']>;
-    thinking?: Maybe<Scalars['Boolean']['output']>;
-};
-
-export type ModelPrice = {
-    cacheRead: Scalars['Float']['output'];
-    cacheWrite: Scalars['Float']['output'];
-    input: Scalars['Float']['output'];
-    output: Scalars['Float']['output'];
-};
-
 export type ModelPriceInput = {
-    cacheRead: Scalars['Float']['input'];
-    cacheWrite: Scalars['Float']['input'];
-    input: Scalars['Float']['input'];
-    output: Scalars['Float']['input'];
-};
-
-export type ModelUsageStats = {
-    model: Scalars['String']['output'];
-    provider: Scalars['String']['output'];
-    stats: UsageStats;
-};
-
-export type Mutation = {
-    addFavoriteFlow: ResultType;
-    anonymizeText: Scalars['String']['output'];
-    callAssistant: ResultType;
-    createAPIToken: ApiTokenWithSecret;
-    createAssistant: FlowAssistant;
-    createFlow: Flow;
-    createFlowTemplate: FlowTemplate;
-    createKnowledgeDocument: KnowledgeDocument;
-    createPrompt: UserPrompt;
-    createProvider: ProviderConfig;
-    deleteAPIToken: Scalars['Boolean']['output'];
-    deleteAssistant: ResultType;
-    deleteFavoriteFlow: ResultType;
-    deleteFlow: ResultType;
-    deleteFlowTemplate: ResultType;
-    deleteKnowledgeDocument: ResultType;
-    deletePrompt: ResultType;
-    deleteProvider: ResultType;
-    finishFlow: ResultType;
-    putUserInput: ResultType;
-    renameFlow: ResultType;
-    stopAssistant: Assistant;
-    stopFlow: ResultType;
-    testAgent: AgentTestResult;
-    testProvider: ProviderTestResult;
-    updateAPIToken: ApiToken;
-    updateFlowTemplate: FlowTemplate;
-    updateKnowledgeDocument: KnowledgeDocument;
-    updatePrompt: UserPrompt;
-    updateProvider: ProviderConfig;
-    validatePrompt: PromptValidationResult;
-};
-
-export type MutationAddFavoriteFlowArgs = {
-    flowId: Scalars['ID']['input'];
-};
-
-export type MutationAnonymizeTextArgs = {
-    text: Scalars['String']['input'];
-};
-
-export type MutationCallAssistantArgs = {
-    assistantId: Scalars['ID']['input'];
-    flowId: Scalars['ID']['input'];
-    input: Scalars['String']['input'];
-    resourceIds?: InputMaybe<Array<Scalars['ID']['input']>>;
-    useAgents: Scalars['Boolean']['input'];
-};
-
-export type MutationCreateApiTokenArgs = {
-    input: CreateApiTokenInput;
-};
-
-export type MutationCreateAssistantArgs = {
-    flowId: Scalars['ID']['input'];
-    input: Scalars['String']['input'];
-    modelProvider: Scalars['String']['input'];
-    resourceIds?: InputMaybe<Array<Scalars['ID']['input']>>;
-    useAgents: Scalars['Boolean']['input'];
-};
-
-export type MutationCreateFlowArgs = {
-    input: Scalars['String']['input'];
-    modelProvider: Scalars['String']['input'];
-    resourceIds?: InputMaybe<Array<Scalars['ID']['input']>>;
-};
-
-export type MutationCreateFlowTemplateArgs = {
-    input: CreateFlowTemplateInput;
-};
-
-export type MutationCreateKnowledgeDocumentArgs = {
-    input: CreateKnowledgeDocumentInput;
-};
-
-export type MutationCreatePromptArgs = {
-    template: Scalars['String']['input'];
-    type: PromptType;
-};
-
-export type MutationCreateProviderArgs = {
-    agents: AgentsConfigInput;
-    name: Scalars['String']['input'];
-    type: ProviderType;
-};
-
-export type MutationDeleteApiTokenArgs = {
-    tokenId: Scalars['String']['input'];
-};
-
-export type MutationDeleteAssistantArgs = {
-    assistantId: Scalars['ID']['input'];
-    flowId: Scalars['ID']['input'];
-};
-
-export type MutationDeleteFavoriteFlowArgs = {
-    flowId: Scalars['ID']['input'];
-};
-
-export type MutationDeleteFlowArgs = {
-    flowId: Scalars['ID']['input'];
-};
-
-export type MutationDeleteFlowTemplateArgs = {
-    templateId: Scalars['ID']['input'];
-};
-
-export type MutationDeleteKnowledgeDocumentArgs = {
-    id: Scalars['String']['input'];
-};
-
-export type MutationDeletePromptArgs = {
-    promptId: Scalars['ID']['input'];
-};
-
-export type MutationDeleteProviderArgs = {
-    providerId: Scalars['ID']['input'];
-};
-
-export type MutationFinishFlowArgs = {
-    flowId: Scalars['ID']['input'];
-};
-
-export type MutationPutUserInputArgs = {
-    flowId: Scalars['ID']['input'];
-    input: Scalars['String']['input'];
-    modelProvider?: InputMaybe<Scalars['String']['input']>;
-    resourceIds?: InputMaybe<Array<Scalars['ID']['input']>>;
-};
-
-export type MutationRenameFlowArgs = {
-    flowId: Scalars['ID']['input'];
-    title: Scalars['String']['input'];
-};
-
-export type MutationStopAssistantArgs = {
-    assistantId: Scalars['ID']['input'];
-    flowId: Scalars['ID']['input'];
-};
-
-export type MutationStopFlowArgs = {
-    flowId: Scalars['ID']['input'];
-};
-
-export type MutationTestAgentArgs = {
-    agent: AgentConfigInput;
-    agentType: AgentConfigType;
-    type: ProviderType;
-};
-
-export type MutationTestProviderArgs = {
-    agents: AgentsConfigInput;
-    type: ProviderType;
-};
-
-export type MutationUpdateApiTokenArgs = {
-    input: UpdateApiTokenInput;
-    tokenId: Scalars['String']['input'];
-};
-
-export type MutationUpdateFlowTemplateArgs = {
-    input: UpdateFlowTemplateInput;
-    templateId: Scalars['ID']['input'];
-};
-
-export type MutationUpdateKnowledgeDocumentArgs = {
-    id: Scalars['String']['input'];
-    input: UpdateKnowledgeDocumentInput;
-};
-
-export type MutationUpdatePromptArgs = {
-    promptId: Scalars['ID']['input'];
-    template: Scalars['String']['input'];
-};
-
-export type MutationUpdateProviderArgs = {
-    agents: AgentsConfigInput;
-    name: Scalars['String']['input'];
-    providerId: Scalars['ID']['input'];
-};
-
-export type MutationValidatePromptArgs = {
-    template: Scalars['String']['input'];
-    type: PromptType;
+    cacheRead: number;
+    cacheWrite: number;
+    input: number;
+    output: number;
 };
 
 export enum PromptType {
@@ -688,49 +195,6 @@ export enum PromptValidationErrorType {
     VariableTypeMismatch = 'variable_type_mismatch',
 }
 
-export type PromptValidationResult = {
-    details?: Maybe<Scalars['String']['output']>;
-    errorType?: Maybe<PromptValidationErrorType>;
-    line?: Maybe<Scalars['Int']['output']>;
-    message?: Maybe<Scalars['String']['output']>;
-    result: ResultType;
-};
-
-export type PromptsConfig = {
-    default: DefaultPrompts;
-    userDefined?: Maybe<Array<UserPrompt>>;
-};
-
-export type Provider = {
-    name: Scalars['String']['output'];
-    type: ProviderType;
-};
-
-export type ProviderConfig = {
-    agents: AgentsConfig;
-    createdAt: Scalars['Time']['output'];
-    id: Scalars['ID']['output'];
-    name: Scalars['String']['output'];
-    type: ProviderType;
-    updatedAt: Scalars['Time']['output'];
-};
-
-export type ProviderTestResult = {
-    adviser: AgentTestResult;
-    assistant: AgentTestResult;
-    coder: AgentTestResult;
-    enricher: AgentTestResult;
-    generator: AgentTestResult;
-    installer: AgentTestResult;
-    pentester: AgentTestResult;
-    primaryAgent: AgentTestResult;
-    refiner: AgentTestResult;
-    reflector: AgentTestResult;
-    searcher: AgentTestResult;
-    simple: AgentTestResult;
-    simpleJson: AgentTestResult;
-};
-
 export enum ProviderType {
     Anthropic = 'anthropic',
     Bedrock = 'bedrock',
@@ -744,210 +208,9 @@ export enum ProviderType {
     Qwen = 'qwen',
 }
 
-export type ProviderUsageStats = {
-    provider: Scalars['String']['output'];
-    stats: UsageStats;
-};
-
-export type ProvidersConfig = {
-    default: DefaultProvidersConfig;
-    enabled: ProvidersReadinessStatus;
-    models: ProvidersModelsList;
-    userDefined?: Maybe<Array<ProviderConfig>>;
-};
-
-export type ProvidersModelsList = {
-    anthropic: Array<ModelConfig>;
-    bedrock?: Maybe<Array<ModelConfig>>;
-    custom?: Maybe<Array<ModelConfig>>;
-    deepseek?: Maybe<Array<ModelConfig>>;
-    gemini: Array<ModelConfig>;
-    glm?: Maybe<Array<ModelConfig>>;
-    kimi?: Maybe<Array<ModelConfig>>;
-    ollama?: Maybe<Array<ModelConfig>>;
-    openai: Array<ModelConfig>;
-    qwen?: Maybe<Array<ModelConfig>>;
-};
-
-export type ProvidersReadinessStatus = {
-    anthropic: Scalars['Boolean']['output'];
-    bedrock: Scalars['Boolean']['output'];
-    custom: Scalars['Boolean']['output'];
-    deepseek: Scalars['Boolean']['output'];
-    gemini: Scalars['Boolean']['output'];
-    glm: Scalars['Boolean']['output'];
-    kimi: Scalars['Boolean']['output'];
-    ollama: Scalars['Boolean']['output'];
-    openai: Scalars['Boolean']['output'];
-    qwen: Scalars['Boolean']['output'];
-};
-
-export type Query = {
-    agentLogs?: Maybe<Array<AgentLog>>;
-    apiToken?: Maybe<ApiToken>;
-    apiTokens: Array<ApiToken>;
-    assistantLogs?: Maybe<Array<AssistantLog>>;
-    assistants?: Maybe<Array<Assistant>>;
-    flow: Flow;
-    flowFiles: Array<FlowFile>;
-    flowStatsByFlow: FlowStats;
-    flowTemplate?: Maybe<FlowTemplate>;
-    flowTemplates: Array<FlowTemplate>;
-    flows?: Maybe<Array<Flow>>;
-    flowsExecutionStatsByPeriod: Array<FlowExecutionStats>;
-    flowsStatsByPeriod: Array<DailyFlowsStats>;
-    flowsStatsTotal: FlowsStats;
-    knowledgeDocument: KnowledgeDocument;
-    knowledgeDocuments: Array<KnowledgeDocument>;
-    messageLogs?: Maybe<Array<MessageLog>>;
-    providers: Array<Provider>;
-    resources: Array<UserResource>;
-    screenshots?: Maybe<Array<Screenshot>>;
-    searchKnowledge: Array<KnowledgeDocumentWithScore>;
-    searchLogs?: Maybe<Array<SearchLog>>;
-    settings: Settings;
-    settingsPrompts: PromptsConfig;
-    settingsProviders: ProvidersConfig;
-    settingsUser: UserPreferences;
-    tasks?: Maybe<Array<Task>>;
-    terminalLogs?: Maybe<Array<TerminalLog>>;
-    toolcallsStatsByFlow: ToolcallsStats;
-    toolcallsStatsByFunction: Array<FunctionToolcallsStats>;
-    toolcallsStatsByFunctionForFlow: Array<FunctionToolcallsStats>;
-    toolcallsStatsByPeriod: Array<DailyToolcallsStats>;
-    toolcallsStatsTotal: ToolcallsStats;
-    usageStatsByAgentType: Array<AgentTypeUsageStats>;
-    usageStatsByAgentTypeForFlow: Array<AgentTypeUsageStats>;
-    usageStatsByFlow: UsageStats;
-    usageStatsByModel: Array<ModelUsageStats>;
-    usageStatsByModelAgentsForFlow: Array<ModelAgentsUsageStats>;
-    usageStatsByPeriod: Array<DailyUsageStats>;
-    usageStatsByProvider: Array<ProviderUsageStats>;
-    usageStatsTotal: UsageStats;
-    vectorStoreLogs?: Maybe<Array<VectorStoreLog>>;
-};
-
-export type QueryAgentLogsArgs = {
-    flowId: Scalars['ID']['input'];
-};
-
-export type QueryApiTokenArgs = {
-    tokenId: Scalars['String']['input'];
-};
-
-export type QueryAssistantLogsArgs = {
-    assistantId: Scalars['ID']['input'];
-    flowId: Scalars['ID']['input'];
-};
-
-export type QueryAssistantsArgs = {
-    flowId: Scalars['ID']['input'];
-};
-
-export type QueryFlowArgs = {
-    flowId: Scalars['ID']['input'];
-};
-
-export type QueryFlowFilesArgs = {
-    flowId: Scalars['ID']['input'];
-};
-
-export type QueryFlowStatsByFlowArgs = {
-    flowId: Scalars['ID']['input'];
-};
-
-export type QueryFlowTemplateArgs = {
-    templateId: Scalars['ID']['input'];
-};
-
-export type QueryFlowsExecutionStatsByPeriodArgs = {
-    period: UsageStatsPeriod;
-};
-
-export type QueryFlowsStatsByPeriodArgs = {
-    period: UsageStatsPeriod;
-};
-
-export type QueryKnowledgeDocumentArgs = {
-    id: Scalars['String']['input'];
-};
-
-export type QueryKnowledgeDocumentsArgs = {
-    filter?: InputMaybe<KnowledgeFilter>;
-    withContent: Scalars['Boolean']['input'];
-};
-
-export type QueryMessageLogsArgs = {
-    flowId: Scalars['ID']['input'];
-};
-
-export type QueryResourcesArgs = {
-    path?: InputMaybe<Scalars['String']['input']>;
-    recursive?: InputMaybe<Scalars['Boolean']['input']>;
-};
-
-export type QueryScreenshotsArgs = {
-    flowId: Scalars['ID']['input'];
-};
-
-export type QuerySearchKnowledgeArgs = {
-    filter?: InputMaybe<KnowledgeFilter>;
-    limit?: InputMaybe<Scalars['Int']['input']>;
-    query: Scalars['String']['input'];
-};
-
-export type QuerySearchLogsArgs = {
-    flowId: Scalars['ID']['input'];
-};
-
-export type QueryTasksArgs = {
-    flowId: Scalars['ID']['input'];
-};
-
-export type QueryTerminalLogsArgs = {
-    flowId: Scalars['ID']['input'];
-};
-
-export type QueryToolcallsStatsByFlowArgs = {
-    flowId: Scalars['ID']['input'];
-};
-
-export type QueryToolcallsStatsByFunctionForFlowArgs = {
-    flowId: Scalars['ID']['input'];
-};
-
-export type QueryToolcallsStatsByPeriodArgs = {
-    period: UsageStatsPeriod;
-};
-
-export type QueryUsageStatsByAgentTypeForFlowArgs = {
-    flowId: Scalars['ID']['input'];
-};
-
-export type QueryUsageStatsByFlowArgs = {
-    flowId: Scalars['ID']['input'];
-};
-
-export type QueryUsageStatsByModelAgentsForFlowArgs = {
-    flowId: Scalars['ID']['input'];
-};
-
-export type QueryUsageStatsByPeriodArgs = {
-    period: UsageStatsPeriod;
-};
-
-export type QueryVectorStoreLogsArgs = {
-    flowId: Scalars['ID']['input'];
-};
-
-export type ReasoningConfig = {
-    effort?: Maybe<ReasoningEffort>;
-    maxTokens?: Maybe<Scalars['Int']['output']>;
-};
-
 export type ReasoningConfigInput = {
-    effort?: InputMaybe<ReasoningEffort>;
-    maxTokens?: InputMaybe<Scalars['Int']['input']>;
+    effort?: ReasoningEffort | null | undefined;
+    maxTokens?: number | null | undefined;
 };
 
 export enum ReasoningEffort {
@@ -967,38 +230,6 @@ export enum ResultType {
     Success = 'success',
 }
 
-export type Screenshot = {
-    createdAt: Scalars['Time']['output'];
-    flowId: Scalars['ID']['output'];
-    id: Scalars['ID']['output'];
-    name: Scalars['String']['output'];
-    subtaskId?: Maybe<Scalars['ID']['output']>;
-    taskId?: Maybe<Scalars['ID']['output']>;
-    url: Scalars['String']['output'];
-};
-
-export type SearchLog = {
-    createdAt: Scalars['Time']['output'];
-    engine: Scalars['String']['output'];
-    executor: AgentType;
-    flowId: Scalars['ID']['output'];
-    id: Scalars['ID']['output'];
-    initiator: AgentType;
-    query: Scalars['String']['output'];
-    result: Scalars['String']['output'];
-    subtaskId?: Maybe<Scalars['ID']['output']>;
-    taskId?: Maybe<Scalars['ID']['output']>;
-};
-
-export type Settings = {
-    askUser: Scalars['Boolean']['output'];
-    assistantUseAgents: Scalars['Boolean']['output'];
-    debug: Scalars['Boolean']['output'];
-    dockerInside: Scalars['Boolean']['output'];
-    isDevelopMode: Scalars['Boolean']['output'];
-    version: Scalars['String']['output'];
-};
-
 export enum StatusType {
     Created = 'created',
     Failed = 'failed',
@@ -1006,171 +237,6 @@ export enum StatusType {
     Running = 'running',
     Waiting = 'waiting',
 }
-
-export type Subscription = {
-    agentLogAdded: AgentLog;
-    apiTokenCreated: ApiToken;
-    apiTokenDeleted: ApiToken;
-    apiTokenUpdated: ApiToken;
-    assistantCreated: Assistant;
-    assistantDeleted: Assistant;
-    assistantLogAdded: AssistantLog;
-    assistantLogUpdated: AssistantLog;
-    assistantUpdated: Assistant;
-    flowCreated: Flow;
-    flowDeleted: Flow;
-    flowFileAdded: FlowFile;
-    flowFileDeleted: FlowFile;
-    flowFileUpdated: FlowFile;
-    flowTemplateCreated: FlowTemplate;
-    flowTemplateDeleted: FlowTemplate;
-    flowTemplateUpdated: FlowTemplate;
-    flowUpdated: Flow;
-    knowledgeDocumentCreated: KnowledgeDocument;
-    knowledgeDocumentDeleted: KnowledgeDocument;
-    knowledgeDocumentUpdated: KnowledgeDocument;
-    messageLogAdded: MessageLog;
-    messageLogUpdated: MessageLog;
-    providerCreated: ProviderConfig;
-    providerDeleted: ProviderConfig;
-    providerUpdated: ProviderConfig;
-    resourceAdded: UserResource;
-    resourceDeleted: UserResource;
-    resourceUpdated: UserResource;
-    screenshotAdded: Screenshot;
-    searchLogAdded: SearchLog;
-    settingsUserUpdated: UserPreferences;
-    taskCreated: Task;
-    taskUpdated: Task;
-    terminalLogAdded: TerminalLog;
-    vectorStoreLogAdded: VectorStoreLog;
-};
-
-export type SubscriptionAgentLogAddedArgs = {
-    flowId: Scalars['ID']['input'];
-};
-
-export type SubscriptionAssistantCreatedArgs = {
-    flowId: Scalars['ID']['input'];
-};
-
-export type SubscriptionAssistantDeletedArgs = {
-    flowId: Scalars['ID']['input'];
-};
-
-export type SubscriptionAssistantLogAddedArgs = {
-    flowId: Scalars['ID']['input'];
-};
-
-export type SubscriptionAssistantLogUpdatedArgs = {
-    flowId: Scalars['ID']['input'];
-};
-
-export type SubscriptionAssistantUpdatedArgs = {
-    flowId: Scalars['ID']['input'];
-};
-
-export type SubscriptionFlowFileAddedArgs = {
-    flowId: Scalars['ID']['input'];
-};
-
-export type SubscriptionFlowFileDeletedArgs = {
-    flowId: Scalars['ID']['input'];
-};
-
-export type SubscriptionFlowFileUpdatedArgs = {
-    flowId: Scalars['ID']['input'];
-};
-
-export type SubscriptionMessageLogAddedArgs = {
-    flowId: Scalars['ID']['input'];
-};
-
-export type SubscriptionMessageLogUpdatedArgs = {
-    flowId: Scalars['ID']['input'];
-};
-
-export type SubscriptionScreenshotAddedArgs = {
-    flowId: Scalars['ID']['input'];
-};
-
-export type SubscriptionSearchLogAddedArgs = {
-    flowId: Scalars['ID']['input'];
-};
-
-export type SubscriptionTaskCreatedArgs = {
-    flowId: Scalars['ID']['input'];
-};
-
-export type SubscriptionTaskUpdatedArgs = {
-    flowId: Scalars['ID']['input'];
-};
-
-export type SubscriptionTerminalLogAddedArgs = {
-    flowId: Scalars['ID']['input'];
-};
-
-export type SubscriptionVectorStoreLogAddedArgs = {
-    flowId: Scalars['ID']['input'];
-};
-
-export type Subtask = {
-    createdAt: Scalars['Time']['output'];
-    description: Scalars['String']['output'];
-    id: Scalars['ID']['output'];
-    result: Scalars['String']['output'];
-    status: StatusType;
-    taskId: Scalars['ID']['output'];
-    title: Scalars['String']['output'];
-    updatedAt: Scalars['Time']['output'];
-};
-
-export type SubtaskExecutionStats = {
-    subtaskId: Scalars['ID']['output'];
-    subtaskTitle: Scalars['String']['output'];
-    totalDurationSeconds: Scalars['Float']['output'];
-    totalToolcallsCount: Scalars['Int']['output'];
-};
-
-export type Task = {
-    createdAt: Scalars['Time']['output'];
-    flowId: Scalars['ID']['output'];
-    id: Scalars['ID']['output'];
-    input: Scalars['String']['output'];
-    result: Scalars['String']['output'];
-    status: StatusType;
-    subtasks?: Maybe<Array<Subtask>>;
-    title: Scalars['String']['output'];
-    updatedAt: Scalars['Time']['output'];
-};
-
-export type TaskExecutionStats = {
-    subtasks: Array<SubtaskExecutionStats>;
-    taskId: Scalars['ID']['output'];
-    taskTitle: Scalars['String']['output'];
-    totalDurationSeconds: Scalars['Float']['output'];
-    totalToolcallsCount: Scalars['Int']['output'];
-};
-
-export type Terminal = {
-    connected: Scalars['Boolean']['output'];
-    createdAt: Scalars['Time']['output'];
-    id: Scalars['ID']['output'];
-    image: Scalars['String']['output'];
-    name: Scalars['String']['output'];
-    type: TerminalType;
-};
-
-export type TerminalLog = {
-    createdAt: Scalars['Time']['output'];
-    flowId: Scalars['ID']['output'];
-    id: Scalars['ID']['output'];
-    subtaskId?: Maybe<Scalars['ID']['output']>;
-    taskId?: Maybe<Scalars['ID']['output']>;
-    terminal: Scalars['ID']['output'];
-    text: Scalars['String']['output'];
-    type: TerminalLogType;
-};
 
 export enum TerminalLogType {
     Stderr = 'stderr',
@@ -1183,317 +249,11 @@ export enum TerminalType {
     Secondary = 'secondary',
 }
 
-export type TestResult = {
-    error?: Maybe<Scalars['String']['output']>;
-    latency?: Maybe<Scalars['Int']['output']>;
-    name: Scalars['String']['output'];
-    reasoning: Scalars['Boolean']['output'];
-    result: Scalars['Boolean']['output'];
-    streaming: Scalars['Boolean']['output'];
-    type: Scalars['String']['output'];
-};
-
 export enum TokenStatus {
     Active = 'active',
     Expired = 'expired',
     Revoked = 'revoked',
 }
-
-export type ToolcallsStats = {
-    totalCount: Scalars['Int']['output'];
-    totalDurationSeconds: Scalars['Float']['output'];
-};
-
-export type ToolsPrompts = {
-    chooseDockerImage: DefaultPrompt;
-    chooseUserLanguage: DefaultPrompt;
-    collectToolCallId: DefaultPrompt;
-    detectToolCallIdPattern: DefaultPrompt;
-    getExecutionLogs: DefaultPrompt;
-    getFlowDescription: DefaultPrompt;
-    getFullExecutionContext: DefaultPrompt;
-    getShortExecutionContext: DefaultPrompt;
-    getTaskDescription: DefaultPrompt;
-    monitorAgentExecution: DefaultPrompt;
-    planAgentTask: DefaultPrompt;
-    wrapAgentTask: DefaultPrompt;
-};
-
-export type UpdateApiTokenInput = {
-    name?: InputMaybe<Scalars['String']['input']>;
-    status?: InputMaybe<TokenStatus>;
-};
-
-export type UpdateFlowTemplateInput = {
-    text: Scalars['String']['input'];
-    title: Scalars['String']['input'];
-};
-
-export type UpdateKnowledgeDocumentInput = {
-    answerType?: InputMaybe<KnowledgeAnswerType>;
-    codeLang?: InputMaybe<Scalars['String']['input']>;
-    content: Scalars['String']['input'];
-    description?: InputMaybe<Scalars['String']['input']>;
-    docType?: InputMaybe<KnowledgeDocType>;
-    guideType?: InputMaybe<KnowledgeGuideType>;
-    question?: InputMaybe<Scalars['String']['input']>;
-};
-
-export type UsageStats = {
-    totalUsageCacheIn: Scalars['Int']['output'];
-    totalUsageCacheOut: Scalars['Int']['output'];
-    totalUsageCostIn: Scalars['Float']['output'];
-    totalUsageCostOut: Scalars['Float']['output'];
-    totalUsageIn: Scalars['Int']['output'];
-    totalUsageOut: Scalars['Int']['output'];
-};
-
-export enum UsageStatsPeriod {
-    Month = 'month',
-    Quarter = 'quarter',
-    Week = 'week',
-}
-
-export type UserPreferences = {
-    favoriteFlows: Array<Scalars['ID']['output']>;
-    id: Scalars['ID']['output'];
-};
-
-export type UserPrompt = {
-    createdAt: Scalars['Time']['output'];
-    id: Scalars['ID']['output'];
-    template: Scalars['String']['output'];
-    type: PromptType;
-    updatedAt: Scalars['Time']['output'];
-};
-
-export type UserResource = {
-    createdAt: Scalars['Time']['output'];
-    id: Scalars['ID']['output'];
-    isDir: Scalars['Boolean']['output'];
-    name: Scalars['String']['output'];
-    path: Scalars['String']['output'];
-    size: Scalars['Int']['output'];
-    updatedAt: Scalars['Time']['output'];
-    userId: Scalars['ID']['output'];
-};
-
-export enum VectorStoreAction {
-    Retrieve = 'retrieve',
-    Store = 'store',
-}
-
-export type VectorStoreLog = {
-    action: VectorStoreAction;
-    createdAt: Scalars['Time']['output'];
-    executor: AgentType;
-    filter: Scalars['String']['output'];
-    flowId: Scalars['ID']['output'];
-    id: Scalars['ID']['output'];
-    initiator: AgentType;
-    query: Scalars['String']['output'];
-    result: Scalars['String']['output'];
-    subtaskId?: Maybe<Scalars['ID']['output']>;
-    taskId?: Maybe<Scalars['ID']['output']>;
-};
-
-export type AgentConfigInput = {
-    frequencyPenalty?: number | null | undefined;
-    maxLength?: number | null | undefined;
-    maxTokens?: number | null | undefined;
-    minLength?: number | null | undefined;
-    model: string;
-    presencePenalty?: number | null | undefined;
-    price?: ModelPriceInput | null | undefined;
-    reasoning?: ReasoningConfigInput | null | undefined;
-    repetitionPenalty?: number | null | undefined;
-    temperature?: number | null | undefined;
-    topK?: number | null | undefined;
-    topP?: number | null | undefined;
-};
-
-export type AgentConfigType =
-    | 'adviser'
-    | 'assistant'
-    | 'coder'
-    | 'enricher'
-    | 'generator'
-    | 'installer'
-    | 'pentester'
-    | 'primary_agent'
-    | 'refiner'
-    | 'reflector'
-    | 'searcher'
-    | 'simple'
-    | 'simple_json';
-
-export type AgentType =
-    | 'adviser'
-    | 'assistant'
-    | 'coder'
-    | 'enricher'
-    | 'generator'
-    | 'installer'
-    | 'memorist'
-    | 'pentester'
-    | 'primary_agent'
-    | 'refiner'
-    | 'reflector'
-    | 'reporter'
-    | 'searcher'
-    | 'summarizer'
-    | 'tool_call_fixer';
-
-export type AgentsConfigInput = {
-    adviser: AgentConfigInput;
-    assistant: AgentConfigInput;
-    coder: AgentConfigInput;
-    enricher: AgentConfigInput;
-    generator: AgentConfigInput;
-    installer: AgentConfigInput;
-    pentester: AgentConfigInput;
-    primaryAgent: AgentConfigInput;
-    refiner: AgentConfigInput;
-    reflector: AgentConfigInput;
-    searcher: AgentConfigInput;
-    simple: AgentConfigInput;
-    simpleJson: AgentConfigInput;
-};
-
-export type CreateApiTokenInput = {
-    name?: string | null | undefined;
-    ttl: number;
-};
-
-export type CreateFlowTemplateInput = {
-    text: string;
-    title: string;
-};
-
-export type CreateKnowledgeDocumentInput = {
-    answerType?: KnowledgeAnswerType | null | undefined;
-    codeLang?: string | null | undefined;
-    content: string;
-    description?: string | null | undefined;
-    docType: KnowledgeDocType;
-    guideType?: KnowledgeGuideType | null | undefined;
-    question: string;
-};
-
-export type KnowledgeAnswerType = 'code' | 'guide' | 'other' | 'tool' | 'vulnerability';
-
-export type KnowledgeDocType = 'answer' | 'code' | 'guide';
-
-export type KnowledgeFilter = {
-    answerTypes?: Array<KnowledgeAnswerType> | null | undefined;
-    codeLangs?: Array<string> | null | undefined;
-    docTypes?: Array<KnowledgeDocType> | null | undefined;
-    flowId?: string | number | null | undefined;
-    guideTypes?: Array<KnowledgeGuideType> | null | undefined;
-    manual?: boolean | null | undefined;
-};
-
-export type KnowledgeGuideType = 'configure' | 'development' | 'install' | 'other' | 'pentest' | 'use';
-
-export type MessageLogType =
-    | 'advice'
-    | 'answer'
-    | 'ask'
-    | 'browser'
-    | 'done'
-    | 'file'
-    | 'input'
-    | 'report'
-    | 'search'
-    | 'terminal'
-    | 'thoughts';
-
-export type ModelPriceInput = {
-    cacheRead: number;
-    cacheWrite: number;
-    input: number;
-    output: number;
-};
-
-export type PromptType =
-    | 'adviser'
-    | 'assistant'
-    | 'coder'
-    | 'enricher'
-    | 'execution_logs'
-    | 'flow_descriptor'
-    | 'full_execution_context'
-    | 'generator'
-    | 'image_chooser'
-    | 'input_toolcall_fixer'
-    | 'installer'
-    | 'language_chooser'
-    | 'memorist'
-    | 'pentester'
-    | 'primary_agent'
-    | 'question_adviser'
-    | 'question_coder'
-    | 'question_enricher'
-    | 'question_execution_monitor'
-    | 'question_installer'
-    | 'question_memorist'
-    | 'question_pentester'
-    | 'question_reflector'
-    | 'question_searcher'
-    | 'question_task_planner'
-    | 'refiner'
-    | 'reflector'
-    | 'reporter'
-    | 'searcher'
-    | 'short_execution_context'
-    | 'subtasks_generator'
-    | 'subtasks_refiner'
-    | 'summarizer'
-    | 'task_assignment_wrapper'
-    | 'task_descriptor'
-    | 'task_reporter'
-    | 'tool_call_id_collector'
-    | 'tool_call_id_detector'
-    | 'toolcall_fixer';
-
-export type PromptValidationErrorType =
-    | 'empty_template'
-    | 'rendering_failed'
-    | 'syntax_error'
-    | 'unauthorized_variable'
-    | 'unknown_type'
-    | 'variable_type_mismatch';
-
-export type ProviderType =
-    | 'anthropic'
-    | 'bedrock'
-    | 'custom'
-    | 'deepseek'
-    | 'gemini'
-    | 'glm'
-    | 'kimi'
-    | 'ollama'
-    | 'openai'
-    | 'qwen';
-
-export type ReasoningConfigInput = {
-    effort?: ReasoningEffort | null | undefined;
-    maxTokens?: number | null | undefined;
-};
-
-export type ReasoningEffort = 'high' | 'low' | 'medium';
-
-export type ResultFormat = 'markdown' | 'plain' | 'terminal';
-
-export type ResultType = 'error' | 'success';
-
-export type StatusType = 'created' | 'failed' | 'finished' | 'running' | 'waiting';
-
-export type TerminalLogType = 'stderr' | 'stdin' | 'stdout';
-
-export type TerminalType = 'primary' | 'secondary';
-
-export type TokenStatus = 'active' | 'expired' | 'revoked';
 
 export type UpdateApiTokenInput = {
     name?: string | null | undefined;
@@ -1515,9 +275,16 @@ export type UpdateKnowledgeDocumentInput = {
     question?: string | null | undefined;
 };
 
-export type UsageStatsPeriod = 'month' | 'quarter' | 'week';
+export enum UsageStatsPeriod {
+    Month = 'month',
+    Quarter = 'quarter',
+    Week = 'week',
+}
 
-export type VectorStoreAction = 'retrieve' | 'store';
+export enum VectorStoreAction {
+    Retrieve = 'retrieve',
+    Store = 'store',
+}
 
 export type SettingsFragmentFragment = {
     debug: boolean;

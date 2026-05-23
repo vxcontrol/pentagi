@@ -22,10 +22,13 @@ import {
     ChevronsLeft,
     ChevronsRight,
     ColumnsSettings,
+    Inbox,
     ListFilter,
+    Search,
     X,
 } from 'lucide-react';
 import {
+    type ChangeEvent,
     Fragment,
     type ReactElement,
     type ReactNode,
@@ -38,6 +41,7 @@ import {
     useState,
 } from 'react';
 import { useLocation } from 'react-router-dom';
+import { useDebouncedCallback } from 'use-debounce';
 
 import { Button } from '@/components/ui/button';
 import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from '@/components/ui/context-menu';
@@ -47,10 +51,10 @@ import {
     DropdownMenuContent,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { useEffectAfterMount } from '@/hooks/use-effect-after-mount';
 import { useLatestRef } from '@/hooks/use-latest-ref';
 import { usePageStorageKeys } from '@/hooks/use-page-storage-keys';
@@ -71,6 +75,8 @@ interface DataTableProps<TData, TValue = unknown> {
     columns: ColumnDef<TData, TValue>[];
     columnVisibility?: VisibilityState;
     data: TData[];
+    /** Plural lowercase, e.g. `"flows"`, `"knowledge documents"`, `"API tokens"`. */
+    empty?: { entityName?: string };
     /**
      * Search target(s) for the filter input. Three modes:
      * - `string` (legacy single-column): the input searches only this column;
@@ -148,10 +154,40 @@ const getColumnId = <TData, TValue>(column: ColumnDef<TData, TValue>): string | 
     return typeof withAccessor.accessorKey === 'string' ? withAccessor.accessorKey : undefined;
 };
 
+interface DataTableEmptyStateProps {
+    entityName?: string;
+    filterValue: string;
+}
+
 interface DataTableFilterProps {
     onQueryChange: (value: string) => void;
     placeholder: string;
     query: string;
+}
+
+function DataTableEmptyState({ entityName, filterValue }: DataTableEmptyStateProps) {
+    if (!entityName) {
+        return <>No results.</>;
+    }
+
+    const hasFilter = filterValue.length > 0;
+    const Icon = hasFilter ? Search : Inbox;
+
+    return (
+        <Empty className="border-0 p-0 md:p-0">
+            <EmptyHeader>
+                <EmptyMedia variant="icon">
+                    <Icon />
+                </EmptyMedia>
+                <EmptyTitle>{hasFilter ? 'No matches' : `No ${entityName} yet`}</EmptyTitle>
+                {hasFilter ? (
+                    <EmptyDescription>
+                        No {entityName} match <code>{filterValue}</code>. Try a different query.
+                    </EmptyDescription>
+                ) : null}
+            </EmptyHeader>
+        </Empty>
+    );
 }
 
 const FILTER_DEBOUNCE_MS = 150;
@@ -199,6 +235,7 @@ function DataTable<TData, TValue = unknown>({
     columns,
     columnVisibility: externalColumnVisibility,
     data,
+    empty,
     filterColumn,
     filterPlaceholder = 'Filter...',
     filterValue: externalFilterValue,
@@ -760,10 +797,13 @@ function DataTable<TData, TValue = unknown>({
                         ) : (
                             <TableRow>
                                 <TableCell
-                                    className="h-24 text-center"
+                                    className={cn('text-center', empty?.entityName ? 'py-12' : 'h-24')}
                                     colSpan={columns.length}
                                 >
-                                    No results.
+                                    <DataTableEmptyState
+                                        entityName={empty?.entityName}
+                                        filterValue={effectiveQuery.trim()}
+                                    />
                                 </TableCell>
                             </TableRow>
                         )}
@@ -776,6 +816,8 @@ function DataTable<TData, TValue = unknown>({
                         <>
                             Showing {rangeStart}–{rangeEnd} of {totalRows}
                         </>
+                    ) : empty?.entityName ? (
+                        `No ${empty.entityName}`
                     ) : (
                         'No results'
                     )}
@@ -820,6 +862,7 @@ function DataTable<TData, TValue = unknown>({
                 )}
                 <div className="flex items-center gap-1">
                     <Button
+                        aria-label="First page"
                         disabled={!table.getCanPreviousPage()}
                         onClick={() => table.firstPage()}
                         size="icon-xs"
@@ -828,6 +871,7 @@ function DataTable<TData, TValue = unknown>({
                         <ChevronsLeft />
                     </Button>
                     <Button
+                        aria-label="Previous page"
                         disabled={!table.getCanPreviousPage()}
                         onClick={() => table.previousPage()}
                         size="icon-xs"
@@ -836,6 +880,7 @@ function DataTable<TData, TValue = unknown>({
                         <ChevronLeft />
                     </Button>
                     <Button
+                        aria-label="Next page"
                         disabled={!table.getCanNextPage()}
                         onClick={() => table.nextPage()}
                         size="icon-xs"
@@ -844,6 +889,7 @@ function DataTable<TData, TValue = unknown>({
                         <ChevronRight />
                     </Button>
                     <Button
+                        aria-label="Last page"
                         disabled={!table.getCanNextPage()}
                         onClick={() => table.lastPage()}
                         size="icon-xs"
@@ -889,24 +935,34 @@ function DataTableColumnHeader<TData, TValue = unknown>({ column, title }: DataT
 }
 
 /**
- * Search input for the table's global filter. Keystrokes update an internal
- * `localValue` state synchronously so the input feels instant; the debounced
- * mirror is what we propagate upstream via `onQueryChange`. The previous
- * design committed every keystroke straight into `useTableQueryFilter`, which
- * synchronously walked the router and re-rendered the entire route subtree —
- * with the Flows page that ran ~250 ms per keystroke, so consecutive
- * keypresses queued behind the in-flight reconciliation and showed up as
- * input-delay INP. Debouncing the commit drops the upstream cascade rate
- * from per-keystroke to once per typing pause.
+ * Search input for the table's global filter.
  *
- * External `query` changes (X button, programmatic clear, URL back-button,
- * route swap) are reconciled into `localValue` through the sync effect: we
- * skip when the incoming value matches what we last emitted, so our own
- * round-trip through the parent doesn't fight with active typing.
+ * Controlled debounced input — the kind the React docs warn you cannot
+ * model with `useDeferredValue` alone, because we want to throttle the
+ * *side-effect* (URL writes via the parent's `onQueryChange`) rather than
+ * the render of the filtered rows (`useDeferredValue` already handles the
+ * latter at the table level — see `deferredGlobalFilter` above). React's
+ * own recommendation for this case is plain debouncing.
+ *
+ * The whole component is two state cells and one effect:
+ *
+ *   1. `localValue` (`useState`) — drives the controlled input, updates
+ *      synchronously on every keystroke so the caret never lags.
+ *   2. `lastEmittedReference` (`useRef`) — records the most recent value
+ *      we've handed upstream so the external-sync effect can distinguish
+ *      "this is our own commit coming back through the router" (skip)
+ *      from "something outside changed the source of truth" (accept,
+ *      override any in-flight typing).
+ *   3. One `useEffect` reconciling external `query` with local state.
+ *
+ * Everything timer-related lives inside `useDebouncedCallback`, which
+ * exposes a single `.cancel()` we call from the only two places that need
+ * to override the schedule — external sync and `handleClear`. There is no
+ * stale `debouncedValue` cell for an effect to read out of phase, which
+ * was the entire class of races the previous design carried.
  */
 function DataTableFilter({ onQueryChange, placeholder, query }: DataTableFilterProps) {
     const [localValue, setLocalValue] = useState(query);
-    const debouncedValue = useDebouncedValue(localValue, FILTER_DEBOUNCE_MS);
     const lastEmittedReference = useRef(query);
     // Generated per-instance so pages with multiple DataTables (e.g.
     // /settings/prompts) don't end up with duplicate `id` attributes — that
@@ -914,25 +970,46 @@ function DataTableFilter({ onQueryChange, placeholder, query }: DataTableFilterP
     // relies on the input id.
     const fieldId = useId();
 
-    useEffect(() => {
-        if (query !== lastEmittedReference.current) {
-            setLocalValue(query);
-            lastEmittedReference.current = query;
+    const debouncedEmit = useDebouncedCallback((next: string) => {
+        if (next === lastEmittedReference.current) {
+            return;
         }
-    }, [query]);
 
+        lastEmittedReference.current = next;
+        onQueryChange(next);
+    }, FILTER_DEBOUNCE_MS);
+
+    // External → local sync. Runs only when `query` is something we didn't
+    // emit ourselves: back button, programmatic clear, sibling control.
+    // Any in-flight debounce of locally-typed text is cancelled
+    // synchronously; the external value wins, by design.
     useEffect(() => {
-        if (debouncedValue !== lastEmittedReference.current) {
-            lastEmittedReference.current = debouncedValue;
-            onQueryChange(debouncedValue);
+        if (query === lastEmittedReference.current) {
+            return;
         }
-    }, [debouncedValue, onQueryChange]);
+
+        debouncedEmit.cancel();
+        lastEmittedReference.current = query;
+        setLocalValue(query);
+    }, [query, debouncedEmit]);
+
+    const handleChange = useCallback(
+        (event: ChangeEvent<HTMLInputElement>) => {
+            setLocalValue(event.target.value);
+            debouncedEmit(event.target.value);
+        },
+        [debouncedEmit],
+    );
 
     const handleClear = useCallback(() => {
         setLocalValue('');
-        lastEmittedReference.current = '';
-        onQueryChange('');
-    }, [onQueryChange]);
+        debouncedEmit.cancel();
+
+        if (lastEmittedReference.current !== '') {
+            lastEmittedReference.current = '';
+            onQueryChange('');
+        }
+    }, [debouncedEmit, onQueryChange]);
 
     return (
         <InputGroup className="max-w-sm">
@@ -942,7 +1019,7 @@ function DataTableFilter({ onQueryChange, placeholder, query }: DataTableFilterP
                 id={fieldId}
                 maxLength={FILTER_MAX_LENGTH}
                 name={fieldId}
-                onChange={(event) => setLocalValue(event.target.value)}
+                onChange={handleChange}
                 placeholder={placeholder}
                 type="text"
                 value={localValue}

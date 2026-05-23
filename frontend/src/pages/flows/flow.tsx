@@ -269,6 +269,8 @@ function Flow() {
                         )}
                         {flowId && !isMobile && (
                             <Button
+                                aria-label="Toggle favorite"
+                                aria-pressed={isFavoriteFlow(flowId)}
                                 className="shrink-0"
                                 onClick={() => toggleFavoriteFlow(flowId)}
                                 size="icon"

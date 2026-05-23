@@ -171,6 +171,7 @@ function Templates() {
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                                 <Button
+                                    aria-label="Open menu"
                                     className="size-8 p-0"
                                     onClick={(e) => e.stopPropagation()}
                                     variant="ghost"
@@ -301,6 +302,7 @@ function Templates() {
                 <DataTable
                     columns={columns}
                     data={templates}
+                    empty={{ entityName: 'templates' }}
                     filterPlaceholder="Filter templates..."
                     filterValue={filter}
                     onFilterChange={setFilter}

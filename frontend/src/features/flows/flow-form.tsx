@@ -30,7 +30,7 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Form, FormControl, FormField, FormLabel } from '@/components/ui/form';
+import { Form, FormControl, FormField, FormItem, FormLabel } from '@/components/ui/form';
 import {
     InputGroup,
     InputGroupAddon,
@@ -649,7 +649,7 @@ export function FlowForm({
                                                 <TooltipProvider>
                                                     <Tooltip>
                                                         <TooltipTrigger asChild>
-                                                            <div className="flex items-center">
+                                                            <FormItem className="flex flex-row items-center gap-0">
                                                                 <FormControl>
                                                                     <Switch
                                                                         checked={useAgentsField.value}
@@ -665,7 +665,7 @@ export function FlowForm({
                                                                 >
                                                                     Use Agents
                                                                 </FormLabel>
-                                                            </div>
+                                                            </FormItem>
                                                         </TooltipTrigger>
                                                         <TooltipContent>
                                                             <p className="max-w-48">
@@ -761,6 +761,7 @@ export function FlowForm({
 
                                     {!isLoading || isSubmitting ? (
                                         <InputGroupButton
+                                            aria-label={isSubmitting ? 'Submitting…' : 'Submit'}
                                             className="shrink-0"
                                             disabled={isSubmitting || !isValid || upload.isUploading}
                                             size="icon-xs"
@@ -771,6 +772,7 @@ export function FlowForm({
                                         </InputGroupButton>
                                     ) : (
                                         <InputGroupButton
+                                            aria-label={isCanceling ? 'Cancelling…' : 'Cancel'}
                                             className="shrink-0"
                                             disabled={isCanceling || !onCancel}
                                             onClick={() => onCancel?.()}
@@ -788,10 +790,13 @@ export function FlowForm({
                 />
             </form>
             <input
+                aria-hidden="true"
                 className="hidden"
                 multiple
+                name="flow-form-attachment"
                 onChange={handleFileInputChange}
                 ref={fileInputRef}
+                tabIndex={-1}
                 type="file"
             />
             <ConfirmationDialog

@@ -416,6 +416,7 @@ function Flows() {
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                     <Button
+                                        aria-label="Open menu"
                                         className="size-8 p-0"
                                         onClick={(e) => e.stopPropagation()}
                                         variant="ghost"
@@ -636,6 +637,7 @@ function Flows() {
                 <DataTable<Flow>
                     columns={columns}
                     data={flows}
+                    empty={{ entityName: 'flows' }}
                     filterPlaceholder="Filter flows..."
                     filterValue={filter}
                     onFilterChange={setFilter}

@@ -47,7 +47,7 @@ const menuItems: readonly MenuItem[] = [
         icon: <Key className="size-4" />,
         id: 'api-tokens',
         path: '/settings/api-tokens',
-        title: 'PentAGI API',
+        title: 'API Tokens',
     },
 ] as const;
 
@@ -72,10 +72,6 @@ function SettingsHeader() {
 
         if (path.startsWith('/settings/prompts/') && params.promptId && params.promptId !== 'new') {
             return 'Edit Prompt';
-        }
-
-        if (path === '/settings/api-tokens') {
-            return 'PentAGI API';
         }
 
         const activeItem = menuItems.find((item) => path.startsWith(item.path));

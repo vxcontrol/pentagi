@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { useState } from 'react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -134,6 +135,363 @@ describe('DataTable — controlled filter projection', () => {
         await user.click(clearButton);
 
         expect(onFilterChange).toHaveBeenCalledWith('');
+    });
+
+    // The next four tests exercise every race window the inline-arrow +
+    // useDebouncedValue + two-effects design used to leak through. They
+    // share a `Host` shape — a parent that mirrors the controlled value to
+    // local state and hands `DataTableFilter` a fresh inline `onFilterChange`
+    // per render (the same pattern real callers use through
+    // `useTableQueryFilter`). The tests assert on the sequence of emitted
+    // values rather than on internal state, so they remain valid even if
+    // the underlying implementation changes shape again.
+
+    interface FilterHostProps {
+        emitted: string[];
+        initialValue?: string;
+        onSetValueRef?: (setter: (next: string) => void) => void;
+    }
+
+    const FilterHost = ({ emitted, initialValue = '', onSetValueRef }: FilterHostProps) => {
+        const [value, setValue] = useState(initialValue);
+
+        // Expose `setValue` for tests that need to mutate the controlled
+        // prop without typing into the input (simulating an external source
+        // like back-button or sibling control).
+        if (onSetValueRef) {
+            onSetValueRef(setValue);
+        }
+
+        return (
+            <DataTable<Row>
+                columns={COLUMNS}
+                data={ROWS}
+                filterColumn="name"
+                filterPlaceholder="Filter..."
+                filterValue={value}
+                onFilterChange={(next) => {
+                    emitted.push(next);
+                    setValue(next);
+                }}
+            />
+        );
+    };
+
+    it('does not resurrect the previous query after the X clears past a settled debounce', async () => {
+        // Regression for the X-clear race seen in the browser:
+        // typed → debounce flushes → URL=?q=alpha → X click. The old design
+        // re-emitted 'alpha' on the next parent render (new inline handler,
+        // stale `debouncedValue`). With the new single-timer path, X clear
+        // cancels any in-flight emit synchronously.
+        const emitted: string[] = [];
+        const user = userEvent.setup();
+
+        render(<FilterHost emitted={emitted} />, { wrapper: Wrapper });
+
+        const input = screen.getByPlaceholderText('Filter...');
+        await user.type(input, 'alpha');
+
+        await waitFor(() => expect(emitted.at(-1)).toBe('alpha'));
+
+        const inputGroup = input.closest('[data-slot="input-group"]');
+        const clearButton = within(inputGroup as HTMLElement).getByRole('button');
+
+        await user.click(clearButton);
+
+        await new Promise((resolve) => setTimeout(resolve, 400));
+
+        const after = emitted.slice(emitted.indexOf('alpha') + 1);
+        expect(after).not.toContain('alpha');
+        expect(after.at(-1)).toBe('');
+        expect((input as HTMLInputElement).value).toBe('');
+    });
+
+    it('drops a pending typed emit when the X is clicked before the debounce flushes', async () => {
+        // The pre-refactor code relied on `useDebouncedValue`'s internal
+        // setTimeout, which `handleClear` had no way to cancel. So if a user
+        // typed quickly and immediately clicked X, the still-pending timer
+        // would land *after* the clear, re-emitting the typed value. The
+        // refactor cancels the pending timer inside `handleClear` → `emit`.
+        const emitted: string[] = [];
+        const user = userEvent.setup();
+
+        render(<FilterHost emitted={emitted} />, { wrapper: Wrapper });
+
+        const input = screen.getByPlaceholderText('Filter...');
+        await user.type(input, 'bravo', { delay: 5 });
+        // No `waitFor` here — we want the X click to happen mid-debounce,
+        // before any emit has reached the parent.
+        expect(emitted).toEqual([]);
+
+        const inputGroup = input.closest('[data-slot="input-group"]');
+        const clearButton = within(inputGroup as HTMLElement).getByRole('button');
+
+        await user.click(clearButton);
+
+        // Wait long enough for any stale timer to have fired by now.
+        await new Promise((resolve) => setTimeout(resolve, 400));
+
+        // The clear may emit '' (if the parent's filterValue was previously
+        // non-empty — irrelevant here, but harmless), but it must never
+        // emit any partial of 'bravo'.
+        expect(emitted.some((value) => value.length > 0)).toBe(false);
+        expect((input as HTMLInputElement).value).toBe('');
+    });
+
+    it('lets an external change win when it lands mid-debounce', async () => {
+        // If the parent flips `filterValue` while we're still holding a
+        // pending debounce of locally-typed text, the external value wins
+        // and the pending emit is dropped. Without this guarantee, the
+        // pending timer would later fire and clobber the external value.
+        const emitted: string[] = [];
+        const user = userEvent.setup();
+        let setValueExternal: ((next: string) => void) | undefined;
+
+        render(
+            <FilterHost
+                emitted={emitted}
+                onSetValueRef={(setter) => {
+                    setValueExternal = setter;
+                }}
+            />,
+            { wrapper: Wrapper },
+        );
+
+        const input = screen.getByPlaceholderText('Filter...');
+        await user.type(input, 'cha', { delay: 5 });
+
+        // While the debounce is still pending, simulate an external write
+        // (e.g. back-button popping to a different `?q=`).
+        expect(setValueExternal).toBeDefined();
+        act(() => setValueExternal!('external'));
+
+        // Give any leftover timer enough time to fire.
+        await new Promise((resolve) => setTimeout(resolve, 400));
+
+        // The pending typed value must never have escaped upstream.
+        expect(emitted).not.toContain('cha');
+        // The input snaps to the external value.
+        expect((input as HTMLInputElement).value).toBe('external');
+    });
+
+    it('honours typed input when it eventually matches an unrelated external value', async () => {
+        // A subtler invariant: if the user types something that happens to
+        // equal a value the parent previously set externally, the typed
+        // emit must still fire — we shouldn't dedupe against a value the
+        // parent already knows about, only against the value we last sent.
+        const emitted: string[] = [];
+        const user = userEvent.setup();
+
+        render(
+            <FilterHost
+                emitted={emitted}
+                initialValue="seed"
+            />,
+            { wrapper: Wrapper },
+        );
+
+        const input = screen.getByPlaceholderText('Filter...');
+        // Clear what's in the input and type the same string fresh.
+        await user.clear(input);
+        await waitFor(() => expect(emitted.at(-1)).toBe(''));
+        await user.type(input, 'seed');
+
+        await waitFor(() => expect(emitted.at(-1)).toBe('seed'));
+        expect((input as HTMLInputElement).value).toBe('seed');
+    });
+
+    it('mounts with a deep-linked filterValue and shows the X clear button immediately', () => {
+        // Deep links land on the page with `?q=alpha` already in the URL —
+        // the parent passes that value down at first render, the input should
+        // be populated, and the trailing X should be available right away.
+        const emitted: string[] = [];
+
+        render(
+            <FilterHost
+                emitted={emitted}
+                initialValue="alpha"
+            />,
+            { wrapper: Wrapper },
+        );
+
+        const input = screen.getByPlaceholderText('Filter...') as HTMLInputElement;
+        expect(input.value).toBe('alpha');
+        // No emission happened — we accepted the prop, we didn't echo it back.
+        expect(emitted).toEqual([]);
+
+        // X button is rendered because the input is non-empty.
+        const inputGroup = input.closest('[data-slot="input-group"]');
+        expect(within(inputGroup as HTMLElement).getByRole('button')).toBeInTheDocument();
+    });
+
+    it('coalesces burst typing into a single emit with the last-typed value', async () => {
+        // We type six characters back-to-back. The 150ms debounce should
+        // collapse the burst to a single outbound call — sequential prefix
+        // commits would defeat the debounce and hammer the URL writer.
+        const emitted: string[] = [];
+        const user = userEvent.setup();
+
+        render(<FilterHost emitted={emitted} />, { wrapper: Wrapper });
+
+        const input = screen.getByPlaceholderText('Filter...');
+        await user.type(input, 'foobar');
+
+        await waitFor(() => expect(emitted.at(-1)).toBe('foobar'));
+
+        // No intermediate prefixes — only the final value lands.
+        expect(emitted).toEqual(['foobar']);
+    });
+
+    it('does not write to the upstream on unmount with a pending debounce', async () => {
+        // If the user types and immediately navigates away, the in-flight
+        // timer should be cancelled by `useDebouncedCallback` so the dead
+        // component can't push a stale value into the parent (which by then
+        // may belong to a different page).
+        const emitted: string[] = [];
+        const user = userEvent.setup();
+
+        const { unmount } = render(<FilterHost emitted={emitted} />, { wrapper: Wrapper });
+
+        await user.type(screen.getByPlaceholderText('Filter...'), 'gone', { delay: 5 });
+
+        // Unmount before the debounce settles.
+        unmount();
+
+        // Give any leftover timer time to misfire.
+        await new Promise((resolve) => setTimeout(resolve, 400));
+
+        // Nothing made it upstream — the timer was cancelled by the hook's
+        // unmount cleanup.
+        expect(emitted).toEqual([]);
+    });
+
+    it('keeps two DataTables on one page independent (settings/prompts shape)', async () => {
+        // `/settings/prompts` mounts an Agent table and a Tool table on the
+        // same route. Typing in one input must not leak into the other —
+        // both DataTableFilter instances own private state, with separate
+        // `lastEmittedReference`s and timers.
+        const emittedAgent: string[] = [];
+        const emittedTool: string[] = [];
+        const user = userEvent.setup();
+
+        const TwoTablesHost = () => {
+            const [agent, setAgent] = useState('');
+            const [tool, setTool] = useState('');
+
+            return (
+                <>
+                    <DataTable<Row>
+                        columns={COLUMNS}
+                        data={ROWS}
+                        filterColumn="name"
+                        filterPlaceholder="Agent filter..."
+                        filterValue={agent}
+                        onFilterChange={(next) => {
+                            emittedAgent.push(next);
+                            setAgent(next);
+                        }}
+                    />
+                    <DataTable<Row>
+                        columns={COLUMNS}
+                        data={ROWS}
+                        filterColumn="name"
+                        filterPlaceholder="Tool filter..."
+                        filterValue={tool}
+                        onFilterChange={(next) => {
+                            emittedTool.push(next);
+                            setTool(next);
+                        }}
+                    />
+                </>
+            );
+        };
+
+        render(<TwoTablesHost />, { wrapper: Wrapper });
+
+        const agentInput = screen.getByPlaceholderText('Agent filter...');
+        const toolInput = screen.getByPlaceholderText('Tool filter...');
+
+        await user.type(agentInput, 'agX');
+        await waitFor(() => expect(emittedAgent.at(-1)).toBe('agX'));
+
+        // Tool table never saw anything.
+        expect(emittedTool).toEqual([]);
+        expect((toolInput as HTMLInputElement).value).toBe('');
+
+        // Now type in the tool input; agent must stay frozen.
+        await user.type(toolInput, 'toY');
+        await waitFor(() => expect(emittedTool.at(-1)).toBe('toY'));
+
+        expect((agentInput as HTMLInputElement).value).toBe('agX');
+        expect(emittedAgent).toEqual(['agX']);
+    });
+
+    it('accepts a back-button-style external clear without re-emitting the old value', async () => {
+        // History pop: user typed `'foo'`, then hit back. The router resets
+        // `filterValue` to `''`. The input should snap to `''` without
+        // re-emitting `'foo'` from a stale timer or sync effect.
+        const emitted: string[] = [];
+        const user = userEvent.setup();
+        let setExternal: ((next: string) => void) | undefined;
+
+        render(
+            <FilterHost
+                emitted={emitted}
+                onSetValueRef={(setter) => {
+                    setExternal = setter;
+                }}
+            />,
+            { wrapper: Wrapper },
+        );
+
+        const input = screen.getByPlaceholderText('Filter...');
+        await user.type(input, 'foo');
+        await waitFor(() => expect(emitted.at(-1)).toBe('foo'));
+
+        // Simulate the browser back button clearing `?q=`. The external
+        // setter bypasses `onFilterChange` (which is the realistic shape —
+        // a real router pop doesn't echo through our handler), so we measure
+        // the absence of further emits rather than a `''` arrival.
+        const indexOfFoo = emitted.lastIndexOf('foo');
+        expect(setExternal).toBeDefined();
+        act(() => setExternal!(''));
+
+        await new Promise((resolve) => setTimeout(resolve, 400));
+
+        // The input cleared; no leftover timer pushed `'foo'` back upstream.
+        expect((input as HTMLInputElement).value).toBe('');
+        expect(emitted.slice(indexOfFoo + 1)).not.toContain('foo');
+    });
+
+    it('survives rapid alternation between typing and X clicks', async () => {
+        // Stress: type, clear, type, clear — three rounds back to back.
+        // Each round must end with a clean `''` upstream and an empty input.
+        const emitted: string[] = [];
+        const user = userEvent.setup();
+
+        render(<FilterHost emitted={emitted} />, { wrapper: Wrapper });
+
+        const input = screen.getByPlaceholderText('Filter...');
+
+        for (const round of ['one', 'two', 'three']) {
+            await user.type(input, round);
+            await waitFor(() => expect(emitted.at(-1)).toBe(round));
+
+            const inputGroup = input.closest('[data-slot="input-group"]');
+            const clearButton = within(inputGroup as HTMLElement).getByRole('button');
+            await user.click(clearButton);
+            await waitFor(() => expect((input as HTMLInputElement).value).toBe(''));
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 400));
+
+        // Final state: input empty, last emit is the clear from round three.
+        expect((input as HTMLInputElement).value).toBe('');
+        expect(emitted.at(-1)).toBe('');
+        // Every round's value made it through cleanly.
+        expect(emitted).toContain('one');
+        expect(emitted).toContain('two');
+        expect(emitted).toContain('three');
     });
 });
 
@@ -340,6 +698,61 @@ describe('DataTable — empty results', () => {
 
         expect(screen.queryByText(/Page 1 of 0/)).not.toBeInTheDocument();
         expect(screen.getByText('No results')).toBeInTheDocument();
+    });
+
+    it('renders the bare "No results." cell when `empty.entityName` is omitted (legacy fallback)', () => {
+        render(
+            <DataTable<Row>
+                columns={COLUMNS}
+                data={[]}
+            />,
+            { wrapper: Wrapper },
+        );
+
+        expect(screen.getByText('No results.')).toBeInTheDocument();
+        // The shadcn Empty title is NOT rendered without `entityName`.
+        expect(screen.queryByText('No matches')).not.toBeInTheDocument();
+    });
+
+    it('renders a data-empty Empty block ("No <entity> yet") when `entityName` is set and no filter is active', () => {
+        render(
+            <DataTable<Row>
+                columns={COLUMNS}
+                data={[]}
+                empty={{ entityName: 'flows' }}
+            />,
+            { wrapper: Wrapper },
+        );
+
+        expect(screen.getByText('No flows yet')).toBeInTheDocument();
+        // No filter ⇒ no "match" description.
+        expect(screen.queryByText(/Try a different query/)).not.toBeInTheDocument();
+        // Pagination footer also uses the entity copy.
+        expect(screen.getByText('No flows')).toBeInTheDocument();
+    });
+
+    it('renders a filter-empty Empty block ("No <entity> match …") when `entityName` is set and a filter is active', async () => {
+        const user = userEvent.setup();
+        render(
+            <DataTable<Row>
+                columns={COLUMNS}
+                data={ROWS}
+                empty={{ entityName: 'flows' }}
+                filterColumn="name"
+                filterPlaceholder="Filter..."
+            />,
+            { wrapper: Wrapper },
+        );
+
+        const input = screen.getByPlaceholderText('Filter...');
+        // No row in ROWS has the substring "ZZZZZZ" — guarantees an empty subset.
+        await user.type(input, 'ZZZZZZ');
+
+        expect(await screen.findByText('No matches')).toBeInTheDocument();
+        // Description cites the query and offers the next-step hint.
+        const description = await screen.findByText(/Try a different query/);
+        expect(description).toHaveTextContent('ZZZZZZ');
+        expect(description.textContent).toMatch(/^No flows match/);
     });
 
     it('assigns a non-empty unique id and matching name to the filter field', () => {

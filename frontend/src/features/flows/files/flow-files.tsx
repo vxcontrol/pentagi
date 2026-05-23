@@ -198,9 +198,12 @@ function FlowFiles() {
             {...dragHandlers}
         >
             <input
+                aria-hidden="true"
                 className="hidden"
                 key={upload.fileInputKey}
                 multiple
+                name="flow-file-upload"
+                tabIndex={-1}
                 type="file"
                 {...upload.fileInputProps}
             />

@@ -19,8 +19,8 @@ import xml from 'highlight.js/lib/languages/xml';
 import yaml from 'highlight.js/lib/languages/yaml';
 import 'highlight.js/styles/atom-one-dark.css';
 import { common, createLowlight } from 'lowlight';
-import { useCallback, useMemo } from 'react';
-import ReactMarkdown from 'react-markdown';
+import { isValidElement, type ReactNode, useCallback, useMemo } from 'react';
+import ReactMarkdown, { type Components } from 'react-markdown';
 import rehypeHighlight from 'rehype-highlight';
 import rehypeSlug from 'rehype-slug';
 import remarkGfm from 'remark-gfm';
@@ -141,7 +141,12 @@ function Markdown({ children, className, searchValue }: MarkdownProps) {
     );
 
     const processTextNode = useMemo(() => {
-        const fn = (nodeChildren: any): any => {
+        const hasChildrenProp = (
+            node: unknown,
+        ): node is { key?: null | React.Key; props: { children: ReactNode } } =>
+            isValidElement(node) && (node.props as { children?: ReactNode }).children !== undefined;
+
+        const fn = (nodeChildren: ReactNode): ReactNode => {
             if (!processedSearch) {
                 return nodeChildren;
             }
@@ -156,7 +161,7 @@ function Markdown({ children, className, searchValue }: MarkdownProps) {
                         return createHighlightedText(child);
                     }
 
-                    if (child && typeof child === 'object' && child.props && child.props.children !== undefined) {
+                    if (hasChildrenProp(child)) {
                         return {
                             ...child,
                             key: child.key || `processed-${index}`,
@@ -171,12 +176,7 @@ function Markdown({ children, className, searchValue }: MarkdownProps) {
                 });
             }
 
-            if (
-                nodeChildren &&
-                typeof nodeChildren === 'object' &&
-                nodeChildren.props &&
-                nodeChildren.props.children !== undefined
-            ) {
+            if (hasChildrenProp(nodeChildren)) {
                 return {
                     ...nodeChildren,
                     props: {
@@ -210,20 +210,21 @@ function Markdown({ children, className, searchValue }: MarkdownProps) {
     );
 
     const customComponents = useMemo(() => {
-        const components: Record<string, any> = {};
+        const components: Components = {};
 
         if (processedSearch) {
             textElements.forEach((element) => {
-                components[element] = createComponentRenderer(element);
+                (components as Record<string, ReturnType<typeof createComponentRenderer>>)[element] =
+                    createComponentRenderer(element);
             });
 
             // Code blocks pass through untouched — highlighting injected `<span>`s into a `<code>`
             // breaks rehype-highlight's tokenization and the rendered listing.
-            components.code = ({ children: nodeChildren, ...props }: any) => {
+            components.code = ({ children: nodeChildren, ...props }) => {
                 return <code {...props}>{nodeChildren}</code>;
             };
 
-            components.pre = ({ children: nodeChildren, ...props }: any) => {
+            components.pre = ({ children: nodeChildren, ...props }) => {
                 return <pre {...props}>{nodeChildren}</pre>;
             };
         }

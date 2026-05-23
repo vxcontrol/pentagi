@@ -465,9 +465,12 @@ function Resources() {
                 {...dragHandlers}
             >
                 <input
+                    aria-hidden="true"
                     className="hidden"
                     key={upload.fileInputKey}
                     multiple
+                    name="resource-upload"
+                    tabIndex={-1}
                     type="file"
                     {...upload.fileInputProps}
                 />
@@ -505,6 +508,7 @@ function Resources() {
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                             <Button
+                                aria-label="Column settings"
                                 className="ml-auto"
                                 size="icon"
                                 variant="outline"
@@ -596,7 +600,7 @@ function Resources() {
                     isOpen={!!deletion.fileToDelete}
                     itemName={deletion.fileToDelete?.name}
                     itemType={deletion.fileToDelete?.isDir ? 'directory' : 'resource'}
-                    title={deletion.fileToDelete?.isDir ? 'Delete Directory' : 'Delete Resource'}
+                    title={deletion.fileToDelete?.isDir ? 'Delete directory' : 'Delete resource'}
                 />
             </div>
         </>

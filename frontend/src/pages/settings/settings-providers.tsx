@@ -1,4 +1,4 @@
-import type { ColumnDef } from '@tanstack/react-table';
+import type { ColumnDef, Row } from '@tanstack/react-table';
 
 import { AlertCircle, ChevronDown, Copy, Ellipsis, Loader2, Pencil, Plus, Settings, Trash } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
@@ -35,7 +35,7 @@ import { useTableState } from '@/hooks/use-table-state';
 import { formatDate } from '@/lib/utils/format';
 type Provider = ProviderConfigFragmentFragment;
 
-const providerIcons: Record<ProviderType, React.ComponentType<any>> = {
+const providerIcons: Record<ProviderType, React.ComponentType<React.SVGProps<SVGSVGElement>>> = {
     [ProviderType.Anthropic]: Anthropic,
     [ProviderType.Bedrock]: Bedrock,
     [ProviderType.Custom]: Custom,
@@ -208,10 +208,10 @@ function SettingsProviders() {
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                     <Button
+                                        aria-label="Open menu"
                                         className="size-8 p-0"
                                         variant="ghost"
                                     >
-                                        <span className="sr-only">Open menu</span>
                                         <Ellipsis />
                                     </Button>
                                 </DropdownMenuTrigger>
@@ -259,8 +259,8 @@ function SettingsProviders() {
         [handleProviderClone, handleProviderDeleteDialogOpen, handleProviderEdit, isDeleteLoading, deletingProvider],
     );
 
-    const renderSubComponent = ({ row }: { row: any }) => {
-        const provider = row.original as Provider;
+    const renderSubComponent = ({ row }: { row: Row<Provider> }) => {
+        const provider = row.original;
         const { agents } = provider;
 
         if (!agents) {
@@ -270,12 +270,12 @@ function SettingsProviders() {
         const getName = (key: string): string =>
             key.replaceAll(/([A-Z])/g, ' $1').replace(/^./, (item) => item.toUpperCase());
 
-        const getFields = (obj: any, prefix = ''): { label: string; value: boolean | number | string }[] => {
+        const getFields = (obj: unknown, prefix = ''): { label: string; value: boolean | number | string }[] => {
             if (!obj || typeof obj !== 'object') {
                 return [];
             }
 
-            return Object.entries(obj)
+            return Object.entries(obj as Record<string, unknown>)
                 .filter(([key, value]) => key !== '__typename' && !!value)
                 .flatMap(([key, value]) => {
                     const label = `${prefix ? `${prefix} ` : ''}${getName(key)}`;
@@ -418,6 +418,7 @@ function SettingsProviders() {
             <DataTable<Provider>
                 columns={columns}
                 data={providers}
+                empty={{ entityName: 'providers' }}
                 filterPlaceholder="Filter providers..."
                 filterValue={filter}
                 onFilterChange={setFilter}
@@ -451,9 +452,18 @@ function SettingsProvidersHeader() {
         <div className="flex items-center justify-between gap-4">
             <p className="text-muted-foreground min-w-0 flex-1 truncate">Manage language model providers</p>
 
+            {/*
+             * "Create Provider" is a dropdown trigger, not a submit-style action — it
+             * opens a menu listing provider types (OpenAI, Anthropic, Custom, …). The
+             * `<ChevronDown />` icon plus Radix's `aria-haspopup="menu"` already signal
+             * "menu opens" to sighted and AT users; the explicit aria-label adds the
+             * intent ("create provider") so screen readers don't just announce
+             * "Create Provider, menu" but "Create provider, choose type, menu".
+             */}
             <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                     <Button
+                        aria-label="Create provider — choose type"
                         className="shrink-0"
                         variant="secondary"
                     >

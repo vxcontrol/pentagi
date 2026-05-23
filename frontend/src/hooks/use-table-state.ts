@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { useDebounce } from 'use-debounce';
 
-import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { URL_PARAMS } from '@/lib/url-params';
 
 interface SetPageOptions {
@@ -95,7 +95,7 @@ export function useTableState(options: UseTableStateOptions = {}): UseTableState
     const [searchParams, setSearchParams] = useSearchParams();
 
     const filter = searchParams.get(filterParamName) ?? '';
-    const debouncedFilter = useDebouncedValue(filter, debounceMs);
+    const [debouncedFilter] = useDebounce(filter, debounceMs);
     const pageIndex = useMemo(() => {
         const raw = searchParams.get(pageParamName);
 

@@ -1,4 +1,4 @@
-import type { ColumnDef } from '@tanstack/react-table';
+import type { ColumnDef, Row } from '@tanstack/react-table';
 
 import {
     AlertCircle,
@@ -381,10 +381,10 @@ function SettingsPrompts() {
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                                 <Button
+                                    aria-label="Open menu"
                                     className="size-8 p-0"
                                     variant="ghost"
                                 >
-                                    <span className="sr-only">Open menu</span>
                                     <Ellipsis />
                                 </Button>
                             </DropdownMenuTrigger>
@@ -538,10 +538,10 @@ function SettingsPrompts() {
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                                 <Button
+                                    aria-label="Open menu"
                                     className="size-8 p-0"
                                     variant="ghost"
                                 >
-                                    <span className="sr-only">Open menu</span>
                                     <Ellipsis />
                                 </Button>
                             </DropdownMenuTrigger>
@@ -593,8 +593,8 @@ function SettingsPrompts() {
         },
     ];
 
-    const renderAgentSubComponent = ({ row }: { row: any }) => {
-        const agent = row.original as AgentPromptTableData;
+    const renderAgentSubComponent = ({ row }: { row: Row<AgentPromptTableData> }) => {
+        const agent = row.original;
 
         const userSystemPrompt = data?.settingsPrompts?.userDefined?.find((p) => p.type === agent.systemType);
         const userHumanPrompt = data?.settingsPrompts?.userDefined?.find((p) => p.type === agent.humanType);
@@ -652,8 +652,8 @@ function SettingsPrompts() {
         );
     };
 
-    const renderToolSubComponent = ({ row }: { row: any }) => {
-        const tool = row.original as ToolPromptTableData;
+    const renderToolSubComponent = ({ row }: { row: Row<ToolPromptTableData> }) => {
+        const tool = row.original;
 
         const userToolPrompt = data?.settingsPrompts?.userDefined?.find((p) => p.type === tool.promptType);
 
@@ -830,6 +830,7 @@ function SettingsPrompts() {
                         <DataTable<AgentPromptTableData>
                             columns={agentColumns}
                             data={agentPrompts}
+                            empty={{ entityName: 'agent prompts' }}
                             filterPlaceholder="Filter agents..."
                             initialPageSize={1000}
                             renderRowContextMenu={renderAgentRowContextMenu}
@@ -850,6 +851,7 @@ function SettingsPrompts() {
                         <DataTable<ToolPromptTableData>
                             columns={toolColumns}
                             data={toolPrompts}
+                            empty={{ entityName: 'tool prompts' }}
                             filterPlaceholder="Filter tools..."
                             initialPageSize={1000}
                             renderRowContextMenu={renderToolRowContextMenu}
