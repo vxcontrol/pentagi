@@ -77,7 +77,13 @@ describe('InputSearch — collapsed/expanded presentation', () => {
     });
 
     it('mounts expanded (trigger absent, input populated) when deep-linked', () => {
-        render(<SearchHost emitted={[]} initialQuery="jwt" />, { wrapper: Wrapper });
+        render(
+            <SearchHost
+                emitted={[]}
+                initialQuery="jwt"
+            />,
+            { wrapper: Wrapper },
+        );
         expect(queryTrigger()).not.toBeInTheDocument();
         expect(getInput().value).toBe('jwt');
     });
@@ -98,7 +104,13 @@ describe('InputSearch — typing and outbound emit', () => {
         const emitted: string[] = [];
         const user = userEvent.setup();
 
-        render(<SearchHost emitted={emitted} initialQuery="x" />, { wrapper: Wrapper });
+        render(
+            <SearchHost
+                emitted={emitted}
+                initialQuery="x"
+            />,
+            { wrapper: Wrapper },
+        );
 
         await user.clear(getInput());
         await sleep(PAST_DEBOUNCE_MS);
@@ -130,7 +142,13 @@ describe('InputSearch — Escape semantics', () => {
         const emitted: string[] = [];
         const user = userEvent.setup();
 
-        render(<SearchHost emitted={emitted} initialQuery="jwt" />, { wrapper: Wrapper });
+        render(
+            <SearchHost
+                emitted={emitted}
+                initialQuery="jwt"
+            />,
+            { wrapper: Wrapper },
+        );
         const input = getInput();
         input.focus();
 
@@ -147,7 +165,13 @@ describe('InputSearch — Escape semantics', () => {
         const emitted: string[] = [];
         const user = userEvent.setup();
 
-        render(<SearchHost emitted={emitted} initialQuery="jwt" />, { wrapper: Wrapper });
+        render(
+            <SearchHost
+                emitted={emitted}
+                initialQuery="jwt"
+            />,
+            { wrapper: Wrapper },
+        );
         const input = getInput();
         input.focus();
 

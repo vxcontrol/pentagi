@@ -282,7 +282,13 @@ describe('DataTable — controlled filter projection', () => {
         const emitted: string[] = [];
         const user = userEvent.setup();
 
-        render(<FilterHost emitted={emitted} initialValue="seed" />, { wrapper: Wrapper });
+        render(
+            <FilterHost
+                emitted={emitted}
+                initialValue="seed"
+            />,
+            { wrapper: Wrapper },
+        );
 
         const input = screen.getByPlaceholderText('Filter...');
         // Clear what's in the input and type the same string fresh.
@@ -300,7 +306,13 @@ describe('DataTable — controlled filter projection', () => {
         // be populated, and the trailing X should be available right away.
         const emitted: string[] = [];
 
-        render(<FilterHost emitted={emitted} initialValue="alpha" />, { wrapper: Wrapper });
+        render(
+            <FilterHost
+                emitted={emitted}
+                initialValue="alpha"
+            />,
+            { wrapper: Wrapper },
+        );
 
         const input = screen.getByPlaceholderText('Filter...') as HTMLInputElement;
         expect(input.value).toBe('alpha');
