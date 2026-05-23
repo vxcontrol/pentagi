@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useDebounce } from 'use-debounce';
 
-import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { useLatestRef } from '@/hooks/use-latest-ref';
 import { useTableQueryFilterReader } from '@/hooks/use-table-query-filter';
 import { mergeHrefWithSearchParams } from '@/lib/url-params';
@@ -222,7 +222,7 @@ export function useDetailNavigation<T extends { id: string }>({
     const [internalSearchQuery, setInternalSearchQuery] = useState(defaultSearchQuery ?? '');
     const isSearchControlled = searchQuery !== undefined;
     const activeSearchQuery = isSearchControlled ? searchQuery : internalSearchQuery;
-    const debouncedSearchQuery = useDebouncedValue(activeSearchQuery, searchDebounceMs ?? DEFAULT_SEARCH_DEBOUNCE_MS);
+    const [debouncedSearchQuery] = useDebounce(activeSearchQuery, searchDebounceMs ?? DEFAULT_SEARCH_DEBOUNCE_MS);
 
     const setSearchQuery = useCallback(
         (next: string) => {

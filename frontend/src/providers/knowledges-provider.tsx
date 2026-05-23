@@ -1,6 +1,7 @@
 import { createContext, type ReactNode, useCallback, useContext, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
+import { useDebounce } from 'use-debounce';
 
 import type {
     CreateKnowledgeDocumentInput,
@@ -18,7 +19,6 @@ import {
     useSearchKnowledgeQuery,
     useUpdateKnowledgeDocumentMutation,
 } from '@/graphql/types';
-import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { useLatestRef } from '@/hooks/use-latest-ref';
 import { Log } from '@/lib/log';
 import { URL_PARAMS } from '@/lib/url-params';
@@ -71,7 +71,8 @@ export function KnowledgesProvider({ children }: KnowledgesProviderProps) {
     // provider sees one canonical "is the user actively searching" flag.
     const [searchParams] = useSearchParams();
     const rawSemanticQuery = searchParams.get(URL_PARAMS.SEARCH) ?? '';
-    const debouncedSemanticQuery = useDebouncedValue(rawSemanticQuery, SEARCH_DEBOUNCE_MS).trim();
+    const [debouncedSemanticQueryRaw] = useDebounce(rawSemanticQuery, SEARCH_DEBOUNCE_MS);
+    const debouncedSemanticQuery = debouncedSemanticQueryRaw.trim();
     const inSearchMode = debouncedSemanticQuery.length > 0;
 
     // Override the client's default `nextFetchPolicy: 'cache-first'`: since

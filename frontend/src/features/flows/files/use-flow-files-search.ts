@@ -1,9 +1,8 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useCallback } from 'react';
 import { useForm, type UseFormReturn } from 'react-hook-form';
+import { useDebounce } from 'use-debounce';
 import { z } from 'zod';
-
-import { useDebouncedValue } from '@/hooks/use-debounced-value';
 
 import { SEARCH_DEBOUNCE_MS } from './flow-files-constants';
 
@@ -34,7 +33,7 @@ export function useFlowFilesSearch(): UseFlowFilesSearchResult {
     });
 
     const rawQuery = form.watch('search');
-    const debouncedQuery = useDebouncedValue(rawQuery, SEARCH_DEBOUNCE_MS);
+    const [debouncedQuery] = useDebounce(rawQuery, SEARCH_DEBOUNCE_MS);
 
     const resetSearch = useCallback(() => {
         form.reset({ search: '' });

@@ -41,6 +41,7 @@ import {
     useState,
 } from 'react';
 import { useLocation } from 'react-router-dom';
+import { useDebouncedCallback } from 'use-debounce';
 
 import { Button } from '@/components/ui/button';
 import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from '@/components/ui/context-menu';
@@ -54,7 +55,6 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { useDebouncedCallback } from '@/hooks/use-debounced-callback';
 import { useEffectAfterMount } from '@/hooks/use-effect-after-mount';
 import { useLatestRef } from '@/hooks/use-latest-ref';
 import { usePageStorageKeys } from '@/hooks/use-page-storage-keys';

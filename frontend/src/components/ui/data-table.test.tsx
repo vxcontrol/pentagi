@@ -293,6 +293,194 @@ describe('DataTable — controlled filter projection', () => {
         await waitFor(() => expect(emitted.at(-1)).toBe('seed'));
         expect((input as HTMLInputElement).value).toBe('seed');
     });
+
+    it('mounts with a deep-linked filterValue and shows the X clear button immediately', () => {
+        // Deep links land on the page with `?q=alpha` already in the URL —
+        // the parent passes that value down at first render, the input should
+        // be populated, and the trailing X should be available right away.
+        const emitted: string[] = [];
+
+        render(<FilterHost emitted={emitted} initialValue="alpha" />, { wrapper: Wrapper });
+
+        const input = screen.getByPlaceholderText('Filter...') as HTMLInputElement;
+        expect(input.value).toBe('alpha');
+        // No emission happened — we accepted the prop, we didn't echo it back.
+        expect(emitted).toEqual([]);
+
+        // X button is rendered because the input is non-empty.
+        const inputGroup = input.closest('[data-slot="input-group"]');
+        expect(within(inputGroup as HTMLElement).getByRole('button')).toBeInTheDocument();
+    });
+
+    it('coalesces burst typing into a single emit with the last-typed value', async () => {
+        // We type six characters back-to-back. The 150ms debounce should
+        // collapse the burst to a single outbound call — sequential prefix
+        // commits would defeat the debounce and hammer the URL writer.
+        const emitted: string[] = [];
+        const user = userEvent.setup();
+
+        render(<FilterHost emitted={emitted} />, { wrapper: Wrapper });
+
+        const input = screen.getByPlaceholderText('Filter...');
+        await user.type(input, 'foobar');
+
+        await waitFor(() => expect(emitted.at(-1)).toBe('foobar'));
+
+        // No intermediate prefixes — only the final value lands.
+        expect(emitted).toEqual(['foobar']);
+    });
+
+    it('does not write to the upstream on unmount with a pending debounce', async () => {
+        // If the user types and immediately navigates away, the in-flight
+        // timer should be cancelled by `useDebouncedCallback` so the dead
+        // component can't push a stale value into the parent (which by then
+        // may belong to a different page).
+        const emitted: string[] = [];
+        const user = userEvent.setup();
+
+        const { unmount } = render(<FilterHost emitted={emitted} />, { wrapper: Wrapper });
+
+        await user.type(screen.getByPlaceholderText('Filter...'), 'gone', { delay: 5 });
+
+        // Unmount before the debounce settles.
+        unmount();
+
+        // Give any leftover timer time to misfire.
+        await new Promise((resolve) => setTimeout(resolve, 400));
+
+        // Nothing made it upstream — the timer was cancelled by the hook's
+        // unmount cleanup.
+        expect(emitted).toEqual([]);
+    });
+
+    it('keeps two DataTables on one page independent (settings/prompts shape)', async () => {
+        // `/settings/prompts` mounts an Agent table and a Tool table on the
+        // same route. Typing in one input must not leak into the other —
+        // both DataTableFilter instances own private state, with separate
+        // `lastEmittedReference`s and timers.
+        const emittedAgent: string[] = [];
+        const emittedTool: string[] = [];
+        const user = userEvent.setup();
+
+        const TwoTablesHost = () => {
+            const [agent, setAgent] = useState('');
+            const [tool, setTool] = useState('');
+
+            return (
+                <>
+                    <DataTable<Row>
+                        columns={COLUMNS}
+                        data={ROWS}
+                        filterColumn="name"
+                        filterPlaceholder="Agent filter..."
+                        filterValue={agent}
+                        onFilterChange={(next) => {
+                            emittedAgent.push(next);
+                            setAgent(next);
+                        }}
+                    />
+                    <DataTable<Row>
+                        columns={COLUMNS}
+                        data={ROWS}
+                        filterColumn="name"
+                        filterPlaceholder="Tool filter..."
+                        filterValue={tool}
+                        onFilterChange={(next) => {
+                            emittedTool.push(next);
+                            setTool(next);
+                        }}
+                    />
+                </>
+            );
+        };
+
+        render(<TwoTablesHost />, { wrapper: Wrapper });
+
+        const agentInput = screen.getByPlaceholderText('Agent filter...');
+        const toolInput = screen.getByPlaceholderText('Tool filter...');
+
+        await user.type(agentInput, 'agX');
+        await waitFor(() => expect(emittedAgent.at(-1)).toBe('agX'));
+
+        // Tool table never saw anything.
+        expect(emittedTool).toEqual([]);
+        expect((toolInput as HTMLInputElement).value).toBe('');
+
+        // Now type in the tool input; agent must stay frozen.
+        await user.type(toolInput, 'toY');
+        await waitFor(() => expect(emittedTool.at(-1)).toBe('toY'));
+
+        expect((agentInput as HTMLInputElement).value).toBe('agX');
+        expect(emittedAgent).toEqual(['agX']);
+    });
+
+    it('accepts a back-button-style external clear without re-emitting the old value', async () => {
+        // History pop: user typed `'foo'`, then hit back. The router resets
+        // `filterValue` to `''`. The input should snap to `''` without
+        // re-emitting `'foo'` from a stale timer or sync effect.
+        const emitted: string[] = [];
+        const user = userEvent.setup();
+        let setExternal: ((next: string) => void) | undefined;
+
+        render(
+            <FilterHost
+                emitted={emitted}
+                onSetValueRef={(setter) => {
+                    setExternal = setter;
+                }}
+            />,
+            { wrapper: Wrapper },
+        );
+
+        const input = screen.getByPlaceholderText('Filter...');
+        await user.type(input, 'foo');
+        await waitFor(() => expect(emitted.at(-1)).toBe('foo'));
+
+        // Simulate the browser back button clearing `?q=`. The external
+        // setter bypasses `onFilterChange` (which is the realistic shape —
+        // a real router pop doesn't echo through our handler), so we measure
+        // the absence of further emits rather than a `''` arrival.
+        const indexOfFoo = emitted.lastIndexOf('foo');
+        expect(setExternal).toBeDefined();
+        act(() => setExternal!(''));
+
+        await new Promise((resolve) => setTimeout(resolve, 400));
+
+        // The input cleared; no leftover timer pushed `'foo'` back upstream.
+        expect((input as HTMLInputElement).value).toBe('');
+        expect(emitted.slice(indexOfFoo + 1)).not.toContain('foo');
+    });
+
+    it('survives rapid alternation between typing and X clicks', async () => {
+        // Stress: type, clear, type, clear — three rounds back to back.
+        // Each round must end with a clean `''` upstream and an empty input.
+        const emitted: string[] = [];
+        const user = userEvent.setup();
+
+        render(<FilterHost emitted={emitted} />, { wrapper: Wrapper });
+
+        const input = screen.getByPlaceholderText('Filter...');
+
+        for (const round of ['one', 'two', 'three']) {
+            await user.type(input, round);
+            await waitFor(() => expect(emitted.at(-1)).toBe(round));
+
+            const inputGroup = input.closest('[data-slot="input-group"]');
+            const clearButton = within(inputGroup as HTMLElement).getByRole('button');
+            await user.click(clearButton);
+            await waitFor(() => expect((input as HTMLInputElement).value).toBe(''));
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 400));
+
+        // Final state: input empty, last emit is the clear from round three.
+        expect((input as HTMLInputElement).value).toBe('');
+        expect(emitted.at(-1)).toBe('');
+        // Every round's value made it through cleanly.
+        expect(emitted).toContain('one');
+        expect(emitted).toContain('two');
+        expect(emitted).toContain('three');
+    });
 });
 
 describe('DataTable — uncontrolled filter is still routed through the same input', () => {

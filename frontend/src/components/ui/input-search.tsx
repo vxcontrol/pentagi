@@ -1,11 +1,11 @@
 import { Search } from 'lucide-react';
 import { motion } from 'motion/react';
 import { type ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useDebouncedCallback } from 'use-debounce';
 
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group';
 import { Kbd, KbdGroup } from '@/components/ui/kbd';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { useDebouncedCallback } from '@/hooks/use-debounced-callback';
 import { cn } from '@/lib/utils';
 import { isMac } from '@/lib/utils/platform';
 
