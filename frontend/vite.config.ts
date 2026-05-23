@@ -117,14 +117,6 @@ export default defineConfig(({ mode }) => {
             alias: {
                 '@': path.resolve(__dirname, './src'),
             },
-            // pnpm hoists each package into its own `.pnpm/<name>@<version>/`
-            // folder, which means transitive deps that import `react` resolve
-            // it through their own private path. Without dedupe, two physical
-            // copies of React end up in the bundle and any hook called from
-            // inside the second copy throws "Cannot read properties of null
-            // (reading 'useRef')" — that's what bit us when `use-debounce`
-            // was added.
-            dedupe: ['react', 'react-dom'],
         },
         server: serverConfig,
     };
