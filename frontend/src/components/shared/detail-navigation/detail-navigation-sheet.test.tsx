@@ -279,11 +279,12 @@ describe('DetailNavigationSheet — search input', () => {
     });
 
     it('typing narrows the listbox immediately when searchDebounceMs=0', async () => {
-        const user = userEvent.setup();
         renderSheet({ currentId: 'a' });
 
         const input = await screen.findByRole('textbox');
-        await user.type(input, 'cha');
+        // `fireEvent.change` — `user.type` races with the Radix focus trap (see
+        // the URL-filter AND test below for the same sidestep).
+        fireEvent.change(input, { target: { value: 'cha' } });
 
         const listbox = await screen.findByRole('listbox');
 
