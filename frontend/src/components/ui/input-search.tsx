@@ -1,4 +1,4 @@
-import { Search } from 'lucide-react';
+import { Search, X } from 'lucide-react';
 import { motion } from 'motion/react';
 import { type ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useDebouncedCallback } from 'use-debounce';
@@ -40,7 +40,20 @@ interface InputSearchProps {
  * Collapsible search input. Idle state shows only a `<Search>` icon button;
  * clicking it (or pressing the configured hotkey) expands a controlled text
  * input with a smooth width animation. Blurring an empty input collapses it
- * back. Escape clears the value, a second Escape collapses + blurs.
+ * back.
+ *
+ * Clearing the value has two equivalent entry points:
+ * - A trailing `<X>` button rendered only while the field has content
+ *   (mirrors `DataTableFilter` so every search field across the app shares
+ *   the same shape).
+ * - First `Escape` press — same effect, useful when the user's hand is on
+ *   the keyboard. A second `Escape` on an already-empty field collapses
+ *   and blurs.
+ *
+ * Both paths route through `handleClear`, which cancels any pending
+ * debounce, emits `''` upstream, and keeps focus on the input — so the
+ * field stays open and ready for fresh typing rather than collapsing out
+ * from under the user.
  *
  * The trigger is a real `<button>` (via `InputGroupButton`) — never a `<div>`
  * with `onClick` — so the control is reachable with Tab and announced by
@@ -199,9 +212,27 @@ export function InputSearch({
         [debouncedEmit],
     );
 
-    // Escape: first press clears the value, second press collapses + blurs.
-    // The clear path cancels any pending debounce synchronously, then emits
-    // `''` directly — no chance for an in-flight typed value to land after.
+    // Shared clear path used by both the trailing `<X>` button and the first
+    // `Escape` press. Focus stays on the input so the programmatic-clear
+    // collapse effect (the one keyed on `searchQuery`) doesn't fire — the
+    // user just emptied the value and is presumably about to type again,
+    // not exit the search.
+    const handleClear = useCallback(() => {
+        setLocalValue('');
+        debouncedEmit.cancel();
+
+        if (lastEmittedReference.current !== '') {
+            lastEmittedReference.current = '';
+            onSearchChange('');
+        }
+
+        inputRef.current?.focus();
+    }, [debouncedEmit, onSearchChange]);
+
+    // Escape: first press clears the value (via `handleClear`), second press
+    // collapses + blurs. The clear path cancels any pending debounce
+    // synchronously, then emits `''` directly — no chance for an in-flight
+    // typed value to land after.
     const handleInputKeyDown = useCallback(
         (event: React.KeyboardEvent<HTMLInputElement>) => {
             if (event.key !== 'Escape') {
@@ -211,13 +242,7 @@ export function InputSearch({
             event.preventDefault();
 
             if (localValue.length > 0) {
-                setLocalValue('');
-                debouncedEmit.cancel();
-
-                if (lastEmittedReference.current !== '') {
-                    lastEmittedReference.current = '';
-                    onSearchChange('');
-                }
+                handleClear();
 
                 return;
             }
@@ -225,7 +250,7 @@ export function InputSearch({
             inputRef.current?.blur();
             setIsExpanded(false);
         },
-        [debouncedEmit, localValue, onSearchChange],
+        [handleClear, localValue],
     );
 
     return (
@@ -299,6 +324,17 @@ export function InputSearch({
                     value={localValue}
                 />
             </motion.div>
+            {isExpanded && localValue ? (
+                <InputGroupAddon align="inline-end">
+                    <InputGroupButton
+                        aria-label={`Clear ${ariaLabel.toLowerCase()}`}
+                        onClick={handleClear}
+                        type="button"
+                    >
+                        <X />
+                    </InputGroupButton>
+                </InputGroupAddon>
+            ) : null}
         </InputGroup>
     );
 }

@@ -137,6 +137,70 @@ describe('InputSearch — typing and outbound emit', () => {
     });
 });
 
+describe('InputSearch — trailing clear button', () => {
+    const queryClearButton = () => screen.queryByRole('button', { name: 'Clear search docs' });
+
+    it('does not render the clear button when the field is empty', () => {
+        render(<SearchHost emitted={[]} initialQuery="" />, { wrapper: Wrapper });
+        expect(queryClearButton()).not.toBeInTheDocument();
+    });
+
+    it('renders the clear button on mount when deep-linked with a non-empty query', () => {
+        render(<SearchHost emitted={[]} initialQuery="jwt" />, { wrapper: Wrapper });
+        expect(queryClearButton()).toBeInTheDocument();
+    });
+
+    it('shows the clear button after typing, hides it once the field is empty again', async () => {
+        const emitted: string[] = [];
+        const user = userEvent.setup();
+        render(<SearchHost emitted={emitted} initialQuery="" />, { wrapper: Wrapper });
+
+        await user.click(queryTrigger()!);
+        expect(queryClearButton()).not.toBeInTheDocument();
+
+        await user.type(getInput(), 'foo');
+        expect(queryClearButton()).toBeInTheDocument();
+
+        await user.clear(getInput());
+        expect(queryClearButton()).not.toBeInTheDocument();
+    });
+
+    it('clears the value, emits "" upstream, and keeps focus on the input', async () => {
+        const emitted: string[] = [];
+        const user = userEvent.setup();
+        render(<SearchHost emitted={emitted} initialQuery="jwt" />, { wrapper: Wrapper });
+
+        const input = getInput();
+        await user.click(queryClearButton()!);
+        await sleep(PAST_DEBOUNCE_MS);
+
+        expect(input.value).toBe('');
+        expect(emitted.at(-1)).toBe('');
+        // Focus returned to the input — the programmatic-clear collapse
+        // effect should NOT fire, so the trigger button stays absent.
+        expect(document.activeElement).toBe(input);
+        expect(queryTrigger()).not.toBeInTheDocument();
+    });
+
+    it('drops a pending debounce when clicked mid-typing', async () => {
+        const emitted: string[] = [];
+        const user = userEvent.setup();
+        render(<SearchHost emitted={emitted} />, { wrapper: Wrapper });
+
+        await user.click(queryTrigger()!);
+        await user.type(getInput(), 'ab');
+        // Clear button appears as soon as a character is typed.
+        const clearBtn = queryClearButton();
+        expect(clearBtn).toBeInTheDocument();
+
+        await user.click(clearBtn!);
+        await sleep(PAST_DEBOUNCE_MS);
+
+        expect(emitted.some((value) => value.length > 0)).toBe(false);
+        expect(getInput().value).toBe('');
+    });
+});
+
 describe('InputSearch — Escape semantics', () => {
     it('first Esc clears a non-empty query but keeps the input expanded', async () => {
         const emitted: string[] = [];
