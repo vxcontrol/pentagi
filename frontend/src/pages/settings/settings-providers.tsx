@@ -1,4 +1,4 @@
-import type { ColumnDef } from '@tanstack/react-table';
+import type { ColumnDef, Row } from '@tanstack/react-table';
 
 import { AlertCircle, ChevronDown, Copy, Ellipsis, Loader2, Pencil, Plus, Settings, Trash } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
@@ -35,7 +35,7 @@ import { useTableState } from '@/hooks/use-table-state';
 import { formatDate } from '@/lib/utils/format';
 type Provider = ProviderConfigFragmentFragment;
 
-const providerIcons: Record<ProviderType, React.ComponentType<any>> = {
+const providerIcons: Record<ProviderType, React.ComponentType<React.SVGProps<SVGSVGElement>>> = {
     [ProviderType.Anthropic]: Anthropic,
     [ProviderType.Bedrock]: Bedrock,
     [ProviderType.Custom]: Custom,
@@ -259,8 +259,8 @@ function SettingsProviders() {
         [handleProviderClone, handleProviderDeleteDialogOpen, handleProviderEdit, isDeleteLoading, deletingProvider],
     );
 
-    const renderSubComponent = ({ row }: { row: any }) => {
-        const provider = row.original as Provider;
+    const renderSubComponent = ({ row }: { row: Row<Provider> }) => {
+        const provider = row.original;
         const { agents } = provider;
 
         if (!agents) {
@@ -270,12 +270,12 @@ function SettingsProviders() {
         const getName = (key: string): string =>
             key.replaceAll(/([A-Z])/g, ' $1').replace(/^./, (item) => item.toUpperCase());
 
-        const getFields = (obj: any, prefix = ''): { label: string; value: boolean | number | string }[] => {
+        const getFields = (obj: unknown, prefix = ''): { label: string; value: boolean | number | string }[] => {
             if (!obj || typeof obj !== 'object') {
                 return [];
             }
 
-            return Object.entries(obj)
+            return Object.entries(obj as Record<string, unknown>)
                 .filter(([key, value]) => key !== '__typename' && !!value)
                 .flatMap(([key, value]) => {
                     const label = `${prefix ? `${prefix} ` : ''}${getName(key)}`;

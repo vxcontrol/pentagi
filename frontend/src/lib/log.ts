@@ -7,7 +7,7 @@ export const Level = {
 
 export type Level = (typeof Level)[keyof typeof Level];
 
-const dump = (prefix: string, obj: any) => {
+const dump = (prefix: string, obj: unknown) => {
     if (console) {
         console.log(prefix, obj);
     }
@@ -20,23 +20,23 @@ const valid = (checkLevel: Level) => {
 };
 
 export const Log = {
-    debug(msg: any) {
+    debug(msg: unknown) {
         if (valid(Level.DEBUG)) {
             dump('[DEBUG] ', msg);
         }
     },
-    error(msg: any, err?: unknown) {
+    error(msg: unknown, err?: unknown) {
         if (valid(Level.ERROR)) {
             dump('[ERROR] ', msg);
             console.error(err);
         }
     },
-    info(msg: any) {
+    info(msg: unknown) {
         if (valid(Level.INFO)) {
             dump('[INFO] ', msg);
         }
     },
-    warn(msg: any) {
+    warn(msg: unknown) {
         if (valid(Level.WARN)) {
             dump('[WARN] ', msg);
         }

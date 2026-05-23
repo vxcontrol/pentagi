@@ -14,11 +14,11 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ReactDiffViewer from 'react-diff-viewer-continued';
-import { useController, useForm, useFormState } from 'react-hook-form';
+import { type Control, type ControllerRenderProps, type FieldValues, useController, useForm, useFormState } from 'react-hook-form';
 import { useNavigate, useParams } from 'react-router-dom';
 import { z } from 'zod';
 
-import type { AgentPrompt, AgentPrompts, DefaultPrompt, PromptType } from '@/graphql/types';
+import type { AgentPrompt, AgentPrompts, DefaultPrompt, PromptType, ValidatePromptMutation } from '@/graphql/types';
 
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -56,7 +56,7 @@ interface BaseTextareaProps {
 }
 
 interface ControllerProps {
-    control: any;
+    control: Control<FieldValues>;
     disabled?: boolean;
     name: string;
 }
@@ -133,7 +133,7 @@ function SettingsPrompt() {
     const [submitError, setSubmitError] = useState<null | string>(null);
     const [activeTab, setActiveTab] = useState<'human' | 'system'>('system');
     const [resetDialogOpen, setResetDialogOpen] = useState(false);
-    const [validationResult, setValidationResult] = useState<any>(null);
+    const [validationResult, setValidationResult] = useState<null | ValidatePromptMutation['validatePrompt']>(null);
     const [validationDialogOpen, setValidationDialogOpen] = useState(false);
     const [isDiffDialogOpen, setIsDiffDialogOpen] = useState(false);
     const [isLeaveDialogOpen, setIsLeaveDialogOpen] = useState(false);
@@ -143,7 +143,7 @@ function SettingsPrompt() {
 
     const isLoading = isCreateLoading || isUpdateLoading || isDeleteLoading || isValidateLoading;
 
-    const handleVariableClick = (variable: string, field: any, formId: string) => {
+    const handleVariableClick = (variable: string, field: ControllerRenderProps<FieldValues, string>, formId: string) => {
         const textarea = document.querySelector(`#${formId} textarea`) as HTMLTextAreaElement;
 
         if (textarea) {
@@ -421,7 +421,7 @@ function SettingsPrompt() {
         window.addEventListener('popstate', handlePopState, { capture: true });
 
         return () => {
-            window.removeEventListener('popstate', handlePopState, { capture: true } as any);
+            window.removeEventListener('popstate', handlePopState, { capture: true });
         };
     }, [isDirty]);
 

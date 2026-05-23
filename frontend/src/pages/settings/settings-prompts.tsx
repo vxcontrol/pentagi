@@ -1,4 +1,4 @@
-import type { ColumnDef } from '@tanstack/react-table';
+import type { ColumnDef, Row } from '@tanstack/react-table';
 
 import {
     AlertCircle,
@@ -593,8 +593,8 @@ function SettingsPrompts() {
         },
     ];
 
-    const renderAgentSubComponent = ({ row }: { row: any }) => {
-        const agent = row.original as AgentPromptTableData;
+    const renderAgentSubComponent = ({ row }: { row: Row<AgentPromptTableData> }) => {
+        const agent = row.original;
 
         const userSystemPrompt = data?.settingsPrompts?.userDefined?.find((p) => p.type === agent.systemType);
         const userHumanPrompt = data?.settingsPrompts?.userDefined?.find((p) => p.type === agent.humanType);
@@ -652,8 +652,8 @@ function SettingsPrompts() {
         );
     };
 
-    const renderToolSubComponent = ({ row }: { row: any }) => {
-        const tool = row.original as ToolPromptTableData;
+    const renderToolSubComponent = ({ row }: { row: Row<ToolPromptTableData> }) => {
+        const tool = row.original;
 
         const userToolPrompt = data?.settingsPrompts?.userDefined?.find((p) => p.type === tool.promptType);
 
