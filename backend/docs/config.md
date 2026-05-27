@@ -610,7 +610,7 @@ These settings control the integration with various Large Language Model (LLM) p
 | DeepSeekServerURL | `DEEPSEEK_SERVER_URL` | `https://api.deepseek.com` | DeepSeek API endpoint URL                                |
 | DeepSeekProvider  | `DEEPSEEK_PROVIDER`   | *(none)*                   | Provider name prefix for LiteLLM integration (optional)  |
 
-**LiteLLM Integration**: Set `DEEPSEEK_PROVIDER=deepseek` to enable model prefixing (e.g., `deepseek/deepseek-chat`) when using LiteLLM proxy with default PentAGI configs.
+**LiteLLM Integration**: Set `DEEPSEEK_PROVIDER=deepseek` to enable model prefixing (e.g., `deepseek/deepseek-v4-flash`) when using LiteLLM proxy with default PentAGI configs.
 
 ### GLM LLM Provider
 

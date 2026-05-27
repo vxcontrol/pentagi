@@ -1,127 +1,142 @@
 simple:
-  model: deepseek-chat
+  model: deepseek-v4-flash
   temperature: 0.5
   top_p: 0.5
   n: 1
   max_tokens: 8192
+  extra_body:
+    thinking:
+      type: disabled
   price:
-    input: 0.28
-    output: 0.42
-    cache_read: 0.028
+    input: 0.14
+    output: 0.28
+    cache_read: 0.0028
 
 simple_json:
-  model: deepseek-chat
+  model: deepseek-v4-flash
   temperature: 0.5
   top_p: 0.5
   n: 1
   max_tokens: 4096
   json: true
+  extra_body:
+    thinking:
+      type: disabled
   price:
-    input: 0.28
-    output: 0.42
-    cache_read: 0.028
+    input: 0.14
+    output: 0.28
+    cache_read: 0.0028
 
 primary_agent:
-  model: deepseek-reasoner
+  model: deepseek-v4-pro
   n: 1
   max_tokens: 16384
   price:
-    input: 0.28
-    output: 0.42
-    cache_read: 0.028
+    input: 0.435
+    output: 0.87
+    cache_read: 0.003625
 
 assistant:
-  model: deepseek-reasoner
+  model: deepseek-v4-pro
   n: 1
   max_tokens: 16384
   price:
-    input: 0.28
-    output: 0.42
-    cache_read: 0.028
+    input: 0.435
+    output: 0.87
+    cache_read: 0.003625
 
 generator:
-  model: deepseek-reasoner
+  model: deepseek-v4-pro
   n: 1
   max_tokens: 32768
   price:
-    input: 0.28
-    output: 0.42
-    cache_read: 0.028
+    input: 0.435
+    output: 0.87
+    cache_read: 0.003625
 
 refiner:
-  model: deepseek-reasoner
+  model: deepseek-v4-pro
   n: 1
   max_tokens: 20480
   price:
-    input: 0.28
-    output: 0.42
-    cache_read: 0.028
+    input: 0.435
+    output: 0.87
+    cache_read: 0.003625
 
 adviser:
-  model: deepseek-chat
+  model: deepseek-v4-flash
   temperature: 0.7
   top_p: 0.8
   n: 1
   max_tokens: 8192
+  extra_body:
+    thinking:
+      type: disabled
   price:
-    input: 0.28
-    output: 0.42
-    cache_read: 0.028
+    input: 0.14
+    output: 0.28
+    cache_read: 0.0028
 
 reflector:
-  model: deepseek-reasoner
+  model: deepseek-v4-pro
   n: 1
   max_tokens: 4096
   price:
-    input: 0.28
-    output: 0.42
-    cache_read: 0.028
+    input: 0.435
+    output: 0.87
+    cache_read: 0.003625
 
 searcher:
-  model: deepseek-chat
+  model: deepseek-v4-flash
   temperature: 0.7
   top_p: 0.8
   n: 1
   max_tokens: 4096
+  extra_body:
+    thinking:
+      type: disabled
   price:
-    input: 0.28
-    output: 0.42
-    cache_read: 0.028
+    input: 0.14
+    output: 0.28
+    cache_read: 0.0028
 
 enricher:
-  model: deepseek-chat
+  model: deepseek-v4-flash
   temperature: 0.7
   top_p: 0.8
   n: 1
   max_tokens: 4096
+  extra_body:
+    thinking:
+      type: disabled
   price:
-    input: 0.28
-    output: 0.42
-    cache_read: 0.028
+    input: 0.14
+    output: 0.28
+    cache_read: 0.0028
 
 coder:
-  model: deepseek-reasoner
+  model: deepseek-v4-pro
   n: 1
   max_tokens: 20480
   price:
-    input: 0.28
-    output: 0.42
-    cache_read: 0.028
+    input: 0.435
+    output: 0.87
+    cache_read: 0.003625
 
 installer:
-  model: deepseek-reasoner
+  model: deepseek-v4-pro
   n: 1
   max_tokens: 16384
   price:
-    input: 0.28
-    output: 0.42
-    cache_read: 0.028
+    input: 0.435
+    output: 0.87
+    cache_read: 0.003625
 
 pentester:
-  model: deepseek-reasoner
+  model: deepseek-v4-pro
   n: 1
   max_tokens: 16384
   price:
-    input: 0.28
-    output: 0.42
-    cache_read: 0.028
+    input: 0.435
+    output: 0.87
+    cache_read: 0.003625
