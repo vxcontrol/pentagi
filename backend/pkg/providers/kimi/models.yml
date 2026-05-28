@@ -1,86 +1,60 @@
-# Kimi K2.5 series - Most versatile multimodal model
+# Kimi K2.6 - Latest flagship multimodal model with native architecture
+- name: kimi-k2.6
+  description: Kimi K2.6 - Latest and most intelligent multimodal model with native architecture, stronger long-term code writing, improved instruction compliance and self-correction. Supports text/image/video input, thinking/non-thinking modes, 256k context, automatic context caching, ToolCalls, JSON Mode, internet search
+  thinking: true
+  price:
+    input: 0.95
+    output: 4.00
+    cache_read: 0.16
+
+# Kimi K2.5 - Previous-gen multimodal model (cost-optimized alternative to K2.6)
 - name: kimi-k2.5
-  description: Kimi K2.5 - Most intelligent and versatile model with native multimodal architecture supporting visual/text input, thinking/non-thinking modes, 256k context, cache support
+  description: Kimi K2.5 - Multimodal model supporting text/image/video input, thinking/non-thinking modes, 256k context, automatic context caching, ToolCalls, JSON Mode, Partial Mode, internet search. 36% cheaper input than K2.6
   thinking: true
   price:
     input: 0.60
     output: 3.00
+    cache_read: 0.10
 
-# Kimi K2 series - MoE foundation models with 1T total params, 32B activated
-- name: kimi-k2-0905-preview
-  description: Kimi K2-0905 - Enhanced agentic coding, improved frontend code quality and context understanding, 256k context
-  thinking: false
-  price:
-    input: 0.60
-    output: 2.50
-
-- name: kimi-k2-0711-preview
-  description: Kimi K2-0711 - MoE base model with powerful code and agent capabilities, 128k context
-  thinking: false
-  price:
-    input: 0.60
-    output: 2.50
-
-- name: kimi-k2-turbo-preview
-  description: Kimi K2 Turbo - High-speed version of K2-0905, 60-100 tokens/sec output speed, 256k context
-  thinking: false
-  price:
-    input: 1.15
-    output: 8.00
-
-- name: kimi-k2-thinking
-  description: Kimi K2 Thinking - Long-term thinking model with multi-step tool usage and deep reasoning, 256k context
-  thinking: true
-  price:
-    input: 0.60
-    output: 2.50
-
-- name: kimi-k2-thinking-turbo
-  description: Kimi K2 Thinking Turbo - High-speed thinking model, 60-100 tokens/sec, excels at deep reasoning, 256k context
-  thinking: true
-  price:
-    input: 1.15
-    output: 8.00
-
-# Moonshot V1 series - General text generation models
+# Moonshot V1 - Generation models with flexible parameters (no thinking, free temp/top_p)
 - name: moonshot-v1-8k
-  description: Moonshot V1-8K - Suitable for generating short texts, 8k context
+  description: Moonshot V1-8K - Short text generation, 8k context window (input+output combined). Flexible OpenAI-standard parameters
   thinking: false
   price:
     input: 0.20
     output: 2.00
 
 - name: moonshot-v1-32k
-  description: Moonshot V1-32K - Suitable for generating long texts, 32k context
+  description: Moonshot V1-32K - Long text generation, 32k context window. Flexible OpenAI-standard parameters
   thinking: false
   price:
     input: 1.00
     output: 3.00
 
 - name: moonshot-v1-128k
-  description: Moonshot V1-128K - Suitable for generating very long texts, 128k context
+  description: Moonshot V1-128K - Very long text generation, 128k context window. Flexible OpenAI-standard parameters
   thinking: false
   price:
     input: 2.00
     output: 5.00
 
-# Moonshot V1 Vision series - Multimodal models with image understanding
+# Moonshot V1 Vision - Multimodal generation models with image understanding
 - name: moonshot-v1-8k-vision-preview
-  description: Moonshot V1-8K Vision - Vision model that understands image content and outputs text, 8k context
+  description: Moonshot V1-8K Vision - Image understanding with text output, 8k context window
   thinking: false
   price:
     input: 0.20
     output: 2.00
 
 - name: moonshot-v1-32k-vision-preview
-  description: Moonshot V1-32K Vision - Vision model that understands image content and outputs text, 32k context
+  description: Moonshot V1-32K Vision - Image understanding with text output, 32k context window
   thinking: false
   price:
     input: 1.00
     output: 3.00
 
 - name: moonshot-v1-128k-vision-preview
-  description: Moonshot V1-128K Vision - Vision model that understands image content and outputs text, 128k context
+  description: Moonshot V1-128K Vision - Image understanding with text output, 128k context window
   thinking: false
   price:
     input: 2.00

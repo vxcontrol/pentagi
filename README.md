@@ -1772,62 +1772,57 @@ PROXY_URL=http://your-proxy:8080
 
 #### Supported Models
 
-PentAGI supports 13 Gemini models with tool calling, streaming, thinking modes, and context caching. Models marked with `*` are used in default configuration.
+PentAGI supports 9 Gemini models with tool calling, streaming, thinking modes, and context caching. Models marked with `*` are used in default configuration.
 
-**Gemini 3.1 Series - Latest Flagship (February 2026)**
+**Gemini 3.5 Series - Latest Stable Flash (May 2026)**
+
+| Model ID                              | Thinking | Context | Price (Input/Output/Cache) | Use Case                                        |
+| ------------------------------------- | -------- | ------- | -------------------------- | ----------------------------------------------- |
+| `gemini-3.5-flash`*                   | ✅        | 1M      | $1.50/$9.00/$0.15          | Most intelligent Flash model with sustained frontier performance on agentic and coding tasks, superior search and grounding |
+
+**Gemini 3.1 Series - Stable Flash-Lite + Pro Preview (Feb-May 2026)**
 
 | Model ID                              | Thinking | Context | Price (Input/Output/Cache) | Use Case                                        |
 | ------------------------------------- | -------- | ------- | -------------------------- | ----------------------------------------------- |
 | `gemini-3.1-pro-preview`*             | ✅        | 1M      | $2.00/$12.00/$0.20         | Latest flagship with refined thinking, improved token efficiency, optimized for software engineering and agentic workflows |
 | `gemini-3.1-pro-preview-customtools`  | ✅        | 1M      | $2.00/$12.00/$0.20         | Custom tools endpoint optimized for bash and custom tools (view_file, search_code) prioritization |
-| `gemini-3.1-flash-lite-preview`*      | ✅        | 1M      | $0.25/$1.50/$0.03          | Most cost-efficient with fastest performance for high-volume agentic tasks and low-latency applications |
+| `gemini-3.1-flash-lite`*              | ✅        | 1M      | $0.25/$1.50/$0.025         | Most cost-efficient stable multimodal model, frontier-class performance for high-volume agentic tasks and low-latency applications |
 
-**Gemini 3 Series (⚠️ gemini-3-pro-preview DEPRECATED - Shutdown March 9, 2026)**
-
-| Model ID                              | Thinking | Context | Price (Input/Output/Cache) | Use Case                                        |
-| ------------------------------------- | -------- | ------- | -------------------------- | ----------------------------------------------- |
-| `gemini-3-pro-preview`                | ✅        | 1M      | $2.00/$12.00/$0.20         | ⚠️ DEPRECATED - Migrate to gemini-3.1-pro-preview before March 9, 2026 |
-| `gemini-3-flash-preview`*             | ✅        | 1M      | $0.50/$3.00/$0.05          | Frontier intelligence with superior search grounding, high-throughput security scanning |
-
-**Gemini 2.5 Series - Advanced Thinking Models**
+**Gemini 2.5 Series - Advanced Thinking Models (active until October 16, 2026)**
 
 | Model ID                                 | Thinking | Context | Price (Input/Output/Cache) | Use Case                                        |
 | ---------------------------------------- | -------- | ------- | -------------------------- | ----------------------------------------------- |
-| `gemini-2.5-pro`                         | ✅        | 1M      | $1.25/$10.00/$0.13         | State-of-the-art for complex coding and reasoning, sophisticated threat modeling |
+| `gemini-2.5-pro`                         | ✅        | 1M      | $1.25/$10.00/$0.125        | State-of-the-art for complex coding and reasoning, sophisticated threat modeling |
 | `gemini-2.5-flash`                       | ✅        | 1M      | $0.30/$2.50/$0.03          | First hybrid reasoning model with thinking budgets, best price-performance for large-scale assessments |
 | `gemini-2.5-flash-lite`                  | ✅        | 1M      | $0.10/$0.40/$0.01          | Smallest and most cost-effective for at-scale usage, high-throughput scanning |
-| `gemini-2.5-flash-lite-preview-09-2025`  | ✅        | 1M      | $0.10/$0.40/$0.01          | Latest preview optimized for cost-efficiency, high throughput, and quality |
 
-**Gemini 2.0 Series - Balanced Multimodal for Agents**
-
-| Model ID                              | Thinking | Context | Price (Input/Output/Cache) | Use Case                                        |
-| ------------------------------------- | -------- | ------- | -------------------------- | ----------------------------------------------- |
-| `gemini-2.0-flash`                    | ❌        | 1M      | $0.10/$0.40/$0.03          | Balanced multimodal built for agents era, diverse security tasks and real-time monitoring |
-| `gemini-2.0-flash-lite`               | ❌        | 1M      | $0.08/$0.30/$0.00          | Lightweight for continuous monitoring, basic scanning, automated alert processing |
-
-**Specialized Open-Source Models (Free)**
+**Gemma 4 Open-Source Models (Apache 2.0, Free Tier)**
 
 | Model ID                              | Thinking | Context | Price (Input/Output/Cache) | Use Case                                        |
 | ------------------------------------- | -------- | ------- | -------------------------- | ----------------------------------------------- |
-| `gemma-3-27b-it`                      | ❌        | 128K    | Free/Free/Free             | Open-source from Gemini tech, on-premises security operations, privacy-sensitive testing |
-| `gemma-3n-4b-it`                      | ❌        | 128K    | Free/Free/Free             | Efficient for edge devices (mobile/laptops/tablets), offline vulnerability scanning |
+| `gemma-4-31b-it`                      | ✅        | 256K    | Free/Free/Free             | Largest open-source Gemma 4 dense model (~31B params), multimodal text+image, 140+ languages, on-premises security operations |
+| `gemma-4-26b-a4b-it`                  | ✅        | 256K    | Free/Free/Free             | MoE architecture (~26B total / ~3.8B active params), highly efficient inference on consumer GPUs for on-premises high-throughput scanning |
 
 **Prices**: Per 1M tokens (Standard Paid tier). Context window is input token limit.
 
-> [!WARNING]
-> **Gemini 3 Pro Preview Deprecation**
+> [!NOTE]
+> **Gemini 2.5 Series Shutdown**
 >
-> `gemini-3-pro-preview` will be **shut down on March 9, 2026**. Migrate to `gemini-3.1-pro-preview` to avoid service disruption. The new model offers:
+> `gemini-2.5-pro`, `gemini-2.5-flash`, and `gemini-2.5-flash-lite` will be **shut down on October 16, 2026**. Recommended migrations:
 >
-> - Refined performance and reliability
-> - Improved thinking and token efficiency
-> - Better grounded, factually consistent responses
-> - Enhanced software engineering behavior
+> - `gemini-2.5-pro` → `gemini-3.1-pro-preview` (same $2.00 input pricing tier)
+> - `gemini-2.5-flash` → `gemini-3.5-flash` (improved frontier capabilities)
+> - `gemini-2.5-flash-lite` → `gemini-3.1-flash-lite` (same $0.25 input pricing)
+
+**Default Model Assignments (config.yml)**:
+- **`gemini-3.1-pro-preview`** - `primary_agent`, `assistant`, `generator`, `refiner`, `adviser`, `coder`, `pentester`
+- **`gemini-3.5-flash`** - `reflector`, `searcher`, `enricher`, `installer`
+- **`gemini-3.1-flash-lite`** - `simple`, `simple_json`
 
 **Key Features**:
-- **Extended Thinking**: Step-by-step reasoning for complex security analysis (all Gemini 3.x and 2.5 series)
-- **Context Caching**: Significant cost reduction on repeated context (10-90% of input price)
-- **Ultra-Long Context**: 1M tokens for comprehensive codebase analysis and documentation review
+- **Extended Thinking**: Step-by-step reasoning for complex security analysis (all Gemini 3.x, 2.5 series, and Gemma 4 with toggleable thinking)
+- **Context Caching**: Significant cost reduction on repeated context (10% of input price for most models)
+- **Ultra-Long Context**: 1M tokens for Gemini chat models, 256K tokens for Gemma 4 open-source models
 - **Multimodal Support**: Text, image, video, audio, and PDF processing for comprehensive assessments
 - **Tool Calling**: Seamless integration with 20+ pentesting tools via function calling
 - **Streaming**: Real-time response streaming for interactive security workflows
@@ -1835,6 +1830,7 @@ PentAGI supports 13 Gemini models with tool calling, streaming, thinking modes, 
 - **Search Grounding**: Google Search integration for threat intelligence and CVE research
 - **File Search**: Document retrieval and RAG capabilities for knowledge-based assessments
 - **Batch API**: 50% cost reduction for non-real-time batch processing
+- **Custom Tools Endpoint**: Dedicated `gemini-3.1-pro-preview-customtools` route for tool-heavy agentic workflows that prefer registered tools over bash
 
 **Reasoning Effort Levels**:
 - **High**: Maximum thinking depth for complex multi-step analysis (generator)
@@ -1983,28 +1979,51 @@ DEEPSEEK_PROVIDER=deepseek  # Adds prefix to model names (deepseek/deepseek-v4-f
 
 #### Supported Models
 
-PentAGI supports 2 DeepSeek V4 models with tool calling, streaming, thinking modes, and context caching. Models marked with `*` are used in default configuration.
+PentAGI supports 2 DeepSeek V4 models with tool calling, streaming, hybrid thinking/non-thinking modes, and context caching. Both models support thinking mode by default and can be switched to non-thinking mode via `extra_body`. Models marked with `*` are used in default configuration.
 
-| Model ID              | Thinking | Context | Price (Input/Output/Cache) | Use Case                                             |
-| --------------------- | -------- | ------- | -------------------------- | ---------------------------------------------------- |
-| `deepseek-v4-flash`*  | ❌        | 1M      | $0.14/$0.28/$0.0028        | General dialogue, code generation, tool calling      |
-| `deepseek-v4-pro`*    | ✅        | 1M      | $0.435/$0.87/$0.003625     | Advanced reasoning, complex logic, security analysis |
+| Model ID              | Thinking | Max Output | Context | Price (Input/Output/Cache) | Use Case                                             |
+| --------------------- | -------- | ---------- | ------- | -------------------------- | ---------------------------------------------------- |
+| `deepseek-v4-flash`*  | ✅ hybrid | 384K       | 1M      | $0.14/$0.28/$0.0028        | Utility agents, general dialogue, fast tool calling  |
+| `deepseek-v4-pro`*    | ✅ hybrid | 384K       | 1M      | $1.74/$3.48/$0.0145        | Advanced reasoning, complex logic, security analysis |
 
-**Prices**: Per 1M tokens. Cache pricing applies to prompt tokens served from cache and is heavily discounted versus input price. Models with thinking support include reinforcement learning chain-of-thought reasoning.
+**Prices**: Per 1M tokens. Cache pricing applies to prompt tokens served from cache (input cache hit, reduced to 1/10 of launch price since 2026-04-26). Both models support hybrid thinking — `thinking` mode is enabled by default; pass `extra_body.thinking.type: disabled` to switch to non-thinking mode for faster/cheaper responses.
+
+> **Pricing Note (deepseek-v4-pro)**: The 75% promotional discount on `deepseek-v4-pro` officially ended on 2026-05-31 15:59 UTC. The prices above reflect the standard post-promotional pricing. If you have legacy configurations using the discounted prices ($0.435/$0.87/$0.003625), update them to the current rates for accurate cost tracking.
 
 > The legacy model names `deepseek-chat` and `deepseek-reasoner` are scheduled
 > for deprecation by DeepSeek on 2026-07-24. Existing user configurations
 > referencing the legacy names continue to work until then; the defaults above
-> use the current V4 names.
+> use the current V4 names. `deepseek-chat` maps to `deepseek-v4-flash`
+> non-thinking mode; `deepseek-reasoner` maps to `deepseek-v4-flash` thinking mode.
+
+**Default Agent Configuration**:
+
+Strategy: prefer `deepseek-v4-flash` (12x cheaper input, 12x cheaper output) as the workhorse for utility/lightweight agents; reserve `deepseek-v4-pro` for complex multi-step reasoning. The `installer` agent runs on Flash with thinking enabled because environment setup tasks (shell commands, config edits) rarely require pro-level reasoning. Run A/B tests on your own workloads before promoting more agents to Pro.
+
+| Agent Role                                  | Default Model        | Thinking | Reasoning Effort | Max Output | Temperature | Top P |
+| ------------------------------------------- | -------------------- | -------- | ---------------- | ---------- | ----------- | ----- |
+| Generator / Refiner                         | `deepseek-v4-pro`    | Enabled  | High             | 32768      | (auto)      | (auto) |
+| Coder                                       | `deepseek-v4-pro`    | Enabled  | High             | 20480      | (auto)      | (auto) |
+| Primary Agent / Assistant / Pentester       | `deepseek-v4-pro`    | Enabled  | High             | 16384      | (auto)      | (auto) |
+| Adviser (mentor/planner)                    | `deepseek-v4-pro`    | Enabled  | High             | 8192       | (auto)      | (auto) |
+| Installer                                   | `deepseek-v4-flash`  | Enabled  | High             | 12288      | (auto)      | (auto) |
+| Reflector / Searcher / Enricher             | `deepseek-v4-flash`  | Disabled | —                | 4096       | 0.5         | 0.9   |
+| Simple / Simple JSON                        | `deepseek-v4-flash`  | Disabled | —                | 2048       | 0.3         | 0.9   |
+
+> **Note**: When thinking mode is enabled, DeepSeek silently ignores `temperature`, `top_p`, `presence_penalty`, and `frequency_penalty`. The langchaingo client automatically nullifies `temperature`/`top_p` when `reasoning_effort` is set, so they appear as "(auto)" in the table above. All thinking-enabled agents also explicitly pass `extra_body.thinking.type: enabled` as defensive coding against future provider default changes.
 
 **Key Features**:
-- **Automatic Prompt Caching**: Significant cost reduction on repeated context via cache-hit pricing far below input price
-- **Extended Thinking**: Reinforcement learning CoT for complex security analysis (deepseek-v4-pro)
+- **Hybrid Thinking Modes**: Switch between thinking (deep reasoning) and non-thinking (fast) modes via `extra_body.thinking.type`
+- **Automatic Prompt Caching**: Significant cost reduction on repeated context via cache-hit pricing (1/10 of launch price)
+- **Extended Thinking**: Reinforcement learning CoT for complex security analysis (both V4 models)
 - **Strong Coding**: Optimized for code generation and exploit development
+- **Long Context**: 1M token context window with up to 384K output tokens
 - **Tool Calling**: Seamless integration with 20+ pentesting tools via function calling
 - **Streaming**: Real-time response streaming for interactive workflows
 - **Multilingual**: Strong Chinese and English support
-- **Additional Features**: JSON Output, Chat Prefix Completion, FIM (Fill-in-the-Middle) Completion
+- **Additional Features**: JSON Output, Chat Prefix Completion (beta), FIM/Fill-in-the-Middle Completion (non-thinking mode only)
+
+**Concurrency Limits**: `deepseek-v4-flash`: 2500 concurrent requests; `deepseek-v4-pro`: 500 concurrent requests.
 
 **LiteLLM Integration**: Set `DEEPSEEK_PROVIDER=deepseek` to enable model name prefixing when using default PentAGI configurations with LiteLLM proxy. Leave empty for direct API usage.
 
@@ -2039,70 +2058,78 @@ GLM_PROVIDER=zai  # Adds prefix to model names (zai/glm-4) for LiteLLM
 
 #### Supported Models
 
-PentAGI supports 12 GLM models with tool calling, streaming, thinking modes, and prompt caching. Models marked with `*` are used in default configuration.
+PentAGI supports 13 GLM models with tool calling, streaming, hybrid thinking modes, and prompt caching. Models marked with `*` are used in default configuration. Thinking is controlled via `extra_body.thinking.type` ("enabled"/"disabled"); unlike Kimi, GLM is permissive about temperature in either mode.
 
-**GLM-5 Series - Flagship MoE (744B/40B active)**
+**GLM-5.x Series - Latest Generation (200K context, 128K max output)**
 
-| Model ID                | Thinking      | Context | Max Output | Price (Input/Output/Cache) | Use Case                                        |
-| ----------------------- | ------------- | ------- | ---------- | -------------------------- | ----------------------------------------------- |
-| `glm-5`*                | ✅ Forced      | 200K    | 128K       | $1.00/$3.20/$0.20          | Flagship agentic engineering, complex multi-stage tasks |
-| `glm-5-code`†           | ✅ Forced      | 200K    | 128K       | $1.20/$5.00/$0.30          | Code-specialized, exploit development (requires Coding Plan) |
+| Model ID         | Thinking | Context | Max Output | Price (Input/Output/Cache) | Use Case                                                            |
+| ---------------- | -------- | ------- | ---------- | -------------------------- | ------------------------------------------------------------------- |
+| `glm-5.1`*       | ✅ Hybrid | 200K    | 128K       | $1.40/$4.40/$0.26          | Newest flagship: 8h sustained autonomous execution, Claude Opus 4.6-aligned (generator/refiner/adviser/coder/pentester default) |
+| `glm-5`          | ✅ Hybrid | 200K    | 128K       | $1.00/$3.20/$0.20          | Foundation for Agentic Engineering, MoE 744B/40B active, Claude Opus 4.5-level coding |
+| `glm-5-turbo`*   | ✅ Hybrid | 200K    | 128K       | $1.20/$4.00/$0.24          | OpenClaw-native: optimized for tool invocation, persistent tasks, long-chain execution (primary_agent/assistant default) |
 
 **GLM-4.7 Series - Premium with Interleaved Thinking**
 
-| Model ID                | Thinking      | Context | Max Output | Price (Input/Output/Cache) | Use Case                                        |
-| ----------------------- | ------------- | ------- | ---------- | -------------------------- | ----------------------------------------------- |
-| `glm-4.7`*              | ✅ Forced      | 200K    | 128K       | $0.60/$2.20/$0.11          | Premium with thinking before each response/tool call |
-| `glm-4.7-flashx`*       | ✅ Hybrid      | 200K    | 128K       | $0.07/$0.40/$0.01          | High-speed with priority GPU, best price/performance |
-| `glm-4.7-flash`         | ✅ Hybrid      | 200K    | 128K       | Free/Free/Free             | Free ~30B SOTA model, 1 concurrent request      |
+| Model ID          | Thinking | Context | Max Output | Price (Input/Output/Cache) | Use Case                                            |
+| ----------------- | -------- | ------- | ---------- | -------------------------- | --------------------------------------------------- |
+| `glm-4.7`         | ✅ Hybrid | 200K    | 128K       | $0.60/$2.20/$0.11          | Enhanced programming, stable multi-step reasoning   |
+| `glm-4.7-flashx`  | ✅ Hybrid | 200K    | 128K       | $0.07/$0.40/$0.01          | Ultra-cheap with priority GPU, but lower RPM limits (avoid for high-frequency use) |
+| `glm-4.7-flash`   | ✅ Hybrid | 200K    | 128K       | Free/Free/Free             | Free ~30B SOTA model, 1 concurrent request          |
 
 **GLM-4.6 Series - Balanced with Auto-Thinking**
 
-| Model ID                | Thinking      | Context | Max Output | Price (Input/Output/Cache) | Use Case                                        |
-| ----------------------- | ------------- | ------- | ---------- | -------------------------- | ----------------------------------------------- |
-| `glm-4.6`               | ✅ Auto        | 200K    | 128K       | $0.60/$2.20/$0.11          | Balanced, streaming tool calls, 30% token efficient |
+| Model ID  | Thinking | Context | Max Output | Price (Input/Output/Cache) | Use Case                                          |
+| --------- | -------- | ------- | ---------- | -------------------------- | ------------------------------------------------- |
+| `glm-4.6` | ✅ Auto   | 200K    | 128K       | $0.60/$2.20/$0.11          | Balanced, streaming tool calls, token-efficient   |
 
 **GLM-4.5 Series - Unified Reasoning/Coding/Agents**
 
-| Model ID                | Thinking      | Context | Max Output | Price (Input/Output/Cache) | Use Case                                        |
-| ----------------------- | ------------- | ------- | ---------- | -------------------------- | ----------------------------------------------- |
-| `glm-4.5`               | ✅ Auto        | 128K    | 96K        | $0.60/$2.20/$0.11          | Unified model, MoE 355B/32B active              |
-| `glm-4.5-x`             | ✅ Auto        | 128K    | 96K        | $2.20/$8.90/$0.45          | Ultra-fast premium, lowest latency              |
-| `glm-4.5-air`*          | ✅ Auto        | 128K    | 96K        | $0.20/$1.10/$0.03          | Cost-effective, MoE 106B/12B, best price/quality |
-| `glm-4.5-airx`          | ✅ Auto        | 128K    | 96K        | $1.10/$4.50/$0.22          | Accelerated Air with priority GPU               |
-| `glm-4.5-flash`         | ✅ Auto        | 128K    | 96K        | Free/Free/Free             | Free with reasoning/coding/agents support       |
+| Model ID         | Thinking | Context | Max Output | Price (Input/Output/Cache) | Use Case                                          |
+| ---------------- | -------- | ------- | ---------- | -------------------------- | ------------------------------------------------- |
+| `glm-4.5`        | ✅ Auto   | 128K    | 96K        | $0.60/$2.20/$0.11          | Unified, MoE 355B/32B active                      |
+| `glm-4.5-x`      | ✅ Auto   | 128K    | 96K        | $2.20/$8.90/$0.45          | Ultra-fast premium, lowest latency                |
+| `glm-4.5-air`*   | ✅ Auto   | 128K    | 96K        | $0.20/$1.10/$0.03          | Cost-effective MoE 106B/12B (simple/simple_json/reflector/searcher/enricher/installer default) |
+| `glm-4.5-airx`   | ✅ Auto   | 128K    | 96K        | $1.10/$4.50/$0.22          | Accelerated Air with priority GPU                 |
+| `glm-4.5-flash`  | ✅ Auto   | 128K    | 96K        | Free/Free/Free             | Free with reasoning/coding/agents support         |
 
 **GLM-4 Legacy - Dense Architecture**
 
-| Model ID                | Thinking      | Context | Max Output | Price (Input/Output/Cache) | Use Case                                        |
-| ----------------------- | ------------- | ------- | ---------- | -------------------------- | ----------------------------------------------- |
-| `glm-4-32b-0414-128k`   | ❌             | 128K    | 16K        | $0.10/$0.10/$0.00          | Ultra-budget dense 32B, high-volume parsing     |
+| Model ID              | Thinking | Context | Max Output | Price (Input/Output) | Use Case                                      |
+| --------------------- | -------- | ------- | ---------- | -------------------- | --------------------------------------------- |
+| `glm-4-32b-0414-128k` | ❌        | 128K    | 16K        | $0.10/$0.10          | Ultra-budget dense 32B, parsing without reasoning |
 
-**Prices**: Per 1M tokens. Cache pricing is for prompt caching. † Model requires **Coding Plan subscription**.
+**Prices**: Per 1M tokens. Cache pricing is for prompt cache hit; cache storage is currently free per Z.AI promotion. GLM-4-32B has no cache support.
 
-> [!WARNING]
-> **Coding Plan Requirement**
->
-> The `glm-5-code` model requires an active **Coding Plan subscription**. Attempting to use this model without the subscription will result in:
->
-> ```
-> API returned unexpected status code: 403: You do not have permission to access glm-5-code
-> ```
->
-> For code-specialized tasks without Coding Plan, use `glm-5` (general flagship) or `glm-4.7` (premium with interleaved thinking) instead.
+**Default Agent Configuration**:
+
+Strategy: `glm-5.1` (newest flagship, $1.40 input) for critical reasoning, `glm-5-turbo` (OpenClaw-native, agent-optimized) for orchestration, `glm-4.5-air` (cheap MoE with hybrid thinking and reliable RPM) for all utility/installer agents. `glm-4.7-flashx` is avoided as default due to lower RPM limits causing frequent 429 errors at high frequency.
+
+| Agent Role                          | Default Model | Thinking | Temperature | Top P | Max Output |
+| ----------------------------------- | ------------- | -------- | ----------- | ----- | ---------- |
+| Generator / Refiner                 | `glm-5.1`     | Enabled  | 1.0         | 0.95  | 32768      |
+| Coder                               | `glm-5.1`     | Enabled  | 1.0         | 0.95  | 20480      |
+| Adviser / Pentester                 | `glm-5.1`     | Enabled  | 1.0         | 0.95  | 16384      |
+| Primary Agent / Assistant           | `glm-5-turbo` | Enabled  | 1.0         | 0.95  | 16384      |
+| Installer                           | `glm-4.5-air` | Enabled  | 1.0         | 0.95  | 16384      |
+| Simple / Reflector                  | `glm-4.5-air` | Disabled | 0.6         | 0.9   | 8192       |
+| Searcher / Enricher / Simple JSON   | `glm-4.5-air` | Disabled | 0.6         | 0.9   | 4096       |
+
+> **Note on temperature**: GLM accepts both `1.0` and `0.6` in either thinking/non-thinking mode (per Z.AI docs). langchaingo's `IsReasoningModel` matches `glm-4.5*`/`glm-4.6*`/`glm-4.7*` prefixes and force-overrides temperature to 1.0 in `createChatRequest` — this is harmless for GLM (unlike Kimi) but means temperature values for those models in YAML are advisory. `glm-5`/`glm-5.1`/`glm-5-turbo` are not matched, so explicit values pass through unchanged.
 
 **Thinking Modes**:
-- **Forced**: Model always uses thinking mode before responding (GLM-5, GLM-4.7)
-- **Hybrid**: Model intelligently decides when to use thinking (GLM-4.7-FlashX, GLM-4.7-Flash)
-- **Auto**: Model automatically determines when reasoning is needed (GLM-4.6, GLM-4.5 series)
+- **Hybrid** (GLM-5.x, GLM-4.7): Explicit toggle via `extra_body.thinking.type`
+- **Auto** (GLM-4.6, GLM-4.5 series): Model automatically determines when reasoning is needed
+- **Preserved Thinking** (Z.AI Coding capability): all thinking-enabled agents in PentAGI also pass `extra_body.thinking.clear_thinking: false` so that `reasoning_content` from previous assistant turns is retained across the conversation. This is required on the standard API endpoint (`/api/paas/v4`) — on the Coding Plan endpoint it would be enabled by default. Improves reasoning continuity and cache hit rates in multi-turn tool call chains.
+- All thinking-enabled agents also pass `extra_body.tool_choice: auto` defensively
 
 **Key Features**:
+- **Long-Horizon Tasks**: GLM-5.1 supports 8-hour sustained autonomous execution, ideal for complex multi-stage agentic workflows
+- **OpenClaw-Native Orchestration**: GLM-5-Turbo is specifically optimized for tool invocation, instruction following, and long-chain execution
 - **Prompt Caching**: Significant cost reduction on repeated context (cached input pricing shown)
-- **Interleaved Thinking**: GLM-4.7 thinks before each response and tool call with preserved reasoning across multi-turn dialogues
-- **Ultra-Long Context**: 200K tokens for GLM-5 and GLM-4.7/4.6 series for massive codebase analysis
-- **MoE Architecture**: Efficient 744B parameters with 40B active (GLM-5), 355B/32B (GLM-4.5), 106B/12B (GLM-4.5-Air)
+- **Ultra-Long Context**: 200K tokens for GLM-5.x/4.7/4.6 series
+- **MoE Architecture**: Efficient 744B/40B active (GLM-5/5.1), 355B/32B (GLM-4.5), 106B/12B (GLM-4.5-Air)
 - **Tool Calling**: Seamless integration with 20+ pentesting tools via function calling
-- **Streaming**: Real-time response streaming with streaming tool calls support (GLM-4.6+)
+- **Streaming**: Real-time streaming with streaming tool calls support (GLM-4.6+)
 - **Multilingual**: Exceptional Chinese and English NLP capabilities
 - **Free Options**: GLM-4.7-Flash and GLM-4.5-Flash for prototyping and experimentation
 
@@ -2138,51 +2165,67 @@ KIMI_PROVIDER=moonshot  # Adds prefix to model names (moonshot/kimi-k2.5) for Li
 
 #### Supported Models
 
-PentAGI supports 11 Kimi/Moonshot models with tool calling, streaming, thinking modes, and multimodal capabilities. Models marked with `*` are used in default configuration.
+PentAGI supports 8 Kimi/Moonshot models with tool calling, streaming, hybrid thinking modes, and multimodal capabilities (text/image/video for K2.x). All `kimi-k2-*` legacy models (turbo-preview, 0905-preview, 0711-preview, thinking, thinking-turbo) were deprecated by Moonshot on 2026-05-25 and are NOT included. Models marked with `*` are used in default configuration.
 
-**Kimi K2.5 Series - Advanced Multimodal**
+**Kimi K2.x Series - Multimodal Flagship**
 
-| Model ID                   | Thinking | Multimodal | Context | Speed      | Price (Input/Output) | Use Case                                        |
-| -------------------------- | -------- | ---------- | ------- | ---------- | -------------------- | ----------------------------------------------- |
-| `kimi-k2.5`*               | ✅        | ✅          | 256K    | Standard   | $0.60/$3.00          | Most intelligent, versatile, vision+text+code   |
+| Model ID         | Thinking | Multimodal | Context | Price (Input Miss / Output / Cache Hit) | Use Case                                                |
+| ---------------- | -------- | ---------- | ------- | --------------------------------------- | ------------------------------------------------------- |
+| `kimi-k2.6`*     | ✅ hybrid | ✅          | 256K    | $0.95 / $4.00 / $0.16                   | Latest flagship: native multimodal, stronger code, improved instruction compliance (generator/refiner/adviser/coder/pentester default) |
+| `kimi-k2.5`*     | ✅ hybrid | ✅          | 256K    | $0.60 / $3.00 / $0.10                   | Previous-gen: 36% cheaper input, same architecture (primary/assistant/installer/utility default) |
 
-**Kimi K2 Series - MoE Foundation (1T params, 32B activated)**
+**Moonshot V1 Series - Generation Models (Flexible Parameters)**
 
-| Model ID                   | Thinking | Multimodal | Context | Speed      | Price (Input/Output) | Use Case                                        |
-| -------------------------- | -------- | ---------- | ------- | ---------- | -------------------- | ----------------------------------------------- |
-| `kimi-k2-0905-preview`*    | ❌        | ❌          | 256K    | Standard   | $0.60/$2.50          | Enhanced agentic coding, improved frontend      |
-| `kimi-k2-0711-preview`     | ❌        | ❌          | 128K    | Standard   | $0.60/$2.50          | Powerful code and agent capabilities            |
-| `kimi-k2-turbo-preview`*   | ❌        | ❌          | 256K    | Turbo      | $1.15/$8.00          | High-speed version, 60-100 tokens/sec           |
-| `kimi-k2-thinking`         | ✅        | ❌          | 256K    | Standard   | $0.60/$2.50          | Long-term thinking, multi-step tool usage       |
-| `kimi-k2-thinking-turbo`   | ✅        | ❌          | 256K    | Turbo      | $1.15/$8.00          | High-speed thinking, deep reasoning             |
+| Model ID            | Thinking | Multimodal | Context | Price (Input / Output) | Use Case                                       |
+| ------------------- | -------- | ---------- | ------- | ---------------------- | ---------------------------------------------- |
+| `moonshot-v1-8k`    | ❌        | ❌          | 8K      | $0.20 / $2.00          | Short text generation, ultra-cheap             |
+| `moonshot-v1-32k`   | ❌        | ❌          | 32K     | $1.00 / $3.00          | Long text generation                           |
+| `moonshot-v1-128k`  | ❌        | ❌          | 128K    | $2.00 / $5.00          | Very long context                              |
 
-**Moonshot V1 Series - General Text Generation**
+**Moonshot V1 Vision Series - Image Understanding**
 
-| Model ID                   | Thinking | Multimodal | Context | Speed      | Price (Input/Output) | Use Case                                        |
-| -------------------------- | -------- | ---------- | ------- | ---------- | -------------------- | ----------------------------------------------- |
-| `moonshot-v1-8k`           | ❌        | ❌          | 8K      | Standard   | $0.20/$2.00          | Short text generation, cost-effective           |
-| `moonshot-v1-32k`          | ❌        | ❌          | 32K     | Standard   | $1.00/$3.00          | Long text generation, balanced                  |
-| `moonshot-v1-128k`         | ❌        | ❌          | 128K    | Standard   | $2.00/$5.00          | Very long text generation, extensive context    |
+| Model ID                          | Thinking | Multimodal | Context | Price (Input / Output) | Use Case                                |
+| --------------------------------- | -------- | ---------- | ------- | ---------------------- | --------------------------------------- |
+| `moonshot-v1-8k-vision-preview`   | ❌        | ✅          | 8K      | $0.20 / $2.00          | Vision + short context                  |
+| `moonshot-v1-32k-vision-preview`  | ❌        | ✅          | 32K     | $1.00 / $3.00          | Vision + medium context                 |
+| `moonshot-v1-128k-vision-preview` | ❌        | ✅          | 128K    | $2.00 / $5.00          | Vision + long context                   |
 
-**Moonshot V1 Vision Series - Multimodal**
+**Prices**: Per 1M tokens. Cache pricing applies to prompt tokens served from automatic context cache (only Kimi K2.x models support cache).
 
-| Model ID                      | Thinking | Multimodal | Context | Speed      | Price (Input/Output) | Use Case                                        |
-| ----------------------------- | -------- | ---------- | ------- | ---------- | -------------------- | ----------------------------------------------- |
-| `moonshot-v1-8k-vision-preview`   | ❌        | ✅          | 8K      | Standard   | $0.20/$2.00          | Vision understanding, short context             |
-| `moonshot-v1-32k-vision-preview`  | ❌        | ✅          | 32K     | Standard   | $1.00/$3.00          | Vision understanding, medium context            |
-| `moonshot-v1-128k-vision-preview` | ❌        | ✅          | 128K    | Standard   | $2.00/$5.00          | Vision understanding, long context              |
+> **CRITICAL — Kimi K2.6/K2.5 parameter constraints**: API returns `invalid_request_error` for any deviation:
+> - `temperature`: MUST be `1.0` in thinking mode, MUST be `0.6` in non-thinking mode
+> - `top_p`: MUST be `0.95`
+> - `n`: MUST be `1`
+> - `presence_penalty` and `frequency_penalty`: MUST be `0` (not modifiable)
+>
+> Moonshot V1 models use standard OpenAI-compatible parameters with no such constraints.
 
-**Prices**: Per 1M tokens. Turbo models offer 60-100 tokens/sec output speed with higher pricing.
+**Default Agent Configuration**:
+
+Strategy: prefer `kimi-k2.5` as cost-effective workhorse (36% cheaper input vs `kimi-k2.6`); reserve `kimi-k2.6` for critical reasoning. All `kimi-k2.x` agents are configured with the API-required fixed parameters (temp/top_p/n) and explicit `extra_body.thinking.type`. For thinking-enabled agents, `extra_body.thinking.keep: "all"` is set to preserve historical `reasoning_content` in multi-turn tool call chains (without it Moonshot returns "thinking is enabled but reasoning_content is missing").
+
+| Agent Role                                   | Default Model | Thinking | Temperature | Top P | Max Output |
+| -------------------------------------------- | ------------- | -------- | ----------- | ----- | ---------- |
+| Generator / Refiner                          | `kimi-k2.6`   | Enabled (keep=all) | 1.0 | 0.95 | 32768 |
+| Coder                                        | `kimi-k2.6`   | Enabled (keep=all) | 1.0 | 0.95 | 20480 |
+| Pentester                                    | `kimi-k2.6`   | Enabled (keep=all) | 1.0 | 0.95 | 16384 |
+| Adviser (mentor/planner)                     | `kimi-k2.6`   | Enabled (keep=all) | 1.0 | 0.95 | 8192  |
+| Primary Agent / Assistant                    | `kimi-k2.5`   | Enabled (keep=all) | 1.0 | 0.95 | 16384 |
+| Installer                                    | `kimi-k2.5`   | Enabled (keep=all) | 1.0 | 0.95 | 12288 |
+| Reflector / Searcher / Enricher              | `kimi-k2.5`   | Disabled           | 0.6 | 0.95 | 4096  |
+| Simple / Simple JSON                         | `kimi-k2.5`   | Disabled           | 0.6 | 0.95 | 2048  |
 
 **Key Features**:
-- **Ultra-Long Context**: Up to 256K tokens for comprehensive codebase analysis
-- **Multimodal Capabilities**: Vision models support image understanding for screenshot analysis (Kimi K2.5, V1 Vision series)
-- **Extended Thinking**: Deep reasoning with multi-step tool usage (kimi-k2.5, kimi-k2-thinking models)
-- **High-Speed Turbo**: 60-100 tokens/sec output for real-time workflows (Turbo variants)
-- **Tool Calling**: Seamless integration with 20+ pentesting tools via function calling
-- **Streaming**: Real-time response streaming for interactive security assessment
-- **Multilingual**: Strong Chinese and English language support
-- **MoE Architecture**: Efficient 1T total parameters with 32B activated for K2 series
+- **Ultra-Long Context**: Up to 256K tokens (K2.x) for comprehensive codebase/documentation analysis
+- **Native Multimodal**: K2.6/K2.5 support text + image + video input out of the box
+- **Hybrid Thinking**: K2.6/K2.5 toggle between thinking and non-thinking via `extra_body.thinking.type`
+- **Preserved Thinking** (K2.6): `thinking.keep: "all"` preserves historical `reasoning_content` across turns — required for multi-turn tool call chains
+- **Automatic Context Caching**: K2.x models cache repeated prefixes (~17% of miss price for K2.6, ~17% for K2.5)
+- **Tool Calling**: Full function-calling support for K2.x and Moonshot V1
+- **Self-Correction**: K2.6 features improved instruction compliance and self-correction
+- **Multilingual**: Strong Chinese, English, and multi-language support
+
+**Multi-turn with thinking + tool calls**: PentAGI's universal reasoning preservation pattern (`TextPartWithReasoning` + `WithPreserveReasoningContent`) automatically ensures `reasoning_content` is sent back in the required TextContent → ToolCall order, satisfying Moonshot's "thinking is enabled but reasoning_content is missing in assistant tool call message" requirement.
 
 **LiteLLM Integration**: Set `KIMI_PROVIDER=moonshot` to enable model name prefixing when using default PentAGI configurations with LiteLLM proxy. Leave empty for direct API usage.
 
@@ -2217,82 +2260,134 @@ QWEN_PROVIDER=dashscope  # Adds prefix to model names (dashscope/qwen-plus) for 
 
 #### Supported Models
 
-PentAGI supports 32 Qwen models with tool calling, streaming, thinking modes, and context caching. Models marked with `*` are used in default configuration.
+PentAGI supports 33 Qwen models curated for agent workflows: text reasoning, code generation, and vision-language (browser screenshots). All models are non-snapshot main aliases with tool calling, streaming, thinking modes, and context caching. Models marked with `*` are used in default configuration.
 
-**Wide Availability Models (All Regions)**
+**Flagship Models (Top-tier Reasoning)**
 
-| Model ID                     | Thinking | Intl | Global/US | China | Price (Input/Output/Cache) | Use Case                                        |
-| ---------------------------- | -------- | ---- | --------- | ----- | -------------------------- | ----------------------------------------------- |
-| `qwen3-max`*                 | ✅        | ✅    | ✅         | ✅     | $2.40/$12.00/$0.48         | Flagship reasoning, complex security analysis   |
-| `qwen3-max-preview`          | ✅        | ✅    | ✅         | ✅     | $2.40/$12.00/$0.48         | Preview version with extended thinking          |
-| `qwen-max`                   | ❌        | ✅    | ❌         | ✅     | $1.60/$6.40/$0.32          | Strong instruction following, legacy flagship   |
-| `qwen3.5-plus`*              | ✅        | ✅    | ✅         | ✅     | $0.40/$2.40/$0.08          | Balanced reasoning, general dialogue, coding    |
-| `qwen-plus`                  | ✅        | ✅    | ✅         | ✅     | $0.40/$4.00/$0.08          | Cost-effective balanced performance             |
-| `qwen3.5-flash`*             | ✅        | ✅    | ✅         | ✅     | $0.10/$0.40/$0.02          | Ultra-fast lightweight, high-throughput         |
-| `qwen-flash`                 | ❌        | ✅    | ✅         | ✅     | $0.05/$0.40/$0.01          | Fast with context caching, cost-optimized       |
-| `qwen-turbo`                 | ✅        | ✅    | ❌         | ✅     | $0.05/$0.50/$0.01          | Deprecated, use qwen-flash instead              |
-| `qwq-plus`                   | ✅        | ✅    | ❌         | ✅     | $0.80/$2.40/$0.16          | Deep reasoning, chain-of-thought analysis       |
+| Model ID                     | Thinking | Intl | Global/US | China | Price (Input/Output/Cache) | Use Case                                                |
+| ---------------------------- | -------- | ---- | --------- | ----- | -------------------------- | ------------------------------------------------------- |
+| `qwen3.7-max`*               | ✅        | ✅    | ✅         | ✅     | $2.50/$7.50/$0.50          | Next-gen flagship for agent-centric era (generator/refiner/adviser default) |
+| `qwen3.6-max-preview`        | ✅        | ✅    | ✅         | ✅     | $1.30/$7.80/$0.13          | Preview Max with enhanced vibe coding & front-end skills |
+| `qwen3-max`                  | ✅        | ✅    | ✅         | ✅     | $1.20/$6.00/$0.24          | Previous-gen flagship with agent programming upgrades   |
+| `qwen-plus`                  | ✅        | ✅    | ✅         | ✅     | $0.40/$4.00/$0.08          | Qwen3-backbone Plus with switchable thinking modes      |
 
-**Region-Specific Models**
+**Balanced Plus Models (Mid-tier)**
 
-| Model ID                     | Thinking | Intl | Global/US | China | Price (Input/Output/Cache) | Use Case                                        |
-| ---------------------------- | -------- | ---- | --------- | ----- | -------------------------- | ----------------------------------------------- |
-| `qwen-plus-us`               | ✅        | ❌    | ✅         | ❌     | $0.40/$4.00/$0.08          | US region optimized balanced model              |
-| `qwen-long-latest`           | ❌        | ❌    | ❌         | ✅     | $0.07/$0.29/$0.01          | Ultra-long context (10M tokens)                 |
+| Model ID                     | Thinking | Intl | Global/US | China | Price (Input/Output/Cache) | Use Case                                                |
+| ---------------------------- | -------- | ---- | --------- | ----- | -------------------------- | ------------------------------------------------------- |
+| `qwen3.6-plus`*              | ✅        | ✅    | ✅         | ✅     | $0.50/$3.00/$0.05          | Native VL Plus with agentic coding (primary/assistant/pentester default) |
+| `qwen3.5-plus`               | ✅        | ✅    | ✅         | ✅     | $0.40/$2.40/$0.04          | Previous-gen native VL with strong multimodal capabilities |
 
-**Open Source - Qwen3.5 Series**
+**Fast Flash Models (Cost-optimized)**
 
-| Model ID                     | Thinking | Intl | Global/US | China | Price (Input/Output/Cache) | Use Case                                        |
-| ---------------------------- | -------- | ---- | --------- | ----- | -------------------------- | ----------------------------------------------- |
-| `qwen3.5-397b-a17b`          | ✅        | ✅    | ✅         | ✅     | $0.60/$3.60/$0.12          | Largest 397B parameters, exceptional reasoning  |
-| `qwen3.5-122b-a10b`          | ✅        | ✅    | ✅         | ✅     | $0.40/$3.20/$0.08          | Large 122B parameters, strong performance       |
-| `qwen3.5-27b`                | ✅        | ✅    | ✅         | ✅     | $0.30/$2.40/$0.06          | Medium 27B parameters, balanced                 |
-| `qwen3.5-35b-a3b`            | ✅        | ✅    | ✅         | ✅     | $0.25/$2.00/$0.05          | Efficient 35B with 3B active MoE                |
+| Model ID                     | Thinking | Intl | Global/US | China | Price (Input/Output/Cache) | Use Case                                                |
+| ---------------------------- | -------- | ---- | --------- | ----- | -------------------------- | ------------------------------------------------------- |
+| `qwen3.6-flash`              | ✅        | ✅    | ✅         | ✅     | $0.25/$1.50/$0.025         | Latest Flash with significant agentic-coding boost      |
+| `qwen3.5-flash`*             | ✅        | ✅    | ✅         | ✅     | $0.10/$0.40/$0.01          | Ultra-fast lightweight (simple/reflector/searcher/enricher default) |
+| `qwen-flash`                 | ✅        | ✅    | ✅         | ✅     | $0.05/$0.40/$0.01          | Qwen3-series Flash with 1M context, tiered pricing      |
 
-**Open Source - Qwen3 Series**
+**Code-Specialized Models**
 
-| Model ID                       | Thinking | Intl | Global/US | China | Price (Input/Output/Cache) | Use Case                                        |
-| ------------------------------ | -------- | ---- | --------- | ----- | -------------------------- | ----------------------------------------------- |
-| `qwen3-next-80b-a3b-thinking`  | ✅        | ✅    | ✅         | ✅     | $0.15/$1.43/$0.03          | Next-gen 80B thinking-only mode                 |
-| `qwen3-next-80b-a3b-instruct`  | ❌        | ✅    | ✅         | ✅     | $0.15/$1.20/$0.03          | Next-gen 80B instruction following              |
-| `qwen3-235b-a22b`              | ✅        | ✅    | ✅         | ✅     | $0.70/$8.40/$0.14          | Dual-mode 235B with 22B active                  |
-| `qwen3-32b`                    | ✅        | ✅    | ✅         | ✅     | $0.29/$2.87/$0.06          | Versatile 32B dual-mode                         |
-| `qwen3-30b-a3b`                | ✅        | ✅    | ✅         | ✅     | $0.20/$2.40/$0.04          | Efficient 30B MoE architecture                  |
-| `qwen3-14b`                    | ✅        | ✅    | ✅         | ✅     | $0.35/$4.20/$0.07          | Medium 14B performance-cost balance             |
-| `qwen3-8b`                     | ✅        | ✅    | ✅         | ✅     | $0.18/$2.10/$0.04          | Compact 8B efficiency optimized                 |
-| `qwen3-4b`                     | ✅        | ✅    | ❌         | ✅     | $0.11/$1.26/$0.02          | Lightweight 4B for simple tasks                 |
-| `qwen3-1.7b`                   | ✅        | ✅    | ❌         | ✅     | $0.11/$1.26/$0.02          | Ultra-compact 1.7B basic tasks                  |
-| `qwen3-0.6b`                   | ✅        | ✅    | ❌         | ✅     | $0.11/$1.26/$0.02          | Smallest 0.6B minimal resources                 |
+| Model ID                     | Thinking | Intl | Global/US | China | Price (Input/Output/Cache) | Use Case                                                |
+| ---------------------------- | -------- | ---- | --------- | ----- | -------------------------- | ------------------------------------------------------- |
+| `qwen3-coder-plus`*          | ❌        | ✅    | ✅         | ✅     | $1.00/$5.00/$0.20          | Strong coding agent with autonomous programming (coder default) |
+| `qwen3-coder-flash`*         | ❌        | ✅    | ✅         | ✅     | $0.30/$1.50/$0.06          | Fast code-gen with multi-turn tool stability (installer default) |
+| `qwen3-coder-next`           | ❌        | ✅    | ✅         | ✅     | $0.30/$1.50/—              | Open-source code generation, SOTA at same scale         |
 
-**Open Source - QwQ & Qwen2.5 Series**
+**Vision-Language Models (Browser & Screenshot Analysis)**
 
-| Model ID                     | Thinking | Intl | Global/US | China | Price (Input/Output/Cache) | Use Case                                        |
-| ---------------------------- | -------- | ---- | --------- | ----- | -------------------------- | ----------------------------------------------- |
-| `qwq-32b`                    | ✅        | ✅    | ✅         | ✅     | $0.29/$0.86/$0.06          | Open 32B reasoning, deep research               |
-| `qwen2.5-14b-instruct-1m`    | ❌        | ✅    | ❌         | ✅     | $0.81/$3.22/$0.16          | Extended 1M context, 14B parameters             |
-| `qwen2.5-7b-instruct-1m`     | ❌        | ✅    | ❌         | ✅     | $0.37/$1.47/$0.07          | Extended 1M context, 7B parameters              |
-| `qwen2.5-72b-instruct`       | ❌        | ✅    | ❌         | ✅     | $1.40/$5.60/$0.28          | Large 72B instruction following                 |
-| `qwen2.5-32b-instruct`       | ❌        | ✅    | ❌         | ✅     | $0.70/$2.80/$0.14          | Medium 32B instruction following                |
-| `qwen2.5-14b-instruct`       | ❌        | ✅    | ❌         | ✅     | $0.35/$1.40/$0.07          | Compact 14B instruction following               |
-| `qwen2.5-7b-instruct`        | ❌        | ✅    | ❌         | ✅     | $0.18/$0.70/$0.04          | Small 7B instruction following                  |
-| `qwen2.5-3b-instruct`        | ❌        | ❌    | ❌         | ✅     | $0.04/$0.13/$0.01          | Lightweight 3B Chinese Mainland only            |
+| Model ID                     | Thinking | Intl | Global/US | China | Price (Input/Output/Cache) | Use Case                                                |
+| ---------------------------- | -------- | ---- | --------- | ----- | -------------------------- | ------------------------------------------------------- |
+| `qwen3-vl-plus`              | ✅        | ✅    | ✅         | ✅     | $0.20/$1.60/$0.04          | VL with visual agent capabilities, ultra-long video understanding |
+| `qwen3-vl-flash`             | ✅        | ✅    | ✅         | ✅     | $0.05/$0.40/$0.01          | Small VL with 2D/3D localization for browser triage     |
+| `qvq-max`                    | ✅        | ✅    | ✅         | ✅     | $1.20/$4.80/—              | Visual reasoning with chain-of-thought                  |
 
-**Prices**: Per 1M tokens. Cache pricing is for implicit context caching (20% of input cost). Models with thinking support include additional reasoning computation during CoT phase.
+**Open-Source Qwen3.6 Series**
+
+| Model ID                     | Thinking | Intl | Global/US | China | Price (Input/Output/Cache) | Use Case                                                |
+| ---------------------------- | -------- | ---- | --------- | ----- | -------------------------- | ------------------------------------------------------- |
+| `qwen3.6-27b`                | ✅        | ✅    | ✅         | ✅     | $0.60/$3.60/—              | Native VL on hybrid architecture, on-premises ready     |
+| `qwen3.6-35b-a3b`            | ✅        | ✅    | ✅         | ✅     | $0.25/$1.49/—              | Efficient 35B MoE (~3B active) for continuous monitoring |
+
+**Open-Source Qwen3.5 Series**
+
+| Model ID                     | Thinking | Intl | Global/US | China | Price (Input/Output/Cache) | Use Case                                                |
+| ---------------------------- | -------- | ---- | --------- | ----- | -------------------------- | ------------------------------------------------------- |
+| `qwen3.5-397b-a17b`          | ✅        | ✅    | ✅         | ✅     | $0.60/$3.60/—              | Largest 397B params (~17B active), exceptional reasoning |
+| `qwen3.5-122b-a10b`          | ✅        | ✅    | ✅         | ✅     | $0.40/$3.20/—              | Large 122B params (~10B active), strong balance         |
+| `qwen3.5-35b-a3b`            | ✅        | ✅    | ✅         | ✅     | $0.25/$2.00/—              | Efficient 35B MoE (~3B active), cost-effective          |
+| `qwen3.5-27b`                | ✅        | ✅    | ✅         | ✅     | $0.30/$2.40/—              | Medium 27B with hybrid linear attention + sparse MoE    |
+
+**Open-Source Qwen3 Coder Series**
+
+| Model ID                              | Thinking | Intl | Global/US | China | Price (Input/Output/Cache) | Use Case                                                |
+| ------------------------------------- | -------- | ---- | --------- | ----- | -------------------------- | ------------------------------------------------------- |
+| `qwen3-coder-480b-a35b-instruct`      | ❌        | ✅    | ✅         | ✅     | $1.50/$7.50/—              | Largest open coder MoE (480B/~35B active)               |
+| `qwen3-coder-30b-a3b-instruct`        | ❌        | ✅    | ✅         | ✅     | $0.45/$2.25/—              | Efficient 30B MoE (~3B active), repository-scale        |
+
+**Open-Source Qwen3 Dense & MoE Series**
+
+| Model ID                              | Thinking | Intl | Global/US | China | Price (Input/Output/Cache) | Use Case                                                |
+| ------------------------------------- | -------- | ---- | --------- | ----- | -------------------------- | ------------------------------------------------------- |
+| `qwen3-next-80b-a3b-thinking`         | ✅        | ✅    | ✅         | ✅     | $0.15/$1.20/—              | Next-gen 80B MoE (~3B active) thinking-only             |
+| `qwen3-next-80b-a3b-instruct`         | ❌        | ✅    | ✅         | ✅     | $0.15/$1.20/—              | Next-gen 80B MoE instruction-following                  |
+| `qwen3-235b-a22b`                     | ✅        | ✅    | ✅         | ✅     | $0.70/$8.40/—              | Dual-mode 235B MoE (~22B active)                        |
+| `qwen3-32b`                           | ✅        | ✅    | ✅         | ✅     | $0.16/$0.64/—              | Versatile 32B dense dual-mode                           |
+| `qwen3-30b-a3b`                       | ✅        | ✅    | ✅         | ✅     | $0.20/$2.40/—              | Efficient 30B MoE (~3B active)                          |
+| `qwen3-14b`                           | ✅        | ✅    | ✅         | ✅     | $0.35/$4.20/—              | Medium 14B dense performance-cost balance               |
+| `qwen3-8b`                            | ✅        | ✅    | ✅         | ✅     | $0.18/$2.10/—              | Compact 8B dense efficiency                             |
+| `qwen3-4b`                            | ✅        | ✅    | ✅         | ✅     | $0.11/$1.26/—              | Lightweight 4B dense for simple tasks                   |
+| `qwen3-1.7b`                          | ✅        | ✅    | ✅         | ✅     | $0.11/$1.26/—              | Ultra-compact 1.7B basic checks                         |
+| `qwen3-0.6b`                          | ✅        | ✅    | ✅         | ✅     | $0.11/$1.26/—              | Smallest 0.6B for edge monitoring                       |
+
+**Prices**: Per 1M tokens. Cache pricing reflects implicit cache hit (when available); MoE/dense open-source models do not expose cache pricing. Tiered models (Max/Plus) show lowest-tier pricing (typically ≤32k or ≤256k input); larger contexts incur higher rates per Alibaba Cloud pricing.
 
 **Region Availability**:
 - **Intl** (International): Singapore region (`dashscope-intl.aliyuncs.com`)
 - **Global/US**: US Virginia region (`dashscope-us.aliyuncs.com`)
 - **China**: Chinese Mainland Beijing region (`dashscope.aliyuncs.com`)
 
+**Default Agent Configuration**:
+| Agent Role                                       | Default Model        | Tier      |
+| ------------------------------------------------ | -------------------- | --------- |
+| Generator / Refiner / Adviser (planning, mentor) | `qwen3.7-max`        | Flagship  |
+| Primary / Assistant / Pentester                  | `qwen3.6-plus`       | Balanced  |
+| Coder (exploit development)                      | `qwen3-coder-plus`   | Code+     |
+| Installer (env setup)                            | `qwen3-coder-flash`  | Code Fast |
+| Simple / Reflector / Searcher / Enricher         | `qwen3.5-flash`      | Fast      |
+
 **Key Features**:
-- **Automatic Context Caching**: 30-50% cost reduction on repeated context with implicit cache (20% of input price)
-- **Extended Thinking**: Chain-of-thought reasoning for complex security analysis (Qwen3-Max, QwQ, Qwen3.5-Plus)
+- **Agent-Centric Design**: Qwen3.7-Max is purpose-built for long-horizon autonomous execution and tool invocation
+- **Automatic Context Caching**: 30-50% cost reduction on repeated context with implicit cache
+- **Extended Thinking**: Chain-of-thought reasoning for complex security analysis (Qwen3.7/3.6/3.5/3-Max, QVQ-Max)
+- **Code Specialization**: Qwen3-Coder series with multi-turn tool interaction and repository-level understanding
+- **Vision-Language**: Qwen3-VL series for browser screenshot triage, 2D/3D localization, OCR-level analysis
 - **Tool Calling**: Seamless integration with 20+ pentesting tools via function calling
 - **Streaming**: Real-time response streaming for interactive workflows
 - **Multilingual**: Strong Chinese, English, and multi-language support
-- **Ultra-Long Context**: Up to 10M tokens with qwen-long-latest for massive codebase analysis
+- **Open-Source Variants**: Dense and MoE models from 0.6B to 480B for on-premises/air-gapped deployments
 
 **LiteLLM Integration**: Set `QWEN_PROVIDER=dashscope` to enable model name prefixing when using default PentAGI configurations with LiteLLM proxy. Leave empty for direct API usage.
+
+#### Alternative Integrations
+
+DashScope is fully OpenAI-compatible, so Qwen can also power two other PentAGI subsystems through the standard OpenAI client.
+
+**As embedding provider** (`text-embedding-v4`, see [Alibaba Cloud Model Studio pricing](https://modelstudio.console.alibabacloud.com/ap-southeast-1?tab=doc#/doc/?type=model&url=prices)):
+
+```bash
+EMBEDDING_PROVIDER=openai
+EMBEDDING_URL=https://dashscope-intl.aliyuncs.com/compatible-mode/v1  # International (Singapore)
+# EMBEDDING_URL=https://dashscope.aliyuncs.com/compatible-mode/v1     # Chinese Mainland
+EMBEDDING_KEY=sk-*******
+EMBEDDING_MODEL=text-embedding-v4
+EMBEDDING_BATCH_SIZE=         # optional, default applies
+EMBEDDING_STRIP_NEW_LINES=    # optional, default applies
+```
+
+> Note: the Global/US DashScope endpoint (`dashscope-us.aliyuncs.com`) does **not** expose embedding APIs — use the International or China endpoints for `text-embedding-v4`.
+
+**As OpenAI-typed custom LLM provider**: instead of the dedicated `QWEN_*` variables, you can wire any Qwen chat model through PentAGI's custom OpenAI-compatible provider by pointing `OPENAI_SERVER_URL` (or a custom provider entry) to the DashScope `/compatible-mode/v1` endpoint and selecting the desired Qwen model name. Useful when you already manage all model traffic through a single OpenAI-shaped client (e.g. shared with LiteLLM/OneAPI proxies).
 
 ## Advanced Setup
 
@@ -3118,6 +3213,8 @@ PentAGI supports the following embedding providers:
 - **HuggingFace**: Models from HuggingFace
 - **GoogleAI**: Google's embedding models
 - **VoyageAI**: VoyageAI's embedding models
+
+> **OpenAI-compatible third parties**: any provider exposing OpenAI's `/embeddings` API can be plugged in via `EMBEDDING_PROVIDER=openai` with a custom `EMBEDDING_URL`. For example, **Qwen DashScope** offers `text-embedding-v4` through the `/compatible-mode/v1` endpoint (International and Chinese Mainland regions only — the US region does not expose embeddings). See the [Qwen Alternative Integrations](#alternative-integrations) subsection for the full configuration snippet.
 
 <details>
 <summary><b>Embedding Provider Configuration</b> (click to expand)</summary>
