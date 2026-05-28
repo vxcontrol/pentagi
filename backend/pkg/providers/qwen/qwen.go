@@ -83,11 +83,22 @@ func New(
 		return nil, err
 	}
 
+	// Alibaba Cloud DashScope OpenAI-compatible API. Thinking is controlled via
+	// extra_body.enable_thinking (true/false) in the per-agent config — this is a
+	// DashScope-specific parameter, not OpenAI standard. Qwen3.5/3.6/3.7 hybrid
+	// models have thinking ENABLED by default, so utility agents must explicitly
+	// set enable_thinking=false or reasoning_content will be returned inline as
+	// part of content (corrupting outputs that expect short deterministic answers
+	// like docker image selection or descriptors).
+	// WithPreserveReasoningContent() is required for multi-turn with tool calls
+	// when preserve_thinking=true is set in extra_body for qwen3.7-max/qwen3.6-plus
+	// (other Qwen3 models do not support preserve_thinking).
 	client, err := openai.New(
 		openai.WithToken(cfg.QwenAPIKey),
 		openai.WithModel(QwenAgentModel),
 		openai.WithBaseURL(cfg.QwenServerURL),
 		openai.WithHTTPClient(httpClient),
+		openai.WithPreserveReasoningContent(),
 	)
 	if err != nil {
 		return nil, err

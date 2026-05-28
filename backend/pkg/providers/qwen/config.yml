@@ -1,8 +1,32 @@
+# Qwen (Alibaba Cloud DashScope) agent configuration.
+#
+# Strategy: qwen3.7-max (flagship) for critical reasoning, qwen3.6-plus (mid-tier
+# multimodal Plus) for orchestration, qwen3.5-flash for cheap utility, qwen3-coder-*
+# for code-specialized tasks (installer/coder).
+#
+# CRITICAL thinking control via extra_body (DashScope-specific, not OpenAI standard):
+#   - enable_thinking=false: utility agents (simple, simple_json, reflector, searcher,
+#     enricher) MUST set this explicitly. Qwen3.5/3.6/3.7 hybrid models have thinking
+#     ENABLED by default. Without disabling, reasoning_content leaks into content and
+#     corrupts short deterministic outputs (e.g. docker image selector returning the
+#     full chain-of-thought instead of just "vxcontrol/kali-linux").
+#   - enable_thinking=true: reasoning agents (primary, assistant, generator, refiner,
+#     adviser, pentester) explicitly enable thinking. Redundant with hybrid defaults
+#     but defensive against future provider changes.
+#   - preserve_thinking=true: keeps reasoning_content from previous assistant turns
+#     in subsequent requests. Supported ONLY by qwen3.7-max and qwen3.6-plus families.
+#     Required for agent loops with tool calls to preserve reasoning continuity.
+#     Works together with WithPreserveReasoningContent() in qwen.go.
+#   - qwen3-coder-* (coder, installer) are NOT hybrid thinking models — no thinking
+#     control needed.
+
 simple:
   model: "qwen3.5-flash"
   temperature: 0.6
   n: 1
   max_tokens: 8192
+  extra_body:
+    enable_thinking: false
   price:
     input: 0.1
     output: 0.4
@@ -14,6 +38,8 @@ simple_json:
   n: 1
   max_tokens: 4096
   json: true
+  extra_body:
+    enable_thinking: false
   price:
     input: 0.1
     output: 0.4
@@ -24,6 +50,9 @@ primary_agent:
   temperature: 1.0
   n: 1
   max_tokens: 16384
+  extra_body:
+    enable_thinking: true
+    preserve_thinking: true
   price:
     input: 0.5
     output: 3.0
@@ -34,6 +63,9 @@ assistant:
   temperature: 1.0
   n: 1
   max_tokens: 16384
+  extra_body:
+    enable_thinking: true
+    preserve_thinking: true
   price:
     input: 0.5
     output: 3.0
@@ -44,6 +76,9 @@ generator:
   temperature: 1.0
   n: 1
   max_tokens: 32768
+  extra_body:
+    enable_thinking: true
+    preserve_thinking: true
   price:
     input: 2.5
     output: 7.5
@@ -54,6 +89,9 @@ refiner:
   temperature: 1.0
   n: 1
   max_tokens: 20480
+  extra_body:
+    enable_thinking: true
+    preserve_thinking: true
   price:
     input: 2.5
     output: 7.5
@@ -64,6 +102,9 @@ adviser:
   temperature: 1.0
   n: 1
   max_tokens: 8192
+  extra_body:
+    enable_thinking: true
+    preserve_thinking: true
   price:
     input: 2.5
     output: 7.5
@@ -74,6 +115,8 @@ reflector:
   temperature: 0.7
   n: 1
   max_tokens: 4096
+  extra_body:
+    enable_thinking: false
   price:
     input: 0.1
     output: 0.4
@@ -84,6 +127,8 @@ searcher:
   temperature: 0.7
   n: 1
   max_tokens: 4096
+  extra_body:
+    enable_thinking: false
   price:
     input: 0.1
     output: 0.4
@@ -94,6 +139,8 @@ enricher:
   temperature: 0.7
   n: 1
   max_tokens: 4096
+  extra_body:
+    enable_thinking: false
   price:
     input: 0.1
     output: 0.4
@@ -124,6 +171,9 @@ pentester:
   temperature: 0.8
   n: 1
   max_tokens: 16384
+  extra_body:
+    enable_thinking: true
+    preserve_thinking: true
   price:
     input: 0.5
     output: 3.0
