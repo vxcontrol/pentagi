@@ -153,12 +153,21 @@ enum VectorStoreAction {
   store
 }
 
+enum ToolCallStatus {
+  received
+  running
+  finished
+  failed
+}
+
 # ==================== Core System Types ====================
 
 type Settings {
   debug: Boolean!
   askUser: Boolean!
+  version: String!
   dockerInside: Boolean!
+  isDevelopMode: Boolean!
   assistantUseAgents: Boolean!
 }
 
@@ -328,6 +337,21 @@ type VectorStoreLog {
   createdAt: Time!
 }
 
+type ToolCallLog {
+  id: ID!
+  callId: String!
+  status: ToolCallStatus!
+  name: String!
+  args: String!
+  result: String!
+  durationSeconds: Float!
+  flowId: ID!
+  taskId: ID
+  subtaskId: ID
+  createdAt: Time!
+  updatedAt: Time!
+}
+
 type Screenshot {
   id: ID!
   flowId: ID!
@@ -336,6 +360,26 @@ type Screenshot {
   name: String!
   url: String!
   createdAt: Time!
+}
+
+type FlowFile {
+  id: String!
+  name: String!
+  path: String!
+  size: Int!
+  isDir: Boolean!
+  modifiedAt: Time!
+}
+
+type UserResource {
+  id: ID!
+  userId: ID!
+  name: String!
+  path: String!
+  size: Int!
+  isDir: Boolean!
+  createdAt: Time!
+  updatedAt: Time!
 }
 
 # =================== API Tokens types ===================
@@ -556,6 +600,14 @@ type ProviderUsageStats {
 type ModelUsageStats {
   model: String!
   provider: String!
+  stats: UsageStats!
+}
+
+# Model-agents usage statistics
+type ModelAgentsUsageStats {
+  model: String!
+  provider: String!
+  agentTypes: [AgentType!]!
   stats: UsageStats!
 }
 
@@ -793,6 +845,94 @@ input AgentsConfigInput {
   pentester: AgentConfigInput!
 }
 
+# ==================== Knowledge (Vector Store) Types ====================
+
+# Document type discriminator stored in cmetadata doc_type field
+enum KnowledgeDocType {
+  answer
+  guide
+  code
+}
+
+# Guide sub-type stored in cmetadata guide_type field
+enum KnowledgeGuideType {
+  install
+  configure
+  use
+  pentest
+  development
+  other
+}
+
+# Answer sub-type stored in cmetadata answer_type field
+enum KnowledgeAnswerType {
+  guide
+  vulnerability
+  code
+  tool
+  other
+}
+
+# A single document stored in the pgvector knowledge base
+type KnowledgeDocument {
+  # UUID primary key of the embedding row
+  id: String!
+  docType: KnowledgeDocType!
+  # Chunk text; empty string when withContent=false was requested (to save bandwidth)
+  content: String!
+  question: String!
+  description: String
+  userId: ID!
+  flowId: ID
+  taskId: ID
+  subtaskId: ID
+  guideType: KnowledgeGuideType
+  answerType: KnowledgeAnswerType
+  codeLang: String
+  partSize: Int!
+  totalSize: Int!
+  # True when document was created manually via API rather than by an agent
+  manual: Boolean!
+}
+
+# Knowledge document enriched with semantic similarity score from vector search
+type KnowledgeDocumentWithScore {
+  score: Float!
+  document: KnowledgeDocument!
+}
+
+# Optional filter for listing or searching knowledge documents
+input KnowledgeFilter {
+  docTypes: [KnowledgeDocType!]
+  guideTypes: [KnowledgeGuideType!]
+  answerTypes: [KnowledgeAnswerType!]
+  codeLangs: [String!]
+  flowId: ID
+  manual: Boolean
+}
+
+# Input for creating a new knowledge document manually
+input CreateKnowledgeDocumentInput {
+  docType: KnowledgeDocType!
+  content: String!
+  question: String!
+  description: String
+  guideType: KnowledgeGuideType
+  answerType: KnowledgeAnswerType
+  codeLang: String
+}
+
+# Input for updating an existing knowledge document; non-null fields trigger re-embedding
+input UpdateKnowledgeDocumentInput {
+  content: String!
+  question: String
+  description: String
+  docType: KnowledgeDocType
+  guideType: KnowledgeGuideType
+  answerType: KnowledgeAnswerType
+  codeLang: String
+}
+
 # ==================== GraphQL Operations ====================
 
 type Query {
@@ -806,12 +946,14 @@ type Query {
 
   # Task and execution logs
   tasks(flowId: ID!): [Task!]
+  flowFiles(flowId: ID!): [FlowFile!]!
   screenshots(flowId: ID!): [Screenshot!]
   terminalLogs(flowId: ID!): [TerminalLog!]
   messageLogs(flowId: ID!): [MessageLog!]
   agentLogs(flowId: ID!): [AgentLog!]
   searchLogs(flowId: ID!): [SearchLog!]
   vectorStoreLogs(flowId: ID!): [VectorStoreLog!]
+  toolCallLogs(flowId: ID!): [ToolCallLog!]
   assistantLogs(flowId: ID!, assistantId: ID!): [AssistantLog!]
 
   # Usage statistics and analytics
@@ -822,6 +964,7 @@ type Query {
   usageStatsByAgentType: [AgentTypeUsageStats!]!
   usageStatsByFlow(flowId: ID!): UsageStats!
   usageStatsByAgentTypeForFlow(flowId: ID!): [AgentTypeUsageStats!]!
+  usageStatsByModelAgentsForFlow(flowId: ID!): [ModelAgentsUsageStats!]!
 
   # Toolcalls statistics and analytics
   toolcallsStatsTotal: ToolcallsStats!
@@ -851,20 +994,28 @@ type Query {
   # Flow Templates management
   flowTemplate(templateId: ID!): FlowTemplate
   flowTemplates: [FlowTemplate!]!
+
+  # User Resources management
+  resources(path: String, recursive: Boolean): [UserResource!]!
+
+  # Knowledge (vector store) management
+  knowledgeDocuments(filter: KnowledgeFilter, withContent: Boolean!): [KnowledgeDocument!]!
+  knowledgeDocument(id: String!): KnowledgeDocument!
+  searchKnowledge(query: String!, filter: KnowledgeFilter, limit: Int): [KnowledgeDocumentWithScore!]!
 }
 
 type Mutation {
   # Flow management
-  createFlow(modelProvider: String!, input: String!): Flow!
-  putUserInput(flowId: ID!, input: String!, modelProvider: String): ResultType!
+  createFlow(modelProvider: String!, input: String!, resourceIds: [ID!]): Flow!
+  putUserInput(flowId: ID!, input: String!, modelProvider: String, resourceIds: [ID!]): ResultType!
   stopFlow(flowId: ID!): ResultType!
   finishFlow(flowId: ID!): ResultType!
   deleteFlow(flowId: ID!): ResultType!
   renameFlow(flowId: ID!, title: String!): ResultType!
 
   # Assistant management
-  createAssistant(flowId: ID!, modelProvider: String!, input: String!, useAgents: Boolean!): FlowAssistant!
-  callAssistant(flowId: ID!, assistantId: ID!, input: String!, useAgents: Boolean!): ResultType!
+  createAssistant(flowId: ID!, modelProvider: String!, input: String!, useAgents: Boolean!, resourceIds: [ID!]): FlowAssistant!
+  callAssistant(flowId: ID!, assistantId: ID!, input: String!, useAgents: Boolean!, resourceIds: [ID!]): ResultType!
   stopAssistant(flowId: ID!, assistantId: ID!): Assistant!
   deleteAssistant(flowId: ID!, assistantId: ID!): ResultType!
 
@@ -894,6 +1045,12 @@ type Mutation {
   createFlowTemplate(input: CreateFlowTemplateInput!): FlowTemplate!
   updateFlowTemplate(templateId: ID!, input: UpdateFlowTemplateInput!): FlowTemplate!
   deleteFlowTemplate(templateId: ID!): ResultType!
+
+  # Knowledge (vector store) management
+  createKnowledgeDocument(input: CreateKnowledgeDocumentInput!): KnowledgeDocument!
+  updateKnowledgeDocument(id: String!, input: UpdateKnowledgeDocumentInput!): KnowledgeDocument!
+  deleteKnowledgeDocument(id: String!): ResultType!
+  anonymizeText(text: String!): String!
 }
 
 type Subscription {
@@ -909,6 +1066,11 @@ type Subscription {
   assistantUpdated(flowId: ID!): Assistant!
   assistantDeleted(flowId: ID!): Assistant!
 
+  # Flow file events
+  flowFileAdded(flowId: ID!): FlowFile!
+  flowFileUpdated(flowId: ID!): FlowFile!
+  flowFileDeleted(flowId: ID!): FlowFile!
+
   # Log events
   screenshotAdded(flowId: ID!): Screenshot!
   terminalLogAdded(flowId: ID!): TerminalLog!
@@ -917,6 +1079,8 @@ type Subscription {
   agentLogAdded(flowId: ID!): AgentLog!
   searchLogAdded(flowId: ID!): SearchLog!
   vectorStoreLogAdded(flowId: ID!): VectorStoreLog!
+  toolCallLogAdded(flowId: ID!): ToolCallLog!
+  toolCallLogUpdated(flowId: ID!): ToolCallLog!
   assistantLogAdded(flowId: ID!): AssistantLog!
   assistantLogUpdated(flowId: ID!): AssistantLog!
 
@@ -937,4 +1101,14 @@ type Subscription {
   flowTemplateCreated: FlowTemplate!
   flowTemplateUpdated: FlowTemplate!
   flowTemplateDeleted: FlowTemplate!
+
+  # User resource events
+  resourceAdded: UserResource!
+  resourceUpdated: UserResource!
+  resourceDeleted: UserResource!
+
+  # Knowledge (vector store) events
+  knowledgeDocumentCreated: KnowledgeDocument!
+  knowledgeDocumentUpdated: KnowledgeDocument!
+  knowledgeDocumentDeleted: KnowledgeDocument!
 }

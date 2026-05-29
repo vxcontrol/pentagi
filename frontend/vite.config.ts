@@ -61,36 +61,25 @@ export default defineConfig(({ mode }) => {
             minify: 'terser',
             rollupOptions: {
                 output: {
-                    manualChunks: {
-                        'apollo-client': ['@apollo/client', 'graphql', 'graphql-ws'],
-                        markdown: ['react-markdown', 'rehype-highlight', 'rehype-raw', 'rehype-slug', 'remark-gfm'],
-                        pdf: ['html2pdf.js'],
-                        'radix-ui': [
-                            '@radix-ui/react-accordion',
-                            '@radix-ui/react-avatar',
-                            '@radix-ui/react-collapsible',
-                            '@radix-ui/react-dialog',
-                            '@radix-ui/react-dropdown-menu',
-                            '@radix-ui/react-label',
-                            '@radix-ui/react-popover',
-                            '@radix-ui/react-scroll-area',
-                            '@radix-ui/react-select',
-                            '@radix-ui/react-separator',
-                            '@radix-ui/react-slot',
-                            '@radix-ui/react-switch',
-                            '@radix-ui/react-tabs',
-                            '@radix-ui/react-tooltip',
-                            '@radix-ui/react-progress',
-                        ],
-                        'react-vendor': ['react', 'react-dom', 'react-router-dom'],
-                        terminal: [
-                            '@xterm/addon-fit',
-                            '@xterm/addon-search',
-                            '@xterm/addon-unicode11',
-                            '@xterm/addon-web-links',
-                            '@xterm/addon-webgl',
-                            '@xterm/xterm',
-                        ],
+                    manualChunks: (id: string) => {
+                        if (!id.includes('node_modules')) {
+                            return;
+                        }
+                        if (/[\\/]@apollo[\\/]client|[\\/]graphql[\\/]|[\\/]graphql-ws[\\/]/.test(id)) {
+                            return 'apollo-client';
+                        }
+                        if (/[\\/](react-markdown|rehype-highlight|rehype-raw|rehype-slug|remark-gfm)[\\/]/.test(id)) {
+                            return 'markdown';
+                        }
+                        if (/[\\/]@radix-ui[\\/]/.test(id)) {
+                            return 'radix-ui';
+                        }
+                        if (/[\\/]@xterm[\\/]/.test(id)) {
+                            return 'terminal';
+                        }
+                        if (/[\\/](react|react-dom|react-router-dom)[\\/]/.test(id)) {
+                            return 'react-vendor';
+                        }
                     },
                 },
             },

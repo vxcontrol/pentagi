@@ -4,11 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"strings"
 
 	"pentagi/pkg/database"
+	"pentagi/pkg/graph/model"
 	obs "pentagi/pkg/observability"
 	"pentagi/pkg/observability/langfuse"
+	"pentagi/pkg/providers/embeddings"
 
 	"github.com/sirupsen/logrus"
 	"github.com/vxcontrol/cloud/anonymizer"
@@ -26,28 +29,43 @@ const (
 )
 
 type search struct {
-	flowID    int64
-	taskID    *int64
-	subtaskID *int64
-	replacer  anonymizer.Replacer
-	store     *pgvector.Store
-	vslp      VectorStoreLogProvider
+	userID            int64
+	flowID            int64
+	taskID            *int64
+	subtaskID         *int64
+	replacer          anonymizer.Replacer
+	store             *pgvector.Store
+	embedder          embeddings.Embedder
+	db                database.Querier
+	maxEmbeddingBytes int
+	vslp              VectorStoreLogProvider
+	knp               KnowledgeProvider
 }
 
 func NewSearchTool(
+	userID int64,
 	flowID int64,
 	taskID, subtaskID *int64,
 	replacer anonymizer.Replacer,
 	store *pgvector.Store,
+	embedder embeddings.Embedder,
+	db database.Querier,
+	maxEmbeddingBytes int,
 	vslp VectorStoreLogProvider,
+	knp KnowledgeProvider,
 ) Tool {
 	return &search{
-		flowID:    flowID,
-		taskID:    taskID,
-		subtaskID: subtaskID,
-		replacer:  replacer,
-		store:     store,
-		vslp:      vslp,
+		userID:            userID,
+		flowID:            flowID,
+		taskID:            taskID,
+		subtaskID:         subtaskID,
+		replacer:          replacer,
+		store:             store,
+		embedder:          embedder,
+		db:                db,
+		maxEmbeddingBytes: maxEmbeddingBytes,
+		vslp:              vslp,
+		knp:               knp,
 	}
 }
 
@@ -203,16 +221,24 @@ func (s *search) Handle(ctx context.Context, name string, args json.RawMessage) 
 			return "", fmt.Errorf("failed to unmarshal %s store answer action arguments: %w", name, err)
 		}
 
+		// Anonymize before anything else so all downstream paths (including error
+		// branches that emit langfuse events) only ever expose the anonymized form.
+		var (
+			anonymizedAnswer   = s.replacer.ReplaceString(action.Answer)
+			anonymizedQuestion = s.replacer.ReplaceString(action.Question)
+		)
+
+		eventMetadata := map[string]any{
+			"tool_name":   name,
+			"message":     action.Message,
+			"doc_type":    searchVectorStoreDefaultType,
+			"answer_type": action.Type,
+		}
 		opts := []langfuse.EventOption{
 			langfuse.WithEventName("store search answer to vector store"),
 			langfuse.WithEventInput(action.Question),
-			langfuse.WithEventOutput(action.Answer),
-			langfuse.WithEventMetadata(map[string]any{
-				"tool_name":   name,
-				"message":     action.Message,
-				"doc_type":    searchVectorStoreDefaultType,
-				"answer_type": action.Type,
-			}),
+			langfuse.WithEventOutput(anonymizedAnswer),
+			langfuse.WithEventMetadata(eventMetadata),
 		}
 
 		logger = logger.WithFields(logrus.Fields{
@@ -221,42 +247,80 @@ func (s *search) Handle(ctx context.Context, name string, args json.RawMessage) 
 			"answer":      action.Answer[:min(len(action.Answer), 1000)],
 		})
 
+		// Build common metadata for the document.
+		metadata := map[string]any{
+			"user_id":     s.userID,
+			"flow_id":     s.flowID,
+			"doc_type":    searchVectorStoreDefaultType,
+			"answer_type": action.Type,
+			"question":    anonymizedQuestion,
+			"part_size":   len(anonymizedAnswer),
+			"total_size":  len(anonymizedAnswer),
+		}
+		if s.taskID != nil {
+			metadata["task_id"] = *s.taskID
+		}
+		if s.subtaskID != nil {
+			metadata["subtask_id"] = *s.subtaskID
+		}
+
 		var (
-			anonymizedAnswer   = s.replacer.ReplaceString(action.Answer)
-			anonymizedQuestion = s.replacer.ReplaceString(action.Question)
+			docs []schema.Document
+			ids  []string
+			err  error
 		)
 
-		docs, err := documentloaders.NewText(strings.NewReader(anonymizedAnswer)).Load(ctx)
-		if err != nil {
-			observation.Event(append(opts,
-				langfuse.WithEventStatus(err.Error()),
-				langfuse.WithEventLevel(langfuse.ObservationLevelError),
-			)...)
-			logger.WithError(err).Error("failed to load document")
-			return "", fmt.Errorf("failed to load document: %w", err)
-		}
-
-		for _, doc := range docs {
-			if doc.Metadata == nil {
-				doc.Metadata = map[string]any{}
+		if len(anonymizedAnswer) <= s.maxEmbeddingBytes || s.embedder == nil {
+			// Fast path: answer fits within the embedding limit.
+			docs, err = documentloaders.NewText(strings.NewReader(anonymizedAnswer)).Load(ctx)
+			if err != nil {
+				observation.Event(append(opts,
+					langfuse.WithEventStatus(err.Error()),
+					langfuse.WithEventLevel(langfuse.ObservationLevelError),
+				)...)
+				logger.WithError(err).Error("failed to load document")
+				return "", fmt.Errorf("failed to load document: %w", err)
 			}
-			doc.Metadata["flow_id"] = s.flowID
-			doc.Metadata["task_id"] = s.taskID
-			doc.Metadata["subtask_id"] = s.subtaskID
-			doc.Metadata["doc_type"] = searchVectorStoreDefaultType
-			doc.Metadata["answer_type"] = action.Type
-			doc.Metadata["question"] = anonymizedQuestion
-			doc.Metadata["part_size"] = len(doc.PageContent)
-			doc.Metadata["total_size"] = len(anonymizedAnswer)
-		}
+			for i := range docs {
+				if docs[i].Metadata == nil {
+					docs[i].Metadata = map[string]any{}
+				}
+				maps.Copy(docs[i].Metadata, metadata)
+				docs[i].Metadata["part_size"] = len(docs[i].PageContent)
+			}
+			ids, err = s.store.AddDocuments(ctx, docs)
+			eventMetadata["ids"] = ids
+			if err != nil {
+				observation.Event(append(opts,
+					langfuse.WithEventStatus(err.Error()),
+					langfuse.WithEventLevel(langfuse.ObservationLevelError),
+				)...)
+				logger.WithError(err).Error("failed to store answer for question")
+				return "", fmt.Errorf("failed to store answer for question: %w", err)
+			}
+		} else {
+			// Slow path: Answer field exceeds embedding limit.
+			// PageContent is just the answer text, so overhead = 0.
+			embeddingText := truncateForEmbedding(anonymizedAnswer, s.maxEmbeddingBytes)
 
-		if _, err := s.store.AddDocuments(ctx, docs); err != nil {
-			observation.Event(append(opts,
-				langfuse.WithEventStatus(err.Error()),
-				langfuse.WithEventLevel(langfuse.ObservationLevelError),
-			)...)
-			logger.WithError(err).Error("failed to store answer for question")
-			return "", fmt.Errorf("failed to store answer for question: %w", err)
+			id, err := storeDocumentWithEmbeddingLimit(ctx, s.db, s.embedder,
+				embeddingText, anonymizedAnswer, metadata)
+			if err != nil {
+				observation.Event(append(opts,
+					langfuse.WithEventStatus(err.Error()),
+					langfuse.WithEventLevel(langfuse.ObservationLevelError),
+				)...)
+				logger.WithError(err).Error("failed to store answer with embedding limit")
+				return "", fmt.Errorf("failed to store answer for question: %w", err)
+			}
+			ids = []string{id}
+			docs = []schema.Document{
+				{
+					PageContent: anonymizedAnswer,
+					Metadata:    metadata,
+				},
+			}
+			eventMetadata["ids"] = ids
 		}
 
 		observation.Event(append(opts,
@@ -265,13 +329,41 @@ func (s *search) Handle(ctx context.Context, name string, args json.RawMessage) 
 			langfuse.WithEventOutput(docs),
 		)...)
 
+		if s.knp != nil {
+			answerType := model.KnowledgeAnswerType(action.Type)
+			for _, id := range ids {
+				knDoc := &model.KnowledgeDocument{
+					ID:         id,
+					UserID:     s.userID,
+					DocType:    model.KnowledgeDocTypeAnswer,
+					Content:    anonymizedAnswer,
+					Question:   anonymizedQuestion,
+					AnswerType: &answerType,
+					PartSize:   len(anonymizedAnswer),
+					TotalSize:  len(anonymizedAnswer),
+					Manual:     false,
+				}
+				if s.flowID != 0 {
+					knDoc.FlowID = &s.flowID
+				}
+				knDoc.TaskID = s.taskID
+				knDoc.SubtaskID = s.subtaskID
+				s.knp.KnowledgeDocumentCreated(ctx, knDoc)
+			}
+		}
+
 		if agentCtx, ok := GetAgentContext(ctx); ok {
-			filtersData, err := json.Marshal(map[string]any{
+			data := map[string]any{
 				"doc_type":    searchVectorStoreDefaultType,
 				"answer_type": action.Type,
-				"task_id":     s.taskID,
-				"subtask_id":  s.subtaskID,
-			})
+			}
+			if s.taskID != nil {
+				data["task_id"] = *s.taskID
+			}
+			if s.subtaskID != nil {
+				data["subtask_id"] = *s.subtaskID
+			}
+			filtersData, err := json.Marshal(data)
 			if err != nil {
 				logger.WithError(err).Error("failed to marshal filters")
 				return "", fmt.Errorf("failed to marshal filters: %w", err)

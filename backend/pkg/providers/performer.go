@@ -444,6 +444,16 @@ func (fp *flowProvider) callWithRetries(
 				if toolCall.FunctionCall == nil {
 					continue
 				}
+				sanitizedArgs := cast.SanitizeJSONControlChars(toolCall.FunctionCall.Arguments)
+				if !json.Valid([]byte(sanitizedArgs)) {
+					logger.WithFields(logrus.Fields{
+						"tool_call_id": toolCall.ID,
+						"tool_name":    toolCall.FunctionCall.Name,
+						"raw_args":     toolCall.FunctionCall.Arguments[:min(200, len(toolCall.FunctionCall.Arguments))],
+					}).Warn("tool call has invalid JSON arguments, replacing with empty object to allow tool-call fixer to regenerate them")
+					sanitizedArgs = "{}"
+				}
+				toolCall.FunctionCall.Arguments = sanitizedArgs
 				result.funcCalls = append(result.funcCalls, toolCall)
 			}
 		}

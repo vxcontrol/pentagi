@@ -22,7 +22,7 @@ const statusIcons: Record<StatusType, { className: string; icon: LucideIcon }> =
 };
 const defaultIcon = { className: 'text-muted-foreground', icon: CircleDashed };
 
-const FlowTaskStatusIcon = ({ className, status, tooltip }: FlowTaskStatusIconProps) => {
+function FlowTaskStatusIcon({ className, status, tooltip }: FlowTaskStatusIconProps) {
     const { className: defaultClassName, icon: Icon } = status ? statusIcons[status] || defaultIcon : defaultIcon;
     const iconElement = (
         <Icon className={cn('size-4 shrink-0', defaultClassName, tooltip && 'cursor-pointer', className)} />
@@ -38,6 +38,6 @@ const FlowTaskStatusIcon = ({ className, status, tooltip }: FlowTaskStatusIconPr
             <TooltipContent>{formatName(tooltip)}</TooltipContent>
         </Tooltip>
     );
-};
+}
 
 export default FlowTaskStatusIcon;

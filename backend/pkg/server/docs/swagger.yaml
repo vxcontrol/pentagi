@@ -160,6 +160,47 @@ definitions:
     - ttl
     - updated_at
     type: object
+  models.AddResourceFromFlowRequest:
+    properties:
+      destination:
+        description: Destination is the virtual path prefix in the user's resource
+          tree.
+        type: string
+      force:
+        description: Force overwrites existing resources at the target paths when
+          true.
+        type: boolean
+      source:
+        description: |-
+          Source is a single relative path within the flow cache (kept for backward
+          compatibility). Combined with Sources when both are provided.
+        type: string
+      sources:
+        description: |-
+          Sources is a list of relative paths within the flow cache. Combined with
+          Source when both are provided; duplicate entries are silently removed.
+        items:
+          type: string
+        type: array
+    required:
+    - destination
+    type: object
+  models.AddResourcesRequest:
+    properties:
+      force:
+        description: Force overwrites files that already exist in the flow resources
+          directory.
+        type: boolean
+      ids:
+        description: IDs is the list of user resource IDs to copy into the flow resources
+          directory.
+        items:
+          type: integer
+        minItems: 1
+        type: array
+    required:
+    - ids
+    type: object
   models.AgentTypeUsageStats:
     properties:
       agent_type:
@@ -386,6 +427,58 @@ definitions:
     - status
     - type
     type: object
+  models.ContainerFile:
+    properties:
+      id:
+        type: string
+      is_dir:
+        type: boolean
+      modified_at:
+        type: string
+      name:
+        type: string
+      path:
+        type: string
+      size:
+        type: integer
+    type: object
+  models.ContainerFiles:
+    properties:
+      files:
+        items:
+          $ref: '#/definitions/models.ContainerFile'
+        type: array
+      path:
+        type: string
+      total:
+        type: integer
+    type: object
+  models.CopyResourceRequest:
+    properties:
+      destination:
+        description: |-
+          Destination is the exact target path (single source) or base directory
+          (multiple sources). Required.
+        type: string
+      force:
+        description: Force overwrites existing resources at the target paths when
+          true.
+        type: boolean
+      source:
+        description: |-
+          Source is kept for backward compatibility (single source).
+          Combined with Sources when both are provided; duplicates are removed.
+        type: string
+      sources:
+        description: |-
+          Sources is a list of virtual resource paths to copy.
+          Combined with Source when both are provided; duplicates are removed.
+        items:
+          type: string
+        type: array
+    required:
+    - destination
+    type: object
   models.CreateAPITokenRequest:
     properties:
       name:
@@ -409,6 +502,10 @@ definitions:
       provider:
         example: openai
         type: string
+      resource_ids:
+        items:
+          type: integer
+        type: array
       use_agents:
         example: true
         type: boolean
@@ -426,9 +523,40 @@ definitions:
       provider:
         example: openai
         type: string
+      resource_ids:
+        items:
+          type: integer
+        type: array
     required:
     - input
     - provider
+    type: object
+  models.CreateKnowledgeDocRequest:
+    properties:
+      answer_type:
+        type: string
+      code_lang:
+        maxLength: 100
+        type: string
+      content:
+        maxLength: 65536
+        minLength: 1
+        type: string
+      description:
+        maxLength: 1000
+        type: string
+      doc_type:
+        type: string
+      guide_type:
+        type: string
+      question:
+        maxLength: 2048
+        minLength: 1
+        type: string
+    required:
+    - content
+    - doc_type
+    - question
     type: object
   models.DailyFlowsStats:
     properties:
@@ -530,6 +658,31 @@ definitions:
         type: integer
     required:
     - flow_title
+    type: object
+  models.FlowFile:
+    properties:
+      id:
+        type: string
+      is_dir:
+        type: boolean
+      modified_at:
+        type: string
+      name:
+        type: string
+      path:
+        description: 'relative: "uploads/<x>" or resources/<x> or container/<x>"'
+        type: string
+      size:
+        type: integer
+    type: object
+  models.FlowFiles:
+    properties:
+      files:
+        items:
+          $ref: '#/definitions/models.FlowFile'
+        type: array
+      total:
+        type: integer
     type: object
   models.FlowStats:
     properties:
@@ -653,6 +806,97 @@ definitions:
     required:
     - function_name
     type: object
+  models.KnowledgeDocEntry:
+    properties:
+      answer_type:
+        type: string
+      code_lang:
+        type: string
+      content:
+        type: string
+      description:
+        type: string
+      doc_type:
+        type: string
+      flow_id:
+        type: integer
+      guide_type:
+        type: string
+      id:
+        type: string
+      manual:
+        type: boolean
+      part_size:
+        type: integer
+      question:
+        type: string
+      subtask_id:
+        type: integer
+      task_id:
+        type: integer
+      total_size:
+        type: integer
+      user_id:
+        type: integer
+    type: object
+  models.KnowledgeDocList:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/models.KnowledgeDocEntry'
+        type: array
+      total:
+        type: integer
+    type: object
+  models.KnowledgeDocWithScore:
+    properties:
+      document:
+        $ref: '#/definitions/models.KnowledgeDocEntry'
+      score:
+        type: number
+    type: object
+  models.KnowledgeSearchRequest:
+    properties:
+      answer_types:
+        items:
+          type: string
+        type: array
+      code_langs:
+        items:
+          type: string
+        type: array
+      doc_types:
+        items:
+          type: string
+        type: array
+      flow_id:
+        type: integer
+      guide_types:
+        items:
+          type: string
+        type: array
+      limit:
+        maximum: 100
+        minimum: 1
+        type: integer
+      manual:
+        type: boolean
+      query:
+        maxLength: 2048
+        minLength: 1
+        type: string
+    required:
+    - query
+    type: object
+  models.KnowledgeSearchResult:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/models.KnowledgeDocWithScore'
+        type: array
+      total:
+        type: integer
+    type: object
   models.Login:
     properties:
       mail:
@@ -666,6 +910,47 @@ definitions:
     - mail
     - password
     type: object
+  models.MkdirResourceRequest:
+    properties:
+      path:
+        type: string
+    required:
+    - path
+    type: object
+  models.ModelInfo:
+    properties:
+      agent_types:
+        items:
+          type: string
+        type: array
+      name:
+        example: gpt-4o
+        type: string
+      price_info:
+        $ref: '#/definitions/models.ModelPriceInfo'
+    required:
+    - agent_types
+    - name
+    type: object
+  models.ModelPriceInfo:
+    properties:
+      cache_read:
+        example: 0.1
+        minimum: 0
+        type: number
+      cache_write:
+        example: 0.3
+        minimum: 0
+        type: number
+      input:
+        example: 1.1
+        minimum: 0
+        type: number
+      output:
+        example: 3
+        minimum: 0
+        type: number
+    type: object
   models.ModelUsageStats:
     properties:
       model:
@@ -678,6 +963,30 @@ definitions:
     - model
     - provider
     - stats
+    type: object
+  models.MoveResourceRequest:
+    properties:
+      destination:
+        description: |-
+          Destination is the exact target path (single source) or base directory
+          (multiple sources). Empty string means the root directory.
+        type: string
+      force:
+        description: Force overwrites existing resources at the target paths when
+          true.
+        type: boolean
+      source:
+        description: |-
+          Source is kept for backward compatibility (single source).
+          Combined with Sources when both are provided; duplicates are removed.
+        type: string
+      sources:
+        description: |-
+          Sources is a list of virtual resource paths to move.
+          Combined with Source when both are provided; duplicates are removed.
+        items:
+          type: string
+        type: array
     type: object
   models.Msglog:
     properties:
@@ -737,6 +1046,10 @@ definitions:
       input:
         example: user input for waiting assistant
         type: string
+      resource_ids:
+        items:
+          type: integer
+        type: array
       use_agents:
         example: true
         type: boolean
@@ -761,6 +1074,10 @@ definitions:
         type: string
       provider:
         type: string
+      resource_ids:
+        items:
+          type: integer
+        type: array
     required:
     - action
     type: object
@@ -830,6 +1147,13 @@ definitions:
     type: object
   models.ProviderInfo:
     properties:
+      default_model:
+        example: gpt-4o
+        type: string
+      models:
+        items:
+          $ref: '#/definitions/models.ModelInfo'
+        type: array
       name:
         example: my openai provider
         type: string
@@ -837,6 +1161,8 @@ definitions:
         example: openai
         type: string
     required:
+    - default_model
+    - models
     - name
     - type
     type: object
@@ -849,6 +1175,51 @@ definitions:
     required:
     - provider
     - stats
+    type: object
+  models.PullFlowFilesRequest:
+    properties:
+      force:
+        description: Force overwrites local cache entries that already exist.
+        type: boolean
+      path:
+        description: |-
+          Path is a single container path (maintained for backward compatibility).
+          Combined with Paths if both are provided.
+        type: string
+      paths:
+        description: Paths is a list of container paths to pull. Combined with Path
+          if provided.
+        items:
+          type: string
+        type: array
+    type: object
+  models.ResourceEntry:
+    properties:
+      created_at:
+        type: string
+      id:
+        type: integer
+      is_dir:
+        type: boolean
+      name:
+        type: string
+      path:
+        type: string
+      size:
+        type: integer
+      updated_at:
+        type: string
+      user_id:
+        type: integer
+    type: object
+  models.ResourceList:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/models.ResourceEntry'
+        type: array
+      total:
+        type: integer
     type: object
   models.Role:
     properties:
@@ -934,6 +1305,27 @@ definitions:
     - flow_id
     - initiator
     - query
+    type: object
+  models.Settings:
+    properties:
+      ask_user:
+        example: false
+        type: boolean
+      assistant_use_agents:
+        example: false
+        type: boolean
+      debug:
+        example: false
+        type: boolean
+      docker_inside:
+        example: false
+        type: boolean
+      is_develop_mode:
+        example: false
+        type: boolean
+      version:
+        example: v1.0.0
+        type: string
     type: object
   models.Subtask:
     properties:
@@ -1114,6 +1506,44 @@ definitions:
     - text
     - type
     type: object
+  models.Toolcall:
+    properties:
+      args:
+        type: string
+      call_id:
+        type: string
+      created_at:
+        type: string
+      duration_seconds:
+        minimum: 0
+        type: number
+      flow_id:
+        minimum: 0
+        type: integer
+      id:
+        minimum: 0
+        type: integer
+      name:
+        type: string
+      result:
+        type: string
+      status:
+        type: string
+      subtask_id:
+        minimum: 0
+        type: integer
+      task_id:
+        minimum: 0
+        type: integer
+      updated_at:
+        type: string
+    required:
+    - args
+    - call_id
+    - flow_id
+    - name
+    - status
+    type: object
   models.ToolcallsStats:
     properties:
       total_count:
@@ -1130,6 +1560,29 @@ definitions:
         type: string
       status:
         type: string
+    type: object
+  models.UpdateKnowledgeDocRequest:
+    properties:
+      answer_type:
+        type: string
+      code_lang:
+        maxLength: 100
+        type: string
+      content:
+        maxLength: 65536
+        minLength: 1
+        type: string
+      description:
+        maxLength: 1000
+        type: string
+      guide_type:
+        type: string
+      question:
+        maxLength: 2048
+        minLength: 1
+        type: string
+    required:
+    - content
     type: object
   models.UsageStats:
     properties:
@@ -1333,6 +1786,18 @@ definitions:
       total:
         type: integer
     type: object
+  services.anonymizeTextRequest:
+    properties:
+      text:
+        type: string
+    required:
+    - text
+    type: object
+  services.anonymizeTextResponse:
+    properties:
+      text:
+        type: string
+    type: object
   services.assistantlogs:
     properties:
       assistantlogs:
@@ -1471,6 +1936,15 @@ definitions:
       tokens:
         items:
           $ref: '#/definitions/models.APIToken'
+        type: array
+      total:
+        type: integer
+    type: object
+  services.toolcalls:
+    properties:
+      toolcalls:
+        items:
+          $ref: '#/definitions/models.Toolcall'
         type: array
       total:
         type: integer
@@ -1638,6 +2112,48 @@ paths:
       summary: Retrieve agentlogs list
       tags:
       - Agentlogs
+  /anonymize/text:
+    post:
+      consumes:
+      - application/json
+      description: Replace sensitive data patterns (credentials, keys, PII, etc.)
+        in the provided text with safe placeholders.
+      parameters:
+      - description: Text to anonymize
+        in: body
+        name: json
+        required: true
+        schema:
+          $ref: '#/definitions/services.anonymizeTextRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: anonymized text returned successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/services.anonymizeTextResponse'
+              type: object
+        "400":
+          description: invalid request body
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: anonymize.call permission required
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "503":
+          description: anonymizer is not configured
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Anonymize text
+      tags:
+      - Anonymize
   /assistantlogs/:
     get:
       parameters:
@@ -2486,7 +3002,7 @@ paths:
       consumes:
       - application/json
       parameters:
-      - description: flow id
+      - description: flow id (use 0 to create a new flow together with the assistant)
         in: path
         minimum: 0
         name: flowID
@@ -2797,6 +3313,429 @@ paths:
       summary: Retrieve container info by id and flow id
       tags:
       - Containers
+  /flows/{flowID}/files/:
+    delete:
+      parameters:
+      - description: flow id
+        in: path
+        minimum: 0
+        name: flowID
+        required: true
+        type: integer
+      - description: 'relative path in cache: uploads/, resources/, or container/
+          (may be combined with paths[])'
+        in: query
+        name: path
+        type: string
+      - collectionFormat: multi
+        description: 'relative paths in cache (repeatable): uploads/, resources/,
+          or container/'
+        in: query
+        items:
+          type: string
+        name: paths[]
+        type: array
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: flow files deleted successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.FlowFiles'
+              type: object
+        "400":
+          description: invalid flow file request data
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: deleting flow file not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: flow file not found
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on deleting flow file
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete flow files or directories by cached paths
+      tags:
+      - FlowFiles
+    get:
+      parameters:
+      - description: flow id
+        in: path
+        minimum: 0
+        name: flowID
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: flow files list received successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.FlowFiles'
+              type: object
+        "400":
+          description: invalid flow files request data
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: getting flow files not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: flow not found
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on getting flow files
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Retrieve flow files list
+      tags:
+      - FlowFiles
+    post:
+      consumes:
+      - multipart/form-data
+      parameters:
+      - description: flow id
+        in: path
+        minimum: 0
+        name: flowID
+        required: true
+        type: integer
+      - description: 'files to upload (multipart, field name: files or file)'
+        in: formData
+        name: files
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: flow files uploaded successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.FlowFiles'
+              type: object
+        "400":
+          description: invalid flow files request data
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: uploading flow files not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: flow not found
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "409":
+          description: flow file already exists
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on uploading flow files
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Upload files to flow workspace
+      tags:
+      - FlowFiles
+  /flows/{flowID}/files/container:
+    get:
+      parameters:
+      - description: flow id
+        in: path
+        minimum: 0
+        name: flowID
+        required: true
+        type: integer
+      - description: absolute path inside the running container; defaults to /work
+          (may be combined with paths[])
+        in: query
+        name: path
+        type: string
+      - collectionFormat: multi
+        description: absolute paths inside the running container (repeatable)
+        in: query
+        items:
+          type: string
+        name: paths[]
+        type: array
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: container files list received successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.ContainerFiles'
+              type: object
+        "400":
+          description: invalid flow files request data or container not running
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: getting flow container files not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: flow not found
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on getting flow container files
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Retrieve flow container directory files list
+      tags:
+      - FlowFiles
+  /flows/{flowID}/files/download:
+    get:
+      description: |-
+        Single regular file: served as a direct attachment.
+        Single directory or multiple paths (any mix): packaged as a ZIP archive.
+      parameters:
+      - description: flow id
+        in: path
+        minimum: 0
+        name: flowID
+        required: true
+        type: integer
+      - description: 'relative path in cache: uploads/, resources/, or container/
+          (may be combined with paths[])'
+        in: query
+        name: path
+        type: string
+      - collectionFormat: multi
+        description: relative paths in cache (repeatable)
+        in: query
+        items:
+          type: string
+        name: paths[]
+        type: array
+      produces:
+      - application/octet-stream
+      - application/zip
+      - application/json
+      responses:
+        "200":
+          description: file content, or ZIP archive for directories / multiple paths
+          schema:
+            type: file
+        "400":
+          description: invalid flow file request data
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: downloading flow file not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: flow file not found
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on downloading flow file
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Download flow file(s) or directory by cached path(s)
+      tags:
+      - FlowFiles
+  /flows/{flowID}/files/pull:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: flow id
+        in: path
+        minimum: 0
+        name: flowID
+        required: true
+        type: integer
+      - description: 'pull request: path or paths are required'
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.PullFlowFilesRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: container paths synced to local cache, sorted by cache path
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.FlowFiles'
+              type: object
+        "400":
+          description: invalid pull request or container not running
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: pulling flow files not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: flow not found
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "409":
+          description: cache entry already exists; set force=true to overwrite
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on pulling flow files
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Pull files or directories from the running container into the local
+        cache
+      tags:
+      - FlowFiles
+  /flows/{flowID}/files/resources:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Copies one or more user resources (identified by ID) into flow-{id}-data/resources/.
+        Files already present in the flow are skipped unless force=true, in which case they are replaced.
+        When the primary container for this flow is running, new or replaced files are pushed to /work/resources/ (best-effort), same as uploads.
+      parameters:
+      - description: flow id
+        in: path
+        minimum: 0
+        name: flowID
+        required: true
+        type: integer
+      - description: resource IDs and force flag
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/models.AddResourcesRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: resources copied successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.FlowFiles'
+              type: object
+        "400":
+          description: invalid request
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: flow not found
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "409":
+          description: file already exists and force=false
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Copy user resources into a flow
+      tags:
+      - FlowFiles
+  /flows/{flowID}/files/to-resources:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: flow id
+        in: path
+        minimum: 0
+        name: flowID
+        required: true
+        type: integer
+      - description: source(s), destination and force flag
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/models.AddResourceFromFlowRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: resources created or updated
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.ResourceList'
+              type: object
+        "400":
+          description: invalid request
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: source or flow not found
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "409":
+          description: destination already exists and force=false
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Promote flow file(s) or directory/directories to user resources
+      tags:
+      - FlowFiles
   /flows/{flowID}/graph:
     get:
       parameters:
@@ -3689,6 +4628,144 @@ paths:
       summary: Retrieve termlogs list by flow id
       tags:
       - Termlogs
+  /flows/{flowID}/toolcalls/:
+    get:
+      parameters:
+      - description: flow id
+        in: path
+        minimum: 0
+        name: flowID
+        required: true
+        type: integer
+      - collectionFormat: multi
+        description: |-
+          Filtering result on server e.g. {"value":[...],"field":"...","operator":"..."}
+            field is the unique identifier of the table column, different for each endpoint
+            value should be integer or string or array type, "value":123 or "value":"string" or "value":[123,456]
+            operator value should be one of <,<=,>=,>,=,!=,like,not like,in
+            default operator value is 'like' or '=' if field is 'id' or '*_id' or '*_at'
+        in: query
+        items:
+          type: string
+        name: filters[]
+        type: array
+      - description: Field to group results by
+        in: query
+        name: group
+        type: string
+      - default: 1
+        description: Number of page (since 1)
+        in: query
+        minimum: 1
+        name: page
+        required: true
+        type: integer
+      - default: 5
+        description: Amount items per page (min -1, max 1000, -1 means unlimited)
+        in: query
+        maximum: 1000
+        minimum: -1
+        name: pageSize
+        type: integer
+      - collectionFormat: multi
+        description: |-
+          Sorting result on server e.g. {"prop":"...","order":"..."}
+            field order is "ascending" or "descending" value
+            order is required if prop is not empty
+        in: query
+        items:
+          type: string
+        name: sort[]
+        type: array
+      - default: init
+        description: Type of request
+        enum:
+        - sort
+        - filter
+        - init
+        - page
+        - size
+        in: query
+        name: type
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: toolcalls list received successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/services.toolcalls'
+              type: object
+        "400":
+          description: invalid query request data
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: getting toolcalls not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on getting toolcalls
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Retrieve toolcalls list by flow id
+      tags:
+      - Toolcalls
+  /flows/{flowID}/toolcalls/{toolcallID}:
+    get:
+      parameters:
+      - description: flow id
+        in: path
+        minimum: 0
+        name: flowID
+        required: true
+        type: integer
+      - description: toolcall id
+        in: path
+        minimum: 0
+        name: toolcallID
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: toolcall info received successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.Toolcall'
+              type: object
+        "400":
+          description: invalid request data
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: getting toolcall not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: toolcall not found
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on getting toolcall
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Retrieve toolcall info by id and flow id
+      tags:
+      - Toolcalls
   /flows/{flowID}/usage:
     get:
       description: Get comprehensive analytics for a single flow including all breakdowns
@@ -3894,6 +4971,301 @@ paths:
       summary: Retrieve current user and system settings
       tags:
       - Public
+  /knowledge/:
+    get:
+      parameters:
+      - collectionFormat: multi
+        description: |-
+          Filtering result on server e.g. {"value":[...],"field":"...","operator":"..."}
+            field is the unique identifier of the table column, different for each endpoint
+            value should be integer or string or array type, "value":123 or "value":"string" or "value":[123,456]
+            operator value should be one of <,<=,>=,>,=,!=,like,not like,in
+            default operator value is 'like' or '=' if field is 'id' or '*_id' or '*_at'
+        in: query
+        items:
+          type: string
+        name: filters[]
+        type: array
+      - description: Field to group results by
+        in: query
+        name: group
+        type: string
+      - default: 1
+        description: Number of page (since 1)
+        in: query
+        minimum: 1
+        name: page
+        required: true
+        type: integer
+      - default: 5
+        description: Amount items per page (min -1, max 1000, -1 means unlimited)
+        in: query
+        maximum: 1000
+        minimum: -1
+        name: pageSize
+        type: integer
+      - collectionFormat: multi
+        description: |-
+          Sorting result on server e.g. {"prop":"...","order":"..."}
+            field order is "ascending" or "descending" value
+            order is required if prop is not empty
+        in: query
+        items:
+          type: string
+        name: sort[]
+        type: array
+      - default: init
+        description: Type of request
+        enum:
+        - sort
+        - filter
+        - init
+        - page
+        - size
+        in: query
+        name: type
+        required: true
+        type: string
+      - description: include document text in the response
+        in: query
+        name: with_content
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.KnowledgeDocList'
+              type: object
+        "400":
+          description: invalid query parameters
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List knowledge documents
+      tags:
+      - Knowledge
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Create request
+        in: body
+        name: json
+        required: true
+        schema:
+          $ref: '#/definitions/models.CreateKnowledgeDocRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.KnowledgeDocEntry'
+              type: object
+        "400":
+          description: invalid request
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "503":
+          description: embedding provider not configured
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create knowledge document
+      tags:
+      - Knowledge
+  /knowledge/{id}:
+    delete:
+      parameters:
+      - description: Document UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: document deleted
+          schema:
+            $ref: '#/definitions/SuccessResponse'
+        "403":
+          description: not permitted or wrong owner
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: document not found
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete knowledge document
+      tags:
+      - Knowledge
+    get:
+      parameters:
+      - description: Document UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.KnowledgeDocEntry'
+              type: object
+        "403":
+          description: not permitted or wrong owner
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: document not found
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get knowledge document
+      tags:
+      - Knowledge
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Document UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Update request
+        in: body
+        name: json
+        required: true
+        schema:
+          $ref: '#/definitions/models.UpdateKnowledgeDocRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.KnowledgeDocEntry'
+              type: object
+        "400":
+          description: invalid request
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: not permitted or wrong owner
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: document not found
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "503":
+          description: embedding provider not configured
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update knowledge document
+      tags:
+      - Knowledge
+  /knowledge/search:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Search request
+        in: body
+        name: json
+        required: true
+        schema:
+          $ref: '#/definitions/models.KnowledgeSearchRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.KnowledgeSearchResult'
+              type: object
+        "400":
+          description: invalid request
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "503":
+          description: embedding provider not configured
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Semantic search in knowledge base
+      tags:
+      - Knowledge
   /msglogs/:
     get:
       parameters:
@@ -4259,7 +5631,9 @@ paths:
             - $ref: '#/definitions/SuccessResponse'
             - properties:
                 data:
-                  $ref: '#/definitions/models.ProviderInfo'
+                  items:
+                    $ref: '#/definitions/models.ProviderInfo'
+                  type: array
               type: object
         "403":
           description: getting providers not permitted
@@ -4270,6 +5644,326 @@ paths:
       summary: Retrieve providers list
       tags:
       - Providers
+  /resources/:
+    delete:
+      parameters:
+      - description: virtual path to delete (may be combined with paths[])
+        in: query
+        name: path
+        type: string
+      - collectionFormat: multi
+        description: additional virtual paths to delete (repeatable)
+        in: query
+        items:
+          type: string
+        name: paths[]
+        type: array
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.ResourceList'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete a resource (file or directory)
+      tags:
+      - Resources
+    get:
+      parameters:
+      - description: virtual directory path; empty for root (may be combined with
+          paths[])
+        in: query
+        name: path
+        type: string
+      - collectionFormat: multi
+        description: additional virtual directory paths (repeatable)
+        in: query
+        items:
+          type: string
+        name: paths[]
+        type: array
+      - description: list recursively (default false)
+        in: query
+        name: recursive
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.ResourceList'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List user resources
+      tags:
+      - Resources
+    post:
+      consumes:
+      - multipart/form-data
+      parameters:
+      - description: target virtual directory path; empty or omitted means root
+        in: query
+        name: dir
+        type: string
+      - description: 'files to upload (field name: files or file)'
+        in: formData
+        name: files
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.ResourceList'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Upload files to resource storage
+      tags:
+      - Resources
+  /resources/copy:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: copy request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.CopyResourceRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.ResourceList'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Copy resource(s) (files or directories)
+      tags:
+      - Resources
+  /resources/download:
+    get:
+      parameters:
+      - description: virtual path to download (may be combined with paths[])
+        in: query
+        name: path
+        type: string
+      - collectionFormat: multi
+        description: additional virtual paths to download (repeatable)
+        in: query
+        items:
+          type: string
+        name: paths[]
+        type: array
+      produces:
+      - application/octet-stream
+      - application/zip
+      - application/json
+      responses:
+        "200":
+          description: file content, or ZIP archive for directories / multiple paths
+          schema:
+            type: file
+        "400":
+          description: invalid resource request data
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: downloading resource not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: resource not found
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on downloading resource
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Download a resource or resources
+      tags:
+      - Resources
+  /resources/mkdir:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: mkdir request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.MkdirResourceRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.ResourceEntry'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create a virtual directory
+      tags:
+      - Resources
+  /resources/move:
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: move request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.MoveResourceRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.ResourceList'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Move or rename resource(s) (files or directories)
+      tags:
+      - Resources
   /roles/:
     get:
       parameters:
@@ -4357,7 +6051,7 @@ paths:
       parameters:
       - description: role id
         in: path
-        name: id
+        name: roleID
         required: true
         type: integer
       produces:
@@ -4555,6 +6249,29 @@ paths:
       summary: Retrieve searchlogs list
       tags:
       - Searchlogs
+  /settings/:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: settings received successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.Settings'
+              type: object
+        "403":
+          description: getting settings not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Retrieve settings
+      tags:
+      - Settings
   /termlogs/:
     get:
       parameters:
@@ -4811,6 +6528,90 @@ paths:
       summary: Update API token
       tags:
       - Tokens
+  /toolcalls/:
+    get:
+      parameters:
+      - collectionFormat: multi
+        description: |-
+          Filtering result on server e.g. {"value":[...],"field":"...","operator":"..."}
+            field is the unique identifier of the table column, different for each endpoint
+            value should be integer or string or array type, "value":123 or "value":"string" or "value":[123,456]
+            operator value should be one of <,<=,>=,>,=,!=,like,not like,in
+            default operator value is 'like' or '=' if field is 'id' or '*_id' or '*_at'
+        in: query
+        items:
+          type: string
+        name: filters[]
+        type: array
+      - description: Field to group results by
+        in: query
+        name: group
+        type: string
+      - default: 1
+        description: Number of page (since 1)
+        in: query
+        minimum: 1
+        name: page
+        required: true
+        type: integer
+      - default: 5
+        description: Amount items per page (min -1, max 1000, -1 means unlimited)
+        in: query
+        maximum: 1000
+        minimum: -1
+        name: pageSize
+        type: integer
+      - collectionFormat: multi
+        description: |-
+          Sorting result on server e.g. {"prop":"...","order":"..."}
+            field order is "ascending" or "descending" value
+            order is required if prop is not empty
+        in: query
+        items:
+          type: string
+        name: sort[]
+        type: array
+      - default: init
+        description: Type of request
+        enum:
+        - sort
+        - filter
+        - init
+        - page
+        - size
+        in: query
+        name: type
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: toolcalls list received successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/services.toolcalls'
+              type: object
+        "400":
+          description: invalid query request data
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: getting toolcalls not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on getting toolcalls
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Retrieve toolcalls list
+      tags:
+      - Toolcalls
   /usage:
     get:
       description: Get comprehensive analytics for all user's flows including usage,

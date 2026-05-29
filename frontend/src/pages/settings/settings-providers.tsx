@@ -1,22 +1,8 @@
-import type { ColumnDef } from '@tanstack/react-table';
+import type { ColumnDef, Row } from '@tanstack/react-table';
 
-import { format, isToday } from 'date-fns';
-import { enUS } from 'date-fns/locale';
-import {
-    AlertCircle,
-    ArrowDown,
-    ArrowUp,
-    ChevronDown,
-    Copy,
-    Loader2,
-    MoreHorizontal,
-    Pencil,
-    Plus,
-    Settings,
-    Trash,
-} from 'lucide-react';
+import { AlertCircle, ChevronDown, Copy, Ellipsis, Loader2, Pencil, Plus, Settings, Trash } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 
 import type { ProviderConfigFragmentFragment } from '@/graphql/types';
 
@@ -35,7 +21,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ContextMenuItem, ContextMenuSeparator } from '@/components/ui/context-menu';
-import { DataTable } from '@/components/ui/data-table';
+import { DataTable, DataTableColumnHeader } from '@/components/ui/data-table';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -44,11 +30,12 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { StatusCard } from '@/components/ui/status-card';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ProviderType, useDeleteProviderMutation, useSettingsProvidersQuery } from '@/graphql/types';
+import { useTableState } from '@/hooks/use-table-state';
+import { formatDate } from '@/lib/utils/format';
 type Provider = ProviderConfigFragmentFragment;
 
-const providerIcons: Record<ProviderType, React.ComponentType<any>> = {
+const providerIcons: Record<ProviderType, React.ComponentType<React.SVGProps<SVGSVGElement>>> = {
     [ProviderType.Anthropic]: Anthropic,
     [ProviderType.Bedrock]: Bedrock,
     [ProviderType.Custom]: Custom,
@@ -74,67 +61,7 @@ const providerTypes = [
     { label: 'Qwen', type: ProviderType.Qwen },
 ];
 
-const formatDateTime = (dateString: string) => {
-    const date = new Date(dateString);
-
-    if (isToday(date)) {
-        return format(date, 'HH:mm:ss', { locale: enUS });
-    }
-
-    return format(date, 'd MMM yyyy', { locale: enUS });
-};
-
-const formatFullDateTime = (dateString: string) => {
-    const date = new Date(dateString);
-
-    return format(date, 'd MMM yyyy, HH:mm:ss', { locale: enUS });
-};
-
-const SettingsProvidersHeader = () => {
-    const navigate = useNavigate();
-
-    const handleProviderCreate = (providerType: string) => {
-        navigate(`/settings/providers/new?type=${providerType}`);
-    };
-
-    return (
-        <div className="flex items-center justify-between gap-4">
-            <p className="text-muted-foreground">Manage language model providers</p>
-
-            <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                    <Button variant="secondary">
-                        Create Provider
-                        <ChevronDown className="size-4" />
-                    </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent
-                    align="end"
-                    style={{
-                        width: 'var(--radix-dropdown-menu-trigger-width)',
-                    }}
-                >
-                    {providerTypes.map(({ label, type }) => {
-                        const Icon = providerIcons[type];
-
-                        return (
-                            <DropdownMenuItem
-                                key={type}
-                                onClick={() => handleProviderCreate(type)}
-                            >
-                                {Icon && <Icon className="size-4" />}
-                                {label}
-                            </DropdownMenuItem>
-                        );
-                    })}
-                </DropdownMenuContent>
-            </DropdownMenu>
-        </div>
-    );
-};
-
-const SettingsProviders = () => {
-    const [searchParams, setSearchParams] = useSearchParams();
+function SettingsProviders() {
     const { data, error, loading: isLoading } = useSettingsProvidersQuery();
     const [deleteProvider, { error: deleteError, loading: isDeleteLoading }] = useDeleteProviderMutation();
     const [deleteErrorMessage, setDeleteErrorMessage] = useState<null | string>(null);
@@ -142,49 +69,7 @@ const SettingsProviders = () => {
     const [deletingProvider, setDeletingProvider] = useState<null | Provider>(null);
     const navigate = useNavigate();
 
-
-    // Get current page from URL
-    const currentPage = useMemo(() => {
-        const page = searchParams.get('page');
-
-        return page ? Math.max(0, Number.parseInt(page, 10) - 1) : 0;
-    }, [searchParams]);
-
-    // Handle page change
-    const handlePageChange = useCallback(
-        (pageIndex: number) => {
-            const newParams = new URLSearchParams(searchParams);
-
-            if (pageIndex === 0) {
-                newParams.delete('page');
-            } else {
-                newParams.set('page', String(pageIndex + 1));
-            }
-
-            setSearchParams(newParams);
-        },
-        [searchParams, setSearchParams],
-    );
-
-    // Three-way sorting handler: null -> asc -> desc -> null
-    const handleColumnSort = useCallback(
-        (column: {
-            clearSorting: () => void;
-            getIsSorted: () => 'asc' | 'desc' | false;
-            toggleSorting: (desc?: boolean) => void;
-        }) => {
-            const sorted = column.getIsSorted();
-
-            if (sorted === 'asc') {
-                column.toggleSorting(true);
-            } else if (sorted === 'desc') {
-                column.clearSorting();
-            } else {
-                column.toggleSorting(false);
-            }
-        },
-        [],
-    );
+    const { filter, pageIndex: currentPage, setFilter, setPage: handlePageChange } = useTableState();
 
     const handleProviderDelete = useCallback(
         async (providerId: string | undefined) => {
@@ -232,59 +117,43 @@ const SettingsProviders = () => {
         () => [
             {
                 accessorKey: 'name',
-                cell: ({ row }) => <div className="font-medium">{row.getValue('name')}</div>,
+                cell: ({ row }) => <div className="truncate font-medium">{row.getValue('name')}</div>,
                 enableHiding: false,
-                header: ({ column }) => {
-                    const sorted = column.getIsSorted();
-
-                    return (
-                        <Button
-                            className="text-muted-foreground hover:text-primary flex items-center gap-2 p-0 no-underline hover:no-underline"
-                            onClick={() => handleColumnSort(column)}
-                            variant="link"
-                        >
-                            Name
-                            {sorted === 'asc' ? (
-                                <ArrowDown className="size-4" />
-                            ) : sorted === 'desc' ? (
-                                <ArrowUp className="size-4" />
-                            ) : null}
-                        </Button>
-                    );
-                },
-                size: 400,
+                header: ({ column }) => (
+                    <DataTableColumnHeader
+                        column={column}
+                        title="Name"
+                    />
+                ),
+                // Name flexes to fill remaining width — fixed `size` would push
+                // the Type column off-screen on narrow viewports (e.g. 375px).
+                meta: { searchable: true },
             },
             {
                 accessorKey: 'type',
                 cell: ({ row }) => {
                     const providerType = row.getValue('type') as ProviderType;
                     const Icon = providerIcons[providerType];
+                    const label = providerTypes.find((p) => p.type === providerType)?.label || providerType;
 
                     return (
-                        <Badge variant="outline">
-                            {Icon && <Icon className="mr-1 size-3" />}
-                            {providerTypes.find((p) => p.type === providerType)?.label || providerType}
+                        <Badge
+                            className="max-w-full whitespace-nowrap"
+                            variant="outline"
+                        >
+                            {Icon && <Icon className="mr-1 size-3 shrink-0" />}
+                            <span className="truncate">{label}</span>
                         </Badge>
                     );
                 },
-                header: ({ column }) => {
-                    const sorted = column.getIsSorted();
-
-                    return (
-                        <Button
-                            className="text-muted-foreground hover:text-primary flex items-center gap-2 p-0 no-underline hover:no-underline"
-                            onClick={() => handleColumnSort(column)}
-                            variant="link"
-                        >
-                            Type
-                            {sorted === 'asc' ? (
-                                <ArrowDown className="size-4" />
-                            ) : sorted === 'desc' ? (
-                                <ArrowUp className="size-4" />
-                            ) : null}
-                        </Button>
-                    );
-                },
+                header: ({ column }) => (
+                    <DataTableColumnHeader
+                        column={column}
+                        title="Type"
+                    />
+                ),
+                meta: { searchable: true },
+                minSize: 110,
                 size: 160,
             },
             {
@@ -292,35 +161,15 @@ const SettingsProviders = () => {
                 cell: ({ row }) => {
                     const dateString = row.getValue('createdAt') as string;
 
-                    return (
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <div className="cursor-default text-sm">{formatDateTime(dateString)}</div>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                                <div className="text-xs">{formatFullDateTime(dateString)}</div>
-                            </TooltipContent>
-                        </Tooltip>
-                    );
+                    return <div className="text-sm">{formatDate(new Date(dateString))}</div>;
                 },
-                header: ({ column }) => {
-                    const sorted = column.getIsSorted();
-
-                    return (
-                        <Button
-                            className="text-muted-foreground hover:text-primary flex items-center gap-2 p-0 no-underline hover:no-underline"
-                            onClick={() => handleColumnSort(column)}
-                            variant="link"
-                        >
-                            Created
-                            {sorted === 'asc' ? (
-                                <ArrowDown className="size-4" />
-                            ) : sorted === 'desc' ? (
-                                <ArrowUp className="size-4" />
-                            ) : null}
-                        </Button>
-                    );
-                },
+                header: ({ column }) => (
+                    <DataTableColumnHeader
+                        column={column}
+                        title="Created"
+                    />
+                ),
+                meta: { columnMenuLabel: 'Created' },
                 size: 120,
                 sortingFn: (rowA, rowB) => {
                     const dateA = new Date(rowA.getValue('createdAt') as string);
@@ -334,35 +183,14 @@ const SettingsProviders = () => {
                 cell: ({ row }) => {
                     const dateString = row.getValue('updatedAt') as string;
 
-                    return (
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <div className="cursor-default text-sm">{formatDateTime(dateString)}</div>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                                <div className="text-xs">{formatFullDateTime(dateString)}</div>
-                            </TooltipContent>
-                        </Tooltip>
-                    );
+                    return <div className="text-sm">{formatDate(new Date(dateString))}</div>;
                 },
-                header: ({ column }) => {
-                    const sorted = column.getIsSorted();
-
-                    return (
-                        <Button
-                            className="text-muted-foreground hover:text-primary flex items-center gap-2 p-0 no-underline hover:no-underline"
-                            onClick={() => handleColumnSort(column)}
-                            variant="link"
-                        >
-                            Updated
-                            {sorted === 'asc' ? (
-                                <ArrowDown className="size-4" />
-                            ) : sorted === 'desc' ? (
-                                <ArrowUp className="size-4" />
-                            ) : null}
-                        </Button>
-                    );
-                },
+                header: ({ column }) => (
+                    <DataTableColumnHeader
+                        column={column}
+                        title="Updated"
+                    />
+                ),
                 size: 120,
                 sortingFn: (rowA, rowB) => {
                     const dateA = new Date(rowA.getValue('updatedAt') as string);
@@ -380,11 +208,11 @@ const SettingsProviders = () => {
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                     <Button
+                                        aria-label="Open menu"
                                         className="size-8 p-0"
                                         variant="ghost"
                                     >
-                                        <span className="sr-only">Open menu</span>
-                                        <MoreHorizontal className="size-4" />
+                                        <Ellipsis />
                                     </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent
@@ -428,35 +256,26 @@ const SettingsProviders = () => {
                 size: 48,
             },
         ],
-        [
-            handleColumnSort,
-            handleProviderClone,
-            handleProviderDeleteDialogOpen,
-            handleProviderEdit,
-            isDeleteLoading,
-            deletingProvider,
-        ],
+        [handleProviderClone, handleProviderDeleteDialogOpen, handleProviderEdit, isDeleteLoading, deletingProvider],
     );
 
-    const renderSubComponent = ({ row }: { row: any }) => {
-        const provider = row.original as Provider;
+    const renderSubComponent = ({ row }: { row: Row<Provider> }) => {
+        const provider = row.original;
         const { agents } = provider;
 
         if (!agents) {
             return <div className="text-muted-foreground p-4 text-sm">No agent configuration available</div>;
         }
 
-        // Convert camelCase key to display name (e.g., 'simpleJson' -> 'Simple Json')
         const getName = (key: string): string =>
             key.replaceAll(/([A-Z])/g, ' $1').replace(/^./, (item) => item.toUpperCase());
 
-        // Recursively extract all fields from an object, flattening nested objects
-        const getFields = (obj: any, prefix = ''): { label: string; value: boolean | number | string }[] => {
+        const getFields = (obj: unknown, prefix = ''): { label: string; value: boolean | number | string }[] => {
             if (!obj || typeof obj !== 'object') {
                 return [];
             }
 
-            return Object.entries(obj)
+            return Object.entries(obj as Record<string, unknown>)
                 .filter(([key, value]) => key !== '__typename' && !!value)
                 .flatMap(([key, value]) => {
                     const label = `${prefix ? `${prefix} ` : ''}${getName(key)}`;
@@ -467,7 +286,6 @@ const SettingsProviders = () => {
                 });
         };
 
-        // Dynamically create agent types from object keys
         const agentTypes = Object.entries(agents)
             .filter(([key]) => key !== '__typename')
             .map(([key, data]) => ({
@@ -483,7 +301,6 @@ const SettingsProviders = () => {
                 <hr className="border-muted-foreground/20 my-4" />
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5">
                     {agentTypes.map(({ data, key, name }) => {
-                        // Get all fields from data, including nested objects
                         const fields = data ? getFields(data) : [];
 
                         return (
@@ -563,7 +380,6 @@ const SettingsProviders = () => {
 
     const providers = data?.settingsProviders?.userDefined || [];
 
-    // Check if providers list is empty
     if (providers.length === 0) {
         return (
             <div className="flex flex-col gap-4">
@@ -602,8 +418,10 @@ const SettingsProviders = () => {
             <DataTable<Provider>
                 columns={columns}
                 data={providers}
-                filterColumn="name"
-                filterPlaceholder="Filter provider names..."
+                empty={{ entityName: 'providers' }}
+                filterPlaceholder="Filter providers..."
+                filterValue={filter}
+                onFilterChange={setFilter}
                 onPageChange={handlePageChange}
                 pageIndex={currentPage}
                 renderRowContextMenu={renderRowContextMenu}
@@ -621,6 +439,61 @@ const SettingsProviders = () => {
             />
         </div>
     );
-};
+}
+
+function SettingsProvidersHeader() {
+    const navigate = useNavigate();
+
+    const handleProviderCreate = (providerType: string) => {
+        navigate(`/settings/providers/new?type=${providerType}`);
+    };
+
+    return (
+        <div className="flex items-center justify-between gap-4">
+            <p className="text-muted-foreground min-w-0 flex-1 truncate">Manage language model providers</p>
+
+            {/*
+             * "Create Provider" is a dropdown trigger, not a submit-style action — it
+             * opens a menu listing provider types (OpenAI, Anthropic, Custom, …). The
+             * `<ChevronDown />` icon plus Radix's `aria-haspopup="menu"` already signal
+             * "menu opens" to sighted and AT users; the explicit aria-label adds the
+             * intent ("create provider") so screen readers don't just announce
+             * "Create Provider, menu" but "Create provider, choose type, menu".
+             */}
+            <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                    <Button
+                        aria-label="Create provider — choose type"
+                        className="shrink-0"
+                        variant="secondary"
+                    >
+                        Create Provider
+                        <ChevronDown className="size-4" />
+                    </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent
+                    align="end"
+                    style={{
+                        width: 'var(--radix-dropdown-menu-trigger-width)',
+                    }}
+                >
+                    {providerTypes.map(({ label, type }) => {
+                        const Icon = providerIcons[type];
+
+                        return (
+                            <DropdownMenuItem
+                                key={type}
+                                onClick={() => handleProviderCreate(type)}
+                            >
+                                {Icon && <Icon className="size-4" />}
+                                {label}
+                            </DropdownMenuItem>
+                        );
+                    })}
+                </DropdownMenuContent>
+            </DropdownMenu>
+        </div>
+    );
+}
 
 export default SettingsProviders;

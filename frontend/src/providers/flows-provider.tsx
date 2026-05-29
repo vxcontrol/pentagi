@@ -36,8 +36,7 @@ interface FlowsProviderProps {
     children: React.ReactNode;
 }
 
-export const FlowsProvider = ({ children }: FlowsProviderProps) => {
-    // Query for flows list
+export function FlowsProvider({ children }: FlowsProviderProps) {
     const {
         data: flowsData,
         error: flowsError,
@@ -54,7 +53,6 @@ export const FlowsProvider = ({ children }: FlowsProviderProps) => {
     useFlowDeletedSubscription();
     useFlowUpdatedSubscription();
 
-    // Show toast notification when flows loading error occurs
     useEffect(() => {
         if (flowsError) {
             toast.error('Error loading flows', {
@@ -64,7 +62,6 @@ export const FlowsProvider = ({ children }: FlowsProviderProps) => {
         }
     }, [flowsError]);
 
-    // Mutations
     const [createFlowMutation] = useCreateFlowMutation();
     const [createAssistantMutation] = useCreateAssistantMutation();
     const [deleteFlowMutation] = useDeleteFlowMutation();
@@ -72,7 +69,7 @@ export const FlowsProvider = ({ children }: FlowsProviderProps) => {
 
     const createFlow = useCallback(
         async (values: FlowFormValues) => {
-            const { message, providerName } = values;
+            const { message, providerName, resourceIds } = values;
 
             const input = message.trim();
             const modelProvider = providerName.trim();
@@ -86,6 +83,7 @@ export const FlowsProvider = ({ children }: FlowsProviderProps) => {
                     variables: {
                         input,
                         modelProvider,
+                        resourceIds: resourceIds?.length ? resourceIds : undefined,
                     },
                 });
 
@@ -109,7 +107,7 @@ export const FlowsProvider = ({ children }: FlowsProviderProps) => {
 
     const createFlowWithAssistant = useCallback(
         async (values: FlowFormValues) => {
-            const { message, providerName, useAgents } = values;
+            const { message, providerName, resourceIds, useAgents } = values;
 
             const input = message.trim();
             const modelProvider = providerName.trim();
@@ -124,6 +122,7 @@ export const FlowsProvider = ({ children }: FlowsProviderProps) => {
                         flowId: '0',
                         input,
                         modelProvider,
+                        resourceIds: resourceIds?.length ? resourceIds : undefined,
                         useAgents,
                     },
                 });
@@ -204,7 +203,6 @@ export const FlowsProvider = ({ children }: FlowsProviderProps) => {
                 await finishFlowMutation({
                     variables: { flowId },
                 });
-                // Cache will be automatically updated via mutation policy and flowUpdated subscription
 
                 toast.success('Flow finished successfully', {
                     description: flowDescription,
@@ -241,9 +239,9 @@ export const FlowsProvider = ({ children }: FlowsProviderProps) => {
     );
 
     return <FlowsContext.Provider value={value}>{children}</FlowsContext.Provider>;
-};
+}
 
-export const useFlows = () => {
+export function useFlows() {
     const context = useContext(FlowsContext);
 
     if (context === undefined) {
@@ -251,4 +249,4 @@ export const useFlows = () => {
     }
 
     return context;
-};
+}

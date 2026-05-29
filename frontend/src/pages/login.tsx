@@ -6,17 +6,13 @@ import LoginForm from '@/features/authentication/login-form';
 import { getSafeReturnUrl } from '@/lib/utils/auth';
 import { useUser } from '@/providers/user-provider';
 
-const Login = () => {
+function Login() {
     const [searchParams] = useSearchParams();
     const location = useLocation();
     const { authInfo, isLoading } = useUser();
     const authProviders = authInfo?.providers || [];
 
-    // Extract the return URL from either location state or query parameters
-    const returnUrl = getSafeReturnUrl(
-        (location.state?.from as string) || searchParams.get('returnUrl'),
-        '/flows/new',
-    );
+    const returnUrl = getSafeReturnUrl((location.state?.from as string) || searchParams.get('returnUrl'), '/flows/new');
 
     return (
         <div className="flex h-dvh w-full items-center justify-center">
@@ -37,6 +33,6 @@ const Login = () => {
             </div>
         </div>
     );
-};
+}
 
 export default Login;

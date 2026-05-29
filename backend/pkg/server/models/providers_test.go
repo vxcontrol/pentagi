@@ -141,21 +141,43 @@ func TestPatchProviderValid(t *testing.T) {
 func TestProviderInfoValid(t *testing.T) {
 	t.Parallel()
 
+	validInfo := ProviderInfo{
+		Name:         "my-provider",
+		Type:         ProviderType("openai"),
+		DefaultModel: "gpt-4o",
+		Models:       []ModelInfo{{Name: "gpt-4o", AgentTypes: []string{"primary_agent"}}},
+	}
+
 	t.Run("valid provider info", func(t *testing.T) {
 		t.Parallel()
-		pi := ProviderInfo{Name: "my-provider", Type: ProviderType("openai")}
-		assert.NoError(t, pi.Valid())
+		assert.NoError(t, validInfo.Valid())
 	})
 
 	t.Run("missing name", func(t *testing.T) {
 		t.Parallel()
-		pi := ProviderInfo{Name: "", Type: ProviderType("openai")}
+		pi := validInfo
+		pi.Name = ""
 		assert.Error(t, pi.Valid())
 	})
 
 	t.Run("invalid type", func(t *testing.T) {
 		t.Parallel()
-		pi := ProviderInfo{Name: "my-provider", Type: ProviderType("invalid")}
+		pi := validInfo
+		pi.Type = ProviderType("invalid")
+		assert.Error(t, pi.Valid())
+	})
+
+	t.Run("missing default model", func(t *testing.T) {
+		t.Parallel()
+		pi := validInfo
+		pi.DefaultModel = ""
+		assert.Error(t, pi.Valid())
+	})
+
+	t.Run("missing models", func(t *testing.T) {
+		t.Parallel()
+		pi := validInfo
+		pi.Models = nil
 		assert.Error(t, pi.Valid())
 	})
 }

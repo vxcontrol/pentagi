@@ -18,13 +18,28 @@ const (
 type SubscriptionsController interface {
 	NewFlowSubscriber(userID, flowID int64) FlowSubscriber
 	NewFlowPublisher(userID, flowID int64) FlowPublisher
+	NewResourceSubscriber(userID int64) ResourceSubscriber
+	NewResourcePublisher(userID int64) ResourcePublisher
+	NewProviderSubscriber(userID int64) ProviderSubscriber
+	NewProviderPublisher(userID int64) ProviderPublisher
+	NewAPITokenSubscriber(userID int64) APITokenSubscriber
+	NewAPITokenPublisher(userID int64) APITokenPublisher
+	NewSettingsSubscriber(userID int64) SettingsSubscriber
+	NewSettingsPublisher(userID int64) SettingsPublisher
+	NewFlowTemplateSubscriber(userID int64) FlowTemplateSubscriber
+	NewFlowTemplatePublisher(userID int64) FlowTemplatePublisher
+	NewKnowledgeSubscriber(userID int64) KnowledgeSubscriber
+	NewKnowledgePublisher(userID int64) KnowledgePublisher
+}
+
+type UserContext interface {
+	GetUserID() int64
+	SetUserID(userID int64)
 }
 
 type FlowContext interface {
 	GetFlowID() int64
 	SetFlowID(flowID int64)
-	GetUserID() int64
-	SetUserID(userID int64)
 }
 
 type FlowSubscriber interface {
@@ -39,6 +54,9 @@ type FlowSubscriber interface {
 	AssistantCreated(ctx context.Context) (<-chan *model.Assistant, error)
 	AssistantUpdated(ctx context.Context) (<-chan *model.Assistant, error)
 	AssistantDeleted(ctx context.Context) (<-chan *model.Assistant, error)
+	FlowFileAdded(ctx context.Context) (<-chan *model.FlowFile, error)
+	FlowFileUpdated(ctx context.Context) (<-chan *model.FlowFile, error)
+	FlowFileDeleted(ctx context.Context) (<-chan *model.FlowFile, error)
 	ScreenshotAdded(ctx context.Context) (<-chan *model.Screenshot, error)
 	TerminalLogAdded(ctx context.Context) (<-chan *model.TerminalLog, error)
 	MessageLogAdded(ctx context.Context) (<-chan *model.MessageLog, error)
@@ -46,19 +64,48 @@ type FlowSubscriber interface {
 	AgentLogAdded(ctx context.Context) (<-chan *model.AgentLog, error)
 	SearchLogAdded(ctx context.Context) (<-chan *model.SearchLog, error)
 	VectorStoreLogAdded(ctx context.Context) (<-chan *model.VectorStoreLog, error)
+	ToolCallLogAdded(ctx context.Context) (<-chan *model.ToolCallLog, error)
+	ToolCallLogUpdated(ctx context.Context) (<-chan *model.ToolCallLog, error)
 	AssistantLogAdded(ctx context.Context) (<-chan *model.AssistantLog, error)
 	AssistantLogUpdated(ctx context.Context) (<-chan *model.AssistantLog, error)
+	FlowContext
+	UserContext
+}
+
+type ProviderSubscriber interface {
 	ProviderCreated(ctx context.Context) (<-chan *model.ProviderConfig, error)
 	ProviderUpdated(ctx context.Context) (<-chan *model.ProviderConfig, error)
 	ProviderDeleted(ctx context.Context) (<-chan *model.ProviderConfig, error)
+	UserContext
+}
+
+type APITokenSubscriber interface {
 	APITokenCreated(ctx context.Context) (<-chan *model.APIToken, error)
 	APITokenUpdated(ctx context.Context) (<-chan *model.APIToken, error)
 	APITokenDeleted(ctx context.Context) (<-chan *model.APIToken, error)
+	UserContext
+}
+
+type SettingsSubscriber interface {
 	SettingsUserUpdated(ctx context.Context) (<-chan *model.UserPreferences, error)
+	UserContext
+}
+
+type FlowTemplateSubscriber interface {
 	FlowTemplateCreated(ctx context.Context) (<-chan *model.FlowTemplate, error)
 	FlowTemplateUpdated(ctx context.Context) (<-chan *model.FlowTemplate, error)
 	FlowTemplateDeleted(ctx context.Context) (<-chan *model.FlowTemplate, error)
-	FlowContext
+	UserContext
+}
+
+type ResourceSubscriber interface {
+	ResourceAdded(ctx context.Context) (<-chan *model.UserResource, error)
+	ResourceUpdated(ctx context.Context) (<-chan *model.UserResource, error)
+	ResourceDeleted(ctx context.Context) (<-chan *model.UserResource, error)
+	ResourceAddedAdmin(ctx context.Context) (<-chan *model.UserResource, error)
+	ResourceUpdatedAdmin(ctx context.Context) (<-chan *model.UserResource, error)
+	ResourceDeletedAdmin(ctx context.Context) (<-chan *model.UserResource, error)
+	UserContext
 }
 
 type FlowPublisher interface {
@@ -70,6 +117,9 @@ type FlowPublisher interface {
 	AssistantCreated(ctx context.Context, assistant database.Assistant)
 	AssistantUpdated(ctx context.Context, assistant database.Assistant)
 	AssistantDeleted(ctx context.Context, assistant database.Assistant)
+	FlowFileAdded(ctx context.Context, file *model.FlowFile)
+	FlowFileUpdated(ctx context.Context, file *model.FlowFile)
+	FlowFileDeleted(ctx context.Context, file *model.FlowFile)
 	ScreenshotAdded(ctx context.Context, screenshot database.Screenshot)
 	TerminalLogAdded(ctx context.Context, terminalLog database.Termlog)
 	MessageLogAdded(ctx context.Context, messageLog database.Msglog)
@@ -77,19 +127,68 @@ type FlowPublisher interface {
 	AgentLogAdded(ctx context.Context, agentLog database.Agentlog)
 	SearchLogAdded(ctx context.Context, searchLog database.Searchlog)
 	VectorStoreLogAdded(ctx context.Context, vectorStoreLog database.Vecstorelog)
+	ToolCallLogAdded(ctx context.Context, toolCallLog database.Toolcall)
+	ToolCallLogUpdated(ctx context.Context, toolCallLog database.Toolcall)
 	AssistantLogAdded(ctx context.Context, assistantLog database.Assistantlog)
 	AssistantLogUpdated(ctx context.Context, assistantLog database.Assistantlog, appendPart bool)
+	KnowledgeDocumentCreated(ctx context.Context, doc *model.KnowledgeDocument)
+	FlowContext
+	UserContext
+}
+
+// KnowledgeSubscriber subscribes to knowledge document events.
+// Regular users receive only their own events (scoped by userID via Publish).
+// Admin users additionally use the Admin variants which receive all events via Broadcast.
+type KnowledgeSubscriber interface {
+	KnowledgeDocumentCreated(ctx context.Context) (<-chan *model.KnowledgeDocument, error)
+	KnowledgeDocumentUpdated(ctx context.Context) (<-chan *model.KnowledgeDocument, error)
+	KnowledgeDocumentDeleted(ctx context.Context) (<-chan *model.KnowledgeDocument, error)
+	KnowledgeDocumentCreatedAdmin(ctx context.Context) (<-chan *model.KnowledgeDocument, error)
+	KnowledgeDocumentUpdatedAdmin(ctx context.Context) (<-chan *model.KnowledgeDocument, error)
+	KnowledgeDocumentDeletedAdmin(ctx context.Context) (<-chan *model.KnowledgeDocument, error)
+	UserContext
+}
+
+// KnowledgePublisher publishes knowledge document events.
+// Regular events are scoped by userID (Publish); admin channels receive all via Broadcast.
+type KnowledgePublisher interface {
+	KnowledgeDocumentCreated(ctx context.Context, doc *model.KnowledgeDocument)
+	KnowledgeDocumentUpdated(ctx context.Context, doc *model.KnowledgeDocument)
+	KnowledgeDocumentDeleted(ctx context.Context, doc *model.KnowledgeDocument)
+	UserContext
+}
+
+type ProviderPublisher interface {
 	ProviderCreated(ctx context.Context, provider database.Provider, cfg *pconfig.ProviderConfig)
 	ProviderUpdated(ctx context.Context, provider database.Provider, cfg *pconfig.ProviderConfig)
 	ProviderDeleted(ctx context.Context, provider database.Provider, cfg *pconfig.ProviderConfig)
+	UserContext
+}
+
+type APITokenPublisher interface {
 	APITokenCreated(ctx context.Context, apiToken database.APITokenWithSecret)
 	APITokenUpdated(ctx context.Context, apiToken database.ApiToken)
 	APITokenDeleted(ctx context.Context, apiToken database.ApiToken)
+	UserContext
+}
+
+type SettingsPublisher interface {
 	SettingsUserUpdated(ctx context.Context, userPreferences database.UserPreference)
+	UserContext
+}
+
+type FlowTemplatePublisher interface {
 	FlowTemplateCreated(ctx context.Context, template database.FlowTemplate)
 	FlowTemplateUpdated(ctx context.Context, template database.FlowTemplate)
 	FlowTemplateDeleted(ctx context.Context, template database.FlowTemplate)
-	FlowContext
+	UserContext
+}
+
+type ResourcePublisher interface {
+	ResourceAdded(ctx context.Context, resource *model.UserResource)
+	ResourceUpdated(ctx context.Context, resource *model.UserResource)
+	ResourceDeleted(ctx context.Context, resource *model.UserResource)
+	UserContext
 }
 
 type controller struct {
@@ -104,6 +203,9 @@ type controller struct {
 	assistantCreated    Channel[*model.Assistant]
 	assistantUpdated    Channel[*model.Assistant]
 	assistantDeleted    Channel[*model.Assistant]
+	flowFileAdded       Channel[*model.FlowFile]
+	flowFileUpdated     Channel[*model.FlowFile]
+	flowFileDeleted     Channel[*model.FlowFile]
 	screenshotAdded     Channel[*model.Screenshot]
 	terminalLogAdded    Channel[*model.TerminalLog]
 	messageLogAdded     Channel[*model.MessageLog]
@@ -111,18 +213,38 @@ type controller struct {
 	agentLogAdded       Channel[*model.AgentLog]
 	searchLogAdded      Channel[*model.SearchLog]
 	vecStoreLogAdded    Channel[*model.VectorStoreLog]
+	toolCallLogAdded    Channel[*model.ToolCallLog]
+	toolCallLogUpdated  Channel[*model.ToolCallLog]
 	assistantLogAdded   Channel[*model.AssistantLog]
 	assistantLogUpdated Channel[*model.AssistantLog]
-	providerCreated     Channel[*model.ProviderConfig]
-	providerUpdated     Channel[*model.ProviderConfig]
-	providerDeleted     Channel[*model.ProviderConfig]
-	apiTokenCreated     Channel[*model.APIToken]
-	apiTokenUpdated     Channel[*model.APIToken]
-	apiTokenDeleted     Channel[*model.APIToken]
+
+	providerCreated Channel[*model.ProviderConfig]
+	providerUpdated Channel[*model.ProviderConfig]
+	providerDeleted Channel[*model.ProviderConfig]
+
+	apiTokenCreated Channel[*model.APIToken]
+	apiTokenUpdated Channel[*model.APIToken]
+	apiTokenDeleted Channel[*model.APIToken]
+
 	settingsUserUpdated Channel[*model.UserPreferences]
+
 	flowTemplateCreated Channel[*model.FlowTemplate]
 	flowTemplateUpdated Channel[*model.FlowTemplate]
 	flowTemplateDeleted Channel[*model.FlowTemplate]
+
+	resourceAdded        Channel[*model.UserResource]
+	resourceUpdated      Channel[*model.UserResource]
+	resourceDeleted      Channel[*model.UserResource]
+	resourceAddedAdmin   Channel[*model.UserResource]
+	resourceUpdatedAdmin Channel[*model.UserResource]
+	resourceDeletedAdmin Channel[*model.UserResource]
+
+	knowledgeDocumentCreated      Channel[*model.KnowledgeDocument]
+	knowledgeDocumentUpdated      Channel[*model.KnowledgeDocument]
+	knowledgeDocumentDeleted      Channel[*model.KnowledgeDocument]
+	knowledgeDocumentCreatedAdmin Channel[*model.KnowledgeDocument]
+	knowledgeDocumentUpdatedAdmin Channel[*model.KnowledgeDocument]
+	knowledgeDocumentDeletedAdmin Channel[*model.KnowledgeDocument]
 }
 
 func NewSubscriptionsController() SubscriptionsController {
@@ -138,6 +260,9 @@ func NewSubscriptionsController() SubscriptionsController {
 		assistantCreated:    NewChannel[*model.Assistant](),
 		assistantUpdated:    NewChannel[*model.Assistant](),
 		assistantDeleted:    NewChannel[*model.Assistant](),
+		flowFileAdded:       NewChannel[*model.FlowFile](),
+		flowFileUpdated:     NewChannel[*model.FlowFile](),
+		flowFileDeleted:     NewChannel[*model.FlowFile](),
 		screenshotAdded:     NewChannel[*model.Screenshot](),
 		terminalLogAdded:    NewChannel[*model.TerminalLog](),
 		messageLogAdded:     NewChannel[*model.MessageLog](),
@@ -145,18 +270,38 @@ func NewSubscriptionsController() SubscriptionsController {
 		agentLogAdded:       NewChannel[*model.AgentLog](),
 		searchLogAdded:      NewChannel[*model.SearchLog](),
 		vecStoreLogAdded:    NewChannel[*model.VectorStoreLog](),
+		toolCallLogAdded:    NewChannel[*model.ToolCallLog](),
+		toolCallLogUpdated:  NewChannel[*model.ToolCallLog](),
 		assistantLogAdded:   NewChannel[*model.AssistantLog](),
 		assistantLogUpdated: NewChannel[*model.AssistantLog](),
-		providerCreated:     NewChannel[*model.ProviderConfig](),
-		providerUpdated:     NewChannel[*model.ProviderConfig](),
-		providerDeleted:     NewChannel[*model.ProviderConfig](),
-		apiTokenCreated:     NewChannel[*model.APIToken](),
-		apiTokenUpdated:     NewChannel[*model.APIToken](),
-		apiTokenDeleted:     NewChannel[*model.APIToken](),
+
+		providerCreated: NewChannel[*model.ProviderConfig](),
+		providerUpdated: NewChannel[*model.ProviderConfig](),
+		providerDeleted: NewChannel[*model.ProviderConfig](),
+
+		apiTokenCreated: NewChannel[*model.APIToken](),
+		apiTokenUpdated: NewChannel[*model.APIToken](),
+		apiTokenDeleted: NewChannel[*model.APIToken](),
+
 		settingsUserUpdated: NewChannel[*model.UserPreferences](),
+
 		flowTemplateCreated: NewChannel[*model.FlowTemplate](),
 		flowTemplateUpdated: NewChannel[*model.FlowTemplate](),
 		flowTemplateDeleted: NewChannel[*model.FlowTemplate](),
+
+		resourceAdded:        NewChannel[*model.UserResource](),
+		resourceUpdated:      NewChannel[*model.UserResource](),
+		resourceDeleted:      NewChannel[*model.UserResource](),
+		resourceAddedAdmin:   NewChannel[*model.UserResource](),
+		resourceUpdatedAdmin: NewChannel[*model.UserResource](),
+		resourceDeletedAdmin: NewChannel[*model.UserResource](),
+
+		knowledgeDocumentCreated:      NewChannel[*model.KnowledgeDocument](),
+		knowledgeDocumentUpdated:      NewChannel[*model.KnowledgeDocument](),
+		knowledgeDocumentDeleted:      NewChannel[*model.KnowledgeDocument](),
+		knowledgeDocumentCreatedAdmin: NewChannel[*model.KnowledgeDocument](),
+		knowledgeDocumentUpdatedAdmin: NewChannel[*model.KnowledgeDocument](),
+		knowledgeDocumentDeletedAdmin: NewChannel[*model.KnowledgeDocument](),
 	}
 }
 
@@ -174,6 +319,60 @@ func (s *controller) NewFlowSubscriber(userID, flowID int64) FlowSubscriber {
 		flowID: flowID,
 		ctrl:   s,
 	}
+}
+
+func (s *controller) NewResourcePublisher(userID int64) ResourcePublisher {
+	return &resourcePublisher{
+		userID: userID,
+		ctrl:   s,
+	}
+}
+
+func (s *controller) NewResourceSubscriber(userID int64) ResourceSubscriber {
+	return &resourceSubscriber{
+		userID: userID,
+		ctrl:   s,
+	}
+}
+
+func (s *controller) NewProviderPublisher(userID int64) ProviderPublisher {
+	return &providerPublisher{userID: userID, ctrl: s}
+}
+
+func (s *controller) NewProviderSubscriber(userID int64) ProviderSubscriber {
+	return &providerSubscriber{userID: userID, ctrl: s}
+}
+
+func (s *controller) NewAPITokenPublisher(userID int64) APITokenPublisher {
+	return &apiTokenPublisher{userID: userID, ctrl: s}
+}
+
+func (s *controller) NewAPITokenSubscriber(userID int64) APITokenSubscriber {
+	return &apiTokenSubscriber{userID: userID, ctrl: s}
+}
+
+func (s *controller) NewSettingsPublisher(userID int64) SettingsPublisher {
+	return &settingsPublisher{userID: userID, ctrl: s}
+}
+
+func (s *controller) NewSettingsSubscriber(userID int64) SettingsSubscriber {
+	return &settingsSubscriber{userID: userID, ctrl: s}
+}
+
+func (s *controller) NewFlowTemplatePublisher(userID int64) FlowTemplatePublisher {
+	return &flowTemplatePublisher{userID: userID, ctrl: s}
+}
+
+func (s *controller) NewFlowTemplateSubscriber(userID int64) FlowTemplateSubscriber {
+	return &flowTemplateSubscriber{userID: userID, ctrl: s}
+}
+
+func (s *controller) NewKnowledgePublisher(userID int64) KnowledgePublisher {
+	return &knowledgePublisher{userID: userID, ctrl: s}
+}
+
+func (s *controller) NewKnowledgeSubscriber(userID int64) KnowledgeSubscriber {
+	return &knowledgeSubscriber{userID: userID, ctrl: s}
 }
 
 type Channel[T any] interface {
@@ -231,10 +430,15 @@ func (c *channel[T]) Publish(ctx context.Context, id int64, data T) {
 	defer c.mx.RUnlock()
 
 	for _, ch := range c.subs[id] {
+		timer := time.NewTimer(defSendTimeout)
 		select {
 		case ch <- data:
+			timer.Stop()
 		case <-ctx.Done():
+			timer.Stop()
 			return
+		case <-timer.C:
+			// subscriber is slow or disconnected; drop the event after timeout
 		}
 	}
 }
@@ -245,10 +449,15 @@ func (c *channel[T]) Broadcast(ctx context.Context, data T) {
 
 	for _, subs := range c.subs {
 		for _, ch := range subs {
+			timer := time.NewTimer(defSendTimeout)
 			select {
 			case ch <- data:
+				timer.Stop()
 			case <-ctx.Done():
+				timer.Stop()
 				return
+			case <-timer.C:
+				// subscriber is slow or disconnected; drop the event after timeout
 			}
 		}
 	}

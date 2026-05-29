@@ -18,7 +18,6 @@ const searchFormSchema = z.object({
     search: z.string(),
 });
 
-// Helper function to check if text contains search value (case-insensitive)
 const containsSearchValue = (text: null | string | undefined, searchValue: string): boolean => {
     if (!text || !searchValue.trim()) {
         return false;
@@ -27,7 +26,7 @@ const containsSearchValue = (text: null | string | undefined, searchValue: strin
     return text.toLowerCase().includes(searchValue.toLowerCase().trim());
 };
 
-const FlowTasks = () => {
+function FlowTasks() {
     const { flowData, flowId } = useFlow();
 
     const tasks = useMemo(() => flowData?.tasks ?? [], [flowData?.tasks]);
@@ -44,7 +43,6 @@ const FlowTasks = () => {
 
     const searchValue = form.watch('search');
 
-    // Create debounced function to update search value
     const debouncedUpdateSearch = useMemo(
         () =>
             debounce((value: string) => {
@@ -53,7 +51,6 @@ const FlowTasks = () => {
         [],
     );
 
-    // Update debounced search value when input value changes
     useEffect(() => {
         debouncedUpdateSearch(searchValue);
 
@@ -62,22 +59,18 @@ const FlowTasks = () => {
         };
     }, [searchValue, debouncedUpdateSearch]);
 
-    // Cleanup debounced function on unmount
     useEffect(() => {
         return () => {
             debouncedUpdateSearch.cancel();
         };
     }, [debouncedUpdateSearch]);
 
-    // Clear search when flow changes to prevent stale search state
     useEffect(() => {
         form.reset({ search: '' });
         setDebouncedSearchValue('');
         debouncedUpdateSearch.cancel();
     }, [flowId, form, debouncedUpdateSearch]);
 
-    // Memoize filtered tasks to avoid recomputing on every render
-    // Use debouncedSearchValue for filtering to improve performance
     const filteredTasks = useMemo(() => {
         const search = debouncedSearchValue.toLowerCase().trim();
 
@@ -106,7 +99,6 @@ const FlowTasks = () => {
     return (
         <div className="flex h-full flex-col">
             <div className="bg-background sticky top-0 z-10 pb-4">
-                {/* Search Input */}
                 <Form {...form}>
                     <div className="p-px">
                         <FormField
@@ -190,6 +182,6 @@ const FlowTasks = () => {
             )}
         </div>
     );
-};
+}
 
 export default FlowTasks;

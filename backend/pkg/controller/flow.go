@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"os"
 	"slices"
 	"sync"
 	"time"
@@ -13,15 +15,18 @@ import (
 	"pentagi/pkg/config"
 	"pentagi/pkg/database"
 	"pentagi/pkg/docker"
+	"pentagi/pkg/flowfiles"
+	"pentagi/pkg/graph/model"
 	"pentagi/pkg/graph/subscriptions"
 	obs "pentagi/pkg/observability"
 	"pentagi/pkg/observability/langfuse"
 	"pentagi/pkg/providers"
 	"pentagi/pkg/providers/pconfig"
 	"pentagi/pkg/providers/provider"
-	"pentagi/pkg/templates"
+	"pentagi/pkg/resources"
 	"pentagi/pkg/tools"
 
+	dockercontainer "github.com/docker/docker/api/types/container"
 	"github.com/sirupsen/logrus"
 )
 
@@ -39,10 +44,12 @@ type FlowWorker interface {
 	DeleteAssistant(ctx context.Context, assistantID int64) error
 	ListAssistants(ctx context.Context) []AssistantWorker
 	ListTasks(ctx context.Context) []TaskWorker
-	PutInput(ctx context.Context, input string, prv provider.Provider) error
+	PutInput(ctx context.Context, input string, prv provider.Provider, resources []database.UserResource) error
+	PutResources(ctx context.Context, resources []database.UserResource) error
 	Finish(ctx context.Context) error
 	Stop(ctx context.Context) error
 	Rename(ctx context.Context, title string) error
+	WaitTaskCompletion(ctx context.Context) error
 }
 
 type flowWorker struct {
@@ -55,8 +62,12 @@ type flowWorker struct {
 	taskMX  *sync.Mutex
 	taskST  context.CancelFunc
 	taskWG  *sync.WaitGroup
+	taskCMX sync.Mutex
+	taskCCH chan struct{}
 	input   chan flowInput
 	flowCtx *FlowContext
+	dataDir string
+	docker  docker.DockerClient
 	logger  *logrus.Entry
 }
 
@@ -67,6 +78,7 @@ type newFlowWorkerCtx struct {
 	prvname   provider.ProviderName
 	prvtype   provider.ProviderType
 	functions *tools.Functions
+	resources []database.UserResource
 
 	flowWorkerCtx
 }
@@ -88,6 +100,7 @@ type flowProviderControllers struct {
 	slc  SearchLogController
 	tlc  TermLogController
 	vslc VectorStoreLogController
+	tclc ToolCallLogController
 	sc   ScreenshotController
 }
 
@@ -97,6 +110,7 @@ type flowProviderWorkers struct {
 	slw  FlowSearchLogWorker
 	tlw  FlowTermLogWorker
 	vslw FlowVectorStoreLogWorker
+	tclw FlowToolCallLogWorker
 	sw   FlowScreenshotWorker
 }
 
@@ -166,8 +180,11 @@ func NewFlowWorker(
 	flowSpan := observation.Span(langfuse.WithSpanName("prepare flow worker"))
 	ctx, _ = flowSpan.Observation(ctx)
 
-	prompter := templates.NewDefaultPrompter() // TODO: change to flow prompter by userID from DB
-	executor, err := tools.NewFlowToolsExecutor(fwc.db, fwc.cfg, fwc.docker, fwc.functions, flow.ID)
+	prompter, err := newUserPrompter(ctx, fwc.db, fwc.userID)
+	if err != nil {
+		return nil, wrapErrorEndSpan(ctx, flowSpan, "failed to build user prompter", err)
+	}
+	executor, err := tools.NewFlowToolsExecutor(fwc.db, fwc.cfg, fwc.docker, fwc.functions, fwc.userID, flow.ID)
 	if err != nil {
 		return nil, wrapErrorEndSpan(ctx, flowSpan, "failed to create flow tools executor", err)
 	}
@@ -213,6 +230,8 @@ func NewFlowWorker(
 	executor.SetSearchLogProvider(workers.slw)
 	executor.SetTermLogProvider(workers.tlw)
 	executor.SetVectorStoreLogProvider(workers.vslw)
+	executor.SetToolCallLogProvider(workers.tclw)
+	executor.SetKnowledgeProvider(pub)
 	executor.SetGraphitiClient(fwc.provs.GraphitiClient())
 
 	flowCtx := &FlowContext{
@@ -239,8 +258,11 @@ func NewFlowWorker(
 		taskMX:  &sync.Mutex{},
 		taskST:  func() {},
 		taskWG:  &sync.WaitGroup{},
+		taskCCH: make(chan struct{}),
 		input:   make(chan flowInput),
 		flowCtx: flowCtx,
+		dataDir: fwc.cfg.DataDir,
+		docker:  fwc.docker,
 		logger: logrus.WithFields(logrus.Fields{
 			"flow_id":   flow.ID,
 			"user_id":   fwc.userID,
@@ -264,7 +286,7 @@ func NewFlowWorker(
 	go fw.worker()
 
 	if !fwc.dryRun {
-		if err := fw.PutInput(ctx, fwc.input, nil); err != nil {
+		if err := fw.PutInput(ctx, fwc.input, nil, fwc.resources); err != nil {
 			return nil, wrapErrorEndSpan(ctx, flowSpan, "failed to run flow worker", err)
 		}
 	}
@@ -332,8 +354,11 @@ func LoadFlowWorker(ctx context.Context, flow database.Flow, fwc flowWorkerCtx) 
 		return nil, wrapErrorEndSpan(ctx, flowSpan, "failed to unmarshal functions", err)
 	}
 
-	prompter := templates.NewDefaultPrompter() // TODO: change to flow prompter by userID from DB
-	executor, err := tools.NewFlowToolsExecutor(fwc.db, fwc.cfg, fwc.docker, functions, flow.ID)
+	prompter, err := newUserPrompter(ctx, fwc.db, flow.UserID)
+	if err != nil {
+		return nil, wrapErrorEndSpan(ctx, flowSpan, "failed to build user prompter", err)
+	}
+	executor, err := tools.NewFlowToolsExecutor(fwc.db, fwc.cfg, fwc.docker, functions, flow.UserID, flow.ID)
 	if err != nil {
 		return nil, wrapErrorEndSpan(ctx, flowSpan, "failed to create flow tools executor", err)
 	}
@@ -363,6 +388,8 @@ func LoadFlowWorker(ctx context.Context, flow database.Flow, fwc flowWorkerCtx) 
 	executor.SetSearchLogProvider(workers.slw)
 	executor.SetTermLogProvider(workers.tlw)
 	executor.SetVectorStoreLogProvider(workers.vslw)
+	executor.SetToolCallLogProvider(workers.tclw)
+	executor.SetKnowledgeProvider(pub)
 	executor.SetGraphitiClient(fwc.provs.GraphitiClient())
 
 	flowCtx := &FlowContext{
@@ -389,8 +416,11 @@ func LoadFlowWorker(ctx context.Context, flow database.Flow, fwc flowWorkerCtx) 
 		taskMX:  &sync.Mutex{},
 		taskST:  func() {},
 		taskWG:  &sync.WaitGroup{},
+		taskCCH: make(chan struct{}),
 		input:   make(chan flowInput),
 		flowCtx: flowCtx,
+		dataDir: fwc.cfg.DataDir,
+		docker:  fwc.docker,
 		logger: logrus.WithFields(logrus.Fields{
 			"flow_id":   flow.ID,
 			"user_id":   flow.UserID,
@@ -420,6 +450,8 @@ func LoadFlowWorker(ctx context.Context, flow database.Flow, fwc flowWorkerCtx) 
 	awc := assistantWorkerCtx{
 		userID:        flow.UserID,
 		flowID:        flow.ID,
+		prompter:      prompter,
+		fw:            fw,
 		flowWorkerCtx: fwc,
 	}
 	for _, assistant := range assistants {
@@ -571,12 +603,17 @@ func (fw *flowWorker) PutInput(
 	ctx context.Context,
 	input string,
 	prv provider.Provider,
+	resources []database.UserResource,
 ) error {
 	ctx, span := obs.Observer.NewSpan(ctx, obs.SpanKindInternal, "controller.flowWorker.PutInput")
 	defer span.End()
 
 	if err := fw.switchProvider(ctx, prv); err != nil {
 		return fmt.Errorf("failed to switch provider: %w", err)
+	}
+
+	if err := fw.PutResources(ctx, resources); err != nil {
+		fw.logger.WithError(err).Warn("failed to copy resources before user input")
 	}
 
 	flin := flowInput{input: input, done: make(chan error, 1)}
@@ -601,6 +638,110 @@ func (fw *flowWorker) PutInput(
 		case <-ctx.Done():
 			return fmt.Errorf("flow %d input processing timeout: %w", fw.flowCtx.FlowID, ctx.Err())
 		}
+	}
+}
+
+func (fw *flowWorker) PutResources(ctx context.Context, dbResources []database.UserResource) error {
+	ctx, span := obs.Observer.NewSpan(ctx, obs.SpanKindInternal, "controller.flowWorker.PutResources")
+	defer span.End()
+
+	addedPaths, err := fw.copyResourcesToFS(dbResources)
+	if err != nil {
+		return err
+	}
+	if len(addedPaths) == 0 {
+		return nil
+	}
+
+	fw.pushResourcesToContainer(ctx, addedPaths)
+	fw.publishResourceFileEvents(ctx, addedPaths)
+	return nil
+}
+
+// copyResourcesToFS copies user resource blobs into the flow resources directory on disk.
+// Returns relative paths of newly written files (skips files already present).
+func (fw *flowWorker) copyResourcesToFS(dbResources []database.UserResource) ([]string, error) {
+	if len(dbResources) == 0 {
+		return nil, nil
+	}
+
+	refs := make([]flowfiles.ResourceRef, 0, len(dbResources))
+	for _, r := range dbResources {
+		refs = append(refs, flowfiles.ResourceRef{
+			Hash:        r.Hash,
+			VirtualPath: r.Path,
+			Name:        r.Name,
+			IsDir:       r.IsDir,
+		})
+	}
+
+	storeDir := resources.ResourcesDir(fw.dataDir)
+	return flowfiles.CopyResourcesToFlow(fw.dataDir, storeDir, uint64(fw.flowCtx.FlowID), refs, false)
+}
+
+// pushResourcesToContainer pushes newly added resource files into the running primary container.
+// Each file is sent individually so partial failures are non-fatal.
+func (fw *flowWorker) pushResourcesToContainer(ctx context.Context, addedPaths []string) {
+	if fw.docker == nil {
+		return
+	}
+	containerName := tools.PrimaryTerminalName(fw.flowCtx.FlowID)
+	running, _ := fw.docker.IsContainerRunning(ctx, containerName)
+	if !running {
+		return
+	}
+
+	resourcesDir := flowfiles.FlowResourcesDir(fw.dataDir, uint64(fw.flowCtx.FlowID))
+	for _, relPath := range addedPaths {
+		fsRelPath := relPath[len(flowfiles.ResourcesDirName)+1:]
+		absPath := resourcesDir + "/" + fsRelPath
+
+		pr, pw := io.Pipe()
+		errCh := make(chan error, 1)
+		go func() {
+			errCh <- flowfiles.WriteSingleFileTar(pw, absPath, flowfiles.ResourcesDirName+"/"+fsRelPath)
+		}()
+
+		copyErr := fw.docker.CopyToContainer(ctx, containerName, docker.WorkFolderPathInContainer, pr,
+			dockercontainer.CopyToContainerOptions{AllowOverwriteDirWithFile: true})
+		pr.Close()
+		writeErr := <-errCh
+
+		if copyErr != nil || writeErr != nil {
+			fw.logger.WithFields(logrus.Fields{
+				"path":      relPath,
+				"copy_err":  copyErr,
+				"write_err": writeErr,
+			}).Warn("failed to push resource file to container; will be synced on restart")
+		}
+	}
+}
+
+// publishResourceFileEvents emits flowFileAdded subscription events for newly written resource files.
+func (fw *flowWorker) publishResourceFileEvents(ctx context.Context, addedPaths []string) {
+	if len(addedPaths) == 0 {
+		return
+	}
+
+	resourcesDir := flowfiles.FlowResourcesDir(fw.dataDir, uint64(fw.flowCtx.FlowID))
+	pub := fw.flowCtx.Publisher
+	for _, relPath := range addedPaths {
+		fsRelPath := relPath[len(flowfiles.ResourcesDirName)+1:]
+		absPath := resourcesDir + "/" + fsRelPath
+
+		file := &model.FlowFile{
+			ID:         flowfiles.ID(relPath),
+			Name:       flowfiles.BaseName(relPath),
+			Path:       relPath,
+			IsDir:      false,
+			ModifiedAt: time.Now(),
+		}
+		if info, err := os.Lstat(absPath); err == nil {
+			file.Size = int(info.Size())
+			file.ModifiedAt = info.ModTime()
+		}
+
+		pub.FlowFileAdded(ctx, file)
 	}
 }
 
@@ -753,6 +894,35 @@ func (fw *flowWorker) finish() error {
 	return nil
 }
 
+// signalTaskComplete broadcasts task completion to all goroutines currently
+// blocked in WaitTaskCompletion. It replaces the shared channel so that future
+// callers block on a fresh channel until the next task finishes.
+func (fw *flowWorker) signalTaskComplete() {
+	fw.taskCMX.Lock()
+	old := fw.taskCCH
+	fw.taskCCH = make(chan struct{})
+	fw.taskCMX.Unlock()
+	close(old)
+}
+
+// WaitTaskCompletion blocks until the currently running task completes,
+// the supplied context expires, or the flow worker itself is stopped.
+// Multiple concurrent callers are all unblocked at once when a task finishes.
+func (fw *flowWorker) WaitTaskCompletion(ctx context.Context) error {
+	fw.taskCMX.Lock()
+	ch := fw.taskCCH
+	fw.taskCMX.Unlock()
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-ch:
+		return nil
+	case <-fw.ctx.Done():
+		return nil
+	}
+}
+
 func (fw *flowWorker) worker() {
 	defer fw.wg.Done()
 
@@ -828,18 +998,61 @@ func (fw *flowWorker) processInput(flin flowInput) (TaskWorker, error) {
 	// anyway there need to set flow status to Running to disable user input
 	_ = fw.SetStatus(fw.ctx, database.FlowStatusRunning)
 
-	if task, err := fw.tc.CreateTask(fw.ctx, flin.input, fw); err != nil {
+	// Pre-create the per-task cancellable context BEFORE calling CreateTask.
+	// GenerateSubtasks (an LLM call) runs synchronously inside CreateTask and may take
+	// many seconds. Without this, a concurrent Stop() would invoke a no-op taskST and
+	// find taskWG at zero—reporting success while the generator is still running.
+	fw.taskMX.Lock()
+	fw.taskST()
+	ctx, taskST := context.WithCancel(fw.ctx)
+	fw.taskST = taskST
+	fw.taskMX.Unlock()
+
+	defer taskST()
+
+	fw.taskWG.Add(1)
+	defer fw.taskWG.Done()
+	defer fw.signalTaskComplete()
+
+	task, err := fw.tc.CreateTask(ctx, flin.input, fw)
+	if err != nil {
+		if errors.Is(err, context.Canceled) && fw.ctx.Err() == nil {
+			// CreateTask was cancelled by Stop() — not a fatal flow error.
+			// Keep the worker alive and return the flow to Waiting state.
+			flin.done <- nil
+			_ = fw.SetStatus(fw.ctx, database.FlowStatusWaiting)
+			return nil, nil
+		}
 		err = fmt.Errorf("failed to create task for flow %d: %w", fw.flowCtx.FlowID, err)
 		flin.done <- err
 		return nil, err
-	} else {
-		flin.done <- nil
-		spanName := fmt.Sprintf("perform task %d: %s", task.GetTaskID(), task.GetTitle())
-		return task, fw.runTask(spanName, flin.input, task)
 	}
+
+	flin.done <- nil
+	spanName := fmt.Sprintf("perform task %d: %s", task.GetTaskID(), task.GetTitle())
+	return task, fw.execTask(ctx, spanName, flin.input, task)
 }
 
+// runTask creates a fresh per-task cancellable context and runs an already-created task.
+// Use this for tasks that were previously created and are being resumed (e.g. after waiting).
 func (fw *flowWorker) runTask(spanName, input string, task TaskWorker) error {
+	fw.taskMX.Lock()
+	fw.taskST()
+	ctx, taskST := context.WithCancel(fw.ctx)
+	fw.taskST = taskST
+	fw.taskMX.Unlock()
+
+	defer taskST()
+
+	fw.taskWG.Add(1)
+	defer fw.taskWG.Done()
+	defer fw.signalTaskComplete()
+
+	return fw.execTask(ctx, spanName, input, task)
+}
+
+// execTask executes a task using an already-prepared context and cancel function.
+func (fw *flowWorker) execTask(ctx context.Context, spanName, input string, task TaskWorker) error {
 	_, observation := obs.Observer.NewObservation(fw.ctx)
 	span := observation.Span(
 		langfuse.WithSpanName(spanName),
@@ -849,17 +1062,7 @@ func (fw *flowWorker) runTask(spanName, input string, task TaskWorker) error {
 		}),
 	)
 
-	fw.taskMX.Lock()
-	fw.taskST()
-	ctx, taskST := context.WithCancel(fw.ctx)
-	fw.taskST = taskST
-	fw.taskMX.Unlock()
-
 	ctx, _ = span.Observation(ctx)
-	defer taskST()
-
-	fw.taskWG.Add(1)
-	defer fw.taskWG.Done()
 
 	if err := task.Run(ctx); err != nil {
 		// if task is stopped by user and it's not finished yet
@@ -926,6 +1129,11 @@ func newFlowProviderWorkers(
 		return nil, fmt.Errorf("failed to create flow vector store log: %w", err)
 	}
 
+	tclw, err := cnts.tclc.NewFlowToolCallLog(ctx, flowID, pub)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create flow tool call log: %w", err)
+	}
+
 	sw, err := cnts.sc.NewFlowScreenshot(ctx, flowID, pub)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create flow screenshot: %w", err)
@@ -937,6 +1145,7 @@ func newFlowProviderWorkers(
 		slw:  slw,
 		tlw:  tlw,
 		vslw: vslw,
+		tclw: tclw,
 		sw:   sw,
 	}, nil
 }
@@ -971,6 +1180,11 @@ func getFlowProviderWorkers(
 		return nil, fmt.Errorf("failed to get flow vector store log: %w", err)
 	}
 
+	tclw, err := cnts.tclc.GetFlowToolCallLog(ctx, flowID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get flow tool call log: %w", err)
+	}
+
 	sw, err := cnts.sc.GetFlowScreenshot(ctx, flowID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get flow screenshot: %w", err)
@@ -982,6 +1196,7 @@ func getFlowProviderWorkers(
 		slw:  slw,
 		tlw:  tlw,
 		vslw: vslw,
+		tclw: tclw,
 		sw:   sw,
 	}, nil
 }

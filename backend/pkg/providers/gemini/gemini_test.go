@@ -121,7 +121,7 @@ func TestGeminiSpecificFeatures(t *testing.T) {
 	}
 
 	// Test that we have current Gemini models
-	expectedModels := []string{"gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash"}
+	expectedModels := []string{"gemini-2.5-flash", "gemini-2.5-pro", "gemini-3.5-flash", "gemini-3.1-pro-preview"}
 	for _, expectedModel := range expectedModels {
 		found := false
 		for _, model := range models {

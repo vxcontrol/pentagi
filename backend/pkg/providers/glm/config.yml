@@ -1,70 +1,143 @@
+# Z.AI GLM agent configuration.
+#
+# Strategy: glm-5.1 (newest flagship) for critical reasoning, glm-5-turbo (OpenClaw-
+# native, agent-optimized) for orchestration, glm-4.5-air for cheap utility.
+#
+# Thinking is controlled via extra_body.thinking.type ("enabled" / "disabled"). GLM is
+# permissive about temperature in either mode (no Kimi-style strict constraint).
+#
+# extra_body.thinking.clear_thinking=false enables Preserved Thinking (Z.AI docs):
+# on the standard API endpoint Z.AI defaults to clearing reasoning_content between
+# turns, which hurts agent loops with tool calls. Setting clear_thinking=false
+# preserves reasoning_content across turns, improving reasoning continuity and cache
+# hit rates. Required together with WithPreserveReasoningContent() in glm.go so that
+# langchaingo serializes reasoning_content back to the API.
+#
+# Note: langchaingo's IsReasoningModel matches glm-4.5/4.6/4.7 prefixes and force-
+# overrides temperature to 1.0; harmless for GLM but temp values for those models in
+# YAML are advisory. glm-5/glm-5.1/glm-5-turbo are not matched and pass through.
+
 simple:
-  model: "glm-4.7-flashx"
-  temperature: 1.0
+  model: "glm-4.5-air"
+  temperature: 0.6
+  top_p: 0.9
   n: 1
+  max_tokens: 8192
+  extra_body:
+    thinking:
+      type: disabled
+    tool_choice: auto
   price:
-    input: 0.07
-    output: 0.40
-    cache_read: 0.01
+    input: 0.20
+    output: 1.10
+    cache_read: 0.03
 
 simple_json:
-  model: "glm-4.7-flashx"
-  temperature: 1.0
+  model: "glm-4.5-air"
+  temperature: 0.6
+  top_p: 0.9
   n: 1
+  max_tokens: 4096
+  json: true
+  extra_body:
+    thinking:
+      type: disabled
+    tool_choice: auto
   price:
-    input: 0.07
-    output: 0.40
-    cache_read: 0.01
+    input: 0.20
+    output: 1.10
+    cache_read: 0.03
 
 primary_agent:
-  model: "glm-5"
+  model: "glm-5-turbo"
   temperature: 1.0
+  top_p: 0.95
   n: 1
+  max_tokens: 16384
+  extra_body:
+    thinking:
+      type: enabled
+      clear_thinking: false
+    tool_choice: auto
   price:
-    input: 1.00
-    output: 3.20
-    cache_read: 0.20
+    input: 1.20
+    output: 4.00
+    cache_read: 0.24
 
 assistant:
-  model: "glm-5"
+  model: "glm-5-turbo"
   temperature: 1.0
+  top_p: 0.95
   n: 1
+  max_tokens: 16384
+  extra_body:
+    thinking:
+      type: enabled
+      clear_thinking: false
+    tool_choice: auto
   price:
-    input: 1.00
-    output: 3.20
-    cache_read: 0.20
+    input: 1.20
+    output: 4.00
+    cache_read: 0.24
 
 generator:
-  model: "glm-5"
+  model: "glm-5.1"
   temperature: 1.0
+  top_p: 0.95
   n: 1
+  max_tokens: 32768
+  extra_body:
+    thinking:
+      type: enabled
+      clear_thinking: false
+    tool_choice: auto
   price:
-    input: 1.00
-    output: 3.20
-    cache_read: 0.20
+    input: 1.40
+    output: 4.40
+    cache_read: 0.26
 
 refiner:
-  model: "glm-5"
+  model: "glm-5.1"
   temperature: 1.0
+  top_p: 0.95
   n: 1
+  max_tokens: 32768
+  extra_body:
+    thinking:
+      type: enabled
+      clear_thinking: false
+    tool_choice: auto
   price:
-    input: 1.00
-    output: 3.20
-    cache_read: 0.20
+    input: 1.40
+    output: 4.40
+    cache_read: 0.26
 
 adviser:
-  model: "glm-5"
+  model: "glm-5.1"
   temperature: 1.0
+  top_p: 0.95
   n: 1
+  max_tokens: 16384
+  extra_body:
+    thinking:
+      type: enabled
+      clear_thinking: false
+    tool_choice: auto
   price:
-    input: 1.00
-    output: 3.20
-    cache_read: 0.20
+    input: 1.40
+    output: 4.40
+    cache_read: 0.26
 
 reflector:
   model: "glm-4.5-air"
-  temperature: 0.7
+  temperature: 0.6
+  top_p: 0.9
   n: 1
+  max_tokens: 8192
+  extra_body:
+    thinking:
+      type: disabled
+    tool_choice: auto
   price:
     input: 0.20
     output: 1.10
@@ -72,8 +145,14 @@ reflector:
 
 searcher:
   model: "glm-4.5-air"
-  temperature: 0.7
+  temperature: 0.6
+  top_p: 0.9
   n: 1
+  max_tokens: 4096
+  extra_body:
+    thinking:
+      type: disabled
+    tool_choice: auto
   price:
     input: 0.20
     output: 1.10
@@ -81,36 +160,63 @@ searcher:
 
 enricher:
   model: "glm-4.5-air"
-  temperature: 0.7
+  temperature: 0.6
+  top_p: 0.9
   n: 1
+  max_tokens: 4096
+  extra_body:
+    thinking:
+      type: disabled
+    tool_choice: auto
   price:
     input: 0.20
     output: 1.10
     cache_read: 0.03
 
 coder:
-  model: "glm-5"
+  model: "glm-5.1"
   temperature: 1.0
+  top_p: 0.95
   n: 1
+  max_tokens: 20480
+  extra_body:
+    thinking:
+      type: enabled
+      clear_thinking: false
+    tool_choice: auto
   price:
-    input: 1.00
-    output: 3.20
-    cache_read: 0.20
+    input: 1.40
+    output: 4.40
+    cache_read: 0.26
 
 installer:
-  model: "glm-4.7"
+  model: "glm-4.5-air"
   temperature: 1.0
+  top_p: 0.95
   n: 1
+  max_tokens: 16384
+  extra_body:
+    thinking:
+      type: enabled
+      clear_thinking: false
+    tool_choice: auto
   price:
-    input: 0.60
-    output: 2.20
-    cache_read: 0.11
+    input: 0.20
+    output: 1.10
+    cache_read: 0.03
 
 pentester:
-  model: "glm-4.7"
+  model: "glm-5.1"
   temperature: 1.0
+  top_p: 0.95
   n: 1
+  max_tokens: 16384
+  extra_body:
+    thinking:
+      type: enabled
+      clear_thinking: false
+    tool_choice: auto
   price:
-    input: 0.60
-    output: 2.20
-    cache_read: 0.11
+    input: 1.40
+    output: 4.40
+    cache_read: 0.26

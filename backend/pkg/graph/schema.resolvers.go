@@ -13,6 +13,7 @@ import (
 	"pentagi/pkg/controller"
 	"pentagi/pkg/database"
 	"pentagi/pkg/database/converter"
+	"pentagi/pkg/flowfiles"
 	"pentagi/pkg/graph/model"
 	"pentagi/pkg/providers/anthropic"
 	"pentagi/pkg/providers/bedrock"
@@ -24,16 +25,19 @@ import (
 	"pentagi/pkg/providers/pconfig"
 	"pentagi/pkg/providers/provider"
 	"pentagi/pkg/providers/qwen"
+	"pentagi/pkg/resources"
 	"pentagi/pkg/server/auth"
 	"pentagi/pkg/templates"
 	"pentagi/pkg/templates/validator"
+	"pentagi/pkg/version"
+	"strings"
 	"time"
 
 	"github.com/sirupsen/logrus"
 )
 
 // CreateFlow is the resolver for the createFlow field.
-func (r *mutationResolver) CreateFlow(ctx context.Context, modelProvider string, input string) (*model.Flow, error) {
+func (r *mutationResolver) CreateFlow(ctx context.Context, modelProvider string, input string, resourceIds []int64) (*model.Flow, error) {
 	uid, _, err := validatePermission(ctx, "flows.create")
 	if err != nil {
 		return nil, err
@@ -53,6 +57,14 @@ func (r *mutationResolver) CreateFlow(ctx context.Context, modelProvider string,
 		return nil, fmt.Errorf("user input is required")
 	}
 
+	var dbResources []database.UserResource
+	if _, isAdmin, err := validatePermission(ctx, "resources.view"); err == nil {
+		dbResources, err = validateUserResources(ctx, r.DB, uid, isAdmin, resourceIds)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	prvname := provider.ProviderName(modelProvider)
 	prv, err := r.ProvidersCtrl.GetProvider(ctx, prvname, uid)
 	if err != nil {
@@ -60,7 +72,7 @@ func (r *mutationResolver) CreateFlow(ctx context.Context, modelProvider string,
 	}
 	prvtype := prv.Type()
 
-	fw, err := r.Controller.CreateFlow(ctx, uid, input, prvname, prvtype, nil)
+	fw, err := r.Controller.CreateFlow(ctx, uid, input, prvname, prvtype, nil, dbResources)
 	if err != nil {
 		return nil, err
 	}
@@ -82,7 +94,7 @@ func (r *mutationResolver) CreateFlow(ctx context.Context, modelProvider string,
 }
 
 // PutUserInput is the resolver for the putUserInput field.
-func (r *mutationResolver) PutUserInput(ctx context.Context, flowID int64, input string, modelProvider *string) (model.ResultType, error) {
+func (r *mutationResolver) PutUserInput(ctx context.Context, flowID int64, input string, modelProvider *string, resourceIds []int64) (model.ResultType, error) {
 	uid, err := validatePermissionWithFlowID(ctx, "flows.edit", flowID, r.DB)
 	if err != nil {
 		return model.ResultTypeError, err
@@ -104,6 +116,14 @@ func (r *mutationResolver) PutUserInput(ctx context.Context, flowID int64, input
 
 	r.Logger.WithFields(fields).Debug("put user input")
 
+	var dbResources []database.UserResource
+	if _, isAdmin, err := validatePermission(ctx, "resources.view"); err == nil {
+		dbResources, err = validateUserResources(ctx, r.DB, uid, isAdmin, resourceIds)
+		if err != nil {
+			return model.ResultTypeError, err
+		}
+	}
+
 	fw, err := r.Controller.GetFlow(ctx, flowID)
 	if err != nil {
 		return model.ResultTypeError, err
@@ -118,7 +138,7 @@ func (r *mutationResolver) PutUserInput(ctx context.Context, flowID int64, input
 		}
 	}
 
-	if err := fw.PutInput(ctx, input, prv); err != nil {
+	if err := fw.PutInput(ctx, input, prv, dbResources); err != nil {
 		return model.ResultTypeError, err
 	}
 
@@ -198,6 +218,14 @@ func (r *mutationResolver) DeleteFlow(ctx context.Context, flowID int64) (model.
 		return model.ResultTypeError, err
 	}
 
+	// Best-effort cleanup: remove accumulated long-term memory documents for this
+	// flow from the vector store. They will never be re-used after the flow is gone.
+	if err := r.DB.DeleteFlowMemoryDocuments(ctx,
+		database.StringToNullString(fmt.Sprintf("%d", flow.ID)),
+	); err != nil {
+		r.Logger.WithError(err).Warnf("failed to clean up memory documents for deleted flow %d", flow.ID)
+	}
+
 	publisher := r.Subscriptions.NewFlowPublisher(flow.UserID, flow.ID)
 	publisher.FlowUpdated(ctx, flow, containers)
 	publisher.FlowDeleted(ctx, flow, containers)
@@ -244,7 +272,7 @@ func (r *mutationResolver) RenameFlow(ctx context.Context, flowID int64, title s
 }
 
 // CreateAssistant is the resolver for the createAssistant field.
-func (r *mutationResolver) CreateAssistant(ctx context.Context, flowID int64, modelProvider string, input string, useAgents bool) (*model.FlowAssistant, error) {
+func (r *mutationResolver) CreateAssistant(ctx context.Context, flowID int64, modelProvider string, input string, useAgents bool, resourceIds []int64) (*model.FlowAssistant, error) {
 	var (
 		err error
 		uid int64
@@ -281,6 +309,14 @@ func (r *mutationResolver) CreateAssistant(ctx context.Context, flowID int64, mo
 		return nil, fmt.Errorf("user input is required")
 	}
 
+	var dbResources []database.UserResource
+	if _, isAdmin, err := validatePermission(ctx, "resources.view"); err == nil {
+		dbResources, err = validateUserResources(ctx, r.DB, uid, isAdmin, resourceIds)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	prvname := provider.ProviderName(modelProvider)
 	prv, err := r.ProvidersCtrl.GetProvider(ctx, prvname, uid)
 	if err != nil {
@@ -288,7 +324,7 @@ func (r *mutationResolver) CreateAssistant(ctx context.Context, flowID int64, mo
 	}
 	prvtype := prv.Type()
 
-	aw, err := r.Controller.CreateAssistant(ctx, uid, flowID, input, useAgents, prvname, prvtype, nil)
+	aw, err := r.Controller.CreateAssistant(ctx, uid, flowID, input, useAgents, prvname, prvtype, nil, dbResources)
 	if err != nil {
 		return nil, err
 	}
@@ -312,7 +348,7 @@ func (r *mutationResolver) CreateAssistant(ctx context.Context, flowID int64, mo
 }
 
 // CallAssistant is the resolver for the callAssistant field.
-func (r *mutationResolver) CallAssistant(ctx context.Context, flowID int64, assistantID int64, input string, useAgents bool) (model.ResultType, error) {
+func (r *mutationResolver) CallAssistant(ctx context.Context, flowID int64, assistantID int64, input string, useAgents bool, resourceIds []int64) (model.ResultType, error) {
 	uid, err := validatePermissionWithFlowID(ctx, "assistants.edit", flowID, r.DB)
 	if err != nil {
 		return model.ResultTypeError, err
@@ -324,6 +360,14 @@ func (r *mutationResolver) CallAssistant(ctx context.Context, flowID int64, assi
 		"assistant": assistantID,
 	}).Debug("call assistant")
 
+	var dbResources []database.UserResource
+	if _, isAdmin, err := validatePermission(ctx, "resources.view"); err == nil {
+		dbResources, err = validateUserResources(ctx, r.DB, uid, isAdmin, resourceIds)
+		if err != nil {
+			return model.ResultTypeError, err
+		}
+	}
+
 	fw, err := r.Controller.GetFlow(ctx, flowID)
 	if err != nil {
 		return model.ResultTypeError, err
@@ -334,7 +378,7 @@ func (r *mutationResolver) CallAssistant(ctx context.Context, flowID int64, assi
 		return model.ResultTypeError, err
 	}
 
-	if err := aw.PutInput(ctx, input, useAgents); err != nil {
+	if err := aw.PutInput(ctx, input, useAgents, dbResources); err != nil {
 		return model.ResultTypeError, err
 	}
 
@@ -481,7 +525,7 @@ func (r *mutationResolver) CreateProvider(ctx context.Context, name string, type
 		return nil, err
 	}
 
-	r.Subscriptions.NewFlowPublisher(uid, 0).ProviderCreated(ctx, prv, cfg)
+	r.Subscriptions.NewProviderPublisher(uid).ProviderCreated(ctx, prv, cfg)
 
 	return converter.ConvertProvider(prv, cfg), nil
 }
@@ -506,7 +550,7 @@ func (r *mutationResolver) UpdateProvider(ctx context.Context, providerID int64,
 		return nil, err
 	}
 
-	r.Subscriptions.NewFlowPublisher(uid, 0).ProviderUpdated(ctx, prv, cfg)
+	r.Subscriptions.NewProviderPublisher(uid).ProviderUpdated(ctx, prv, cfg)
 
 	return converter.ConvertProvider(prv, cfg), nil
 }
@@ -533,7 +577,7 @@ func (r *mutationResolver) DeleteProvider(ctx context.Context, providerID int64)
 		return model.ResultTypeError, err
 	}
 
-	r.Subscriptions.NewFlowPublisher(uid, 0).ProviderDeleted(ctx, prv, &cfg)
+	r.Subscriptions.NewProviderPublisher(uid).ProviderDeleted(ctx, prv, &cfg)
 
 	return model.ResultTypeSuccess, nil
 }
@@ -758,7 +802,7 @@ func (r *mutationResolver) CreateAPIToken(ctx context.Context, input model.Creat
 	r.TokenCache.Invalidate(tokenID)
 	r.TokenCache.InvalidateUser(uint64(uid))
 
-	r.Subscriptions.NewFlowPublisher(uid, 0).APITokenCreated(ctx, tokenWithSecret)
+	r.Subscriptions.NewAPITokenPublisher(uid).APITokenCreated(ctx, tokenWithSecret)
 
 	return converter.ConvertAPITokenWithSecret(tokenWithSecret), nil
 }
@@ -828,7 +872,7 @@ func (r *mutationResolver) UpdateAPIToken(ctx context.Context, tokenID string, i
 		r.TokenCache.InvalidateUser(uint64(uid))
 	}
 
-	r.Subscriptions.NewFlowPublisher(uid, 0).APITokenUpdated(ctx, updatedToken)
+	r.Subscriptions.NewAPITokenPublisher(uid).APITokenUpdated(ctx, updatedToken)
 
 	return converter.ConvertAPIToken(updatedToken), nil
 }
@@ -865,7 +909,7 @@ func (r *mutationResolver) DeleteAPIToken(ctx context.Context, tokenID string) (
 	r.TokenCache.Invalidate(tokenID)
 	r.TokenCache.InvalidateUser(uint64(uid))
 
-	r.Subscriptions.NewFlowPublisher(uid, 0).APITokenDeleted(ctx, token)
+	r.Subscriptions.NewAPITokenPublisher(uid).APITokenDeleted(ctx, token)
 
 	return true, nil
 }
@@ -913,7 +957,7 @@ func (r *mutationResolver) AddFavoriteFlow(ctx context.Context, flowID int64) (m
 		return model.ResultTypeError, fmt.Errorf("failed to add favorite flow: %w", err)
 	}
 
-	r.Subscriptions.NewFlowPublisher(uid, 0).SettingsUserUpdated(ctx, prefs)
+	r.Subscriptions.NewSettingsPublisher(uid).SettingsUserUpdated(ctx, prefs)
 
 	return model.ResultTypeSuccess, nil
 }
@@ -952,7 +996,7 @@ func (r *mutationResolver) DeleteFavoriteFlow(ctx context.Context, flowID int64)
 		return model.ResultTypeError, fmt.Errorf("failed to delete favorite flow: %w", err)
 	}
 
-	r.Subscriptions.NewFlowPublisher(uid, 0).SettingsUserUpdated(ctx, prefs)
+	r.Subscriptions.NewSettingsPublisher(uid).SettingsUserUpdated(ctx, prefs)
 
 	return model.ResultTypeSuccess, nil
 }
@@ -987,7 +1031,7 @@ func (r *mutationResolver) CreateFlowTemplate(ctx context.Context, input model.C
 		return nil, fmt.Errorf("failed to create template: %w", err)
 	}
 
-	r.Subscriptions.NewFlowPublisher(uid, 0).FlowTemplateCreated(ctx, template)
+	r.Subscriptions.NewFlowTemplatePublisher(uid).FlowTemplateCreated(ctx, template)
 
 	return converter.ConvertFlowTemplate(template), nil
 }
@@ -1031,7 +1075,7 @@ func (r *mutationResolver) UpdateFlowTemplate(ctx context.Context, templateID in
 		return nil, fmt.Errorf("failed to update template: %w", err)
 	}
 
-	r.Subscriptions.NewFlowPublisher(uid, 0).FlowTemplateUpdated(ctx, template)
+	r.Subscriptions.NewFlowTemplatePublisher(uid).FlowTemplateUpdated(ctx, template)
 
 	return converter.ConvertFlowTemplate(template), nil
 }
@@ -1073,9 +1117,86 @@ func (r *mutationResolver) DeleteFlowTemplate(ctx context.Context, templateID in
 		return model.ResultTypeError, fmt.Errorf("failed to delete template: %w", err)
 	}
 
-	r.Subscriptions.NewFlowPublisher(uid, 0).FlowTemplateDeleted(ctx, template)
+	r.Subscriptions.NewFlowTemplatePublisher(uid).FlowTemplateDeleted(ctx, template)
 
 	return model.ResultTypeSuccess, nil
+}
+
+// CreateKnowledgeDocument is the resolver for the createKnowledgeDocument field.
+func (r *mutationResolver) CreateKnowledgeDocument(ctx context.Context, input model.CreateKnowledgeDocumentInput) (*model.KnowledgeDocument, error) {
+	uid, _, err := validatePermission(ctx, "knowledge.create")
+	if err != nil {
+		return nil, err
+	}
+
+	r.Logger.WithFields(logrus.Fields{
+		"uid":      uid,
+		"doc_type": input.DocType,
+	}).Debug("create knowledge document")
+
+	return r.Knowledge.CreateDocument(ctx, uid, input)
+}
+
+// UpdateKnowledgeDocument is the resolver for the updateKnowledgeDocument field.
+func (r *mutationResolver) UpdateKnowledgeDocument(ctx context.Context, id string, input model.UpdateKnowledgeDocumentInput) (*model.KnowledgeDocument, error) {
+	uid, admin, err := validatePermission(ctx, "knowledge.edit")
+	if err != nil {
+		return nil, err
+	}
+
+	r.Logger.WithFields(logrus.Fields{
+		"uid":   uid,
+		"admin": admin,
+		"id":    id,
+	}).Debug("update knowledge document")
+
+	if admin {
+		return r.Knowledge.UpdateDocument(ctx, uid, id, input)
+	}
+	return r.Knowledge.UpdateUserDocument(ctx, uid, id, input)
+}
+
+// DeleteKnowledgeDocument is the resolver for the deleteKnowledgeDocument field.
+func (r *mutationResolver) DeleteKnowledgeDocument(ctx context.Context, id string) (model.ResultType, error) {
+	uid, admin, err := validatePermission(ctx, "knowledge.delete")
+	if err != nil {
+		return model.ResultTypeError, err
+	}
+
+	r.Logger.WithFields(logrus.Fields{
+		"uid":   uid,
+		"admin": admin,
+		"id":    id,
+	}).Debug("delete knowledge document")
+
+	var deleteErr error
+	if admin {
+		deleteErr = r.Knowledge.DeleteDocument(ctx, uid, id)
+	} else {
+		deleteErr = r.Knowledge.DeleteUserDocument(ctx, uid, id)
+	}
+	if deleteErr != nil {
+		return model.ResultTypeError, deleteErr
+	}
+	return model.ResultTypeSuccess, nil
+}
+
+// AnonymizeText is the resolver for the anonymizeText field.
+func (r *mutationResolver) AnonymizeText(ctx context.Context, text string) (string, error) {
+	uid, _, err := validatePermission(ctx, "anonymize.call")
+	if err != nil {
+		return "", err
+	}
+
+	r.Logger.WithFields(logrus.Fields{
+		"uid": uid,
+	}).Debug("anonymize text")
+
+	if r.Replacer == nil {
+		return "", fmt.Errorf("anonymizer is not available")
+	}
+
+	return r.Replacer.ReplaceString(text), nil
 }
 
 // Providers is the resolver for the providers field.
@@ -1224,6 +1345,26 @@ func (r *queryResolver) Tasks(ctx context.Context, flowID int64) ([]*model.Task,
 	return converter.ConvertTasks(tasks, subtasks), nil
 }
 
+// FlowFiles is the resolver for the flowFiles field.
+func (r *queryResolver) FlowFiles(ctx context.Context, flowID int64) ([]*model.FlowFile, error) {
+	uid, err := validatePermissionWithFlowID(ctx, "flow_files.view", flowID, r.DB)
+	if err != nil {
+		return nil, err
+	}
+
+	r.Logger.WithFields(logrus.Fields{
+		"uid":  uid,
+		"flow": flowID,
+	}).Debug("get flow files")
+
+	files, err := flowfiles.List(r.Config.DataDir, uint64(flowID))
+	if err != nil {
+		return nil, err
+	}
+
+	return convertFlowFiles(files), nil
+}
+
 // Screenshots is the resolver for the screenshots field.
 func (r *queryResolver) Screenshots(ctx context.Context, flowID int64) ([]*model.Screenshot, error) {
 	uid, err := validatePermissionWithFlowID(ctx, "screenshots.view", flowID, r.DB)
@@ -1342,6 +1483,26 @@ func (r *queryResolver) VectorStoreLogs(ctx context.Context, flowID int64) ([]*m
 	}
 
 	return converter.ConvertVectorStoreLogs(logs), nil
+}
+
+// ToolCallLogs is the resolver for the toolCallLogs field.
+func (r *queryResolver) ToolCallLogs(ctx context.Context, flowID int64) ([]*model.ToolCallLog, error) {
+	uid, err := validatePermissionWithFlowID(ctx, "toolcalls.view", flowID, r.DB)
+	if err != nil {
+		return nil, err
+	}
+
+	r.Logger.WithFields(logrus.Fields{
+		"uid":  uid,
+		"flow": flowID,
+	}).Debug("get tool call logs")
+
+	logs, err := r.DB.GetFlowToolcalls(ctx, flowID)
+	if err != nil {
+		return nil, err
+	}
+
+	return converter.ConvertToolCallLogs(logs), nil
 }
 
 // AssistantLogs is the resolver for the assistantLogs field.
@@ -1518,6 +1679,26 @@ func (r *queryResolver) UsageStatsByAgentTypeForFlow(ctx context.Context, flowID
 	}
 
 	return converter.ConvertAgentTypeUsageStatsForFlow(stats), nil
+}
+
+// UsageStatsByModelAgentsForFlow is the resolver for the usageStatsByModelAgentsForFlow field.
+func (r *queryResolver) UsageStatsByModelAgentsForFlow(ctx context.Context, flowID int64) ([]*model.ModelAgentsUsageStats, error) {
+	uid, err := validatePermissionWithFlowID(ctx, "usage.view", flowID, r.DB)
+	if err != nil {
+		return nil, err
+	}
+
+	r.Logger.WithFields(logrus.Fields{
+		"uid":  uid,
+		"flow": flowID,
+	}).Debug("get usage stats by model agents for flow")
+
+	stats, err := r.DB.GetUsageStatsByModelAgentsForFlow(ctx, flowID)
+	if err != nil {
+		return nil, err
+	}
+
+	return converter.ConvertModelAgentsUsageStatsForFlow(stats), nil
 }
 
 // ToolcallsStatsTotal is the resolver for the toolcallsStatsTotal field.
@@ -1818,7 +1999,9 @@ func (r *queryResolver) Settings(ctx context.Context) (*model.Settings, error) {
 	settings := &model.Settings{
 		Debug:              r.Config.Debug,
 		AskUser:            r.Config.AskUser,
+		Version:            version.GetBinaryVersion(),
 		DockerInside:       r.Config.DockerInside,
+		IsDevelopMode:      version.IsDevelopMode(),
 		AssistantUseAgents: r.Config.AssistantUseAgents,
 	}
 
@@ -2157,6 +2340,146 @@ func (r *queryResolver) FlowTemplates(ctx context.Context) ([]*model.FlowTemplat
 	return converter.ConvertFlowTemplates(templates), nil
 }
 
+// Resources is the resolver for the resources field.
+func (r *queryResolver) Resources(ctx context.Context, path *string, recursive *bool) ([]*model.UserResource, error) {
+	uid, admin, err := validatePermission(ctx, "resources.view")
+	if err != nil {
+		return nil, err
+	}
+
+	r.Logger.WithFields(logrus.Fields{
+		"uid":       uid,
+		"admin":     admin,
+		"path":      path,
+		"recursive": recursive,
+	}).Debug("list user resources")
+
+	reqPath := ""
+	if path != nil {
+		reqPath = strings.TrimSpace(*path)
+		if reqPath != "" {
+			reqPath, err = resources.SanitizeResourcePath(reqPath)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+	isRecursive := recursive != nil && *recursive
+
+	var recs []database.UserResource
+
+	if !admin {
+		switch {
+		case reqPath == "" && isRecursive:
+			recs, err = r.DB.GetUserResourcesAll(ctx, uid)
+		case reqPath == "":
+			recs, err = r.DB.GetUserResourcesRoot(ctx, uid)
+		case isRecursive:
+			escaped := resources.EscapeLike(reqPath)
+			recs, err = r.DB.GetUserResourcesRecursive(ctx, database.GetUserResourcesRecursiveParams{
+				UserID:      uid,
+				DirPath:     reqPath,
+				ChildPrefix: escaped + "/%",
+			})
+		default:
+			escaped := resources.EscapeLike(reqPath)
+			recs, err = r.DB.GetUserResourcesInDir(ctx, database.GetUserResourcesInDirParams{
+				UserID:      uid,
+				DirPath:     reqPath,
+				ChildPrefix: escaped + "/%",
+				DeepPrefix:  escaped + "/%/%",
+			})
+		}
+	} else {
+		switch {
+		case reqPath == "" && isRecursive:
+			recs, err = r.DB.GetAllResourcesAll(ctx)
+		case reqPath == "":
+			recs, err = r.DB.GetAllResourcesRoot(ctx)
+		case isRecursive:
+			escaped := resources.EscapeLike(reqPath)
+			recs, err = r.DB.GetAllResourcesRecursive(ctx, database.GetAllResourcesRecursiveParams{
+				DirPath:     reqPath,
+				ChildPrefix: escaped + "/%",
+			})
+		default:
+			escaped := resources.EscapeLike(reqPath)
+			recs, err = r.DB.GetAllResourcesInDir(ctx, database.GetAllResourcesInDirParams{
+				DirPath:     reqPath,
+				ChildPrefix: escaped + "/%",
+				DeepPrefix:  escaped + "/%/%",
+			})
+		}
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to list resources: %w", err)
+	}
+
+	return converter.ConvertUserResources(recs), nil
+}
+
+// KnowledgeDocuments is the resolver for the knowledgeDocuments field.
+func (r *queryResolver) KnowledgeDocuments(ctx context.Context, filter *model.KnowledgeFilter, withContent bool) ([]*model.KnowledgeDocument, error) {
+	uid, admin, err := validatePermission(ctx, "knowledge.view")
+	if err != nil {
+		return nil, err
+	}
+
+	r.Logger.WithFields(logrus.Fields{
+		"uid":          uid,
+		"admin":        admin,
+		"with_content": withContent,
+	}).Debug("list knowledge documents")
+
+	if admin {
+		return r.Knowledge.ListDocuments(ctx, filter, withContent)
+	}
+	return r.Knowledge.ListUserDocuments(ctx, uid, filter, withContent)
+}
+
+// KnowledgeDocument is the resolver for the knowledgeDocument field.
+func (r *queryResolver) KnowledgeDocument(ctx context.Context, id string) (*model.KnowledgeDocument, error) {
+	uid, admin, err := validatePermission(ctx, "knowledge.view")
+	if err != nil {
+		return nil, err
+	}
+
+	r.Logger.WithFields(logrus.Fields{
+		"uid":   uid,
+		"admin": admin,
+		"id":    id,
+	}).Debug("get knowledge document")
+
+	if admin {
+		return r.Knowledge.GetDocument(ctx, id)
+	}
+	return r.Knowledge.GetUserDocument(ctx, uid, id)
+}
+
+// SearchKnowledge is the resolver for the searchKnowledge field.
+func (r *queryResolver) SearchKnowledge(ctx context.Context, query string, filter *model.KnowledgeFilter, limit *int) ([]*model.KnowledgeDocumentWithScore, error) {
+	uid, admin, err := validatePermission(ctx, "knowledge.search")
+	if err != nil {
+		return nil, err
+	}
+
+	r.Logger.WithFields(logrus.Fields{
+		"uid":   uid,
+		"admin": admin,
+		"query": query[:min(len(query), 200)],
+	}).Debug("search knowledge documents")
+
+	lim := 0
+	if limit != nil {
+		lim = *limit
+	}
+
+	if admin {
+		return r.Knowledge.SearchDocuments(ctx, query, filter, lim)
+	}
+	return r.Knowledge.SearchUserDocuments(ctx, uid, query, filter, lim)
+}
+
 // FlowCreated is the resolver for the flowCreated field.
 func (r *subscriptionResolver) FlowCreated(ctx context.Context) (<-chan *model.Flow, error) {
 	uid, admin, err := validatePermission(ctx, "flows.subscribe")
@@ -2252,6 +2575,36 @@ func (r *subscriptionResolver) AssistantDeleted(ctx context.Context, flowID int6
 	return r.Subscriptions.NewFlowSubscriber(uid, flowID).AssistantDeleted(ctx)
 }
 
+// FlowFileAdded is the resolver for the flowFileAdded field.
+func (r *subscriptionResolver) FlowFileAdded(ctx context.Context, flowID int64) (<-chan *model.FlowFile, error) {
+	uid, err := validatePermissionWithFlowID(ctx, "flow_files.subscribe", flowID, r.DB)
+	if err != nil {
+		return nil, err
+	}
+
+	return r.Subscriptions.NewFlowSubscriber(uid, flowID).FlowFileAdded(ctx)
+}
+
+// FlowFileUpdated is the resolver for the flowFileUpdated field.
+func (r *subscriptionResolver) FlowFileUpdated(ctx context.Context, flowID int64) (<-chan *model.FlowFile, error) {
+	uid, err := validatePermissionWithFlowID(ctx, "flow_files.subscribe", flowID, r.DB)
+	if err != nil {
+		return nil, err
+	}
+
+	return r.Subscriptions.NewFlowSubscriber(uid, flowID).FlowFileUpdated(ctx)
+}
+
+// FlowFileDeleted is the resolver for the flowFileDeleted field.
+func (r *subscriptionResolver) FlowFileDeleted(ctx context.Context, flowID int64) (<-chan *model.FlowFile, error) {
+	uid, err := validatePermissionWithFlowID(ctx, "flow_files.subscribe", flowID, r.DB)
+	if err != nil {
+		return nil, err
+	}
+
+	return r.Subscriptions.NewFlowSubscriber(uid, flowID).FlowFileDeleted(ctx)
+}
+
 // ScreenshotAdded is the resolver for the screenshotAdded field.
 func (r *subscriptionResolver) ScreenshotAdded(ctx context.Context, flowID int64) (<-chan *model.Screenshot, error) {
 	uid, err := validatePermissionWithFlowID(ctx, "screenshots.subscribe", flowID, r.DB)
@@ -2322,6 +2675,26 @@ func (r *subscriptionResolver) VectorStoreLogAdded(ctx context.Context, flowID i
 	return r.Subscriptions.NewFlowSubscriber(uid, flowID).VectorStoreLogAdded(ctx)
 }
 
+// ToolCallLogAdded is the resolver for the toolCallLogAdded field.
+func (r *subscriptionResolver) ToolCallLogAdded(ctx context.Context, flowID int64) (<-chan *model.ToolCallLog, error) {
+	uid, err := validatePermissionWithFlowID(ctx, "toolcalls.subscribe", flowID, r.DB)
+	if err != nil {
+		return nil, err
+	}
+
+	return r.Subscriptions.NewFlowSubscriber(uid, flowID).ToolCallLogAdded(ctx)
+}
+
+// ToolCallLogUpdated is the resolver for the toolCallLogUpdated field.
+func (r *subscriptionResolver) ToolCallLogUpdated(ctx context.Context, flowID int64) (<-chan *model.ToolCallLog, error) {
+	uid, err := validatePermissionWithFlowID(ctx, "toolcalls.subscribe", flowID, r.DB)
+	if err != nil {
+		return nil, err
+	}
+
+	return r.Subscriptions.NewFlowSubscriber(uid, flowID).ToolCallLogUpdated(ctx)
+}
+
 // AssistantLogAdded is the resolver for the assistantLogAdded field.
 func (r *subscriptionResolver) AssistantLogAdded(ctx context.Context, flowID int64) (<-chan *model.AssistantLog, error) {
 	uid, err := validatePermissionWithFlowID(ctx, "assistantlogs.subscribe", flowID, r.DB)
@@ -2349,7 +2722,7 @@ func (r *subscriptionResolver) ProviderCreated(ctx context.Context) (<-chan *mod
 		return nil, err
 	}
 
-	return r.Subscriptions.NewFlowSubscriber(uid, 0).ProviderCreated(ctx)
+	return r.Subscriptions.NewProviderSubscriber(uid).ProviderCreated(ctx)
 }
 
 // ProviderUpdated is the resolver for the providerUpdated field.
@@ -2359,7 +2732,7 @@ func (r *subscriptionResolver) ProviderUpdated(ctx context.Context) (<-chan *mod
 		return nil, err
 	}
 
-	return r.Subscriptions.NewFlowSubscriber(uid, 0).ProviderUpdated(ctx)
+	return r.Subscriptions.NewProviderSubscriber(uid).ProviderUpdated(ctx)
 }
 
 // ProviderDeleted is the resolver for the providerDeleted field.
@@ -2369,7 +2742,7 @@ func (r *subscriptionResolver) ProviderDeleted(ctx context.Context) (<-chan *mod
 		return nil, err
 	}
 
-	return r.Subscriptions.NewFlowSubscriber(uid, 0).ProviderDeleted(ctx)
+	return r.Subscriptions.NewProviderSubscriber(uid).ProviderDeleted(ctx)
 }
 
 // APITokenCreated is the resolver for the apiTokenCreated field.
@@ -2388,7 +2761,7 @@ func (r *subscriptionResolver) APITokenCreated(ctx context.Context) (<-chan *mod
 		return nil, fmt.Errorf("unauthorized: non-user session is not allowed to subscribe to API tokens")
 	}
 
-	return r.Subscriptions.NewFlowSubscriber(uid, 0).APITokenCreated(ctx)
+	return r.Subscriptions.NewAPITokenSubscriber(uid).APITokenCreated(ctx)
 }
 
 // APITokenUpdated is the resolver for the apiTokenUpdated field.
@@ -2407,7 +2780,7 @@ func (r *subscriptionResolver) APITokenUpdated(ctx context.Context) (<-chan *mod
 		return nil, fmt.Errorf("unauthorized: non-user session is not allowed to subscribe to API tokens")
 	}
 
-	return r.Subscriptions.NewFlowSubscriber(uid, 0).APITokenUpdated(ctx)
+	return r.Subscriptions.NewAPITokenSubscriber(uid).APITokenUpdated(ctx)
 }
 
 // APITokenDeleted is the resolver for the apiTokenDeleted field.
@@ -2426,7 +2799,7 @@ func (r *subscriptionResolver) APITokenDeleted(ctx context.Context) (<-chan *mod
 		return nil, fmt.Errorf("unauthorized: non-user session is not allowed to subscribe to API tokens")
 	}
 
-	return r.Subscriptions.NewFlowSubscriber(uid, 0).APITokenDeleted(ctx)
+	return r.Subscriptions.NewAPITokenSubscriber(uid).APITokenDeleted(ctx)
 }
 
 // SettingsUserUpdated is the resolver for the settingsUserUpdated field.
@@ -2445,7 +2818,7 @@ func (r *subscriptionResolver) SettingsUserUpdated(ctx context.Context) (<-chan 
 		return nil, fmt.Errorf("unauthorized: non-user session is not allowed to subscribe to user preferences")
 	}
 
-	return r.Subscriptions.NewFlowSubscriber(uid, 0).SettingsUserUpdated(ctx)
+	return r.Subscriptions.NewSettingsSubscriber(uid).SettingsUserUpdated(ctx)
 }
 
 // FlowTemplateCreated is the resolver for the flowTemplateCreated field.
@@ -2464,7 +2837,7 @@ func (r *subscriptionResolver) FlowTemplateCreated(ctx context.Context) (<-chan 
 		return nil, fmt.Errorf("unauthorized: non-user session is not allowed to subscribe to templates")
 	}
 
-	return r.Subscriptions.NewFlowSubscriber(uid, 0).FlowTemplateCreated(ctx)
+	return r.Subscriptions.NewFlowTemplateSubscriber(uid).FlowTemplateCreated(ctx)
 }
 
 // FlowTemplateUpdated is the resolver for the flowTemplateUpdated field.
@@ -2483,7 +2856,7 @@ func (r *subscriptionResolver) FlowTemplateUpdated(ctx context.Context) (<-chan 
 		return nil, fmt.Errorf("unauthorized: non-user session is not allowed to subscribe to templates")
 	}
 
-	return r.Subscriptions.NewFlowSubscriber(uid, 0).FlowTemplateUpdated(ctx)
+	return r.Subscriptions.NewFlowTemplateSubscriber(uid).FlowTemplateUpdated(ctx)
 }
 
 // FlowTemplateDeleted is the resolver for the flowTemplateDeleted field.
@@ -2502,7 +2875,91 @@ func (r *subscriptionResolver) FlowTemplateDeleted(ctx context.Context) (<-chan 
 		return nil, fmt.Errorf("unauthorized: non-user session is not allowed to subscribe to templates")
 	}
 
-	return r.Subscriptions.NewFlowSubscriber(uid, 0).FlowTemplateDeleted(ctx)
+	return r.Subscriptions.NewFlowTemplateSubscriber(uid).FlowTemplateDeleted(ctx)
+}
+
+// ResourceAdded is the resolver for the resourceAdded field.
+func (r *subscriptionResolver) ResourceAdded(ctx context.Context) (<-chan *model.UserResource, error) {
+	uid, admin, err := validatePermission(ctx, "resources.subscribe")
+	if err != nil {
+		return nil, err
+	}
+
+	sub := r.Subscriptions.NewResourceSubscriber(uid)
+	if admin {
+		return sub.ResourceAddedAdmin(ctx)
+	}
+	return sub.ResourceAdded(ctx)
+}
+
+// ResourceUpdated is the resolver for the resourceUpdated field.
+func (r *subscriptionResolver) ResourceUpdated(ctx context.Context) (<-chan *model.UserResource, error) {
+	uid, admin, err := validatePermission(ctx, "resources.subscribe")
+	if err != nil {
+		return nil, err
+	}
+
+	sub := r.Subscriptions.NewResourceSubscriber(uid)
+	if admin {
+		return sub.ResourceUpdatedAdmin(ctx)
+	}
+	return sub.ResourceUpdated(ctx)
+}
+
+// ResourceDeleted is the resolver for the resourceDeleted field.
+func (r *subscriptionResolver) ResourceDeleted(ctx context.Context) (<-chan *model.UserResource, error) {
+	uid, admin, err := validatePermission(ctx, "resources.subscribe")
+	if err != nil {
+		return nil, err
+	}
+
+	sub := r.Subscriptions.NewResourceSubscriber(uid)
+	if admin {
+		return sub.ResourceDeletedAdmin(ctx)
+	}
+	return sub.ResourceDeleted(ctx)
+}
+
+// KnowledgeDocumentCreated is the resolver for the knowledgeDocumentCreated field.
+func (r *subscriptionResolver) KnowledgeDocumentCreated(ctx context.Context) (<-chan *model.KnowledgeDocument, error) {
+	uid, admin, err := validatePermission(ctx, "knowledge.subscribe")
+	if err != nil {
+		return nil, err
+	}
+
+	sub := r.Subscriptions.NewKnowledgeSubscriber(uid)
+	if admin {
+		return sub.KnowledgeDocumentCreatedAdmin(ctx)
+	}
+	return sub.KnowledgeDocumentCreated(ctx)
+}
+
+// KnowledgeDocumentUpdated is the resolver for the knowledgeDocumentUpdated field.
+func (r *subscriptionResolver) KnowledgeDocumentUpdated(ctx context.Context) (<-chan *model.KnowledgeDocument, error) {
+	uid, admin, err := validatePermission(ctx, "knowledge.subscribe")
+	if err != nil {
+		return nil, err
+	}
+
+	sub := r.Subscriptions.NewKnowledgeSubscriber(uid)
+	if admin {
+		return sub.KnowledgeDocumentUpdatedAdmin(ctx)
+	}
+	return sub.KnowledgeDocumentUpdated(ctx)
+}
+
+// KnowledgeDocumentDeleted is the resolver for the knowledgeDocumentDeleted field.
+func (r *subscriptionResolver) KnowledgeDocumentDeleted(ctx context.Context) (<-chan *model.KnowledgeDocument, error) {
+	uid, admin, err := validatePermission(ctx, "knowledge.subscribe")
+	if err != nil {
+		return nil, err
+	}
+
+	sub := r.Subscriptions.NewKnowledgeSubscriber(uid)
+	if admin {
+		return sub.KnowledgeDocumentDeletedAdmin(ctx)
+	}
+	return sub.KnowledgeDocumentDeleted(ctx)
 }
 
 // Mutation returns MutationResolver implementation.

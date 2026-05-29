@@ -132,6 +132,75 @@
                 }
             }
         },
+        "/anonymize/text": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Replace sensitive data patterns (credentials, keys, PII, etc.) in the provided text with safe placeholders.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Anonymize"
+                ],
+                "summary": "Anonymize text",
+                "parameters": [
+                    {
+                        "description": "Text to anonymize",
+                        "name": "json",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/services.anonymizeTextRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "anonymized text returned successfully",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/services.anonymizeTextResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "invalid request body",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "anonymize.call permission required",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "503": {
+                        "description": "anonymizer is not configured",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/assistantlogs/": {
             "get": {
                 "security": [
@@ -1382,7 +1451,7 @@
                     {
                         "minimum": 0,
                         "type": "integer",
-                        "description": "flow id",
+                        "description": "flow id (use 0 to create a new flow together with the assistant)",
                         "name": "flowID",
                         "in": "path",
                         "required": true
@@ -1846,6 +1915,672 @@
                     },
                     "500": {
                         "description": "internal error on getting container",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/flows/{flowID}/files/": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "FlowFiles"
+                ],
+                "summary": "Retrieve flow files list",
+                "parameters": [
+                    {
+                        "minimum": 0,
+                        "type": "integer",
+                        "description": "flow id",
+                        "name": "flowID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "flow files list received successful",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/models.FlowFiles"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "invalid flow files request data",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "getting flow files not permitted",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "flow not found",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "internal error on getting flow files",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "FlowFiles"
+                ],
+                "summary": "Upload files to flow workspace",
+                "parameters": [
+                    {
+                        "minimum": 0,
+                        "type": "integer",
+                        "description": "flow id",
+                        "name": "flowID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "file",
+                        "description": "files to upload (multipart, field name: files or file)",
+                        "name": "files",
+                        "in": "formData",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "flow files uploaded successful",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/models.FlowFiles"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "invalid flow files request data",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "uploading flow files not permitted",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "flow not found",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "flow file already exists",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "internal error on uploading flow files",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "FlowFiles"
+                ],
+                "summary": "Delete flow files or directories by cached paths",
+                "parameters": [
+                    {
+                        "minimum": 0,
+                        "type": "integer",
+                        "description": "flow id",
+                        "name": "flowID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "relative path in cache: uploads/, resources/, or container/ (may be combined with paths[])",
+                        "name": "path",
+                        "in": "query"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "multi",
+                        "description": "relative paths in cache (repeatable): uploads/, resources/, or container/",
+                        "name": "paths[]",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "flow files deleted successfully",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/models.FlowFiles"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "invalid flow file request data",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "deleting flow file not permitted",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "flow file not found",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "internal error on deleting flow file",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/flows/{flowID}/files/container": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "FlowFiles"
+                ],
+                "summary": "Retrieve flow container directory files list",
+                "parameters": [
+                    {
+                        "minimum": 0,
+                        "type": "integer",
+                        "description": "flow id",
+                        "name": "flowID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "absolute path inside the running container; defaults to /work (may be combined with paths[])",
+                        "name": "path",
+                        "in": "query"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "multi",
+                        "description": "absolute paths inside the running container (repeatable)",
+                        "name": "paths[]",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "container files list received successful",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/models.ContainerFiles"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "invalid flow files request data or container not running",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "getting flow container files not permitted",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "flow not found",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "internal error on getting flow container files",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/flows/{flowID}/files/download": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Single regular file: served as a direct attachment.\nSingle directory or multiple paths (any mix): packaged as a ZIP archive.",
+                "produces": [
+                    "application/octet-stream",
+                    "application/zip",
+                    "application/json"
+                ],
+                "tags": [
+                    "FlowFiles"
+                ],
+                "summary": "Download flow file(s) or directory by cached path(s)",
+                "parameters": [
+                    {
+                        "minimum": 0,
+                        "type": "integer",
+                        "description": "flow id",
+                        "name": "flowID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "relative path in cache: uploads/, resources/, or container/ (may be combined with paths[])",
+                        "name": "path",
+                        "in": "query"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "multi",
+                        "description": "relative paths in cache (repeatable)",
+                        "name": "paths[]",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "file content, or ZIP archive for directories / multiple paths",
+                        "schema": {
+                            "type": "file"
+                        }
+                    },
+                    "400": {
+                        "description": "invalid flow file request data",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "downloading flow file not permitted",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "flow file not found",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "internal error on downloading flow file",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/flows/{flowID}/files/pull": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "FlowFiles"
+                ],
+                "summary": "Pull files or directories from the running container into the local cache",
+                "parameters": [
+                    {
+                        "minimum": 0,
+                        "type": "integer",
+                        "description": "flow id",
+                        "name": "flowID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "pull request: path or paths are required",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.PullFlowFilesRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "container paths synced to local cache, sorted by cache path",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/models.FlowFiles"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "invalid pull request or container not running",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "pulling flow files not permitted",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "flow not found",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "cache entry already exists; set force=true to overwrite",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "internal error on pulling flow files",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/flows/{flowID}/files/resources": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Copies one or more user resources (identified by ID) into flow-{id}-data/resources/.\nFiles already present in the flow are skipped unless force=true, in which case they are replaced.\nWhen the primary container for this flow is running, new or replaced files are pushed to /work/resources/ (best-effort), same as uploads.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "FlowFiles"
+                ],
+                "summary": "Copy user resources into a flow",
+                "parameters": [
+                    {
+                        "minimum": 0,
+                        "type": "integer",
+                        "description": "flow id",
+                        "name": "flowID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "resource IDs and force flag",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.AddResourcesRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "resources copied successfully",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/models.FlowFiles"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "not permitted",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "flow not found",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "file already exists and force=false",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "internal error",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/flows/{flowID}/files/to-resources": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "FlowFiles"
+                ],
+                "summary": "Promote flow file(s) or directory/directories to user resources",
+                "parameters": [
+                    {
+                        "minimum": 0,
+                        "type": "integer",
+                        "description": "flow id",
+                        "name": "flowID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "source(s), destination and force flag",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.AddResourceFromFlowRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "resources created or updated",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/models.ResourceList"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "not permitted",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "source or flow not found",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "destination already exists and force=false",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "internal error",
                         "schema": {
                             "$ref": "#/definitions/ErrorResponse"
                         }
@@ -3137,6 +3872,207 @@
                 }
             }
         },
+        "/flows/{flowID}/toolcalls/": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Toolcalls"
+                ],
+                "summary": "Retrieve toolcalls list by flow id",
+                "parameters": [
+                    {
+                        "minimum": 0,
+                        "type": "integer",
+                        "description": "flow id",
+                        "name": "flowID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "multi",
+                        "description": "Filtering result on server e.g. {\"value\":[...],\"field\":\"...\",\"operator\":\"...\"}\n  field is the unique identifier of the table column, different for each endpoint\n  value should be integer or string or array type, \"value\":123 or \"value\":\"string\" or \"value\":[123,456]\n  operator value should be one of \u003c,\u003c=,\u003e=,\u003e,=,!=,like,not like,in\n  default operator value is 'like' or '=' if field is 'id' or '*_id' or '*_at'",
+                        "name": "filters[]",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Field to group results by",
+                        "name": "group",
+                        "in": "query"
+                    },
+                    {
+                        "minimum": 1,
+                        "type": "integer",
+                        "default": 1,
+                        "description": "Number of page (since 1)",
+                        "name": "page",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "maximum": 1000,
+                        "minimum": -1,
+                        "type": "integer",
+                        "default": 5,
+                        "description": "Amount items per page (min -1, max 1000, -1 means unlimited)",
+                        "name": "pageSize",
+                        "in": "query"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "multi",
+                        "description": "Sorting result on server e.g. {\"prop\":\"...\",\"order\":\"...\"}\n  field order is \"ascending\" or \"descending\" value\n  order is required if prop is not empty",
+                        "name": "sort[]",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "sort",
+                            "filter",
+                            "init",
+                            "page",
+                            "size"
+                        ],
+                        "type": "string",
+                        "default": "init",
+                        "description": "Type of request",
+                        "name": "type",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "toolcalls list received successful",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/services.toolcalls"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "invalid query request data",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "getting toolcalls not permitted",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "internal error on getting toolcalls",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/flows/{flowID}/toolcalls/{toolcallID}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Toolcalls"
+                ],
+                "summary": "Retrieve toolcall info by id and flow id",
+                "parameters": [
+                    {
+                        "minimum": 0,
+                        "type": "integer",
+                        "description": "flow id",
+                        "name": "flowID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "minimum": 0,
+                        "type": "integer",
+                        "description": "toolcall id",
+                        "name": "toolcallID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "toolcall info received successful",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/models.Toolcall"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "invalid request data",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "getting toolcall not permitted",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "toolcall not found",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "internal error on getting toolcall",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/flows/{flowID}/usage": {
             "get": {
                 "security": [
@@ -3443,6 +4379,470 @@
                     },
                     "500": {
                         "description": "internal error on getting information about system and config",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/knowledge/": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Knowledge"
+                ],
+                "summary": "List knowledge documents",
+                "parameters": [
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "multi",
+                        "description": "Filtering result on server e.g. {\"value\":[...],\"field\":\"...\",\"operator\":\"...\"}\n  field is the unique identifier of the table column, different for each endpoint\n  value should be integer or string or array type, \"value\":123 or \"value\":\"string\" or \"value\":[123,456]\n  operator value should be one of \u003c,\u003c=,\u003e=,\u003e,=,!=,like,not like,in\n  default operator value is 'like' or '=' if field is 'id' or '*_id' or '*_at'",
+                        "name": "filters[]",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Field to group results by",
+                        "name": "group",
+                        "in": "query"
+                    },
+                    {
+                        "minimum": 1,
+                        "type": "integer",
+                        "default": 1,
+                        "description": "Number of page (since 1)",
+                        "name": "page",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "maximum": 1000,
+                        "minimum": -1,
+                        "type": "integer",
+                        "default": 5,
+                        "description": "Amount items per page (min -1, max 1000, -1 means unlimited)",
+                        "name": "pageSize",
+                        "in": "query"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "multi",
+                        "description": "Sorting result on server e.g. {\"prop\":\"...\",\"order\":\"...\"}\n  field order is \"ascending\" or \"descending\" value\n  order is required if prop is not empty",
+                        "name": "sort[]",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "sort",
+                            "filter",
+                            "init",
+                            "page",
+                            "size"
+                        ],
+                        "type": "string",
+                        "default": "init",
+                        "description": "Type of request",
+                        "name": "type",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "include document text in the response",
+                        "name": "with_content",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/models.KnowledgeDocList"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "invalid query parameters",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "not permitted",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "internal error",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Knowledge"
+                ],
+                "summary": "Create knowledge document",
+                "parameters": [
+                    {
+                        "description": "Create request",
+                        "name": "json",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.CreateKnowledgeDocRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/models.KnowledgeDocEntry"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "not permitted",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "internal error",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "503": {
+                        "description": "embedding provider not configured",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/knowledge/search": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Knowledge"
+                ],
+                "summary": "Semantic search in knowledge base",
+                "parameters": [
+                    {
+                        "description": "Search request",
+                        "name": "json",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.KnowledgeSearchRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/models.KnowledgeSearchResult"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "not permitted",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "internal error",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "503": {
+                        "description": "embedding provider not configured",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/knowledge/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Knowledge"
+                ],
+                "summary": "Get knowledge document",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Document UUID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/models.KnowledgeDocEntry"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "403": {
+                        "description": "not permitted or wrong owner",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "document not found",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "internal error",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Knowledge"
+                ],
+                "summary": "Update knowledge document",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Document UUID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Update request",
+                        "name": "json",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.UpdateKnowledgeDocRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/models.KnowledgeDocEntry"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "not permitted or wrong owner",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "document not found",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "internal error",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "503": {
+                        "description": "embedding provider not configured",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Knowledge"
+                ],
+                "summary": "Delete knowledge document",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Document UUID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "document deleted",
+                        "schema": {
+                            "$ref": "#/definitions/SuccessResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "not permitted or wrong owner",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "document not found",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "internal error",
                         "schema": {
                             "$ref": "#/definitions/ErrorResponse"
                         }
@@ -4017,7 +5417,10 @@
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/models.ProviderInfo"
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/models.ProviderInfo"
+                                            }
                                         }
                                     }
                                 }
@@ -4026,6 +5429,532 @@
                     },
                     "403": {
                         "description": "getting providers not permitted",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/resources/": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Resources"
+                ],
+                "summary": "List user resources",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "virtual directory path; empty for root (may be combined with paths[])",
+                        "name": "path",
+                        "in": "query"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "multi",
+                        "description": "additional virtual directory paths (repeatable)",
+                        "name": "paths[]",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "list recursively (default false)",
+                        "name": "recursive",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/models.ResourceList"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Resources"
+                ],
+                "summary": "Upload files to resource storage",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "target virtual directory path; empty or omitted means root",
+                        "name": "dir",
+                        "in": "query"
+                    },
+                    {
+                        "type": "file",
+                        "description": "files to upload (field name: files or file)",
+                        "name": "files",
+                        "in": "formData",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/models.ResourceList"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Resources"
+                ],
+                "summary": "Delete a resource (file or directory)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "virtual path to delete (may be combined with paths[])",
+                        "name": "path",
+                        "in": "query"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "multi",
+                        "description": "additional virtual paths to delete (repeatable)",
+                        "name": "paths[]",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/models.ResourceList"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/resources/copy": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Resources"
+                ],
+                "summary": "Copy resource(s) (files or directories)",
+                "parameters": [
+                    {
+                        "description": "copy request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.CopyResourceRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/models.ResourceList"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/resources/download": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/octet-stream",
+                    "application/zip",
+                    "application/json"
+                ],
+                "tags": [
+                    "Resources"
+                ],
+                "summary": "Download a resource or resources",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "virtual path to download (may be combined with paths[])",
+                        "name": "path",
+                        "in": "query"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "multi",
+                        "description": "additional virtual paths to download (repeatable)",
+                        "name": "paths[]",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "file content, or ZIP archive for directories / multiple paths",
+                        "schema": {
+                            "type": "file"
+                        }
+                    },
+                    "400": {
+                        "description": "invalid resource request data",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "downloading resource not permitted",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "resource not found",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "internal error on downloading resource",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/resources/mkdir": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Resources"
+                ],
+                "summary": "Create a virtual directory",
+                "parameters": [
+                    {
+                        "description": "mkdir request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.MkdirResourceRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/models.ResourceEntry"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/resources/move": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Resources"
+                ],
+                "summary": "Move or rename resource(s) (files or directories)",
+                "parameters": [
+                    {
+                        "description": "move request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.MoveResourceRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/models.ResourceList"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
                         "schema": {
                             "$ref": "#/definitions/ErrorResponse"
                         }
@@ -4156,7 +6085,7 @@
                     {
                         "type": "integer",
                         "description": "role id",
-                        "name": "id",
+                        "name": "roleID",
                         "in": "path",
                         "required": true
                     }
@@ -4424,6 +6353,48 @@
                     },
                     "500": {
                         "description": "internal error on getting searchlogs",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/settings/": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Settings"
+                ],
+                "summary": "Retrieve settings",
+                "responses": {
+                    "200": {
+                        "description": "settings received successful",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/models.Settings"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "403": {
+                        "description": "getting settings not permitted",
                         "schema": {
                             "$ref": "#/definitions/ErrorResponse"
                         }
@@ -4819,6 +6790,121 @@
                     },
                     "500": {
                         "description": "internal error on deleting token",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/toolcalls/": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Toolcalls"
+                ],
+                "summary": "Retrieve toolcalls list",
+                "parameters": [
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "multi",
+                        "description": "Filtering result on server e.g. {\"value\":[...],\"field\":\"...\",\"operator\":\"...\"}\n  field is the unique identifier of the table column, different for each endpoint\n  value should be integer or string or array type, \"value\":123 or \"value\":\"string\" or \"value\":[123,456]\n  operator value should be one of \u003c,\u003c=,\u003e=,\u003e,=,!=,like,not like,in\n  default operator value is 'like' or '=' if field is 'id' or '*_id' or '*_at'",
+                        "name": "filters[]",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Field to group results by",
+                        "name": "group",
+                        "in": "query"
+                    },
+                    {
+                        "minimum": 1,
+                        "type": "integer",
+                        "default": 1,
+                        "description": "Number of page (since 1)",
+                        "name": "page",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "maximum": 1000,
+                        "minimum": -1,
+                        "type": "integer",
+                        "default": 5,
+                        "description": "Amount items per page (min -1, max 1000, -1 means unlimited)",
+                        "name": "pageSize",
+                        "in": "query"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "multi",
+                        "description": "Sorting result on server e.g. {\"prop\":\"...\",\"order\":\"...\"}\n  field order is \"ascending\" or \"descending\" value\n  order is required if prop is not empty",
+                        "name": "sort[]",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "sort",
+                            "filter",
+                            "init",
+                            "page",
+                            "size"
+                        ],
+                        "type": "string",
+                        "default": "init",
+                        "description": "Type of request",
+                        "name": "type",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "toolcalls list received successful",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/services.toolcalls"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "invalid query request data",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "getting toolcalls not permitted",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "internal error on getting toolcalls",
                         "schema": {
                             "$ref": "#/definitions/ErrorResponse"
                         }
@@ -5748,6 +7834,53 @@
                 }
             }
         },
+        "models.AddResourceFromFlowRequest": {
+            "type": "object",
+            "required": [
+                "destination"
+            ],
+            "properties": {
+                "destination": {
+                    "description": "Destination is the virtual path prefix in the user's resource tree.",
+                    "type": "string"
+                },
+                "force": {
+                    "description": "Force overwrites existing resources at the target paths when true.",
+                    "type": "boolean"
+                },
+                "source": {
+                    "description": "Source is a single relative path within the flow cache (kept for backward\ncompatibility). Combined with Sources when both are provided.",
+                    "type": "string"
+                },
+                "sources": {
+                    "description": "Sources is a list of relative paths within the flow cache. Combined with\nSource when both are provided; duplicate entries are silently removed.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "models.AddResourcesRequest": {
+            "type": "object",
+            "required": [
+                "ids"
+            ],
+            "properties": {
+                "force": {
+                    "description": "Force overwrites files that already exist in the flow resources directory.",
+                    "type": "boolean"
+                },
+                "ids": {
+                    "description": "IDs is the list of user resource IDs to copy into the flow resources directory.",
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                        "type": "integer"
+                    }
+                }
+            }
+        },
         "models.AgentTypeUsageStats": {
             "type": "object",
             "required": [
@@ -6062,6 +8195,73 @@
                 }
             }
         },
+        "models.ContainerFile": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "is_dir": {
+                    "type": "boolean"
+                },
+                "modified_at": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "path": {
+                    "type": "string"
+                },
+                "size": {
+                    "type": "integer"
+                }
+            }
+        },
+        "models.ContainerFiles": {
+            "type": "object",
+            "properties": {
+                "files": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.ContainerFile"
+                    }
+                },
+                "path": {
+                    "type": "string"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "models.CopyResourceRequest": {
+            "type": "object",
+            "required": [
+                "destination"
+            ],
+            "properties": {
+                "destination": {
+                    "description": "Destination is the exact target path (single source) or base directory\n(multiple sources). Required.",
+                    "type": "string"
+                },
+                "force": {
+                    "description": "Force overwrites existing resources at the target paths when true.",
+                    "type": "boolean"
+                },
+                "source": {
+                    "description": "Source is kept for backward compatibility (single source).\nCombined with Sources when both are provided; duplicates are removed.",
+                    "type": "string"
+                },
+                "sources": {
+                    "description": "Sources is a list of virtual resource paths to copy.\nCombined with Source when both are provided; duplicates are removed.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
         "models.CreateAPITokenRequest": {
             "type": "object",
             "required": [
@@ -6098,6 +8298,12 @@
                     "type": "string",
                     "example": "openai"
                 },
+                "resource_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
                 "use_agents": {
                     "type": "boolean",
                     "example": true
@@ -6121,6 +8327,49 @@
                 "provider": {
                     "type": "string",
                     "example": "openai"
+                },
+                "resource_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                }
+            }
+        },
+        "models.CreateKnowledgeDocRequest": {
+            "type": "object",
+            "required": [
+                "content",
+                "doc_type",
+                "question"
+            ],
+            "properties": {
+                "answer_type": {
+                    "type": "string"
+                },
+                "code_lang": {
+                    "type": "string",
+                    "maxLength": 100
+                },
+                "content": {
+                    "type": "string",
+                    "maxLength": 65536,
+                    "minLength": 1
+                },
+                "description": {
+                    "type": "string",
+                    "maxLength": 1000
+                },
+                "doc_type": {
+                    "type": "string"
+                },
+                "guide_type": {
+                    "type": "string"
+                },
+                "question": {
+                    "type": "string",
+                    "maxLength": 2048,
+                    "minLength": 1
                 }
             }
         },
@@ -6264,6 +8513,44 @@
                 "total_toolcalls_count": {
                     "type": "integer",
                     "minimum": 0
+                }
+            }
+        },
+        "models.FlowFile": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "is_dir": {
+                    "type": "boolean"
+                },
+                "modified_at": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "path": {
+                    "description": "relative: \"uploads/\u003cx\u003e\" or resources/\u003cx\u003e or container/\u003cx\u003e\"",
+                    "type": "string"
+                },
+                "size": {
+                    "type": "integer"
+                }
+            }
+        },
+        "models.FlowFiles": {
+            "type": "object",
+            "properties": {
+                "files": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.FlowFile"
+                    }
+                },
+                "total": {
+                    "type": "integer"
                 }
             }
         },
@@ -6438,6 +8725,143 @@
                 }
             }
         },
+        "models.KnowledgeDocEntry": {
+            "type": "object",
+            "properties": {
+                "answer_type": {
+                    "type": "string"
+                },
+                "code_lang": {
+                    "type": "string"
+                },
+                "content": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "doc_type": {
+                    "type": "string"
+                },
+                "flow_id": {
+                    "type": "integer"
+                },
+                "guide_type": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "manual": {
+                    "type": "boolean"
+                },
+                "part_size": {
+                    "type": "integer"
+                },
+                "question": {
+                    "type": "string"
+                },
+                "subtask_id": {
+                    "type": "integer"
+                },
+                "task_id": {
+                    "type": "integer"
+                },
+                "total_size": {
+                    "type": "integer"
+                },
+                "user_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "models.KnowledgeDocList": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.KnowledgeDocEntry"
+                    }
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "models.KnowledgeDocWithScore": {
+            "type": "object",
+            "properties": {
+                "document": {
+                    "$ref": "#/definitions/models.KnowledgeDocEntry"
+                },
+                "score": {
+                    "type": "number"
+                }
+            }
+        },
+        "models.KnowledgeSearchRequest": {
+            "type": "object",
+            "required": [
+                "query"
+            ],
+            "properties": {
+                "answer_types": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "code_langs": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "doc_types": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "flow_id": {
+                    "type": "integer"
+                },
+                "guide_types": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "limit": {
+                    "type": "integer",
+                    "maximum": 100,
+                    "minimum": 1
+                },
+                "manual": {
+                    "type": "boolean"
+                },
+                "query": {
+                    "type": "string",
+                    "maxLength": 2048,
+                    "minLength": 1
+                }
+            }
+        },
+        "models.KnowledgeSearchResult": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.KnowledgeDocWithScore"
+                    }
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
         "models.Login": {
             "type": "object",
             "required": [
@@ -6453,6 +8877,64 @@
                     "type": "string",
                     "maxLength": 100,
                     "minLength": 4
+                }
+            }
+        },
+        "models.MkdirResourceRequest": {
+            "type": "object",
+            "required": [
+                "path"
+            ],
+            "properties": {
+                "path": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.ModelInfo": {
+            "type": "object",
+            "required": [
+                "agent_types",
+                "name"
+            ],
+            "properties": {
+                "agent_types": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "name": {
+                    "type": "string",
+                    "example": "gpt-4o"
+                },
+                "price_info": {
+                    "$ref": "#/definitions/models.ModelPriceInfo"
+                }
+            }
+        },
+        "models.ModelPriceInfo": {
+            "type": "object",
+            "properties": {
+                "cache_read": {
+                    "type": "number",
+                    "minimum": 0,
+                    "example": 0.1
+                },
+                "cache_write": {
+                    "type": "number",
+                    "minimum": 0,
+                    "example": 0.3
+                },
+                "input": {
+                    "type": "number",
+                    "minimum": 0,
+                    "example": 1.1
+                },
+                "output": {
+                    "type": "number",
+                    "minimum": 0,
+                    "example": 3
                 }
             }
         },
@@ -6472,6 +8954,30 @@
                 },
                 "stats": {
                     "$ref": "#/definitions/models.UsageStats"
+                }
+            }
+        },
+        "models.MoveResourceRequest": {
+            "type": "object",
+            "properties": {
+                "destination": {
+                    "description": "Destination is the exact target path (single source) or base directory\n(multiple sources). Empty string means the root directory.",
+                    "type": "string"
+                },
+                "force": {
+                    "description": "Force overwrites existing resources at the target paths when true.",
+                    "type": "boolean"
+                },
+                "source": {
+                    "description": "Source is kept for backward compatibility (single source).\nCombined with Sources when both are provided; duplicates are removed.",
+                    "type": "string"
+                },
+                "sources": {
+                    "description": "Sources is a list of virtual resource paths to move.\nCombined with Source when both are provided; duplicates are removed.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 }
             }
         },
@@ -6559,6 +9065,12 @@
                     "type": "string",
                     "example": "user input for waiting assistant"
                 },
+                "resource_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
                 "use_agents": {
                     "type": "boolean",
                     "example": true
@@ -6591,6 +9103,12 @@
                 },
                 "provider": {
                     "type": "string"
+                },
+                "resource_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
                 }
             }
         },
@@ -6692,10 +9210,22 @@
         "models.ProviderInfo": {
             "type": "object",
             "required": [
+                "default_model",
+                "models",
                 "name",
                 "type"
             ],
             "properties": {
+                "default_model": {
+                    "type": "string",
+                    "example": "gpt-4o"
+                },
+                "models": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.ModelInfo"
+                    }
+                },
                 "name": {
                     "type": "string",
                     "example": "my openai provider"
@@ -6718,6 +9248,69 @@
                 },
                 "stats": {
                     "$ref": "#/definitions/models.UsageStats"
+                }
+            }
+        },
+        "models.PullFlowFilesRequest": {
+            "type": "object",
+            "properties": {
+                "force": {
+                    "description": "Force overwrites local cache entries that already exist.",
+                    "type": "boolean"
+                },
+                "path": {
+                    "description": "Path is a single container path (maintained for backward compatibility).\nCombined with Paths if both are provided.",
+                    "type": "string"
+                },
+                "paths": {
+                    "description": "Paths is a list of container paths to pull. Combined with Path if provided.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "models.ResourceEntry": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "is_dir": {
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "path": {
+                    "type": "string"
+                },
+                "size": {
+                    "type": "integer"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "models.ResourceList": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.ResourceEntry"
+                    }
+                },
+                "total": {
+                    "type": "integer"
                 }
             }
         },
@@ -6838,6 +9431,35 @@
                 "task_id": {
                     "type": "integer",
                     "minimum": 0
+                }
+            }
+        },
+        "models.Settings": {
+            "type": "object",
+            "properties": {
+                "ask_user": {
+                    "type": "boolean",
+                    "example": false
+                },
+                "assistant_use_agents": {
+                    "type": "boolean",
+                    "example": false
+                },
+                "debug": {
+                    "type": "boolean",
+                    "example": false
+                },
+                "docker_inside": {
+                    "type": "boolean",
+                    "example": false
+                },
+                "is_develop_mode": {
+                    "type": "boolean",
+                    "example": false
+                },
+                "version": {
+                    "type": "string",
+                    "example": "v1.0.0"
                 }
             }
         },
@@ -7097,6 +9719,59 @@
                 }
             }
         },
+        "models.Toolcall": {
+            "type": "object",
+            "required": [
+                "args",
+                "call_id",
+                "flow_id",
+                "name",
+                "status"
+            ],
+            "properties": {
+                "args": {
+                    "type": "string"
+                },
+                "call_id": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "duration_seconds": {
+                    "type": "number",
+                    "minimum": 0
+                },
+                "flow_id": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "id": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "name": {
+                    "type": "string"
+                },
+                "result": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "subtask_id": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "task_id": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
         "models.ToolcallsStats": {
             "type": "object",
             "properties": {
@@ -7119,6 +9794,38 @@
                 },
                 "status": {
                     "type": "string"
+                }
+            }
+        },
+        "models.UpdateKnowledgeDocRequest": {
+            "type": "object",
+            "required": [
+                "content"
+            ],
+            "properties": {
+                "answer_type": {
+                    "type": "string"
+                },
+                "code_lang": {
+                    "type": "string",
+                    "maxLength": 100
+                },
+                "content": {
+                    "type": "string",
+                    "maxLength": 65536,
+                    "minLength": 1
+                },
+                "description": {
+                    "type": "string",
+                    "maxLength": 1000
+                },
+                "guide_type": {
+                    "type": "string"
+                },
+                "question": {
+                    "type": "string",
+                    "maxLength": 2048,
+                    "minLength": 1
                 }
             }
         },
@@ -7406,6 +10113,25 @@
                 }
             }
         },
+        "services.anonymizeTextRequest": {
+            "type": "object",
+            "required": [
+                "text"
+            ],
+            "properties": {
+                "text": {
+                    "type": "string"
+                }
+            }
+        },
+        "services.anonymizeTextResponse": {
+            "type": "object",
+            "properties": {
+                "text": {
+                    "type": "string"
+                }
+            }
+        },
         "services.assistantlogs": {
             "type": "object",
             "properties": {
@@ -7619,6 +10345,20 @@
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/models.APIToken"
+                    }
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "services.toolcalls": {
+            "type": "object",
+            "properties": {
+                "toolcalls": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.Toolcall"
                     }
                 },
                 "total": {

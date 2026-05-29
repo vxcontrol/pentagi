@@ -4,7 +4,6 @@
  * @returns URL parameter string (empty string or ?returnUrl=...)
  */
 export const getReturnUrlParam = (currentPath: string): string => {
-    // Don't save default route as return URL
     if (currentPath === '/flows/new' || currentPath === '/login') {
         return '';
     }
@@ -24,7 +23,6 @@ export const getSafeReturnUrl = (returnUrl: null | string, fallback: string): st
 
     const trimmed = returnUrl.trim();
 
-    // Allow only relative paths: must start with single slash, not //
     if (trimmed.startsWith('/') && !trimmed.startsWith('//')) {
         return trimmed;
     }

@@ -1,0 +1,640 @@
+import { Document, Font, Page, pdf, StyleSheet, Text, View } from '@react-pdf/renderer';
+import { marked } from 'marked';
+
+import { Log } from '@/lib/log';
+
+// Register Noto Sans (covers Latin + Cyrillic + Greek + many other scripts)
+Font.register({
+    family: 'NotoSans',
+    fonts: [
+        { fontStyle: 'normal', fontWeight: 'normal', src: '/fonts/NotoSans-Regular.ttf' },
+        { fontStyle: 'normal', fontWeight: 'bold', src: '/fonts/NotoSans-Bold.ttf' },
+        { fontStyle: 'italic', fontWeight: 'normal', src: '/fonts/NotoSans-Italic.ttf' },
+        { fontStyle: 'italic', fontWeight: 'bold', src: '/fonts/NotoSans-BoldItalic.ttf' },
+    ],
+});
+
+// Register Noto Sans Mono (covers Latin + Cyrillic for code blocks)
+Font.register({
+    family: 'NotoSansMono',
+    fonts: [
+        { fontStyle: 'normal', fontWeight: 'normal', src: '/fonts/NotoSansMono-Regular.ttf' },
+        { fontStyle: 'normal', fontWeight: 'bold', src: '/fonts/NotoSansMono-Bold.ttf' },
+    ],
+});
+
+// Register Noto Sans SC (Simplified Chinese, covers CJK + Latin)
+Font.register({
+    family: 'NotoSansSC',
+    fonts: [
+        { fontStyle: 'normal', fontWeight: 'normal', src: '/fonts/NotoSansSC-Regular.otf' },
+        { fontStyle: 'normal', fontWeight: 'bold', src: '/fonts/NotoSansSC-Bold.otf' },
+    ],
+});
+
+// Disable word hyphenation (breaks CJK and Cyrillic incorrectly)
+Font.registerHyphenationCallback((word) => [word]);
+
+// Regex that matches any CJK unified ideographs or CJK punctuation/fullwidth chars
+const CJK_RE = /[\u4E00-\u9FFF\u3400-\u4DBF\uF900-\uFAFF\u3000-\u303F\uFF01-\uFF60\uFFE0-\uFFE6]+/g;
+
+interface TextSegment {
+    isCJK: boolean;
+    text: string;
+}
+
+/**
+ * Splits a string into alternating non-CJK and CJK segments so each segment
+ * can be rendered with the appropriate font family.
+ */
+const splitByCJK = (text: string): TextSegment[] => {
+    const segments: TextSegment[] = [];
+    let lastIndex = 0;
+
+    CJK_RE.lastIndex = 0;
+
+    let match: null | RegExpExecArray;
+
+    while ((match = CJK_RE.exec(text)) !== null) {
+        if (match.index > lastIndex) {
+            segments.push({ isCJK: false, text: text.slice(lastIndex, match.index) });
+        }
+
+        segments.push({ isCJK: true, text: match[0] });
+        lastIndex = match.index + match[0].length;
+    }
+
+    if (lastIndex < text.length) {
+        segments.push({ isCJK: false, text: text.slice(lastIndex) });
+    }
+
+    return segments.length > 0 ? segments : [{ isCJK: false, text }];
+};
+
+const pdfStyles = StyleSheet.create({
+    bold: {
+        fontWeight: 'bold',
+    },
+    code: {
+        color: '#dc2626',
+        fontFamily: 'NotoSansMono',
+        fontSize: 9,
+        fontWeight: 'bold',
+    },
+    codeBlock: {
+        backgroundColor: '#1e293b',
+        borderColor: '#334155',
+        borderRadius: 4,
+        borderWidth: 1,
+        color: '#e2e8f0',
+        fontFamily: 'NotoSansMono',
+        fontSize: 8.5,
+        lineHeight: 1.4,
+        marginBottom: 8,
+        marginTop: 4,
+        padding: 8,
+    },
+    h1: {
+        color: '#0f172a',
+        fontSize: 16,
+        fontWeight: 'bold',
+        marginBottom: 10,
+        marginTop: 0,
+    },
+    h2: {
+        borderBottomColor: '#e2e8f0',
+        borderBottomWidth: 1,
+        color: '#1e293b',
+        fontSize: 14,
+        fontWeight: 'bold',
+        marginBottom: 8,
+        marginTop: 12,
+        paddingBottom: 4,
+    },
+    h3: {
+        color: '#334155',
+        fontSize: 13,
+        fontWeight: 'bold',
+        marginBottom: 6,
+        marginTop: 10,
+    },
+    h4: {
+        color: '#475569',
+        fontSize: 12,
+        fontWeight: 'bold',
+        marginBottom: 5,
+        marginTop: 8,
+    },
+    h5: {
+        color: '#64748b',
+        fontSize: 11,
+        fontWeight: 'bold',
+        marginBottom: 4,
+        marginTop: 6,
+    },
+    h6: {
+        color: '#94a3b8',
+        fontSize: 10,
+        fontWeight: 'bold',
+        marginBottom: 4,
+        marginTop: 6,
+    },
+    hr: {
+        borderBottomColor: '#cbd5e1',
+        borderBottomWidth: 1,
+        marginBottom: 12,
+        marginTop: 12,
+    },
+    italic: {
+        fontStyle: 'italic',
+    },
+    link: {
+        color: '#2563eb',
+        fontWeight: 'semibold',
+        textDecoration: 'underline',
+    },
+    list: {
+        marginBottom: 8,
+        marginLeft: 0,
+        marginTop: 6,
+    },
+    listBullet: {
+        color: '#64748b',
+        fontSize: 9,
+        marginRight: 8,
+        minWidth: 20,
+    },
+    listContent: {
+        color: '#334155',
+        flex: 1,
+        fontSize: 10,
+        lineHeight: 1.5,
+    },
+    listItem: {
+        alignItems: 'flex-start',
+        flexDirection: 'row',
+        marginBottom: 4,
+        marginLeft: 16,
+    },
+    page: {
+        backgroundColor: '#ffffff',
+        color: '#334155',
+        fontFamily: 'NotoSans',
+        fontSize: 10,
+        lineHeight: 1.5,
+        padding: 40,
+    },
+    paragraph: {
+        color: '#475569',
+        lineHeight: 1.6,
+        marginBottom: 8,
+        textAlign: 'justify',
+    },
+});
+
+// @react-pdf/renderer has spotty emoji glyph support — substitute readable text tags instead.
+const emojiMap: Record<string, string> = {
+    '⏳': '[WAIT]',
+    '⚠️': '[WARN]',
+    '⚡': '[RUN]',
+    '✅': '[OK]',
+    '✨': '[NEW]',
+    '❌': '[FAIL]',
+    '🎯': '[TARGET]',
+    '🐛': '[BUG]',
+    '💡': '[IDEA]',
+    '📊': '[DATA]',
+    '📝': '[NOTE]',
+    '🔍': '[SEARCH]',
+    '🔐': '[SEC]',
+    '🔧': '[TOOL]',
+    '🚀': '[START]',
+};
+
+const replaceEmojis = (text: string): string => {
+    let result = text;
+
+    for (const [emoji, replacement] of Object.entries(emojiMap)) {
+        result = result.replaceAll(emoji, replacement);
+    }
+
+    return result;
+};
+
+interface InlineToken {
+    bold?: boolean;
+    code?: boolean;
+    italic?: boolean;
+    link?: string;
+    text: string;
+    type: 'text';
+}
+
+interface ParsedContent {
+    content?: string;
+    inlineTokens?: InlineToken[];
+    items?: Array<{ inlineTokens: InlineToken[]; raw: string }>;
+    level?: number;
+    ordered?: boolean;
+    type: string;
+}
+
+const parseInlineTokens = (text: string): InlineToken[] => {
+    const tokens: InlineToken[] = [];
+    const inlineTokens = marked.lexer(text, { breaks: false });
+
+    const firstToken = inlineTokens[0];
+
+    if (firstToken && firstToken.type === 'paragraph' && 'tokens' in firstToken) {
+        const paragraphTokens =
+            (firstToken as { tokens?: unknown[] }).tokens?.filter((t): t is Record<string, unknown> => {
+                return typeof t === 'object' && t !== null;
+            }) || [];
+
+        paragraphTokens.forEach((token) => {
+            switch (token.type) {
+                case 'codespan': {
+                    tokens.push({
+                        code: true,
+                        text: replaceEmojis(String(token.text || '')),
+                        type: 'text',
+                    });
+                    break;
+                }
+
+                case 'em': {
+                    tokens.push({
+                        italic: true,
+                        text: replaceEmojis(String(token.text || '')),
+                        type: 'text',
+                    });
+                    break;
+                }
+
+                case 'link': {
+                    tokens.push({
+                        link: String(token.href || ''),
+                        text: replaceEmojis(String(token.text || '')),
+                        type: 'text',
+                    });
+                    break;
+                }
+
+                case 'strong': {
+                    tokens.push({
+                        bold: true,
+                        text: replaceEmojis(String(token.text || '')),
+                        type: 'text',
+                    });
+                    break;
+                }
+
+                case 'text': {
+                    tokens.push({
+                        text: replaceEmojis(String(token.text || '')),
+                        type: 'text',
+                    });
+                    break;
+                }
+
+                default: {
+                    if ('text' in token) {
+                        tokens.push({
+                            text: replaceEmojis(String(token.text || '')),
+                            type: 'text',
+                        });
+                    }
+                }
+            }
+        });
+    } else {
+        tokens.push({
+            text: replaceEmojis(text),
+            type: 'text',
+        });
+    }
+
+    return tokens;
+};
+
+const parseMarkdownTokens = (markdown: string): ParsedContent[] => {
+    const tokens = marked.lexer(markdown);
+    const result: ParsedContent[] = [];
+
+    const processToken = (token: Record<string, unknown>): void => {
+        switch (token.type) {
+            case 'code': {
+                result.push({
+                    content: replaceEmojis(String(token.text || '')),
+                    type: 'code',
+                });
+                break;
+            }
+
+            case 'heading': {
+                result.push({
+                    inlineTokens: parseInlineTokens(String(token.text || '')),
+                    level: Number(token.depth || 1),
+                    type: 'heading',
+                });
+                break;
+            }
+
+            case 'hr': {
+                result.push({ type: 'hr' });
+                break;
+            }
+
+            case 'list': {
+                const tokenItems = (Array.isArray(token.items) ? token.items : []) as Array<Record<string, unknown>>;
+                const items = tokenItems.map((item) => ({
+                    inlineTokens: parseInlineTokens(String(item.text || '')),
+                    raw: String(item.text || ''),
+                }));
+                result.push({
+                    items,
+                    ordered: Boolean(token.ordered),
+                    type: 'list',
+                });
+                break;
+            }
+
+            case 'paragraph': {
+                result.push({
+                    inlineTokens: parseInlineTokens(String(token.text || '')),
+                    type: 'paragraph',
+                });
+                break;
+            }
+
+            case 'space': {
+                break;
+            }
+
+            default: {
+                if ('text' in token && typeof token.text === 'string') {
+                    result.push({
+                        inlineTokens: parseInlineTokens(token.text),
+                        type: 'paragraph',
+                    });
+                }
+            }
+        }
+    };
+
+    tokens.forEach((token) => processToken(token as Record<string, unknown>));
+
+    return result;
+};
+
+/**
+ * Splits CJK segments out so each chunk renders with the matching font family —
+ * Noto Sans for Latin/Cyrillic, Noto Sans SC for CJK. CJK fonts have no true italic
+ * variant, so italic is dropped for those segments.
+ */
+const renderTextWithCJK = (
+    text: string,
+    baseFamily: string,
+    boldFamily: string,
+    keyPrefix: string,
+    bold = false,
+    italic = false,
+) => {
+    const segments = splitByCJK(text);
+
+    if (segments.length === 1 && !segments[0]?.isCJK) {
+        return text;
+    }
+
+    return segments.map((seg, idx) => {
+        const family = seg.isCJK ? (bold ? 'NotoSansSC' : 'NotoSansSC') : bold ? boldFamily : baseFamily;
+        const style: Record<string, string> = { fontFamily: family };
+
+        if (bold && !seg.isCJK) {
+            style.fontWeight = 'bold';
+        }
+
+        if (italic && !seg.isCJK) {
+            style.fontStyle = 'italic';
+        }
+
+        return (
+            <Text
+                key={`${keyPrefix}-cjk-${idx}`}
+                style={style}
+            >
+                {seg.text}
+            </Text>
+        );
+    });
+};
+
+const renderInlineTokens = (tokens: InlineToken[], keyPrefix: string) => {
+    return tokens.map((token, idx) => {
+        const textContent = token.text;
+
+        const appliedStyles = [];
+
+        if (token.code) {
+            appliedStyles.push(pdfStyles.code);
+        }
+
+        if (token.bold) {
+            appliedStyles.push(pdfStyles.bold);
+        }
+
+        if (token.italic) {
+            appliedStyles.push(pdfStyles.italic);
+        }
+
+        if (token.link) {
+            appliedStyles.push(pdfStyles.link);
+        }
+
+        if (appliedStyles.length > 0) {
+            const isBold = !!token.bold;
+            const isItalic = !!token.italic;
+            const isCode = !!token.code;
+            const rendered = isCode
+                ? textContent
+                : renderTextWithCJK(
+                      textContent,
+                      'NotoSans',
+                      'NotoSans',
+                      `${keyPrefix}-inline-${idx}`,
+                      isBold,
+                      isItalic,
+                  );
+
+            return (
+                <Text
+                    key={`${keyPrefix}-inline-${idx}`}
+                    style={appliedStyles}
+                >
+                    {rendered}
+                </Text>
+            );
+        }
+
+        const rendered = renderTextWithCJK(textContent, 'NotoSans', 'NotoSans', `${keyPrefix}-inline-${idx}`);
+
+        if (typeof rendered === 'string') {
+            return rendered;
+        }
+
+        return <Text key={`${keyPrefix}-inline-${idx}`}>{rendered}</Text>;
+    });
+};
+
+const renderPDFContent = (parsed: ParsedContent[]) => {
+    const elements = parsed
+        .map((item, index) => {
+            switch (item.type) {
+                case 'code': {
+                    if (!item.content) {
+                        return null;
+                    }
+
+                    return (
+                        <Text
+                            key={`code-${index}`}
+                            style={pdfStyles.codeBlock}
+                        >
+                            {item.content}
+                        </Text>
+                    );
+                }
+
+                case 'heading': {
+                    if (!item.inlineTokens || item.inlineTokens.length === 0) {
+                        return null;
+                    }
+
+                    const style =
+                        item.level === 1
+                            ? pdfStyles.h1
+                            : item.level === 2
+                              ? pdfStyles.h2
+                              : item.level === 3
+                                ? pdfStyles.h3
+                                : item.level === 4
+                                  ? pdfStyles.h4
+                                  : item.level === 5
+                                    ? pdfStyles.h5
+                                    : pdfStyles.h6;
+
+                    return (
+                        <Text
+                            key={`heading-${index}`}
+                            style={style}
+                        >
+                            {renderInlineTokens(item.inlineTokens, `heading-${index}`)}
+                        </Text>
+                    );
+                }
+
+                case 'hr': {
+                    return (
+                        <View
+                            key={`hr-${index}`}
+                            style={pdfStyles.hr}
+                        />
+                    );
+                }
+
+                case 'list': {
+                    if (!item.items || item.items.length === 0) {
+                        return null;
+                    }
+
+                    return (
+                        <View
+                            key={`list-${index}`}
+                            style={pdfStyles.list}
+                        >
+                            {item.items.map((listItem, li) => (
+                                <View
+                                    key={`li-${index}-${li}`}
+                                    style={pdfStyles.listItem}
+                                >
+                                    <Text style={pdfStyles.listBullet}>{item.ordered ? `${li + 1}.` : '•'}</Text>
+                                    <Text style={pdfStyles.listContent}>
+                                        {renderInlineTokens(listItem.inlineTokens, `li-${index}-${li}`)}
+                                    </Text>
+                                </View>
+                            ))}
+                        </View>
+                    );
+                }
+
+                case 'paragraph': {
+                    if (!item.inlineTokens || item.inlineTokens.length === 0) {
+                        return null;
+                    }
+
+                    return (
+                        <Text
+                            key={`para-${index}`}
+                            style={pdfStyles.paragraph}
+                        >
+                            {renderInlineTokens(item.inlineTokens, `para-${index}`)}
+                        </Text>
+                    );
+                }
+
+                default: {
+                    return null;
+                }
+            }
+        })
+        .filter((el) => el !== null);
+
+    return elements;
+};
+
+function PDFReportDocument({ content }: { content: string }) {
+    const parsed = parseMarkdownTokens(content);
+    const elements = renderPDFContent(parsed);
+
+    return (
+        <Document>
+            <Page
+                size="A4"
+                style={pdfStyles.page}
+            >
+                {elements}
+            </Page>
+        </Document>
+    );
+}
+
+export const generatePDFFromMarkdownNew = async (content: string, fileName: string): Promise<void> => {
+    try {
+        const doc = <PDFReportDocument content={content} />;
+        const blob = await pdf(doc).toBlob();
+
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `${fileName}.pdf`;
+        link.style.display = 'none';
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+    } catch (error) {
+        Log.error('Failed to generate PDF:', error);
+        throw error;
+    }
+};
+
+export const generatePDFBlobNew = async (content: string): Promise<Blob> => {
+    try {
+        const doc = <PDFReportDocument content={content} />;
+
+        return await pdf(doc).toBlob();
+    } catch (error) {
+        Log.error('Failed to generate PDF blob:', error);
+        throw error;
+    }
+};

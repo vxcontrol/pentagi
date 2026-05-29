@@ -14,11 +14,11 @@ This document describes the internal architecture and execution workflow of Flow
 - **FlowWorker** - Manages the complete lifecycle of a Flow, coordinates Tasks
 - **TaskWorker** - Executes individual Tasks, manages Subtask generation and refinement
 - **SubtaskWorker** - Handles execution of specific Subtasks via AI agents
-- **AssistantWorker** - Manages interactive assistant mode within a Flow
+- **AssistantWorker** - Manages interactive assistant mode within a Flow; optionally controls the Flow's automation via injected `FlowWorker` reference
 
 ### Providers
 - **FlowProvider** - Core interface for Flow execution, agent coordination and orchestration
-- **AssistantProvider** - Specialized provider for assistant mode interactions
+- **AssistantProvider** - Specialized provider for assistant mode interactions; receives `FlowWorker` via `SetFlowWorker()` after chain preparation to enable flow management tool callbacks
 - **ProviderController** - Factory for creating and managing different LLM providers
 
 ### AI Agents
@@ -34,12 +34,13 @@ This document describes the internal architecture and execution workflow of Flow
 - **Enricher Agent** - Enhances information from multiple sources
 - **Adviser Agent** - Provides expert guidance and recommendations
 - **Reflector Agent** - Corrects agents that return unstructured text instead of tool calls
-- **Assistant Agent** - Provides interactive assistance, operates autonomously within Flow independently from Task/Subtask (UseAgents flag controls delegation)
+- **Assistant Agent** - Provides interactive assistance, operates autonomously within Flow independently from Task/Subtask (UseAgents flag controls delegation); when FlowWorker is available, exposes `get_flow_status`, `stop_flow`, `submit_flow_input`, and `patch_flow_subtasks` tools for automation control
 
 ### Tools and Capabilities by Category
 - **Environment Tools** - Terminal commands, file operations within Docker containers
-  - `terminal` - Command execution (default: 5min if not specified, hard limit: 20min)
+  - `terminal` - Command execution (configurable via `TERMINAL_TOOL_TIMEOUT`, default: 1200s; hard limit: 3h/10800s; 0 or negative values are clamped to the hard limit)
   - `file` - Read/write operations with absolute path requirements
+  - User-provided flow files are available under `/work/uploads` and `/work/resources`
   
 - **Search Network Tools** - External information sources
   - `browser` - Web scraping with screenshot capture  
@@ -64,15 +65,23 @@ This document describes the internal architecture and execution workflow of Flow
   - `maintenance_result`, `code_result`, `hack_result`, `memorist_result`
   - `search_result`, `enricher_result`, `report_result`
   - `subtask_list` (Generator), `subtask_patch` (Refiner)
-  
+  - Future signed evidence receipt design is outlined in [evidence_chain.md](../../examples/proposals/evidence_chain.md)
+
 - **Barrier Tools** - Control flow termination  
   - `done` - Complete subtask, `ask` - Request user input (configurable via ASK_USER env)
+
+- **Flow Management Tools** - Assistant-only; available when FlowWorker is injected into AssistantProvider
+  - `get_flow_status` - Query flow state, tasks, subtasks, planned/running subtask with optional agent messages (verbose mode: 50 messages, execution context)
+  - `stop_flow` - Cancel the currently running task (15s timeout; reports actual post-stop state)
+  - `submit_flow_input` - Deliver text to a waiting flow: answers an `ask` checkpoint or creates a new task
+  - `patch_flow_subtasks` - Replace planned subtask list via delta operations (add/remove/modify/reorder); returns new IDs after recreation
 
 ### Execution Context
 - **Message Chain** - Conversation history maintained for each agent interaction
 - **Execution Context** - Comprehensive state including completed/planned Subtasks
 - **Docker Environment** - Isolated container for secure tool execution
 - **Vector Store** - Long-term semantic memory for knowledge retention
+- **Task Materials** - Optional user uploads and resources exposed to prompts via `{{.UserFiles}}`
 
 ### Performance Results
 - **PerformResultDone** - Subtask completed successfully via `done` tool
@@ -188,7 +197,7 @@ graph TD
         
         AssistantDirect[Assistant Agent<br/>UseAgents=false] --> DirectTools[Direct Tools Only]
         
-        Note over AssistantUA,AssistantDirect: Operates independently<br/>from Task/Subtask hierarchy
+        AssistantNote[Operates independently<br/>from Task/Subtask hierarchy]
     end
     
     subgraph "Specialist Agent Tools"
@@ -239,7 +248,7 @@ graph TD
         Enricher --> Memorist
         Enricher --> Searcher
         
-        Note over Adviser: Also used for:<br/>- Mentor (execution monitoring)<br/>- Planner (task planning)
+        AdviserNote["Also used for:<br/>- Mentor (execution monitoring)<br/>- Planner (task planning)"]
     end
     
     subgraph "Error Correction"
@@ -309,6 +318,13 @@ sequenceDiagram
         U->>AW: Follow-up input
         Note over AW: Message chain preserved in DB
         AW->>AP: Continue conversation context
+    end
+    
+    opt FlowWorker injected (flow management enabled)
+        Note over AP,AA: get_flow_status / stop_flow / submit_flow_input / patch_flow_subtasks available
+        AA->>AP: Call flow management tool
+        AP->>AP: buildFlowManagerHandlers() → stopAssistantFlow / sendAssistantFlowInput / patchAssistantFlowSubtasks
+        AP-->>AA: Tool result with actual flow state
     end
 ```
 
@@ -469,6 +485,7 @@ graph TB
         SearchLogCtrl[Search Log Controller]
         TermLogCtrl[Terminal Log Controller]
         VectorLogCtrl[Vector Store Log Controller]
+        ToolCallLogCtrl[Tool Call Log Controller]
         ScreenshotCtrl[Screenshot Controller]
         AssistantLogCtrl[Assistant Log Controller]
     end
@@ -479,6 +496,7 @@ graph TB
         SearchLogWorker[Flow Search Log Worker]  
         TermLogWorker[Flow Terminal Log Worker]
         VectorLogWorker[Flow Vector Store Log Worker]
+        ToolCallLogWorker[Flow Tool Call Log Worker]
         ScreenshotWorker[Flow Screenshot Worker]
         AssistantLogWorker[Flow Assistant Log Worker]
     end
@@ -489,6 +507,7 @@ graph TB
         SearchLogDB[(Search Logs<br/>Engine + Query + Result)]
         TermLogDB[(Terminal Logs<br/>Stdin/Stdout)]
         VectorLogDB[(Vector Store Logs<br/>Retrieve/Store actions)]
+        ToolCallLogDB[(Tool Call Logs<br/>received/running/finished/failed)]
         ScreenshotDB[(Screenshots<br/>Browser captures)]
         AssistantLogDB[(Assistant Logs<br/>Interactive conversation)]
     end
@@ -503,6 +522,7 @@ graph TB
     FlowCtrl --> SearchLogCtrl
     FlowCtrl --> TermLogCtrl
     FlowCtrl --> VectorLogCtrl
+    FlowCtrl --> ToolCallLogCtrl
     FlowCtrl --> ScreenshotCtrl
     FlowCtrl --> AssistantLogCtrl
     
@@ -511,6 +531,7 @@ graph TB
     SearchLogCtrl --> SearchLogWorker
     TermLogCtrl --> TermLogWorker
     VectorLogCtrl --> VectorLogWorker
+    ToolCallLogCtrl --> ToolCallLogWorker
     ScreenshotCtrl --> ScreenshotWorker
     AssistantLogCtrl --> AssistantLogWorker
     
@@ -519,6 +540,7 @@ graph TB
     SearchLogWorker --> SearchLogDB
     TermLogWorker --> TermLogDB
     VectorLogWorker --> VectorLogDB
+    ToolCallLogWorker --> ToolCallLogDB
     ScreenshotWorker --> ScreenshotDB
     AssistantLogWorker --> AssistantLogDB
     
@@ -527,6 +549,7 @@ graph TB
     Subtask --> SearchLogWorker
     Subtask --> TermLogWorker
     Subtask --> VectorLogWorker
+    Subtask --> ToolCallLogWorker
     Subtask --> ScreenshotWorker
     Assistant --> AssistantLogWorker
     
@@ -535,6 +558,7 @@ graph TB
     SearchLogWorker --> Publisher
     TermLogWorker --> Publisher
     VectorLogWorker --> Publisher
+    ToolCallLogWorker --> Publisher
     ScreenshotWorker --> Publisher
     AssistantLogWorker --> Publisher
     
@@ -559,7 +583,9 @@ graph TB
     
     subgraph "Tool Execution Environment"
         WorkDir[Work Directory<br/>/work in container]
-        Terminal[Terminal Tool<br/>5min default, 20min max]
+        Uploads[User Uploads<br/>/work/uploads]
+        Resources[User Resources<br/>/work/resources]
+        Terminal[Terminal Tool<br/>default 1200s, hard limit 3h]
         FileOps[File Operations<br/>Absolute paths required]
         WebAccess[Web Access<br/>Separate scraper container]
     end
@@ -570,6 +596,8 @@ graph TB
     Primary --> Volumes  
     Primary --> Network
     Primary --> WorkDir
+    WorkDir --> Uploads
+    WorkDir --> Resources
     WorkDir --> Terminal
     WorkDir --> FileOps
     Primary --> WebAccess
@@ -706,6 +734,12 @@ The system maintains multiple types of persistent knowledge with PostgreSQL + pg
 - **Answer Storage** (`doc_type: answer`) - Q&A pairs for common scenarios  
 - **Code Storage** (`doc_type: code`) - Programming language-specific code samples
 
+**Lifecycle Guidance**:
+- Treat `memory` as flow-scoped execution history. It is most useful for understanding what happened in a specific engagement and is commonly inspected with a `flow_id` filter.
+- Treat `guide`, `answer`, and `code` as reusable knowledge. These document types exist to preserve durable procedures, reusable target notes, Q&A material, and code snippets across future runs.
+- If you want a later flow to begin with known context, store the confirmed result intentionally through `store_guide`, `store_answer`, or `store_code` instead of assuming execution history alone will provide the right reusable context.
+- Current prompt templates already distinguish these roles: reusable guides, answers, and code live in vector documents, while Graphiti is intended for episodic memory about what actually happened during execution.
+
 **Technical Parameters**:
 - **Similarity Threshold**: 0.2 for all vector searches
 - **Result Limits**: 3 documents maximum per search
@@ -787,6 +821,7 @@ graph LR
         GraphQLSubs --> TerminalLogAdded[Terminal Log Added]
         GraphQLSubs --> SearchLogAdded[Search Log Added]
         GraphQLSubs --> VectorStoreLogAdded[Vector Store Log Added]
+        GraphQLSubs --> ToolCallLogAdded[Tool Call Log Added/Updated]
         GraphQLSubs --> ScreenshotAdded[Screenshot Added]
         GraphQLSubs --> AssistantLogAdded[Assistant Log Added/Updated]
     end
@@ -833,6 +868,7 @@ The system uses 25+ dedicated prompt types for specific functions:
 - **XML Semantic Delimiters** - Structured sections like `<memory_protocol>`, `<terminal_protocol>`
 - **Summarization Awareness** - Universal protocol for handling historical summaries  
 - **Tool Placeholder System** - `{{.ToolPlaceholder}}` injection at prompt end
+- **Task Materials Section** - `{{.UserFiles}}` lists user uploads/resources when present
 - **Template Variable System** - 50+ variables for dynamic content injection
 
 ### Performance Optimizations and Limits
@@ -847,21 +883,24 @@ Several mechanisms ensure efficient execution:
 - **Search Action Economy** - Searcher limited to 3-5 actions per query
 
 **Timeout Configuration**:
-- **Terminal Operations** - Default 5 minutes, hard limit 20 minutes
+- **Terminal Operations** - Configurable via `TERMINAL_TOOL_TIMEOUT` (default: 1200s); hard limit 3h/10800s; 0 or negative values clamped to hard limit
 - **LLM API Calls** - 3 retries with 5-second delays between attempts  
 - **Vector Search** - Threshold 0.2, max 3 results per query
 - **Tool Result Summarization** - Triggered at 16KB result size
 - **Flow Input Processing** - 1 second timeout for input queueing
 - **Assistant Input** - 2 second timeout for assistant input queueing
+- **Flow Management Operations** - 15 second timeout for `stop_flow` and `submit_flow_input` handlers
 
 **Container Resource Management**:
 - **Port Allocation** - 2 ports per Flow starting from base 28000
 - **Volume Management** - Per-flow data directories with cleanup
+- **File Sync** - Incremental sync of `uploads/` and `resources/` into `/work/uploads` and `/work/resources`
 - **Network Isolation** - Optional custom Docker networks
 - **Image Fallback** - Automatic fallback to default Debian image
 
 **Memory Optimization**:
 - **Message summarization** - Prevents context window overflow
+- **Summarizer result cache** - LRU cache per FlowProvider (1000 entries, 4h TTL); keyed by SHA-256 of input; skips LLM call for repeated identical content
 - **Tool argument limits** - 1KB limit for individual argument values  
 - **Connection pooling** - Database connections are reused
 - **Automatic cleanup** - Containers removed after Flow completion
@@ -1110,6 +1149,10 @@ graph TB
 - `performMentor` method in `performer.go` - Coordinates mentor invocation for execution monitoring
 - `performPlanner` method in `performers.go` - Generates execution plans via adviser
 - `formatEnhancedToolResponse` function in `helpers.go` - Formats mentor analysis
+- `flowStatusTool`, `stopFlowTool`, `submitFlowInputTool`, `patchFlowSubtasksTool` in `tools/flow_manager.go` - Flow management tool implementations
+- `buildFlowManagerHandlers()` in `providers/assistant.go` - Builds handler closures from injected `FlowWorker`
+- `patchAssistantFlowSubtasks()` in `providers/assistant.go` - Applies subtask delta operations and recreates DB entries
+- Summarizer LRU cache on `flowProvider` (`providers/provider.go`) - 1000 entries, 4h TTL, SHA-256 key
 - Template `question_execution_monitor.tmpl` - Question format for execution monitoring
 - Template `question_task_planner.tmpl` - Question format for task planning
 
@@ -1149,13 +1192,13 @@ The Flow execution system represents a sophisticated orchestration platform that
 
 ### Operational Flexibility
 - **Multi-provider LLM support** - Different models optimized for different agent types
-- **Assistant dual modes** - UseAgents flag enables delegation or direct tool access
+- **Assistant dual modes** - UseAgents flag enables delegation or direct tool access; FlowWorker injection enables 4 flow management tools for automation control
 - **Flow continuity** - System can resume operations after interruptions
 - **Real-time feedback** - Streaming responses provide immediate user visibility
 - **Vector knowledge system** - 4 storage types with semantic search and metadata filtering
-- **Comprehensive tool ecosystem** - 44+ tools across 6 categories with automatic memory storage
+- **Comprehensive tool ecosystem** - 44+ tools across 7 categories with automatic memory storage
 - **GraphQL subscriptions** - Real-time Flow/Task/Log updates via WebSocket connections
-- **Logging architecture** - 7-layer logging system with Controller/Worker pattern
+- **Logging architecture** - 8-layer logging system with Controller/Worker pattern
 
 ### Critical Technical Details
 
@@ -1165,6 +1208,14 @@ The Flow execution system represents a sophisticated orchestration platform that
 - **Buffer Management**: Separate buffers for thinking/content with controlled updates
 - **Real-time Distribution**: Immediate GraphQL subscription updates to frontend
 
+**Assistant Flow Management Architecture**:
+- **FlowWorker injection**: `SetFlowWorker(fw FlowWorker)` called after `getFlowProviderWorkers()` in `controller/assistant.go`
+- **Handler closures**: `buildFlowManagerHandlers()` produces `StopFlow`, `SendFlowInput`, `PatchSubtasks` callbacks
+- **Two-layer validation**: tool handlers (`tools/flow_manager.go`) perform primary checks; provider callbacks are safety nets
+- **Subtask patching**: delta operations applied via `applySubtaskOperations()`; all planned subtask IDs are recreated; new IDs returned in tool result
+- **State verification**: `stop_flow` re-queries `GetFlowTasks` after handler returns and reports actual state
+- **Resource handoff**: assistant inputs with resource IDs delegate file copying to `FlowWorker.PutResources()`
+
 **Message Chain Consistency**:
 - **AST Processing**: Uses Chain Abstract Syntax Tree for structured message analysis
 - **Fallback Content**: Unresponded tool calls get default responses via `cast.FallbackResponseContent`
@@ -1173,16 +1224,22 @@ The Flow execution system represents a sophisticated orchestration platform that
 
 **Flow Publisher Integration**:
 - **Centralized Updates**: Single publisher coordinates all Flow-related real-time updates
-- **Event Types**: 8 different event types (Flow, Task, Agent logs, Message logs, etc.)
+- **Event Types**: 10 different event types (Flow, Task, Agent logs, Message logs, Tool Call logs, etc.)
 - **User-scoped**: Each user gets their own publisher instance for proper isolation
 - **WebSocket Distribution**: Efficient real-time delivery to frontend clients
 
 ### Implementation Architecture Summary
 
+**User Files and Resources**:
+- **User Resources** - Per-user blob storage with metadata in `user_resources`
+- **Flow Files** - Per-flow filesystem cache under `flow-{id}-data/{uploads,container,resources}`
+- **Container Availability** - `FlowToolsExecutor.Prepare()` incrementally syncs missing `uploads/` and `resources/` files into `/work`
+- **Prompt Visibility** - Agents receive a compact `<task_files>` listing only when user files are present
+
 **Core Flow Processing**:
 - **3-layer hierarchy**: FlowWorker → TaskWorker → SubtaskWorker with proper lifecycle management
 - **Agent orchestration**: 13 specialized agent types with role-specific tool access
-- **Tool ecosystem**: 44+ tools across 6 categories (Environment, SearchNetwork, SearchVectorDb, Agent, StoreAgentResult, Barrier)
+- **Tool ecosystem**: 44+ tools across 7 categories (Environment, SearchNetwork, SearchVectorDb, Agent, StoreAgentResult, Barrier, FlowManagement)
 - **Message chain types**: 14 distinct chain types for agent communication tracking
 
 **Error Resilience & Recovery**:
@@ -1192,7 +1249,7 @@ The Flow execution system represents a sophisticated orchestration platform that
 - **Graceful degradation**: Automatic fallbacks to simpler operational modes
 
 **Real-time & Observability**:
-- **7-layer logging**: Comprehensive tracking from agent interactions to terminal commands
+- **8-layer logging**: Comprehensive tracking from agent interactions to terminal commands
 - **GraphQL subscriptions**: Real-time updates via WebSocket connections
 - **Streaming architecture**: Progressive response delivery with thinking/content separation
 - **Vector observability**: Complete tracking of knowledge storage and retrieval operations

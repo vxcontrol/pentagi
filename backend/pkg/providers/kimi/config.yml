@@ -1,139 +1,224 @@
+# Kimi (Moonshot) agent configuration.
+#
+# Strategy: kimi-k2.5 for utility/orchestration, kimi-k2.6 for critical reasoning.
+#
+# K2.6/K2.5 API constraints (any deviation -> invalid_request_error):
+#   thinking:     temperature=1.0, top_p=0.95, n=1, thinking.keep="all" (k2.6 only)
+#   non-thinking: temperature=0.6, top_p=0.95, n=1
+#   always:       presence_penalty=0, frequency_penalty=0, tool_choice in {auto, none}
+#
+# WORKAROUND (drop after fix in langchaingo): for kimi-k2.5 non-thinking agents we
+# duplicate temperature=0.6 into extra_body. Reason: langchaingo's
+# reasoning.IsReasoningModel matches substring "2.5" and force-overrides temperature
+# to 1.0 in createChatRequest. extra_body merges with priority via maps.Copy in
+# openaiclient.createChat, so it bypasses the override. Remove the duplicate
+# extra_body.temperature once langchaingo stops matching k2.5/k2.6 as reasoning.
+#
+# Legacy kimi-k2-* models (turbo-preview, 0905-preview, 0711-preview, thinking,
+# thinking-turbo) were deprecated by Moonshot on 2026-05-25. Do not reintroduce.
+
 simple:
-  model: "kimi-k2-turbo-preview"
-  temperature: 0.3
+  model: kimi-k2.5
+  temperature: 0.6
+  top_p: 0.95
   n: 1
   max_tokens: 8192
   extra_body:
-    tool_choice: "auto"
+    temperature: 0.6
+    thinking:
+      type: disabled
+    tool_choice: auto
   price:
-    input: 1.15
-    output: 8.0
+    input: 0.60
+    output: 3.00
+    cache_read: 0.10
 
 simple_json:
-  model: "kimi-k2-turbo-preview"
-  temperature: 0.3
+  model: kimi-k2.5
+  temperature: 0.6
+  top_p: 0.95
   n: 1
   max_tokens: 4096
   json: true
+  extra_body:
+    temperature: 0.6
+    thinking:
+      type: disabled
+    tool_choice: auto
   price:
-    input: 1.15
-    output: 8.0
+    input: 0.60
+    output: 3.00
+    cache_read: 0.10
 
 primary_agent:
-  model: "kimi-k2.5"
+  model: kimi-k2.5
   temperature: 1.0
+  top_p: 0.95
   n: 1
   max_tokens: 16384
   extra_body:
-    tool_choice: "auto"
+    thinking:
+      type: enabled
+    tool_choice: auto
   price:
-    input: 0.6
-    output: 3.0
+    input: 0.60
+    output: 3.00
+    cache_read: 0.10
 
 assistant:
-  model: "kimi-k2.5"
+  model: kimi-k2.5
   temperature: 1.0
+  top_p: 0.95
   n: 1
   max_tokens: 16384
   extra_body:
-    tool_choice: "auto"
+    thinking:
+      type: enabled
+    tool_choice: auto
   price:
-    input: 0.6
-    output: 3.0
+    input: 0.60
+    output: 3.00
+    cache_read: 0.10
 
 generator:
-  model: "kimi-k2.5"
+  model: kimi-k2.6
   temperature: 1.0
+  top_p: 0.95
   n: 1
   max_tokens: 32768
   extra_body:
-    tool_choice: "auto"
+    thinking:
+      type: enabled
+      keep: all
+    tool_choice: auto
   price:
-    input: 0.6
-    output: 3.0
+    input: 0.95
+    output: 4.00
+    cache_read: 0.16
 
 refiner:
-  model: "kimi-k2.5"
+  model: kimi-k2.6
   temperature: 1.0
+  top_p: 0.95
   n: 1
-  max_tokens: 20480
+  max_tokens: 32768
   extra_body:
-    tool_choice: "auto"
+    thinking:
+      type: enabled
+      keep: all
+    tool_choice: auto
   price:
-    input: 0.6
-    output: 3.0
+    input: 0.95
+    output: 4.00
+    cache_read: 0.16
 
 adviser:
-  model: "kimi-k2.5"
+  model: kimi-k2.6
   temperature: 1.0
+  top_p: 0.95
   n: 1
   max_tokens: 8192
+  extra_body:
+    thinking:
+      type: enabled
+      keep: all
+    tool_choice: auto
   price:
-    input: 0.6
-    output: 3.0
+    input: 0.95
+    output: 4.00
+    cache_read: 0.16
 
 reflector:
-  model: "kimi-k2-0905-preview"
-  temperature: 0.7
+  model: kimi-k2.5
+  temperature: 0.6
+  top_p: 0.95
   n: 1
   max_tokens: 4096
   extra_body:
-    tool_choice: "auto"
+    temperature: 0.6
+    thinking:
+      type: disabled
+    tool_choice: auto
   price:
-    input: 0.6
-    output: 2.5
+    input: 0.60
+    output: 3.00
+    cache_read: 0.10
 
 searcher:
-  model: "kimi-k2-0905-preview"
-  temperature: 0.7
+  model: kimi-k2.5
+  temperature: 0.6
+  top_p: 0.95
   n: 1
   max_tokens: 4096
   extra_body:
-    tool_choice: "auto"
+    temperature: 0.6
+    thinking:
+      type: disabled
+    tool_choice: auto
   price:
-    input: 0.6
-    output: 2.5
+    input: 0.60
+    output: 3.00
+    cache_read: 0.10
 
 enricher:
-  model: "kimi-k2-0905-preview"
-  temperature: 0.7
+  model: kimi-k2.5
+  temperature: 0.6
+  top_p: 0.95
   n: 1
   max_tokens: 4096
   extra_body:
-    tool_choice: "auto"
+    temperature: 0.6
+    thinking:
+      type: disabled
+    tool_choice: auto
   price:
-    input: 0.6
-    output: 2.5
+    input: 0.60
+    output: 3.00
+    cache_read: 0.10
 
 coder:
-  model: "kimi-k2.5"
+  model: kimi-k2.6
   temperature: 1.0
+  top_p: 0.95
   n: 1
   max_tokens: 20480
   extra_body:
-    tool_choice: "auto"
+    thinking:
+      type: enabled
+      keep: all
+    tool_choice: auto
   price:
-    input: 0.6
-    output: 3.0
+    input: 0.95
+    output: 4.00
+    cache_read: 0.16
 
 installer:
-  model: "kimi-k2-turbo-preview"
-  temperature: 0.7
+  model: kimi-k2.5
+  temperature: 1.0
+  top_p: 0.95
   n: 1
   max_tokens: 16384
   extra_body:
-    tool_choice: "auto"
+    thinking:
+      type: enabled
+    tool_choice: auto
   price:
-    input: 1.15
-    output: 8.0
+    input: 0.60
+    output: 3.00
+    cache_read: 0.10
 
 pentester:
-  model: "kimi-k2-turbo-preview"
-  temperature: 0.8
+  model: kimi-k2.6
+  temperature: 1.0
+  top_p: 0.95
   n: 1
   max_tokens: 16384
   extra_body:
-    tool_choice: "auto"
+    thinking:
+      type: enabled
+      keep: all
+    tool_choice: auto
   price:
-    input: 1.15
-    output: 8.0
+    input: 0.95
+    output: 4.00
+    cache_read: 0.16

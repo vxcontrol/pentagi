@@ -38,7 +38,14 @@ type Querier interface {
 	DeleteFavoriteFlow(ctx context.Context, arg DeleteFavoriteFlowParams) (UserPreference, error)
 	DeleteFlow(ctx context.Context, id int64) (Flow, error)
 	DeleteFlowAssistantLog(ctx context.Context, id int64) error
+	// Delete all memory-type documents for a specific flow.
+	// Called on flow deletion to free long-term memory that will never be re-used.
+	// flow_id is the decimal text representation of the flow ID (e.g. "55"), matching the
+	// text result of (cmetadata ->> 'flow_id') which uses JSON ->> extraction.
+	DeleteFlowMemoryDocuments(ctx context.Context, flowID sql.NullString) error
 	DeleteFlowTemplate(ctx context.Context, arg DeleteFlowTemplateParams) error
+	// Delete a knowledge document by UUID (admin — no user_id check).
+	DeleteKnowledgeDocument(ctx context.Context, uuid sql.NullString) error
 	DeletePrompt(ctx context.Context, id int64) error
 	DeleteProvider(ctx context.Context, id int64) (Provider, error)
 	DeleteSubtask(ctx context.Context, id int64) error
@@ -46,6 +53,8 @@ type Querier interface {
 	DeleteUser(ctx context.Context, id int64) error
 	DeleteUserAPIToken(ctx context.Context, arg DeleteUserAPITokenParams) (ApiToken, error)
 	DeleteUserAPITokenByTokenID(ctx context.Context, arg DeleteUserAPITokenByTokenIDParams) (ApiToken, error)
+	// Delete a knowledge document by UUID, only if it belongs to the given user.
+	DeleteUserKnowledgeDocument(ctx context.Context, arg DeleteUserKnowledgeDocumentParams) error
 	DeleteUserPreferences(ctx context.Context, userID int64) error
 	DeleteUserPrompt(ctx context.Context, arg DeleteUserPromptParams) error
 	DeleteUserProvider(ctx context.Context, arg DeleteUserProviderParams) (Provider, error)
@@ -55,6 +64,10 @@ type Querier interface {
 	// Get toolcalls stats for all flows
 	GetAllFlowsToolcallsStats(ctx context.Context) ([]GetAllFlowsToolcallsStatsRow, error)
 	GetAllFlowsUsageStats(ctx context.Context) ([]GetAllFlowsUsageStatsRow, error)
+	GetAllResourcesAll(ctx context.Context) ([]UserResource, error)
+	GetAllResourcesInDir(ctx context.Context, arg GetAllResourcesInDirParams) ([]UserResource, error)
+	GetAllResourcesRecursive(ctx context.Context, arg GetAllResourcesRecursiveParams) ([]UserResource, error)
+	GetAllResourcesRoot(ctx context.Context) ([]UserResource, error)
 	GetAssistant(ctx context.Context, id int64) (Assistant, error)
 	GetAssistantUseAgents(ctx context.Context, id int64) (bool, error)
 	// Get total count of assistants for a specific flow
@@ -88,6 +101,8 @@ type Querier interface {
 	GetFlowTemplate(ctx context.Context, arg GetFlowTemplateParams) (FlowTemplate, error)
 	GetFlowTemplatesByUserID(ctx context.Context, userID int64) ([]FlowTemplate, error)
 	GetFlowTermLogs(ctx context.Context, flowID int64) ([]Termlog, error)
+	GetFlowToolcall(ctx context.Context, arg GetFlowToolcallParams) (Toolcall, error)
+	GetFlowToolcalls(ctx context.Context, flowID int64) ([]Toolcall, error)
 	// ==================== Toolcalls Analytics Queries ====================
 	// Get total execution time and count of toolcalls for a specific flow
 	GetFlowToolcallsStats(ctx context.Context, flowID int64) (GetFlowToolcallsStatsRow, error)
@@ -108,6 +123,8 @@ type Querier interface {
 	GetFlowsStatsByDayLastMonth(ctx context.Context, userID int64) ([]GetFlowsStatsByDayLastMonthRow, error)
 	// Get flows stats by day for the last week
 	GetFlowsStatsByDayLastWeek(ctx context.Context, userID int64) ([]GetFlowsStatsByDayLastWeekRow, error)
+	// Fetch a single knowledge document by its UUID (admin view — no user_id check).
+	GetKnowledgeDocument(ctx context.Context, uuid string) (GetKnowledgeDocumentRow, error)
 	GetMsgChain(ctx context.Context, id int64) (Msgchain, error)
 	// Get all msgchains for a flow (including task and subtask level)
 	GetMsgchainsForFlow(ctx context.Context, flowID int64) ([]GetMsgchainsForFlowRow, error)
@@ -172,6 +189,7 @@ type Querier interface {
 	GetUsageStatsByDayLastMonth(ctx context.Context, userID int64) ([]GetUsageStatsByDayLastMonthRow, error)
 	GetUsageStatsByDayLastWeek(ctx context.Context, userID int64) ([]GetUsageStatsByDayLastWeekRow, error)
 	GetUsageStatsByModel(ctx context.Context, userID int64) ([]GetUsageStatsByModelRow, error)
+	GetUsageStatsByModelAgentsForFlow(ctx context.Context, flowID int64) ([]GetUsageStatsByModelAgentsForFlowRow, error)
 	GetUsageStatsByProvider(ctx context.Context, userID int64) ([]GetUsageStatsByProviderRow, error)
 	GetUsageStatsByType(ctx context.Context, userID int64) ([]GetUsageStatsByTypeRow, error)
 	GetUsageStatsByTypeForFlow(ctx context.Context, flowID int64) ([]GetUsageStatsByTypeForFlowRow, error)
@@ -197,6 +215,8 @@ type Querier interface {
 	GetUserFlowTermLogs(ctx context.Context, arg GetUserFlowTermLogsParams) ([]Termlog, error)
 	GetUserFlowVectorStoreLogs(ctx context.Context, arg GetUserFlowVectorStoreLogsParams) ([]Vecstorelog, error)
 	GetUserFlows(ctx context.Context, userID int64) ([]Flow, error)
+	// Fetch a single knowledge document by UUID, scoped to a specific user.
+	GetUserKnowledgeDocument(ctx context.Context, arg GetUserKnowledgeDocumentParams) (GetUserKnowledgeDocumentRow, error)
 	GetUserPreferencesByUserID(ctx context.Context, userID int64) (UserPreference, error)
 	GetUserPrompt(ctx context.Context, arg GetUserPromptParams) (Prompt, error)
 	GetUserPromptByType(ctx context.Context, arg GetUserPromptByTypeParams) (Prompt, error)
@@ -205,12 +225,42 @@ type Querier interface {
 	GetUserProviderByName(ctx context.Context, arg GetUserProviderByNameParams) (Provider, error)
 	GetUserProviders(ctx context.Context, userID int64) ([]Provider, error)
 	GetUserProvidersByType(ctx context.Context, arg GetUserProvidersByTypeParams) ([]Provider, error)
+	GetUserResourceByID(ctx context.Context, id int64) (UserResource, error)
+	GetUserResourcesAll(ctx context.Context, userID int64) ([]UserResource, error)
+	GetUserResourcesByIDs(ctx context.Context, ids []int64) ([]UserResource, error)
+	GetUserResourcesInDir(ctx context.Context, arg GetUserResourcesInDirParams) ([]UserResource, error)
+	GetUserResourcesRecursive(ctx context.Context, arg GetUserResourcesRecursiveParams) ([]UserResource, error)
+	GetUserResourcesRoot(ctx context.Context, userID int64) ([]UserResource, error)
 	// Get total count of flows, tasks, subtasks, and assistants for a user
 	GetUserTotalFlowsStats(ctx context.Context, userID int64) (GetUserTotalFlowsStatsRow, error)
 	// Get total toolcalls stats for a user
 	GetUserTotalToolcallsStats(ctx context.Context, userID int64) (GetUserTotalToolcallsStatsRow, error)
 	GetUserTotalUsageStats(ctx context.Context, userID int64) (GetUserTotalUsageStatsRow, error)
 	GetUsers(ctx context.Context) ([]GetUsersRow, error)
+	// Insert a document with a pre-computed embedding vector and return its UUID.
+	// embedding must be formatted as a PostgreSQL vector literal: '[f1,f2,...]'
+	// cmetadata must be valid JSON text.
+	InsertKnowledgeDocument(ctx context.Context, arg InsertKnowledgeDocumentParams) (string, error)
+	// List all knowledge documents excluding the noisy memory type (admin view).
+	ListAllKnowledgeDocuments(ctx context.Context) ([]ListAllKnowledgeDocumentsRow, error)
+	// List non-memory knowledge documents belonging to a specific flow (admin scoped).
+	ListFlowKnowledgeDocuments(ctx context.Context, flowID sql.NullString) ([]ListFlowKnowledgeDocumentsRow, error)
+	// List all non-memory knowledge documents owned by a specific user (user-scoped view).
+	ListUserKnowledgeDocuments(ctx context.Context, userID sql.NullString) ([]ListUserKnowledgeDocumentsRow, error)
+	// Vector similarity search over all knowledge documents (admin view, no user filter).
+	// Returns rows ordered by cosine similarity descending (highest score first).
+	// embedding    query vector as a PostgreSQL vector literal, e.g. '[0.1,0.2,...]'
+	// max_distance cosine-distance upper bound (exclusive); equals (1 - score_threshold),
+	//              e.g. pass 0.8 to get documents with similarity score > 0.2
+	// lim          maximum number of rows to return
+	SearchKnowledgeDocuments(ctx context.Context, arg SearchKnowledgeDocumentsParams) ([]SearchKnowledgeDocumentsRow, error)
+	// Vector similarity search scoped to a specific user (by cmetadata user_id).
+	// Returns rows ordered by cosine similarity descending (highest score first).
+	// embedding    query vector as a PostgreSQL vector literal, e.g. '[0.1,0.2,...]'
+	// max_distance cosine-distance upper bound (exclusive); equals (1 - score_threshold)
+	// lim          maximum number of rows to return
+	// user_id      owner filter as a decimal text string (e.g. "42")
+	SearchUserKnowledgeDocuments(ctx context.Context, arg SearchUserKnowledgeDocumentsParams) ([]SearchUserKnowledgeDocumentsRow, error)
 	UpdateAPIToken(ctx context.Context, arg UpdateAPITokenParams) (ApiToken, error)
 	UpdateAssistant(ctx context.Context, arg UpdateAssistantParams) (Assistant, error)
 	UpdateAssistantLanguage(ctx context.Context, arg UpdateAssistantLanguageParams) (Assistant, error)
@@ -232,6 +282,10 @@ type Querier interface {
 	UpdateFlowTemplate(ctx context.Context, arg UpdateFlowTemplateParams) (FlowTemplate, error)
 	UpdateFlowTitle(ctx context.Context, arg UpdateFlowTitleParams) (Flow, error)
 	UpdateFlowToolCallIDTemplate(ctx context.Context, arg UpdateFlowToolCallIDTemplateParams) (Flow, error)
+	// Update an existing document's embedding, text and metadata atomically.
+	// embedding must be formatted as a PostgreSQL vector literal: '[f1,f2,...]'
+	// cmetadata must be valid JSON text.
+	UpdateKnowledgeDocument(ctx context.Context, arg UpdateKnowledgeDocumentParams) (UpdateKnowledgeDocumentRow, error)
 	UpdateMsgChain(ctx context.Context, arg UpdateMsgChainParams) (Msgchain, error)
 	UpdateMsgChainUsage(ctx context.Context, arg UpdateMsgChainUsageParams) (Msgchain, error)
 	UpdateMsgLogResult(ctx context.Context, arg UpdateMsgLogResultParams) (Msglog, error)

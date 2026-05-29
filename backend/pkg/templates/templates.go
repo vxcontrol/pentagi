@@ -81,10 +81,12 @@ var PromptVariables = map[PromptType][]string{
 		"AskUserToolName",
 		"AskUserEnabled",
 		"ExecutionContext",
+		"Cwd",
 		"Lang",
 		"DockerImage",
 		"CurrentTime",
 		"ToolPlaceholder",
+		"UserFiles",
 	},
 	PromptTypeAssistant: {
 		"SearchToolName",
@@ -114,6 +116,13 @@ var PromptVariables = map[PromptType][]string{
 		"ExecutionContext",
 		"Lang",
 		"CurrentTime",
+		"FlowManagerEnabled",
+		"GetFlowStatusToolName",
+		"StopFlowToolName",
+		"SubmitFlowInputToolName",
+		"PatchFlowSubtasksToolName",
+		"WaitFlowCompletionToolName",
+		"UserFiles",
 	},
 	PromptTypePentester: {
 		"HackResultToolName",
@@ -126,6 +135,8 @@ var PromptVariables = map[PromptType][]string{
 		"AdviceToolName",
 		"MemoristToolName",
 		"MaintenanceToolName",
+		"TerminalToolName",
+		"FileToolName",
 		"SummarizationToolName",
 		"SummarizedContentPrefix",
 		"IsDefaultDockerImage",
@@ -136,6 +147,7 @@ var PromptVariables = map[PromptType][]string{
 		"Lang",
 		"CurrentTime",
 		"ToolPlaceholder",
+		"UserFiles",
 	},
 	PromptTypeQuestionPentester: {
 		"Question",
@@ -150,6 +162,8 @@ var PromptVariables = map[PromptType][]string{
 		"AdviceToolName",
 		"MemoristToolName",
 		"MaintenanceToolName",
+		"TerminalToolName",
+		"FileToolName",
 		"SummarizationToolName",
 		"SummarizedContentPrefix",
 		"DockerImage",
@@ -159,6 +173,7 @@ var PromptVariables = map[PromptType][]string{
 		"Lang",
 		"CurrentTime",
 		"ToolPlaceholder",
+		"UserFiles",
 	},
 	PromptTypeQuestionCoder: {
 		"Question",
@@ -170,6 +185,8 @@ var PromptVariables = map[PromptType][]string{
 		"SearchToolName",
 		"AdviceToolName",
 		"MemoristToolName",
+		"TerminalToolName",
+		"FileToolName",
 		"SummarizationToolName",
 		"SummarizedContentPrefix",
 		"DockerImage",
@@ -179,6 +196,7 @@ var PromptVariables = map[PromptType][]string{
 		"Lang",
 		"CurrentTime",
 		"ToolPlaceholder",
+		"UserFiles",
 	},
 	PromptTypeQuestionInstaller: {
 		"Question",
@@ -190,9 +208,11 @@ var PromptVariables = map[PromptType][]string{
 		"SummarizationToolName",
 		"SummarizedContentPrefix",
 		"ExecutionContext",
+		"Cwd",
 		"Lang",
 		"CurrentTime",
 		"ToolPlaceholder",
+		"UserFiles",
 	},
 	PromptTypeQuestionSearcher: {
 		"Question",
@@ -214,6 +234,7 @@ var PromptVariables = map[PromptType][]string{
 		"Lang",
 		"CurrentTime",
 		"ToolPlaceholder",
+		"UserFiles",
 	},
 	PromptTypeQuestionMemorist: {
 		"Question",
@@ -238,6 +259,7 @@ var PromptVariables = map[PromptType][]string{
 		"DockerImage",
 		"Cwd",
 		"ContainerPorts",
+		"UserFiles",
 	},
 	PromptTypeQuestionAdviser: {
 		"InitiatorAgent",
@@ -255,10 +277,12 @@ var PromptVariables = map[PromptType][]string{
 		"SummarizationToolName",
 		"SummarizedContentPrefix",
 		"DockerImage",
+		"Cwd",
 		"Lang",
 		"CurrentTime",
 		"N",
 		"ToolPlaceholder",
+		"UserFiles",
 	},
 	PromptTypeSubtasksGenerator: {
 		"Task",
@@ -274,10 +298,12 @@ var PromptVariables = map[PromptType][]string{
 		"SummarizationToolName",
 		"SummarizedContentPrefix",
 		"DockerImage",
+		"Cwd",
 		"Lang",
 		"CurrentTime",
 		"N",
 		"ToolPlaceholder",
+		"UserFiles",
 	},
 	PromptTypeSubtasksRefiner: {
 		"Task",
@@ -291,9 +317,11 @@ var PromptVariables = map[PromptType][]string{
 		"ReportResultToolName",
 		"SummarizationToolName",
 		"SummarizedContentPrefix",
+		"Cwd",
 		"Lang",
 		"N",
 		"ToolPlaceholder",
+		"UserFiles",
 	},
 	PromptTypeTaskReporter: {
 		"Task",
@@ -318,6 +346,7 @@ var PromptVariables = map[PromptType][]string{
 		"SummarizationToolName",
 		"SummarizedContentPrefix",
 		"ExecutionContext",
+		"Cwd",
 		"Lang",
 		"CurrentTime",
 		"ToolPlaceholder",
@@ -327,6 +356,7 @@ var PromptVariables = map[PromptType][]string{
 		"FileToolName",
 		"TerminalToolName",
 		"BrowserToolName",
+		"UserFiles",
 	},
 	PromptTypeQuestionEnricher: {
 		"Question",
@@ -636,12 +666,31 @@ func (dp *defaultPrompter) RenderTemplate(promptType PromptType, params any) (st
 }
 
 func (dp *defaultPrompter) DumpTemplates() ([]byte, error) {
+	promptsMap, err := LoadDefaultPromptsMap()
+	if err != nil {
+		return nil, err
+	}
+
+	blob, err := json.Marshal(promptsMap)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal templates: %w", err)
+	}
+
+	return blob, nil
+}
+
+// LoadDefaultPromptsMap returns a freshly populated PromptsMap of the embedded
+// default templates. Callers that need to overlay overrides on top of the
+// defaults can mutate the returned map directly, without going through the
+// JSON dump path used by Prompter.DumpTemplates(). Each call returns a new
+// map, so mutations do not affect subsequent callers.
+func LoadDefaultPromptsMap() (PromptsMap, error) {
 	prompts, err := promptTemplates.ReadDir("prompts")
 	if err != nil {
 		return nil, fmt.Errorf("failed to read templates: %w", err)
 	}
 
-	promptsMap := make(PromptsMap)
+	promptsMap := make(PromptsMap, len(prompts))
 	for _, prompt := range prompts {
 		promptBytes, err := promptTemplates.ReadFile(path.Join("prompts", prompt.Name()))
 		if err != nil {
@@ -652,12 +701,7 @@ func (dp *defaultPrompter) DumpTemplates() ([]byte, error) {
 		promptsMap[PromptType(promptName)] = string(promptBytes)
 	}
 
-	blob, err := json.Marshal(promptsMap)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal templates: %w", err)
-	}
-
-	return blob, nil
+	return promptsMap, nil
 }
 
 func RenderPrompt(name, prompt string, params any) (string, error) {

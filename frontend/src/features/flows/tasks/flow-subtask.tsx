@@ -1,5 +1,5 @@
 import { ListCheck, ListTodo } from 'lucide-react';
-import { memo, useEffect, useMemo, useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 
 import type { SubtaskFragmentFragment } from '@/graphql/types';
 
@@ -13,7 +13,6 @@ interface FlowSubtaskProps {
     subtask: SubtaskFragmentFragment;
 }
 
-// Helper function to check if text contains search value (case-insensitive)
 const containsSearchValue = (text: null | string | undefined, searchValue: string): boolean => {
     if (!text || !searchValue.trim()) {
         return false;
@@ -22,12 +21,11 @@ const containsSearchValue = (text: null | string | undefined, searchValue: strin
     return text.toLowerCase().includes(searchValue.toLowerCase().trim());
 };
 
-const FlowSubtask = ({ searchValue = '', subtask }: FlowSubtaskProps) => {
+function FlowSubtask({ searchValue = '', subtask }: FlowSubtaskProps) {
     const { description, id, result, status, title } = subtask;
     const [isDetailsVisible, setIsDetailsVisible] = useState(false);
     const hasDetails = description || result;
 
-    // Memoize search checks to avoid recalculating on every render
     const searchChecks = useMemo(() => {
         const trimmedSearch = searchValue.trim();
 
@@ -41,20 +39,25 @@ const FlowSubtask = ({ searchValue = '', subtask }: FlowSubtaskProps) => {
         };
     }, [searchValue, description, result]);
 
-    // Auto-expand details if they contain search matches
-    useEffect(() => {
+    const [prevSearchValue, setPrevSearchValue] = useState(searchValue);
+    const [prevHasMatch, setPrevHasMatch] = useState(searchChecks.hasDescriptionMatch || searchChecks.hasResultMatch);
+
+    const hasMatch = searchChecks.hasDescriptionMatch || searchChecks.hasResultMatch;
+
+    if (searchValue !== prevSearchValue || hasMatch !== prevHasMatch) {
+        setPrevSearchValue(searchValue);
+        setPrevHasMatch(hasMatch);
+
         const trimmedSearch = searchValue.trim();
 
         if (trimmedSearch) {
-            // Expand details if description or result contains the search term
-            if (searchChecks.hasDescriptionMatch || searchChecks.hasResultMatch) {
+            if (hasMatch) {
                 setIsDetailsVisible(true);
             }
         } else {
-            // Reset to default state when search is cleared
             setIsDetailsVisible(false);
         }
-    }, [searchValue, searchChecks.hasDescriptionMatch, searchChecks.hasResultMatch]);
+    }
 
     return (
         <div className="group relative flex gap-2.5 pb-4 pl-0.5">
@@ -127,6 +130,6 @@ const FlowSubtask = ({ searchValue = '', subtask }: FlowSubtaskProps) => {
             <div className="absolute top-0 left-[calc((--spacing(2.5))-0.5px)] h-full border-l group-last:hidden"></div>
         </div>
     );
-};
+}
 
 export default memo(FlowSubtask);

@@ -42,7 +42,7 @@ const providerIcons: Record<ProviderType, ProviderIconConfig> = {
 };
 const defaultProviderIcon: ProviderIconConfig = { className: 'text-blue-500', icon: Custom };
 
-export const ProviderIcon = ({ className = 'size-4', provider, tooltip }: ProviderIconProps) => {
+export function ProviderIcon({ className = 'size-4', provider, tooltip }: ProviderIconProps) {
     if (!provider?.type) {
         return null;
     }
@@ -60,4 +60,4 @@ export const ProviderIcon = ({ className = 'size-4', provider, tooltip }: Provid
             <TooltipContent>{tooltip}</TooltipContent>
         </Tooltip>
     );
-};
+}

@@ -1,9 +1,24 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { ArrowUp, Check, ChevronDown, FileSymlink, FileText, Square, X } from 'lucide-react';
+import {
+    ArrowUp,
+    Check,
+    ChevronDown,
+    Ellipsis,
+    FileSymlink,
+    FileText,
+    Folder,
+    Loader2,
+    Paperclip,
+    Plus,
+    Square,
+    X,
+} from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRef } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { z } from 'zod';
+
+import type { UserResourceFragmentFragment } from '@/graphql/types';
 
 import { ProviderIcon } from '@/components/icons/provider-icon';
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
@@ -15,7 +30,7 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Form, FormControl, FormField, FormLabel } from '@/components/ui/form';
+import { Form, FormControl, FormField, FormItem, FormLabel } from '@/components/ui/form';
 import {
     InputGroup,
     InputGroupAddon,
@@ -25,14 +40,18 @@ import {
 } from '@/components/ui/input-group';
 import { Spinner } from '@/components/ui/spinner';
 import { Switch } from '@/components/ui/switch';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { useResourcesUpload } from '@/features/resources/use-resources-upload';
 import { getProviderDisplayName } from '@/models/provider';
 import { useProviders } from '@/providers/providers-provider';
+import { useResources } from '@/providers/resources-provider';
 import { type Template, useTemplates } from '@/providers/templates-provider';
 
 const formSchema = z.object({
     message: z.string().trim().min(1, { message: 'Message cannot be empty' }),
     providerName: z.string().trim().min(1, { message: 'Provider must be selected' }),
+    resourceIds: z.array(z.string()),
     useAgents: z.boolean(),
 });
 
@@ -51,7 +70,7 @@ export interface FlowFormProps {
 
 export type FlowFormValues = z.infer<typeof formSchema>;
 
-export const FlowForm = ({
+export function FlowForm({
     defaultValues,
     isCanceling,
     isDisabled,
@@ -62,13 +81,47 @@ export const FlowForm = ({
     onSubmit,
     placeholder = 'Describe what you would like PentAGI to test...',
     type,
-}: FlowFormProps) => {
+}: FlowFormProps) {
     const { providers, setSelectedProvider } = useProviders();
     const { templates } = useTemplates();
+    const { resources } = useResources();
     const [isReplaceConfirmOpen, setIsReplaceConfirmOpen] = useState(false);
     const [pendingTemplate, setPendingTemplate] = useState<null | Template>(null);
     const [providerSearch, setProviderSearch] = useState('');
     const [templateSearch, setTemplateSearch] = useState('');
+    const [resourceSearch, setResourceSearch] = useState('');
+    // Tracks which picker the combined dropdown is showing. Lifted to form
+    // state (instead of internal to the menu) so the tab choice survives
+    // re-renders triggered by `setTemplateSearch` / `setResourceSearch`
+    // inside the inner pickers.
+    const [pickerTab, setPickerTab] = useState<'resources' | 'templates'>('templates');
+
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // Resources are rendered as a hierarchy: alphabetical sort by full path
+    // produces the right ordering for siblings at every depth (parents before
+    // their descendants, peers in alphabetical order). Each row's nesting level
+    // is then derived from the slash count and rendered as a left indent so the
+    // user can visually trace files into their parent directories.
+    const sortedResources = useMemo(
+        () => [...resources].sort((a, b) => a.path.localeCompare(b.path, undefined, { sensitivity: 'base' })),
+        [resources],
+    );
+
+    const filteredResources = useMemo(() => {
+        const queryValue = resourceSearch.trim().toLowerCase();
+
+        if (!queryValue) {
+            return sortedResources;
+        }
+
+        return sortedResources.filter(
+            (resource) =>
+                resource.name.toLowerCase().includes(queryValue) || resource.path.toLowerCase().includes(queryValue),
+        );
+    }, [sortedResources, resourceSearch]);
+
+    const isResourceSearchActive = resourceSearch.trim().length > 0;
 
     const filteredTemplates = useMemo(() => {
         if (!templateSearch.trim()) {
@@ -101,6 +154,7 @@ export const FlowForm = ({
         defaultValues: {
             message: defaultValues?.message ?? '',
             providerName: defaultValues?.providerName ?? '',
+            resourceIds: defaultValues?.resourceIds ?? [],
             useAgents: defaultValues?.useAgents ?? false,
         },
         mode: 'onChange',
@@ -116,7 +170,46 @@ export const FlowForm = ({
         setValue,
     } = form;
 
-    // Update form values from defaultValues if user hasn't manually changed them
+    const resourceIds = useWatch({ control, name: 'resourceIds' });
+
+    const updateResourceIds = useCallback(
+        (updater: ((current: string[]) => string[]) | Array<number | string>) => {
+            const current = getValues('resourceIds') ?? [];
+            const raw = typeof updater === 'function' ? updater(current) : updater;
+            // Canonical cache shape carries `id` as a number (see `resources-rest.ts`),
+            // while zod enforces `z.array(z.string())` on the form state. String-coerce
+            // every incoming value so the form always holds a consistent string array.
+            const next = raw.map((id) => String(id));
+            setValue('resourceIds', next, { shouldDirty: true, shouldValidate: true });
+        },
+        [getValues, setValue],
+    );
+
+    const flowResources = useMemo<UserResourceFragmentFragment[]>(() => {
+        const byId = new Map(resources.map((item) => [String(item.id), item]));
+
+        return resourceIds
+            .map((id) => byId.get(id))
+            .filter((item): item is UserResourceFragmentFragment => Boolean(item));
+    }, [resourceIds, resources]);
+
+    const upload = useResourcesUpload({
+        onSuccess: (uploaded) => {
+            const ids = uploaded.items.map((item) => String(item.id));
+
+            if (ids.length === 0) {
+                return;
+            }
+
+            updateResourceIds((current) => {
+                const merged = new Set(current);
+                ids.forEach((id) => merged.add(id));
+
+                return Array.from(merged);
+            });
+        },
+    });
+
     useEffect(() => {
         if (!defaultValues) {
             return;
@@ -124,16 +217,27 @@ export const FlowForm = ({
 
         const currentValues = getValues();
 
-        // Update only fields that user hasn't manually changed and that differ from current values
+        // Update only fields that user hasn't manually changed and that differ from current values.
+        // Arrays are compared shallowly so a new-but-identical `resourceIds` reference doesn't
+        // trigger an unnecessary setValue (and the re-render it causes).
         Object.entries(defaultValues)
             .filter(([fieldName, defaultValue]) => {
                 const typedFieldName = fieldName as keyof FlowFormValues;
 
-                return (
-                    defaultValue !== undefined &&
-                    !dirtyFields[typedFieldName] &&
-                    currentValues[typedFieldName] !== defaultValue
-                );
+                if (defaultValue === undefined || dirtyFields[typedFieldName]) {
+                    return false;
+                }
+
+                const currentValue = currentValues[typedFieldName];
+
+                if (Array.isArray(defaultValue) && Array.isArray(currentValue)) {
+                    return (
+                        currentValue.length !== defaultValue.length ||
+                        currentValue.some((item, index) => item !== defaultValue[index])
+                    );
+                }
+
+                return currentValue !== defaultValue;
             })
             .forEach(([fieldName, defaultValue]) => {
                 const typedFieldName = fieldName as keyof FlowFormValues;
@@ -147,10 +251,10 @@ export const FlowForm = ({
     const previousFormDisabledRef = useRef(isFormDisabled);
 
     useEffect(() => {
-        const isDisabled = previousFormDisabledRef.current;
+        const wasDisabled = previousFormDisabledRef.current;
         previousFormDisabledRef.current = isFormDisabled;
 
-        if (isDisabled && !isFormDisabled) {
+        if (wasDisabled && !isFormDisabled) {
             textareaRef.current?.focus();
         }
     }, [isFormDisabled]);
@@ -158,6 +262,37 @@ export const FlowForm = ({
     const handleSubmit = async (values: FlowFormValues) => {
         await onSubmit(values);
         resetField('message');
+        resetField('resourceIds');
+    };
+
+    const handleAttachClick = () => {
+        fileInputRef.current?.click();
+    };
+
+    const handleFileInputChange = useCallback(
+        async (event: React.ChangeEvent<HTMLInputElement>) => {
+            const selectedFiles = Array.from(event.target.files ?? []);
+
+            // Reset native input so re-uploading the same file fires `change` again.
+            event.target.value = '';
+
+            if (selectedFiles.length === 0) {
+                return;
+            }
+
+            await upload.uploadFiles(selectedFiles);
+        },
+        [upload],
+    );
+
+    const handleRemoveAttachment = (id: string) => {
+        updateResourceIds((current) => current.filter((fileId) => fileId !== id));
+    };
+
+    const handleToggleAttachment = (id: string) => {
+        updateResourceIds((current) =>
+            current.includes(id) ? current.filter((fileId) => fileId !== id) : [...current, id],
+        );
     };
 
     const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -194,6 +329,158 @@ export const FlowForm = ({
         }
     }, [pendingTemplate, setValue]);
 
+    // Templates and resources share the same dropdown via tabs — both picker
+    // bodies are kept as render functions so each can be mounted directly
+    // inside its `<TabsContent>` without duplicating the search-input +
+    // scrolled-list layout.
+    const renderTemplatePickerInner = () => (
+        <>
+            <DropdownMenuGroup className="-m-1 rounded-none p-0">
+                <InputGroup className="-mb-1 rounded-none border-0 shadow-none [&:has([data-slot=input-group-control]:focus-visible)]:border-0 [&:has([data-slot=input-group-control]:focus-visible)]:ring-0">
+                    <InputGroupInput
+                        onChange={(event) => setTemplateSearch(event.target.value)}
+                        onClick={(event) => event.stopPropagation()}
+                        onKeyDown={(event) => event.stopPropagation()}
+                        placeholder="Search..."
+                        value={templateSearch}
+                    />
+                    {templateSearch && (
+                        <InputGroupAddon align="inline-end">
+                            <InputGroupButton
+                                onClick={(event) => {
+                                    event.stopPropagation();
+                                    setTemplateSearch('');
+                                }}
+                            >
+                                <X />
+                            </InputGroupButton>
+                        </InputGroupAddon>
+                    )}
+                </InputGroup>
+                <DropdownMenuSeparator />
+            </DropdownMenuGroup>
+            <DropdownMenuGroup className="max-h-64 overflow-y-auto">
+                {!filteredTemplates.length ? (
+                    <DropdownMenuItem
+                        className="min-h-16 justify-center"
+                        disabled
+                    >
+                        {templateSearch ? 'No results found' : 'No available templates'}
+                    </DropdownMenuItem>
+                ) : (
+                    filteredTemplates.map((template) => (
+                        <DropdownMenuItem
+                            key={template.id}
+                            onSelect={() => {
+                                if (isFormDisabled) {
+                                    return;
+                                }
+
+                                handleApplyTemplate(template);
+                            }}
+                        >
+                            <span className="max-w-80 flex-1 truncate">{template.title}</span>
+                        </DropdownMenuItem>
+                    ))
+                )}
+            </DropdownMenuGroup>
+        </>
+    );
+
+    const renderResourcePickerInner = () => (
+        <>
+            <DropdownMenuGroup className="-m-1 rounded-none p-0">
+                <InputGroup className="-mb-1 rounded-none border-0 shadow-none [&:has([data-slot=input-group-control]:focus-visible)]:border-0 [&:has([data-slot=input-group-control]:focus-visible)]:ring-0">
+                    <InputGroupInput
+                        onChange={(event) => setResourceSearch(event.target.value)}
+                        onClick={(event) => event.stopPropagation()}
+                        onKeyDown={(event) => event.stopPropagation()}
+                        placeholder="Search..."
+                        value={resourceSearch}
+                    />
+                    {resourceSearch && (
+                        <InputGroupAddon align="inline-end">
+                            <InputGroupButton
+                                onClick={(event) => {
+                                    event.stopPropagation();
+                                    setResourceSearch('');
+                                }}
+                            >
+                                <X />
+                            </InputGroupButton>
+                        </InputGroupAddon>
+                    )}
+                </InputGroup>
+                <DropdownMenuSeparator />
+            </DropdownMenuGroup>
+            <DropdownMenuGroup className="max-h-64 overflow-y-auto">
+                {!filteredResources.length ? (
+                    <DropdownMenuItem
+                        className="min-h-16 justify-center"
+                        disabled
+                    >
+                        {resourceSearch ? 'No results found' : 'No available resources'}
+                    </DropdownMenuItem>
+                ) : (
+                    filteredResources.map((resource) => {
+                        const resourceId = String(resource.id);
+                        const isSelected = resourceIds.includes(resourceId);
+                        const Icon = resource.isDir ? Folder : FileText;
+                        // Depth derived from the path's slash count; ignored while a
+                        // search query is active so matches don't appear orphaned
+                        // beneath hidden ancestors.
+                        const depth = isResourceSearchActive ? 0 : resource.path.split('/').length - 1;
+
+                        return (
+                            <DropdownMenuItem
+                                key={resourceId}
+                                onSelect={(event) => {
+                                    event.preventDefault();
+
+                                    if (isFormDisabled) {
+                                        return;
+                                    }
+
+                                    handleToggleAttachment(resourceId);
+                                }}
+                                style={{ paddingLeft: `${0.5 + depth * 0.875}rem` }}
+                            >
+                                <div className="flex w-full min-w-0 items-center gap-2">
+                                    <Icon className="text-muted-foreground size-4 shrink-0" />
+                                    <div className="flex min-w-0 flex-1 flex-col">
+                                        <span className="truncate">{resource.name}</span>
+                                        {isResourceSearchActive && resource.path !== resource.name && (
+                                            <span className="text-muted-foreground truncate text-xs">
+                                                {resource.path}
+                                            </span>
+                                        )}
+                                    </div>
+                                    {isSelected && <Check className="ml-auto size-4 shrink-0" />}
+                                </div>
+                            </DropdownMenuItem>
+                        );
+                    })
+                )}
+            </DropdownMenuGroup>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+                disabled={upload.isUploading}
+                onSelect={(event) => {
+                    event.preventDefault();
+
+                    if (isFormDisabled) {
+                        return;
+                    }
+
+                    handleAttachClick();
+                }}
+            >
+                {upload.isUploading ? <Loader2 className="animate-spin" /> : <Plus />}
+                {upload.isUploading ? 'Uploading…' : 'Upload files'}
+            </DropdownMenuItem>
+        </>
+    );
+
     return (
         <Form {...form}>
             <form onSubmit={handleFormSubmit(handleSubmit)}>
@@ -203,6 +490,39 @@ export const FlowForm = ({
                     render={({ field }) => (
                         <FormControl>
                             <InputGroup className="block">
+                                {flowResources.length > 0 && (
+                                    <InputGroupAddon
+                                        align="block-start"
+                                        className="flex-wrap gap-1.5"
+                                    >
+                                        {flowResources.map((resource) => {
+                                            const Icon = resource.isDir ? Folder : FileText;
+                                            const resourceId = String(resource.id);
+
+                                            return (
+                                                <div
+                                                    className="bg-muted/50 flex max-w-full items-center gap-1.5 rounded-md border px-2 py-1 text-xs"
+                                                    key={resourceId}
+                                                    title={resource.path}
+                                                >
+                                                    <Icon className="text-muted-foreground size-3.5 shrink-0" />
+                                                    <span className="text-foreground max-w-40 truncate">
+                                                        {resource.name}
+                                                    </span>
+                                                    <button
+                                                        aria-label={`Remove ${resource.name}`}
+                                                        className="text-muted-foreground hover:text-destructive ml-0.5 flex shrink-0 items-center justify-center"
+                                                        disabled={isFormDisabled}
+                                                        onClick={() => handleRemoveAttachment(resourceId)}
+                                                        type="button"
+                                                    >
+                                                        <X className="size-3.5" />
+                                                    </button>
+                                                </div>
+                                            );
+                                        })}
+                                    </InputGroupAddon>
+                                )}
                                 <InputGroupTextareaAutosize
                                     {...field}
                                     autoFocus
@@ -329,7 +649,7 @@ export const FlowForm = ({
                                                 <TooltipProvider>
                                                     <Tooltip>
                                                         <TooltipTrigger asChild>
-                                                            <div className="flex items-center">
+                                                            <FormItem className="flex flex-row items-center gap-0">
                                                                 <FormControl>
                                                                     <Switch
                                                                         checked={useAgentsField.value}
@@ -345,7 +665,7 @@ export const FlowForm = ({
                                                                 >
                                                                     Use Agents
                                                                 </FormLabel>
-                                                            </div>
+                                                            </FormItem>
                                                         </TooltipTrigger>
                                                         <TooltipContent>
                                                             <p className="max-w-48">
@@ -358,78 +678,92 @@ export const FlowForm = ({
                                         />
                                     )}
 
-                                    <DropdownMenu>
+                                    <DropdownMenu
+                                        onOpenChange={(open) => {
+                                            if (!open) {
+                                                setTemplateSearch('');
+                                                setResourceSearch('');
+                                            }
+                                        }}
+                                    >
                                         <DropdownMenuTrigger asChild>
                                             <InputGroupButton
+                                                aria-label="Templates and resources"
+                                                className="ml-auto shrink-0"
                                                 disabled={isFormDisabled}
+                                                size="icon-xs"
                                                 variant="ghost"
                                             >
-                                                <FileText className="shrink-0" />
-                                                <ChevronDown />
+                                                <Ellipsis className="shrink-0" />
                                             </InputGroupButton>
                                         </DropdownMenuTrigger>
+                                        {/* Single upward-opening dropdown for both Templates and Resources
+                                            on every viewport. Sub-menus would get clipped on the narrowest
+                                            screens (~390px), and a unified UI keeps the form simpler than
+                                            branching on `isMobile`. The tab strip is rendered last so it
+                                            lands closest to the trigger button. */}
                                         <DropdownMenuContent
-                                            align="start"
+                                            align="end"
+                                            className="w-72"
                                             side="top"
                                         >
-                                            <DropdownMenuGroup className="-m-1 rounded-none p-0">
-                                                <InputGroup className="-mb-1 rounded-none border-0 shadow-none [&:has([data-slot=input-group-control]:focus-visible)]:border-0 [&:has([data-slot=input-group-control]:focus-visible)]:ring-0">
-                                                    <InputGroupInput
-                                                        onChange={(event) => setTemplateSearch(event.target.value)}
-                                                        onClick={(event) => event.stopPropagation()}
-                                                        onKeyDown={(event) => event.stopPropagation()}
-                                                        placeholder="Search..."
-                                                        value={templateSearch}
-                                                    />
-                                                    {templateSearch && (
-                                                        <InputGroupAddon align="inline-end">
-                                                            <InputGroupButton
-                                                                onClick={(event) => {
-                                                                    event.stopPropagation();
-                                                                    setTemplateSearch('');
-                                                                }}
-                                                            >
-                                                                <X />
-                                                            </InputGroupButton>
-                                                        </InputGroupAddon>
-                                                    )}
-                                                </InputGroup>
-                                                <DropdownMenuSeparator />
-                                            </DropdownMenuGroup>
-                                            <DropdownMenuGroup className="max-h-64 overflow-y-auto">
-                                                {!filteredTemplates.length ? (
-                                                    <DropdownMenuItem
-                                                        className="min-h-16 justify-center"
-                                                        disabled
+                                            <Tabs
+                                                onValueChange={(value) => {
+                                                    // Defer the content swap to the next task so it lands
+                                                    // *after* the pointerup that the click triggered.
+                                                    // Radix `DropdownMenuItem` listens to pointerup directly,
+                                                    // so if we swap synchronously, the pointerup at the tab
+                                                    // coordinates lands on the freshly-mounted "Upload files"
+                                                    // item in the Resources panel and fires its onSelect.
+                                                    setTimeout(
+                                                        () => setPickerTab(value as 'resources' | 'templates'),
+                                                        0,
+                                                    );
+                                                }}
+                                                value={pickerTab}
+                                            >
+                                                <TabsContent
+                                                    className="mt-0 focus-visible:ring-0"
+                                                    value="templates"
+                                                >
+                                                    {renderTemplatePickerInner()}
+                                                </TabsContent>
+                                                <TabsContent
+                                                    className="mt-0 focus-visible:ring-0"
+                                                    value="resources"
+                                                >
+                                                    {renderResourcePickerInner()}
+                                                </TabsContent>
+                                                <TabsList className="mt-1 grid w-full grid-cols-2">
+                                                    <TabsTrigger
+                                                        className="gap-1.5"
+                                                        value="templates"
                                                     >
-                                                        {templateSearch ? 'No results found' : 'No available templates'}
-                                                    </DropdownMenuItem>
-                                                ) : (
-                                                    filteredTemplates.map((template) => (
-                                                        <DropdownMenuItem
-                                                            key={template.id}
-                                                            onSelect={() => {
-                                                                if (isFormDisabled) {
-                                                                    return;
-                                                                }
-
-                                                                handleApplyTemplate(template);
-                                                            }}
-                                                        >
-                                                            <span className="max-w-80 flex-1 truncate">
-                                                                {template.title}
+                                                        <FileText className="size-3.5" />
+                                                        Templates
+                                                    </TabsTrigger>
+                                                    <TabsTrigger
+                                                        className="gap-1.5"
+                                                        value="resources"
+                                                    >
+                                                        <Paperclip className="size-3.5" />
+                                                        Resources
+                                                        {flowResources.length > 0 && (
+                                                            <span className="bg-muted-foreground/20 text-foreground flex h-4 min-w-4 items-center justify-center rounded px-1 text-[10px] font-medium tabular-nums">
+                                                                {flowResources.length}
                                                             </span>
-                                                        </DropdownMenuItem>
-                                                    ))
-                                                )}
-                                            </DropdownMenuGroup>
+                                                        )}
+                                                    </TabsTrigger>
+                                                </TabsList>
+                                            </Tabs>
                                         </DropdownMenuContent>
                                     </DropdownMenu>
 
                                     {!isLoading || isSubmitting ? (
                                         <InputGroupButton
-                                            className="ml-auto"
-                                            disabled={isSubmitting || !isValid}
+                                            aria-label={isSubmitting ? 'Submitting…' : 'Submit'}
+                                            className="shrink-0"
+                                            disabled={isSubmitting || !isValid || upload.isUploading}
                                             size="icon-xs"
                                             type="submit"
                                             variant="default"
@@ -438,7 +772,8 @@ export const FlowForm = ({
                                         </InputGroupButton>
                                     ) : (
                                         <InputGroupButton
-                                            className="ml-auto"
+                                            aria-label={isCanceling ? 'Cancelling…' : 'Cancel'}
+                                            className="shrink-0"
                                             disabled={isCanceling || !onCancel}
                                             onClick={() => onCancel?.()}
                                             size="icon-xs"
@@ -454,6 +789,16 @@ export const FlowForm = ({
                     )}
                 />
             </form>
+            <input
+                aria-hidden="true"
+                className="hidden"
+                multiple
+                name="flow-form-attachment"
+                onChange={handleFileInputChange}
+                ref={fileInputRef}
+                tabIndex={-1}
+                type="file"
+            />
             <ConfirmationDialog
                 confirmIcon={<FileSymlink />}
                 confirmText="Replace"
@@ -472,4 +817,4 @@ export const FlowForm = ({
             />
         </Form>
     );
-};
+}

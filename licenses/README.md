@@ -16,14 +16,14 @@ Run the generator script to create/update license reports (run from project root
 - `backend-dependencies.txt` - Complete list of Go modules
 - `backend-licenses.csv` - Detailed license information (CSV format)
 
-### Frontend (npm)
-- `frontend-dependencies.json` - Complete npm dependency tree (JSON)
+### Frontend (pnpm)
+- `frontend-dependencies.json` - Complete dependency tree (JSON)
 - `frontend-licenses.json` - Detailed license data (JSON)
 - `frontend-licenses.csv` - License data (CSV)
 
 **Note:** 
 - Backend reports require `go-licenses` tool: `go install github.com/google/go-licenses@latest`
-- Frontend reports require `npm ci` in the frontend directory first.
+- Frontend reports require `pnpm install` in the frontend directory first.
 
 ## License
 

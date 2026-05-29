@@ -31,6 +31,7 @@ type FlowController interface {
 		prvname provider.ProviderName,
 		prvtype provider.ProviderType,
 		functions *tools.Functions,
+		resources []database.UserResource,
 	) (FlowWorker, error)
 	CreateAssistant(
 		ctx context.Context,
@@ -41,6 +42,7 @@ type FlowController interface {
 		prvname provider.ProviderName,
 		prvtype provider.ProviderType,
 		functions *tools.Functions,
+		resources []database.UserResource,
 	) (AssistantWorker, error)
 	LoadFlows(ctx context.Context) error
 	ListFlows(ctx context.Context) []FlowWorker
@@ -64,6 +66,7 @@ type flowController struct {
 	slc    SearchLogController
 	tlc    TermLogController
 	vslc   VectorStoreLogController
+	tclc   ToolCallLogController
 	sc     ScreenshotController
 }
 
@@ -88,6 +91,7 @@ func NewFlowController(
 		slc:    NewSearchLogController(db),
 		tlc:    NewTermLogController(db),
 		vslc:   NewVectorStoreLogController(db),
+		tclc:   NewToolCallLogController(db),
 		sc:     NewScreenshotController(db),
 	}
 }
@@ -112,6 +116,7 @@ func (fc *flowController) LoadFlows(ctx context.Context) error {
 				slc:  fc.slc,
 				tlc:  fc.tlc,
 				vslc: fc.vslc,
+				tclc: fc.tclc,
 				sc:   fc.sc,
 			},
 		})
@@ -137,6 +142,7 @@ func (fc *flowController) CreateFlow(
 	prvname provider.ProviderName,
 	prvtype provider.ProviderType,
 	functions *tools.Functions,
+	resources []database.UserResource,
 ) (FlowWorker, error) {
 	fc.mx.Lock()
 	defer fc.mx.Unlock()
@@ -147,6 +153,7 @@ func (fc *flowController) CreateFlow(
 		prvname:   prvname,
 		prvtype:   prvtype,
 		functions: functions,
+		resources: resources,
 		flowWorkerCtx: flowWorkerCtx{
 			db:     fc.db,
 			cfg:    fc.cfg,
@@ -160,6 +167,7 @@ func (fc *flowController) CreateFlow(
 				slc:  fc.slc,
 				tlc:  fc.tlc,
 				vslc: fc.vslc,
+				tclc: fc.tclc,
 				sc:   fc.sc,
 			},
 		},
@@ -182,6 +190,7 @@ func (fc *flowController) CreateAssistant(
 	prvname provider.ProviderName,
 	prvtype provider.ProviderType,
 	functions *tools.Functions,
+	resources []database.UserResource,
 ) (AssistantWorker, error) {
 	fc.mx.Lock()
 	defer fc.mx.Unlock()
@@ -205,6 +214,7 @@ func (fc *flowController) CreateAssistant(
 			slc:  fc.slc,
 			tlc:  fc.tlc,
 			vslc: fc.vslc,
+			tclc: fc.tclc,
 			sc:   fc.sc,
 		},
 	}
@@ -289,6 +299,8 @@ func (fc *flowController) CreateAssistant(
 		prvtype:       prvtype,
 		useAgents:     useAgents,
 		functions:     functions,
+		resources:     resources,
+		fw:            fw,
 		flowWorkerCtx: flowWorkerCtx,
 	})
 	if err != nil {

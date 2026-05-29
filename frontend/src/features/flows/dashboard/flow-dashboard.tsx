@@ -2,7 +2,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { FlowDashboardOverview } from '@/features/flows/dashboard/flow-dashboard-overview';
 import { useFlow } from '@/providers/flow-provider';
 
-const FlowDashboard = () => {
+function FlowDashboard() {
     const { flowId } = useFlow();
 
     if (!flowId) {
@@ -24,6 +24,6 @@ const FlowDashboard = () => {
             </TabsContent>
         </Tabs>
     );
-};
+}
 
 export default FlowDashboard;

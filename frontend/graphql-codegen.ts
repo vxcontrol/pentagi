@@ -7,13 +7,15 @@ const config: CodegenConfig = {
             config: {
                 dedupeFragments: true,
                 exportFragmentSpreadSubTypes: true,
+                apolloReactCommonImportFrom: '@apollo/client/react',
+                apolloReactHooksImportFrom: '@apollo/client/react',
+                enumType: 'native',
                 inlineFragmentTypes: 'combine',
-                preResolveTypes: true,
                 skipTypename: true,
                 useTypeImports: true,
                 withHooks: true,
             },
-            plugins: ['typescript', 'typescript-operations', 'typescript-react-apollo'],
+            plugins: ['typescript-operations', 'typescript-react-apollo'],
         },
     },
     hooks: {

@@ -30,7 +30,7 @@
             "type": "node",
             "request": "launch",
             "name": "Launch Frontend",
-            "runtimeExecutable": "npm",
+            "runtimeExecutable": "pnpm",
             "runtimeArgs": ["run", "dev"],
             "env": {
                 "VITE_APP_LOG_LEVEL": "DEBUG",

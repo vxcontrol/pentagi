@@ -1,12 +1,36 @@
+# Qwen (Alibaba Cloud DashScope) agent configuration.
+#
+# Strategy: qwen3.7-max (flagship) for critical reasoning, qwen3.6-plus (mid-tier
+# multimodal Plus) for orchestration, qwen3.5-flash for cheap utility, qwen3-coder-*
+# for code-specialized tasks (installer/coder).
+#
+# CRITICAL thinking control via extra_body (DashScope-specific, not OpenAI standard):
+#   - enable_thinking=false: utility agents (simple, simple_json, reflector, searcher,
+#     enricher) MUST set this explicitly. Qwen3.5/3.6/3.7 hybrid models have thinking
+#     ENABLED by default. Without disabling, reasoning_content leaks into content and
+#     corrupts short deterministic outputs (e.g. docker image selector returning the
+#     full chain-of-thought instead of just "vxcontrol/kali-linux").
+#   - enable_thinking=true: reasoning agents (primary, assistant, generator, refiner,
+#     adviser, pentester) explicitly enable thinking. Redundant with hybrid defaults
+#     but defensive against future provider changes.
+#   - preserve_thinking=true: keeps reasoning_content from previous assistant turns
+#     in subsequent requests. Supported ONLY by qwen3.7-max and qwen3.6-plus families.
+#     Required for agent loops with tool calls to preserve reasoning continuity.
+#     Works together with WithPreserveReasoningContent() in qwen.go.
+#   - qwen3-coder-* (coder, installer) are NOT hybrid thinking models — no thinking
+#     control needed.
+
 simple:
   model: "qwen3.5-flash"
   temperature: 0.6
   n: 1
   max_tokens: 8192
+  extra_body:
+    enable_thinking: false
   price:
     input: 0.1
     output: 0.4
-    cache_read: 0.02
+    cache_read: 0.01
 
 simple_json:
   model: "qwen3.5-flash"
@@ -14,117 +38,143 @@ simple_json:
   n: 1
   max_tokens: 4096
   json: true
+  extra_body:
+    enable_thinking: false
   price:
     input: 0.1
     output: 0.4
-    cache_read: 0.02
+    cache_read: 0.01
 
 primary_agent:
-  model: "qwen3.5-plus"
+  model: "qwen3.6-plus"
   temperature: 1.0
   n: 1
   max_tokens: 16384
+  extra_body:
+    enable_thinking: true
+    preserve_thinking: true
   price:
-    input: 0.4
-    output: 2.4
-    cache_read: 0.08
+    input: 0.5
+    output: 3.0
+    cache_read: 0.05
 
 assistant:
-  model: "qwen3.5-plus"
+  model: "qwen3.6-plus"
   temperature: 1.0
   n: 1
   max_tokens: 16384
+  extra_body:
+    enable_thinking: true
+    preserve_thinking: true
   price:
-    input: 0.4
-    output: 2.4
-    cache_read: 0.08
+    input: 0.5
+    output: 3.0
+    cache_read: 0.05
 
 generator:
-  model: "qwen3-max"
+  model: "qwen3.7-max"
   temperature: 1.0
   n: 1
   max_tokens: 32768
+  extra_body:
+    enable_thinking: true
+    preserve_thinking: true
   price:
-    input: 2.4
-    output: 12.0
-    cache_read: 0.48
+    input: 2.5
+    output: 7.5
+    cache_read: 0.5
 
 refiner:
-  model: "qwen3-max"
+  model: "qwen3.7-max"
   temperature: 1.0
   n: 1
   max_tokens: 20480
+  extra_body:
+    enable_thinking: true
+    preserve_thinking: true
   price:
-    input: 2.4
-    output: 12.0
-    cache_read: 0.48
+    input: 2.5
+    output: 7.5
+    cache_read: 0.5
 
 adviser:
-  model: "qwen3-max"
+  model: "qwen3.7-max"
   temperature: 1.0
   n: 1
   max_tokens: 8192
+  extra_body:
+    enable_thinking: true
+    preserve_thinking: true
   price:
-    input: 2.4
-    output: 12.0
-    cache_read: 0.48
+    input: 2.5
+    output: 7.5
+    cache_read: 0.5
 
 reflector:
   model: "qwen3.5-flash"
   temperature: 0.7
   n: 1
   max_tokens: 4096
+  extra_body:
+    enable_thinking: false
   price:
     input: 0.1
     output: 0.4
-    cache_read: 0.02
+    cache_read: 0.01
 
 searcher:
   model: "qwen3.5-flash"
   temperature: 0.7
   n: 1
   max_tokens: 4096
+  extra_body:
+    enable_thinking: false
   price:
     input: 0.1
     output: 0.4
-    cache_read: 0.02
+    cache_read: 0.01
 
 enricher:
   model: "qwen3.5-flash"
   temperature: 0.7
   n: 1
   max_tokens: 4096
+  extra_body:
+    enable_thinking: false
   price:
     input: 0.1
     output: 0.4
-    cache_read: 0.02
+    cache_read: 0.01
 
 coder:
-  model: "qwen3.5-plus"
+  model: "qwen3-coder-plus"
   temperature: 1.0
   n: 1
   max_tokens: 20480
   price:
-    input: 0.4
-    output: 2.4
-    cache_read: 0.08
+    input: 1.0
+    output: 5.0
+    cache_read: 0.2
 
 installer:
-  model: "qwen3.5-plus"
+  model: "qwen3-coder-flash"
   temperature: 0.7
   n: 1
   max_tokens: 16384
   price:
-    input: 0.4
-    output: 2.4
-    cache_read: 0.08
+    input: 0.3
+    output: 1.5
+    cache_read: 0.06
 
 pentester:
-  model: "qwen3.5-plus"
+  model: "qwen3.6-plus"
   temperature: 0.8
   n: 1
   max_tokens: 16384
+  extra_body:
+    enable_thinking: true
+    preserve_thinking: true
   price:
-    input: 0.4
-    output: 2.4
-    cache_read: 0.08
+    input: 0.5
+    output: 3.0
+    cache_read: 0.05

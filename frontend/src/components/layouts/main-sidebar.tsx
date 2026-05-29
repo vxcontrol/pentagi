@@ -3,9 +3,11 @@ import {
     ChevronsUpDown,
     Clock,
     FileText,
+    Folder,
     GitFork,
     KeyRound,
     LayoutDashboard,
+    LibraryBig,
     LogOut,
     Monitor,
     Moon,
@@ -48,6 +50,7 @@ import {
 } from '@/components/ui/sidebar';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { PasswordChangeForm } from '@/features/authentication/password-change-form';
+import { useResourcesUpload } from '@/features/resources/use-resources-upload';
 import { useTheme } from '@/hooks/use-theme';
 import { useFavorites } from '@/providers/favorites-provider';
 import { useSidebarFlows } from '@/providers/sidebar-flows-provider';
@@ -60,39 +63,13 @@ interface FlowMenuItemProps {
     onToggleFavorite: (flowId: string) => void;
 }
 
-const FlowMenuItem = ({ activeFlowId, flow, isFavorite, onToggleFavorite }: FlowMenuItemProps) => {
-    return (
-        <SidebarMenuItem>
-            <SidebarMenuButton
-                asChild
-                isActive={activeFlowId === Number(flow.id)}
-            >
-                <Link to={`/flows/${flow.id}`}>
-                    <span className="-mx-2 w-8 shrink-0 text-center text-xs group-data-[state=expanded]:hidden">
-                        {flow.id}
-                    </span>
-                    <span className="text-muted-foreground bg-background dark:bg-muted -my-0.5 -ml-0.5 h-5 min-w-5 shrink-0 rounded-md px-px py-0.5 text-center text-xs group-data-[state=collapsed]:hidden">
-                        {flow.id}
-                    </span>
-                    <span className="truncate">{flow.title}</span>
-                </Link>
-            </SidebarMenuButton>
-            <SidebarMenuAction
-                className="data-[state=open]:bg-accent rounded-sm"
-                onClick={() => onToggleFavorite(flow.id)}
-                showOnHover
-            >
-                <Star className={isFavorite ? 'fill-yellow-500 stroke-yellow-500' : ''} />
-            </SidebarMenuAction>
-        </SidebarMenuItem>
-    );
-};
-
-export const MainSidebar = () => {
+export function MainSidebar() {
     const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
     const isDashboardActive = useMatch('/dashboard');
     const isFlowsActive = useMatch('/flows/*');
     const isTemplatesActive = useMatch('/templates/*');
+    const isKnowledgesActive = useMatch('/knowledges/*');
+    const isResourcesActive = useMatch('/resources/*');
     const isSettingsActive = useMatch('/settings/*');
     const { flowId: flowIdParam } = useParams<{ flowId: string }>();
 
@@ -101,6 +78,8 @@ export const MainSidebar = () => {
     const { setTheme, theme } = useTheme();
     const { addFavoriteFlow, favoriteFlowIds, removeFavoriteFlow } = useFavorites();
     const { flows } = useSidebarFlows();
+
+    const resourcesUpload = useResourcesUpload();
 
     const flowId = useMemo(() => (flowIdParam ? Number(flowIdParam) : null), [flowIdParam]);
 
@@ -194,6 +173,46 @@ export const MainSidebar = () => {
                                     showOnHover
                                 >
                                     <Link to="/templates/new">
+                                        <Plus />
+                                    </Link>
+                                </SidebarMenuAction>
+                            </SidebarMenuItem>
+                            <SidebarMenuItem>
+                                <SidebarMenuButton
+                                    asChild
+                                    isActive={!!isResourcesActive}
+                                >
+                                    <Link to="/resources">
+                                        <Folder />
+                                        Resources
+                                    </Link>
+                                </SidebarMenuButton>
+                                <SidebarMenuAction
+                                    className="data-[state=open]:bg-accent rounded-sm"
+                                    onClick={resourcesUpload.openFilePicker}
+                                    showOnHover
+                                    title="Upload file"
+                                    type="button"
+                                >
+                                    <Plus />
+                                </SidebarMenuAction>
+                            </SidebarMenuItem>
+                            <SidebarMenuItem>
+                                <SidebarMenuButton
+                                    asChild
+                                    isActive={!!isKnowledgesActive}
+                                >
+                                    <Link to="/knowledges">
+                                        <LibraryBig />
+                                        Knowledges
+                                    </Link>
+                                </SidebarMenuButton>
+                                <SidebarMenuAction
+                                    asChild
+                                    className="data-[state=open]:bg-accent rounded-sm"
+                                    showOnHover
+                                >
+                                    <Link to="/knowledges/new">
                                         <Plus />
                                     </Link>
                                 </SidebarMenuAction>
@@ -314,18 +333,21 @@ export const MainSidebar = () => {
                                     >
                                         <TabsList className="h-7 p-0.5">
                                             <TabsTrigger
+                                                aria-label="System theme"
                                                 className="h-6 px-2"
                                                 value="system"
                                             >
                                                 <Monitor className="size-4" />
                                             </TabsTrigger>
                                             <TabsTrigger
+                                                aria-label="Light theme"
                                                 className="h-6 px-2"
                                                 value="light"
                                             >
                                                 <Sun className="size-4" />
                                             </TabsTrigger>
                                             <TabsTrigger
+                                                aria-label="Dark theme"
                                                 className="h-6 px-2"
                                                 value="dark"
                                             >
@@ -355,6 +377,17 @@ export const MainSidebar = () => {
             </SidebarFooter>
             <SidebarRail />
 
+            <input
+                aria-hidden="true"
+                className="hidden"
+                key={resourcesUpload.fileInputKey}
+                multiple
+                name="resource-upload"
+                tabIndex={-1}
+                type="file"
+                {...resourcesUpload.fileInputProps}
+            />
+
             <Dialog
                 onOpenChange={setIsPasswordModalOpen}
                 open={isPasswordModalOpen}
@@ -371,4 +404,34 @@ export const MainSidebar = () => {
             </Dialog>
         </Sidebar>
     );
-};
+}
+
+function FlowMenuItem({ activeFlowId, flow, isFavorite, onToggleFavorite }: FlowMenuItemProps) {
+    return (
+        <SidebarMenuItem>
+            <SidebarMenuButton
+                asChild
+                isActive={activeFlowId === Number(flow.id)}
+            >
+                <Link to={`/flows/${flow.id}`}>
+                    <span className="-mx-2 w-8 shrink-0 text-center text-xs group-data-[state=expanded]:hidden">
+                        {flow.id}
+                    </span>
+                    <span className="text-muted-foreground bg-background dark:bg-muted -my-0.5 -ml-0.5 h-5 min-w-5 shrink-0 rounded-md px-px py-0.5 text-center text-xs group-data-[state=collapsed]:hidden">
+                        {flow.id}
+                    </span>
+                    <span className="truncate">{flow.title}</span>
+                </Link>
+            </SidebarMenuButton>
+            <SidebarMenuAction
+                aria-label="Toggle favorite"
+                aria-pressed={isFavorite}
+                className="data-[state=open]:bg-accent rounded-sm"
+                onClick={() => onToggleFavorite(flow.id)}
+                showOnHover
+            >
+                <Star className={isFavorite ? 'fill-yellow-500 stroke-yellow-500' : ''} />
+            </SidebarMenuAction>
+        </SidebarMenuItem>
+    );
+}

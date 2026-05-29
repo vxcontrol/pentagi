@@ -1,20 +1,19 @@
 import { Copy, Hammer } from 'lucide-react';
-import { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 
 import type { SearchLogFragmentFragment } from '@/graphql/types';
 
 import Markdown from '@/components/shared/markdown';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import FlowAgentIcon from '@/features/flows/agents/flow-agent-icon';
+import { copyMessageToClipboard } from '@/lib/clipboard';
 import { formatDate, formatName } from '@/lib/utils/format';
-import { copyMessageToClipboard } from '@/lib/сlipboard';
 
 interface FlowToolProps {
     log: SearchLogFragmentFragment;
     searchValue?: string;
 }
 
-// Helper function to check if text contains search value (case-insensitive)
 const containsSearchValue = (text: null | string | undefined, searchValue: string): boolean => {
     if (!text || !searchValue.trim()) {
         return false;
@@ -23,10 +22,9 @@ const containsSearchValue = (text: null | string | undefined, searchValue: strin
     return text.toLowerCase().includes(searchValue.toLowerCase().trim());
 };
 
-const FlowTool = ({ log, searchValue = '' }: FlowToolProps) => {
+function FlowTool({ log, searchValue = '' }: FlowToolProps) {
     const { createdAt, engine, executor, initiator, query, result, subtaskId, taskId } = log;
 
-    // Memoize search checks to avoid recalculating on every render
     const searchChecks = useMemo(() => {
         const trimmedSearch = searchValue.trim();
 
@@ -41,21 +39,23 @@ const FlowTool = ({ log, searchValue = '' }: FlowToolProps) => {
     }, [searchValue, query, result]);
 
     const [isDetailsVisible, setIsDetailsVisible] = useState(false);
+    const [prevSearchValue, setPrevSearchValue] = useState(searchValue);
+    const [prevHasResultMatch, setPrevHasResultMatch] = useState(searchChecks.hasResultMatch);
 
-    // Auto-expand details if they contain search matches
-    useEffect(() => {
+    if (searchValue !== prevSearchValue || searchChecks.hasResultMatch !== prevHasResultMatch) {
+        setPrevSearchValue(searchValue);
+        setPrevHasResultMatch(searchChecks.hasResultMatch);
+
         const trimmedSearch = searchValue.trim();
 
         if (trimmedSearch) {
-            // Expand result block only if it contains the search term
             if (searchChecks.hasResultMatch) {
                 setIsDetailsVisible(true);
             }
         } else {
-            // Reset to default state when search is cleared
             setIsDetailsVisible(false);
         }
-    }, [searchValue, searchChecks.hasResultMatch]);
+    }
 
     const handleCopy = useCallback(async () => {
         await copyMessageToClipboard({
@@ -146,6 +146,6 @@ const FlowTool = ({ log, searchValue = '' }: FlowToolProps) => {
             </div>
         </div>
     );
-};
+}
 
 export default memo(FlowTool);

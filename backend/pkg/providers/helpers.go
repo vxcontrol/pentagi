@@ -44,6 +44,33 @@ type dummyMessage struct {
 	Message string `json:"message"`
 }
 
+// wrapToolCallIDTemplateError annotates an error returned by
+// Provider.GetToolCallIDTemplate so the user sees an actionable hint when a
+// known upstream limitation blocks provider initialization. Currently it
+// covers the Ollama "model does not support tools" case (issue #280): the
+// underlying error is returned by the Ollama API itself and surfaces five
+// wraps deep, which previously left the user with a cryptic "failed to
+// determine tool call ID template" message. This helper is shared by the
+// flow and assistant provider paths, so the wording stays context-neutral.
+//
+// The function preserves the original error chain via %w so downstream code
+// (logs, langfuse spans, errors.Is/As) keeps working.
+func wrapToolCallIDTemplateError(err error) error {
+	if err == nil {
+		return nil
+	}
+	if strings.Contains(err.Error(), "does not support tools") {
+		return fmt.Errorf(
+			"failed to determine tool call ID template: the selected model "+
+				"does not support tool/function calling, which PentAGI requires "+
+				"for tool execution in flows and assistant sessions; select an "+
+				"Ollama model whose metadata advertises tool/function calling "+
+				"support and update the provider configuration: %w",
+			err)
+	}
+	return fmt.Errorf("failed to determine tool call ID template: %w", err)
+}
+
 type reflectorRetryContextKey struct{}
 
 // isReflectorRetry checks if we are already in a reflector retry cycle
@@ -523,6 +550,8 @@ func (fp *flowProvider) restoreChain(
 				return wrapErrorWithEvent("failed to normalize tool call IDs", err)
 			}
 
+			ast.SanitizeToolCallArguments()
+
 			if err := ast.ClearReasoning(); err != nil {
 				return wrapErrorWithEvent("failed to clear reasoning", err)
 			}
@@ -630,6 +659,8 @@ func (fp *flowProvider) processChain(
 			if err := ast.NormalizeToolCallIDs(fp.tcIDTemplate); err != nil {
 				logger.WithError(err).Warn("failed to normalize tool call IDs")
 			}
+
+			ast.SanitizeToolCallArguments()
 
 			// Clear provider-specific reasoning signatures
 			if err := ast.ClearReasoning(); err != nil {

@@ -1,4 +1,4 @@
-import type { ColumnDef } from '@tanstack/react-table';
+import type { ColumnDef, Row } from '@tanstack/react-table';
 
 import {
     AlertCircle,
@@ -6,8 +6,8 @@ import {
     ArrowUp,
     Bot,
     Code,
+    Ellipsis,
     Loader2,
-    MoreHorizontal,
     Pencil,
     RotateCcw,
     Settings,
@@ -35,42 +35,38 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { StatusCard } from '@/components/ui/status-card';
 import { useDeletePromptMutation, useSettingsPromptsQuery } from '@/graphql/types';
-// Types for table data
+import { usePageStorageKeys } from '@/hooks/use-page-storage-keys';
+
 type AgentPromptTableData = {
-    displayName: string; // Formatted display name
+    displayName: string;
     hasHuman: boolean;
     hasSystem: boolean;
     humanStatus: 'Custom' | 'Default' | 'N/A';
     humanTemplate?: string;
-    humanType?: PromptType; // Type for human prompt lookup
-    name: string; // Original key (camelCase)
+    humanType?: PromptType;
+    name: string;
     systemStatus: 'Custom' | 'Default' | 'N/A';
     systemTemplate: string;
-    systemType?: PromptType; // Type for system prompt lookup
+    systemType?: PromptType;
 };
 
 type ToolPromptTableData = {
-    displayName: string; // Formatted display name
-    name: string; // Original key (camelCase)
-    promptType?: PromptType; // Type for prompt lookup
+    displayName: string;
+    name: string;
+    promptType?: PromptType;
     status: 'Custom' | 'Default' | 'N/A';
     template: string;
 };
 
-const SettingsPromptsHeader = () => {
-    return (
-        <div className="flex items-center justify-between">
-            <p className="text-muted-foreground">Manage system and custom prompt templates</p>
-        </div>
-    );
-};
-
-const SettingsPrompts = () => {
+function SettingsPrompts() {
     const { data, error, loading: isLoading } = useSettingsPromptsQuery();
     const [deletePrompt, { loading: isDeleteLoading }] = useDeletePromptMutation();
     const navigate = useNavigate();
+    // Shared base key for the route; each DataTable appends its own suffix so
+    // sorting / column visibility / search-column narrowing live in distinct
+    // slots even though the page mounts two tables.
+    const { table: tableStorageBase } = usePageStorageKeys();
 
-    // Reset dialog states
     const [resetDialogOpen, setResetDialogOpen] = useState(false);
     const [resetOperation, setResetOperation] = useState<null | {
         displayName: string;
@@ -78,8 +74,7 @@ const SettingsPrompts = () => {
         type: 'all' | 'human' | 'system' | 'tool';
     }>(null);
 
-
-    // Three-way sorting handler: null -> asc -> desc -> null
+    // Three-way sorting: null → asc → desc → null.
     const handleColumnSort = (column: {
         clearSorting: () => void;
         getIsSorted: () => 'asc' | 'desc' | false;
@@ -96,12 +91,10 @@ const SettingsPrompts = () => {
         }
     };
 
-    // Handler for editing any prompt (agent or tool)
     const handlePromptEdit = (promptName: string) => {
         navigate(`/settings/prompts/${promptName}`);
     };
 
-    // Reset dialog handlers
     const handleResetDialogOpen = (
         type: 'all' | 'human' | 'system' | 'tool',
         promptName: string,
@@ -123,11 +116,9 @@ const SettingsPrompts = () => {
             const userDefined = data.settingsPrompts.userDefined || [];
 
             if (type === 'tool') {
-                // Handle tool prompt reset
                 const toolPrompt = tools?.[promptName as keyof typeof tools];
 
                 if (toolPrompt?.type) {
-                    // Find the user-defined prompt with matching type
                     const userPrompt = userDefined.find((p) => p.type === toolPrompt.type);
 
                     if (userPrompt) {
@@ -138,7 +129,6 @@ const SettingsPrompts = () => {
                     }
                 }
             } else {
-                // Handle agent prompt reset
                 const agentPrompts = agents?.[promptName as keyof typeof agents] as AgentPrompts;
 
                 if (agentPrompts) {
@@ -195,7 +185,6 @@ const SettingsPrompts = () => {
         }
     };
 
-    // Helper function to check if reset is available for specific prompt type
     const canResetPrompt = (promptName: string, resetType: 'all' | 'human' | 'system' | 'tool'): boolean => {
         if (!data?.settingsPrompts?.default || !data?.settingsPrompts?.userDefined) {
             return false;
@@ -241,7 +230,6 @@ const SettingsPrompts = () => {
         return false;
     };
 
-    // Transform agents data for table
     const getAgentPromptsData = (): AgentPromptTableData[] => {
         if (!data?.settingsPrompts?.default?.agents) {
             return [];
@@ -251,12 +239,10 @@ const SettingsPrompts = () => {
         const userDefined = data.settingsPrompts.userDefined || [];
         const agentEntries: AgentPromptTableData[] = [];
 
-        // Helper function to format agent name
         const formatName = (key: string): string => {
             return key.replaceAll(/([A-Z])/g, ' $1').replace(/^./, (str) => str.toUpperCase());
         };
 
-        // Process each agent
         Object.entries(agents).forEach(([key, prompts]) => {
             if (key === '__typename') {
                 return;
@@ -265,7 +251,6 @@ const SettingsPrompts = () => {
             const systemType = (prompts as AgentPrompt | AgentPrompts)?.system?.type;
             const humanType = (prompts as AgentPrompts)?.human?.type;
 
-            // Check if user has custom prompts
             const hasCustomSystem = userDefined.some((p) => p.type === systemType);
             const hasCustomHuman = humanType ? userDefined.some((p) => p.type === humanType) : false;
 
@@ -292,7 +277,6 @@ const SettingsPrompts = () => {
         return agentEntries.sort((a, b) => a.name.localeCompare(b.name));
     };
 
-    // Transform tools data for table
     const getToolPromptsData = (): ToolPromptTableData[] => {
         if (!data?.settingsPrompts?.default?.tools) {
             return [];
@@ -302,12 +286,10 @@ const SettingsPrompts = () => {
         const userDefined = data.settingsPrompts.userDefined || [];
         const toolEntries: ToolPromptTableData[] = [];
 
-        // Helper function to format tool name
         const formatName = (key: string): string => {
             return key.replaceAll(/([A-Z])/g, ' $1').replace(/^./, (str) => str.toUpperCase());
         };
 
-        // Process each tool
         Object.entries(tools).forEach(([key, prompt]) => {
             if (key === '__typename') {
                 return;
@@ -330,7 +312,6 @@ const SettingsPrompts = () => {
         return toolEntries.sort((a, b) => a.name.localeCompare(b.name));
     };
 
-    // Agent prompts table columns
     const agentColumns: ColumnDef<AgentPromptTableData>[] = [
         {
             accessorKey: 'displayName',
@@ -358,6 +339,7 @@ const SettingsPrompts = () => {
                     </Button>
                 );
             },
+            meta: { columnMenuLabel: 'Agent Name', searchable: true },
             size: 200,
         },
         {
@@ -372,6 +354,7 @@ const SettingsPrompts = () => {
                 );
             },
             header: 'System Prompt',
+            meta: { columnMenuLabel: 'System Prompt', searchable: true },
             size: 100,
         },
         {
@@ -386,6 +369,7 @@ const SettingsPrompts = () => {
                 );
             },
             header: 'Human Prompt',
+            meta: { columnMenuLabel: 'Human Prompt', searchable: true },
             size: 100,
         },
         {
@@ -397,11 +381,11 @@ const SettingsPrompts = () => {
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                                 <Button
+                                    aria-label="Open menu"
                                     className="size-8 p-0"
                                     variant="ghost"
                                 >
-                                    <span className="sr-only">Open menu</span>
-                                    <MoreHorizontal className="size-4" />
+                                    <Ellipsis />
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent
@@ -500,7 +484,6 @@ const SettingsPrompts = () => {
         },
     ];
 
-    // Tool prompts table columns
     const toolColumns: ColumnDef<ToolPromptTableData>[] = [
         {
             accessorKey: 'displayName',
@@ -528,6 +511,7 @@ const SettingsPrompts = () => {
                     </Button>
                 );
             },
+            meta: { columnMenuLabel: 'Tool Name', searchable: true },
             size: 300,
         },
         {
@@ -542,6 +526,7 @@ const SettingsPrompts = () => {
                 );
             },
             header: 'Prompt',
+            meta: { columnMenuLabel: 'Prompt', searchable: true },
             size: 100,
         },
         {
@@ -553,11 +538,11 @@ const SettingsPrompts = () => {
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                                 <Button
+                                    aria-label="Open menu"
                                     className="size-8 p-0"
                                     variant="ghost"
                                 >
-                                    <span className="sr-only">Open menu</span>
-                                    <MoreHorizontal className="size-4" />
+                                    <Ellipsis />
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent
@@ -608,15 +593,12 @@ const SettingsPrompts = () => {
         },
     ];
 
-    // Render sub-component for agent prompts
-    const renderAgentSubComponent = ({ row }: { row: any }) => {
-        const agent = row.original as AgentPromptTableData;
+    const renderAgentSubComponent = ({ row }: { row: Row<AgentPromptTableData> }) => {
+        const agent = row.original;
 
-        // Find userDefined prompts for this agent type
         const userSystemPrompt = data?.settingsPrompts?.userDefined?.find((p) => p.type === agent.systemType);
         const userHumanPrompt = data?.settingsPrompts?.userDefined?.find((p) => p.type === agent.humanType);
 
-        // Use userDefined templates if available, otherwise use default
         const systemTemplate = userSystemPrompt?.template || agent.systemTemplate;
         const humanTemplate = userHumanPrompt?.template || agent.humanTemplate;
 
@@ -670,14 +652,11 @@ const SettingsPrompts = () => {
         );
     };
 
-    // Render sub-component for tool prompts
-    const renderToolSubComponent = ({ row }: { row: any }) => {
-        const tool = row.original as ToolPromptTableData;
+    const renderToolSubComponent = ({ row }: { row: Row<ToolPromptTableData> }) => {
+        const tool = row.original;
 
-        // Find userDefined prompt for this tool type
         const userToolPrompt = data?.settingsPrompts?.userDefined?.find((p) => p.type === tool.promptType);
 
-        // Use userDefined template if available, otherwise use default
         const template = userToolPrompt?.template || tool.template;
 
         return (
@@ -840,7 +819,6 @@ const SettingsPrompts = () => {
             <div className="flex flex-col gap-6">
                 <SettingsPromptsHeader />
 
-                {/* Agent Prompts Section */}
                 {agentPrompts.length > 0 && (
                     <div className="flex flex-col gap-2">
                         <div className="flex items-center gap-2">
@@ -852,16 +830,16 @@ const SettingsPrompts = () => {
                         <DataTable<AgentPromptTableData>
                             columns={agentColumns}
                             data={agentPrompts}
-                            filterColumn="displayName"
-                            filterPlaceholder="Filter agent names..."
+                            empty={{ entityName: 'agent prompts' }}
+                            filterPlaceholder="Filter agents..."
                             initialPageSize={1000}
                             renderRowContextMenu={renderAgentRowContextMenu}
                             renderSubComponent={renderAgentSubComponent}
+                            storageKey={`${tableStorageBase}:agents`}
                         />
                     </div>
                 )}
 
-                {/* Tool Prompts Section */}
                 {toolPrompts.length > 0 && (
                     <div className="flex flex-col gap-2">
                         <div className="flex items-center gap-2">
@@ -873,11 +851,12 @@ const SettingsPrompts = () => {
                         <DataTable<ToolPromptTableData>
                             columns={toolColumns}
                             data={toolPrompts}
-                            filterColumn="displayName"
-                            filterPlaceholder="Filter tool names..."
+                            empty={{ entityName: 'tool prompts' }}
+                            filterPlaceholder="Filter tools..."
                             initialPageSize={1000}
                             renderRowContextMenu={renderToolRowContextMenu}
                             renderSubComponent={renderToolSubComponent}
+                            storageKey={`${tableStorageBase}:tools`}
                         />
                     </div>
                 )}
@@ -905,6 +884,14 @@ const SettingsPrompts = () => {
             />
         </Fragment>
     );
-};
+}
+
+function SettingsPromptsHeader() {
+    return (
+        <div className="flex items-center justify-between">
+            <p className="text-muted-foreground">Manage system and custom prompt templates</p>
+        </div>
+    );
+}
 
 export default SettingsPrompts;

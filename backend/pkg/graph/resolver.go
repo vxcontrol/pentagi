@@ -4,12 +4,14 @@ import (
 	"pentagi/pkg/config"
 	"pentagi/pkg/controller"
 	"pentagi/pkg/database"
+	"pentagi/pkg/database/knowledge"
 	"pentagi/pkg/graph/subscriptions"
 	"pentagi/pkg/providers"
 	"pentagi/pkg/server/auth"
 	"pentagi/pkg/templates"
 
 	"github.com/sirupsen/logrus"
+	"github.com/vxcontrol/cloud/anonymizer"
 )
 
 // This file will not be regenerated automatically.
@@ -25,4 +27,6 @@ type Resolver struct {
 	ProvidersCtrl   providers.ProviderController
 	Controller      controller.FlowController
 	Subscriptions   subscriptions.SubscriptionsController
+	Knowledge       knowledge.KnowledgeStore
+	Replacer        anonymizer.Replacer
 }

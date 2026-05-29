@@ -14,16 +14,13 @@ function InputGroup({ className, ...props }: React.ComponentProps<'div'>) {
                 'group/input-group border-input dark:bg-input/30 relative flex w-full items-center rounded-md border shadow-2xs outline-hidden transition-[color,box-shadow]',
                 'h-9 has-[>textarea]:h-auto',
 
-                // Variants based on alignment.
                 '[&>input]:has-[>[data-align=inline-start]]:pl-2',
                 '[&>input]:has-[>[data-align=inline-end]]:pr-2',
                 'has-[>[data-align=block-start]]:h-auto has-[>[data-align=block-start]]:flex-col [&>input]:has-[>[data-align=block-start]]:pb-3',
                 'has-[>[data-align=block-end]]:h-auto has-[>[data-align=block-end]]:flex-col [&>input]:has-[>[data-align=block-end]]:pt-3',
 
-                // Focus state.
                 'has-[[data-slot=input-group-control]:focus-visible]:ring-ring has-[[data-slot=input-group-control]:focus-visible]:ring-1',
 
-                // Error state.
                 'has-[[data-slot][aria-invalid=true]]:border-destructive has-[[data-slot][aria-invalid=true]]:ring-destructive/20 dark:has-[[data-slot][aria-invalid=true]]:ring-destructive/40',
 
                 className,
@@ -121,7 +118,7 @@ function InputGroupText({ className, ...props }: React.ComponentProps<'span'>) {
     );
 }
 
-function InputGroupTextarea({ className, ...props }: React.ComponentProps<'textarea'>) {
+function InputGroupTextarea({ className, ...props }: React.ComponentProps<typeof Textarea>) {
     return (
         <Textarea
             className={cn(

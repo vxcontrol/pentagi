@@ -82,11 +82,23 @@ func New(
 		return nil, err
 	}
 
+	// Z.AI GLM OpenAI-compatible API. Thinking mode is controlled via extra_body.thinking.type
+	// ("enabled"/"disabled") in the per-agent config. Unlike Kimi/DeepSeek, GLM does not use
+	// reasoning_effort and is permissive about temperature (accepts both 1.0 and 0.6 in
+	// thinking mode per Z.AI docs), so no WithModernReasoningFormat is needed.
+	// Note: langchaingo's reasoning.IsReasoningModel matches glm-4.5/4.6/4.7 prefixes and
+	// force-overrides temperature to 1.0, but GLM accepts any temperature so this is harmless.
+	// WithPreserveReasoningContent() is required for Preserved Thinking (clear_thinking=false
+	// in per-agent extra_body): on the standard API endpoint Z.AI defaults to clearing
+	// reasoning_content across turns, so we must both enable preservation server-side
+	// AND have langchaingo serialize reasoning_content back into assistant messages with
+	// tool calls. Without it the API will reject the request or silently drop history.
 	client, err := openai.New(
 		openai.WithToken(cfg.GLMAPIKey),
 		openai.WithModel(GLMAgentModel),
 		openai.WithBaseURL(cfg.GLMServerURL),
 		openai.WithHTTPClient(httpClient),
+		openai.WithPreserveReasoningContent(),
 	)
 	if err != nil {
 		return nil, err

@@ -40,7 +40,11 @@ interface AssistantsDropdownProps {
     selectedAssistantId: null | string;
 }
 
-const AssistantsDropdown = ({
+interface FlowAssistantMessagesProps {
+    className?: string;
+}
+
+function AssistantsDropdown({
     assistants,
     isAssistantCreating,
     isDisabled,
@@ -49,12 +53,11 @@ const AssistantsDropdown = ({
     onAssistantSelect,
     providers,
     selectedAssistantId,
-}: AssistantsDropdownProps) => {
+}: AssistantsDropdownProps) {
     const [isOpen, setIsOpen] = useState(false);
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [currentAssistant, setCurrentAssistant] = useState<AssistantFragmentFragment | null>(null);
 
-    // Get the current selected assistant
     const selectedAssistant = useMemo(() => {
         if (!selectedAssistantId) {
             return null;
@@ -63,12 +66,10 @@ const AssistantsDropdown = ({
         return assistants.find((assistant) => assistant.id === selectedAssistantId) || null;
     }, [assistants, selectedAssistantId]);
 
-    // Get the current selected assistant index (1-based, reversed)
     const selectedAssistantIndex = useMemo(() => {
         return assistants.findIndex((assistant) => assistant.id === selectedAssistantId);
     }, [assistants, selectedAssistantId]);
 
-    // Group assistants by status with pre-calculated indices
     const assistantsGroup = useMemo(() => {
         type AssistantItem = { assistant: AssistantFragmentFragment; index: number };
 
@@ -97,13 +98,11 @@ const AssistantsDropdown = ({
         );
     }, [assistants]);
 
-    // Handle assistant selection
     const handleAssistantSelect = (assistantId: string) => {
         onAssistantSelect(assistantId);
         setIsOpen(false);
     };
 
-    // Handle delete click
     const handleDeleteClick = (assistant: AssistantFragmentFragment) => {
         if (isDisabled) {
             return;
@@ -113,7 +112,6 @@ const AssistantsDropdown = ({
         setDeleteDialogOpen(true);
     };
 
-    // Confirm delete
     const handleConfirmDelete = () => {
         if (currentAssistant) {
             onAssistantDelete(currentAssistant.id);
@@ -121,7 +119,6 @@ const AssistantsDropdown = ({
         }
     };
 
-    // Render assistant item
     const renderAssistantItem = (assistant: AssistantFragmentFragment, index: number) => {
         const isSelected = selectedAssistantId === assistant.id;
         const isValid = isProviderValid(assistant.provider, providers);
@@ -272,17 +269,13 @@ const AssistantsDropdown = ({
             />
         </>
     );
-};
-
-interface FlowAssistantMessagesProps {
-    className?: string;
 }
 
 const searchFormSchema = z.object({
     search: z.string(),
 });
 
-const FlowAssistantMessages = ({ className }: FlowAssistantMessagesProps) => {
+function FlowAssistantMessages({ className }: FlowAssistantMessagesProps) {
     const { providers } = useProviders();
 
     const {
@@ -301,7 +294,6 @@ const FlowAssistantMessages = ({ className }: FlowAssistantMessagesProps) => {
 
     const [isAssistantCreating, setIsAssistantCreating] = useState(false);
 
-    // Separate state for immediate input value and debounced search value
     const [debouncedSearchValue, setDebouncedSearchValue] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isCanceling, setIsCanceling] = useState(false);
@@ -319,7 +311,6 @@ const FlowAssistantMessages = ({ className }: FlowAssistantMessagesProps) => {
         selectedAssistantId ?? null,
     );
 
-    // Get system settings
     const { settings } = useSystemSettings();
 
     const form = useForm<z.infer<typeof searchFormSchema>>({
@@ -331,7 +322,6 @@ const FlowAssistantMessages = ({ className }: FlowAssistantMessagesProps) => {
 
     const searchValue = form.watch('search');
 
-    // Create debounced function to update search value
     const debouncedUpdateSearch = useMemo(
         () =>
             debounce((value: string) => {
@@ -340,7 +330,6 @@ const FlowAssistantMessages = ({ className }: FlowAssistantMessagesProps) => {
         [],
     );
 
-    // Update debounced search value when input value changes
     useEffect(() => {
         debouncedUpdateSearch(searchValue);
 
@@ -349,21 +338,18 @@ const FlowAssistantMessages = ({ className }: FlowAssistantMessagesProps) => {
         };
     }, [searchValue, debouncedUpdateSearch]);
 
-    // Cleanup debounced function on unmount
     useEffect(() => {
         return () => {
             debouncedUpdateSearch.cancel();
         };
     }, [debouncedUpdateSearch]);
 
-    // Clear search when flow changes to prevent stale search state
     useEffect(() => {
         form.reset({ search: '' });
         setDebouncedSearchValue('');
         debouncedUpdateSearch.cancel();
     }, [flowId, form, debouncedUpdateSearch]);
 
-    // Get the current selected assistant
     const selectedAssistant = useMemo(() => {
         if (!selectedAssistantId || !assistants) {
             return null;
@@ -372,18 +358,14 @@ const FlowAssistantMessages = ({ className }: FlowAssistantMessagesProps) => {
         return assistants.find((assistant) => assistant.id === selectedAssistantId) || null;
     }, [assistants, selectedAssistantId]);
 
-    // Calculate default useAgents value
     const shouldUseAgents = useMemo(() => {
-        // If creating a new assistant, use system setting
         if (isAssistantCreating || !selectedAssistant) {
             return settings?.assistantUseAgents ?? false;
         }
 
-        // If assistant is selected and not creating new, use its useAgents setting
         return selectedAssistant.useAgents;
     }, [selectedAssistant, settings?.assistantUseAgents, isAssistantCreating]);
 
-    // Check if search filter is active
     const hasActiveFilters = useMemo(() => {
         return !!searchValue.trim();
     }, [searchValue]);
@@ -403,14 +385,12 @@ const FlowAssistantMessages = ({ className }: FlowAssistantMessagesProps) => {
         );
     }, [selectedAssistantLogs, debouncedSearchValue]);
 
-    // Handlers for interacting with assistant
     const handleAssistantDelete = (assistantId: string) => {
         if (deleteAssistant) {
             deleteAssistant(assistantId);
         }
     };
 
-    // Message submission handler
     const handleSubmitMessage = async (values: FlowFormValues) => {
         if (!values.message.trim()) {
             return;
@@ -420,14 +400,12 @@ const FlowAssistantMessages = ({ className }: FlowAssistantMessagesProps) => {
 
         try {
             if (!selectedAssistantId) {
-                // If no assistant is selected, create a new one
                 setIsAssistantCreating(true);
 
                 if (createAssistant) {
                     await createAssistant(values);
                 }
             } else if (submitAssistantMessage) {
-                // Otherwise call the existing assistant
                 await submitAssistantMessage(selectedAssistantId, values);
             }
         } catch (error) {
@@ -439,7 +417,6 @@ const FlowAssistantMessages = ({ className }: FlowAssistantMessagesProps) => {
         }
     };
 
-    // Stop assistant handler
     const handleStopAssistant = async () => {
         if (!selectedAssistantId || !stopAssistant) {
             return;
@@ -457,37 +434,31 @@ const FlowAssistantMessages = ({ className }: FlowAssistantMessagesProps) => {
         }
     };
 
-    // Handle click on Create Assistant option in dropdown
     const handleAssistantCreate = () => {
         if (initiateAssistantCreation) {
             initiateAssistantCreation();
         }
     };
 
-    // Reset filters handler
     const handleResetFilters = () => {
         form.reset({ search: '' });
         setDebouncedSearchValue('');
         debouncedUpdateSearch.cancel();
     };
 
-    // Get placeholder text based on assistant status
     const placeholder = useMemo(() => {
         if (!flowId) {
             return 'Select a flow...';
         }
 
-        // Show creating assistant message while in creation mode
         if (isAssistantCreating) {
             return 'Creating assistant...';
         }
 
-        // No assistant selected - prompt to create one
         if (!selectedAssistant?.status) {
             return 'Type a message to create a new assistant...';
         }
 
-        // Assistant-specific statuses
         switch (selectedAssistant.status) {
             case StatusType.Created: {
                 return 'Assistant is starting...';
@@ -592,7 +563,6 @@ const FlowAssistantMessages = ({ className }: FlowAssistantMessagesProps) => {
                 </Empty>
             ) : selectedAssistantId ? (
                 filteredLogs.length > 0 ? (
-                    // Show messages for selected assistant
                     <div className="relative h-full overflow-y-hidden">
                         <div
                             className="flex h-full flex-col gap-4 overflow-y-auto"
@@ -654,7 +624,6 @@ const FlowAssistantMessages = ({ className }: FlowAssistantMessagesProps) => {
                     </Empty>
                 )
             ) : (
-                // Show placeholder when no assistant is selected
                 <Empty>
                     <EmptyHeader>
                         <EmptyMedia variant="icon">
@@ -685,6 +654,6 @@ const FlowAssistantMessages = ({ className }: FlowAssistantMessagesProps) => {
             </div>
         </div>
     );
-};
+}
 
 export default FlowAssistantMessages;

@@ -12,16 +12,12 @@ import type { AssistantLogFragmentFragment } from '@/graphql/types';
 import { Log } from '@/lib/log';
 import { baseUrl } from '@/models/api';
 
-// --- Constants ---
-
 const GRAPHQL_ENDPOINT = `${baseUrl}/graphql`;
 const ASSISTANT_LOG_TYPENAME = 'AssistantLog';
 const MAX_RETRY_DELAY_MS = 30_000;
 const STREAMING_CACHE_MAX_ENTRIES = 500;
 const STREAMING_CACHE_TTL_MS = 1000 * 60 * 5;
 const STREAMING_THROTTLE_MS = 50;
-
-// --- Types ---
 
 type StreamingLogEntry = {
     message: null | string;
@@ -30,8 +26,6 @@ type StreamingLogEntry = {
 };
 
 type SubscriptionAction = 'add' | 'create' | 'delete' | 'update';
-
-// --- Pure utilities ---
 
 const EMPTY_LOG_ENTRY: StreamingLogEntry = { message: null, result: null, thinking: null };
 
@@ -69,8 +63,6 @@ const isSubscriptionOperation = ({ query }: Operation): boolean => {
     return definition.kind === 'OperationDefinition' && definition.operation === 'subscription';
 };
 
-// --- Link helpers ---
-
 const createInterceptLink = (transform: (result: FetchResult, operation: Operation) => FetchResult): ApolloLink =>
     new ApolloLink(
         (operation: Operation, forward) =>
@@ -85,8 +77,6 @@ const createInterceptLink = (transform: (result: FetchResult, operation: Operati
             }),
     );
 
-// --- Subscription → cache configuration ---
-
 const subscriptionToCacheFieldMap: Record<string, string> = {
     agentLogAdded: 'agentLogs',
     apiTokenCreated: 'apiTokens',
@@ -99,15 +89,24 @@ const subscriptionToCacheFieldMap: Record<string, string> = {
     assistantUpdated: 'assistants',
     flowCreated: 'flows',
     flowDeleted: 'flows',
+    flowFileAdded: 'flowFiles',
+    flowFileDeleted: 'flowFiles',
+    flowFileUpdated: 'flowFiles',
     flowTemplateCreated: 'flowTemplates',
     flowTemplateDeleted: 'flowTemplates',
     flowTemplateUpdated: 'flowTemplates',
     flowUpdated: 'flows',
+    knowledgeDocumentCreated: 'knowledgeDocuments',
+    knowledgeDocumentDeleted: 'knowledgeDocuments',
+    knowledgeDocumentUpdated: 'knowledgeDocuments',
     messageLogAdded: 'messageLogs',
     messageLogUpdated: 'messageLogs',
     providerCreated: 'settingsProviders',
     providerDeleted: 'settingsProviders',
     providerUpdated: 'settingsProviders',
+    resourceAdded: 'resources',
+    resourceDeleted: 'resources',
+    resourceUpdated: 'resources',
     screenshotAdded: 'screenshots',
     searchLogAdded: 'searchLogs',
     settingsUserUpdated: 'settingsUser',
@@ -116,8 +115,6 @@ const subscriptionToCacheFieldMap: Record<string, string> = {
     terminalLogAdded: 'terminalLogs',
     vectorStoreLogAdded: 'vectorStoreLogs',
 };
-
-// --- Cache variant matching ---
 
 const matchesCacheVariant = (
     storeFieldName: string,
@@ -148,8 +145,6 @@ const matchesCacheVariant = (
         return true;
     }
 };
-
-// --- Cache action strategies ---
 
 type CacheActionApplier = (
     existingArray: readonly Reference[],
@@ -205,7 +200,12 @@ const updateCacheForSubscription = (
                         return existingArray;
                     }
 
-                    const itemExists = existingArray.some((ref) => readField('id', ref) === newItem.id);
+                    // ID equality must be type-tolerant: REST hydration writes some
+                    // entries with `id` as a string (GraphQL `ID!` convention)
+                    const targetId = String(newItem.id);
+                    const idMatches = (ref: Reference) => String(readField('id', ref)) === targetId;
+
+                    const itemExists = existingArray.some(idMatches);
 
                     let newRef = toReference(newItem as StoreObject, true);
 
@@ -220,7 +220,7 @@ const updateCacheForSubscription = (
                     const action = resolveSubscriptionAction(subscriptionName);
 
                     return cacheActionStrategies[action](existingArray, newRef, itemExists, () =>
-                        existingArray.filter((ref) => readField('id', ref) !== newItem.id),
+                        existingArray.filter((ref) => !idMatches(ref)),
                     );
                 },
             },
@@ -233,8 +233,6 @@ const updateCacheForSubscription = (
         });
     }
 };
-
-// --- Link factories ---
 
 const createStreamingLink = (): ApolloLink => {
     const streamingLogs = new LRUCache<string, StreamingLogEntry>({
@@ -371,13 +369,9 @@ const createSubscriptionCacheLink = (cacheInstance: InMemoryCache): ApolloLink =
         return result;
     });
 
-// --- Cache merge policy ---
-
 const replaceWithIncoming = {
     merge: (_existing: unknown, incoming: unknown) => incoming,
 };
-
-// --- Client factory ---
 
 const createApolloClient = () => {
     const httpLink = createHttpLink({
@@ -395,12 +389,10 @@ const createApolloClient = () => {
                 error: (error) => {
                     Log.error('GraphQL WebSocket error:', error);
 
-                    // Check if error is authorization-related
                     if (error && typeof error === 'object') {
                         const errorMessage = 'message' in error ? String(error.message) : '';
                         const errorString = errorMessage.toLowerCase();
 
-                        // Detect 403/401 errors or auth-related messages
                         if (
                             errorString.includes('403') ||
                             errorString.includes('401') ||
@@ -437,7 +429,6 @@ const createApolloClient = () => {
                     path,
                 });
 
-                // Check for authorization errors in GraphQL responses
                 const errorCode = extensions?.code as string | undefined;
 
                 if (
@@ -456,7 +447,6 @@ const createApolloClient = () => {
         if (networkError) {
             Log.error(`[Network Error] ${networkError.message}`, networkError);
 
-            // Check for HTTP 401/403 errors
             if ('statusCode' in networkError) {
                 const statusCode = (networkError as { statusCode?: number }).statusCode;
 
@@ -497,10 +487,13 @@ const createApolloClient = () => {
                             return existing ?? toReference({ __typename: 'Flow', id: args.flowId });
                         },
                     },
+                    flowFiles: { keyArgs: ['flowId'], ...replaceWithIncoming },
                     flows: { ...replaceWithIncoming },
                     flowTemplates: { ...replaceWithIncoming },
+                    knowledgeDocuments: { keyArgs: ['filter', 'withContent'], ...replaceWithIncoming },
                     messageLogs: { keyArgs: ['flowId'], ...replaceWithIncoming },
                     providers: { ...replaceWithIncoming },
+                    resources: { keyArgs: ['path', 'recursive'], ...replaceWithIncoming },
                     screenshots: { keyArgs: ['flowId'], ...replaceWithIncoming },
                     searchLogs: { keyArgs: ['flowId'], ...replaceWithIncoming },
                     settingsPrompts: { ...replaceWithIncoming },

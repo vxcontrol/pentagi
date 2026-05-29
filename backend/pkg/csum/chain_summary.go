@@ -653,8 +653,10 @@ func determineRecentSectionsToKeep(ast *cast.ChainAST, keepQASections int, maxSe
 	const bufferSpace = 1000
 	effectiveMaxBytes := maxBytes - bufferSpace
 
-	// Keep the most recent sections
-	for i := totalSections - 1; i >= totalSections-keepQASections; i-- {
+	// Keep the most recent sections; clamp lower bound to 0 to avoid out-of-range
+	// when keepQASections exceeds the number of available sections.
+	recentFloor := max(0, totalSections-keepQASections)
+	for i := totalSections - 1; i >= recentFloor; i-- {
 		sectionSize := ast.Sections[i].Size()
 		currentSize += sectionSize
 		keepCount++
@@ -666,7 +668,7 @@ func determineRecentSectionsToKeep(ast *cast.ChainAST, keepQASections int, maxSe
 	}
 
 	// Start from most recent sections (end of array) and work backwards
-	for i := totalSections - keepQASections - 1; i >= 0; i-- {
+	for i := recentFloor - 1; i >= 0; i-- {
 		// Stop if we've reached max sections to keep
 		if keepCount >= maxSections {
 			break

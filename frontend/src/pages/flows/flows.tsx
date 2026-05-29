@@ -1,34 +1,21 @@
 import type { ColumnDef } from '@tanstack/react-table';
 
-import { format, isToday } from 'date-fns';
-import { enUS } from 'date-fns/locale';
-import {
-    ArrowDown,
-    ArrowUp,
-    Eye,
-    GitFork,
-    Loader2,
-    MoreHorizontal,
-    Pause,
-    Pencil,
-    Plus,
-    Star,
-    Trash,
-} from 'lucide-react';
-import { Check, CheckCircle2, X, XCircle } from 'lucide-react';
+import { Ellipsis, Eye, GitFork, Loader2, Pause, Pencil, PencilLine, Plus, Star, Trash } from 'lucide-react';
+import { CheckCircle2, XCircle } from 'lucide-react';
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
 import { FlowStatusIcon } from '@/components/icons/flow-status-icon';
 import { ProviderIcon } from '@/components/icons/provider-icon';
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
+import { HeaderButton } from '@/components/shared/header-button';
+import { InlineEditInput } from '@/components/shared/inline-edit';
 import { Badge } from '@/components/ui/badge';
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage } from '@/components/ui/breadcrumb';
 import { Button } from '@/components/ui/button';
 import { ContextMenuItem, ContextMenuSeparator } from '@/components/ui/context-menu';
-import { DataTable } from '@/components/ui/data-table';
+import { DataTable, DataTableColumnHeader } from '@/components/ui/data-table';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -36,13 +23,15 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group';
 import { Separator } from '@/components/ui/separator';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { StatusCard } from '@/components/ui/status-card';
 import { Toggle } from '@/components/ui/toggle';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ResultType, StatusType, type TerminalFragmentFragment, useRenameFlowMutation } from '@/graphql/types';
+import { useTableState } from '@/hooks/use-table-state';
+import { mergeHrefWithSearchParams } from '@/lib/url-params';
+import { formatDate } from '@/lib/utils/format';
 import { useFavorites } from '@/providers/favorites-provider';
 import { type Flow, useFlows } from '@/providers/flows-provider';
 
@@ -72,25 +61,9 @@ const statusConfig: Record<
     },
 };
 
-const formatDateTime = (dateString: string) => {
-    const date = new Date(dateString);
-
-    if (isToday(date)) {
-        return format(date, 'HH:mm:ss', { locale: enUS });
-    }
-
-    return format(date, 'd MMM yyyy', { locale: enUS });
-};
-
-const formatFullDateTime = (dateString: string) => {
-    const date = new Date(dateString);
-
-    return format(date, 'd MMM yyyy, HH:mm:ss', { locale: enUS });
-};
-
-const Flows = () => {
+function Flows() {
     const navigate = useNavigate();
-    const [searchParams, setSearchParams] = useSearchParams();
+    const location = useLocation();
     const { deleteFlow, finishFlow, flows, isLoading } = useFlows();
     const { isFavoriteFlow, toggleFavoriteFlow } = useFavorites();
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -101,55 +74,13 @@ const Flows = () => {
     const editingInputRef = useRef<HTMLInputElement>(null);
     const [renameFlowMutation, { loading: isRenameLoading }] = useRenameFlowMutation();
 
-    // Three-way sorting handler: null -> asc -> desc -> null
-    const handleColumnSort = useMemo(
-        () =>
-            (column: {
-                clearSorting: () => void;
-                getIsSorted: () => 'asc' | 'desc' | false;
-                toggleSorting: (desc?: boolean) => void;
-            }) => {
-                const sorted = column.getIsSorted();
-
-                if (sorted === 'asc') {
-                    column.toggleSorting(true);
-                } else if (sorted === 'desc') {
-                    column.clearSorting();
-                } else {
-                    column.toggleSorting(false);
-                }
-            },
-        [],
-    );
-
-    // Get current page from URL
-    const currentPage = useMemo(() => {
-        const page = searchParams.get('page');
-
-        return page ? Math.max(0, Number.parseInt(page, 10) - 1) : 0;
-    }, [searchParams]);
-
-    // Handle page change
-    const handlePageChange = useCallback(
-        (pageIndex: number) => {
-            const newParams = new URLSearchParams(searchParams);
-
-            if (pageIndex === 0) {
-                newParams.delete('page');
-            } else {
-                newParams.set('page', String(pageIndex + 1));
-            }
-
-            setSearchParams(newParams);
-        },
-        [searchParams, setSearchParams],
-    );
+    const { filter, pageIndex: currentPage, setFilter, setPage: handlePageChange } = useTableState();
 
     const handleFlowOpen = useCallback(
         (flowId: string) => {
-            navigate(`/flows/${flowId}`);
+            navigate(mergeHrefWithSearchParams(`/flows/${flowId}`, new URLSearchParams(location.search)));
         },
-        [navigate],
+        [navigate, location.search],
     );
 
     const handleFlowDeleteDialogOpen = useCallback((flow: Flow) => {
@@ -237,25 +168,14 @@ const Flows = () => {
                 accessorKey: 'id',
                 cell: ({ row }) => <div className="font-mono text-sm">{row.getValue('id')}</div>,
                 enableHiding: false,
-                header: ({ column }) => {
-                    const sorted = column.getIsSorted();
-
-                    return (
-                        <Button
-                            className="text-muted-foreground hover:text-primary flex items-center gap-2 p-0 no-underline hover:no-underline"
-                            onClick={() => handleColumnSort(column)}
-                            variant="link"
-                        >
-                            ID
-                            {sorted === 'asc' ? (
-                                <ArrowDown className="size-4" />
-                            ) : sorted === 'desc' ? (
-                                <ArrowUp className="size-4" />
-                            ) : null}
-                        </Button>
-                    );
-                },
+                header: ({ column }) => (
+                    <DataTableColumnHeader
+                        column={column}
+                        title="ID"
+                    />
+                ),
                 maxSize: 80,
+                meta: { searchable: true },
                 minSize: 60,
                 size: 70,
             },
@@ -268,68 +188,30 @@ const Flows = () => {
 
                     if (isEditing) {
                         return (
-                            <InputGroup
-                                className="h-8"
-                                onClick={(e) => e.stopPropagation()}
-                            >
-                                <InputGroupInput
+                            <div onClick={(e) => e.stopPropagation()}>
+                                <InlineEditInput
                                     autoFocus
+                                    busy={isRenameLoading}
                                     defaultValue={title}
-                                    onKeyDown={(e) => {
-                                        if (e.key === 'Enter') {
-                                            handleFlowRenameSave();
-
-                                            return;
-                                        }
-
-                                        if (e.key === 'Escape') {
-                                            handleFlowRenameCancel();
-
-                                            return;
-                                        }
-                                    }}
+                                    inputRef={editingInputRef}
+                                    onCancel={handleFlowRenameCancel}
+                                    onSave={handleFlowRenameSave}
                                     placeholder="Flow title"
-                                    ref={editingInputRef}
                                 />
-                                <InputGroupAddon
-                                    align="inline-end"
-                                    className="gap-0 pr-2"
-                                >
-                                    <InputGroupButton
-                                        disabled={isRenameLoading}
-                                        onClick={() => handleFlowRenameSave()}
-                                    >
-                                        {isRenameLoading ? <Loader2 className="animate-spin" /> : <Check />}
-                                    </InputGroupButton>
-                                    <InputGroupButton onClick={() => handleFlowRenameCancel()}>
-                                        <X />
-                                    </InputGroupButton>
-                                </InputGroupAddon>
-                            </InputGroup>
+                            </div>
                         );
                     }
 
                     return <div className="truncate font-medium">{title}</div>;
                 },
                 enableHiding: false,
-                header: ({ column }) => {
-                    const sorted = column.getIsSorted();
-
-                    return (
-                        <Button
-                            className="text-muted-foreground hover:text-primary flex items-center gap-2 p-0 no-underline hover:no-underline"
-                            onClick={() => handleColumnSort(column)}
-                            variant="link"
-                        >
-                            Title
-                            {sorted === 'asc' ? (
-                                <ArrowDown className="size-4" />
-                            ) : sorted === 'desc' ? (
-                                <ArrowUp className="size-4" />
-                            ) : null}
-                        </Button>
-                    );
-                },
+                header: ({ column }) => (
+                    <DataTableColumnHeader
+                        column={column}
+                        title="Title"
+                    />
+                ),
+                meta: { searchable: true },
                 minSize: 200,
                 size: 300,
             },
@@ -349,30 +231,24 @@ const Flows = () => {
                         </Badge>
                     );
                 },
-                header: ({ column }) => {
-                    const sorted = column.getIsSorted();
-
-                    return (
-                        <Button
-                            className="text-muted-foreground hover:text-primary flex items-center gap-2 p-0 no-underline hover:no-underline"
-                            onClick={() => handleColumnSort(column)}
-                            variant="link"
-                        >
-                            Status
-                            {sorted === 'asc' ? (
-                                <ArrowDown className="size-4" />
-                            ) : sorted === 'desc' ? (
-                                <ArrowUp className="size-4" />
-                            ) : null}
-                        </Button>
-                    );
-                },
+                header: ({ column }) => (
+                    <DataTableColumnHeader
+                        column={column}
+                        title="Status"
+                    />
+                ),
                 maxSize: 130,
+                meta: { searchable: true },
                 minSize: 80,
                 size: 100,
             },
             {
-                accessorKey: 'provider',
+                // accessorFn returns the provider name as a plain string so it
+                // participates in the DataTable global filter (search input).
+                // The cell renderer still reads the original provider object
+                // directly through `row.original`, so the icon + label stay
+                // intact.
+                accessorFn: (row) => row.provider?.name ?? '',
                 cell: ({ row }) => {
                     const flow = row.original;
 
@@ -386,25 +262,15 @@ const Flows = () => {
                         </div>
                     );
                 },
-                header: ({ column }) => {
-                    const sorted = column.getIsSorted();
-
-                    return (
-                        <Button
-                            className="text-muted-foreground hover:text-primary flex items-center gap-2 p-0 no-underline hover:no-underline"
-                            onClick={() => handleColumnSort(column)}
-                            variant="link"
-                        >
-                            Provider
-                            {sorted === 'asc' ? (
-                                <ArrowDown className="size-4" />
-                            ) : sorted === 'desc' ? (
-                                <ArrowUp className="size-4" />
-                            ) : null}
-                        </Button>
-                    );
-                },
+                header: ({ column }) => (
+                    <DataTableColumnHeader
+                        column={column}
+                        title="Provider"
+                    />
+                ),
+                id: 'provider',
                 maxSize: 150,
+                meta: { searchable: true },
                 minSize: 80,
                 size: 100,
                 sortingFn: (rowA, rowB) => {
@@ -415,7 +281,11 @@ const Flows = () => {
                 },
             },
             {
-                accessorKey: 'terminals',
+                // accessorFn joins all terminal images into one string for the
+                // global search; the cell still derives its presentation from
+                // the original array on `row.original`, and sortingFn keeps
+                // ordering by count (more intuitive than alphabetical).
+                accessorFn: (row) => (row.terminals ?? []).map((t) => t.image).join(' '),
                 cell: ({ row }) => {
                     const flow = row.original;
                     const terminals = flow.terminals || [];
@@ -457,25 +327,15 @@ const Flows = () => {
                         </Tooltip>
                     );
                 },
-                header: ({ column }) => {
-                    const sorted = column.getIsSorted();
-
-                    return (
-                        <Button
-                            className="text-muted-foreground hover:text-primary flex items-center gap-2 p-0 no-underline hover:no-underline"
-                            onClick={() => handleColumnSort(column)}
-                            variant="link"
-                        >
-                            Terminals
-                            {sorted === 'asc' ? (
-                                <ArrowDown className="size-4" />
-                            ) : sorted === 'desc' ? (
-                                <ArrowUp className="size-4" />
-                            ) : null}
-                        </Button>
-                    );
-                },
+                header: ({ column }) => (
+                    <DataTableColumnHeader
+                        column={column}
+                        title="Terminals"
+                    />
+                ),
+                id: 'terminals',
                 maxSize: 220,
+                meta: { searchable: true },
                 minSize: 160,
                 size: 180,
                 sortingFn: (rowA, rowB) => {
@@ -490,36 +350,16 @@ const Flows = () => {
                 cell: ({ row }) => {
                     const dateString = row.getValue('createdAt') as string;
 
-                    return (
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <div className="cursor-default text-sm">{formatDateTime(dateString)}</div>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                                <div className="text-xs">{formatFullDateTime(dateString)}</div>
-                            </TooltipContent>
-                        </Tooltip>
-                    );
+                    return <div className="text-sm">{formatDate(new Date(dateString))}</div>;
                 },
-                header: ({ column }) => {
-                    const sorted = column.getIsSorted();
-
-                    return (
-                        <Button
-                            className="text-muted-foreground hover:text-primary flex items-center gap-2 p-0 no-underline hover:no-underline"
-                            onClick={() => handleColumnSort(column)}
-                            variant="link"
-                        >
-                            Created
-                            {sorted === 'asc' ? (
-                                <ArrowDown className="size-4" />
-                            ) : sorted === 'desc' ? (
-                                <ArrowUp className="size-4" />
-                            ) : null}
-                        </Button>
-                    );
-                },
+                header: ({ column }) => (
+                    <DataTableColumnHeader
+                        column={column}
+                        title="Created"
+                    />
+                ),
                 maxSize: 140,
+                meta: { columnMenuLabel: 'Created' },
                 minSize: 100,
                 size: 120,
                 sortingFn: (rowA, rowB) => {
@@ -534,36 +374,16 @@ const Flows = () => {
                 cell: ({ row }) => {
                     const dateString = row.getValue('updatedAt') as string;
 
-                    return (
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <div className="cursor-default text-sm">{formatDateTime(dateString)}</div>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                                <div className="text-xs">{formatFullDateTime(dateString)}</div>
-                            </TooltipContent>
-                        </Tooltip>
-                    );
+                    return <div className="text-sm">{formatDate(new Date(dateString))}</div>;
                 },
-                header: ({ column }) => {
-                    const sorted = column.getIsSorted();
-
-                    return (
-                        <Button
-                            className="text-muted-foreground hover:text-primary flex items-center gap-2 p-0 no-underline hover:no-underline"
-                            onClick={() => handleColumnSort(column)}
-                            variant="link"
-                        >
-                            Updated
-                            {sorted === 'asc' ? (
-                                <ArrowDown className="size-4" />
-                            ) : sorted === 'desc' ? (
-                                <ArrowUp className="size-4" />
-                            ) : null}
-                        </Button>
-                    );
-                },
+                header: ({ column }) => (
+                    <DataTableColumnHeader
+                        column={column}
+                        title="Updated"
+                    />
+                ),
                 maxSize: 140,
+                meta: { columnMenuLabel: 'Updated' },
                 minSize: 100,
                 size: 120,
                 sortingFn: (rowA, rowB) => {
@@ -596,11 +416,12 @@ const Flows = () => {
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                     <Button
+                                        aria-label="Open menu"
                                         className="size-8 p-0"
                                         onClick={(e) => e.stopPropagation()}
                                         variant="ghost"
                                     >
-                                        <MoreHorizontal />
+                                        <Ellipsis />
                                     </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent
@@ -613,7 +434,7 @@ const Flows = () => {
                                         View
                                     </DropdownMenuItem>
                                     <DropdownMenuItem onClick={() => handleFlowRenameStart(flow)}>
-                                        <Pencil className="size-3" />
+                                        <PencilLine className="size-3" />
                                         Rename
                                     </DropdownMenuItem>
                                     {isRunning && (
@@ -669,7 +490,6 @@ const Flows = () => {
             deletingFlowIds,
             editingFlowId,
             finishingFlowIds,
-            handleColumnSort,
             handleFlowDeleteDialogOpen,
             handleFlowFinish,
             handleFlowOpen,
@@ -745,30 +565,28 @@ const Flows = () => {
 
     const pageHeader = (
         <header className="bg-background sticky top-0 z-10 flex h-12 w-full shrink-0 items-center gap-2 border-b transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
-            <div className="flex items-center gap-2 px-4">
-                <SidebarTrigger className="-ml-1" />
+            <div className="flex min-w-0 flex-1 items-center gap-2 px-4">
+                <SidebarTrigger className="-ml-1 shrink-0" />
                 <Separator
-                    className="h-4"
+                    className="h-4 shrink-0"
                     orientation="vertical"
                 />
-                <Breadcrumb>
-                    <BreadcrumbList>
-                        <BreadcrumbItem>
-                            <GitFork className="size-4" />
-                            <BreadcrumbPage>Flows</BreadcrumbPage>
+                <Breadcrumb className="min-w-0 flex-1">
+                    <BreadcrumbList className="min-w-0 flex-nowrap">
+                        <BreadcrumbItem className="min-w-0">
+                            <GitFork className="size-4 shrink-0" />
+                            <BreadcrumbPage className="min-w-0 truncate">Flows</BreadcrumbPage>
                         </BreadcrumbItem>
                     </BreadcrumbList>
                 </Breadcrumb>
             </div>
-            <div className="ml-auto flex items-center gap-2 px-4">
-                <Button
+            <div className="flex shrink-0 items-center gap-2 px-4">
+                <HeaderButton
+                    icon={<Plus />}
+                    label="New Flow"
                     onClick={() => navigate('/flows/new')}
-                    size="sm"
                     variant="secondary"
-                >
-                    <Plus />
-                    New Flow
-                </Button>
+                />
             </div>
         </header>
     );
@@ -788,7 +606,6 @@ const Flows = () => {
         );
     }
 
-    // Check if flows list is empty
     if (flows.length === 0) {
         return (
             <>
@@ -820,8 +637,10 @@ const Flows = () => {
                 <DataTable<Flow>
                     columns={columns}
                     data={flows}
-                    filterColumn="title"
+                    empty={{ entityName: 'flows' }}
                     filterPlaceholder="Filter flows..."
+                    filterValue={filter}
+                    onFilterChange={setFilter}
                     onPageChange={handlePageChange}
                     onRowClick={handleRowClick}
                     pageIndex={currentPage}
@@ -840,6 +659,6 @@ const Flows = () => {
             </div>
         </>
     );
-};
+}
 
 export default Flows;

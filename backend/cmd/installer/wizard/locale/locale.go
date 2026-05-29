@@ -155,23 +155,26 @@ Required: 20.0.0+`
 
 	// Docker Compose issues
 	TroubleshootComposeTitle = "Docker Compose Not Found"
-	TroubleshootComposeDesc  = "Docker Compose is required but not installed or not in PATH."
+	TroubleshootComposeDesc  = "The Docker Compose v2 plugin is required, but `docker compose` is not available."
 	TroubleshootComposeFix   = `To fix:
-1. Install Docker Desktop (includes Compose) or
-2. Install standalone: https://docs.docker.com/compose/install/
+1. Install or update Docker Desktop, or install the Docker Compose v2 plugin for Docker Engine
+2. Verify the plugin is available: docker compose version
+3. If only legacy docker-compose is installed, install the Docker Compose v2 plugin as well
 
-Verify installation: docker compose version`
+PentAGI executes "docker compose", so legacy "docker-compose" alone is not sufficient.
+Documentation: https://docs.docker.com/compose/install/`
 
 	// Docker Compose version issues
 	TroubleshootComposeVersionTitle = "Docker Compose Version Too Old"
-	TroubleshootComposeVersionDesc  = "Your Docker Compose version is incompatible. PentAGI requires Docker Compose 1.25.0 or newer."
+	TroubleshootComposeVersionDesc  = "Your `docker compose` version is incompatible. PentAGI requires Docker Compose 1.25.0 or newer."
 	TroubleshootComposeVersionFix   = `Current version: %s
 Required: 1.25.0+
 
 To fix:
-1. Update Docker Desktop to latest version
-2. Or install newer Docker Compose:
-   https://docs.docker.com/compose/install/`
+1. Update Docker Desktop or the Docker Compose v2 plugin to a newer version
+2. Verify the result with: docker compose version
+
+Documentation: https://docs.docker.com/compose/install/`
 
 	// Worker environment issues
 	TroubleshootWorkerTitle = "Worker Docker Environment Not Accessible"
@@ -492,8 +495,8 @@ Setup options: Local installation from https://10.10.10.10:11434 or cloud regist
 	LLMFormDeepSeekHelp = `DeepSeek provides advanced AI models with strong reasoning capabilities and multilingual support.
 
 Default PentAGI Models:
-• DeepSeek-Chat: Flagship model for general-purpose tasks with strong coding and reasoning capabilities
-• DeepSeek-Reasoner: Advanced reasoning model for complex security analysis
+• deepseek-v4-flash: Cost-efficient general-purpose model for dialogue, code generation, and tool calling
+• deepseek-v4-pro: Higher-tier reasoning model for complex logic, mathematical reasoning, and security analysis
 • Cost-effective pricing with competitive performance compared to leading models
 
 Key Advantages:
@@ -504,7 +507,7 @@ Key Advantages:
 
 LiteLLM Integration:
 • Set Provider Name to 'deepseek' when using LiteLLM proxy
-• Enables model prefix (e.g., deepseek/deepseek-chat) without modifying config.yml
+• Enables model prefix (e.g., deepseek/deepseek-v4-flash) without modifying config.yml
 • Optional for direct DeepSeek API usage
 
 Best for: Teams requiring multilingual support, cost-conscious deployments, Chinese language security testing
@@ -1199,8 +1202,10 @@ const (
 	ServerSettingsProxyPassword     = "Proxy Password"
 	ServerSettingsProxyPasswordDesc = "Password for proxy authentication (optional)"
 
-	ServerSettingsHTTPClientTimeout     = "HTTP Client Timeout"
-	ServerSettingsHTTPClientTimeoutDesc = "Timeout in seconds for external API calls (LLM providers, search engines, etc.)"
+	ServerSettingsHTTPClientTimeout       = "HTTP Client Timeout"
+	ServerSettingsHTTPClientTimeoutDesc   = "Timeout in seconds for external API calls (LLM providers, search engines, etc.)"
+	ServerSettingsTerminalToolTimeout     = "Terminal Tool Timeout"
+	ServerSettingsTerminalToolTimeoutDesc = "Default timeout in seconds for terminal commands (0 or negative = use 3-hour maximum)"
 
 	ServerSettingsExternalSSLCAPath     = "Custom CA Certificate Path"
 	ServerSettingsExternalSSLCAPathDesc = "Path inside container to custom root CA cert (e.g., /opt/pentagi/ssl/ca-bundle.pem)"
@@ -1227,6 +1232,7 @@ const (
 	ServerSettingsProxyUsernameHint       = "Proxy Username"
 	ServerSettingsProxyPasswordHint       = "Proxy Password"
 	ServerSettingsHTTPClientTimeoutHint   = "HTTP Timeout"
+	ServerSettingsTerminalToolTimeoutHint = "Terminal Timeout"
 	ServerSettingsExternalSSLCAPathHint   = "Custom CA Path"
 	ServerSettingsExternalSSLInsecureHint = "Skip SSL Verification"
 	ServerSettingsSSLDirHint              = "SSL Directory"
@@ -1269,6 +1275,15 @@ Examples:
 Default: 600 seconds (10 minutes)
 Setting to 0 disables timeout (not recommended in production)
 Too low values may cause legitimate long-running requests to fail.`
+
+	ServerSettingsTerminalToolTimeoutHelp = `Default timeout in seconds applied when an agent requests timeout=0 or a negative timeout value.
+
+This affects commands executed through the isolated terminal container, including scanners and CLI-based utilities.
+
+Default: 1200 seconds (20 minutes)
+Allowed range: 1–10800 seconds (up to 3 hours)
+Values <= 0 or above 10800 are clamped to the maximum (10800 s = 3 hours); agents are never allowed to run indefinitely.
+Explicit timeout values provided by the tool call override this default when they are within the 1–10800 s range.`
 
 	ServerSettingsExternalSSLCAPathHelp = `Path to custom CA certificate file (PEM format) inside the container.
 
@@ -1646,6 +1661,9 @@ Choose carefully as changing providers requires reindexing all stored data.`
 
 	EmbedderFormStripNewLines     = "Strip New Lines"
 	EmbedderFormStripNewLinesDesc = "Remove line breaks from text before embedding (true/false)"
+
+	EmbedderFormMaxTextBytes     = "Max Text Bytes"
+	EmbedderFormMaxTextBytesDesc = "Maximum number of bytes per text chunk sent to the embedding API (e.g. 8192)"
 
 	EmbedderFormHelpTitle   = "Embedding Configuration"
 	EmbedderFormHelpContent = `Configure text vectorization for semantic search and knowledge storage.
@@ -2227,6 +2245,7 @@ const (
 	EnvDesc_EMBEDDING_MODEL           = "Embedding Model"
 	EnvDesc_EMBEDDING_BATCH_SIZE      = "Embedding Batch Size"
 	EnvDesc_EMBEDDING_STRIP_NEW_LINES = "Embedding Strip New Lines"
+	EnvDesc_EMBEDDING_MAX_TEXT_BYTES  = "Embedding Max Text Bytes"
 
 	EnvDesc_ASK_USER = "Human-in-the-loop"
 
@@ -2277,6 +2296,7 @@ const (
 	EnvDesc_COOKIE_SIGNING_SALT               = "PentAGI Cookie Signing Salt"
 	EnvDesc_PROXY_URL                         = "HTTP/HTTPS Proxy URL"
 	EnvDesc_HTTP_CLIENT_TIMEOUT               = "HTTP Client Timeout (seconds)"
+	EnvDesc_TERMINAL_TOOL_TIMEOUT             = "Terminal Tool Timeout (seconds)"
 	EnvDesc_EXTERNAL_SSL_CA_PATH              = "Custom CA Certificate Path"
 	EnvDesc_EXTERNAL_SSL_INSECURE             = "Skip SSL Verification"
 	EnvDesc_PENTAGI_SSL_DIR                   = "PentAGI SSL Directory"

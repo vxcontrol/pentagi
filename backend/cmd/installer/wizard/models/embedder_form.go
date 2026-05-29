@@ -262,6 +262,11 @@ func (m *EmbedderFormModel) BuildForm() tea.Cmd {
 		fields = append(fields, m.createStripNewLinesField(config))
 	}
 
+	// Max text bytes field (always show except for disabled)
+	if providerInfo.ID != locale.EmbedderProviderIDDisabled {
+		fields = append(fields, m.createMaxTextBytesField(config))
+	}
+
 	m.SetFormFields(fields)
 	return nil
 }
@@ -352,6 +357,20 @@ func (m *EmbedderFormModel) createStripNewLinesField(config *controller.Embedder
 	}
 }
 
+func (m *EmbedderFormModel) createMaxTextBytesField(config *controller.EmbedderConfig) FormField {
+	input := NewTextInput(m.GetStyles(), m.GetWindow(), config.MaxTextBytes)
+
+	return FormField{
+		Key:         "max_text_bytes",
+		Title:       locale.EmbedderFormMaxTextBytes,
+		Description: locale.EmbedderFormMaxTextBytesDesc,
+		Required:    false,
+		Masked:      false,
+		Input:       input,
+		Value:       input.Value(),
+	}
+}
+
 func (m *EmbedderFormModel) GetFormTitle() string {
 	return locale.EmbedderFormTitle
 }
@@ -432,6 +451,15 @@ func (m *EmbedderFormModel) GetCurrentConfiguration() string {
 			locale.EmbedderFormStripNewLines, m.GetStyles().Info.Render(stripNewLines)))
 	}
 
+	maxTextBytes := config.MaxTextBytes.Value
+	if maxTextBytes == "" {
+		maxTextBytes = config.MaxTextBytes.Default
+	}
+	if maxTextBytes != "" {
+		sections = append(sections, fmt.Sprintf("• %s: %s",
+			locale.EmbedderFormMaxTextBytes, m.GetStyles().Info.Render(maxTextBytes)))
+	}
+
 	return strings.Join(sections, "\n")
 }
 
@@ -477,6 +505,7 @@ func (m *EmbedderFormModel) HandleSave() error {
 		Model:         config.Model,
 		BatchSize:     config.BatchSize,
 		StripNewLines: config.StripNewLines,
+		MaxTextBytes:  config.MaxTextBytes,
 	}
 
 	// set provider
@@ -514,6 +543,14 @@ func (m *EmbedderFormModel) HandleSave() error {
 				return fmt.Errorf("invalid boolean value for strip newlines: %s (must be 'true' or 'false')", value)
 			}
 			newConfig.StripNewLines.Value = value
+		case "max_text_bytes":
+			// validate numeric input
+			if value != "" {
+				if intVal, err := strconv.Atoi(value); err != nil || intVal <= 0 {
+					return fmt.Errorf("invalid max text bytes: %s (must be a positive number)", value)
+				}
+			}
+			newConfig.MaxTextBytes.Value = value
 		}
 	}
 

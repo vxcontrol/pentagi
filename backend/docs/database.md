@@ -1199,21 +1199,79 @@ return tx.Commit()
 
 ### Connection Pooling
 
-The package provides optimized connection pooling through GORM:
+PentAGI opens two independent connection pools to the same Postgres instance:
+
+| Pool | Env var | Default | Used by |
+|---|---|---|---|
+| Shared `sql.DB` | `DATABASE_MAX_OPEN_CONNS` | `25` | sqlc `Queries` and GORM — both clients are backed by the **same** `*sql.DB` created in `main.go` |
+| Shared `pgxpool` | `DATABASE_VECTOR_MAX_CONNS` | `10` | All `pgvector.Store` instances: every flow/assistant tool executor + knowledge API |
+
+Additional knob: `DATABASE_MAX_IDLE_CONNS` (default `5`) — idle connections kept open between requests.
+
+`NewGorm` accepts the already-configured `*sql.DB` so GORM never opens its own pool:
+
 ```go
-func NewGorm(dsn, dbType string) (*gorm.DB, error) {
-    db, err := gorm.Open(dbType, dsn)
-    if err != nil {
-        return nil, err
-    }
+// main.go — one pool, used by both sqlc and GORM
+db.SetMaxOpenConns(cfg.DBMaxOpenConns)
+db.SetMaxIdleConns(cfg.DBMaxIdleConns)
+db.SetConnMaxLifetime(time.Hour)
 
-    // Optimized connection settings
-    db.DB().SetMaxIdleConns(5)
-    db.DB().SetMaxOpenConns(20)
-    db.DB().SetConnMaxLifetime(time.Hour)
+orm, err := database.NewGorm(db)
 
-    return db, nil
+// pkg/database/database.go
+func NewGorm(db *sql.DB) (*gorm.DB, error) {
+    orm, err := gorm.Open("postgres", db)
+    ...
 }
+```
+
+The shared `pgxpool` is created in `main.go` and stored in `cfg.PgxPool`. All pgvector stores
+(tool executors via `SetEmbedder`, knowledge API in `router.go`) use `pgvector.WithConn(cfg.PgxPool)`
+instead of opening individual `pgx.Connect` calls per executor.
+
+**Connection budget** for the stock `vxcontrol/pgvector` image (`max_connections = 100`,
+`superuser_reserved_connections = 3`):
+
+```
+Available for client connections  = 97
+  pentagi  sql.DB  (DATABASE_MAX_OPEN_CONNS)    = 25
+  pentagi  pgxpool (DATABASE_VECTOR_MAX_CONNS)  = 10
+  pgexporter                                    =  3
+  autovacuum workers                            =  3
+  ─────────────────────────────────────────────
+  Total consumed                                = 41
+  Free buffer                                   = 56  (≈ 58%)
+```
+
+Defaults are sized for 10 parallel flows with concurrent API requests. To inspect the live
+budget on a running deployment:
+
+```bash
+# Postgres limits
+docker exec pgvector sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c \
+  "SELECT name, setting FROM pg_settings
+   WHERE name IN ('"'"'max_connections'"'"', '"'"'superuser_reserved_connections'"'"');"'
+
+# Current usage vs. available
+docker exec pgvector sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c \
+  "SELECT max_conn, used, max_conn - used AS available
+   FROM (SELECT current_setting('"'"'max_connections'"'"')::int AS max_conn,
+                count(*) AS used FROM pg_stat_activity) t;"'
+
+# Breakdown by client
+docker exec pgvector sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c \
+  "SELECT application_name, client_addr, state, count(*)
+   FROM pg_stat_activity
+   WHERE pid <> pg_backend_pid()
+   GROUP BY 1, 2, 3 ORDER BY count DESC;"'
+```
+
+To raise the Postgres limit, add a `command` override in `docker-compose.yml`:
+
+```yaml
+pgvector:
+  image: vxcontrol/pgvector:latest
+  command: postgres -c max_connections=200
 ```
 
 ### Vector Operations

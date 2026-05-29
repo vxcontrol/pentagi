@@ -61,7 +61,7 @@ interface FlowProviderProps {
     children: React.ReactNode;
 }
 
-export const FlowProvider = ({ children }: FlowProviderProps) => {
+export function FlowProvider({ children }: FlowProviderProps) {
     const { flowId } = useParams();
 
     const [selectedAssistantIds, setSelectedAssistantIds] = useState<Record<string, null | string>>({});
@@ -95,20 +95,16 @@ export const FlowProvider = ({ children }: FlowProviderProps) => {
 
         const explicitSelection = selectedAssistantIds[flowId];
 
-        // If there's an explicit selection (including null for "no selection")
         if (explicitSelection !== undefined) {
-            // If explicitly set to null, return null
             if (explicitSelection === null) {
                 return null;
             }
 
-            // If the selected assistant still exists in the list, return it
             if (assistants.some((assistant) => assistant.id === explicitSelection)) {
                 return explicitSelection;
             }
         }
 
-        // Otherwise, auto-select the first assistant
         return assistants?.[0]?.id ?? null;
     }, [flowId, selectedAssistantIds, assistants]);
 
@@ -119,15 +115,13 @@ export const FlowProvider = ({ children }: FlowProviderProps) => {
         variables: { assistantId: selectedAssistantId ?? '', flowId: flowId ?? '' },
     });
 
-    // Subscriptions — skip until the initial flow query has loaded
-    // to ensure cache fields exist before subscription data arrives
+    // Skip subscriptions until the initial flow query has loaded so cache fields exist
+    // before subscription deltas arrive.
     const subscriptionVariables = useMemo(() => ({ flowId: flowId || '' }), [flowId]);
     const subscriptionSkip = !flowId || isLoading;
 
-    // Global flow subscription - updates flow status (e.g., when stopped/finished)
     useFlowUpdatedSubscription();
 
-    // Flow-specific subscriptions that depend on the selected flow
     useTaskCreatedSubscription({ skip: subscriptionSkip, variables: subscriptionVariables });
     useTaskUpdatedSubscription({ skip: subscriptionSkip, variables: subscriptionVariables });
     useScreenshotAddedSubscription({ skip: subscriptionSkip, variables: subscriptionVariables });
@@ -138,7 +132,6 @@ export const FlowProvider = ({ children }: FlowProviderProps) => {
     useSearchLogAddedSubscription({ skip: subscriptionSkip, variables: subscriptionVariables });
     useVectorStoreLogAddedSubscription({ skip: subscriptionSkip, variables: subscriptionVariables });
 
-    // Assistant-specific subscriptions
     useAssistantCreatedSubscription({ skip: subscriptionSkip, variables: subscriptionVariables });
     useAssistantUpdatedSubscription({ skip: subscriptionSkip, variables: subscriptionVariables });
     useAssistantDeletedSubscription({ skip: subscriptionSkip, variables: subscriptionVariables });
@@ -167,7 +160,6 @@ export const FlowProvider = ({ children }: FlowProviderProps) => {
         selectAssistant(null);
     }, [flowId, selectAssistant]);
 
-    // Mutations
     const [putUserInput] = usePutUserInputMutation();
     const [stopFlowMutation] = useStopFlowMutation();
     const [createAssistantMutation] = useCreateAssistantMutation();
@@ -177,12 +169,17 @@ export const FlowProvider = ({ children }: FlowProviderProps) => {
 
     const flowStatus = useMemo(() => flowData?.flow?.status, [flowData?.flow?.status]);
 
-    // Show toast notification when flow loading error occurs
+    // A single Postgres "no rows in result set" surfaces here every time a sibling
+    // query/subscription retries against an invalid flow id; without a stable
+    // toast id Sonner would stack 8 copies of the same message before the page
+    // redirects. Surface a friendly message and drop the raw SQL detail entirely.
     useEffect(() => {
         if (flowError) {
-            const description = flowError.message || 'An error occurred while loading flow';
-            toast.error('Failed to load flow', {
-                description,
+            const raw = flowError.message ?? '';
+            const isNotFound = /no rows in result set|not found/i.test(raw);
+            toast.error(isNotFound ? 'Flow not found' : 'Failed to load flow', {
+                description: isNotFound ? undefined : raw || undefined,
+                id: 'flow-load-error',
             });
             Log.error('Error loading flow:', flowError);
         }
@@ -194,7 +191,7 @@ export const FlowProvider = ({ children }: FlowProviderProps) => {
                 return;
             }
 
-            const { message: input, providerName } = values;
+            const { message: input, providerName, resourceIds } = values;
 
             try {
                 await putUserInput({
@@ -202,6 +199,7 @@ export const FlowProvider = ({ children }: FlowProviderProps) => {
                         flowId,
                         input,
                         modelProvider: providerName || undefined,
+                        resourceIds: resourceIds?.length ? resourceIds : undefined,
                     },
                 });
             } catch (error) {
@@ -238,7 +236,7 @@ export const FlowProvider = ({ children }: FlowProviderProps) => {
 
     const createAssistant = useCallback(
         async (values: FlowFormValues) => {
-            const { message, providerName, useAgents } = values;
+            const { message, providerName, resourceIds, useAgents } = values;
 
             const input = message.trim();
             const modelProvider = providerName.trim();
@@ -253,6 +251,7 @@ export const FlowProvider = ({ children }: FlowProviderProps) => {
                         flowId,
                         input,
                         modelProvider,
+                        resourceIds: resourceIds?.length ? resourceIds : undefined,
                         useAgents,
                     },
                 });
@@ -278,7 +277,7 @@ export const FlowProvider = ({ children }: FlowProviderProps) => {
 
     const submitAssistantMessage = useCallback(
         async (assistantId: string, values: FlowFormValues) => {
-            const { message, useAgents } = values;
+            const { message, resourceIds, useAgents } = values;
 
             const input = message.trim();
 
@@ -292,10 +291,10 @@ export const FlowProvider = ({ children }: FlowProviderProps) => {
                         assistantId,
                         flowId,
                         input,
+                        resourceIds: resourceIds?.length ? resourceIds : undefined,
                         useAgents,
                     },
                 });
-                // Cache will be automatically updated via subscriptions
             } catch (error) {
                 const description =
                     error instanceof Error ? error.message : 'An error occurred while calling assistant';
@@ -321,7 +320,6 @@ export const FlowProvider = ({ children }: FlowProviderProps) => {
                         flowId,
                     },
                 });
-                // Cache will be automatically updated via mutation policy and subscriptions
             } catch (error) {
                 const description =
                     error instanceof Error ? error.message : 'An error occurred while stopping assistant';
@@ -410,9 +408,9 @@ export const FlowProvider = ({ children }: FlowProviderProps) => {
     );
 
     return <FlowContext.Provider value={value}>{children}</FlowContext.Provider>;
-};
+}
 
-export const useFlow = () => {
+export function useFlow() {
     const context = useContext(FlowContext);
 
     if (context === undefined) {
@@ -420,4 +418,4 @@ export const useFlow = () => {
     }
 
     return context;
-};
+}

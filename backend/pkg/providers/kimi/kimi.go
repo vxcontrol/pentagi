@@ -19,7 +19,11 @@ import (
 //go:embed config.yml models.yml
 var configFS embed.FS
 
-const KimiAgentModel = "kimi-k2-turbo-preview"
+// KimiAgentModel is the fallback model used when no agent-specific configuration exists.
+// kimi-k2.5 is chosen as cost-effective default ($0.60/$3.00 input/output vs $0.95/$4.00 for k2.6).
+// All legacy kimi-k2-* models (turbo-preview, 0905-preview, 0711-preview, thinking, thinking-turbo)
+// were deprecated by Moonshot on 2026-05-25 and must not be used.
+const KimiAgentModel = "kimi-k2.5"
 
 const KimiToolCallIDTemplate = "{f}:{r:1:d}"
 
@@ -83,6 +87,14 @@ func New(
 		return nil, err
 	}
 
+	// Kimi K2.6/K2.5 OpenAI-compatible API requires legacy string form for reasoning
+	// (no WithModernReasoningFormat). Thinking mode is controlled via
+	// extra_body.thinking.type ("enabled"/"disabled") in the per-agent config, with
+	// thinking.keep="all" required for multi-turn tool calls to preserve historical
+	// reasoning_content (otherwise Moonshot returns "thinking is enabled but
+	// reasoning_content is missing in assistant tool call message").
+	// WithPreserveReasoningContent() keeps reasoning_content in TextContent parts
+	// before ToolCall in assistant messages — Kimi rejects requests without it.
 	client, err := openai.New(
 		openai.WithToken(cfg.KimiAPIKey),
 		openai.WithModel(KimiAgentModel),

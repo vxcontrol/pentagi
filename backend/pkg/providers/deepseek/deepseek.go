@@ -19,7 +19,7 @@ import (
 //go:embed config.yml models.yml
 var configFS embed.FS
 
-const DeepSeekAgentModel = "deepseek-chat"
+const DeepSeekAgentModel = "deepseek-v4-flash"
 
 const DeepSeekToolCallIDTemplate = "call_{r:2:d}_{r:24:b}"
 
@@ -83,6 +83,12 @@ func New(
 		return nil, err
 	}
 
+	// DeepSeek V4 OpenAI-compatible API expects the legacy string form
+	// "reasoning_effort": "high|medium|low" rather than the modern object form
+	// "reasoning": {"effort": "..."}. The absence of WithModernReasoningFormat()
+	// ensures langchaingo serializes reasoning_effort as a top-level string.
+	// WithPreserveReasoningContent() keeps reasoning_content in multi-turn
+	// assistant messages with tool calls (required for DeepSeek thinking mode).
 	client, err := openai.New(
 		openai.WithToken(cfg.DeepSeekAPIKey),
 		openai.WithModel(DeepSeekAgentModel),

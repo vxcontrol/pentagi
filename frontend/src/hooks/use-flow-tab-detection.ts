@@ -18,19 +18,16 @@ export function useFlowTabDetection() {
     const [manualTab, setManualTab] = useState<null | string>(null);
 
     const resolvedTab = useMemo(() => {
-        // If user manually selected a tab, use it
         if (manualTab) {
             return manualTab;
         }
 
-        // Check URL parameter
         const tabParam = searchParams.get('tab');
 
         if (tabParam && CENTRAL_TAB_VALUES.includes(tabParam)) {
             return tabParam;
         }
 
-        // Auto-detect: switch to assistant tab if flow is loaded and messageLogs are empty
         if (!isLoading && !flowData?.messageLogs?.length) {
             return 'assistant';
         }

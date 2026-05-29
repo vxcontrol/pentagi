@@ -1,5 +1,5 @@
 simple:
-  model: gemini-3.1-flash-lite-preview
+  model: gemini-3.1-flash-lite
   temperature: 0.7
   top_p: 0.95
   n: 1
@@ -10,7 +10,7 @@ simple:
     cache_read: 0.025
 
 simple_json:
-  model: gemini-3.1-flash-lite-preview
+  model: gemini-3.1-flash-lite
   temperature: 0.7
   top_p: 0.95
   n: 1
@@ -87,37 +87,37 @@ adviser:
     cache_read: 0.2
 
 reflector:
-  model: gemini-3-flash-preview
+  model: gemini-3.5-flash
   temperature: 1.0
   top_p: 0.95
   n: 1
   max_tokens: 4096
   price:
-    input: 0.5
-    output: 3.0
-    cache_read: 0.05
+    input: 1.5
+    output: 9.0
+    cache_read: 0.15
 
 searcher:
-  model: gemini-3-flash-preview
+  model: gemini-3.5-flash
   temperature: 1.0
   top_p: 0.95
   n: 1
   max_tokens: 8192
   price:
-    input: 0.5
-    output: 3.0
-    cache_read: 0.05
+    input: 1.5
+    output: 9.0
+    cache_read: 0.15
 
 enricher:
-  model: gemini-3-flash-preview
+  model: gemini-3.5-flash
   temperature: 1.0
   top_p: 0.95
   n: 1
   max_tokens: 4096
   price:
-    input: 0.5
-    output: 3.0
-    cache_read: 0.05
+    input: 1.5
+    output: 9.0
+    cache_read: 0.15
 
 coder:
   model: gemini-3.1-pro-preview
@@ -133,7 +133,7 @@ coder:
     cache_read: 0.2
 
 installer:
-  model: gemini-3-flash-preview
+  model: gemini-3.5-flash
   temperature: 1.0
   top_p: 0.95
   n: 1
@@ -141,9 +141,9 @@ installer:
   reasoning:
     effort: low
   price:
-    input: 0.5
-    output: 3.0
-    cache_read: 0.05
+    input: 1.5
+    output: 9.0
+    cache_read: 0.15
 
 pentester:
   model: gemini-3.1-pro-preview

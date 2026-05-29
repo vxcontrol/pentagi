@@ -95,19 +95,19 @@ src/
 ### Prerequisites
 
 -   Node.js 18+
--   npm 8+
+-   pnpm 10+
 
 ### Installation
 
 1. Clone the repository
 2. Install dependencies:
-   npm install
+   pnpm install
 3. Start the development server:
-   npm run dev
+   pnpm run dev
 
 ### Building for Production
 
-npm run build
+pnpm run build
 
 ### Environment Variables
 

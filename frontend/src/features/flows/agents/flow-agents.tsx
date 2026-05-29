@@ -25,7 +25,7 @@ const searchFormSchema = z.object({
     search: z.string(),
 });
 
-const FlowAgents = () => {
+function FlowAgents() {
     const { flowData, flowId } = useFlow();
 
     const logs = useMemo(() => flowData?.agentLogs ?? [], [flowData?.agentLogs]);
@@ -47,7 +47,6 @@ const FlowAgents = () => {
     const searchValue = form.watch('search');
     const filter = form.watch('filter');
 
-    // Create debounced function to update search value
     const debouncedUpdateSearch = useMemo(
         () =>
             debounce((value: string) => {
@@ -56,7 +55,6 @@ const FlowAgents = () => {
         [],
     );
 
-    // Update debounced search value when input value changes
     useEffect(() => {
         debouncedUpdateSearch(searchValue);
 
@@ -65,14 +63,12 @@ const FlowAgents = () => {
         };
     }, [searchValue, debouncedUpdateSearch]);
 
-    // Cleanup debounced function on unmount
     useEffect(() => {
         return () => {
             debouncedUpdateSearch.cancel();
         };
     }, [debouncedUpdateSearch]);
 
-    // Clear search when flow changes to prevent stale search state
     useEffect(() => {
         form.reset({
             filter: {
@@ -85,7 +81,6 @@ const FlowAgents = () => {
         debouncedUpdateSearch.cancel();
     }, [flowId, form, debouncedUpdateSearch]);
 
-    // Check if any filters are active
     const hasActiveFilters = useMemo(() => {
         const hasSearch = !!searchValue.trim();
         const hasTaskFilters = !!(filter?.taskIds?.length || filter?.subtaskIds?.length);
@@ -93,14 +88,11 @@ const FlowAgents = () => {
         return hasSearch || hasTaskFilters;
     }, [searchValue, filter]);
 
-    // Memoize filtered logs to avoid recomputing on every render
-    // Use debouncedSearchValue for filtering to improve performance
     const filteredLogs = useMemo(() => {
         const search = debouncedSearchValue.toLowerCase().trim();
 
         let filtered = logs || [];
 
-        // Filter by search
         if (search) {
             filtered = filtered.filter((log) => {
                 return (
@@ -112,7 +104,6 @@ const FlowAgents = () => {
             });
         }
 
-        // Filter by selected tasks and subtasks
         if (filter?.taskIds?.length || filter?.subtaskIds?.length) {
             const selectedTaskIds = new Set(filter.taskIds ?? []);
             const selectedSubtaskIds = new Set(filter.subtaskIds ?? []);
@@ -135,7 +126,6 @@ const FlowAgents = () => {
 
     const hasLogs = filteredLogs && filteredLogs.length > 0;
 
-    // Reset filters handler
     const handleResetFilters = () => {
         form.reset({
             filter: {
@@ -265,6 +255,6 @@ const FlowAgents = () => {
             )}
         </div>
     );
-};
+}
 
 export default FlowAgents;

@@ -195,10 +195,6 @@ func (mlw *flowMsgLogWorker) putMsg(
 	taskID, subtaskID *int64,
 	thinking, msg string,
 ) (int64, error) {
-	if len(msg) > defaultMaxMessageLength {
-		msg = msg[:defaultMaxMessageLength] + "..."
-	}
-
 	msgLog, err := mlw.db.CreateMsgLog(ctx, database.CreateMsgLogParams{
 		Type:      msgType,
 		Message:   database.SanitizeUTF8(msg),

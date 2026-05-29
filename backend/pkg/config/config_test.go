@@ -271,14 +271,14 @@ func clearConfigEnv(t *testing.T) {
 	envVars := []string{
 		"DATABASE_URL", "DEBUG", "DATA_DIR", "ASK_USER", "INSTALLATION_ID", "LICENSE_KEY",
 		"DOCKER_INSIDE", "DOCKER_NET_ADMIN", "DOCKER_SOCKET", "DOCKER_NETWORK",
-		"DOCKER_PUBLIC_IP", "DOCKER_WORK_DIR", "DOCKER_DEFAULT_IMAGE", "DOCKER_DEFAULT_IMAGE_FOR_PENTEST",
+		"DOCKER_PUBLIC_IP", "DOCKER_WORK_DIR", "DOCKER_DEFAULT_IMAGE", "DOCKER_DEFAULT_IMAGE_FOR_PENTEST", "TERMINAL_TOOL_TIMEOUT",
 		"SERVER_PORT", "SERVER_HOST", "SERVER_USE_SSL", "SERVER_SSL_KEY", "SERVER_SSL_CRT",
 		"STATIC_URL", "STATIC_DIR", "CORS_ORIGINS", "COOKIE_SIGNING_SALT",
 		"SCRAPER_PUBLIC_URL", "SCRAPER_PRIVATE_URL",
 		"OPEN_AI_KEY", "OPEN_AI_SERVER_URL",
 		"ANTHROPIC_API_KEY", "ANTHROPIC_SERVER_URL",
 		"EMBEDDING_URL", "EMBEDDING_KEY", "EMBEDDING_MODEL",
-		"EMBEDDING_STRIP_NEW_LINES", "EMBEDDING_BATCH_SIZE", "EMBEDDING_PROVIDER",
+		"EMBEDDING_STRIP_NEW_LINES", "EMBEDDING_BATCH_SIZE", "EMBEDDING_MAX_TEXT_BYTES", "EMBEDDING_PROVIDER",
 		"SUMMARIZER_PRESERVE_LAST", "SUMMARIZER_USE_QA", "SUMMARIZER_SUM_MSG_HUMAN_IN_QA",
 		"SUMMARIZER_LAST_SEC_BYTES", "SUMMARIZER_MAX_BP_BYTES",
 		"SUMMARIZER_MAX_QA_SECTIONS", "SUMMARIZER_MAX_QA_BYTES", "SUMMARIZER_KEEP_QA_SECTIONS",
@@ -545,6 +545,31 @@ func TestNewConfig_HTTPClientTimeout(t *testing.T) {
 		config, err := NewConfig()
 		require.NoError(t, err)
 		assert.Equal(t, 0, config.HTTPClientTimeout)
+	})
+}
+
+func TestNewConfig_TerminalToolTimeout(t *testing.T) {
+	clearConfigEnv(t)
+	t.Chdir(t.TempDir())
+
+	t.Run("default timeout", func(t *testing.T) {
+		config, err := NewConfig()
+		require.NoError(t, err)
+		assert.Equal(t, 1200, config.TerminalToolTimeout)
+	})
+
+	t.Run("custom timeout", func(t *testing.T) {
+		t.Setenv("TERMINAL_TOOL_TIMEOUT", "900")
+		config, err := NewConfig()
+		require.NoError(t, err)
+		assert.Equal(t, 900, config.TerminalToolTimeout)
+	})
+
+	t.Run("zero timeout", func(t *testing.T) {
+		t.Setenv("TERMINAL_TOOL_TIMEOUT", "0")
+		config, err := NewConfig()
+		require.NoError(t, err)
+		assert.Equal(t, 0, config.TerminalToolTimeout)
 	})
 }
 

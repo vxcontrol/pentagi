@@ -2,16 +2,14 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import Logo from '@/components/icons/logo';
 
-const OAuthResult = () => {
+function OAuthResult() {
     const [statusMessage, setStatusMessage] = useState('Authentication in progress...');
     const messageRef = useRef(statusMessage);
     const prevMessageRef = useRef(statusMessage);
 
-    // Success delay is short, error delay is longer to allow reading
     const successDelay = 2000;
     const errorDelay = 5000;
 
-    // Synchronize state with ref without problematic dependencies
     useLayoutEffect(() => {
         if (prevMessageRef.current !== messageRef.current) {
             setStatusMessage(messageRef.current);
@@ -24,7 +22,6 @@ const OAuthResult = () => {
         const status = params.get('status');
         const error = params.get('error');
 
-        // This is used to track all timeouts that need to be cleared on cleanup
         let redirectTimer: NodeJS.Timeout | null = null;
         let cleanupTimer: NodeJS.Timeout | null = null;
         let closeTimer: NodeJS.Timeout | null = null;
@@ -33,7 +30,6 @@ const OAuthResult = () => {
             messageRef.current = message;
         };
 
-        // Handle window close safely
         const handleClose = (delay: number) => {
             closeTimer = setTimeout(() => {
                 try {
@@ -46,7 +42,6 @@ const OAuthResult = () => {
             }, delay);
         };
 
-        // Handle redirection if needed
         const handleRedirect = (url: string, delay: number) => {
             redirectTimer = setTimeout(() => {
                 try {
@@ -56,7 +51,6 @@ const OAuthResult = () => {
                 }
             }, delay);
 
-            // Ensure redirect timer gets cleaned up
             cleanupTimer = setTimeout(() => {
                 if (redirectTimer) {
                     clearTimeout(redirectTimer);
@@ -76,7 +70,6 @@ const OAuthResult = () => {
                     window.location.origin,
                 );
 
-                // Success handling
                 updateMessage('Authentication complete, closing window...');
                 handleClose(successDelay);
             } catch (e) {
@@ -85,15 +78,12 @@ const OAuthResult = () => {
                 handleClose(errorDelay);
             }
         } else {
-            // If no opener, redirect to login
             updateMessage('Authentication window opened directly. Redirecting to login page...');
             handleRedirect('/login', errorDelay / 2);
             handleClose(errorDelay);
         }
 
-        // Cleanup function for useEffect
         return () => {
-            // Explicitly clear all timeouts
             if (redirectTimer) {
                 clearTimeout(redirectTimer);
             }
@@ -114,6 +104,6 @@ const OAuthResult = () => {
             <div className="fixed bottom-4 text-sm text-white">{statusMessage}</div>
         </div>
     );
-};
+}
 
 export default OAuthResult;

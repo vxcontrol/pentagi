@@ -1,12 +1,12 @@
 import { Copy } from 'lucide-react';
-import { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 
 import type { AgentLogFragmentFragment } from '@/graphql/types';
 
 import Markdown from '@/components/shared/markdown';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { copyMessageToClipboard } from '@/lib/clipboard';
 import { formatDate } from '@/lib/utils/format';
-import { copyMessageToClipboard } from '@/lib/сlipboard';
 
 import FlowAgentIcon from './flow-agent-icon';
 
@@ -17,7 +17,6 @@ interface FlowAgentProps {
     searchValue?: string;
 }
 
-// Helper function to check if text contains search value (case-insensitive)
 const containsSearchValue = (text: null | string | undefined, searchValue: string): boolean => {
     if (!text || !searchValue.trim()) {
         return false;
@@ -26,10 +25,9 @@ const containsSearchValue = (text: null | string | undefined, searchValue: strin
     return text.toLowerCase().includes(searchValue.toLowerCase().trim());
 };
 
-const FlowAgent = ({ log, searchValue = '' }: FlowAgentProps) => {
+function FlowAgent({ log, searchValue = '' }: FlowAgentProps) {
     const { createdAt, executor, initiator, result, subtaskId, task, taskId } = log;
 
-    // Memoize search checks to avoid recalculating on every render
     const searchChecks = useMemo(() => {
         const trimmedSearch = searchValue.trim();
 
@@ -45,28 +43,27 @@ const FlowAgent = ({ log, searchValue = '' }: FlowAgentProps) => {
 
     const [isDetailsVisible, setIsDetailsVisible] = useState(false);
 
-    // Auto-expand details if they contain search matches
-    useEffect(() => {
+    const [prevSearchValue, setPrevSearchValue] = useState(searchValue);
+    const [prevHasResultMatch, setPrevHasResultMatch] = useState(searchChecks.hasResultMatch);
+
+    if (searchValue !== prevSearchValue || searchChecks.hasResultMatch !== prevHasResultMatch) {
+        setPrevSearchValue(searchValue);
+        setPrevHasResultMatch(searchChecks.hasResultMatch);
+
         const trimmedSearch = searchValue.trim();
 
         if (trimmedSearch) {
-            // Expand result block only if it contains the search term
             if (searchChecks.hasResultMatch) {
                 setIsDetailsVisible(true);
             }
         } else {
-            // Reset to default state when search is cleared
             setIsDetailsVisible(false);
         }
-    }, [searchValue, searchChecks.hasResultMatch]);
+    }
 
-    // Determine if we should show full task or preview
-    // Show full task if: search found in task OR details are manually visible OR task is short
     const shouldShowFullTask = searchChecks.hasTaskMatch || isDetailsVisible || task.length <= taskPreviewLength;
     const taskToShow = shouldShowFullTask ? task : `${task.slice(0, taskPreviewLength)}...`;
 
-    // Determine if we should show details toggle
-    // Show toggle if: result exists OR task is longer than preview length
     const shouldShowDetailsToggle = result || task.length > taskPreviewLength;
 
     const handleCopy = useCallback(async () => {
@@ -144,6 +141,6 @@ const FlowAgent = ({ log, searchValue = '' }: FlowAgentProps) => {
             </div>
         </div>
     );
-};
+}
 
 export default memo(FlowAgent);

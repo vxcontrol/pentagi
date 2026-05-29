@@ -16,8 +16,7 @@ interface SidebarFlowsProviderProps {
     children: ReactNode;
 }
 
-export const SidebarFlowsProvider = ({ children }: SidebarFlowsProviderProps) => {
-    // Single query for sidebar flows with cache-first policy
+export function SidebarFlowsProvider({ children }: SidebarFlowsProviderProps) {
     // Subscriptions are handled by FlowsProvider in FlowsLayout
     const { data: flowsData } = useFlowsQuery({
         fetchPolicy: 'cache-first',
@@ -34,9 +33,9 @@ export const SidebarFlowsProvider = ({ children }: SidebarFlowsProviderProps) =>
     );
 
     return <SidebarFlowsContext.Provider value={value}>{children}</SidebarFlowsContext.Provider>;
-};
+}
 
-export const useSidebarFlows = () => {
+export function useSidebarFlows() {
     const context = useContext(SidebarFlowsContext);
 
     if (context === undefined) {
@@ -44,4 +43,4 @@ export const useSidebarFlows = () => {
     }
 
     return context;
-};
+}

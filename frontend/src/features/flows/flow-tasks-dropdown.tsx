@@ -26,7 +26,7 @@ interface FlowTasksDropdownProps {
     value?: FlowTasksDropdownValue;
 }
 
-const FlowTasksDropdown = ({ disabled, onChange, value }: FlowTasksDropdownProps) => {
+function FlowTasksDropdown({ disabled, onChange, value }: FlowTasksDropdownProps) {
     const { flowData } = useFlow();
     const tasks = useMemo(() => flowData?.tasks ?? [], [flowData?.tasks]);
     const [isOpen, setIsOpen] = useState(false);
@@ -35,10 +35,8 @@ const FlowTasksDropdown = ({ disabled, onChange, value }: FlowTasksDropdownProps
     const taskIds = useMemo(() => new Set(value?.taskIds ?? []), [value?.taskIds]);
     const subtaskIds = useMemo(() => new Set(value?.subtaskIds ?? []), [value?.subtaskIds]);
 
-    // Check if any filter is active
     const hasActiveFilters = taskIds.size > 0 || subtaskIds.size > 0;
 
-    // Toggle task expansion
     const toggleTaskExpansion = (taskId: string) => {
         setExpandedTaskIds((prev) => {
             const newSet = new Set(prev);
@@ -53,7 +51,6 @@ const FlowTasksDropdown = ({ disabled, onChange, value }: FlowTasksDropdownProps
         });
     };
 
-    // Toggle task selection
     const toggleTaskSelection = (taskId: string) => {
         if (!onChange) {
             return;
@@ -71,7 +68,6 @@ const FlowTasksDropdown = ({ disabled, onChange, value }: FlowTasksDropdownProps
         });
     };
 
-    // Toggle subtask selection
     const toggleSubtaskSelection = (subtaskId: string) => {
         if (!onChange) {
             return;
@@ -100,7 +96,6 @@ const FlowTasksDropdown = ({ disabled, onChange, value }: FlowTasksDropdownProps
         });
     };
 
-    // Clear all filters
     const clearFilters = () => {
         if (!onChange) {
             return;
@@ -119,6 +114,8 @@ const FlowTasksDropdown = ({ disabled, onChange, value }: FlowTasksDropdownProps
         >
             <PopoverTrigger asChild>
                 <Button
+                    aria-label="Filter tasks"
+                    aria-pressed={hasActiveFilters}
                     disabled={disabled}
                     size="icon"
                     variant="outline"
@@ -225,6 +222,6 @@ const FlowTasksDropdown = ({ disabled, onChange, value }: FlowTasksDropdownProps
             </PopoverContent>
         </Popover>
     );
-};
+}
 
 export default FlowTasksDropdown;

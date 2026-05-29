@@ -10,6 +10,7 @@ import (
 
 	"github.com/caarlos0/env/v10"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
 	"github.com/vxcontrol/cloud/anonymizer/patterns"
 	"github.com/vxcontrol/cloud/sdk"
@@ -35,6 +36,7 @@ type Config struct {
 	DockerWorkDir                string `env:"DOCKER_WORK_DIR"`
 	DockerDefaultImage           string `env:"DOCKER_DEFAULT_IMAGE" envDefault:"debian:latest"`
 	DockerDefaultImageForPentest string `env:"DOCKER_DEFAULT_IMAGE_FOR_PENTEST" envDefault:"vxcontrol/kali-linux"`
+	TerminalToolTimeout          int    `env:"TERMINAL_TOOL_TIMEOUT" envDefault:"1200"`
 
 	// === API Server Configuration ===
 	ServerPort   int    `env:"SERVER_PORT" envDefault:"8080"`
@@ -70,6 +72,7 @@ type Config struct {
 	EmbeddingStripNewLines bool   `env:"EMBEDDING_STRIP_NEW_LINES" envDefault:"true"`
 	EmbeddingBatchSize     int    `env:"EMBEDDING_BATCH_SIZE" envDefault:"512"`
 	EmbeddingProvider      string `env:"EMBEDDING_PROVIDER" envDefault:"openai"`
+	EmbeddingMaxTextBytes  int    `env:"EMBEDDING_MAX_TEXT_BYTES" envDefault:"8192"`
 
 	// === Chain Summarization Engine ===
 	SummarizerPreserveLast   bool `env:"SUMMARIZER_PRESERVE_LAST" envDefault:"true"`
@@ -222,6 +225,15 @@ type Config struct {
 
 	// === Agent Planning Phase Configuration ===
 	AgentPlanningStepEnabled bool `env:"AGENT_PLANNING_STEP_ENABLED" envDefault:"false"`
+
+	// === Database Connection Pool Sizing ===
+	DBMaxOpenConns   int `env:"DATABASE_MAX_OPEN_CONNS" envDefault:"25"`
+	DBMaxIdleConns   int `env:"DATABASE_MAX_IDLE_CONNS" envDefault:"5"`
+	DBVectorMaxConns int `env:"DATABASE_VECTOR_MAX_CONNS" envDefault:"10"`
+
+	// PgxPool is the shared pgxpool.Pool for all pgvector stores. Populated by
+	// main after pool creation; NOT sourced from environment variables.
+	PgxPool *pgxpool.Pool `env:"-"`
 }
 
 func NewConfig() (*Config, error) {

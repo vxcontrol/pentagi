@@ -18,12 +18,12 @@ interface TerminalRef {
     findPrevious: () => void;
 }
 
-const Terminal = ({
+function Terminal({
     className,
     logs,
     ref,
     searchValue,
-}: TerminalProps & { ref?: React.RefObject<null | TerminalRef> }) => {
+}: TerminalProps & { ref?: React.RefObject<null | TerminalRef> }) {
     const { theme } = useTheme();
     const { clear, containerRef, isReady, scrollToBottom, searchAddon, write } = useXterm({ theme });
     const { findNext, findPrevious } = useTerminalSearch(searchAddon, isReady, searchValue, theme);
@@ -84,9 +84,7 @@ const Terminal = ({
             style={{ contain: 'strict' }}
         />
     );
-};
-
-Terminal.displayName = 'Terminal';
+}
 
 export type { TerminalRef };
 export default Terminal;

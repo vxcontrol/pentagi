@@ -3,11 +3,21 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
+	"io/fs"
+	"os"
+	"path"
+	"path/filepath"
+	"strings"
+	"time"
 
 	"pentagi/pkg/config"
 	"pentagi/pkg/database"
 	"pentagi/pkg/docker"
+	"pentagi/pkg/flowfiles"
+	"pentagi/pkg/graph/model"
 	"pentagi/pkg/graphiti"
 	"pentagi/pkg/providers/embeddings"
 	"pentagi/pkg/schema"
@@ -131,7 +141,25 @@ type VectorStoreLogProvider interface {
 	) (int64, error)
 }
 
+type ToolCallLogProvider interface {
+	PutLog(
+		ctx context.Context,
+		callID string,
+		name string,
+		args json.RawMessage,
+		taskID *int64,
+		subtaskID *int64,
+	) (int64, error)
+	UpdateLogSuccess(ctx context.Context, id int64, result string, durationSeconds float64) error
+	UpdateLogFailed(ctx context.Context, id int64, result string, durationSeconds float64) error
+}
+
+type KnowledgeProvider interface {
+	KnowledgeDocumentCreated(ctx context.Context, doc *model.KnowledgeDocument)
+}
+
 type flowToolsExecutor struct {
+	userID int64
 	flowID int64
 	scp    ScreenshotProvider
 	alp    AgentLogProvider
@@ -139,9 +167,12 @@ type flowToolsExecutor struct {
 	slp    SearchLogProvider
 	tlp    TermLogProvider
 	vslp   VectorStoreLogProvider
+	tclp   ToolCallLogProvider
+	knp    KnowledgeProvider
 
 	db             database.Querier
 	cfg            *config.Config
+	embedder       embeddings.Embedder
 	store          *pgvector.Store
 	graphitiClient *graphiti.Client
 	image          string
@@ -176,14 +207,24 @@ type CustomExecutorConfig struct {
 }
 
 type AssistantExecutorConfig struct {
-	UseAgents  bool
-	Adviser    ExecutorHandler
-	Coder      ExecutorHandler
-	Installer  ExecutorHandler
-	Memorist   ExecutorHandler
-	Pentester  ExecutorHandler
-	Searcher   ExecutorHandler
-	Summarizer SummarizeHandler
+	UseAgents   bool
+	Adviser     ExecutorHandler
+	Coder       ExecutorHandler
+	Installer   ExecutorHandler
+	Memorist    ExecutorHandler
+	Pentester   ExecutorHandler
+	Searcher    ExecutorHandler
+	Summarizer  SummarizeHandler
+	FlowManager FlowManagerHandlers
+}
+
+// FlowManagerHandlers holds optional callbacks for automation flow control.
+// Each non-nil handler enables its corresponding flow-management tool in the assistant executor.
+type FlowManagerHandlers struct {
+	StopFlow      func(ctx context.Context, reason string) error
+	SendFlowInput func(ctx context.Context, input string) error
+	PatchSubtasks func(ctx context.Context, taskID int64, patch SubtaskPatch) error
+	WaitFlow      func(ctx context.Context) error
 }
 
 type PrimaryExecutorConfig struct {
@@ -275,6 +316,7 @@ type ReporterExecutorConfig struct {
 }
 
 type FlowToolsExecutor interface {
+	SetUserID(userID int64)
 	SetFlowID(flowID int64)
 	SetImage(image string)
 	SetEmbedder(embedder embeddings.Embedder)
@@ -285,6 +327,8 @@ type FlowToolsExecutor interface {
 	SetSearchLogProvider(slp SearchLogProvider)
 	SetTermLogProvider(tlp TermLogProvider)
 	SetVectorStoreLogProvider(vslp VectorStoreLogProvider)
+	SetToolCallLogProvider(tclp ToolCallLogProvider)
+	SetKnowledgeProvider(knp KnowledgeProvider)
 	SetGraphitiClient(client *graphiti.Client)
 
 	Prepare(ctx context.Context) error
@@ -308,7 +352,7 @@ func NewFlowToolsExecutor(
 	cfg *config.Config,
 	docker docker.DockerClient,
 	functions *Functions,
-	flowID int64,
+	userID, flowID int64,
 ) (FlowToolsExecutor, error) {
 	allPatterns, err := patterns.LoadPatterns(patterns.PatternListTypeAll)
 	if err != nil {
@@ -330,9 +374,14 @@ func NewFlowToolsExecutor(
 		replacer:    replacer,
 		cfg:         cfg,
 		flowID:      flowID,
+		userID:      userID,
 		definitions: make(map[string]llms.FunctionDefinition),
 		handlers:    make(map[string]ExecutorHandler),
 	}, nil
+}
+
+func (fte *flowToolsExecutor) SetUserID(userID int64) {
+	fte.userID = userID
 }
 
 func (fte *flowToolsExecutor) SetFlowID(flowID int64) {
@@ -344,19 +393,32 @@ func (fte *flowToolsExecutor) SetImage(image string) {
 }
 
 func (fte *flowToolsExecutor) SetEmbedder(embedder embeddings.Embedder) {
+	fte.embedder = embedder
 	if !embedder.IsAvailable() {
 		return
 	}
 
 	if fte.store != nil {
-		fte.store.Close()
+		// Do NOT close the store when it is backed by the shared pgxpool — calling
+		// Close() on that store would terminate the pool for every other executor.
+		// With a per-connection URL the store owns its connection and must close it.
+		if fte.cfg.PgxPool == nil {
+			fte.store.Close()
+		}
+		fte.store = nil
 	}
 
-	store, err := pgvector.New(
-		context.Background(),
-		pgvector.WithConnectionURL(fte.cfg.DatabaseURL),
+	opts := []pgvector.Option{
 		pgvector.WithEmbedder(embedder),
-	)
+		pgvector.WithCollectionName("langchain"),
+	}
+	if fte.cfg.PgxPool != nil {
+		opts = append(opts, pgvector.WithConn(fte.cfg.PgxPool))
+	} else {
+		opts = append(opts, pgvector.WithConnectionURL(fte.cfg.DatabaseURL))
+	}
+
+	store, err := pgvector.New(context.Background(), opts...)
 	if err == nil {
 		fte.store = &store
 	}
@@ -390,6 +452,14 @@ func (fte *flowToolsExecutor) SetVectorStoreLogProvider(vslp VectorStoreLogProvi
 	fte.vslp = vslp
 }
 
+func (fte *flowToolsExecutor) SetToolCallLogProvider(tclp ToolCallLogProvider) {
+	fte.tclp = tclp
+}
+
+func (fte *flowToolsExecutor) SetKnowledgeProvider(knp KnowledgeProvider) {
+	fte.knp = knp
+}
+
 func (fte *flowToolsExecutor) SetGraphitiClient(client *graphiti.Client) {
 	fte.graphitiClient = client
 }
@@ -400,6 +470,9 @@ func (fte *flowToolsExecutor) Prepare(ctx context.Context) error {
 		case database.ContainerStatusRunning:
 			fte.primaryID = cnt.ID
 			fte.primaryLID = cnt.LocalID.String
+			if err := fte.syncMissingFiles(ctx); err != nil {
+				return fmt.Errorf("failed to sync missing files to container '%s': %w", PrimaryTerminalName(fte.flowID), err)
+			}
 			return nil
 		default:
 			fte.docker.RemoveContainer(ctx, cnt.LocalID.String, cnt.ID)
@@ -432,12 +505,222 @@ func (fte *flowToolsExecutor) Prepare(ctx context.Context) error {
 	fte.primaryID = cnt.ID
 	fte.primaryLID = cnt.LocalID.String
 
+	if err := fte.syncMissingFiles(ctx); err != nil {
+		return fmt.Errorf("failed to sync files to container '%s': %w", containerName, err)
+	}
+
 	return nil
+}
+
+// fileSyncEntry maps a local host file to its expected path inside the container.
+type fileSyncEntry struct {
+	localPath     string // absolute path on host
+	containerPath string // absolute path in container, e.g. /work/uploads/file.txt
+	tarPath       string // relative tar path (relative to /work/), e.g. uploads/file.txt
+}
+
+// syncMissingFiles is the single method responsible for keeping uploads/ and resources/
+// in sync with the container. It collects all local files, checks which are absent in the
+// container with ONE exec call, then copies only the missing ones in a single tar stream.
+func (fte *flowToolsExecutor) syncMissingFiles(ctx context.Context) error {
+	entries, err := fte.collectSyncEntries()
+	if err != nil {
+		return err
+	}
+	if len(entries) == 0 {
+		return nil
+	}
+
+	missing, err := fte.findMissingInContainer(ctx, entries)
+	if err != nil {
+		return err
+	}
+	if len(missing) == 0 {
+		return nil
+	}
+
+	return fte.copyEntriesToContainer(ctx, missing)
+}
+
+// collectSyncEntries walks uploads/ and resources/ on disk and returns sync entries.
+func (fte *flowToolsExecutor) collectSyncEntries() ([]fileSyncEntry, error) {
+	var entries []fileSyncEntry
+
+	uploadsDir, err := fte.cachedUploadsDir()
+	if err != nil {
+		return nil, err
+	}
+	if uploadsEntries, err := collectFileSyncEntries(uploadsDir, flowfiles.UploadsDirName); err != nil {
+		return nil, fmt.Errorf("failed to collect uploads: %w", err)
+	} else {
+		entries = append(entries, uploadsEntries...)
+	}
+
+	resourcesDir, err := fte.cachedResourcesDir()
+	if err != nil {
+		return nil, err
+	}
+	if resourcesEntries, err := collectFileSyncEntries(resourcesDir, flowfiles.ResourcesDirName); err != nil {
+		return nil, fmt.Errorf("failed to collect resources: %w", err)
+	} else {
+		entries = append(entries, resourcesEntries...)
+	}
+
+	return entries, nil
+}
+
+// collectFileSyncEntries walks localDir and builds sync entries using dirName as the
+// top-level name inside /work/ (e.g. "uploads" or "resources").
+func collectFileSyncEntries(localDir, dirName string) ([]fileSyncEntry, error) {
+	var entries []fileSyncEntry
+	err := filepath.WalkDir(localDir, func(entryPath string, d fs.DirEntry, err error) error {
+		if err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				return nil
+			}
+			return err
+		}
+		if entryPath == localDir || d.IsDir() {
+			return nil
+		}
+		if d.Type()&os.ModeSymlink != 0 || !d.Type().IsRegular() {
+			return nil
+		}
+
+		rel, err := filepath.Rel(localDir, entryPath)
+		if err != nil {
+			return err
+		}
+		tarPath := path.Join(dirName, filepath.ToSlash(rel))
+		entries = append(entries, fileSyncEntry{
+			localPath:     entryPath,
+			containerPath: docker.WorkFolderPathInContainer + "/" + tarPath,
+			tarPath:       tarPath,
+		})
+		return nil
+	})
+
+	return entries, err
+}
+
+// findMissingInContainer executes a single shell command inside the container that tests
+// the existence of every expected file and outputs the container path of each missing one.
+// This is the only exec call needed in the happy-path (all files already present → returns empty).
+func (fte *flowToolsExecutor) findMissingInContainer(ctx context.Context, entries []fileSyncEntry) ([]fileSyncEntry, error) {
+	// sh -c 'for f in "$@"; do [ -f "$f" ] || printf "%s\n" "$f"; done' -- /path1 /path2 …
+	cmd := make([]string, 0, len(entries)+4)
+	cmd = append(cmd, "sh", "-c",
+		`for f in "$@"; do [ -f "$f" ] || printf '%s\n' "$f"; done`, "--")
+	for _, e := range entries {
+		cmd = append(cmd, e.containerPath)
+	}
+
+	containerName := PrimaryTerminalName(fte.flowID)
+	createResp, err := fte.docker.ContainerExecCreate(ctx, containerName, container.ExecOptions{
+		Cmd:          cmd,
+		AttachStdout: true,
+		AttachStderr: true,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create file-check exec: %w", err)
+	}
+
+	resp, err := fte.docker.ContainerExecAttach(ctx, createResp.ID, container.ExecAttachOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to attach file-check exec: %w", err)
+	}
+	output, readErr := io.ReadAll(resp.Reader)
+	resp.Close()
+	if readErr != nil {
+		return nil, fmt.Errorf("failed to read file-check output: %w", readErr)
+	}
+	inspect, err := fte.docker.ContainerExecInspect(ctx, createResp.ID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to inspect file-check exec: %w", err)
+	}
+	if inspect.ExitCode != 0 {
+		return nil, fmt.Errorf("file-check exec failed with exit code %d: %s", inspect.ExitCode, strings.TrimSpace(string(output)))
+	}
+
+	// Build a lookup map for O(1) access.
+	byContainerPath := make(map[string]fileSyncEntry, len(entries))
+	for _, e := range entries {
+		byContainerPath[e.containerPath] = e
+	}
+
+	var missing []fileSyncEntry
+	for _, line := range strings.Split(string(output), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		if e, ok := byContainerPath[line]; ok {
+			missing = append(missing, e)
+		}
+	}
+
+	return missing, nil
+}
+
+// copyEntriesToContainer writes all missing files as a single tar stream into the container.
+func (fte *flowToolsExecutor) copyEntriesToContainer(ctx context.Context, entries []fileSyncEntry) error {
+	pr, pw := io.Pipe()
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- flowfiles.WriteFilesTar(pw, convertSyncEntriesToTarEntries(entries))
+	}()
+
+	containerName := PrimaryTerminalName(fte.flowID)
+	copyErr := fte.docker.CopyToContainer(ctx, containerName, docker.WorkFolderPathInContainer, pr,
+		container.CopyToContainerOptions{AllowOverwriteDirWithFile: true})
+	pr.Close()
+	writeErr := <-errCh
+
+	if copyErr != nil {
+		return copyErr
+	}
+
+	return writeErr
+}
+
+func convertSyncEntriesToTarEntries(entries []fileSyncEntry) []flowfiles.TarEntry {
+	tarEntries := make([]flowfiles.TarEntry, 0, len(entries))
+	for _, entry := range entries {
+		tarEntries = append(tarEntries, flowfiles.TarEntry{
+			LocalPath: entry.localPath,
+			TarPath:   entry.tarPath,
+		})
+	}
+	return tarEntries
+}
+
+func (fte *flowToolsExecutor) cachedUploadsDir() (string, error) {
+	dataDir, err := filepath.Abs(fte.cfg.DataDir)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve data directory: %w", err)
+	}
+
+	return flowfiles.FlowUploadsDir(dataDir, uint64(fte.flowID)), nil
+}
+
+func (fte *flowToolsExecutor) cachedResourcesDir() (string, error) {
+	dataDir, err := filepath.Abs(fte.cfg.DataDir)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve data directory: %w", err)
+	}
+
+	return flowfiles.FlowResourcesDir(dataDir, uint64(fte.flowID)), nil
 }
 
 func (fte *flowToolsExecutor) Release(ctx context.Context) error {
 	if fte.store != nil {
-		fte.store.Close()
+		// Do NOT close the store when it is backed by the shared pgxpool — the pool
+		// outlives individual flows and is shared by all executors. Only close when
+		// the store owns its own connection (no shared pool configured).
+		if fte.cfg.PgxPool == nil {
+			fte.store.Close()
+		}
+		fte.store = nil
 	}
 
 	// TODO: here better to get flow containers list and purge all of them
@@ -478,10 +761,12 @@ func (fte *flowToolsExecutor) GetCustomExecutor(cfg CustomExecutorConfig) (Conte
 	}
 
 	return &customExecutor{
+		userID:      fte.userID,
 		flowID:      fte.flowID,
 		taskID:      cfg.TaskID,
 		subtaskID:   cfg.SubtaskID,
 		mlp:         fte.mlp,
+		tclp:        fte.tclp,
 		vslp:        fte.vslp,
 		db:          fte.db,
 		store:       fte.store,
@@ -528,6 +813,7 @@ func (fte *flowToolsExecutor) GetAssistantExecutor(cfg AssistantExecutorConfig) 
 		container.LocalID.String,
 		fte.docker,
 		fte.tlp,
+		time.Duration(fte.cfg.TerminalToolTimeout)*time.Second,
 	)
 
 	definitions := []llms.FunctionDefinition{
@@ -578,10 +864,14 @@ func (fte *flowToolsExecutor) GetAssistantExecutor(cfg AssistantExecutorConfig) 
 		}
 
 		guide := NewGuideTool(
-			fte.flowID, nil, nil,
+			fte.userID, fte.flowID, nil, nil,
 			fte.replacer,
 			fte.store,
+			fte.embedder,
+			fte.db,
+			fte.cfg.EmbeddingMaxTextBytes,
 			fte.vslp,
+			fte.knp,
 		)
 		if guide.IsAvailable() {
 			definitions = append(definitions, registryDefinitions[SearchGuideToolName])
@@ -589,10 +879,14 @@ func (fte *flowToolsExecutor) GetAssistantExecutor(cfg AssistantExecutorConfig) 
 		}
 
 		search := NewSearchTool(
-			fte.flowID, nil, nil,
+			fte.userID, fte.flowID, nil, nil,
 			fte.replacer,
 			fte.store,
+			fte.embedder,
+			fte.db,
+			fte.cfg.EmbeddingMaxTextBytes,
 			fte.vslp,
+			fte.knp,
 		)
 		if search.IsAvailable() {
 			definitions = append(definitions, registryDefinitions[SearchAnswerToolName])
@@ -600,10 +894,14 @@ func (fte *flowToolsExecutor) GetAssistantExecutor(cfg AssistantExecutorConfig) 
 		}
 
 		code := NewCodeTool(
-			fte.flowID, nil, nil,
+			fte.userID, fte.flowID, nil, nil,
 			fte.replacer,
 			fte.store,
+			fte.embedder,
+			fte.db,
+			fte.cfg.EmbeddingMaxTextBytes,
 			fte.vslp,
+			fte.knp,
 		)
 		if code.IsAvailable() {
 			definitions = append(definitions, registryDefinitions[SearchCodeToolName])
@@ -684,9 +982,39 @@ func (fte *flowToolsExecutor) GetAssistantExecutor(cfg AssistantExecutorConfig) 
 		}
 	}
 
+	flowStatus := NewFlowStatusTool(fte.flowID, fte.db, cfg.Summarizer)
+	definitions = append(definitions, registryDefinitions[GetFlowStatusToolName])
+	handlers[GetFlowStatusToolName] = flowStatus.Handle
+
+	if cfg.FlowManager.StopFlow != nil {
+		stopFlow := NewStopFlowTool(fte.flowID, fte.db, cfg.FlowManager.StopFlow)
+		definitions = append(definitions, registryDefinitions[StopFlowToolName])
+		handlers[StopFlowToolName] = stopFlow.Handle
+	}
+
+	if cfg.FlowManager.SendFlowInput != nil {
+		submitInput := NewSubmitFlowInputTool(fte.flowID, fte.db, cfg.FlowManager.SendFlowInput)
+		definitions = append(definitions, registryDefinitions[SubmitFlowInputToolName])
+		handlers[SubmitFlowInputToolName] = submitInput.Handle
+	}
+
+	if cfg.FlowManager.PatchSubtasks != nil {
+		patchSubtasks := NewPatchFlowSubtasksTool(fte.flowID, fte.db, cfg.FlowManager.PatchSubtasks)
+		definitions = append(definitions, registryDefinitions[PatchFlowSubtasksToolName])
+		handlers[PatchFlowSubtasksToolName] = patchSubtasks.Handle
+	}
+
+	if cfg.FlowManager.WaitFlow != nil {
+		waitFlowCompletion := NewWaitFlowCompletionTool(fte.flowID, fte.db, cfg.FlowManager.WaitFlow)
+		definitions = append(definitions, registryDefinitions[WaitFlowCompletionToolName])
+		handlers[WaitFlowCompletionToolName] = waitFlowCompletion.Handle
+	}
+
 	ce := &customExecutor{
+		userID:      fte.userID,
 		flowID:      fte.flowID,
 		mlp:         fte.mlp,
+		tclp:        fte.tclp,
 		vslp:        fte.vslp,
 		db:          fte.db,
 		store:       fte.store,
@@ -729,10 +1057,12 @@ func (fte *flowToolsExecutor) GetPrimaryExecutor(cfg PrimaryExecutorConfig) (Con
 	}
 
 	ce := &customExecutor{
+		userID:    fte.userID,
 		flowID:    fte.flowID,
 		taskID:    &cfg.TaskID,
 		subtaskID: &cfg.SubtaskID,
 		mlp:       fte.mlp,
+		tclp:      fte.tclp,
 		vslp:      fte.vslp,
 		db:        fte.db,
 		store:     fte.store,
@@ -799,13 +1129,16 @@ func (fte *flowToolsExecutor) GetInstallerExecutor(cfg InstallerExecutorConfig) 
 		container.LocalID.String,
 		fte.docker,
 		fte.tlp,
+		time.Duration(fte.cfg.TerminalToolTimeout)*time.Second,
 	)
 
 	ce := &customExecutor{
+		userID:    fte.userID,
 		flowID:    fte.flowID,
 		taskID:    cfg.TaskID,
 		subtaskID: cfg.SubtaskID,
 		mlp:       fte.mlp,
+		tclp:      fte.tclp,
 		vslp:      fte.vslp,
 		db:        fte.db,
 		store:     fte.store,
@@ -846,12 +1179,17 @@ func (fte *flowToolsExecutor) GetInstallerExecutor(cfg InstallerExecutorConfig) 
 	}
 
 	guide := NewGuideTool(
+		fte.userID,
 		fte.flowID,
 		cfg.TaskID,
 		cfg.SubtaskID,
 		fte.replacer,
 		fte.store,
+		fte.embedder,
+		fte.db,
+		fte.cfg.EmbeddingMaxTextBytes,
 		fte.vslp,
+		fte.knp,
 	)
 	if guide.IsAvailable() {
 		ce.definitions = append(ce.definitions, registryDefinitions[StoreGuideToolName])
@@ -884,11 +1222,29 @@ func (fte *flowToolsExecutor) GetCoderExecutor(cfg CoderExecutorConfig) (Context
 		return nil, fmt.Errorf("searcher handler is required")
 	}
 
+	container, err := fte.db.GetFlowPrimaryContainer(context.Background(), fte.flowID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get container %d: %w", fte.flowID, err)
+	}
+
+	term := NewTerminalTool(
+		fte.flowID,
+		cfg.TaskID,
+		cfg.SubtaskID,
+		container.ID,
+		container.LocalID.String,
+		fte.docker,
+		fte.tlp,
+		time.Duration(fte.cfg.TerminalToolTimeout)*time.Second,
+	)
+
 	ce := &customExecutor{
+		userID:    fte.userID,
 		flowID:    fte.flowID,
 		taskID:    cfg.TaskID,
 		subtaskID: cfg.SubtaskID,
 		mlp:       fte.mlp,
+		tclp:      fte.tclp,
 		vslp:      fte.vslp,
 		db:        fte.db,
 		store:     fte.store,
@@ -898,6 +1254,8 @@ func (fte *flowToolsExecutor) GetCoderExecutor(cfg CoderExecutorConfig) (Context
 			registryDefinitions[MaintenanceToolName],
 			registryDefinitions[MemoristToolName],
 			registryDefinitions[SearchToolName],
+			registryDefinitions[TerminalToolName],
+			registryDefinitions[FileToolName],
 		},
 		handlers: map[string]ExecutorHandler{
 			CodeResultToolName:  cfg.CodeResult,
@@ -905,6 +1263,8 @@ func (fte *flowToolsExecutor) GetCoderExecutor(cfg CoderExecutorConfig) (Context
 			MaintenanceToolName: cfg.Installer,
 			MemoristToolName:    cfg.Memorist,
 			SearchToolName:      cfg.Searcher,
+			TerminalToolName:    term.Handle,
+			FileToolName:        term.Handle,
 		},
 		barriers: map[string]struct{}{
 			CodeResultToolName: {},
@@ -927,12 +1287,17 @@ func (fte *flowToolsExecutor) GetCoderExecutor(cfg CoderExecutorConfig) (Context
 	}
 
 	code := NewCodeTool(
+		fte.userID,
 		fte.flowID,
 		cfg.TaskID,
 		cfg.SubtaskID,
 		fte.replacer,
 		fte.store,
+		fte.embedder,
+		fte.db,
+		fte.cfg.EmbeddingMaxTextBytes,
 		fte.vslp,
+		fte.knp,
 	)
 	if code.IsAvailable() {
 		ce.definitions = append(ce.definitions, registryDefinitions[SearchCodeToolName])
@@ -993,13 +1358,16 @@ func (fte *flowToolsExecutor) GetPentesterExecutor(cfg PentesterExecutorConfig) 
 		container.LocalID.String,
 		fte.docker,
 		fte.tlp,
+		time.Duration(fte.cfg.TerminalToolTimeout)*time.Second,
 	)
 
 	ce := &customExecutor{
+		userID:    fte.userID,
 		flowID:    fte.flowID,
 		taskID:    cfg.TaskID,
 		subtaskID: cfg.SubtaskID,
 		mlp:       fte.mlp,
+		tclp:      fte.tclp,
 		vslp:      fte.vslp,
 		db:        fte.db,
 		store:     fte.store,
@@ -1044,12 +1412,17 @@ func (fte *flowToolsExecutor) GetPentesterExecutor(cfg PentesterExecutorConfig) 
 	}
 
 	guide := NewGuideTool(
+		fte.userID,
 		fte.flowID,
 		cfg.TaskID,
 		cfg.SubtaskID,
 		fte.replacer,
 		fte.store,
+		fte.embedder,
+		fte.db,
+		fte.cfg.EmbeddingMaxTextBytes,
 		fte.vslp,
+		fte.knp,
 	)
 	if guide.IsAvailable() {
 		ce.definitions = append(ce.definitions, registryDefinitions[StoreGuideToolName])
@@ -1094,10 +1467,12 @@ func (fte *flowToolsExecutor) GetSearcherExecutor(cfg SearcherExecutorConfig) (C
 	}
 
 	ce := &customExecutor{
+		userID:    fte.userID,
 		flowID:    fte.flowID,
 		taskID:    cfg.TaskID,
 		subtaskID: cfg.SubtaskID,
 		mlp:       fte.mlp,
+		tclp:      fte.tclp,
 		vslp:      fte.vslp,
 		db:        fte.db,
 		store:     fte.store,
@@ -1217,12 +1592,17 @@ func (fte *flowToolsExecutor) GetSearcherExecutor(cfg SearcherExecutorConfig) (C
 	}
 
 	search := NewSearchTool(
+		fte.userID,
 		fte.flowID,
 		cfg.TaskID,
 		cfg.SubtaskID,
 		fte.replacer,
 		fte.store,
+		fte.embedder,
+		fte.db,
+		fte.cfg.EmbeddingMaxTextBytes,
 		fte.vslp,
+		fte.knp,
 	)
 	if search.IsAvailable() {
 		ce.definitions = append(ce.definitions, registryDefinitions[SearchAnswerToolName])
@@ -1256,12 +1636,15 @@ func (fte *flowToolsExecutor) GetGeneratorExecutor(cfg GeneratorExecutorConfig) 
 		container.LocalID.String,
 		fte.docker,
 		fte.tlp,
+		time.Duration(fte.cfg.TerminalToolTimeout)*time.Second,
 	)
 
 	ce := &customExecutor{
+		userID: fte.userID,
 		flowID: fte.flowID,
 		taskID: &cfg.TaskID,
 		mlp:    fte.mlp,
+		tclp:   fte.tclp,
 		vslp:   fte.vslp,
 		db:     fte.db,
 		store:  fte.store,
@@ -1321,12 +1704,15 @@ func (fte *flowToolsExecutor) GetRefinerExecutor(cfg RefinerExecutorConfig) (Con
 		container.LocalID.String,
 		fte.docker,
 		fte.tlp,
+		time.Duration(fte.cfg.TerminalToolTimeout)*time.Second,
 	)
 
 	ce := &customExecutor{
+		userID: fte.userID,
 		flowID: fte.flowID,
 		taskID: &cfg.TaskID,
 		mlp:    fte.mlp,
+		tclp:   fte.tclp,
 		vslp:   fte.vslp,
 		db:     fte.db,
 		store:  fte.store,
@@ -1382,13 +1768,16 @@ func (fte *flowToolsExecutor) GetMemoristExecutor(cfg MemoristExecutorConfig) (C
 		container.LocalID.String,
 		fte.docker,
 		fte.tlp,
+		time.Duration(fte.cfg.TerminalToolTimeout)*time.Second,
 	)
 
 	ce := &customExecutor{
+		userID:    fte.userID,
 		flowID:    fte.flowID,
 		taskID:    cfg.TaskID,
 		subtaskID: cfg.SubtaskID,
 		mlp:       fte.mlp,
+		tclp:      fte.tclp,
 		vslp:      fte.vslp,
 		db:        fte.db,
 		store:     fte.store,
@@ -1450,13 +1839,16 @@ func (fte *flowToolsExecutor) GetEnricherExecutor(cfg EnricherExecutorConfig) (C
 		container.LocalID.String,
 		fte.docker,
 		fte.tlp,
+		time.Duration(fte.cfg.TerminalToolTimeout)*time.Second,
 	)
 
 	ce := &customExecutor{
+		userID:    fte.userID,
 		flowID:    fte.flowID,
 		taskID:    cfg.TaskID,
 		subtaskID: cfg.SubtaskID,
 		mlp:       fte.mlp,
+		tclp:      fte.tclp,
 		vslp:      fte.vslp,
 		db:        fte.db,
 		store:     fte.store,
@@ -1520,10 +1912,12 @@ func (fte *flowToolsExecutor) GetReporterExecutor(cfg ReporterExecutorConfig) (C
 	}
 
 	return &customExecutor{
+		userID:      fte.userID,
 		flowID:      fte.flowID,
 		taskID:      cfg.TaskID,
 		subtaskID:   cfg.SubtaskID,
 		mlp:         fte.mlp,
+		tclp:        fte.tclp,
 		vslp:        fte.vslp,
 		db:          fte.db,
 		store:       fte.store,

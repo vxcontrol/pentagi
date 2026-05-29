@@ -4,7 +4,7 @@ interface KimiProps extends React.SVGProps<SVGSVGElement> {
     className?: string;
 }
 
-const Kimi = ({ className, ...props }: KimiProps) => {
+function Kimi({ className, ...props }: KimiProps) {
     return (
         <svg
             className={cn(className)}
@@ -19,6 +19,6 @@ const Kimi = ({ className, ...props }: KimiProps) => {
             </g>
         </svg>
     );
-};
+}
 
 export default Kimi;

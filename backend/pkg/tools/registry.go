@@ -9,41 +9,46 @@ import (
 )
 
 const (
-	FinalyToolName            = "done"
-	AskUserToolName           = "ask"
-	MaintenanceToolName       = "maintenance"
-	MaintenanceResultToolName = "maintenance_result"
-	CoderToolName             = "coder"
-	CodeResultToolName        = "code_result"
-	PentesterToolName         = "pentester"
-	HackResultToolName        = "hack_result"
-	AdviceToolName            = "advice"
-	MemoristToolName          = "memorist"
-	MemoristResultToolName    = "memorist_result"
-	BrowserToolName           = "browser"
-	GoogleToolName            = "google"
-	DuckDuckGoToolName        = "duckduckgo"
-	TavilyToolName            = "tavily"
-	TraversaalToolName        = "traversaal"
-	PerplexityToolName        = "perplexity"
-	SearxngToolName           = "searxng"
-	SploitusToolName          = "sploitus"
-	SearchToolName            = "search"
-	SearchResultToolName      = "search_result"
-	EnricherResultToolName    = "enricher_result"
-	SearchInMemoryToolName    = "search_in_memory"
-	SearchGuideToolName       = "search_guide"
-	StoreGuideToolName        = "store_guide"
-	SearchAnswerToolName      = "search_answer"
-	StoreAnswerToolName       = "store_answer"
-	SearchCodeToolName        = "search_code"
-	StoreCodeToolName         = "store_code"
-	GraphitiSearchToolName    = "graphiti_search"
-	ReportResultToolName      = "report_result"
-	SubtaskListToolName       = "subtask_list"
-	SubtaskPatchToolName      = "subtask_patch"
-	TerminalToolName          = "terminal"
-	FileToolName              = "file"
+	FinalyToolName             = "done"
+	AskUserToolName            = "ask"
+	MaintenanceToolName        = "maintenance"
+	MaintenanceResultToolName  = "maintenance_result"
+	CoderToolName              = "coder"
+	CodeResultToolName         = "code_result"
+	PentesterToolName          = "pentester"
+	HackResultToolName         = "hack_result"
+	AdviceToolName             = "advice"
+	MemoristToolName           = "memorist"
+	MemoristResultToolName     = "memorist_result"
+	BrowserToolName            = "browser"
+	GoogleToolName             = "google"
+	DuckDuckGoToolName         = "duckduckgo"
+	TavilyToolName             = "tavily"
+	TraversaalToolName         = "traversaal"
+	PerplexityToolName         = "perplexity"
+	SearxngToolName            = "searxng"
+	SploitusToolName           = "sploitus"
+	SearchToolName             = "search"
+	SearchResultToolName       = "search_result"
+	EnricherResultToolName     = "enricher_result"
+	SearchInMemoryToolName     = "search_in_memory"
+	SearchGuideToolName        = "search_guide"
+	StoreGuideToolName         = "store_guide"
+	SearchAnswerToolName       = "search_answer"
+	StoreAnswerToolName        = "store_answer"
+	SearchCodeToolName         = "search_code"
+	StoreCodeToolName          = "store_code"
+	GraphitiSearchToolName     = "graphiti_search"
+	ReportResultToolName       = "report_result"
+	SubtaskListToolName        = "subtask_list"
+	SubtaskPatchToolName       = "subtask_patch"
+	TerminalToolName           = "terminal"
+	FileToolName               = "file"
+	GetFlowStatusToolName      = "get_flow_status"
+	StopFlowToolName           = "stop_flow"
+	SubmitFlowInputToolName    = "submit_flow_input"
+	PatchFlowSubtasksToolName  = "patch_flow_subtasks"
+	WaitFlowCompletionToolName = "wait_flow_completion"
 )
 
 type ToolType int
@@ -89,41 +94,46 @@ func GetToolType(name string) ToolType {
 }
 
 var toolsTypeMapping = map[string]ToolType{
-	FinalyToolName:            BarrierToolType,
-	AskUserToolName:           BarrierToolType,
-	MaintenanceToolName:       AgentToolType,
-	MaintenanceResultToolName: StoreAgentResultToolType,
-	CoderToolName:             AgentToolType,
-	CodeResultToolName:        StoreAgentResultToolType,
-	PentesterToolName:         AgentToolType,
-	HackResultToolName:        StoreAgentResultToolType,
-	AdviceToolName:            AgentToolType,
-	MemoristToolName:          AgentToolType,
-	MemoristResultToolName:    StoreAgentResultToolType,
-	BrowserToolName:           SearchNetworkToolType,
-	GoogleToolName:            SearchNetworkToolType,
-	DuckDuckGoToolName:        SearchNetworkToolType,
-	TavilyToolName:            SearchNetworkToolType,
-	TraversaalToolName:        SearchNetworkToolType,
-	PerplexityToolName:        SearchNetworkToolType,
-	SearxngToolName:           SearchNetworkToolType,
-	SploitusToolName:          SearchNetworkToolType,
-	SearchToolName:            AgentToolType,
-	SearchResultToolName:      StoreAgentResultToolType,
-	EnricherResultToolName:    StoreAgentResultToolType,
-	SearchInMemoryToolName:    SearchVectorDbToolType,
-	SearchGuideToolName:       SearchVectorDbToolType,
-	StoreGuideToolName:        StoreVectorDbToolType,
-	SearchAnswerToolName:      SearchVectorDbToolType,
-	StoreAnswerToolName:       StoreVectorDbToolType,
-	SearchCodeToolName:        SearchVectorDbToolType,
-	StoreCodeToolName:         StoreVectorDbToolType,
-	GraphitiSearchToolName:    SearchVectorDbToolType,
-	ReportResultToolName:      StoreAgentResultToolType,
-	SubtaskListToolName:       StoreAgentResultToolType,
-	SubtaskPatchToolName:      StoreAgentResultToolType,
-	TerminalToolName:          EnvironmentToolType,
-	FileToolName:              EnvironmentToolType,
+	FinalyToolName:             BarrierToolType,
+	AskUserToolName:            BarrierToolType,
+	MaintenanceToolName:        AgentToolType,
+	MaintenanceResultToolName:  StoreAgentResultToolType,
+	CoderToolName:              AgentToolType,
+	CodeResultToolName:         StoreAgentResultToolType,
+	PentesterToolName:          AgentToolType,
+	HackResultToolName:         StoreAgentResultToolType,
+	AdviceToolName:             AgentToolType,
+	MemoristToolName:           AgentToolType,
+	MemoristResultToolName:     StoreAgentResultToolType,
+	BrowserToolName:            SearchNetworkToolType,
+	GoogleToolName:             SearchNetworkToolType,
+	DuckDuckGoToolName:         SearchNetworkToolType,
+	TavilyToolName:             SearchNetworkToolType,
+	TraversaalToolName:         SearchNetworkToolType,
+	PerplexityToolName:         SearchNetworkToolType,
+	SearxngToolName:            SearchNetworkToolType,
+	SploitusToolName:           SearchNetworkToolType,
+	SearchToolName:             AgentToolType,
+	SearchResultToolName:       StoreAgentResultToolType,
+	EnricherResultToolName:     StoreAgentResultToolType,
+	SearchInMemoryToolName:     SearchVectorDbToolType,
+	SearchGuideToolName:        SearchVectorDbToolType,
+	StoreGuideToolName:         StoreVectorDbToolType,
+	SearchAnswerToolName:       SearchVectorDbToolType,
+	StoreAnswerToolName:        StoreVectorDbToolType,
+	SearchCodeToolName:         SearchVectorDbToolType,
+	StoreCodeToolName:          StoreVectorDbToolType,
+	GraphitiSearchToolName:     SearchVectorDbToolType,
+	ReportResultToolName:       StoreAgentResultToolType,
+	SubtaskListToolName:        StoreAgentResultToolType,
+	SubtaskPatchToolName:       StoreAgentResultToolType,
+	TerminalToolName:           EnvironmentToolType,
+	FileToolName:               EnvironmentToolType,
+	GetFlowStatusToolName:      EnvironmentToolType,
+	StopFlowToolName:           EnvironmentToolType,
+	SubmitFlowInputToolName:    EnvironmentToolType,
+	PatchFlowSubtasksToolName:  EnvironmentToolType,
+	WaitFlowCompletionToolName: EnvironmentToolType,
 }
 
 var reflector = &jsonschema.Reflector{
@@ -156,8 +166,10 @@ var allowedStoringInMemoryTools = []string{
 var registryDefinitions = map[string]llms.FunctionDefinition{
 	TerminalToolName: {
 		Name: TerminalToolName,
-		Description: "Calls a terminal command in blocking mode with hard limit timeout 1200 seconds and " +
-			"optimum timeout 60 seconds, only one command can be executed at a time",
+		Description: "Calls a terminal command in blocking mode. " +
+			"Use timeout=0 or a negative value to apply the configured server default timeout. " +
+			"Explicit positive values are accepted up to 10800 seconds (3 hours); values outside this range are replaced by the server default. " +
+			"Only one command can be executed at a time",
 		Parameters: reflector.Reflect(&TerminalAction{}),
 	},
 	FileToolName: {
@@ -371,6 +383,51 @@ var registryDefinitions = map[string]llms.FunctionDefinition{
 		Name:        FinalyToolName,
 		Description: "If you need to finish the task with success or failure, use this tool",
 		Parameters:  reflector.Reflect(&Done{}),
+	},
+	GetFlowStatusToolName: {
+		Name: GetFlowStatusToolName,
+		Description: "Return structured information about the automation flow. " +
+			"Choose the detail level based on what you need to know:\n" +
+			"  'summary'  — flow health snapshot: status, task counts, subtask counts, active task/subtask IDs. Best first call.\n" +
+			"  'tasks'    — all tasks with ID, status, title. Add verbose=true for inputs and results.\n" +
+			"  'subtasks' — all subtasks, optionally filtered by task_id. Add verbose=true for descriptions and results.\n" +
+			"  'running'  — full Task→Subtask execution chain: task input, subtask description, partial result, and recent agent messages (10 default, 50 with verbose=true). Use when you need to understand what is happening right now.\n" +
+			"  'planned'  — subtasks with status 'created' (not yet started), optionally filtered by task_id. Add verbose=true for full descriptions.",
+		Parameters: reflector.Reflect(&GetFlowStatusAction{}),
+	},
+	StopFlowToolName: {
+		Name: StopFlowToolName,
+		Description: "Cancel the currently executing automation task. " +
+			"If a task is actively running its execution context is cancelled; the flow transitions to 'waiting' state and can accept new input or subtask patches. " +
+			"If no task is running the tool returns an informational message and takes no further action. " +
+			"After calling this tool, verify the flow reached 'waiting' state before making further changes.",
+		Parameters: reflector.Reflect(&StopFlowAction{}),
+	},
+	SubmitFlowInputToolName: {
+		Name: SubmitFlowInputToolName,
+		Description: "Deliver text to the automation flow. The behaviour depends on the current flow state:\n" +
+			"  Subtask at 'ask' checkpoint — the text is delivered as the user's answer and the subtask resumes immediately.\n" +
+			"  Flow waiting with no active subtask — the text becomes the goal for a new task; the generator and refiner agents decompose it into a subtask list. Write a complete, detailed description with all context the automation needs.\n" +
+			"Returns an error if a task is currently running — cancel the running task first.",
+		Parameters: reflector.Reflect(&SubmitFlowInputAction{}),
+	},
+	PatchFlowSubtasksToolName: {
+		Name: PatchFlowSubtasksToolName,
+		Description: "Replace the planned (not-yet-started) subtask list for a specific task using delta operations. " +
+			"Supported operations: add (insert a new subtask at a position), remove (delete a planned subtask by ID), modify (update title or description), reorder (move to a different position). " +
+			"The currently executing or waiting subtask can also be targeted by including its ID in an operation; doing so resets it to 'created' status. " +
+			"After patching, submit new input to trigger execution of the updated plan. " +
+			"Returns an error if a task is currently running — cancel it first.",
+		Parameters: reflector.Reflect(&PatchFlowSubtasksAction{}),
+	},
+	WaitFlowCompletionToolName: {
+		Name: WaitFlowCompletionToolName,
+		Description: "Block until the currently running automation task completes (or the timeout expires). " +
+			"Use this when you need to wait for the automation to finish before inspecting its results or taking further action. " +
+			"Returns immediately with an informational message if no tasks exist or if no task is currently running — " +
+			"use " + GetFlowStatusToolName + " first to confirm the flow state before calling this tool. " +
+			"On return, always call " + GetFlowStatusToolName + " with detail='summary' to inspect the final status.",
+		Parameters: reflector.Reflect(&WaitFlowCompletionAction{}),
 	},
 }
 
