@@ -304,6 +304,19 @@ func TestResolvePulledStagedTarget(t *testing.T) {
 
 		assert.Equal(t, target, ResolvePulledStagedTarget(stagingDir, "etc/nginx/nginx.conf"))
 	})
+
+	t.Run("escaping cache path is rejected", func(t *testing.T) {
+		root := t.TempDir()
+		stagingDir := filepath.Join(root, "staging")
+		require.NoError(t, os.MkdirAll(stagingDir, 0755))
+		// A file outside the staging dir that an escaping path would resolve to.
+		require.NoError(t, os.WriteFile(filepath.Join(root, "evil.conf"), []byte("evil"), 0644))
+
+		// The first candidate (Join(stagingDir, "../evil.conf")) escapes the
+		// staging dir and must be ignored by the containment barrier; the
+		// second candidate (basename "evil.conf") does not exist in staging.
+		assert.Equal(t, "", ResolvePulledStagedTarget(stagingDir, "../evil.conf"))
+	})
 }
 
 func TestWriteUploadsTar(t *testing.T) {
@@ -682,6 +695,37 @@ func TestZipRelativePaths(t *testing.T) {
 		zr, err := zip.NewReader(bytes.NewReader(buf.Bytes()), int64(buf.Len()))
 		require.NoError(t, err)
 		assert.Empty(t, zr.File)
+	})
+
+	t.Run("escaping relPath is skipped", func(t *testing.T) {
+		root := t.TempDir()
+		base := filepath.Join(root, "flow-1-data")
+		require.NoError(t, os.MkdirAll(filepath.Join(base, "uploads"), 0755))
+		require.NoError(t, os.WriteFile(filepath.Join(base, "uploads", "a.txt"), []byte("alpha"), 0644))
+		// Secret file outside baseDir that an escaping relPath would resolve to.
+		require.NoError(t, os.WriteFile(filepath.Join(root, "secret.txt"), []byte("secret"), 0644))
+
+		var buf bytes.Buffer
+		err := ZipRelativePaths(&buf, base, []string{
+			"uploads/a.txt",
+			"../secret.txt", // escapes baseDir: must be skipped by the barrier
+		})
+		require.NoError(t, err)
+
+		zr, err := zip.NewReader(bytes.NewReader(buf.Bytes()), int64(buf.Len()))
+		require.NoError(t, err)
+		contents := map[string]string{}
+		for _, f := range zr.File {
+			rc, err := f.Open()
+			require.NoError(t, err)
+			data, _ := io.ReadAll(rc)
+			rc.Close()
+			contents[f.Name] = string(data)
+		}
+
+		assert.Equal(t, "alpha", contents["uploads/a.txt"])
+		assert.NotContains(t, contents, "../secret.txt", "escaping paths must be excluded")
+		assert.NotContains(t, contents, "secret.txt", "escaping paths must be excluded")
 	})
 }
 

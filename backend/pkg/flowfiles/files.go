@@ -354,6 +354,12 @@ func ResolvePulledStagedTarget(stagingDir, cacheRelPath string) string {
 	}
 
 	for _, candidate := range candidates {
+		// Defense-in-depth containment barrier: ignore any candidate that
+		// resolves outside the staging directory. cacheRelPath is sanitized by
+		// the caller today, but this keeps the function safe under refactoring.
+		if !IsWithinDir(candidate, stagingDir) {
+			continue
+		}
 		if _, err := os.Lstat(candidate); err == nil {
 			return candidate
 		}
@@ -469,6 +475,13 @@ func ZipRelativePaths(w io.Writer, baseDir string, relPaths []string) error {
 
 	for _, relPath := range relPaths {
 		localPath := filepath.Join(baseDir, filepath.FromSlash(relPath))
+
+		// Defense-in-depth containment barrier: callers are expected to pass
+		// pre-validated cache-relative paths, but never operate on a path that
+		// resolves outside baseDir regardless of caller behaviour.
+		if !IsWithinDir(localPath, baseDir) {
+			continue
+		}
 
 		info, err := os.Lstat(localPath)
 		if err != nil {

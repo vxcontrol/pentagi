@@ -27,6 +27,7 @@ import (
 type mockDB struct {
 	database.Querier // nil — panics if an unexpected method is called
 
+	insertKnowledge     func(ctx context.Context, arg database.InsertKnowledgeDocumentParams) (string, error)
 	getKnowledge        func(ctx context.Context, uuid string) (database.GetKnowledgeDocumentRow, error)
 	getUserKnowledge    func(ctx context.Context, arg database.GetUserKnowledgeDocumentParams) (database.GetUserKnowledgeDocumentRow, error)
 	listAll             func(ctx context.Context) ([]database.ListAllKnowledgeDocumentsRow, error)
@@ -39,6 +40,9 @@ type mockDB struct {
 	searchUserKnowledge func(ctx context.Context, arg database.SearchUserKnowledgeDocumentsParams) ([]database.SearchUserKnowledgeDocumentsRow, error)
 }
 
+func (m *mockDB) InsertKnowledgeDocument(ctx context.Context, arg database.InsertKnowledgeDocumentParams) (string, error) {
+	return m.insertKnowledge(ctx, arg)
+}
 func (m *mockDB) GetKnowledgeDocument(ctx context.Context, uuid string) (database.GetKnowledgeDocumentRow, error) {
 	return m.getKnowledge(ctx, uuid)
 }
@@ -1437,56 +1441,100 @@ func TestCreateDocument(t *testing.T) {
 	ctx := context.Background()
 	const userID = int64(11)
 
-	t.Run("store nil returns error immediately", func(t *testing.T) {
-		ks := &knowledgeStore{store: nil}
+	// insertOK returns a mockDB whose InsertKnowledgeDocument returns a fixed id.
+	insertOK := func(id string) *mockDB {
+		return &mockDB{
+			insertKnowledge: func(_ context.Context, _ database.InsertKnowledgeDocumentParams) (string, error) {
+				return id, nil
+			},
+		}
+	}
+
+	t.Run("embedder nil returns error", func(t *testing.T) {
+		ks := &knowledgeStore{db: insertOK("id"), embedder: nil}
 		_, err := ks.CreateDocument(ctx, userID, model.CreateKnowledgeDocumentInput{
 			DocType: model.KnowledgeDocTypeAnswer, Content: "x", Question: "q",
 		})
 		if err == nil {
-			t.Fatal("expected error when store is nil")
+			t.Fatal("expected error when embedder is nil")
 		}
 	})
 
-	t.Run("store AddDocuments error propagates", func(t *testing.T) {
-		vs := &mockVectorStore{
-			addDocumentsFn: func(_ context.Context, _ []schema.Document, _ ...vectorstores.Option) ([]string, error) {
-				return nil, errors.New("vector db error")
+	t.Run("embedder unavailable returns error", func(t *testing.T) {
+		ks := &knowledgeStore{db: insertOK("id"), embedder: &mockEmbedder{available: false}}
+		_, err := ks.CreateDocument(ctx, userID, model.CreateKnowledgeDocumentInput{
+			DocType: model.KnowledgeDocTypeAnswer, Content: "x", Question: "q",
+		})
+		if err == nil {
+			t.Fatal("expected error when embedder unavailable")
+		}
+	})
+
+	t.Run("EmbedDocuments error propagates", func(t *testing.T) {
+		ks := &knowledgeStore{
+			db: insertOK("id"),
+			embedder: &mockEmbedder{
+				available: true,
+				embedDocumentsFn: func(_ context.Context, _ []string) ([][]float32, error) {
+					return nil, errors.New("embed error")
+				},
 			},
 		}
-		ks := &knowledgeStore{store: vs, newKnp: newPublisherFactory(&mockPublisher{})}
 		_, err := ks.CreateDocument(ctx, userID, model.CreateKnowledgeDocumentInput{
 			DocType: model.KnowledgeDocTypeGuide, Content: "c", Question: "q",
 		})
 		if err == nil {
-			t.Fatal("expected error from AddDocuments")
+			t.Fatal("expected error from EmbedDocuments")
 		}
 	})
 
-	t.Run("AddDocuments returning no IDs is an error", func(t *testing.T) {
-		vs := &mockVectorStore{
-			addDocumentsFn: func(_ context.Context, _ []schema.Document, _ ...vectorstores.Option) ([]string, error) {
-				return []string{}, nil // empty slice
+	t.Run("embedder returning empty vectors is an error", func(t *testing.T) {
+		ks := &knowledgeStore{
+			db: insertOK("id"),
+			embedder: &mockEmbedder{
+				available: true,
+				embedDocumentsFn: func(_ context.Context, _ []string) ([][]float32, error) {
+					return [][]float32{}, nil // empty slice
+				},
 			},
 		}
-		ks := &knowledgeStore{store: vs, newKnp: newPublisherFactory(&mockPublisher{})}
 		_, err := ks.CreateDocument(ctx, userID, model.CreateKnowledgeDocumentInput{
 			DocType: model.KnowledgeDocTypeAnswer, Content: "c", Question: "q",
 		})
 		if err == nil {
-			t.Fatal("expected error for empty IDs")
+			t.Fatal("expected error for empty vectors")
+		}
+	})
+
+	t.Run("db insert error propagates", func(t *testing.T) {
+		db := &mockDB{
+			insertKnowledge: func(_ context.Context, _ database.InsertKnowledgeDocumentParams) (string, error) {
+				return "", errors.New("constraint error")
+			},
+		}
+		ks := &knowledgeStore{
+			db:       db,
+			embedder: &mockEmbedder{available: true},
+			newKnp:   newPublisherFactory(&mockPublisher{}),
+		}
+		_, err := ks.CreateDocument(ctx, userID, model.CreateKnowledgeDocumentInput{
+			DocType: model.KnowledgeDocTypeAnswer, Content: "c", Question: "q",
+		})
+		if err == nil {
+			t.Fatal("expected error from db insert")
 		}
 	})
 
 	t.Run("success: all fields set, manual=true, user_id present, event published", func(t *testing.T) {
 		pub := &mockPublisher{}
-		var capturedDocs []schema.Document
-		vs := &mockVectorStore{
-			addDocumentsFn: func(_ context.Context, docs []schema.Document, _ ...vectorstores.Option) ([]string, error) {
-				capturedDocs = docs
-				return []string{"new-uuid"}, nil
+		var gotParams database.InsertKnowledgeDocumentParams
+		db := &mockDB{
+			insertKnowledge: func(_ context.Context, arg database.InsertKnowledgeDocumentParams) (string, error) {
+				gotParams = arg
+				return "new-uuid", nil
 			},
 		}
-		ks := &knowledgeStore{store: vs, newKnp: newPublisherFactory(pub)}
+		ks := &knowledgeStore{db: db, embedder: &mockEmbedder{available: true}, newKnp: newPublisherFactory(pub)}
 
 		input := model.CreateKnowledgeDocumentInput{
 			DocType:     model.KnowledgeDocTypeCode,
@@ -1510,25 +1558,35 @@ func TestCreateDocument(t *testing.T) {
 		if !doc.Manual {
 			t.Fatal("manual must be true for manually created docs")
 		}
-
-		// Metadata stored in pgvector
-		if len(capturedDocs) != 1 {
-			t.Fatal("expected exactly one document passed to AddDocuments")
-		}
-		meta := capturedDocs[0].Metadata
-		if meta["user_id"] != userID {
-			t.Fatalf("user_id in metadata: want %d, got %v", userID, meta["user_id"])
-		}
-		if meta["manual"] != true {
-			t.Fatal("manual flag must be true in metadata")
-		}
-		if meta["code_lang"] != "go" {
-			t.Fatal("code_lang missing from metadata")
-		}
-
-		// Returned model must carry the creator's UserID
 		if doc.UserID != userID {
 			t.Fatalf("doc.UserID: want %d, got %d", userID, doc.UserID)
+		}
+		if doc.CodeLang == nil || *doc.CodeLang != "go" {
+			t.Fatal("code_lang missing from returned doc")
+		}
+
+		// Persisted document text (trimmed) and embedding literal
+		if gotParams.Document.String != "func main() {}" {
+			t.Fatalf("persisted document not trimmed: %q", gotParams.Document.String)
+		}
+		emb, ok := gotParams.Embedding.(string)
+		if !ok || emb == "" || emb[0] != '[' {
+			t.Fatalf("embedding must be a vector literal, got %v", gotParams.Embedding)
+		}
+
+		// Metadata stored in pgvector cmetadata
+		meta := parseMeta(string(gotParams.Cmetadata))
+		if meta.UserID != userID {
+			t.Fatalf("user_id in metadata: want %d, got %d", userID, meta.UserID)
+		}
+		if !meta.Manual {
+			t.Fatal("manual flag must be true in metadata")
+		}
+		if meta.CodeLang != "go" {
+			t.Fatal("code_lang missing from metadata")
+		}
+		if meta.Description != "a Go main" {
+			t.Fatalf("description missing from metadata: %q", meta.Description)
 		}
 
 		// Event
@@ -1541,32 +1599,27 @@ func TestCreateDocument(t *testing.T) {
 	})
 
 	t.Run("content is trimmed of whitespace", func(t *testing.T) {
-		var capturedContent string
-		vs := &mockVectorStore{
-			addDocumentsFn: func(_ context.Context, docs []schema.Document, _ ...vectorstores.Option) ([]string, error) {
-				capturedContent = docs[0].PageContent
-				return []string{"id"}, nil
+		var gotParams database.InsertKnowledgeDocumentParams
+		db := &mockDB{
+			insertKnowledge: func(_ context.Context, arg database.InsertKnowledgeDocumentParams) (string, error) {
+				gotParams = arg
+				return "id", nil
 			},
 		}
-		ks := &knowledgeStore{store: vs, newKnp: newPublisherFactory(&mockPublisher{})}
+		ks := &knowledgeStore{db: db, embedder: &mockEmbedder{available: true}, newKnp: newPublisherFactory(&mockPublisher{})}
 		_, err := ks.CreateDocument(ctx, userID, model.CreateKnowledgeDocumentInput{
 			DocType: model.KnowledgeDocTypeAnswer, Content: "  trimmed  ", Question: "q",
 		})
 		if err != nil {
 			t.Fatal(err)
 		}
-		if capturedContent != "trimmed" {
-			t.Fatalf("expected trimmed content, got %q", capturedContent)
+		if gotParams.Document.String != "trimmed" {
+			t.Fatalf("expected trimmed content, got %q", gotParams.Document.String)
 		}
 	})
 
 	t.Run("optional fields absent means nil in model", func(t *testing.T) {
-		vs := &mockVectorStore{
-			addDocumentsFn: func(_ context.Context, _ []schema.Document, _ ...vectorstores.Option) ([]string, error) {
-				return []string{"id"}, nil
-			},
-		}
-		ks := &knowledgeStore{store: vs, newKnp: newPublisherFactory(&mockPublisher{})}
+		ks := &knowledgeStore{db: insertOK("id"), embedder: &mockEmbedder{available: true}, newKnp: newPublisherFactory(&mockPublisher{})}
 		doc, err := ks.CreateDocument(ctx, userID, model.CreateKnowledgeDocumentInput{
 			DocType: model.KnowledgeDocTypeAnswer, Content: "c", Question: "q",
 		})
