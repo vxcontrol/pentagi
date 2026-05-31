@@ -149,8 +149,8 @@ func (p *processor) applyChanges(ctx context.Context, state *operationState) (er
 			return
 		}
 		// refresh state for updates
-		if err := p.checker.GatherUpdatesInfo(ctx); err != nil {
-			err = fmt.Errorf("failed to gather info after update: %w", err)
+		if gatherErr := p.checker.GatherUpdatesInfo(ctx); gatherErr != nil {
+			err = fmt.Errorf("failed to gather info after update: %w", gatherErr)
 		}
 	}()
 
@@ -446,8 +446,8 @@ func (p *processor) install(ctx context.Context, state *operationState) (err err
 			return
 		}
 		// refresh state for updates
-		if err := p.checker.GatherUpdatesInfo(ctx); err != nil {
-			err = fmt.Errorf("failed to gather info after update: %w", err)
+		if gatherErr := p.checker.GatherUpdatesInfo(ctx); gatherErr != nil {
+			err = fmt.Errorf("failed to gather info after update: %w", gatherErr)
 		}
 	}()
 
@@ -499,8 +499,8 @@ func (p *processor) update(ctx context.Context, stack ProductStack, state *opera
 			return
 		}
 		// refresh state for updates
-		if err := p.checker.GatherUpdatesInfo(ctx); err != nil {
-			err = fmt.Errorf("failed to gather info after update: %w", err)
+		if gatherErr := p.checker.GatherUpdatesInfo(ctx); gatherErr != nil {
+			err = fmt.Errorf("failed to gather info after update: %w", gatherErr)
 		}
 	}()
 
@@ -694,7 +694,7 @@ func (p *processor) remove(ctx context.Context, stack ProductStack, state *opera
 			return fmt.Errorf("failed to gather worker info after remove: %w", err)
 		}
 		if err := p.checker.GatherUpdatesInfo(ctx); err != nil {
-			err = fmt.Errorf("failed to gather info after update: %w", err)
+			return fmt.Errorf("failed to gather info after update: %w", err)
 		}
 
 	case ProductStackInstaller:
@@ -733,8 +733,8 @@ func (p *processor) purge(ctx context.Context, stack ProductStack, state *operat
 			return
 		}
 		// refresh state for updates
-		if err := p.checker.GatherUpdatesInfo(ctx); err != nil {
-			err = fmt.Errorf("failed to gather info after update: %w", err)
+		if gatherErr := p.checker.GatherUpdatesInfo(ctx); gatherErr != nil {
+			err = fmt.Errorf("failed to gather info after update: %w", gatherErr)
 		}
 	}()
 
@@ -774,7 +774,7 @@ func (p *processor) purge(ctx context.Context, stack ProductStack, state *operat
 			return fmt.Errorf("failed to gather worker info after purge: %w", err)
 		}
 		if err := p.checker.GatherUpdatesInfo(ctx); err != nil {
-			err = fmt.Errorf("failed to gather info after update: %w", err)
+			return fmt.Errorf("failed to gather info after update: %w", err)
 		}
 
 	case ProductStackInstaller:
