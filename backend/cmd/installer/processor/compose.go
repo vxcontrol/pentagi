@@ -86,12 +86,22 @@ func (c *composeOperationsImpl) performStackOperation(
 ) error {
 	switch stack {
 	case ProductStackPentagi:
+		// destructive operations cannot run without the compose file and have
+		// nothing to act on when the stack was never extracted
+		if isDestructiveComposeOperation(operation) && !c.composeFileExists(stack) {
+			return nil
+		}
 		return c.wrapPerformStackCommand(ctx, stack, state, operation, args...)
 
 	case ProductStackLangfuse, ProductStackObservability, ProductStackGraphiti:
 		switch operation {
 		// for destructive operations we must always allow compose to run, even if stack is disabled/external now
 		case ProcessorOperationRemove, ProcessorOperationPurge, ProcessorOperationStop:
+			// but only if the compose file exists; a missing file means the stack
+			// was never extracted and there is nothing for compose to remove
+			if !c.composeFileExists(stack) {
+				return nil
+			}
 			return c.wrapPerformStackCommand(ctx, stack, state, operation, args...)
 		// for non-destructive operations (start/update/download) honor embedded mode only
 		default:
@@ -161,6 +171,28 @@ func (c *composeOperationsImpl) performStackCommand(
 	cmd.Env = append(cmd.Env, "PYTHONUNBUFFERED=1")
 
 	return c.processor.runCommand(cmd, stack, state)
+}
+
+// isDestructiveComposeOperation reports whether the operation tears a stack down
+// (and therefore may target a stack that is disabled/external/never extracted)
+func isDestructiveComposeOperation(operation ProcessorOperation) bool {
+	switch operation {
+	case ProcessorOperationRemove, ProcessorOperationPurge, ProcessorOperationStop:
+		return true
+	default:
+		return false
+	}
+}
+
+// composeFileExists reports whether the stack's compose file is present on disk;
+// destructive operations cannot run (and have nothing to remove) without it
+func (c *composeOperationsImpl) composeFileExists(stack ProductStack) bool {
+	composeFile, err := c.determineComposeFile(stack)
+	if err != nil {
+		return false
+	}
+	composePath := filepath.Join(filepath.Dir(c.processor.state.GetEnvPath()), composeFile)
+	return c.processor.isFileExists(composePath) == nil
 }
 
 func (c *composeOperationsImpl) determineComposeFile(stack ProductStack) (string, error) {
