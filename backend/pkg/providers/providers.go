@@ -410,7 +410,7 @@ func (pc *providerController) NewFlowProvider(
 
 	image, err := prv.Call(ctx, pconfig.OptionsTypeSimple, imageTmpl)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get primary docker image: %w", err)
+		return nil, fmt.Errorf("failed to select primary docker image via llm call: %w", err)
 	}
 	image = strings.ToLower(strings.TrimSpace(image))
 
