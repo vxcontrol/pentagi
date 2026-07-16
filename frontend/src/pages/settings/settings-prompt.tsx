@@ -86,8 +86,6 @@ import { useBreakpoint } from '@/hooks/use-breakpoint';
 import { composeRefs } from '@/lib/compose-refs';
 import { formatPromptId } from '@/lib/route-titles/format-prompt-id';
 
-const VARIABLES_HINT = 'Click to insert at the cursor, or cycle through existing uses.';
-
 const VARIABLES_TITLE = 'Available variables';
 
 const systemFormSchema = z.object({
@@ -1062,7 +1060,9 @@ function Variables({ currentTemplate, onEditorFocus, onVariableClick, variables 
             <div className="bg-card overflow-hidden rounded-lg border">
                 <div className="border-b px-4 py-3">
                     <h4 className="text-sm font-medium">{VARIABLES_TITLE}</h4>
-                    <p className="text-muted-foreground mt-1 text-xs">{VARIABLES_HINT}</p>
+                    <p className="text-muted-foreground mt-1 text-xs">
+                        Click to insert at the cursor, or cycle through existing uses.
+                    </p>
                 </div>
                 {content}
             </div>
@@ -1073,14 +1073,18 @@ function Variables({ currentTemplate, onEditorFocus, onVariableClick, variables 
         <Popover>
             <PopoverTrigger asChild>
                 <Button
-                    className="h-auto w-full justify-start gap-3 px-4 py-3 whitespace-normal"
-                    variant="outline"
+                    className="w-full justify-start"
+                    size="sm"
+                    variant="secondary"
                 >
                     <Braces className="size-4" />
-                    <span className="flex flex-col items-start gap-1 text-left">
-                        <span className="text-sm font-medium">{VARIABLES_TITLE}</span>
-                        <span className="text-muted-foreground text-xs font-normal">{VARIABLES_HINT}</span>
-                    </span>
+                    {VARIABLES_TITLE}
+                    <Badge
+                        className="ml-auto font-normal tabular-nums"
+                        variant="outline"
+                    >
+                        {variables.length}
+                    </Badge>
                 </Button>
             </PopoverTrigger>
             {/* Both autofocus preventDefaults are load-bearing: insert/cycle act on the editor's stored
