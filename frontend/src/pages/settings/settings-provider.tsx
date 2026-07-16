@@ -3,7 +3,7 @@ import {
     AlertCircle,
     Check,
     CheckCircle,
-    ChevronsUpDown,
+    ChevronDown,
     Clock,
     Ellipsis,
     Lightbulb,
@@ -213,12 +213,15 @@ function FormComboboxItem<T extends FieldValues = FieldValues>({
                 >
                     <PopoverTrigger asChild>
                         <Button
-                            className={cn('w-full justify-between', !displayValue && 'text-muted-foreground')}
+                            className={cn(
+                                'h-9 w-full justify-between bg-transparent px-3 font-normal hover:bg-transparent',
+                                !displayValue && 'text-muted-foreground',
+                            )}
                             disabled={disabled}
                             variant="outline"
                         >
                             {displayValue || placeholder}
-                            <ChevronsUpDown className="opacity-50" />
+                            <ChevronDown className="size-4 opacity-50" />
                         </Button>
                     </PopoverTrigger>
                     <PopoverContent
@@ -464,7 +467,7 @@ function FormModelComboboxItem<T extends FieldValues = FieldValues>({
                                     disabled={disabled}
                                     size="icon-sm"
                                 >
-                                    <ChevronsUpDown className="opacity-50" />
+                                    <ChevronDown className="size-4 opacity-50" />
                                 </InputGroupButton>
                             </PopoverTrigger>
                         </InputGroupAddon>
