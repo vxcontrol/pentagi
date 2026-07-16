@@ -1080,8 +1080,8 @@ function Variables({ currentTemplate, onEditorFocus, onVariableClick, variables 
                     <Braces className="size-4" />
                     {VARIABLES_TITLE}
                     <Badge
-                        className="ml-auto font-normal tabular-nums"
-                        variant="default"
+                        className="ml-auto h-5 font-normal tabular-nums"
+                        variant="outline"
                     >
                         {variables.length}
                     </Badge>
