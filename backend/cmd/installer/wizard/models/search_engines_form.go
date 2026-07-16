@@ -113,6 +113,21 @@ func (m *SearchEnginesFormModel) BuildForm() tea.Cmd {
 		config.TavilyAPIKey,
 	))
 
+	// Firecrawl API Key
+	fields = append(fields, m.createAPIKeyField("firecrawl_api_key",
+		locale.ToolsSearchEnginesFirecrawlKey,
+		locale.ToolsSearchEnginesFirecrawlKeyDesc,
+		config.FirecrawlAPIKey,
+	))
+
+	// Firecrawl API URL (optional, for self-hosted deployments)
+	fields = append(fields, m.createTextField("firecrawl_api_url",
+		locale.ToolsSearchEnginesFirecrawlURL,
+		locale.ToolsSearchEnginesFirecrawlURLDesc,
+		config.FirecrawlAPIURL,
+		false,
+	))
+
 	// Traversaal API Key
 	fields = append(fields, m.createAPIKeyField("traversaal_api_key",
 		locale.ToolsSearchEnginesTraversaalKey,
@@ -325,6 +340,15 @@ func (m *SearchEnginesFormModel) GetCurrentConfiguration() string {
 			m.GetStyles().Warning.Render(locale.StatusNotConfigured)))
 	}
 
+	// Firecrawl
+	if config.FirecrawlAPIKey.Value != "" {
+		sections = append(sections, fmt.Sprintf("• Firecrawl: %s",
+			m.GetStyles().Success.Render(locale.StatusConfigured)))
+	} else {
+		sections = append(sections, fmt.Sprintf("• Firecrawl: %s",
+			m.GetStyles().Warning.Render(locale.StatusNotConfigured)))
+	}
+
 	// Traversaal
 	if config.TraversaalAPIKey.Value != "" {
 		sections = append(sections, fmt.Sprintf("• Traversaal: %s",
@@ -393,6 +417,8 @@ func (m *SearchEnginesFormModel) HandleSave() error {
 		PerplexityModel:       config.PerplexityModel,
 		PerplexityContextSize: config.PerplexityContextSize,
 		TavilyAPIKey:          config.TavilyAPIKey,
+		FirecrawlAPIKey:       config.FirecrawlAPIKey,
+		FirecrawlAPIURL:       config.FirecrawlAPIURL,
 		TraversaalAPIKey:      config.TraversaalAPIKey,
 		GoogleAPIKey:          config.GoogleAPIKey,
 		GoogleCXKey:           config.GoogleCXKey,
@@ -436,6 +462,10 @@ func (m *SearchEnginesFormModel) HandleSave() error {
 			newConfig.PerplexityContextSize.Value = value
 		case "tavily_api_key":
 			newConfig.TavilyAPIKey.Value = value
+		case "firecrawl_api_key":
+			newConfig.FirecrawlAPIKey.Value = value
+		case "firecrawl_api_url":
+			newConfig.FirecrawlAPIURL.Value = value
 		case "traversaal_api_key":
 			newConfig.TraversaalAPIKey.Value = value
 		case "google_api_key":

@@ -1575,6 +1575,8 @@ type SearchEnginesConfig struct {
 	SploitusEnabled   loader.EnvVar // SPLOITUS_ENABLED
 	PerplexityAPIKey  loader.EnvVar // PERPLEXITY_API_KEY
 	TavilyAPIKey      loader.EnvVar // TAVILY_API_KEY
+	FirecrawlAPIKey   loader.EnvVar // FIRECRAWL_API_KEY
+	FirecrawlAPIURL   loader.EnvVar // FIRECRAWL_API_URL
 	TraversaalAPIKey  loader.EnvVar // TRAVERSAAL_API_KEY
 	GoogleAPIKey      loader.EnvVar // GOOGLE_API_KEY
 	GoogleCXKey       loader.EnvVar // GOOGLE_CX_KEY
@@ -1611,6 +1613,8 @@ func (c *controller) GetSearchEnginesConfig() *SearchEnginesConfig {
 	sploitusEnabled, _ := c.GetVar("SPLOITUS_ENABLED")
 	perplexityAPIKey, _ := c.GetVar("PERPLEXITY_API_KEY")
 	tavilyAPIKey, _ := c.GetVar("TAVILY_API_KEY")
+	firecrawlAPIKey, _ := c.GetVar("FIRECRAWL_API_KEY")
+	firecrawlAPIURL, _ := c.GetVar("FIRECRAWL_API_URL")
 	traversaalAPIKey, _ := c.GetVar("TRAVERSAAL_API_KEY")
 	googleAPIKey, _ := c.GetVar("GOOGLE_API_KEY")
 	googleCXKey, _ := c.GetVar("GOOGLE_CX_KEY")
@@ -1634,6 +1638,8 @@ func (c *controller) GetSearchEnginesConfig() *SearchEnginesConfig {
 		PerplexityModel:       perplexityModel,
 		PerplexityContextSize: perplexityContextSize,
 		TavilyAPIKey:          tavilyAPIKey,
+		FirecrawlAPIKey:       firecrawlAPIKey,
+		FirecrawlAPIURL:       firecrawlAPIURL,
 		TraversaalAPIKey:      traversaalAPIKey,
 		GoogleAPIKey:          googleAPIKey,
 		GoogleCXKey:           googleCXKey,
@@ -1662,6 +1668,9 @@ func (c *controller) GetSearchEnginesConfig() *SearchEnginesConfig {
 		configuredCount++
 	}
 	if tavilyAPIKey.Value != "" {
+		configuredCount++
+	}
+	if firecrawlAPIKey.Value != "" {
 		configuredCount++
 	}
 	if traversaalAPIKey.Value != "" {
@@ -1712,6 +1721,12 @@ func (c *controller) UpdateSearchEnginesConfig(config *SearchEnginesConfig) erro
 	if err := c.SetVar("TAVILY_API_KEY", config.TavilyAPIKey.Value); err != nil {
 		return fmt.Errorf("failed to set TAVILY_API_KEY: %w", err)
 	}
+	if err := c.SetVar("FIRECRAWL_API_KEY", config.FirecrawlAPIKey.Value); err != nil {
+		return fmt.Errorf("failed to set FIRECRAWL_API_KEY: %w", err)
+	}
+	if err := c.SetVar("FIRECRAWL_API_URL", config.FirecrawlAPIURL.Value); err != nil {
+		return fmt.Errorf("failed to set FIRECRAWL_API_URL: %w", err)
+	}
 	if err := c.SetVar("TRAVERSAAL_API_KEY", config.TraversaalAPIKey.Value); err != nil {
 		return fmt.Errorf("failed to set TRAVERSAAL_API_KEY: %w", err)
 	}
@@ -1759,6 +1774,8 @@ func (c *controller) ResetSearchEnginesConfig() *SearchEnginesConfig {
 		"PERPLEXITY_MODEL",
 		"PERPLEXITY_CONTEXT_SIZE",
 		"TAVILY_API_KEY",
+		"FIRECRAWL_API_KEY",
+		"FIRECRAWL_API_URL",
 		"TRAVERSAAL_API_KEY",
 		"GOOGLE_API_KEY",
 		"GOOGLE_CX_KEY",
@@ -2247,6 +2264,8 @@ func (c *controller) getVariableDescription(varName string) string {
 		"SPLOITUS_ENABLED":      locale.EnvDesc_SPLOITUS_ENABLED,
 		"PERPLEXITY_API_KEY":    locale.EnvDesc_PERPLEXITY_API_KEY,
 		"TAVILY_API_KEY":        locale.EnvDesc_TAVILY_API_KEY,
+		"FIRECRAWL_API_KEY":     locale.EnvDesc_FIRECRAWL_API_KEY,
+		"FIRECRAWL_API_URL":     locale.EnvDesc_FIRECRAWL_API_URL,
 		"TRAVERSAAL_API_KEY":    locale.EnvDesc_TRAVERSAAL_API_KEY,
 		"GOOGLE_API_KEY":        locale.EnvDesc_GOOGLE_API_KEY,
 		"GOOGLE_CX_KEY":         locale.EnvDesc_GOOGLE_CX_KEY,
@@ -2342,6 +2361,7 @@ var maskedVariables = map[string]bool{
 	"LOCAL_SCRAPER_PASSWORD":    true,
 	"PERPLEXITY_API_KEY":        true,
 	"TAVILY_API_KEY":            true,
+	"FIRECRAWL_API_KEY":         true,
 	"TRAVERSAAL_API_KEY":        true,
 	"GOOGLE_API_KEY":            true,
 	"GOOGLE_CX_KEY":             true,
@@ -2440,6 +2460,8 @@ var criticalVariables = map[string]bool{
 	"PERPLEXITY_MODEL":        true,
 	"PERPLEXITY_CONTEXT_SIZE": true,
 	"TAVILY_API_KEY":          true,
+	"FIRECRAWL_API_KEY":       true,
+	"FIRECRAWL_API_URL":       true,
 	"TRAVERSAAL_API_KEY":      true,
 	"GOOGLE_API_KEY":          true,
 	"GOOGLE_CX_KEY":           true,

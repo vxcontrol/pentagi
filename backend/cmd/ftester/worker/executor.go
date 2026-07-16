@@ -196,6 +196,16 @@ func (te *toolExecutor) GetTool(ctx context.Context, funcName string) (tools.Too
 			te.GetSummarizer(),
 		), nil
 
+	case tools.FirecrawlToolName:
+		return tools.NewFirecrawlTool(
+			te.cfg,
+			te.flowID,
+			te.taskID,
+			te.subtaskID,
+			te.proxies.GetSearchLogProvider(),
+			te.GetSummarizer(),
+		), nil
+
 	case tools.TraversaalToolName:
 		return tools.NewTraversaalTool(
 			te.cfg,

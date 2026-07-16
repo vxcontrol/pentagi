@@ -939,6 +939,17 @@ func (fte *flowToolsExecutor) GetAssistantExecutor(cfg AssistantExecutorConfig) 
 			handlers[TavilyToolName] = tavily.Handle
 		}
 
+		firecrawl := NewFirecrawlTool(
+			fte.cfg,
+			fte.flowID, nil, nil,
+			fte.slp,
+			cfg.Summarizer,
+		)
+		if firecrawl.IsAvailable() {
+			definitions = append(definitions, registryDefinitions[FirecrawlToolName])
+			handlers[FirecrawlToolName] = firecrawl.Handle
+		}
+
 		traversaal := NewTraversaalTool(
 			fte.cfg,
 			fte.flowID, nil, nil,
@@ -1539,6 +1550,19 @@ func (fte *flowToolsExecutor) GetSearcherExecutor(cfg SearcherExecutorConfig) (C
 	if tavily.IsAvailable() {
 		ce.definitions = append(ce.definitions, registryDefinitions[TavilyToolName])
 		ce.handlers[TavilyToolName] = tavily.Handle
+	}
+
+	firecrawl := NewFirecrawlTool(
+		fte.cfg,
+		fte.flowID,
+		cfg.TaskID,
+		cfg.SubtaskID,
+		fte.slp,
+		cfg.Summarizer,
+	)
+	if firecrawl.IsAvailable() {
+		ce.definitions = append(ce.definitions, registryDefinitions[FirecrawlToolName])
+		ce.handlers[FirecrawlToolName] = firecrawl.Handle
 	}
 
 	traversaal := NewTraversaalTool(

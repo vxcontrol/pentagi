@@ -58,6 +58,7 @@ This document serves as a comprehensive guide to the configuration system in Pen
     - [Google Search](#google-search)
     - [Traversaal Search](#traversaal-search)
     - [Tavily Search](#tavily-search)
+    - [Firecrawl Search](#firecrawl-search)
     - [Perplexity Search](#perplexity-search)
     - [Searxng Search](#searxng-search)
     - [Usage Details](#usage-details-10)
@@ -1400,6 +1401,7 @@ Common built-in functions that can be disabled:
 - `google` - Google Search
 - `duckduckgo` - DuckDuckGo Search
 - `tavily` - Tavily Search
+- `firecrawl` - Firecrawl Search
 - `traversaal` - Traversaal Search
 - `perplexity` - Perplexity Search
 - `searxng` - SearXNG Search
@@ -1447,6 +1449,13 @@ These settings control the integration with various search engines used for web 
 | ------------ | -------------------- | ------------- | -------------------------------- |
 | TavilyAPIKey | `TAVILY_API_KEY`     | *(none)*      | API key for Tavily search engine |
 
+### Firecrawl Search
+
+| Option          | Environment Variable | Default Value               | Description                                                                    |
+| --------------- | -------------------- | --------------------------- | ------------------------------------------------------------------------------ |
+| FirecrawlAPIKey | `FIRECRAWL_API_KEY`  | *(none)*                    | API key for Firecrawl search engine                                            |
+| FirecrawlAPIURL | `FIRECRAWL_API_URL`  | `https://api.firecrawl.dev` | Base URL for the Firecrawl API (override to point at a self-hosted deployment) |
+
 ### Perplexity Search
 
 | Option                | Environment Variable      | Default Value | Description                                                  |
@@ -1488,6 +1497,14 @@ traversaalSearch: &functions.TraversaalSearchFunc{
 // Tavily Search configuration
 tavilySearch: &functions.TavilySearchFunc{
     apiKey:     fte.cfg.TavilyAPIKey,
+    proxyURL:   fte.cfg.ProxyURL,
+    summarizer: cfg.Summarizer,
+},
+
+// Firecrawl Search configuration
+firecrawlSearch: &functions.FirecrawlSearchFunc{
+    apiKey:     fte.cfg.FirecrawlAPIKey,
+    apiURL:     fte.cfg.FirecrawlAPIURL,
     proxyURL:   fte.cfg.ProxyURL,
     summarizer: cfg.Summarizer,
 },

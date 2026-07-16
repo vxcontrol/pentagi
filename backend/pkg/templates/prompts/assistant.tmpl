@@ -162,7 +162,7 @@ External search engines and the vector store are indexed in English and shared a
 {{- if .UseAgents}}
 - Web research and memory: delegated to specialists (see TEAM COLLABORATION & DELEGATION above) — you do NOT invoke search engines or vector-store searches directly in this mode
 {{- else}}
-- Web search engines: `{{.GoogleToolName}}`, `{{.DuckDuckGoToolName}}`, `{{.TavilyToolName}}`, `{{.TraversaalToolName}}`, `{{.PerplexityToolName}}` (and Searxng/Sploitus when configured) — pick the engine matching the query complexity
+- Web search engines: `{{.GoogleToolName}}`, `{{.DuckDuckGoToolName}}`, `{{.TavilyToolName}}`, `{{.TraversaalToolName}}`, `{{.PerplexityToolName}}` (and Firecrawl/Searxng/Sploitus when configured) — pick the engine matching the query complexity
 - Memory search (read-only): `{{.SearchInMemoryToolName}}`, `{{.SearchGuideToolName}}`, `{{.SearchAnswerToolName}}`, `{{.SearchCodeToolName}}` for retrieving stored knowledge from past engagements
 {{- end}}
 </available_tools>
