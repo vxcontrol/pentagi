@@ -1647,30 +1647,35 @@ function SettingsProvider() {
                     <AccordionTrigger className="group text-left hover:no-underline">
                         <div className="flex w-full items-center justify-between gap-2">
                             <span className="group-hover:underline">{getName(agentKey)}</span>
-                            <span
+                            <Button
+                                asChild
                                 className={cn(
-                                    'hover:bg-accent hover:text-accent-foreground mr-2 flex items-center gap-1 rounded border px-2 py-1 text-xs',
-                                    (isTestLoading || isAgentTestLoading) &&
-                                        'pointer-events-none cursor-not-allowed opacity-50',
+                                    'mr-2',
+                                    (isTestLoading || isAgentTestLoading) && 'pointer-events-none opacity-50',
                                 )}
-                                onClick={(event) => {
-                                    if (isTestLoading || isAgentTestLoading) {
-                                        return;
-                                    }
-
-                                    event.stopPropagation();
-                                    handleTestAgent(agentKey);
-                                }}
+                                size="xs"
+                                variant="outline"
                             >
-                                {isAgentTestLoading && currentAgentKey === agentKey ? (
-                                    <Loader2 className="size-4 animate-spin" />
-                                ) : (
-                                    <Play className="size-4" />
-                                )}
-                                <span className="no-underline! hover:no-underline!">
-                                    {isAgentTestLoading && currentAgentKey === agentKey ? 'Testing...' : 'Test'}
+                                <span
+                                    onClick={(event) => {
+                                        if (isTestLoading || isAgentTestLoading) {
+                                            return;
+                                        }
+
+                                        event.stopPropagation();
+                                        handleTestAgent(agentKey);
+                                    }}
+                                >
+                                    {isAgentTestLoading && currentAgentKey === agentKey ? (
+                                        <Loader2 className="size-4 animate-spin" />
+                                    ) : (
+                                        <Play className="size-4" />
+                                    )}
+                                    <span className="no-underline! hover:no-underline!">
+                                        {isAgentTestLoading && currentAgentKey === agentKey ? 'Testing...' : 'Test'}
+                                    </span>
                                 </span>
-                            </span>
+                            </Button>
                         </div>
                     </AccordionTrigger>
                     <AccordionContent className="flex flex-col gap-4 pt-4">
