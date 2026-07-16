@@ -26,7 +26,6 @@ const (
 type firecrawlRequest struct {
 	Query         string                  `json:"query"`
 	Limit         int                     `json:"limit,omitempty"`
-	Sources       []string                `json:"sources,omitempty"`
 	ScrapeOptions *firecrawlScrapeOptions `json:"scrapeOptions,omitempty"`
 }
 
@@ -172,10 +171,12 @@ func (f *firecrawl) search(ctx context.Context, query string, maxResults int) (s
 		return "", fmt.Errorf("failed to create http client: %w", err)
 	}
 
+	// sources is intentionally omitted: /v2/search defaults to ["web"], which is
+	// all this tool consumes, and it avoids the string-vs-object shape ambiguity
+	// that field carries across the API/SDK layers.
 	reqPayload := firecrawlRequest{
-		Query:   query,
-		Limit:   maxResults,
-		Sources: []string{"web"},
+		Query: query,
+		Limit: maxResults,
 		ScrapeOptions: &firecrawlScrapeOptions{
 			Formats:         []string{"markdown"},
 			OnlyMainContent: true,
