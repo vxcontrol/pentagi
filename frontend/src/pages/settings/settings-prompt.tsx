@@ -59,7 +59,7 @@ import ConfirmationDialog from '@/components/shared/confirmation-dialog';
 import { DetailSplitLayout } from '@/components/shared/detail-split-layout';
 import { UnsavedChangesDialog, useUnsavedChangesGuard } from '@/components/shared/unsaved-changes';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { badgeVariants } from '@/components/ui/badge';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
@@ -85,7 +85,6 @@ import { useAppForm } from '@/hooks/use-app-form';
 import { useBreakpoint } from '@/hooks/use-breakpoint';
 import { composeRefs } from '@/lib/compose-refs';
 import { formatPromptId } from '@/lib/route-titles/format-prompt-id';
-import { cn } from '@/lib/utils';
 
 const systemFormSchema = z.object({
     template: z.string().min(1, 'System template is required'),
@@ -219,7 +218,6 @@ interface VariablesContentProps {
 
 interface VariablesPanelContainerProps {
     control: Control<HumanFormData> | Control<SystemFormData>;
-    isDesktop: boolean;
     onEditorFocus: () => void;
     onVariableClick: (variable: string) => void;
     variables: string[];
@@ -227,7 +225,6 @@ interface VariablesPanelContainerProps {
 
 interface VariablesProps {
     currentTemplate: string;
-    isDesktop: boolean;
     onEditorFocus: () => void;
     onVariableClick: (variable: string) => void;
     variables: string[];
@@ -853,7 +850,6 @@ function SettingsPrompt() {
             {variablesData ? (
                 <VariablesPanelContainer
                     control={activeControl}
-                    isDesktop={isDesktop}
                     onEditorFocus={handleEditorFocus}
                     onVariableClick={handleVariableClick}
                     variables={variablesData.variables}
@@ -1041,7 +1037,8 @@ function SettingsPrompt() {
     );
 }
 
-function Variables({ currentTemplate, isDesktop, onEditorFocus, onVariableClick, variables }: VariablesProps) {
+function Variables({ currentTemplate, onEditorFocus, onVariableClick, variables }: VariablesProps) {
+    const { isDesktop } = useBreakpoint();
     const counts = useMemo(() => countVariableUses(currentTemplate, variables), [currentTemplate, variables]);
 
     if (variables.length === 0) {
@@ -1064,19 +1061,18 @@ function Variables({ currentTemplate, isDesktop, onEditorFocus, onVariableClick,
         <Popover>
             <PopoverTrigger asChild>
                 <Button
-                    aria-label={`Available variables (${variables.length})`}
-                    className="w-fit"
-                    size="icon"
+                    className="w-full justify-start"
                     variant="outline"
                 >
                     <Braces className="size-4" />
+                    Available variables
                 </Button>
             </PopoverTrigger>
             {/* Both autofocus preventDefaults are load-bearing: insert/cycle act on the editor's stored
                 selection, so opening must not steal the caret and closing must return it to the editor. */}
             <PopoverContent
                 align="start"
-                className="max-h-[60dvh] w-[calc(100vw-2rem)] overflow-y-auto p-0"
+                className="max-h-(--radix-popover-content-available-height) w-(--radix-popover-trigger-width) overflow-y-auto p-0"
                 onCloseAutoFocus={(event) => {
                     event.preventDefault();
                     onEditorFocus();
@@ -1107,23 +1103,27 @@ function VariablesContent({ counts, onVariableClick, variables }: VariablesConte
                         : `Insert {{.${variable}}} at the cursor`;
 
                     return (
-                        <button
-                            aria-label={action}
-                            className={cn(
-                                badgeVariants({ variant: isUsed ? 'green' : 'secondary' }),
-                                'cursor-pointer font-mono font-normal',
-                            )}
+                        // className stays on Badge: Slot only concatenates, so `font-normal` would race
+                        // badgeVariants' `font-semibold` unless cn() merges them here first.
+                        <Badge
+                            asChild
+                            className="cursor-pointer font-mono font-normal"
                             key={variable}
-                            onClick={() => onVariableClick(variable)}
-                            title={action}
-                            type="button"
+                            variant={isUsed ? 'green' : 'secondary'}
                         >
-                            {isUsed ? <Check className="size-3" /> : null}
-                            {`{{.${variable}}}`}
-                            {count > 1 ? (
-                                <span className="ml-0.5 text-[10px] tabular-nums opacity-70">×{count}</span>
-                            ) : null}
-                        </button>
+                            <button
+                                aria-label={action}
+                                onClick={() => onVariableClick(variable)}
+                                title={action}
+                                type="button"
+                            >
+                                {isUsed ? <Check className="size-3" /> : null}
+                                {`{{.${variable}}}`}
+                                {count > 1 ? (
+                                    <span className="ml-0.5 text-[10px] tabular-nums opacity-70">×{count}</span>
+                                ) : null}
+                            </button>
+                        </Badge>
                     );
                 })}
             </div>
@@ -1132,19 +1132,12 @@ function VariablesContent({ counts, onVariableClick, variables }: VariablesConte
 }
 
 // Don't hoist this useWatch to the parent — it would re-subscribe the whole page per keystroke.
-function VariablesPanelContainer({
-    control,
-    isDesktop,
-    onEditorFocus,
-    onVariableClick,
-    variables,
-}: VariablesPanelContainerProps) {
+function VariablesPanelContainer({ control, onEditorFocus, onVariableClick, variables }: VariablesPanelContainerProps) {
     const currentTemplate = useWatch({ control, name: 'template' });
 
     return (
         <Variables
             currentTemplate={currentTemplate}
-            isDesktop={isDesktop}
             onEditorFocus={onEditorFocus}
             onVariableClick={onVariableClick}
             variables={variables}
