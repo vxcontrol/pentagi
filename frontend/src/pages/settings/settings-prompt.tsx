@@ -831,16 +831,16 @@ function SettingsPrompt() {
                 </p>
             </div>
 
-            <TabsList className="dark:bg-background w-full">
+            <TabsList className="xl:dark:bg-background w-full">
                 <TabsTrigger
-                    className="dark:data-[state=active]:bg-card flex-1"
+                    className="xl:dark:data-[state=active]:bg-card flex-1"
                     value="system"
                 >
                     <Code className="size-4" />
                     System Prompt
                 </TabsTrigger>
                 <TabsTrigger
-                    className="dark:data-[state=active]:bg-card flex-1"
+                    className="xl:dark:data-[state=active]:bg-card flex-1"
                     disabled={!hasHumanPrompt}
                     value="human"
                 >
@@ -1081,7 +1081,7 @@ function Variables({ currentTemplate, onEditorFocus, onVariableClick, variables 
                     {VARIABLES_TITLE}
                     <Badge
                         className="ml-auto font-normal tabular-nums"
-                        variant="outline"
+                        variant="default"
                     >
                         {variables.length}
                     </Badge>
