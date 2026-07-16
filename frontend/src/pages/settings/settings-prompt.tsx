@@ -788,7 +788,7 @@ function SettingsPrompt() {
     const defaultTemplate = activeTab === 'system' ? promptInfo.defaultSystemTemplate : promptInfo.defaultHumanTemplate;
     const hasHumanPrompt = promptInfo.type === 'agent' && promptInfo.hasHuman;
 
-    const promptMeta = (
+    const promptPanel = (
         <>
             <div className="flex flex-col gap-2 text-center">
                 <h2 className="text-2xl font-semibold">Edit prompt</h2>
@@ -832,16 +832,16 @@ function SettingsPrompt() {
                     Human Prompt
                 </TabsTrigger>
             </TabsList>
+
+            {variablesData ? (
+                <VariablesPanelContainer
+                    control={activeControl}
+                    onVariableClick={handleVariableClick}
+                    variables={variablesData.variables}
+                />
+            ) : null}
         </>
     );
-
-    const variablesPanel = variablesData ? (
-        <VariablesPanelContainer
-            control={activeControl}
-            onVariableClick={handleVariableClick}
-            variables={variablesData.variables}
-        />
-    ) : null;
 
     const systemPlaceholder =
         promptInfo.type === 'tool' ? 'Enter the tool template...' : 'Enter the system prompt template...';
@@ -911,18 +911,12 @@ function SettingsPrompt() {
                 {isDesktop ? (
                     <DetailSplitLayout
                         content={promptEditor}
-                        panel={
-                            <>
-                                {promptMeta}
-                                {variablesPanel}
-                            </>
-                        }
+                        panel={promptPanel}
                     />
                 ) : (
                     <div className="flex min-h-0 flex-1 flex-col gap-4 p-4">
-                        {promptMeta}
+                        {promptPanel}
                         {promptEditor}
-                        {variablesPanel}
                     </div>
                 )}
             </Tabs>
