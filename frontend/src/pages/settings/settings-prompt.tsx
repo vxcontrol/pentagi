@@ -2,6 +2,7 @@ import { useMutation, useQuery } from '@apollo/client/react';
 import {
     AlertCircle,
     Bot,
+    Braces,
     Check,
     CheckCircle,
     Code,
@@ -58,7 +59,7 @@ import ConfirmationDialog from '@/components/shared/confirmation-dialog';
 import { DetailSplitLayout } from '@/components/shared/detail-split-layout';
 import { UnsavedChangesDialog, useUnsavedChangesGuard } from '@/components/shared/unsaved-changes';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Badge } from '@/components/ui/badge';
+import { badgeVariants } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
@@ -71,6 +72,7 @@ import {
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Form, FormControl, FormItem, FormMessage } from '@/components/ui/form';
 import { FormSubmitButton } from '@/components/ui/form-submit-button';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
     CreatePromptDocument,
@@ -83,6 +85,7 @@ import { useAppForm } from '@/hooks/use-app-form';
 import { useBreakpoint } from '@/hooks/use-breakpoint';
 import { composeRefs } from '@/lib/compose-refs';
 import { formatPromptId } from '@/lib/route-titles/format-prompt-id';
+import { cn } from '@/lib/utils';
 
 const systemFormSchema = z.object({
     template: z.string().min(1, 'System template is required'),
@@ -208,14 +211,24 @@ interface DiffContentProps {
     styles: ComponentProps<typeof ReactDiffViewer>['styles'];
 }
 
+interface VariablesContentProps {
+    counts: Record<string, number>;
+    onVariableClick: (variable: string) => void;
+    variables: string[];
+}
+
 interface VariablesPanelContainerProps {
     control: Control<HumanFormData> | Control<SystemFormData>;
+    isDesktop: boolean;
+    onEditorFocus: () => void;
     onVariableClick: (variable: string) => void;
     variables: string[];
 }
 
 interface VariablesProps {
     currentTemplate: string;
+    isDesktop: boolean;
+    onEditorFocus: () => void;
     onVariableClick: (variable: string) => void;
     variables: string[];
 }
@@ -303,6 +316,10 @@ function SettingsPrompt() {
         if (!editorRef.current?.selectNextUse(variable)) {
             editorRef.current?.insertAtCursor(`{{.${variable}}}`);
         }
+    }, []);
+
+    const handleEditorFocus = useCallback(() => {
+        editorRef.current?.focus();
     }, []);
 
     const handleReset = () => {
@@ -836,6 +853,8 @@ function SettingsPrompt() {
             {variablesData ? (
                 <VariablesPanelContainer
                     control={activeControl}
+                    isDesktop={isDesktop}
+                    onEditorFocus={handleEditorFocus}
                     onVariableClick={handleVariableClick}
                     variables={variablesData.variables}
                 />
@@ -1022,15 +1041,57 @@ function SettingsPrompt() {
     );
 }
 
-function Variables({ currentTemplate, onVariableClick, variables }: VariablesProps) {
+function Variables({ currentTemplate, isDesktop, onEditorFocus, onVariableClick, variables }: VariablesProps) {
     const counts = useMemo(() => countVariableUses(currentTemplate, variables), [currentTemplate, variables]);
 
     if (variables.length === 0) {
         return null;
     }
 
+    const content = (
+        <VariablesContent
+            counts={counts}
+            onVariableClick={onVariableClick}
+            variables={variables}
+        />
+    );
+
+    if (isDesktop) {
+        return <div className="bg-card overflow-hidden rounded-lg border">{content}</div>;
+    }
+
     return (
-        <div className="bg-card overflow-hidden rounded-lg border">
+        <Popover>
+            <PopoverTrigger asChild>
+                <Button
+                    aria-label={`Available variables (${variables.length})`}
+                    className="w-fit"
+                    size="icon"
+                    variant="outline"
+                >
+                    <Braces className="size-4" />
+                </Button>
+            </PopoverTrigger>
+            {/* Both autofocus preventDefaults are load-bearing: insert/cycle act on the editor's stored
+                selection, so opening must not steal the caret and closing must return it to the editor. */}
+            <PopoverContent
+                align="start"
+                className="max-h-[60dvh] w-[calc(100vw-2rem)] overflow-y-auto p-0"
+                onCloseAutoFocus={(event) => {
+                    event.preventDefault();
+                    onEditorFocus();
+                }}
+                onOpenAutoFocus={(event) => event.preventDefault()}
+            >
+                {content}
+            </PopoverContent>
+        </Popover>
+    );
+}
+
+function VariablesContent({ counts, onVariableClick, variables }: VariablesContentProps) {
+    return (
+        <>
             <div className="border-b px-4 py-3">
                 <h4 className="text-sm font-medium">Available variables</h4>
                 <p className="text-muted-foreground mt-1 text-xs">
@@ -1046,42 +1107,45 @@ function Variables({ currentTemplate, onVariableClick, variables }: VariablesPro
                         : `Insert {{.${variable}}} at the cursor`;
 
                     return (
-                        <Badge
+                        <button
                             aria-label={action}
-                            className="cursor-pointer font-mono font-normal"
+                            className={cn(
+                                badgeVariants({ variant: isUsed ? 'green' : 'secondary' }),
+                                'cursor-pointer font-mono font-normal',
+                            )}
                             key={variable}
                             onClick={() => onVariableClick(variable)}
-                            onKeyDown={(event) => {
-                                if (event.key === 'Enter' || event.key === ' ') {
-                                    event.preventDefault();
-                                    onVariableClick(variable);
-                                }
-                            }}
-                            role="button"
-                            tabIndex={0}
                             title={action}
-                            variant={isUsed ? 'green' : 'secondary'}
+                            type="button"
                         >
                             {isUsed ? <Check className="size-3" /> : null}
                             {`{{.${variable}}}`}
                             {count > 1 ? (
                                 <span className="ml-0.5 text-[10px] tabular-nums opacity-70">×{count}</span>
                             ) : null}
-                        </Badge>
+                        </button>
                     );
                 })}
             </div>
-        </div>
+        </>
     );
 }
 
 // Don't hoist this useWatch to the parent — it would re-subscribe the whole page per keystroke.
-function VariablesPanelContainer({ control, onVariableClick, variables }: VariablesPanelContainerProps) {
+function VariablesPanelContainer({
+    control,
+    isDesktop,
+    onEditorFocus,
+    onVariableClick,
+    variables,
+}: VariablesPanelContainerProps) {
     const currentTemplate = useWatch({ control, name: 'template' });
 
     return (
         <Variables
             currentTemplate={currentTemplate}
+            isDesktop={isDesktop}
+            onEditorFocus={onEditorFocus}
             onVariableClick={onVariableClick}
             variables={variables}
         />
