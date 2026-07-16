@@ -40,7 +40,7 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Form, FormControl, FormField, FormItem, FormMessage } from '@/components/ui/form';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { FormSubmitButton } from '@/components/ui/form-submit-button';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -524,7 +524,7 @@ function Template() {
                                         </>
                                     )}
                                     <DropdownMenuItem onClick={handleTemplateRenameStart}>
-                                        <Pencil className="size-3" />
+                                        <Pencil className="size-4" />
                                         Rename
                                     </DropdownMenuItem>
                                     <DropdownMenuSeparator />
@@ -695,14 +695,16 @@ function Template() {
             name="title"
             render={({ field }) => (
                 <FormItem>
+                    <FormLabel>Title</FormLabel>
                     <FormControl>
                         <Input
                             autoFocus={isNew}
                             disabled={isSaving}
-                            placeholder="Title"
+                            placeholder="A short name for this template"
                             {...field}
                         />
                     </FormControl>
+                    <FormMessage />
                 </FormItem>
             )}
         />
@@ -721,7 +723,7 @@ function Template() {
                             mode={viewMode}
                             onBlur={field.onBlur}
                             onChange={field.onChange}
-                            placeholder="Content"
+                            placeholder="Describe the task, or start from a preset above"
                             ref={field.ref}
                             value={field.value}
                         />
