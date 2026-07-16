@@ -675,7 +675,7 @@ function Template() {
             </PopoverTrigger>
             <PopoverContent
                 align="start"
-                className="max-h-(--radix-popover-content-available-height) w-(--radix-popover-trigger-width) overflow-y-auto p-0"
+                className="max-h-(--radix-popover-content-available-height) w-(--radix-popover-trigger-width) overflow-y-auto overscroll-contain p-0"
             >
                 {presetsList(() => setIsPresetsOpen(false))}
             </PopoverContent>

@@ -1052,7 +1052,15 @@ function Variables({ currentTemplate, onVariableClick, variables }: VariablesPro
         return (
             <div className="bg-card overflow-hidden rounded-lg border">
                 <div className="border-b px-4 py-3">
-                    <h4 className="text-sm font-medium">{VARIABLES_TITLE}</h4>
+                    <h4 className="flex items-center gap-2 text-sm font-medium">
+                        {VARIABLES_TITLE}
+                        <Badge
+                            className="ml-auto font-normal tabular-nums"
+                            variant="secondary"
+                        >
+                            {variables.length}
+                        </Badge>
+                    </h4>
                     <p className="text-muted-foreground mt-1 text-xs">
                         Click to insert at the cursor, or cycle through existing uses.
                     </p>
@@ -1082,7 +1090,7 @@ function Variables({ currentTemplate, onVariableClick, variables }: VariablesPro
             </PopoverTrigger>
             <PopoverContent
                 align="start"
-                className="max-h-(--radix-popover-content-available-height) w-(--radix-popover-trigger-width) overflow-y-auto p-0"
+                className="max-h-(--radix-popover-content-available-height) w-(--radix-popover-trigger-width) overflow-y-auto overscroll-contain p-0"
             >
                 {content}
             </PopoverContent>
