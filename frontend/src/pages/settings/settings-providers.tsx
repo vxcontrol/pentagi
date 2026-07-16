@@ -414,9 +414,7 @@ function SettingsProviders() {
                                 <Loader2 className="text-muted-foreground size-10 animate-spin" />
                             </EmptyMedia>
                             <EmptyTitle>Loading providers...</EmptyTitle>
-                            <EmptyDescription>
-                                Please wait while we fetch your provider configurations
-                            </EmptyDescription>
+                            <EmptyDescription>Please wait while we fetch your provider configurations</EmptyDescription>
                         </EmptyHeader>
                     </Empty>
                 </div>

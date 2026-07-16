@@ -410,9 +410,7 @@ function Knowledges() {
                                 <Loader2 className="text-muted-foreground size-10 animate-spin" />
                             </EmptyMedia>
                             <EmptyTitle>Loading knowledges...</EmptyTitle>
-                            <EmptyDescription>
-                                Please wait while we fetch your knowledge documents
-                            </EmptyDescription>
+                            <EmptyDescription>Please wait while we fetch your knowledge documents</EmptyDescription>
                         </EmptyHeader>
                     </Empty>
                 </div>

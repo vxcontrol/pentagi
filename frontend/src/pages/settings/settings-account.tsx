@@ -64,9 +64,16 @@ function SettingsAccount() {
                         </div>
                         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                             <CardTitle className="truncate">{displayName}</CardTitle>
-                            {memberSince && <CardDescription className="truncate">Member since {memberSince}</CardDescription>}
+                            {memberSince && (
+                                <CardDescription className="truncate">Member since {memberSince}</CardDescription>
+                            )}
                         </div>
-                        <Badge className="shrink-0" variant="secondary">{accountLabel}</Badge>
+                        <Badge
+                            className="shrink-0"
+                            variant="secondary"
+                        >
+                            {accountLabel}
+                        </Badge>
                     </CardHeader>
                 </Card>
 

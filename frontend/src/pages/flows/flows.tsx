@@ -595,9 +595,7 @@ function Flows() {
                                 <Loader2 className="text-muted-foreground size-10 animate-spin" />
                             </EmptyMedia>
                             <EmptyTitle>Loading flows...</EmptyTitle>
-                            <EmptyDescription>
-                                Please wait while we fetch your conversation flows
-                            </EmptyDescription>
+                            <EmptyDescription>Please wait while we fetch your conversation flows</EmptyDescription>
                         </EmptyHeader>
                     </Empty>
                 </div>
