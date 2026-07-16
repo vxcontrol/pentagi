@@ -3,7 +3,7 @@ import { useEffect } from 'react';
 import { useRouteError } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
-import { StatusCard } from '@/components/ui/status-card';
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { isChunkLoadError, isDomDesyncError, reloadOnce } from '@/lib/chunk-reload';
 
 /**
@@ -29,30 +29,29 @@ function RouteErrorBoundary() {
             className="grid min-h-svh w-full place-items-center p-4"
             role="alert"
         >
-            <StatusCard
-                action={
+            <Empty>
+                <EmptyHeader>
+                    <EmptyMedia variant="icon">
+                        <TriangleAlert />
+                    </EmptyMedia>
+                    <EmptyTitle>Something went wrong</EmptyTitle>
+                    <EmptyDescription>
+                        {isChunk
+                            ? 'A new version was likely just deployed. Reloading will load the latest one.'
+                            : isDesync
+                              ? 'The page hit a display glitch. Reloading usually clears it.'
+                              : 'The page ran into an unexpected error. Reloading usually clears it.'}
+                    </EmptyDescription>
+                </EmptyHeader>
+                <EmptyContent>
                     <Button
                         onClick={() => window.location.reload()}
                         variant="secondary"
                     >
                         Reload
                     </Button>
-                }
-                description={
-                    isChunk
-                        ? 'A new version was likely just deployed. Reloading will load the latest one.'
-                        : isDesync
-                          ? 'The page hit a display glitch. Reloading usually clears it.'
-                          : 'The page ran into an unexpected error. Reloading usually clears it.'
-                }
-                icon={
-                    <TriangleAlert
-                        aria-hidden
-                        className="text-muted-foreground size-10"
-                    />
-                }
-                title="Something went wrong"
-            />
+                </EmptyContent>
+            </Empty>
         </div>
     );
 }

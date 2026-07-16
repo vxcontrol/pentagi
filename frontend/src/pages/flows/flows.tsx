@@ -29,7 +29,7 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { StatusCard } from '@/components/ui/status-card';
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Toggle } from '@/components/ui/toggle';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { RenameFlowDocument, ResultType, StatusType, type TerminalFragmentFragment } from '@/graphql/types';
@@ -589,11 +589,17 @@ function Flows() {
             <>
                 {pageHeader}
                 <div className="flex flex-col gap-4 p-4">
-                    <StatusCard
-                        description="Please wait while we fetch your conversation flows"
-                        icon={<Loader2 className="text-muted-foreground size-16 animate-spin" />}
-                        title="Loading flows..."
-                    />
+                    <Empty>
+                        <EmptyHeader>
+                            <EmptyMedia>
+                                <Loader2 className="text-muted-foreground size-10 animate-spin" />
+                            </EmptyMedia>
+                            <EmptyTitle>Loading flows...</EmptyTitle>
+                            <EmptyDescription>
+                                Please wait while we fetch your conversation flows
+                            </EmptyDescription>
+                        </EmptyHeader>
+                    </Empty>
                 </div>
             </>
         );
@@ -604,8 +610,15 @@ function Flows() {
             <>
                 {pageHeader}
                 <div className="flex flex-col gap-4 p-4">
-                    <StatusCard
-                        action={
+                    <Empty>
+                        <EmptyHeader>
+                            <EmptyMedia variant="icon">
+                                <GitFork />
+                            </EmptyMedia>
+                            <EmptyTitle>No flows found</EmptyTitle>
+                            <EmptyDescription>Get started by creating your first conversation flow</EmptyDescription>
+                        </EmptyHeader>
+                        <EmptyContent>
                             <Button
                                 onClick={() => navigate(routes.newFlow)}
                                 variant="secondary"
@@ -613,11 +626,8 @@ function Flows() {
                                 <Plus />
                                 New Flow
                             </Button>
-                        }
-                        description="Get started by creating your first conversation flow"
-                        icon={<GitFork className="text-muted-foreground size-8" />}
-                        title="No flows found"
-                    />
+                        </EmptyContent>
+                    </Empty>
                 </div>
             </>
         );

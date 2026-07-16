@@ -27,8 +27,8 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { InputSearch } from '@/components/ui/input-search';
-import { StatusCard } from '@/components/ui/status-card';
 import { KnowledgeDocType } from '@/graphql/types';
 import { useTableState } from '@/hooks/use-table-state';
 import { routes } from '@/lib/routes';
@@ -404,11 +404,17 @@ function Knowledges() {
             <>
                 {pageHeader}
                 <div className="flex flex-col gap-4 p-4">
-                    <StatusCard
-                        description="Please wait while we fetch your knowledge documents"
-                        icon={<Loader2 className="text-muted-foreground size-16 animate-spin" />}
-                        title="Loading knowledges..."
-                    />
+                    <Empty>
+                        <EmptyHeader>
+                            <EmptyMedia>
+                                <Loader2 className="text-muted-foreground size-10 animate-spin" />
+                            </EmptyMedia>
+                            <EmptyTitle>Loading knowledges...</EmptyTitle>
+                            <EmptyDescription>
+                                Please wait while we fetch your knowledge documents
+                            </EmptyDescription>
+                        </EmptyHeader>
+                    </Empty>
                 </div>
             </>
         );
@@ -419,8 +425,17 @@ function Knowledges() {
             <>
                 {pageHeader}
                 <div className="flex flex-col gap-4 p-4">
-                    <StatusCard
-                        action={
+                    <Empty>
+                        <EmptyHeader>
+                            <EmptyMedia variant="icon">
+                                <LibraryBig />
+                            </EmptyMedia>
+                            <EmptyTitle>No knowledge documents yet</EmptyTitle>
+                            <EmptyDescription>
+                                Create your first knowledge document to enrich the vector store
+                            </EmptyDescription>
+                        </EmptyHeader>
+                        <EmptyContent>
                             <Button
                                 onClick={() => navigate(routes.newKnowledge)}
                                 variant="secondary"
@@ -428,11 +443,8 @@ function Knowledges() {
                                 <Plus />
                                 New Knowledge
                             </Button>
-                        }
-                        description="Create your first knowledge document to enrich the vector store"
-                        icon={<LibraryBig className="text-muted-foreground size-8" />}
-                        title="No knowledge documents yet"
-                    />
+                        </EmptyContent>
+                    </Empty>
                 </div>
             </>
         );

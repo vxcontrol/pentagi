@@ -764,7 +764,7 @@ function DataTable<TData, TValue = unknown>({
                             >
                                 {headerGroup.headers.map((header) => (
                                     <TableHead
-                                        className={header.column.columnDef.meta?.headerClassName}
+                                        className={cn('truncate', header.column.columnDef.meta?.headerClassName)}
                                         key={header.id}
                                         style={
                                             header.column.columnDef.size

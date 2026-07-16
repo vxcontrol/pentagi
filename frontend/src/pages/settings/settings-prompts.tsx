@@ -39,7 +39,7 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { StatusCard } from '@/components/ui/status-card';
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { DeletePromptDocument, SettingsPromptsDocument } from '@/graphql/types';
 import { usePageStorageKeys } from '@/hooks/use-page-storage-keys';
 import { routes } from '@/lib/routes';
@@ -323,8 +323,8 @@ function SettingsPrompts() {
         {
             accessorKey: 'displayName',
             cell: ({ row }) => (
-                <div className="flex items-center gap-2">
-                    <span className="font-medium">{row.original.displayName}</span>
+                <div className="flex min-w-0 items-center gap-2">
+                    <span className="truncate font-medium">{row.original.displayName}</span>
                 </div>
             ),
             enableHiding: false,
@@ -347,7 +347,6 @@ function SettingsPrompts() {
                 );
             },
             meta: { columnMenuLabel: 'Agent Name', searchable: true },
-            size: 200,
         },
         {
             accessorKey: 'systemStatus',
@@ -495,8 +494,8 @@ function SettingsPrompts() {
         {
             accessorKey: 'displayName',
             cell: ({ row }) => (
-                <div className="flex items-center gap-2">
-                    <span className="font-medium">{row.original.displayName}</span>
+                <div className="flex min-w-0 items-center gap-2">
+                    <span className="truncate font-medium">{row.original.displayName}</span>
                 </div>
             ),
             enableHiding: false,
@@ -519,7 +518,6 @@ function SettingsPrompts() {
                 );
             },
             meta: { columnMenuLabel: 'Tool Name', searchable: true },
-            size: 300,
         },
         {
             accessorKey: 'status',
@@ -793,11 +791,15 @@ function SettingsPrompts() {
                 {pageHeader}
                 <div className="flex flex-1 flex-col gap-6 p-4">
                     <SettingsPromptsHeader />
-                    <StatusCard
-                        description="Please wait while we fetch your prompt templates"
-                        icon={<Loader2 className="text-muted-foreground size-16 animate-spin" />}
-                        title="Loading prompts..."
-                    />
+                    <Empty>
+                        <EmptyHeader>
+                            <EmptyMedia>
+                                <Loader2 className="text-muted-foreground size-10 animate-spin" />
+                            </EmptyMedia>
+                            <EmptyTitle>Loading prompts...</EmptyTitle>
+                            <EmptyDescription>Please wait while we fetch your prompt templates</EmptyDescription>
+                        </EmptyHeader>
+                    </Empty>
                 </div>
             </>
         );
@@ -828,11 +830,15 @@ function SettingsPrompts() {
                 {pageHeader}
                 <div className="flex flex-1 flex-col gap-6 p-4">
                     <SettingsPromptsHeader />
-                    <StatusCard
-                        description="Prompt templates could not be loaded"
-                        icon={<Settings className="text-muted-foreground size-8" />}
-                        title="No prompts available"
-                    />
+                    <Empty>
+                        <EmptyHeader>
+                            <EmptyMedia variant="icon">
+                                <Settings />
+                            </EmptyMedia>
+                            <EmptyTitle>No prompts available</EmptyTitle>
+                            <EmptyDescription>Prompt templates could not be loaded</EmptyDescription>
+                        </EmptyHeader>
+                    </Empty>
                 </div>
             </>
         );

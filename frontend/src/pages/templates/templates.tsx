@@ -24,7 +24,7 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { StatusCard } from '@/components/ui/status-card';
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { useTableState } from '@/hooks/use-table-state';
 import { routes } from '@/lib/routes';
 import { mergeHrefWithSearchParams } from '@/lib/url-params';
@@ -268,8 +268,15 @@ function Templates() {
             <>
                 {pageHeader}
                 <div className="flex flex-col gap-4 p-4">
-                    <StatusCard
-                        action={
+                    <Empty>
+                        <EmptyHeader>
+                            <EmptyMedia variant="icon">
+                                <FileText />
+                            </EmptyMedia>
+                            <EmptyTitle>No templates yet</EmptyTitle>
+                            <EmptyDescription>Create your first template to get started</EmptyDescription>
+                        </EmptyHeader>
+                        <EmptyContent>
                             <Button
                                 onClick={() => navigate(routes.newTemplate)}
                                 variant="secondary"
@@ -277,11 +284,8 @@ function Templates() {
                                 <Plus className="size-4" />
                                 New Template
                             </Button>
-                        }
-                        description="Create your first template to get started"
-                        icon={<FileText className="text-muted-foreground size-8" />}
-                        title="No templates yet"
-                    />
+                        </EmptyContent>
+                    </Empty>
                 </div>
             </>
         );

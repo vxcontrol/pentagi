@@ -8,7 +8,7 @@ import { useNavigate } from 'react-router-dom';
 import type { ProviderConfigFragmentFragment } from '@/graphql/types';
 
 import { providerIcons } from '@/components/icons/provider-icon';
-import { AppHeader, AppHeaderContent, AppHeaderTitle } from '@/components/layouts/app/app-header';
+import { AppHeader, AppHeaderActions, AppHeaderContent, AppHeaderTitle } from '@/components/layouts/app/app-header';
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -22,7 +22,7 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { StatusCard } from '@/components/ui/status-card';
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { DeleteProviderDocument, ProviderType, SettingsProvidersDocument } from '@/graphql/types';
 import { useTableState } from '@/hooks/use-table-state';
 import { routes } from '@/lib/routes';
@@ -65,46 +65,39 @@ export function SettingsProvidersHeader() {
     };
 
     return (
-        <div className="flex items-center justify-between gap-4">
-            <p className="text-muted-foreground min-w-0 flex-1 truncate">Manage language model providers</p>
-
-            <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                    <Button
-                        aria-label="Create provider — choose type"
-                        className="shrink-0"
-                        variant="secondary"
-                    >
-                        Create Provider
-                        <ChevronDown className="size-4" />
-                    </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent
-                    align="end"
-                    style={{
-                        width: 'var(--radix-dropdown-menu-trigger-width)',
-                    }}
+        <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+                <Button
+                    aria-label="Create provider — choose type"
+                    className="w-8 shrink-0 px-0 md:w-auto md:px-3"
+                    size="sm"
+                    variant="secondary"
                 >
-                    {availableTypes.length === 0 ? (
-                        <DropdownMenuItem disabled>No available provider types</DropdownMenuItem>
-                    ) : (
-                        availableTypes.map(({ label, type }) => {
-                            const Icon = providerIcons[type]?.icon;
+                    <Plus />
+                    <span className="hidden md:inline">Create Provider</span>
+                    <ChevronDown className="hidden size-4 md:inline-flex" />
+                </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+                {availableTypes.length === 0 ? (
+                    <DropdownMenuItem disabled>No available provider types</DropdownMenuItem>
+                ) : (
+                    availableTypes.map(({ label, type }) => {
+                        const Icon = providerIcons[type]?.icon;
 
-                            return (
-                                <DropdownMenuItem
-                                    key={type}
-                                    onClick={() => handleProviderCreate(type)}
-                                >
-                                    {Icon && <Icon className="size-4" />}
-                                    {label}
-                                </DropdownMenuItem>
-                            );
-                        })
-                    )}
-                </DropdownMenuContent>
-            </DropdownMenu>
-        </div>
+                        return (
+                            <DropdownMenuItem
+                                key={type}
+                                onClick={() => handleProviderCreate(type)}
+                            >
+                                {Icon && <Icon className="size-4" />}
+                                {label}
+                            </DropdownMenuItem>
+                        );
+                    })
+                )}
+            </DropdownMenuContent>
+        </DropdownMenu>
     );
 }
 
@@ -404,6 +397,9 @@ function SettingsProviders() {
             <AppHeaderContent>
                 <AppHeaderTitle icon={<Plug className="size-4 shrink-0" />}>Providers</AppHeaderTitle>
             </AppHeaderContent>
+            <AppHeaderActions>
+                <SettingsProvidersHeader />
+            </AppHeaderActions>
         </AppHeader>
     );
 
@@ -412,12 +408,17 @@ function SettingsProviders() {
             <>
                 {pageHeader}
                 <div className="flex flex-1 flex-col gap-4 p-4">
-                    <SettingsProvidersHeader />
-                    <StatusCard
-                        description="Please wait while we fetch your provider configurations"
-                        icon={<Loader2 className="text-muted-foreground size-16 animate-spin" />}
-                        title="Loading providers..."
-                    />
+                    <Empty>
+                        <EmptyHeader>
+                            <EmptyMedia>
+                                <Loader2 className="text-muted-foreground size-10 animate-spin" />
+                            </EmptyMedia>
+                            <EmptyTitle>Loading providers...</EmptyTitle>
+                            <EmptyDescription>
+                                Please wait while we fetch your provider configurations
+                            </EmptyDescription>
+                        </EmptyHeader>
+                    </Empty>
                 </div>
             </>
         );
@@ -428,7 +429,6 @@ function SettingsProviders() {
             <>
                 {pageHeader}
                 <div className="flex flex-1 flex-col gap-4 p-4">
-                    <SettingsProvidersHeader />
                     <Alert variant="destructive">
                         <AlertCircle className="size-4" />
                         <AlertTitle>Error loading providers</AlertTitle>
@@ -446,9 +446,17 @@ function SettingsProviders() {
             <>
                 {pageHeader}
                 <div className="flex flex-1 flex-col gap-4 p-4">
-                    <SettingsProvidersHeader />
-                    <StatusCard
-                        action={
+                    <Empty>
+                        <EmptyHeader>
+                            <EmptyMedia variant="icon">
+                                <Settings />
+                            </EmptyMedia>
+                            <EmptyTitle>No providers configured</EmptyTitle>
+                            <EmptyDescription>
+                                Get started by adding your first language model provider
+                            </EmptyDescription>
+                        </EmptyHeader>
+                        <EmptyContent>
                             <Button
                                 onClick={() => navigate(routes.settings.newProvider())}
                                 variant="secondary"
@@ -456,11 +464,8 @@ function SettingsProviders() {
                                 <Plus className="size-4" />
                                 Add Provider
                             </Button>
-                        }
-                        description="Get started by adding your first language model provider"
-                        icon={<Settings className="text-muted-foreground size-8" />}
-                        title="No providers configured"
-                    />
+                        </EmptyContent>
+                    </Empty>
                 </div>
             </>
         );
@@ -470,8 +475,6 @@ function SettingsProviders() {
         <>
             {pageHeader}
             <div className="flex flex-1 flex-col gap-4 p-4">
-                <SettingsProvidersHeader />
-
                 {(deleteError || deleteErrorMessage) && (
                     <Alert variant="destructive">
                         <AlertCircle className="size-4" />

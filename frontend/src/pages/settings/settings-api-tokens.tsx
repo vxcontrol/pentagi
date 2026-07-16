@@ -24,7 +24,7 @@ import * as z from 'zod';
 
 import type { ApiTokenFragmentFragment } from '@/graphql/types';
 
-import { AppHeader, AppHeaderContent, AppHeaderTitle } from '@/components/layouts/app/app-header';
+import { AppHeader, AppHeaderAction, AppHeaderActions, AppHeaderContent, AppHeaderTitle } from '@/components/layouts/app/app-header';
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -40,10 +40,10 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { StatusCard } from '@/components/ui/status-card';
 import {
     ApiTokenCreatedDocument,
     ApiTokenDeletedDocument,
@@ -143,45 +143,6 @@ const copyToClipboard = async (text: string): Promise<boolean> => {
         return false;
     }
 };
-
-function SettingsAPITokensHeader({ onCreateClick }: { onCreateClick: () => void }) {
-    return (
-        <div className="flex items-center justify-between gap-4">
-            <div className="flex min-w-0 flex-1 flex-col gap-2">
-                <p className="text-muted-foreground truncate">Manage API tokens for programmatic access</p>
-                <div className="flex gap-4 text-sm">
-                    <a
-                        className="text-primary inline-flex items-center gap-1 underline hover:no-underline"
-                        href={`${window.location.origin}${baseUrl}/graphql/playground`}
-                        rel="noopener noreferrer"
-                        target="_blank"
-                    >
-                        GraphQL Playground
-                        <ExternalLink className="size-3" />
-                    </a>
-                    <a
-                        className="text-primary inline-flex items-center gap-1 underline hover:no-underline"
-                        href={`${window.location.origin}${baseUrl}/swagger/index.html`}
-                        rel="noopener noreferrer"
-                        target="_blank"
-                    >
-                        Swagger UI
-                        <ExternalLink className="size-3" />
-                    </a>
-                </div>
-            </div>
-
-            <Button
-                className="shrink-0"
-                onClick={onCreateClick}
-                variant="secondary"
-            >
-                <Plus className="size-4" />
-                Create Token
-            </Button>
-        </div>
-    );
-}
 
 const createNewTokenPlaceholder: APIToken = {
     createdAt: new Date().toISOString(),
@@ -848,6 +809,51 @@ function SettingsAPITokens() {
             <AppHeaderContent>
                 <AppHeaderTitle icon={<Key className="size-4 shrink-0" />}>API Tokens</AppHeaderTitle>
             </AppHeaderContent>
+            <AppHeaderActions>
+                <AppHeaderAction
+                    icon={<Plus />}
+                    label="Create Token"
+                    onClick={handleCreateNew}
+                    variant="secondary"
+                />
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <Button
+                            aria-label="Developer tools"
+                            className="size-8 p-0"
+                            size="sm"
+                            variant="ghost"
+                        >
+                            <Ellipsis />
+                        </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent
+                        align="end"
+                        className="min-w-44"
+                    >
+                        <DropdownMenuItem asChild>
+                            <a
+                                href={`${baseUrl}/graphql/playground`}
+                                rel="noopener noreferrer"
+                                target="_blank"
+                            >
+                                <ExternalLink className="size-4" />
+                                GraphQL Playground
+                            </a>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem asChild>
+                            <a
+                                href={`${baseUrl}/swagger/index.html`}
+                                rel="noopener noreferrer"
+                                target="_blank"
+                            >
+                                <ExternalLink className="size-4" />
+                                Swagger UI
+                            </a>
+                        </DropdownMenuItem>
+                    </DropdownMenuContent>
+                </DropdownMenu>
+            </AppHeaderActions>
         </AppHeader>
     );
 
@@ -856,12 +862,15 @@ function SettingsAPITokens() {
             <>
                 {pageHeader}
                 <div className="flex flex-1 flex-col gap-4 p-4">
-                    <SettingsAPITokensHeader onCreateClick={handleCreateNew} />
-                    <StatusCard
-                        description="Please wait while we fetch your API tokens"
-                        icon={<Loader2 className="text-muted-foreground size-16 animate-spin" />}
-                        title="Loading tokens..."
-                    />
+                    <Empty>
+                        <EmptyHeader>
+                            <EmptyMedia>
+                                <Loader2 className="text-muted-foreground size-10 animate-spin" />
+                            </EmptyMedia>
+                            <EmptyTitle>Loading tokens...</EmptyTitle>
+                            <EmptyDescription>Please wait while we fetch your API tokens</EmptyDescription>
+                        </EmptyHeader>
+                    </Empty>
                 </div>
             </>
         );
@@ -872,7 +881,6 @@ function SettingsAPITokens() {
             <>
                 {pageHeader}
                 <div className="flex flex-1 flex-col gap-4 p-4">
-                    <SettingsAPITokensHeader onCreateClick={handleCreateNew} />
                     <Alert variant="destructive">
                         <AlertCircle className="size-4" />
                         <AlertTitle>Error loading tokens</AlertTitle>
@@ -890,9 +898,17 @@ function SettingsAPITokens() {
             <>
                 {pageHeader}
                 <div className="flex flex-1 flex-col gap-4 p-4">
-                    <SettingsAPITokensHeader onCreateClick={handleCreateNew} />
-                    <StatusCard
-                        action={
+                    <Empty>
+                        <EmptyHeader>
+                            <EmptyMedia variant="icon">
+                                <Key />
+                            </EmptyMedia>
+                            <EmptyTitle>No API tokens configured</EmptyTitle>
+                            <EmptyDescription>
+                                Create your first API token to access PentAGI programmatically
+                            </EmptyDescription>
+                        </EmptyHeader>
+                        <EmptyContent>
                             <Button
                                 onClick={handleCreateNew}
                                 variant="secondary"
@@ -900,11 +916,8 @@ function SettingsAPITokens() {
                                 <Plus className="size-4" />
                                 Create Token
                             </Button>
-                        }
-                        description="Create your first API token to access PentAGI programmatically"
-                        icon={<Key className="text-muted-foreground size-8" />}
-                        title="No API tokens configured"
-                    />
+                        </EmptyContent>
+                    </Empty>
                 </div>
             </>
         );
@@ -914,8 +927,6 @@ function SettingsAPITokens() {
         <>
             {pageHeader}
             <div className="flex flex-1 flex-col gap-4 p-4">
-                <SettingsAPITokensHeader onCreateClick={handleCreateNew} />
-
                 {(createError || updateError || deleteError || deleteErrorMessage) && (
                     <Alert variant="destructive">
                         <AlertCircle className="size-4" />

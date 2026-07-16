@@ -68,9 +68,9 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Form, FormControl, FormItem, FormMessage } from '@/components/ui/form';
 import { FormSubmitButton } from '@/components/ui/form-submit-button';
-import { StatusCard } from '@/components/ui/status-card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
     CreatePromptDocument,
@@ -733,11 +733,15 @@ function SettingsPrompt() {
             <>
                 {pageHeader}
                 <div className="flex flex-1 items-center justify-center p-4">
-                    <StatusCard
-                        description="Please wait while we fetch prompt information"
-                        icon={<Loader2 className="text-muted-foreground size-16 animate-spin" />}
-                        title="Loading prompt data..."
-                    />
+                    <Empty>
+                        <EmptyHeader>
+                            <EmptyMedia>
+                                <Loader2 className="text-muted-foreground size-10 animate-spin" />
+                            </EmptyMedia>
+                            <EmptyTitle>Loading prompt data...</EmptyTitle>
+                            <EmptyDescription>Please wait while we fetch prompt information</EmptyDescription>
+                        </EmptyHeader>
+                    </Empty>
                 </div>
             </>
         );
@@ -748,11 +752,15 @@ function SettingsPrompt() {
             <>
                 {pageHeader}
                 <div className="flex flex-1 items-center justify-center p-4">
-                    <StatusCard
-                        description={error.message}
-                        icon={<AlertCircle className="text-destructive size-16" />}
-                        title="Error loading prompt data"
-                    />
+                    <Empty>
+                        <EmptyHeader>
+                            <EmptyMedia>
+                                <AlertCircle className="text-destructive size-12" />
+                            </EmptyMedia>
+                            <EmptyTitle>Error loading prompt data</EmptyTitle>
+                            <EmptyDescription>{error.message}</EmptyDescription>
+                        </EmptyHeader>
+                    </Empty>
                 </div>
             </>
         );
@@ -763,11 +771,15 @@ function SettingsPrompt() {
             <>
                 {pageHeader}
                 <div className="flex flex-1 items-center justify-center p-4">
-                    <StatusCard
-                        description={`The prompt "${promptId}" could not be found or is not supported for editing.`}
-                        icon={<AlertCircle className="text-destructive size-16" />}
-                        title="Prompt not found"
-                    />
+                    <Empty>
+                        <EmptyHeader>
+                            <EmptyMedia>
+                                <AlertCircle className="text-destructive size-12" />
+                            </EmptyMedia>
+                            <EmptyTitle>Prompt not found</EmptyTitle>
+                            <EmptyDescription>{`The prompt "${promptId}" could not be found or is not supported for editing.`}</EmptyDescription>
+                        </EmptyHeader>
+                    </Empty>
                 </div>
             </>
         );
