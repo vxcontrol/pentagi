@@ -220,14 +220,12 @@ interface VariablesContentProps {
 
 interface VariablesPanelContainerProps {
     control: Control<HumanFormData> | Control<SystemFormData>;
-    onEditorFocus: () => void;
     onVariableClick: (variable: string) => void;
     variables: string[];
 }
 
 interface VariablesProps {
     currentTemplate: string;
-    onEditorFocus: () => void;
     onVariableClick: (variable: string) => void;
     variables: string[];
 }
@@ -315,10 +313,6 @@ function SettingsPrompt() {
         if (!editorRef.current?.selectNextUse(variable)) {
             editorRef.current?.insertAtCursor(`{{.${variable}}}`);
         }
-    }, []);
-
-    const handleEditorFocus = useCallback(() => {
-        editorRef.current?.focus();
     }, []);
 
     const handleReset = () => {
@@ -852,7 +846,6 @@ function SettingsPrompt() {
             {variablesData ? (
                 <VariablesPanelContainer
                     control={activeControl}
-                    onEditorFocus={handleEditorFocus}
                     onVariableClick={handleVariableClick}
                     variables={variablesData.variables}
                 />
@@ -1039,7 +1032,7 @@ function SettingsPrompt() {
     );
 }
 
-function Variables({ currentTemplate, onEditorFocus, onVariableClick, variables }: VariablesProps) {
+function Variables({ currentTemplate, onVariableClick, variables }: VariablesProps) {
     const { isDesktop } = useBreakpoint();
     const counts = useMemo(() => countVariableUses(currentTemplate, variables), [currentTemplate, variables]);
 
@@ -1064,7 +1057,7 @@ function Variables({ currentTemplate, onEditorFocus, onVariableClick, variables 
                         Click to insert at the cursor, or cycle through existing uses.
                     </p>
                 </div>
-                {content}
+                <div className="bg-background">{content}</div>
             </div>
         );
     }
@@ -1087,16 +1080,9 @@ function Variables({ currentTemplate, onEditorFocus, onVariableClick, variables 
                     </Badge>
                 </Button>
             </PopoverTrigger>
-            {/* Both autofocus preventDefaults are load-bearing: insert/cycle act on the editor's stored
-                selection, so opening must not steal the caret and closing must return it to the editor. */}
             <PopoverContent
                 align="start"
                 className="max-h-(--radix-popover-content-available-height) w-(--radix-popover-trigger-width) overflow-y-auto p-0"
-                onCloseAutoFocus={(event) => {
-                    event.preventDefault();
-                    onEditorFocus();
-                }}
-                onOpenAutoFocus={(event) => event.preventDefault()}
             >
                 {content}
             </PopoverContent>
@@ -1106,7 +1092,7 @@ function Variables({ currentTemplate, onEditorFocus, onVariableClick, variables 
 
 function VariablesContent({ counts, onVariableClick, variables }: VariablesContentProps) {
     return (
-        <div className="bg-background flex flex-wrap gap-1.5 px-4 py-3">
+        <div className="flex flex-wrap gap-1.5 px-4 py-3">
             {variables.map((variable) => {
                 const count = counts[variable] ?? 0;
                 const isUsed = count > 0;
@@ -1143,13 +1129,12 @@ function VariablesContent({ counts, onVariableClick, variables }: VariablesConte
 }
 
 // Don't hoist this useWatch to the parent — it would re-subscribe the whole page per keystroke.
-function VariablesPanelContainer({ control, onEditorFocus, onVariableClick, variables }: VariablesPanelContainerProps) {
+function VariablesPanelContainer({ control, onVariableClick, variables }: VariablesPanelContainerProps) {
     const currentTemplate = useWatch({ control, name: 'template' });
 
     return (
         <Variables
             currentTemplate={currentTemplate}
-            onEditorFocus={onEditorFocus}
             onVariableClick={onVariableClick}
             variables={variables}
         />
