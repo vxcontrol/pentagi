@@ -201,10 +201,10 @@ func (f *firecrawl) search(ctx context.Context, query string, maxResults int) (s
 	}
 	defer resp.Body.Close()
 
-	return f.parseHTTPResponse(ctx, resp)
+	return f.parseHTTPResponse(ctx, query, resp)
 }
 
-func (f *firecrawl) parseHTTPResponse(ctx context.Context, resp *http.Response) (string, error) {
+func (f *firecrawl) parseHTTPResponse(ctx context.Context, query string, resp *http.Response) (string, error) {
 	switch resp.StatusCode {
 	case http.StatusOK:
 		var respBody firecrawlSearchResult
@@ -217,7 +217,7 @@ func (f *firecrawl) parseHTTPResponse(ctx context.Context, resp *http.Response) 
 			}
 			return "", fmt.Errorf("request failed")
 		}
-		return f.buildFirecrawlResult(ctx, &respBody), nil
+		return f.buildFirecrawlResult(ctx, query, &respBody), nil
 	case http.StatusBadRequest:
 		return "", fmt.Errorf("request is invalid")
 	case http.StatusUnauthorized:
@@ -247,7 +247,7 @@ func (f *firecrawl) parseHTTPResponse(ctx context.Context, resp *http.Response) 
 	}
 }
 
-func (f *firecrawl) buildFirecrawlResult(ctx context.Context, result *firecrawlSearchResult) string {
+func (f *firecrawl) buildFirecrawlResult(ctx context.Context, query string, result *firecrawlSearchResult) string {
 	var writer strings.Builder
 	writer.WriteString("# Links\n\n")
 
@@ -264,7 +264,7 @@ func (f *firecrawl) buildFirecrawlResult(ctx context.Context, result *firecrawlS
 	}
 
 	if isMarkdownExists && f.summarizer != nil {
-		summarizePrompt, err := f.getSummarizePrompt(result)
+		summarizePrompt, err := f.getSummarizePrompt(query, result)
 		if err != nil {
 			writer.WriteString(f.getContentFromResults(result.Data.Web))
 		} else {
@@ -305,9 +305,11 @@ type firecrawlPromptDoc struct {
 	Markdown string
 }
 
-func (f *firecrawl) getSummarizePrompt(result *firecrawlSearchResult) (string, error) {
+func (f *firecrawl) getSummarizePrompt(query string, result *firecrawlSearchResult) (string, error) {
 	templateText := `<instructions>
 TASK: Summarize web search results for the following user query:
+
+USER QUERY: "{{.Query}}"
 
 DATA:
 - <raw_content> tags contain web page content with attributes: id, title, url
@@ -355,6 +357,7 @@ The summary MUST provide complete answers to the user's query, preserving all re
 	}
 
 	templateContext := map[string]any{
+		"Query":     query,
 		"MaxLength": maxRawContentLength,
 		"Results":   docs,
 	}

@@ -329,7 +329,7 @@ func TestFirecrawlParseHTTPResponse_StatusAndDecodeErrors(t *testing.T) {
 				StatusCode: tt.statusCode,
 				Body:       io.NopCloser(strings.NewReader(tt.body)),
 			}
-			result, err := fc.parseHTTPResponse(t.Context(), resp)
+			result, err := fc.parseHTTPResponse(t.Context(), "test query", resp)
 
 			if !tt.wantErr {
 				if err != nil {
@@ -358,6 +358,10 @@ func TestFirecrawlBuildResult_WithSummarizer(t *testing.T) {
 				if !strings.Contains(prompt, "<raw_content") {
 					t.Fatalf("summarizer prompt must include raw content, got: %q", prompt)
 				}
+				// The user query must be rendered so the model can answer it.
+				if !strings.Contains(prompt, `USER QUERY: "test query"`) {
+					t.Fatalf("summarizer prompt must include the user query, got: %q", prompt)
+				}
 				// Source IDs must be one-based to line up with the numbered links.
 				if !strings.Contains(prompt, `id="1"`) {
 					t.Fatalf("summarizer prompt must use one-based source ids, got: %q", prompt)
@@ -369,7 +373,7 @@ func TestFirecrawlBuildResult_WithSummarizer(t *testing.T) {
 			},
 		}
 
-		out := fc.buildFirecrawlResult(t.Context(), &firecrawlSearchResult{
+		out := fc.buildFirecrawlResult(t.Context(), "test query", &firecrawlSearchResult{
 			Success: true,
 			Data: firecrawlData{
 				Web: []firecrawlResult{
@@ -394,7 +398,7 @@ func TestFirecrawlBuildResult_WithSummarizer(t *testing.T) {
 	t.Run("falls back to markdown content when no summarizer", func(t *testing.T) {
 		fc := &firecrawl{}
 
-		out := fc.buildFirecrawlResult(t.Context(), &firecrawlSearchResult{
+		out := fc.buildFirecrawlResult(t.Context(), "test query", &firecrawlSearchResult{
 			Success: true,
 			Data: firecrawlData{
 				Web: []firecrawlResult{
@@ -419,7 +423,7 @@ func TestFirecrawlBuildResult_WithSummarizer(t *testing.T) {
 	t.Run("no content sections when markdown is empty", func(t *testing.T) {
 		fc := &firecrawl{}
 
-		out := fc.buildFirecrawlResult(t.Context(), &firecrawlSearchResult{
+		out := fc.buildFirecrawlResult(t.Context(), "test query", &firecrawlSearchResult{
 			Success: true,
 			Data: firecrawlData{
 				Web: []firecrawlResult{
@@ -443,7 +447,7 @@ func TestFirecrawlBuildResult_WithSummarizer(t *testing.T) {
 	t.Run("falls back to metadata url and title", func(t *testing.T) {
 		fc := &firecrawl{}
 
-		out := fc.buildFirecrawlResult(t.Context(), &firecrawlSearchResult{
+		out := fc.buildFirecrawlResult(t.Context(), "test query", &firecrawlSearchResult{
 			Success: true,
 			Data: firecrawlData{
 				Web: []firecrawlResult{
