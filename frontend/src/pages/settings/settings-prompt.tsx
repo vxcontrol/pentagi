@@ -86,6 +86,10 @@ import { useBreakpoint } from '@/hooks/use-breakpoint';
 import { composeRefs } from '@/lib/compose-refs';
 import { formatPromptId } from '@/lib/route-titles/format-prompt-id';
 
+const VARIABLES_HINT = 'Click to insert at the cursor, or cycle through existing uses.';
+
+const VARIABLES_TITLE = 'Available variables';
+
 const systemFormSchema = z.object({
     template: z.string().min(1, 'System template is required'),
 });
@@ -1054,18 +1058,29 @@ function Variables({ currentTemplate, onEditorFocus, onVariableClick, variables 
     );
 
     if (isDesktop) {
-        return <div className="bg-card overflow-hidden rounded-lg border">{content}</div>;
+        return (
+            <div className="bg-card overflow-hidden rounded-lg border">
+                <div className="border-b px-4 py-3">
+                    <h4 className="text-sm font-medium">{VARIABLES_TITLE}</h4>
+                    <p className="text-muted-foreground mt-1 text-xs">{VARIABLES_HINT}</p>
+                </div>
+                {content}
+            </div>
+        );
     }
 
     return (
         <Popover>
             <PopoverTrigger asChild>
                 <Button
-                    className="w-full justify-start"
+                    className="h-auto w-full justify-start gap-3 px-4 py-3 whitespace-normal"
                     variant="outline"
                 >
                     <Braces className="size-4" />
-                    Available variables
+                    <span className="flex flex-col items-start gap-1 text-left">
+                        <span className="text-sm font-medium">{VARIABLES_TITLE}</span>
+                        <span className="text-muted-foreground text-xs font-normal">{VARIABLES_HINT}</span>
+                    </span>
                 </Button>
             </PopoverTrigger>
             {/* Both autofocus preventDefaults are load-bearing: insert/cycle act on the editor's stored
@@ -1087,47 +1102,39 @@ function Variables({ currentTemplate, onEditorFocus, onVariableClick, variables 
 
 function VariablesContent({ counts, onVariableClick, variables }: VariablesContentProps) {
     return (
-        <>
-            <div className="border-b px-4 py-3">
-                <h4 className="text-sm font-medium">Available variables</h4>
-                <p className="text-muted-foreground mt-1 text-xs">
-                    Click to insert at the cursor, or cycle through existing uses.
-                </p>
-            </div>
-            <div className="bg-background flex flex-wrap gap-1.5 px-4 py-3">
-                {variables.map((variable) => {
-                    const count = counts[variable] ?? 0;
-                    const isUsed = count > 0;
-                    const action = isUsed
-                        ? `Go to next {{.${variable}}} in the template${count > 1 ? ` (${count} uses)` : ''}`
-                        : `Insert {{.${variable}}} at the cursor`;
+        <div className="bg-background flex flex-wrap gap-1.5 px-4 py-3">
+            {variables.map((variable) => {
+                const count = counts[variable] ?? 0;
+                const isUsed = count > 0;
+                const action = isUsed
+                    ? `Go to next {{.${variable}}} in the template${count > 1 ? ` (${count} uses)` : ''}`
+                    : `Insert {{.${variable}}} at the cursor`;
 
-                    return (
-                        // className stays on Badge: Slot only concatenates, so `font-normal` would race
-                        // badgeVariants' `font-semibold` unless cn() merges them here first.
-                        <Badge
-                            asChild
-                            className="cursor-pointer font-mono font-normal"
-                            key={variable}
-                            variant={isUsed ? 'green' : 'secondary'}
+                return (
+                    // className stays on Badge: Slot only concatenates, so `font-normal` would race
+                    // badgeVariants' `font-semibold` unless cn() merges them here first.
+                    <Badge
+                        asChild
+                        className="cursor-pointer font-mono font-normal"
+                        key={variable}
+                        variant={isUsed ? 'green' : 'secondary'}
+                    >
+                        <button
+                            aria-label={action}
+                            onClick={() => onVariableClick(variable)}
+                            title={action}
+                            type="button"
                         >
-                            <button
-                                aria-label={action}
-                                onClick={() => onVariableClick(variable)}
-                                title={action}
-                                type="button"
-                            >
-                                {isUsed ? <Check className="size-3" /> : null}
-                                {`{{.${variable}}}`}
-                                {count > 1 ? (
-                                    <span className="ml-0.5 text-[10px] tabular-nums opacity-70">×{count}</span>
-                                ) : null}
-                            </button>
-                        </Badge>
-                    );
-                })}
-            </div>
-        </>
+                            {isUsed ? <Check className="size-3" /> : null}
+                            {`{{.${variable}}}`}
+                            {count > 1 ? (
+                                <span className="ml-0.5 text-[10px] tabular-nums opacity-70">×{count}</span>
+                            ) : null}
+                        </button>
+                    </Badge>
+                );
+            })}
+        </div>
     );
 }
 
