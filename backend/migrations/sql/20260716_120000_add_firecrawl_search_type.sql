@@ -40,6 +40,12 @@ CREATE TYPE SEARCHENGINE_TYPE_NEW AS ENUM (
   'sploitus'
 );
 
+-- Remap any rows logged with the removed value so the narrowing cast below
+-- cannot fail; 'firecrawl' is a content-rich search engine like 'tavily'.
+UPDATE searchlogs
+    SET engine = 'tavily'
+    WHERE engine = 'firecrawl';
+
 -- Update the searchlogs table to use the reverted enum type
 ALTER TABLE searchlogs
     ALTER COLUMN engine TYPE SEARCHENGINE_TYPE_NEW USING engine::text::SEARCHENGINE_TYPE_NEW;
