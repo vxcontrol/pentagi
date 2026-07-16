@@ -53,7 +53,6 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { FormSubmitButton } from '@/components/ui/form-submit-button';
 import { Input } from '@/components/ui/input';
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -1881,15 +1880,13 @@ function SettingsProvider() {
                         type="button"
                         variant="outline"
                     />
-                    <FormSubmitButton
+                    <AppHeaderAction
                         form="provider-form"
                         icon={<Save className="size-4" />}
+                        label={isNew ? 'Create' : 'Save'}
                         loading={isLoading}
-                        size="sm"
-                        variant="secondary"
-                    >
-                        {isNew ? 'Create' : 'Save'}
-                    </FormSubmitButton>
+                        type="submit"
+                    />
                     {!isNew && (
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>

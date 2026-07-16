@@ -71,7 +71,6 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Form, FormControl, FormItem, FormMessage } from '@/components/ui/form';
-import { FormSubmitButton } from '@/components/ui/form-submit-button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
@@ -675,15 +674,13 @@ function SettingsPrompt() {
                         type="button"
                         variant="outline"
                     />
-                    <FormSubmitButton
+                    <AppHeaderAction
                         form={activeFormId}
                         icon={<Save className="size-4" />}
+                        label="Save"
                         loading={isLoading}
-                        size="sm"
-                        variant="secondary"
-                    >
-                        Save
-                    </FormSubmitButton>
+                        type="submit"
+                    />
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                             <Button

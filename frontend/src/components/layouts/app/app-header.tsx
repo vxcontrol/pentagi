@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react';
 
+import { Loader2 } from 'lucide-react';
+
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage } from '@/components/ui/breadcrumb';
 import { Button, type ButtonProps } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -10,6 +12,7 @@ interface AppHeaderActionProps extends Omit<ButtonProps, 'children'> {
     endIcon?: ReactNode;
     icon: ReactNode;
     label: ReactNode;
+    loading?: boolean;
 }
 
 export function AppHeader({ children, className }: { children: ReactNode; className?: string }) {
@@ -28,9 +31,11 @@ export function AppHeader({ children, className }: { children: ReactNode; classN
 export function AppHeaderAction({
     'aria-label': ariaLabel,
     className,
+    disabled,
     endIcon,
     icon,
     label,
+    loading = false,
     size = 'sm',
     ...props
 }: AppHeaderActionProps) {
@@ -40,10 +45,11 @@ export function AppHeaderAction({
         <Button
             aria-label={accessibleLabel}
             className={cn('w-8 px-0 md:w-auto md:px-3', className)}
+            disabled={disabled || loading}
             size={size}
             {...props}
         >
-            {icon}
+            {loading ? <Loader2 className="size-4 animate-spin" /> : icon}
             <span className="hidden md:inline">{label}</span>
             {endIcon ? <span className="hidden md:inline-flex">{endIcon}</span> : null}
         </Button>

@@ -17,7 +17,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { z } from 'zod';
 
-import { AppHeader, AppHeaderActions, AppHeaderContent } from '@/components/layouts/app/app-header';
+import { AppHeader, AppHeaderAction, AppHeaderActions, AppHeaderContent } from '@/components/layouts/app/app-header';
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
 import {
     DetailNavigationButtons,
@@ -41,7 +41,6 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { FormSubmitButton } from '@/components/ui/form-submit-button';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Spinner } from '@/components/ui/spinner';
@@ -476,16 +475,14 @@ function Template() {
                         />
                     )}
                     {(isNew || !!templateData?.flowTemplate) && (
-                        <FormSubmitButton
-                            disabled={isSaving || (!isNew && !hasUnsavedChanges)}
+                        <AppHeaderAction
+                            disabled={!isNew && !hasUnsavedChanges}
                             form="template-form"
                             icon={<Save className="size-4" />}
+                            label={isNew ? 'Create' : 'Save'}
                             loading={isSaving}
-                            size="sm"
-                            variant="secondary"
-                        >
-                            {isNew ? 'Create' : 'Save'}
-                        </FormSubmitButton>
+                            type="submit"
+                        />
                     )}
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>

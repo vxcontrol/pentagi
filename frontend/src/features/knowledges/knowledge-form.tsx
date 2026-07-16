@@ -16,7 +16,6 @@ import { AppHeaderAction } from '@/components/layouts/app/app-header';
 import { type EditorViewMode } from '@/components/shared/markdown-editor';
 import { UnsavedChangesDialog, useUnsavedChangesGuard } from '@/components/shared/unsaved-changes';
 import { Form } from '@/components/ui/form';
-import { Spinner } from '@/components/ui/spinner';
 import { AnonymizeTextDocument, KnowledgeAnswerType, KnowledgeDocType, KnowledgeGuideType } from '@/graphql/types';
 import { useAppForm } from '@/hooks/use-app-form';
 import { useBreakpoint } from '@/hooks/use-breakpoint';
@@ -319,8 +318,9 @@ export function KnowledgeForm({ initialValues, isNew, knowledge, onSubmit }: Kno
     const saveButton = (
         <AppHeaderAction
             disabled={!canSubmit}
-            icon={isSaving ? <Spinner variant="circle" /> : <Save aria-hidden="true" />}
+            icon={<Save aria-hidden="true" />}
             label={isNew ? 'Create' : 'Save'}
+            loading={isSaving}
             type="submit"
         />
     );
