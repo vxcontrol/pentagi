@@ -294,6 +294,17 @@ func (f *firecrawl) getContentFromResults(results []firecrawlResult) string {
 	return writer.String()
 }
 
+// firecrawlPromptDoc is a single source record fed to the summarizer. IDs are
+// one-based so they line up with the numbered links in the tool output, and the
+// title/URL use the metadata fallbacks so nothing renders empty. Markdown is
+// bounded per document so an oversized or hostile page can't blow up the prompt.
+type firecrawlPromptDoc struct {
+	ID       int
+	Title    string
+	URL      string
+	Markdown string
+}
+
 func (f *firecrawl) getSummarizePrompt(result *firecrawlSearchResult) (string, error) {
 	templateText := `<instructions>
 TASK: Summarize web search results for the following user query:
@@ -321,17 +332,31 @@ FORMAT:
 The summary MUST provide complete answers to the user's query, preserving all relevant information.
 </instructions>
 
-{{range $index, $result := .Results}}
-{{if $result.Markdown}}
-<raw_content id="{{$index}}" title="{{$result.Title}}" url="{{$result.URL}}">
-{{$result.Markdown}}
+{{range .Results}}
+<raw_content id="{{.ID}}" title="{{.Title}}" url="{{.URL}}">
+{{.Markdown}}
 </raw_content>
-{{end}}
 {{end}}`
+
+	// Keep source IDs aligned with the one-based numbering of the links section,
+	// so a result without markdown still leaves a gap rather than renumbering.
+	docs := make([]firecrawlPromptDoc, 0, len(result.Data.Web))
+	for i, res := range result.Data.Web {
+		if res.Markdown == "" {
+			continue
+		}
+		markdown := res.Markdown[:min(len(res.Markdown), maxRawContentLength)]
+		docs = append(docs, firecrawlPromptDoc{
+			ID:       i + 1,
+			Title:    res.resolvedTitle(),
+			URL:      res.resolvedURL(),
+			Markdown: markdown,
+		})
+	}
 
 	templateContext := map[string]any{
 		"MaxLength": maxRawContentLength,
-		"Results":   result.Data.Web,
+		"Results":   docs,
 	}
 
 	tmpl, err := template.New("summarize").Parse(templateText)

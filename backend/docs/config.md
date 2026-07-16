@@ -1501,13 +1501,15 @@ tavilySearch: &functions.TavilySearchFunc{
     summarizer: cfg.Summarizer,
 },
 
-// Firecrawl Search configuration
-firecrawlSearch: &functions.FirecrawlSearchFunc{
-    apiKey:     fte.cfg.FirecrawlAPIKey,
-    apiURL:     fte.cfg.FirecrawlAPIURL,
-    proxyURL:   fte.cfg.ProxyURL,
-    summarizer: cfg.Summarizer,
-},
+// Firecrawl Search configuration (FirecrawlAPIKey / FirecrawlAPIURL read from fte.cfg)
+firecrawl := NewFirecrawlTool(
+    fte.cfg,
+    fte.flowID,
+    cfg.TaskID,
+    cfg.SubtaskID,
+    fte.slp,
+    cfg.Summarizer,
+)
 
 // Perplexity Search configuration
 perplexitySearch: &functions.PerplexitySearchFunc{

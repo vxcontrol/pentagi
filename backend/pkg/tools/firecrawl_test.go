@@ -358,6 +358,13 @@ func TestFirecrawlBuildResult_WithSummarizer(t *testing.T) {
 				if !strings.Contains(prompt, "<raw_content") {
 					t.Fatalf("summarizer prompt must include raw content, got: %q", prompt)
 				}
+				// Source IDs must be one-based to line up with the numbered links.
+				if !strings.Contains(prompt, `id="1"`) {
+					t.Fatalf("summarizer prompt must use one-based source ids, got: %q", prompt)
+				}
+				if !strings.Contains(prompt, `title="Title"`) || !strings.Contains(prompt, `url="https://example.com"`) {
+					t.Fatalf("summarizer prompt must carry resolved title/url, got: %q", prompt)
+				}
 				return "short summary", nil
 			},
 		}

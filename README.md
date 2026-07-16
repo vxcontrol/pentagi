@@ -3448,7 +3448,7 @@ go run cmd/ftester/main.go browser
 - **google**: Search the web using Google Custom Search
 - **duckduckgo**: Search the web using DuckDuckGo
 - **tavily**: Search using Tavily AI search engine
-- **firecrawl**: Search using Firecrawl with full-page content scraping
+- **firecrawl**: Search using Firecrawl with main-content markdown scraping
 - **traversaal**: Search using Traversaal AI search engine
 - **perplexity**: Search using Perplexity AI
 - **sploitus**: Search for security exploits, vulnerabilities (CVEs), and pentesting tools

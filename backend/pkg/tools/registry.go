@@ -236,7 +236,7 @@ var registryDefinitions = map[string]llms.FunctionDefinition{
 	FirecrawlToolName: {
 		Name: FirecrawlToolName,
 		Description: "Search in the firecrawl search engine, it combines web search with page scraping to return " +
-			"full-page markdown content for each result, ideal for deep research on complex technical topics " +
+			"the main-content markdown for each result, ideal for deep research on complex technical topics " +
 			"and reading documentation directly from the discovered web sites",
 		Parameters: reflector.Reflect(&SearchAction{}),
 	},

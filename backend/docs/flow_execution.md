@@ -761,7 +761,7 @@ The Searcher Agent follows a strict hierarchy for information retrieval:
 3. **Priority 5: Deep Analysis Tools** - Complex research synthesis
    - `traversaal` - Structured answers for common questions
    - `tavily` - Research-grade exploration of technical topics
-   - `firecrawl` - Deep research with full-page content scraped from discovered sites
+   - `firecrawl` - Deep research with main-content markdown scraped from discovered sites
    - `perplexity` - Comprehensive analysis with advanced reasoning
 
 **Available Search Engines**: Google, DuckDuckGo, Tavily, Firecrawl, Traversaal, Perplexity, Sploitus, Searxng
@@ -770,7 +770,7 @@ The Searcher Agent follows a strict hierarchy for information retrieval:
 - **Google** - Custom Search API with CX key and language restrictions
 - **DuckDuckGo** - Anonymous search with VQD token authentication
 - **Tavily** - Advanced research with raw content and citations
-- **Firecrawl** - Web search with full-page markdown content scraped from each result
+- **Firecrawl** - Web search with main-content markdown scraped from each result
 - **Perplexity** - AI-powered synthesis with configurable context size
 - **Traversaal** - Structured Q&A responses with web links
 - **Sploitus** - Search for security exploits and pentest tools
