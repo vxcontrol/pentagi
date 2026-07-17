@@ -138,6 +138,9 @@ export default defineConfig(({ mode }) => {
                 '@': path.resolve(__dirname, './src'),
             },
         },
+        // `vite preview` serves the production build, which is the only place chunking exists —
+        // but it has no proxy of its own, so without this the built app cannot reach the API.
+        preview: { ...serverConfig, port: vitePort + 100 },
         server: serverConfig,
     };
 });
