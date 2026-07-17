@@ -1,7 +1,7 @@
 import type { ColumnDef, Row } from '@tanstack/react-table';
 
 import { useMutation, useQuery } from '@apollo/client/react';
-import { AlertCircle, ChevronDown, Copy, Ellipsis, Pencil, Plug, Plus, Settings, Trash } from 'lucide-react';
+import { ChevronDown, Copy, Ellipsis, Pencil, Plug, Plus, Settings, Trash } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
@@ -10,7 +10,7 @@ import type { ProviderConfigFragmentFragment } from '@/graphql/types';
 import { providerIcons } from '@/components/icons/provider-icon';
 import { AppHeader, AppHeaderActions, AppHeaderContent, AppHeaderTitle } from '@/components/layouts/app/app-header';
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { ErrorAlert } from '@/components/shared/error-alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ContextMenuItem, ContextMenuSeparator } from '@/components/ui/context-menu';
@@ -431,11 +431,10 @@ function SettingsProviders() {
             <>
                 {pageHeader}
                 <div className="flex flex-1 flex-col gap-4 p-4">
-                    <Alert variant="destructive">
-                        <AlertCircle className="size-4" />
-                        <AlertTitle>Error loading providers</AlertTitle>
-                        <AlertDescription>{error.message}</AlertDescription>
-                    </Alert>
+                    <ErrorAlert
+                        message={error.message}
+                        title="Error loading providers"
+                    />
                 </div>
             </>
         );
@@ -478,11 +477,10 @@ function SettingsProviders() {
             {pageHeader}
             <div className="flex flex-1 flex-col gap-4 p-4">
                 {(deleteError || deleteErrorMessage) && (
-                    <Alert variant="destructive">
-                        <AlertCircle className="size-4" />
-                        <AlertTitle>Error deleting provider</AlertTitle>
-                        <AlertDescription>{deleteError?.message || deleteErrorMessage}</AlertDescription>
-                    </Alert>
+                    <ErrorAlert
+                        message={deleteError?.message || deleteErrorMessage}
+                        title="Error deleting provider"
+                    />
                 )}
 
                 <DataTable<Provider>

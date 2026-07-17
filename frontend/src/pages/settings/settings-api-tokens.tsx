@@ -3,19 +3,7 @@ import type { ColumnDef } from '@tanstack/react-table';
 import { useMutation, useQuery, useSubscription } from '@apollo/client/react';
 import { format } from 'date-fns';
 import { enUS } from 'date-fns/locale';
-import {
-    AlertCircle,
-    CalendarIcon,
-    Check,
-    Copy,
-    Ellipsis,
-    ExternalLink,
-    Key,
-    Pencil,
-    Plus,
-    Trash,
-    X,
-} from 'lucide-react';
+import { CalendarIcon, Check, Copy, Ellipsis, ExternalLink, Key, Pencil, Plus, Trash, X } from 'lucide-react';
 import { useCallback, useId, useMemo, useState } from 'react';
 import { type Control, Controller, useFormState } from 'react-hook-form';
 import { toast } from 'sonner';
@@ -31,7 +19,7 @@ import {
     AppHeaderTitle,
 } from '@/components/layouts/app/app-header';
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { ErrorAlert } from '@/components/shared/error-alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
@@ -890,11 +878,10 @@ function SettingsAPITokens() {
             <>
                 {pageHeader}
                 <div className="flex flex-1 flex-col gap-4 p-4">
-                    <Alert variant="destructive">
-                        <AlertCircle className="size-4" />
-                        <AlertTitle>Error loading tokens</AlertTitle>
-                        <AlertDescription>{error.message}</AlertDescription>
-                    </Alert>
+                    <ErrorAlert
+                        message={error.message}
+                        title="Error loading tokens"
+                    />
                 </div>
             </>
         );
@@ -937,13 +924,12 @@ function SettingsAPITokens() {
             {pageHeader}
             <div className="flex flex-1 flex-col gap-4 p-4">
                 {(createError || updateError || deleteError || deleteErrorMessage) && (
-                    <Alert variant="destructive">
-                        <AlertCircle className="size-4" />
-                        <AlertTitle>Error</AlertTitle>
-                        <AlertDescription>
-                            {createError?.message || updateError?.message || deleteError?.message || deleteErrorMessage}
-                        </AlertDescription>
-                    </Alert>
+                    <ErrorAlert
+                        message={
+                            createError?.message || updateError?.message || deleteError?.message || deleteErrorMessage
+                        }
+                        title="Error"
+                    />
                 )}
 
                 <DataTable<APIToken>

@@ -13,7 +13,7 @@ import {
     AppHeaderTitle,
 } from '@/components/layouts/app/app-header';
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
-import { DataLoadError } from '@/components/shared/data-load-error';
+import { ErrorAlert } from '@/components/shared/error-alert';
 import { InlineEditInput } from '@/components/shared/inline-edit';
 import { Button } from '@/components/ui/button';
 import { ContextMenuItem, ContextMenuSeparator } from '@/components/ui/context-menu';
@@ -292,7 +292,7 @@ function Templates() {
             <>
                 {pageHeader}
                 <div className="flex flex-1 flex-col gap-4 p-4">
-                    <DataLoadError
+                    <ErrorAlert
                         message={error.message}
                         title="Error loading templates"
                     />

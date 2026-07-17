@@ -4,7 +4,7 @@ import { Activity, CircleDollarSign, Cpu, GitFork } from 'lucide-react';
 import type { UsageStatsFragmentFragment } from '@/graphql/types';
 
 import { MetricCard } from '@/components/dashboard';
-import { DataLoadError } from '@/components/shared/data-load-error';
+import { ErrorAlert } from '@/components/shared/error-alert';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Spinner } from '@/components/ui/spinner';
@@ -93,7 +93,7 @@ export function DashboardOverview() {
     return (
         <div className="flex flex-col gap-6">
             {loadError ? (
-                <DataLoadError
+                <ErrorAlert
                     message={loadError.message}
                     title="Error loading dashboard data"
                 />

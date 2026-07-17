@@ -8,7 +8,7 @@ import type { FlowFragmentFragment, UsageStatsPeriod } from '@/graphql/types';
 
 import { ChartCard, ChartTooltip } from '@/components/dashboard';
 import { FlowStatusBadge } from '@/components/icons/flow-status-badge';
-import { DataLoadError } from '@/components/shared/data-load-error';
+import { ErrorAlert } from '@/components/shared/error-alert';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -155,7 +155,7 @@ export function DashboardAnalytics({ period }: { period: UsageStatsPeriod }) {
     return (
         <div className="flex flex-col gap-6">
             {loadError ? (
-                <DataLoadError
+                <ErrorAlert
                     message={loadError.message}
                     title="Error loading dashboard data"
                 />

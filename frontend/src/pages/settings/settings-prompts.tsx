@@ -2,7 +2,6 @@ import type { ColumnDef, Row } from '@tanstack/react-table';
 
 import { useMutation, useQuery } from '@apollo/client/react';
 import {
-    AlertCircle,
     ArrowDown,
     ArrowUp,
     Bot,
@@ -26,7 +25,7 @@ type AgentPrompts = { human?: DefaultPrompt; system: DefaultPrompt };
 
 import { AppHeader, AppHeaderContent, AppHeaderTitle } from '@/components/layouts/app/app-header';
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { ErrorAlert } from '@/components/shared/error-alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ContextMenuItem, ContextMenuSeparator } from '@/components/ui/context-menu';
@@ -818,11 +817,10 @@ function SettingsPrompts() {
                 {pageHeader}
                 <div className="flex flex-1 flex-col gap-6 p-4">
                     <SettingsPromptsHeader />
-                    <Alert variant="destructive">
-                        <AlertCircle className="size-4" />
-                        <AlertTitle>Error loading prompts</AlertTitle>
-                        <AlertDescription>{error.message}</AlertDescription>
-                    </Alert>
+                    <ErrorAlert
+                        message={error.message}
+                        title="Error loading prompts"
+                    />
                 </div>
             </>
         );
