@@ -29,6 +29,7 @@ interface TemplatesContextValue {
     error?: Error;
     getTemplate: (id: string) => Template | undefined;
     isLoading: boolean;
+    refetch: () => unknown;
     templates: Template[];
     updateTemplate: (id: string, payload: { text: string; title: string }) => Promise<void>;
 }
@@ -48,6 +49,7 @@ export function TemplatesProvider({ children }: TemplatesProviderProps) {
         data: templatesData,
         error: templatesError,
         loading: isLoadingTemplates,
+        refetch,
     } = useQuery(FlowTemplatesDocument, shouldFetchTemplates ? { fetchPolicy: 'cache-and-network' } : skipToken);
 
     const [createTemplateMutation] = useMutation(CreateFlowTemplateDocument);
@@ -160,10 +162,20 @@ export function TemplatesProvider({ children }: TemplatesProviderProps) {
             error: templatesError,
             getTemplate,
             isLoading: isLoadingTemplates,
+            refetch,
             templates,
             updateTemplate,
         }),
-        [createTemplate, deleteTemplate, templatesError, getTemplate, isLoadingTemplates, templates, updateTemplate],
+        [
+            createTemplate,
+            deleteTemplate,
+            templatesError,
+            getTemplate,
+            isLoadingTemplates,
+            refetch,
+            templates,
+            updateTemplate,
+        ],
     );
 
     return <TemplatesContext.Provider value={value}>{children}</TemplatesContext.Provider>;

@@ -35,6 +35,7 @@ interface KnowledgesContextValue {
     getKnowledge: (id: string) => Knowledge | undefined;
     isLoading: boolean;
     knowledges: Knowledge[];
+    refetch: () => unknown;
     renameKnowledge: (id: string, question: string) => Promise<Knowledge | undefined>;
     updateKnowledge: (id: string, input: UpdateKnowledgeDocumentInput) => Promise<Knowledge | undefined>;
 }
@@ -76,6 +77,7 @@ export function KnowledgesProvider({ children }: KnowledgesProviderProps) {
         data: listData,
         error: listError,
         loading: isListLoading,
+        refetch: refetchList,
     } = useQuery(KnowledgeDocumentsDocument, {
         fetchPolicy: 'cache-and-network',
         nextFetchPolicy: 'cache-and-network',
@@ -89,6 +91,7 @@ export function KnowledgesProvider({ children }: KnowledgesProviderProps) {
         data: searchData,
         error: searchError,
         loading: isSearchLoading,
+        refetch: refetchSearch,
     } = useQuery(SearchKnowledgeDocument, {
         fetchPolicy: 'cache-and-network',
         nextFetchPolicy: 'cache-and-network',
@@ -136,6 +139,7 @@ export function KnowledgesProvider({ children }: KnowledgesProviderProps) {
 
     const isLoading = inSearchMode ? isSearchLoading : isListLoading;
     const error = inSearchMode ? searchError : listError;
+    const refetch = inSearchMode ? refetchSearch : refetchList;
 
     const getKnowledge = useCallback(
         (id: string): Knowledge | undefined => knowledges.find((k) => k.id === id),
@@ -212,6 +216,7 @@ export function KnowledgesProvider({ children }: KnowledgesProviderProps) {
             getKnowledge,
             isLoading,
             knowledges,
+            refetch,
             renameKnowledge,
             updateKnowledge,
         }),
@@ -222,6 +227,7 @@ export function KnowledgesProvider({ children }: KnowledgesProviderProps) {
             getKnowledge,
             isLoading,
             knowledges,
+            refetch,
             renameKnowledge,
             updateKnowledge,
         ],

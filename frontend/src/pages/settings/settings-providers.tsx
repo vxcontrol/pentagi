@@ -104,7 +104,7 @@ export function SettingsProvidersHeader() {
 }
 
 function SettingsProviders() {
-    const { data, error, loading: isLoading } = useQuery(SettingsProvidersDocument);
+    const { data, error, loading: isLoading, refetch } = useQuery(SettingsProvidersDocument);
     const [deleteProvider, { loading: isDeleteLoading }] = useMutation(DeleteProviderDocument);
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
     const [deletingProvider, setDeletingProvider] = useState<null | Provider>(null);
@@ -432,6 +432,7 @@ function SettingsProviders() {
                 <div className="flex flex-1 flex-col gap-4 p-4">
                     <ErrorState
                         message={error.message}
+                        onRetry={refetch}
                         title="Error loading providers"
                     />
                 </div>

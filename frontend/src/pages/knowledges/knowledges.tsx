@@ -62,7 +62,7 @@ const docTypeSubtype = (k: Knowledge): null | string => {
 function Knowledges() {
     const navigate = useNavigate();
     const location = useLocation();
-    const { deleteKnowledge, error, isLoading, knowledges, renameKnowledge } = useKnowledges();
+    const { deleteKnowledge, error, isLoading, knowledges, refetch, renameKnowledge } = useKnowledges();
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
     const [deletingKnowledge, setDeletingKnowledge] = useState<Knowledge | null>(null);
     const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
@@ -430,6 +430,7 @@ function Knowledges() {
                 <div className="flex flex-1 flex-col gap-4 p-4">
                     <ErrorState
                         message={error.message}
+                        onRetry={refetch}
                         title="Error loading knowledge documents"
                     />
                 </div>

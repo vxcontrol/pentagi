@@ -288,7 +288,7 @@ function SettingsPrompt() {
     const { promptId } = useParams<{ promptId: string }>();
     const { isDesktop } = useBreakpoint();
 
-    const { data, error, loading } = useQuery(SettingsPromptsDocument);
+    const { data, error, loading, refetch } = useQuery(SettingsPromptsDocument);
     const [createPrompt, { loading: isCreateLoading }] = useMutation(CreatePromptDocument);
     const [updatePrompt, { loading: isUpdateLoading }] = useMutation(UpdatePromptDocument);
     const [deletePrompt, { loading: isDeleteLoading }] = useMutation(DeletePromptDocument);
@@ -755,6 +755,7 @@ function SettingsPrompt() {
                 <div className="flex flex-1 items-center justify-center p-4">
                     <ErrorState
                         message={error.message}
+                        onRetry={refetch}
                         title="Error loading prompt data"
                     />
                 </div>

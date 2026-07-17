@@ -1,13 +1,15 @@
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, RefreshCw } from 'lucide-react';
 
-import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
+import { Button } from '@/components/ui/button';
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 
 interface ErrorStateProps {
     message?: null | string;
+    onRetry?: () => unknown;
     title: string;
 }
 
-export function ErrorState({ message, title }: ErrorStateProps) {
+export function ErrorState({ message, onRetry, title }: ErrorStateProps) {
     return (
         <Empty>
             <EmptyHeader>
@@ -17,6 +19,17 @@ export function ErrorState({ message, title }: ErrorStateProps) {
                 <EmptyTitle>{title}</EmptyTitle>
                 {message ? <EmptyDescription>{message}</EmptyDescription> : null}
             </EmptyHeader>
+            {onRetry ? (
+                <EmptyContent>
+                    <Button
+                        onClick={() => onRetry()}
+                        variant="secondary"
+                    >
+                        <RefreshCw />
+                        Try again
+                    </Button>
+                </EmptyContent>
+            ) : null}
         </Empty>
     );
 }

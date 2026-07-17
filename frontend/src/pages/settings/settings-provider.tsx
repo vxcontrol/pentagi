@@ -1125,7 +1125,7 @@ function SettingsProvider() {
     const { providerId } = useParams<{ providerId: string }>();
     const navigate = useNavigate();
     const [searchParams, setSearchParams] = useSearchParams();
-    const { data, error, loading } = useQuery(SettingsProvidersDocument);
+    const { data, error, loading, refetch } = useQuery(SettingsProvidersDocument);
     const [createProvider, { loading: isCreateLoading }] = useMutation(CreateProviderDocument);
     const [updateProvider, { loading: isUpdateLoading }] = useMutation(UpdateProviderDocument);
     const [deleteProvider, { loading: isDeleteLoading }] = useMutation(DeleteProviderDocument);
@@ -1590,6 +1590,7 @@ function SettingsProvider() {
                 <div className="flex flex-1 items-center justify-center p-4">
                     <ErrorState
                         message={error.message}
+                        onRetry={refetch}
                         title="Error loading provider data"
                     />
                 </div>

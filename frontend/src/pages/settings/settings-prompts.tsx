@@ -65,7 +65,7 @@ type ToolPromptTableData = {
 };
 
 function SettingsPrompts() {
-    const { data, error, loading: isLoading } = useQuery(SettingsPromptsDocument);
+    const { data, error, loading: isLoading, refetch } = useQuery(SettingsPromptsDocument);
     const [deletePrompt, { loading: isDeleteLoading }] = useMutation(DeletePromptDocument);
     const navigate = useNavigate();
     // Shared base key for the route; each DataTable appends its own suffix so
@@ -819,6 +819,7 @@ function SettingsPrompts() {
                     <SettingsPromptsHeader />
                     <ErrorState
                         message={error.message}
+                        onRetry={refetch}
                         title="Error loading prompts"
                     />
                 </div>

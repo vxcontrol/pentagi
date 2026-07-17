@@ -35,7 +35,7 @@ import { type Template, useTemplates } from '@/providers/templates-provider';
 function Templates() {
     const navigate = useNavigate();
     const location = useLocation();
-    const { deleteTemplate, error, isLoading, templates, updateTemplate } = useTemplates();
+    const { deleteTemplate, error, isLoading, refetch, templates, updateTemplate } = useTemplates();
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
     const [deletingTemplate, setDeletingTemplate] = useState<null | Template>(null);
     const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
@@ -294,6 +294,7 @@ function Templates() {
                 <div className="flex flex-1 flex-col gap-4 p-4">
                     <ErrorState
                         message={error.message}
+                        onRetry={refetch}
                         title="Error loading templates"
                     />
                 </div>

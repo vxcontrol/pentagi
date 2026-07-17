@@ -103,7 +103,7 @@ const seedViewOptions = (storageKey: string): ResourcesViewOptions => {
 };
 
 function Resources() {
-    const { error, isInitialLoading, resources } = useResources();
+    const { error, isInitialLoading, refetch, resources } = useResources();
     const search = useResourcesSearch();
 
     const [isMkdirOpen, setIsMkdirOpen] = useState(false);
@@ -440,6 +440,7 @@ function Resources() {
                 <div className="flex flex-1 flex-col gap-4 p-4">
                     <ErrorState
                         message={error.message}
+                        onRetry={refetch}
                         title="Error loading resources"
                     />
                 </div>

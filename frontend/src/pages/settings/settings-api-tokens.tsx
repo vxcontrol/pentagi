@@ -230,7 +230,7 @@ function EditRowActions({
 }
 
 function SettingsAPITokens() {
-    const { data, error, loading: isLoading } = useQuery(ApiTokensDocument);
+    const { data, error, loading: isLoading, refetch } = useQuery(ApiTokensDocument);
     const [createAPIToken, { loading: isCreateLoading }] = useMutation(CreateApiTokenDocument);
     const [updateAPIToken, { loading: isUpdateLoading }] = useMutation(UpdateApiTokenDocument);
     const [deleteAPIToken, { loading: isDeleteLoading }] = useMutation(DeleteApiTokenDocument);
@@ -882,6 +882,7 @@ function SettingsAPITokens() {
                 <div className="flex flex-1 flex-col gap-4 p-4">
                     <ErrorState
                         message={error.message}
+                        onRetry={refetch}
                         title="Error loading tokens"
                     />
                 </div>
