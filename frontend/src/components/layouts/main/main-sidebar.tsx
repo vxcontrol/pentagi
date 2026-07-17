@@ -297,7 +297,7 @@ export function MainSidebar() {
                                 >
                                     <Avatar className="bg-background dark:bg-muted size-8 rounded-lg">
                                         <AvatarFallback className="flex size-8 items-center justify-center">
-                                            <UserIcon />
+                                            <UserIcon className="size-4" />
                                         </AvatarFallback>
                                     </Avatar>
                                     <div className="grid flex-1 text-left text-sm leading-tight">
@@ -347,21 +347,21 @@ export function MainSidebar() {
                                                 className="dark:data-[state=active]:bg-card h-6 px-2"
                                                 value="system"
                                             >
-                                                <Monitor />
+                                                <Monitor className="size-4" />
                                             </TabsTrigger>
                                             <TabsTrigger
                                                 aria-label="Light theme"
                                                 className="dark:data-[state=active]:bg-card h-6 px-2"
                                                 value="light"
                                             >
-                                                <Sun />
+                                                <Sun className="size-4" />
                                             </TabsTrigger>
                                             <TabsTrigger
                                                 aria-label="Dark theme"
                                                 className="dark:data-[state=active]:bg-card h-6 px-2"
                                                 value="dark"
                                             >
-                                                <Moon />
+                                                <Moon className="size-4" />
                                             </TabsTrigger>
                                         </TabsList>
                                     </Tabs>
