@@ -1,0 +1,20 @@
+- name: MiniMax-M3
+  description: MiniMax-M3 - Latest flagship model with 512K context window, up to 128K output tokens, and image input support. Suitable for general dialogue, code generation, complex reasoning, and tool calling.
+  thinking: false
+  price:
+    input: 0.60
+    output: 2.40
+
+- name: MiniMax-M2.7
+  description: MiniMax-M2.7 - Previous flagship model with enhanced reasoning and coding capabilities. Supports tool calling, JSON output, and streaming.
+  thinking: false
+  price:
+    input: 0.40
+    output: 1.10
+
+- name: MiniMax-M2.7-highspeed
+  description: MiniMax-M2.7-highspeed - High-speed version of M2.7 for low-latency scenarios. Same capabilities as M2.7 with improved response latency.
+  thinking: false
+  price:
+    input: 0.40
+    output: 1.10

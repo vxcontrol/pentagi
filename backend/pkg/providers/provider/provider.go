@@ -30,6 +30,7 @@ const (
 	ProviderGLM       ProviderType = "glm"
 	ProviderKimi      ProviderType = "kimi"
 	ProviderQwen      ProviderType = "qwen"
+	ProviderMiniMax   ProviderType = "minimax"
 )
 
 type ProviderName string
@@ -49,6 +50,7 @@ const (
 	DefaultProviderNameGLM       ProviderName = ProviderName(ProviderGLM)
 	DefaultProviderNameKimi      ProviderName = ProviderName(ProviderKimi)
 	DefaultProviderNameQwen      ProviderName = ProviderName(ProviderQwen)
+	DefaultProviderNameMiniMax   ProviderName = ProviderName(ProviderMiniMax)
 )
 
 type Provider interface {
