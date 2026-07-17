@@ -4,6 +4,7 @@ import { Activity, CircleDollarSign, Cpu, GitFork } from 'lucide-react';
 import type { UsageStatsFragmentFragment } from '@/graphql/types';
 
 import { MetricCard } from '@/components/dashboard';
+import { DataLoadError } from '@/components/shared/data-load-error';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Spinner } from '@/components/ui/spinner';
@@ -20,15 +21,50 @@ import {
 import { formatCost, formatDuration, formatNumber, formatTokenCount } from '@/lib/utils/format';
 
 export function DashboardOverview() {
-    const { data: usageTotalData, loading: usageTotalLoading } = useQuery(UsageStatsTotalDocument);
-    const { data: usageByProviderData, loading: usageByProviderLoading } = useQuery(UsageStatsByProviderDocument);
-    const { data: usageByModelData, loading: usageByModelLoading } = useQuery(UsageStatsByModelDocument);
-    const { data: usageByAgentTypeData, loading: usageByAgentTypeLoading } = useQuery(UsageStatsByAgentTypeDocument);
-    const { data: toolcallsTotalData, loading: toolcallsTotalLoading } = useQuery(ToolcallsStatsTotalDocument);
-    const { data: toolcallsByFunctionData, loading: toolcallsByFunctionLoading } = useQuery(
-        ToolcallsStatsByFunctionDocument,
-    );
-    const { data: flowsTotalData, loading: flowsTotalLoading } = useQuery(FlowsStatsTotalDocument);
+    const {
+        data: usageTotalData,
+        error: usageTotalError,
+        loading: usageTotalLoading,
+    } = useQuery(UsageStatsTotalDocument);
+    const {
+        data: usageByProviderData,
+        error: usageByProviderError,
+        loading: usageByProviderLoading,
+    } = useQuery(UsageStatsByProviderDocument);
+    const {
+        data: usageByModelData,
+        error: usageByModelError,
+        loading: usageByModelLoading,
+    } = useQuery(UsageStatsByModelDocument);
+    const {
+        data: usageByAgentTypeData,
+        error: usageByAgentTypeError,
+        loading: usageByAgentTypeLoading,
+    } = useQuery(UsageStatsByAgentTypeDocument);
+    const {
+        data: toolcallsTotalData,
+        error: toolcallsTotalError,
+        loading: toolcallsTotalLoading,
+    } = useQuery(ToolcallsStatsTotalDocument);
+    const {
+        data: toolcallsByFunctionData,
+        error: toolcallsByFunctionError,
+        loading: toolcallsByFunctionLoading,
+    } = useQuery(ToolcallsStatsByFunctionDocument);
+    const {
+        data: flowsTotalData,
+        error: flowsTotalError,
+        loading: flowsTotalLoading,
+    } = useQuery(FlowsStatsTotalDocument);
+
+    const loadError =
+        usageTotalError ??
+        usageByProviderError ??
+        usageByModelError ??
+        usageByAgentTypeError ??
+        toolcallsTotalError ??
+        toolcallsByFunctionError ??
+        flowsTotalError;
 
     const usageTotal = usageTotalData?.usageStatsTotal;
     const toolcallsTotal = toolcallsTotalData?.toolcallsStatsTotal;
@@ -56,6 +92,12 @@ export function DashboardOverview() {
 
     return (
         <div className="flex flex-col gap-6">
+            {loadError ? (
+                <DataLoadError
+                    message={loadError.message}
+                    title="Error loading dashboard data"
+                />
+            ) : null}
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                 <MetricCard
                     description={`Tasks: ${flowsTotal?.totalTasksCount ?? 0} · Subtasks: ${flowsTotal?.totalSubtasksCount ?? 0} · Assistants: ${flowsTotal?.totalAssistantsCount ?? 0}`}

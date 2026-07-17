@@ -8,6 +8,7 @@ import type { FlowFragmentFragment, UsageStatsPeriod } from '@/graphql/types';
 
 import { ChartCard, ChartTooltip } from '@/components/dashboard';
 import { FlowStatusBadge } from '@/components/icons/flow-status-badge';
+import { DataLoadError } from '@/components/shared/data-load-error';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -61,22 +62,38 @@ type FlowExecution = {
 };
 
 export function DashboardAnalytics({ period }: { period: UsageStatsPeriod }) {
-    const { data: usageByPeriodData, loading: usageByPeriodLoading } = useQuery(UsageStatsByPeriodDocument, {
+    const {
+        data: usageByPeriodData,
+        error: usageByPeriodError,
+        loading: usageByPeriodLoading,
+    } = useQuery(UsageStatsByPeriodDocument, {
         variables: { period },
     });
-    const { data: toolcallsByPeriodData, loading: toolcallsByPeriodLoading } = useQuery(
-        ToolcallsStatsByPeriodDocument,
-        {
-            variables: { period },
-        },
-    );
-    const { data: flowsByPeriodData, loading: flowsByPeriodLoading } = useQuery(FlowsStatsByPeriodDocument, {
+    const {
+        data: toolcallsByPeriodData,
+        error: toolcallsByPeriodError,
+        loading: toolcallsByPeriodLoading,
+    } = useQuery(ToolcallsStatsByPeriodDocument, {
         variables: { period },
     });
-    const { data: executionStatsData, loading: executionStatsLoading } = useQuery(FlowsExecutionStatsByPeriodDocument, {
+    const {
+        data: flowsByPeriodData,
+        error: flowsByPeriodError,
+        loading: flowsByPeriodLoading,
+    } = useQuery(FlowsStatsByPeriodDocument, {
         variables: { period },
     });
-    const { data: flowsData } = useQuery(FlowsDocument);
+    const {
+        data: executionStatsData,
+        error: executionStatsError,
+        loading: executionStatsLoading,
+    } = useQuery(FlowsExecutionStatsByPeriodDocument, {
+        variables: { period },
+    });
+    const { data: flowsData, error: flowsError } = useQuery(FlowsDocument);
+
+    const loadError =
+        usageByPeriodError ?? toolcallsByPeriodError ?? flowsByPeriodError ?? executionStatsError ?? flowsError;
 
     const flowsTooltip = useChartTooltipAnimation();
     const toolcallsTooltip = useChartTooltipAnimation();
@@ -137,6 +154,12 @@ export function DashboardAnalytics({ period }: { period: UsageStatsPeriod }) {
 
     return (
         <div className="flex flex-col gap-6">
+            {loadError ? (
+                <DataLoadError
+                    message={loadError.message}
+                    title="Error loading dashboard data"
+                />
+            ) : null}
             <ChartCard
                 description="Flows, tasks, and subtasks created per day"
                 empty={!flowsByPeriodLoading && flowsChartData.length === 0}

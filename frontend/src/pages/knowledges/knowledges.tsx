@@ -15,6 +15,7 @@ import {
     AppHeaderTitle,
 } from '@/components/layouts/app/app-header';
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
+import { DataLoadError } from '@/components/shared/data-load-error';
 import { InlineEditInput } from '@/components/shared/inline-edit';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -61,7 +62,7 @@ const docTypeSubtype = (k: Knowledge): null | string => {
 function Knowledges() {
     const navigate = useNavigate();
     const location = useLocation();
-    const { deleteKnowledge, isLoading, knowledges, renameKnowledge } = useKnowledges();
+    const { deleteKnowledge, error, isLoading, knowledges, renameKnowledge } = useKnowledges();
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
     const [deletingKnowledge, setDeletingKnowledge] = useState<Knowledge | null>(null);
     const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
@@ -417,6 +418,20 @@ function Knowledges() {
                             <EmptyDescription>Please wait while we fetch your knowledge documents</EmptyDescription>
                         </EmptyHeader>
                     </Empty>
+                </div>
+            </>
+        );
+    }
+
+    if (error) {
+        return (
+            <>
+                {pageHeader}
+                <div className="flex flex-1 flex-col gap-4 p-4">
+                    <DataLoadError
+                        message={error.message}
+                        title="Error loading knowledge documents"
+                    />
                 </div>
             </>
         );

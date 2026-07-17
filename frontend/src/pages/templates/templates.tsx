@@ -13,6 +13,7 @@ import {
     AppHeaderTitle,
 } from '@/components/layouts/app/app-header';
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
+import { DataLoadError } from '@/components/shared/data-load-error';
 import { InlineEditInput } from '@/components/shared/inline-edit';
 import { Button } from '@/components/ui/button';
 import { ContextMenuItem, ContextMenuSeparator } from '@/components/ui/context-menu';
@@ -34,7 +35,7 @@ import { type Template, useTemplates } from '@/providers/templates-provider';
 function Templates() {
     const navigate = useNavigate();
     const location = useLocation();
-    const { deleteTemplate, templates, updateTemplate } = useTemplates();
+    const { deleteTemplate, error, isLoading, templates, updateTemplate } = useTemplates();
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
     const [deletingTemplate, setDeletingTemplate] = useState<null | Template>(null);
     const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
@@ -263,6 +264,42 @@ function Templates() {
             </AppHeaderActions>
         </AppHeader>
     );
+
+    if (isLoading && !templates.length) {
+        return (
+            <>
+                {pageHeader}
+                <div className="flex flex-1 flex-col gap-4 p-4">
+                    <Empty>
+                        <EmptyHeader>
+                            <EmptyMedia>
+                                <Spinner
+                                    className="text-muted-foreground size-10"
+                                    variant="circle"
+                                />
+                            </EmptyMedia>
+                            <EmptyTitle>Loading templates...</EmptyTitle>
+                            <EmptyDescription>Please wait while we fetch your flow templates</EmptyDescription>
+                        </EmptyHeader>
+                    </Empty>
+                </div>
+            </>
+        );
+    }
+
+    if (error) {
+        return (
+            <>
+                {pageHeader}
+                <div className="flex flex-1 flex-col gap-4 p-4">
+                    <DataLoadError
+                        message={error.message}
+                        title="Error loading templates"
+                    />
+                </div>
+            </>
+        );
+    }
 
     if (!templates.length) {
         return (
