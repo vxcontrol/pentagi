@@ -1,6 +1,6 @@
 import { NetworkStatus } from '@apollo/client';
 import { useMutation, useQuery, useSubscription } from '@apollo/client/react';
-import { createContext, useCallback, useContext, useEffect, useMemo } from 'react';
+import { createContext, useCallback, useContext, useMemo } from 'react';
 import { toast } from 'sonner';
 
 import type { FlowFormValues } from '@/features/flows/flow-form';
@@ -29,6 +29,7 @@ interface FlowsContextValue {
     flowsData: FlowsQuery | undefined;
     flowsError: Error | undefined;
     isLoading: boolean;
+    refetch: () => unknown;
 }
 
 const FlowsContext = createContext<FlowsContextValue | undefined>(undefined);
@@ -43,6 +44,7 @@ export function FlowsProvider({ children }: FlowsProviderProps) {
         error: flowsError,
         loading,
         networkStatus,
+        refetch,
     } = useQuery(FlowsDocument, {
         notifyOnNetworkStatusChange: true,
     });
@@ -53,15 +55,6 @@ export function FlowsProvider({ children }: FlowsProviderProps) {
     useSubscription(FlowCreatedDocument);
     useSubscription(FlowDeletedDocument);
     useSubscription(FlowUpdatedDocument);
-
-    useEffect(() => {
-        if (flowsError) {
-            toast.error('Error loading flows', {
-                description: flowsError.message,
-            });
-            Log.error('Error loading flows:', flowsError);
-        }
-    }, [flowsError]);
 
     const [createFlowMutation] = useMutation(CreateFlowDocument);
     const [createAssistantMutation] = useMutation(CreateAssistantDocument);
@@ -235,8 +228,9 @@ export function FlowsProvider({ children }: FlowsProviderProps) {
             flowsData,
             flowsError,
             isLoading,
+            refetch,
         }),
-        [createFlow, createFlowWithAssistant, deleteFlow, finishFlow, flows, flowsData, flowsError, isLoading],
+        [createFlow, createFlowWithAssistant, deleteFlow, finishFlow, flows, flowsData, flowsError, isLoading, refetch],
     );
 
     return <FlowsContext.Provider value={value}>{children}</FlowsContext.Provider>;

@@ -17,6 +17,7 @@ import {
     AppHeaderTitle,
 } from '@/components/layouts/app/app-header';
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
+import { ErrorState } from '@/components/shared/error-state';
 import { InlineEditInput } from '@/components/shared/inline-edit';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -70,7 +71,7 @@ const statusConfig: Record<
 function Flows() {
     const navigate = useNavigate();
     const location = useLocation();
-    const { deleteFlow, finishFlow, flows, isLoading } = useFlows();
+    const { deleteFlow, finishFlow, flows, flowsError, isLoading, refetch } = useFlows();
     const { isFavoriteFlow, toggleFavoriteFlow } = useFavorites();
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
     const [deletingFlow, setDeletingFlow] = useState<Flow | null>(null);
@@ -602,6 +603,21 @@ function Flows() {
                             <EmptyDescription>Please wait while we fetch your conversation flows</EmptyDescription>
                         </EmptyHeader>
                     </Empty>
+                </div>
+            </>
+        );
+    }
+
+    if (flowsError) {
+        return (
+            <>
+                {pageHeader}
+                <div className="flex flex-1 flex-col gap-4 p-4">
+                    <ErrorState
+                        message={flowsError.message}
+                        onRetry={refetch}
+                        title="Error loading flows"
+                    />
                 </div>
             </>
         );
