@@ -1,6 +1,5 @@
 import { useMutation, useQuery } from '@apollo/client/react';
 import {
-    AlertCircle,
     Check,
     CheckCircle,
     ChevronDown,
@@ -38,6 +37,7 @@ import {
 } from '@/components/layouts/app/app-header';
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
 import { DetailSplitLayout } from '@/components/shared/detail-split-layout';
+import { ErrorState } from '@/components/shared/error-state';
 import { UnsavedChangesDialog, useUnsavedChangesGuard } from '@/components/shared/unsaved-changes';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Badge } from '@/components/ui/badge';
@@ -1588,15 +1588,10 @@ function SettingsProvider() {
                     </AppHeaderContent>
                 </AppHeader>
                 <div className="flex flex-1 items-center justify-center p-4">
-                    <Empty>
-                        <EmptyHeader>
-                            <EmptyMedia>
-                                <AlertCircle className="text-destructive size-12" />
-                            </EmptyMedia>
-                            <EmptyTitle>Error loading provider data</EmptyTitle>
-                            <EmptyDescription>{error.message}</EmptyDescription>
-                        </EmptyHeader>
-                    </Empty>
+                    <ErrorState
+                        message={error.message}
+                        title="Error loading provider data"
+                    />
                 </div>
             </>
         );

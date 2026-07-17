@@ -25,7 +25,7 @@ type AgentPrompts = { human?: DefaultPrompt; system: DefaultPrompt };
 
 import { AppHeader, AppHeaderContent, AppHeaderTitle } from '@/components/layouts/app/app-header';
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
-import { ErrorAlert } from '@/components/shared/error-alert';
+import { ErrorState } from '@/components/shared/error-state';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ContextMenuItem, ContextMenuSeparator } from '@/components/ui/context-menu';
@@ -817,7 +817,7 @@ function SettingsPrompts() {
                 {pageHeader}
                 <div className="flex flex-1 flex-col gap-6 p-4">
                     <SettingsPromptsHeader />
-                    <ErrorAlert
+                    <ErrorState
                         message={error.message}
                         title="Error loading prompts"
                     />

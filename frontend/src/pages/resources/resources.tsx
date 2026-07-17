@@ -12,6 +12,7 @@ import {
     AppHeaderTitle,
 } from '@/components/layouts/app/app-header';
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
+import { ErrorState } from '@/components/shared/error-state';
 import {
     bulkCopyAction,
     bulkCopyPathsAction,
@@ -102,7 +103,7 @@ const seedViewOptions = (storageKey: string): ResourcesViewOptions => {
 };
 
 function Resources() {
-    const { isInitialLoading, resources } = useResources();
+    const { error, isInitialLoading, resources } = useResources();
     const search = useResourcesSearch();
 
     const [isMkdirOpen, setIsMkdirOpen] = useState(false);
@@ -431,6 +432,20 @@ function Resources() {
             </EmptyHeader>
         </Empty>
     );
+
+    if (error) {
+        return (
+            <>
+                {pageHeader}
+                <div className="flex flex-1 flex-col gap-4 p-4">
+                    <ErrorState
+                        message={error.message}
+                        title="Error loading resources"
+                    />
+                </div>
+            </>
+        );
+    }
 
     return (
         <>

@@ -56,6 +56,7 @@ import {
 } from '@/components/layouts/app/app-header';
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
 import { DetailSplitLayout } from '@/components/shared/detail-split-layout';
+import { ErrorState } from '@/components/shared/error-state';
 import { UnsavedChangesDialog, useUnsavedChangesGuard } from '@/components/shared/unsaved-changes';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -752,15 +753,10 @@ function SettingsPrompt() {
             <>
                 {pageHeader}
                 <div className="flex flex-1 items-center justify-center p-4">
-                    <Empty>
-                        <EmptyHeader>
-                            <EmptyMedia>
-                                <AlertCircle className="text-destructive size-12" />
-                            </EmptyMedia>
-                            <EmptyTitle>Error loading prompt data</EmptyTitle>
-                            <EmptyDescription>{error.message}</EmptyDescription>
-                        </EmptyHeader>
-                    </Empty>
+                    <ErrorState
+                        message={error.message}
+                        title="Error loading prompt data"
+                    />
                 </div>
             </>
         );
