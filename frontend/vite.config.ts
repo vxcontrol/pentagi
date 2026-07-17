@@ -61,39 +61,45 @@ export default defineConfig(({ mode }) => {
             minify: 'terser',
             rollupOptions: {
                 output: {
-                    manualChunks: (id: string) => {
-                        if (!id.includes('node_modules')) {
-                            return;
-                        }
-                        if (/[\\/]@apollo[\\/]client|[\\/]graphql[\\/]|[\\/]graphql-ws[\\/]/.test(id)) {
-                            return 'apollo-client';
-                        }
-                        if (/[\\/](react-markdown|rehype-highlight|rehype-slug|remark-gfm)[\\/]/.test(id)) {
-                            return 'markdown';
-                        }
-                        if (/[\\/]@radix-ui[\\/]/.test(id)) {
-                            return 'radix-ui';
-                        }
-                        if (/[\\/]@xterm[\\/]/.test(id)) {
-                            return 'terminal';
-                        }
-                        if (/[\\/]recharts[\\/]/.test(id)) {
-                            return 'charts';
-                        }
-                        if (/[\\/]@react-pdf[\\/]/.test(id)) {
-                            return 'pdf';
-                        }
-                        if (/[\\/](@tiptap|prosemirror-[a-z-]+)[\\/]/.test(id)) {
-                            return 'tiptap';
-                        }
-                        // Without an own chunk, marked gets folded into the 527KB tiptap chunk, and report-pdf's
-                        // static `import { marked }` would download all of it for a ~40KB library.
-                        if (/[\\/]node_modules[\\/]marked[\\/]/.test(id)) {
-                            return 'marked';
-                        }
-                        if (/[\\/](react|react-dom|react-router-dom)[\\/]/.test(id)) {
-                            return 'react-vendor';
-                        }
+                    // A group captures its modules' dependencies too (`includeDependenciesRecursively`
+                    // defaults to true), so a shared module must outrank the heavy libraries depending
+                    // on it. At equal priority react/jsx-runtime lands inside `markdown` and clsx inside
+                    // `charts`, and index.html then preloads both on every route.
+                    codeSplitting: {
+                        groups: [
+                            {
+                                name: 'react-vendor',
+                                priority: 100,
+                                test: /node_modules[\\/](react|react-dom|react-router-dom)[\\/]/,
+                            },
+                            {
+                                name: 'utils',
+                                priority: 90,
+                                test: /node_modules[\\/](clsx|tailwind-merge)[\\/]/,
+                            },
+                            {
+                                name: 'apollo-client',
+                                priority: 50,
+                                test: /node_modules[\\/](@apollo[\\/]client|graphql|graphql-ws)[\\/]/,
+                            },
+                            {
+                                name: 'markdown',
+                                priority: 50,
+                                test: /node_modules[\\/](react-markdown|rehype-highlight|rehype-slug|remark-gfm)[\\/]/,
+                            },
+                            { name: 'radix-ui', priority: 50, test: /node_modules[\\/]@radix-ui[\\/]/ },
+                            { name: 'terminal', priority: 50, test: /node_modules[\\/]@xterm[\\/]/ },
+                            { name: 'charts', priority: 50, test: /node_modules[\\/]recharts[\\/]/ },
+                            { name: 'pdf', priority: 50, test: /node_modules[\\/]@react-pdf[\\/]/ },
+                            {
+                                name: 'tiptap',
+                                priority: 50,
+                                test: /node_modules[\\/](@tiptap|prosemirror-[a-z-]+)[\\/]/,
+                            },
+                            // Without an own chunk, marked gets folded into the tiptap chunk, and report-pdf's
+                            // static `import { marked }` would download all of it for a ~40KB library.
+                            { name: 'marked', priority: 60, test: /node_modules[\\/]marked[\\/]/ },
+                        ],
                     },
                 },
             },
