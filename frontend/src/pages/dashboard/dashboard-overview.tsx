@@ -1,10 +1,9 @@
 import { useQuery } from '@apollo/client/react';
-import { Activity, CircleDollarSign, Cpu, GitFork } from 'lucide-react';
+import { Activity, AlertCircle, CircleDollarSign, Cpu, GitFork } from 'lucide-react';
 
 import type { UsageStatsFragmentFragment } from '@/graphql/types';
 
 import { MetricCard } from '@/components/dashboard';
-import { ErrorAlert } from '@/components/shared/error-alert';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Spinner } from '@/components/ui/spinner';
@@ -57,15 +56,6 @@ export function DashboardOverview() {
         loading: flowsTotalLoading,
     } = useQuery(FlowsStatsTotalDocument);
 
-    const loadError =
-        usageTotalError ??
-        usageByProviderError ??
-        usageByModelError ??
-        usageByAgentTypeError ??
-        toolcallsTotalError ??
-        toolcallsByFunctionError ??
-        flowsTotalError;
-
     const usageTotal = usageTotalData?.usageStatsTotal;
     const toolcallsTotal = toolcallsTotalData?.toolcallsStatsTotal;
     const flowsTotal = flowsTotalData?.flowsStatsTotal;
@@ -92,15 +82,10 @@ export function DashboardOverview() {
 
     return (
         <div className="flex flex-col gap-6">
-            {loadError ? (
-                <ErrorAlert
-                    message={loadError.message}
-                    title="Error loading dashboard data"
-                />
-            ) : null}
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                 <MetricCard
                     description={`Tasks: ${flowsTotal?.totalTasksCount ?? 0} · Subtasks: ${flowsTotal?.totalSubtasksCount ?? 0} · Assistants: ${flowsTotal?.totalAssistantsCount ?? 0}`}
+                    error={!!flowsTotalError}
                     icon={<GitFork className="text-muted-foreground size-4" />}
                     loading={flowsTotalLoading}
                     title="Total Flows"
@@ -108,6 +93,7 @@ export function DashboardOverview() {
                 />
                 <MetricCard
                     description={`Total duration: ${toolcallsTotal ? formatDuration(toolcallsTotal.totalDurationSeconds) : '—'}`}
+                    error={!!toolcallsTotalError}
                     icon={<Activity className="text-muted-foreground size-4" />}
                     loading={toolcallsTotalLoading}
                     title="Tool Calls"
@@ -115,6 +101,7 @@ export function DashboardOverview() {
                 />
                 <MetricCard
                     description="Input + Output tokens processed"
+                    error={!!usageTotalError}
                     icon={<Cpu className="text-muted-foreground size-4" />}
                     loading={usageTotalLoading}
                     title="Total Tokens"
@@ -122,6 +109,7 @@ export function DashboardOverview() {
                 />
                 <MetricCard
                     description="Total LLM spending across all providers"
+                    error={!!usageTotalError}
                     icon={<CircleDollarSign className="text-muted-foreground size-4" />}
                     loading={usageTotalLoading}
                     title="Total Cost"
@@ -135,7 +123,13 @@ export function DashboardOverview() {
                     <CardDescription>LLM token usage and costs grouped by provider</CardDescription>
                 </CardHeader>
                 <CardContent>
-                    {usageByProviderLoading ? <LoadingTable /> : <UsageStatsTable rows={providerRows} />}
+                    {usageByProviderLoading ? (
+                        <LoadingTable />
+                    ) : usageByProviderError ? (
+                        <ErrorTable />
+                    ) : (
+                        <UsageStatsTable rows={providerRows} />
+                    )}
                 </CardContent>
             </Card>
 
@@ -145,7 +139,13 @@ export function DashboardOverview() {
                     <CardDescription>LLM token usage and costs grouped by model</CardDescription>
                 </CardHeader>
                 <CardContent>
-                    {usageByModelLoading ? <LoadingTable /> : <UsageStatsTable rows={modelRows} />}
+                    {usageByModelLoading ? (
+                        <LoadingTable />
+                    ) : usageByModelError ? (
+                        <ErrorTable />
+                    ) : (
+                        <UsageStatsTable rows={modelRows} />
+                    )}
                 </CardContent>
             </Card>
 
@@ -155,7 +155,13 @@ export function DashboardOverview() {
                     <CardDescription>LLM token usage and costs grouped by agent type</CardDescription>
                 </CardHeader>
                 <CardContent>
-                    {usageByAgentTypeLoading ? <LoadingTable /> : <UsageStatsTable rows={agentTypeRows} />}
+                    {usageByAgentTypeLoading ? (
+                        <LoadingTable />
+                    ) : usageByAgentTypeError ? (
+                        <ErrorTable />
+                    ) : (
+                        <UsageStatsTable rows={agentTypeRows} />
+                    )}
                 </CardContent>
             </Card>
 
@@ -167,6 +173,8 @@ export function DashboardOverview() {
                 <CardContent>
                     {toolcallsByFunctionLoading ? (
                         <LoadingTable />
+                    ) : toolcallsByFunctionError ? (
+                        <ErrorTable />
                     ) : (
                         <Table>
                             <TableHeader>
@@ -201,6 +209,15 @@ export function DashboardOverview() {
                     )}
                 </CardContent>
             </Card>
+        </div>
+    );
+}
+
+function ErrorTable() {
+    return (
+        <div className="text-muted-foreground flex flex-col items-center justify-center gap-2 py-8">
+            <AlertCircle className="text-muted-foreground/40 size-6" />
+            <p className="text-sm">Couldn't load</p>
         </div>
     );
 }

@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-import { BarChart2 } from 'lucide-react';
+import { AlertCircle, BarChart2 } from 'lucide-react';
 import { ResponsiveContainer } from 'recharts';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,6 +11,7 @@ export function ChartCard({
     className,
     description,
     empty,
+    error,
     height = 300,
     loading,
     title,
@@ -19,6 +20,7 @@ export function ChartCard({
     className?: string;
     description?: ReactNode;
     empty?: boolean;
+    error?: boolean;
     height?: number;
     loading?: boolean;
     title: ReactNode;
@@ -39,6 +41,14 @@ export function ChartCard({
                             className="text-muted-foreground size-6"
                             variant="circle"
                         />
+                    </div>
+                ) : error ? (
+                    <div
+                        className="flex flex-col items-center justify-center gap-2"
+                        style={{ height }}
+                    >
+                        <AlertCircle className="text-muted-foreground/40 size-10" />
+                        <p className="text-muted-foreground text-sm">Couldn't load</p>
                     </div>
                 ) : empty ? (
                     <div

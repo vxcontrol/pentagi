@@ -1,6 +1,6 @@
 import { useQuery } from '@apollo/client/react';
 import { format } from 'date-fns';
-import { ChevronRight, Clock, Wrench } from 'lucide-react';
+import { AlertCircle, ChevronRight, Clock, Wrench } from 'lucide-react';
 import { memo, useDeferredValue, useMemo, useRef, useState } from 'react';
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Tooltip, XAxis, YAxis } from 'recharts';
 
@@ -8,7 +8,6 @@ import type { FlowFragmentFragment, UsageStatsPeriod } from '@/graphql/types';
 
 import { ChartCard, ChartTooltip } from '@/components/dashboard';
 import { FlowStatusBadge } from '@/components/icons/flow-status-badge';
-import { ErrorAlert } from '@/components/shared/error-alert';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -90,10 +89,7 @@ export function DashboardAnalytics({ period }: { period: UsageStatsPeriod }) {
     } = useQuery(FlowsExecutionStatsByPeriodDocument, {
         variables: { period },
     });
-    const { data: flowsData, error: flowsError } = useQuery(FlowsDocument);
-
-    const loadError =
-        usageByPeriodError ?? toolcallsByPeriodError ?? flowsByPeriodError ?? executionStatsError ?? flowsError;
+    const { data: flowsData } = useQuery(FlowsDocument);
 
     const flowsTooltip = useChartTooltipAnimation();
     const toolcallsTooltip = useChartTooltipAnimation();
@@ -154,15 +150,10 @@ export function DashboardAnalytics({ period }: { period: UsageStatsPeriod }) {
 
     return (
         <div className="flex flex-col gap-6">
-            {loadError ? (
-                <ErrorAlert
-                    message={loadError.message}
-                    title="Error loading dashboard data"
-                />
-            ) : null}
             <ChartCard
                 description="Flows, tasks, and subtasks created per day"
                 empty={!flowsByPeriodLoading && flowsChartData.length === 0}
+                error={!!flowsByPeriodError}
                 height={320}
                 loading={flowsByPeriodLoading}
                 title="Flows Activity Over Time"
@@ -222,6 +213,7 @@ export function DashboardAnalytics({ period }: { period: UsageStatsPeriod }) {
                 <ChartCard
                     description="Number of tool executions per day"
                     empty={!toolcallsByPeriodLoading && toolcallsChartData.length === 0}
+                    error={!!toolcallsByPeriodError}
                     loading={toolcallsByPeriodLoading}
                     title="Tool Calls Over Time"
                 >
@@ -267,6 +259,7 @@ export function DashboardAnalytics({ period }: { period: UsageStatsPeriod }) {
                 <ChartCard
                     description="Input and output tokens processed daily"
                     empty={!usageByPeriodLoading && usageChartData.length === 0}
+                    error={!!usageByPeriodError}
                     loading={usageByPeriodLoading}
                     title="Token Usage Over Time"
                 >
@@ -324,6 +317,7 @@ export function DashboardAnalytics({ period }: { period: UsageStatsPeriod }) {
             <ChartCard
                 description="LLM spending per day. May stay near zero when using local engines — this is expected."
                 empty={!usageByPeriodLoading && usageChartData.length === 0}
+                error={!!usageByPeriodError}
                 height={240}
                 loading={usageByPeriodLoading}
                 title="Cost Over Time"
@@ -390,6 +384,11 @@ export function DashboardAnalytics({ period }: { period: UsageStatsPeriod }) {
                                 className="text-muted-foreground size-6"
                                 variant="circle"
                             />
+                        </div>
+                    ) : executionStatsError ? (
+                        <div className="text-muted-foreground flex flex-col items-center justify-center gap-2 py-8">
+                            <AlertCircle className="text-muted-foreground/40 size-6" />
+                            <p className="text-sm">Couldn't load</p>
                         </div>
                     ) : !deferredExecutionStats.length ? (
                         <p className="text-muted-foreground py-8 text-center text-sm">
