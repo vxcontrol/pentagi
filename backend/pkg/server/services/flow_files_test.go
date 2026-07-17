@@ -2501,6 +2501,9 @@ func TestFlowFileService_DownloadFlowFileScenarios(t *testing.T) {
 				assert.Contains(t, w.Header().Get("Content-Disposition"), tt.wantDispContains)
 			}
 			if tt.wantZipEntries != nil {
+				// A streamed ZIP download must not buffer the whole archive, so it
+				// must not carry a Content-Length computed from a full buffer.
+				assert.Empty(t, w.Header().Get("Content-Length"))
 				zr, err := zip.NewReader(bytes.NewReader(w.Body.Bytes()), int64(w.Body.Len()))
 				require.NoError(t, err)
 				got := map[string]string{}
