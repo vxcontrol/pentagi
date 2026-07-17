@@ -3408,6 +3408,35 @@ Flow deletion removes the flow from normal queries through PentAGI's soft-delete
 
 </details>
 
+### Troubleshooting: Flow Stalls or Hangs Without Progress
+
+If a flow starts but then appears to wait indefinitely with no subtasks progressing, a common cause is an embedding provider that is misconfigured or unreachable. PentAGI uses the embedding provider to store and search vector memory while a flow runs, so embedding calls that fail or hang can leave a flow waiting instead of advancing.
+
+**1. Check the container logs first.** Embedding errors surface in the PentAGI logs:
+
+```bash
+docker logs pentagi
+```
+
+Look for embedding-related failures such as authentication errors (401/403), wrong-model or not-found errors (404), connection timeouts, or TLS certificate errors. These point at the embedding provider configuration rather than at the flow itself.
+
+**2. Validate the provider with etester.** The [Embedding Tester Utility (etester)](#embedding-tester-utility-etester) checks both the embedding provider and the database connection without starting a flow:
+
+```bash
+docker exec -it pentagi /opt/pentagi/bin/etester test -verbose
+```
+
+A failing `test` confirms the problem is in the embedding configuration rather than in the flow.
+
+**3. Verify the configuration.** Check the following in your `.env` file against the [Supported Embedding Providers](#supported-embedding-providers) list and each provider's documented limitations:
+
+- `EMBEDDING_PROVIDER` is one of the supported providers (default `openai`).
+- `EMBEDDING_MODEL` is a valid model name for that provider.
+- `EMBEDDING_URL` and `EMBEDDING_KEY` are correct for the provider. If both are left empty, PentAGI falls back to the matching LLM provider settings (for example `OPEN_AI_KEY` and `OPEN_AI_SERVER_URL` when `EMBEDDING_PROVIDER=openai`), so a missing or wrong key there can break embeddings too.
+- The endpoint is reachable from inside the container. If outbound calls go through a proxy, confirm `PROXY_URL` is set; if calls hang rather than fail quickly, `HTTP_CLIENT_TIMEOUT` controls how long PentAGI waits on the provider before giving up.
+
+> **Changing provider?** If you switch embedding providers after data has already been indexed, run `flush` or `reindex` with etester so old and new vectors are not mixed. See [Why Consistent Embedding Providers Matter](#why-consistent-embedding-providers-matter) above.
+
 ## Function Testing with ftester
 
 PentAGI includes a versatile utility called `ftester` for debugging, testing, and developing specific functions and AI agent behaviors. While `ctester` focuses on testing LLM model capabilities, `ftester` allows you to directly invoke individual system functions and AI agent components with precise control over execution context.
