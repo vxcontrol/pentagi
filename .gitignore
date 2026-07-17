@@ -8,6 +8,7 @@
 backend/tmp
 backend/build
 backend/vendor
+backend/cmd/installer/**/log.json
 
 frontend/coverage
 frontend/dist
