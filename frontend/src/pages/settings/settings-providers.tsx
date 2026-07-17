@@ -4,13 +4,13 @@ import { useMutation, useQuery } from '@apollo/client/react';
 import { ChevronDown, Copy, Ellipsis, Pencil, Plug, Plus, Settings, Trash } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 
 import type { ProviderConfigFragmentFragment } from '@/graphql/types';
 
 import { providerIcons } from '@/components/icons/provider-icon';
 import { AppHeader, AppHeaderActions, AppHeaderContent, AppHeaderTitle } from '@/components/layouts/app/app-header';
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
-import { ErrorAlert } from '@/components/shared/error-alert';
 import { ErrorState } from '@/components/shared/error-state';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -105,8 +105,7 @@ export function SettingsProvidersHeader() {
 
 function SettingsProviders() {
     const { data, error, loading: isLoading } = useQuery(SettingsProvidersDocument);
-    const [deleteProvider, { error: deleteError, loading: isDeleteLoading }] = useMutation(DeleteProviderDocument);
-    const [deleteErrorMessage, setDeleteErrorMessage] = useState<null | string>(null);
+    const [deleteProvider, { loading: isDeleteLoading }] = useMutation(DeleteProviderDocument);
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
     const [deletingProvider, setDeletingProvider] = useState<null | Provider>(null);
     const navigate = useNavigate();
@@ -120,17 +119,16 @@ function SettingsProviders() {
             }
 
             try {
-                setDeleteErrorMessage(null);
-
                 await deleteProvider({
                     refetchQueries: ['settingsProviders'],
                     variables: { providerId: providerId.toString() },
                 });
 
                 setDeletingProvider(null);
-                setDeleteErrorMessage(null);
             } catch (error) {
-                setDeleteErrorMessage(error instanceof Error ? error.message : 'An error occurred while deleting');
+                toast.error('Failed to delete provider', {
+                    description: error instanceof Error ? error.message : undefined,
+                });
             }
         },
         [deleteProvider],
@@ -477,13 +475,6 @@ function SettingsProviders() {
         <>
             {pageHeader}
             <div className="flex flex-1 flex-col gap-4 p-4">
-                {(deleteError || deleteErrorMessage) && (
-                    <ErrorAlert
-                        message={deleteError?.message || deleteErrorMessage}
-                        title="Error deleting provider"
-                    />
-                )}
-
                 <DataTable<Provider>
                     columns={columns}
                     data={providers}

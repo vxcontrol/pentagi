@@ -19,7 +19,6 @@ import {
     AppHeaderTitle,
 } from '@/components/layouts/app/app-header';
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
-import { ErrorAlert } from '@/components/shared/error-alert';
 import { ErrorState } from '@/components/shared/error-state';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -232,15 +231,14 @@ function EditRowActions({
 
 function SettingsAPITokens() {
     const { data, error, loading: isLoading } = useQuery(ApiTokensDocument);
-    const [createAPIToken, { error: createError, loading: isCreateLoading }] = useMutation(CreateApiTokenDocument);
-    const [updateAPIToken, { error: updateError, loading: isUpdateLoading }] = useMutation(UpdateApiTokenDocument);
-    const [deleteAPIToken, { error: deleteError, loading: isDeleteLoading }] = useMutation(DeleteApiTokenDocument);
+    const [createAPIToken, { loading: isCreateLoading }] = useMutation(CreateApiTokenDocument);
+    const [updateAPIToken, { loading: isUpdateLoading }] = useMutation(UpdateApiTokenDocument);
+    const [deleteAPIToken, { loading: isDeleteLoading }] = useMutation(DeleteApiTokenDocument);
 
     const [editingTokenId, setEditingTokenId] = useState<null | string>(null);
     const [creatingToken, setCreatingToken] = useState(false);
     const [tokenSecret, setTokenSecret] = useState<null | string>(null);
     const [showTokenDialog, setShowTokenDialog] = useState(false);
-    const [deleteErrorMessage, setDeleteErrorMessage] = useState<null | string>(null);
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
     const [deletingToken, setDeletingToken] = useState<APIToken | null>(null);
 
@@ -319,7 +317,9 @@ function SettingsAPITokens() {
                 setEditingTokenId(null);
                 editForm.reset(EDIT_TOKEN_DEFAULTS);
             } catch (error) {
-                console.error('Failed to update token:', error);
+                toast.error('Failed to update token', {
+                    description: error instanceof Error ? error.message : undefined,
+                });
             }
         },
         [editForm, updateAPIToken],
@@ -371,7 +371,9 @@ function SettingsAPITokens() {
             setCreatingToken(false);
             createForm.reset(CREATE_TOKEN_DEFAULTS);
         } catch (error) {
-            console.error('Failed to create token:', error);
+            toast.error('Failed to create token', {
+                description: error instanceof Error ? error.message : undefined,
+            });
         }
     }, [createAPIToken, createForm]);
 
@@ -387,17 +389,16 @@ function SettingsAPITokens() {
             }
 
             try {
-                setDeleteErrorMessage(null);
-
                 await deleteAPIToken({
                     refetchQueries: ['apiTokens'],
                     variables: { tokenId },
                 });
 
                 setDeletingToken(null);
-                setDeleteErrorMessage(null);
             } catch (error) {
-                setDeleteErrorMessage(error instanceof Error ? error.message : 'An error occurred while deleting');
+                toast.error('Failed to delete token', {
+                    description: error instanceof Error ? error.message : undefined,
+                });
             }
         },
         [deleteAPIToken],
@@ -924,15 +925,6 @@ function SettingsAPITokens() {
         <>
             {pageHeader}
             <div className="flex flex-1 flex-col gap-4 p-4">
-                {(createError || updateError || deleteError || deleteErrorMessage) && (
-                    <ErrorAlert
-                        message={
-                            createError?.message || updateError?.message || deleteError?.message || deleteErrorMessage
-                        }
-                        title="Error"
-                    />
-                )}
-
                 <DataTable<APIToken>
                     columns={columns}
                     data={creatingToken ? [createNewTokenPlaceholder, ...tokens] : tokens}
