@@ -569,6 +569,11 @@ The system uses Docker containers for isolation and easy deployment, with separa
 
 ## Quick Start
 
+For a step-by-step walkthrough that connects installation, configuration, LLM
+and embedding provider testing, and your first login, see the
+[Installing and Configuring PentAGI](examples/guides/installation_configuration.md)
+guide. The sections below remain the detailed reference for each step.
+
 ### System Requirements
 
 - Docker and Docker Compose (or Podman - see [Podman configuration](#running-pentagi-with-podman))
