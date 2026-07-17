@@ -1,7 +1,7 @@
 import type { ColumnDef, Row } from '@tanstack/react-table';
 
 import { useMutation, useQuery } from '@apollo/client/react';
-import { AlertCircle, ChevronDown, Copy, Ellipsis, Loader2, Pencil, Plug, Plus, Settings, Trash } from 'lucide-react';
+import { AlertCircle, ChevronDown, Copy, Ellipsis, Pencil, Plug, Plus, Settings, Trash } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
@@ -412,7 +412,10 @@ function SettingsProviders() {
                     <Empty>
                         <EmptyHeader>
                             <EmptyMedia>
-                                <Loader2 className="text-muted-foreground size-10 animate-spin" />
+                                <Spinner
+                                    className="text-muted-foreground size-10"
+                                    variant="circle"
+                                />
                             </EmptyMedia>
                             <EmptyTitle>Loading providers...</EmptyTitle>
                             <EmptyDescription>Please wait while we fetch your provider configurations</EmptyDescription>

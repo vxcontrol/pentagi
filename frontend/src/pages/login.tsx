@@ -1,7 +1,7 @@
-import { Loader2 } from 'lucide-react';
 import { useLocation, useSearchParams } from 'react-router-dom';
 
 import Logo from '@/components/icons/logo';
+import { Spinner } from '@/components/ui/spinner';
 import LoginForm from '@/features/authentication/login-form';
 import { routes } from '@/lib/routes';
 import { getSafeReturnUrl } from '@/lib/utils/auth';
@@ -28,7 +28,10 @@ function Login() {
                             returnUrl={returnUrl}
                         />
                     ) : (
-                        <Loader2 className="size-16 animate-spin" />
+                        <Spinner
+                            className="size-16"
+                            variant="circle"
+                        />
                     )}
                 </div>
                 <div className="from-primary/20 via-primary/10 to-background hidden bg-linear-to-br lg:flex">

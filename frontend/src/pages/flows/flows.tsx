@@ -1,7 +1,7 @@
 import type { ColumnDef } from '@tanstack/react-table';
 
 import { useMutation } from '@apollo/client/react';
-import { Ellipsis, Eye, GitFork, Loader2, Pause, Pencil, PencilLine, Plus, Star, Trash } from 'lucide-react';
+import { Ellipsis, Eye, GitFork, Pause, Pencil, PencilLine, Plus, Star, Trash } from 'lucide-react';
 import { CheckCircle2, XCircle } from 'lucide-react';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -593,7 +593,10 @@ function Flows() {
                     <Empty>
                         <EmptyHeader>
                             <EmptyMedia>
-                                <Loader2 className="text-muted-foreground size-10 animate-spin" />
+                                <Spinner
+                                    className="text-muted-foreground size-10"
+                                    variant="circle"
+                                />
                             </EmptyMedia>
                             <EmptyTitle>Loading flows...</EmptyTitle>
                             <EmptyDescription>Please wait while we fetch your conversation flows</EmptyDescription>

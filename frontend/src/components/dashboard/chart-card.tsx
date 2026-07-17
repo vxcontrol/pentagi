@@ -1,9 +1,10 @@
 import type { ReactNode } from 'react';
 
-import { BarChart2, Loader2 } from 'lucide-react';
+import { BarChart2 } from 'lucide-react';
 import { ResponsiveContainer } from 'recharts';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Spinner } from '@/components/ui/spinner';
 
 export function ChartCard({
     children,
@@ -34,7 +35,10 @@ export function ChartCard({
                         className="flex items-center justify-center"
                         style={{ height }}
                     >
-                        <Loader2 className="text-muted-foreground size-6 animate-spin" />
+                        <Spinner
+                            className="text-muted-foreground size-6"
+                            variant="circle"
+                        />
                     </div>
                 ) : empty ? (
                     <div

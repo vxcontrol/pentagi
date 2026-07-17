@@ -1,11 +1,12 @@
 import { useQuery } from '@apollo/client/react';
-import { Activity, CircleDollarSign, Cpu, GitFork, Loader2 } from 'lucide-react';
+import { Activity, CircleDollarSign, Cpu, GitFork } from 'lucide-react';
 
 import type { UsageStatsFragmentFragment } from '@/graphql/types';
 
 import { MetricCard } from '@/components/dashboard';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Spinner } from '@/components/ui/spinner';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
     FlowsStatsTotalDocument,
@@ -165,7 +166,10 @@ export function DashboardOverview() {
 function LoadingTable() {
     return (
         <div className="flex items-center justify-center py-8">
-            <Loader2 className="text-muted-foreground size-6 animate-spin" />
+            <Spinner
+                className="text-muted-foreground size-6"
+                variant="circle"
+            />
         </div>
     );
 }

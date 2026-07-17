@@ -1,6 +1,6 @@
 import type { ColumnDef } from '@tanstack/react-table';
 
-import { Ellipsis, LibraryBig, Loader2, Pencil, PencilLine, Plus, Trash } from 'lucide-react';
+import { Ellipsis, LibraryBig, Pencil, PencilLine, Plus, Trash } from 'lucide-react';
 import { useCallback, useRef, useState } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -408,7 +408,10 @@ function Knowledges() {
                     <Empty>
                         <EmptyHeader>
                             <EmptyMedia>
-                                <Loader2 className="text-muted-foreground size-10 animate-spin" />
+                                <Spinner
+                                    className="text-muted-foreground size-10"
+                                    variant="circle"
+                                />
                             </EmptyMedia>
                             <EmptyTitle>Loading knowledges...</EmptyTitle>
                             <EmptyDescription>Please wait while we fetch your knowledge documents</EmptyDescription>

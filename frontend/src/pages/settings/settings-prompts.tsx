@@ -9,7 +9,6 @@ import {
     Code,
     Ellipsis,
     FileText,
-    Loader2,
     Pencil,
     RotateCcw,
     Settings,
@@ -40,6 +39,7 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
+import { Spinner } from '@/components/ui/spinner';
 import { DeletePromptDocument, SettingsPromptsDocument } from '@/graphql/types';
 import { usePageStorageKeys } from '@/hooks/use-page-storage-keys';
 import { routes } from '@/lib/routes';
@@ -414,7 +414,10 @@ function SettingsPrompts() {
                                         resetOperation?.promptName === agent.name &&
                                         resetOperation?.type === 'system' ? (
                                             <>
-                                                <Loader2 className="size-3 animate-spin" />
+                                                <Spinner
+                                                    className="size-3"
+                                                    variant="circle"
+                                                />
                                                 Resetting...
                                             </>
                                         ) : (
@@ -438,7 +441,10 @@ function SettingsPrompts() {
                                         resetOperation?.promptName === agent.name &&
                                         resetOperation?.type === 'human' ? (
                                             <>
-                                                <Loader2 className="size-3 animate-spin" />
+                                                <Spinner
+                                                    className="size-3"
+                                                    variant="circle"
+                                                />
                                                 Resetting...
                                             </>
                                         ) : (
@@ -462,7 +468,10 @@ function SettingsPrompts() {
                                         resetOperation?.promptName === agent.name &&
                                         resetOperation?.type === 'all' ? (
                                             <>
-                                                <Loader2 className="size-3 animate-spin" />
+                                                <Spinner
+                                                    className="size-3"
+                                                    variant="circle"
+                                                />
                                                 Resetting...
                                             </>
                                         ) : (
@@ -565,7 +574,10 @@ function SettingsPrompts() {
                                             resetOperation?.promptName === tool.name &&
                                             resetOperation?.type === 'tool' ? (
                                                 <>
-                                                    <Loader2 className="size-3 animate-spin" />
+                                                    <Spinner
+                                                        className="size-3"
+                                                        variant="circle"
+                                                    />
                                                     Resetting...
                                                 </>
                                             ) : (
@@ -786,7 +798,10 @@ function SettingsPrompts() {
                     <Empty>
                         <EmptyHeader>
                             <EmptyMedia>
-                                <Loader2 className="text-muted-foreground size-10 animate-spin" />
+                                <Spinner
+                                    className="text-muted-foreground size-10"
+                                    variant="circle"
+                                />
                             </EmptyMedia>
                             <EmptyTitle>Loading prompts...</EmptyTitle>
                             <EmptyDescription>Please wait while we fetch your prompt templates</EmptyDescription>

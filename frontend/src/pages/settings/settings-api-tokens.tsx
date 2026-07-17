@@ -11,7 +11,6 @@ import {
     Ellipsis,
     ExternalLink,
     Key,
-    Loader2,
     Pencil,
     Plus,
     Trash,
@@ -872,7 +871,10 @@ function SettingsAPITokens() {
                     <Empty>
                         <EmptyHeader>
                             <EmptyMedia>
-                                <Loader2 className="text-muted-foreground size-10 animate-spin" />
+                                <Spinner
+                                    className="text-muted-foreground size-10"
+                                    variant="circle"
+                                />
                             </EmptyMedia>
                             <EmptyTitle>Loading tokens...</EmptyTitle>
                             <EmptyDescription>Please wait while we fetch your API tokens</EmptyDescription>

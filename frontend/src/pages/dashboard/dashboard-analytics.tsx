@@ -1,6 +1,6 @@
 import { useQuery } from '@apollo/client/react';
 import { format } from 'date-fns';
-import { ChevronRight, Clock, Loader2, Wrench } from 'lucide-react';
+import { ChevronRight, Clock, Wrench } from 'lucide-react';
 import { memo, useDeferredValue, useMemo, useRef, useState } from 'react';
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Tooltip, XAxis, YAxis } from 'recharts';
 
@@ -11,6 +11,7 @@ import { FlowStatusBadge } from '@/components/icons/flow-status-badge';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Spinner } from '@/components/ui/spinner';
 import {
     FlowsDocument,
     FlowsExecutionStatsByPeriodDocument,
@@ -362,7 +363,10 @@ export function DashboardAnalytics({ period }: { period: UsageStatsPeriod }) {
                 <CardContent>
                     {executionStatsLoading ? (
                         <div className="flex items-center justify-center py-8">
-                            <Loader2 className="text-muted-foreground size-6 animate-spin" />
+                            <Spinner
+                                className="text-muted-foreground size-6"
+                                variant="circle"
+                            />
                         </div>
                     ) : !deferredExecutionStats.length ? (
                         <p className="text-muted-foreground py-8 text-center text-sm">

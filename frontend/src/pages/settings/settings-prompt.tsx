@@ -9,7 +9,6 @@ import {
     Ellipsis,
     FileDiff,
     FileText,
-    Loader2,
     RotateCcw,
     Save,
     User,
@@ -734,7 +733,10 @@ function SettingsPrompt() {
                     <Empty>
                         <EmptyHeader>
                             <EmptyMedia>
-                                <Loader2 className="text-muted-foreground size-10 animate-spin" />
+                                <Spinner
+                                    className="text-muted-foreground size-10"
+                                    variant="circle"
+                                />
                             </EmptyMedia>
                             <EmptyTitle>Loading prompt data...</EmptyTitle>
                             <EmptyDescription>Please wait while we fetch prompt information</EmptyDescription>

@@ -7,7 +7,6 @@ import {
     Clock,
     Ellipsis,
     Lightbulb,
-    Loader2,
     Play,
     Plug,
     Save,
@@ -1564,7 +1563,10 @@ function SettingsProvider() {
                     <Empty>
                         <EmptyHeader>
                             <EmptyMedia>
-                                <Loader2 className="text-muted-foreground size-10 animate-spin" />
+                                <Spinner
+                                    className="text-muted-foreground size-10"
+                                    variant="circle"
+                                />
                             </EmptyMedia>
                             <EmptyTitle>Loading provider data...</EmptyTitle>
                             <EmptyDescription>Please wait while we fetch provider configuration</EmptyDescription>

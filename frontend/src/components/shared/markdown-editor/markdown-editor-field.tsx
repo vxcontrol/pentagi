@@ -1,10 +1,10 @@
 import type { AriaAttributes, Ref } from 'react';
 
-import { Loader2 } from 'lucide-react';
 import { lazy, Suspense, useImperativeHandle, useRef } from 'react';
 
 import type { TextareaRef } from '@/components/ui/textarea';
 
+import { Spinner } from '@/components/ui/spinner';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 
@@ -118,7 +118,10 @@ export function MarkdownEditorField({
                     )}
                     id={id}
                 >
-                    <Loader2 className="text-muted-foreground size-5 animate-spin" />
+                    <Spinner
+                        className="text-muted-foreground size-5"
+                        variant="circle"
+                    />
                 </div>
             }
         >
