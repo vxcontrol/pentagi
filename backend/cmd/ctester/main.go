@@ -168,7 +168,7 @@ func createProvider(providerType string, cfg *config.Config) (provider.Provider,
 				"BEDROCK_DEFAULT_AUTH=true, BEDROCK_BEARER_TOKEN, or " +
 				"BEDROCK_ACCESS_KEY_ID+BEDROCK_SECRET_ACCESS_KEY")
 		}
-		providerConfig, err := bedrock.DefaultProviderConfig()
+		providerConfig, err := bedrock.DefaultProviderConfig(cfg)
 		if err != nil {
 			return nil, fmt.Errorf("error creating bedrock provider config: %w", err)
 		}

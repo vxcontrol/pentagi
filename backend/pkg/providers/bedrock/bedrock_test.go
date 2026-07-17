@@ -21,7 +21,7 @@ func TestConfigLoading(t *testing.T) {
 		BedrockSecretKey: "test-key",
 	}
 
-	providerConfig, err := DefaultProviderConfig()
+	providerConfig, err := DefaultProviderConfig(&config.Config{})
 	if err != nil {
 		t.Fatalf("Failed to create provider config: %v", err)
 	}
@@ -68,7 +68,7 @@ func TestProviderType(t *testing.T) {
 		BedrockSecretKey: "test-key",
 	}
 
-	providerConfig, err := DefaultProviderConfig()
+	providerConfig, err := DefaultProviderConfig(&config.Config{})
 	if err != nil {
 		t.Fatalf("Failed to create provider config: %v", err)
 	}
@@ -154,7 +154,7 @@ func TestGetUsage(t *testing.T) {
 		BedrockSecretKey: "test-key",
 	}
 
-	providerConfig, err := DefaultProviderConfig()
+	providerConfig, err := DefaultProviderConfig(&config.Config{})
 	if err != nil {
 		t.Fatalf("Failed to create provider config: %v", err)
 	}
@@ -877,7 +877,7 @@ func TestExtractToolsFromOptions(t *testing.T) {
 
 // TestAuthenticationStrategies verifies all supported authentication methods.
 func TestAuthenticationStrategies(t *testing.T) {
-	providerConfig, err := DefaultProviderConfig()
+	providerConfig, err := DefaultProviderConfig(&config.Config{})
 	if err != nil {
 		t.Fatalf("Failed to create provider config: %v", err)
 	}
@@ -1020,7 +1020,7 @@ func TestAuthenticationStrategies(t *testing.T) {
 
 // TestAuthenticationErrors verifies error handling for invalid configurations.
 func TestAuthenticationErrors(t *testing.T) {
-	providerConfig, err := DefaultProviderConfig()
+	providerConfig, err := DefaultProviderConfig(&config.Config{})
 	if err != nil {
 		t.Fatalf("Failed to create provider config: %v", err)
 	}
