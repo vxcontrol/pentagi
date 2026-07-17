@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 
 import type { DefaultPromptFragmentFragment as DefaultPrompt, PromptType } from '@/graphql/types';
 
@@ -187,7 +188,9 @@ function SettingsPrompts() {
 
             setResetOperation(null);
         } catch (error) {
-            console.error('Failed to reset prompt:', error);
+            toast.error('Failed to reset prompt', {
+                description: error instanceof Error ? error.message : undefined,
+            });
         }
     };
 
