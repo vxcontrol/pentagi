@@ -2673,6 +2673,21 @@ On Linux, this is typically configured in `/etc/docker/daemon.json`. On Docker D
 
 See the official Docker documentation for [registry mirrors](https://docs.docker.com/docker-hub/image-library/mirror/) and [daemon proxy configuration](https://docs.docker.com/engine/daemon/proxy/).
 
+#### Troubleshooting: "failed to select primary docker image via llm call"
+
+A flow that fails immediately with `failed to select primary docker image via llm call` usually indicates a problem with the configured LLM backend, not with Docker or the image registry. Older PentAGI versions reported the same failure as `failed to get primary docker image`, which led users to debug Docker even though the registry was healthy.
+
+When a flow starts, PentAGI makes its first LLM call to choose the primary Docker image for the task. This image-selection call runs through the `simple` agent type, so a failure here points at the model assigned to that agent type rather than at Docker. A message such as `API returned unexpected status code: 502` or `404` in this context is returned by the LLM backend, not by Docker Hub.
+
+This is distinct from the registry reachability problems described above: if Docker pulls succeed and the Compose stack starts, but flow creation still fails at image selection, investigate the LLM backend rather than Docker.
+
+To diagnose:
+
+1. Check PentAGI logs first: `docker logs pentagi`.
+2. Check the logs of your configured LLM backend (the server behind your provider or `LLM_SERVER_URL`).
+3. Verify that the base URL, API key, and model name in [Custom LLM Provider Configuration](#custom-llm-provider-configuration) are correct and reachable from the container. If you assign different models per agent type, check the model used by the `simple` agent type, since image selection runs through it.
+4. For custom, OpenAI-compatible, vLLM, or SGLang backends, confirm that the model supports tool calling (function calling) and that the matching tool-call parser is enabled. A missing or mismatched tool-call parser is a known cause of this failure.
+
 ## Development
 
 ### Development Requirements
