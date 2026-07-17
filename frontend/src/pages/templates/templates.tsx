@@ -1,6 +1,6 @@
 import type { ColumnDef } from '@tanstack/react-table';
 
-import { Ellipsis, FileText, Loader2, Pencil, PencilLine, Plus, Trash } from 'lucide-react';
+import { Ellipsis, FileText, Pencil, PencilLine, Plus, Trash } from 'lucide-react';
 import { useCallback, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -25,6 +25,7 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
+import { Spinner } from '@/components/ui/spinner';
 import { useTableState } from '@/hooks/use-table-state';
 import { routes } from '@/lib/routes';
 import { mergeHrefWithSearchParams } from '@/lib/url-params';
@@ -203,12 +204,12 @@ function Templates() {
                                 >
                                     {deletingIds.has(template.id) ? (
                                         <>
-                                            <Loader2 className="size-4 animate-spin" />
+                                            <Spinner variant="circle" />
                                             Deleting...
                                         </>
                                     ) : (
                                         <>
-                                            <Trash className="size-4" />
+                                            <Trash />
                                             Delete
                                         </>
                                     )}
@@ -281,7 +282,7 @@ function Templates() {
                                 onClick={() => navigate(routes.newTemplate)}
                                 variant="secondary"
                             >
-                                <Plus className="size-4" />
+                                <Plus />
                                 New Template
                             </Button>
                         </EmptyContent>

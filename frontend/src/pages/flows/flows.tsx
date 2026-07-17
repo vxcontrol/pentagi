@@ -30,6 +30,7 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
+import { Spinner } from '@/components/ui/spinner';
 import { Toggle } from '@/components/ui/toggle';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { RenameFlowDocument, ResultType, StatusType, type TerminalFragmentFragment } from '@/graphql/types';
@@ -416,7 +417,7 @@ function Flows() {
                                 size="sm"
                                 variant="outline"
                             >
-                                <Star className="size-4" />
+                                <Star />
                             </Toggle>
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
@@ -449,7 +450,7 @@ function Flows() {
                                         >
                                             {finishingFlowIds.has(flow.id) ? (
                                                 <>
-                                                    <Loader2 className="animate-spin" />
+                                                    <Spinner variant="circle" />
                                                     Finishing...
                                                 </>
                                             ) : (
@@ -467,12 +468,12 @@ function Flows() {
                                     >
                                         {deletingFlowIds.has(flow.id) ? (
                                             <>
-                                                <Loader2 className="size-4 animate-spin" />
+                                                <Spinner variant="circle" />
                                                 Deleting...
                                             </>
                                         ) : (
                                             <>
-                                                <Trash className="size-4" />
+                                                <Trash />
                                                 Delete
                                             </>
                                         )}

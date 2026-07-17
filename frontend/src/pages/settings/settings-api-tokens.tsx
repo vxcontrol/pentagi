@@ -50,6 +50,7 @@ import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTi
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Spinner } from '@/components/ui/spinner';
 import {
     ApiTokenCreatedDocument,
     ApiTokenDeletedDocument,
@@ -188,7 +189,7 @@ function CreateRowActions({
                 size="icon-sm"
                 variant="ghost"
             >
-                {isLoading ? <Loader2 className="animate-spin" /> : <Check />}
+                {isLoading ? <Spinner variant="circle" /> : <Check />}
             </Button>
             <Button
                 aria-label="Cancel"
@@ -226,7 +227,7 @@ function EditRowActions({
                 size="icon-sm"
                 variant="ghost"
             >
-                {isLoading ? <Loader2 className="animate-spin" /> : <Check />}
+                {isLoading ? <Spinner variant="circle" /> : <Check />}
             </Button>
             <Button
                 aria-label="Cancel"
@@ -738,7 +739,7 @@ function SettingsAPITokens() {
                                     >
                                         {isDeleteLoading && deletingToken?.tokenId === token.tokenId ? (
                                             <>
-                                                <Loader2 className="animate-spin" />
+                                                <Spinner variant="circle" />
                                                 Deleting...
                                             </>
                                         ) : (
@@ -843,7 +844,7 @@ function SettingsAPITokens() {
                                 rel="noopener noreferrer"
                                 target="_blank"
                             >
-                                <ExternalLink className="size-4" />
+                                <ExternalLink />
                                 GraphQL Playground
                             </a>
                         </DropdownMenuItem>
@@ -853,7 +854,7 @@ function SettingsAPITokens() {
                                 rel="noopener noreferrer"
                                 target="_blank"
                             >
-                                <ExternalLink className="size-4" />
+                                <ExternalLink />
                                 Swagger UI
                             </a>
                         </DropdownMenuItem>
@@ -919,7 +920,7 @@ function SettingsAPITokens() {
                                 onClick={handleCreateNew}
                                 variant="secondary"
                             >
-                                <Plus className="size-4" />
+                                <Plus />
                                 Create Token
                             </Button>
                         </EmptyContent>
@@ -985,7 +986,7 @@ function SettingsAPITokens() {
                                 }}
                                 variant="secondary"
                             >
-                                <Copy className="size-4" />
+                                <Copy />
                                 Copy Token
                             </Button>
                             <Button

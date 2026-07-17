@@ -41,6 +41,7 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
+import { Spinner } from '@/components/ui/spinner';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import FlowCentralTabs from '@/features/flows/flow-central-tabs';
 import FlowTabs from '@/features/flows/flow-tabs';
@@ -295,7 +296,7 @@ function Flow() {
                                             className="cursor-default hover:bg-transparent focus:bg-transparent"
                                             onSelect={(event) => event.preventDefault()}
                                         >
-                                            <GitFork className="size-4" />
+                                            <GitFork />
                                             Flows
                                             <div className="-my-1.5 -mr-2 ml-auto flex items-center">
                                                 <DetailNavigationButtons<FlowItem>
@@ -331,7 +332,7 @@ function Flow() {
                                     >
                                         {isFinishing ? (
                                             <>
-                                                <Loader2 className="animate-spin" />
+                                                <Spinner variant="circle" />
                                                 Finishing...
                                             </>
                                         ) : (
@@ -349,12 +350,12 @@ function Flow() {
                                 >
                                     {isDeleting ? (
                                         <>
-                                            <Loader2 className="size-4 animate-spin" />
+                                            <Spinner variant="circle" />
                                             Deleting...
                                         </>
                                     ) : (
                                         <>
-                                            <Trash className="size-4" />
+                                            <Trash />
                                             Delete
                                         </>
                                     )}
@@ -496,7 +497,7 @@ function FlowReportDropdown() {
                     disabled={isReportDisabled}
                     onClick={handleOpenWebView}
                 >
-                    <ExternalLink className="size-4" />
+                    <ExternalLink />
                     Open web view
                 </DropdownMenuItem>
                 <DropdownMenuItem
@@ -504,7 +505,7 @@ function FlowReportDropdown() {
                     disabled={isReportDisabled}
                     onClick={handleCopyToClipboard}
                 >
-                    <Copy className="size-4" />
+                    <Copy />
                     Copy to clipboard
                 </DropdownMenuItem>
                 <DropdownMenuItem
@@ -512,7 +513,7 @@ function FlowReportDropdown() {
                     disabled={isReportDisabled}
                     onClick={handleDownloadMD}
                 >
-                    <Download className="size-4" />
+                    <Download />
                     Download MD
                 </DropdownMenuItem>
                 <DropdownMenuItem
@@ -520,7 +521,7 @@ function FlowReportDropdown() {
                     disabled={isReportDisabled}
                     onClick={handleDownloadPDF}
                 >
-                    <Download className="size-4" />
+                    <Download />
                     Download PDF
                 </DropdownMenuItem>
             </DropdownMenuContent>

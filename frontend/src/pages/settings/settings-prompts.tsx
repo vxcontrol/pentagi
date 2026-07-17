@@ -338,11 +338,7 @@ function SettingsPrompts() {
                         variant="link"
                     >
                         Agent Name
-                        {sorted === 'asc' ? (
-                            <ArrowDown className="size-4" />
-                        ) : sorted === 'desc' ? (
-                            <ArrowUp className="size-4" />
-                        ) : null}
+                        {sorted === 'asc' ? <ArrowDown /> : sorted === 'desc' ? <ArrowUp /> : null}
                     </Button>
                 );
             },
@@ -509,11 +505,7 @@ function SettingsPrompts() {
                         variant="link"
                     >
                         Tool Name
-                        {sorted === 'asc' ? (
-                            <ArrowDown className="size-4" />
-                        ) : sorted === 'desc' ? (
-                            <ArrowUp className="size-4" />
-                        ) : null}
+                        {sorted === 'asc' ? <ArrowDown /> : sorted === 'desc' ? <ArrowUp /> : null}
                     </Button>
                 );
             },

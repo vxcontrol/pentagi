@@ -941,8 +941,8 @@ function DataTableColumnHeader<TData, TValue = unknown>({ column, title }: DataT
             variant="link"
         >
             {title}
-            {sorted === 'asc' ? <ArrowDown className="size-4" /> : null}
-            {sorted === 'desc' ? <ArrowUp className="size-4" /> : null}
+            {sorted === 'asc' ? <ArrowDown /> : null}
+            {sorted === 'desc' ? <ArrowUp /> : null}
         </Button>
     );
 }

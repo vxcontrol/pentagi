@@ -1,17 +1,7 @@
 import type { ReactNode } from 'react';
 
 import { skipToken, useQuery } from '@apollo/client/react';
-import {
-    ChevronDown,
-    Ellipsis,
-    FileSymlink,
-    FileText,
-    LayoutTemplate,
-    Loader2,
-    Pencil,
-    Save,
-    Trash,
-} from 'lucide-react';
+import { ChevronDown, Ellipsis, FileSymlink, FileText, LayoutTemplate, Pencil, Save, Trash } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -478,7 +468,7 @@ function Template() {
                         <AppHeaderAction
                             disabled={!isNew && !hasUnsavedChanges}
                             form="template-form"
-                            icon={<Save className="size-4" />}
+                            icon={<Save />}
                             label={isNew ? 'Create' : 'Save'}
                             loading={isSaving}
                             type="submit"
@@ -507,7 +497,7 @@ function Template() {
                                                 className="cursor-default hover:bg-transparent focus:bg-transparent"
                                                 onSelect={(event) => event.preventDefault()}
                                             >
-                                                <FileText className="size-4" />
+                                                <FileText />
                                                 Templates
                                                 <div className="-my-1.5 -mr-2 ml-auto flex items-center">
                                                     <DetailNavigationButtons<Template>
@@ -521,7 +511,7 @@ function Template() {
                                         </>
                                     )}
                                     <DropdownMenuItem onClick={handleTemplateRenameStart}>
-                                        <Pencil className="size-4" />
+                                        <Pencil />
                                         Rename
                                     </DropdownMenuItem>
                                     <DropdownMenuSeparator />
@@ -548,12 +538,12 @@ function Template() {
                                     >
                                         {isDeleting ? (
                                             <>
-                                                <Loader2 className="size-4 animate-spin" />
+                                                <Spinner variant="circle" />
                                                 Deleting...
                                             </>
                                         ) : (
                                             <>
-                                                <Trash className="size-4" />
+                                                <Trash />
                                                 Delete
                                             </>
                                         )}
@@ -660,7 +650,7 @@ function Template() {
                     size="sm"
                     variant="secondary"
                 >
-                    <LayoutTemplate className="size-4" />
+                    <LayoutTemplate />
                     {PRESETS_TITLE}
                     <Badge
                         className="ml-auto h-5 font-normal tabular-nums"

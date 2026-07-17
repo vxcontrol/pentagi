@@ -1,6 +1,6 @@
 import type { ReactElement } from 'react';
 
-import { Loader2, Trash2 } from 'lucide-react';
+import { Trash2 } from 'lucide-react';
 import { cloneElement, isValidElement, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -12,6 +12,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
+import { Spinner } from '@/components/ui/spinner';
 import { cn } from '@/lib/utils';
 
 type ConfirmationDialogIconProps = ReactElement<React.SVGProps<SVGSVGElement>>;
@@ -127,7 +128,7 @@ function ConfirmationDialog({
                         }}
                         variant={confirmVariant}
                     >
-                        {isProcessing ? <Loader2 className="size-4 animate-spin" /> : processIcon(confirmIcon)}
+                        {isProcessing ? <Spinner variant="circle" /> : processIcon(confirmIcon)}
                         {confirmText}
                     </Button>
                 </DialogFooter>

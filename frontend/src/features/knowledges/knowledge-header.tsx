@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-import { Ellipsis, HatGlasses, LibraryBig, Loader2, Pencil, Trash } from 'lucide-react';
+import { Ellipsis, HatGlasses, LibraryBig, Pencil, Trash } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -236,12 +236,12 @@ export function KnowledgeHeader({
                                     >
                                         {isAnonymizing ? (
                                             <>
-                                                <Loader2 className="size-4 animate-spin" />
+                                                <Spinner variant="circle" />
                                                 Anonymizing...
                                             </>
                                         ) : (
                                             <>
-                                                <HatGlasses className="size-4" />
+                                                <HatGlasses />
                                                 Anonymize
                                             </>
                                         )}
@@ -254,7 +254,7 @@ export function KnowledgeHeader({
                                             className="cursor-default hover:bg-transparent focus:bg-transparent"
                                             onSelect={(event) => event.preventDefault()}
                                         >
-                                            <LibraryBig className="size-4" />
+                                            <LibraryBig />
                                             Knowledges
                                             <div className="-my-1.5 -mr-2 ml-auto flex items-center">
                                                 <DetailNavigationButtons<Knowledge>
@@ -302,12 +302,12 @@ export function KnowledgeHeader({
                                         >
                                             {isDeleting ? (
                                                 <>
-                                                    <Loader2 className="size-4 animate-spin" />
+                                                    <Spinner variant="circle" />
                                                     Deleting...
                                                 </>
                                             ) : (
                                                 <>
-                                                    <Trash className="size-4" />
+                                                    <Trash />
                                                     Delete
                                                 </>
                                             )}

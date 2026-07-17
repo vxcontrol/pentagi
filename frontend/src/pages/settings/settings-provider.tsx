@@ -57,6 +57,7 @@ import { Input } from '@/components/ui/input';
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Spinner } from '@/components/ui/spinner';
 import {
     AgentConfigType,
     CreateProviderDocument,
@@ -1667,9 +1668,9 @@ function SettingsProvider() {
                                     }}
                                 >
                                     {isAgentTestLoading && currentAgentKey === agentKey ? (
-                                        <Loader2 className="size-4 animate-spin" />
+                                        <Spinner variant="circle" />
                                     ) : (
-                                        <Play className="size-4" />
+                                        <Play />
                                     )}
                                     <span className="no-underline! hover:no-underline!">
                                         {isAgentTestLoading && currentAgentKey === agentKey ? 'Testing...' : 'Test'}
@@ -1879,7 +1880,7 @@ function SettingsProvider() {
                 <AppHeaderActions>
                     <AppHeaderAction
                         disabled={isLoading || isTestLoading || isAgentTestLoading}
-                        icon={isTestLoading ? <Loader2 className="size-4 animate-spin" /> : <Play className="size-4" />}
+                        icon={isTestLoading ? <Spinner variant="circle" /> : <Play />}
                         label={isTestLoading ? 'Testing...' : 'Test'}
                         onClick={() => handleTest()}
                         type="button"
@@ -1887,7 +1888,7 @@ function SettingsProvider() {
                     />
                     <AppHeaderAction
                         form="provider-form"
-                        icon={<Save className="size-4" />}
+                        icon={<Save />}
                         label={isNew ? 'Create' : 'Save'}
                         loading={isLoading}
                         type="submit"
@@ -1912,11 +1913,7 @@ function SettingsProvider() {
                                     disabled={isDeleteLoading}
                                     onClick={handleDelete}
                                 >
-                                    {isDeleteLoading ? (
-                                        <Loader2 className="size-4 animate-spin" />
-                                    ) : (
-                                        <Trash2 className="size-4" />
-                                    )}
+                                    {isDeleteLoading ? <Spinner variant="circle" /> : <Trash2 />}
                                     {isDeleteLoading ? 'Deleting...' : 'Delete'}
                                 </DropdownMenuItem>
                             </DropdownMenuContent>

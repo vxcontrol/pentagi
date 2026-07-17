@@ -29,6 +29,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { InputSearch } from '@/components/ui/input-search';
+import { Spinner } from '@/components/ui/spinner';
 import { KnowledgeDocType } from '@/graphql/types';
 import { useTableState } from '@/hooks/use-table-state';
 import { routes } from '@/lib/routes';
@@ -328,12 +329,12 @@ function Knowledges() {
                                 >
                                     {deletingIds.has(k.id) ? (
                                         <>
-                                            <Loader2 className="size-4 animate-spin" />
+                                            <Spinner variant="circle" />
                                             Deleting...
                                         </>
                                     ) : (
                                         <>
-                                            <Trash className="size-4" />
+                                            <Trash />
                                             Delete
                                         </>
                                     )}

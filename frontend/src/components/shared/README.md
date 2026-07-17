@@ -39,10 +39,10 @@ that every list reuses.
 
 ## Components
 
-| File                                                       | Role                                                                                                    |
-| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| [`detail-navigation/`](detail-navigation/)                 | Prev / Position / Next toolbar + listbox sheet for detail pages, and the navigation hooks that feed it. |
-| [`inline-edit/`](inline-edit/)                             | Generic inline-edit input (Save/Cancel addons, Enter/Escape) plus the paired `useInlineEdit` state machine. |
+| File                                       | Role                                                                                                        |
+| ------------------------------------------ | ----------------------------------------------------------------------------------------------------------- |
+| [`detail-navigation/`](detail-navigation/) | Prev / Position / Next toolbar + listbox sheet for detail pages, and the navigation hooks that feed it.     |
+| [`inline-edit/`](inline-edit/)             | Generic inline-edit input (Save/Cancel addons, Enter/Escape) plus the paired `useInlineEdit` state machine. |
 
 ## Hooks
 

@@ -23,6 +23,7 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
+import { Spinner } from '@/components/ui/spinner';
 import { DeleteProviderDocument, ProviderType, SettingsProvidersDocument } from '@/graphql/types';
 import { useTableState } from '@/hooks/use-table-state';
 import { routes } from '@/lib/routes';
@@ -90,7 +91,7 @@ export function SettingsProvidersHeader() {
                                 key={type}
                                 onClick={() => handleProviderCreate(type)}
                             >
-                                {Icon && <Icon className="size-4" />}
+                                {Icon && <Icon />}
                                 {label}
                             </DropdownMenuItem>
                         );
@@ -264,7 +265,7 @@ function SettingsProviders() {
                                         Edit
                                     </DropdownMenuItem>
                                     <DropdownMenuItem onClick={() => handleProviderClone(provider.id)}>
-                                        <Copy className="size-4" />
+                                        <Copy />
                                         Clone
                                     </DropdownMenuItem>
                                     <DropdownMenuSeparator />
@@ -274,12 +275,12 @@ function SettingsProviders() {
                                     >
                                         {isDeleteLoading && deletingProvider?.id === provider.id ? (
                                             <>
-                                                <Loader2 className="size-4 animate-spin" />
+                                                <Spinner variant="circle" />
                                                 Deleting...
                                             </>
                                         ) : (
                                             <>
-                                                <Trash className="size-4" />
+                                                <Trash />
                                                 Delete
                                             </>
                                         )}
@@ -459,7 +460,7 @@ function SettingsProviders() {
                                 onClick={() => navigate(routes.settings.newProvider())}
                                 variant="secondary"
                             >
-                                <Plus className="size-4" />
+                                <Plus />
                                 Add Provider
                             </Button>
                         </EmptyContent>

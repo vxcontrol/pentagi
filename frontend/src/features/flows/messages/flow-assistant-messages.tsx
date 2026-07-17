@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Check, ChevronDown, ListFilter, Loader2, Plus, Search, Trash2, X } from 'lucide-react';
+import { Check, ChevronDown, ListFilter, Plus, Search, Trash2, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useDebouncedCallback } from 'use-debounce';
@@ -16,6 +16,7 @@ import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTi
 import { Form, FormControl, FormField } from '@/components/ui/form';
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Spinner } from '@/components/ui/spinner';
 import { StatusType } from '@/graphql/types';
 import { useAutoScroll } from '@/hooks/use-auto-scroll';
 import { Log } from '@/lib/log';
@@ -549,7 +550,7 @@ function FlowAssistantMessages({ className }: FlowAssistantMessagesProps) {
                 <Empty>
                     <EmptyHeader>
                         <EmptyMedia variant="icon">
-                            <Loader2 className="animate-spin" />
+                            <Spinner variant="circle" />
                         </EmptyMedia>
                         <EmptyTitle>Creating assistant...</EmptyTitle>
                         <EmptyDescription>Please wait while we set up your new assistant</EmptyDescription>

@@ -177,7 +177,7 @@ function FlowTerminal() {
                                                         title="Previous match"
                                                         type="button"
                                                     >
-                                                        <ChevronUp className="size-4" />
+                                                        <ChevronUp />
                                                     </InputGroupButton>
                                                     <InputGroupButton
                                                         onClick={handleFindNext}
@@ -185,7 +185,7 @@ function FlowTerminal() {
                                                         title="Next match"
                                                         type="button"
                                                     >
-                                                        <ChevronDown className="size-4" />
+                                                        <ChevronDown />
                                                     </InputGroupButton>
                                                 </>
                                             )}
@@ -196,7 +196,7 @@ function FlowTerminal() {
                                                     title="Clear search"
                                                     type="button"
                                                 >
-                                                    <X className="size-4" />
+                                                    <X />
                                                 </InputGroupButton>
                                             )}
                                         </InputGroupAddon>

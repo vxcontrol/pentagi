@@ -1,7 +1,8 @@
-import { Check, Loader2, X } from 'lucide-react';
+import { Check, X } from 'lucide-react';
 import { type KeyboardEvent, type Ref } from 'react';
 
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group';
+import { Spinner } from '@/components/ui/spinner';
 import { cn } from '@/lib/utils';
 
 interface InlineEditInputProps {
@@ -98,7 +99,7 @@ export function InlineEditInput({
                     disabled={busy}
                     onClick={onSave}
                 >
-                    {busy ? <Loader2 className="animate-spin" /> : <Check />}
+                    {busy ? <Spinner variant="circle" /> : <Check />}
                 </InputGroupButton>
                 <InputGroupButton
                     aria-label="Cancel"

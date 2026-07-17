@@ -72,6 +72,7 @@ import {
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Form, FormControl, FormItem, FormMessage } from '@/components/ui/form';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Spinner } from '@/components/ui/spinner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
     CreatePromptDocument,
@@ -662,13 +663,7 @@ function SettingsPrompt() {
                 <AppHeaderActions>
                     <AppHeaderAction
                         disabled={isLoading}
-                        icon={
-                            isValidateLoading ? (
-                                <Loader2 className="size-4 animate-spin" />
-                            ) : (
-                                <CheckCircle className="size-4" />
-                            )
-                        }
+                        icon={isValidateLoading ? <Spinner variant="circle" /> : <CheckCircle />}
                         label={isValidateLoading ? 'Validating...' : 'Validate'}
                         onClick={handleValidate}
                         type="button"
@@ -676,7 +671,7 @@ function SettingsPrompt() {
                     />
                     <AppHeaderAction
                         form={activeFormId}
-                        icon={<Save className="size-4" />}
+                        icon={<Save />}
                         label="Save"
                         loading={isLoading}
                         type="submit"
@@ -699,18 +694,14 @@ function SettingsPrompt() {
                             {hasOverride && (
                                 <>
                                     <DropdownMenuItem onClick={() => setIsDiffDialogOpen(true)}>
-                                        <FileDiff className="size-4" />
+                                        <FileDiff />
                                         Diff
                                     </DropdownMenuItem>
                                     <DropdownMenuItem
                                         disabled={isLoading}
                                         onClick={handleReset}
                                     >
-                                        {isDeleteLoading ? (
-                                            <Loader2 className="size-4 animate-spin" />
-                                        ) : (
-                                            <RotateCcw className="size-4" />
-                                        )}
+                                        {isDeleteLoading ? <Spinner variant="circle" /> : <RotateCcw />}
                                         {isDeleteLoading ? 'Resetting...' : 'Reset'}
                                     </DropdownMenuItem>
                                     <DropdownMenuSeparator />
@@ -1075,7 +1066,7 @@ function Variables({ currentTemplate, onVariableClick, variables }: VariablesPro
                     size="sm"
                     variant="secondary"
                 >
-                    <Braces className="size-4" />
+                    <Braces />
                     {VARIABLES_TITLE}
                     <Badge
                         className="ml-auto h-5 font-normal tabular-nums"

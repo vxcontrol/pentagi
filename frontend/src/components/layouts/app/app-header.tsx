@@ -1,11 +1,10 @@
 import type { ReactNode } from 'react';
 
-import { Loader2 } from 'lucide-react';
-
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage } from '@/components/ui/breadcrumb';
 import { Button, type ButtonProps } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { SidebarTrigger } from '@/components/ui/sidebar';
+import { Spinner } from '@/components/ui/spinner';
 import { cn } from '@/lib/utils';
 
 interface AppHeaderActionProps extends Omit<ButtonProps, 'children'> {
@@ -49,7 +48,7 @@ export function AppHeaderAction({
             size={size}
             {...props}
         >
-            {loading ? <Loader2 className="size-4 animate-spin" /> : icon}
+            {loading ? <Spinner variant="circle" /> : icon}
             <span className="hidden md:inline">{label}</span>
             {endIcon ? <span className="hidden md:inline-flex">{endIcon}</span> : null}
         </Button>
