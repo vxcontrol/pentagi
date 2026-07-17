@@ -1399,6 +1399,26 @@ The `LLM_SERVER_PRESERVE_REASONING` setting controls whether reasoning content i
 
 This setting is required by some LLM providers (e.g., Moonshot) that return errors like "thinking is enabled but reasoning_content is missing in assistant tool call message" when reasoning content is not included in multi-turn conversations. Enable this setting if your provider requires reasoning content to be preserved.
 
+#### Troubleshooting: tool-call (function-call) parser errors
+
+PentAGI drives its agents with tool calls (also called function calls), so any custom OpenAI-compatible backend configured through `LLM_SERVER_*` must return valid tool-call JSON in the format the OpenAI Chat Completions API defines. When the backend emits malformed, truncated, or non-conforming tool-call arguments, the agent chain cannot continue.
+
+Self-hosted engines such as llama.cpp, SGLang, and vLLM usually require a specific tool-call parser and a matching chat template to produce correct tool-call output. If the parser is missing or mismatched for the model you are serving, tool-call arguments can come back corrupted. Compatibility therefore depends on the backend's tool-call/function-call behavior and configuration, not on PentAGI alone; not every llama.cpp or SGLang setup produces valid tool calls out of the box.
+
+Typical symptoms:
+
+- Backend or proxy errors such as `Failed to parse tool call arguments as JSON` (often surfaced through a LiteLLM proxy as an HTTP 500), or other unexpected 5xx/4xx responses from the LLM endpoint.
+- A flow that runs for a few steps and then stops responding to new input in the UI.
+- Repeated or looping tool calls that never converge.
+- A flow that fails right at the start with `failed to select primary docker image via llm call`, because the first action in a flow is an LLM tool call to choose the container image; a backend that cannot return a valid tool call fails at this step too.
+
+How to investigate:
+
+1. Check both sides of the connection: the PentAGI logs (`docker compose logs -f pentagi`) and the inference backend or proxy logs (llama.cpp, SGLang, vLLM, or LiteLLM). The backend log usually shows the same parse error when it produced the malformed tool call.
+2. Validate the provider before running a full flow with the `ctester` utility, which exercises tool-calling agent types directly. See [Testing LLM Agents](https://github.com/vxcontrol/pentagi#testing-llm-agents).
+3. Confirm the backend's tool-call parser and chat template are the ones recommended for the model you are serving, and that the model itself supports tool calling.
+4. Update PentAGI to the latest build. Recent versions sanitize malformed function-call arguments returned by the model so a single bad response no longer stalls the whole flow; older builds forwarded the corrupted arguments and could get stuck.
+
 ### Ollama Provider Configuration
 
 PentAGI supports Ollama for both local LLM inference (zero-cost, enhanced privacy) and Ollama Cloud (managed service with free tier).
