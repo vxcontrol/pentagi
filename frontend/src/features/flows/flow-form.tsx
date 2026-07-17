@@ -6,7 +6,6 @@ import {
     FileSymlink,
     FileText,
     Folder,
-    Loader2,
     Paperclip,
     Plus,
     Square,
@@ -21,6 +20,7 @@ import type { UserResourceFragmentFragment } from '@/graphql/types';
 
 import { ProviderIcon } from '@/components/icons/provider-icon';
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
+import { Button } from '@/components/ui/button';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -463,7 +463,7 @@ export function FlowForm({
                     handleAttachClick();
                 }}
             >
-                {upload.isUploading ? <Loader2 className="animate-spin" /> : <Plus />}
+                {upload.isUploading ? <Spinner variant="circle" /> : <Plus />}
                 {upload.isUploading ? 'Uploading…' : 'Upload files'}
             </DropdownMenuItem>
         </>
@@ -500,15 +500,16 @@ export function FlowForm({
                                                     <span className="text-foreground max-w-40 truncate">
                                                         {resource.name}
                                                     </span>
-                                                    <button
+                                                    <Button
                                                         aria-label={`Remove ${resource.name}`}
-                                                        className="text-muted-foreground hover:text-destructive ml-0.5 flex shrink-0 items-center justify-center"
+                                                        className="text-muted-foreground hover:text-destructive -my-[5px] -mr-1.5 -ml-1 size-[26px] shrink-0 [&_svg]:size-3.5"
                                                         disabled={isFormDisabled}
                                                         onClick={() => handleRemoveAttachment(resourceId)}
-                                                        type="button"
+                                                        size="icon-xs"
+                                                        variant="ghost"
                                                     >
-                                                        <X className="size-3.5" />
-                                                    </button>
+                                                        <X />
+                                                    </Button>
                                                 </div>
                                             );
                                         })}
