@@ -1013,6 +1013,44 @@ func TestQuestionTaskPlannerPrompt(t *testing.T) {
 	}
 }
 
+// TestPentesterPromptXSStrikeArgumentGuidance keeps the pentester prompt from
+// recommending unsupported XSStrike flags when composing terminal commands.
+func TestPentesterPromptXSStrikeArgumentGuidance(t *testing.T) {
+	defaultPrompts, err := templates.GetDefaultPrompts()
+	if err != nil {
+		t.Fatalf("Failed to load default prompts: %v", err)
+	}
+
+	dummyData := validator.CreateDummyTemplateData()
+	template := defaultPrompts.AgentsPrompts.Pentester.System.Template
+
+	rendered, err := templates.RenderPrompt(
+		string(templates.PromptTypePentester),
+		template,
+		dummyData,
+	)
+	if err != nil {
+		t.Fatalf("Failed to render pentester template: %v", err)
+	}
+
+	requiredGuidance := []string{
+		"cli_argument_protocol",
+		"XSStrike",
+		"xsstrike --help",
+		"xsstrike -c",
+		"xsstrike -o",
+		"xsstrike -o /dev/null",
+		"shell redirection",
+		"inventing unsupported output flags",
+	}
+
+	for _, guidance := range requiredGuidance {
+		if !strings.Contains(rendered, guidance) {
+			t.Errorf("Rendered pentester template missing XSStrike argument guidance: %s", guidance)
+		}
+	}
+}
+
 // TestTaskAssignmentWrapperPrompt tests the task_assignment_wrapper template
 func TestTaskAssignmentWrapperPrompt(t *testing.T) {
 	defaultPrompts, err := templates.GetDefaultPrompts()
