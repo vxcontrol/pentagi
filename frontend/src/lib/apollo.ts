@@ -383,6 +383,11 @@ const replaceWithIncoming = {
 };
 
 const createApolloClient = () => {
+    // Holds the client for the ws `connected` handler, which is defined before the
+    // client exists; `lazy: true` means the socket only opens on the first
+    // subscription, after `.current` is set below.
+    const clientRef: { current?: ApolloClient } = {};
+
     const httpLink = new HttpLink({
         credentials: 'include',
         uri: `${window.location.origin}${GRAPHQL_ENDPOINT}`,
@@ -393,7 +398,16 @@ const createApolloClient = () => {
             lazy: true,
             on: {
                 closed: () => Log.debug('GraphQL WebSocket closed'),
-                connected: () => Log.debug('GraphQL WebSocket connected'),
+                connected: (_socket, _payload, wasRetry) => {
+                    Log.debug('GraphQL WebSocket connected');
+
+                    // Subscriptions are delta-only — the server never replays events
+                    // published while we were disconnected — so on a reconnect refetch
+                    // active queries to reconcile the cache with the backend.
+                    if (wasRetry) {
+                        void clientRef.current?.refetchObservableQueries();
+                    }
+                },
                 connecting: () => Log.debug('GraphQL WebSocket connecting...'),
                 error: (error) => {
                     Log.error('GraphQL WebSocket error:', error);
@@ -517,7 +531,7 @@ const createApolloClient = () => {
 
     const link = ApolloLink.from([errorLink, subscriptionCacheLink, streamingLink, transportLink]);
 
-    return new ApolloClient({
+    const apolloClient = new ApolloClient({
         cache,
         defaultOptions: {
             watchQuery: {
@@ -528,6 +542,10 @@ const createApolloClient = () => {
         },
         link,
     });
+
+    clientRef.current = apolloClient;
+
+    return apolloClient;
 };
 
 export const client = createApolloClient();
