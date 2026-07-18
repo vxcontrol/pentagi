@@ -240,7 +240,7 @@ export const updateCacheForSubscription = (
     }
 };
 
-const createStreamingLink = (): ApolloLink => {
+export const createStreamingLink = (): ApolloLink => {
     const streamingLogs = new LRUCache<string, StreamingLogEntry>({
         max: STREAMING_CACHE_MAX_ENTRIES,
         ttl: STREAMING_CACHE_TTL_MS,

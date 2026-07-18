@@ -1,7 +1,7 @@
-import { gql, InMemoryCache } from '@apollo/client';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { gql, InMemoryCache, Observable } from '@apollo/client';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { updateCacheForSubscription } from './apollo';
+import { createStreamingLink, updateCacheForSubscription } from './apollo';
 
 const TERMINAL = gql`
     query T($flowId: ID!) {
@@ -211,5 +211,89 @@ describe('subscription cache merge-link (updateCacheForSubscription)', () => {
         );
 
         expect(termIds(cache, '1')).toEqual(['5']);
+    });
+});
+
+type EmittedData = {
+    [key: string]: unknown;
+    assistantLogUpdated?: { appendPart?: boolean; message?: null | string };
+};
+
+describe('streaming assistant-log link (createStreamingLink)', () => {
+    let now = 0;
+
+    beforeEach(() => {
+        now = 1000;
+        vi.spyOn(Date, 'now').mockImplementation(() => now);
+    });
+
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
+    const drive = () => {
+        const link = createStreamingLink();
+        let source: undefined | { next: (value: unknown) => void };
+        const forward = () =>
+            new Observable((observer) => {
+                source = observer;
+
+                return () => {};
+            });
+        const emitted: EmittedData[] = [];
+
+        link.request({} as never, forward as never)!.subscribe({
+            next: (result) => emitted.push(result.data as EmittedData),
+        });
+
+        return {
+            emitted,
+            pushLog: (log: Record<string, unknown>) => source?.next({ data: { assistantLogUpdated: log } }),
+            pushRaw: (data: unknown) => source?.next({ data }),
+        };
+    };
+
+    it('coalesces rapid append parts but accumulates the full running message', () => {
+        const { emitted, pushLog } = drive();
+
+        pushLog({ appendPart: true, id: 'a', message: 'Hello', result: null, thinking: null });
+        expect(emitted).toHaveLength(1);
+        expect(emitted[0]?.assistantLogUpdated?.message).toBe('Hello');
+        expect(emitted[0]?.assistantLogUpdated?.appendPart).toBe(false);
+
+        // within the 50ms throttle window -> accumulated internally, not emitted
+        pushLog({ appendPart: true, id: 'a', message: ' World', result: null, thinking: null });
+        expect(emitted).toHaveLength(1);
+
+        // past the window -> emits the full running total, not just the latest delta
+        now = 1060;
+        pushLog({ appendPart: true, id: 'a', message: '!', result: null, thinking: null });
+        expect(emitted).toHaveLength(2);
+        expect(emitted[1]?.assistantLogUpdated?.message).toBe('Hello World!');
+    });
+
+    it('flushes the accumulation on the final part, then starts fresh for the same id', () => {
+        const { emitted, pushLog } = drive();
+
+        pushLog({ appendPart: true, id: 'a', message: 'Hello', result: null, thinking: null });
+        now = 1010;
+        pushLog({ appendPart: true, id: 'a', message: ' World', result: null, thinking: null }); // throttled
+
+        // the final (non-append) part concatenates the cached total + its own delta and always emits
+        pushLog({ appendPart: false, id: 'a', message: '!', result: null, thinking: null });
+        expect(emitted.at(-1)?.assistantLogUpdated?.message).toBe('Hello World!');
+
+        // its cache entry was deleted -> a fresh append for the same id starts empty
+        now = 2000;
+        pushLog({ appendPart: true, id: 'a', message: 'Next', result: null, thinking: null });
+        expect(emitted.at(-1)?.assistantLogUpdated?.message).toBe('Next');
+    });
+
+    it('passes a non-assistant-log result straight through', () => {
+        const { emitted, pushRaw } = drive();
+
+        pushRaw({ somethingElse: { id: '1' } });
+
+        expect(emitted).toEqual([{ somethingElse: { id: '1' } }]);
     });
 });
