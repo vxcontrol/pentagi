@@ -1,9 +1,10 @@
 import { useQuery } from '@apollo/client/react';
-import { Activity, AlertCircle, CircleDollarSign, Cpu, GitFork } from 'lucide-react';
+import { Activity, CircleDollarSign, Cpu, GitFork } from 'lucide-react';
 
 import type { UsageStatsFragmentFragment } from '@/graphql/types';
 
 import { MetricCard } from '@/components/dashboard';
+import { DashboardError } from '@/components/dashboard/dashboard-error';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Spinner } from '@/components/ui/spinner';
@@ -214,12 +215,7 @@ export function DashboardOverview() {
 }
 
 function ErrorTable() {
-    return (
-        <div className="text-muted-foreground flex flex-col items-center justify-center gap-2 py-8">
-            <AlertCircle className="text-muted-foreground/40 size-6" />
-            <p className="text-sm">Couldn't load</p>
-        </div>
-    );
+    return <DashboardError className="py-8" />;
 }
 
 function LoadingTable() {

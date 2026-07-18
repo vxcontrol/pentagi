@@ -15,6 +15,7 @@ import {
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
 import { ErrorState } from '@/components/shared/error-state';
 import { InlineEditInput } from '@/components/shared/inline-edit';
+import { LoadingState } from '@/components/shared/loading-state';
 import { Button } from '@/components/ui/button';
 import { ContextMenuItem, ContextMenuSeparator } from '@/components/ui/context-menu';
 import { DataTable, DataTableColumnHeader } from '@/components/ui/data-table';
@@ -270,24 +271,17 @@ function Templates() {
             <>
                 {pageHeader}
                 <div className="flex flex-1 flex-col gap-4 p-4">
-                    <Empty>
-                        <EmptyHeader>
-                            <EmptyMedia>
-                                <Spinner
-                                    className="text-muted-foreground size-10"
-                                    variant="circle"
-                                />
-                            </EmptyMedia>
-                            <EmptyTitle>Loading templates...</EmptyTitle>
-                            <EmptyDescription>Please wait while we fetch your flow templates</EmptyDescription>
-                        </EmptyHeader>
-                    </Empty>
+                    <LoadingState
+                        description="Please wait while we fetch your flow templates"
+                        title="Loading templates..."
+                    />
                 </div>
             </>
         );
     }
 
-    if (error) {
+    // Error surface only when there's no data — a failed background refetch must not blank a working list.
+    if (error && !templates.length) {
         return (
             <>
                 {pageHeader}

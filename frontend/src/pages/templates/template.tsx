@@ -710,7 +710,7 @@ function Template() {
                             mode={viewMode}
                             onBlur={field.onBlur}
                             onChange={field.onChange}
-                            placeholder="Describe the task, or start from a preset above"
+                            placeholder="Describe the task, or start from a preset"
                             ref={field.ref}
                             value={field.value}
                         />

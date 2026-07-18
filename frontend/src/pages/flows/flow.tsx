@@ -28,6 +28,7 @@ import {
     DetailNavigationSheet,
     DetailNavigationToolbar,
 } from '@/components/shared/detail-navigation';
+import { ErrorState } from '@/components/shared/error-state';
 import { InlineEditInput, useInlineEdit } from '@/components/shared/inline-edit';
 import { Badge } from '@/components/ui/badge';
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage } from '@/components/ui/breadcrumb';
@@ -79,7 +80,7 @@ function Flow() {
     const { isDesktop, isMobile } = useBreakpoint();
     const navigate = useNavigate();
 
-    const { flowData, flowId, isLoading: isFlowLoading } = useFlow();
+    const { flowData, flowId, flowLoadError, isLoading: isFlowLoading, refetchFlow } = useFlow();
     const { deleteFlow, finishFlow } = useFlows();
     const { isFavoriteFlow, toggleFavoriteFlow } = useFavorites();
 
@@ -108,13 +109,13 @@ function Flow() {
     const [renameFlowMutation, { loading: isRenameLoading }] = useMutation(RenameFlowDocument);
 
     useEffect(() => {
-        // errorPolicy:'all' surfaces a partial error while the flow itself
-        // loaded; leave only when the flow is genuinely absent, not on any error
-        // — else a failed sibling log query bounces the user off a working flow.
-        if (!isFlowLoading && !flowData?.flow) {
+        // Redirect only when the flow is genuinely gone (query resolved with no flow, or
+        // a not-found error). A real load failure keeps the user here behind the
+        // ErrorState + Retry below instead of silently bouncing to the list.
+        if (!isFlowLoading && !flowData?.flow && !flowLoadError) {
             navigate(routes.flows, { replace: true });
         }
-    }, [flowData, isFlowLoading, navigate]);
+    }, [flowData, flowLoadError, isFlowLoading, navigate]);
 
     const handleFlowRenameSave = useCallback(async () => {
         const newTitle = editingInputRef.current?.value.trim();
@@ -189,6 +190,31 @@ function Flow() {
 
     const activeTabsTab = isDesktop ? desktopTabsTab : mobileAutoTab;
     const handleTabsTabChange = isDesktop ? setDesktopTabsTab : handleMobileTabChange;
+
+    if (flowLoadError) {
+        return (
+            <>
+                <AppHeader>
+                    <AppHeaderContent>
+                        <Breadcrumb className="min-w-0 flex-1">
+                            <BreadcrumbList className="min-w-0 flex-nowrap">
+                                <BreadcrumbItem className="min-w-0">
+                                    <BreadcrumbPage>Flow</BreadcrumbPage>
+                                </BreadcrumbItem>
+                            </BreadcrumbList>
+                        </Breadcrumb>
+                    </AppHeaderContent>
+                </AppHeader>
+                <div className="flex flex-1 flex-col gap-4 p-4">
+                    <ErrorState
+                        message={flowLoadError.message}
+                        onRetry={refetchFlow}
+                        title="Error loading flow"
+                    />
+                </div>
+            </>
+        );
+    }
 
     const tabsCard = (
         <div className="flex h-[calc(100dvh-3rem)] max-w-full flex-col rounded-none border-0">

@@ -41,6 +41,7 @@ export interface UseXtermResult {
 export function useXterm({ theme }: { theme: 'dark' | 'light' | 'system' }): UseXtermResult {
     const containerRef = useRef<HTMLDivElement | null>(null);
     const terminalRef = useRef<null | Terminal>(null);
+    const writeTokenRef = useRef(0);
     const themeRef = useRef(theme);
     const [isReady, setIsReady] = useState(false);
     const [searchAddon, setSearchAddon] = useState<null | SearchAddon>(null);
@@ -57,7 +58,8 @@ export function useXterm({ theme }: { theme: 'dark' | 'light' | 'system' }): Use
         }
 
         try {
-            writeWithFlowControl(terminal, data);
+            const token = writeTokenRef.current;
+            writeWithFlowControl(terminal, data, () => token !== writeTokenRef.current);
         } catch (error: unknown) {
             Log.error('Terminal write failed:', error);
         }
@@ -65,6 +67,9 @@ export function useXterm({ theme }: { theme: 'dark' | 'light' | 'system' }): Use
 
     const clear = useCallback(() => {
         try {
+            // Invalidate any in-flight chunked write so its trailing chunks don't land
+            // after the clear and interleave with the next write.
+            writeTokenRef.current += 1;
             terminalRef.current?.clear();
         } catch (error: unknown) {
             Log.error('Terminal clear failed:', error);
@@ -257,6 +262,56 @@ export function useXterm({ theme }: { theme: 'dark' | 'light' | 'system' }): Use
     return { clear, containerRef, isReady, scrollToBottom, searchAddon, write };
 }
 
+/**
+ * Writes data to the terminal with chunked flow control.
+ * For large payloads, splits into chunks and uses xterm's write callback
+ * to avoid overwhelming the parser and blocking the UI thread.
+ *
+ * Chunk boundaries are adjusted to avoid splitting UTF-16 surrogate pairs:
+ * if the last code unit of a chunk is a high surrogate (0xD800-0xDBFF),
+ * the boundary is moved back by one so the pair stays intact.
+ *
+ * See: https://xtermjs.org/docs/guides/flowcontrol/
+ */
+export function writeWithFlowControl(terminal: Terminal, data: string, isStale: () => boolean = () => false): void {
+    if (data.length <= FLOW_CONTROL_CHUNK_SIZE) {
+        terminal.write(data);
+
+        return;
+    }
+
+    let offset = 0;
+
+    const writeNext = () => {
+        // A clear() (or a superseding write) bumps the generation token; stop draining so
+        // trailing chunks of this write don't land after the buffer was cleared.
+        if (isStale()) {
+            return;
+        }
+
+        let end = Math.min(offset + FLOW_CONTROL_CHUNK_SIZE, data.length);
+
+        if (end < data.length) {
+            const code = data.charCodeAt(end - 1);
+
+            if (code >= 0xd800 && code <= 0xdbff) {
+                end--;
+            }
+        }
+
+        const chunk = data.slice(offset, end);
+        offset = end;
+
+        if (offset < data.length) {
+            terminal.write(chunk, writeNext);
+        } else {
+            terminal.write(chunk);
+        }
+    };
+
+    writeNext();
+}
+
 function removeLinkTooltip(container: HTMLElement): void {
     const existing = container.querySelector(`.${TOOLTIP_CLASS}`);
 
@@ -299,48 +354,4 @@ function showLinkTooltip(container: HTMLElement, event: MouseEvent, uri: string,
     }
 
     tooltip.style.top = `${Math.max(0, y)}px`;
-}
-
-/**
- * Writes data to the terminal with chunked flow control.
- * For large payloads, splits into chunks and uses xterm's write callback
- * to avoid overwhelming the parser and blocking the UI thread.
- *
- * Chunk boundaries are adjusted to avoid splitting UTF-16 surrogate pairs:
- * if the last code unit of a chunk is a high surrogate (0xD800-0xDBFF),
- * the boundary is moved back by one so the pair stays intact.
- *
- * See: https://xtermjs.org/docs/guides/flowcontrol/
- */
-function writeWithFlowControl(terminal: Terminal, data: string): void {
-    if (data.length <= FLOW_CONTROL_CHUNK_SIZE) {
-        terminal.write(data);
-
-        return;
-    }
-
-    let offset = 0;
-
-    const writeNext = () => {
-        let end = Math.min(offset + FLOW_CONTROL_CHUNK_SIZE, data.length);
-
-        if (end < data.length) {
-            const code = data.charCodeAt(end - 1);
-
-            if (code >= 0xd800 && code <= 0xdbff) {
-                end--;
-            }
-        }
-
-        const chunk = data.slice(offset, end);
-        offset = end;
-
-        if (offset < data.length) {
-            terminal.write(chunk, writeNext);
-        } else {
-            terminal.write(chunk);
-        }
-    };
-
-    writeNext();
 }

@@ -11,7 +11,7 @@ interface ErrorStateProps {
 
 export function ErrorState({ message, onRetry, title }: ErrorStateProps) {
     return (
-        <Empty>
+        <Empty role="alert">
             <EmptyHeader>
                 <EmptyMedia>
                     <AlertCircle className="text-destructive size-12" />

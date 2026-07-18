@@ -1,4 +1,3 @@
-import { NetworkStatus } from '@apollo/client';
 import { useMutation, useQuery, useSubscription } from '@apollo/client/react';
 import { createContext, useCallback, useContext, useMemo } from 'react';
 import { toast } from 'sonner';
@@ -43,14 +42,16 @@ export function FlowsProvider({ children }: FlowsProviderProps) {
         data: flowsData,
         error: flowsError,
         loading,
-        networkStatus,
         refetch,
     } = useQuery(FlowsDocument, {
         notifyOnNetworkStatusChange: true,
     });
 
-    const isLoading = loading && networkStatus === NetworkStatus.loading;
     const flows = useMemo(() => flowsData?.flows ?? [], [flowsData?.flows]);
+    // Full-page spinner only while there's nothing to show yet: a background refetch
+    // (reconnect sweep) keeps the rendered list, and a retry after a failed initial load
+    // shows the spinner rather than flashing the "No flows found" empty state.
+    const isLoading = loading && flows.length === 0;
 
     useSubscription(FlowCreatedDocument);
     useSubscription(FlowDeletedDocument);

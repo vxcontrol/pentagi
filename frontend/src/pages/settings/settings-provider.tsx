@@ -38,6 +38,7 @@ import {
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
 import { DetailSplitLayout } from '@/components/shared/detail-split-layout';
 import { ErrorState } from '@/components/shared/error-state';
+import { LoadingState } from '@/components/shared/loading-state';
 import { UnsavedChangesDialog, useUnsavedChangesGuard } from '@/components/shared/unsaved-changes';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Badge } from '@/components/ui/badge';
@@ -50,7 +51,6 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group';
@@ -1560,18 +1560,10 @@ function SettingsProvider() {
                     </AppHeaderContent>
                 </AppHeader>
                 <div className="flex flex-1 items-center justify-center p-4">
-                    <Empty>
-                        <EmptyHeader>
-                            <EmptyMedia>
-                                <Spinner
-                                    className="text-muted-foreground size-10"
-                                    variant="circle"
-                                />
-                            </EmptyMedia>
-                            <EmptyTitle>Loading provider data...</EmptyTitle>
-                            <EmptyDescription>Please wait while we fetch provider configuration</EmptyDescription>
-                        </EmptyHeader>
-                    </Empty>
+                    <LoadingState
+                        description="Please wait while we fetch provider configuration"
+                        title="Loading provider data..."
+                    />
                 </div>
             </>
         );
@@ -1664,6 +1656,22 @@ function SettingsProvider() {
                                         event.stopPropagation();
                                         handleTestAgent(agentKey);
                                     }}
+                                    onKeyDown={(event) => {
+                                        if (event.key !== 'Enter' && event.key !== ' ') {
+                                            return;
+                                        }
+
+                                        event.preventDefault();
+                                        event.stopPropagation();
+
+                                        if (isTestLoading || isAgentTestLoading) {
+                                            return;
+                                        }
+
+                                        handleTestAgent(agentKey);
+                                    }}
+                                    role="button"
+                                    tabIndex={isTestLoading || isAgentTestLoading ? -1 : 0}
                                 >
                                     {isAgentTestLoading && currentAgentKey === agentKey ? (
                                         <Spinner variant="circle" />

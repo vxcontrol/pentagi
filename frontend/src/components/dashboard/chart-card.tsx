@@ -1,8 +1,9 @@
 import type { ReactNode } from 'react';
 
-import { AlertCircle, BarChart2 } from 'lucide-react';
+import { BarChart2 } from 'lucide-react';
 import { ResponsiveContainer } from 'recharts';
 
+import { DashboardError } from '@/components/dashboard/dashboard-error';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Spinner } from '@/components/ui/spinner';
 
@@ -43,13 +44,10 @@ export function ChartCard({
                         />
                     </div>
                 ) : error ? (
-                    <div
-                        className="flex flex-col items-center justify-center gap-2"
+                    <DashboardError
+                        iconClassName="size-10"
                         style={{ height }}
-                    >
-                        <AlertCircle className="text-muted-foreground/40 size-10" />
-                        <p className="text-muted-foreground text-sm">Couldn't load</p>
-                    </div>
+                    />
                 ) : empty ? (
                     <div
                         className="flex flex-col items-center justify-center gap-2"

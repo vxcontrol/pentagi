@@ -382,6 +382,67 @@ const replaceWithIncoming = {
     merge: (_existing: unknown, incoming: unknown) => incoming,
 };
 
+export const createCache = () =>
+    new InMemoryCache({
+        typePolicies: {
+            APIToken: {
+                keyFields: ['tokenId'],
+            },
+            KnowledgeDocument: {
+                fields: {
+                    // `content` arrives empty from the list query (withContent:false,
+                    // to save bandwidth) but full from the detail query — both
+                    // normalize to this shared entity. Never let an empty incoming
+                    // blank out a body the detail already loaded.
+                    content: {
+                        merge: (existing: string | undefined, incoming: string) => incoming || existing || '',
+                    },
+                },
+            },
+            ProviderConfig: {
+                keyFields: (object) => {
+                    if (object.id === 0 || object.id === '0') {
+                        return false;
+                    }
+
+                    return ['id'];
+                },
+            },
+            Query: {
+                fields: {
+                    agentLogs: { keyArgs: ['flowId'], ...replaceWithIncoming },
+                    apiTokens: { ...replaceWithIncoming },
+                    assistantLogs: { keyArgs: ['flowId', 'assistantId'], ...replaceWithIncoming },
+                    assistants: { keyArgs: ['flowId'], ...replaceWithIncoming },
+                    flow: {
+                        read(existing, { args, toReference }) {
+                            if (!args?.flowId) {
+                                return existing;
+                            }
+
+                            return existing ?? toReference({ __typename: 'Flow', id: args.flowId });
+                        },
+                    },
+                    flowFiles: { keyArgs: ['flowId'], ...replaceWithIncoming },
+                    flows: { ...replaceWithIncoming },
+                    flowTemplates: { ...replaceWithIncoming },
+                    knowledgeDocuments: { keyArgs: ['filter', 'withContent'], ...replaceWithIncoming },
+                    messageLogs: { keyArgs: ['flowId'], ...replaceWithIncoming },
+                    providers: { ...replaceWithIncoming },
+                    resources: { keyArgs: ['path', 'recursive'], ...replaceWithIncoming },
+                    screenshots: { keyArgs: ['flowId'], ...replaceWithIncoming },
+                    searchLogs: { keyArgs: ['flowId'], ...replaceWithIncoming },
+                    settingsPrompts: { ...replaceWithIncoming },
+                    settingsProviders: { ...replaceWithIncoming },
+                    settingsUser: { ...replaceWithIncoming },
+                    tasks: { keyArgs: ['flowId'], ...replaceWithIncoming },
+                    terminalLogs: { keyArgs: ['flowId'], ...replaceWithIncoming },
+                    vectorStoreLogs: { keyArgs: ['flowId'], ...replaceWithIncoming },
+                },
+            },
+        },
+    });
+
 const createApolloClient = () => {
     // Holds the client for the ws `connected` handler, which is defined before the
     // client exists; `lazy: true` means the socket only opens on the first
@@ -405,7 +466,17 @@ const createApolloClient = () => {
                     // published while we were disconnected — so on a reconnect refetch
                     // active queries to reconcile the cache with the backend.
                     if (wasRetry) {
-                        void clientRef.current?.refetchObservableQueries();
+                        // Unlike per-query refetch(), the aggregate promise isn't wrapped
+                        // in preventUnhandledRejection — a failed reconcile (e.g. a transient
+                        // 502 during the reconnect) would otherwise surface as an
+                        // unhandledrejection.
+                        void clientRef.current?.refetchObservableQueries().catch((error: unknown) => {
+                            Log.error('Reconnect cache reconcile failed:', error);
+                        });
+
+                        // refetchObservableQueries skips cache-only queries, so the REST-hydrated
+                        // resources slot isn't reconciled above — its provider re-fetches on this.
+                        window.dispatchEvent(new Event('ws:reconnected'));
                     }
                 },
                 connecting: () => Log.debug('GraphQL WebSocket connecting...'),
@@ -466,65 +537,7 @@ const createApolloClient = () => {
         }
     });
 
-    const cache = new InMemoryCache({
-        typePolicies: {
-            APIToken: {
-                keyFields: ['tokenId'],
-            },
-            KnowledgeDocument: {
-                fields: {
-                    // `content` arrives empty from the list query (withContent:false,
-                    // to save bandwidth) but full from the detail query — both
-                    // normalize to this shared entity. Never let an empty incoming
-                    // blank out a body the detail already loaded.
-                    content: {
-                        merge: (existing: string | undefined, incoming: string) => incoming || existing || '',
-                    },
-                },
-            },
-            ProviderConfig: {
-                keyFields: (object) => {
-                    if (object.id === 0 || object.id === '0') {
-                        return false;
-                    }
-
-                    return ['id'];
-                },
-            },
-            Query: {
-                fields: {
-                    agentLogs: { keyArgs: ['flowId'], ...replaceWithIncoming },
-                    apiTokens: { ...replaceWithIncoming },
-                    assistantLogs: { keyArgs: ['flowId', 'assistantId'], ...replaceWithIncoming },
-                    assistants: { keyArgs: ['flowId'], ...replaceWithIncoming },
-                    flow: {
-                        read(existing, { args, toReference }) {
-                            if (!args?.flowId) {
-                                return existing;
-                            }
-
-                            return existing ?? toReference({ __typename: 'Flow', id: args.flowId });
-                        },
-                    },
-                    flowFiles: { keyArgs: ['flowId'], ...replaceWithIncoming },
-                    flows: { ...replaceWithIncoming },
-                    flowTemplates: { ...replaceWithIncoming },
-                    knowledgeDocuments: { keyArgs: ['filter', 'withContent'], ...replaceWithIncoming },
-                    messageLogs: { keyArgs: ['flowId'], ...replaceWithIncoming },
-                    providers: { ...replaceWithIncoming },
-                    resources: { keyArgs: ['path', 'recursive'], ...replaceWithIncoming },
-                    screenshots: { keyArgs: ['flowId'], ...replaceWithIncoming },
-                    searchLogs: { keyArgs: ['flowId'], ...replaceWithIncoming },
-                    settingsPrompts: { ...replaceWithIncoming },
-                    settingsProviders: { ...replaceWithIncoming },
-                    settingsUser: { ...replaceWithIncoming },
-                    tasks: { keyArgs: ['flowId'], ...replaceWithIncoming },
-                    terminalLogs: { keyArgs: ['flowId'], ...replaceWithIncoming },
-                    vectorStoreLogs: { keyArgs: ['flowId'], ...replaceWithIncoming },
-                },
-            },
-        },
-    });
+    const cache = createCache();
 
     const streamingLink = createStreamingLink();
     const subscriptionCacheLink = createSubscriptionCacheLink(cache);

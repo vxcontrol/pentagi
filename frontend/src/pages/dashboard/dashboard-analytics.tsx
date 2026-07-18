@@ -1,12 +1,13 @@
 import { useQuery } from '@apollo/client/react';
 import { format } from 'date-fns';
-import { AlertCircle, ChevronRight, Clock, Wrench } from 'lucide-react';
+import { ChevronRight, Clock, Wrench } from 'lucide-react';
 import { memo, useDeferredValue, useMemo, useRef, useState } from 'react';
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Tooltip, XAxis, YAxis } from 'recharts';
 
 import type { FlowFragmentFragment, UsageStatsPeriod } from '@/graphql/types';
 
 import { ChartCard, ChartTooltip } from '@/components/dashboard';
+import { DashboardError } from '@/components/dashboard/dashboard-error';
 import { FlowStatusBadge } from '@/components/icons/flow-status-badge';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -386,10 +387,7 @@ export function DashboardAnalytics({ period }: { period: UsageStatsPeriod }) {
                             />
                         </div>
                     ) : executionStatsError ? (
-                        <div className="text-muted-foreground flex flex-col items-center justify-center gap-2 py-8">
-                            <AlertCircle className="text-muted-foreground/40 size-6" />
-                            <p className="text-sm">Couldn't load</p>
-                        </div>
+                        <DashboardError className="py-8" />
                     ) : !deferredExecutionStats.length ? (
                         <p className="text-muted-foreground py-8 text-center text-sm">
                             No flow executions in this period

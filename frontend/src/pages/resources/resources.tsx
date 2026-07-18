@@ -433,7 +433,8 @@ function Resources() {
         </Empty>
     );
 
-    if (error) {
+    // Error surface only when there's no data — a failed background refetch must not blank a working list.
+    if (error && !hasResources) {
         return (
             <>
                 {pageHeader}

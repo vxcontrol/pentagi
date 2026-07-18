@@ -115,6 +115,15 @@ export function ResourcesProvider({ children }: ResourcesProviderProps) {
         };
     }, [apolloClient, refreshTick, shouldFetchResources]);
 
+    // Subscriptions are delta-only and the reconnect sweep skips this cache-only slot,
+    // so re-hydrate from REST when the socket reconnects after an outage.
+    useEffect(() => {
+        const reconcile = () => setRefreshTick((tick) => tick + 1);
+        window.addEventListener('ws:reconnected', reconcile);
+
+        return () => window.removeEventListener('ws:reconnected', reconcile);
+    }, []);
+
     const { data, error: graphqlError } = useQuery(ResourcesDocument, {
         fetchPolicy: 'cache-only',
         skip: !shouldFetchResources,

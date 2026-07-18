@@ -12,6 +12,7 @@ import { providerIcons } from '@/components/icons/provider-icon';
 import { AppHeader, AppHeaderActions, AppHeaderContent, AppHeaderTitle } from '@/components/layouts/app/app-header';
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
 import { ErrorState } from '@/components/shared/error-state';
+import { LoadingState } from '@/components/shared/loading-state';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ContextMenuItem, ContextMenuSeparator } from '@/components/ui/context-menu';
@@ -408,24 +409,17 @@ function SettingsProviders() {
             <>
                 {pageHeader}
                 <div className="flex flex-1 flex-col gap-4 p-4">
-                    <Empty>
-                        <EmptyHeader>
-                            <EmptyMedia>
-                                <Spinner
-                                    className="text-muted-foreground size-10"
-                                    variant="circle"
-                                />
-                            </EmptyMedia>
-                            <EmptyTitle>Loading providers...</EmptyTitle>
-                            <EmptyDescription>Please wait while we fetch your provider configurations</EmptyDescription>
-                        </EmptyHeader>
-                    </Empty>
+                    <LoadingState
+                        description="Please wait while we fetch your provider configurations"
+                        title="Loading providers..."
+                    />
                 </div>
             </>
         );
     }
 
-    if (error) {
+    // Error surface only when there's no data — a failed background refetch must not blank a working list.
+    if (error && !data) {
         return (
             <>
                 {pageHeader}

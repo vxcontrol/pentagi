@@ -39,7 +39,16 @@ vi.mock('./terminal-sanitizer', () => ({ processLog: (line: string) => line }));
 
 import Terminal from './terminal';
 
-const visibleLines = () => xterm.visible.split('\r\n').filter(Boolean);
+const visibleLines = () => {
+    const lines = xterm.visible.split('\r\n');
+
+    // Keep interior blank lines (garbling can surface as a stray \r\n); drop only the trailing terminator.
+    if (lines.at(-1) === '') {
+        lines.pop();
+    }
+
+    return lines;
+};
 
 const reset = () => {
     xterm.visible = '';

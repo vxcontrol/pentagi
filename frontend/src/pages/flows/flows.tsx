@@ -19,6 +19,7 @@ import {
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
 import { ErrorState } from '@/components/shared/error-state';
 import { InlineEditInput } from '@/components/shared/inline-edit';
+import { LoadingState } from '@/components/shared/loading-state';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ContextMenuItem, ContextMenuSeparator } from '@/components/ui/context-menu';
@@ -591,24 +592,17 @@ function Flows() {
             <>
                 {pageHeader}
                 <div className="flex flex-1 flex-col gap-4 p-4">
-                    <Empty>
-                        <EmptyHeader>
-                            <EmptyMedia>
-                                <Spinner
-                                    className="text-muted-foreground size-10"
-                                    variant="circle"
-                                />
-                            </EmptyMedia>
-                            <EmptyTitle>Loading flows...</EmptyTitle>
-                            <EmptyDescription>Please wait while we fetch your conversation flows</EmptyDescription>
-                        </EmptyHeader>
-                    </Empty>
+                    <LoadingState
+                        description="Please wait while we fetch your conversation flows"
+                        title="Loading flows..."
+                    />
                 </div>
             </>
         );
     }
 
-    if (flowsError) {
+    // Error surface only when there's no data — a failed background refetch must not blank a working list.
+    if (flowsError && flows.length === 0) {
         return (
             <>
                 {pageHeader}

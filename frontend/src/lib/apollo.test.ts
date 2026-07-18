@@ -1,7 +1,7 @@
 import { gql, InMemoryCache, Observable } from '@apollo/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { createStreamingLink, updateCacheForSubscription } from './apollo';
+import { createCache, createStreamingLink, updateCacheForSubscription } from './apollo';
 
 const TERMINAL = gql`
     query T($flowId: ID!) {
@@ -31,20 +31,7 @@ const FLOWS = gql`
     }
 `;
 
-// Mirrors the flow-scoped list fields in the production cache: keyed by flowId,
-// query writes replace wholesale (the subscription link mutates via cache.modify).
-const makeCache = () =>
-    new InMemoryCache({
-        typePolicies: {
-            Query: {
-                fields: {
-                    flows: { merge: (_existing, incoming) => incoming },
-                    tasks: { keyArgs: ['flowId'], merge: (_existing, incoming) => incoming },
-                    terminalLogs: { keyArgs: ['flowId'], merge: (_existing, incoming) => incoming },
-                },
-            },
-        },
-    });
+const makeCache = createCache;
 
 // The subscription payload carries `__typename` + fields; updateCacheForSubscription's
 // param is the minimal `{ id }` contract, so route literals through this to keep

@@ -128,7 +128,8 @@ function FlowTerminal() {
     };
 
     const handleClearSearch = () => {
-        form.reset({ search: '' });
+        // Clear only the search — form.reset would drop the task/subtask filter too.
+        form.setValue('search', '');
         setDebouncedSearchValue('');
         debouncedUpdateSearch.cancel();
     };

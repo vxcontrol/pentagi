@@ -22,7 +22,11 @@ import {
 import { formatCost, formatDuration, formatNumber, formatTokenCount } from '@/lib/utils/format';
 
 export function FlowDashboardOverview({ flowId }: { flowId: string }) {
-    const { data: usageData, loading: usageLoading } = useQuery(UsageStatsByFlowDocument, {
+    const {
+        data: usageData,
+        error: usageError,
+        loading: usageLoading,
+    } = useQuery(UsageStatsByFlowDocument, {
         variables: { flowId },
     });
     const { data: usageByAgentData, loading: usageByAgentLoading } = useQuery(UsageStatsByAgentTypeForFlowDocument, {
@@ -34,7 +38,11 @@ export function FlowDashboardOverview({ flowId }: { flowId: string }) {
             variables: { flowId },
         },
     );
-    const { data: toolcallsData, loading: toolcallsLoading } = useQuery(ToolcallsStatsByFlowDocument, {
+    const {
+        data: toolcallsData,
+        error: toolcallsError,
+        loading: toolcallsLoading,
+    } = useQuery(ToolcallsStatsByFlowDocument, {
         variables: { flowId },
     });
     const { data: toolcallsByFunctionData, loading: toolcallsByFunctionLoading } = useQuery(
@@ -43,7 +51,11 @@ export function FlowDashboardOverview({ flowId }: { flowId: string }) {
             variables: { flowId },
         },
     );
-    const { data: flowStatsData, loading: flowStatsLoading } = useQuery(FlowStatsByFlowDocument, {
+    const {
+        data: flowStatsData,
+        error: flowStatsError,
+        loading: flowStatsLoading,
+    } = useQuery(FlowStatsByFlowDocument, {
         variables: { flowId },
     });
 
@@ -112,6 +124,7 @@ export function FlowDashboardOverview({ flowId }: { flowId: string }) {
             <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
                 <MetricCard
                     description={`Subtasks: ${flowStats?.totalSubtasksCount ?? 0} · Assistants: ${flowStats?.totalAssistantsCount ?? 0}`}
+                    error={!!flowStatsError}
                     icon={<GitFork className="text-muted-foreground size-4" />}
                     loading={anyLoading}
                     title="Tasks"
@@ -119,6 +132,7 @@ export function FlowDashboardOverview({ flowId }: { flowId: string }) {
                 />
                 <MetricCard
                     description={`Duration: ${toolcalls ? formatDuration(toolcalls.totalDurationSeconds) : '—'}`}
+                    error={!!toolcallsError}
                     icon={<Activity className="text-muted-foreground size-4" />}
                     loading={anyLoading}
                     title="Tool Calls"
@@ -126,6 +140,7 @@ export function FlowDashboardOverview({ flowId }: { flowId: string }) {
                 />
                 <MetricCard
                     description="Input + Output tokens"
+                    error={!!usageError}
                     icon={<Cpu className="text-muted-foreground size-4" />}
                     loading={anyLoading}
                     title="Tokens"
@@ -133,6 +148,7 @@ export function FlowDashboardOverview({ flowId }: { flowId: string }) {
                 />
                 <MetricCard
                     description="LLM spending for this flow"
+                    error={!!usageError}
                     icon={<CircleDollarSign className="text-muted-foreground size-4" />}
                     loading={anyLoading}
                     title="Cost"

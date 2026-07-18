@@ -57,6 +57,7 @@ import {
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
 import { DetailSplitLayout } from '@/components/shared/detail-split-layout';
 import { ErrorState } from '@/components/shared/error-state';
+import { LoadingState } from '@/components/shared/loading-state';
 import { UnsavedChangesDialog, useUnsavedChangesGuard } from '@/components/shared/unsaved-changes';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -213,7 +214,7 @@ interface DiffContentProps {
 }
 
 interface VariablesContentProps {
-    counts: Record<string, number>;
+    currentTemplate: string;
     onVariableClick: (variable: string) => void;
     variables: string[];
 }
@@ -731,18 +732,10 @@ function SettingsPrompt() {
             <>
                 {pageHeader}
                 <div className="flex flex-1 items-center justify-center p-4">
-                    <Empty>
-                        <EmptyHeader>
-                            <EmptyMedia>
-                                <Spinner
-                                    className="text-muted-foreground size-10"
-                                    variant="circle"
-                                />
-                            </EmptyMedia>
-                            <EmptyTitle>Loading prompt data...</EmptyTitle>
-                            <EmptyDescription>Please wait while we fetch prompt information</EmptyDescription>
-                        </EmptyHeader>
-                    </Empty>
+                    <LoadingState
+                        description="Please wait while we fetch prompt information"
+                        title="Loading prompt data..."
+                    />
                 </div>
             </>
         );
@@ -960,7 +953,7 @@ function SettingsPrompt() {
 
                     {validationResult && (
                         <div className="flex flex-col gap-4">
-                            <Alert variant={validationResult.result ? 'default' : 'destructive'}>
+                            <Alert variant={validationResult.result === 'success' ? 'default' : 'destructive'}>
                                 {validationResult.result === 'success' ? (
                                     <CheckCircle className="size-4 text-green-500!" />
                                 ) : (
@@ -1021,7 +1014,6 @@ function SettingsPrompt() {
 
 function Variables({ currentTemplate, onVariableClick, variables }: VariablesProps) {
     const { isDesktop } = useBreakpoint();
-    const counts = useMemo(() => countVariableUses(currentTemplate, variables), [currentTemplate, variables]);
 
     if (variables.length === 0) {
         return null;
@@ -1029,7 +1021,7 @@ function Variables({ currentTemplate, onVariableClick, variables }: VariablesPro
 
     const content = (
         <VariablesContent
-            counts={counts}
+            currentTemplate={currentTemplate}
             onVariableClick={onVariableClick}
             variables={variables}
         />
@@ -1085,7 +1077,11 @@ function Variables({ currentTemplate, onVariableClick, variables }: VariablesPro
     );
 }
 
-function VariablesContent({ counts, onVariableClick, variables }: VariablesContentProps) {
+function VariablesContent({ currentTemplate, onVariableClick, variables }: VariablesContentProps) {
+    // Computed here, not in the parent, so the narrow-width popover only runs the
+    // per-variable RegExp sweep while it's open and mounted.
+    const counts = useMemo(() => countVariableUses(currentTemplate, variables), [currentTemplate, variables]);
+
     return (
         <div className="flex flex-wrap gap-1.5 px-4 py-3">
             {variables.map((variable) => {
