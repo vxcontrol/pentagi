@@ -975,6 +975,8 @@ PentAGI implements a sophisticated multi-layered agent supervision system to ens
 - `EXECUTION_MONITOR_SAME_TOOL_LIMIT` (default: 5) - Consecutive same-tool threshold
 - `EXECUTION_MONITOR_TOTAL_TOOL_LIMIT` (default: 10) - Total tool calls threshold
 
+For local or custom Qwen-style deployments where flows run for hours or repeat commands, see the [vLLM Qwen3.5-27B-FP8 troubleshooting guide](../../examples/guides/vllm-qwen35-27b-fp8.md#issue-automation-flow-runs-for-hours-or-repeats-commands) for prompt-bounding and log-review guidance.
+
 ### Enhanced Reflector Integration
 
 **Automatic Reflector on Generation Failures**:
