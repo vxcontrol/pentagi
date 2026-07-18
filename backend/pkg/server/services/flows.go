@@ -448,22 +448,15 @@ func (s *FlowService) PatchFlow(c *gin.Context) {
 		return
 	}
 
-	fw, err := s.fc.GetFlow(c, int64(flow.ID))
-	if err != nil {
-		logger.FromContext(c).WithError(err).Errorf("error getting flow by id in flow controller")
-		response.Error(c, response.ErrInternal, err)
-		return
-	}
-
 	switch patchFlow.Action {
 	case "stop":
-		if err := fw.Stop(c); err != nil {
+		if err := s.fc.StopFlow(c, int64(flow.ID)); err != nil {
 			logger.FromContext(c).WithError(err).Errorf("error stopping flow")
 			response.Error(c, response.ErrInternal, err)
 			return
 		}
 	case "finish":
-		if err := fw.Finish(c); err != nil {
+		if err := s.fc.FinishFlow(c, int64(flow.ID)); err != nil {
 			logger.FromContext(c).WithError(err).Errorf("error finishing flow")
 			response.Error(c, response.ErrInternal, err)
 			return
@@ -472,6 +465,13 @@ func (s *FlowService) PatchFlow(c *gin.Context) {
 		if patchFlow.Input == nil || *patchFlow.Input == "" {
 			logger.FromContext(c).Errorf("error sending input to flow: input is empty")
 			response.Error(c, response.ErrFlowsInvalidRequest, nil)
+			return
+		}
+
+		fw, err := s.fc.GetFlow(c, int64(flow.ID))
+		if err != nil {
+			logger.FromContext(c).WithError(err).Errorf("error getting flow by id in flow controller")
+			response.Error(c, response.ErrInternal, err)
 			return
 		}
 
@@ -501,6 +501,12 @@ func (s *FlowService) PatchFlow(c *gin.Context) {
 		if patchFlow.Name == nil || *patchFlow.Name == "" {
 			logger.FromContext(c).Errorf("error renaming flow: name is empty")
 			response.Error(c, response.ErrFlowsInvalidRequest, nil)
+			return
+		}
+		fw, err := s.fc.GetFlow(c, int64(flow.ID))
+		if err != nil {
+			logger.FromContext(c).WithError(err).Errorf("error getting flow by id in flow controller")
+			response.Error(c, response.ErrInternal, err)
 			return
 		}
 		if err := fw.Rename(c, *patchFlow.Name); err != nil {

@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"sort"
@@ -348,7 +349,7 @@ func (fc *flowController) StopFlow(ctx context.Context, flowID int64) error {
 
 	flow, ok := fc.flows[flowID]
 	if !ok {
-		return ErrFlowNotFound
+		return fc.stopUnloadedFlow(ctx, flowID)
 	}
 
 	err := flow.Stop(ctx)
@@ -365,7 +366,7 @@ func (fc *flowController) FinishFlow(ctx context.Context, flowID int64) error {
 
 	flow, ok := fc.flows[flowID]
 	if !ok {
-		return ErrFlowNotFound
+		return fc.finishUnloadedFlow(ctx, flowID)
 	}
 
 	err := flow.Finish(ctx)
@@ -376,6 +377,113 @@ func (fc *flowController) FinishFlow(ctx context.Context, flowID int64) error {
 	delete(fc.flows, flowID)
 
 	return nil
+}
+
+func (fc *flowController) stopUnloadedFlow(ctx context.Context, flowID int64) error {
+	flow, err := fc.db.GetFlow(ctx, flowID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrFlowNotFound
+		}
+		return fmt.Errorf("failed to get flow %d: %w", flowID, err)
+	}
+
+	containers, err := fc.cleanupFlowContainers(ctx, flowID, func(status database.ContainerStatus) bool {
+		return status == database.ContainerStatusStarting || status == database.ContainerStatusRunning
+	})
+	if err != nil {
+		return err
+	}
+
+	switch flow.Status {
+	case database.FlowStatusRunning, database.FlowStatusWaiting:
+		flow, err = fc.db.UpdateFlowStatus(ctx, database.UpdateFlowStatusParams{
+			ID:     flowID,
+			Status: database.FlowStatusWaiting,
+		})
+		if err != nil {
+			return fmt.Errorf("failed to set flow %d status to waiting: %w", flowID, err)
+		}
+		fc.publishFlowUpdated(ctx, flow, containers)
+		return nil
+	default:
+		fc.publishFlowUpdated(ctx, flow, containers)
+		return nil
+	}
+}
+
+func (fc *flowController) finishUnloadedFlow(ctx context.Context, flowID int64) error {
+	if _, err := fc.db.GetFlow(ctx, flowID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrFlowNotFound
+		}
+		return fmt.Errorf("failed to get flow %d: %w", flowID, err)
+	}
+
+	containers, err := fc.cleanupFlowContainers(ctx, flowID, func(status database.ContainerStatus) bool {
+		return status != database.ContainerStatusDeleted
+	})
+	if err != nil {
+		return err
+	}
+
+	flow, err := fc.db.UpdateFlowStatus(ctx, database.UpdateFlowStatusParams{
+		ID:     flowID,
+		Status: database.FlowStatusFinished,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to set flow %d status to finished: %w", flowID, err)
+	}
+
+	fc.publishFlowUpdated(ctx, flow, containers)
+
+	return nil
+}
+
+func (fc *flowController) cleanupFlowContainers(
+	ctx context.Context,
+	flowID int64,
+	shouldCleanup func(database.ContainerStatus) bool,
+) ([]database.Container, error) {
+	containers, err := fc.db.GetFlowContainers(ctx, flowID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get flow %d containers: %w", flowID, err)
+	}
+
+	for _, container := range containers {
+		if !shouldCleanup(container.Status) {
+			continue
+		}
+
+		if container.LocalID.Valid && container.LocalID.String != "" && fc.docker != nil {
+			if err := fc.docker.RemoveContainer(ctx, container.LocalID.String, container.ID); err != nil {
+				return nil, fmt.Errorf("failed to remove flow %d container %d: %w", flowID, container.ID, err)
+			}
+			continue
+		}
+
+		if _, err := fc.db.UpdateContainerStatus(ctx, database.UpdateContainerStatusParams{
+			ID:     container.ID,
+			Status: database.ContainerStatusDeleted,
+		}); err != nil {
+			return nil, fmt.Errorf("failed to mark flow %d container %d as deleted: %w", flowID, container.ID, err)
+		}
+	}
+
+	containers, err = fc.db.GetFlowContainers(ctx, flowID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get flow %d containers after cleanup: %w", flowID, err)
+	}
+
+	return containers, nil
+}
+
+func (fc *flowController) publishFlowUpdated(ctx context.Context, flow database.Flow, containers []database.Container) {
+	if fc.subs == nil {
+		return
+	}
+
+	fc.subs.NewFlowPublisher(flow.UserID, flow.ID).FlowUpdated(ctx, flow, containers)
 }
 
 func (fc *flowController) RenameFlow(ctx context.Context, flowID int64, title string) error {

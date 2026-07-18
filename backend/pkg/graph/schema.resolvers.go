@@ -196,11 +196,7 @@ func (r *mutationResolver) DeleteFlow(ctx context.Context, flowID int64) (model.
 		"flow": flowID,
 	}).Debug("delete flow")
 
-	if fw, err := r.Controller.GetFlow(ctx, flowID); err == nil {
-		if err := fw.Finish(ctx); err != nil {
-			return model.ResultTypeError, err
-		}
-	} else if !errors.Is(err, controller.ErrFlowNotFound) {
+	if err := r.Controller.FinishFlow(ctx, flowID); err != nil && !errors.Is(err, controller.ErrFlowNotFound) {
 		return model.ResultTypeError, err
 	}
 
