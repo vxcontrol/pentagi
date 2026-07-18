@@ -453,7 +453,11 @@ func NewBodyPair(aiMsg *llms.MessageContent, toolMsgs []*llms.MessageContent) *B
 				break
 			}
 		}
-		for _, id := range partsToDelete {
+		// Delete in reverse so each removal does not shift the indices of the
+		// entries still pending deletion (a forward loop with the pre-collected
+		// ascending indices would delete the wrong elements once there are 2+).
+		for i := len(partsToDelete) - 1; i >= 0; i-- {
+			id := partsToDelete[i]
 			aiMsg.Parts = append(aiMsg.Parts[:id], aiMsg.Parts[id+1:]...)
 		}
 	}
