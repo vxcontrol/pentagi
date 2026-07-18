@@ -166,7 +166,7 @@ const cacheActionStrategies: Record<SubscriptionAction, CacheActionApplier> = {
     update: (existingArray, newRef, itemExists) => (itemExists ? existingArray : [...existingArray, newRef]),
 };
 
-const updateCacheForSubscription = (
+export const updateCacheForSubscription = (
     cache: InMemoryCache,
     subscriptionName: string,
     cacheField: string,
@@ -355,7 +355,7 @@ const createStreamingLink = (): ApolloLink => {
     });
 };
 
-const createSubscriptionCacheLink = (cacheInstance: InMemoryCache): ApolloLink =>
+export const createSubscriptionCacheLink = (cacheInstance: InMemoryCache): ApolloLink =>
     createInterceptLink((result, operation) => {
         if (result.data) {
             const variables = operation.variables as Record<string, unknown> | undefined;
