@@ -79,7 +79,7 @@ function Flow() {
     const { isDesktop, isMobile } = useBreakpoint();
     const navigate = useNavigate();
 
-    const { flowData, flowError, flowId, isLoading: isFlowLoading } = useFlow();
+    const { flowData, flowId, isLoading: isFlowLoading } = useFlow();
     const { deleteFlow, finishFlow } = useFlows();
     const { isFavoriteFlow, toggleFavoriteFlow } = useFavorites();
 
@@ -108,10 +108,13 @@ function Flow() {
     const [renameFlowMutation, { loading: isRenameLoading }] = useMutation(RenameFlowDocument);
 
     useEffect(() => {
-        if (flowError || (!isFlowLoading && !flowData?.flow)) {
+        // errorPolicy:'all' surfaces a partial error while the flow itself
+        // loaded; leave only when the flow is genuinely absent, not on any error
+        // — else a failed sibling log query bounces the user off a working flow.
+        if (!isFlowLoading && !flowData?.flow) {
             navigate(routes.flows, { replace: true });
         }
-    }, [flowError, flowData, isFlowLoading, navigate]);
+    }, [flowData, isFlowLoading, navigate]);
 
     const handleFlowRenameSave = useCallback(async () => {
         const newTitle = editingInputRef.current?.value.trim();

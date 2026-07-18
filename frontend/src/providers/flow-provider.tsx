@@ -170,12 +170,11 @@ export function FlowProvider({ children }: FlowProviderProps) {
 
     const flowStatus = useMemo(() => flowData?.flow?.status, [flowData?.flow?.status]);
 
-    // A single Postgres "no rows in result set" surfaces here every time a sibling
-    // query/subscription retries against an invalid flow id; without a stable
-    // toast id Sonner would stack 8 copies of the same message before the page
-    // redirects. Surface a friendly message and drop the raw SQL detail entirely.
+    // errorPolicy:'all' surfaces a partial error while the flow loaded, so gate
+    // on `!flow` or a partial failure toasts over a flow that rendered fine. The
+    // stable id keeps the invalid-id "no rows" retries from stacking.
     useEffect(() => {
-        if (flowError) {
+        if (flowError && !flowData?.flow) {
             const raw = flowError.message ?? '';
             const isNotFound = /no rows in result set|not found/i.test(raw);
             toast.error(isNotFound ? 'Flow not found' : 'Failed to load flow', {
@@ -184,7 +183,7 @@ export function FlowProvider({ children }: FlowProviderProps) {
             });
             Log.error('Error loading flow:', flowError);
         }
-    }, [flowError]);
+    }, [flowError, flowData]);
 
     const submitAutomationMessage = useCallback(
         async (values: FlowFormValues) => {
