@@ -47,6 +47,7 @@ This document describes the internal architecture and execution workflow of Flow
   - `google` - Google Custom Search API integration
   - `duckduckgo` - Anonymous search engine
   - `tavily` - Advanced research with citations
+  - `firecrawl` - Web search with full-page content scraping
   - `traversaal` - Structured Q&A search
   - `perplexity` - AI-powered comprehensive research
   - `sploitus` - Search for security exploits and pentest tools
@@ -760,14 +761,16 @@ The Searcher Agent follows a strict hierarchy for information retrieval:
 3. **Priority 5: Deep Analysis Tools** - Complex research synthesis
    - `traversaal` - Structured answers for common questions
    - `tavily` - Research-grade exploration of technical topics
+   - `firecrawl` - Deep research with main-content markdown scraped from discovered sites
    - `perplexity` - Comprehensive analysis with advanced reasoning
 
-**Available Search Engines**: Google, DuckDuckGo, Tavily, Traversaal, Perplexity, Sploitus, Searxng
+**Available Search Engines**: Google, DuckDuckGo, Tavily, Firecrawl, Traversaal, Perplexity, Sploitus, Searxng
 
 **Search Engine Configurations**:
 - **Google** - Custom Search API with CX key and language restrictions
 - **DuckDuckGo** - Anonymous search with VQD token authentication
 - **Tavily** - Advanced research with raw content and citations
+- **Firecrawl** - Web search with main-content markdown scraped from each result
 - **Perplexity** - AI-powered synthesis with configurable context size
 - **Traversaal** - Structured Q&A responses with web links
 - **Sploitus** - Search for security exploits and pentest tools

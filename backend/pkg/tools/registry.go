@@ -24,6 +24,7 @@ const (
 	GoogleToolName             = "google"
 	DuckDuckGoToolName         = "duckduckgo"
 	TavilyToolName             = "tavily"
+	FirecrawlToolName          = "firecrawl"
 	TraversaalToolName         = "traversaal"
 	PerplexityToolName         = "perplexity"
 	SearxngToolName            = "searxng"
@@ -109,6 +110,7 @@ var toolsTypeMapping = map[string]ToolType{
 	GoogleToolName:             SearchNetworkToolType,
 	DuckDuckGoToolName:         SearchNetworkToolType,
 	TavilyToolName:             SearchNetworkToolType,
+	FirecrawlToolName:          SearchNetworkToolType,
 	TraversaalToolName:         SearchNetworkToolType,
 	PerplexityToolName:         SearchNetworkToolType,
 	SearxngToolName:            SearchNetworkToolType,
@@ -153,6 +155,7 @@ var allowedStoringInMemoryTools = []string{
 	GoogleToolName,
 	DuckDuckGoToolName,
 	TavilyToolName,
+	FirecrawlToolName,
 	TraversaalToolName,
 	PerplexityToolName,
 	SearxngToolName,
@@ -228,6 +231,13 @@ var registryDefinitions = map[string]llms.FunctionDefinition{
 		Name: TavilyToolName,
 		Description: "Search in the tavily search engine, it's a more complex query and more detailed content " +
 			"with answer by query and detailed information from the web sites",
+		Parameters: reflector.Reflect(&SearchAction{}),
+	},
+	FirecrawlToolName: {
+		Name: FirecrawlToolName,
+		Description: "Search in the firecrawl search engine, it combines web search with page scraping to return " +
+			"the main-content markdown for each result, ideal for deep research on complex technical topics " +
+			"and reading documentation directly from the discovered web sites",
 		Parameters: reflector.Reflect(&SearchAction{}),
 	},
 	TraversaalToolName: {
@@ -439,8 +449,8 @@ func getMessageType(name string) database.MsglogType {
 		return database.MsglogTypeFile
 	case BrowserToolName:
 		return database.MsglogTypeBrowser
-	case MemoristToolName, SearchToolName, GoogleToolName, DuckDuckGoToolName, TavilyToolName, TraversaalToolName,
-		PerplexityToolName, SearxngToolName, SploitusToolName,
+	case MemoristToolName, SearchToolName, GoogleToolName, DuckDuckGoToolName, TavilyToolName, FirecrawlToolName,
+		TraversaalToolName, PerplexityToolName, SearxngToolName, SploitusToolName,
 		SearchGuideToolName, SearchAnswerToolName, SearchCodeToolName, SearchInMemoryToolName, GraphitiSearchToolName:
 		return database.MsglogTypeSearch
 	case AdviceToolName:

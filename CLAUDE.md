@@ -122,7 +122,7 @@ State is managed primarily through Apollo Client (GraphQL) with real-time update
 ### Key Integrations
 
 - **LLM Providers**: OpenAI, Anthropic, Gemini, AWS Bedrock, Ollama, DeepSeek, GLM, Kimi, Qwen, and custom HTTP endpoints — configured via environment variables or the Settings UI
-- **Search**: DuckDuckGo, Google, Tavily, Traversaal, Perplexity, Searxng
+- **Search**: DuckDuckGo, Google, Tavily, Firecrawl, Traversaal, Perplexity, Searxng
 - **Databases**: PostgreSQL + pgvector (required), Neo4j (optional, for knowledge graph)
 - **Observability**: OpenTelemetry → VictoriaMetrics + Loki + Jaeger → Grafana; Langfuse for LLM analytics
 

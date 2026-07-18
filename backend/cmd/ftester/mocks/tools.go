@@ -132,6 +132,28 @@ func MockResponse(funcName string, args json.RawMessage) (string, error) {
 
 		resultObj = builder.String()
 
+	case tools.FirecrawlToolName:
+		var searchArgs tools.SearchAction
+		if err := json.Unmarshal(args, &searchArgs); err != nil {
+			return "", fmt.Errorf("error unmarshaling search arguments: %w", err)
+		}
+
+		terminal.PrintMock("Firecrawl search:")
+		terminal.PrintKeyValue("Query", searchArgs.Query)
+		terminal.PrintKeyValueFormat("Max results", "%d", searchArgs.MaxResults.Int())
+
+		var builder strings.Builder
+		builder.WriteString("# Links\n\n")
+
+		for i := 1; i <= min(searchArgs.MaxResults.Int(), 3); i++ {
+			builder.WriteString(fmt.Sprintf("## %d. Mock Firecrawl Result %d\n\n", i, i))
+			builder.WriteString(fmt.Sprintf("* URL https://example.com/firecrawl/result%d\n\n", i))
+			builder.WriteString(fmt.Sprintf("### Short content\n\nHere is a brief description of the content from this search result related to '%s'.\n\n", searchArgs.Query))
+			builder.WriteString(fmt.Sprintf("### Raw content for %d. Mock Firecrawl Result %d\n\nThis is the full scraped markdown content that Firecrawl would retrieve from the URL. It contains comprehensive information about '%s' that helps answer your query with specific facts and data points relevant to your search.\n\n", i, i, searchArgs.Query))
+		}
+
+		resultObj = builder.String()
+
 	case tools.TraversaalToolName:
 		var searchArgs tools.SearchAction
 		if err := json.Unmarshal(args, &searchArgs); err != nil {
