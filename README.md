@@ -2945,11 +2945,14 @@ docker run --rm \
 
 #### Using Pre-configured Providers
 
-The Docker image comes with built-in support for major providers (OpenAI, Anthropic, Gemini, Ollama) and pre-configured provider files for additional services (OpenRouter, DeepInfra, DeepSeek, Moonshot, Novita):
+The Docker image comes with built-in support for major providers (OpenAI, Anthropic, Gemini, Ollama) and pre-configured provider files for additional services (OpenRouter, OrcaRouter, DeepInfra, DeepSeek, Moonshot, Novita):
 
 ```bash
 # Test with OpenRouter configuration
 docker exec -it pentagi /opt/pentagi/bin/ctester -config /opt/pentagi/conf/openrouter.provider.yml
+
+# Test with OrcaRouter configuration
+docker exec -it pentagi /opt/pentagi/bin/ctester -config /opt/pentagi/conf/orcarouter.provider.yml
 
 # Test with DeepInfra configuration
 docker exec -it pentagi /opt/pentagi/bin/ctester -config /opt/pentagi/conf/deepinfra.provider.yml
@@ -3003,11 +3006,11 @@ docker exec -it pentagi /opt/pentagi/bin/ctester -config /opt/pentagi/conf/ollam
 To use these configurations, your `.env` file only needs to contain:
 
 ```
-LLM_SERVER_URL=https://openrouter.ai/api/v1      # or https://api.deepinfra.com/v1/openai or https://api.openai.com/v1 or https://api.novita.ai/openai
+LLM_SERVER_URL=https://openrouter.ai/api/v1      # or https://api.orcarouter.ai/v1 or https://api.deepinfra.com/v1/openai or https://api.openai.com/v1 or https://api.novita.ai/openai
 LLM_SERVER_KEY=your_api_key
 LLM_SERVER_MODEL=                                # Leave empty, as models are specified in the config
-LLM_SERVER_CONFIG_PATH=/opt/pentagi/conf/openrouter.provider.yml  # or deepinfra.provider.ymll or custom-openai.provider.yml or novita.provider.yml
-LLM_SERVER_PROVIDER=                             # Provider name for LiteLLM proxy (e.g., openrouter, deepseek, moonshot, novita)
+LLM_SERVER_CONFIG_PATH=/opt/pentagi/conf/openrouter.provider.yml  # or orcarouter.provider.yml or deepinfra.provider.ymll or custom-openai.provider.yml or novita.provider.yml
+LLM_SERVER_PROVIDER=                             # Provider name for LiteLLM proxy (e.g., openrouter, orcarouter, deepseek, moonshot, novita)
 LLM_SERVER_LEGACY_REASONING=false                # Controls reasoning format, for OpenAI must be true (default: false)
 LLM_SERVER_PRESERVE_REASONING=false              # Preserve reasoning content in multi-turn conversations (required by Moonshot, default: false)
 
@@ -3127,6 +3130,7 @@ When using LiteLLM proxy, set the corresponding `*_PROVIDER` variable to enable 
 - `dashscope` - for Qwen models (`QWEN_PROVIDER=dashscope` → `dashscope/qwen-plus`)
 - `openai`, `anthropic`, `gemini` - for major cloud providers
 - `openrouter` - for OpenRouter aggregator
+- `orcarouter` - for OrcaRouter aggregator
 - `deepinfra` - for DeepInfra hosting
 - `novita` - for Novita AI
 - Any other provider name configured in your LiteLLM instance

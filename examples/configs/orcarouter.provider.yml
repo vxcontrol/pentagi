@@ -1,0 +1,134 @@
+# OrcaRouter provider configuration (OpenAI-compatible meta-router).
+# Use via the custom LLM endpoint:
+#   LLM_SERVER_URL=https://api.orcarouter.ai/v1
+#   LLM_SERVER_KEY=sk-orca-...
+#   LLM_SERVER_CONFIG_PATH=/opt/pentagi/conf/orcarouter.provider.yml
+# Model IDs are namespaced (e.g. openai/gpt-5.5); "orcarouter/auto" is a virtual
+# adaptive router. Prices are indicative - regenerate from https://www.orcarouter.ai/api/pricing.
+
+simple:
+  model: "google/gemini-3.5-flash"
+  temperature: 0.3
+  top_p: 0.9
+  n: 1
+  max_tokens: 4000
+  price:
+    input: 0.3
+    output: 2.5
+
+simple_json:
+  model: "google/gemini-3.5-flash"
+  temperature: 0.3
+  top_p: 1.0
+  n: 1
+  max_tokens: 4000
+  json: true
+  price:
+    input: 0.3
+    output: 2.5
+
+primary_agent:
+  model: "openai/gpt-5.5"
+  n: 1
+  max_tokens: 6000
+  reasoning:
+    effort: high
+  price:
+    input: 1.25
+    output: 10.0
+
+assistant:
+  model: "openai/gpt-5.5"
+  n: 1
+  max_tokens: 6000
+  reasoning:
+    effort: high
+  price:
+    input: 1.25
+    output: 10.0
+
+generator:
+  model: "anthropic/claude-sonnet-4.6"
+  n: 1
+  max_tokens: 12000
+  reasoning:
+    max_tokens: 4000
+  price:
+    input: 3.0
+    output: 15.0
+
+refiner:
+  model: "openai/gpt-5.5"
+  n: 1
+  max_tokens: 10000
+  reasoning:
+    effort: medium
+  price:
+    input: 1.25
+    output: 10.0
+
+adviser:
+  model: "openai/gpt-5.5"
+  n: 1
+  max_tokens: 6000
+  reasoning:
+    effort: high
+  price:
+    input: 1.25
+    output: 10.0
+
+reflector:
+  model: "google/gemini-3.5-flash"
+  temperature: 0.5
+  top_p: 1.0
+  n: 1
+  max_tokens: 4000
+  price:
+    input: 0.3
+    output: 2.5
+
+searcher:
+  model: "google/gemini-3.5-flash"
+  n: 1
+  max_tokens: 4000
+  price:
+    input: 0.3
+    output: 2.5
+
+enricher:
+  model: "google/gemini-3.5-flash"
+  temperature: 0.5
+  top_p: 1.0
+  n: 1
+  max_tokens: 6000
+  price:
+    input: 0.3
+    output: 2.5
+
+coder:
+  model: "anthropic/claude-sonnet-4.6"
+  n: 1
+  max_tokens: 8000
+  reasoning:
+    max_tokens: 2000
+  price:
+    input: 3.0
+    output: 15.0
+
+installer:
+  model: "google/gemini-3.5-flash"
+  n: 1
+  max_tokens: 4000
+  price:
+    input: 0.3
+    output: 2.5
+
+pentester:
+  model: "openai/gpt-5.5"
+  n: 1
+  max_tokens: 6000
+  reasoning:
+    effort: high
+  price:
+    input: 1.25
+    output: 10.0
