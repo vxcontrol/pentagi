@@ -28,8 +28,7 @@ function Terminal({
     const { clear, containerRef, isReady, scrollToBottom, searchAddon, write } = useXterm({ theme });
     const { findNext, findPrevious } = useTerminalSearch(searchAddon, isReady, searchValue, theme);
 
-    const lastLogIndexRef = useRef(0);
-    const prevLogsLengthRef = useRef(0);
+    const renderedLogsRef = useRef<string[]>([]);
 
     useImperativeHandle(ref, () => ({ findNext, findPrevious }), [findNext, findPrevious]);
 
@@ -38,20 +37,25 @@ function Terminal({
             return;
         }
 
-        if (logs.length === 0 && prevLogsLengthRef.current > 0) {
-            clear();
-            lastLogIndexRef.current = 0;
-            prevLogsLengthRef.current = 0;
-
-            return;
-        }
+        const rendered = renderedLogsRef.current;
 
         if (logs.length === 0) {
+            if (rendered.length > 0) {
+                clear();
+                renderedLogsRef.current = [];
+            }
+
             return;
         }
 
-        if (logs.length >= lastLogIndexRef.current) {
-            const newLogs = logs.slice(lastLogIndexRef.current);
+        // Append the tail only when the on-screen lines are an exact prefix of
+        // the new array. `logs` is also fed filtered subsets (flow-terminal), so
+        // a length-only check reappends the tail over stale lines when it shrinks
+        // then grows back.
+        const isAppend = logs.length >= rendered.length && rendered.every((line, index) => line === logs[index]);
+
+        if (isAppend) {
+            const newLogs = logs.slice(rendered.length);
 
             if (newLogs.length > 0) {
                 const batch = newLogs.filter(Boolean).map(processLog).join('\r\n');
@@ -73,8 +77,7 @@ function Terminal({
             scrollToBottom();
         }
 
-        lastLogIndexRef.current = logs.length;
-        prevLogsLengthRef.current = logs.length;
+        renderedLogsRef.current = logs;
     }, [logs, isReady, write, clear, scrollToBottom]);
 
     return (
