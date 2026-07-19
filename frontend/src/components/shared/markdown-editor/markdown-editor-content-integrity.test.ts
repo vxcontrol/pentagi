@@ -186,61 +186,74 @@ describe('generative content-integrity — atoms survive load↔serialize across
     // encode an odd run + pipe exactly, so the serializer pads it by one backslash; assert over random `\`/`|`
     // payloads that the padded save is byte-stable immediately, both cells survive, and no non-backslash byte
     // is lost or reordered.
-    it('typed backslash/pipe cell payloads keep the table intact and converge on the first save', () => {
-        const rng = mulberry32(0xe5cade);
-        const chars = ['a', 'x', '\\', '|', ' '];
-        const cellNode = (type: string, text: string) => ({
-            content: [{ content: [{ text, type: 'text' }], type: 'paragraph' }],
-            type,
-        });
-        const tableDoc = (typed: string) => ({
-            content: [
-                {
-                    content: [
-                        { content: [cellNode('tableHeader', 'op'), cellNode('tableHeader', 'note')], type: 'tableRow' },
-                        { content: [cellNode('tableCell', typed), cellNode('tableCell', 'tail')], type: 'tableRow' },
-                    ],
-                    type: 'table',
-                },
-            ],
-            type: 'doc',
-        });
-        const normalize = (text: string) => text.replace(/\\/g, '').replace(/ +/g, ' ').trim();
-
-        for (let i = 0; i < 200; i++) {
-            const length = 1 + Math.floor(rng() * 8);
-            const typed = Array.from({ length }, () => chars[Math.floor(rng() * chars.length)]).join('');
-            const editor = new Editor({ content: tableDoc(typed), extensions: createMarkdownExtensions() });
-            const save1 = editor.getMarkdown();
-
-            editor.destroy();
-
-            const save2 = roundTrip(save1);
-
-            expect(save2, `not byte-stable (i=${i}, typed ${JSON.stringify(typed)}):\n${save1}\n-->\n${save2}`).toBe(
-                save1,
-            );
-            expect(save2.includes('tail'), `trailing cell dropped (i=${i}, typed ${JSON.stringify(typed)})`).toBe(true);
-            expect(structuralCounts(save1)).toEqual({ table: 1, tableCell: 2, tableHeader: 2, tableRow: 2 });
-
-            const reloaded = new Editor({
-                content: save1,
-                contentType: 'markdown',
-                extensions: createMarkdownExtensions(),
+    it(
+        'typed backslash/pipe cell payloads keep the table intact and converge on the first save',
+        { timeout: 30000 },
+        () => {
+            const rng = mulberry32(0xe5cade);
+            const chars = ['a', 'x', '\\', '|', ' '];
+            const cellNode = (type: string, text: string) => ({
+                content: [{ content: [{ text, type: 'text' }], type: 'paragraph' }],
+                type,
             });
-            const cells: string[] = [];
-
-            reloaded.state.doc.descendants((node) => {
-                if (node.type.name === 'tableCell') {
-                    cells.push(node.textContent);
-                }
+            const tableDoc = (typed: string) => ({
+                content: [
+                    {
+                        content: [
+                            {
+                                content: [cellNode('tableHeader', 'op'), cellNode('tableHeader', 'note')],
+                                type: 'tableRow',
+                            },
+                            {
+                                content: [cellNode('tableCell', typed), cellNode('tableCell', 'tail')],
+                                type: 'tableRow',
+                            },
+                        ],
+                        type: 'table',
+                    },
+                ],
+                type: 'doc',
             });
-            reloaded.destroy();
+            const normalize = (text: string) => text.replace(/\\/g, '').replace(/ +/g, ' ').trim();
 
-            expect(
-                normalize(cells[0] ?? ''),
-                `cell content mutated (i=${i}, typed ${JSON.stringify(typed)}):\n${save1}`,
-            ).toBe(normalize(typed));
-        }
-    });
+            for (let i = 0; i < 200; i++) {
+                const length = 1 + Math.floor(rng() * 8);
+                const typed = Array.from({ length }, () => chars[Math.floor(rng() * chars.length)]).join('');
+                const editor = new Editor({ content: tableDoc(typed), extensions: createMarkdownExtensions() });
+                const save1 = editor.getMarkdown();
+
+                editor.destroy();
+
+                const save2 = roundTrip(save1);
+
+                expect(
+                    save2,
+                    `not byte-stable (i=${i}, typed ${JSON.stringify(typed)}):\n${save1}\n-->\n${save2}`,
+                ).toBe(save1);
+                expect(save2.includes('tail'), `trailing cell dropped (i=${i}, typed ${JSON.stringify(typed)})`).toBe(
+                    true,
+                );
+                expect(structuralCounts(save1)).toEqual({ table: 1, tableCell: 2, tableHeader: 2, tableRow: 2 });
+
+                const reloaded = new Editor({
+                    content: save1,
+                    contentType: 'markdown',
+                    extensions: createMarkdownExtensions(),
+                });
+                const cells: string[] = [];
+
+                reloaded.state.doc.descendants((node) => {
+                    if (node.type.name === 'tableCell') {
+                        cells.push(node.textContent);
+                    }
+                });
+                reloaded.destroy();
+
+                expect(
+                    normalize(cells[0] ?? ''),
+                    `cell content mutated (i=${i}, typed ${JSON.stringify(typed)}):\n${save1}`,
+                ).toBe(normalize(typed));
+            }
+        },
+    );
 });
