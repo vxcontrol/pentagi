@@ -20,6 +20,7 @@ node_modules
 .cursorignore
 .cursor/
 .agents/
+.playwright-mcp/
 skills-lock.json
 
 build/*
