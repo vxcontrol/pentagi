@@ -8,6 +8,9 @@ on:
       - "v[0-9]+.[0-9]+.[0-9]+"
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   lint-and-test:
     runs-on: ubuntu-latest
@@ -23,24 +26,15 @@ jobs:
           echo "Expected Node: $NVMRC"
           grep -q "node:${NVMRC}-slim" Dockerfile || { echo "::error::Dockerfile node tag != .nvmrc ($NVMRC)"; exit 1; }
 
-      # Go setup and cache
+      # Go setup and cache (setup-go's cache:true already covers the build cache
+      # and the module cache; a second actions/cache restore over the read-only
+      # ~/go/pkg/mod collides with "File exists" whenever both caches hit)
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
           go-version: '1.24'
           cache: true
           cache-dependency-path: backend/go.sum
-
-      # Cache Go dependencies
-      - name: Go Mod Cache
-        uses: actions/cache@v5
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('backend/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
 
       # pnpm setup
       - name: Install pnpm
