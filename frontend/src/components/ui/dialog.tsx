@@ -40,7 +40,8 @@ function DialogContent({ children, className, ...props }: React.ComponentProps<t
                     data-slot="dialog-close"
                 >
                     <X className="h-4 w-4" />
-                    <span className="sr-only">Close</span>
+                    {/* not "Close": pages render visible Close buttons, and duplicate accessible names break role-based locators */}
+                    <span className="sr-only">Dismiss dialog</span>
                 </DialogPrimitive.Close>
             </DialogPrimitive.Content>
         </DialogPortal>
