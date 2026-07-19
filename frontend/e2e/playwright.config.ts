@@ -7,6 +7,10 @@ export type BackendTier = 'local' | 'mock' | 'stand';
 
 const tier = (process.env.E2E_TIER ?? 'mock') as BackendTier;
 const isCI = Boolean(process.env.CI);
+// Visual snapshots only ever run inside the pinned Playwright Linux container
+// (e2e/tools/run-visual.sh) — a darwin run would generate parallel baselines
+// that never match CI pixels.
+const isVisual = process.env.E2E_VISUAL === '1';
 
 // `vite preview` listens on VITE_PORT + 100 and reuses the dev proxy config.
 const PREVIEW_PORT = 8100;
@@ -38,11 +42,17 @@ export default defineConfig<BackendOptions>({
     projects:
         tier === 'mock'
             ? [
-                  {
-                      name: 'mock-chromium',
-                      testIgnore: '**/specs/real/**',
-                      use: { ...devices['Desktop Chrome'] },
-                  },
+                  isVisual
+                      ? {
+                            name: 'visual',
+                            testMatch: '**/specs/visual/**',
+                            use: { ...devices['Desktop Chrome'] },
+                        }
+                      : {
+                            name: 'mock-chromium',
+                            testIgnore: ['**/specs/real/**', '**/specs/visual/**'],
+                            use: { ...devices['Desktop Chrome'] },
+                        },
               ]
             : [
                   {
@@ -83,7 +93,9 @@ export default defineConfig<BackendOptions>({
     webServer:
         tier === 'mock'
             ? {
-                  command: 'pnpm run build && pnpm exec vite preview',
+                  // The visual container cannot load host-built native vite
+                  // binaries — it serves a pre-built dist with plain Node.
+                  command: isVisual ? 'node e2e/tools/serve-dist.mjs' : 'pnpm run build && pnpm exec vite preview',
                   cwd: fileURLToPath(new URL('..', import.meta.url)),
                   env: { VITE_PORT: '8000', VITE_USE_HTTPS: 'false' },
                   reuseExistingServer: !isCI,

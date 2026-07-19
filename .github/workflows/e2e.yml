@@ -73,6 +73,53 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
+  # Visual snapshots: pinned container = pixel-stable baselines. Advisory —
+  # never a required check.
+  e2e-visual:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    container:
+      image: mcr.microsoft.com/playwright:v1.61.1-noble
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Verify container tag matches @playwright/test
+        run: |
+          node -e "
+            const v = require('./frontend/package.json').devDependencies['@playwright/test'];
+            if (v !== '1.61.1') {
+              console.error('::error::bump the e2e-visual container tag to v' + v + '-noble (and regenerate baselines)');
+              process.exit(1);
+            }
+          "
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          package_json_file: frontend/package.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        working-directory: frontend
+        run: pnpm run build
+
+      - name: Run visual snapshots
+        working-directory: frontend
+        run: E2E_VISUAL=1 npx playwright test -c e2e/playwright.config.ts
+
+      - name: Upload diffs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-visual-diffs
+          path: frontend/e2e/test-results
+          retention-days: 7
+          if-no-files-found: ignore
+
   # Tier 2: branch-built image + isolated compose stack + the mock-LLM agent
   # loop. Not part of the PR gate — nightly and on-demand only.
   e2e-local:

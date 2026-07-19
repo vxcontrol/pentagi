@@ -29,6 +29,9 @@ CI=1 pnpm e2e            # byte-identical reproduction of a CI run
 ./e2e/tools/run-local-tier.sh          # Tier 2: branch image + isolated docker
                                        # stack + mock LLM; runs specs/real/**
 E2E_TIER=stand E2E_BASE_URL=https://… pnpm e2e   # against a live stand
+
+pnpm e2e:visual                        # visual snapshots (pinned container)
+pnpm e2e:visual:update                 # regenerate baselines after a UI change
 ```
 
 Tips for the mock tier: `vite preview` is reused between runs if you keep it
@@ -48,6 +51,18 @@ Tier-2 notes: the runner isolates the stack from your `.env` (`--env-file
 docker daemon, and removes those sandboxes on exit. The deterministic agent
 transcript lives in `e2e/mock-llm/scenario.mjs`. Iterating: `E2E_SKIP_BUILD=1`
 reuses the image, `E2E_KEEP_STACK=1` leaves the stack up.
+
+## Visual snapshots
+
+Baselines live in the repo (`e2e/specs/visual/*-snapshots/`, linux-suffixed)
+and are generated ONLY inside the pinned `mcr.microsoft.com/playwright`
+container — never run the visual project on the host: macOS pixels produce
+parallel baselines that will never match CI. `pnpm e2e:visual` derives the
+image tag from the installed `@playwright/test` version, builds `dist` on the
+host, and compares inside the container; `pnpm e2e:visual:update` regenerates
+baselines (commit them with the UI change that caused the diff). The xterm
+canvas is masked — WebGL rendering is driver-dependent. The CI `e2e-visual`
+job is advisory and never a required check.
 
 ## Debugging a red CI run
 

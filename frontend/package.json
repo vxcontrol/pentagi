@@ -8,6 +8,8 @@
         "e2e": "playwright test -c e2e/playwright.config.ts",
         "e2e:setup": "playwright install chromium",
         "e2e:ui": "playwright test -c e2e/playwright.config.ts --ui",
+        "e2e:visual": "./e2e/tools/run-visual.sh",
+        "e2e:visual:update": "./e2e/tools/run-visual.sh --update",
         "graphql:generate": "graphql-codegen --config graphql-codegen.ts",
         "lint": "eslint \"{src,e2e}/**/*.{ts,tsx,js,jsx}\"",
         "lint:fix": "eslint \"{src,e2e}/**/*.{ts,tsx,js,jsx}\" --fix",
