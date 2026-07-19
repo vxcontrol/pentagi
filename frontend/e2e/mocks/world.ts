@@ -2,7 +2,9 @@ import type { WebSocketRoute } from '@playwright/test';
 
 import type {
     Cassette,
+    CassetteFrame,
     GraphQLCassetteEntry,
+    GraphQLPayload,
     RestCassetteEntry,
     SubscriptionCassetteEntry,
     WorldFlagged,
@@ -12,19 +14,29 @@ const isSubsetMatch = (expected?: Record<string, unknown>, actual?: Record<strin
     !expected ||
     Object.entries(expected).every(([key, value]) => JSON.stringify(actual?.[key]) === JSON.stringify(value));
 
+const sleep = (delayMs: number) => new Promise<void>((resolve) => setTimeout(resolve, delayMs));
+
+export interface StreamSubscriber {
+    complete: () => void;
+    next: (payload: GraphQLPayload) => void;
+}
+
+interface StreamState {
+    cursor: number;
+    isDriving: boolean;
+    subscribers: Set<StreamSubscriber>;
+}
+
 export class MockWorld {
     readonly unmatched: string[] = [];
 
     private readonly consumed = new Map<string, number>();
     private readonly flags = new Set<string>();
-    private readonly frameCursors = new Map<string, number>();
+    private readonly flagWaiters = new Map<string, Array<() => void>>();
     private readonly sockets = new Set<WebSocketRoute>();
+    private readonly streams = new Map<string, StreamState>();
 
     constructor(private readonly cassette: Cassette) {}
-
-    advanceFrameCursor(streamKey: string): void {
-        this.frameCursors.set(streamKey, this.frameCursor(streamKey) + 1);
-    }
 
     dropSockets(code = 1001, reason = 'e2e: forced drop'): void {
         // 1001 is retryable for graphql-ws; 4400+/1011 would kill the client for good.
@@ -33,9 +45,18 @@ export class MockWorld {
         }
     }
 
-    /** Frames already delivered for a stream survive reconnects — replay is delta-only, matching the real server. */
-    frameCursor(streamKey: string): number {
-        return this.frameCursors.get(streamKey) ?? 0;
+    /** Resolves once the flag is raised (immediately if it already is). */
+    flagRaised(flag: string): Promise<void> {
+        if (this.flags.has(flag)) {
+            return Promise.resolve();
+        }
+
+        return new Promise((resolve) => {
+            const waiters = this.flagWaiters.get(flag) ?? [];
+
+            waiters.push(resolve);
+            this.flagWaiters.set(flag, waiters);
+        });
     }
 
     matchGraphQL(operationName: string, variables?: Record<string, unknown>): GraphQLCassetteEntry | undefined {
@@ -87,8 +108,50 @@ export class MockWorld {
         this.unmatched.push(description);
     }
 
+    /**
+     * One driver per stream broadcasts each frame once to every current
+     * subscriber: duplicate subscribers (e.g. flowUpdated is opened by both the
+     * list and the detail provider) each get the frame, while a re-subscribe
+     * after a reconnect joins past the cursor — delta-only, like the real
+     * server. Returns an unsubscribe function.
+     */
+    subscribeStream(streamKey: string, entry: SubscriptionCassetteEntry, subscriber: StreamSubscriber): () => void {
+        const state = this.streams.get(streamKey) ?? { cursor: 0, isDriving: false, subscribers: new Set() };
+
+        this.streams.set(streamKey, state);
+        state.subscribers.add(subscriber);
+
+        if (!state.isDriving) {
+            state.isDriving = true;
+            void this.driveStream(state, entry.frames, entry.complete ?? false);
+        }
+
+        return () => state.subscribers.delete(subscriber);
+    }
+
     unregisterSocket(socket: WebSocketRoute): void {
         this.sockets.delete(socket);
+    }
+
+    private async driveStream(state: StreamState, frames: CassetteFrame[], shouldComplete: boolean): Promise<void> {
+        while (state.cursor < frames.length) {
+            const frame = frames[state.cursor] as CassetteFrame;
+
+            if (frame.whenFlag) {
+                await this.flagRaised(frame.whenFlag);
+            }
+
+            if (frame.delayMs) {
+                await sleep(frame.delayMs);
+            }
+
+            state.cursor += 1;
+            state.subscribers.forEach(({ next }) => next(frame.payload));
+        }
+
+        if (shouldComplete) {
+            state.subscribers.forEach(({ complete }) => complete());
+        }
     }
 
     /** Entries gated on an unraised flag are invisible; raised-flag entries outrank unflagged ones. */
@@ -107,9 +170,15 @@ export class MockWorld {
         const entry = candidates[Math.min(index, candidates.length - 1)] as T;
 
         if (entry.setFlag) {
-            this.flags.add(entry.setFlag);
+            this.raiseFlag(entry.setFlag);
         }
 
         return entry;
+    }
+
+    private raiseFlag(flag: string): void {
+        this.flags.add(flag);
+        this.flagWaiters.get(flag)?.forEach((resolve) => resolve());
+        this.flagWaiters.delete(flag);
     }
 }

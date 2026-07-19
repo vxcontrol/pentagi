@@ -1,0 +1,74 @@
+import type { A11yAllowlist } from '../../helpers/a11y.ts';
+
+import { expect, test } from '../../fixtures/test.ts';
+import { scanA11y } from '../../helpers/a11y.ts';
+import { apiTokensCassette } from '../../mocks/cassettes/api-tokens.ts';
+import { flowsCassette } from '../../mocks/cassettes/flows.ts';
+import { knowledgesCassette } from '../../mocks/cassettes/knowledges.ts';
+import { loginJourneyCassette } from '../../mocks/cassettes/smoke.ts';
+import { templatesCassette } from '../../mocks/cassettes/templates.ts';
+
+const ALLOWLIST: A11yAllowlist = {
+    // Message metadata (date + ID) intentionally renders at 50% opacity — a
+    // design decision, not a regression; revisit with the design pass.
+    '/flows/:flowId': ['color-contrast'],
+};
+
+test.describe('a11y', { tag: '@cross' }, () => {
+    test.describe('login', () => {
+        test.use({ cassette: loginJourneyCassette, isAuthSeeded: false });
+
+        test('login page', async ({ page }) => {
+            await page.goto('/login');
+            await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible();
+            await scanA11y(page, '/login', ALLOWLIST);
+        });
+    });
+
+    test.describe('flows', () => {
+        test.use({ cassette: flowsCassette() });
+
+        test('flows list', async ({ page }) => {
+            await page.goto('/flows');
+            await expect(page.getByRole('row', { name: /E2E Alpha/ })).toBeVisible();
+            await scanA11y(page, '/flows', ALLOWLIST);
+        });
+
+        test('flow detail', async ({ page }) => {
+            await page.goto('/flows');
+            await page.getByRole('row', { name: /E2E Alpha/ }).click();
+            await expect(page.getByRole('button', { name: 'Flow actions' })).toBeVisible();
+            await scanA11y(page, '/flows/:flowId', ALLOWLIST);
+        });
+    });
+
+    test.describe('templates', () => {
+        test.use({ cassette: templatesCassette() });
+
+        test('templates list', async ({ page }) => {
+            await page.goto('/templates');
+            await expect(page.getByRole('row', { name: /E2E Seed Template/ })).toBeVisible();
+            await scanA11y(page, '/templates', ALLOWLIST);
+        });
+    });
+
+    test.describe('knowledges', () => {
+        test.use({ cassette: knowledgesCassette() });
+
+        test('knowledges list', async ({ page }) => {
+            await page.goto('/knowledges');
+            await expect(page.getByRole('row', { name: /E2E Seed Question/ })).toBeVisible();
+            await scanA11y(page, '/knowledges', ALLOWLIST);
+        });
+    });
+
+    test.describe('api tokens', () => {
+        test.use({ cassette: apiTokensCassette() });
+
+        test('api tokens list', async ({ page }) => {
+            await page.goto('/settings/api-tokens');
+            await expect(page.getByRole('row', { name: /E2E seed token/ })).toBeVisible();
+            await scanA11y(page, '/settings/api-tokens', ALLOWLIST);
+        });
+    });
+});

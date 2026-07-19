@@ -844,7 +844,10 @@ function DataTable<TData, TValue = unknown>({
                         }}
                         value={pageSizeValue}
                     >
-                        <SelectTrigger className="h-7 w-16 text-xs">
+                        <SelectTrigger
+                            aria-label="Rows per page"
+                            className="h-7 w-16 text-xs"
+                        >
                             <SelectValue />
                         </SelectTrigger>
                         <SelectContent

@@ -38,6 +38,10 @@ export interface UseXtermResult {
  * Requires Ctrl+Click (Cmd+Click on Mac) to open links per
  * https://xtermjs.org/docs/guides/link-handling/
  */
+export interface XtermHostElement extends HTMLDivElement {
+    xterm?: Terminal;
+}
+
 export function useXterm({ theme }: { theme: 'dark' | 'light' | 'system' }): UseXtermResult {
     const containerRef = useRef<HTMLDivElement | null>(null);
     const terminalRef = useRef<null | Terminal>(null);
@@ -171,6 +175,9 @@ export function useXterm({ theme }: { theme: 'dark' | 'light' | 'system' }): Use
         });
 
         terminalRef.current = terminal;
+        // The buffer is unreachable from the DOM (WebGL canvas) — this handle is
+        // how e2e asserts and devtools read terminal content.
+        (container as XtermHostElement).xterm = terminal;
 
         const rafId = requestAnimationFrame(() => {
             if (!mounted) {
@@ -226,6 +233,7 @@ export function useXterm({ theme }: { theme: 'dark' | 'light' | 'system' }): Use
             }
 
             terminalRef.current = null;
+            delete (container as XtermHostElement).xterm;
             setSearchAddon(null);
             setIsReady(false);
         };

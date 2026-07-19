@@ -19,7 +19,7 @@ export const installWsMock = async (page: Page, world: MockWorld): Promise<void>
     await page.routeWebSocket('**/api/v1/graphql', (ws) => {
         world.registerSocket(ws);
 
-        const timers = new Set<ReturnType<typeof setTimeout>>();
+        const unsubscribes = new Map<string, () => void>();
         let isOpen = true;
 
         const send = (message: Record<string, unknown>) => {
@@ -28,19 +28,16 @@ export const installWsMock = async (page: Page, world: MockWorld): Promise<void>
             }
         };
 
-        const schedule = (delayMs: number, action: () => void) => {
-            const timer = setTimeout(() => {
-                timers.delete(timer);
-                action();
-            }, delayMs);
-
-            timers.add(timer);
-        };
-
         ws.onMessage((raw) => {
             const message = JSON.parse(String(raw)) as ClientMessage;
 
             switch (message.type) {
+                case 'complete': {
+                    unsubscribes.get(message.id)?.();
+                    unsubscribes.delete(message.id);
+                    break;
+                }
+
                 case 'connection_init': {
                     // Ack immediately and never send any frame before it: a pre-ack frame
                     // throws inside graphql-ws, and this app's shouldRetry:()=>true turns
@@ -64,22 +61,13 @@ export const installWsMock = async (page: Page, world: MockWorld): Promise<void>
                         break;
                     }
 
-                    const { entry, streamKey } = match;
-                    const pending = entry.frames.slice(world.frameCursor(streamKey));
-                    let elapsed = 0;
-
-                    for (const frame of pending) {
-                        elapsed += frame.delayMs ?? 0;
-                        schedule(elapsed, () => {
-                            world.advanceFrameCursor(streamKey);
-                            send({ id, payload: frame.payload, type: 'next' });
-                        });
-                    }
-
-                    if (entry.complete) {
-                        schedule(elapsed, () => send({ id, type: 'complete' }));
-                    }
-
+                    unsubscribes.set(
+                        id,
+                        world.subscribeStream(match.streamKey, match.entry, {
+                            complete: () => send({ id, type: 'complete' }),
+                            next: (framePayload) => send({ id, payload: framePayload, type: 'next' }),
+                        }),
+                    );
                     break;
                 }
 
@@ -91,12 +79,8 @@ export const installWsMock = async (page: Page, world: MockWorld): Promise<void>
 
         ws.onClose(() => {
             isOpen = false;
-
-            for (const timer of timers) {
-                clearTimeout(timer);
-            }
-
-            timers.clear();
+            unsubscribes.forEach((unsubscribe) => unsubscribe());
+            unsubscribes.clear();
             world.unregisterSocket(ws);
         });
     });

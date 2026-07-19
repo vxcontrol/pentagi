@@ -2,6 +2,7 @@
 import { FlatCompat } from '@eslint/eslintrc';
 import js from '@eslint/js';
 import perfectionist from 'eslint-plugin-perfectionist';
+import playwright from 'eslint-plugin-playwright';
 
 const compat = new FlatCompat({
     baseDirectory: import.meta.dirname,
@@ -92,6 +93,10 @@ const eslintConfig = [
         rules: { 'no-restricted-syntax': 'off' },
     },
     perfectionist.configs['recommended-natural'],
+    {
+        ...playwright.configs['flat/recommended'],
+        files: ['e2e/**/*.ts'],
+    },
     {
         // Playwright fixtures take a `use` callback that the React hooks rule
         // mistakes for a hook call; there is no React under e2e/.

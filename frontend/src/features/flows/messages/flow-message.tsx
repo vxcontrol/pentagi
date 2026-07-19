@@ -208,7 +208,12 @@ function FlowMessage({ log, searchValue = '' }: FlowMessageProps) {
                     <TooltipContent>Copy</TooltipContent>
                 </Tooltip>
                 <span className="text-muted-foreground/50">{formatDate(new Date(createdAt))}</span>
-                <span className="text-muted-foreground/50">{log.id}</span>
+                <span
+                    className="text-muted-foreground/50"
+                    data-testid="flow-message-id"
+                >
+                    {log.id}
+                </span>
             </div>
         </div>
     );

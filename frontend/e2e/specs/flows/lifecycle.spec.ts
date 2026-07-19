@@ -1,0 +1,165 @@
+import type { ResultOf } from '@graphql-typed-document-node/core';
+
+import type {
+    AddFavoriteFlowDocument,
+    DeleteFlowDocument,
+    FinishFlowDocument,
+    RenameFlowDocument,
+} from '@/graphql/types';
+
+import { ResultType, StatusType } from '@/graphql/types';
+
+import { expect, test } from '../../fixtures/test.ts';
+import { entity } from '../../mocks/cassette.ts';
+import { FLOW_A, flowsCassette, makeFlow } from '../../mocks/cassettes/flows.ts';
+
+const openFlowA = async (page: import('@playwright/test').Page) => {
+    await page.goto('/flows');
+    await page.getByRole('row', { name: /E2E Alpha/ }).click();
+    await expect(page.getByRole('button', { name: 'Flow actions' })).toBeVisible();
+};
+
+test.describe('flow lifecycle', { tag: '@flows' }, () => {
+    test.describe('rename', () => {
+        const renamed: ResultOf<typeof RenameFlowDocument> = { renameFlow: ResultType.Success };
+
+        test.use({
+            cassette: flowsCassette({
+                mutations: { renameFlow: [{ data: renamed, setFlag: 'flow-renamed' }] },
+                subscriptions: {
+                    flowUpdated: [
+                        {
+                            frames: [
+                                {
+                                    payload: { data: { flowUpdated: makeFlow('5', 'E2E Alpha Renamed') } },
+                                    whenFlag: 'flow-renamed',
+                                },
+                            ],
+                        },
+                    ],
+                },
+            }),
+        });
+
+        test('renames from the actions menu and the title persists', async ({ page }) => {
+            await openFlowA(page);
+            await page.getByRole('button', { name: 'Flow actions' }).click();
+            await page.getByRole('menuitem', { name: 'Rename' }).click();
+            await page.getByPlaceholder('Flow title').fill('E2E Alpha Renamed');
+            await page.getByPlaceholder('Flow title').press('Enter');
+
+            await expect(page.getByText('Flow renamed successfully')).toBeVisible();
+            await expect(page.locator('header').getByText('E2E Alpha Renamed', { exact: true })).toBeVisible();
+        });
+    });
+
+    test.describe('finish', () => {
+        const finished: ResultOf<typeof FinishFlowDocument> = { finishFlow: ResultType.Success };
+
+        test.use({
+            cassette: flowsCassette({
+                mutations: { finishFlow: [{ data: finished, setFlag: 'flow-finished' }] },
+                subscriptions: {
+                    flowUpdated: [
+                        {
+                            frames: [
+                                {
+                                    payload: {
+                                        data: { flowUpdated: makeFlow('5', 'E2E Alpha', StatusType.Finished) },
+                                    },
+                                    whenFlag: 'flow-finished',
+                                },
+                            ],
+                        },
+                    ],
+                },
+            }),
+        });
+
+        test('finishes a running flow from the actions menu', async ({ page }) => {
+            await openFlowA(page);
+            await page.getByRole('button', { name: 'Flow actions' }).click();
+            await page.getByRole('menuitem', { name: 'Finish' }).click();
+
+            await expect(page.getByText('Flow finished successfully')).toBeVisible();
+
+            await page.getByRole('button', { name: 'Flow actions' }).click();
+
+            await expect(page.getByRole('menuitem', { name: 'Finish' })).toBeHidden();
+        });
+    });
+
+    test.describe('favorite', () => {
+        const favorited: ResultOf<typeof AddFavoriteFlowDocument> = { addFavoriteFlow: ResultType.Success };
+
+        // The star is useOptimistic and reverts once the mutation settles — the
+        // persisted state only arrives via the settingsUserUpdated frame.
+        test.use({
+            cassette: flowsCassette({
+                mutations: { addFavoriteFlow: [{ data: favorited, setFlag: 'flow-favorited' }] },
+                subscriptions: {
+                    settingsUserUpdated: [
+                        {
+                            frames: [
+                                {
+                                    payload: {
+                                        data: {
+                                            settingsUserUpdated: entity('UserPreferences', {
+                                                favoriteFlows: ['5'],
+                                                id: '1',
+                                            }),
+                                        },
+                                    },
+                                    whenFlag: 'flow-favorited',
+                                },
+                            ],
+                        },
+                    ],
+                },
+            }),
+        });
+
+        test('toggles the favorite star', async ({ page }) => {
+            await openFlowA(page);
+
+            const star = page.locator('header').getByRole('button', { name: 'Toggle favorite' });
+
+            await expect(star).toHaveAttribute('aria-pressed', 'false');
+            await star.click();
+            await expect(star).toHaveAttribute('aria-pressed', 'true');
+        });
+    });
+
+    test.describe('delete', () => {
+        const deleted: ResultOf<typeof DeleteFlowDocument> = { deleteFlow: ResultType.Success };
+
+        test.use({
+            cassette: flowsCassette({
+                mutations: { deleteFlow: [{ data: deleted, setFlag: 'flow-deleted' }] },
+                subscriptions: {
+                    flowDeleted: [
+                        {
+                            frames: [{ payload: { data: { flowDeleted: FLOW_A } }, whenFlag: 'flow-deleted' }],
+                        },
+                    ],
+                },
+            }),
+        });
+
+        test('deletes via the destructive confirm and drops off the list', async ({ page }) => {
+            await openFlowA(page);
+            await page.getByRole('button', { name: 'Flow actions' }).click();
+            await page.getByRole('menuitem', { name: 'Delete' }).click();
+
+            const dialog = page.getByRole('dialog');
+
+            await expect(dialog.getByText('Delete flow')).toBeVisible();
+            await dialog.getByRole('button', { name: 'Delete' }).click();
+
+            await expect(page.getByText('Flow deleted successfully')).toBeVisible();
+            await expect(page).toHaveURL(/\/flows$/);
+            await expect(page.getByRole('row', { name: /E2E Beta/ })).toBeVisible();
+            await expect(page.getByRole('row', { name: /E2E Alpha/ })).toBeHidden();
+        });
+    });
+});
