@@ -17,7 +17,9 @@ export default defineConfig({
     test: {
         environment: 'jsdom',
         globals: false,
-        include: ['src/**/*.{test,spec}.{ts,tsx}'],
+        // e2e/**/*.unit.test.ts = pure e2e-helper logic (no browser); Playwright
+        // specs are *.spec.ts and stay out of vitest.
+        include: ['src/**/*.{test,spec}.{ts,tsx}', 'e2e/**/*.unit.test.ts'],
         setupFiles: ['./vitest.setup.ts'],
     },
 });

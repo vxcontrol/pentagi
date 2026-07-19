@@ -6,6 +6,8 @@ const E2E_USER = process.env.E2E_USER ?? 'admin@pentagi.com';
 const E2E_PASSWORD = process.env.E2E_PASSWORD ?? 'admin';
 
 setup('authenticate', async ({ page }) => {
+    // A real backend login + the websocket teardown can outrun the 30s default.
+    setup.setTimeout(90_000);
     await page.goto('/login');
     await page.getByLabel('Login').fill(E2E_USER);
     await page.getByRole('textbox', { name: 'Password' }).fill(E2E_PASSWORD);

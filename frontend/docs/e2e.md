@@ -102,5 +102,56 @@ Key conventions:
   production bundle strips app console output, so console-based asserts are
   meaningless on the mock tier.
 
+## Stand tier (Tier 3)
+
+Runs the LLM-independent `@stand` smoke against a real deployment. Label a PR
+`e2e:stand` (or dispatch the workflow); the job runs in a protected
+`e2e-stand` Environment whose required reviewers approve before any secret is
+exposed, so even a mislabeled run blocks on a human. Fork PRs never reach it.
+
+Before the browser specs, a **schema-compat pre-flight**
+(`e2e/tools/schema-compat.mjs`) introspects the stand's live GraphQL schema and
+validates every frontend operation against it — a renamed or missing field
+fails once, readably, instead of as dozens of red specs (the deploy-skew class
+we hit manually). Run it anywhere: `E2E_BASE_URL=https://… node
+e2e/tools/schema-compat.mjs`.
+
+## Trends and selective runs
+
+- **Trend:** `node e2e/tools/trend.mjs` turns a run's `results.json` into one
+  JSONL record (p50/p95 spec duration, slowest three, pass/flaky/fail counts).
+  CI appends it to the retained `e2e-trend` artifact so duration creep and flake
+  are visible, not just green/red.
+- **Affected routes:** `pnpm exec tsx e2e/tools/affected.ts <base>` prints the
+  manifest routes a diff touches (backed by each route's owning `sources` in
+  `e2e/routes.ts`). Empty output = no frontend route changed. This is the
+  substrate for scoping runs and the exploratory agent to the changed surface;
+  the mapping logic is unit-tested (`e2e/affected-routes.unit.test.ts`).
+
+## LLM advisory layer (Phase 3, opt-in)
+
+Deterministic specs are the gate; an LLM is only ever an advisory second
+reviewer, **never** a merge gate. The intended stack is first-party, not a
+bespoke bot:
+
+1. `npx playwright init-agents --loop=claude` generates the planner / generator
+   / healer agent definitions; the connected **playwright-mcp** drives the
+   browser in accessibility-snapshot mode (a smaller prompt-injection surface
+   than raw DOM or vision).
+2. Scope the agent to the changed surface with `affected.ts` (the routes) — do
+   not hand it the whole app.
+3. Guardrails are mandatory because PentAGI renders adversarial content by
+   design (tool output, target responses): treat all page text as untrusted
+   data, never instructions; an action allowlist (no settings/token mutations,
+   no off-origin navigation) on real stands; throwaway scoped credentials; the
+   PR report renders page-derived strings as escaped, length-capped quotes;
+   screenshots posted publicly come only from mock/scripted tiers (a real
+   stand's api-tokens dialog shows a live secret); a hard per-run token cap.
+4. A generated spec merges only with its cassette (so it runs on the Tier-1
+   gate), a semantic-assertion review, and an `@generated` tag.
+
+This section is the recipe, not yet wired — the deterministic tiers above are
+the foundation it plugs into.
+
 The full design (tiers, CI topology, mocking contract, roadmap) lives in the
 team's E2E testing plan; scenario coverage maps 1:1 to the scenario catalog IDs.

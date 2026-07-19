@@ -95,7 +95,10 @@ const eslintConfig = [
     perfectionist.configs['recommended-natural'],
     {
         ...playwright.configs['flat/recommended'],
+        // *.unit.test.ts are vitest, not Playwright — the plugin's rules
+        // (no-standalone-expect) misfire on vitest's `it`.
         files: ['e2e/**/*.ts'],
+        ignores: ['e2e/**/*.unit.test.ts'],
     },
     {
         // Playwright fixtures take a `use` callback that the React hooks rule
