@@ -93,7 +93,21 @@ const eslintConfig = [
     },
     perfectionist.configs['recommended-natural'],
     {
-        ignores: ['node_modules/**', 'dist/**', 'build/**', 'public/mockServiceWorker.js', 'src/graphql/types.ts'],
+        // Playwright fixtures take a `use` callback that the React hooks rule
+        // mistakes for a hook call; there is no React under e2e/.
+        files: ['e2e/**/*.ts'],
+        rules: { 'react-hooks/rules-of-hooks': 'off' },
+    },
+    {
+        ignores: [
+            'node_modules/**',
+            'dist/**',
+            'build/**',
+            'public/mockServiceWorker.js',
+            'src/graphql/types.ts',
+            'e2e/test-results/**',
+            'e2e/playwright-report/**',
+        ],
     },
 ];
 

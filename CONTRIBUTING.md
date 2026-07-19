@@ -62,6 +62,13 @@ License reports are automatically generated during Docker builds:
   - `licenses.json` - Detailed license data
   - `licenses.csv` - License summary
 
+## Testing Your Changes
+
+Frontend changes are covered by unit tests (`cd frontend && pnpm test`) and
+end-to-end tests that run fully offline — no backend, keys, or secrets needed,
+including on fork PRs. See [frontend/docs/e2e.md](frontend/docs/e2e.md) for the
+one-time bootstrap, running locally, and debugging a red CI run.
+
 ## Questions?
 
 Contact: **info@pentagi.com** or **info@vxcontrol.com**
