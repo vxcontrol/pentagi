@@ -1,0 +1,85 @@
+import type { Locator, Page } from '@playwright/test';
+
+import { routes } from '@/lib/routes';
+
+import type { Cassette } from './mocks/cassette.ts';
+
+import { apiTokensCassette } from './mocks/cassettes/api-tokens.ts';
+import { dashboardCassette } from './mocks/cassettes/dashboard.ts';
+import { flowsCassette } from './mocks/cassettes/flows.ts';
+import { knowledgesCassette } from './mocks/cassettes/knowledges.ts';
+import { resourcesCassette } from './mocks/cassettes/resources.ts';
+import { settingsPromptsCassette } from './mocks/cassettes/settings-prompts.ts';
+import { settingsProvidersCassette } from './mocks/cassettes/settings-providers.ts';
+import { templatesCassette } from './mocks/cassettes/templates.ts';
+
+export interface RouteManifestEntry {
+    cassette: () => Cassette;
+    path: string;
+    /** The route counts as rendered when this locator is visible. */
+    ready: (page: Page) => Locator;
+    /** Owning src/ areas — the substrate for changed-files → affected-routes mapping. */
+    sources: string[];
+}
+
+/**
+ * One entry per navigable route, consumed by the NAV sweep, per-route specs,
+ * and (later) CI diff-scoping and the exploratory agent. Paths come from the
+ * app's own routes module so a route rename breaks this file at compile time.
+ */
+export const ROUTE_MANIFEST: RouteManifestEntry[] = [
+    {
+        cassette: flowsCassette,
+        path: routes.flows,
+        ready: (page) => page.getByRole('row', { name: /E2E Alpha/ }),
+        sources: ['src/pages/flows', 'src/features/flows', 'src/providers/flows-provider.tsx'],
+    },
+    {
+        cassette: flowsCassette,
+        path: routes.flow('5'),
+        ready: (page) => page.getByRole('button', { name: 'Flow actions' }),
+        sources: ['src/pages/flows', 'src/features/flows', 'src/providers/flow-provider.tsx'],
+    },
+    {
+        cassette: templatesCassette,
+        path: routes.templates,
+        ready: (page) => page.getByRole('row', { name: /E2E Seed Template/ }),
+        sources: ['src/pages/templates', 'src/providers/templates-provider.tsx'],
+    },
+    {
+        cassette: knowledgesCassette,
+        path: routes.knowledges,
+        ready: (page) => page.getByRole('row', { name: /E2E Seed Question/ }),
+        sources: ['src/pages/knowledges', 'src/features/knowledges', 'src/providers/knowledges-provider.tsx'],
+    },
+    {
+        cassette: apiTokensCassette,
+        path: routes.settings.apiTokens,
+        ready: (page) => page.getByRole('row', { name: /E2E seed token/ }),
+        sources: ['src/pages/settings/settings-api-tokens.tsx'],
+    },
+    {
+        cassette: dashboardCassette,
+        path: routes.dashboard,
+        ready: (page) => page.getByRole('heading', { name: 'Flows Activity Over Time' }),
+        sources: ['src/pages/dashboard', 'src/components/dashboard'],
+    },
+    {
+        cassette: settingsPromptsCassette,
+        path: routes.settings.prompts,
+        ready: (page) => page.getByRole('heading', { name: 'Agent Prompts' }),
+        sources: ['src/pages/settings/settings-prompts.tsx'],
+    },
+    {
+        cassette: settingsProvidersCassette,
+        path: routes.settings.providers,
+        ready: (page) => page.getByText('No providers configured'),
+        sources: ['src/pages/settings/settings-providers.tsx', 'src/pages/settings/settings-provider.tsx'],
+    },
+    {
+        cassette: resourcesCassette,
+        path: routes.resources,
+        ready: (page) => page.getByRole('treeitem', { name: /reports/ }),
+        sources: ['src/pages/resources', 'src/features/resources', 'src/components/shared/file-manager'],
+    },
+];
