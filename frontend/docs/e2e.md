@@ -26,7 +26,8 @@ pnpm e2e:ui              # same, in Playwright UI mode (watch/debug)
 CI=1 pnpm e2e            # byte-identical reproduction of a CI run
                          # (same retries and trace policy; CI-style reporters)
 
-E2E_TIER=local pnpm e2e  # against the local docker stack (https://localhost:8443)
+./e2e/tools/run-local-tier.sh          # Tier 2: branch image + isolated docker
+                                       # stack + mock LLM; runs specs/real/**
 E2E_TIER=stand E2E_BASE_URL=https://… pnpm e2e   # against a live stand
 ```
 
@@ -37,9 +38,16 @@ running (`reuseExistingServer`), so only the first run pays the build.
 
 | Tier | Backend | Needs | Used for |
 |---|---|---|---|
-| `mock` (default) | Playwright route/WS mocks replaying cassettes against the **production bundle** | nothing | the PR gate; every functional spec |
-| `local` | `docker compose` stack | docker | fidelity checks, real backend paths |
+| `mock` (default) | Playwright route/WS mocks replaying cassettes against the **production bundle** | nothing | the PR gate; every cassette spec |
+| `local` | branch-built image in an isolated compose stack (`pentagi-e2e`, ports 8444/5433 — coexists with a dev stack) + an OpenAI-compatible **mock LLM** driving the real agent loop | docker | `specs/real/**`: the fidelity check — real GraphQL/WS/pub-sub end to end |
 | `stand` | a live stand | `E2E_BASE_URL` + creds | deploy smoke, version-skew checks |
+
+Tier-2 notes: the runner isolates the stack from your `.env` (`--env-file
+/dev/null`), seeds flow ids from 90001 so sandbox containers
+(`pentagi-terminal-<id>`) never collide with a developer stack on the same
+docker daemon, and removes those sandboxes on exit. The deterministic agent
+transcript lives in `e2e/mock-llm/scenario.mjs`. Iterating: `E2E_SKIP_BUILD=1`
+reuses the image, `E2E_KEEP_STACK=1` leaves the stack up.
 
 ## Debugging a red CI run
 

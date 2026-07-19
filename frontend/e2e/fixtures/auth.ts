@@ -1,7 +1,5 @@
 import type { Page } from '@playwright/test';
 
-import { test as base } from '@playwright/test';
-
 import type { AuthInfo } from '@/models/info';
 import type { User } from '@/models/user';
 
@@ -48,17 +46,3 @@ export const seedAuthenticated = async (page: Page): Promise<void> => {
         [AUTH_STORAGE_KEY, JSON.stringify(seededAuthInfo())] as const,
     );
 };
-
-export const test = base.extend<{ _seedAuth: void; isAuthSeeded: boolean }>({
-    _seedAuth: [
-        async ({ isAuthSeeded, page }, use) => {
-            if (isAuthSeeded) {
-                await seedAuthenticated(page);
-            }
-
-            await use();
-        },
-        { auto: true },
-    ],
-    isAuthSeeded: [true, { option: true }],
-});

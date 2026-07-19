@@ -72,3 +72,45 @@ jobs:
             frontend/e2e/test-results
           retention-days: 7
           if-no-files-found: ignore
+
+  # Tier 2: branch-built image + isolated compose stack + the mock-LLM agent
+  # loop. Not part of the PR gate — nightly and on-demand only.
+  e2e-local:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          package_json_file: frontend/package.json
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: frontend/.nvmrc
+          cache: "pnpm"
+          cache-dependency-path: "frontend/pnpm-lock.yaml"
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        working-directory: frontend
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run Tier 2 (branch image + mock LLM)
+        run: ./frontend/e2e/tools/run-local-tier.sh
+
+      - name: Upload report and traces
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-local-report
+          path: frontend/e2e/test-results
+          retention-days: 7
+          if-no-files-found: ignore

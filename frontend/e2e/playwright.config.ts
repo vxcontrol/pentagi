@@ -15,6 +15,8 @@ const PREVIEW_PORT = 8100;
 // so CI artifact uploads have one deterministic location.
 const here = (relative: string) => fileURLToPath(new URL(relative, import.meta.url));
 
+export const AUTH_STATE_PATH = here('./.auth/user.json');
+
 const TIERS: Record<BackendTier, { baseURL: string; installMocks: boolean }> = {
     local: { baseURL: process.env.E2E_BASE_URL ?? 'https://localhost:8443', installMocks: false },
     mock: { baseURL: `http://localhost:${PREVIEW_PORT}`, installMocks: true },
@@ -30,12 +32,30 @@ export default defineConfig<BackendOptions>({
     fullyParallel: true,
     globalTimeout: isCI ? 10 * 60_000 : undefined,
     outputDir: './test-results',
-    projects: [
-        {
-            name: `${tier}-chromium`,
-            use: { ...devices['Desktop Chrome'] },
-        },
-    ],
+    // Cassette specs run only on the mock tier; specs/real/** run only against a
+    // live backend, which authenticates once in the setup project and reuses
+    // storageState.
+    projects:
+        tier === 'mock'
+            ? [
+                  {
+                      name: 'mock-chromium',
+                      testIgnore: '**/specs/real/**',
+                      use: { ...devices['Desktop Chrome'] },
+                  },
+              ]
+            : [
+                  {
+                      name: 'setup',
+                      testMatch: '**/auth.setup.ts',
+                  },
+                  {
+                      dependencies: ['setup'],
+                      name: `${tier}-chromium`,
+                      testMatch: '**/specs/real/**',
+                      use: { ...devices['Desktop Chrome'], storageState: AUTH_STATE_PATH },
+                  },
+              ],
     reporter: isCI
         ? [
               ['blob', { outputDir: here('./blob-report') }],

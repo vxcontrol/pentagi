@@ -4,6 +4,7 @@ import type { Cassette } from '../mocks/cassette.ts';
 
 import { installMockRoutes } from '../mocks/install.ts';
 import { MockWorld } from '../mocks/world.ts';
+import { seedAuthenticated } from './auth.ts';
 
 export interface BackendConfig {
     installMocks: boolean;
@@ -27,9 +28,13 @@ interface BackendFixtures {
     world: MockWorld;
 }
 
-export const test = base.extend<BackendFixtures & BackendOptions & { _installMocks: void }>({
+export const test = base.extend<BackendFixtures & BackendOptions & { _installMocks: void; isAuthSeeded: boolean }>({
+    // Seeding client-side auth is a mock-tier shortcut only: against a real
+    // backend a forged localStorage session has no cookie behind it, and the
+    // first 401 wipes it and hard-redirects to login. Real tiers authenticate
+    // once in the setup project and reuse storageState.
     _installMocks: [
-        async ({ backend, page, world }, use) => {
+        async ({ backend, isAuthSeeded, page, world }, use) => {
             if (!backend.installMocks) {
                 await use();
 
@@ -37,6 +42,11 @@ export const test = base.extend<BackendFixtures & BackendOptions & { _installMoc
             }
 
             await page.clock.install({ time: CASSETTE_EPOCH });
+
+            if (isAuthSeeded) {
+                await seedAuthenticated(page);
+            }
+
             await installMockRoutes(page, world);
             await use();
             expect(world.unmatched, 'every API call the app made must have a cassette entry').toEqual([]);
@@ -45,6 +55,7 @@ export const test = base.extend<BackendFixtures & BackendOptions & { _installMoc
     ],
     backend: [{ installMocks: true, tier: 'mock' }, { option: true }],
     cassette: [{}, { option: true }],
+    isAuthSeeded: [true, { option: true }],
     world: async ({ cassette }, use) => {
         await use(new MockWorld(cassette));
     },
