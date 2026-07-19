@@ -15,7 +15,7 @@ test.describe('stand smoke', { tag: '@stand' }, () => {
             await page.goto(route);
             // Staying on the route (not bounced to /login) proves the reused
             // session authenticated — no dependency on the stand's username.
-            await expect(page).toHaveURL(new RegExp(route.replace(/\//g, '\\/')));
+            await expect(page).toHaveURL((url) => url.pathname === route);
             await expect(page.getByRole('link', { name: 'Templates' })).toBeVisible();
             expect(pageErrors, `uncaught errors on ${route}`).toEqual([]);
         });
