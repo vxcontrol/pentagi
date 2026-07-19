@@ -27,9 +27,9 @@ if (!BASE_URL) {
     process.exit(2);
 }
 
-// Node rejects the stack's self-signed cert otherwise; the target is trusted by
-// virtue of being the URL we were told to check.
-process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+// A real stand has a valid cert. Only the local self-signed Tier-2 stack needs
+// TLS verification relaxed — the operator opts in for that with
+// `NODE_TLS_REJECT_UNAUTHORIZED=0 node …` in their own shell, never in code.
 
 // Despite the name, this file holds the frontend's operations (named queries /
 // mutations / subscriptions + fragments), not a schema.

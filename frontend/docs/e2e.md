@@ -114,7 +114,8 @@ Before the browser specs, a **schema-compat pre-flight**
 validates every frontend operation against it — a renamed or missing field
 fails once, readably, instead of as dozens of red specs (the deploy-skew class
 we hit manually). Run it anywhere: `E2E_BASE_URL=https://… node
-e2e/tools/schema-compat.mjs`.
+e2e/tools/schema-compat.mjs` (against the local self-signed Tier-2 stack,
+prefix `NODE_TLS_REJECT_UNAUTHORIZED=0`; a real stand has a valid cert).
 
 ## Trends and selective runs
 
