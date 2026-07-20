@@ -115,3 +115,69 @@ export const settingsProvidersCassette = (override: Cassette = {}): Cassette =>
         },
         override,
     );
+
+const populatedProviders: ResultOf<typeof SettingsProvidersDocument> = {
+    settingsProviders: entity('ProvidersConfig', {
+        default: entity('DefaultProvidersConfig', {
+            anthropic: defaultConfig('default-anthropic', ProviderType.Anthropic),
+            bedrock: null,
+            custom: null,
+            deepseek: null,
+            gemini: null,
+            glm: null,
+            kimi: null,
+            minimax: null,
+            ollama: null,
+            openai: defaultConfig('default-openai', ProviderType.Openai),
+            qwen: null,
+        }),
+        enabled: entity('ProvidersReadinessStatus', {
+            anthropic: true,
+            bedrock: false,
+            custom: false,
+            deepseek: false,
+            gemini: false,
+            glm: false,
+            kimi: false,
+            minimax: false,
+            ollama: false,
+            openai: true,
+            qwen: false,
+        }),
+        models: entity('ProvidersModelsList', {
+            anthropic: [],
+            bedrock: [],
+            custom: [],
+            deepseek: [],
+            gemini: [],
+            glm: [],
+            kimi: [],
+            minimax: [],
+            ollama: [],
+            openai: [],
+            qwen: [],
+        }),
+        userDefined: [
+            entity('ProviderConfig', {
+                agents: agentsConfig(),
+                createdAt: T,
+                id: 'custom-1',
+                name: 'My Custom Endpoint',
+                type: ProviderType.Custom,
+                updatedAt: T,
+            }),
+        ],
+    }),
+};
+
+export const populatedSettingsProvidersCassette = (override: Cassette = {}): Cassette =>
+    mergeCassettes(
+        {
+            queries: {
+                ...baseQueries(),
+                settingsProviders: [{ data: populatedProviders }],
+            },
+            rest: baseRest(),
+        },
+        override,
+    );

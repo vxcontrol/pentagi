@@ -17,7 +17,9 @@ fi
 
 UPDATE_ARGS=()
 if [[ "${1:-}" == "--update" ]]; then
-    UPDATE_ARGS=(--update-snapshots)
+    # `=all` binds the mode so a trailing spec-file filter isn't swallowed as the
+    # option's optional [mode] argument (`--update-snapshots <file>` fails to parse).
+    UPDATE_ARGS=(--update-snapshots=all)
     shift
 fi
 
