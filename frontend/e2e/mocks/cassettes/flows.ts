@@ -8,7 +8,16 @@ import type {
     TerminalLogFragmentFragment,
 } from '@/graphql/types';
 
-import { MessageLogType, ProviderType, ResultFormat, StatusType, TerminalLogType, TerminalType } from '@/graphql/types';
+import {
+    AgentType,
+    MessageLogType,
+    ProviderType,
+    ResultFormat,
+    StatusType,
+    TerminalLogType,
+    TerminalType,
+    VectorStoreAction,
+} from '@/graphql/types';
 
 import type { Cassette } from '../cassette.ts';
 
@@ -182,5 +191,85 @@ export const flowsCassette = (override: Cassette = {}): Cassette =>
 export const variedMessagesCassette = (): Cassette =>
     flowsCassette({
         queries: { flow: [{ data: flowQueryData(FLOW_A, VARIED_MESSAGES), variables: { id: '5' } }] },
+        subscriptions: { messageLogAdded: [{ frames: [], variables: { flowId: '5' } }] },
+    });
+
+const TABS_TASK = entity('Task', {
+    createdAt: T,
+    flowId: '5',
+    id: '11',
+    input: 'Enumerate the target',
+    result: 'Enumeration complete',
+    status: StatusType.Finished,
+    subtasks: [
+        entity('Subtask', {
+            createdAt: T,
+            description: 'Run an nmap sweep',
+            id: '21',
+            result: 'Ports 22, 80 open',
+            status: StatusType.Finished,
+            taskId: '11',
+            title: 'E2E Subtask Scan',
+            updatedAt: T,
+        }),
+    ],
+    title: 'E2E Task Alpha',
+    updatedAt: T,
+});
+
+const TABS_AGENT_LOG = entity('AgentLog', {
+    createdAt: T,
+    executor: AgentType.Pentester,
+    flowId: '5',
+    id: '41',
+    initiator: AgentType.Adviser,
+    result: 'Reconnaissance summary ready',
+    subtaskId: null,
+    task: 'E2E agent reconnaissance',
+    taskId: '11',
+});
+
+const TABS_SEARCH_LOG = entity('SearchLog', {
+    createdAt: T,
+    engine: 'duckduckgo',
+    executor: AgentType.Searcher,
+    flowId: '5',
+    id: '51',
+    initiator: AgentType.Pentester,
+    query: 'E2E search for the CVE',
+    result: 'Found relevant advisories',
+    subtaskId: null,
+    taskId: '11',
+});
+
+const TABS_VECTOR_LOG = entity('VectorStoreLog', {
+    action: VectorStoreAction.Retrieve,
+    createdAt: T,
+    executor: AgentType.Memorist,
+    filter: '{}',
+    flowId: '5',
+    id: '61',
+    initiator: AgentType.Pentester,
+    query: 'E2E recall prior findings',
+    result: 'Recalled 3 memories',
+    subtaskId: null,
+    taskId: '11',
+});
+
+const flowTabsData: ResultOf<typeof FlowDocument> = {
+    agentLogs: [TABS_AGENT_LOG],
+    flow: FLOW_A,
+    messageLogs: [],
+    screenshots: [],
+    searchLogs: [TABS_SEARCH_LOG],
+    tasks: [TABS_TASK],
+    terminalLogs: [],
+    vectorStoreLogs: [TABS_VECTOR_LOG],
+};
+
+/** Flow 5 with one populated entry per query-backed detail tab (tasks, agents, searches, vector store). */
+export const flowTabsCassette = (): Cassette =>
+    flowsCassette({
+        queries: { flow: [{ data: flowTabsData, variables: { id: '5' } }] },
         subscriptions: { messageLogAdded: [{ frames: [], variables: { flowId: '5' } }] },
     });
