@@ -5,6 +5,9 @@ name: E2E
 
 on:
   pull_request:
+    # `labeled` lets applying `e2e:stand` start the stand job by itself; the
+    # default types never fire on label changes.
+    types: [opened, synchronize, reopened, labeled]
   push:
     branches:
       - main
@@ -13,16 +16,30 @@ on:
   schedule:
     - cron: "0 3 * * *"
   workflow_dispatch:
+    inputs:
+      tier:
+        description: "Extra tier to run on top of mock + visual"
+        type: choice
+        options:
+          - none
+          - local
+          - stand
+          - all
+        default: local
 
 permissions:
   contents: read
 
+# Keyed on the PR number (not the branch name — two fork PRs named identically
+# would cancel each other) and the event action (a `labeled` run must not
+# cancel an in-flight `synchronize` run of the same PR).
 concurrency:
-  group: e2e-${{ github.head_ref || github.run_id }}
+  group: e2e-${{ github.event.action || 'run' }}-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   e2e-mock:
+    if: github.event.action != 'labeled'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -75,8 +92,9 @@ jobs:
 
       - name: Append trend record
         if: always()
+        continue-on-error: true
         working-directory: frontend
-        run: node e2e/tools/trend.mjs || true
+        run: node e2e/tools/trend.mjs
         env:
           E2E_TREND_SHA: ${{ github.sha }}
           E2E_TREND_REF: ${{ github.head_ref || github.ref_name }}
@@ -93,6 +111,7 @@ jobs:
   # Visual snapshots: pinned container = pixel-stable baselines. Advisory —
   # never a required check.
   e2e-visual:
+    if: github.event.action != 'labeled'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     container:
@@ -115,6 +134,14 @@ jobs:
         uses: pnpm/action-setup@v4
         with:
           package_json_file: frontend/package.json
+
+      # The dist must be built with the pinned Node, not whatever the
+      # Playwright container ships — local baselines are built under .nvmrc
+      # and pixel-stability assumes identically built bundles.
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: frontend/.nvmrc
 
       - name: Install dependencies
         working-directory: frontend
@@ -140,7 +167,10 @@ jobs:
   # Tier 2: branch-built image + isolated compose stack + the mock-LLM agent
   # loop. Not part of the PR gate — nightly and on-demand only.
   e2e-local:
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    if: >
+      github.event_name == 'schedule' ||
+      (github.event_name == 'workflow_dispatch' &&
+       contains(fromJSON('["local", "all"]'), inputs.tier))
     runs-on: ubuntu-latest
     timeout-minutes: 40
     steps:
@@ -184,7 +214,8 @@ jobs:
   # run blocks on a human. Fork PRs never reach it (they get Tier 1 only).
   e2e-stand:
     if: >
-      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_dispatch' &&
+       contains(fromJSON('["stand", "all"]'), inputs.tier)) ||
       (github.event_name == 'pull_request' &&
        contains(github.event.pull_request.labels.*.name, 'e2e:stand'))
     runs-on: ubuntu-latest
@@ -224,16 +255,19 @@ jobs:
         working-directory: frontend
         run: pnpm exec playwright install --with-deps chromium
 
+      # The config scopes the stand tier to @stand specs — no CLI grep to
+      # drift out of sync with the tags.
       - name: Run stand smoke
         working-directory: frontend
-        run: E2E_TIER=stand npx playwright test -c e2e/playwright.config.ts --grep @smoke
+        run: E2E_TIER=stand npx playwright test -c e2e/playwright.config.ts
         env:
           E2E_BASE_URL: ${{ secrets.E2E_STAND_URL }}
           E2E_USER: ${{ secrets.E2E_STAND_USER }}
           E2E_PASSWORD: ${{ secrets.E2E_STAND_PASSWORD }}
 
-      # Real-tier traces embed cookies and live payloads — keep them short-lived
-      # and never upload storageState.
+      # Traces/videos are disabled on this tier (they would embed the live
+      # session cookie in a public-repo artifact) — this uploads results.json
+      # and failure screenshots only; never storageState.
       - name: Upload report
         if: always()
         uses: actions/upload-artifact@v4

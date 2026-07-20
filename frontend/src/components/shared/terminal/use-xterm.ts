@@ -28,6 +28,10 @@ export interface UseXtermResult {
     write: (data: string) => void;
 }
 
+export interface XtermHostElement extends HTMLDivElement {
+    xterm?: Terminal;
+}
+
 /**
  * Manages the full xterm.js lifecycle: creation, addon loading,
  * resize handling, WebGL fallback, theme sync, and cleanup.
@@ -38,10 +42,6 @@ export interface UseXtermResult {
  * Requires Ctrl+Click (Cmd+Click on Mac) to open links per
  * https://xtermjs.org/docs/guides/link-handling/
  */
-export interface XtermHostElement extends HTMLDivElement {
-    xterm?: Terminal;
-}
-
 export function useXterm({ theme }: { theme: 'dark' | 'light' | 'system' }): UseXtermResult {
     const containerRef = useRef<HTMLDivElement | null>(null);
     const terminalRef = useRef<null | Terminal>(null);

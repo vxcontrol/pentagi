@@ -2,6 +2,11 @@ import type { Page } from '@playwright/test';
 
 import type { MockWorld } from './world.ts';
 
+export interface WsTransport {
+    close: (options?: { code?: number; reason?: string }) => unknown;
+    send: (data: string) => void;
+}
+
 type ClientMessage =
     | { id: string; payload: SubscribePayload; type: 'subscribe' }
     | { id: string; type: 'complete' }
@@ -15,21 +20,35 @@ interface SubscribePayload {
     variables?: Record<string, unknown>;
 }
 
-export const installWsMock = async (page: Page, world: MockWorld): Promise<void> => {
-    await page.routeWebSocket('**/api/v1/graphql', (ws) => {
-        world.registerSocket(ws);
+/**
+ * Transport-agnostic graphql-ws server half: Playwright routes and the vitest
+ * protocol-contract suite (ws-graphql.unit.test.ts) both drive this exact
+ * code, so the protocol invariants are pinned outside full browser runs.
+ */
+export const handleWsConnection = (
+    world: MockWorld,
+    transport: WsTransport,
+): { onClose: () => void; onMessage: (raw: string) => void } => {
+    world.registerSocket(transport);
 
-        const unsubscribes = new Map<string, () => void>();
-        let isOpen = true;
+    const unsubscribes = new Map<string, () => void>();
+    let isOpen = true;
 
-        const send = (message: Record<string, unknown>) => {
-            if (isOpen) {
-                ws.send(JSON.stringify(message));
-            }
-        };
+    const send = (message: Record<string, unknown>) => {
+        if (isOpen) {
+            transport.send(JSON.stringify(message));
+        }
+    };
 
-        ws.onMessage((raw) => {
-            const message = JSON.parse(String(raw)) as ClientMessage;
+    return {
+        onClose: () => {
+            isOpen = false;
+            unsubscribes.forEach((unsubscribe) => unsubscribe());
+            unsubscribes.clear();
+            world.unregisterSocket(transport);
+        },
+        onMessage: (raw) => {
+            const message = JSON.parse(raw) as ClientMessage;
 
             switch (message.type) {
                 case 'complete': {
@@ -58,6 +77,9 @@ export const installWsMock = async (page: Page, world: MockWorld): Promise<void>
                     if (!match) {
                         // Unmatched subscriptions get ack'd silence and stay open: a flow page
                         // opens ~15 at once, and `error`/`complete` would poison the client.
+                        world.reportUnmatchedSubscription(
+                            `subscription ${payload.operationName} ${JSON.stringify(payload.variables ?? {})}`,
+                        );
                         break;
                     }
 
@@ -75,13 +97,15 @@ export const installWsMock = async (page: Page, world: MockWorld): Promise<void>
                     break;
                 }
             }
-        });
+        },
+    };
+};
 
-        ws.onClose(() => {
-            isOpen = false;
-            unsubscribes.forEach((unsubscribe) => unsubscribe());
-            unsubscribes.clear();
-            world.unregisterSocket(ws);
-        });
+export const installWsMock = async (page: Page, world: MockWorld): Promise<void> => {
+    await page.routeWebSocket('**/api/v1/graphql', (ws) => {
+        const connection = handleWsConnection(world, ws);
+
+        ws.onMessage((raw) => connection.onMessage(String(raw)));
+        ws.onClose(() => connection.onClose());
     });
 };

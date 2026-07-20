@@ -17,7 +17,7 @@ import { baseQueries, baseRest } from './base.ts';
 
 const T = '2026-01-15T11:30:00Z';
 
-const provider = entity('Provider', { name: 'E2E Provider', type: ProviderType.Custom });
+export const PROVIDER = entity('Provider', { name: 'E2E Provider', type: ProviderType.Custom });
 
 const terminal = (id: string) =>
     entity('Terminal', {
@@ -33,7 +33,7 @@ export const makeFlow = (id: string, title: string, status: StatusType = StatusT
     entity('Flow', {
         createdAt: T,
         id,
-        provider,
+        provider: PROVIDER,
         status,
         terminals: [terminal(id)],
         title,
@@ -84,7 +84,7 @@ export const FLOW_B_STREAMED_IDS = ['203', '204'];
 
 const messagesFor = (flowId: string, ids: string[]) => ids.map((id) => makeMessage(id, flowId));
 
-const flowQueryData = (
+export const flowQueryData = (
     flow: FlowFragmentFragment,
     messageLogs: MessageLogFragmentFragment[],
     terminalLogs: TerminalLogFragmentFragment[] = [],

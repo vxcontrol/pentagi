@@ -1,5 +1,3 @@
-import type { WebSocketRoute } from '@playwright/test';
-
 import type {
     Cassette,
     CassetteFrame,
@@ -10,11 +8,24 @@ import type {
     WorldFlagged,
 } from './cassette.ts';
 
+// Key-sorted stringify: the app builds variables objects at runtime (spreads,
+// conditional assignment), so property order must not affect matching.
+const stableStringify = (value: unknown): string =>
+    JSON.stringify(value, (_key, node: unknown) =>
+        node && typeof node === 'object' && !Array.isArray(node)
+            ? Object.fromEntries(Object.entries(node).sort(([a], [b]) => a.localeCompare(b)))
+            : node,
+    ) ?? 'undefined';
+
 const isSubsetMatch = (expected?: Record<string, unknown>, actual?: Record<string, unknown>): boolean =>
     !expected ||
-    Object.entries(expected).every(([key, value]) => JSON.stringify(actual?.[key]) === JSON.stringify(value));
+    Object.entries(expected).every(([key, value]) => stableStringify(actual?.[key]) === stableStringify(value));
 
 const sleep = (delayMs: number) => new Promise<void>((resolve) => setTimeout(resolve, delayMs));
+
+export interface MockSocket {
+    close: (options?: { code?: number; reason?: string }) => unknown;
+}
 
 export interface StreamSubscriber {
     complete: () => void;
@@ -29,11 +40,18 @@ interface StreamState {
 
 export class MockWorld {
     readonly unmatched: string[] = [];
+    /**
+     * Unmatched subscriptions are expected (a flow page opens ~15 and cassettes
+     * mock only the relevant ones), so unlike `unmatched` this is not a teardown
+     * gate — it is attached as a diagnostic when a test fails, so a typo'd
+     * subscription key points at the cassette instead of a UI timeout.
+     */
+    readonly unmatchedSubscriptions: string[] = [];
 
-    private readonly consumed = new Map<string, number>();
+    private readonly consumed = new Map<string, { index: number; signature: string }>();
     private readonly flags = new Set<string>();
     private readonly flagWaiters = new Map<string, Array<() => void>>();
-    private readonly sockets = new Set<WebSocketRoute>();
+    private readonly sockets = new Set<MockSocket>();
     private readonly streams = new Map<string, StreamState>();
 
     constructor(private readonly cassette: Cassette) {}
@@ -63,28 +81,34 @@ export class MockWorld {
         const sections = [this.cassette.queries, this.cassette.mutations];
 
         for (const section of sections) {
-            const candidates = this.eligible(
-                section?.[operationName]?.filter((entry) => isSubsetMatch(entry.variables, variables)),
-            );
+            const matching = section?.[operationName]?.filter((entry) => isSubsetMatch(entry.variables, variables));
+            const candidates = this.eligible(matching);
 
-            if (candidates?.length) {
-                return this.nextEntry(`gql:${operationName}:${JSON.stringify(variables ?? {})}`, candidates);
+            if (matching && candidates?.length) {
+                return this.nextEntry(`gql:${operationName}:${stableStringify(variables ?? {})}`, candidates, matching);
             }
         }
 
         return undefined;
     }
 
-    matchRest(method: string, pathname: string): RestCassetteEntry | undefined {
+    matchRest(method: string, pathname: string, body?: Record<string, unknown>): RestCassetteEntry | undefined {
         const normalized = pathname.replace(/\/+$/, '');
         const key = Object.keys(this.cassette.rest ?? {}).find((candidate) => {
             const [candidateMethod, candidatePath = ''] = candidate.split(' ');
 
             return candidateMethod === method && candidatePath.replace(/\/+$/, '') === normalized;
         });
-        const candidates = this.eligible(key ? this.cassette.rest?.[key] : undefined);
+        // A path hit whose bodySubset does not match stays unmatched (501): a
+        // broken request payload must not be answered with a canned success.
+        const matching = (key ? this.cassette.rest?.[key] : undefined)?.filter((entry) =>
+            isSubsetMatch(entry.bodySubset, body),
+        );
+        const candidates = this.eligible(matching);
 
-        return candidates?.length ? this.nextEntry(`rest:${method}:${normalized}`, candidates) : undefined;
+        return matching && candidates?.length
+            ? this.nextEntry(`rest:${method}:${normalized}`, candidates, matching)
+            : undefined;
     }
 
     matchSubscription(
@@ -100,12 +124,16 @@ export class MockWorld {
             : undefined;
     }
 
-    registerSocket(socket: WebSocketRoute): void {
+    registerSocket(socket: MockSocket): void {
         this.sockets.add(socket);
     }
 
     reportUnmatched(description: string): void {
         this.unmatched.push(description);
+    }
+
+    reportUnmatchedSubscription(description: string): void {
+        this.unmatchedSubscriptions.push(description);
     }
 
     /**
@@ -129,7 +157,7 @@ export class MockWorld {
         return () => state.subscribers.delete(subscriber);
     }
 
-    unregisterSocket(socket: WebSocketRoute): void {
+    unregisterSocket(socket: MockSocket): void {
         this.sockets.delete(socket);
     }
 
@@ -161,11 +189,18 @@ export class MockWorld {
         return open?.some((entry) => entry.whenFlag) ? open.filter((entry) => entry.whenFlag) : open;
     }
 
-    /** Sequenced responses: entries for the same match key are consumed in order; the last one repeats. */
-    private nextEntry<T extends WorldFlagged>(key: string, candidates: T[]): T {
-        const index = this.consumed.get(key) ?? 0;
+    /**
+     * Sequenced responses: entries for the same match key are consumed in
+     * order; the last one repeats. The cursor is scoped to the current eligible
+     * subset — when a raised flag changes which entries are visible, carrying a
+     * pre-flag cursor over would skip the new subset's leading entries.
+     */
+    private nextEntry<T extends WorldFlagged>(key: string, candidates: T[], all: T[]): T {
+        const signature = candidates.map((candidate) => all.indexOf(candidate)).join(',');
+        const state = this.consumed.get(key);
+        const index = state?.signature === signature ? state.index : 0;
 
-        this.consumed.set(key, index + 1);
+        this.consumed.set(key, { index: index + 1, signature });
 
         const entry = candidates[Math.min(index, candidates.length - 1)] as T;
 

@@ -17,17 +17,26 @@ compose() {
 }
 
 # Sandbox containers are spawned by the backend straight on the docker socket,
-# outside the compose project — `down -v` never removes them. The 9xxxx flow-id
-# range (seeded below) makes them unambiguously ours to delete.
+# outside the compose project — `down -v` never removes them. The anchored
+# regex matches only the seeded 9xxxx (5+ digit) flow-id range; an unanchored
+# name filter is a substring match and would also remove a dev stack's
+# sandboxes for any flow id starting with 9.
 remove_e2e_sandboxes() {
-    docker ps -aq --filter "name=pentagi-terminal-9" | xargs -r docker rm -f
+    docker ps -aq --filter 'name=^/?pentagi-terminal-9[0-9]{4,}$' | xargs -r docker rm -f
 }
 
 cleanup() {
-    remove_e2e_sandboxes
-    if [[ "${E2E_KEEP_STACK:-}" != "1" ]]; then
-        compose down -v --remove-orphans
+    if [[ "${E2E_KEEP_STACK:-}" == "1" ]]; then
+        return
     fi
+    # The backend/mock-LLM logs are the only record of the agent loop — capture
+    # them before `down -v` destroys the containers, so a red CI run has more
+    # than a trace of a stuck UI.
+    mkdir -p "$REPO_ROOT/frontend/e2e/test-results"
+    compose logs --no-color pentagi mock-llm \
+        > "$REPO_ROOT/frontend/e2e/test-results/compose.log" 2>&1 || true
+    remove_e2e_sandboxes
+    compose down -v --remove-orphans
 }
 trap cleanup EXIT
 

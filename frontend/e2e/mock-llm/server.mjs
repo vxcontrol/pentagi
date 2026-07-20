@@ -54,6 +54,11 @@ const respondJson = (response, status, payload) => {
     response.end(JSON.stringify(payload));
 };
 
+// OpenAI error envelope — langchaingo surfaces `error.message`, a bare string
+// under `error` is dropped on the floor.
+const respondError = (response, status, message) =>
+    respondJson(response, status, { error: { code: null, message, param: null, type: 'invalid_request_error' } });
+
 const respondCompletion = (response, payload, rule) => {
     completionCounter += 1;
     const id = `chatcmpl-e2e-${completionCounter}`;
@@ -112,10 +117,23 @@ createServer(async (request, response) => {
     const { url = '' } = request;
 
     if (request.method === 'POST' && url.endsWith('/chat/completions')) {
-        const payload = JSON.parse((await readBody(request)) || '{}');
-        const rule = pickAnswer(payload);
+        // A malformed body must 400, not throw: an uncaught throw in this
+        // async callback kills the process, resets completionCounter, and
+        // drops every in-flight SSE stream of the run.
+        let payload;
 
-        console.log(`[mock-llm] ${rule.label}: ${payload.stream ? 'stream' : 'plain'}`);
+        try {
+            payload = JSON.parse((await readBody(request)) || '{}');
+        } catch (error) {
+            respondError(response, 400, `mock-llm: invalid JSON body: ${error}`);
+
+            return;
+        }
+
+        const rule = pickAnswer(payload);
+        const toolNames = (payload.tools ?? []).map((tool) => tool.function?.name ?? tool.type).join(',');
+
+        console.log(`[mock-llm] ${rule.label}: ${payload.stream ? 'stream' : 'plain'} tools=[${toolNames}]`);
         respondCompletion(response, payload, rule);
 
         return;
@@ -130,5 +148,5 @@ createServer(async (request, response) => {
         return;
     }
 
-    respondJson(response, 404, { error: `mock-llm: unhandled ${request.method} ${url}` });
+    respondError(response, 404, `mock-llm: unhandled ${request.method} ${url}`);
 }).listen(PORT, () => console.log(`[mock-llm] listening on :${PORT}`));

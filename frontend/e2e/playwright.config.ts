@@ -1,11 +1,9 @@
 import { defineConfig, devices } from '@playwright/test';
 import { fileURLToPath } from 'node:url';
 
-import type { BackendOptions } from './fixtures/backend.ts';
+import type { BackendOptions, BackendTier } from './fixtures/backend.ts';
 
-export type BackendTier = 'local' | 'mock' | 'stand';
-
-const tier = (process.env.E2E_TIER ?? 'mock') as BackendTier;
+const rawTier = process.env.E2E_TIER ?? 'mock';
 const isCI = Boolean(process.env.CI);
 // Visual snapshots only ever run inside the pinned Playwright Linux container
 // (e2e/tools/run-visual.sh) — a darwin run would generate parallel baselines
@@ -26,6 +24,12 @@ const TIERS: Record<BackendTier, { baseURL: string; installMocks: boolean }> = {
     mock: { baseURL: `http://localhost:${PREVIEW_PORT}`, installMocks: true },
     stand: { baseURL: process.env.E2E_BASE_URL ?? '', installMocks: false },
 };
+
+if (!(rawTier in TIERS)) {
+    throw new Error(`E2E_TIER must be one of ${Object.keys(TIERS).join('|')}, got "${rawTier}"`);
+}
+
+const tier = rawTier as BackendTier;
 
 if (tier === 'stand' && !TIERS.stand.baseURL) {
     throw new Error('E2E_TIER=stand requires E2E_BASE_URL');
@@ -61,6 +65,10 @@ export default defineConfig<BackendOptions>({
                   },
                   {
                       dependencies: ['setup'],
+                      // The stand tier runs only @stand-tagged specs: flow-run
+                      // drives a real (paid) agent run and must never target a
+                      // shared stand.
+                      ...(tier === 'stand' ? { grep: /@stand/ } : {}),
                       name: `${tier}-chromium`,
                       testMatch: '**/specs/real/**',
                       use: { ...devices['Desktop Chrome'], storageState: AUTH_STATE_PATH },
@@ -79,14 +87,17 @@ export default defineConfig<BackendOptions>({
     retries: 1,
     testDir: './specs',
     use: {
-        backend: { installMocks: TIERS[tier].installMocks, tier },
+        backend: { installMocks: TIERS[tier].installMocks },
         baseURL: TIERS[tier].baseURL,
         ignoreHTTPSErrors: tier === 'local',
         locale: 'en-US',
         screenshot: 'only-on-failure',
         timezoneId: 'UTC',
-        trace: 'on-first-retry',
-        video: 'retain-on-failure',
+        // Stand traces/videos embed the live session cookie and the setup
+        // project's password fill; CI uploads test-results as a public-repo
+        // artifact, so they must never be recorded on that tier.
+        trace: tier === 'stand' ? 'off' : 'on-first-retry',
+        video: tier === 'stand' ? 'off' : 'retain-on-failure',
     },
     // The gate must test the shipped artifact: keep this on the production build,
     // never a dev server.
@@ -98,7 +109,10 @@ export default defineConfig<BackendOptions>({
                   command: isVisual ? 'node e2e/tools/serve-dist.mjs' : 'pnpm run build && pnpm exec vite preview',
                   cwd: fileURLToPath(new URL('..', import.meta.url)),
                   env: { VITE_PORT: '8000', VITE_USE_HTTPS: 'false' },
-                  reuseExistingServer: !isCI,
+                  // Never reuse a listener on the port: the build runs inside
+                  // this command, so a reused (possibly orphaned) preview
+                  // silently serves a previous commit's dist as the gate.
+                  reuseExistingServer: false,
                   timeout: 240_000,
                   url: `http://localhost:${PREVIEW_PORT}`,
               }

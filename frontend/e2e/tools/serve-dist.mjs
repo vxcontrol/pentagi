@@ -23,14 +23,33 @@ const MIME = {
     '.woff2': 'font/woff2',
 };
 
+const INDEX = join(DIST, 'index.html');
+
+if (!existsSync(INDEX)) {
+    console.error(`[serve-dist] no build at ${DIST} — run \`pnpm run build\` first`);
+    process.exit(2);
+}
+
 createServer((request, response) => {
-    const pathname = normalize(new URL(request.url ?? '/', 'http://localhost').pathname).replace(/^(\.\.[/\\])+/, '');
+    // The WHATWG URL parser already resolves any `..` segments in the pathname.
+    const pathname = normalize(new URL(request.url ?? '/', 'http://localhost').pathname);
     let filePath = join(DIST, pathname);
 
     if (!existsSync(filePath) || statSync(filePath).isDirectory()) {
-        filePath = join(DIST, 'index.html');
+        // A miss on an asset-like path (hashed chunk, image) must 404 loudly —
+        // an index.html fallback there masks a broken build as text/html.
+        if (extname(pathname)) {
+            response.writeHead(404, { 'content-type': 'text/plain' });
+            response.end(`not found: ${pathname}`);
+
+            return;
+        }
+
+        filePath = INDEX;
     }
 
     response.writeHead(200, { 'content-type': MIME[extname(filePath)] ?? 'application/octet-stream' });
-    createReadStream(filePath).pipe(response);
+    createReadStream(filePath)
+        .on('error', () => response.destroy())
+        .pipe(response);
 }).listen(PORT, () => console.log(`[serve-dist] ${DIST} on :${PORT}`));

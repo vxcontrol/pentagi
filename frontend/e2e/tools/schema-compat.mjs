@@ -1,22 +1,15 @@
 // Deploy-skew pre-flight for the stand tier: validates the frontend's persisted
 // GraphQL operations against the TARGET backend's live schema (fetched via
-// introspection), so a renamed/removed field fails in one readable step here
-// instead of as dozens of red specs. This is the RC-01/RC-02 class — a new
-// frontend field the deployed backend doesn't yet expose.
+// introspection), so a renamed/removed field — e.g. a new frontend field the
+// deployed backend doesn't yet expose — fails in one readable step here
+// instead of as dozens of red specs.
 //
 // Usage: node schema-compat.mjs
 //   E2E_BASE_URL  (required)  e.g. https://localhost:8444
 //   E2E_USER / E2E_PASSWORD   (default admin@pentagi.com / admin)
+import { buildClientSchema, getIntrospectionQuery, parse, separateOperations, validate } from 'graphql';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-
-import {
-    buildClientSchema,
-    getIntrospectionQuery,
-    parse,
-    separateOperations,
-    validate,
-} from 'graphql';
 
 const BASE_URL = process.env.E2E_BASE_URL;
 const USER = process.env.E2E_USER ?? 'admin@pentagi.com';
@@ -61,6 +54,11 @@ const introspect = async (cookie) => {
         headers: { 'content-type': 'application/json', cookie },
         method: 'POST',
     });
+
+    if (!response.ok) {
+        throw new Error(`introspection failed: HTTP ${response.status}`);
+    }
+
     const { data, errors } = await response.json();
 
     if (errors) {
@@ -74,6 +72,13 @@ const main = async () => {
     const schema = await introspect(await login());
     const document = parse(readFileSync(OPERATIONS_DOC, 'utf8'));
     const operations = separateOperations(document);
+
+    // "All 0 operations satisfied" is a broken gate, not a pass: a codegen
+    // change that turns the doc into SDL/fragments must fail loudly.
+    if (!Object.keys(operations).length) {
+        throw new Error(`no operations found in ${OPERATIONS_DOC} — the document no longer contains operations`);
+    }
+
     const failures = [];
 
     for (const [name, operation] of Object.entries(operations)) {

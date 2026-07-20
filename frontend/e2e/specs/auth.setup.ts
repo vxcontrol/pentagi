@@ -20,6 +20,9 @@ setup('authenticate', async ({ page }) => {
 
     await expect(skip.or(loggedIn).first()).toBeVisible({ timeout: 15_000 });
 
+    // Whether the seeded admin still carries password_change_required depends
+    // on backend state; the `.or()` wait above has already settled one branch.
+    // eslint-disable-next-line playwright/no-conditional-in-test
     if (await skip.isVisible()) {
         await skip.click();
     }

@@ -1,8 +1,11 @@
 // Turns a Playwright JSON report into one trend record so a green/red gate also
 // surfaces slow regressions: duration p95, per-spec outliers, and flaky/failed
-// counts. Appends JSONL to the trend file (an artifact retained across runs).
+// counts. Writes one JSONL record per run; each CI run uploads its own
+// `e2e-trend` artifact (immutable per run) — aggregate across runs offline,
+// e.g. `gh run download` + `cat */trend.jsonl`.
 //
-// Usage: node trend.mjs [results.json] [trend.jsonl]
+// Usage: CI=1 pnpm e2e && node trend.mjs [results.json] [trend.jsonl]
+//   (the json reporter that writes results.json only runs under CI=1)
 //   E2E_TREND_SHA / E2E_TREND_REF   optional provenance stamped into the record
 import { appendFileSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -23,10 +26,14 @@ const percentile = (values, p) => {
 
 const collectSpecs = (report) => {
     const specs = [];
+
     const walk = (suite) => {
         suite.suites?.forEach(walk);
         suite.specs?.forEach((spec) => {
-            const ms = Math.max(0, ...(spec.tests ?? []).flatMap((test) => (test.results ?? []).map((r) => r.duration)));
+            const ms = Math.max(
+                0,
+                ...(spec.tests ?? []).flatMap((test) => (test.results ?? []).map((r) => r.duration)),
+            );
 
             specs.push({ ms, title: spec.title });
         });
@@ -37,7 +44,16 @@ const collectSpecs = (report) => {
     return specs;
 };
 
-const report = JSON.parse(readFileSync(RESULTS, 'utf8'));
+let raw;
+
+try {
+    raw = readFileSync(RESULTS, 'utf8');
+} catch {
+    console.error(`trend: no results file at ${RESULTS} — run the suite with CI=1 so the json reporter writes it`);
+    process.exit(2);
+}
+
+const report = JSON.parse(raw);
 const specs = collectSpecs(report);
 const durations = specs.map((spec) => spec.ms);
 const { expected = 0, flaky = 0, skipped = 0, unexpected = 0 } = report.stats ?? {};

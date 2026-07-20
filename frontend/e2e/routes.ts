@@ -18,14 +18,21 @@ export interface RouteManifestEntry {
     path: string;
     /** The route counts as rendered when this locator is visible. */
     ready: (page: Page) => Locator;
-    /** Owning src/ areas — the substrate for changed-files → affected-routes mapping. */
+    /**
+     * Owning src/ areas — the substrate for changed-files → affected-routes
+     * mapping. A dir rendered by several routes must be listed under every one
+     * of them: ownership never falls back to the run-everything path, so a
+     * single-route listing silently skips the other consumers.
+     */
     sources: string[];
 }
 
 /**
- * One entry per navigable route, consumed by the NAV sweep, per-route specs,
- * and (later) CI diff-scoping and the exploratory agent. Paths come from the
- * app's own routes module so a route rename breaks this file at compile time.
+ * The routes swept by NAV/visual/a11y specs and CI diff-scoping. This is a
+ * subset of the app's routes — route-manifest.unit.test.ts pins the excluded
+ * remainder so a new route cannot silently stay out of every sweep. Paths come
+ * from the app's own routes module so a route rename breaks this file at
+ * compile time.
  */
 export const ROUTE_MANIFEST: RouteManifestEntry[] = [
     {
@@ -38,7 +45,15 @@ export const ROUTE_MANIFEST: RouteManifestEntry[] = [
         cassette: flowsCassette,
         path: routes.flow('5'),
         ready: (page) => page.getByRole('button', { name: 'Flow actions' }),
-        sources: ['src/pages/flows', 'src/features/flows', 'src/providers/flow-provider.tsx'],
+        sources: [
+            'src/pages/flows',
+            'src/features/flows',
+            'src/providers/flow-provider.tsx',
+            // Rendered inside the detail page's tabs alongside their owning routes.
+            'src/components/shared/file-manager',
+            'src/components/dashboard',
+            'src/features/resources',
+        ],
     },
     {
         cassette: templatesCassette,

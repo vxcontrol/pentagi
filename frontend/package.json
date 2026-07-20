@@ -11,10 +11,10 @@
         "e2e:visual": "./e2e/tools/run-visual.sh",
         "e2e:visual:update": "./e2e/tools/run-visual.sh --update",
         "graphql:generate": "graphql-codegen --config graphql-codegen.ts",
-        "lint": "eslint \"{src,e2e}/**/*.{ts,tsx,js,jsx}\"",
-        "lint:fix": "eslint \"{src,e2e}/**/*.{ts,tsx,js,jsx}\" --fix",
-        "prettier": "prettier --check \"{src,e2e}/**/*.{ts,tsx,js,jsx,json,css,scss}\"",
-        "prettier:fix": "prettier --write \"{src,e2e}/**/*.{ts,tsx,js,jsx,json,css,scss}\"",
+        "lint": "eslint \"{src,e2e}/**/*.{ts,tsx,js,jsx,mjs}\"",
+        "lint:fix": "eslint \"{src,e2e}/**/*.{ts,tsx,js,jsx,mjs}\" --fix",
+        "prettier": "prettier --check \"{src,e2e}/**/*.{ts,tsx,js,jsx,mjs,json,css,scss}\"",
+        "prettier:fix": "prettier --write \"{src,e2e}/**/*.{ts,tsx,js,jsx,mjs,json,css,scss}\"",
         "ssl:generate": "tsx --eval 'import { generateCertificates } from \"./scripts/generate-ssl.ts\"; generateCertificates();'",
         "test": "vitest run",
         "test:coverage": "vitest run --coverage",
@@ -113,6 +113,7 @@
         "@types/node": "^24.13.2",
         "@types/react": "^19.2.17",
         "@types/react-dom": "^19.2.3",
+        "@types/ws": "^8.18.1",
         "@typescript-eslint/eslint-plugin": "^8.61.1",
         "@typescript-eslint/parser": "^8.61.1",
         "@vitejs/plugin-react-swc": "^4.3.1",
@@ -133,7 +134,8 @@
         "vite": "^8.0.16",
         "vite-plugin-html": "^3.2.2",
         "vite-tsconfig-paths": "^6.1.1",
-        "vitest": "^4.1.9"
+        "vitest": "^4.1.9",
+        "ws": "^8.21.1"
     },
     "packageManager": "pnpm@11.8.0"
 }

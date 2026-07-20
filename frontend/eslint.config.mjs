@@ -107,6 +107,20 @@ const eslintConfig = [
         rules: { 'react-hooks/rules-of-hooks': 'off' },
     },
     {
+        // The dependency-free .mjs tools run under plain Node — declare its
+        // globals so no-undef doesn't misfire.
+        files: ['e2e/**/*.mjs'],
+        languageOptions: {
+            globals: {
+                console: 'readonly',
+                fetch: 'readonly',
+                process: 'readonly',
+                setTimeout: 'readonly',
+                URL: 'readonly',
+            },
+        },
+    },
+    {
         ignores: [
             'node_modules/**',
             'dist/**',

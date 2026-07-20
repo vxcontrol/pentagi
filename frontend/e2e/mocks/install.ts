@@ -41,7 +41,13 @@ export const installMockRoutes = async (page: Page, world: MockWorld): Promise<v
             return;
         }
 
-        const entry = world.matchRest(request.method(), pathname);
+        // postDataJSON throws on non-JSON bodies (multipart uploads) — only
+        // parse what declares itself JSON.
+        const contentType = request.headers()['content-type'] ?? '';
+        const body = contentType.includes('application/json')
+            ? (request.postDataJSON() as Record<string, unknown> | undefined)
+            : undefined;
+        const entry = world.matchRest(request.method(), pathname, body ?? undefined);
 
         if (entry) {
             await route.fulfill({

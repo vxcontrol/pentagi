@@ -21,11 +21,16 @@ if [[ "${1:-}" == "--update" ]]; then
     shift
 fi
 
+# --user: the image defaults to root, and on Linux a root-owned --update would
+# write baselines/test-results into the repo that git/rm can't touch without
+# sudo (masked on macOS Docker Desktop by its uid mapping).
 docker run --rm \
     -v "$REPO_ROOT:/work" \
     -w /work/frontend \
     -e E2E_VISUAL=1 \
     -e CI="${CI:-}" \
+    -e HOME=/tmp \
+    --user "$(id -u):$(id -g)" \
     --ipc=host \
     "$IMAGE" \
     npx playwright test -c e2e/playwright.config.ts ${UPDATE_ARGS[@]+"${UPDATE_ARGS[@]}"} "$@"

@@ -10,6 +10,7 @@ import type {
 import { ResultType, StatusType } from '@/graphql/types';
 
 import { expect, test } from '../../fixtures/test.ts';
+import { expectCleanPage } from '../../helpers/errors.ts';
 import { entity } from '../../mocks/cassette.ts';
 import { FLOW_A, flowsCassette, makeFlow } from '../../mocks/cassettes/flows.ts';
 
@@ -41,7 +42,7 @@ test.describe('flow lifecycle', { tag: '@flows' }, () => {
             }),
         });
 
-        test('renames from the actions menu and the title persists', async ({ page }) => {
+        test('renames from the actions menu and the title persists', async ({ page, pageErrorLog }) => {
             await openFlowA(page);
             await page.getByRole('button', { name: 'Flow actions' }).click();
             await page.getByRole('menuitem', { name: 'Rename' }).click();
@@ -50,6 +51,7 @@ test.describe('flow lifecycle', { tag: '@flows' }, () => {
 
             await expect(page.getByText('Flow renamed successfully')).toBeVisible();
             await expect(page.locator('header').getByText('E2E Alpha Renamed', { exact: true })).toBeVisible();
+            expectCleanPage(pageErrorLog);
         });
     });
 
@@ -76,7 +78,7 @@ test.describe('flow lifecycle', { tag: '@flows' }, () => {
             }),
         });
 
-        test('finishes a running flow from the actions menu', async ({ page }) => {
+        test('finishes a running flow from the actions menu', async ({ page, pageErrorLog }) => {
             await openFlowA(page);
             await page.getByRole('button', { name: 'Flow actions' }).click();
             await page.getByRole('menuitem', { name: 'Finish' }).click();
@@ -86,6 +88,7 @@ test.describe('flow lifecycle', { tag: '@flows' }, () => {
             await page.getByRole('button', { name: 'Flow actions' }).click();
 
             await expect(page.getByRole('menuitem', { name: 'Finish' })).toBeHidden();
+            expectCleanPage(pageErrorLog);
         });
     });
 
@@ -93,7 +96,9 @@ test.describe('flow lifecycle', { tag: '@flows' }, () => {
         const favorited: ResultOf<typeof AddFavoriteFlowDocument> = { addFavoriteFlow: ResultType.Success };
 
         // The star is useOptimistic and reverts once the mutation settles — the
-        // persisted state only arrives via the settingsUserUpdated frame.
+        // persisted state only arrives via the settingsUserUpdated frame. The
+        // delay keeps the optimistic flash from satisfying the persisted-state
+        // asserts below before the frame lands.
         test.use({
             cassette: flowsCassette({
                 mutations: { addFavoriteFlow: [{ data: favorited, setFlag: 'flow-favorited' }] },
@@ -102,6 +107,7 @@ test.describe('flow lifecycle', { tag: '@flows' }, () => {
                         {
                             frames: [
                                 {
+                                    delayMs: 400,
                                     payload: {
                                         data: {
                                             settingsUserUpdated: entity('UserPreferences', {
@@ -119,7 +125,7 @@ test.describe('flow lifecycle', { tag: '@flows' }, () => {
             }),
         });
 
-        test('toggles the favorite star', async ({ page }) => {
+        test('toggles the favorite star and the state persists', async ({ page, pageErrorLog }) => {
             await openFlowA(page);
 
             const star = page.locator('header').getByRole('button', { name: 'Toggle favorite' });
@@ -127,6 +133,11 @@ test.describe('flow lifecycle', { tag: '@flows' }, () => {
             await expect(star).toHaveAttribute('aria-pressed', 'false');
             await star.click();
             await expect(star).toHaveAttribute('aria-pressed', 'true');
+            // The sidebar favorites group renders only from the subscription
+            // frame — the optimistic star alone can never produce it.
+            await expect(page.getByText('Favorite Flows')).toBeVisible();
+            await expect(star).toHaveAttribute('aria-pressed', 'true');
+            expectCleanPage(pageErrorLog);
         });
     });
 
@@ -146,7 +157,7 @@ test.describe('flow lifecycle', { tag: '@flows' }, () => {
             }),
         });
 
-        test('deletes via the destructive confirm and drops off the list', async ({ page }) => {
+        test('deletes via the destructive confirm and drops off the list', async ({ page, pageErrorLog }) => {
             await openFlowA(page);
             await page.getByRole('button', { name: 'Flow actions' }).click();
             await page.getByRole('menuitem', { name: 'Delete' }).click();
@@ -154,12 +165,14 @@ test.describe('flow lifecycle', { tag: '@flows' }, () => {
             const dialog = page.getByRole('dialog');
 
             await expect(dialog.getByText('Delete flow')).toBeVisible();
+            await expect(dialog.getByRole('button', { name: 'Delete' })).toHaveClass(/destructive/);
             await dialog.getByRole('button', { name: 'Delete' }).click();
 
             await expect(page.getByText('Flow deleted successfully')).toBeVisible();
             await expect(page).toHaveURL(/\/flows$/);
             await expect(page.getByRole('row', { name: /E2E Beta/ })).toBeVisible();
             await expect(page.getByRole('row', { name: /E2E Alpha/ })).toBeHidden();
+            expectCleanPage(pageErrorLog);
         });
     });
 });

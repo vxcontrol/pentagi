@@ -10,8 +10,10 @@ import { templatesCassette } from '../../mocks/cassettes/templates.ts';
 
 const ALLOWLIST: A11yAllowlist = {
     // Message metadata (date + ID) intentionally renders at 50% opacity — a
-    // design decision, not a regression; revisit with the design pass.
-    '/flows/:flowId': ['color-contrast'],
+    // design decision, not a regression; revisit with the design pass. Axe
+    // targets are class chains, so the pattern pins the 50%-muted class; any
+    // other contrast violation on the page still fails.
+    '/flows/:flowId': [{ rule: 'color-contrast', target: /text-muted-foreground\\?\/50/ }],
 };
 
 test.describe('a11y', { tag: '@cross' }, () => {

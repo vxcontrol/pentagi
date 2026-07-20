@@ -8,7 +8,6 @@ import { seedAuthenticated } from './auth.ts';
 
 export interface BackendConfig {
     installMocks: boolean;
-    tier: BackendTier;
 }
 
 export interface BackendOptions {
@@ -34,7 +33,7 @@ export const test = base.extend<BackendFixtures & BackendOptions & { _installMoc
     // first 401 wipes it and hard-redirects to login. Real tiers authenticate
     // once in the setup project and reuse storageState.
     _installMocks: [
-        async ({ backend, isAuthSeeded, page, world }, use) => {
+        async ({ backend, isAuthSeeded, page, world }, use, testInfo) => {
             if (!backend.installMocks) {
                 await use();
 
@@ -49,11 +48,22 @@ export const test = base.extend<BackendFixtures & BackendOptions & { _installMoc
 
             await installMockRoutes(page, world);
             await use();
+
+            // Silently-dead subscriptions are legal (cassettes mock only the
+            // relevant ones), but on a failure they are the first suspect — a
+            // typo'd subscription key otherwise surfaces as a UI timeout.
+            if (testInfo.status !== testInfo.expectedStatus && world.unmatchedSubscriptions.length) {
+                await testInfo.attach('unmatched-subscriptions', {
+                    body: world.unmatchedSubscriptions.join('\n'),
+                    contentType: 'text/plain',
+                });
+            }
+
             expect(world.unmatched, 'every API call the app made must have a cassette entry').toEqual([]);
         },
         { auto: true },
     ],
-    backend: [{ installMocks: true, tier: 'mock' }, { option: true }],
+    backend: [{ installMocks: true }, { option: true }],
     cassette: [{}, { option: true }],
     isAuthSeeded: [true, { option: true }],
     world: async ({ cassette }, use) => {

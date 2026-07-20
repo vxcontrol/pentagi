@@ -1,6 +1,6 @@
 import type { Cassette } from '../cassette.ts';
 
-import { authenticatedInfoEntry, guestInfoEntry } from '../../fixtures/auth.ts';
+import { authenticatedInfoEntry, guestInfoEntry, SEEDED_USER } from '../../fixtures/auth.ts';
 import { baseQueries, baseRest } from './base.ts';
 
 /** Seeded-session smoke: every request answers as an authenticated user. */
@@ -15,6 +15,12 @@ export const loginJourneyCassette: Cassette = {
     rest: {
         ...baseRest(),
         'GET /api/v1/info': [guestInfoEntry(), { ...authenticatedInfoEntry(), whenFlag: 'authenticated' }],
-        'POST /api/v1/auth/login': [{ body: { data: {}, status: 'success' }, setFlag: 'authenticated' }],
+        'POST /api/v1/auth/login': [
+            {
+                body: { data: {}, status: 'success' },
+                bodySubset: { mail: SEEDED_USER.mail, password: 'e2e-password' },
+                setFlag: 'authenticated',
+            },
+        ],
     },
 };
