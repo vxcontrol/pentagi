@@ -138,6 +138,10 @@ type flowProvider struct {
 	dataDir       string
 	publicIP      string
 	dockerNetwork string
+	docker        docker.DockerClient
+	// cachedPorts memoizes the primary container's bound host ports (stable for
+	// the flow's lifetime) so the prompt doesn't inspect Docker on every render.
+	cachedPorts []int
 
 	callCounter *atomic.Int64
 

@@ -272,6 +272,9 @@ func NewFlowWorker(
 	}
 
 	if err := executor.Prepare(ctx); err != nil {
+		// The flow row is already persisted; a container that never started
+		// leaves it visibly failed instead of stuck in "created".
+		markFlowFailed(fwc.db, flow.ID)
 		return nil, wrapErrorEndSpan(ctx, flowSpan, "failed to prepare flow resources", err)
 	}
 

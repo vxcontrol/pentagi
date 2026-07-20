@@ -1101,6 +1101,9 @@ func (f *fakeDockerClient) CopyFromContainer(_ context.Context, _ string, contai
 	}
 	return io.NopCloser(bytes.NewReader(f.copyFromBody)), f.copyFromStat, nil
 }
+func (f *fakeDockerClient) GetFlowContainerPorts(_ context.Context, _ int64) ([]int, error) {
+	return nil, nil
+}
 func (f *fakeDockerClient) Cleanup(_ context.Context) error { return nil }
 func (f *fakeDockerClient) GetDefaultImage() string         { return "test-image" }
 

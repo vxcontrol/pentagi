@@ -99,6 +99,9 @@ func (m *contextAwareMockDockerClient) ContainerStatPath(_ context.Context, _ st
 func (m *contextAwareMockDockerClient) ListContainerDir(_ context.Context, _ string, _ string) (docker.ContainerDirListing, error) {
 	return docker.ContainerDirListing{}, nil
 }
+func (m *contextAwareMockDockerClient) GetFlowContainerPorts(_ context.Context, _ int64) ([]int, error) {
+	return nil, nil
+}
 func (m *contextAwareMockDockerClient) ContainerExecInspect(_ context.Context, _ string) (container.ExecInspect, error) {
 	return m.inspectResp, nil
 }

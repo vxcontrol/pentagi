@@ -860,8 +860,40 @@ func (fp *flowProvider) subtasksToMarkdown(subtasks []tools.SubtaskInfo) string 
 	return buffer.String()
 }
 
+// containerPorts returns the primary container's actually bound host ports for
+// the prompt (memoized, stable for the flow's lifetime). It falls back to the
+// deterministic advisory set when the live ports can't be read — host-network
+// mode publishes none, and a not-yet-inspectable container has none either.
+func (fp *flowProvider) containerPorts() []int {
+	fp.mx.RLock()
+	cached := fp.cachedPorts
+	fp.mx.RUnlock()
+	if len(cached) > 0 {
+		return cached
+	}
+
+	fallback := docker.GetPrimaryContainerPorts(fp.flowID)
+	if fp.docker == nil {
+		return fallback
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	ports, err := fp.docker.GetFlowContainerPorts(ctx, fp.flowID)
+	if err != nil || len(ports) == 0 {
+		return fallback
+	}
+
+	fp.mx.Lock()
+	fp.cachedPorts = ports
+	fp.mx.Unlock()
+
+	return ports
+}
+
 func (fp *flowProvider) getContainerPortsDescription() string {
-	ports := docker.GetPrimaryContainerPorts(fp.flowID)
+	ports := fp.containerPorts()
 	var buffer strings.Builder
 
 	buffer.WriteString("**OOB Attack Infrastructure:**\n\n")

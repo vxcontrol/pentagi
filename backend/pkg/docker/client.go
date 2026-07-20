@@ -7,10 +7,12 @@ import (
 	"fmt"
 	"hash/crc32"
 	"io"
+	"net"
 	"os"
 	"path"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -76,18 +78,95 @@ type DockerClient interface {
 	ContainerExecInspect(ctx context.Context, execID string) (container.ExecInspect, error)
 	ContainerStatPath(ctx context.Context, containerID string, path string) (container.PathStat, error)
 	ListContainerDir(ctx context.Context, containerID string, dirPath string) (ContainerDirListing, error)
+	// GetFlowContainerPorts returns the host ports actually bound to the flow's
+	// primary container (read from the live container, so it stays correct after
+	// a process restart and reflects the dynamically allocated ports).
+	GetFlowContainerPorts(ctx context.Context, flowID int64) ([]int, error)
 	CopyToContainer(ctx context.Context, containerID string, dstPath string, content io.Reader, options container.CopyToContainerOptions) error
 	CopyFromContainer(ctx context.Context, containerID string, srcPath string) (io.ReadCloser, container.PathStat, error)
 	Cleanup(ctx context.Context) error
 	GetDefaultImage() string
 }
 
+// GetPrimaryContainerPorts is the deterministic advisory port set for a flow.
+// It is used only as a fallback for the prompt text (host-network mode, or when
+// the live container can't be inspected) — the actual bridge-mode host bindings
+// come from reserveFreePorts, since this derivation wraps modulo
+// limitContainerPortsNumber and therefore collides for flow ids that are
+// congruent mod (limitContainerPortsNumber/containerPortsNumber).
 func GetPrimaryContainerPorts(flowID int64) []int {
 	ports := make([]int, containerPortsNumber)
 	for i := 0; i < containerPortsNumber; i++ {
 		delta := (int(flowID)*containerPortsNumber + i) % limitContainerPortsNumber
 		ports[i] = BaseContainerPortsNumber + delta
 	}
+	return ports
+}
+
+// reserveFreePorts asks the OS for n free TCP ports on bindIP and keeps each
+// listener open, so two concurrent reservations can never hand back the same
+// port. The caller closes the returned listeners immediately before Docker
+// binds the ports (the only remaining race window is against a non-pentagi
+// process, which the deterministic derivation could not avoid either).
+func reserveFreePorts(bindIP string, n int) ([]int, []io.Closer, error) {
+	ports := make([]int, 0, n)
+	closers := make([]io.Closer, 0, n)
+	closeAll := func() {
+		for _, c := range closers {
+			_ = c.Close()
+		}
+	}
+
+	for i := 0; i < n; i++ {
+		listener, err := net.Listen("tcp", net.JoinHostPort(bindIP, "0"))
+		if err != nil {
+			closeAll()
+			return nil, nil, fmt.Errorf("failed to reserve free host port: %w", err)
+		}
+		closers = append(closers, listener)
+		ports = append(ports, listener.Addr().(*net.TCPAddr).Port)
+	}
+
+	return ports, closers, nil
+}
+
+func (dc *dockerClient) GetFlowContainerPorts(ctx context.Context, flowID int64) ([]int, error) {
+	cnt, err := dc.db.GetFlowPrimaryContainer(ctx, flowID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get primary container for flow %d: %w", flowID, err)
+	}
+	if !cnt.LocalID.Valid || cnt.LocalID.String == "" {
+		return nil, fmt.Errorf("primary container for flow %d has no local id", flowID)
+	}
+
+	inspection, err := dc.client.ContainerInspect(ctx, cnt.LocalID.String)
+	if err != nil {
+		return nil, fmt.Errorf("failed to inspect container %s: %w", cnt.LocalID.String, err)
+	}
+
+	return hostPortsFromBindings(inspection.NetworkSettings.Ports), nil
+}
+
+// hostPortsFromBindings collects the distinct host ports from a container's port
+// map, sorted for a stable prompt rendering.
+func hostPortsFromBindings(portMap nat.PortMap) []int {
+	seen := make(map[int]struct{})
+	for _, bindings := range portMap {
+		for _, binding := range bindings {
+			port, err := strconv.Atoi(binding.HostPort)
+			if err != nil {
+				continue
+			}
+			seen[port] = struct{}{}
+		}
+	}
+
+	ports := make([]int, 0, len(seen))
+	for port := range seen {
+		ports = append(ports, port)
+	}
+	slices.Sort(ports)
+
 	return ports
 }
 
@@ -292,6 +371,9 @@ func (dc *dockerClient) RunContainer(
 
 	// Configure network mode and port bindings
 	var networkingConfig *network.NetworkingConfig
+	// Held open until just before ContainerCreate so a concurrent flow cannot
+	// reserve the same host ports.
+	var portReservations []io.Closer
 	if dc.network == "host" {
 		// Host network mode: container uses host network stack directly
 		// No port bindings needed as container has direct access to host interfaces
@@ -305,7 +387,17 @@ func (dc *dockerClient) RunContainer(
 		if config.ExposedPorts == nil {
 			config.ExposedPorts = nat.PortSet{}
 		}
-		for _, port := range GetPrimaryContainerPorts(flowID) {
+		// Allocate free host ports instead of deriving them from flowID: the
+		// derivation wraps and collides for far-apart flow ids (and across
+		// stacks sharing this daemon), which fails the bind with "port is
+		// already allocated".
+		hostPorts, reservations, err := reserveFreePorts(dc.publicIP, containerPortsNumber)
+		if err != nil {
+			defer updateContainerInfo(database.ContainerStatusFailed, "")
+			return database.Container{}, fmt.Errorf("failed to allocate host ports for container '%s': %w", containerName, err)
+		}
+		portReservations = reservations
+		for _, port := range hostPorts {
 			natPort := nat.Port(fmt.Sprintf("%d/tcp", port))
 			hostConfig.PortBindings[natPort] = []nat.PortBinding{
 				{
@@ -323,6 +415,11 @@ func (dc *dockerClient) RunContainer(
 				},
 			}
 		}
+	}
+
+	// Hand the reserved host ports to Docker: release them so its bind succeeds.
+	for _, reservation := range portReservations {
+		_ = reservation.Close()
 	}
 
 	resp, err := dc.client.ContainerCreate(ctx, config, hostConfig, networkingConfig, nil, containerName)
