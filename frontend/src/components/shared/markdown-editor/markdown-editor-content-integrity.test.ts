@@ -184,8 +184,8 @@ describe('generative content-integrity — atoms survive load↔serialize across
     // The doc side of the same class: rich-mode typing can put a backslash run right before a pipe in a cell —
     // a sequence no markdown load produces (marked's splitter consumes one `\` per escaped pipe). GFM cannot
     // encode an odd run + pipe exactly, so the serializer pads it by one backslash; assert over random `\`/`|`
-    // payloads that the padded save is byte-stable immediately, both cells survive, and no non-backslash byte
-    // is lost or reordered.
+    // payloads that the padded save is byte-stable immediately, both cells survive, and every byte other than
+    // backslashes and cell-edge/collapsed whitespace (which GFM legitimately trims) survives in order.
     it(
         'typed backslash/pipe cell payloads keep the table intact and converge on the first save',
         { timeout: 30000 },
