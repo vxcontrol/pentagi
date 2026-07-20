@@ -1,7 +1,7 @@
 import { SEEDED_USER } from '../fixtures/auth.ts';
 import { expect, test } from '../fixtures/test.ts';
 import { expectCleanPage } from '../helpers/errors.ts';
-import { loginJourneyCassette, smokeCassette } from '../mocks/cassettes/smoke.ts';
+import { loginFailCassette, loginJourneyCassette, smokeCassette } from '../mocks/cassettes/smoke.ts';
 
 test.describe('smoke', { tag: '@smoke' }, () => {
     test.describe('unauthenticated', () => {
@@ -23,6 +23,23 @@ test.describe('smoke', { tag: '@smoke' }, () => {
             await expect(page).toHaveURL(/\/flows$/);
             await expect(page.getByText(SEEDED_USER.mail)).toBeVisible();
             expectCleanPage(pageErrorLog);
+        });
+    });
+
+    test.describe('rejected login', () => {
+        test.use({ cassette: loginFailCassette, isAuthSeeded: false });
+
+        test('surfaces the error and re-disables Sign in until a field changes', async ({ page }) => {
+            await page.goto('/login');
+            await page.getByLabel('Login').fill(SEEDED_USER.mail);
+            await page.getByRole('textbox', { name: 'Password' }).fill('wrong-password');
+            await page.getByRole('button', { name: 'Sign in' }).click();
+
+            await expect(page.getByText('Invalid login or password').first()).toBeVisible();
+            await expect(page).toHaveURL(/\/login/);
+            // react-hook-form leaves Submit disabled after a failed submit until
+            // an input changes.
+            await expect(page.getByRole('button', { name: 'Sign in' })).toBeDisabled();
         });
     });
 
