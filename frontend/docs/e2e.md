@@ -106,6 +106,30 @@ Key conventions:
   production bundle strips app console output, so console-based asserts are
   meaningless on the mock tier.
 
+## Tags
+
+Specs are tagged (`test.describe(..., { tag: '@x' })`) so runs can be filtered
+with `--grep` / `--grep-invert` (e.g. `pnpm e2e --grep @smoke`):
+
+| Tag | Meaning |
+|---|---|
+| `@smoke` | Sanity subset — auth, nav, the load-bearing happy paths |
+| `@flows` | Flow list / detail / subscription / terminal specs |
+| `@crud` | Create-read-update-delete journeys (knowledge, api tokens, templates) |
+| `@coverage` | Surface coverage (dashboard, settings, resources, nav sweep) |
+| `@cross` | Cross-cutting: themes, responsive, a11y |
+| `@visual` | Screenshot baselines — runs only in the visual project |
+| `@real` | Tier 2 — real backend + mock LLM (`specs/real/**`) |
+| `@stand` | Tier 3 — LLM-independent smoke against a live stand |
+
+Two conventions the gate reserves:
+
+- **`@quarantine`** — tag a newly-flaky spec to isolate it and drop it from the
+  gate with `pnpm e2e --grep-invert @quarantine` (leave a tracking note); fix and
+  untag rather than let it rot. Nothing is quarantined today.
+- **`@generated`** — a spec whose cassette was recorder-derived and passed a
+  semantic-assertion review; see the LLM recipe below.
+
 ## Stand tier (Tier 3)
 
 Runs the LLM-independent `@stand` smoke against a real deployment. Label a PR
