@@ -28,14 +28,18 @@ CI=1 pnpm e2e            # byte-identical reproduction of a CI run
 
 ./e2e/tools/run-local-tier.sh          # Tier 2: branch image + isolated docker
                                        # stack + mock LLM; runs specs/real/**
-E2E_TIER=stand E2E_BASE_URL=https://… pnpm e2e   # against a live stand
+E2E_TIER=stand E2E_BASE_URL=https://… pnpm e2e   # live stand: @stand smoke only
+                                       # (flow-run drives a real paid agent run
+                                       # and is scoped to the local tier)
 
 pnpm e2e:visual                        # visual snapshots (pinned container)
 pnpm e2e:visual:update                 # regenerate baselines after a UI change
 ```
 
-Tips for the mock tier: `vite preview` is reused between runs if you keep it
-running (`reuseExistingServer`), so only the first run pays the build.
+Every mock-tier run rebuilds the bundle and starts its own `vite preview` —
+deliberately: reusing a server already listening on the port would silently
+test a previous commit's dist. A stray listener on 8100 fails the run loudly;
+kill it and rerun.
 
 ## Tiers
 
@@ -105,7 +109,7 @@ Key conventions:
 ## Stand tier (Tier 3)
 
 Runs the LLM-independent `@stand` smoke against a real deployment. Label a PR
-`e2e:stand` (or dispatch the workflow); the job runs in a protected
+`e2e:stand` (or dispatch the workflow with `tier: stand`); the job runs in a protected
 `e2e-stand` Environment whose required reviewers approve before any secret is
 exposed, so even a mislabeled run blocks on a human. Fork PRs never reach it.
 
@@ -119,10 +123,11 @@ prefix `NODE_TLS_REJECT_UNAUTHORIZED=0`; a real stand has a valid cert).
 
 ## Trends and selective runs
 
-- **Trend:** `node e2e/tools/trend.mjs` turns a run's `results.json` into one
-  JSONL record (p50/p95 spec duration, slowest three, pass/flaky/fail counts).
-  CI appends it to the retained `e2e-trend` artifact so duration creep and flake
-  are visible, not just green/red.
+- **Trend:** `node e2e/tools/trend.mjs` turns a run's `results.json` (written
+  under `CI=1`) into one JSONL record (p50/p95 spec duration, slowest three,
+  pass/flaky/fail counts). Each CI run uploads its own `e2e-trend` artifact;
+  aggregate across runs offline (`gh run download`) to see duration creep and
+  flake, not just green/red.
 - **Affected routes:** `pnpm exec tsx e2e/tools/affected.ts <base>` prints the
   manifest routes a diff touches (backed by each route's owning `sources` in
   `e2e/routes.ts`). Empty output = no frontend route changed. This is the
@@ -153,6 +158,3 @@ bespoke bot:
 
 This section is the recipe, not yet wired — the deterministic tiers above are
 the foundation it plugs into.
-
-The full design (tiers, CI topology, mocking contract, roadmap) lives in the
-team's E2E testing plan; scenario coverage maps 1:1 to the scenario catalog IDs.

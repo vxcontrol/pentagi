@@ -11,9 +11,16 @@
 # developer's .env and the stack inherits live provider keys and DOCKER_HOST.
 # (frontend/e2e/tools/run-local-tier.sh wraps all of this.)
 
+# All three base networks get e2e names — the base file gives them fixed
+# `name:`s, so leaving any un-overridden would join this stack to the
+# developer's live observability/langfuse networks.
 networks:
   pentagi-network:
     name: pentagi-e2e-network
+  observability-network:
+    name: pentagi-e2e-observability-network
+  langfuse-network:
+    name: pentagi-e2e-langfuse-network
 
 services:
   mock-llm:
@@ -25,6 +32,13 @@ services:
       - ./frontend/e2e/mock-llm:/app:ro
     networks:
       - pentagi-network
+    # Keeps a crash-looping mock (restart would silently mask it) from ever
+    # reading as a started dependency.
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:8080/v1/models"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
 
   pentagi:
     container_name: pentagi-e2e
@@ -32,7 +46,7 @@ services:
       pgvector:
         condition: service_healthy
       mock-llm:
-        condition: service_started
+        condition: service_healthy
     environment:
       - LLM_SERVER_URL=http://mock-llm:8080/v1
       # The langchaingo client refuses to construct without a token even though
