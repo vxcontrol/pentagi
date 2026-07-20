@@ -2,13 +2,18 @@ import { expect, test } from '../../fixtures/test.ts';
 import { expectCleanPage } from '../../helpers/errors.ts';
 import { variedMessagesCassette } from '../../mocks/cassettes/flows.ts';
 
+type XtermHost = {
+    xterm?: { buffer: { active: { getLine: (row: number) => undefined | XtermLine; length: number } } };
+};
+type XtermLine = { translateToString: (trim: boolean) => string };
+
 // The page has more than one xterm (the right-panel Terminal tab + the
 // message-level Terminal renderer); read every buffer and match any.
 const anyTerminalContains = (marker: string): boolean => {
     const hosts = document.querySelectorAll('.xterm');
 
     return Array.from(hosts).some((el) => {
-        const terminal = (el.parentElement as { xterm?: { buffer: { active: { getLine: (n: number) => { translateToString: (t: boolean) => string } | undefined; length: number } } } } | null)?.xterm;
+        const terminal = (el.parentElement as null | XtermHost)?.xterm;
 
         if (!terminal) {
             return false;

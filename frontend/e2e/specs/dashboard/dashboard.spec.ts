@@ -7,7 +7,7 @@ import { dashboardCassette } from '../../mocks/cassettes/dashboard.ts';
 const CHART_TITLES = ['Flows Activity Over Time', 'Tool Calls Over Time', 'Token Usage Over Time', 'Cost Over Time'];
 
 const cardWith = (page: Page, heading: string) =>
-    page.getByTestId('dashboard-card').filter({ has: page.getByRole('heading', { exact: true, name: heading }) });
+    page.locator('[data-slot="card"]', { has: page.getByRole('heading', { exact: true, name: heading }) });
 
 test.describe('dashboard', { tag: '@coverage' }, () => {
     test.describe('happy path', () => {
