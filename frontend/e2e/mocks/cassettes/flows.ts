@@ -40,7 +40,11 @@ export const makeFlow = (id: string, title: string, status: StatusType = StatusT
         updatedAt: T,
     });
 
-export const makeMessage = (id: string, flowId: string): MessageLogFragmentFragment =>
+export const makeMessage = (
+    id: string,
+    flowId: string,
+    overrides: Partial<MessageLogFragmentFragment> = {},
+): MessageLogFragmentFragment =>
     entity('MessageLog', {
         createdAt: T,
         flowId,
@@ -52,7 +56,30 @@ export const makeMessage = (id: string, flowId: string): MessageLogFragmentFragm
         taskId: null,
         thinking: null,
         type: MessageLogType.Answer,
+        ...overrides,
     });
+
+// One message per distinct render path in flow-message.tsx (all Answer-typed
+// cassettes never exercise these): thinking-toggle needs thinking+message,
+// report auto-expands its details, a Terminal resultFormat mounts the xterm
+// renderer, and Input right-aligns.
+export const VARIED_MESSAGES = [
+    makeMessage('501', '5', { message: 'Planning the run', thinking: 'internal reasoning about the plan' }),
+    makeMessage('502', '5', {
+        message: 'Task finished',
+        result: '# Report\n\nCommand executed successfully.',
+        resultFormat: ResultFormat.Markdown,
+        type: MessageLogType.Report,
+    }),
+    // Report type auto-expands, so the Terminal renderer mounts on load.
+    makeMessage('503', '5', {
+        message: '',
+        result: 'e2e-terminal-marker\nexit 0',
+        resultFormat: ResultFormat.Terminal,
+        type: MessageLogType.Report,
+    }),
+    makeMessage('504', '5', { message: 'run the smoke command', type: MessageLogType.Input }),
+];
 
 export const FLOW_A = makeFlow('5', 'E2E Alpha');
 export const FLOW_B = makeFlow('6', 'E2E Beta');
@@ -150,3 +177,10 @@ export const flowsCassette = (override: Cassette = {}): Cassette =>
         },
         override,
     );
+
+/** Flow 5 pre-loaded with one message per render path, no streaming. */
+export const variedMessagesCassette = (): Cassette =>
+    flowsCassette({
+        queries: { flow: [{ data: flowQueryData(FLOW_A, VARIED_MESSAGES), variables: { id: '5' } }] },
+        subscriptions: { messageLogAdded: [{ frames: [], variables: { flowId: '5' } }] },
+    });
