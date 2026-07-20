@@ -15,7 +15,7 @@ import type {
     UsageStatsTotalDocument,
 } from '@/graphql/types';
 
-import { AgentType } from '@/graphql/types';
+import { AgentType, UsageStatsPeriod } from '@/graphql/types';
 
 import type { Cassette } from '../cassette.ts';
 
@@ -23,6 +23,9 @@ import { entity, mergeCassettes } from '../cassette.ts';
 import { baseQueries, baseRest } from './base.ts';
 
 const DATES = ['2026-01-15', '2026-01-14', '2026-01-13'];
+// The month period returns a distinct date range so the period switch is
+// asserted on rendered data (the x-axis labels), not just the refetch firing.
+const MONTH_DATES = ['2026-08-15', '2026-08-10', '2026-08-05'];
 
 const usageStats = (seed: number): UsageStatsFragmentFragment =>
     entity('UsageStats', {
@@ -34,9 +37,9 @@ const usageStats = (seed: number): UsageStatsFragmentFragment =>
         totalUsageOut: seed * 40,
     });
 
-const usageStatsByPeriod: ResultOf<typeof UsageStatsByPeriodDocument> = {
-    usageStatsByPeriod: DATES.map((date, index) => entity('DailyUsageStats', { date, stats: usageStats(index + 1) })),
-};
+const usageStatsByPeriodFor = (dates: string[]): ResultOf<typeof UsageStatsByPeriodDocument> => ({
+    usageStatsByPeriod: dates.map((date, index) => entity('DailyUsageStats', { date, stats: usageStats(index + 1) })),
+});
 
 const toolcallsStatsByPeriod: ResultOf<typeof ToolcallsStatsByPeriodDocument> = {
     toolcallsStatsByPeriod: DATES.map((date, index) =>
@@ -143,7 +146,10 @@ export const dashboardCassette = (override: Cassette = {}): Cassette =>
                 toolcallsStatsTotal: [{ data: toolcallsStatsTotal }],
                 usageStatsByAgentType: [{ data: usageStatsByAgentType }],
                 usageStatsByModel: [{ data: usageStatsByModel }],
-                usageStatsByPeriod: [{ data: usageStatsByPeriod }],
+                usageStatsByPeriod: [
+                    { data: usageStatsByPeriodFor(DATES), variables: { period: UsageStatsPeriod.Week } },
+                    { data: usageStatsByPeriodFor(MONTH_DATES), variables: { period: UsageStatsPeriod.Month } },
+                ],
                 usageStatsByProvider: [{ data: usageStatsByProvider }],
                 usageStatsTotal: [{ data: usageStatsTotal }],
             },

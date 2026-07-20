@@ -39,10 +39,13 @@ test.describe('dashboard', { tag: '@coverage' }, () => {
             expectCleanPage(pageErrorLog);
         });
 
-        test('period switch refetches the charts for the month', async ({ page, pageErrorLog }) => {
+        test('period switch refetches and renders the month range', async ({ page, pageErrorLog }) => {
             await page.goto('/dashboard');
 
             await expect(page.getByRole('heading', { exact: true, name: 'Flows Activity Over Time' })).toBeVisible();
+
+            const tokenCard = cardWith(page, 'Token Usage Over Time');
+            await expect(tokenCard.getByText('Jan 15', { exact: true })).toBeVisible();
 
             const monthRequest = page.waitForRequest((request) => {
                 if (request.method() !== 'POST' || !request.url().includes('/api/v1/graphql')) {
@@ -61,6 +64,9 @@ test.describe('dashboard', { tag: '@coverage' }, () => {
             await monthRequest;
 
             await expect(page.getByRole('tab', { name: 'Month' })).toHaveAttribute('aria-selected', 'true');
+
+            await expect(tokenCard.getByText('Aug 15', { exact: true })).toBeVisible();
+            await expect(tokenCard.getByText('Jan 15', { exact: true })).toBeHidden();
 
             for (const title of CHART_TITLES) {
                 await expect(page.getByRole('heading', { exact: true, name: title })).toBeVisible();
