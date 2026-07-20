@@ -13,7 +13,7 @@ interface InlineEditInputProps {
      * so focus must be requested explicitly.
      */
     autoFocus?: boolean;
-    /** Disable input + Save button while a mutation is in flight. */
+    /** Disable the Save + Cancel buttons while a mutation is in flight. The input stays editable. */
     busy?: boolean;
     /** Optional className passed through to the outer `<InputGroup>`. */
     className?: string;

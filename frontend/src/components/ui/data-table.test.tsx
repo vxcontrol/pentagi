@@ -141,7 +141,7 @@ describe('DataTable — controlled filter projection', () => {
     // share a `Host` shape — a parent that mirrors the controlled value to
     // local state and hands `DataTableFilter` a fresh inline `onFilterChange`
     // per render (the same pattern real callers use through
-    // `useTableQueryFilter`). The tests assert on the sequence of emitted
+    // `useTableState`). The tests assert on the sequence of emitted
     // values rather than on internal state, so they remain valid even if
     // the underlying implementation changes shape again.
 

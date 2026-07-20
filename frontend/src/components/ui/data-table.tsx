@@ -95,8 +95,8 @@ interface DataTableProps<TData, TValue = unknown> {
     filterPlaceholder?: string;
     /**
      * Controlled filter value. When provided together with `onFilterChange`
-     * the parent owns the source of truth — typically `useTableQueryFilter`
-     * for URL/storage-backed filters. The value flows through TanStack's
+     * the parent owns the source of truth — typically `useTableState`
+     * for URL-backed filters. The value flows through TanStack's
      * `state.globalFilter`, so `DataTableFilter` stays uniform regardless
      * of whether the table is single- or multi-column.
      */

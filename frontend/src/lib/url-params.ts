@@ -9,7 +9,7 @@
 export const URL_PARAMS = {
     /** `?page=` — 1-based page number for list-style pagination. */
     PAGE: 'page',
-    /** `?q=` — free-text filter applied by `useTableQueryFilter`. */
+    /** `?q=` — client-side free-text filter over the rendered list. */
     QUERY: 'q',
     /**
      * `?qs=` — server-side semantic search query. Triggers a vector-store
