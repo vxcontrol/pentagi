@@ -10,6 +10,7 @@ import type {
 import { ResultType } from '@/graphql/types';
 
 import { expect, test } from '../../fixtures/test.ts';
+import { typeIntoEditor } from '../../helpers/editor.ts';
 import { expectCleanPage } from '../../helpers/errors.ts';
 import { KNOWLEDGE_DOC, knowledgesCassette, makeKnowledge } from '../../mocks/cassettes/knowledges.ts';
 
@@ -28,7 +29,7 @@ test.describe('knowledges crud', { tag: '@crud' }, () => {
         test('blocks submit until the answer type is picked', async ({ page, pageErrorLog }) => {
             await openNewKnowledgeForm(page);
             await page.getByRole('textbox', { name: 'Question' }).fill('What is the E2E answer?');
-            await page.getByRole('textbox', { name: 'Content' }).fill('E2E knowledge content');
+            await typeIntoEditor(page, 'Content', 'E2E knowledge content');
             await page.getByRole('button', { name: 'Create' }).click();
 
             await expect(page.getByText('Answer type is required')).toBeVisible();
@@ -66,7 +67,7 @@ test.describe('knowledges crud', { tag: '@crud' }, () => {
         test('creates a document and lands on its detail page', async ({ page, pageErrorLog }) => {
             await openNewKnowledgeForm(page);
             await page.getByRole('textbox', { name: 'Question' }).fill('What is the E2E answer?');
-            await page.getByRole('textbox', { name: 'Content' }).fill('E2E knowledge content');
+            await typeIntoEditor(page, 'Content', 'E2E knowledge content');
             await page.getByRole('combobox', { name: 'Answer type' }).click();
             await page.getByRole('option', { name: 'other' }).click();
             await page.getByRole('button', { name: 'Create' }).click();
