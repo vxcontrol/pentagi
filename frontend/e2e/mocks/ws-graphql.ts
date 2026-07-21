@@ -53,9 +53,8 @@ export const handleWsConnection = (
                 }
 
                 case 'connection_init': {
-                    // Ack immediately and never send any frame before it: a pre-ack frame
-                    // throws inside graphql-ws, and this app's shouldRetry:()=>true turns
-                    // that into an infinite reconnect storm.
+                    // Ack immediately; a frame sent before the ack is a graphql-ws protocol
+                    // violation that closes the socket. Ack-first ordering is pinned by the unit test.
                     send({ type: 'connection_ack' });
                     break;
                 }
@@ -78,6 +77,9 @@ export const handleWsConnection = (
                         break;
                     }
 
+                    // Reusing a live id is a protocol violation (4409); at minimum release the
+                    // prior subscription so it can't leak both subscribers onto one id.
+                    unsubscribes.get(id)?.();
                     unsubscribes.set(
                         id,
                         world.subscribeStream(match.streamKey, match.entry, {
