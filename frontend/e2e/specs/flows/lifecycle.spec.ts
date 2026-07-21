@@ -26,7 +26,15 @@ test.describe('flow lifecycle', { tag: '@flows' }, () => {
 
         test.use({
             cassette: flowsCassette({
-                mutations: { renameFlow: [{ data: renamed, setFlag: 'flow-renamed' }] },
+                mutations: {
+                    renameFlow: [
+                        {
+                            data: renamed,
+                            setFlag: 'flow-renamed',
+                            variables: { flowId: '5', title: 'E2E Alpha Renamed' },
+                        },
+                    ],
+                },
                 subscriptions: {
                     flowUpdated: [
                         {
@@ -60,7 +68,7 @@ test.describe('flow lifecycle', { tag: '@flows' }, () => {
 
         test.use({
             cassette: flowsCassette({
-                mutations: { finishFlow: [{ data: finished, setFlag: 'flow-finished' }] },
+                mutations: { finishFlow: [{ data: finished, setFlag: 'flow-finished', variables: { flowId: '5' } }] },
                 subscriptions: {
                     flowUpdated: [
                         {
@@ -101,7 +109,9 @@ test.describe('flow lifecycle', { tag: '@flows' }, () => {
         // asserts below before the frame lands.
         test.use({
             cassette: flowsCassette({
-                mutations: { addFavoriteFlow: [{ data: favorited, setFlag: 'flow-favorited' }] },
+                mutations: {
+                    addFavoriteFlow: [{ data: favorited, setFlag: 'flow-favorited', variables: { flowId: '5' } }],
+                },
                 subscriptions: {
                     settingsUserUpdated: [
                         {
@@ -146,7 +156,7 @@ test.describe('flow lifecycle', { tag: '@flows' }, () => {
 
         test.use({
             cassette: flowsCassette({
-                mutations: { deleteFlow: [{ data: deleted, setFlag: 'flow-deleted' }] },
+                mutations: { deleteFlow: [{ data: deleted, setFlag: 'flow-deleted', variables: { flowId: '5' } }] },
                 subscriptions: {
                     flowDeleted: [
                         {

@@ -44,7 +44,21 @@ test.describe('knowledges crud', { tag: '@crud' }, () => {
 
         test.use({
             cassette: knowledgesCassette({
-                mutations: { createKnowledgeDocument: [{ data: created }] },
+                mutations: {
+                    createKnowledgeDocument: [
+                        {
+                            data: created,
+                            variables: {
+                                input: {
+                                    answerType: 'other',
+                                    content: 'E2E knowledge content',
+                                    docType: 'answer',
+                                    question: 'What is the E2E answer?',
+                                },
+                            },
+                        },
+                    ],
+                },
                 queries: { knowledgeDocument: [{ data: detail, variables: { id: '301' } }] },
             }),
         });

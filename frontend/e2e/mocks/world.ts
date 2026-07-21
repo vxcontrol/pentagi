@@ -17,9 +17,21 @@ const stableStringify = (value: unknown): string =>
             : node,
     ) ?? 'undefined';
 
+const isPlainObject = (value: unknown): value is Record<string, unknown> =>
+    typeof value === 'object' && value !== null && !Array.isArray(value);
+
+// Recurses so a nested pin stays a subset — `{ input: { name } }` must not demand
+// that the whole `input` match, or any sibling the app also sends (a time-derived
+// TTL, a default) would make the entry unmatchable.
 const isSubsetMatch = (expected?: Record<string, unknown>, actual?: Record<string, unknown>): boolean =>
     !expected ||
-    Object.entries(expected).every(([key, value]) => stableStringify(actual?.[key]) === stableStringify(value));
+    Object.entries(expected).every(([key, value]) => {
+        const found = actual?.[key];
+
+        return isPlainObject(value) && isPlainObject(found)
+            ? isSubsetMatch(value, found)
+            : stableStringify(found) === stableStringify(value);
+    });
 
 const sleep = (delayMs: number) => new Promise<void>((resolve) => setTimeout(resolve, delayMs));
 

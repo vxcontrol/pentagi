@@ -20,7 +20,17 @@ test.describe('api tokens crud', { tag: '@crud' }, () => {
 
         test.use({
             cassette: apiTokensCassette({
-                mutations: { createAPIToken: [{ data: created, setFlag: 'token-created' }] },
+                mutations: {
+                    createAPIToken: [
+                        // `ttl` is derived from the clock at submit time and drifts by a second
+                        // between runs, so only the operator-entered name is pinned.
+                        {
+                            data: created,
+                            setFlag: 'token-created',
+                            variables: { input: { name: 'E2E created token' } },
+                        },
+                    ],
+                },
                 queries: {
                     apiTokens: [
                         { data: tokensList(SEED_TOKEN) },

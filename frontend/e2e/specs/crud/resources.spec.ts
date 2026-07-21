@@ -29,7 +29,11 @@ test.describe('resources', { tag: '@coverage' }, () => {
             cassette: resourcesCassette({
                 rest: {
                     'POST /api/v1/resources/mkdir': [
-                        { body: { data: {}, status: 'success' }, setFlag: 'folder-created' },
+                        {
+                            body: { data: {}, status: 'success' },
+                            bodySubset: { path: 'new-folder' },
+                            setFlag: 'folder-created',
+                        },
                     ],
                 },
                 subscriptions: {
