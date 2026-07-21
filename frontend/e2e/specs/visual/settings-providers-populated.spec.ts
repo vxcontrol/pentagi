@@ -1,8 +1,6 @@
 import { expect, test } from '../../fixtures/test.ts';
 import { populatedSettingsProvidersCassette } from '../../mocks/cassettes/settings-providers.ts';
 
-// The route-manifest visual sweep only captures the empty providers state. This
-// pins the populated layout (enabled defaults + a user-defined provider row).
 const THEMES = ['light', 'dark'] as const;
 
 test.describe('visual: settings providers (populated)', { tag: '@visual' }, () => {

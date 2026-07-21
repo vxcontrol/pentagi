@@ -20,11 +20,6 @@ interface SubscribePayload {
     variables?: Record<string, unknown>;
 }
 
-/**
- * Transport-agnostic graphql-ws server half: Playwright routes and the vitest
- * protocol-contract suite (ws-graphql.unit.test.ts) both drive this exact
- * code, so the protocol invariants are pinned outside full browser runs.
- */
 export const handleWsConnection = (
     world: MockWorld,
     transport: WsTransport,

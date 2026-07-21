@@ -5,9 +5,6 @@ import type { BackendOptions, BackendTier } from './fixtures/backend.ts';
 
 const rawTier = process.env.E2E_TIER ?? 'mock';
 const isCI = Boolean(process.env.CI);
-// Visual snapshots only ever run inside the pinned Playwright Linux container
-// (e2e/tools/run-visual.sh) — a darwin run would generate parallel baselines
-// that never match CI pixels.
 const isVisual = process.env.E2E_VISUAL === '1';
 
 // Baselines are linux-suffixed, so a host run writes `*-visual-darwin.png` beside
@@ -21,8 +18,6 @@ if (isVisual && process.platform !== 'linux') {
 // `vite preview` listens on VITE_PORT + 100 and reuses the dev proxy config.
 const PREVIEW_PORT = 8100;
 
-// Reporter paths resolve against the process cwd, not the config file — pin them
-// so CI artifact uploads have one deterministic location.
 const here = (relative: string) => fileURLToPath(new URL(relative, import.meta.url));
 
 export const AUTH_STATE_PATH = here('./.auth/user.json');
@@ -54,9 +49,6 @@ export default defineConfig<BackendOptions>({
     fullyParallel: true,
     globalTimeout: isCI ? 10 * 60_000 : undefined,
     outputDir: './test-results',
-    // Cassette specs run only on the mock tier; specs/real/** run only against a
-    // live backend, which authenticates once in the setup project and reuses
-    // storageState.
     projects:
         tier === 'mock'
             ? [
@@ -96,8 +88,6 @@ export default defineConfig<BackendOptions>({
               ['list'],
           ]
         : [['html', { open: 'never', outputFolder: here('./playwright-report') }], ['list']],
-    // Retries and trace policy are intentionally identical local vs CI so a red CI
-    // run reproduces byte-identically with `CI=1 pnpm e2e`.
     retries: 1,
     testDir: './specs',
     use: {

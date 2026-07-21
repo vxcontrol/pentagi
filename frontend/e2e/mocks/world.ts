@@ -8,8 +8,6 @@ import type {
     WorldFlagged,
 } from './cassette.ts';
 
-// Key-sorted stringify: the app builds variables objects at runtime (spreads,
-// conditional assignment), so property order must not affect matching.
 const stableStringify = (value: unknown): string =>
     JSON.stringify(value, (_key, node: unknown) =>
         node && typeof node === 'object' && !Array.isArray(node)
@@ -20,9 +18,6 @@ const stableStringify = (value: unknown): string =>
 const isPlainObject = (value: unknown): value is Record<string, unknown> =>
     typeof value === 'object' && value !== null && !Array.isArray(value);
 
-// Recurses so a nested pin stays a subset — `{ input: { name } }` must not demand
-// that the whole `input` match, or any sibling the app also sends (a time-derived
-// TTL, a default) would make the entry unmatchable.
 const isSubsetMatch = (expected?: Record<string, unknown>, actual?: Record<string, unknown>): boolean =>
     !expected ||
     Object.entries(expected).every(([key, value]) => {
@@ -75,7 +70,6 @@ export class MockWorld {
         }
     }
 
-    /** Resolves once the flag is raised (immediately if it already is). */
     flagRaised(flag: string): Promise<void> {
         if (this.flags.has(flag)) {
             return Promise.resolve();
@@ -111,8 +105,6 @@ export class MockWorld {
 
             return candidateMethod === method && candidatePath.replace(/\/+$/, '') === normalized;
         });
-        // A path hit whose bodySubset does not match stays unmatched (501): a
-        // broken request payload must not be answered with a canned success.
         const matching = (key ? this.cassette.rest?.[key] : undefined)?.filter((entry) =>
             isSubsetMatch(entry.bodySubset, body),
         );
@@ -148,13 +140,6 @@ export class MockWorld {
         this.unmatchedSubscriptions.push(description);
     }
 
-    /**
-     * One driver per stream broadcasts each frame once to every current
-     * subscriber: duplicate subscribers (e.g. flowUpdated is opened by both the
-     * list and the detail provider) each get the frame, while a re-subscribe
-     * after a reconnect joins past the cursor — delta-only, like the real
-     * server. Returns an unsubscribe function.
-     */
     subscribeStream(streamKey: string, entry: SubscriptionCassetteEntry, subscriber: StreamSubscriber): () => void {
         const state = this.streams.get(streamKey) ?? { cursor: 0, isDriving: false, subscribers: new Set() };
 
@@ -194,7 +179,6 @@ export class MockWorld {
         }
     }
 
-    /** Entries gated on an unraised flag are invisible; raised-flag entries outrank unflagged ones. */
     private eligible<T extends WorldFlagged>(candidates?: T[]): T[] | undefined {
         const open = candidates?.filter((entry) => !entry.whenFlag || this.flags.has(entry.whenFlag));
 

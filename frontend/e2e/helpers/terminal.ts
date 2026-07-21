@@ -14,7 +14,6 @@ interface XtermHost extends HTMLElement {
     };
 }
 
-/** Reads the visible xterm buffer as plain text — the WebGL canvas has no DOM text to locate. */
 export const readTerminalBuffer = async (page: Page): Promise<string> =>
     page
         .locator('.xterm')

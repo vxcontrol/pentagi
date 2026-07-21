@@ -69,10 +69,6 @@ export const makeMessage = (
         ...overrides,
     });
 
-// One message per distinct render path in flow-message.tsx (all Answer-typed
-// cassettes never exercise these): thinking-toggle needs thinking+message,
-// report auto-expands its details, a Terminal resultFormat mounts the xterm
-// renderer, and Input right-aligns.
 export const VARIED_MESSAGES = [
     makeMessage('501', '5', { message: 'Planning the run', thinking: 'internal reasoning about the plan' }),
     makeMessage('502', '5', {
@@ -81,7 +77,6 @@ export const VARIED_MESSAGES = [
         resultFormat: ResultFormat.Markdown,
         type: MessageLogType.Report,
     }),
-    // Report type auto-expands, so the Terminal renderer mounts on load.
     makeMessage('503', '5', {
         message: '',
         result: 'e2e-terminal-marker\nexit 0',
@@ -143,11 +138,6 @@ const addedFrame = (message: MessageLogFragmentFragment, delayMs: number) => ({
     payload: { data: { messageLogAdded: message } },
 });
 
-/**
- * Two concurrent flows with disjoint message streams. The second `flow` entry
- * for flow 5 is the post-reconnect reconcile response: everything delivered so
- * far plus the message "missed" while the socket was down.
- */
 export const flowsCassette = (override: Cassette = {}): Cassette =>
     mergeCassettes(
         {
@@ -188,7 +178,6 @@ export const flowsCassette = (override: Cassette = {}): Cassette =>
         override,
     );
 
-/** Flow 5 pre-loaded with one message per render path, no streaming. */
 export const variedMessagesCassette = (): Cassette =>
     flowsCassette({
         queries: { flow: [{ data: flowQueryData(FLOW_A, VARIED_MESSAGES), variables: { id: '5' } }] },
@@ -315,7 +304,6 @@ const flowTabsData: ResultOf<typeof FlowDocument> = {
     vectorStoreLogs: [TABS_VECTOR_LOG],
 };
 
-/** Flow 5 with one populated entry per detail tab, including the REST-fed screenshot image. */
 export const flowTabsCassette = (): Cassette =>
     flowsCassette({
         queries: {

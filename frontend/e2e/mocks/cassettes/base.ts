@@ -43,7 +43,6 @@ const settingsUser: ResultOf<typeof SettingsUserDocument> = {
     }),
 };
 
-/** Everything the authenticated app shell requests on any page. */
 export const baseQueries = (): NonNullable<Cassette['queries']> => ({
     flows: [{ data: flows }],
     flowTemplates: [{ data: flowTemplates }],

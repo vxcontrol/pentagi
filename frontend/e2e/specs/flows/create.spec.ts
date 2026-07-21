@@ -38,8 +38,6 @@ test.describe('flow create', { tag: ['@flows', '@smoke'] }, () => {
     test('creates a flow from the form and lands on its detail page', async ({ page, pageErrorLog }) => {
         await page.goto('/flows/new');
 
-        // The form only becomes submittable once the providers query resolved
-        // and the default provider is selected.
         await expect(page.getByText(PROVIDER.name)).toBeVisible();
         await page.getByPlaceholder(/Describe what you would like PentAGI to test/).fill('Say hello');
         await page.getByRole('button', { name: 'Submit' }).click();

@@ -146,8 +146,6 @@ test.describe('flow lifecycle', { tag: '@flows' }, () => {
             await expect(star).toHaveAttribute('aria-pressed', 'false');
             await star.click();
             await expect(star).toHaveAttribute('aria-pressed', 'true');
-            // The sidebar favorites group renders only from the subscription
-            // frame — the optimistic star alone can never produce it.
             await expect(page.getByText('Favorite Flows')).toBeVisible();
             await expect(star).toHaveAttribute('aria-pressed', 'true');
             expectCleanPage(pageErrorLog);

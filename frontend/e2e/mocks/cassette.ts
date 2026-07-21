@@ -20,7 +20,6 @@ export interface CassetteFrame {
  */
 export const entity = <T extends object>(typename: string, value: T): T => ({ __typename: typename, ...value });
 
-/** Section-wise merge: an override replaces the base entry list per operation/path key. */
 export const mergeCassettes = (base: Cassette, override: Cassette): Cassette => ({
     mutations: { ...base.mutations, ...override.mutations },
     queries: { ...base.queries, ...override.queries },

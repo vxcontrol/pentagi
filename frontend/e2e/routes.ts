@@ -15,11 +15,9 @@ import { settingsProvidersCassette } from './mocks/cassettes/settings-providers.
 import { templatesCassette } from './mocks/cassettes/templates.ts';
 
 export interface RouteManifestEntry {
-    /** Known accessibility debt on this route, waived node-by-node by the axe sweep. */
     a11yWaivers?: A11yWaiver[];
     cassette: () => Cassette;
     path: string;
-    /** The route counts as rendered when this locator is visible. */
     ready: (page: Page) => Locator;
     /**
      * Owning src/ areas — the substrate for changed-files → affected-routes
@@ -58,7 +56,6 @@ export const ROUTE_MANIFEST: RouteManifestEntry[] = [
             'src/features/flows',
             'src/providers/flow-provider.tsx',
             'src/providers/flows-provider.tsx',
-            // Rendered inside the detail page's tabs alongside their owning routes.
             'src/components/shared/file-manager',
             'src/components/dashboard',
             'src/features/resources',
