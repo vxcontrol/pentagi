@@ -927,8 +927,8 @@ function TestResultsDialog({ handleOpenChange, isOpen, results }: TestResultsDia
         if (result === true) {
             return (
                 <Badge
-                    className="shrink-0 border-green-500/40 bg-green-500/10 text-green-600"
-                    variant="outline"
+                    className="shrink-0"
+                    variant="green"
                 >
                     Success
                 </Badge>
@@ -987,13 +987,9 @@ function TestResultsDialog({ handleOpenChange, isOpen, results }: TestResultsDia
                                                 {getName(agentType)}
                                             </span>
                                             <Badge
-                                                className={
-                                                    isAllPassed
-                                                        ? 'shrink-0 border-green-500/40 bg-green-500/10 text-green-600'
-                                                        : 'shrink-0'
-                                                }
+                                                className="shrink-0"
                                                 variant={
-                                                    isNonePassed ? 'destructive' : isAllPassed ? 'outline' : 'secondary'
+                                                    isNonePassed ? 'destructive' : isAllPassed ? 'green' : 'secondary'
                                                 }
                                             >
                                                 {successTestsCount}/{testsCount} passed
