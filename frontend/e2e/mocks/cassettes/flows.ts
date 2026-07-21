@@ -3,6 +3,7 @@ import type { ResultOf } from '@graphql-typed-document-node/core';
 import type {
     AssistantsDocument,
     FlowDocument,
+    FlowFilesDocument,
     FlowFragmentFragment,
     MessageLogFragmentFragment,
     TerminalLogFragmentFragment,
@@ -256,20 +257,75 @@ const TABS_VECTOR_LOG = entity('VectorStoreLog', {
     taskId: '11',
 });
 
+export const TABS_SCREENSHOT_ID = '71';
+export const TABS_SCREENSHOT_NAME = 'login-form';
+export const TABS_SCREENSHOT_URL = 'https://e2e.invalid/login-form';
+
+const TABS_SCREENSHOT = entity('Screenshot', {
+    createdAt: T,
+    flowId: '5',
+    id: TABS_SCREENSHOT_ID,
+    name: TABS_SCREENSHOT_NAME,
+    subtaskId: null,
+    taskId: '11',
+    url: TABS_SCREENSHOT_URL,
+});
+
+// The file manager groups by path prefix (uploads/resources/container), so a file
+// seeded outside those roots renders nowhere.
+export const TABS_FILE_NAME = 'scan-report.txt';
+
+const flowFiles: ResultOf<typeof FlowFilesDocument> = {
+    flowFiles: [
+        entity('FlowFile', {
+            id: '1',
+            isDir: false,
+            modifiedAt: T,
+            name: TABS_FILE_NAME,
+            path: `uploads/${TABS_FILE_NAME}`,
+            size: 2048,
+        }),
+        entity('FlowFile', {
+            id: '2',
+            isDir: false,
+            modifiedAt: T,
+            name: 'wordlist.txt',
+            path: 'resources/wordlist.txt',
+            size: 512,
+        }),
+    ],
+};
+
+// 1×1 transparent PNG: the Screenshots tab renders an <img>, and the hermetic gate
+// records every unmatched call, so the blob needs an entry even though no assertion
+// looks at its pixels.
+const PNG_1X1 = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+    'base64',
+);
+
 const flowTabsData: ResultOf<typeof FlowDocument> = {
     agentLogs: [TABS_AGENT_LOG],
     flow: FLOW_A,
     messageLogs: [],
-    screenshots: [],
+    screenshots: [TABS_SCREENSHOT],
     searchLogs: [TABS_SEARCH_LOG],
     tasks: [TABS_TASK],
     terminalLogs: [],
     vectorStoreLogs: [TABS_VECTOR_LOG],
 };
 
-/** Flow 5 with one populated entry per query-backed detail tab (tasks, agents, searches, vector store). */
+/** Flow 5 with one populated entry per detail tab, including the REST-fed screenshot image. */
 export const flowTabsCassette = (): Cassette =>
     flowsCassette({
-        queries: { flow: [{ data: flowTabsData, variables: { id: '5' } }] },
+        queries: {
+            flow: [{ data: flowTabsData, variables: { id: '5' } }],
+            flowFiles: [{ data: flowFiles, variables: { flowId: '5' } }],
+        },
+        rest: {
+            [`GET /api/v1/flows/5/screenshots/${TABS_SCREENSHOT_ID}/file`]: [
+                { body: PNG_1X1, contentType: 'image/png' },
+            ],
+        },
         subscriptions: { messageLogAdded: [{ frames: [], variables: { flowId: '5' } }] },
     });

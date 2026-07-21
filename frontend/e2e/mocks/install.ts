@@ -50,10 +50,15 @@ export const installMockRoutes = async (page: Page, world: MockWorld): Promise<v
         const entry = world.matchRest(request.method(), pathname, body ?? undefined);
 
         if (entry) {
-            await route.fulfill({
-                json: entry.body ?? {},
-                status: entry.status ?? 200,
-            });
+            await route.fulfill(
+                entry.contentType
+                    ? {
+                          body: entry.body as Buffer | string,
+                          contentType: entry.contentType,
+                          status: entry.status ?? 200,
+                      }
+                    : { json: entry.body ?? {}, status: entry.status ?? 200 },
+            );
 
             return;
         }

@@ -45,6 +45,12 @@ export interface RestCassetteEntry extends WorldFlagged {
      * entry whose payload matters (login credentials, create/update bodies).
      */
     bodySubset?: Record<string, unknown>;
+    /**
+     * Serves `body` verbatim under this content type instead of encoding it as
+     * JSON. Binary endpoints need it: a screenshot `<img>` handed JSON decodes to
+     * a broken image while the request still counts as matched.
+     */
+    contentType?: string;
     status?: number;
 }
 
