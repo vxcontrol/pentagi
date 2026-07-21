@@ -1,0 +1,44 @@
+import { expect, test } from '@playwright/test';
+
+import { readTerminalBuffer } from '../../helpers/terminal.ts';
+
+test.describe('real backend flow run', { tag: '@real' }, () => {
+    test('runs a flow end-to-end through the mock LLM', async ({ page }) => {
+        test.setTimeout(240_000);
+
+        const pageErrors: string[] = [];
+
+        page.on('pageerror', (error) => pageErrors.push(String(error)));
+
+        await page.goto('/flows/new');
+        await page.getByPlaceholder(/Describe what you would like PentAGI to test/).fill('Say hello');
+        await page.getByRole('button', { name: 'Submit' }).click();
+
+        await expect(page).toHaveURL(/\/flows\/\d+/, { timeout: 30_000 });
+        // Scope the list assertion to this attempt's flow id: a retry runs
+        // against a DB that already holds the previous attempt's identically
+        // named flow, and an unscoped row match would be a strict-mode
+        // violation.
+        const flowId = new URL(page.url()).pathname.match(/\d+/)?.[0] ?? '';
+
+        await expect(page.getByTestId('flow-message-id').first()).toBeVisible({ timeout: 90_000 });
+        await expect(page.getByText('Hello from the e2e mock LLM!').first()).toBeVisible({ timeout: 90_000 });
+
+        // The scenario's `uname -a` exec must stream its sandbox output back
+        // into the xterm buffer — `Linux` appears only in the command's real
+        // output, never in the echoed command line.
+        await expect(async () => {
+            expect(await readTerminalBuffer(page)).toMatch(/Linux/);
+        }).toPass({ timeout: 90_000 });
+
+        // A completed task settles the flow into Waiting (ready for the next
+        // input) — Finished only happens via the explicit user action.
+        await page.goto('/flows');
+        await expect(
+            page
+                .getByRole('row', { name: new RegExp(`${flowId}.*Say Hello Flow`) })
+                .getByText('Waiting', { exact: true }),
+        ).toBeVisible({ timeout: 60_000 });
+        expect(pageErrors, 'uncaught errors during the flow run').toEqual([]);
+    });
+});

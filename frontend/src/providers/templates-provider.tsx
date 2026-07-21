@@ -26,8 +26,10 @@ export interface Template {
 interface TemplatesContextValue {
     createTemplate: (title: string, text: string) => Promise<void>;
     deleteTemplate: (id: string) => Promise<void>;
+    error?: Error;
     getTemplate: (id: string) => Template | undefined;
     isLoading: boolean;
+    refetch: () => unknown;
     templates: Template[];
     updateTemplate: (id: string, payload: { text: string; title: string }) => Promise<void>;
 }
@@ -43,10 +45,12 @@ export function TemplatesProvider({ children }: TemplatesProviderProps) {
 
     const shouldFetchTemplates = Boolean(authInfo && authInfo.type !== 'guest' && isAuthenticated());
 
-    const { data: templatesData, loading: isLoadingTemplates } = useQuery(
-        FlowTemplatesDocument,
-        shouldFetchTemplates ? { fetchPolicy: 'cache-and-network' } : skipToken,
-    );
+    const {
+        data: templatesData,
+        error: templatesError,
+        loading: isLoadingTemplates,
+        refetch,
+    } = useQuery(FlowTemplatesDocument, shouldFetchTemplates ? { fetchPolicy: 'cache-and-network' } : skipToken);
 
     const [createTemplateMutation] = useMutation(CreateFlowTemplateDocument);
     const [updateTemplateMutation] = useMutation(UpdateFlowTemplateDocument);
@@ -155,12 +159,23 @@ export function TemplatesProvider({ children }: TemplatesProviderProps) {
         () => ({
             createTemplate,
             deleteTemplate,
+            error: templatesError,
             getTemplate,
             isLoading: isLoadingTemplates,
+            refetch,
             templates,
             updateTemplate,
         }),
-        [createTemplate, deleteTemplate, getTemplate, isLoadingTemplates, templates, updateTemplate],
+        [
+            createTemplate,
+            deleteTemplate,
+            templatesError,
+            getTemplate,
+            isLoadingTemplates,
+            refetch,
+            templates,
+            updateTemplate,
+        ],
     );
 
     return <TemplatesContext.Provider value={value}>{children}</TemplatesContext.Provider>;

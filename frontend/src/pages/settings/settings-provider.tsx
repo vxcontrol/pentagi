@@ -1,13 +1,11 @@
 import { useMutation, useQuery } from '@apollo/client/react';
 import {
-    AlertCircle,
     Check,
     CheckCircle,
-    ChevronsUpDown,
+    ChevronDown,
     Clock,
     Ellipsis,
     Lightbulb,
-    Loader2,
     Play,
     Plug,
     Save,
@@ -39,6 +37,8 @@ import {
 } from '@/components/layouts/app/app-header';
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
 import { DetailSplitLayout } from '@/components/shared/detail-split-layout';
+import { ErrorState } from '@/components/shared/error-state';
+import { LoadingState } from '@/components/shared/loading-state';
 import { UnsavedChangesDialog, useUnsavedChangesGuard } from '@/components/shared/unsaved-changes';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Badge } from '@/components/ui/badge';
@@ -52,12 +52,12 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { FormSubmitButton } from '@/components/ui/form-submit-button';
 import { Input } from '@/components/ui/input';
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { StatusCard } from '@/components/ui/status-card';
+import { Spinner } from '@/components/ui/spinner';
+import { Textarea } from '@/components/ui/textarea';
 import {
     AgentConfigType,
     CreateProviderDocument,
@@ -213,12 +213,15 @@ function FormComboboxItem<T extends FieldValues = FieldValues>({
                 >
                     <PopoverTrigger asChild>
                         <Button
-                            className={cn('w-full justify-between', !displayValue && 'text-muted-foreground')}
+                            className={cn(
+                                'h-9 w-full justify-between bg-transparent px-3 font-normal hover:bg-transparent',
+                                !displayValue && 'text-muted-foreground',
+                            )}
                             disabled={disabled}
                             variant="outline"
                         >
                             {displayValue || placeholder}
-                            <ChevronsUpDown className="opacity-50" />
+                            <ChevronDown className="size-4 opacity-50" />
                         </Button>
                     </PopoverTrigger>
                     <PopoverContent
@@ -464,7 +467,7 @@ function FormModelComboboxItem<T extends FieldValues = FieldValues>({
                                     disabled={disabled}
                                     size="icon-sm"
                                 >
-                                    <ChevronsUpDown className="opacity-50" />
+                                    <ChevronDown className="size-4 opacity-50" />
                                 </InputGroupButton>
                             </PopoverTrigger>
                         </InputGroupAddon>
@@ -544,7 +547,58 @@ function FormModelComboboxItem<T extends FieldValues = FieldValues>({
     );
 }
 
+function FormTextareaItem<T extends FieldValues = FieldValues>({
+    control,
+    description,
+    disabled,
+    label,
+    name,
+    placeholder,
+}: FormInputStringItemProps<T>) {
+    const { field, fieldState } = useController({ control, defaultValue: undefined, disabled, name });
+
+    return (
+        <FormItem>
+            <FormLabel>{label}</FormLabel>
+            <FormControl>
+                <Textarea
+                    {...field}
+                    aria-invalid={fieldState.error ? true : undefined}
+                    className="font-mono text-xs"
+                    maxHeight={320}
+                    minHeight={80}
+                    placeholder={placeholder}
+                    value={field.value ?? ''}
+                />
+            </FormControl>
+            {description && <FormDescription>{description}</FormDescription>}
+            {fieldState.error && <FormMessage>{fieldState.error.message}</FormMessage>}
+        </FormItem>
+    );
+}
+
 const optionalNumber = z.number().nullable().optional();
+
+// Only a JSON object round-trips: extraBody merges into the request body as key/value pairs.
+export const optionalJsonObject = z
+    .string()
+    .optional()
+    .refine(
+        (value) => {
+            if (!value?.trim()) {
+                return true;
+            }
+
+            try {
+                const parsed: unknown = JSON.parse(value);
+
+                return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed);
+            } catch {
+                return false;
+            }
+        },
+        { message: 'Must be a valid JSON object' },
+    );
 
 const requiredString = (message: string) =>
     z
@@ -555,6 +609,7 @@ const requiredString = (message: string) =>
 
 const agentConfigSchema = z
     .object({
+        extraBody: optionalJsonObject,
         frequencyPenalty: optionalNumber,
         maxLength: optionalNumber,
         maxTokens: optionalNumber,
@@ -818,7 +873,7 @@ function ReasoningFields({
     );
 }
 
-const transformFormToGraphQL = (
+export const transformFormToGraphQL = (
     formData: FormInput,
 ): {
     agents: AgentsConfigInput;
@@ -829,6 +884,7 @@ const transformFormToGraphQL = (
         .filter(([key, data]) => key !== '__typename' && data?.model)
         .reduce((configs, [key, data]) => {
             const config: AgentConfigInput = {
+                extraBody: data?.extraBody?.trim() ? (JSON.parse(data.extraBody) as Record<string, unknown>) : null,
                 frequencyPenalty: data?.frequencyPenalty ?? null,
                 maxLength: data?.maxLength ?? null,
                 maxTokens: data?.maxTokens ?? null,
@@ -871,7 +927,7 @@ const transformFormToGraphQL = (
     };
 };
 
-const normalizeGraphQLData = (obj: unknown): unknown => {
+export const normalizeGraphQLData = (obj: unknown): unknown => {
     if (obj === null || obj === undefined) {
         return obj;
     }
@@ -884,7 +940,13 @@ const normalizeGraphQLData = (obj: unknown): unknown => {
         return Object.fromEntries(
             Object.entries(obj)
                 .filter(([key]) => key !== '__typename')
-                .map(([key, value]) => [key, normalizeGraphQLData(value)]),
+                .map(([key, value]) => {
+                    if (key === 'extraBody') {
+                        return [key, value && typeof value === 'object' ? JSON.stringify(value, null, 4) : ''];
+                    }
+
+                    return [key, normalizeGraphQLData(value)];
+                }),
         );
     }
 
@@ -925,8 +987,8 @@ function TestResultsDialog({ handleOpenChange, isOpen, results }: TestResultsDia
         if (result === true) {
             return (
                 <Badge
-                    className="shrink-0 border-green-500/40 bg-green-500/10 text-green-600"
-                    variant="outline"
+                    className="shrink-0"
+                    variant="green"
                 >
                     Success
                 </Badge>
@@ -985,13 +1047,9 @@ function TestResultsDialog({ handleOpenChange, isOpen, results }: TestResultsDia
                                                 {getName(agentType)}
                                             </span>
                                             <Badge
-                                                className={
-                                                    isAllPassed
-                                                        ? 'shrink-0 border-green-500/40 bg-green-500/10 text-green-600'
-                                                        : 'shrink-0'
-                                                }
+                                                className="shrink-0"
                                                 variant={
-                                                    isNonePassed ? 'destructive' : isAllPassed ? 'outline' : 'secondary'
+                                                    isNonePassed ? 'destructive' : isAllPassed ? 'green' : 'secondary'
                                                 }
                                             >
                                                 {successTestsCount}/{testsCount} passed
@@ -1123,7 +1181,7 @@ function SettingsProvider() {
     const { providerId } = useParams<{ providerId: string }>();
     const navigate = useNavigate();
     const [searchParams, setSearchParams] = useSearchParams();
-    const { data, error, loading } = useQuery(SettingsProvidersDocument);
+    const { data, error, loading, refetch } = useQuery(SettingsProvidersDocument);
     const [createProvider, { loading: isCreateLoading }] = useMutation(CreateProviderDocument);
     const [updateProvider, { loading: isUpdateLoading }] = useMutation(UpdateProviderDocument);
     const [deleteProvider, { loading: isDeleteLoading }] = useMutation(DeleteProviderDocument);
@@ -1558,9 +1616,8 @@ function SettingsProvider() {
                     </AppHeaderContent>
                 </AppHeader>
                 <div className="flex flex-1 items-center justify-center p-4">
-                    <StatusCard
+                    <LoadingState
                         description="Please wait while we fetch provider configuration"
-                        icon={<Loader2 className="text-muted-foreground size-16 animate-spin" />}
                         title="Loading provider data..."
                     />
                 </div>
@@ -1579,9 +1636,9 @@ function SettingsProvider() {
                     </AppHeaderContent>
                 </AppHeader>
                 <div className="flex flex-1 items-center justify-center p-4">
-                    <StatusCard
-                        description={error.message}
-                        icon={<AlertCircle className="text-destructive size-16" />}
+                    <ErrorState
+                        message={error.message}
+                        onRetry={refetch}
                         title="Error loading provider data"
                     />
                 </div>
@@ -1637,30 +1694,51 @@ function SettingsProvider() {
                     <AccordionTrigger className="group text-left hover:no-underline">
                         <div className="flex w-full items-center justify-between gap-2">
                             <span className="group-hover:underline">{getName(agentKey)}</span>
-                            <span
+                            <Button
+                                asChild
                                 className={cn(
-                                    'hover:bg-accent hover:text-accent-foreground mr-2 flex items-center gap-1 rounded border px-2 py-1 text-xs',
-                                    (isTestLoading || isAgentTestLoading) &&
-                                        'pointer-events-none cursor-not-allowed opacity-50',
+                                    'mr-2',
+                                    (isTestLoading || isAgentTestLoading) && 'pointer-events-none opacity-50',
                                 )}
-                                onClick={(event) => {
-                                    if (isTestLoading || isAgentTestLoading) {
-                                        return;
-                                    }
-
-                                    event.stopPropagation();
-                                    handleTestAgent(agentKey);
-                                }}
+                                size="xs"
+                                variant="outline"
                             >
-                                {isAgentTestLoading && currentAgentKey === agentKey ? (
-                                    <Loader2 className="size-4 animate-spin" />
-                                ) : (
-                                    <Play className="size-4" />
-                                )}
-                                <span className="no-underline! hover:no-underline!">
-                                    {isAgentTestLoading && currentAgentKey === agentKey ? 'Testing...' : 'Test'}
+                                <span
+                                    onClick={(event) => {
+                                        if (isTestLoading || isAgentTestLoading) {
+                                            return;
+                                        }
+
+                                        event.stopPropagation();
+                                        handleTestAgent(agentKey);
+                                    }}
+                                    onKeyDown={(event) => {
+                                        if (event.key !== 'Enter' && event.key !== ' ') {
+                                            return;
+                                        }
+
+                                        event.preventDefault();
+                                        event.stopPropagation();
+
+                                        if (isTestLoading || isAgentTestLoading) {
+                                            return;
+                                        }
+
+                                        handleTestAgent(agentKey);
+                                    }}
+                                    role="button"
+                                    tabIndex={isTestLoading || isAgentTestLoading ? -1 : 0}
+                                >
+                                    {isAgentTestLoading && currentAgentKey === agentKey ? (
+                                        <Spinner variant="circle" />
+                                    ) : (
+                                        <Play />
+                                    )}
+                                    <span className="no-underline! hover:no-underline!">
+                                        {isAgentTestLoading && currentAgentKey === agentKey ? 'Testing...' : 'Test'}
+                                    </span>
                                 </span>
-                            </span>
+                            </Button>
                         </div>
                     </AccordionTrigger>
                     <AccordionContent className="flex flex-col gap-4 pt-4">
@@ -1847,6 +1925,20 @@ function SettingsProvider() {
                                 </div>
                             </div>
                         </div>
+
+                        <div className="col-span-full p-px">
+                            <div className="mt-6 flex flex-col gap-4">
+                                <h4 className="text-sm font-medium">Extra Body</h4>
+                                <FormTextareaItem
+                                    control={control}
+                                    description="Provider-specific request body fields as a JSON object, merged into every call (e.g. vLLM chat_template_kwargs)."
+                                    disabled={isLoading}
+                                    label="Extra Body (JSON)"
+                                    name={`agents.${agentKey}.extraBody`}
+                                    placeholder={'{\n    "chat_template_kwargs": { "enable_thinking": false }\n}'}
+                                />
+                            </div>
+                        </div>
                     </AccordionContent>
                 </AccordionItem>
             ))}
@@ -1864,21 +1956,19 @@ function SettingsProvider() {
                 <AppHeaderActions>
                     <AppHeaderAction
                         disabled={isLoading || isTestLoading || isAgentTestLoading}
-                        icon={isTestLoading ? <Loader2 className="size-4 animate-spin" /> : <Play className="size-4" />}
+                        icon={isTestLoading ? <Spinner variant="circle" /> : <Play />}
                         label={isTestLoading ? 'Testing...' : 'Test'}
                         onClick={() => handleTest()}
                         type="button"
                         variant="outline"
                     />
-                    <FormSubmitButton
+                    <AppHeaderAction
                         form="provider-form"
-                        icon={<Save className="size-4" />}
+                        icon={<Save />}
+                        label={isNew ? 'Create' : 'Save'}
                         loading={isLoading}
-                        size="sm"
-                        variant="secondary"
-                    >
-                        {isNew ? 'Create' : 'Save'}
-                    </FormSubmitButton>
+                        type="submit"
+                    />
                     {!isNew && (
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
@@ -1899,11 +1989,7 @@ function SettingsProvider() {
                                     disabled={isDeleteLoading}
                                     onClick={handleDelete}
                                 >
-                                    {isDeleteLoading ? (
-                                        <Loader2 className="size-4 animate-spin" />
-                                    ) : (
-                                        <Trash2 className="size-4" />
-                                    )}
+                                    {isDeleteLoading ? <Spinner variant="circle" /> : <Trash2 />}
                                     {isDeleteLoading ? 'Deleting...' : 'Delete'}
                                 </DropdownMenuItem>
                             </DropdownMenuContent>

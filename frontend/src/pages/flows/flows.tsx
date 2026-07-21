@@ -1,7 +1,7 @@
 import type { ColumnDef } from '@tanstack/react-table';
 
 import { useMutation } from '@apollo/client/react';
-import { Ellipsis, Eye, GitFork, Loader2, Pause, Pencil, PencilLine, Plus, Star, Trash } from 'lucide-react';
+import { Ellipsis, Eye, GitFork, Pause, Pencil, PencilLine, Plus, Star, Trash } from 'lucide-react';
 import { CheckCircle2, XCircle } from 'lucide-react';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -17,7 +17,9 @@ import {
     AppHeaderTitle,
 } from '@/components/layouts/app/app-header';
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
+import { ErrorState } from '@/components/shared/error-state';
 import { InlineEditInput } from '@/components/shared/inline-edit';
+import { LoadingState } from '@/components/shared/loading-state';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ContextMenuItem, ContextMenuSeparator } from '@/components/ui/context-menu';
@@ -29,7 +31,8 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { StatusCard } from '@/components/ui/status-card';
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
+import { Spinner } from '@/components/ui/spinner';
 import { Toggle } from '@/components/ui/toggle';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { RenameFlowDocument, ResultType, StatusType, type TerminalFragmentFragment } from '@/graphql/types';
@@ -69,7 +72,7 @@ const statusConfig: Record<
 function Flows() {
     const navigate = useNavigate();
     const location = useLocation();
-    const { deleteFlow, finishFlow, flows, isLoading } = useFlows();
+    const { deleteFlow, finishFlow, flows, flowsError, isLoading, refetch } = useFlows();
     const { isFavoriteFlow, toggleFavoriteFlow } = useFavorites();
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
     const [deletingFlow, setDeletingFlow] = useState<Flow | null>(null);
@@ -416,7 +419,7 @@ function Flows() {
                                 size="sm"
                                 variant="outline"
                             >
-                                <Star className="size-4" />
+                                <Star />
                             </Toggle>
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
@@ -449,7 +452,7 @@ function Flows() {
                                         >
                                             {finishingFlowIds.has(flow.id) ? (
                                                 <>
-                                                    <Loader2 className="animate-spin" />
+                                                    <Spinner variant="circle" />
                                                     Finishing...
                                                 </>
                                             ) : (
@@ -467,12 +470,12 @@ function Flows() {
                                     >
                                         {deletingFlowIds.has(flow.id) ? (
                                             <>
-                                                <Loader2 className="size-4 animate-spin" />
+                                                <Spinner variant="circle" />
                                                 Deleting...
                                             </>
                                         ) : (
                                             <>
-                                                <Trash className="size-4" />
+                                                <Trash />
                                                 Delete
                                             </>
                                         )}
@@ -588,11 +591,26 @@ function Flows() {
         return (
             <>
                 {pageHeader}
-                <div className="flex flex-col gap-4 p-4">
-                    <StatusCard
+                <div className="flex flex-1 flex-col gap-4 p-4">
+                    <LoadingState
                         description="Please wait while we fetch your conversation flows"
-                        icon={<Loader2 className="text-muted-foreground size-16 animate-spin" />}
                         title="Loading flows..."
+                    />
+                </div>
+            </>
+        );
+    }
+
+    // Error surface only when there's no data — a failed background refetch must not blank a working list.
+    if (flowsError && flows.length === 0) {
+        return (
+            <>
+                {pageHeader}
+                <div className="flex flex-1 flex-col gap-4 p-4">
+                    <ErrorState
+                        message={flowsError.message}
+                        onRetry={refetch}
+                        title="Error loading flows"
                     />
                 </div>
             </>
@@ -603,9 +621,16 @@ function Flows() {
         return (
             <>
                 {pageHeader}
-                <div className="flex flex-col gap-4 p-4">
-                    <StatusCard
-                        action={
+                <div className="flex flex-1 flex-col gap-4 p-4">
+                    <Empty>
+                        <EmptyHeader>
+                            <EmptyMedia variant="icon">
+                                <GitFork />
+                            </EmptyMedia>
+                            <EmptyTitle>No flows found</EmptyTitle>
+                            <EmptyDescription>Get started by creating your first conversation flow</EmptyDescription>
+                        </EmptyHeader>
+                        <EmptyContent>
                             <Button
                                 onClick={() => navigate(routes.newFlow)}
                                 variant="secondary"
@@ -613,11 +638,8 @@ function Flows() {
                                 <Plus />
                                 New Flow
                             </Button>
-                        }
-                        description="Get started by creating your first conversation flow"
-                        icon={<GitFork className="text-muted-foreground size-8" />}
-                        title="No flows found"
-                    />
+                        </EmptyContent>
+                    </Empty>
                 </div>
             </>
         );

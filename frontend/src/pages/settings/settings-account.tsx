@@ -62,11 +62,18 @@ function SettingsAccount() {
                         <div className="bg-muted text-foreground flex size-12 shrink-0 items-center justify-center rounded-lg text-lg font-semibold">
                             {initial}
                         </div>
-                        <div className="flex flex-1 flex-col gap-0.5">
+                        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                             <CardTitle className="truncate">{displayName}</CardTitle>
-                            {memberSince && <CardDescription>Member since {memberSince}</CardDescription>}
+                            {memberSince && (
+                                <CardDescription className="truncate">Member since {memberSince}</CardDescription>
+                            )}
                         </div>
-                        <Badge variant="secondary">{accountLabel}</Badge>
+                        <Badge
+                            className="shrink-0"
+                            variant="secondary"
+                        >
+                            {accountLabel}
+                        </Badge>
                     </CardHeader>
                 </Card>
 

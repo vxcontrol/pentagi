@@ -1,4 +1,4 @@
-import { ArrowDownToLine, FolderInput, FolderOutput, FolderUp, Loader2, Search, Upload, X } from 'lucide-react';
+import { ArrowDownToLine, FolderInput, FolderOutput, FolderUp, Search, Upload, X } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -20,6 +20,7 @@ import { Button } from '@/components/ui/button';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Form, FormControl, FormField, FormItem } from '@/components/ui/form';
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group';
+import { Spinner } from '@/components/ui/spinner';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { StatusType } from '@/graphql/types';
 import { useFilesDragAndDrop } from '@/hooks/use-files-drag-and-drop';
@@ -255,7 +256,7 @@ function FlowFiles() {
                                         type="button"
                                         variant="outline"
                                     >
-                                        {upload.isUploading ? <Loader2 className="animate-spin" /> : <Upload />}
+                                        {upload.isUploading ? <Spinner variant="circle" /> : <Upload />}
                                     </Button>
                                 </span>
                             </TooltipTrigger>

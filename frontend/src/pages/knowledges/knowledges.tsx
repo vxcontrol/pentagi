@@ -1,6 +1,6 @@
 import type { ColumnDef } from '@tanstack/react-table';
 
-import { Ellipsis, LibraryBig, Loader2, Pencil, PencilLine, Plus, Trash } from 'lucide-react';
+import { Ellipsis, LibraryBig, Pencil, PencilLine, Plus, Trash } from 'lucide-react';
 import { useCallback, useRef, useState } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -15,7 +15,9 @@ import {
     AppHeaderTitle,
 } from '@/components/layouts/app/app-header';
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
+import { ErrorState } from '@/components/shared/error-state';
 import { InlineEditInput } from '@/components/shared/inline-edit';
+import { LoadingState } from '@/components/shared/loading-state';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ContextMenuItem, ContextMenuSeparator } from '@/components/ui/context-menu';
@@ -27,8 +29,9 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { InputSearch } from '@/components/ui/input-search';
-import { StatusCard } from '@/components/ui/status-card';
+import { Spinner } from '@/components/ui/spinner';
 import { KnowledgeDocType } from '@/graphql/types';
 import { useTableState } from '@/hooks/use-table-state';
 import { routes } from '@/lib/routes';
@@ -60,7 +63,7 @@ const docTypeSubtype = (k: Knowledge): null | string => {
 function Knowledges() {
     const navigate = useNavigate();
     const location = useLocation();
-    const { deleteKnowledge, isLoading, knowledges, renameKnowledge } = useKnowledges();
+    const { deleteKnowledge, error, isLoading, knowledges, refetch, renameKnowledge } = useKnowledges();
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
     const [deletingKnowledge, setDeletingKnowledge] = useState<Knowledge | null>(null);
     const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
@@ -328,12 +331,12 @@ function Knowledges() {
                                 >
                                     {deletingIds.has(k.id) ? (
                                         <>
-                                            <Loader2 className="size-4 animate-spin" />
+                                            <Spinner variant="circle" />
                                             Deleting...
                                         </>
                                     ) : (
                                         <>
-                                            <Trash className="size-4" />
+                                            <Trash />
                                             Delete
                                         </>
                                     )}
@@ -403,11 +406,26 @@ function Knowledges() {
         return (
             <>
                 {pageHeader}
-                <div className="flex flex-col gap-4 p-4">
-                    <StatusCard
+                <div className="flex flex-1 flex-col gap-4 p-4">
+                    <LoadingState
                         description="Please wait while we fetch your knowledge documents"
-                        icon={<Loader2 className="text-muted-foreground size-16 animate-spin" />}
                         title="Loading knowledges..."
+                    />
+                </div>
+            </>
+        );
+    }
+
+    // Error surface only when there's no data — a failed background refetch must not blank a working list.
+    if (error && !knowledges.length) {
+        return (
+            <>
+                {pageHeader}
+                <div className="flex flex-1 flex-col gap-4 p-4">
+                    <ErrorState
+                        message={error.message}
+                        onRetry={refetch}
+                        title="Error loading knowledge documents"
                     />
                 </div>
             </>
@@ -418,9 +436,18 @@ function Knowledges() {
         return (
             <>
                 {pageHeader}
-                <div className="flex flex-col gap-4 p-4">
-                    <StatusCard
-                        action={
+                <div className="flex flex-1 flex-col gap-4 p-4">
+                    <Empty>
+                        <EmptyHeader>
+                            <EmptyMedia variant="icon">
+                                <LibraryBig />
+                            </EmptyMedia>
+                            <EmptyTitle>No knowledge documents yet</EmptyTitle>
+                            <EmptyDescription>
+                                Create your first knowledge document to enrich the vector store
+                            </EmptyDescription>
+                        </EmptyHeader>
+                        <EmptyContent>
                             <Button
                                 onClick={() => navigate(routes.newKnowledge)}
                                 variant="secondary"
@@ -428,11 +455,8 @@ function Knowledges() {
                                 <Plus />
                                 New Knowledge
                             </Button>
-                        }
-                        description="Create your first knowledge document to enrich the vector store"
-                        icon={<LibraryBig className="text-muted-foreground size-8" />}
-                        title="No knowledge documents yet"
-                    />
+                        </EmptyContent>
+                    </Empty>
                 </div>
             </>
         );

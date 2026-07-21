@@ -1,0 +1,33 @@
+{
+    "compilerOptions": {
+        /* Base Options: */
+        "esModuleInterop": true,
+        "skipLibCheck": true,
+        "target": "es2022",
+        "resolveJsonModule": true,
+        "moduleDetection": "force",
+        "isolatedModules": true,
+        "verbatimModuleSyntax": true,
+        "allowImportingTsExtensions": true,
+        "types": ["node"],
+
+        /* Strictness */
+        "strict": true,
+        "noUncheckedIndexedAccess": true,
+        "noImplicitOverride": true,
+
+        "module": "preserve",
+        "noEmit": true,
+
+        /* Specs import component cva maps (badge/button) to measure what ships, not a copy. */
+        "jsx": "react-jsx",
+
+        /* Specs run in Node, but page.evaluate/addInitScript callbacks run in the DOM. */
+        "lib": ["es2023", "dom", "dom.iterable"],
+
+        "paths": {
+            "@/*": ["../src/*"]
+        }
+    },
+    "include": ["./**/*.ts"]
+}

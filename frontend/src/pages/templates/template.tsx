@@ -1,13 +1,13 @@
 import type { ReactNode } from 'react';
 
 import { skipToken, useQuery } from '@apollo/client/react';
-import { ChevronDown, Ellipsis, FileSymlink, FileText, Loader2, Pencil, Save, Trash } from 'lucide-react';
+import { ChevronDown, Ellipsis, FileSymlink, FileText, LayoutTemplate, Pencil, Save, Trash } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { z } from 'zod';
 
-import { AppHeader, AppHeaderActions, AppHeaderContent } from '@/components/layouts/app/app-header';
+import { AppHeader, AppHeaderAction, AppHeaderActions, AppHeaderContent } from '@/components/layouts/app/app-header';
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
 import {
     DetailNavigationButtons,
@@ -30,9 +30,9 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Form, FormControl, FormField, FormItem, FormMessage } from '@/components/ui/form';
-import { FormSubmitButton } from '@/components/ui/form-submit-button';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Spinner } from '@/components/ui/spinner';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useTemplateDetailNavigation } from '@/features/templates/use-template-detail-navigation';
@@ -49,6 +49,8 @@ const formSchema = z.object({
 });
 
 type FormValues = z.infer<typeof formSchema>;
+
+const PRESETS_TITLE = 'Preset templates';
 
 const PRESET_TEMPLATES: { text: string; title: string }[] = [
     {
@@ -245,6 +247,7 @@ function Template() {
     const templateNav = useTemplateDetailNavigation(isNew ? null : templateId);
 
     const [expandedPresetIndex, setExpandedPresetIndex] = useState<null | number>(null);
+    const [isPresetsOpen, setIsPresetsOpen] = useState(false);
     const [isReplaceConfirmOpen, setIsReplaceConfirmOpen] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [pendingPreset, setPendingPreset] = useState<null | { text: string; title: string }>(null);
@@ -452,26 +455,28 @@ function Template() {
                         </BreadcrumbList>
                     </Breadcrumb>
                 </AppHeaderContent>
-                <AppHeaderActions>
-                    {canShowActions && !isMobile && (
-                        <DetailNavigationToolbar<Template>
-                            controller={templateNav}
-                            renderItem={renderTemplateItem}
-                            sheetIcon={<FileText className="size-4" />}
-                            sheetTitle="Templates"
-                        />
-                    )}
+                <AppHeaderActions
+                    pager={
+                        canShowActions &&
+                        !isMobile && (
+                            <DetailNavigationToolbar<Template>
+                                controller={templateNav}
+                                renderItem={renderTemplateItem}
+                                sheetIcon={<FileText className="size-4" />}
+                                sheetTitle="Templates"
+                            />
+                        )
+                    }
+                >
                     {(isNew || !!templateData?.flowTemplate) && (
-                        <FormSubmitButton
-                            disabled={isSaving || (!isNew && !hasUnsavedChanges)}
+                        <AppHeaderAction
+                            disabled={!isNew && !hasUnsavedChanges}
                             form="template-form"
-                            icon={<Save className="size-4" />}
+                            icon={<Save />}
+                            label={isNew ? 'Create' : 'Save'}
                             loading={isSaving}
-                            size="sm"
-                            variant="secondary"
-                        >
-                            {isNew ? 'Create' : 'Save'}
-                        </FormSubmitButton>
+                            type="submit"
+                        />
                     )}
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -496,7 +501,7 @@ function Template() {
                                                 className="cursor-default hover:bg-transparent focus:bg-transparent"
                                                 onSelect={(event) => event.preventDefault()}
                                             >
-                                                <FileText className="size-4" />
+                                                <FileText />
                                                 Templates
                                                 <div className="-my-1.5 -mr-2 ml-auto flex items-center">
                                                     <DetailNavigationButtons<Template>
@@ -510,7 +515,7 @@ function Template() {
                                         </>
                                     )}
                                     <DropdownMenuItem onClick={handleTemplateRenameStart}>
-                                        <Pencil className="size-3" />
+                                        <Pencil />
                                         Rename
                                     </DropdownMenuItem>
                                     <DropdownMenuSeparator />
@@ -537,12 +542,12 @@ function Template() {
                                     >
                                         {isDeleting ? (
                                             <>
-                                                <Loader2 className="size-4 animate-spin" />
+                                                <Spinner variant="circle" />
                                                 Deleting...
                                             </>
                                         ) : (
                                             <>
-                                                <Trash className="size-4" />
+                                                <Trash />
                                                 Delete
                                             </>
                                         )}
@@ -564,78 +569,108 @@ function Template() {
         </>
     );
 
-    const presetsPanel = useMemo(
-        () => (
-            <div className="bg-card overflow-hidden rounded-lg border">
-                <div className="border-b px-4 py-3">
-                    <h4 className="flex items-center gap-2 text-sm font-medium">
-                        Preset templates
-                        <Badge
-                            className="ml-auto font-normal tabular-nums"
-                            variant="secondary"
-                        >
-                            {PRESET_TEMPLATES.length}
-                        </Badge>
-                    </h4>
-                    <p className="text-muted-foreground mt-1 text-xs">
-                        Click a preset to fill the form, or expand it to preview the content.
-                    </p>
-                </div>
-                <div className="flex w-full min-w-0 flex-col gap-2 p-2">
-                    {PRESET_TEMPLATES.map((preset, index) => (
-                        <Collapsible
-                            className="w-full min-w-0"
-                            key={index}
-                            onOpenChange={(open) => setExpandedPresetIndex(open ? index : null)}
-                            open={expandedPresetIndex === index}
-                        >
-                            <Card className="w-full min-w-0">
-                                <div className="flex w-full min-w-0">
-                                    <Button
+    const presetsList = (onApplied?: () => void) => (
+        <div className="flex w-full min-w-0 flex-col gap-2 p-2">
+            {PRESET_TEMPLATES.map((preset, index) => (
+                <Collapsible
+                    className="w-full min-w-0"
+                    key={index}
+                    onOpenChange={(open) => setExpandedPresetIndex(open ? index : null)}
+                    open={expandedPresetIndex === index}
+                >
+                    <Card className="w-full min-w-0">
+                        <div className="flex w-full min-w-0">
+                            <Button
+                                className={cn(
+                                    'h-auto min-w-0 flex-1 justify-start rounded-none rounded-tl-[0.6875rem] px-3 py-2 text-left text-start',
+                                    expandedPresetIndex !== index ? 'rounded-bl-[0.6875rem]' : 'whitespace-normal',
+                                )}
+                                onClick={() => {
+                                    handleApplyPreset(preset);
+                                    onApplied?.();
+                                }}
+                                variant="ghost"
+                            >
+                                <span className={cn('min-w-0', expandedPresetIndex !== index && 'truncate')}>
+                                    {preset.title}
+                                </span>
+                            </Button>
+                            <CollapsibleTrigger asChild>
+                                <Button
+                                    className={cn(
+                                        'h-auto shrink-0 rounded-none rounded-tr-[0.6875rem] border-l px-2 py-2',
+                                        expandedPresetIndex !== index && 'rounded-br-[0.6875rem]',
+                                    )}
+                                    variant="ghost"
+                                >
+                                    <ChevronDown
                                         className={cn(
-                                            'h-auto min-w-0 flex-1 justify-start rounded-none rounded-tl-[0.6875rem] px-3 py-2 text-left text-start',
-                                            expandedPresetIndex !== index
-                                                ? 'rounded-bl-[0.6875rem]'
-                                                : 'whitespace-normal',
+                                            'transition-transform',
+                                            expandedPresetIndex === index && 'rotate-180',
                                         )}
-                                        onClick={() => handleApplyPreset(preset)}
-                                        variant="ghost"
-                                    >
-                                        <span className={cn('min-w-0', expandedPresetIndex !== index && 'truncate')}>
-                                            {preset.title}
-                                        </span>
-                                    </Button>
-                                    <CollapsibleTrigger asChild>
-                                        <Button
-                                            className={cn(
-                                                'h-auto shrink-0 rounded-none rounded-tr-[0.6875rem] border-l px-2 py-2',
-                                                expandedPresetIndex !== index && 'rounded-br-[0.6875rem]',
-                                            )}
-                                            variant="ghost"
-                                        >
-                                            <ChevronDown
-                                                className={cn(
-                                                    'transition-transform',
-                                                    expandedPresetIndex === index && 'rotate-180',
-                                                )}
-                                            />
-                                        </Button>
-                                    </CollapsibleTrigger>
-                                </div>
-                                <CollapsibleContent>
-                                    <CardContent className="border-t px-3 py-2">
-                                        <p className="text-muted-foreground text-sm break-words whitespace-pre-wrap">
-                                            {preset.text}
-                                        </p>
-                                    </CardContent>
-                                </CollapsibleContent>
-                            </Card>
-                        </Collapsible>
-                    ))}
-                </div>
+                                    />
+                                </Button>
+                            </CollapsibleTrigger>
+                        </div>
+                        <CollapsibleContent>
+                            <CardContent className="border-t px-3 py-2">
+                                <p className="text-muted-foreground text-sm break-words whitespace-pre-wrap">
+                                    {preset.text}
+                                </p>
+                            </CardContent>
+                        </CollapsibleContent>
+                    </Card>
+                </Collapsible>
+            ))}
+        </div>
+    );
+
+    const presetsPanel = isDesktop ? (
+        <div className="bg-card overflow-hidden rounded-lg border">
+            <div className="border-b px-4 py-3">
+                <h4 className="flex items-center gap-2 text-sm font-medium">
+                    {PRESETS_TITLE}
+                    <Badge
+                        className="ml-auto font-normal tabular-nums"
+                        variant="secondary"
+                    >
+                        {PRESET_TEMPLATES.length}
+                    </Badge>
+                </h4>
+                <p className="text-muted-foreground mt-1 text-xs">
+                    Click a preset to fill the form, or expand it to preview the content.
+                </p>
             </div>
-        ),
-        [expandedPresetIndex, handleApplyPreset],
+            {presetsList()}
+        </div>
+    ) : (
+        <Popover
+            onOpenChange={setIsPresetsOpen}
+            open={isPresetsOpen}
+        >
+            <PopoverTrigger asChild>
+                <Button
+                    className="w-full justify-start"
+                    size="sm"
+                    variant="secondary"
+                >
+                    <LayoutTemplate />
+                    {PRESETS_TITLE}
+                    <Badge
+                        className="ml-auto h-5 font-normal tabular-nums"
+                        variant="outline"
+                    >
+                        {PRESET_TEMPLATES.length}
+                    </Badge>
+                </Button>
+            </PopoverTrigger>
+            <PopoverContent
+                align="start"
+                className="max-h-(--radix-popover-content-available-height) w-(--radix-popover-trigger-width) overflow-y-auto overscroll-contain p-0"
+            >
+                {presetsList(() => setIsPresetsOpen(false))}
+            </PopoverContent>
+        </Popover>
     );
 
     const introBlock = (
@@ -651,14 +686,16 @@ function Template() {
             name="title"
             render={({ field }) => (
                 <FormItem>
+                    <FormLabel>Title</FormLabel>
                     <FormControl>
                         <Input
                             autoFocus={isNew}
                             disabled={isSaving}
-                            placeholder="Title"
+                            placeholder="A short name for this template"
                             {...field}
                         />
                     </FormControl>
+                    <FormMessage />
                 </FormItem>
             )}
         />
@@ -677,7 +714,7 @@ function Template() {
                             mode={viewMode}
                             onBlur={field.onBlur}
                             onChange={field.onChange}
-                            placeholder="Content"
+                            placeholder="Describe the task, or start from a preset"
                             ref={field.ref}
                             value={field.value}
                         />
@@ -743,8 +780,8 @@ function Template() {
                         <div className="flex min-h-0 flex-1 flex-col gap-4 p-4">
                             {introBlock}
                             {titleField}
-                            {textEditor}
                             {presetsPanel}
+                            {textEditor}
                         </div>
                     )}
                 </form>

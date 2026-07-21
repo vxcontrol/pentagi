@@ -6,11 +6,14 @@ import type {
     MarkdownToken,
 } from '@tiptap/core';
 
+import { mergeAttributes } from '@tiptap/core';
+import { CodeBlockLowlight } from '@tiptap/extension-code-block-lowlight';
 import { Image } from '@tiptap/extension-image';
 import { TaskItem, TaskList } from '@tiptap/extension-list';
 import { TableCell, TableHeader, TableRow } from '@tiptap/extension-table';
 import { Placeholder } from '@tiptap/extensions';
 import StarterKit from '@tiptap/starter-kit';
+import { common, createLowlight } from 'lowlight';
 
 import { HeadingAutoformat } from './markdown-editor-heading-autoformat';
 import { createMarkdownLayer, TunedTable } from './markdown-editor-marked';
@@ -60,6 +63,27 @@ const parseTunedCodeBlock = (token: MarkdownToken, helpers: MarkdownParseHelpers
     );
 };
 
+const lowlight = createLowlight(common);
+
+// CodeBlockLowlight extends the default codeBlock, so the same byte-fidelity
+// parse/render tuning applies verbatim; the highlighting it adds is a view-only
+// ProseMirror decoration and never touches the serialized markdown. renderHTML
+// stamps the fence language onto the `<pre>` as data-language so a CSS caption
+// (index.css) can name the block — the label lives in the DOM, not the document.
+const TunedCodeBlock = CodeBlockLowlight.extend({
+    parseMarkdown: parseTunedCodeBlock,
+    renderHTML({ HTMLAttributes, node }) {
+        const language = (node.attrs.language as null | string) || null;
+
+        return [
+            'pre',
+            mergeAttributes(this.options.HTMLAttributes, HTMLAttributes, language ? { 'data-language': language } : {}),
+            ['code', { class: language ? `${this.options.languageClassPrefix}${language}` : null }, 0],
+        ];
+    },
+    renderMarkdown: renderTunedCodeBlock,
+}).configure({ HTMLAttributes: { class: 'hljs' }, lowlight });
+
 // A paragraph line that literally starts with `# ` or `> ` re-parses as a heading / blockquote on the next load
 // (an ATX heading interrupts a paragraph; `>` opens a quote), silently changing the block TYPE of body text —
 // reachable by Shift+Enter then a `# ` line. Escape those markers at line start; createTunedMarked's escape
@@ -75,7 +99,7 @@ const escapeLineLeadingBlockMarkers = (markdown: string): string =>
 // `_`-emphasis literal on load/paste, so leaving the underscore TYPING rules on would diverge — typed
 // `__init__`/`_word_` would emphasize (→ `**init**`/`*word*`) while the same text loaded stays literal,
 // breaking identifiers. Drop only the underscore rules (their `find` regex mentions `_`; the `*` rules stay)
-// so typing matches load. codeBlock gets the indented-fence fix above. (Underline off below.)
+// so typing matches load. (codeBlock is replaced by TunedCodeBlock below; underline off below.)
 const TunedStarterKit = StarterKit.extend({
     addExtensions() {
         return (this.parent?.() ?? []).map((extension) => {
@@ -87,13 +111,6 @@ const TunedStarterKit = StarterKit.extend({
                     addPasteRules() {
                         return dropUnderscoreRules(this.parent?.() ?? []);
                     },
-                });
-            }
-
-            if (extension.name === 'codeBlock') {
-                return extension.extend({
-                    parseMarkdown: parseTunedCodeBlock,
-                    renderMarkdown: renderTunedCodeBlock,
                 });
             }
 
@@ -122,10 +139,11 @@ const TunedStarterKit = StarterKit.extend({
 //     (markdown-editor-link-handle.tsx) can show the edit popover; opening still works via that popover's button.
 export const createMarkdownExtensions = (placeholder?: string) => [
     TunedStarterKit.configure({
-        codeBlock: { HTMLAttributes: { class: 'hljs' } },
+        codeBlock: false,
         link: { autolink: true, linkOnPaste: true, openOnClick: false },
         underline: false,
     }),
+    TunedCodeBlock,
     HeadingAutoformat,
     TunedTable.configure({ resizable: true }),
     TableRow,

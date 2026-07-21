@@ -1,0 +1,91 @@
+# Tier 3: real feature stand. Split into its own workflow so the PR gate
+# (e2e.yml) never subscribes to `labeled` events — a label must not be able to
+# publish a skipped `e2e-mock` check that branch protection would count as
+# satisfied. Label-gated + a protected Environment whose required reviewers
+# approve before any secret is exposed; even a mislabeled run blocks on a human.
+# Fork PRs get Tier 1 only.
+name: E2E Stand
+
+on:
+  pull_request:
+    types: [labeled]
+  workflow_dispatch:
+    inputs:
+      tier:
+        description: "Run the stand tier"
+        type: choice
+        options:
+          - stand
+          - all
+        default: stand
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-stand-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  e2e-stand:
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      contains(github.event.pull_request.labels.*.name, 'e2e:stand')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: e2e-stand
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          package_json_file: frontend/package.json
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: frontend/.nvmrc
+          cache: "pnpm"
+          cache-dependency-path: "frontend/pnpm-lock.yaml"
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      # Deploy-skew pre-flight: one readable failure instead of dozens of red
+      # specs when the stand's schema no longer satisfies the frontend contract.
+      - name: Schema-compat pre-flight
+        working-directory: frontend
+        run: node e2e/tools/schema-compat.mjs
+        env:
+          E2E_BASE_URL: ${{ secrets.E2E_STAND_URL }}
+          E2E_USER: ${{ secrets.E2E_STAND_USER }}
+          E2E_PASSWORD: ${{ secrets.E2E_STAND_PASSWORD }}
+
+      - name: Install Playwright browsers
+        working-directory: frontend
+        run: pnpm exec playwright install --with-deps chromium
+
+      # The config scopes the stand tier to @stand specs — no CLI grep to
+      # drift out of sync with the tags.
+      - name: Run stand smoke
+        working-directory: frontend
+        run: E2E_TIER=stand npx playwright test -c e2e/playwright.config.ts
+        env:
+          E2E_BASE_URL: ${{ secrets.E2E_STAND_URL }}
+          E2E_USER: ${{ secrets.E2E_STAND_USER }}
+          E2E_PASSWORD: ${{ secrets.E2E_STAND_PASSWORD }}
+
+      # Traces, videos and screenshots are all disabled on this tier — they would
+      # embed the live session cookie, the stand URL or the login into a
+      # public-repo artifact. results.json carries none of those.
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-stand-report
+          path: frontend/e2e/test-results/results.json
+          retention-days: 3
+          if-no-files-found: ignore

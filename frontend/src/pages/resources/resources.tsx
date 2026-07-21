@@ -1,15 +1,4 @@
-import {
-    ColumnsSettings,
-    Copy,
-    FileSymlink,
-    Folder,
-    FolderPlus,
-    FolderUp,
-    Loader2,
-    Search,
-    Upload,
-    X,
-} from 'lucide-react';
+import { ColumnsSettings, Copy, FileSymlink, Folder, FolderPlus, FolderUp, Search, Upload, X } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -23,6 +12,7 @@ import {
     AppHeaderTitle,
 } from '@/components/layouts/app/app-header';
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
+import { ErrorState } from '@/components/shared/error-state';
 import {
     bulkCopyAction,
     bulkCopyPathsAction,
@@ -53,6 +43,7 @@ import {
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { FileDropZone } from '@/components/ui/file-drop-zone';
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group';
+import { Spinner } from '@/components/ui/spinner';
 import { ResourcesCopyDialog } from '@/features/resources/resources-copy-dialog';
 import { ResourcesMkdirDialog } from '@/features/resources/resources-mkdir-dialog';
 import { ResourcesMoveDialog } from '@/features/resources/resources-move-dialog';
@@ -112,7 +103,7 @@ const seedViewOptions = (storageKey: string): ResourcesViewOptions => {
 };
 
 function Resources() {
-    const { isInitialLoading, resources } = useResources();
+    const { error, isInitialLoading, refetch, resources } = useResources();
     const search = useResourcesSearch();
 
     const [isMkdirOpen, setIsMkdirOpen] = useState(false);
@@ -405,7 +396,7 @@ function Resources() {
                 <AppHeaderAction
                     aria-label={upload.isUploading ? 'Uploading...' : 'Upload files'}
                     disabled={upload.isUploading}
-                    icon={upload.isUploading ? <Loader2 className="animate-spin" /> : <Upload />}
+                    icon={upload.isUploading ? <Spinner variant="circle" /> : <Upload />}
                     label={upload.isUploading ? 'Uploading...' : 'Upload files'}
                     onClick={upload.openFilePicker}
                     variant="secondary"
@@ -441,6 +432,22 @@ function Resources() {
             </EmptyHeader>
         </Empty>
     );
+
+    // Error surface only when there's no data — a failed background refetch must not blank a working list.
+    if (error && !hasResources) {
+        return (
+            <>
+                {pageHeader}
+                <div className="flex flex-1 flex-col gap-4 p-4">
+                    <ErrorState
+                        message={error.message}
+                        onRetry={refetch}
+                        title="Error loading resources"
+                    />
+                </div>
+            </>
+        );
+    }
 
     return (
         <>

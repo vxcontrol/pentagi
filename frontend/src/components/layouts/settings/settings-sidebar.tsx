@@ -93,7 +93,7 @@ export function SettingsSidebar() {
             <SidebarFooter>
                 <SidebarMenuButton asChild>
                     <NavLink to={returnUrl}>
-                        <ArrowLeft className="size-4" />
+                        <ArrowLeft />
                         Back to App
                     </NavLink>
                 </SidebarMenuButton>

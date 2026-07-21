@@ -220,6 +220,56 @@ describe('TunedTable — cell pipes escaped + alignment preserved, idempotent', 
         expect(save1).toContain('| :--- | :---: | ---: |');
         expect(roundTrip(save1)).toBe(save1);
     });
+
+    // A doc-side cell text (typed/pasted in rich mode) can hold a backslash run right before a pipe — a
+    // sequence a markdown LOAD can never produce. Serialize it through the editor and reload to prove the
+    // escaped pipe survives as cell content instead of becoming a column delimiter that truncates the row.
+    const saveTableCell = (cellText: string): string => {
+        const cell = (type: string, text: string) => ({
+            content: [{ content: [{ text, type: 'text' }], type: 'paragraph' }],
+            type,
+        });
+        const editor = new Editor({
+            content: {
+                content: [
+                    {
+                        content: [
+                            { content: [cell('tableHeader', 'op'), cell('tableHeader', 'note')], type: 'tableRow' },
+                            { content: [cell('tableCell', cellText), cell('tableCell', 'tail')], type: 'tableRow' },
+                        ],
+                        type: 'table',
+                    },
+                ],
+                type: 'doc',
+            },
+            extensions: createMarkdownExtensions(),
+        });
+        const out = editor.getMarkdown();
+
+        editor.destroy();
+
+        return out;
+    };
+
+    it.each([
+        ['single backslash before pipe', 'a\\|b'],
+        ['triple backslash before pipe', 'a\\\\\\|b'],
+        ['lone backslash-pipe cell', '\\|'],
+    ])('typed cell with %s keeps the row and its trailing cell across saves', (_l, cellText) => {
+        const save1 = saveTableCell(cellText);
+        const save2 = roundTrip(save1);
+
+        expect(save2, `row truncated:\n${save1}\n-->\n${save2}`).toBe(save1);
+        expect(save2).toContain('tail');
+        expect(structuralCounts(save2)).toEqual({ table: 1, tableCell: 2, tableHeader: 2, tableRow: 2 });
+    });
+
+    it('round-trips an even backslash run before a pipe byte-identical', () => {
+        const save1 = saveTableCell('a\\\\|b');
+
+        expect(save1).toContain('a\\\\\\|b');
+        expect(roundTrip(save1)).toBe(save1);
+    });
 });
 
 describe('nesting & sequencing — content preserved and converges (≤2 saves)', () => {

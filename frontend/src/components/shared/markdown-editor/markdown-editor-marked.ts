@@ -88,6 +88,14 @@ const TunedMarkdownText = Extension.create({
     priority: 50,
 });
 
+// marked's cell splitter honors `\|` only after an ODD run of backslashes (it counts them), never collapses
+// `\\`, and truncates a row that splits into extra columns — so cell text holding an odd run + pipe (`a\|b`)
+// has NO exact GFM encoding: escaping the pipe alone yields `\\|`, a live delimiter that drops the trailing
+// cells on the next load. Pad an odd run by one backslash — the cell gains a `\`, the table keeps its cells,
+// and the padded form is byte-stable from the first save.
+export const escapeCellPipes = (text: string): string =>
+    text.replace(/(\\*)\|/g, (_, run: string) => `${run}${run.length % 2 ? '\\\\|' : '\\|'}`);
+
 // @tiptap/extension-table's renderTableToMarkdown is alignment-aware but never escapes pipes, so a literal
 // `|` a cell emits (even from inside inline code) would re-parse as a column delimiter on the next SAVE and
 // drop cells (tiptap PR #7884). renderTableToMarkdown emits cell content only via h.renderChildren, so wrapping
@@ -97,7 +105,7 @@ export const TunedTable = Table.extend({
     renderMarkdown(node: JSONContent, helpers: MarkdownRendererHelpers) {
         const pipeEscaping: MarkdownRendererHelpers = {
             ...helpers,
-            renderChildren: (nodes, separator) => helpers.renderChildren(nodes, separator).replace(/\|/g, '\\|'),
+            renderChildren: (nodes, separator) => escapeCellPipes(helpers.renderChildren(nodes, separator)),
         };
 
         // renderTableToMarkdown joins a multi-block cell's children (e.g. two paragraphs from Enter-in-cell) with

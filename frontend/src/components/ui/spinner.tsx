@@ -8,7 +8,7 @@ export type SpinnerProps = LucideProps & {
 
 type SpinnerVariantProps = Omit<SpinnerProps, 'variant'>;
 
-export function Spinner({ variant, ...props }: SpinnerProps) {
+export function Spinner({ variant = 'circle', ...props }: SpinnerProps) {
     switch (variant) {
         case 'bars':
             return <Bars {...props} />;

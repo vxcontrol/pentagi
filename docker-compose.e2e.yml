@@ -1,0 +1,72 @@
+# Tier-2 e2e stack. Runs beside a developer stack: use its own project name,
+# container names, network, and host ports —
+#
+#   docker build -t local/pentagi:e2e .
+#   PENTAGI_IMAGE=local/pentagi:e2e PENTAGI_LISTEN_PORT=8444 PGVECTOR_LISTEN_PORT=5433 \
+#     docker compose -p pentagi-e2e --env-file /dev/null \
+#     -f docker-compose.yml -f docker-compose.e2e.yml \
+#     up -d --wait --wait-timeout 240 pentagi mock-llm
+#
+# --env-file /dev/null is load-bearing: without it compose auto-loads the
+# developer's .env and the stack inherits live provider keys and DOCKER_HOST.
+# (frontend/e2e/tools/run-local-tier.sh wraps all of this.)
+
+# All three base networks get e2e names — the base file gives them fixed
+# `name:`s, so leaving any un-overridden would join this stack to the
+# developer's live observability/langfuse networks.
+networks:
+  pentagi-network:
+    name: pentagi-e2e-network
+  observability-network:
+    name: pentagi-e2e-observability-network
+  langfuse-network:
+    name: pentagi-e2e-langfuse-network
+
+services:
+  mock-llm:
+    image: node:24-alpine
+    container_name: pentagi-e2e-mock-llm
+    restart: unless-stopped
+    command: ["node", "/app/server.mjs"]
+    volumes:
+      - ./frontend/e2e/mock-llm:/app:ro
+    networks:
+      - pentagi-network
+    # Keeps a crash-looping mock (restart would silently mask it) from ever
+    # reading as a started dependency.
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:8080/v1/models"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
+
+  pentagi:
+    container_name: pentagi-e2e
+    depends_on:
+      pgvector:
+        condition: service_healthy
+      mock-llm:
+        condition: service_healthy
+    environment:
+      - LLM_SERVER_URL=http://mock-llm:8080/v1
+      # The langchaingo client refuses to construct without a token even though
+      # the mock never checks it.
+      - LLM_SERVER_KEY=e2e-dummy-key
+      - LLM_SERVER_MODEL=e2e-mock
+      - EMBEDDING_PROVIDER=none
+    # The base service has no healthcheck, so `up --wait` would return before
+    # goose migrations finish and the API serves. The runtime image is alpine —
+    # probe with busybox wget, not curl.
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget --no-check-certificate -qO /dev/null https://127.0.0.1:8443/api/v1/info",
+        ]
+      interval: 3s
+      timeout: 5s
+      retries: 60
+      start_period: 10s
+
+  pgvector:
+    container_name: pentagi-e2e-pgvector

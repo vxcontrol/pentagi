@@ -332,6 +332,7 @@ fragment agentConfigFragment on AgentConfig {
         cacheRead
         cacheWrite
     }
+    extraBody
 }
 
 fragment userPromptFragment on UserPrompt {

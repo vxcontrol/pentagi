@@ -9,7 +9,7 @@ const config: CodegenConfig = {
                 enumType: 'native',
                 exportFragmentSpreadSubTypes: true,
                 inlineFragmentTypes: 'combine',
-                scalars: { Time: 'string' },
+                scalars: { Map: 'Record<string, unknown>', Time: 'string' },
                 skipTypename: true,
                 useTypeImports: true,
             },

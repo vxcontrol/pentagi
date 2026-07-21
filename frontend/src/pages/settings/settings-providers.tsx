@@ -1,16 +1,18 @@
 import type { ColumnDef, Row } from '@tanstack/react-table';
 
 import { useMutation, useQuery } from '@apollo/client/react';
-import { AlertCircle, ChevronDown, Copy, Ellipsis, Loader2, Pencil, Plug, Plus, Settings, Trash } from 'lucide-react';
+import { ChevronDown, Copy, Ellipsis, Pencil, Plug, Plus, Settings, Trash } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 
 import type { ProviderConfigFragmentFragment } from '@/graphql/types';
 
 import { providerIcons } from '@/components/icons/provider-icon';
-import { AppHeader, AppHeaderContent, AppHeaderTitle } from '@/components/layouts/app/app-header';
+import { AppHeader, AppHeaderActions, AppHeaderContent, AppHeaderTitle } from '@/components/layouts/app/app-header';
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { ErrorState } from '@/components/shared/error-state';
+import { LoadingState } from '@/components/shared/loading-state';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ContextMenuItem, ContextMenuSeparator } from '@/components/ui/context-menu';
@@ -22,7 +24,8 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { StatusCard } from '@/components/ui/status-card';
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
+import { Spinner } from '@/components/ui/spinner';
 import { DeleteProviderDocument, ProviderType, SettingsProvidersDocument } from '@/graphql/types';
 import { useTableState } from '@/hooks/use-table-state';
 import { routes } from '@/lib/routes';
@@ -65,53 +68,45 @@ export function SettingsProvidersHeader() {
     };
 
     return (
-        <div className="flex items-center justify-between gap-4">
-            <p className="text-muted-foreground min-w-0 flex-1 truncate">Manage language model providers</p>
-
-            <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                    <Button
-                        aria-label="Create provider — choose type"
-                        className="shrink-0"
-                        variant="secondary"
-                    >
-                        Create Provider
-                        <ChevronDown className="size-4" />
-                    </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent
-                    align="end"
-                    style={{
-                        width: 'var(--radix-dropdown-menu-trigger-width)',
-                    }}
+        <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+                <Button
+                    aria-label="Create provider — choose type"
+                    className="w-8 shrink-0 px-0 md:w-auto md:px-3"
+                    size="sm"
+                    variant="secondary"
                 >
-                    {availableTypes.length === 0 ? (
-                        <DropdownMenuItem disabled>No available provider types</DropdownMenuItem>
-                    ) : (
-                        availableTypes.map(({ label, type }) => {
-                            const Icon = providerIcons[type]?.icon;
+                    <Plus />
+                    <span className="hidden md:inline">Create Provider</span>
+                    <ChevronDown className="hidden size-4 md:inline-flex" />
+                </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+                {availableTypes.length === 0 ? (
+                    <DropdownMenuItem disabled>No available provider types</DropdownMenuItem>
+                ) : (
+                    availableTypes.map(({ label, type }) => {
+                        const Icon = providerIcons[type]?.icon;
 
-                            return (
-                                <DropdownMenuItem
-                                    key={type}
-                                    onClick={() => handleProviderCreate(type)}
-                                >
-                                    {Icon && <Icon className="size-4" />}
-                                    {label}
-                                </DropdownMenuItem>
-                            );
-                        })
-                    )}
-                </DropdownMenuContent>
-            </DropdownMenu>
-        </div>
+                        return (
+                            <DropdownMenuItem
+                                key={type}
+                                onClick={() => handleProviderCreate(type)}
+                            >
+                                {Icon && <Icon />}
+                                {label}
+                            </DropdownMenuItem>
+                        );
+                    })
+                )}
+            </DropdownMenuContent>
+        </DropdownMenu>
     );
 }
 
 function SettingsProviders() {
-    const { data, error, loading: isLoading } = useQuery(SettingsProvidersDocument);
-    const [deleteProvider, { error: deleteError, loading: isDeleteLoading }] = useMutation(DeleteProviderDocument);
-    const [deleteErrorMessage, setDeleteErrorMessage] = useState<null | string>(null);
+    const { data, error, loading: isLoading, refetch } = useQuery(SettingsProvidersDocument);
+    const [deleteProvider, { loading: isDeleteLoading }] = useMutation(DeleteProviderDocument);
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
     const [deletingProvider, setDeletingProvider] = useState<null | Provider>(null);
     const navigate = useNavigate();
@@ -125,17 +120,16 @@ function SettingsProviders() {
             }
 
             try {
-                setDeleteErrorMessage(null);
-
                 await deleteProvider({
                     refetchQueries: ['settingsProviders'],
                     variables: { providerId: providerId.toString() },
                 });
 
                 setDeletingProvider(null);
-                setDeleteErrorMessage(null);
             } catch (error) {
-                setDeleteErrorMessage(error instanceof Error ? error.message : 'An error occurred while deleting');
+                toast.error('Failed to delete provider', {
+                    description: error instanceof Error ? error.message : undefined,
+                });
             }
         },
         [deleteProvider],
@@ -271,7 +265,7 @@ function SettingsProviders() {
                                         Edit
                                     </DropdownMenuItem>
                                     <DropdownMenuItem onClick={() => handleProviderClone(provider.id)}>
-                                        <Copy className="size-4" />
+                                        <Copy />
                                         Clone
                                     </DropdownMenuItem>
                                     <DropdownMenuSeparator />
@@ -281,12 +275,12 @@ function SettingsProviders() {
                                     >
                                         {isDeleteLoading && deletingProvider?.id === provider.id ? (
                                             <>
-                                                <Loader2 className="size-4 animate-spin" />
+                                                <Spinner variant="circle" />
                                                 Deleting...
                                             </>
                                         ) : (
                                             <>
-                                                <Trash className="size-4" />
+                                                <Trash />
                                                 Delete
                                             </>
                                         )}
@@ -404,6 +398,9 @@ function SettingsProviders() {
             <AppHeaderContent>
                 <AppHeaderTitle icon={<Plug className="size-4 shrink-0" />}>Providers</AppHeaderTitle>
             </AppHeaderContent>
+            <AppHeaderActions>
+                <SettingsProvidersHeader />
+            </AppHeaderActions>
         </AppHeader>
     );
 
@@ -412,10 +409,8 @@ function SettingsProviders() {
             <>
                 {pageHeader}
                 <div className="flex flex-1 flex-col gap-4 p-4">
-                    <SettingsProvidersHeader />
-                    <StatusCard
+                    <LoadingState
                         description="Please wait while we fetch your provider configurations"
-                        icon={<Loader2 className="text-muted-foreground size-16 animate-spin" />}
                         title="Loading providers..."
                     />
                 </div>
@@ -423,17 +418,17 @@ function SettingsProviders() {
         );
     }
 
-    if (error) {
+    // Error surface only when there's no data — a failed background refetch must not blank a working list.
+    if (error && !data) {
         return (
             <>
                 {pageHeader}
                 <div className="flex flex-1 flex-col gap-4 p-4">
-                    <SettingsProvidersHeader />
-                    <Alert variant="destructive">
-                        <AlertCircle className="size-4" />
-                        <AlertTitle>Error loading providers</AlertTitle>
-                        <AlertDescription>{error.message}</AlertDescription>
-                    </Alert>
+                    <ErrorState
+                        message={error.message}
+                        onRetry={refetch}
+                        title="Error loading providers"
+                    />
                 </div>
             </>
         );
@@ -446,21 +441,26 @@ function SettingsProviders() {
             <>
                 {pageHeader}
                 <div className="flex flex-1 flex-col gap-4 p-4">
-                    <SettingsProvidersHeader />
-                    <StatusCard
-                        action={
+                    <Empty>
+                        <EmptyHeader>
+                            <EmptyMedia variant="icon">
+                                <Settings />
+                            </EmptyMedia>
+                            <EmptyTitle>No providers configured</EmptyTitle>
+                            <EmptyDescription>
+                                Get started by adding your first language model provider
+                            </EmptyDescription>
+                        </EmptyHeader>
+                        <EmptyContent>
                             <Button
                                 onClick={() => navigate(routes.settings.newProvider())}
                                 variant="secondary"
                             >
-                                <Plus className="size-4" />
+                                <Plus />
                                 Add Provider
                             </Button>
-                        }
-                        description="Get started by adding your first language model provider"
-                        icon={<Settings className="text-muted-foreground size-8" />}
-                        title="No providers configured"
-                    />
+                        </EmptyContent>
+                    </Empty>
                 </div>
             </>
         );
@@ -470,16 +470,6 @@ function SettingsProviders() {
         <>
             {pageHeader}
             <div className="flex flex-1 flex-col gap-4 p-4">
-                <SettingsProvidersHeader />
-
-                {(deleteError || deleteErrorMessage) && (
-                    <Alert variant="destructive">
-                        <AlertCircle className="size-4" />
-                        <AlertTitle>Error deleting provider</AlertTitle>
-                        <AlertDescription>{deleteError?.message || deleteErrorMessage}</AlertDescription>
-                    </Alert>
-                )}
-
                 <DataTable<Provider>
                     columns={columns}
                     data={providers}

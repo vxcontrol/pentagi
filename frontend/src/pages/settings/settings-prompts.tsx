@@ -2,14 +2,12 @@ import type { ColumnDef, Row } from '@tanstack/react-table';
 
 import { useMutation, useQuery } from '@apollo/client/react';
 import {
-    AlertCircle,
     ArrowDown,
     ArrowUp,
     Bot,
     Code,
     Ellipsis,
     FileText,
-    Loader2,
     Pencil,
     RotateCcw,
     Settings,
@@ -19,6 +17,7 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 
 import type { DefaultPromptFragmentFragment as DefaultPrompt, PromptType } from '@/graphql/types';
 
@@ -27,7 +26,8 @@ type AgentPrompts = { human?: DefaultPrompt; system: DefaultPrompt };
 
 import { AppHeader, AppHeaderContent, AppHeaderTitle } from '@/components/layouts/app/app-header';
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { ErrorState } from '@/components/shared/error-state';
+import { LoadingState } from '@/components/shared/loading-state';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ContextMenuItem, ContextMenuSeparator } from '@/components/ui/context-menu';
@@ -39,7 +39,8 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { StatusCard } from '@/components/ui/status-card';
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
+import { Spinner } from '@/components/ui/spinner';
 import { DeletePromptDocument, SettingsPromptsDocument } from '@/graphql/types';
 import { usePageStorageKeys } from '@/hooks/use-page-storage-keys';
 import { routes } from '@/lib/routes';
@@ -66,7 +67,7 @@ type ToolPromptTableData = {
 };
 
 function SettingsPrompts() {
-    const { data, error, loading: isLoading } = useQuery(SettingsPromptsDocument);
+    const { data, error, loading: isLoading, refetch } = useQuery(SettingsPromptsDocument);
     const [deletePrompt, { loading: isDeleteLoading }] = useMutation(DeletePromptDocument);
     const navigate = useNavigate();
     // Shared base key for the route; each DataTable appends its own suffix so
@@ -188,7 +189,9 @@ function SettingsPrompts() {
 
             setResetOperation(null);
         } catch (error) {
-            console.error('Failed to reset prompt:', error);
+            toast.error('Failed to reset prompt', {
+                description: error instanceof Error ? error.message : undefined,
+            });
         }
     };
 
@@ -323,8 +326,8 @@ function SettingsPrompts() {
         {
             accessorKey: 'displayName',
             cell: ({ row }) => (
-                <div className="flex items-center gap-2">
-                    <span className="font-medium">{row.original.displayName}</span>
+                <div className="flex min-w-0 items-center gap-2">
+                    <span className="truncate font-medium">{row.original.displayName}</span>
                 </div>
             ),
             enableHiding: false,
@@ -338,16 +341,11 @@ function SettingsPrompts() {
                         variant="link"
                     >
                         Agent Name
-                        {sorted === 'asc' ? (
-                            <ArrowDown className="size-4" />
-                        ) : sorted === 'desc' ? (
-                            <ArrowUp className="size-4" />
-                        ) : null}
+                        {sorted === 'asc' ? <ArrowDown /> : sorted === 'desc' ? <ArrowUp /> : null}
                     </Button>
                 );
             },
             meta: { columnMenuLabel: 'Agent Name', searchable: true },
-            size: 200,
         },
         {
             accessorKey: 'systemStatus',
@@ -419,7 +417,10 @@ function SettingsPrompts() {
                                         resetOperation?.promptName === agent.name &&
                                         resetOperation?.type === 'system' ? (
                                             <>
-                                                <Loader2 className="size-3 animate-spin" />
+                                                <Spinner
+                                                    className="size-3"
+                                                    variant="circle"
+                                                />
                                                 Resetting...
                                             </>
                                         ) : (
@@ -443,7 +444,10 @@ function SettingsPrompts() {
                                         resetOperation?.promptName === agent.name &&
                                         resetOperation?.type === 'human' ? (
                                             <>
-                                                <Loader2 className="size-3 animate-spin" />
+                                                <Spinner
+                                                    className="size-3"
+                                                    variant="circle"
+                                                />
                                                 Resetting...
                                             </>
                                         ) : (
@@ -467,7 +471,10 @@ function SettingsPrompts() {
                                         resetOperation?.promptName === agent.name &&
                                         resetOperation?.type === 'all' ? (
                                             <>
-                                                <Loader2 className="size-3 animate-spin" />
+                                                <Spinner
+                                                    className="size-3"
+                                                    variant="circle"
+                                                />
                                                 Resetting...
                                             </>
                                         ) : (
@@ -495,8 +502,8 @@ function SettingsPrompts() {
         {
             accessorKey: 'displayName',
             cell: ({ row }) => (
-                <div className="flex items-center gap-2">
-                    <span className="font-medium">{row.original.displayName}</span>
+                <div className="flex min-w-0 items-center gap-2">
+                    <span className="truncate font-medium">{row.original.displayName}</span>
                 </div>
             ),
             enableHiding: false,
@@ -510,16 +517,11 @@ function SettingsPrompts() {
                         variant="link"
                     >
                         Tool Name
-                        {sorted === 'asc' ? (
-                            <ArrowDown className="size-4" />
-                        ) : sorted === 'desc' ? (
-                            <ArrowUp className="size-4" />
-                        ) : null}
+                        {sorted === 'asc' ? <ArrowDown /> : sorted === 'desc' ? <ArrowUp /> : null}
                     </Button>
                 );
             },
             meta: { columnMenuLabel: 'Tool Name', searchable: true },
-            size: 300,
         },
         {
             accessorKey: 'status',
@@ -575,7 +577,10 @@ function SettingsPrompts() {
                                             resetOperation?.promptName === tool.name &&
                                             resetOperation?.type === 'tool' ? (
                                                 <>
-                                                    <Loader2 className="size-3 animate-spin" />
+                                                    <Spinner
+                                                        className="size-3"
+                                                        variant="circle"
+                                                    />
                                                     Resetting...
                                                 </>
                                             ) : (
@@ -793,9 +798,8 @@ function SettingsPrompts() {
                 {pageHeader}
                 <div className="flex flex-1 flex-col gap-6 p-4">
                     <SettingsPromptsHeader />
-                    <StatusCard
+                    <LoadingState
                         description="Please wait while we fetch your prompt templates"
-                        icon={<Loader2 className="text-muted-foreground size-16 animate-spin" />}
                         title="Loading prompts..."
                     />
                 </div>
@@ -803,17 +807,18 @@ function SettingsPrompts() {
         );
     }
 
-    if (error) {
+    // Error surface only when there's no data — a failed background refetch must not blank a working list.
+    if (error && !data) {
         return (
             <>
                 {pageHeader}
                 <div className="flex flex-1 flex-col gap-6 p-4">
                     <SettingsPromptsHeader />
-                    <Alert variant="destructive">
-                        <AlertCircle className="size-4" />
-                        <AlertTitle>Error loading prompts</AlertTitle>
-                        <AlertDescription>{error.message}</AlertDescription>
-                    </Alert>
+                    <ErrorState
+                        message={error.message}
+                        onRetry={refetch}
+                        title="Error loading prompts"
+                    />
                 </div>
             </>
         );
@@ -828,11 +833,15 @@ function SettingsPrompts() {
                 {pageHeader}
                 <div className="flex flex-1 flex-col gap-6 p-4">
                     <SettingsPromptsHeader />
-                    <StatusCard
-                        description="Prompt templates could not be loaded"
-                        icon={<Settings className="text-muted-foreground size-8" />}
-                        title="No prompts available"
-                    />
+                    <Empty>
+                        <EmptyHeader>
+                            <EmptyMedia variant="icon">
+                                <Settings />
+                            </EmptyMedia>
+                            <EmptyTitle>No prompts available</EmptyTitle>
+                            <EmptyDescription>Prompt templates could not be loaded</EmptyDescription>
+                        </EmptyHeader>
+                    </Empty>
                 </div>
             </>
         );

@@ -166,7 +166,7 @@ const cacheActionStrategies: Record<SubscriptionAction, CacheActionApplier> = {
     update: (existingArray, newRef, itemExists) => (itemExists ? existingArray : [...existingArray, newRef]),
 };
 
-const updateCacheForSubscription = (
+export const updateCacheForSubscription = (
     cache: InMemoryCache,
     subscriptionName: string,
     cacheField: string,
@@ -240,7 +240,7 @@ const updateCacheForSubscription = (
     }
 };
 
-const createStreamingLink = (): ApolloLink => {
+export const createStreamingLink = (): ApolloLink => {
     const streamingLogs = new LRUCache<string, StreamingLogEntry>({
         max: STREAMING_CACHE_MAX_ENTRIES,
         ttl: STREAMING_CACHE_TTL_MS,
@@ -355,7 +355,7 @@ const createStreamingLink = (): ApolloLink => {
     });
 };
 
-const createSubscriptionCacheLink = (cacheInstance: InMemoryCache): ApolloLink =>
+export const createSubscriptionCacheLink = (cacheInstance: InMemoryCache): ApolloLink =>
     createInterceptLink((result, operation) => {
         if (result.data) {
             const variables = operation.variables as Record<string, unknown> | undefined;
@@ -382,77 +382,8 @@ const replaceWithIncoming = {
     merge: (_existing: unknown, incoming: unknown) => incoming,
 };
 
-const createApolloClient = () => {
-    const httpLink = new HttpLink({
-        credentials: 'include',
-        uri: `${window.location.origin}${GRAPHQL_ENDPOINT}`,
-    });
-
-    const wsLink = new GraphQLWsLink(
-        createClient({
-            lazy: true,
-            on: {
-                closed: () => Log.debug('GraphQL WebSocket closed'),
-                connected: () => Log.debug('GraphQL WebSocket connected'),
-                connecting: () => Log.debug('GraphQL WebSocket connecting...'),
-                error: (error) => {
-                    Log.error('GraphQL WebSocket error:', error);
-
-                    // A WebSocket error event doesn't expose the handshake HTTP status, so a
-                    // 403 can't be detected here — let /info classify it via auth:refresh.
-                    window.dispatchEvent(new Event('auth:refresh'));
-                },
-                ping: () => Log.debug('GraphQL WebSocket ping'),
-                pong: () => Log.debug('GraphQL WebSocket pong'),
-            },
-            retryAttempts: Infinity,
-            retryWait: (retries) =>
-                new Promise((resolve) => {
-                    // Jitter so a mass reconnect (e.g. backend restart) doesn't thundering-herd the server.
-                    setTimeout(resolve, Math.min(1000 * 2 ** retries, MAX_RETRY_DELAY_MS) + Math.random() * 3000);
-                }),
-            shouldRetry: () => true,
-            url: `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}${GRAPHQL_ENDPOINT}`,
-        }),
-    );
-
-    const transportLink = split(isSubscriptionOperation, wsLink, httpLink);
-
-    const errorLink = new ErrorLink(({ error, operation }) => {
-        if (CombinedGraphQLErrors.is(error)) {
-            for (const { extensions, locations, message, path } of error.errors) {
-                Log.error(`[GraphQL Error] ${message}`, {
-                    locations,
-                    operation: operation.operationName,
-                    path,
-                });
-
-                const errorCode = extensions?.code as string | undefined;
-
-                if (
-                    errorCode === 'UNAUTHENTICATED' ||
-                    errorCode === 'FORBIDDEN' ||
-                    message.toLowerCase().includes('auth required') ||
-                    message.toLowerCase().includes('unauthorized') ||
-                    message.toLowerCase().includes('forbidden')
-                ) {
-                    Log.warn('GraphQL authorization error detected, refreshing auth info');
-                    window.dispatchEvent(new Event('auth:refresh'));
-                }
-            }
-        } else if (error) {
-            Log.error(`[Network Error] ${error.message}`, error);
-
-            const statusCode = ServerError.is(error) || ServerParseError.is(error) ? error.statusCode : undefined;
-
-            if (statusCode === 401 || statusCode === 403) {
-                Log.warn('Network authorization error detected, refreshing auth info');
-                window.dispatchEvent(new Event('auth:refresh'));
-            }
-        }
-    });
-
-    const cache = new InMemoryCache({
+export const createCache = () =>
+    new InMemoryCache({
         typePolicies: {
             APIToken: {
                 keyFields: ['tokenId'],
@@ -512,12 +443,108 @@ const createApolloClient = () => {
         },
     });
 
+const createApolloClient = () => {
+    // Holds the client for the ws `connected` handler, which is defined before the
+    // client exists; `lazy: true` means the socket only opens on the first
+    // subscription, after `.current` is set below.
+    const clientRef: { current?: ApolloClient } = {};
+
+    const httpLink = new HttpLink({
+        credentials: 'include',
+        uri: `${window.location.origin}${GRAPHQL_ENDPOINT}`,
+    });
+
+    const wsLink = new GraphQLWsLink(
+        createClient({
+            lazy: true,
+            on: {
+                closed: () => Log.debug('GraphQL WebSocket closed'),
+                connected: (_socket, _payload, wasRetry) => {
+                    Log.debug('GraphQL WebSocket connected');
+
+                    // Subscriptions are delta-only — the server never replays events
+                    // published while we were disconnected — so on a reconnect refetch
+                    // active queries to reconcile the cache with the backend.
+                    if (wasRetry) {
+                        // Unlike per-query refetch(), the aggregate promise isn't wrapped
+                        // in preventUnhandledRejection — a failed reconcile (e.g. a transient
+                        // 502 during the reconnect) would otherwise surface as an
+                        // unhandledrejection.
+                        void clientRef.current?.refetchObservableQueries().catch((error: unknown) => {
+                            Log.error('Reconnect cache reconcile failed:', error);
+                        });
+
+                        // refetchObservableQueries skips cache-only queries, so the REST-hydrated
+                        // resources slot isn't reconciled above — its provider re-fetches on this.
+                        window.dispatchEvent(new Event('ws:reconnected'));
+                    }
+                },
+                connecting: () => Log.debug('GraphQL WebSocket connecting...'),
+                error: (error) => {
+                    Log.error('GraphQL WebSocket error:', error);
+
+                    // A WebSocket error event doesn't expose the handshake HTTP status, so a
+                    // 403 can't be detected here — let /info classify it via auth:refresh.
+                    window.dispatchEvent(new Event('auth:refresh'));
+                },
+                ping: () => Log.debug('GraphQL WebSocket ping'),
+                pong: () => Log.debug('GraphQL WebSocket pong'),
+            },
+            retryAttempts: Infinity,
+            retryWait: (retries) =>
+                new Promise((resolve) => {
+                    // Jitter so a mass reconnect (e.g. backend restart) doesn't thundering-herd the server.
+                    setTimeout(resolve, Math.min(1000 * 2 ** retries, MAX_RETRY_DELAY_MS) + Math.random() * 3000);
+                }),
+            shouldRetry: () => true,
+            url: `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}${GRAPHQL_ENDPOINT}`,
+        }),
+    );
+
+    const transportLink = split(isSubscriptionOperation, wsLink, httpLink);
+
+    const errorLink = new ErrorLink(({ error, operation }) => {
+        if (CombinedGraphQLErrors.is(error)) {
+            for (const { extensions, locations, message, path } of error.errors) {
+                Log.error(`[GraphQL Error] ${message}`, {
+                    locations,
+                    operation: operation.operationName,
+                    path,
+                });
+
+                const errorCode = extensions?.code as string | undefined;
+
+                if (
+                    errorCode === 'UNAUTHENTICATED' ||
+                    errorCode === 'FORBIDDEN' ||
+                    message.toLowerCase().includes('auth required') ||
+                    message.toLowerCase().includes('unauthorized') ||
+                    message.toLowerCase().includes('forbidden')
+                ) {
+                    Log.warn('GraphQL authorization error detected, refreshing auth info');
+                    window.dispatchEvent(new Event('auth:refresh'));
+                }
+            }
+        } else if (error) {
+            Log.error(`[Network Error] ${error.message}`, error);
+
+            const statusCode = ServerError.is(error) || ServerParseError.is(error) ? error.statusCode : undefined;
+
+            if (statusCode === 401 || statusCode === 403) {
+                Log.warn('Network authorization error detected, refreshing auth info');
+                window.dispatchEvent(new Event('auth:refresh'));
+            }
+        }
+    });
+
+    const cache = createCache();
+
     const streamingLink = createStreamingLink();
     const subscriptionCacheLink = createSubscriptionCacheLink(cache);
 
     const link = ApolloLink.from([errorLink, subscriptionCacheLink, streamingLink, transportLink]);
 
-    return new ApolloClient({
+    const apolloClient = new ApolloClient({
         cache,
         defaultOptions: {
             watchQuery: {
@@ -528,6 +555,10 @@ const createApolloClient = () => {
         },
         link,
     });
+
+    clientRef.current = apolloClient;
+
+    return apolloClient;
 };
 
 export const client = createApolloClient();

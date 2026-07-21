@@ -35,18 +35,19 @@ type APITokenWithSecret struct {
 }
 
 type AgentConfig struct {
-	Model             string           `json:"model"`
-	MaxTokens         *int             `json:"maxTokens,omitempty"`
-	Temperature       *float64         `json:"temperature,omitempty"`
-	TopK              *int             `json:"topK,omitempty"`
-	TopP              *float64         `json:"topP,omitempty"`
-	MinLength         *int             `json:"minLength,omitempty"`
-	MaxLength         *int             `json:"maxLength,omitempty"`
-	RepetitionPenalty *float64         `json:"repetitionPenalty,omitempty"`
-	FrequencyPenalty  *float64         `json:"frequencyPenalty,omitempty"`
-	PresencePenalty   *float64         `json:"presencePenalty,omitempty"`
-	Reasoning         *ReasoningConfig `json:"reasoning,omitempty"`
-	Price             *ModelPrice      `json:"price,omitempty"`
+	Model             string                 `json:"model"`
+	MaxTokens         *int                   `json:"maxTokens,omitempty"`
+	Temperature       *float64               `json:"temperature,omitempty"`
+	TopK              *int                   `json:"topK,omitempty"`
+	TopP              *float64               `json:"topP,omitempty"`
+	MinLength         *int                   `json:"minLength,omitempty"`
+	MaxLength         *int                   `json:"maxLength,omitempty"`
+	RepetitionPenalty *float64               `json:"repetitionPenalty,omitempty"`
+	FrequencyPenalty  *float64               `json:"frequencyPenalty,omitempty"`
+	PresencePenalty   *float64               `json:"presencePenalty,omitempty"`
+	Reasoning         *ReasoningConfig       `json:"reasoning,omitempty"`
+	Price             *ModelPrice            `json:"price,omitempty"`
+	ExtraBody         map[string]interface{} `json:"extraBody,omitempty"`
 }
 
 type AgentLog struct {

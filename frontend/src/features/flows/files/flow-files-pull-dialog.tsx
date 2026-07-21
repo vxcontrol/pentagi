@@ -1,4 +1,4 @@
-import { ArrowDownToLine, ArrowUp, FolderOpen, Loader2, RefreshCw, TriangleAlert } from 'lucide-react';
+import { ArrowDownToLine, ArrowUp, FolderOpen, RefreshCw, TriangleAlert } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 
 import {
@@ -28,6 +28,7 @@ import {
 } from '@/components/ui/dialog';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Label } from '@/components/ui/label';
+import { Spinner } from '@/components/ui/spinner';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 import { findPullConflicts } from './flow-files-conflicts';
@@ -443,7 +444,7 @@ function FlowFilesPullDialogForm({ cachedFiles, flowId, onClose, onSuccess }: Fl
                                         type="button"
                                         variant="outline"
                                     >
-                                        {isListingLoading ? <Loader2 className="animate-spin" /> : <RefreshCw />}
+                                        {isListingLoading ? <Spinner variant="circle" /> : <RefreshCw />}
                                     </Button>
                                 </span>
                             </TooltipTrigger>

@@ -1,7 +1,7 @@
-import { Loader2 } from 'lucide-react';
 import { useFormContext } from 'react-hook-form';
 
 import { Button } from '@/components/ui/button';
+import { Spinner } from '@/components/ui/spinner';
 
 interface FormSubmitButtonProps extends React.ComponentProps<typeof Button> {
     /**
@@ -54,7 +54,7 @@ function FormSubmitButton({ children, icon, loading, requireValid = true, ...pro
     const isFormInvalid = !!formState && requireValid && formState.isSubmitted && !formState.isValid;
     const isDisabled = isSubmitting || isFormInvalid;
 
-    const renderedIcon = isSubmitting ? <Loader2 className="size-4 animate-spin" /> : icon;
+    const renderedIcon = isSubmitting ? <Spinner variant="circle" /> : icon;
 
     return (
         <Button

@@ -31,9 +31,11 @@ export type Knowledge = KnowledgeDocumentFragmentFragment;
 interface KnowledgesContextValue {
     createKnowledge: (input: CreateKnowledgeDocumentInput) => Promise<Knowledge | undefined>;
     deleteKnowledge: (id: string) => Promise<void>;
+    error?: Error;
     getKnowledge: (id: string) => Knowledge | undefined;
     isLoading: boolean;
     knowledges: Knowledge[];
+    refetch: () => unknown;
     renameKnowledge: (id: string, question: string) => Promise<Knowledge | undefined>;
     updateKnowledge: (id: string, input: UpdateKnowledgeDocumentInput) => Promise<Knowledge | undefined>;
 }
@@ -71,7 +73,12 @@ export function KnowledgesProvider({ children }: KnowledgesProviderProps) {
     // That keeps Apollo's cache warm for the inactive branch — when the user
     // toggles `?qs=` on/off, the previous result is shown immediately while
     // the network refetches in the background.
-    const { data: listData, loading: isListLoading } = useQuery(KnowledgeDocumentsDocument, {
+    const {
+        data: listData,
+        error: listError,
+        loading: isListLoading,
+        refetch: refetchList,
+    } = useQuery(KnowledgeDocumentsDocument, {
         fetchPolicy: 'cache-and-network',
         nextFetchPolicy: 'cache-and-network',
         skip: !shouldFetch || inSearchMode,
@@ -80,7 +87,12 @@ export function KnowledgesProvider({ children }: KnowledgesProviderProps) {
 
     // `searchKnowledge` ignores `withContent` — the backend always returns the full
     // chunk text plus a relevance score we currently drop.
-    const { data: searchData, loading: isSearchLoading } = useQuery(SearchKnowledgeDocument, {
+    const {
+        data: searchData,
+        error: searchError,
+        loading: isSearchLoading,
+        refetch: refetchSearch,
+    } = useQuery(SearchKnowledgeDocument, {
         fetchPolicy: 'cache-and-network',
         nextFetchPolicy: 'cache-and-network',
         skip: !shouldFetch || !inSearchMode,
@@ -126,6 +138,8 @@ export function KnowledgesProvider({ children }: KnowledgesProviderProps) {
     }, [inSearchMode, listData?.knowledgeDocuments, searchData?.searchKnowledge]);
 
     const isLoading = inSearchMode ? isSearchLoading : isListLoading;
+    const error = inSearchMode ? searchError : listError;
+    const refetch = inSearchMode ? refetchSearch : refetchList;
 
     const getKnowledge = useCallback(
         (id: string): Knowledge | undefined => knowledges.find((k) => k.id === id),
@@ -198,13 +212,25 @@ export function KnowledgesProvider({ children }: KnowledgesProviderProps) {
         () => ({
             createKnowledge,
             deleteKnowledge,
+            error,
             getKnowledge,
             isLoading,
             knowledges,
+            refetch,
             renameKnowledge,
             updateKnowledge,
         }),
-        [createKnowledge, deleteKnowledge, getKnowledge, isLoading, knowledges, renameKnowledge, updateKnowledge],
+        [
+            createKnowledge,
+            deleteKnowledge,
+            error,
+            getKnowledge,
+            isLoading,
+            knowledges,
+            refetch,
+            renameKnowledge,
+            updateKnowledge,
+        ],
     );
 
     return <KnowledgesContext.Provider value={value}>{children}</KnowledgesContext.Provider>;

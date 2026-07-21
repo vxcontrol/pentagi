@@ -95,8 +95,8 @@ interface DataTableProps<TData, TValue = unknown> {
     filterPlaceholder?: string;
     /**
      * Controlled filter value. When provided together with `onFilterChange`
-     * the parent owns the source of truth — typically `useTableQueryFilter`
-     * for URL/storage-backed filters. The value flows through TanStack's
+     * the parent owns the source of truth — typically `useTableState`
+     * for URL-backed filters. The value flows through TanStack's
      * `state.globalFilter`, so `DataTableFilter` stays uniform regardless
      * of whether the table is single- or multi-column.
      */
@@ -764,7 +764,7 @@ function DataTable<TData, TValue = unknown>({
                             >
                                 {headerGroup.headers.map((header) => (
                                     <TableHead
-                                        className={header.column.columnDef.meta?.headerClassName}
+                                        className={cn('truncate', header.column.columnDef.meta?.headerClassName)}
                                         key={header.id}
                                         style={
                                             header.column.columnDef.size
@@ -844,7 +844,10 @@ function DataTable<TData, TValue = unknown>({
                         }}
                         value={pageSizeValue}
                     >
-                        <SelectTrigger className="h-7 w-16 text-xs">
+                        <SelectTrigger
+                            aria-label="Rows per page"
+                            className="h-7 w-16 text-xs"
+                        >
                             <SelectValue />
                         </SelectTrigger>
                         <SelectContent
@@ -941,8 +944,8 @@ function DataTableColumnHeader<TData, TValue = unknown>({ column, title }: DataT
             variant="link"
         >
             {title}
-            {sorted === 'asc' ? <ArrowDown className="size-4" /> : null}
-            {sorted === 'desc' ? <ArrowUp className="size-4" /> : null}
+            {sorted === 'asc' ? <ArrowDown /> : null}
+            {sorted === 'desc' ? <ArrowUp /> : null}
         </Button>
     );
 }

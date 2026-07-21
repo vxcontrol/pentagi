@@ -52,9 +52,9 @@ function NewFlow() {
             <div className="flex min-h-[calc(100dvh-3rem)] items-center justify-center p-4">
                 <Card className="w-full max-w-2xl">
                     <CardContent className="flex flex-col gap-4 pt-6">
-                        <div className="text-center">
-                            <h1 className="text-2xl font-semibold">Create a new flow</h1>
-                            <p className="text-muted-foreground mt-2">Describe what you would like PentAGI to test</p>
+                        <div className="flex flex-col gap-2 text-center">
+                            <h2 className="text-2xl font-semibold">Create a new flow</h2>
+                            <p className="text-muted-foreground">Describe what you would like PentAGI to test</p>
                         </div>
                         <Tabs
                             onValueChange={(value) => setFlowType(value as 'assistant' | 'automation')}

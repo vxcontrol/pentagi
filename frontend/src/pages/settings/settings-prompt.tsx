@@ -2,13 +2,13 @@ import { useMutation, useQuery } from '@apollo/client/react';
 import {
     AlertCircle,
     Bot,
+    Braces,
     Check,
     CheckCircle,
     Code,
     Ellipsis,
     FileDiff,
     FileText,
-    Loader2,
     RotateCcw,
     Save,
     User,
@@ -56,6 +56,8 @@ import {
 } from '@/components/layouts/app/app-header';
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
 import { DetailSplitLayout } from '@/components/shared/detail-split-layout';
+import { ErrorState } from '@/components/shared/error-state';
+import { LoadingState } from '@/components/shared/loading-state';
 import { UnsavedChangesDialog, useUnsavedChangesGuard } from '@/components/shared/unsaved-changes';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -68,9 +70,10 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Form, FormControl, FormItem, FormMessage } from '@/components/ui/form';
-import { FormSubmitButton } from '@/components/ui/form-submit-button';
-import { StatusCard } from '@/components/ui/status-card';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Spinner } from '@/components/ui/spinner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
     CreatePromptDocument,
@@ -83,6 +86,8 @@ import { useAppForm } from '@/hooks/use-app-form';
 import { useBreakpoint } from '@/hooks/use-breakpoint';
 import { composeRefs } from '@/lib/compose-refs';
 import { formatPromptId } from '@/lib/route-titles/format-prompt-id';
+
+const VARIABLES_TITLE = 'Available variables';
 
 const systemFormSchema = z.object({
     template: z.string().min(1, 'System template is required'),
@@ -208,6 +213,12 @@ interface DiffContentProps {
     styles: ComponentProps<typeof ReactDiffViewer>['styles'];
 }
 
+interface VariablesContentProps {
+    currentTemplate: string;
+    onVariableClick: (variable: string) => void;
+    variables: string[];
+}
+
 interface VariablesPanelContainerProps {
     control: Control<HumanFormData> | Control<SystemFormData>;
     onVariableClick: (variable: string) => void;
@@ -278,7 +289,7 @@ function SettingsPrompt() {
     const { promptId } = useParams<{ promptId: string }>();
     const { isDesktop } = useBreakpoint();
 
-    const { data, error, loading } = useQuery(SettingsPromptsDocument);
+    const { data, error, loading, refetch } = useQuery(SettingsPromptsDocument);
     const [createPrompt, { loading: isCreateLoading }] = useMutation(CreatePromptDocument);
     const [updatePrompt, { loading: isUpdateLoading }] = useMutation(UpdatePromptDocument);
     const [deletePrompt, { loading: isDeleteLoading }] = useMutation(DeletePromptDocument);
@@ -653,27 +664,19 @@ function SettingsPrompt() {
                 <AppHeaderActions>
                     <AppHeaderAction
                         disabled={isLoading}
-                        icon={
-                            isValidateLoading ? (
-                                <Loader2 className="size-4 animate-spin" />
-                            ) : (
-                                <CheckCircle className="size-4" />
-                            )
-                        }
+                        icon={isValidateLoading ? <Spinner variant="circle" /> : <CheckCircle />}
                         label={isValidateLoading ? 'Validating...' : 'Validate'}
                         onClick={handleValidate}
                         type="button"
                         variant="outline"
                     />
-                    <FormSubmitButton
+                    <AppHeaderAction
                         form={activeFormId}
-                        icon={<Save className="size-4" />}
+                        icon={<Save />}
+                        label="Save"
                         loading={isLoading}
-                        size="sm"
-                        variant="secondary"
-                    >
-                        Save
-                    </FormSubmitButton>
+                        type="submit"
+                    />
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                             <Button
@@ -692,18 +695,14 @@ function SettingsPrompt() {
                             {hasOverride && (
                                 <>
                                     <DropdownMenuItem onClick={() => setIsDiffDialogOpen(true)}>
-                                        <FileDiff className="size-4" />
+                                        <FileDiff />
                                         Diff
                                     </DropdownMenuItem>
                                     <DropdownMenuItem
                                         disabled={isLoading}
                                         onClick={handleReset}
                                     >
-                                        {isDeleteLoading ? (
-                                            <Loader2 className="size-4 animate-spin" />
-                                        ) : (
-                                            <RotateCcw className="size-4" />
-                                        )}
+                                        {isDeleteLoading ? <Spinner variant="circle" /> : <RotateCcw />}
                                         {isDeleteLoading ? 'Resetting...' : 'Reset'}
                                     </DropdownMenuItem>
                                     <DropdownMenuSeparator />
@@ -733,9 +732,8 @@ function SettingsPrompt() {
             <>
                 {pageHeader}
                 <div className="flex flex-1 items-center justify-center p-4">
-                    <StatusCard
+                    <LoadingState
                         description="Please wait while we fetch prompt information"
-                        icon={<Loader2 className="text-muted-foreground size-16 animate-spin" />}
                         title="Loading prompt data..."
                     />
                 </div>
@@ -748,9 +746,9 @@ function SettingsPrompt() {
             <>
                 {pageHeader}
                 <div className="flex flex-1 items-center justify-center p-4">
-                    <StatusCard
-                        description={error.message}
-                        icon={<AlertCircle className="text-destructive size-16" />}
+                    <ErrorState
+                        message={error.message}
+                        onRetry={refetch}
                         title="Error loading prompt data"
                     />
                 </div>
@@ -763,11 +761,15 @@ function SettingsPrompt() {
             <>
                 {pageHeader}
                 <div className="flex flex-1 items-center justify-center p-4">
-                    <StatusCard
-                        description={`The prompt "${promptId}" could not be found or is not supported for editing.`}
-                        icon={<AlertCircle className="text-destructive size-16" />}
-                        title="Prompt not found"
-                    />
+                    <Empty>
+                        <EmptyHeader>
+                            <EmptyMedia>
+                                <AlertCircle className="text-destructive size-12" />
+                            </EmptyMedia>
+                            <EmptyTitle>Prompt not found</EmptyTitle>
+                            <EmptyDescription>{`The prompt "${promptId}" could not be found or is not supported for editing.`}</EmptyDescription>
+                        </EmptyHeader>
+                    </Empty>
                 </div>
             </>
         );
@@ -776,7 +778,7 @@ function SettingsPrompt() {
     const defaultTemplate = activeTab === 'system' ? promptInfo.defaultSystemTemplate : promptInfo.defaultHumanTemplate;
     const hasHumanPrompt = promptInfo.type === 'agent' && promptInfo.hasHuman;
 
-    const promptMeta = (
+    const promptPanel = (
         <>
             <div className="flex flex-col gap-2 text-center">
                 <h2 className="text-2xl font-semibold">Edit prompt</h2>
@@ -803,16 +805,16 @@ function SettingsPrompt() {
                 </p>
             </div>
 
-            <TabsList className="dark:bg-background w-full">
+            <TabsList className="xl:dark:bg-background w-full">
                 <TabsTrigger
-                    className="dark:data-[state=active]:bg-card flex-1"
+                    className="xl:dark:data-[state=active]:bg-card flex-1"
                     value="system"
                 >
                     <Code className="size-4" />
                     System Prompt
                 </TabsTrigger>
                 <TabsTrigger
-                    className="dark:data-[state=active]:bg-card flex-1"
+                    className="xl:dark:data-[state=active]:bg-card flex-1"
                     disabled={!hasHumanPrompt}
                     value="human"
                 >
@@ -820,16 +822,16 @@ function SettingsPrompt() {
                     Human Prompt
                 </TabsTrigger>
             </TabsList>
+
+            {variablesData ? (
+                <VariablesPanelContainer
+                    control={activeControl}
+                    onVariableClick={handleVariableClick}
+                    variables={variablesData.variables}
+                />
+            ) : null}
         </>
     );
-
-    const variablesPanel = variablesData ? (
-        <VariablesPanelContainer
-            control={activeControl}
-            onVariableClick={handleVariableClick}
-            variables={variablesData.variables}
-        />
-    ) : null;
 
     const systemPlaceholder =
         promptInfo.type === 'tool' ? 'Enter the tool template...' : 'Enter the system prompt template...';
@@ -899,18 +901,12 @@ function SettingsPrompt() {
                 {isDesktop ? (
                     <DetailSplitLayout
                         content={promptEditor}
-                        panel={
-                            <>
-                                {promptMeta}
-                                {variablesPanel}
-                            </>
-                        }
+                        panel={promptPanel}
                     />
                 ) : (
                     <div className="flex min-h-0 flex-1 flex-col gap-4 p-4">
-                        {promptMeta}
+                        {promptPanel}
                         {promptEditor}
-                        {variablesPanel}
                     </div>
                 )}
             </Tabs>
@@ -957,7 +953,7 @@ function SettingsPrompt() {
 
                     {validationResult && (
                         <div className="flex flex-col gap-4">
-                            <Alert variant={validationResult.result ? 'default' : 'destructive'}>
+                            <Alert variant={validationResult.result === 'success' ? 'default' : 'destructive'}>
                                 {validationResult.result === 'success' ? (
                                     <CheckCircle className="size-4 text-green-500!" />
                                 ) : (
@@ -1017,54 +1013,108 @@ function SettingsPrompt() {
 }
 
 function Variables({ currentTemplate, onVariableClick, variables }: VariablesProps) {
-    const counts = useMemo(() => countVariableUses(currentTemplate, variables), [currentTemplate, variables]);
+    const { isDesktop } = useBreakpoint();
 
     if (variables.length === 0) {
         return null;
     }
 
-    return (
-        <div className="bg-card overflow-hidden rounded-lg border">
-            <div className="border-b px-4 py-3">
-                <h4 className="text-sm font-medium">Available variables</h4>
-                <p className="text-muted-foreground mt-1 text-xs">
-                    Click to insert at the cursor, or cycle through existing uses.
-                </p>
-            </div>
-            <div className="bg-background flex flex-wrap gap-1.5 px-4 py-3">
-                {variables.map((variable) => {
-                    const count = counts[variable] ?? 0;
-                    const isUsed = count > 0;
-                    const action = isUsed
-                        ? `Go to next {{.${variable}}} in the template${count > 1 ? ` (${count} uses)` : ''}`
-                        : `Insert {{.${variable}}} at the cursor`;
+    const content = (
+        <VariablesContent
+            currentTemplate={currentTemplate}
+            onVariableClick={onVariableClick}
+            variables={variables}
+        />
+    );
 
-                    return (
+    if (isDesktop) {
+        return (
+            <div className="bg-card overflow-hidden rounded-lg border">
+                <div className="border-b px-4 py-3">
+                    <h4 className="flex items-center gap-2 text-sm font-medium">
+                        {VARIABLES_TITLE}
                         <Badge
+                            className="ml-auto font-normal tabular-nums"
+                            variant="secondary"
+                        >
+                            {variables.length}
+                        </Badge>
+                    </h4>
+                    <p className="text-muted-foreground mt-1 text-xs">
+                        Click to insert at the cursor, or cycle through existing uses.
+                    </p>
+                </div>
+                <div className="bg-background">{content}</div>
+            </div>
+        );
+    }
+
+    return (
+        <Popover>
+            <PopoverTrigger asChild>
+                <Button
+                    className="w-full justify-start"
+                    size="sm"
+                    variant="secondary"
+                >
+                    <Braces />
+                    {VARIABLES_TITLE}
+                    <Badge
+                        className="ml-auto h-5 font-normal tabular-nums"
+                        variant="outline"
+                    >
+                        {variables.length}
+                    </Badge>
+                </Button>
+            </PopoverTrigger>
+            <PopoverContent
+                align="start"
+                className="max-h-(--radix-popover-content-available-height) w-(--radix-popover-trigger-width) overflow-y-auto overscroll-contain p-0"
+            >
+                {content}
+            </PopoverContent>
+        </Popover>
+    );
+}
+
+function VariablesContent({ currentTemplate, onVariableClick, variables }: VariablesContentProps) {
+    // Computed here, not in the parent, so the narrow-width popover only runs the
+    // per-variable RegExp sweep while it's open and mounted.
+    const counts = useMemo(() => countVariableUses(currentTemplate, variables), [currentTemplate, variables]);
+
+    return (
+        <div className="flex flex-wrap gap-1.5 px-4 py-3">
+            {variables.map((variable) => {
+                const count = counts[variable] ?? 0;
+                const isUsed = count > 0;
+                const action = isUsed
+                    ? `Go to next {{.${variable}}} in the template${count > 1 ? ` (${count} uses)` : ''}`
+                    : `Insert {{.${variable}}} at the cursor`;
+
+                return (
+                    // className stays on Badge: Slot only concatenates, so `font-normal` would race
+                    // badgeVariants' `font-semibold` unless cn() merges them here first.
+                    <Badge
+                        asChild
+                        className="cursor-pointer font-mono font-normal"
+                        key={variable}
+                        variant={isUsed ? 'green' : 'secondary'}
+                    >
+                        <button
                             aria-label={action}
-                            className="cursor-pointer font-mono font-normal"
-                            key={variable}
                             onClick={() => onVariableClick(variable)}
-                            onKeyDown={(event) => {
-                                if (event.key === 'Enter' || event.key === ' ') {
-                                    event.preventDefault();
-                                    onVariableClick(variable);
-                                }
-                            }}
-                            role="button"
-                            tabIndex={0}
                             title={action}
-                            variant={isUsed ? 'green' : 'secondary'}
+                            type="button"
                         >
                             {isUsed ? <Check className="size-3" /> : null}
                             {`{{.${variable}}}`}
                             {count > 1 ? (
                                 <span className="ml-0.5 text-[10px] tabular-nums opacity-70">×{count}</span>
                             ) : null}
-                        </Badge>
-                    );
-                })}
-            </div>
+                        </button>
+                    </Badge>
+                );
+            })}
         </div>
     );
 }

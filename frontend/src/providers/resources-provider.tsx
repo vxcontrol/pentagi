@@ -1,6 +1,5 @@
 import { useApolloClient, useQuery } from '@apollo/client/react';
 import { createContext, type ReactNode, useContext, useEffect, useMemo, useState } from 'react';
-import { toast } from 'sonner';
 
 import type { UserResourceFragmentFragment } from '@/graphql/types';
 
@@ -28,8 +27,6 @@ interface ResourcesProviderProps {
 }
 
 const ResourcesContext = createContext<ResourcesContextValue | undefined>(undefined);
-
-const RESOURCES_ERROR_TOAST_ID = 'resources-error';
 
 /**
  * Loads the user's full resource library and keeps it in sync via three GraphQL
@@ -118,6 +115,15 @@ export function ResourcesProvider({ children }: ResourcesProviderProps) {
         };
     }, [apolloClient, refreshTick, shouldFetchResources]);
 
+    // Subscriptions are delta-only and the reconnect sweep skips this cache-only slot,
+    // so re-hydrate from REST when the socket reconnects after an outage.
+    useEffect(() => {
+        const reconcile = () => setRefreshTick((tick) => tick + 1);
+        window.addEventListener('ws:reconnected', reconcile);
+
+        return () => window.removeEventListener('ws:reconnected', reconcile);
+    }, []);
+
     const { data, error: graphqlError } = useQuery(ResourcesDocument, {
         fetchPolicy: 'cache-only',
         skip: !shouldFetchResources,
@@ -128,15 +134,6 @@ export function ResourcesProvider({ children }: ResourcesProviderProps) {
     const isInitialLoading = restLoading && data === undefined;
 
     useResourcesRealtime({ isPaused: !shouldFetchResources || isInitialLoading });
-
-    useEffect(() => {
-        if (error) {
-            toast.error('Failed to load resources', {
-                description: error.message,
-                id: RESOURCES_ERROR_TOAST_ID,
-            });
-        }
-    }, [error]);
 
     const resources = useMemo<UserResourceFragmentFragment[]>(() => data?.resources ?? [], [data?.resources]);
 

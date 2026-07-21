@@ -2,6 +2,7 @@
 import { FlatCompat } from '@eslint/eslintrc';
 import js from '@eslint/js';
 import perfectionist from 'eslint-plugin-perfectionist';
+import playwright from 'eslint-plugin-playwright';
 
 const compat = new FlatCompat({
     baseDirectory: import.meta.dirname,
@@ -93,7 +94,42 @@ const eslintConfig = [
     },
     perfectionist.configs['recommended-natural'],
     {
-        ignores: ['node_modules/**', 'dist/**', 'build/**', 'public/mockServiceWorker.js', 'src/graphql/types.ts'],
+        ...playwright.configs['flat/recommended'],
+        // *.unit.test.ts are vitest, not Playwright — the plugin's rules
+        // (no-standalone-expect) misfire on vitest's `it`.
+        files: ['e2e/**/*.ts'],
+        ignores: ['e2e/**/*.unit.test.ts'],
+    },
+    {
+        // Playwright fixtures take a `use` callback that the React hooks rule
+        // mistakes for a hook call; there is no React under e2e/.
+        files: ['e2e/**/*.ts'],
+        rules: { 'react-hooks/rules-of-hooks': 'off' },
+    },
+    {
+        // The dependency-free .mjs tools run under plain Node — declare its
+        // globals so no-undef doesn't misfire.
+        files: ['e2e/**/*.mjs'],
+        languageOptions: {
+            globals: {
+                console: 'readonly',
+                fetch: 'readonly',
+                process: 'readonly',
+                setTimeout: 'readonly',
+                URL: 'readonly',
+            },
+        },
+    },
+    {
+        ignores: [
+            'node_modules/**',
+            'dist/**',
+            'build/**',
+            'public/mockServiceWorker.js',
+            'src/graphql/types.ts',
+            'e2e/test-results/**',
+            'e2e/playwright-report/**',
+        ],
     },
 ];
 

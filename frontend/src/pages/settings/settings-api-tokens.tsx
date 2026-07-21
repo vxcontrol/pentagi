@@ -3,20 +3,7 @@ import type { ColumnDef } from '@tanstack/react-table';
 import { useMutation, useQuery, useSubscription } from '@apollo/client/react';
 import { format } from 'date-fns';
 import { enUS } from 'date-fns/locale';
-import {
-    AlertCircle,
-    CalendarIcon,
-    Check,
-    Copy,
-    Ellipsis,
-    ExternalLink,
-    Key,
-    Loader2,
-    Pencil,
-    Plus,
-    Trash,
-    X,
-} from 'lucide-react';
+import { CalendarIcon, Check, Copy, Ellipsis, ExternalLink, Key, Pencil, Plus, Trash, X } from 'lucide-react';
 import { useCallback, useId, useMemo, useState } from 'react';
 import { type Control, Controller, useFormState } from 'react-hook-form';
 import { toast } from 'sonner';
@@ -24,9 +11,16 @@ import * as z from 'zod';
 
 import type { ApiTokenFragmentFragment } from '@/graphql/types';
 
-import { AppHeader, AppHeaderContent, AppHeaderTitle } from '@/components/layouts/app/app-header';
+import {
+    AppHeader,
+    AppHeaderAction,
+    AppHeaderActions,
+    AppHeaderContent,
+    AppHeaderTitle,
+} from '@/components/layouts/app/app-header';
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { ErrorState } from '@/components/shared/error-state';
+import { LoadingState } from '@/components/shared/loading-state';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
@@ -40,10 +34,11 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { StatusCard } from '@/components/ui/status-card';
+import { Spinner } from '@/components/ui/spinner';
 import {
     ApiTokenCreatedDocument,
     ApiTokenDeletedDocument,
@@ -144,45 +139,6 @@ const copyToClipboard = async (text: string): Promise<boolean> => {
     }
 };
 
-function SettingsAPITokensHeader({ onCreateClick }: { onCreateClick: () => void }) {
-    return (
-        <div className="flex items-center justify-between gap-4">
-            <div className="flex min-w-0 flex-1 flex-col gap-2">
-                <p className="text-muted-foreground truncate">Manage API tokens for programmatic access</p>
-                <div className="flex gap-4 text-sm">
-                    <a
-                        className="text-primary inline-flex items-center gap-1 underline hover:no-underline"
-                        href={`${window.location.origin}${baseUrl}/graphql/playground`}
-                        rel="noopener noreferrer"
-                        target="_blank"
-                    >
-                        GraphQL Playground
-                        <ExternalLink className="size-3" />
-                    </a>
-                    <a
-                        className="text-primary inline-flex items-center gap-1 underline hover:no-underline"
-                        href={`${window.location.origin}${baseUrl}/swagger/index.html`}
-                        rel="noopener noreferrer"
-                        target="_blank"
-                    >
-                        Swagger UI
-                        <ExternalLink className="size-3" />
-                    </a>
-                </div>
-            </div>
-
-            <Button
-                className="shrink-0"
-                onClick={onCreateClick}
-                variant="secondary"
-            >
-                <Plus className="size-4" />
-                Create Token
-            </Button>
-        </div>
-    );
-}
-
 const createNewTokenPlaceholder: APIToken = {
     createdAt: new Date().toISOString(),
     id: 'create-new',
@@ -221,7 +177,7 @@ function CreateRowActions({
                 size="icon-sm"
                 variant="ghost"
             >
-                {isLoading ? <Loader2 className="animate-spin" /> : <Check />}
+                {isLoading ? <Spinner variant="circle" /> : <Check />}
             </Button>
             <Button
                 aria-label="Cancel"
@@ -259,7 +215,7 @@ function EditRowActions({
                 size="icon-sm"
                 variant="ghost"
             >
-                {isLoading ? <Loader2 className="animate-spin" /> : <Check />}
+                {isLoading ? <Spinner variant="circle" /> : <Check />}
             </Button>
             <Button
                 aria-label="Cancel"
@@ -275,16 +231,15 @@ function EditRowActions({
 }
 
 function SettingsAPITokens() {
-    const { data, error, loading: isLoading } = useQuery(ApiTokensDocument);
-    const [createAPIToken, { error: createError, loading: isCreateLoading }] = useMutation(CreateApiTokenDocument);
-    const [updateAPIToken, { error: updateError, loading: isUpdateLoading }] = useMutation(UpdateApiTokenDocument);
-    const [deleteAPIToken, { error: deleteError, loading: isDeleteLoading }] = useMutation(DeleteApiTokenDocument);
+    const { data, error, loading: isLoading, refetch } = useQuery(ApiTokensDocument);
+    const [createAPIToken, { loading: isCreateLoading }] = useMutation(CreateApiTokenDocument);
+    const [updateAPIToken, { loading: isUpdateLoading }] = useMutation(UpdateApiTokenDocument);
+    const [deleteAPIToken, { loading: isDeleteLoading }] = useMutation(DeleteApiTokenDocument);
 
     const [editingTokenId, setEditingTokenId] = useState<null | string>(null);
     const [creatingToken, setCreatingToken] = useState(false);
     const [tokenSecret, setTokenSecret] = useState<null | string>(null);
     const [showTokenDialog, setShowTokenDialog] = useState(false);
-    const [deleteErrorMessage, setDeleteErrorMessage] = useState<null | string>(null);
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
     const [deletingToken, setDeletingToken] = useState<APIToken | null>(null);
 
@@ -363,7 +318,9 @@ function SettingsAPITokens() {
                 setEditingTokenId(null);
                 editForm.reset(EDIT_TOKEN_DEFAULTS);
             } catch (error) {
-                console.error('Failed to update token:', error);
+                toast.error('Failed to update token', {
+                    description: error instanceof Error ? error.message : undefined,
+                });
             }
         },
         [editForm, updateAPIToken],
@@ -415,7 +372,9 @@ function SettingsAPITokens() {
             setCreatingToken(false);
             createForm.reset(CREATE_TOKEN_DEFAULTS);
         } catch (error) {
-            console.error('Failed to create token:', error);
+            toast.error('Failed to create token', {
+                description: error instanceof Error ? error.message : undefined,
+            });
         }
     }, [createAPIToken, createForm]);
 
@@ -431,17 +390,16 @@ function SettingsAPITokens() {
             }
 
             try {
-                setDeleteErrorMessage(null);
-
                 await deleteAPIToken({
                     refetchQueries: ['apiTokens'],
                     variables: { tokenId },
                 });
 
                 setDeletingToken(null);
-                setDeleteErrorMessage(null);
             } catch (error) {
-                setDeleteErrorMessage(error instanceof Error ? error.message : 'An error occurred while deleting');
+                toast.error('Failed to delete token', {
+                    description: error instanceof Error ? error.message : undefined,
+                });
             }
         },
         [deleteAPIToken],
@@ -771,7 +729,7 @@ function SettingsAPITokens() {
                                     >
                                         {isDeleteLoading && deletingToken?.tokenId === token.tokenId ? (
                                             <>
-                                                <Loader2 className="animate-spin" />
+                                                <Spinner variant="circle" />
                                                 Deleting...
                                             </>
                                         ) : (
@@ -848,6 +806,51 @@ function SettingsAPITokens() {
             <AppHeaderContent>
                 <AppHeaderTitle icon={<Key className="size-4 shrink-0" />}>API Tokens</AppHeaderTitle>
             </AppHeaderContent>
+            <AppHeaderActions>
+                <AppHeaderAction
+                    icon={<Plus />}
+                    label="Create Token"
+                    onClick={handleCreateNew}
+                    variant="secondary"
+                />
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <Button
+                            aria-label="Developer tools"
+                            className="size-8 p-0"
+                            size="sm"
+                            variant="ghost"
+                        >
+                            <Ellipsis />
+                        </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent
+                        align="end"
+                        className="min-w-44"
+                    >
+                        <DropdownMenuItem asChild>
+                            <a
+                                href={`${baseUrl}/graphql/playground`}
+                                rel="noopener noreferrer"
+                                target="_blank"
+                            >
+                                <ExternalLink />
+                                GraphQL Playground
+                            </a>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem asChild>
+                            <a
+                                href={`${baseUrl}/swagger/index.html`}
+                                rel="noopener noreferrer"
+                                target="_blank"
+                            >
+                                <ExternalLink />
+                                Swagger UI
+                            </a>
+                        </DropdownMenuItem>
+                    </DropdownMenuContent>
+                </DropdownMenu>
+            </AppHeaderActions>
         </AppHeader>
     );
 
@@ -856,10 +859,8 @@ function SettingsAPITokens() {
             <>
                 {pageHeader}
                 <div className="flex flex-1 flex-col gap-4 p-4">
-                    <SettingsAPITokensHeader onCreateClick={handleCreateNew} />
-                    <StatusCard
+                    <LoadingState
                         description="Please wait while we fetch your API tokens"
-                        icon={<Loader2 className="text-muted-foreground size-16 animate-spin" />}
                         title="Loading tokens..."
                     />
                 </div>
@@ -867,17 +868,17 @@ function SettingsAPITokens() {
         );
     }
 
-    if (error) {
+    // Error surface only when there's no data — a failed background refetch must not blank a working list.
+    if (error && !data) {
         return (
             <>
                 {pageHeader}
                 <div className="flex flex-1 flex-col gap-4 p-4">
-                    <SettingsAPITokensHeader onCreateClick={handleCreateNew} />
-                    <Alert variant="destructive">
-                        <AlertCircle className="size-4" />
-                        <AlertTitle>Error loading tokens</AlertTitle>
-                        <AlertDescription>{error.message}</AlertDescription>
-                    </Alert>
+                    <ErrorState
+                        message={error.message}
+                        onRetry={refetch}
+                        title="Error loading tokens"
+                    />
                 </div>
             </>
         );
@@ -890,21 +891,26 @@ function SettingsAPITokens() {
             <>
                 {pageHeader}
                 <div className="flex flex-1 flex-col gap-4 p-4">
-                    <SettingsAPITokensHeader onCreateClick={handleCreateNew} />
-                    <StatusCard
-                        action={
+                    <Empty>
+                        <EmptyHeader>
+                            <EmptyMedia variant="icon">
+                                <Key />
+                            </EmptyMedia>
+                            <EmptyTitle>No API tokens configured</EmptyTitle>
+                            <EmptyDescription>
+                                Create your first API token to access PentAGI programmatically
+                            </EmptyDescription>
+                        </EmptyHeader>
+                        <EmptyContent>
                             <Button
                                 onClick={handleCreateNew}
                                 variant="secondary"
                             >
-                                <Plus className="size-4" />
+                                <Plus />
                                 Create Token
                             </Button>
-                        }
-                        description="Create your first API token to access PentAGI programmatically"
-                        icon={<Key className="text-muted-foreground size-8" />}
-                        title="No API tokens configured"
-                    />
+                        </EmptyContent>
+                    </Empty>
                 </div>
             </>
         );
@@ -914,18 +920,6 @@ function SettingsAPITokens() {
         <>
             {pageHeader}
             <div className="flex flex-1 flex-col gap-4 p-4">
-                <SettingsAPITokensHeader onCreateClick={handleCreateNew} />
-
-                {(createError || updateError || deleteError || deleteErrorMessage) && (
-                    <Alert variant="destructive">
-                        <AlertCircle className="size-4" />
-                        <AlertTitle>Error</AlertTitle>
-                        <AlertDescription>
-                            {createError?.message || updateError?.message || deleteError?.message || deleteErrorMessage}
-                        </AlertDescription>
-                    </Alert>
-                )}
-
                 <DataTable<APIToken>
                     columns={columns}
                     data={creatingToken ? [createNewTokenPlaceholder, ...tokens] : tokens}
@@ -968,7 +962,7 @@ function SettingsAPITokens() {
                                 }}
                                 variant="secondary"
                             >
-                                <Copy className="size-4" />
+                                <Copy />
                                 Copy Token
                             </Button>
                             <Button

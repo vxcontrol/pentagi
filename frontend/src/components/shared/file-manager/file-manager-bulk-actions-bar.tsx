@@ -184,7 +184,7 @@ export function FileManagerBulkActionsBar({
                                             handleActionClick(action);
                                         }}
                                     >
-                                        {action.icon ? <action.icon className="size-4" /> : null}
+                                        {action.icon ? <action.icon /> : null}
                                         {action.label}
                                     </DropdownMenuItem>
                                 ))}

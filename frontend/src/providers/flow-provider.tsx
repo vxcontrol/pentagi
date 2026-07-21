@@ -1,3 +1,4 @@
+import { NetworkStatus } from '@apollo/client';
 import { useMutation, useQuery, useSubscription } from '@apollo/client/react';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
@@ -36,18 +37,21 @@ import {
 } from '@/graphql/types';
 import { Log } from '@/lib/log';
 
+const isFlowNotFoundError = (error: Error) => /no rows in result set|not found/i.test(error.message);
+
 interface FlowContextValue {
     assistantLogs: Array<AssistantLogFragmentFragment>;
     assistants: Array<AssistantFragmentFragment>;
     createAssistant: (values: FlowFormValues) => Promise<void>;
     deleteAssistant: (assistantId: string) => Promise<void>;
     flowData: FlowQuery | undefined;
-    flowError: Error | undefined;
     flowId: null | string;
+    flowLoadError: Error | undefined;
     flowStatus: StatusType | undefined;
     initiateAssistantCreation: () => void;
     isAssistantsLoading: boolean;
     isLoading: boolean;
+    refetchFlow: () => void;
     selectAssistant: (assistantId: null | string) => void;
     selectedAssistantId: null | string;
     stopAssistant: (assistantId: string) => Promise<void>;
@@ -70,7 +74,9 @@ export function FlowProvider({ children }: FlowProviderProps) {
     const {
         data: flowData,
         error: flowError,
-        loading: isLoading,
+        loading,
+        networkStatus,
+        refetch: refetchFlow,
     } = useQuery(FlowDocument, {
         errorPolicy: 'all',
         fetchPolicy: 'cache-first',
@@ -79,6 +85,17 @@ export function FlowProvider({ children }: FlowProviderProps) {
         skip: !flowId,
         variables: { id: flowId ?? '' },
     });
+
+    // Only the initial load blocks the UI and gates subscriptions. A background
+    // refetch (e.g. the reconnect reconcile) stays at networkStatus `refetch`, so
+    // it must NOT flip isLoading — otherwise it covers the page with the spinner
+    // overlay and tears down the 14 live subscriptions mid-flight.
+    const isLoading = loading && networkStatus === NetworkStatus.loading;
+
+    // A real load failure that left nothing to show (cold cache + backend error on a
+    // deep link), as opposed to a genuine not-found. The detail page renders this as an
+    // in-page ErrorState + Retry instead of silently bouncing to the list.
+    const flowLoadError = flowError && !flowData?.flow && !isFlowNotFoundError(flowError) ? flowError : undefined;
 
     const { data: assistantsData, loading: isAssistantsLoading } = useQuery(AssistantsDocument, {
         fetchPolicy: 'cache-first',
@@ -170,21 +187,22 @@ export function FlowProvider({ children }: FlowProviderProps) {
 
     const flowStatus = useMemo(() => flowData?.flow?.status, [flowData?.flow?.status]);
 
-    // A single Postgres "no rows in result set" surfaces here every time a sibling
-    // query/subscription retries against an invalid flow id; without a stable
-    // toast id Sonner would stack 8 copies of the same message before the page
-    // redirects. Surface a friendly message and drop the raw SQL detail entirely.
+    // errorPolicy:'all' surfaces a partial error while the flow loaded, so gate on
+    // `!flow` or a partial failure toasts over a flow that rendered fine. A real load
+    // failure is surfaced in-page (ErrorState via flowLoadError); only the not-found
+    // redirect needs a toast to explain the bounce to the list. The stable id keeps the
+    // invalid-id "no rows" retries from stacking.
     useEffect(() => {
-        if (flowError) {
-            const raw = flowError.message ?? '';
-            const isNotFound = /no rows in result set|not found/i.test(raw);
-            toast.error(isNotFound ? 'Flow not found' : 'Failed to load flow', {
-                description: isNotFound ? undefined : raw || undefined,
-                id: 'flow-load-error',
-            });
-            Log.error('Error loading flow:', flowError);
+        if (!flowError || flowData?.flow) {
+            return;
         }
-    }, [flowError]);
+
+        if (isFlowNotFoundError(flowError)) {
+            toast.error('Flow not found', { id: 'flow-load-error' });
+        }
+
+        Log.error('Error loading flow:', flowError);
+    }, [flowError, flowData]);
 
     const submitAutomationMessage = useCallback(
         async (values: FlowFormValues) => {
@@ -374,12 +392,13 @@ export function FlowProvider({ children }: FlowProviderProps) {
             createAssistant,
             deleteAssistant,
             flowData,
-            flowError,
             flowId: flowId ?? null,
+            flowLoadError,
             flowStatus,
             initiateAssistantCreation,
             isAssistantsLoading,
             isLoading,
+            refetchFlow,
             selectAssistant,
             selectedAssistantId,
             stopAssistant,
@@ -393,12 +412,13 @@ export function FlowProvider({ children }: FlowProviderProps) {
             createAssistant,
             deleteAssistant,
             flowData,
-            flowError,
             flowId,
+            flowLoadError,
             flowStatus,
             initiateAssistantCreation,
             isAssistantsLoading,
             isLoading,
+            refetchFlow,
             selectAssistant,
             selectedAssistantId,
             stopAssistant,

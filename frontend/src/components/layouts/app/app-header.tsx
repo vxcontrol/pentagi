@@ -4,12 +4,14 @@ import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage } from '@/co
 import { Button, type ButtonProps } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { SidebarTrigger } from '@/components/ui/sidebar';
+import { Spinner } from '@/components/ui/spinner';
 import { cn } from '@/lib/utils';
 
 interface AppHeaderActionProps extends Omit<ButtonProps, 'children'> {
     endIcon?: ReactNode;
     icon: ReactNode;
     label: ReactNode;
+    loading?: boolean;
 }
 
 export function AppHeader({ children, className }: { children: ReactNode; className?: string }) {
@@ -28,9 +30,11 @@ export function AppHeader({ children, className }: { children: ReactNode; classN
 export function AppHeaderAction({
     'aria-label': ariaLabel,
     className,
+    disabled,
     endIcon,
     icon,
     label,
+    loading = false,
     size = 'sm',
     ...props
 }: AppHeaderActionProps) {
@@ -40,18 +44,34 @@ export function AppHeaderAction({
         <Button
             aria-label={accessibleLabel}
             className={cn('w-8 px-0 md:w-auto md:px-3', className)}
+            disabled={disabled || loading}
             size={size}
             {...props}
         >
-            {icon}
+            {loading ? <Spinner variant="circle" /> : icon}
             <span className="hidden md:inline">{label}</span>
             {endIcon ? <span className="hidden md:inline-flex">{endIcon}</span> : null}
         </Button>
     );
 }
 
-export function AppHeaderActions({ children, className }: { children: ReactNode; className?: string }) {
-    return <div className={cn('flex shrink-0 items-center gap-2 px-4', className)}>{children}</div>;
+export function AppHeaderActions({
+    children,
+    className,
+    pager,
+}: {
+    children?: ReactNode;
+    className?: string;
+    pager?: ReactNode;
+}) {
+    // Pass a detail prev/next control as `pager`, not as a child: as the trailing child it stays edge-pinned,
+    // so a conditional neighbour (e.g. a Report button that loads late) can't shift it under the cursor mid-click.
+    return (
+        <div className={cn('flex shrink-0 items-center gap-2 px-4', className)}>
+            {children}
+            {pager}
+        </div>
+    );
 }
 
 export function AppHeaderContent({ children, className }: { children: ReactNode; className?: string }) {
