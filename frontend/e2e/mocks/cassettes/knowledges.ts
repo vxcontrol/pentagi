@@ -30,7 +30,10 @@ export const makeKnowledge = (id: string, question: string): KnowledgeDocumentFr
 
 export const KNOWLEDGE_DOC = makeKnowledge('7', 'E2E Seed Question');
 
-const knowledgeDocuments: ResultOf<typeof KnowledgeDocumentsDocument> = { knowledgeDocuments: [KNOWLEDGE_DOC] };
+// The list query is withContent:false; the backend returns content:'' in that case (schema.graphqls).
+const knowledgeDocuments: ResultOf<typeof KnowledgeDocumentsDocument> = {
+    knowledgeDocuments: [{ ...KNOWLEDGE_DOC, content: '' }],
+};
 
 export const knowledgesCassette = (override: Cassette = {}): Cassette =>
     mergeCassettes(

@@ -26,7 +26,10 @@ export const installMockRoutes = async (page: Page, world: MockWorld): Promise<v
 
             if (entry) {
                 await route.fulfill({
-                    json: entry.errors ? { errors: entry.errors } : { data: entry.data },
+                    json: {
+                        ...(entry.data === undefined ? {} : { data: entry.data }),
+                        ...(entry.errors ? { errors: entry.errors } : {}),
+                    },
                 });
 
                 return;
