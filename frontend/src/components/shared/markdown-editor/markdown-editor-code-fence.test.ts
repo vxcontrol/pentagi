@@ -29,6 +29,29 @@ describe('code-block fence lengthening — a block documenting a ``` fence stays
     });
 });
 
+// The fence language must reach node.attrs.language (what CodeBlockLowlight highlights and the
+// data-language caption names) and survive save unchanged — highlighting is a view-only decoration.
+describe('code-block language attribute', () => {
+    const language = (md: string): null | string => {
+        const editor = new Editor({ content: md, contentType: 'markdown', extensions: createMarkdownExtensions() });
+        const node = (editor.getJSON().content ?? []).find((candidate) => candidate.type === 'codeBlock');
+        editor.destroy();
+
+        return (node?.attrs?.language as null | string) ?? null;
+    };
+
+    it('captures the fence info string into attrs.language', () => {
+        expect(language('```ts\nconst x = 1;\n```')).toBe('ts');
+        expect(language('```\nplain\n```')).toBeNull();
+    });
+
+    it('round-trips the language on the fence for several languages', () => {
+        for (const lang of ['ts', 'python', 'bash', 'json', 'go']) {
+            expect(roundTrip(`\`\`\`${lang}\ncode\n\`\`\``)).toContain(`\`\`\`${lang}`);
+        }
+    });
+});
+
 // KNOWN UPSTREAM LIMITATION — not fixable in this layer. @tiptap/markdown derives a MARK's opening/closing
 // delimiter by rendering it around a fixed placeholder (getMarkOpening/getMarkClosing), so the `code` mark's
 // real content is never seen at delimiter time and it always emits a SINGLE backtick. A code span whose
