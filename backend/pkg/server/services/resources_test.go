@@ -1288,6 +1288,19 @@ func TestResourceService_DownloadResourceScenarios(t *testing.T) {
 			privs:      []string{"resources.download"},
 			wantStatus: http.StatusNotFound,
 		},
+		{
+			// DB row present but the blob file is gone, inside a multi-file ZIP: must
+			// fail with an error, not stream a truncated archive under 200. Present
+			// blob first so the pre-flight, not write order, is what prevents output.
+			name: "blob missing on disk in a zip batch fails cleanly, no truncated 200",
+			seeds: []seed{
+				{path: "a.txt", content: "alpha"},
+				{path: "b.txt", content: "beta", skipBlobWrite: true},
+			},
+			paths:      []string{"a.txt", "b.txt"},
+			privs:      []string{"resources.download"},
+			wantStatus: http.StatusInternalServerError,
+		},
 	}
 
 	for _, tt := range tests {

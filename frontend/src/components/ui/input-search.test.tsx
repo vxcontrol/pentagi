@@ -141,19 +141,37 @@ describe('InputSearch — trailing clear button', () => {
     const queryClearButton = () => screen.queryByRole('button', { name: 'Clear search docs' });
 
     it('does not render the clear button when the field is empty', () => {
-        render(<SearchHost emitted={[]} initialQuery="" />, { wrapper: Wrapper });
+        render(
+            <SearchHost
+                emitted={[]}
+                initialQuery=""
+            />,
+            { wrapper: Wrapper },
+        );
         expect(queryClearButton()).not.toBeInTheDocument();
     });
 
     it('renders the clear button on mount when deep-linked with a non-empty query', () => {
-        render(<SearchHost emitted={[]} initialQuery="jwt" />, { wrapper: Wrapper });
+        render(
+            <SearchHost
+                emitted={[]}
+                initialQuery="jwt"
+            />,
+            { wrapper: Wrapper },
+        );
         expect(queryClearButton()).toBeInTheDocument();
     });
 
     it('shows the clear button after typing, hides it once the field is empty again', async () => {
         const emitted: string[] = [];
         const user = userEvent.setup();
-        render(<SearchHost emitted={emitted} initialQuery="" />, { wrapper: Wrapper });
+        render(
+            <SearchHost
+                emitted={emitted}
+                initialQuery=""
+            />,
+            { wrapper: Wrapper },
+        );
 
         await user.click(queryTrigger()!);
         expect(queryClearButton()).not.toBeInTheDocument();
@@ -168,7 +186,13 @@ describe('InputSearch — trailing clear button', () => {
     it('clears the value, emits "" upstream, and keeps focus on the input', async () => {
         const emitted: string[] = [];
         const user = userEvent.setup();
-        render(<SearchHost emitted={emitted} initialQuery="jwt" />, { wrapper: Wrapper });
+        render(
+            <SearchHost
+                emitted={emitted}
+                initialQuery="jwt"
+            />,
+            { wrapper: Wrapper },
+        );
 
         const input = getInput();
         await user.click(queryClearButton()!);

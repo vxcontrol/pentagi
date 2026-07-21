@@ -21,6 +21,7 @@ import (
 	"pentagi/pkg/providers/gemini"
 	"pentagi/pkg/providers/glm"
 	"pentagi/pkg/providers/kimi"
+	"pentagi/pkg/providers/minimax"
 	"pentagi/pkg/providers/openai"
 	"pentagi/pkg/providers/pconfig"
 	"pentagi/pkg/providers/provider"
@@ -98,6 +99,10 @@ func (r *mutationResolver) PutUserInput(ctx context.Context, flowID int64, input
 	uid, err := validatePermissionWithFlowID(ctx, "flows.edit", flowID, r.DB)
 	if err != nil {
 		return model.ResultTypeError, err
+	}
+
+	if input == "" {
+		return model.ResultTypeError, fmt.Errorf("user input is required")
 	}
 
 	fields := logrus.Fields{
@@ -240,6 +245,10 @@ func (r *mutationResolver) RenameFlow(ctx context.Context, flowID int64, title s
 		return model.ResultTypeError, err
 	}
 
+	if title == "" {
+		return model.ResultTypeError, fmt.Errorf("flow title is required")
+	}
+
 	r.Logger.WithFields(logrus.Fields{
 		"uid":   uid,
 		"flow":  flowID,
@@ -352,6 +361,10 @@ func (r *mutationResolver) CallAssistant(ctx context.Context, flowID int64, assi
 	uid, err := validatePermissionWithFlowID(ctx, "assistants.edit", flowID, r.DB)
 	if err != nil {
 		return model.ResultTypeError, err
+	}
+
+	if input == "" {
+		return model.ResultTypeError, fmt.Errorf("user input is required")
 	}
 
 	r.Logger.WithFields(logrus.Fields{
@@ -754,6 +767,10 @@ func (r *mutationResolver) CreateAPIToken(ctx context.Context, input model.Creat
 		return nil, fmt.Errorf("invalid TTL: must be between 60 and 94608000 seconds")
 	}
 
+	if input.Name != nil && len(*input.Name) > maxAPITokenNameLen {
+		return nil, fmt.Errorf("token name must not exceed %d characters", maxAPITokenNameLen)
+	}
+
 	r.Logger.WithFields(logrus.Fields{
 		"uid":  uid,
 		"name": input.Name,
@@ -821,6 +838,10 @@ func (r *mutationResolver) UpdateAPIToken(ctx context.Context, tokenID string, i
 
 	if !isUserSession {
 		return nil, fmt.Errorf("unauthorized: non-user session is not allowed to update API tokens")
+	}
+
+	if input.Name != nil && len(*input.Name) > maxAPITokenNameLen {
+		return nil, fmt.Errorf("token name must not exceed %d characters", maxAPITokenNameLen)
 	}
 
 	r.Logger.WithFields(logrus.Fields{
@@ -1129,6 +1150,13 @@ func (r *mutationResolver) CreateKnowledgeDocument(ctx context.Context, input mo
 		return nil, err
 	}
 
+	if input.Content == "" || input.Question == "" {
+		return nil, fmt.Errorf("content and question are required")
+	}
+	if err := validateKnowledgeFieldLengths(input.Content, &input.Question, input.Description, input.CodeLang); err != nil {
+		return nil, err
+	}
+
 	r.Logger.WithFields(logrus.Fields{
 		"uid":      uid,
 		"doc_type": input.DocType,
@@ -1144,6 +1172,13 @@ func (r *mutationResolver) UpdateKnowledgeDocument(ctx context.Context, id strin
 		return nil, err
 	}
 
+	if input.Content == "" {
+		return nil, fmt.Errorf("content is required")
+	}
+	if err := validateKnowledgeFieldLengths(input.Content, input.Question, input.Description, input.CodeLang); err != nil {
+		return nil, err
+	}
+
 	r.Logger.WithFields(logrus.Fields{
 		"uid":   uid,
 		"admin": admin,
@@ -1154,6 +1189,25 @@ func (r *mutationResolver) UpdateKnowledgeDocument(ctx context.Context, id strin
 		return r.Knowledge.UpdateDocument(ctx, uid, id, input)
 	}
 	return r.Knowledge.UpdateUserDocument(ctx, uid, id, input)
+}
+
+// RenameKnowledgeDocument is the resolver for the renameKnowledgeDocument field.
+func (r *mutationResolver) RenameKnowledgeDocument(ctx context.Context, id string, question string) (*model.KnowledgeDocument, error) {
+	uid, admin, err := validatePermission(ctx, "knowledge.edit")
+	if err != nil {
+		return nil, err
+	}
+
+	r.Logger.WithFields(logrus.Fields{
+		"uid":   uid,
+		"admin": admin,
+		"id":    id,
+	}).Debug("rename knowledge document")
+
+	if admin {
+		return r.Knowledge.RenameDocument(ctx, uid, id, question)
+	}
+	return r.Knowledge.RenameUserDocument(ctx, uid, id, question)
 }
 
 // DeleteKnowledgeDocument is the resolver for the deleteKnowledgeDocument field.
@@ -2045,22 +2099,22 @@ func (r *queryResolver) SettingsProviders(ctx context.Context) (*model.Providers
 		case provider.ProviderOpenAI:
 			config.Default.Openai = mpcfg
 			if models, err := openai.DefaultModels(); err == nil {
-				config.Models.Openai = converter.ConvertModels(models)
+				config.Models.Openai = converter.ConvertModels(models, prvtype.ReasoningProvider())
 			}
 		case provider.ProviderAnthropic:
 			config.Default.Anthropic = mpcfg
 			if models, err := anthropic.DefaultModels(); err == nil {
-				config.Models.Anthropic = converter.ConvertModels(models)
+				config.Models.Anthropic = converter.ConvertModels(models, prvtype.ReasoningProvider())
 			}
 		case provider.ProviderGemini:
 			config.Default.Gemini = mpcfg
 			if models, err := gemini.DefaultModels(); err == nil {
-				config.Models.Gemini = converter.ConvertModels(models)
+				config.Models.Gemini = converter.ConvertModels(models, prvtype.ReasoningProvider())
 			}
 		case provider.ProviderBedrock:
 			config.Default.Bedrock = mpcfg
 			if models, err := bedrock.DefaultModels(); err == nil {
-				config.Models.Bedrock = converter.ConvertModels(models)
+				config.Models.Bedrock = converter.ConvertModels(models, prvtype.ReasoningProvider())
 			}
 		case provider.ProviderOllama:
 			config.Default.Ollama = mpcfg
@@ -2069,22 +2123,27 @@ func (r *queryResolver) SettingsProviders(ctx context.Context) (*model.Providers
 		case provider.ProviderDeepSeek:
 			config.Default.Deepseek = mpcfg
 			if models, err := deepseek.DefaultModels(); err == nil {
-				config.Models.Deepseek = converter.ConvertModels(models)
+				config.Models.Deepseek = converter.ConvertModels(models, prvtype.ReasoningProvider())
 			}
 		case provider.ProviderGLM:
 			config.Default.Glm = mpcfg
 			if models, err := glm.DefaultModels(); err == nil {
-				config.Models.Glm = converter.ConvertModels(models)
+				config.Models.Glm = converter.ConvertModels(models, prvtype.ReasoningProvider())
 			}
 		case provider.ProviderKimi:
 			config.Default.Kimi = mpcfg
 			if models, err := kimi.DefaultModels(); err == nil {
-				config.Models.Kimi = converter.ConvertModels(models)
+				config.Models.Kimi = converter.ConvertModels(models, prvtype.ReasoningProvider())
 			}
 		case provider.ProviderQwen:
 			config.Default.Qwen = mpcfg
 			if models, err := qwen.DefaultModels(); err == nil {
-				config.Models.Qwen = converter.ConvertModels(models)
+				config.Models.Qwen = converter.ConvertModels(models, prvtype.ReasoningProvider())
+			}
+		case provider.ProviderMiniMax:
+			config.Default.Minimax = mpcfg
+			if models, err := minimax.DefaultModels(); err == nil {
+				config.Models.Minimax = converter.ConvertModels(models, prvtype.ReasoningProvider())
 			}
 		}
 	}
@@ -2100,15 +2159,18 @@ func (r *queryResolver) SettingsProviders(ctx context.Context) (*model.Providers
 			config.Enabled.Gemini = true
 		case provider.ProviderBedrock:
 			config.Enabled.Bedrock = true
+			if p, ok := defaultProviders[provider.DefaultProviderNameBedrock]; ok {
+				config.Models.Bedrock = converter.ConvertModels(p.GetModels(), prvtype.ReasoningProvider())
+			}
 		case provider.ProviderOllama:
 			config.Enabled.Ollama = true
 			if p, ok := defaultProviders[provider.DefaultProviderNameOllama]; ok {
-				config.Models.Ollama = converter.ConvertModels(p.GetModels())
+				config.Models.Ollama = converter.ConvertModels(p.GetModels(), prvtype.ReasoningProvider())
 			}
 		case provider.ProviderCustom:
 			config.Enabled.Custom = true
 			if p, ok := defaultProviders[provider.DefaultProviderNameCustom]; ok {
-				config.Models.Custom = converter.ConvertModels(p.GetModels())
+				config.Models.Custom = converter.ConvertModels(p.GetModels(), prvtype.ReasoningProvider())
 			}
 		case provider.ProviderDeepSeek:
 			config.Enabled.Deepseek = true
@@ -2118,6 +2180,8 @@ func (r *queryResolver) SettingsProviders(ctx context.Context) (*model.Providers
 			config.Enabled.Kimi = true
 		case provider.ProviderQwen:
 			config.Enabled.Qwen = true
+		case provider.ProviderMiniMax:
+			config.Enabled.Minimax = true
 		}
 	}
 

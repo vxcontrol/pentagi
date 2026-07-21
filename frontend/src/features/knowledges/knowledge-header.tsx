@@ -7,14 +7,15 @@ import { toast } from 'sonner';
 
 import type { KnowledgeDocumentFragmentFragment } from '@/graphql/types';
 
+import { AppHeader, AppHeaderAction, AppHeaderActions, AppHeaderContent } from '@/components/layouts/app/app-header';
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
 import {
     DetailNavigationButtons,
     DetailNavigationSheet,
     DetailNavigationToolbar,
 } from '@/components/shared/detail-navigation';
-import { HeaderButton } from '@/components/shared/header-button';
 import { InlineEditInput, useInlineEdit } from '@/components/shared/inline-edit';
+import { type EditorViewMode, EditorViewModeToggle } from '@/components/shared/markdown-editor';
 import { Badge } from '@/components/ui/badge';
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage } from '@/components/ui/breadcrumb';
 import { Button } from '@/components/ui/button';
@@ -25,21 +26,17 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Separator } from '@/components/ui/separator';
-import { SidebarTrigger } from '@/components/ui/sidebar';
 import { Spinner } from '@/components/ui/spinner';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useBreakpoint } from '@/hooks/use-breakpoint';
+import { routes } from '@/lib/routes';
 import { cn } from '@/lib/utils';
 import { type Knowledge, useKnowledges } from '@/providers/knowledges-provider';
 
 import { useKnowledgeDetailNavigation } from './use-knowledge-detail-navigation';
 
 interface KnowledgeHeaderProps {
-    // Anonymize action — visible only to users with the `anonymize.call`
-    // privilege. The header itself renders both desktop button and mobile
-    // dropdown item from these primitives so the icon/loading state stay in
-    // sync between layouts.
+    // Anonymize action — visible only to users with the `anonymize.call` privilege.
     canAnonymize?: boolean;
     isAnonymizeDisabled?: boolean;
     isAnonymizing?: boolean;
@@ -53,7 +50,9 @@ interface KnowledgeHeaderProps {
      */
     onAnonymize?: () => void;
     onBeforeNavigateAway?: () => void;
+    onModeChange?: (mode: EditorViewMode) => void;
     saveButton?: ReactNode;
+    viewMode?: EditorViewMode;
 }
 
 const renderKnowledgeItem = (item: Knowledge, isCurrent: boolean): ReactNode => (
@@ -76,27 +75,29 @@ export function KnowledgeHeader({
     knowledge,
     onAnonymize,
     onBeforeNavigateAway,
+    onModeChange,
     saveButton,
+    viewMode = 'rich',
 }: KnowledgeHeaderProps) {
     const navigate = useNavigate();
     const { isMobile } = useBreakpoint();
-    const { deleteKnowledge, updateKnowledge } = useKnowledges();
+    const { deleteKnowledge, renameKnowledge } = useKnowledges();
     const [isRenaming, setIsRenaming] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
     const knowledgeId = knowledge?.id ?? null;
 
-    // Single controller drives both the desktop toolbar and the mobile
-    // dropdown row + sheet — no separate state mirroring required.
     const knowledgeNav = useKnowledgeDetailNavigation(knowledgeId);
 
     // Title source-of-truth is the server-side `question`. We intentionally do
     // not read it from the form draft below — the inline rename flow in this
-    // header writes through `updateKnowledge`, which refreshes `knowledge` via
+    // header writes through `renameKnowledge`, which refreshes `knowledge` via
     // the cache, and the form picks up the new value separately.
     const knowledgeName = knowledge?.question ?? null;
     const canShowActions = !isNew && !!knowledge;
+    const hasAnonymizeRow = isMobile && canAnonymize;
+    const hasNavRow = isMobile && knowledgeNav.total > 0;
 
     const {
         handleDropdownCloseAutoFocus,
@@ -122,15 +123,9 @@ export function KnowledgeHeader({
         setIsRenaming(true);
 
         try {
-            // Backend requires `content` on update (always re-embeds). We pass
-            // the server's current `content` so an inline rename never
-            // accidentally overwrites unsaved edits made in the form below.
-            // The sibling form picks up the new `question` automatically via
-            // `useForm({ values })` — no manual sync needed here.
-            await updateKnowledge(knowledge.id, {
-                content: knowledge.content,
-                question: newQuestion,
-            });
+            // The sibling edit form picks up the new `question` via
+            // `useForm({ values })` once the cache updates — no manual sync here.
+            await renameKnowledge(knowledge.id, newQuestion);
             toast.success('Knowledge renamed successfully');
             handleRenameCancel();
         } catch {
@@ -138,7 +133,7 @@ export function KnowledgeHeader({
         } finally {
             setIsRenaming(false);
         }
-    }, [editingInputRef, handleRenameCancel, knowledge, updateKnowledge]);
+    }, [editingInputRef, handleRenameCancel, knowledge, renameKnowledge]);
 
     const handleDelete = useCallback(async () => {
         if (!knowledgeId) {
@@ -150,7 +145,7 @@ export function KnowledgeHeader({
         try {
             await deleteKnowledge(knowledgeId);
             onBeforeNavigateAway?.();
-            navigate('/knowledges', { replace: true });
+            navigate(routes.knowledges, { replace: true });
         } catch {
             // Error already handled in provider with toast
         } finally {
@@ -160,13 +155,8 @@ export function KnowledgeHeader({
 
     return (
         <>
-            <header className="bg-background sticky top-0 z-10 flex h-12 shrink-0 items-center gap-2 border-b px-4">
-                <div className="flex min-w-0 flex-1 items-center gap-2">
-                    <SidebarTrigger className="-ml-1 shrink-0" />
-                    <Separator
-                        className="mr-2 h-4 shrink-0"
-                        orientation="vertical"
-                    />
+            <AppHeader>
+                <AppHeaderContent>
                     <Breadcrumb className="min-w-0 flex-1">
                         <BreadcrumbList className="min-w-0 flex-nowrap">
                             <BreadcrumbItem className="min-w-0 gap-2">
@@ -201,8 +191,8 @@ export function KnowledgeHeader({
                             </BreadcrumbItem>
                         </BreadcrumbList>
                     </Breadcrumb>
-                </div>
-                <div className="flex shrink-0 items-center gap-2">
+                </AppHeaderContent>
+                <AppHeaderActions>
                     {canShowActions && !isMobile && (
                         <DetailNavigationToolbar<Knowledge>
                             controller={knowledgeNav}
@@ -212,7 +202,7 @@ export function KnowledgeHeader({
                         />
                     )}
                     {canAnonymize && !isMobile && (
-                        <HeaderButton
+                        <AppHeaderAction
                             disabled={isAnonymizeDisabled}
                             icon={isAnonymizing ? <Spinner variant="circle" /> : <HatGlasses aria-hidden="true" />}
                             label="Anonymize"
@@ -222,7 +212,7 @@ export function KnowledgeHeader({
                         />
                     )}
                     {saveButton}
-                    {(canShowActions || (isMobile && canAnonymize)) && (
+                    {(canShowActions || (isMobile && canAnonymize) || !!onModeChange) && (
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                                 <Button
@@ -239,29 +229,27 @@ export function KnowledgeHeader({
                                 className="min-w-24"
                                 onCloseAutoFocus={handleDropdownCloseAutoFocus}
                             >
-                                {isMobile && canAnonymize && (
-                                    <>
-                                        <DropdownMenuItem
-                                            disabled={isAnonymizeDisabled}
-                                            onClick={onAnonymize}
-                                        >
-                                            {isAnonymizing ? (
-                                                <>
-                                                    <Loader2 className="size-4 animate-spin" />
-                                                    Anonymizing...
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <HatGlasses className="size-4" />
-                                                    Anonymize
-                                                </>
-                                            )}
-                                        </DropdownMenuItem>
-                                        {canShowActions && <DropdownMenuSeparator />}
-                                    </>
+                                {hasAnonymizeRow && (
+                                    <DropdownMenuItem
+                                        disabled={isAnonymizeDisabled}
+                                        onClick={onAnonymize}
+                                    >
+                                        {isAnonymizing ? (
+                                            <>
+                                                <Loader2 className="size-4 animate-spin" />
+                                                Anonymizing...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <HatGlasses className="size-4" />
+                                                Anonymize
+                                            </>
+                                        )}
+                                    </DropdownMenuItem>
                                 )}
-                                {isMobile && knowledgeNav.total > 0 && (
+                                {hasNavRow && (
                                     <>
+                                        {hasAnonymizeRow && <DropdownMenuSeparator />}
                                         <DropdownMenuItem
                                             className="cursor-default hover:bg-transparent focus:bg-transparent"
                                             onSelect={(event) => event.preventDefault()}
@@ -276,15 +264,37 @@ export function KnowledgeHeader({
                                                 />
                                             </div>
                                         </DropdownMenuItem>
-                                        <DropdownMenuSeparator />
                                     </>
                                 )}
                                 {canShowActions && (
                                     <>
+                                        {(hasAnonymizeRow || hasNavRow) && <DropdownMenuSeparator />}
                                         <DropdownMenuItem onClick={handleRenameStart}>
                                             <Pencil className="size-3" />
                                             Rename
                                         </DropdownMenuItem>
+                                        <DropdownMenuSeparator />
+                                    </>
+                                )}
+                                {onModeChange ? (
+                                    <>
+                                        {!canShowActions && (hasAnonymizeRow || hasNavRow) && <DropdownMenuSeparator />}
+                                        <DropdownMenuItem
+                                            className="cursor-default gap-4 hover:bg-transparent focus:bg-transparent"
+                                            onSelect={(event) => event.preventDefault()}
+                                        >
+                                            View
+                                            <EditorViewModeToggle
+                                                className="-my-1.5 -mr-2 ml-auto"
+                                                mode={viewMode}
+                                                onModeChange={onModeChange}
+                                                rawTooltip="Edit the raw markdown"
+                                            />
+                                        </DropdownMenuItem>
+                                    </>
+                                ) : null}
+                                {canShowActions && (
+                                    <>
                                         <DropdownMenuSeparator />
                                         <DropdownMenuItem
                                             disabled={isDeleting}
@@ -307,8 +317,8 @@ export function KnowledgeHeader({
                             </DropdownMenuContent>
                         </DropdownMenu>
                     )}
-                </div>
-            </header>
+                </AppHeaderActions>
+            </AppHeader>
             {isMobile && canShowActions && (
                 <DetailNavigationSheet<Knowledge>
                     controller={knowledgeNav}

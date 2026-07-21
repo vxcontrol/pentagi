@@ -41,8 +41,6 @@ function FlowFiles() {
     const { flowId, flowStatus } = useFlow();
     const [isPullDialogOpen, setIsPullDialogOpen] = useState(false);
     const [isAttachResourcesDialogOpen, setIsAttachResourcesDialogOpen] = useState(false);
-    // Array now: row-action click pushes a single-element array, the bulk bar
-    // pushes the deduped selection. Empty array / null closes the dialog.
     const [filesToPromote, setFilesToPromote] = useState<FileNode[] | null>(null);
 
     const { fileNodes, isInitialLoading, isLoading } = useFlowFilesData({ flowId });
@@ -75,9 +73,8 @@ function FlowFiles() {
     }, []);
 
     /**
-     * Bulk "copy paths" handler: join every selected file's path with `\n` so the
-     * user can paste a clean newline-separated list straight into the agent chat,
-     * a shell command, or a tool argument. Reports the count for clarity.
+     * Join the selected paths with `\n` so the result pastes as a clean
+     * newline-separated list into the agent chat, a shell command, or a tool argument.
      */
     const handleBulkCopyPaths = useCallback(async (paths: string[]) => {
         if (paths.length === 0) {
@@ -95,9 +92,8 @@ function FlowFiles() {
         toast.error('Failed to copy paths');
     }, []);
 
-    // Single-file row download specialises the bulk URL builder via a 1-element
-    // array. `flowId` may be missing (no flow selected yet) — return '' so
-    // FileManager renders a noop link instead of crashing on `null`.
+    // `flowId` may be missing (no flow selected yet) — return '' so FileManager
+    // renders a noop link instead of crashing on `null`.
     const getRowDownloadHref = useCallback(
         (file: FileNode): string => buildFlowFilesDownloadHref(flowId, [file]) ?? '',
         [flowId],
@@ -135,9 +131,6 @@ function FlowFiles() {
         [getRowDownloadHref, handleCopyPath, promoteAction, deletion.requestDelete],
     );
 
-    // Bulk-action set: primary "Save as resources" (most common workflow on this
-    // page — promote interesting artifacts into the global library), copy-paths
-    // in overflow, destructive Delete on the right.
     const fileManagerBulkActions = useMemo<FileManagerBulkAction[]>(
         () => [
             bulkDownloadAction(getBulkDownloadHref),

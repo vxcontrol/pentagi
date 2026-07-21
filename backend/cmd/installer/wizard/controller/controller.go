@@ -148,8 +148,8 @@ type LLMProviderConfig struct {
 
 	// direct form field mappings using loader.EnvVar
 	// these fields directly correspond to environment variables and form inputs (not computed)
-	BaseURL loader.EnvVar // OPEN_AI_SERVER_URL | ANTHROPIC_SERVER_URL | GEMINI_SERVER_URL | BEDROCK_SERVER_URL | OLLAMA_SERVER_URL | DEEPSEEK_SERVER_URL | GLM_SERVER_URL | KIMI_SERVER_URL | QWEN_SERVER_URL | LLM_SERVER_URL
-	APIKey  loader.EnvVar // OPEN_AI_KEY | ANTHROPIC_API_KEY | GEMINI_API_KEY | LLM_SERVER_KEY | DEEPSEEK_API_KEY | GLM_API_KEY | KIMI_API_KEY | QWEN_API_KEY | OLLAMA_SERVER_API_KEY
+	BaseURL loader.EnvVar // OPEN_AI_SERVER_URL | ANTHROPIC_SERVER_URL | GEMINI_SERVER_URL | BEDROCK_SERVER_URL | OLLAMA_SERVER_URL | DEEPSEEK_SERVER_URL | GLM_SERVER_URL | KIMI_SERVER_URL | QWEN_SERVER_URL | MINIMAX_SERVER_URL | LLM_SERVER_URL
+	APIKey  loader.EnvVar // OPEN_AI_KEY | ANTHROPIC_API_KEY | GEMINI_API_KEY | LLM_SERVER_KEY | DEEPSEEK_API_KEY | GLM_API_KEY | KIMI_API_KEY | QWEN_API_KEY | MINIMAX_API_KEY | OLLAMA_SERVER_API_KEY
 	Model   loader.EnvVar // LLM_SERVER_MODEL
 	// AWS Bedrock specific fields
 	DefaultAuth  loader.EnvVar // BEDROCK_DEFAULT_AUTH
@@ -164,7 +164,7 @@ type LLMProviderConfig struct {
 	LegacyReasoning   loader.EnvVar // LLM_SERVER_LEGACY_REASONING
 	PreserveReasoning loader.EnvVar // LLM_SERVER_PRESERVE_REASONING
 	// Custom specific fields
-	ProviderName loader.EnvVar // LLM_SERVER_PROVIDER | DEEPSEEK_PROVIDER | GLM_PROVIDER | KIMI_PROVIDER | QWEN_PROVIDER
+	ProviderName loader.EnvVar // LLM_SERVER_PROVIDER | DEEPSEEK_PROVIDER | GLM_PROVIDER | KIMI_PROVIDER | QWEN_PROVIDER | MINIMAX_PROVIDER
 	// Ollama specific fields
 	PullTimeout       loader.EnvVar // OLLAMA_SERVER_PULL_MODELS_TIMEOUT
 	PullEnabled       loader.EnvVar // OLLAMA_SERVER_PULL_MODELS_ENABLED
@@ -202,6 +202,7 @@ func (c *controller) GetLLMProviders() map[string]*LLMProviderConfig {
 		"glm":       c.GetLLMProviderConfig("glm"),
 		"kimi":      c.GetLLMProviderConfig("kimi"),
 		"qwen":      c.GetLLMProviderConfig("qwen"),
+		"minimax":   c.GetLLMProviderConfig("minimax"),
 		"custom":    c.GetLLMProviderConfig("custom"),
 	}
 }
@@ -288,6 +289,13 @@ func (c *controller) GetLLMProviderConfig(providerID string) *LLMProviderConfig 
 		providerConfig.APIKey, _ = c.GetVar("QWEN_API_KEY")
 		providerConfig.BaseURL, _ = c.GetVar("QWEN_SERVER_URL")
 		providerConfig.ProviderName, _ = c.GetVar("QWEN_PROVIDER")
+		providerConfig.Configured = providerConfig.APIKey.Value != ""
+
+	case "minimax":
+		providerConfig.Name = "MiniMax"
+		providerConfig.APIKey, _ = c.GetVar("MINIMAX_API_KEY")
+		providerConfig.BaseURL, _ = c.GetVar("MINIMAX_SERVER_URL")
+		providerConfig.ProviderName, _ = c.GetVar("MINIMAX_PROVIDER")
 		providerConfig.Configured = providerConfig.APIKey.Value != ""
 
 	case "custom":
@@ -442,6 +450,17 @@ func (c *controller) UpdateLLMProviderConfig(providerID string, config *LLMProvi
 			return fmt.Errorf("failed to set %s: %w", config.ProviderName.Name, err)
 		}
 
+	case "minimax":
+		if err := c.SetVar(config.APIKey.Name, config.APIKey.Value); err != nil {
+			return fmt.Errorf("failed to set %s: %w", config.APIKey.Name, err)
+		}
+		if err := c.SetVar(config.BaseURL.Name, config.BaseURL.Value); err != nil {
+			return fmt.Errorf("failed to set %s: %w", config.BaseURL.Name, err)
+		}
+		if err := c.SetVar(config.ProviderName.Name, config.ProviderName.Value); err != nil {
+			return fmt.Errorf("failed to set %s: %w", config.ProviderName.Name, err)
+		}
+
 	case "custom":
 		if err := c.SetVar(config.BaseURL.Name, config.BaseURL.Value); err != nil {
 			return fmt.Errorf("failed to set %s: %w", config.BaseURL.Name, err)
@@ -519,6 +538,8 @@ func (c *controller) ResetLLMProviderConfig(providerID string) map[string]*LLMPr
 		vars = []string{"KIMI_API_KEY", "KIMI_SERVER_URL", "KIMI_PROVIDER"}
 	case "qwen":
 		vars = []string{"QWEN_API_KEY", "QWEN_SERVER_URL", "QWEN_PROVIDER"}
+	case "minimax":
+		vars = []string{"MINIMAX_API_KEY", "MINIMAX_SERVER_URL", "MINIMAX_PROVIDER"}
 	case "custom":
 		vars = []string{
 			"LLM_SERVER_URL", "LLM_SERVER_KEY", "LLM_SERVER_MODEL",
@@ -2183,6 +2204,9 @@ func (c *controller) getVariableDescription(varName string) string {
 		"QWEN_API_KEY":                      locale.EnvDesc_QWEN_API_KEY,
 		"QWEN_SERVER_URL":                   locale.EnvDesc_QWEN_SERVER_URL,
 		"QWEN_PROVIDER":                     locale.EnvDesc_QWEN_PROVIDER,
+		"MINIMAX_API_KEY":                   locale.EnvDesc_MINIMAX_API_KEY,
+		"MINIMAX_SERVER_URL":                locale.EnvDesc_MINIMAX_SERVER_URL,
+		"MINIMAX_PROVIDER":                  locale.EnvDesc_MINIMAX_PROVIDER,
 		"LLM_SERVER_URL":                    locale.EnvDesc_LLM_SERVER_URL,
 		"LLM_SERVER_KEY":                    locale.EnvDesc_LLM_SERVER_KEY,
 		"LLM_SERVER_MODEL":                  locale.EnvDesc_LLM_SERVER_MODEL,
@@ -2354,6 +2378,7 @@ var maskedVariables = map[string]bool{
 	"GLM_API_KEY":               true,
 	"KIMI_API_KEY":              true,
 	"QWEN_API_KEY":              true,
+	"MINIMAX_API_KEY":           true,
 	"LLM_SERVER_KEY":            true,
 	"LANGFUSE_PUBLIC_KEY":       true,
 	"LANGFUSE_SECRET_KEY":       true,
@@ -2442,6 +2467,9 @@ var criticalVariables = map[string]bool{
 	"QWEN_API_KEY":                      true,
 	"QWEN_SERVER_URL":                   true,
 	"QWEN_PROVIDER":                     true,
+	"MINIMAX_API_KEY":                   true,
+	"MINIMAX_SERVER_URL":                true,
+	"MINIMAX_PROVIDER":                  true,
 	"LLM_SERVER_URL":                    true,
 	"LLM_SERVER_KEY":                    true,
 	"LLM_SERVER_MODEL":                  true,

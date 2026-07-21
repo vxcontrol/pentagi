@@ -1,15 +1,14 @@
-import { zodResolver } from '@hookform/resolvers/zod';
-import { Eye, EyeOff } from 'lucide-react';
-import { useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { type ComponentProps, useState } from 'react';
 import { toast } from 'sonner';
 import * as z from 'zod';
 
 import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { FormSubmitButton } from '@/components/ui/form-submit-button';
-import { Input } from '@/components/ui/input';
-import { api, type ApiErrorResponse, type ApiHttpError } from '@/lib/axios';
+import { InputPassword } from '@/components/ui/input-password';
+import { useAppForm } from '@/hooks/use-app-form';
+import { api, resolveApiErrorMessage } from '@/lib/axios';
+import { cn } from '@/lib/utils';
 
 const passwordChangeSchema = z
     .object({
@@ -48,35 +47,39 @@ const passwordChangeSchema = z
         path: ['newPassword'],
     });
 
+const ERROR_BY_CODE: Record<string, string> = {
+    'Users.ChangePasswordCurrentUser.InvalidCurrentPassword': 'Current password is incorrect',
+    'Users.ChangePasswordCurrentUser.InvalidNewPassword': 'New password does not meet requirements',
+    'Users.ChangePasswordCurrentUser.InvalidPassword': 'Password validation failed',
+    'Users.NotFound': 'User not found',
+};
+
 interface PasswordChangeFormProps {
-    isModal?: boolean;
+    buttonSize?: ComponentProps<typeof Button>['size'];
+    layout?: 'horizontal' | 'vertical';
     onCancel?: () => void;
     onSkip?: () => void;
     onSuccess?: () => void;
-    showSkip?: boolean;
 }
 
 type PasswordChangeFormValues = z.infer<typeof passwordChangeSchema>;
 
 export function PasswordChangeForm({
-    isModal = true,
+    buttonSize = 'default',
+    layout = 'horizontal',
     onCancel,
     onSkip,
     onSuccess,
-    showSkip = false,
 }: PasswordChangeFormProps) {
     const [error, setError] = useState<null | string>(null);
-    const [showCurrentPassword, setShowCurrentPassword] = useState(false);
-    const [showNewPassword, setShowNewPassword] = useState(false);
-    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-    const form = useForm<PasswordChangeFormValues>({
+    const form = useAppForm<PasswordChangeFormValues>({
         defaultValues: {
             confirmPassword: '',
             currentPassword: '',
             newPassword: '',
         },
-        resolver: zodResolver(passwordChangeSchema),
+        schema: passwordChangeSchema,
     });
 
     const handleSubmit = async (values: PasswordChangeFormValues) => {
@@ -90,55 +93,52 @@ export function PasswordChangeForm({
             });
 
             form.reset();
-            setShowCurrentPassword(false);
-            setShowNewPassword(false);
-            setShowConfirmPassword(false);
-
             toast.success('Password successfully changed');
 
-            if (onSuccess) {
-                onSuccess();
-            }
+            onSuccess?.();
         } catch (err: unknown) {
-            const error = err as ApiHttpError;
-            const responseData = error.response?.data as ApiErrorResponse | undefined;
-
-            let errorMessage = 'Failed to change password';
-
-            if (responseData?.msg) {
-                errorMessage = responseData.msg;
-            } else if (responseData?.code) {
-                switch (responseData.code) {
-                    case 'AuthRequired':
-                        errorMessage = 'Authentication required';
-                        break;
-                    case 'Users.ChangePasswordCurrentUser.InvalidCurrentPassword':
-                        errorMessage = 'Current password is incorrect';
-                        break;
-                    case 'Users.ChangePasswordCurrentUser.InvalidNewPassword':
-                        errorMessage = 'New password does not meet requirements';
-                        break;
-                    case 'Users.ChangePasswordCurrentUser.InvalidPassword':
-                        errorMessage = 'Password validation failed';
-                        break;
-                    case 'Users.NotFound':
-                        errorMessage = 'User not found';
-                        break;
-                    default:
-                        errorMessage = responseData.msg || error.message || 'Failed to change password';
-                }
-            } else if (error.message) {
-                errorMessage = error.message;
-            }
-
-            setError(errorMessage);
+            setError(resolveApiErrorMessage(err, ERROR_BY_CODE, 'Failed to change password'));
         }
     };
+
+    const isVertical = layout === 'vertical';
+
+    const skipButton = onSkip && (
+        <Button
+            className={cn('text-muted-foreground', isVertical && 'w-full')}
+            onClick={onSkip}
+            size={buttonSize}
+            type="button"
+            variant="ghost"
+        >
+            Skip for now
+        </Button>
+    );
+    const cancelButton = onCancel && (
+        <Button
+            className={cn(isVertical && 'w-full')}
+            onClick={onCancel}
+            size={buttonSize}
+            type="button"
+            variant="outline"
+        >
+            Cancel
+        </Button>
+    );
+    const submitButton = (
+        <FormSubmitButton
+            className={cn(isVertical && 'w-full')}
+            size={buttonSize}
+        >
+            <span>Update Password</span>
+        </FormSubmitButton>
+    );
 
     return (
         <Form {...form}>
             <form
                 className="flex flex-col gap-4"
+                noValidate
                 onSubmit={form.handleSubmit(handleSubmit)}
             >
                 <FormField
@@ -148,27 +148,10 @@ export function PasswordChangeForm({
                         <FormItem>
                             <FormLabel>Current Password</FormLabel>
                             <FormControl>
-                                <div className="relative">
-                                    <Input
-                                        {...field}
-                                        placeholder="Enter your current password"
-                                        type={showCurrentPassword ? 'text' : 'password'}
-                                    />
-                                    <Button
-                                        className="absolute top-0 right-0 h-full px-3 py-2 hover:bg-transparent"
-                                        onClick={() => setShowCurrentPassword(!showCurrentPassword)}
-                                        size="sm"
-                                        tabIndex={-1}
-                                        type="button"
-                                        variant="ghost"
-                                    >
-                                        {showCurrentPassword ? (
-                                            <EyeOff className="text-muted-foreground size-4" />
-                                        ) : (
-                                            <Eye className="text-muted-foreground size-4" />
-                                        )}
-                                    </Button>
-                                </div>
+                                <InputPassword
+                                    {...field}
+                                    placeholder="Enter your current password"
+                                />
                             </FormControl>
                             <FormMessage />
                         </FormItem>
@@ -182,27 +165,10 @@ export function PasswordChangeForm({
                         <FormItem>
                             <FormLabel>New Password</FormLabel>
                             <FormControl>
-                                <div className="relative">
-                                    <Input
-                                        {...field}
-                                        placeholder="Enter new password"
-                                        type={showNewPassword ? 'text' : 'password'}
-                                    />
-                                    <Button
-                                        className="absolute top-0 right-0 h-full px-3 py-2 hover:bg-transparent"
-                                        onClick={() => setShowNewPassword(!showNewPassword)}
-                                        size="sm"
-                                        tabIndex={-1}
-                                        type="button"
-                                        variant="ghost"
-                                    >
-                                        {showNewPassword ? (
-                                            <EyeOff className="text-muted-foreground size-4" />
-                                        ) : (
-                                            <Eye className="text-muted-foreground size-4" />
-                                        )}
-                                    </Button>
-                                </div>
+                                <InputPassword
+                                    {...field}
+                                    placeholder="Enter your new password"
+                                />
                             </FormControl>
                             <FormDescription className="text-xs">
                                 Must be 16+ characters, or 8+ with number, lowercase, uppercase, and special character
@@ -220,27 +186,10 @@ export function PasswordChangeForm({
                         <FormItem>
                             <FormLabel>Confirm New Password</FormLabel>
                             <FormControl>
-                                <div className="relative">
-                                    <Input
-                                        {...field}
-                                        placeholder="Confirm new password"
-                                        type={showConfirmPassword ? 'text' : 'password'}
-                                    />
-                                    <Button
-                                        className="absolute top-0 right-0 h-full px-3 py-2 hover:bg-transparent"
-                                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                                        size="sm"
-                                        tabIndex={-1}
-                                        type="button"
-                                        variant="ghost"
-                                    >
-                                        {showConfirmPassword ? (
-                                            <EyeOff className="text-muted-foreground size-4" />
-                                        ) : (
-                                            <Eye className="text-muted-foreground size-4" />
-                                        )}
-                                    </Button>
-                                </div>
+                                <InputPassword
+                                    {...field}
+                                    placeholder="Confirm your new password"
+                                />
                             </FormControl>
                             <FormMessage />
                         </FormItem>
@@ -249,30 +198,19 @@ export function PasswordChangeForm({
 
                 {error && <div className="text-destructive text-sm">{error}</div>}
 
-                <div className="flex justify-end gap-2 pt-2">
-                    {showSkip && (
-                        <Button
-                            className="text-muted-foreground"
-                            onClick={onSkip}
-                            type="button"
-                            variant="ghost"
-                        >
-                            Skip for now
-                        </Button>
-                    )}
-                    {isModal && (
-                        <Button
-                            onClick={onCancel}
-                            type="button"
-                            variant="outline"
-                        >
-                            Cancel
-                        </Button>
-                    )}
-                    <FormSubmitButton>
-                        <span>Update Password</span>
-                    </FormSubmitButton>
-                </div>
+                {isVertical ? (
+                    <div className="flex flex-col gap-2 pt-2">
+                        {submitButton}
+                        {cancelButton}
+                        {skipButton}
+                    </div>
+                ) : (
+                    <div className="flex justify-end gap-2 pt-2">
+                        {skipButton}
+                        {cancelButton}
+                        {submitButton}
+                    </div>
+                )}
             </form>
         </Form>
     );

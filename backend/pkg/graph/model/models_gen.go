@@ -194,6 +194,7 @@ type DefaultProvidersConfig struct {
 	Glm       *ProviderConfig `json:"glm,omitempty"`
 	Kimi      *ProviderConfig `json:"kimi,omitempty"`
 	Qwen      *ProviderConfig `json:"qwen,omitempty"`
+	Minimax   *ProviderConfig `json:"minimax,omitempty"`
 }
 
 type Flow struct {
@@ -312,11 +313,12 @@ type ModelAgentsUsageStats struct {
 }
 
 type ModelConfig struct {
-	Name        string      `json:"name"`
-	Description *string     `json:"description,omitempty"`
-	ReleaseDate *time.Time  `json:"releaseDate,omitempty"`
-	Thinking    *bool       `json:"thinking,omitempty"`
-	Price       *ModelPrice `json:"price,omitempty"`
+	Name        string              `json:"name"`
+	Description *string             `json:"description,omitempty"`
+	ReleaseDate *time.Time          `json:"releaseDate,omitempty"`
+	Thinking    *bool               `json:"thinking,omitempty"`
+	Reasoning   *ModelReasoningInfo `json:"reasoning,omitempty"`
+	Price       *ModelPrice         `json:"price,omitempty"`
 }
 
 type ModelPrice struct {
@@ -324,6 +326,14 @@ type ModelPrice struct {
 	Output     float64 `json:"output"`
 	CacheRead  float64 `json:"cacheRead"`
 	CacheWrite float64 `json:"cacheWrite"`
+}
+
+type ModelReasoningInfo struct {
+	Mode          *ModelReasoningMode `json:"mode,omitempty"`
+	Efforts       []ReasoningEffort   `json:"efforts,omitempty"`
+	Supported     *bool               `json:"supported,omitempty"`
+	CannotDisable *bool               `json:"cannotDisable,omitempty"`
+	DefaultOn     *bool               `json:"defaultOn,omitempty"`
 }
 
 type ModelUsageStats struct {
@@ -401,6 +411,7 @@ type ProvidersModelsList struct {
 	Glm       []*ModelConfig `json:"glm,omitempty"`
 	Kimi      []*ModelConfig `json:"kimi,omitempty"`
 	Qwen      []*ModelConfig `json:"qwen,omitempty"`
+	Minimax   []*ModelConfig `json:"minimax,omitempty"`
 }
 
 type ProvidersReadinessStatus struct {
@@ -414,12 +425,14 @@ type ProvidersReadinessStatus struct {
 	Glm       bool `json:"glm"`
 	Kimi      bool `json:"kimi"`
 	Qwen      bool `json:"qwen"`
+	Minimax   bool `json:"minimax"`
 }
 
 type Query struct {
 }
 
 type ReasoningConfig struct {
+	Mode      *ReasoningMode   `json:"mode,omitempty"`
 	Effort    *ReasoningEffort `json:"effort,omitempty"`
 	MaxTokens *int             `json:"maxTokens,omitempty"`
 }
@@ -957,6 +970,49 @@ func (e MessageLogType) MarshalGQL(w io.Writer) {
 	fmt.Fprint(w, strconv.Quote(e.String()))
 }
 
+type ModelReasoningMode string
+
+const (
+	ModelReasoningModeBudget       ModelReasoningMode = "budget"
+	ModelReasoningModeAdaptive     ModelReasoningMode = "adaptive"
+	ModelReasoningModeAdaptiveOnly ModelReasoningMode = "adaptive_only"
+)
+
+var AllModelReasoningMode = []ModelReasoningMode{
+	ModelReasoningModeBudget,
+	ModelReasoningModeAdaptive,
+	ModelReasoningModeAdaptiveOnly,
+}
+
+func (e ModelReasoningMode) IsValid() bool {
+	switch e {
+	case ModelReasoningModeBudget, ModelReasoningModeAdaptive, ModelReasoningModeAdaptiveOnly:
+		return true
+	}
+	return false
+}
+
+func (e ModelReasoningMode) String() string {
+	return string(e)
+}
+
+func (e *ModelReasoningMode) UnmarshalGQL(v interface{}) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = ModelReasoningMode(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid ModelReasoningMode", str)
+	}
+	return nil
+}
+
+func (e ModelReasoningMode) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
 type PromptType string
 
 const (
@@ -1134,6 +1190,7 @@ const (
 	ProviderTypeGlm       ProviderType = "glm"
 	ProviderTypeKimi      ProviderType = "kimi"
 	ProviderTypeQwen      ProviderType = "qwen"
+	ProviderTypeMinimax   ProviderType = "minimax"
 )
 
 var AllProviderType = []ProviderType{
@@ -1147,11 +1204,12 @@ var AllProviderType = []ProviderType{
 	ProviderTypeGlm,
 	ProviderTypeKimi,
 	ProviderTypeQwen,
+	ProviderTypeMinimax,
 }
 
 func (e ProviderType) IsValid() bool {
 	switch e {
-	case ProviderTypeOpenai, ProviderTypeAnthropic, ProviderTypeGemini, ProviderTypeBedrock, ProviderTypeOllama, ProviderTypeCustom, ProviderTypeDeepseek, ProviderTypeGlm, ProviderTypeKimi, ProviderTypeQwen:
+	case ProviderTypeOpenai, ProviderTypeAnthropic, ProviderTypeGemini, ProviderTypeBedrock, ProviderTypeOllama, ProviderTypeCustom, ProviderTypeDeepseek, ProviderTypeGlm, ProviderTypeKimi, ProviderTypeQwen, ProviderTypeMinimax:
 		return true
 	}
 	return false
@@ -1181,12 +1239,16 @@ func (e ProviderType) MarshalGQL(w io.Writer) {
 type ReasoningEffort string
 
 const (
+	ReasoningEffortXhigh  ReasoningEffort = "xhigh"
+	ReasoningEffortMax    ReasoningEffort = "max"
 	ReasoningEffortHigh   ReasoningEffort = "high"
 	ReasoningEffortMedium ReasoningEffort = "medium"
 	ReasoningEffortLow    ReasoningEffort = "low"
 )
 
 var AllReasoningEffort = []ReasoningEffort{
+	ReasoningEffortXhigh,
+	ReasoningEffortMax,
 	ReasoningEffortHigh,
 	ReasoningEffortMedium,
 	ReasoningEffortLow,
@@ -1194,7 +1256,7 @@ var AllReasoningEffort = []ReasoningEffort{
 
 func (e ReasoningEffort) IsValid() bool {
 	switch e {
-	case ReasoningEffortHigh, ReasoningEffortMedium, ReasoningEffortLow:
+	case ReasoningEffortXhigh, ReasoningEffortMax, ReasoningEffortHigh, ReasoningEffortMedium, ReasoningEffortLow:
 		return true
 	}
 	return false
@@ -1218,6 +1280,49 @@ func (e *ReasoningEffort) UnmarshalGQL(v interface{}) error {
 }
 
 func (e ReasoningEffort) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+type ReasoningMode string
+
+const (
+	ReasoningModeAdaptive ReasoningMode = "adaptive"
+	ReasoningModeBudget   ReasoningMode = "budget"
+	ReasoningModeOff      ReasoningMode = "off"
+)
+
+var AllReasoningMode = []ReasoningMode{
+	ReasoningModeAdaptive,
+	ReasoningModeBudget,
+	ReasoningModeOff,
+}
+
+func (e ReasoningMode) IsValid() bool {
+	switch e {
+	case ReasoningModeAdaptive, ReasoningModeBudget, ReasoningModeOff:
+		return true
+	}
+	return false
+}
+
+func (e ReasoningMode) String() string {
+	return string(e)
+}
+
+func (e *ReasoningMode) UnmarshalGQL(v interface{}) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = ReasoningMode(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid ReasoningMode", str)
+	}
+	return nil
+}
+
+func (e ReasoningMode) MarshalGQL(w io.Writer) {
 	fmt.Fprint(w, strconv.Quote(e.String()))
 }
 

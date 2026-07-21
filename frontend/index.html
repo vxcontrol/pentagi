@@ -1,7 +1,18 @@
 <!doctype html>
-<html lang="en">
+<html
+    lang="en"
+    translate="no"
+>
     <head>
         <meta charset="UTF-8" />
+        <!-- The UI is English-only. Browser auto-translation is one known trigger of
+             a DOM desync (it swaps text nodes React owns), so opt the document out of
+             it. Defense-in-depth only: the route errorElement recovers from such
+             desyncs (extension or translation) regardless of source. -->
+        <meta
+            name="google"
+            content="notranslate"
+        />
         <meta
             name="viewport"
             content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"

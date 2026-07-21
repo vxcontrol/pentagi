@@ -29,7 +29,6 @@ import {
 } from 'lucide-react';
 import {
     type ChangeEvent,
-    Fragment,
     type ReactElement,
     type ReactNode,
     useCallback,
@@ -58,6 +57,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { useEffectAfterMount } from '@/hooks/use-effect-after-mount';
 import { useLatestRef } from '@/hooks/use-latest-ref';
 import { usePageStorageKeys } from '@/hooks/use-page-storage-keys';
+import { useWindowVirtualList } from '@/hooks/use-window-virtual-list';
 import { migrateLegacyTableState, updateTableState } from '@/lib/table-state';
 import { cn } from '@/lib/utils';
 
@@ -103,6 +103,21 @@ interface DataTableProps<TData, TValue = unknown> {
     filterValue?: string;
     initialPageSize?: number;
     initialSorting?: SortingState;
+    /**
+     * Render only the viewport-visible rows via window-scrolled
+     * virtualization (`@tanstack/react-virtual`). Activates only when the
+     * rendered row count exceeds `VIRTUALIZATION_THRESHOLD` so short tables
+     * stay fully rendered for native Find-in-page and printing.
+     *
+     * Constraints:
+     * - Silently ignored when `renderSubComponent` is set — variable-height
+     *   expanded rows would need per-row remeasurement this component
+     *   doesn't wire.
+     * - Assumes the page scrolls via `window`. Layouts with an inner
+     *   `overflow-auto` container (e.g. settings-layout's `<main>`) are not
+     *   supported and will misposition rows.
+     */
+    isVirtualized?: boolean;
     onColumnVisibilityChange?: (visibility: VisibilityState) => void;
     onFilterChange?: (value: string) => void;
     onPageChange?: (pageIndex: number, options?: { replace?: boolean }) => void;
@@ -132,6 +147,17 @@ interface DataTableProps<TData, TValue = unknown> {
 }
 
 const PAGE_SIZE_OPTIONS = [10, 15, 20, 50, 100] as const;
+
+// Row count above which `isVirtualized` actually activates. Short tables
+// stay fully rendered so native Find-in-page and printing keep working.
+const VIRTUALIZATION_THRESHOLD = 50;
+
+// Pixel estimate handed to the virtualizer until the first real measurement.
+// Matches the rendered height of a single-line `TableCell` with `p-4` padding
+// plus the `border-b`; rows still resize correctly once `measureItem`
+// observes them — this only affects the initial scroll-anchor math.
+const ROW_HEIGHT_ESTIMATE = 53;
+const estimateRowSize = () => ROW_HEIGHT_ESTIMATE;
 
 const columnPickerLabel = <TData,>(column: Column<TData, unknown>): string =>
     column.columnDef.meta?.columnMenuLabel ?? column.id;
@@ -206,6 +232,32 @@ interface DataTableColumnHeaderProps<TData, TValue> {
     title: ReactNode;
 }
 
+interface DataTableRowProps<TData> {
+    isRowInteractive: boolean;
+    /**
+     * Virtualization wiring, present only when the row is rendered inside
+     * `VirtualizedTableBody`. Bundling `index` and `ref` into one object keeps
+     * the "both or neither" invariant in the type: `index` feeds both
+     * `data-index` (read back by `measureElement` to attribute a measured rect)
+     * and `aria-rowindex` (1-based, offset past the header row); `ref` is the
+     * virtualizer's `measureElement`.
+     */
+    measurement?: { index: number; ref: (node: Element | null) => void };
+    onRowClick: (row: Row<TData>) => void;
+    renderRowContextMenu?: (row: TData) => ReactNode;
+    renderSubComponent?: (props: { row: Row<TData> }) => ReactElement;
+    row: Row<TData>;
+}
+
+interface VirtualizedTableBodyProps<TData> {
+    isRowInteractive: boolean;
+    onRowClick: (row: Row<TData>) => void;
+    renderRowContextMenu?: (row: TData) => ReactNode;
+    renderSubComponent?: (props: { row: Row<TData> }) => ReactElement;
+    rows: Row<TData>[];
+    visibleColumnCount: number;
+}
+
 /**
  * Cycle a TanStack column through `none → asc → desc → none`. Pure with
  * respect to React (no hooks called) so a header `onClick` can invoke it
@@ -241,6 +293,7 @@ function DataTable<TData, TValue = unknown>({
     filterValue: externalFilterValue,
     initialPageSize = 10,
     initialSorting = [],
+    isVirtualized = false,
     onColumnVisibilityChange,
     onFilterChange,
     onPageChange,
@@ -256,12 +309,6 @@ function DataTable<TData, TValue = unknown>({
     const isRowInteractive = !!onRowClick || !!renderSubComponent;
 
     const { pathname } = useLocation();
-    // Reuse the pathname we just read instead of letting the hook subscribe
-    // independently — react-router caches `useLocation` so the cost is
-    // negligible, but the explicit pass keeps the data flow obvious and
-    // makes it easy to migrate the table to a different storage scope (e.g.
-    // a workspace-prefixed path) without grepping for every subscription.
-    //
     // When `storageKey` is passed by the parent it wins — multi-table routes
     // (e.g. /settings/prompts) need distinct slots per instance, otherwise
     // their sorting / visibility / search-column narrowing alias and
@@ -569,6 +616,10 @@ function DataTable<TData, TValue = unknown>({
         [onRowClick],
     );
 
+    const rows = table.getRowModel().rows;
+    const visibleColumnCount = table.getVisibleLeafColumns().length;
+    const isVirtualizationActive = isVirtualized && !renderSubComponent && rows.length > VIRTUALIZATION_THRESHOLD;
+
     const pageSizeValue = pagination.pageSize >= data.length && data.length > 0 ? 'all' : String(pagination.pageSize);
 
     const totalRows = table.getFilteredRowModel().rows.length;
@@ -704,10 +755,13 @@ function DataTable<TData, TValue = unknown>({
                 </DropdownMenu>
             </div>
             <div className="rounded-md border">
-                <Table>
+                <Table aria-rowcount={isVirtualizationActive ? rows.length + 1 : undefined}>
                     <TableHeader>
                         {table.getHeaderGroups().map((headerGroup) => (
-                            <TableRow key={headerGroup.id}>
+                            <TableRow
+                                aria-rowindex={isVirtualizationActive ? 1 : undefined}
+                                key={headerGroup.id}
+                            >
                                 {headerGroup.headers.map((header) => (
                                     <TableHead
                                         className={header.column.columnDef.meta?.headerClassName}
@@ -730,75 +784,12 @@ function DataTable<TData, TValue = unknown>({
                             </TableRow>
                         ))}
                     </TableHeader>
-                    <TableBody>
-                        {table.getRowModel().rows.length > 0 ? (
-                            table.getRowModel().rows.map((row) => {
-                                const contextMenuContent = renderRowContextMenu?.(row.original);
-
-                                const tableRow = (
-                                    <TableRow
-                                        className={cn(
-                                            'group hover:bg-muted/50 data-[state=open]:bg-muted/50 has-[[data-state=open]]:bg-muted/50',
-                                            isRowInteractive && 'cursor-pointer',
-                                            contextMenuContent &&
-                                                'pointer-coarse:select-none pointer-coarse:[-webkit-touch-callout:none]',
-                                        )}
-                                        {...(row.getIsSelected() ? { 'data-state': 'selected' } : {})}
-                                        onClick={() => handleRowClick(row)}
-                                    >
-                                        {row.getVisibleCells().map((cell) => (
-                                            <TableCell
-                                                className={cell.column.columnDef.meta?.cellClassName}
-                                                key={cell.id}
-                                                onClick={(event) => {
-                                                    if (cell.column.columnDef.meta?.preventRowClick) {
-                                                        event.stopPropagation();
-                                                    }
-                                                }}
-                                                style={
-                                                    cell.column.columnDef.size
-                                                        ? {
-                                                              maxWidth: cell.column.columnDef.size,
-                                                              minWidth: cell.column.columnDef.size,
-                                                              width: cell.column.columnDef.size,
-                                                          }
-                                                        : undefined
-                                                }
-                                            >
-                                                {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                                            </TableCell>
-                                        ))}
-                                    </TableRow>
-                                );
-
-                                return (
-                                    <Fragment key={row.id}>
-                                        {contextMenuContent ? (
-                                            <ContextMenu>
-                                                <ContextMenuTrigger asChild>{tableRow}</ContextMenuTrigger>
-                                                <ContextMenuContent>{contextMenuContent}</ContextMenuContent>
-                                            </ContextMenu>
-                                        ) : (
-                                            tableRow
-                                        )}
-                                        {row.getIsExpanded() && renderSubComponent && (
-                                            <TableRow className="cursor-default border-0 hover:bg-transparent">
-                                                <TableCell
-                                                    className="p-0"
-                                                    colSpan={row.getVisibleCells().length}
-                                                >
-                                                    {renderSubComponent({ row })}
-                                                </TableCell>
-                                            </TableRow>
-                                        )}
-                                    </Fragment>
-                                );
-                            })
-                        ) : (
+                    {rows.length === 0 ? (
+                        <TableBody>
                             <TableRow>
                                 <TableCell
                                     className={cn('text-center', empty?.entityName ? 'py-12' : 'h-24')}
-                                    colSpan={columns.length}
+                                    colSpan={visibleColumnCount}
                                 >
                                     <DataTableEmptyState
                                         entityName={empty?.entityName}
@@ -806,8 +797,30 @@ function DataTable<TData, TValue = unknown>({
                                     />
                                 </TableCell>
                             </TableRow>
-                        )}
-                    </TableBody>
+                        </TableBody>
+                    ) : isVirtualizationActive ? (
+                        <VirtualizedTableBody
+                            isRowInteractive={isRowInteractive}
+                            onRowClick={handleRowClick}
+                            renderRowContextMenu={renderRowContextMenu}
+                            renderSubComponent={renderSubComponent}
+                            rows={rows}
+                            visibleColumnCount={visibleColumnCount}
+                        />
+                    ) : (
+                        <TableBody>
+                            {rows.map((row) => (
+                                <DataTableRow
+                                    isRowInteractive={isRowInteractive}
+                                    key={row.id}
+                                    onRowClick={handleRowClick}
+                                    renderRowContextMenu={renderRowContextMenu}
+                                    renderSubComponent={renderSubComponent}
+                                    row={row}
+                                />
+                            ))}
+                        </TableBody>
+                    )}
                 </Table>
             </div>
             <div className="flex flex-wrap items-center justify-between gap-4 px-4 py-4">
@@ -1035,6 +1048,167 @@ function DataTableFilter({ onQueryChange, placeholder, query }: DataTableFilterP
                 </InputGroupAddon>
             ) : null}
         </InputGroup>
+    );
+}
+
+/**
+ * Single row in the `DataTable` body. Renders the visible cells, wraps with
+ * a context-menu trigger when one is supplied, and emits the expanded
+ * sub-component row when the row is expanded. Both `VirtualizedTableBody`
+ * and the plain branch render the same markup by reusing this component;
+ * the only difference is whether `measurement` is supplied.
+ */
+function DataTableRow<TData>({
+    isRowInteractive,
+    measurement,
+    onRowClick,
+    renderRowContextMenu,
+    renderSubComponent,
+    row,
+}: DataTableRowProps<TData>) {
+    const contextMenuContent = renderRowContextMenu?.(row.original);
+
+    const tableRow = (
+        <TableRow
+            aria-rowindex={measurement ? measurement.index + 2 : undefined}
+            className={cn(
+                'group hover:bg-muted/50 data-[state=open]:bg-muted/50 has-[[data-state=open]]:bg-muted/50',
+                isRowInteractive && 'cursor-pointer',
+                contextMenuContent && 'pointer-coarse:select-none pointer-coarse:[-webkit-touch-callout:none]',
+            )}
+            data-index={measurement?.index}
+            ref={measurement?.ref}
+            {...(row.getIsSelected() ? { 'data-state': 'selected' } : {})}
+            onClick={() => onRowClick(row)}
+        >
+            {row.getVisibleCells().map((cell) => (
+                <TableCell
+                    className={cell.column.columnDef.meta?.cellClassName}
+                    key={cell.id}
+                    onClick={(event) => {
+                        if (cell.column.columnDef.meta?.preventRowClick) {
+                            event.stopPropagation();
+                        }
+                    }}
+                    style={
+                        cell.column.columnDef.size
+                            ? {
+                                  maxWidth: cell.column.columnDef.size,
+                                  minWidth: cell.column.columnDef.size,
+                                  width: cell.column.columnDef.size,
+                              }
+                            : undefined
+                    }
+                >
+                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                </TableCell>
+            ))}
+        </TableRow>
+    );
+
+    return (
+        <>
+            {contextMenuContent ? (
+                <ContextMenu>
+                    <ContextMenuTrigger asChild>{tableRow}</ContextMenuTrigger>
+                    <ContextMenuContent>{contextMenuContent}</ContextMenuContent>
+                </ContextMenu>
+            ) : (
+                tableRow
+            )}
+            {row.getIsExpanded() && renderSubComponent ? (
+                <TableRow className="cursor-default border-0 hover:bg-transparent">
+                    <TableCell
+                        className="p-0"
+                        colSpan={row.getVisibleCells().length}
+                    >
+                        {renderSubComponent({ row })}
+                    </TableCell>
+                </TableRow>
+            ) : null}
+        </>
+    );
+}
+
+/**
+ * Empty `<tr>` spacer that pushes the virtualized window into the correct
+ * scroll position. Raw `<tr>` / `<td>` (not `TableRow` / `TableCell`) so the
+ * spacer doesn't inherit row border and hover-background styles.
+ * `aria-hidden` keeps it out of the accessibility tree.
+ */
+function PaddingRow({ colSpan, height }: { colSpan: number; height: number }) {
+    return (
+        <tr aria-hidden>
+            <td
+                colSpan={colSpan}
+                style={{ height }}
+            />
+        </tr>
+    );
+}
+
+/**
+ * Window-scrolled virtualization for `DataTable`'s `<tbody>`. Mounted only
+ * when `DataTable` decides virtualization should activate, so the underlying
+ * `useWindowVirtualList` (and its window/body listeners) never run on tables
+ * that don't need them. Padding `<tr>` spacers preserve `<table>` / `<tbody>`
+ * / `<tr>` semantics — no absolute positioning, no `display: grid` override.
+ */
+function VirtualizedTableBody<TData>({
+    isRowInteractive,
+    onRowClick,
+    renderRowContextMenu,
+    renderSubComponent,
+    rows,
+    visibleColumnCount,
+}: VirtualizedTableBodyProps<TData>) {
+    // Key the measurement cache by TanStack's row id, not the bare index, so it
+    // follows row identity once the table opts into `getRowId` (today's default
+    // ids are positional, making this equivalent to the index). Recreated on
+    // every `rows` change so the cache tracks the current row set.
+    const getItemKey = useCallback((index: number) => rows[index]?.id ?? index, [rows]);
+
+    const { anchorRef, measureItem, paddingEnd, paddingStart, virtualItems } =
+        useWindowVirtualList<HTMLTableSectionElement>({
+            count: rows.length,
+            estimateSize: estimateRowSize,
+            getItemKey,
+        });
+
+    return (
+        <TableBody ref={anchorRef}>
+            {paddingStart > 0 ? (
+                <PaddingRow
+                    colSpan={visibleColumnCount}
+                    height={paddingStart}
+                />
+            ) : null}
+            {virtualItems.map((virtualItem) => {
+                const row = rows[virtualItem.index];
+
+                if (!row) {
+                    return null;
+                }
+
+                return (
+                    <DataTableRow
+                        isRowInteractive={isRowInteractive}
+                        key={row.id}
+                        measurement={{ index: virtualItem.index, ref: measureItem }}
+                        onRowClick={onRowClick}
+                        renderRowContextMenu={renderRowContextMenu}
+                        renderSubComponent={renderSubComponent}
+                        row={row}
+                    />
+                );
+            })}
+            {paddingEnd > 0 ? (
+                <PaddingRow
+                    colSpan={visibleColumnCount}
+                    height={paddingEnd}
+                />
+            ) : null}
+        </TableBody>
     );
 }
 

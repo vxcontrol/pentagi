@@ -1,4 +1,14 @@
 # GLM-5.x Series - Latest generation (200K context, 128K max output, hybrid thinking)
+- name: glm-5.2
+  description: GLM-5.2 - Newest flagship (improves on GLM-5.1), 200K context, hybrid thinking; supports reasoning_effort (high/max).
+  thinking: true
+  reasoning:
+    efforts: [high, max]
+  price:
+    input: 1.40
+    output: 4.40
+    cache_read: 0.26
+
 - name: glm-5.1
   description: GLM-5.1 - Latest flagship designed for long-horizon tasks (8h sustained autonomous execution), Claude Opus 4.6-aligned coding, 200K context, hybrid thinking. Best for planning, mentor, and complex agentic engineering
   thinking: true

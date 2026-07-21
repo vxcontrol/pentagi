@@ -7,11 +7,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"math/big"
 	"path"
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"text/template"
 )
 
@@ -679,29 +681,52 @@ func (dp *defaultPrompter) DumpTemplates() ([]byte, error) {
 	return blob, nil
 }
 
-// LoadDefaultPromptsMap returns a freshly populated PromptsMap of the embedded
-// default templates. Callers that need to overlay overrides on top of the
-// defaults can mutate the returned map directly, without going through the
-// JSON dump path used by Prompter.DumpTemplates(). Each call returns a new
-// map, so mutations do not affect subsequent callers.
-func LoadDefaultPromptsMap() (PromptsMap, error) {
-	prompts, err := promptTemplates.ReadDir("prompts")
-	if err != nil {
-		return nil, fmt.Errorf("failed to read templates: %w", err)
-	}
+// defaultPromptsCache holds the singleton default prompts map loaded once
+// from the embedded FS. String values are immutable in Go, so the map itself
+// is read-only after initialisation and safe to read from multiple goroutines.
+var (
+	defaultPromptsCache     PromptsMap
+	defaultPromptsCacheOnce sync.Once
+	defaultPromptsCacheErr  error
+)
 
-	promptsMap := make(PromptsMap, len(prompts))
-	for _, prompt := range prompts {
-		promptBytes, err := promptTemplates.ReadFile(path.Join("prompts", prompt.Name()))
+// LoadDefaultPromptsMap returns a PromptsMap populated from the embedded
+// default templates. The underlying template strings are loaded only once;
+// every caller receives a shallow copy of the map so it can safely overlay
+// user-specific overrides without affecting the shared cache or other callers.
+// String values in Go are immutable, so the copy shares string memory with
+// the cache rather than duplicating template content.
+func LoadDefaultPromptsMap() (PromptsMap, error) {
+	defaultPromptsCacheOnce.Do(func() {
+		prompts, err := promptTemplates.ReadDir("prompts")
 		if err != nil {
-			return nil, fmt.Errorf("failed to read template: %w", err)
+			defaultPromptsCacheErr = fmt.Errorf("failed to read templates: %w", err)
+			return
 		}
 
-		promptName := strings.TrimSuffix(prompt.Name(), ".tmpl")
-		promptsMap[PromptType(promptName)] = string(promptBytes)
+		m := make(PromptsMap, len(prompts))
+		for _, prompt := range prompts {
+			promptBytes, err := promptTemplates.ReadFile(path.Join("prompts", prompt.Name()))
+			if err != nil {
+				defaultPromptsCacheErr = fmt.Errorf("failed to read template: %w", err)
+				return
+			}
+			promptName := strings.TrimSuffix(prompt.Name(), ".tmpl")
+			m[PromptType(promptName)] = string(promptBytes)
+		}
+		defaultPromptsCache = m
+	})
+
+	if defaultPromptsCacheErr != nil {
+		return nil, defaultPromptsCacheErr
 	}
 
-	return promptsMap, nil
+	// Return a shallow copy: new map header + copied string references.
+	// Callers can mutate keys freely; the cached originals are untouched.
+	copyMap := make(PromptsMap, len(defaultPromptsCache))
+	maps.Copy(copyMap, defaultPromptsCache)
+
+	return copyMap, nil
 }
 
 func RenderPrompt(name, prompt string, params any) (string, error) {

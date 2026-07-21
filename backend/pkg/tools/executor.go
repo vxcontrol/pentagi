@@ -299,9 +299,12 @@ func (ce *customExecutor) Execute(
 	wrapHandler := func(ctx context.Context, name string, args json.RawMessage) (string, database.MsglogResultFormat, error) {
 		resultFormat := getMessageResultFormat(name)
 		result, err := handler(ctx, name, args)
+		persistCtx := context.WithoutCancel(ctx)
+
 		if err != nil {
 			durationDelta := time.Since(startTime).Seconds()
-			_ = ce.tclp.UpdateLogFailed(ctx, tcID, fmt.Sprintf("failed to execute handler: %s", err.Error()), durationDelta)
+			failureResult := fmt.Sprintf("failed to execute handler: %s", err.Error())
+			_ = ce.tclp.UpdateLogFailed(persistCtx, tcID, failureResult, durationDelta)
 			return "", resultFormat, fmt.Errorf("failed to execute handler: %w", err)
 		}
 
@@ -312,10 +315,11 @@ func (ce *customExecutor) Execute(
 			if err != nil {
 				return "", resultFormat, fmt.Errorf("failed to get summarize prompt: %w", err)
 			}
-			result, err = ce.summarizer(ctx, summarizePrompt)
+			result, err = ce.summarizer(persistCtx, summarizePrompt)
 			if err != nil {
 				durationDelta := time.Since(startTime).Seconds()
-				_ = ce.tclp.UpdateLogFailed(ctx, tcID, fmt.Sprintf("failed to summarize result: %s", err.Error()), durationDelta)
+				failureResult := fmt.Sprintf("failed to summarize result: %s", err.Error())
+				_ = ce.tclp.UpdateLogFailed(persistCtx, tcID, failureResult, durationDelta)
 				return "", resultFormat, fmt.Errorf("failed to summarize result: %w", err)
 			}
 			resultFormat = database.MsglogResultFormatMarkdown
@@ -330,7 +334,7 @@ func (ce *customExecutor) Execute(
 		}
 
 		durationDelta := time.Since(startTime).Seconds()
-		err = ce.tclp.UpdateLogSuccess(ctx, tcID, result, durationDelta)
+		err = ce.tclp.UpdateLogSuccess(persistCtx, tcID, result, durationDelta)
 		if err != nil {
 			return "", resultFormat, fmt.Errorf("failed to update toolcall result: %w", err)
 		}

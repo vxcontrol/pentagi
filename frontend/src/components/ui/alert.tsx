@@ -22,6 +22,7 @@ function Alert({ className, variant, ...props }: React.ComponentProps<'div'> & V
     return (
         <div
             className={cn(alertVariants({ variant }), className)}
+            data-slot="alert"
             role="alert"
             {...props}
         />
@@ -32,6 +33,7 @@ function AlertDescription({ className, ...props }: React.ComponentProps<'div'>) 
     return (
         <div
             className={cn('text-sm [&_p]:leading-relaxed', className)}
+            data-slot="alert-description"
             {...props}
         />
     );
@@ -41,6 +43,7 @@ function AlertTitle({ className, ...props }: React.ComponentProps<'h5'>) {
     return (
         <h5
             className={cn('mb-1 leading-none font-medium tracking-tight', className)}
+            data-slot="alert-title"
             {...props}
         />
     );

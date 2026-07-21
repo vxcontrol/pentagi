@@ -1,10 +1,10 @@
 import type { ComponentType } from 'react';
 
 import {
-    useFlowQuery,
-    useFlowTemplateQuery,
-    useKnowledgeDocumentQuery,
-    useSettingsProvidersQuery,
+    FlowDocument,
+    FlowTemplateDocument,
+    KnowledgeDocumentDocument,
+    SettingsProvidersDocument,
 } from '@/graphql/types';
 
 import { apolloTitle } from './apollo-title';
@@ -34,13 +34,14 @@ export type TitleResolver = ((params: RouteParams) => string) | ComponentType<{ 
  * from this registry onto the matching <Route>.
  */
 export const routeTitles = {
+    account: { title: 'Account' },
     apiTokens: { title: 'API Tokens' },
     dashboard: { title: 'Dashboard' },
     flow: {
         title: apolloTitle({
+            document: FlowDocument,
             select: (data, { flowId }) =>
                 data?.flow?.title && flowId ? `Flow #${flowId} — ${data.flow.title}` : 'Flow',
-            useQuery: useFlowQuery,
             variables: ({ flowId }) => (flowId ? { id: flowId } : null),
         }),
     },
@@ -48,9 +49,9 @@ export const routeTitles = {
     flows: { title: 'Flows' },
     knowledge: {
         title: apolloTitle({
+            document: KnowledgeDocumentDocument,
             select: (data, { knowledgeId }) =>
                 knowledgeId === 'new' ? 'New knowledge' : data?.knowledgeDocument?.question || 'Knowledge',
-            useQuery: useKnowledgeDocumentQuery,
             variables: ({ knowledgeId }) => (!knowledgeId || knowledgeId === 'new' ? null : { id: knowledgeId }),
         }),
     },
@@ -65,6 +66,7 @@ export const routeTitles = {
 
     provider: {
         title: apolloTitle({
+            document: SettingsProvidersDocument,
             select: (data, { providerId }) => {
                 if (providerId === 'new') {
                     return 'New provider';
@@ -76,7 +78,6 @@ export const routeTitles = {
 
                 return provider?.name || 'Provider';
             },
-            useQuery: useSettingsProvidersQuery,
             variables: ({ providerId }) => (providerId === 'new' ? null : {}),
         }),
     },
@@ -87,9 +88,9 @@ export const routeTitles = {
 
     template: {
         title: apolloTitle({
+            document: FlowTemplateDocument,
             select: (data, { templateId }) =>
                 templateId === 'new' ? 'New template' : data?.flowTemplate?.title || 'Template',
-            useQuery: useFlowTemplateQuery,
             variables: ({ templateId }) => (!templateId || templateId === 'new' ? null : { templateId }),
         }),
     },

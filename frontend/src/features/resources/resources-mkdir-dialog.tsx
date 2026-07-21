@@ -1,13 +1,12 @@
-import { zodResolver } from '@hookform/resolvers/zod';
 import { FolderPlus } from 'lucide-react';
 import { useEffect } from 'react';
-import { useForm } from 'react-hook-form';
 
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { FormSubmitButton } from '@/components/ui/form-submit-button';
 import { Input } from '@/components/ui/input';
+import { useAppForm } from '@/hooks/use-app-form';
 
 import { resourcesMkdirFormSchema, type ResourcesMkdirFormValues, useResourcesMkdir } from './use-resources-mkdir';
 
@@ -51,10 +50,9 @@ export function ResourcesMkdirDialog({ defaultParentPath = '', isOpen, onClose }
 function ResourcesMkdirDialogForm({ defaultParentPath, onClose }: ResourcesMkdirDialogFormProps) {
     const { isCreating, mkdir } = useResourcesMkdir();
 
-    const form = useForm<ResourcesMkdirFormValues>({
+    const form = useAppForm<ResourcesMkdirFormValues>({
         defaultValues: { path: buildDefaultPath(defaultParentPath) },
-        mode: 'onChange',
-        resolver: zodResolver(resourcesMkdirFormSchema),
+        schema: resourcesMkdirFormSchema,
     });
 
     useEffect(() => {
@@ -85,6 +83,7 @@ function ResourcesMkdirDialogForm({ defaultParentPath, onClose }: ResourcesMkdir
             <Form {...form}>
                 <form
                     className="flex flex-col gap-4"
+                    noValidate
                     onSubmit={handleSubmit}
                 >
                     <FormField

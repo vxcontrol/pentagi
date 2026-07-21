@@ -162,6 +162,35 @@ func validateUserResources(
 	return result, nil
 }
 
+// Knowledge-document field limits. MUST stay in sync with the REST request models
+// (server/models/knowledge.go `validate` tags) and the frontend zod schema.
+const (
+	maxKnowledgeContentLen     = 65536
+	maxKnowledgeQuestionLen    = 2048
+	maxKnowledgeDescriptionLen = 1000
+	maxKnowledgeCodeLangLen    = 100
+)
+
+// maxAPITokenNameLen MUST stay in sync with the REST model (server/models/api_tokens.go
+// `validate` tag) and the frontend tokenNameSchema.
+const maxAPITokenNameLen = 100
+
+func validateKnowledgeFieldLengths(content string, question, description, codeLang *string) error {
+	if len(content) > maxKnowledgeContentLen {
+		return fmt.Errorf("content must not exceed %d characters", maxKnowledgeContentLen)
+	}
+	if question != nil && len(*question) > maxKnowledgeQuestionLen {
+		return fmt.Errorf("question must not exceed %d characters", maxKnowledgeQuestionLen)
+	}
+	if description != nil && len(*description) > maxKnowledgeDescriptionLen {
+		return fmt.Errorf("description must not exceed %d characters", maxKnowledgeDescriptionLen)
+	}
+	if codeLang != nil && len(*codeLang) > maxKnowledgeCodeLangLen {
+		return fmt.Errorf("code language must not exceed %d characters", maxKnowledgeCodeLangLen)
+	}
+	return nil
+}
+
 func convertFlowFiles(files flowfiles.Files) []*model.FlowFile {
 	converted := make([]*model.FlowFile, 0, len(files.Files))
 	for _, file := range files.Files {

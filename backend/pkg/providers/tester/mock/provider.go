@@ -23,6 +23,8 @@ type Provider struct {
 	responses      map[string]interface{} // key -> response mapping
 	defaultResp    string
 	streamingDelay time.Duration
+	providerConfig *pconfig.ProviderConfig
+	models         pconfig.ModelsConfig
 }
 
 // ResponseConfig configures mock responses
@@ -60,6 +62,21 @@ func (p *Provider) SetStreamingDelay(delay time.Duration) {
 	p.streamingDelay = delay
 }
 
+// SetProviderConfig configures the per-agent config GetProviderConfig
+// returns, so capability gating (tester.capabilitySupported) can be exercised
+// against a mock the same way it reads a real provider's loaded YAML — e.g.
+// setting AgentConfig.Reasoning.Mode to off/adaptive for a given agent type.
+func (p *Provider) SetProviderConfig(pc *pconfig.ProviderConfig) {
+	p.providerConfig = pc
+}
+
+// SetModels configures the model catalog GetModels returns, so tests can
+// simulate an adaptive-only (or otherwise reasoning-classified) model without
+// depending on the SDK's real model-name tables.
+func (p *Provider) SetModels(models pconfig.ModelsConfig) {
+	p.models = models
+}
+
 // Type implements provider.Provider
 func (p *Provider) Type() provider.ProviderType {
 	return p.providerType
@@ -87,6 +104,9 @@ func (p *Provider) GetUsage(info map[string]any) pconfig.CallUsage {
 
 // GetModels implements provider.Provider
 func (p *Provider) GetModels() pconfig.ModelsConfig {
+	if p.models != nil {
+		return p.models
+	}
 	return pconfig.ModelsConfig{}
 }
 
@@ -213,6 +233,77 @@ func (p *Provider) CallWithTools(
 	return p.handleContentResponse(respInterface)
 }
 
+// CallWithExtraOptions implements provider.Provider for completeness. The
+// capability test pipeline no longer routes through it for adaptive
+// thinking/reasoning off (those are gated to configs that already produce the
+// behavior via the plain CallWithTools/CallEx path below, so tests should set
+// up the mock's canned response accordingly rather than relying on this
+// method to synthesize it); it is reachable by the CapabilityStructuredOutput
+// path. Uses partial-match lookup like CallEx (CallWithTools only matches
+// exact content, too strict for multi-sentence prompts).
+func (p *Provider) CallWithExtraOptions(
+	ctx context.Context,
+	opt pconfig.ProviderOptionsType,
+	chain []llms.MessageContent,
+	tools []llms.Tool,
+	streamCb streaming.Callback,
+	extra ...llms.CallOption,
+) (*llms.ContentResponse, error) {
+	var applied llms.CallOptions
+	for _, o := range extra {
+		o(&applied)
+	}
+
+	var content string
+	for _, msg := range chain {
+		for _, part := range msg.Parts {
+			if textContent, ok := part.(llms.TextContent); ok {
+				content += textContent.Text + " "
+			}
+		}
+	}
+	content = strings.TrimSpace(content)
+
+	var respInterface interface{}
+	if resp, ok := p.responses[content]; ok {
+		respInterface = resp
+	} else {
+		for key, resp := range p.responses {
+			if strings.Contains(content, key) {
+				respInterface = resp
+				break
+			}
+		}
+	}
+	if respInterface == nil {
+		respInterface = p.defaultResp
+	}
+
+	resp, err := p.handleContentResponse(respInterface)
+	if err != nil {
+		return nil, err
+	}
+
+	switch {
+	case applied.Reasoning != nil && applied.Reasoning.IsDisabled():
+		for _, choice := range resp.Choices {
+			choice.Reasoning = nil
+		}
+	case applied.Reasoning != nil && applied.Reasoning.Adaptive:
+		for _, choice := range resp.Choices {
+			if choice.Reasoning.IsEmpty() {
+				choice.Reasoning = &reasoning.ContentReasoning{Content: "mock adaptive reasoning trace"}
+			}
+		}
+	}
+
+	if streamCb == nil {
+		return resp, nil
+	}
+
+	return p.handleStreamingResponse(ctx, resp, streamCb)
+}
+
 // GetRawConfig implements provider.Provider
 func (p *Provider) GetRawConfig() []byte {
 	return []byte(`{"mock": true}`)
@@ -220,6 +311,9 @@ func (p *Provider) GetRawConfig() []byte {
 
 // GetProviderConfig implements provider.Provider
 func (p *Provider) GetProviderConfig() *pconfig.ProviderConfig {
+	if p.providerConfig != nil {
+		return p.providerConfig
+	}
 	return &pconfig.ProviderConfig{}
 }
 

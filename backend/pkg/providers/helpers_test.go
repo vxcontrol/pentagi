@@ -12,7 +12,6 @@ import (
 
 	"pentagi/pkg/cast"
 
-	lru "github.com/hashicorp/golang-lru/v2/expirable"
 	"github.com/stretchr/testify/assert"
 	"github.com/vxcontrol/langchaingo/llms"
 )
@@ -203,7 +202,7 @@ func newFlowProvider() *flowProvider {
 	return &flowProvider{
 		mx:              &sync.RWMutex{},
 		dataDir:         "testdata",
-		summarizerCache: lru.NewLRU[[32]byte, string](summarizerCacheMaxSize, nil, summarizerCacheTTL),
+		summarizerCache: newSummarizerCache(),
 		callCounter:     &atomic.Int64{},
 		maxGACallsLimit: maxGeneralAgentChainIterations,
 		maxLACallsLimit: maxLimitedAgentChainIterations,

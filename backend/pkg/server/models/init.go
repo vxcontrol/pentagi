@@ -87,8 +87,13 @@ func strongPasswordValidatorString() validator.Func {
 	}
 }
 
+var emailFormatRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`)
+
+func isRealEmail(email string) bool {
+	return len(email) > 4 && emailFormatRegex.MatchString(email)
+}
+
 func emailValidatorString() validator.Func {
-	emailRegex := regexp.MustCompile(`^[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,4}$`)
 	return func(fl validator.FieldLevel) bool {
 		field := fl.Field()
 
@@ -101,10 +106,16 @@ func emailValidatorString() validator.Func {
 			if err := validate.Var(email, "required,uuid"); err == nil {
 				return true
 			}
-			return len(email) > 4 && emailRegex.MatchString(email)
+			return isRealEmail(email)
 		default:
 			return false
 		}
+	}
+}
+
+func strictEmailValidatorString() validator.Func {
+	return func(fl validator.FieldLevel) bool {
+		return fl.Field().Kind() == reflect.String && isRealEmail(fl.Field().String())
 	}
 }
 
@@ -213,6 +224,7 @@ func init() {
 	_ = validate.RegisterValidation("semverex", templateValidatorString(semverexRegexString))
 	_ = validate.RegisterValidation("stpass", strongPasswordValidatorString())
 	_ = validate.RegisterValidation("vmail", emailValidatorString())
+	_ = validate.RegisterValidation("realemail", strictEmailValidatorString())
 	_ = validate.RegisterValidation("oauth_min_scope", oauthMinScope())
 	_ = validate.RegisterValidation("valid", deepValidator())
 
@@ -222,6 +234,7 @@ func init() {
 
 	_, _ = reflect.ValueOf(User{}).Interface().(IValid)
 	_, _ = reflect.ValueOf(Password{}).Interface().(IValid)
+	_, _ = reflect.ValueOf(EmailChange{}).Interface().(IValid)
 
 	_, _ = reflect.ValueOf(Role{}).Interface().(IValid)
 	_, _ = reflect.ValueOf(Prompt{}).Interface().(IValid)

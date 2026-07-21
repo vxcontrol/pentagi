@@ -294,9 +294,8 @@ export function useDetailNavigation<T extends { id: string }>({
 
     const handleItemSelect = useCallback(
         (item: T) => {
-            // Close the sheet *before* navigating — preserves the pre-refactor
-            // ordering so a route change can't unmount the sheet while its
-            // close callback is still in flight.
+            // Close the sheet *before* navigating so a route change can't unmount
+            // the sheet while its close callback is still in flight.
             setSheetOpen(false);
             navigate(buildHref(item), { replace: true });
         },

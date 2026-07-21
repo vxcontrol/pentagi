@@ -18,23 +18,11 @@ func (s ProviderType) String() string {
 
 // Valid is function to control input/output data
 func (s ProviderType) Valid() error {
-	providerType := provider.ProviderType(s)
-	switch providerType {
-	case provider.ProviderOpenAI,
-		provider.ProviderAnthropic,
-		provider.ProviderGemini,
-		provider.ProviderBedrock,
-		provider.ProviderOllama,
-		provider.ProviderCustom,
-		provider.ProviderDeepSeek,
-		provider.ProviderGLM,
-		provider.ProviderKimi,
-		provider.ProviderQwen,
-		provider.ProviderMiniMax:
-		return nil
-	default:
+	if !provider.AllProviderTypes.Contains(provider.ProviderType(s)) {
 		return fmt.Errorf("invalid ProviderType: %s", s)
 	}
+
+	return nil
 }
 
 // Validate is function to use callback to control input/output data

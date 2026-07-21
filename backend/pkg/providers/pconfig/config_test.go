@@ -1,6 +1,7 @@
 package pconfig
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -12,6 +13,265 @@ import (
 	"github.com/vxcontrol/langchaingo/llms"
 	"gopkg.in/yaml.v3"
 )
+
+func TestProviderConfig_UsesAdaptiveThinking(t *testing.T) {
+	adaptiveOnly := ModelsConfig{{Name: "opus-4-8", Reasoning: &ModelReasoningInfo{Mode: ModelReasoningAdaptiveOnly}}}
+	adaptiveCapable := ModelsConfig{{Name: "opus-4-6", Reasoning: &ModelReasoningInfo{Mode: ModelReasoningAdaptive}}}
+	budgetOnly := ModelsConfig{{Name: "sonnet-4-5", Reasoning: &ModelReasoningInfo{Mode: ModelReasoningBudget}}}
+
+	tests := []struct {
+		name   string
+		models ModelsConfig
+		agent  *AgentConfig
+		want   bool
+	}{
+		{"adaptive-only model forces adaptive with no agent reasoning",
+			adaptiveOnly, &AgentConfig{Model: "opus-4-8"}, true},
+		{"adaptive-only model overrides an agent budget choice",
+			adaptiveOnly, &AgentConfig{Model: "opus-4-8", Reasoning: ReasoningConfig{Mode: ReasoningModeBudget, MaxTokens: 4096}}, true},
+		{"explicit off wins over the adaptive-only auto-adaptive",
+			adaptiveOnly, &AgentConfig{Model: "opus-4-8", Reasoning: ReasoningConfig{Mode: ReasoningModeOff}}, false},
+		{"agent selects adaptive on an adaptive-capable model",
+			adaptiveCapable, &AgentConfig{Model: "opus-4-6", Reasoning: ReasoningConfig{Mode: ReasoningModeAdaptive}}, true},
+		{"agent selects budget on an adaptive-capable model",
+			adaptiveCapable, &AgentConfig{Model: "opus-4-6", Reasoning: ReasoningConfig{Mode: ReasoningModeBudget, MaxTokens: 4096}}, false},
+		{"unknown model still honors an explicit adaptive agent choice",
+			ModelsConfig{}, &AgentConfig{Model: "unknown", Reasoning: ReasoningConfig{Mode: ReasoningModeAdaptive}}, true},
+		{"budget-only model with a budget agent",
+			budgetOnly, &AgentConfig{Model: "sonnet-4-5", Reasoning: ReasoningConfig{Mode: ReasoningModeBudget, MaxTokens: 4096}}, false},
+		{"no reasoning anywhere",
+			budgetOnly, &AgentConfig{Model: "sonnet-4-5"}, false},
+		{"empty model cannot match adaptive-only catalog entry",
+			adaptiveOnly, &AgentConfig{Model: ""}, false},
+		{"nil agent is not adaptive",
+			adaptiveOnly, nil, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pc := &ProviderConfig{Simple: tt.agent}
+			assert.Equal(t, tt.want, pc.UsesAdaptiveThinking(tt.models, OptionsTypeSimple))
+		})
+	}
+}
+
+// PrepareAdaptiveCallOptions is a thin wrapper around UsesAdaptiveThinking; these
+// cases cover option shape only (append / effort / preserve). Predicate branches
+// live in TestProviderConfig_UsesAdaptiveThinking.
+func TestProviderConfig_PrepareAdaptiveCallOptions(t *testing.T) {
+	adaptiveOnly := ModelsConfig{{Name: "opus-4-8", Reasoning: &ModelReasoningInfo{Mode: ModelReasoningAdaptiveOnly}}}
+	budgetOnly := ModelsConfig{{Name: "sonnet-4-5", Reasoning: &ModelReasoningInfo{Mode: ModelReasoningBudget}}}
+
+	appliedReasoning := func(options []llms.CallOption) *llms.ReasoningConfig {
+		var co llms.CallOptions
+		for _, o := range options {
+			o(&co)
+		}
+		return co.Reasoning
+	}
+
+	t.Run("appends adaptive option and forwards effort", func(t *testing.T) {
+		pc := &ProviderConfig{Simple: &AgentConfig{
+			Model:     "opus-4-8",
+			Reasoning: ReasoningConfig{Effort: llms.ReasoningHigh},
+		}}
+		existing := []llms.CallOption{llms.WithTemperature(0.5)}
+		_, options := pc.PrepareAdaptiveCallOptions(context.Background(), adaptiveOnly, OptionsTypeSimple, existing)
+		require.Len(t, options, 2, "adaptive option must be appended after existing options")
+
+		r := appliedReasoning(options)
+		require.NotNil(t, r)
+		assert.True(t, r.Adaptive)
+		assert.Equal(t, llms.ReasoningHigh, r.Effort)
+	})
+
+	t.Run("empty effort when agent has no reasoning block", func(t *testing.T) {
+		pc := &ProviderConfig{Simple: &AgentConfig{Model: "opus-4-8"}}
+		_, options := pc.PrepareAdaptiveCallOptions(context.Background(), adaptiveOnly, OptionsTypeSimple, nil)
+		require.Len(t, options, 1)
+
+		r := appliedReasoning(options)
+		require.NotNil(t, r)
+		assert.True(t, r.Adaptive)
+		assert.Equal(t, llms.ReasoningNone, r.Effort, "empty effort is left for the provider to default to high")
+	})
+
+	t.Run("off on adaptive-only does not append", func(t *testing.T) {
+		pc := &ProviderConfig{Simple: &AgentConfig{
+			Model:     "opus-4-8",
+			Reasoning: ReasoningConfig{Mode: ReasoningModeOff},
+		}}
+		existing := []llms.CallOption{llms.WithTemperature(1)}
+		_, options := pc.PrepareAdaptiveCallOptions(context.Background(), adaptiveOnly, OptionsTypeSimple, existing)
+		require.Len(t, options, 1, "existing options must be preserved unchanged")
+		assert.Nil(t, appliedReasoning(options), "off must not append adaptive reasoning")
+	})
+
+	t.Run("no-op preserves existing options", func(t *testing.T) {
+		pc := &ProviderConfig{Simple: &AgentConfig{
+			Model:     "sonnet-4-5",
+			Reasoning: ReasoningConfig{Mode: ReasoningModeBudget, MaxTokens: 4096},
+		}}
+		existing := []llms.CallOption{llms.WithTemperature(1)}
+		_, options := pc.PrepareAdaptiveCallOptions(context.Background(), budgetOnly, OptionsTypeSimple, existing)
+		require.Len(t, options, 1, "a non-adaptive call must not append the adaptive option")
+		assert.Nil(t, appliedReasoning(options), "no adaptive reasoning option should be present")
+	})
+}
+
+// An explicit off mode must emit llms.WithReasoningDisabled() so the langchaingo
+// adapter sends the provider's disable wire. Helper semantics for Mode/IsZero live
+// in TestReasoningConfig_EffectiveMode / TestReasoningConfig_IsZero.
+func TestProviderConfig_EmitsDisableOnOffMode(t *testing.T) {
+	var ac AgentConfig
+	require.NoError(t, yaml.Unmarshal([]byte("model: gpt-5.5\nreasoning:\n  mode: \"off\"\n"), &ac))
+
+	pc := &ProviderConfig{Simple: &ac}
+	var applied llms.CallOptions
+	for _, opt := range pc.GetOptionsForType(OptionsTypeSimple) {
+		opt(&applied)
+	}
+
+	require.NotNil(t, applied.Reasoning, "off must emit a reasoning option")
+	assert.True(t, applied.Reasoning.IsDisabled(), "off must disable reasoning on the call options")
+}
+
+// Dependency contract: langchaingo must keep xhigh/max unclamped so OpenAI-compatible
+// reasoning_effort carries the real level. Not a pconfig.ReasoningConfig unit test.
+func TestLangchaingoReasoningConfig_GetEffortPreservesXHighAndMax(t *testing.T) {
+	for _, effort := range []llms.ReasoningEffort{llms.ReasoningXHigh, llms.ReasoningMax} {
+		rc := llms.ReasoningConfig{Effort: effort}
+		if got := rc.GetEffort(8192); got != effort {
+			t.Errorf("GetEffort(effort=%q) = %q, want %q", effort, got, effort)
+		}
+	}
+}
+
+func TestProviderConfig_EmitsTopReasoningEffortOnEffortPath(t *testing.T) {
+	for _, effort := range []string{"low", "medium", "high", "xhigh", "max"} {
+		t.Run(effort, func(t *testing.T) {
+			var ac AgentConfig
+			require.NoError(t, yaml.Unmarshal([]byte("model: gpt-5.5\nreasoning:\n  effort: "+effort+"\n"), &ac))
+
+			pc := &ProviderConfig{Simple: &ac}
+			var applied llms.CallOptions
+			for _, opt := range pc.GetOptionsForType(OptionsTypeSimple) {
+				opt(&applied)
+			}
+
+			require.NotNil(t, applied.Reasoning, "effort %q must emit a reasoning option on the non-adaptive path", effort)
+			assert.Equal(t, llms.ReasoningEffort(effort), applied.Reasoning.Effort, "the configured effort must reach the call options unchanged")
+			assert.False(t, applied.Reasoning.Adaptive)
+			assert.False(t, applied.Reasoning.IsDisabled())
+		})
+	}
+}
+
+// gopkg.in/yaml.v3 follows YAML 1.2 core (only true/false are booleans), so an
+// unquoted off in a user-authored provider YAML parses as the string mode, not a
+// boolean. This guards the user-editable config path against the YAML 1.1 off gotcha.
+func TestReasoningConfig_UnquotedOffParsesAsMode(t *testing.T) {
+	var ac AgentConfig
+	require.NoError(t, yaml.Unmarshal([]byte("model: gpt-5.5\nreasoning:\n  mode: off\n"), &ac))
+	assert.Equal(t, ReasoningModeOff, ac.Reasoning.Mode)
+}
+
+// TestModelConfigReasoningCapability guards the custom ModelConfig (un)marshalers:
+// the model reasoning capability descriptor must survive YAML and JSON round-trips,
+// because providers rely on it to force adaptive thinking for adaptive-only models.
+func TestModelConfigReasoningCapability(t *testing.T) {
+	yamlData := []byte("- name: m1\n  reasoning:\n    mode: adaptive-only\n    efforts: [low, high, xhigh]\n")
+	models, err := LoadModelsConfigData(yamlData)
+	require.NoError(t, err)
+	require.Len(t, models, 1)
+	require.NotNil(t, models[0].Reasoning, "reasoning must parse from YAML")
+	assert.Equal(t, ModelReasoningAdaptiveOnly, models[0].Reasoning.Mode)
+	assert.Equal(t, []llms.ReasoningEffort{"low", "high", "xhigh"}, models[0].Reasoning.Efforts)
+
+	jsonBytes, err := json.Marshal(models[0])
+	require.NoError(t, err)
+	var backJSON ModelConfig
+	require.NoError(t, json.Unmarshal(jsonBytes, &backJSON))
+	require.NotNil(t, backJSON.Reasoning, "reasoning must survive JSON round-trip")
+	assert.Equal(t, ModelReasoningAdaptiveOnly, backJSON.Reasoning.Mode)
+	assert.Equal(t, []llms.ReasoningEffort{"low", "high", "xhigh"}, backJSON.Reasoning.Efforts)
+
+	yamlBytes, err := yaml.Marshal(models[0])
+	require.NoError(t, err)
+	var backYAML ModelConfig
+	require.NoError(t, yaml.Unmarshal(yamlBytes, &backYAML))
+	require.NotNil(t, backYAML.Reasoning, "reasoning must survive YAML round-trip")
+	assert.Equal(t, ModelReasoningAdaptiveOnly, backYAML.Reasoning.Mode)
+	assert.Equal(t, []llms.ReasoningEffort{"low", "high", "xhigh"}, backYAML.Reasoning.Efforts)
+}
+
+func TestReasoningConfig_EffectiveMode(t *testing.T) {
+	tests := []struct {
+		name string
+		rc   ReasoningConfig
+		want ReasoningMode
+	}{
+		{"empty -> default", ReasoningConfig{}, ReasoningModeDefault},
+		{"explicit adaptive", ReasoningConfig{Mode: ReasoningModeAdaptive}, ReasoningModeAdaptive},
+		{"explicit budget", ReasoningConfig{Mode: ReasoningModeBudget}, ReasoningModeBudget},
+		{"explicit off", ReasoningConfig{Mode: ReasoningModeOff}, ReasoningModeOff},
+		{"off wins over max_tokens", ReasoningConfig{Mode: ReasoningModeOff, MaxTokens: 5000}, ReasoningModeOff},
+		{"effort only, no mode/tokens -> default", ReasoningConfig{Effort: llms.ReasoningHigh}, ReasoningModeDefault},
+		{"max_tokens, no effort -> budget", ReasoningConfig{MaxTokens: 5000}, ReasoningModeBudget},
+		{"max_tokens + none effort -> budget", ReasoningConfig{Effort: llms.ReasoningNone, MaxTokens: 5000}, ReasoningModeBudget},
+		{"max_tokens + string none effort -> budget", ReasoningConfig{Effort: llms.ReasoningEffort("none"), MaxTokens: 5000}, ReasoningModeBudget},
+		{"max_tokens + non-none effort -> default", ReasoningConfig{Effort: llms.ReasoningHigh, MaxTokens: 5000}, ReasoningModeDefault},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, tt.rc.EffectiveMode())
+		})
+	}
+}
+
+func TestReasoningConfig_IsZero(t *testing.T) {
+	assert.True(t, ReasoningConfig{}.IsZero())
+	assert.False(t, ReasoningConfig{Mode: ReasoningModeAdaptive}.IsZero())
+	assert.False(t, ReasoningConfig{Mode: ReasoningModeBudget}.IsZero())
+	assert.False(t, ReasoningConfig{Mode: ReasoningModeOff}.IsZero())
+	assert.False(t, ReasoningConfig{Effort: llms.ReasoningLow}.IsZero())
+	assert.False(t, ReasoningConfig{MaxTokens: 1}.IsZero())
+}
+
+func TestAgentConfigValidate(t *testing.T) {
+	require.NoError(t, (&AgentConfig{
+		Temperature: 2, TopP: 1, TopK: 40, MaxTokens: 8192,
+		MinLength: 1, MaxLength: 100,
+		RepetitionPenalty: 1.1, FrequencyPenalty: -2, PresencePenalty: 2,
+		Reasoning: ReasoningConfig{MaxTokens: 32768},
+		Price:     &PriceInfo{Input: 5, Output: 25},
+	}).Validate())
+	require.NoError(t, (&AgentConfig{}).Validate(), "zero value (all unset) is valid")
+
+	cases := map[string]*AgentConfig{
+		"temperature too high":      {Temperature: 5},
+		"temperature negative":      {Temperature: -1},
+		"top_p too high":            {TopP: 1.5},
+		"top_k negative":            {TopK: -1},
+		"max_tokens negative":       {MaxTokens: -100},
+		"inverted length window":    {MinLength: 5000, MaxLength: 10},
+		"frequency out of range":    {FrequencyPenalty: 9},
+		"presence out of range":     {PresencePenalty: -3},
+		"repetition out of range":   {RepetitionPenalty: 3},
+		"reasoning budget over cap": {Reasoning: ReasoningConfig{MaxTokens: 40000}},
+		"reasoning budget negative": {Reasoning: ReasoningConfig{MaxTokens: -1}},
+		"negative price":            {Price: &PriceInfo{Input: -1}},
+		"negative cache_read price": {Price: &PriceInfo{CacheRead: -0.1}},
+	}
+	for name, ac := range cases {
+		t.Run(name, func(t *testing.T) {
+			assert.Error(t, ac.Validate())
+		})
+	}
+
+	err := (&ProviderConfig{Adviser: &AgentConfig{Temperature: 5}}).Validate()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "adviser")
+}
 
 func TestReasoningConfig_UnmarshalJSON(t *testing.T) {
 	tests := []struct {
@@ -48,6 +308,14 @@ func TestReasoningConfig_UnmarshalJSON(t *testing.T) {
 			},
 		},
 		{
+			name: "with adaptive mode",
+			json: `{"mode": "adaptive", "effort": "xhigh"}`,
+			want: ReasoningConfig{
+				Mode:   ReasoningModeAdaptive,
+				Effort: llms.ReasoningEffort("xhigh"),
+			},
+		},
+		{
 			name:    "invalid json",
 			json:    "{invalid}",
 			wantErr: true,
@@ -65,6 +333,7 @@ func TestReasoningConfig_UnmarshalJSON(t *testing.T) {
 			}
 
 			require.NoError(t, err)
+			assert.Equal(t, tt.want.Mode, got.Mode)
 			assert.Equal(t, tt.want.Effort, got.Effort)
 			assert.Equal(t, tt.want.MaxTokens, got.MaxTokens)
 		})
@@ -109,6 +378,17 @@ max_tokens: 2000
 			},
 		},
 		{
+			name: "with adaptive mode",
+			yaml: `
+mode: adaptive
+effort: xhigh
+`,
+			want: ReasoningConfig{
+				Mode:   ReasoningModeAdaptive,
+				Effort: llms.ReasoningEffort("xhigh"),
+			},
+		},
+		{
 			name:    "invalid yaml",
 			yaml:    "invalid: [yaml",
 			wantErr: true,
@@ -126,6 +406,7 @@ max_tokens: 2000
 			}
 
 			require.NoError(t, err)
+			assert.Equal(t, tt.want.Mode, got.Mode)
 			assert.Equal(t, tt.want.Effort, got.Effort)
 			assert.Equal(t, tt.want.MaxTokens, got.MaxTokens)
 		})
@@ -924,6 +1205,28 @@ func TestAgentConfig_BuildOptions(t *testing.T) {
 			wantLen: 3, // model, temperature, reasoning (max_tokens is set)
 		},
 		{
+			name:   "with adaptive reasoning mode",
+			format: "json",
+			config: `{
+				"model": "test-model",
+				"temperature": 0.7,
+				"reasoning": {
+					"mode": "adaptive",
+					"effort": "xhigh"
+				}
+			}`,
+			wantLen: 2, // model, temperature; adaptive reasoning is applied per-call by the provider, not here
+			checkOptions: func(t *testing.T, options []llms.CallOption) {
+				var opts llms.CallOptions
+				for _, option := range options {
+					option(&opts)
+				}
+
+				assert.Nil(t, opts.Metadata)
+				assert.Nil(t, opts.Reasoning)
+			},
+		},
+		{
 			name:   "with invalid reasoning tokens over limit",
 			format: "json",
 			config: `{
@@ -934,7 +1237,7 @@ func TestAgentConfig_BuildOptions(t *testing.T) {
 					"max_tokens": 50000
 				}
 			}`,
-			wantLen: 2, // shouldn't include reasoning option because tokens > 32000
+			wantLen: 2, // shouldn't include reasoning option because tokens > 32768
 		},
 		{
 			name:   "with invalid reasoning tokens negative",

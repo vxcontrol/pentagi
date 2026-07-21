@@ -453,3 +453,36 @@ func (q *Queries) UpdateKnowledgeDocument(ctx context.Context, arg UpdateKnowled
 	err := row.Scan(&i.ID, &i.Document, &i.Cmetadata)
 	return i, err
 }
+
+const updateKnowledgeDocumentMetadata = `-- name: UpdateKnowledgeDocumentMetadata :one
+UPDATE langchain_pg_embedding
+SET cmetadata = $1::json
+WHERE uuid::text = $2
+  AND collection_id = (SELECT uuid FROM langchain_pg_collection WHERE name = 'langchain')
+RETURNING
+  uuid::text                              AS id,
+  COALESCE(document, '')                  AS document,
+  COALESCE(cmetadata::text, '{}')         AS cmetadata
+`
+
+type UpdateKnowledgeDocumentMetadataParams struct {
+	Cmetadata pqtype.NullRawMessage `json:"cmetadata"`
+	Uuid      sql.NullString        `json:"uuid"`
+}
+
+type UpdateKnowledgeDocumentMetadataRow struct {
+	ID        string         `json:"id"`
+	Document  string         `json:"document"`
+	Cmetadata sql.NullString `json:"cmetadata"`
+}
+
+// Update only the document's metadata, leaving its text and embedding intact.
+// Used when an update changes no content (e.g. rename) so re-embedding — and
+// therefore a configured embedder — is unnecessary.
+// cmetadata must be valid JSON text.
+func (q *Queries) UpdateKnowledgeDocumentMetadata(ctx context.Context, arg UpdateKnowledgeDocumentMetadataParams) (UpdateKnowledgeDocumentMetadataRow, error) {
+	row := q.db.QueryRowContext(ctx, updateKnowledgeDocumentMetadata, arg.Cmetadata, arg.Uuid)
+	var i UpdateKnowledgeDocumentMetadataRow
+	err := row.Scan(&i.ID, &i.Document, &i.Cmetadata)
+	return i, err
+}

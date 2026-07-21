@@ -236,6 +236,14 @@ fragment providerTestResultFragment on ProviderTestResult {
 
 fragment modelConfigFragment on ModelConfig {
     name
+    thinking
+    reasoning {
+        mode
+        efforts
+        supported
+        cannotDisable
+        defaultOn
+    }
     price {
         input
         output
@@ -314,6 +322,7 @@ fragment agentConfigFragment on AgentConfig {
     frequencyPenalty
     presencePenalty
     reasoning {
+        mode
         effort
         maxTokens
     }
@@ -554,6 +563,7 @@ query settingsProviders {
             glm
             kimi
             qwen
+            minimax
         }
         default {
             openai {
@@ -584,6 +594,9 @@ query settingsProviders {
                 ...providerConfigFragment
             }
             qwen {
+                ...providerConfigFragment
+            }
+            minimax {
                 ...providerConfigFragment
             }
         }
@@ -619,6 +632,9 @@ query settingsProviders {
                 ...modelConfigFragment
             }
             qwen {
+                ...modelConfigFragment
+            }
+            minimax {
                 ...modelConfigFragment
             }
         }
@@ -1170,6 +1186,12 @@ mutation createKnowledgeDocument($input: CreateKnowledgeDocumentInput!) {
 
 mutation updateKnowledgeDocument($id: String!, $input: UpdateKnowledgeDocumentInput!) {
     updateKnowledgeDocument(id: $id, input: $input) {
+        ...knowledgeDocumentFragment
+    }
+}
+
+mutation renameKnowledgeDocument($id: String!, $question: String!) {
+    renameKnowledgeDocument(id: $id, question: $question) {
         ...knowledgeDocumentFragment
     }
 }

@@ -2,10 +2,7 @@
 type Exact<T extends { [key: string]: unknown }> = { [K in keyof T]: T[K] };
 /** Internal type. DO NOT USE DIRECTLY. */
 export type Incremental<T> = T | { [P in keyof T]?: P extends ' $fragmentName' | '__typename' ? T[P] : never };
-import { gql } from '@apollo/client';
-import type * as ApolloReactCommon from '@apollo/client/react';
-import * as ApolloReactHooks from '@apollo/client/react';
-const defaultOptions = {} as const;
+import type { TypedDocumentNode as DocumentNode } from '@graphql-typed-document-node/core';
 export type AgentConfigInput = {
     frequencyPenalty?: number | null | undefined;
     maxLength?: number | null | undefined;
@@ -144,6 +141,12 @@ export type ModelPriceInput = {
     output: number;
 };
 
+export enum ModelReasoningMode {
+    Adaptive = 'adaptive',
+    AdaptiveOnly = 'adaptive_only',
+    Budget = 'budget',
+}
+
 export enum PromptType {
     Adviser = 'adviser',
     Assistant = 'assistant',
@@ -203,6 +206,7 @@ export enum ProviderType {
     Gemini = 'gemini',
     Glm = 'glm',
     Kimi = 'kimi',
+    Minimax = 'minimax',
     Ollama = 'ollama',
     Openai = 'openai',
     Qwen = 'qwen',
@@ -211,12 +215,21 @@ export enum ProviderType {
 export type ReasoningConfigInput = {
     effort?: ReasoningEffort | null | undefined;
     maxTokens?: number | null | undefined;
+    mode?: ReasoningMode | null | undefined;
 };
 
 export enum ReasoningEffort {
     High = 'high',
     Low = 'low',
+    Max = 'max',
     Medium = 'medium',
+    Xhigh = 'xhigh',
+}
+
+export enum ReasoningMode {
+    Adaptive = 'adaptive',
+    Budget = 'budget',
+    Off = 'off',
 }
 
 export enum ResultFormat {
@@ -299,8 +312,8 @@ export type FlowFragmentFragment = {
     id: string;
     title: string;
     status: StatusType;
-    createdAt: unknown;
-    updatedAt: unknown;
+    createdAt: string;
+    updatedAt: string;
     terminals: Array<TerminalFragmentFragment> | null;
     provider: ProviderFragmentFragment;
 };
@@ -311,7 +324,7 @@ export type TerminalFragmentFragment = {
     name: string;
     image: string;
     connected: boolean;
-    createdAt: unknown;
+    createdAt: string;
 };
 
 export type TaskFragmentFragment = {
@@ -321,8 +334,8 @@ export type TaskFragmentFragment = {
     input: string;
     result: string;
     flowId: string;
-    createdAt: unknown;
-    updatedAt: unknown;
+    createdAt: string;
+    updatedAt: string;
     subtasks: Array<SubtaskFragmentFragment> | null;
 };
 
@@ -333,8 +346,8 @@ export type SubtaskFragmentFragment = {
     description: string;
     result: string;
     taskId: string;
-    createdAt: unknown;
-    updatedAt: unknown;
+    createdAt: string;
+    updatedAt: string;
 };
 
 export type TerminalLogFragmentFragment = {
@@ -345,7 +358,7 @@ export type TerminalLogFragmentFragment = {
     type: TerminalLogType;
     text: string;
     terminal: string;
-    createdAt: unknown;
+    createdAt: string;
 };
 
 export type MessageLogFragmentFragment = {
@@ -358,7 +371,7 @@ export type MessageLogFragmentFragment = {
     flowId: string;
     taskId: string | null;
     subtaskId: string | null;
-    createdAt: unknown;
+    createdAt: string;
 };
 
 export type ScreenshotFragmentFragment = {
@@ -368,7 +381,7 @@ export type ScreenshotFragmentFragment = {
     subtaskId: string | null;
     name: string;
     url: string;
-    createdAt: unknown;
+    createdAt: string;
 };
 
 export type FlowFileFragmentFragment = {
@@ -377,7 +390,7 @@ export type FlowFileFragmentFragment = {
     path: string;
     size: number;
     isDir: boolean;
-    modifiedAt: unknown;
+    modifiedAt: string;
 };
 
 export type UserResourceFragmentFragment = {
@@ -387,8 +400,8 @@ export type UserResourceFragmentFragment = {
     path: string;
     size: number;
     isDir: boolean;
-    createdAt: unknown;
-    updatedAt: unknown;
+    createdAt: string;
+    updatedAt: string;
 };
 
 export type AgentLogFragmentFragment = {
@@ -400,7 +413,7 @@ export type AgentLogFragmentFragment = {
     result: string;
     taskId: string | null;
     subtaskId: string | null;
-    createdAt: unknown;
+    createdAt: string;
 };
 
 export type SearchLogFragmentFragment = {
@@ -413,7 +426,7 @@ export type SearchLogFragmentFragment = {
     result: string;
     taskId: string | null;
     subtaskId: string | null;
-    createdAt: unknown;
+    createdAt: string;
 };
 
 export type VectorStoreLogFragmentFragment = {
@@ -427,7 +440,7 @@ export type VectorStoreLogFragmentFragment = {
     result: string;
     taskId: string | null;
     subtaskId: string | null;
-    createdAt: unknown;
+    createdAt: string;
 };
 
 export type AssistantFragmentFragment = {
@@ -436,8 +449,8 @@ export type AssistantFragmentFragment = {
     status: StatusType;
     flowId: string;
     useAgents: boolean;
-    createdAt: unknown;
-    updatedAt: unknown;
+    createdAt: string;
+    updatedAt: string;
     provider: ProviderFragmentFragment;
 };
 
@@ -451,7 +464,7 @@ export type AssistantLogFragmentFragment = {
     appendPart: boolean;
     flowId: string;
     assistantId: string;
-    createdAt: unknown;
+    createdAt: string;
 };
 
 export type TestResultFragmentFragment = {
@@ -484,6 +497,14 @@ export type ProviderTestResultFragmentFragment = {
 
 export type ModelConfigFragmentFragment = {
     name: string;
+    thinking: boolean | null;
+    reasoning: {
+        mode: ModelReasoningMode | null;
+        efforts: Array<ReasoningEffort> | null;
+        supported: boolean | null;
+        cannotDisable: boolean | null;
+        defaultOn: boolean | null;
+    } | null;
     price: { input: number; output: number; cacheRead: number; cacheWrite: number } | null;
 };
 
@@ -493,8 +514,8 @@ export type ProviderConfigFragmentFragment = {
     id: string;
     name: string;
     type: ProviderType;
-    createdAt: unknown;
-    updatedAt: unknown;
+    createdAt: string;
+    updatedAt: string;
     agents: AgentsConfigFragmentFragment;
 };
 
@@ -525,7 +546,7 @@ export type AgentConfigFragmentFragment = {
     repetitionPenalty: number | null;
     frequencyPenalty: number | null;
     presencePenalty: number | null;
-    reasoning: { effort: ReasoningEffort | null; maxTokens: number | null } | null;
+    reasoning: { mode: ReasoningMode | null; effort: ReasoningEffort | null; maxTokens: number | null } | null;
     price: { input: number; output: number; cacheRead: number; cacheWrite: number } | null;
 };
 
@@ -533,8 +554,8 @@ export type UserPromptFragmentFragment = {
     id: string;
     type: PromptType;
     template: string;
-    createdAt: unknown;
-    updatedAt: unknown;
+    createdAt: string;
+    updatedAt: string;
 };
 
 export type DefaultPromptFragmentFragment = { type: PromptType; template: string; variables: Array<string> };
@@ -555,8 +576,8 @@ export type ApiTokenFragmentFragment = {
     name: string | null;
     ttl: number;
     status: TokenStatus;
-    createdAt: unknown;
-    updatedAt: unknown;
+    createdAt: string;
+    updatedAt: string;
 };
 
 export type ApiTokenWithSecretFragmentFragment = {
@@ -567,8 +588,8 @@ export type ApiTokenWithSecretFragmentFragment = {
     name: string | null;
     ttl: number;
     status: TokenStatus;
-    createdAt: unknown;
-    updatedAt: unknown;
+    createdAt: string;
+    updatedAt: string;
     token: string;
 };
 
@@ -577,8 +598,8 @@ export type FlowTemplateFragmentFragment = {
     userId: string;
     title: string;
     text: string;
-    createdAt: unknown;
-    updatedAt: unknown;
+    createdAt: string;
+    updatedAt: string;
 };
 
 export type UsageStatsFragmentFragment = {
@@ -590,7 +611,7 @@ export type UsageStatsFragmentFragment = {
     totalUsageCostOut: number;
 };
 
-export type DailyUsageStatsFragmentFragment = { date: unknown; stats: UsageStatsFragmentFragment };
+export type DailyUsageStatsFragmentFragment = { date: string; stats: UsageStatsFragmentFragment };
 
 export type ProviderUsageStatsFragmentFragment = { provider: string; stats: UsageStatsFragmentFragment };
 
@@ -607,7 +628,7 @@ export type ModelAgentsUsageStatsFragmentFragment = {
 
 export type ToolcallsStatsFragmentFragment = { totalCount: number; totalDurationSeconds: number };
 
-export type DailyToolcallsStatsFragmentFragment = { date: unknown; stats: ToolcallsStatsFragmentFragment };
+export type DailyToolcallsStatsFragmentFragment = { date: string; stats: ToolcallsStatsFragmentFragment };
 
 export type FunctionToolcallsStatsFragmentFragment = {
     functionName: string;
@@ -630,7 +651,7 @@ export type FlowStatsFragmentFragment = {
     totalAssistantsCount: number;
 };
 
-export type DailyFlowsStatsFragmentFragment = { date: unknown; stats: FlowsStatsFragmentFragment };
+export type DailyFlowsStatsFragmentFragment = { date: string; stats: FlowsStatsFragmentFragment };
 
 export type SubtaskExecutionStatsFragmentFragment = {
     subtaskId: string;
@@ -703,6 +724,7 @@ export type SettingsProvidersQuery = {
             glm: boolean;
             kimi: boolean;
             qwen: boolean;
+            minimax: boolean;
         };
         default: {
             openai: ProviderConfigFragmentFragment;
@@ -715,6 +737,7 @@ export type SettingsProvidersQuery = {
             glm: ProviderConfigFragmentFragment | null;
             kimi: ProviderConfigFragmentFragment | null;
             qwen: ProviderConfigFragmentFragment | null;
+            minimax: ProviderConfigFragmentFragment | null;
         };
         userDefined: Array<ProviderConfigFragmentFragment> | null;
         models: {
@@ -728,6 +751,7 @@ export type SettingsProvidersQuery = {
             glm: Array<ModelConfigFragmentFragment> | null;
             kimi: Array<ModelConfigFragmentFragment> | null;
             qwen: Array<ModelConfigFragmentFragment> | null;
+            minimax: Array<ModelConfigFragmentFragment> | null;
         };
     };
 };
@@ -1180,6 +1204,13 @@ export type UpdateKnowledgeDocumentMutationVariables = Exact<{
 
 export type UpdateKnowledgeDocumentMutation = { updateKnowledgeDocument: KnowledgeDocumentFragmentFragment };
 
+export type RenameKnowledgeDocumentMutationVariables = Exact<{
+    id: string;
+    question: string;
+}>;
+
+export type RenameKnowledgeDocumentMutation = { renameKnowledgeDocument: KnowledgeDocumentFragmentFragment };
+
 export type DeleteKnowledgeDocumentMutationVariables = Exact<{
     id: string;
 }>;
@@ -1303,7 +1334,7 @@ export type TaskUpdatedSubscription = {
         id: string;
         status: StatusType;
         result: string;
-        updatedAt: unknown;
+        updatedAt: string;
         subtasks: Array<SubtaskFragmentFragment> | null;
     };
 };
@@ -1372,6215 +1403,11113 @@ export type KnowledgeDocumentDeletedSubscriptionVariables = Exact<{ [key: string
 
 export type KnowledgeDocumentDeletedSubscription = { knowledgeDocumentDeleted: KnowledgeDocumentFragmentFragment };
 
-export const SettingsFragmentFragmentDoc = gql`
-    fragment settingsFragment on Settings {
-        debug
-        askUser
-        version
-        dockerInside
-        isDevelopMode
-        assistantUseAgents
-    }
-`;
-export const TerminalFragmentFragmentDoc = gql`
-    fragment terminalFragment on Terminal {
-        id
-        type
-        name
-        image
-        connected
-        createdAt
-    }
-`;
-export const ProviderFragmentFragmentDoc = gql`
-    fragment providerFragment on Provider {
-        name
-        type
-    }
-`;
-export const FlowFragmentFragmentDoc = gql`
-    fragment flowFragment on Flow {
-        id
-        title
-        status
-        terminals {
-            ...terminalFragment
-        }
-        provider {
-            ...providerFragment
-        }
-        createdAt
-        updatedAt
-    }
-    ${TerminalFragmentFragmentDoc}
-    ${ProviderFragmentFragmentDoc}
-`;
-export const SubtaskFragmentFragmentDoc = gql`
-    fragment subtaskFragment on Subtask {
-        id
-        status
-        title
-        description
-        result
-        taskId
-        createdAt
-        updatedAt
-    }
-`;
-export const TaskFragmentFragmentDoc = gql`
-    fragment taskFragment on Task {
-        id
-        title
-        status
-        input
-        result
-        flowId
-        subtasks {
-            ...subtaskFragment
-        }
-        createdAt
-        updatedAt
-    }
-    ${SubtaskFragmentFragmentDoc}
-`;
-export const TerminalLogFragmentFragmentDoc = gql`
-    fragment terminalLogFragment on TerminalLog {
-        id
-        flowId
-        taskId
-        subtaskId
-        type
-        text
-        terminal
-        createdAt
-    }
-`;
-export const MessageLogFragmentFragmentDoc = gql`
-    fragment messageLogFragment on MessageLog {
-        id
-        type
-        message
-        thinking
-        result
-        resultFormat
-        flowId
-        taskId
-        subtaskId
-        createdAt
-    }
-`;
-export const ScreenshotFragmentFragmentDoc = gql`
-    fragment screenshotFragment on Screenshot {
-        id
-        flowId
-        taskId
-        subtaskId
-        name
-        url
-        createdAt
-    }
-`;
-export const FlowFileFragmentFragmentDoc = gql`
-    fragment flowFileFragment on FlowFile {
-        id
-        name
-        path
-        size
-        isDir
-        modifiedAt
-    }
-`;
-export const UserResourceFragmentFragmentDoc = gql`
-    fragment userResourceFragment on UserResource {
-        id
-        userId
-        name
-        path
-        size
-        isDir
-        createdAt
-        updatedAt
-    }
-`;
-export const AgentLogFragmentFragmentDoc = gql`
-    fragment agentLogFragment on AgentLog {
-        id
-        flowId
-        initiator
-        executor
-        task
-        result
-        taskId
-        subtaskId
-        createdAt
-    }
-`;
-export const SearchLogFragmentFragmentDoc = gql`
-    fragment searchLogFragment on SearchLog {
-        id
-        flowId
-        initiator
-        executor
-        engine
-        query
-        result
-        taskId
-        subtaskId
-        createdAt
-    }
-`;
-export const VectorStoreLogFragmentFragmentDoc = gql`
-    fragment vectorStoreLogFragment on VectorStoreLog {
-        id
-        flowId
-        initiator
-        executor
-        filter
-        query
-        action
-        result
-        taskId
-        subtaskId
-        createdAt
-    }
-`;
-export const AssistantFragmentFragmentDoc = gql`
-    fragment assistantFragment on Assistant {
-        id
-        title
-        status
-        provider {
-            ...providerFragment
-        }
-        flowId
-        useAgents
-        createdAt
-        updatedAt
-    }
-    ${ProviderFragmentFragmentDoc}
-`;
-export const AssistantLogFragmentFragmentDoc = gql`
-    fragment assistantLogFragment on AssistantLog {
-        id
-        type
-        message
-        thinking
-        result
-        resultFormat
-        appendPart
-        flowId
-        assistantId
-        createdAt
-    }
-`;
-export const TestResultFragmentFragmentDoc = gql`
-    fragment testResultFragment on TestResult {
-        name
-        type
-        result
-        reasoning
-        streaming
-        latency
-        error
-    }
-`;
-export const AgentTestResultFragmentFragmentDoc = gql`
-    fragment agentTestResultFragment on AgentTestResult {
-        tests {
-            ...testResultFragment
-        }
-    }
-    ${TestResultFragmentFragmentDoc}
-`;
-export const ProviderTestResultFragmentFragmentDoc = gql`
-    fragment providerTestResultFragment on ProviderTestResult {
-        simple {
-            ...agentTestResultFragment
-        }
-        simpleJson {
-            ...agentTestResultFragment
-        }
-        primaryAgent {
-            ...agentTestResultFragment
-        }
-        assistant {
-            ...agentTestResultFragment
-        }
-        generator {
-            ...agentTestResultFragment
-        }
-        refiner {
-            ...agentTestResultFragment
-        }
-        adviser {
-            ...agentTestResultFragment
-        }
-        reflector {
-            ...agentTestResultFragment
-        }
-        searcher {
-            ...agentTestResultFragment
-        }
-        enricher {
-            ...agentTestResultFragment
-        }
-        coder {
-            ...agentTestResultFragment
-        }
-        installer {
-            ...agentTestResultFragment
-        }
-        pentester {
-            ...agentTestResultFragment
-        }
-    }
-    ${AgentTestResultFragmentFragmentDoc}
-`;
-export const ModelConfigFragmentFragmentDoc = gql`
-    fragment modelConfigFragment on ModelConfig {
-        name
-        price {
-            input
-            output
-            cacheRead
-            cacheWrite
-        }
-    }
-`;
-export const AgentConfigFragmentFragmentDoc = gql`
-    fragment agentConfigFragment on AgentConfig {
-        model
-        maxTokens
-        temperature
-        topK
-        topP
-        minLength
-        maxLength
-        repetitionPenalty
-        frequencyPenalty
-        presencePenalty
-        reasoning {
-            effort
-            maxTokens
-        }
-        price {
-            input
-            output
-            cacheRead
-            cacheWrite
-        }
-    }
-`;
-export const AgentsConfigFragmentFragmentDoc = gql`
-    fragment agentsConfigFragment on AgentsConfig {
-        simple {
-            ...agentConfigFragment
-        }
-        simpleJson {
-            ...agentConfigFragment
-        }
-        primaryAgent {
-            ...agentConfigFragment
-        }
-        assistant {
-            ...agentConfigFragment
-        }
-        generator {
-            ...agentConfigFragment
-        }
-        refiner {
-            ...agentConfigFragment
-        }
-        adviser {
-            ...agentConfigFragment
-        }
-        reflector {
-            ...agentConfigFragment
-        }
-        searcher {
-            ...agentConfigFragment
-        }
-        enricher {
-            ...agentConfigFragment
-        }
-        coder {
-            ...agentConfigFragment
-        }
-        installer {
-            ...agentConfigFragment
-        }
-        pentester {
-            ...agentConfigFragment
-        }
-    }
-    ${AgentConfigFragmentFragmentDoc}
-`;
-export const ProviderConfigFragmentFragmentDoc = gql`
-    fragment providerConfigFragment on ProviderConfig {
-        id
-        name
-        type
-        agents {
-            ...agentsConfigFragment
-        }
-        createdAt
-        updatedAt
-    }
-    ${AgentsConfigFragmentFragmentDoc}
-`;
-export const UserPromptFragmentFragmentDoc = gql`
-    fragment userPromptFragment on UserPrompt {
-        id
-        type
-        template
-        createdAt
-        updatedAt
-    }
-`;
-export const DefaultPromptFragmentFragmentDoc = gql`
-    fragment defaultPromptFragment on DefaultPrompt {
-        type
-        template
-        variables
-    }
-`;
-export const PromptValidationResultFragmentFragmentDoc = gql`
-    fragment promptValidationResultFragment on PromptValidationResult {
-        result
-        errorType
-        message
-        line
-        details
-    }
-`;
-export const ApiTokenFragmentFragmentDoc = gql`
-    fragment apiTokenFragment on APIToken {
-        id
-        tokenId
-        userId
-        roleId
-        name
-        ttl
-        status
-        createdAt
-        updatedAt
-    }
-`;
-export const ApiTokenWithSecretFragmentFragmentDoc = gql`
-    fragment apiTokenWithSecretFragment on APITokenWithSecret {
-        id
-        tokenId
-        userId
-        roleId
-        name
-        ttl
-        status
-        createdAt
-        updatedAt
-        token
-    }
-`;
-export const FlowTemplateFragmentFragmentDoc = gql`
-    fragment flowTemplateFragment on FlowTemplate {
-        id
-        userId
-        title
-        text
-        createdAt
-        updatedAt
-    }
-`;
-export const UsageStatsFragmentFragmentDoc = gql`
-    fragment usageStatsFragment on UsageStats {
-        totalUsageIn
-        totalUsageOut
-        totalUsageCacheIn
-        totalUsageCacheOut
-        totalUsageCostIn
-        totalUsageCostOut
-    }
-`;
-export const DailyUsageStatsFragmentFragmentDoc = gql`
-    fragment dailyUsageStatsFragment on DailyUsageStats {
-        date
-        stats {
-            ...usageStatsFragment
-        }
-    }
-    ${UsageStatsFragmentFragmentDoc}
-`;
-export const ProviderUsageStatsFragmentFragmentDoc = gql`
-    fragment providerUsageStatsFragment on ProviderUsageStats {
-        provider
-        stats {
-            ...usageStatsFragment
-        }
-    }
-    ${UsageStatsFragmentFragmentDoc}
-`;
-export const ModelUsageStatsFragmentFragmentDoc = gql`
-    fragment modelUsageStatsFragment on ModelUsageStats {
-        model
-        provider
-        stats {
-            ...usageStatsFragment
-        }
-    }
-    ${UsageStatsFragmentFragmentDoc}
-`;
-export const AgentTypeUsageStatsFragmentFragmentDoc = gql`
-    fragment agentTypeUsageStatsFragment on AgentTypeUsageStats {
-        agentType
-        stats {
-            ...usageStatsFragment
-        }
-    }
-    ${UsageStatsFragmentFragmentDoc}
-`;
-export const ModelAgentsUsageStatsFragmentFragmentDoc = gql`
-    fragment modelAgentsUsageStatsFragment on ModelAgentsUsageStats {
-        model
-        provider
-        agentTypes
-        stats {
-            ...usageStatsFragment
-        }
-    }
-    ${UsageStatsFragmentFragmentDoc}
-`;
-export const ToolcallsStatsFragmentFragmentDoc = gql`
-    fragment toolcallsStatsFragment on ToolcallsStats {
-        totalCount
-        totalDurationSeconds
-    }
-`;
-export const DailyToolcallsStatsFragmentFragmentDoc = gql`
-    fragment dailyToolcallsStatsFragment on DailyToolcallsStats {
-        date
-        stats {
-            ...toolcallsStatsFragment
-        }
-    }
-    ${ToolcallsStatsFragmentFragmentDoc}
-`;
-export const FunctionToolcallsStatsFragmentFragmentDoc = gql`
-    fragment functionToolcallsStatsFragment on FunctionToolcallsStats {
-        functionName
-        isAgent
-        totalCount
-        totalDurationSeconds
-        avgDurationSeconds
-    }
-`;
-export const FlowStatsFragmentFragmentDoc = gql`
-    fragment flowStatsFragment on FlowStats {
-        totalTasksCount
-        totalSubtasksCount
-        totalAssistantsCount
-    }
-`;
-export const FlowsStatsFragmentFragmentDoc = gql`
-    fragment flowsStatsFragment on FlowsStats {
-        totalFlowsCount
-        totalTasksCount
-        totalSubtasksCount
-        totalAssistantsCount
-    }
-`;
-export const DailyFlowsStatsFragmentFragmentDoc = gql`
-    fragment dailyFlowsStatsFragment on DailyFlowsStats {
-        date
-        stats {
-            ...flowsStatsFragment
-        }
-    }
-    ${FlowsStatsFragmentFragmentDoc}
-`;
-export const SubtaskExecutionStatsFragmentFragmentDoc = gql`
-    fragment subtaskExecutionStatsFragment on SubtaskExecutionStats {
-        subtaskId
-        subtaskTitle
-        totalDurationSeconds
-        totalToolcallsCount
-    }
-`;
-export const TaskExecutionStatsFragmentFragmentDoc = gql`
-    fragment taskExecutionStatsFragment on TaskExecutionStats {
-        taskId
-        taskTitle
-        totalDurationSeconds
-        totalToolcallsCount
-        subtasks {
-            ...subtaskExecutionStatsFragment
-        }
-    }
-    ${SubtaskExecutionStatsFragmentFragmentDoc}
-`;
-export const FlowExecutionStatsFragmentFragmentDoc = gql`
-    fragment flowExecutionStatsFragment on FlowExecutionStats {
-        flowId
-        flowTitle
-        totalDurationSeconds
-        totalToolcallsCount
-        totalAssistantsCount
-        tasks {
-            ...taskExecutionStatsFragment
-        }
-    }
-    ${TaskExecutionStatsFragmentFragmentDoc}
-`;
-export const KnowledgeDocumentFragmentFragmentDoc = gql`
-    fragment knowledgeDocumentFragment on KnowledgeDocument {
-        id
-        docType
-        content
-        question
-        description
-        userId
-        flowId
-        taskId
-        subtaskId
-        guideType
-        answerType
-        codeLang
-        partSize
-        totalSize
-        manual
-    }
-`;
-export const KnowledgeDocumentWithScoreFragmentFragmentDoc = gql`
-    fragment knowledgeDocumentWithScoreFragment on KnowledgeDocumentWithScore {
-        score
-        document {
-            ...knowledgeDocumentFragment
-        }
-    }
-    ${KnowledgeDocumentFragmentFragmentDoc}
-`;
-export const UserPreferencesFragmentFragmentDoc = gql`
-    fragment userPreferencesFragment on UserPreferences {
-        id
-        favoriteFlows
-    }
-`;
-export const FlowsDocument = gql`
-    query flows {
-        flows {
-            ...flowFragment
-        }
-    }
-    ${FlowFragmentFragmentDoc}
-`;
-
-/**
- * __useFlowsQuery__
- *
- * To run a query within a React component, call `useFlowsQuery` and pass it any options that fit your needs.
- * When your component renders, `useFlowsQuery` returns an object from Apollo Client that contains loading, error, and data properties
- * you can use to render your UI.
- *
- * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
- *
- * @example
- * const { data, loading, error } = useFlowsQuery({
- *   variables: {
- *   },
- * });
- */
-export function useFlowsQuery(baseOptions?: ApolloReactHooks.QueryHookOptions<FlowsQuery, FlowsQueryVariables>) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useQuery<FlowsQuery, FlowsQueryVariables>(FlowsDocument, options);
-}
-export function useFlowsLazyQuery(
-    baseOptions?: ApolloReactHooks.LazyQueryHookOptions<FlowsQuery, FlowsQueryVariables>,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useLazyQuery<FlowsQuery, FlowsQueryVariables>(FlowsDocument, options);
-}
-// @ts-ignore
-export function useFlowsSuspenseQuery(
-    baseOptions?: ApolloReactHooks.SuspenseQueryHookOptions<FlowsQuery, FlowsQueryVariables>,
-): ApolloReactHooks.UseSuspenseQueryResult<FlowsQuery, FlowsQueryVariables>;
-export function useFlowsSuspenseQuery(
-    baseOptions?:
-        | ApolloReactHooks.SkipToken
-        | ApolloReactHooks.SuspenseQueryHookOptions<FlowsQuery, FlowsQueryVariables>,
-): ApolloReactHooks.UseSuspenseQueryResult<FlowsQuery | undefined, FlowsQueryVariables>;
-export function useFlowsSuspenseQuery(
-    baseOptions?:
-        | ApolloReactHooks.SkipToken
-        | ApolloReactHooks.SuspenseQueryHookOptions<FlowsQuery, FlowsQueryVariables>,
-) {
-    const options = baseOptions === ApolloReactHooks.skipToken ? baseOptions : { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useSuspenseQuery<FlowsQuery, FlowsQueryVariables>(FlowsDocument, options);
-}
-export type FlowsQueryHookResult = ReturnType<typeof useFlowsQuery>;
-export type FlowsLazyQueryHookResult = ReturnType<typeof useFlowsLazyQuery>;
-export type FlowsSuspenseQueryHookResult = ReturnType<typeof useFlowsSuspenseQuery>;
-export type FlowsQueryResult = ApolloReactCommon.QueryResult<FlowsQuery, FlowsQueryVariables>;
-export const ProvidersDocument = gql`
-    query providers {
-        providers {
-            ...providerFragment
-        }
-    }
-    ${ProviderFragmentFragmentDoc}
-`;
-
-/**
- * __useProvidersQuery__
- *
- * To run a query within a React component, call `useProvidersQuery` and pass it any options that fit your needs.
- * When your component renders, `useProvidersQuery` returns an object from Apollo Client that contains loading, error, and data properties
- * you can use to render your UI.
- *
- * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
- *
- * @example
- * const { data, loading, error } = useProvidersQuery({
- *   variables: {
- *   },
- * });
- */
-export function useProvidersQuery(
-    baseOptions?: ApolloReactHooks.QueryHookOptions<ProvidersQuery, ProvidersQueryVariables>,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useQuery<ProvidersQuery, ProvidersQueryVariables>(ProvidersDocument, options);
-}
-export function useProvidersLazyQuery(
-    baseOptions?: ApolloReactHooks.LazyQueryHookOptions<ProvidersQuery, ProvidersQueryVariables>,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useLazyQuery<ProvidersQuery, ProvidersQueryVariables>(ProvidersDocument, options);
-}
-// @ts-ignore
-export function useProvidersSuspenseQuery(
-    baseOptions?: ApolloReactHooks.SuspenseQueryHookOptions<ProvidersQuery, ProvidersQueryVariables>,
-): ApolloReactHooks.UseSuspenseQueryResult<ProvidersQuery, ProvidersQueryVariables>;
-export function useProvidersSuspenseQuery(
-    baseOptions?:
-        | ApolloReactHooks.SkipToken
-        | ApolloReactHooks.SuspenseQueryHookOptions<ProvidersQuery, ProvidersQueryVariables>,
-): ApolloReactHooks.UseSuspenseQueryResult<ProvidersQuery | undefined, ProvidersQueryVariables>;
-export function useProvidersSuspenseQuery(
-    baseOptions?:
-        | ApolloReactHooks.SkipToken
-        | ApolloReactHooks.SuspenseQueryHookOptions<ProvidersQuery, ProvidersQueryVariables>,
-) {
-    const options = baseOptions === ApolloReactHooks.skipToken ? baseOptions : { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useSuspenseQuery<ProvidersQuery, ProvidersQueryVariables>(ProvidersDocument, options);
-}
-export type ProvidersQueryHookResult = ReturnType<typeof useProvidersQuery>;
-export type ProvidersLazyQueryHookResult = ReturnType<typeof useProvidersLazyQuery>;
-export type ProvidersSuspenseQueryHookResult = ReturnType<typeof useProvidersSuspenseQuery>;
-export type ProvidersQueryResult = ApolloReactCommon.QueryResult<ProvidersQuery, ProvidersQueryVariables>;
-export const SettingsDocument = gql`
-    query settings {
-        settings {
-            ...settingsFragment
-        }
-    }
-    ${SettingsFragmentFragmentDoc}
-`;
-
-/**
- * __useSettingsQuery__
- *
- * To run a query within a React component, call `useSettingsQuery` and pass it any options that fit your needs.
- * When your component renders, `useSettingsQuery` returns an object from Apollo Client that contains loading, error, and data properties
- * you can use to render your UI.
- *
- * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
- *
- * @example
- * const { data, loading, error } = useSettingsQuery({
- *   variables: {
- *   },
- * });
- */
-export function useSettingsQuery(
-    baseOptions?: ApolloReactHooks.QueryHookOptions<SettingsQuery, SettingsQueryVariables>,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useQuery<SettingsQuery, SettingsQueryVariables>(SettingsDocument, options);
-}
-export function useSettingsLazyQuery(
-    baseOptions?: ApolloReactHooks.LazyQueryHookOptions<SettingsQuery, SettingsQueryVariables>,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useLazyQuery<SettingsQuery, SettingsQueryVariables>(SettingsDocument, options);
-}
-// @ts-ignore
-export function useSettingsSuspenseQuery(
-    baseOptions?: ApolloReactHooks.SuspenseQueryHookOptions<SettingsQuery, SettingsQueryVariables>,
-): ApolloReactHooks.UseSuspenseQueryResult<SettingsQuery, SettingsQueryVariables>;
-export function useSettingsSuspenseQuery(
-    baseOptions?:
-        | ApolloReactHooks.SkipToken
-        | ApolloReactHooks.SuspenseQueryHookOptions<SettingsQuery, SettingsQueryVariables>,
-): ApolloReactHooks.UseSuspenseQueryResult<SettingsQuery | undefined, SettingsQueryVariables>;
-export function useSettingsSuspenseQuery(
-    baseOptions?:
-        | ApolloReactHooks.SkipToken
-        | ApolloReactHooks.SuspenseQueryHookOptions<SettingsQuery, SettingsQueryVariables>,
-) {
-    const options = baseOptions === ApolloReactHooks.skipToken ? baseOptions : { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useSuspenseQuery<SettingsQuery, SettingsQueryVariables>(SettingsDocument, options);
-}
-export type SettingsQueryHookResult = ReturnType<typeof useSettingsQuery>;
-export type SettingsLazyQueryHookResult = ReturnType<typeof useSettingsLazyQuery>;
-export type SettingsSuspenseQueryHookResult = ReturnType<typeof useSettingsSuspenseQuery>;
-export type SettingsQueryResult = ApolloReactCommon.QueryResult<SettingsQuery, SettingsQueryVariables>;
-export const SettingsProvidersDocument = gql`
-    query settingsProviders {
-        settingsProviders {
-            enabled {
-                openai
-                anthropic
-                gemini
-                bedrock
-                ollama
-                custom
-                deepseek
-                glm
-                kimi
-                qwen
-            }
-            default {
-                openai {
-                    ...providerConfigFragment
-                }
-                anthropic {
-                    ...providerConfigFragment
-                }
-                gemini {
-                    ...providerConfigFragment
-                }
-                bedrock {
-                    ...providerConfigFragment
-                }
-                ollama {
-                    ...providerConfigFragment
-                }
-                custom {
-                    ...providerConfigFragment
-                }
-                deepseek {
-                    ...providerConfigFragment
-                }
-                glm {
-                    ...providerConfigFragment
-                }
-                kimi {
-                    ...providerConfigFragment
-                }
-                qwen {
-                    ...providerConfigFragment
-                }
-            }
-            userDefined {
-                ...providerConfigFragment
-            }
-            models {
-                openai {
-                    ...modelConfigFragment
-                }
-                anthropic {
-                    ...modelConfigFragment
-                }
-                gemini {
-                    ...modelConfigFragment
-                }
-                bedrock {
-                    ...modelConfigFragment
-                }
-                ollama {
-                    ...modelConfigFragment
-                }
-                custom {
-                    ...modelConfigFragment
-                }
-                deepseek {
-                    ...modelConfigFragment
-                }
-                glm {
-                    ...modelConfigFragment
-                }
-                kimi {
-                    ...modelConfigFragment
-                }
-                qwen {
-                    ...modelConfigFragment
-                }
-            }
-        }
-    }
-    ${ProviderConfigFragmentFragmentDoc}
-    ${ModelConfigFragmentFragmentDoc}
-`;
-
-/**
- * __useSettingsProvidersQuery__
- *
- * To run a query within a React component, call `useSettingsProvidersQuery` and pass it any options that fit your needs.
- * When your component renders, `useSettingsProvidersQuery` returns an object from Apollo Client that contains loading, error, and data properties
- * you can use to render your UI.
- *
- * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
- *
- * @example
- * const { data, loading, error } = useSettingsProvidersQuery({
- *   variables: {
- *   },
- * });
- */
-export function useSettingsProvidersQuery(
-    baseOptions?: ApolloReactHooks.QueryHookOptions<SettingsProvidersQuery, SettingsProvidersQueryVariables>,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useQuery<SettingsProvidersQuery, SettingsProvidersQueryVariables>(
-        SettingsProvidersDocument,
-        options,
-    );
-}
-export function useSettingsProvidersLazyQuery(
-    baseOptions?: ApolloReactHooks.LazyQueryHookOptions<SettingsProvidersQuery, SettingsProvidersQueryVariables>,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useLazyQuery<SettingsProvidersQuery, SettingsProvidersQueryVariables>(
-        SettingsProvidersDocument,
-        options,
-    );
-}
-// @ts-ignore
-export function useSettingsProvidersSuspenseQuery(
-    baseOptions?: ApolloReactHooks.SuspenseQueryHookOptions<SettingsProvidersQuery, SettingsProvidersQueryVariables>,
-): ApolloReactHooks.UseSuspenseQueryResult<SettingsProvidersQuery, SettingsProvidersQueryVariables>;
-export function useSettingsProvidersSuspenseQuery(
-    baseOptions?:
-        | ApolloReactHooks.SkipToken
-        | ApolloReactHooks.SuspenseQueryHookOptions<SettingsProvidersQuery, SettingsProvidersQueryVariables>,
-): ApolloReactHooks.UseSuspenseQueryResult<SettingsProvidersQuery | undefined, SettingsProvidersQueryVariables>;
-export function useSettingsProvidersSuspenseQuery(
-    baseOptions?:
-        | ApolloReactHooks.SkipToken
-        | ApolloReactHooks.SuspenseQueryHookOptions<SettingsProvidersQuery, SettingsProvidersQueryVariables>,
-) {
-    const options = baseOptions === ApolloReactHooks.skipToken ? baseOptions : { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useSuspenseQuery<SettingsProvidersQuery, SettingsProvidersQueryVariables>(
-        SettingsProvidersDocument,
-        options,
-    );
-}
-export type SettingsProvidersQueryHookResult = ReturnType<typeof useSettingsProvidersQuery>;
-export type SettingsProvidersLazyQueryHookResult = ReturnType<typeof useSettingsProvidersLazyQuery>;
-export type SettingsProvidersSuspenseQueryHookResult = ReturnType<typeof useSettingsProvidersSuspenseQuery>;
-export type SettingsProvidersQueryResult = ApolloReactCommon.QueryResult<
-    SettingsProvidersQuery,
-    SettingsProvidersQueryVariables
->;
-export const SettingsPromptsDocument = gql`
-    query settingsPrompts {
-        settingsPrompts {
-            default {
-                agents {
-                    primaryAgent {
-                        system {
-                            ...defaultPromptFragment
-                        }
-                    }
-                    assistant {
-                        system {
-                            ...defaultPromptFragment
-                        }
-                    }
-                    pentester {
-                        system {
-                            ...defaultPromptFragment
-                        }
-                        human {
-                            ...defaultPromptFragment
-                        }
-                    }
-                    coder {
-                        system {
-                            ...defaultPromptFragment
-                        }
-                        human {
-                            ...defaultPromptFragment
-                        }
-                    }
-                    installer {
-                        system {
-                            ...defaultPromptFragment
-                        }
-                        human {
-                            ...defaultPromptFragment
-                        }
-                    }
-                    searcher {
-                        system {
-                            ...defaultPromptFragment
-                        }
-                        human {
-                            ...defaultPromptFragment
-                        }
-                    }
-                    memorist {
-                        system {
-                            ...defaultPromptFragment
-                        }
-                        human {
-                            ...defaultPromptFragment
-                        }
-                    }
-                    adviser {
-                        system {
-                            ...defaultPromptFragment
-                        }
-                        human {
-                            ...defaultPromptFragment
-                        }
-                    }
-                    generator {
-                        system {
-                            ...defaultPromptFragment
-                        }
-                        human {
-                            ...defaultPromptFragment
-                        }
-                    }
-                    refiner {
-                        system {
-                            ...defaultPromptFragment
-                        }
-                        human {
-                            ...defaultPromptFragment
-                        }
-                    }
-                    reporter {
-                        system {
-                            ...defaultPromptFragment
-                        }
-                        human {
-                            ...defaultPromptFragment
-                        }
-                    }
-                    reflector {
-                        system {
-                            ...defaultPromptFragment
-                        }
-                        human {
-                            ...defaultPromptFragment
-                        }
-                    }
-                    enricher {
-                        system {
-                            ...defaultPromptFragment
-                        }
-                        human {
-                            ...defaultPromptFragment
-                        }
-                    }
-                    toolCallFixer {
-                        system {
-                            ...defaultPromptFragment
-                        }
-                        human {
-                            ...defaultPromptFragment
-                        }
-                    }
-                    summarizer {
-                        system {
-                            ...defaultPromptFragment
-                        }
-                    }
-                }
-                tools {
-                    getFlowDescription {
-                        ...defaultPromptFragment
-                    }
-                    getTaskDescription {
-                        ...defaultPromptFragment
-                    }
-                    getExecutionLogs {
-                        ...defaultPromptFragment
-                    }
-                    getFullExecutionContext {
-                        ...defaultPromptFragment
-                    }
-                    getShortExecutionContext {
-                        ...defaultPromptFragment
-                    }
-                    chooseDockerImage {
-                        ...defaultPromptFragment
-                    }
-                    chooseUserLanguage {
-                        ...defaultPromptFragment
-                    }
-                    collectToolCallId {
-                        ...defaultPromptFragment
-                    }
-                    detectToolCallIdPattern {
-                        ...defaultPromptFragment
-                    }
-                    monitorAgentExecution {
-                        ...defaultPromptFragment
-                    }
-                    planAgentTask {
-                        ...defaultPromptFragment
-                    }
-                    wrapAgentTask {
-                        ...defaultPromptFragment
-                    }
-                }
-            }
-            userDefined {
-                ...userPromptFragment
-            }
-        }
-    }
-    ${DefaultPromptFragmentFragmentDoc}
-    ${UserPromptFragmentFragmentDoc}
-`;
-
-/**
- * __useSettingsPromptsQuery__
- *
- * To run a query within a React component, call `useSettingsPromptsQuery` and pass it any options that fit your needs.
- * When your component renders, `useSettingsPromptsQuery` returns an object from Apollo Client that contains loading, error, and data properties
- * you can use to render your UI.
- *
- * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
- *
- * @example
- * const { data, loading, error } = useSettingsPromptsQuery({
- *   variables: {
- *   },
- * });
- */
-export function useSettingsPromptsQuery(
-    baseOptions?: ApolloReactHooks.QueryHookOptions<SettingsPromptsQuery, SettingsPromptsQueryVariables>,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useQuery<SettingsPromptsQuery, SettingsPromptsQueryVariables>(
-        SettingsPromptsDocument,
-        options,
-    );
-}
-export function useSettingsPromptsLazyQuery(
-    baseOptions?: ApolloReactHooks.LazyQueryHookOptions<SettingsPromptsQuery, SettingsPromptsQueryVariables>,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useLazyQuery<SettingsPromptsQuery, SettingsPromptsQueryVariables>(
-        SettingsPromptsDocument,
-        options,
-    );
-}
-// @ts-ignore
-export function useSettingsPromptsSuspenseQuery(
-    baseOptions?: ApolloReactHooks.SuspenseQueryHookOptions<SettingsPromptsQuery, SettingsPromptsQueryVariables>,
-): ApolloReactHooks.UseSuspenseQueryResult<SettingsPromptsQuery, SettingsPromptsQueryVariables>;
-export function useSettingsPromptsSuspenseQuery(
-    baseOptions?:
-        | ApolloReactHooks.SkipToken
-        | ApolloReactHooks.SuspenseQueryHookOptions<SettingsPromptsQuery, SettingsPromptsQueryVariables>,
-): ApolloReactHooks.UseSuspenseQueryResult<SettingsPromptsQuery | undefined, SettingsPromptsQueryVariables>;
-export function useSettingsPromptsSuspenseQuery(
-    baseOptions?:
-        | ApolloReactHooks.SkipToken
-        | ApolloReactHooks.SuspenseQueryHookOptions<SettingsPromptsQuery, SettingsPromptsQueryVariables>,
-) {
-    const options = baseOptions === ApolloReactHooks.skipToken ? baseOptions : { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useSuspenseQuery<SettingsPromptsQuery, SettingsPromptsQueryVariables>(
-        SettingsPromptsDocument,
-        options,
-    );
-}
-export type SettingsPromptsQueryHookResult = ReturnType<typeof useSettingsPromptsQuery>;
-export type SettingsPromptsLazyQueryHookResult = ReturnType<typeof useSettingsPromptsLazyQuery>;
-export type SettingsPromptsSuspenseQueryHookResult = ReturnType<typeof useSettingsPromptsSuspenseQuery>;
-export type SettingsPromptsQueryResult = ApolloReactCommon.QueryResult<
-    SettingsPromptsQuery,
-    SettingsPromptsQueryVariables
->;
-export const FlowDocument = gql`
-    query flow($id: ID!) {
-        flow(flowId: $id) {
-            ...flowFragment
-        }
-        tasks(flowId: $id) {
-            ...taskFragment
-        }
-        screenshots(flowId: $id) {
-            ...screenshotFragment
-        }
-        terminalLogs(flowId: $id) {
-            ...terminalLogFragment
-        }
-        messageLogs(flowId: $id) {
-            ...messageLogFragment
-        }
-        agentLogs(flowId: $id) {
-            ...agentLogFragment
-        }
-        searchLogs(flowId: $id) {
-            ...searchLogFragment
-        }
-        vectorStoreLogs(flowId: $id) {
-            ...vectorStoreLogFragment
-        }
-    }
-    ${FlowFragmentFragmentDoc}
-    ${TaskFragmentFragmentDoc}
-    ${ScreenshotFragmentFragmentDoc}
-    ${TerminalLogFragmentFragmentDoc}
-    ${MessageLogFragmentFragmentDoc}
-    ${AgentLogFragmentFragmentDoc}
-    ${SearchLogFragmentFragmentDoc}
-    ${VectorStoreLogFragmentFragmentDoc}
-`;
-
-/**
- * __useFlowQuery__
- *
- * To run a query within a React component, call `useFlowQuery` and pass it any options that fit your needs.
- * When your component renders, `useFlowQuery` returns an object from Apollo Client that contains loading, error, and data properties
- * you can use to render your UI.
- *
- * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
- *
- * @example
- * const { data, loading, error } = useFlowQuery({
- *   variables: {
- *      id: // value for 'id'
- *   },
- * });
- */
-export function useFlowQuery(
-    baseOptions: ApolloReactHooks.QueryHookOptions<FlowQuery, FlowQueryVariables> &
-        ({ variables: FlowQueryVariables; skip?: boolean } | { skip: boolean }),
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useQuery<FlowQuery, FlowQueryVariables>(FlowDocument, options);
-}
-export function useFlowLazyQuery(baseOptions?: ApolloReactHooks.LazyQueryHookOptions<FlowQuery, FlowQueryVariables>) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useLazyQuery<FlowQuery, FlowQueryVariables>(FlowDocument, options);
-}
-// @ts-ignore
-export function useFlowSuspenseQuery(
-    baseOptions?: ApolloReactHooks.SuspenseQueryHookOptions<FlowQuery, FlowQueryVariables>,
-): ApolloReactHooks.UseSuspenseQueryResult<FlowQuery, FlowQueryVariables>;
-export function useFlowSuspenseQuery(
-    baseOptions?: ApolloReactHooks.SkipToken | ApolloReactHooks.SuspenseQueryHookOptions<FlowQuery, FlowQueryVariables>,
-): ApolloReactHooks.UseSuspenseQueryResult<FlowQuery | undefined, FlowQueryVariables>;
-export function useFlowSuspenseQuery(
-    baseOptions?: ApolloReactHooks.SkipToken | ApolloReactHooks.SuspenseQueryHookOptions<FlowQuery, FlowQueryVariables>,
-) {
-    const options = baseOptions === ApolloReactHooks.skipToken ? baseOptions : { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useSuspenseQuery<FlowQuery, FlowQueryVariables>(FlowDocument, options);
-}
-export type FlowQueryHookResult = ReturnType<typeof useFlowQuery>;
-export type FlowLazyQueryHookResult = ReturnType<typeof useFlowLazyQuery>;
-export type FlowSuspenseQueryHookResult = ReturnType<typeof useFlowSuspenseQuery>;
-export type FlowQueryResult = ApolloReactCommon.QueryResult<FlowQuery, FlowQueryVariables>;
-export const TasksDocument = gql`
-    query tasks($flowId: ID!) {
-        tasks(flowId: $flowId) {
-            ...taskFragment
-        }
-    }
-    ${TaskFragmentFragmentDoc}
-`;
-
-/**
- * __useTasksQuery__
- *
- * To run a query within a React component, call `useTasksQuery` and pass it any options that fit your needs.
- * When your component renders, `useTasksQuery` returns an object from Apollo Client that contains loading, error, and data properties
- * you can use to render your UI.
- *
- * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
- *
- * @example
- * const { data, loading, error } = useTasksQuery({
- *   variables: {
- *      flowId: // value for 'flowId'
- *   },
- * });
- */
-export function useTasksQuery(
-    baseOptions: ApolloReactHooks.QueryHookOptions<TasksQuery, TasksQueryVariables> &
-        ({ variables: TasksQueryVariables; skip?: boolean } | { skip: boolean }),
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useQuery<TasksQuery, TasksQueryVariables>(TasksDocument, options);
-}
-export function useTasksLazyQuery(
-    baseOptions?: ApolloReactHooks.LazyQueryHookOptions<TasksQuery, TasksQueryVariables>,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useLazyQuery<TasksQuery, TasksQueryVariables>(TasksDocument, options);
-}
-// @ts-ignore
-export function useTasksSuspenseQuery(
-    baseOptions?: ApolloReactHooks.SuspenseQueryHookOptions<TasksQuery, TasksQueryVariables>,
-): ApolloReactHooks.UseSuspenseQueryResult<TasksQuery, TasksQueryVariables>;
-export function useTasksSuspenseQuery(
-    baseOptions?:
-        | ApolloReactHooks.SkipToken
-        | ApolloReactHooks.SuspenseQueryHookOptions<TasksQuery, TasksQueryVariables>,
-): ApolloReactHooks.UseSuspenseQueryResult<TasksQuery | undefined, TasksQueryVariables>;
-export function useTasksSuspenseQuery(
-    baseOptions?:
-        | ApolloReactHooks.SkipToken
-        | ApolloReactHooks.SuspenseQueryHookOptions<TasksQuery, TasksQueryVariables>,
-) {
-    const options = baseOptions === ApolloReactHooks.skipToken ? baseOptions : { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useSuspenseQuery<TasksQuery, TasksQueryVariables>(TasksDocument, options);
-}
-export type TasksQueryHookResult = ReturnType<typeof useTasksQuery>;
-export type TasksLazyQueryHookResult = ReturnType<typeof useTasksLazyQuery>;
-export type TasksSuspenseQueryHookResult = ReturnType<typeof useTasksSuspenseQuery>;
-export type TasksQueryResult = ApolloReactCommon.QueryResult<TasksQuery, TasksQueryVariables>;
-export const FlowFilesDocument = gql`
-    query flowFiles($flowId: ID!) {
-        flowFiles(flowId: $flowId) {
-            ...flowFileFragment
-        }
-    }
-    ${FlowFileFragmentFragmentDoc}
-`;
-
-/**
- * __useFlowFilesQuery__
- *
- * To run a query within a React component, call `useFlowFilesQuery` and pass it any options that fit your needs.
- * When your component renders, `useFlowFilesQuery` returns an object from Apollo Client that contains loading, error, and data properties
- * you can use to render your UI.
- *
- * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
- *
- * @example
- * const { data, loading, error } = useFlowFilesQuery({
- *   variables: {
- *      flowId: // value for 'flowId'
- *   },
- * });
- */
-export function useFlowFilesQuery(
-    baseOptions: ApolloReactHooks.QueryHookOptions<FlowFilesQuery, FlowFilesQueryVariables> &
-        ({ variables: FlowFilesQueryVariables; skip?: boolean } | { skip: boolean }),
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useQuery<FlowFilesQuery, FlowFilesQueryVariables>(FlowFilesDocument, options);
-}
-export function useFlowFilesLazyQuery(
-    baseOptions?: ApolloReactHooks.LazyQueryHookOptions<FlowFilesQuery, FlowFilesQueryVariables>,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useLazyQuery<FlowFilesQuery, FlowFilesQueryVariables>(FlowFilesDocument, options);
-}
-// @ts-ignore
-export function useFlowFilesSuspenseQuery(
-    baseOptions?: ApolloReactHooks.SuspenseQueryHookOptions<FlowFilesQuery, FlowFilesQueryVariables>,
-): ApolloReactHooks.UseSuspenseQueryResult<FlowFilesQuery, FlowFilesQueryVariables>;
-export function useFlowFilesSuspenseQuery(
-    baseOptions?:
-        | ApolloReactHooks.SkipToken
-        | ApolloReactHooks.SuspenseQueryHookOptions<FlowFilesQuery, FlowFilesQueryVariables>,
-): ApolloReactHooks.UseSuspenseQueryResult<FlowFilesQuery | undefined, FlowFilesQueryVariables>;
-export function useFlowFilesSuspenseQuery(
-    baseOptions?:
-        | ApolloReactHooks.SkipToken
-        | ApolloReactHooks.SuspenseQueryHookOptions<FlowFilesQuery, FlowFilesQueryVariables>,
-) {
-    const options = baseOptions === ApolloReactHooks.skipToken ? baseOptions : { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useSuspenseQuery<FlowFilesQuery, FlowFilesQueryVariables>(FlowFilesDocument, options);
-}
-export type FlowFilesQueryHookResult = ReturnType<typeof useFlowFilesQuery>;
-export type FlowFilesLazyQueryHookResult = ReturnType<typeof useFlowFilesLazyQuery>;
-export type FlowFilesSuspenseQueryHookResult = ReturnType<typeof useFlowFilesSuspenseQuery>;
-export type FlowFilesQueryResult = ApolloReactCommon.QueryResult<FlowFilesQuery, FlowFilesQueryVariables>;
-export const ResourcesDocument = gql`
-    query resources($path: String, $recursive: Boolean) {
-        resources(path: $path, recursive: $recursive) {
-            ...userResourceFragment
-        }
-    }
-    ${UserResourceFragmentFragmentDoc}
-`;
-
-/**
- * __useResourcesQuery__
- *
- * To run a query within a React component, call `useResourcesQuery` and pass it any options that fit your needs.
- * When your component renders, `useResourcesQuery` returns an object from Apollo Client that contains loading, error, and data properties
- * you can use to render your UI.
- *
- * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
- *
- * @example
- * const { data, loading, error } = useResourcesQuery({
- *   variables: {
- *      path: // value for 'path'
- *      recursive: // value for 'recursive'
- *   },
- * });
- */
-export function useResourcesQuery(
-    baseOptions?: ApolloReactHooks.QueryHookOptions<ResourcesQuery, ResourcesQueryVariables>,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useQuery<ResourcesQuery, ResourcesQueryVariables>(ResourcesDocument, options);
-}
-export function useResourcesLazyQuery(
-    baseOptions?: ApolloReactHooks.LazyQueryHookOptions<ResourcesQuery, ResourcesQueryVariables>,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useLazyQuery<ResourcesQuery, ResourcesQueryVariables>(ResourcesDocument, options);
-}
-// @ts-ignore
-export function useResourcesSuspenseQuery(
-    baseOptions?: ApolloReactHooks.SuspenseQueryHookOptions<ResourcesQuery, ResourcesQueryVariables>,
-): ApolloReactHooks.UseSuspenseQueryResult<ResourcesQuery, ResourcesQueryVariables>;
-export function useResourcesSuspenseQuery(
-    baseOptions?:
-        | ApolloReactHooks.SkipToken
-        | ApolloReactHooks.SuspenseQueryHookOptions<ResourcesQuery, ResourcesQueryVariables>,
-): ApolloReactHooks.UseSuspenseQueryResult<ResourcesQuery | undefined, ResourcesQueryVariables>;
-export function useResourcesSuspenseQuery(
-    baseOptions?:
-        | ApolloReactHooks.SkipToken
-        | ApolloReactHooks.SuspenseQueryHookOptions<ResourcesQuery, ResourcesQueryVariables>,
-) {
-    const options = baseOptions === ApolloReactHooks.skipToken ? baseOptions : { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useSuspenseQuery<ResourcesQuery, ResourcesQueryVariables>(ResourcesDocument, options);
-}
-export type ResourcesQueryHookResult = ReturnType<typeof useResourcesQuery>;
-export type ResourcesLazyQueryHookResult = ReturnType<typeof useResourcesLazyQuery>;
-export type ResourcesSuspenseQueryHookResult = ReturnType<typeof useResourcesSuspenseQuery>;
-export type ResourcesQueryResult = ApolloReactCommon.QueryResult<ResourcesQuery, ResourcesQueryVariables>;
-export const AssistantsDocument = gql`
-    query assistants($flowId: ID!) {
-        assistants(flowId: $flowId) {
-            ...assistantFragment
-        }
-    }
-    ${AssistantFragmentFragmentDoc}
-`;
-
-/**
- * __useAssistantsQuery__
- *
- * To run a query within a React component, call `useAssistantsQuery` and pass it any options that fit your needs.
- * When your component renders, `useAssistantsQuery` returns an object from Apollo Client that contains loading, error, and data properties
- * you can use to render your UI.
- *
- * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
- *
- * @example
- * const { data, loading, error } = useAssistantsQuery({
- *   variables: {
- *      flowId: // value for 'flowId'
- *   },
- * });
- */
-export function useAssistantsQuery(
-    baseOptions: ApolloReactHooks.QueryHookOptions<AssistantsQuery, AssistantsQueryVariables> &
-        ({ variables: AssistantsQueryVariables; skip?: boolean } | { skip: boolean }),
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useQuery<AssistantsQuery, AssistantsQueryVariables>(AssistantsDocument, options);
-}
-export function useAssistantsLazyQuery(
-    baseOptions?: ApolloReactHooks.LazyQueryHookOptions<AssistantsQuery, AssistantsQueryVariables>,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useLazyQuery<AssistantsQuery, AssistantsQueryVariables>(AssistantsDocument, options);
-}
-// @ts-ignore
-export function useAssistantsSuspenseQuery(
-    baseOptions?: ApolloReactHooks.SuspenseQueryHookOptions<AssistantsQuery, AssistantsQueryVariables>,
-): ApolloReactHooks.UseSuspenseQueryResult<AssistantsQuery, AssistantsQueryVariables>;
-export function useAssistantsSuspenseQuery(
-    baseOptions?:
-        | ApolloReactHooks.SkipToken
-        | ApolloReactHooks.SuspenseQueryHookOptions<AssistantsQuery, AssistantsQueryVariables>,
-): ApolloReactHooks.UseSuspenseQueryResult<AssistantsQuery | undefined, AssistantsQueryVariables>;
-export function useAssistantsSuspenseQuery(
-    baseOptions?:
-        | ApolloReactHooks.SkipToken
-        | ApolloReactHooks.SuspenseQueryHookOptions<AssistantsQuery, AssistantsQueryVariables>,
-) {
-    const options = baseOptions === ApolloReactHooks.skipToken ? baseOptions : { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useSuspenseQuery<AssistantsQuery, AssistantsQueryVariables>(AssistantsDocument, options);
-}
-export type AssistantsQueryHookResult = ReturnType<typeof useAssistantsQuery>;
-export type AssistantsLazyQueryHookResult = ReturnType<typeof useAssistantsLazyQuery>;
-export type AssistantsSuspenseQueryHookResult = ReturnType<typeof useAssistantsSuspenseQuery>;
-export type AssistantsQueryResult = ApolloReactCommon.QueryResult<AssistantsQuery, AssistantsQueryVariables>;
-export const AssistantLogsDocument = gql`
-    query assistantLogs($flowId: ID!, $assistantId: ID!) {
-        assistantLogs(flowId: $flowId, assistantId: $assistantId) {
-            ...assistantLogFragment
-        }
-    }
-    ${AssistantLogFragmentFragmentDoc}
-`;
-
-/**
- * __useAssistantLogsQuery__
- *
- * To run a query within a React component, call `useAssistantLogsQuery` and pass it any options that fit your needs.
- * When your component renders, `useAssistantLogsQuery` returns an object from Apollo Client that contains loading, error, and data properties
- * you can use to render your UI.
- *
- * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
- *
- * @example
- * const { data, loading, error } = useAssistantLogsQuery({
- *   variables: {
- *      flowId: // value for 'flowId'
- *      assistantId: // value for 'assistantId'
- *   },
- * });
- */
-export function useAssistantLogsQuery(
-    baseOptions: ApolloReactHooks.QueryHookOptions<AssistantLogsQuery, AssistantLogsQueryVariables> &
-        ({ variables: AssistantLogsQueryVariables; skip?: boolean } | { skip: boolean }),
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useQuery<AssistantLogsQuery, AssistantLogsQueryVariables>(AssistantLogsDocument, options);
-}
-export function useAssistantLogsLazyQuery(
-    baseOptions?: ApolloReactHooks.LazyQueryHookOptions<AssistantLogsQuery, AssistantLogsQueryVariables>,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useLazyQuery<AssistantLogsQuery, AssistantLogsQueryVariables>(
-        AssistantLogsDocument,
-        options,
-    );
-}
-// @ts-ignore
-export function useAssistantLogsSuspenseQuery(
-    baseOptions?: ApolloReactHooks.SuspenseQueryHookOptions<AssistantLogsQuery, AssistantLogsQueryVariables>,
-): ApolloReactHooks.UseSuspenseQueryResult<AssistantLogsQuery, AssistantLogsQueryVariables>;
-export function useAssistantLogsSuspenseQuery(
-    baseOptions?:
-        | ApolloReactHooks.SkipToken
-        | ApolloReactHooks.SuspenseQueryHookOptions<AssistantLogsQuery, AssistantLogsQueryVariables>,
-): ApolloReactHooks.UseSuspenseQueryResult<AssistantLogsQuery | undefined, AssistantLogsQueryVariables>;
-export function useAssistantLogsSuspenseQuery(
-    baseOptions?:
-        | ApolloReactHooks.SkipToken
-        | ApolloReactHooks.SuspenseQueryHookOptions<AssistantLogsQuery, AssistantLogsQueryVariables>,
-) {
-    const options = baseOptions === ApolloReactHooks.skipToken ? baseOptions : { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useSuspenseQuery<AssistantLogsQuery, AssistantLogsQueryVariables>(
-        AssistantLogsDocument,
-        options,
-    );
-}
-export type AssistantLogsQueryHookResult = ReturnType<typeof useAssistantLogsQuery>;
-export type AssistantLogsLazyQueryHookResult = ReturnType<typeof useAssistantLogsLazyQuery>;
-export type AssistantLogsSuspenseQueryHookResult = ReturnType<typeof useAssistantLogsSuspenseQuery>;
-export type AssistantLogsQueryResult = ApolloReactCommon.QueryResult<AssistantLogsQuery, AssistantLogsQueryVariables>;
-export const FlowReportDocument = gql`
-    query flowReport($id: ID!) {
-        flow(flowId: $id) {
-            ...flowFragment
-        }
-        tasks(flowId: $id) {
-            ...taskFragment
-        }
-    }
-    ${FlowFragmentFragmentDoc}
-    ${TaskFragmentFragmentDoc}
-`;
-
-/**
- * __useFlowReportQuery__
- *
- * To run a query within a React component, call `useFlowReportQuery` and pass it any options that fit your needs.
- * When your component renders, `useFlowReportQuery` returns an object from Apollo Client that contains loading, error, and data properties
- * you can use to render your UI.
- *
- * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
- *
- * @example
- * const { data, loading, error } = useFlowReportQuery({
- *   variables: {
- *      id: // value for 'id'
- *   },
- * });
- */
-export function useFlowReportQuery(
-    baseOptions: ApolloReactHooks.QueryHookOptions<FlowReportQuery, FlowReportQueryVariables> &
-        ({ variables: FlowReportQueryVariables; skip?: boolean } | { skip: boolean }),
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useQuery<FlowReportQuery, FlowReportQueryVariables>(FlowReportDocument, options);
-}
-export function useFlowReportLazyQuery(
-    baseOptions?: ApolloReactHooks.LazyQueryHookOptions<FlowReportQuery, FlowReportQueryVariables>,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useLazyQuery<FlowReportQuery, FlowReportQueryVariables>(FlowReportDocument, options);
-}
-// @ts-ignore
-export function useFlowReportSuspenseQuery(
-    baseOptions?: ApolloReactHooks.SuspenseQueryHookOptions<FlowReportQuery, FlowReportQueryVariables>,
-): ApolloReactHooks.UseSuspenseQueryResult<FlowReportQuery, FlowReportQueryVariables>;
-export function useFlowReportSuspenseQuery(
-    baseOptions?:
-        | ApolloReactHooks.SkipToken
-        | ApolloReactHooks.SuspenseQueryHookOptions<FlowReportQuery, FlowReportQueryVariables>,
-): ApolloReactHooks.UseSuspenseQueryResult<FlowReportQuery | undefined, FlowReportQueryVariables>;
-export function useFlowReportSuspenseQuery(
-    baseOptions?:
-        | ApolloReactHooks.SkipToken
-        | ApolloReactHooks.SuspenseQueryHookOptions<FlowReportQuery, FlowReportQueryVariables>,
-) {
-    const options = baseOptions === ApolloReactHooks.skipToken ? baseOptions : { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useSuspenseQuery<FlowReportQuery, FlowReportQueryVariables>(FlowReportDocument, options);
-}
-export type FlowReportQueryHookResult = ReturnType<typeof useFlowReportQuery>;
-export type FlowReportLazyQueryHookResult = ReturnType<typeof useFlowReportLazyQuery>;
-export type FlowReportSuspenseQueryHookResult = ReturnType<typeof useFlowReportSuspenseQuery>;
-export type FlowReportQueryResult = ApolloReactCommon.QueryResult<FlowReportQuery, FlowReportQueryVariables>;
-export const UsageStatsTotalDocument = gql`
-    query usageStatsTotal {
-        usageStatsTotal {
-            ...usageStatsFragment
-        }
-    }
-    ${UsageStatsFragmentFragmentDoc}
-`;
-
-/**
- * __useUsageStatsTotalQuery__
- *
- * To run a query within a React component, call `useUsageStatsTotalQuery` and pass it any options that fit your needs.
- * When your component renders, `useUsageStatsTotalQuery` returns an object from Apollo Client that contains loading, error, and data properties
- * you can use to render your UI.
- *
- * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
- *
- * @example
- * const { data, loading, error } = useUsageStatsTotalQuery({
- *   variables: {
- *   },
- * });
- */
-export function useUsageStatsTotalQuery(
-    baseOptions?: ApolloReactHooks.QueryHookOptions<UsageStatsTotalQuery, UsageStatsTotalQueryVariables>,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useQuery<UsageStatsTotalQuery, UsageStatsTotalQueryVariables>(
-        UsageStatsTotalDocument,
-        options,
-    );
-}
-export function useUsageStatsTotalLazyQuery(
-    baseOptions?: ApolloReactHooks.LazyQueryHookOptions<UsageStatsTotalQuery, UsageStatsTotalQueryVariables>,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useLazyQuery<UsageStatsTotalQuery, UsageStatsTotalQueryVariables>(
-        UsageStatsTotalDocument,
-        options,
-    );
-}
-// @ts-ignore
-export function useUsageStatsTotalSuspenseQuery(
-    baseOptions?: ApolloReactHooks.SuspenseQueryHookOptions<UsageStatsTotalQuery, UsageStatsTotalQueryVariables>,
-): ApolloReactHooks.UseSuspenseQueryResult<UsageStatsTotalQuery, UsageStatsTotalQueryVariables>;
-export function useUsageStatsTotalSuspenseQuery(
-    baseOptions?:
-        | ApolloReactHooks.SkipToken
-        | ApolloReactHooks.SuspenseQueryHookOptions<UsageStatsTotalQuery, UsageStatsTotalQueryVariables>,
-): ApolloReactHooks.UseSuspenseQueryResult<UsageStatsTotalQuery | undefined, UsageStatsTotalQueryVariables>;
-export function useUsageStatsTotalSuspenseQuery(
-    baseOptions?:
-        | ApolloReactHooks.SkipToken
-        | ApolloReactHooks.SuspenseQueryHookOptions<UsageStatsTotalQuery, UsageStatsTotalQueryVariables>,
-) {
-    const options = baseOptions === ApolloReactHooks.skipToken ? baseOptions : { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useSuspenseQuery<UsageStatsTotalQuery, UsageStatsTotalQueryVariables>(
-        UsageStatsTotalDocument,
-        options,
-    );
-}
-export type UsageStatsTotalQueryHookResult = ReturnType<typeof useUsageStatsTotalQuery>;
-export type UsageStatsTotalLazyQueryHookResult = ReturnType<typeof useUsageStatsTotalLazyQuery>;
-export type UsageStatsTotalSuspenseQueryHookResult = ReturnType<typeof useUsageStatsTotalSuspenseQuery>;
-export type UsageStatsTotalQueryResult = ApolloReactCommon.QueryResult<
-    UsageStatsTotalQuery,
-    UsageStatsTotalQueryVariables
->;
-export const UsageStatsByPeriodDocument = gql`
-    query usageStatsByPeriod($period: UsageStatsPeriod!) {
-        usageStatsByPeriod(period: $period) {
-            ...dailyUsageStatsFragment
-        }
-    }
-    ${DailyUsageStatsFragmentFragmentDoc}
-`;
-
-/**
- * __useUsageStatsByPeriodQuery__
- *
- * To run a query within a React component, call `useUsageStatsByPeriodQuery` and pass it any options that fit your needs.
- * When your component renders, `useUsageStatsByPeriodQuery` returns an object from Apollo Client that contains loading, error, and data properties
- * you can use to render your UI.
- *
- * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
- *
- * @example
- * const { data, loading, error } = useUsageStatsByPeriodQuery({
- *   variables: {
- *      period: // value for 'period'
- *   },
- * });
- */
-export function useUsageStatsByPeriodQuery(
-    baseOptions: ApolloReactHooks.QueryHookOptions<UsageStatsByPeriodQuery, UsageStatsByPeriodQueryVariables> &
-        ({ variables: UsageStatsByPeriodQueryVariables; skip?: boolean } | { skip: boolean }),
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useQuery<UsageStatsByPeriodQuery, UsageStatsByPeriodQueryVariables>(
-        UsageStatsByPeriodDocument,
-        options,
-    );
-}
-export function useUsageStatsByPeriodLazyQuery(
-    baseOptions?: ApolloReactHooks.LazyQueryHookOptions<UsageStatsByPeriodQuery, UsageStatsByPeriodQueryVariables>,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useLazyQuery<UsageStatsByPeriodQuery, UsageStatsByPeriodQueryVariables>(
-        UsageStatsByPeriodDocument,
-        options,
-    );
-}
-// @ts-ignore
-export function useUsageStatsByPeriodSuspenseQuery(
-    baseOptions?: ApolloReactHooks.SuspenseQueryHookOptions<UsageStatsByPeriodQuery, UsageStatsByPeriodQueryVariables>,
-): ApolloReactHooks.UseSuspenseQueryResult<UsageStatsByPeriodQuery, UsageStatsByPeriodQueryVariables>;
-export function useUsageStatsByPeriodSuspenseQuery(
-    baseOptions?:
-        | ApolloReactHooks.SkipToken
-        | ApolloReactHooks.SuspenseQueryHookOptions<UsageStatsByPeriodQuery, UsageStatsByPeriodQueryVariables>,
-): ApolloReactHooks.UseSuspenseQueryResult<UsageStatsByPeriodQuery | undefined, UsageStatsByPeriodQueryVariables>;
-export function useUsageStatsByPeriodSuspenseQuery(
-    baseOptions?:
-        | ApolloReactHooks.SkipToken
-        | ApolloReactHooks.SuspenseQueryHookOptions<UsageStatsByPeriodQuery, UsageStatsByPeriodQueryVariables>,
-) {
-    const options = baseOptions === ApolloReactHooks.skipToken ? baseOptions : { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useSuspenseQuery<UsageStatsByPeriodQuery, UsageStatsByPeriodQueryVariables>(
-        UsageStatsByPeriodDocument,
-        options,
-    );
-}
-export type UsageStatsByPeriodQueryHookResult = ReturnType<typeof useUsageStatsByPeriodQuery>;
-export type UsageStatsByPeriodLazyQueryHookResult = ReturnType<typeof useUsageStatsByPeriodLazyQuery>;
-export type UsageStatsByPeriodSuspenseQueryHookResult = ReturnType<typeof useUsageStatsByPeriodSuspenseQuery>;
-export type UsageStatsByPeriodQueryResult = ApolloReactCommon.QueryResult<
-    UsageStatsByPeriodQuery,
-    UsageStatsByPeriodQueryVariables
->;
-export const UsageStatsByProviderDocument = gql`
-    query usageStatsByProvider {
-        usageStatsByProvider {
-            ...providerUsageStatsFragment
-        }
-    }
-    ${ProviderUsageStatsFragmentFragmentDoc}
-`;
-
-/**
- * __useUsageStatsByProviderQuery__
- *
- * To run a query within a React component, call `useUsageStatsByProviderQuery` and pass it any options that fit your needs.
- * When your component renders, `useUsageStatsByProviderQuery` returns an object from Apollo Client that contains loading, error, and data properties
- * you can use to render your UI.
- *
- * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
- *
- * @example
- * const { data, loading, error } = useUsageStatsByProviderQuery({
- *   variables: {
- *   },
- * });
- */
-export function useUsageStatsByProviderQuery(
-    baseOptions?: ApolloReactHooks.QueryHookOptions<UsageStatsByProviderQuery, UsageStatsByProviderQueryVariables>,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useQuery<UsageStatsByProviderQuery, UsageStatsByProviderQueryVariables>(
-        UsageStatsByProviderDocument,
-        options,
-    );
-}
-export function useUsageStatsByProviderLazyQuery(
-    baseOptions?: ApolloReactHooks.LazyQueryHookOptions<UsageStatsByProviderQuery, UsageStatsByProviderQueryVariables>,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useLazyQuery<UsageStatsByProviderQuery, UsageStatsByProviderQueryVariables>(
-        UsageStatsByProviderDocument,
-        options,
-    );
-}
-// @ts-ignore
-export function useUsageStatsByProviderSuspenseQuery(
-    baseOptions?: ApolloReactHooks.SuspenseQueryHookOptions<
-        UsageStatsByProviderQuery,
-        UsageStatsByProviderQueryVariables
-    >,
-): ApolloReactHooks.UseSuspenseQueryResult<UsageStatsByProviderQuery, UsageStatsByProviderQueryVariables>;
-export function useUsageStatsByProviderSuspenseQuery(
-    baseOptions?:
-        | ApolloReactHooks.SkipToken
-        | ApolloReactHooks.SuspenseQueryHookOptions<UsageStatsByProviderQuery, UsageStatsByProviderQueryVariables>,
-): ApolloReactHooks.UseSuspenseQueryResult<UsageStatsByProviderQuery | undefined, UsageStatsByProviderQueryVariables>;
-export function useUsageStatsByProviderSuspenseQuery(
-    baseOptions?:
-        | ApolloReactHooks.SkipToken
-        | ApolloReactHooks.SuspenseQueryHookOptions<UsageStatsByProviderQuery, UsageStatsByProviderQueryVariables>,
-) {
-    const options = baseOptions === ApolloReactHooks.skipToken ? baseOptions : { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useSuspenseQuery<UsageStatsByProviderQuery, UsageStatsByProviderQueryVariables>(
-        UsageStatsByProviderDocument,
-        options,
-    );
-}
-export type UsageStatsByProviderQueryHookResult = ReturnType<typeof useUsageStatsByProviderQuery>;
-export type UsageStatsByProviderLazyQueryHookResult = ReturnType<typeof useUsageStatsByProviderLazyQuery>;
-export type UsageStatsByProviderSuspenseQueryHookResult = ReturnType<typeof useUsageStatsByProviderSuspenseQuery>;
-export type UsageStatsByProviderQueryResult = ApolloReactCommon.QueryResult<
-    UsageStatsByProviderQuery,
-    UsageStatsByProviderQueryVariables
->;
-export const UsageStatsByModelDocument = gql`
-    query usageStatsByModel {
-        usageStatsByModel {
-            ...modelUsageStatsFragment
-        }
-    }
-    ${ModelUsageStatsFragmentFragmentDoc}
-`;
-
-/**
- * __useUsageStatsByModelQuery__
- *
- * To run a query within a React component, call `useUsageStatsByModelQuery` and pass it any options that fit your needs.
- * When your component renders, `useUsageStatsByModelQuery` returns an object from Apollo Client that contains loading, error, and data properties
- * you can use to render your UI.
- *
- * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
- *
- * @example
- * const { data, loading, error } = useUsageStatsByModelQuery({
- *   variables: {
- *   },
- * });
- */
-export function useUsageStatsByModelQuery(
-    baseOptions?: ApolloReactHooks.QueryHookOptions<UsageStatsByModelQuery, UsageStatsByModelQueryVariables>,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useQuery<UsageStatsByModelQuery, UsageStatsByModelQueryVariables>(
-        UsageStatsByModelDocument,
-        options,
-    );
-}
-export function useUsageStatsByModelLazyQuery(
-    baseOptions?: ApolloReactHooks.LazyQueryHookOptions<UsageStatsByModelQuery, UsageStatsByModelQueryVariables>,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useLazyQuery<UsageStatsByModelQuery, UsageStatsByModelQueryVariables>(
-        UsageStatsByModelDocument,
-        options,
-    );
-}
-// @ts-ignore
-export function useUsageStatsByModelSuspenseQuery(
-    baseOptions?: ApolloReactHooks.SuspenseQueryHookOptions<UsageStatsByModelQuery, UsageStatsByModelQueryVariables>,
-): ApolloReactHooks.UseSuspenseQueryResult<UsageStatsByModelQuery, UsageStatsByModelQueryVariables>;
-export function useUsageStatsByModelSuspenseQuery(
-    baseOptions?:
-        | ApolloReactHooks.SkipToken
-        | ApolloReactHooks.SuspenseQueryHookOptions<UsageStatsByModelQuery, UsageStatsByModelQueryVariables>,
-): ApolloReactHooks.UseSuspenseQueryResult<UsageStatsByModelQuery | undefined, UsageStatsByModelQueryVariables>;
-export function useUsageStatsByModelSuspenseQuery(
-    baseOptions?:
-        | ApolloReactHooks.SkipToken
-        | ApolloReactHooks.SuspenseQueryHookOptions<UsageStatsByModelQuery, UsageStatsByModelQueryVariables>,
-) {
-    const options = baseOptions === ApolloReactHooks.skipToken ? baseOptions : { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useSuspenseQuery<UsageStatsByModelQuery, UsageStatsByModelQueryVariables>(
-        UsageStatsByModelDocument,
-        options,
-    );
-}
-export type UsageStatsByModelQueryHookResult = ReturnType<typeof useUsageStatsByModelQuery>;
-export type UsageStatsByModelLazyQueryHookResult = ReturnType<typeof useUsageStatsByModelLazyQuery>;
-export type UsageStatsByModelSuspenseQueryHookResult = ReturnType<typeof useUsageStatsByModelSuspenseQuery>;
-export type UsageStatsByModelQueryResult = ApolloReactCommon.QueryResult<
-    UsageStatsByModelQuery,
-    UsageStatsByModelQueryVariables
->;
-export const UsageStatsByAgentTypeDocument = gql`
-    query usageStatsByAgentType {
-        usageStatsByAgentType {
-            ...agentTypeUsageStatsFragment
-        }
-    }
-    ${AgentTypeUsageStatsFragmentFragmentDoc}
-`;
-
-/**
- * __useUsageStatsByAgentTypeQuery__
- *
- * To run a query within a React component, call `useUsageStatsByAgentTypeQuery` and pass it any options that fit your needs.
- * When your component renders, `useUsageStatsByAgentTypeQuery` returns an object from Apollo Client that contains loading, error, and data properties
- * you can use to render your UI.
- *
- * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
- *
- * @example
- * const { data, loading, error } = useUsageStatsByAgentTypeQuery({
- *   variables: {
- *   },
- * });
- */
-export function useUsageStatsByAgentTypeQuery(
-    baseOptions?: ApolloReactHooks.QueryHookOptions<UsageStatsByAgentTypeQuery, UsageStatsByAgentTypeQueryVariables>,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useQuery<UsageStatsByAgentTypeQuery, UsageStatsByAgentTypeQueryVariables>(
-        UsageStatsByAgentTypeDocument,
-        options,
-    );
-}
-export function useUsageStatsByAgentTypeLazyQuery(
-    baseOptions?: ApolloReactHooks.LazyQueryHookOptions<
-        UsageStatsByAgentTypeQuery,
-        UsageStatsByAgentTypeQueryVariables
-    >,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useLazyQuery<UsageStatsByAgentTypeQuery, UsageStatsByAgentTypeQueryVariables>(
-        UsageStatsByAgentTypeDocument,
-        options,
-    );
-}
-// @ts-ignore
-export function useUsageStatsByAgentTypeSuspenseQuery(
-    baseOptions?: ApolloReactHooks.SuspenseQueryHookOptions<
-        UsageStatsByAgentTypeQuery,
-        UsageStatsByAgentTypeQueryVariables
-    >,
-): ApolloReactHooks.UseSuspenseQueryResult<UsageStatsByAgentTypeQuery, UsageStatsByAgentTypeQueryVariables>;
-export function useUsageStatsByAgentTypeSuspenseQuery(
-    baseOptions?:
-        | ApolloReactHooks.SkipToken
-        | ApolloReactHooks.SuspenseQueryHookOptions<UsageStatsByAgentTypeQuery, UsageStatsByAgentTypeQueryVariables>,
-): ApolloReactHooks.UseSuspenseQueryResult<UsageStatsByAgentTypeQuery | undefined, UsageStatsByAgentTypeQueryVariables>;
-export function useUsageStatsByAgentTypeSuspenseQuery(
-    baseOptions?:
-        | ApolloReactHooks.SkipToken
-        | ApolloReactHooks.SuspenseQueryHookOptions<UsageStatsByAgentTypeQuery, UsageStatsByAgentTypeQueryVariables>,
-) {
-    const options = baseOptions === ApolloReactHooks.skipToken ? baseOptions : { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useSuspenseQuery<UsageStatsByAgentTypeQuery, UsageStatsByAgentTypeQueryVariables>(
-        UsageStatsByAgentTypeDocument,
-        options,
-    );
-}
-export type UsageStatsByAgentTypeQueryHookResult = ReturnType<typeof useUsageStatsByAgentTypeQuery>;
-export type UsageStatsByAgentTypeLazyQueryHookResult = ReturnType<typeof useUsageStatsByAgentTypeLazyQuery>;
-export type UsageStatsByAgentTypeSuspenseQueryHookResult = ReturnType<typeof useUsageStatsByAgentTypeSuspenseQuery>;
-export type UsageStatsByAgentTypeQueryResult = ApolloReactCommon.QueryResult<
-    UsageStatsByAgentTypeQuery,
-    UsageStatsByAgentTypeQueryVariables
->;
-export const UsageStatsByFlowDocument = gql`
-    query usageStatsByFlow($flowId: ID!) {
-        usageStatsByFlow(flowId: $flowId) {
-            ...usageStatsFragment
-        }
-    }
-    ${UsageStatsFragmentFragmentDoc}
-`;
-
-/**
- * __useUsageStatsByFlowQuery__
- *
- * To run a query within a React component, call `useUsageStatsByFlowQuery` and pass it any options that fit your needs.
- * When your component renders, `useUsageStatsByFlowQuery` returns an object from Apollo Client that contains loading, error, and data properties
- * you can use to render your UI.
- *
- * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
- *
- * @example
- * const { data, loading, error } = useUsageStatsByFlowQuery({
- *   variables: {
- *      flowId: // value for 'flowId'
- *   },
- * });
- */
-export function useUsageStatsByFlowQuery(
-    baseOptions: ApolloReactHooks.QueryHookOptions<UsageStatsByFlowQuery, UsageStatsByFlowQueryVariables> &
-        ({ variables: UsageStatsByFlowQueryVariables; skip?: boolean } | { skip: boolean }),
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useQuery<UsageStatsByFlowQuery, UsageStatsByFlowQueryVariables>(
-        UsageStatsByFlowDocument,
-        options,
-    );
-}
-export function useUsageStatsByFlowLazyQuery(
-    baseOptions?: ApolloReactHooks.LazyQueryHookOptions<UsageStatsByFlowQuery, UsageStatsByFlowQueryVariables>,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useLazyQuery<UsageStatsByFlowQuery, UsageStatsByFlowQueryVariables>(
-        UsageStatsByFlowDocument,
-        options,
-    );
-}
-// @ts-ignore
-export function useUsageStatsByFlowSuspenseQuery(
-    baseOptions?: ApolloReactHooks.SuspenseQueryHookOptions<UsageStatsByFlowQuery, UsageStatsByFlowQueryVariables>,
-): ApolloReactHooks.UseSuspenseQueryResult<UsageStatsByFlowQuery, UsageStatsByFlowQueryVariables>;
-export function useUsageStatsByFlowSuspenseQuery(
-    baseOptions?:
-        | ApolloReactHooks.SkipToken
-        | ApolloReactHooks.SuspenseQueryHookOptions<UsageStatsByFlowQuery, UsageStatsByFlowQueryVariables>,
-): ApolloReactHooks.UseSuspenseQueryResult<UsageStatsByFlowQuery | undefined, UsageStatsByFlowQueryVariables>;
-export function useUsageStatsByFlowSuspenseQuery(
-    baseOptions?:
-        | ApolloReactHooks.SkipToken
-        | ApolloReactHooks.SuspenseQueryHookOptions<UsageStatsByFlowQuery, UsageStatsByFlowQueryVariables>,
-) {
-    const options = baseOptions === ApolloReactHooks.skipToken ? baseOptions : { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useSuspenseQuery<UsageStatsByFlowQuery, UsageStatsByFlowQueryVariables>(
-        UsageStatsByFlowDocument,
-        options,
-    );
-}
-export type UsageStatsByFlowQueryHookResult = ReturnType<typeof useUsageStatsByFlowQuery>;
-export type UsageStatsByFlowLazyQueryHookResult = ReturnType<typeof useUsageStatsByFlowLazyQuery>;
-export type UsageStatsByFlowSuspenseQueryHookResult = ReturnType<typeof useUsageStatsByFlowSuspenseQuery>;
-export type UsageStatsByFlowQueryResult = ApolloReactCommon.QueryResult<
-    UsageStatsByFlowQuery,
-    UsageStatsByFlowQueryVariables
->;
-export const UsageStatsByAgentTypeForFlowDocument = gql`
-    query usageStatsByAgentTypeForFlow($flowId: ID!) {
-        usageStatsByAgentTypeForFlow(flowId: $flowId) {
-            ...agentTypeUsageStatsFragment
-        }
-    }
-    ${AgentTypeUsageStatsFragmentFragmentDoc}
-`;
-
-/**
- * __useUsageStatsByAgentTypeForFlowQuery__
- *
- * To run a query within a React component, call `useUsageStatsByAgentTypeForFlowQuery` and pass it any options that fit your needs.
- * When your component renders, `useUsageStatsByAgentTypeForFlowQuery` returns an object from Apollo Client that contains loading, error, and data properties
- * you can use to render your UI.
- *
- * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
- *
- * @example
- * const { data, loading, error } = useUsageStatsByAgentTypeForFlowQuery({
- *   variables: {
- *      flowId: // value for 'flowId'
- *   },
- * });
- */
-export function useUsageStatsByAgentTypeForFlowQuery(
-    baseOptions: ApolloReactHooks.QueryHookOptions<
-        UsageStatsByAgentTypeForFlowQuery,
-        UsageStatsByAgentTypeForFlowQueryVariables
-    > &
-        ({ variables: UsageStatsByAgentTypeForFlowQueryVariables; skip?: boolean } | { skip: boolean }),
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useQuery<UsageStatsByAgentTypeForFlowQuery, UsageStatsByAgentTypeForFlowQueryVariables>(
-        UsageStatsByAgentTypeForFlowDocument,
-        options,
-    );
-}
-export function useUsageStatsByAgentTypeForFlowLazyQuery(
-    baseOptions?: ApolloReactHooks.LazyQueryHookOptions<
-        UsageStatsByAgentTypeForFlowQuery,
-        UsageStatsByAgentTypeForFlowQueryVariables
-    >,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useLazyQuery<UsageStatsByAgentTypeForFlowQuery, UsageStatsByAgentTypeForFlowQueryVariables>(
-        UsageStatsByAgentTypeForFlowDocument,
-        options,
-    );
-}
-// @ts-ignore
-export function useUsageStatsByAgentTypeForFlowSuspenseQuery(
-    baseOptions?: ApolloReactHooks.SuspenseQueryHookOptions<
-        UsageStatsByAgentTypeForFlowQuery,
-        UsageStatsByAgentTypeForFlowQueryVariables
-    >,
-): ApolloReactHooks.UseSuspenseQueryResult<
-    UsageStatsByAgentTypeForFlowQuery,
-    UsageStatsByAgentTypeForFlowQueryVariables
->;
-export function useUsageStatsByAgentTypeForFlowSuspenseQuery(
-    baseOptions?:
-        | ApolloReactHooks.SkipToken
-        | ApolloReactHooks.SuspenseQueryHookOptions<
-              UsageStatsByAgentTypeForFlowQuery,
-              UsageStatsByAgentTypeForFlowQueryVariables
-          >,
-): ApolloReactHooks.UseSuspenseQueryResult<
-    UsageStatsByAgentTypeForFlowQuery | undefined,
-    UsageStatsByAgentTypeForFlowQueryVariables
->;
-export function useUsageStatsByAgentTypeForFlowSuspenseQuery(
-    baseOptions?:
-        | ApolloReactHooks.SkipToken
-        | ApolloReactHooks.SuspenseQueryHookOptions<
-              UsageStatsByAgentTypeForFlowQuery,
-              UsageStatsByAgentTypeForFlowQueryVariables
-          >,
-) {
-    const options = baseOptions === ApolloReactHooks.skipToken ? baseOptions : { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useSuspenseQuery<
-        UsageStatsByAgentTypeForFlowQuery,
-        UsageStatsByAgentTypeForFlowQueryVariables
-    >(UsageStatsByAgentTypeForFlowDocument, options);
-}
-export type UsageStatsByAgentTypeForFlowQueryHookResult = ReturnType<typeof useUsageStatsByAgentTypeForFlowQuery>;
-export type UsageStatsByAgentTypeForFlowLazyQueryHookResult = ReturnType<
-    typeof useUsageStatsByAgentTypeForFlowLazyQuery
->;
-export type UsageStatsByAgentTypeForFlowSuspenseQueryHookResult = ReturnType<
-    typeof useUsageStatsByAgentTypeForFlowSuspenseQuery
->;
-export type UsageStatsByAgentTypeForFlowQueryResult = ApolloReactCommon.QueryResult<
-    UsageStatsByAgentTypeForFlowQuery,
-    UsageStatsByAgentTypeForFlowQueryVariables
->;
-export const UsageStatsByModelAgentsForFlowDocument = gql`
-    query usageStatsByModelAgentsForFlow($flowId: ID!) {
-        usageStatsByModelAgentsForFlow(flowId: $flowId) {
-            ...modelAgentsUsageStatsFragment
-        }
-    }
-    ${ModelAgentsUsageStatsFragmentFragmentDoc}
-`;
-
-/**
- * __useUsageStatsByModelAgentsForFlowQuery__
- *
- * To run a query within a React component, call `useUsageStatsByModelAgentsForFlowQuery` and pass it any options that fit your needs.
- * When your component renders, `useUsageStatsByModelAgentsForFlowQuery` returns an object from Apollo Client that contains loading, error, and data properties
- * you can use to render your UI.
- *
- * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
- *
- * @example
- * const { data, loading, error } = useUsageStatsByModelAgentsForFlowQuery({
- *   variables: {
- *      flowId: // value for 'flowId'
- *   },
- * });
- */
-export function useUsageStatsByModelAgentsForFlowQuery(
-    baseOptions: ApolloReactHooks.QueryHookOptions<
-        UsageStatsByModelAgentsForFlowQuery,
-        UsageStatsByModelAgentsForFlowQueryVariables
-    > &
-        ({ variables: UsageStatsByModelAgentsForFlowQueryVariables; skip?: boolean } | { skip: boolean }),
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useQuery<UsageStatsByModelAgentsForFlowQuery, UsageStatsByModelAgentsForFlowQueryVariables>(
-        UsageStatsByModelAgentsForFlowDocument,
-        options,
-    );
-}
-export function useUsageStatsByModelAgentsForFlowLazyQuery(
-    baseOptions?: ApolloReactHooks.LazyQueryHookOptions<
-        UsageStatsByModelAgentsForFlowQuery,
-        UsageStatsByModelAgentsForFlowQueryVariables
-    >,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useLazyQuery<
-        UsageStatsByModelAgentsForFlowQuery,
-        UsageStatsByModelAgentsForFlowQueryVariables
-    >(UsageStatsByModelAgentsForFlowDocument, options);
-}
-// @ts-ignore
-export function useUsageStatsByModelAgentsForFlowSuspenseQuery(
-    baseOptions?: ApolloReactHooks.SuspenseQueryHookOptions<
-        UsageStatsByModelAgentsForFlowQuery,
-        UsageStatsByModelAgentsForFlowQueryVariables
-    >,
-): ApolloReactHooks.UseSuspenseQueryResult<
-    UsageStatsByModelAgentsForFlowQuery,
-    UsageStatsByModelAgentsForFlowQueryVariables
->;
-export function useUsageStatsByModelAgentsForFlowSuspenseQuery(
-    baseOptions?:
-        | ApolloReactHooks.SkipToken
-        | ApolloReactHooks.SuspenseQueryHookOptions<
-              UsageStatsByModelAgentsForFlowQuery,
-              UsageStatsByModelAgentsForFlowQueryVariables
-          >,
-): ApolloReactHooks.UseSuspenseQueryResult<
-    UsageStatsByModelAgentsForFlowQuery | undefined,
-    UsageStatsByModelAgentsForFlowQueryVariables
->;
-export function useUsageStatsByModelAgentsForFlowSuspenseQuery(
-    baseOptions?:
-        | ApolloReactHooks.SkipToken
-        | ApolloReactHooks.SuspenseQueryHookOptions<
-              UsageStatsByModelAgentsForFlowQuery,
-              UsageStatsByModelAgentsForFlowQueryVariables
-          >,
-) {
-    const options = baseOptions === ApolloReactHooks.skipToken ? baseOptions : { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useSuspenseQuery<
-        UsageStatsByModelAgentsForFlowQuery,
-        UsageStatsByModelAgentsForFlowQueryVariables
-    >(UsageStatsByModelAgentsForFlowDocument, options);
-}
-export type UsageStatsByModelAgentsForFlowQueryHookResult = ReturnType<typeof useUsageStatsByModelAgentsForFlowQuery>;
-export type UsageStatsByModelAgentsForFlowLazyQueryHookResult = ReturnType<
-    typeof useUsageStatsByModelAgentsForFlowLazyQuery
->;
-export type UsageStatsByModelAgentsForFlowSuspenseQueryHookResult = ReturnType<
-    typeof useUsageStatsByModelAgentsForFlowSuspenseQuery
->;
-export type UsageStatsByModelAgentsForFlowQueryResult = ApolloReactCommon.QueryResult<
-    UsageStatsByModelAgentsForFlowQuery,
-    UsageStatsByModelAgentsForFlowQueryVariables
->;
-export const ToolcallsStatsTotalDocument = gql`
-    query toolcallsStatsTotal {
-        toolcallsStatsTotal {
-            ...toolcallsStatsFragment
-        }
-    }
-    ${ToolcallsStatsFragmentFragmentDoc}
-`;
-
-/**
- * __useToolcallsStatsTotalQuery__
- *
- * To run a query within a React component, call `useToolcallsStatsTotalQuery` and pass it any options that fit your needs.
- * When your component renders, `useToolcallsStatsTotalQuery` returns an object from Apollo Client that contains loading, error, and data properties
- * you can use to render your UI.
- *
- * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
- *
- * @example
- * const { data, loading, error } = useToolcallsStatsTotalQuery({
- *   variables: {
- *   },
- * });
- */
-export function useToolcallsStatsTotalQuery(
-    baseOptions?: ApolloReactHooks.QueryHookOptions<ToolcallsStatsTotalQuery, ToolcallsStatsTotalQueryVariables>,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useQuery<ToolcallsStatsTotalQuery, ToolcallsStatsTotalQueryVariables>(
-        ToolcallsStatsTotalDocument,
-        options,
-    );
-}
-export function useToolcallsStatsTotalLazyQuery(
-    baseOptions?: ApolloReactHooks.LazyQueryHookOptions<ToolcallsStatsTotalQuery, ToolcallsStatsTotalQueryVariables>,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useLazyQuery<ToolcallsStatsTotalQuery, ToolcallsStatsTotalQueryVariables>(
-        ToolcallsStatsTotalDocument,
-        options,
-    );
-}
-// @ts-ignore
-export function useToolcallsStatsTotalSuspenseQuery(
-    baseOptions?: ApolloReactHooks.SuspenseQueryHookOptions<
-        ToolcallsStatsTotalQuery,
-        ToolcallsStatsTotalQueryVariables
-    >,
-): ApolloReactHooks.UseSuspenseQueryResult<ToolcallsStatsTotalQuery, ToolcallsStatsTotalQueryVariables>;
-export function useToolcallsStatsTotalSuspenseQuery(
-    baseOptions?:
-        | ApolloReactHooks.SkipToken
-        | ApolloReactHooks.SuspenseQueryHookOptions<ToolcallsStatsTotalQuery, ToolcallsStatsTotalQueryVariables>,
-): ApolloReactHooks.UseSuspenseQueryResult<ToolcallsStatsTotalQuery | undefined, ToolcallsStatsTotalQueryVariables>;
-export function useToolcallsStatsTotalSuspenseQuery(
-    baseOptions?:
-        | ApolloReactHooks.SkipToken
-        | ApolloReactHooks.SuspenseQueryHookOptions<ToolcallsStatsTotalQuery, ToolcallsStatsTotalQueryVariables>,
-) {
-    const options = baseOptions === ApolloReactHooks.skipToken ? baseOptions : { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useSuspenseQuery<ToolcallsStatsTotalQuery, ToolcallsStatsTotalQueryVariables>(
-        ToolcallsStatsTotalDocument,
-        options,
-    );
-}
-export type ToolcallsStatsTotalQueryHookResult = ReturnType<typeof useToolcallsStatsTotalQuery>;
-export type ToolcallsStatsTotalLazyQueryHookResult = ReturnType<typeof useToolcallsStatsTotalLazyQuery>;
-export type ToolcallsStatsTotalSuspenseQueryHookResult = ReturnType<typeof useToolcallsStatsTotalSuspenseQuery>;
-export type ToolcallsStatsTotalQueryResult = ApolloReactCommon.QueryResult<
-    ToolcallsStatsTotalQuery,
-    ToolcallsStatsTotalQueryVariables
->;
-export const ToolcallsStatsByPeriodDocument = gql`
-    query toolcallsStatsByPeriod($period: UsageStatsPeriod!) {
-        toolcallsStatsByPeriod(period: $period) {
-            ...dailyToolcallsStatsFragment
-        }
-    }
-    ${DailyToolcallsStatsFragmentFragmentDoc}
-`;
-
-/**
- * __useToolcallsStatsByPeriodQuery__
- *
- * To run a query within a React component, call `useToolcallsStatsByPeriodQuery` and pass it any options that fit your needs.
- * When your component renders, `useToolcallsStatsByPeriodQuery` returns an object from Apollo Client that contains loading, error, and data properties
- * you can use to render your UI.
- *
- * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
- *
- * @example
- * const { data, loading, error } = useToolcallsStatsByPeriodQuery({
- *   variables: {
- *      period: // value for 'period'
- *   },
- * });
- */
-export function useToolcallsStatsByPeriodQuery(
-    baseOptions: ApolloReactHooks.QueryHookOptions<ToolcallsStatsByPeriodQuery, ToolcallsStatsByPeriodQueryVariables> &
-        ({ variables: ToolcallsStatsByPeriodQueryVariables; skip?: boolean } | { skip: boolean }),
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useQuery<ToolcallsStatsByPeriodQuery, ToolcallsStatsByPeriodQueryVariables>(
-        ToolcallsStatsByPeriodDocument,
-        options,
-    );
-}
-export function useToolcallsStatsByPeriodLazyQuery(
-    baseOptions?: ApolloReactHooks.LazyQueryHookOptions<
-        ToolcallsStatsByPeriodQuery,
-        ToolcallsStatsByPeriodQueryVariables
-    >,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useLazyQuery<ToolcallsStatsByPeriodQuery, ToolcallsStatsByPeriodQueryVariables>(
-        ToolcallsStatsByPeriodDocument,
-        options,
-    );
-}
-// @ts-ignore
-export function useToolcallsStatsByPeriodSuspenseQuery(
-    baseOptions?: ApolloReactHooks.SuspenseQueryHookOptions<
-        ToolcallsStatsByPeriodQuery,
-        ToolcallsStatsByPeriodQueryVariables
-    >,
-): ApolloReactHooks.UseSuspenseQueryResult<ToolcallsStatsByPeriodQuery, ToolcallsStatsByPeriodQueryVariables>;
-export function useToolcallsStatsByPeriodSuspenseQuery(
-    baseOptions?:
-        | ApolloReactHooks.SkipToken
-        | ApolloReactHooks.SuspenseQueryHookOptions<ToolcallsStatsByPeriodQuery, ToolcallsStatsByPeriodQueryVariables>,
-): ApolloReactHooks.UseSuspenseQueryResult<
-    ToolcallsStatsByPeriodQuery | undefined,
-    ToolcallsStatsByPeriodQueryVariables
->;
-export function useToolcallsStatsByPeriodSuspenseQuery(
-    baseOptions?:
-        | ApolloReactHooks.SkipToken
-        | ApolloReactHooks.SuspenseQueryHookOptions<ToolcallsStatsByPeriodQuery, ToolcallsStatsByPeriodQueryVariables>,
-) {
-    const options = baseOptions === ApolloReactHooks.skipToken ? baseOptions : { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useSuspenseQuery<ToolcallsStatsByPeriodQuery, ToolcallsStatsByPeriodQueryVariables>(
-        ToolcallsStatsByPeriodDocument,
-        options,
-    );
-}
-export type ToolcallsStatsByPeriodQueryHookResult = ReturnType<typeof useToolcallsStatsByPeriodQuery>;
-export type ToolcallsStatsByPeriodLazyQueryHookResult = ReturnType<typeof useToolcallsStatsByPeriodLazyQuery>;
-export type ToolcallsStatsByPeriodSuspenseQueryHookResult = ReturnType<typeof useToolcallsStatsByPeriodSuspenseQuery>;
-export type ToolcallsStatsByPeriodQueryResult = ApolloReactCommon.QueryResult<
-    ToolcallsStatsByPeriodQuery,
-    ToolcallsStatsByPeriodQueryVariables
->;
-export const ToolcallsStatsByFunctionDocument = gql`
-    query toolcallsStatsByFunction {
-        toolcallsStatsByFunction {
-            ...functionToolcallsStatsFragment
-        }
-    }
-    ${FunctionToolcallsStatsFragmentFragmentDoc}
-`;
-
-/**
- * __useToolcallsStatsByFunctionQuery__
- *
- * To run a query within a React component, call `useToolcallsStatsByFunctionQuery` and pass it any options that fit your needs.
- * When your component renders, `useToolcallsStatsByFunctionQuery` returns an object from Apollo Client that contains loading, error, and data properties
- * you can use to render your UI.
- *
- * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
- *
- * @example
- * const { data, loading, error } = useToolcallsStatsByFunctionQuery({
- *   variables: {
- *   },
- * });
- */
-export function useToolcallsStatsByFunctionQuery(
-    baseOptions?: ApolloReactHooks.QueryHookOptions<
-        ToolcallsStatsByFunctionQuery,
-        ToolcallsStatsByFunctionQueryVariables
-    >,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useQuery<ToolcallsStatsByFunctionQuery, ToolcallsStatsByFunctionQueryVariables>(
-        ToolcallsStatsByFunctionDocument,
-        options,
-    );
-}
-export function useToolcallsStatsByFunctionLazyQuery(
-    baseOptions?: ApolloReactHooks.LazyQueryHookOptions<
-        ToolcallsStatsByFunctionQuery,
-        ToolcallsStatsByFunctionQueryVariables
-    >,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useLazyQuery<ToolcallsStatsByFunctionQuery, ToolcallsStatsByFunctionQueryVariables>(
-        ToolcallsStatsByFunctionDocument,
-        options,
-    );
-}
-// @ts-ignore
-export function useToolcallsStatsByFunctionSuspenseQuery(
-    baseOptions?: ApolloReactHooks.SuspenseQueryHookOptions<
-        ToolcallsStatsByFunctionQuery,
-        ToolcallsStatsByFunctionQueryVariables
-    >,
-): ApolloReactHooks.UseSuspenseQueryResult<ToolcallsStatsByFunctionQuery, ToolcallsStatsByFunctionQueryVariables>;
-export function useToolcallsStatsByFunctionSuspenseQuery(
-    baseOptions?:
-        | ApolloReactHooks.SkipToken
-        | ApolloReactHooks.SuspenseQueryHookOptions<
-              ToolcallsStatsByFunctionQuery,
-              ToolcallsStatsByFunctionQueryVariables
-          >,
-): ApolloReactHooks.UseSuspenseQueryResult<
-    ToolcallsStatsByFunctionQuery | undefined,
-    ToolcallsStatsByFunctionQueryVariables
->;
-export function useToolcallsStatsByFunctionSuspenseQuery(
-    baseOptions?:
-        | ApolloReactHooks.SkipToken
-        | ApolloReactHooks.SuspenseQueryHookOptions<
-              ToolcallsStatsByFunctionQuery,
-              ToolcallsStatsByFunctionQueryVariables
-          >,
-) {
-    const options = baseOptions === ApolloReactHooks.skipToken ? baseOptions : { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useSuspenseQuery<ToolcallsStatsByFunctionQuery, ToolcallsStatsByFunctionQueryVariables>(
-        ToolcallsStatsByFunctionDocument,
-        options,
-    );
-}
-export type ToolcallsStatsByFunctionQueryHookResult = ReturnType<typeof useToolcallsStatsByFunctionQuery>;
-export type ToolcallsStatsByFunctionLazyQueryHookResult = ReturnType<typeof useToolcallsStatsByFunctionLazyQuery>;
-export type ToolcallsStatsByFunctionSuspenseQueryHookResult = ReturnType<
-    typeof useToolcallsStatsByFunctionSuspenseQuery
->;
-export type ToolcallsStatsByFunctionQueryResult = ApolloReactCommon.QueryResult<
-    ToolcallsStatsByFunctionQuery,
-    ToolcallsStatsByFunctionQueryVariables
->;
-export const ToolcallsStatsByFlowDocument = gql`
-    query toolcallsStatsByFlow($flowId: ID!) {
-        toolcallsStatsByFlow(flowId: $flowId) {
-            ...toolcallsStatsFragment
-        }
-    }
-    ${ToolcallsStatsFragmentFragmentDoc}
-`;
-
-/**
- * __useToolcallsStatsByFlowQuery__
- *
- * To run a query within a React component, call `useToolcallsStatsByFlowQuery` and pass it any options that fit your needs.
- * When your component renders, `useToolcallsStatsByFlowQuery` returns an object from Apollo Client that contains loading, error, and data properties
- * you can use to render your UI.
- *
- * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
- *
- * @example
- * const { data, loading, error } = useToolcallsStatsByFlowQuery({
- *   variables: {
- *      flowId: // value for 'flowId'
- *   },
- * });
- */
-export function useToolcallsStatsByFlowQuery(
-    baseOptions: ApolloReactHooks.QueryHookOptions<ToolcallsStatsByFlowQuery, ToolcallsStatsByFlowQueryVariables> &
-        ({ variables: ToolcallsStatsByFlowQueryVariables; skip?: boolean } | { skip: boolean }),
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useQuery<ToolcallsStatsByFlowQuery, ToolcallsStatsByFlowQueryVariables>(
-        ToolcallsStatsByFlowDocument,
-        options,
-    );
-}
-export function useToolcallsStatsByFlowLazyQuery(
-    baseOptions?: ApolloReactHooks.LazyQueryHookOptions<ToolcallsStatsByFlowQuery, ToolcallsStatsByFlowQueryVariables>,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useLazyQuery<ToolcallsStatsByFlowQuery, ToolcallsStatsByFlowQueryVariables>(
-        ToolcallsStatsByFlowDocument,
-        options,
-    );
-}
-// @ts-ignore
-export function useToolcallsStatsByFlowSuspenseQuery(
-    baseOptions?: ApolloReactHooks.SuspenseQueryHookOptions<
-        ToolcallsStatsByFlowQuery,
-        ToolcallsStatsByFlowQueryVariables
-    >,
-): ApolloReactHooks.UseSuspenseQueryResult<ToolcallsStatsByFlowQuery, ToolcallsStatsByFlowQueryVariables>;
-export function useToolcallsStatsByFlowSuspenseQuery(
-    baseOptions?:
-        | ApolloReactHooks.SkipToken
-        | ApolloReactHooks.SuspenseQueryHookOptions<ToolcallsStatsByFlowQuery, ToolcallsStatsByFlowQueryVariables>,
-): ApolloReactHooks.UseSuspenseQueryResult<ToolcallsStatsByFlowQuery | undefined, ToolcallsStatsByFlowQueryVariables>;
-export function useToolcallsStatsByFlowSuspenseQuery(
-    baseOptions?:
-        | ApolloReactHooks.SkipToken
-        | ApolloReactHooks.SuspenseQueryHookOptions<ToolcallsStatsByFlowQuery, ToolcallsStatsByFlowQueryVariables>,
-) {
-    const options = baseOptions === ApolloReactHooks.skipToken ? baseOptions : { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useSuspenseQuery<ToolcallsStatsByFlowQuery, ToolcallsStatsByFlowQueryVariables>(
-        ToolcallsStatsByFlowDocument,
-        options,
-    );
-}
-export type ToolcallsStatsByFlowQueryHookResult = ReturnType<typeof useToolcallsStatsByFlowQuery>;
-export type ToolcallsStatsByFlowLazyQueryHookResult = ReturnType<typeof useToolcallsStatsByFlowLazyQuery>;
-export type ToolcallsStatsByFlowSuspenseQueryHookResult = ReturnType<typeof useToolcallsStatsByFlowSuspenseQuery>;
-export type ToolcallsStatsByFlowQueryResult = ApolloReactCommon.QueryResult<
-    ToolcallsStatsByFlowQuery,
-    ToolcallsStatsByFlowQueryVariables
->;
-export const ToolcallsStatsByFunctionForFlowDocument = gql`
-    query toolcallsStatsByFunctionForFlow($flowId: ID!) {
-        toolcallsStatsByFunctionForFlow(flowId: $flowId) {
-            ...functionToolcallsStatsFragment
-        }
-    }
-    ${FunctionToolcallsStatsFragmentFragmentDoc}
-`;
-
-/**
- * __useToolcallsStatsByFunctionForFlowQuery__
- *
- * To run a query within a React component, call `useToolcallsStatsByFunctionForFlowQuery` and pass it any options that fit your needs.
- * When your component renders, `useToolcallsStatsByFunctionForFlowQuery` returns an object from Apollo Client that contains loading, error, and data properties
- * you can use to render your UI.
- *
- * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
- *
- * @example
- * const { data, loading, error } = useToolcallsStatsByFunctionForFlowQuery({
- *   variables: {
- *      flowId: // value for 'flowId'
- *   },
- * });
- */
-export function useToolcallsStatsByFunctionForFlowQuery(
-    baseOptions: ApolloReactHooks.QueryHookOptions<
-        ToolcallsStatsByFunctionForFlowQuery,
-        ToolcallsStatsByFunctionForFlowQueryVariables
-    > &
-        ({ variables: ToolcallsStatsByFunctionForFlowQueryVariables; skip?: boolean } | { skip: boolean }),
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useQuery<
-        ToolcallsStatsByFunctionForFlowQuery,
-        ToolcallsStatsByFunctionForFlowQueryVariables
-    >(ToolcallsStatsByFunctionForFlowDocument, options);
-}
-export function useToolcallsStatsByFunctionForFlowLazyQuery(
-    baseOptions?: ApolloReactHooks.LazyQueryHookOptions<
-        ToolcallsStatsByFunctionForFlowQuery,
-        ToolcallsStatsByFunctionForFlowQueryVariables
-    >,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useLazyQuery<
-        ToolcallsStatsByFunctionForFlowQuery,
-        ToolcallsStatsByFunctionForFlowQueryVariables
-    >(ToolcallsStatsByFunctionForFlowDocument, options);
-}
-// @ts-ignore
-export function useToolcallsStatsByFunctionForFlowSuspenseQuery(
-    baseOptions?: ApolloReactHooks.SuspenseQueryHookOptions<
-        ToolcallsStatsByFunctionForFlowQuery,
-        ToolcallsStatsByFunctionForFlowQueryVariables
-    >,
-): ApolloReactHooks.UseSuspenseQueryResult<
-    ToolcallsStatsByFunctionForFlowQuery,
-    ToolcallsStatsByFunctionForFlowQueryVariables
->;
-export function useToolcallsStatsByFunctionForFlowSuspenseQuery(
-    baseOptions?:
-        | ApolloReactHooks.SkipToken
-        | ApolloReactHooks.SuspenseQueryHookOptions<
-              ToolcallsStatsByFunctionForFlowQuery,
-              ToolcallsStatsByFunctionForFlowQueryVariables
-          >,
-): ApolloReactHooks.UseSuspenseQueryResult<
-    ToolcallsStatsByFunctionForFlowQuery | undefined,
-    ToolcallsStatsByFunctionForFlowQueryVariables
->;
-export function useToolcallsStatsByFunctionForFlowSuspenseQuery(
-    baseOptions?:
-        | ApolloReactHooks.SkipToken
-        | ApolloReactHooks.SuspenseQueryHookOptions<
-              ToolcallsStatsByFunctionForFlowQuery,
-              ToolcallsStatsByFunctionForFlowQueryVariables
-          >,
-) {
-    const options = baseOptions === ApolloReactHooks.skipToken ? baseOptions : { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useSuspenseQuery<
-        ToolcallsStatsByFunctionForFlowQuery,
-        ToolcallsStatsByFunctionForFlowQueryVariables
-    >(ToolcallsStatsByFunctionForFlowDocument, options);
-}
-export type ToolcallsStatsByFunctionForFlowQueryHookResult = ReturnType<typeof useToolcallsStatsByFunctionForFlowQuery>;
-export type ToolcallsStatsByFunctionForFlowLazyQueryHookResult = ReturnType<
-    typeof useToolcallsStatsByFunctionForFlowLazyQuery
->;
-export type ToolcallsStatsByFunctionForFlowSuspenseQueryHookResult = ReturnType<
-    typeof useToolcallsStatsByFunctionForFlowSuspenseQuery
->;
-export type ToolcallsStatsByFunctionForFlowQueryResult = ApolloReactCommon.QueryResult<
-    ToolcallsStatsByFunctionForFlowQuery,
-    ToolcallsStatsByFunctionForFlowQueryVariables
->;
-export const FlowsStatsTotalDocument = gql`
-    query flowsStatsTotal {
-        flowsStatsTotal {
-            ...flowsStatsFragment
-        }
-    }
-    ${FlowsStatsFragmentFragmentDoc}
-`;
-
-/**
- * __useFlowsStatsTotalQuery__
- *
- * To run a query within a React component, call `useFlowsStatsTotalQuery` and pass it any options that fit your needs.
- * When your component renders, `useFlowsStatsTotalQuery` returns an object from Apollo Client that contains loading, error, and data properties
- * you can use to render your UI.
- *
- * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
- *
- * @example
- * const { data, loading, error } = useFlowsStatsTotalQuery({
- *   variables: {
- *   },
- * });
- */
-export function useFlowsStatsTotalQuery(
-    baseOptions?: ApolloReactHooks.QueryHookOptions<FlowsStatsTotalQuery, FlowsStatsTotalQueryVariables>,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useQuery<FlowsStatsTotalQuery, FlowsStatsTotalQueryVariables>(
-        FlowsStatsTotalDocument,
-        options,
-    );
-}
-export function useFlowsStatsTotalLazyQuery(
-    baseOptions?: ApolloReactHooks.LazyQueryHookOptions<FlowsStatsTotalQuery, FlowsStatsTotalQueryVariables>,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useLazyQuery<FlowsStatsTotalQuery, FlowsStatsTotalQueryVariables>(
-        FlowsStatsTotalDocument,
-        options,
-    );
-}
-// @ts-ignore
-export function useFlowsStatsTotalSuspenseQuery(
-    baseOptions?: ApolloReactHooks.SuspenseQueryHookOptions<FlowsStatsTotalQuery, FlowsStatsTotalQueryVariables>,
-): ApolloReactHooks.UseSuspenseQueryResult<FlowsStatsTotalQuery, FlowsStatsTotalQueryVariables>;
-export function useFlowsStatsTotalSuspenseQuery(
-    baseOptions?:
-        | ApolloReactHooks.SkipToken
-        | ApolloReactHooks.SuspenseQueryHookOptions<FlowsStatsTotalQuery, FlowsStatsTotalQueryVariables>,
-): ApolloReactHooks.UseSuspenseQueryResult<FlowsStatsTotalQuery | undefined, FlowsStatsTotalQueryVariables>;
-export function useFlowsStatsTotalSuspenseQuery(
-    baseOptions?:
-        | ApolloReactHooks.SkipToken
-        | ApolloReactHooks.SuspenseQueryHookOptions<FlowsStatsTotalQuery, FlowsStatsTotalQueryVariables>,
-) {
-    const options = baseOptions === ApolloReactHooks.skipToken ? baseOptions : { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useSuspenseQuery<FlowsStatsTotalQuery, FlowsStatsTotalQueryVariables>(
-        FlowsStatsTotalDocument,
-        options,
-    );
-}
-export type FlowsStatsTotalQueryHookResult = ReturnType<typeof useFlowsStatsTotalQuery>;
-export type FlowsStatsTotalLazyQueryHookResult = ReturnType<typeof useFlowsStatsTotalLazyQuery>;
-export type FlowsStatsTotalSuspenseQueryHookResult = ReturnType<typeof useFlowsStatsTotalSuspenseQuery>;
-export type FlowsStatsTotalQueryResult = ApolloReactCommon.QueryResult<
-    FlowsStatsTotalQuery,
-    FlowsStatsTotalQueryVariables
->;
-export const FlowsStatsByPeriodDocument = gql`
-    query flowsStatsByPeriod($period: UsageStatsPeriod!) {
-        flowsStatsByPeriod(period: $period) {
-            ...dailyFlowsStatsFragment
-        }
-    }
-    ${DailyFlowsStatsFragmentFragmentDoc}
-`;
-
-/**
- * __useFlowsStatsByPeriodQuery__
- *
- * To run a query within a React component, call `useFlowsStatsByPeriodQuery` and pass it any options that fit your needs.
- * When your component renders, `useFlowsStatsByPeriodQuery` returns an object from Apollo Client that contains loading, error, and data properties
- * you can use to render your UI.
- *
- * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
- *
- * @example
- * const { data, loading, error } = useFlowsStatsByPeriodQuery({
- *   variables: {
- *      period: // value for 'period'
- *   },
- * });
- */
-export function useFlowsStatsByPeriodQuery(
-    baseOptions: ApolloReactHooks.QueryHookOptions<FlowsStatsByPeriodQuery, FlowsStatsByPeriodQueryVariables> &
-        ({ variables: FlowsStatsByPeriodQueryVariables; skip?: boolean } | { skip: boolean }),
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useQuery<FlowsStatsByPeriodQuery, FlowsStatsByPeriodQueryVariables>(
-        FlowsStatsByPeriodDocument,
-        options,
-    );
-}
-export function useFlowsStatsByPeriodLazyQuery(
-    baseOptions?: ApolloReactHooks.LazyQueryHookOptions<FlowsStatsByPeriodQuery, FlowsStatsByPeriodQueryVariables>,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useLazyQuery<FlowsStatsByPeriodQuery, FlowsStatsByPeriodQueryVariables>(
-        FlowsStatsByPeriodDocument,
-        options,
-    );
-}
-// @ts-ignore
-export function useFlowsStatsByPeriodSuspenseQuery(
-    baseOptions?: ApolloReactHooks.SuspenseQueryHookOptions<FlowsStatsByPeriodQuery, FlowsStatsByPeriodQueryVariables>,
-): ApolloReactHooks.UseSuspenseQueryResult<FlowsStatsByPeriodQuery, FlowsStatsByPeriodQueryVariables>;
-export function useFlowsStatsByPeriodSuspenseQuery(
-    baseOptions?:
-        | ApolloReactHooks.SkipToken
-        | ApolloReactHooks.SuspenseQueryHookOptions<FlowsStatsByPeriodQuery, FlowsStatsByPeriodQueryVariables>,
-): ApolloReactHooks.UseSuspenseQueryResult<FlowsStatsByPeriodQuery | undefined, FlowsStatsByPeriodQueryVariables>;
-export function useFlowsStatsByPeriodSuspenseQuery(
-    baseOptions?:
-        | ApolloReactHooks.SkipToken
-        | ApolloReactHooks.SuspenseQueryHookOptions<FlowsStatsByPeriodQuery, FlowsStatsByPeriodQueryVariables>,
-) {
-    const options = baseOptions === ApolloReactHooks.skipToken ? baseOptions : { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useSuspenseQuery<FlowsStatsByPeriodQuery, FlowsStatsByPeriodQueryVariables>(
-        FlowsStatsByPeriodDocument,
-        options,
-    );
-}
-export type FlowsStatsByPeriodQueryHookResult = ReturnType<typeof useFlowsStatsByPeriodQuery>;
-export type FlowsStatsByPeriodLazyQueryHookResult = ReturnType<typeof useFlowsStatsByPeriodLazyQuery>;
-export type FlowsStatsByPeriodSuspenseQueryHookResult = ReturnType<typeof useFlowsStatsByPeriodSuspenseQuery>;
-export type FlowsStatsByPeriodQueryResult = ApolloReactCommon.QueryResult<
-    FlowsStatsByPeriodQuery,
-    FlowsStatsByPeriodQueryVariables
->;
-export const FlowStatsByFlowDocument = gql`
-    query flowStatsByFlow($flowId: ID!) {
-        flowStatsByFlow(flowId: $flowId) {
-            ...flowStatsFragment
-        }
-    }
-    ${FlowStatsFragmentFragmentDoc}
-`;
-
-/**
- * __useFlowStatsByFlowQuery__
- *
- * To run a query within a React component, call `useFlowStatsByFlowQuery` and pass it any options that fit your needs.
- * When your component renders, `useFlowStatsByFlowQuery` returns an object from Apollo Client that contains loading, error, and data properties
- * you can use to render your UI.
- *
- * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
- *
- * @example
- * const { data, loading, error } = useFlowStatsByFlowQuery({
- *   variables: {
- *      flowId: // value for 'flowId'
- *   },
- * });
- */
-export function useFlowStatsByFlowQuery(
-    baseOptions: ApolloReactHooks.QueryHookOptions<FlowStatsByFlowQuery, FlowStatsByFlowQueryVariables> &
-        ({ variables: FlowStatsByFlowQueryVariables; skip?: boolean } | { skip: boolean }),
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useQuery<FlowStatsByFlowQuery, FlowStatsByFlowQueryVariables>(
-        FlowStatsByFlowDocument,
-        options,
-    );
-}
-export function useFlowStatsByFlowLazyQuery(
-    baseOptions?: ApolloReactHooks.LazyQueryHookOptions<FlowStatsByFlowQuery, FlowStatsByFlowQueryVariables>,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useLazyQuery<FlowStatsByFlowQuery, FlowStatsByFlowQueryVariables>(
-        FlowStatsByFlowDocument,
-        options,
-    );
-}
-// @ts-ignore
-export function useFlowStatsByFlowSuspenseQuery(
-    baseOptions?: ApolloReactHooks.SuspenseQueryHookOptions<FlowStatsByFlowQuery, FlowStatsByFlowQueryVariables>,
-): ApolloReactHooks.UseSuspenseQueryResult<FlowStatsByFlowQuery, FlowStatsByFlowQueryVariables>;
-export function useFlowStatsByFlowSuspenseQuery(
-    baseOptions?:
-        | ApolloReactHooks.SkipToken
-        | ApolloReactHooks.SuspenseQueryHookOptions<FlowStatsByFlowQuery, FlowStatsByFlowQueryVariables>,
-): ApolloReactHooks.UseSuspenseQueryResult<FlowStatsByFlowQuery | undefined, FlowStatsByFlowQueryVariables>;
-export function useFlowStatsByFlowSuspenseQuery(
-    baseOptions?:
-        | ApolloReactHooks.SkipToken
-        | ApolloReactHooks.SuspenseQueryHookOptions<FlowStatsByFlowQuery, FlowStatsByFlowQueryVariables>,
-) {
-    const options = baseOptions === ApolloReactHooks.skipToken ? baseOptions : { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useSuspenseQuery<FlowStatsByFlowQuery, FlowStatsByFlowQueryVariables>(
-        FlowStatsByFlowDocument,
-        options,
-    );
-}
-export type FlowStatsByFlowQueryHookResult = ReturnType<typeof useFlowStatsByFlowQuery>;
-export type FlowStatsByFlowLazyQueryHookResult = ReturnType<typeof useFlowStatsByFlowLazyQuery>;
-export type FlowStatsByFlowSuspenseQueryHookResult = ReturnType<typeof useFlowStatsByFlowSuspenseQuery>;
-export type FlowStatsByFlowQueryResult = ApolloReactCommon.QueryResult<
-    FlowStatsByFlowQuery,
-    FlowStatsByFlowQueryVariables
->;
-export const FlowsExecutionStatsByPeriodDocument = gql`
-    query flowsExecutionStatsByPeriod($period: UsageStatsPeriod!) {
-        flowsExecutionStatsByPeriod(period: $period) {
-            ...flowExecutionStatsFragment
-        }
-    }
-    ${FlowExecutionStatsFragmentFragmentDoc}
-`;
-
-/**
- * __useFlowsExecutionStatsByPeriodQuery__
- *
- * To run a query within a React component, call `useFlowsExecutionStatsByPeriodQuery` and pass it any options that fit your needs.
- * When your component renders, `useFlowsExecutionStatsByPeriodQuery` returns an object from Apollo Client that contains loading, error, and data properties
- * you can use to render your UI.
- *
- * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
- *
- * @example
- * const { data, loading, error } = useFlowsExecutionStatsByPeriodQuery({
- *   variables: {
- *      period: // value for 'period'
- *   },
- * });
- */
-export function useFlowsExecutionStatsByPeriodQuery(
-    baseOptions: ApolloReactHooks.QueryHookOptions<
-        FlowsExecutionStatsByPeriodQuery,
-        FlowsExecutionStatsByPeriodQueryVariables
-    > &
-        ({ variables: FlowsExecutionStatsByPeriodQueryVariables; skip?: boolean } | { skip: boolean }),
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useQuery<FlowsExecutionStatsByPeriodQuery, FlowsExecutionStatsByPeriodQueryVariables>(
-        FlowsExecutionStatsByPeriodDocument,
-        options,
-    );
-}
-export function useFlowsExecutionStatsByPeriodLazyQuery(
-    baseOptions?: ApolloReactHooks.LazyQueryHookOptions<
-        FlowsExecutionStatsByPeriodQuery,
-        FlowsExecutionStatsByPeriodQueryVariables
-    >,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useLazyQuery<FlowsExecutionStatsByPeriodQuery, FlowsExecutionStatsByPeriodQueryVariables>(
-        FlowsExecutionStatsByPeriodDocument,
-        options,
-    );
-}
-// @ts-ignore
-export function useFlowsExecutionStatsByPeriodSuspenseQuery(
-    baseOptions?: ApolloReactHooks.SuspenseQueryHookOptions<
-        FlowsExecutionStatsByPeriodQuery,
-        FlowsExecutionStatsByPeriodQueryVariables
-    >,
-): ApolloReactHooks.UseSuspenseQueryResult<FlowsExecutionStatsByPeriodQuery, FlowsExecutionStatsByPeriodQueryVariables>;
-export function useFlowsExecutionStatsByPeriodSuspenseQuery(
-    baseOptions?:
-        | ApolloReactHooks.SkipToken
-        | ApolloReactHooks.SuspenseQueryHookOptions<
-              FlowsExecutionStatsByPeriodQuery,
-              FlowsExecutionStatsByPeriodQueryVariables
-          >,
-): ApolloReactHooks.UseSuspenseQueryResult<
-    FlowsExecutionStatsByPeriodQuery | undefined,
-    FlowsExecutionStatsByPeriodQueryVariables
->;
-export function useFlowsExecutionStatsByPeriodSuspenseQuery(
-    baseOptions?:
-        | ApolloReactHooks.SkipToken
-        | ApolloReactHooks.SuspenseQueryHookOptions<
-              FlowsExecutionStatsByPeriodQuery,
-              FlowsExecutionStatsByPeriodQueryVariables
-          >,
-) {
-    const options = baseOptions === ApolloReactHooks.skipToken ? baseOptions : { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useSuspenseQuery<
-        FlowsExecutionStatsByPeriodQuery,
-        FlowsExecutionStatsByPeriodQueryVariables
-    >(FlowsExecutionStatsByPeriodDocument, options);
-}
-export type FlowsExecutionStatsByPeriodQueryHookResult = ReturnType<typeof useFlowsExecutionStatsByPeriodQuery>;
-export type FlowsExecutionStatsByPeriodLazyQueryHookResult = ReturnType<typeof useFlowsExecutionStatsByPeriodLazyQuery>;
-export type FlowsExecutionStatsByPeriodSuspenseQueryHookResult = ReturnType<
-    typeof useFlowsExecutionStatsByPeriodSuspenseQuery
->;
-export type FlowsExecutionStatsByPeriodQueryResult = ApolloReactCommon.QueryResult<
-    FlowsExecutionStatsByPeriodQuery,
-    FlowsExecutionStatsByPeriodQueryVariables
->;
-export const ApiTokensDocument = gql`
-    query apiTokens {
-        apiTokens {
-            ...apiTokenFragment
-        }
-    }
-    ${ApiTokenFragmentFragmentDoc}
-`;
-
-/**
- * __useApiTokensQuery__
- *
- * To run a query within a React component, call `useApiTokensQuery` and pass it any options that fit your needs.
- * When your component renders, `useApiTokensQuery` returns an object from Apollo Client that contains loading, error, and data properties
- * you can use to render your UI.
- *
- * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
- *
- * @example
- * const { data, loading, error } = useApiTokensQuery({
- *   variables: {
- *   },
- * });
- */
-export function useApiTokensQuery(
-    baseOptions?: ApolloReactHooks.QueryHookOptions<ApiTokensQuery, ApiTokensQueryVariables>,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useQuery<ApiTokensQuery, ApiTokensQueryVariables>(ApiTokensDocument, options);
-}
-export function useApiTokensLazyQuery(
-    baseOptions?: ApolloReactHooks.LazyQueryHookOptions<ApiTokensQuery, ApiTokensQueryVariables>,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useLazyQuery<ApiTokensQuery, ApiTokensQueryVariables>(ApiTokensDocument, options);
-}
-// @ts-ignore
-export function useApiTokensSuspenseQuery(
-    baseOptions?: ApolloReactHooks.SuspenseQueryHookOptions<ApiTokensQuery, ApiTokensQueryVariables>,
-): ApolloReactHooks.UseSuspenseQueryResult<ApiTokensQuery, ApiTokensQueryVariables>;
-export function useApiTokensSuspenseQuery(
-    baseOptions?:
-        | ApolloReactHooks.SkipToken
-        | ApolloReactHooks.SuspenseQueryHookOptions<ApiTokensQuery, ApiTokensQueryVariables>,
-): ApolloReactHooks.UseSuspenseQueryResult<ApiTokensQuery | undefined, ApiTokensQueryVariables>;
-export function useApiTokensSuspenseQuery(
-    baseOptions?:
-        | ApolloReactHooks.SkipToken
-        | ApolloReactHooks.SuspenseQueryHookOptions<ApiTokensQuery, ApiTokensQueryVariables>,
-) {
-    const options = baseOptions === ApolloReactHooks.skipToken ? baseOptions : { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useSuspenseQuery<ApiTokensQuery, ApiTokensQueryVariables>(ApiTokensDocument, options);
-}
-export type ApiTokensQueryHookResult = ReturnType<typeof useApiTokensQuery>;
-export type ApiTokensLazyQueryHookResult = ReturnType<typeof useApiTokensLazyQuery>;
-export type ApiTokensSuspenseQueryHookResult = ReturnType<typeof useApiTokensSuspenseQuery>;
-export type ApiTokensQueryResult = ApolloReactCommon.QueryResult<ApiTokensQuery, ApiTokensQueryVariables>;
-export const ApiTokenDocument = gql`
-    query apiToken($tokenId: String!) {
-        apiToken(tokenId: $tokenId) {
-            ...apiTokenFragment
-        }
-    }
-    ${ApiTokenFragmentFragmentDoc}
-`;
-
-/**
- * __useApiTokenQuery__
- *
- * To run a query within a React component, call `useApiTokenQuery` and pass it any options that fit your needs.
- * When your component renders, `useApiTokenQuery` returns an object from Apollo Client that contains loading, error, and data properties
- * you can use to render your UI.
- *
- * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
- *
- * @example
- * const { data, loading, error } = useApiTokenQuery({
- *   variables: {
- *      tokenId: // value for 'tokenId'
- *   },
- * });
- */
-export function useApiTokenQuery(
-    baseOptions: ApolloReactHooks.QueryHookOptions<ApiTokenQuery, ApiTokenQueryVariables> &
-        ({ variables: ApiTokenQueryVariables; skip?: boolean } | { skip: boolean }),
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useQuery<ApiTokenQuery, ApiTokenQueryVariables>(ApiTokenDocument, options);
-}
-export function useApiTokenLazyQuery(
-    baseOptions?: ApolloReactHooks.LazyQueryHookOptions<ApiTokenQuery, ApiTokenQueryVariables>,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useLazyQuery<ApiTokenQuery, ApiTokenQueryVariables>(ApiTokenDocument, options);
-}
-// @ts-ignore
-export function useApiTokenSuspenseQuery(
-    baseOptions?: ApolloReactHooks.SuspenseQueryHookOptions<ApiTokenQuery, ApiTokenQueryVariables>,
-): ApolloReactHooks.UseSuspenseQueryResult<ApiTokenQuery, ApiTokenQueryVariables>;
-export function useApiTokenSuspenseQuery(
-    baseOptions?:
-        | ApolloReactHooks.SkipToken
-        | ApolloReactHooks.SuspenseQueryHookOptions<ApiTokenQuery, ApiTokenQueryVariables>,
-): ApolloReactHooks.UseSuspenseQueryResult<ApiTokenQuery | undefined, ApiTokenQueryVariables>;
-export function useApiTokenSuspenseQuery(
-    baseOptions?:
-        | ApolloReactHooks.SkipToken
-        | ApolloReactHooks.SuspenseQueryHookOptions<ApiTokenQuery, ApiTokenQueryVariables>,
-) {
-    const options = baseOptions === ApolloReactHooks.skipToken ? baseOptions : { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useSuspenseQuery<ApiTokenQuery, ApiTokenQueryVariables>(ApiTokenDocument, options);
-}
-export type ApiTokenQueryHookResult = ReturnType<typeof useApiTokenQuery>;
-export type ApiTokenLazyQueryHookResult = ReturnType<typeof useApiTokenLazyQuery>;
-export type ApiTokenSuspenseQueryHookResult = ReturnType<typeof useApiTokenSuspenseQuery>;
-export type ApiTokenQueryResult = ApolloReactCommon.QueryResult<ApiTokenQuery, ApiTokenQueryVariables>;
-export const KnowledgeDocumentsDocument = gql`
-    query knowledgeDocuments($filter: KnowledgeFilter, $withContent: Boolean!) {
-        knowledgeDocuments(filter: $filter, withContent: $withContent) {
-            ...knowledgeDocumentFragment
-        }
-    }
-    ${KnowledgeDocumentFragmentFragmentDoc}
-`;
-
-/**
- * __useKnowledgeDocumentsQuery__
- *
- * To run a query within a React component, call `useKnowledgeDocumentsQuery` and pass it any options that fit your needs.
- * When your component renders, `useKnowledgeDocumentsQuery` returns an object from Apollo Client that contains loading, error, and data properties
- * you can use to render your UI.
- *
- * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
- *
- * @example
- * const { data, loading, error } = useKnowledgeDocumentsQuery({
- *   variables: {
- *      filter: // value for 'filter'
- *      withContent: // value for 'withContent'
- *   },
- * });
- */
-export function useKnowledgeDocumentsQuery(
-    baseOptions: ApolloReactHooks.QueryHookOptions<KnowledgeDocumentsQuery, KnowledgeDocumentsQueryVariables> &
-        ({ variables: KnowledgeDocumentsQueryVariables; skip?: boolean } | { skip: boolean }),
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useQuery<KnowledgeDocumentsQuery, KnowledgeDocumentsQueryVariables>(
-        KnowledgeDocumentsDocument,
-        options,
-    );
-}
-export function useKnowledgeDocumentsLazyQuery(
-    baseOptions?: ApolloReactHooks.LazyQueryHookOptions<KnowledgeDocumentsQuery, KnowledgeDocumentsQueryVariables>,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useLazyQuery<KnowledgeDocumentsQuery, KnowledgeDocumentsQueryVariables>(
-        KnowledgeDocumentsDocument,
-        options,
-    );
-}
-// @ts-ignore
-export function useKnowledgeDocumentsSuspenseQuery(
-    baseOptions?: ApolloReactHooks.SuspenseQueryHookOptions<KnowledgeDocumentsQuery, KnowledgeDocumentsQueryVariables>,
-): ApolloReactHooks.UseSuspenseQueryResult<KnowledgeDocumentsQuery, KnowledgeDocumentsQueryVariables>;
-export function useKnowledgeDocumentsSuspenseQuery(
-    baseOptions?:
-        | ApolloReactHooks.SkipToken
-        | ApolloReactHooks.SuspenseQueryHookOptions<KnowledgeDocumentsQuery, KnowledgeDocumentsQueryVariables>,
-): ApolloReactHooks.UseSuspenseQueryResult<KnowledgeDocumentsQuery | undefined, KnowledgeDocumentsQueryVariables>;
-export function useKnowledgeDocumentsSuspenseQuery(
-    baseOptions?:
-        | ApolloReactHooks.SkipToken
-        | ApolloReactHooks.SuspenseQueryHookOptions<KnowledgeDocumentsQuery, KnowledgeDocumentsQueryVariables>,
-) {
-    const options = baseOptions === ApolloReactHooks.skipToken ? baseOptions : { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useSuspenseQuery<KnowledgeDocumentsQuery, KnowledgeDocumentsQueryVariables>(
-        KnowledgeDocumentsDocument,
-        options,
-    );
-}
-export type KnowledgeDocumentsQueryHookResult = ReturnType<typeof useKnowledgeDocumentsQuery>;
-export type KnowledgeDocumentsLazyQueryHookResult = ReturnType<typeof useKnowledgeDocumentsLazyQuery>;
-export type KnowledgeDocumentsSuspenseQueryHookResult = ReturnType<typeof useKnowledgeDocumentsSuspenseQuery>;
-export type KnowledgeDocumentsQueryResult = ApolloReactCommon.QueryResult<
-    KnowledgeDocumentsQuery,
-    KnowledgeDocumentsQueryVariables
->;
-export const KnowledgeDocumentDocument = gql`
-    query knowledgeDocument($id: String!) {
-        knowledgeDocument(id: $id) {
-            ...knowledgeDocumentFragment
-        }
-    }
-    ${KnowledgeDocumentFragmentFragmentDoc}
-`;
-
-/**
- * __useKnowledgeDocumentQuery__
- *
- * To run a query within a React component, call `useKnowledgeDocumentQuery` and pass it any options that fit your needs.
- * When your component renders, `useKnowledgeDocumentQuery` returns an object from Apollo Client that contains loading, error, and data properties
- * you can use to render your UI.
- *
- * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
- *
- * @example
- * const { data, loading, error } = useKnowledgeDocumentQuery({
- *   variables: {
- *      id: // value for 'id'
- *   },
- * });
- */
-export function useKnowledgeDocumentQuery(
-    baseOptions: ApolloReactHooks.QueryHookOptions<KnowledgeDocumentQuery, KnowledgeDocumentQueryVariables> &
-        ({ variables: KnowledgeDocumentQueryVariables; skip?: boolean } | { skip: boolean }),
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useQuery<KnowledgeDocumentQuery, KnowledgeDocumentQueryVariables>(
-        KnowledgeDocumentDocument,
-        options,
-    );
-}
-export function useKnowledgeDocumentLazyQuery(
-    baseOptions?: ApolloReactHooks.LazyQueryHookOptions<KnowledgeDocumentQuery, KnowledgeDocumentQueryVariables>,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useLazyQuery<KnowledgeDocumentQuery, KnowledgeDocumentQueryVariables>(
-        KnowledgeDocumentDocument,
-        options,
-    );
-}
-// @ts-ignore
-export function useKnowledgeDocumentSuspenseQuery(
-    baseOptions?: ApolloReactHooks.SuspenseQueryHookOptions<KnowledgeDocumentQuery, KnowledgeDocumentQueryVariables>,
-): ApolloReactHooks.UseSuspenseQueryResult<KnowledgeDocumentQuery, KnowledgeDocumentQueryVariables>;
-export function useKnowledgeDocumentSuspenseQuery(
-    baseOptions?:
-        | ApolloReactHooks.SkipToken
-        | ApolloReactHooks.SuspenseQueryHookOptions<KnowledgeDocumentQuery, KnowledgeDocumentQueryVariables>,
-): ApolloReactHooks.UseSuspenseQueryResult<KnowledgeDocumentQuery | undefined, KnowledgeDocumentQueryVariables>;
-export function useKnowledgeDocumentSuspenseQuery(
-    baseOptions?:
-        | ApolloReactHooks.SkipToken
-        | ApolloReactHooks.SuspenseQueryHookOptions<KnowledgeDocumentQuery, KnowledgeDocumentQueryVariables>,
-) {
-    const options = baseOptions === ApolloReactHooks.skipToken ? baseOptions : { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useSuspenseQuery<KnowledgeDocumentQuery, KnowledgeDocumentQueryVariables>(
-        KnowledgeDocumentDocument,
-        options,
-    );
-}
-export type KnowledgeDocumentQueryHookResult = ReturnType<typeof useKnowledgeDocumentQuery>;
-export type KnowledgeDocumentLazyQueryHookResult = ReturnType<typeof useKnowledgeDocumentLazyQuery>;
-export type KnowledgeDocumentSuspenseQueryHookResult = ReturnType<typeof useKnowledgeDocumentSuspenseQuery>;
-export type KnowledgeDocumentQueryResult = ApolloReactCommon.QueryResult<
-    KnowledgeDocumentQuery,
-    KnowledgeDocumentQueryVariables
->;
-export const SearchKnowledgeDocument = gql`
-    query searchKnowledge($query: String!, $filter: KnowledgeFilter, $limit: Int) {
-        searchKnowledge(query: $query, filter: $filter, limit: $limit) {
-            ...knowledgeDocumentWithScoreFragment
-        }
-    }
-    ${KnowledgeDocumentWithScoreFragmentFragmentDoc}
-`;
-
-/**
- * __useSearchKnowledgeQuery__
- *
- * To run a query within a React component, call `useSearchKnowledgeQuery` and pass it any options that fit your needs.
- * When your component renders, `useSearchKnowledgeQuery` returns an object from Apollo Client that contains loading, error, and data properties
- * you can use to render your UI.
- *
- * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
- *
- * @example
- * const { data, loading, error } = useSearchKnowledgeQuery({
- *   variables: {
- *      query: // value for 'query'
- *      filter: // value for 'filter'
- *      limit: // value for 'limit'
- *   },
- * });
- */
-export function useSearchKnowledgeQuery(
-    baseOptions: ApolloReactHooks.QueryHookOptions<SearchKnowledgeQuery, SearchKnowledgeQueryVariables> &
-        ({ variables: SearchKnowledgeQueryVariables; skip?: boolean } | { skip: boolean }),
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useQuery<SearchKnowledgeQuery, SearchKnowledgeQueryVariables>(
-        SearchKnowledgeDocument,
-        options,
-    );
-}
-export function useSearchKnowledgeLazyQuery(
-    baseOptions?: ApolloReactHooks.LazyQueryHookOptions<SearchKnowledgeQuery, SearchKnowledgeQueryVariables>,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useLazyQuery<SearchKnowledgeQuery, SearchKnowledgeQueryVariables>(
-        SearchKnowledgeDocument,
-        options,
-    );
-}
-// @ts-ignore
-export function useSearchKnowledgeSuspenseQuery(
-    baseOptions?: ApolloReactHooks.SuspenseQueryHookOptions<SearchKnowledgeQuery, SearchKnowledgeQueryVariables>,
-): ApolloReactHooks.UseSuspenseQueryResult<SearchKnowledgeQuery, SearchKnowledgeQueryVariables>;
-export function useSearchKnowledgeSuspenseQuery(
-    baseOptions?:
-        | ApolloReactHooks.SkipToken
-        | ApolloReactHooks.SuspenseQueryHookOptions<SearchKnowledgeQuery, SearchKnowledgeQueryVariables>,
-): ApolloReactHooks.UseSuspenseQueryResult<SearchKnowledgeQuery | undefined, SearchKnowledgeQueryVariables>;
-export function useSearchKnowledgeSuspenseQuery(
-    baseOptions?:
-        | ApolloReactHooks.SkipToken
-        | ApolloReactHooks.SuspenseQueryHookOptions<SearchKnowledgeQuery, SearchKnowledgeQueryVariables>,
-) {
-    const options = baseOptions === ApolloReactHooks.skipToken ? baseOptions : { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useSuspenseQuery<SearchKnowledgeQuery, SearchKnowledgeQueryVariables>(
-        SearchKnowledgeDocument,
-        options,
-    );
-}
-export type SearchKnowledgeQueryHookResult = ReturnType<typeof useSearchKnowledgeQuery>;
-export type SearchKnowledgeLazyQueryHookResult = ReturnType<typeof useSearchKnowledgeLazyQuery>;
-export type SearchKnowledgeSuspenseQueryHookResult = ReturnType<typeof useSearchKnowledgeSuspenseQuery>;
-export type SearchKnowledgeQueryResult = ApolloReactCommon.QueryResult<
-    SearchKnowledgeQuery,
-    SearchKnowledgeQueryVariables
->;
-export const SettingsUserDocument = gql`
-    query settingsUser {
-        settingsUser {
-            ...userPreferencesFragment
-        }
-    }
-    ${UserPreferencesFragmentFragmentDoc}
-`;
-
-/**
- * __useSettingsUserQuery__
- *
- * To run a query within a React component, call `useSettingsUserQuery` and pass it any options that fit your needs.
- * When your component renders, `useSettingsUserQuery` returns an object from Apollo Client that contains loading, error, and data properties
- * you can use to render your UI.
- *
- * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
- *
- * @example
- * const { data, loading, error } = useSettingsUserQuery({
- *   variables: {
- *   },
- * });
- */
-export function useSettingsUserQuery(
-    baseOptions?: ApolloReactHooks.QueryHookOptions<SettingsUserQuery, SettingsUserQueryVariables>,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useQuery<SettingsUserQuery, SettingsUserQueryVariables>(SettingsUserDocument, options);
-}
-export function useSettingsUserLazyQuery(
-    baseOptions?: ApolloReactHooks.LazyQueryHookOptions<SettingsUserQuery, SettingsUserQueryVariables>,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useLazyQuery<SettingsUserQuery, SettingsUserQueryVariables>(SettingsUserDocument, options);
-}
-// @ts-ignore
-export function useSettingsUserSuspenseQuery(
-    baseOptions?: ApolloReactHooks.SuspenseQueryHookOptions<SettingsUserQuery, SettingsUserQueryVariables>,
-): ApolloReactHooks.UseSuspenseQueryResult<SettingsUserQuery, SettingsUserQueryVariables>;
-export function useSettingsUserSuspenseQuery(
-    baseOptions?:
-        | ApolloReactHooks.SkipToken
-        | ApolloReactHooks.SuspenseQueryHookOptions<SettingsUserQuery, SettingsUserQueryVariables>,
-): ApolloReactHooks.UseSuspenseQueryResult<SettingsUserQuery | undefined, SettingsUserQueryVariables>;
-export function useSettingsUserSuspenseQuery(
-    baseOptions?:
-        | ApolloReactHooks.SkipToken
-        | ApolloReactHooks.SuspenseQueryHookOptions<SettingsUserQuery, SettingsUserQueryVariables>,
-) {
-    const options = baseOptions === ApolloReactHooks.skipToken ? baseOptions : { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useSuspenseQuery<SettingsUserQuery, SettingsUserQueryVariables>(
-        SettingsUserDocument,
-        options,
-    );
-}
-export type SettingsUserQueryHookResult = ReturnType<typeof useSettingsUserQuery>;
-export type SettingsUserLazyQueryHookResult = ReturnType<typeof useSettingsUserLazyQuery>;
-export type SettingsUserSuspenseQueryHookResult = ReturnType<typeof useSettingsUserSuspenseQuery>;
-export type SettingsUserQueryResult = ApolloReactCommon.QueryResult<SettingsUserQuery, SettingsUserQueryVariables>;
-export const AddFavoriteFlowDocument = gql`
-    mutation addFavoriteFlow($flowId: ID!) {
-        addFavoriteFlow(flowId: $flowId)
-    }
-`;
-export type AddFavoriteFlowMutationFn = ApolloReactCommon.MutationFunction<
-    AddFavoriteFlowMutation,
-    AddFavoriteFlowMutationVariables
->;
-
-/**
- * __useAddFavoriteFlowMutation__
- *
- * To run a mutation, you first call `useAddFavoriteFlowMutation` within a React component and pass it any options that fit your needs.
- * When your component renders, `useAddFavoriteFlowMutation` returns a tuple that includes:
- * - A mutate function that you can call at any time to execute the mutation
- * - An object with fields that represent the current status of the mutation's execution
- *
- * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
- *
- * @example
- * const [addFavoriteFlowMutation, { data, loading, error }] = useAddFavoriteFlowMutation({
- *   variables: {
- *      flowId: // value for 'flowId'
- *   },
- * });
- */
-export function useAddFavoriteFlowMutation(
-    baseOptions?: ApolloReactHooks.MutationHookOptions<AddFavoriteFlowMutation, AddFavoriteFlowMutationVariables>,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useMutation<AddFavoriteFlowMutation, AddFavoriteFlowMutationVariables>(
-        AddFavoriteFlowDocument,
-        options,
-    );
-}
-export type AddFavoriteFlowMutationHookResult = ReturnType<typeof useAddFavoriteFlowMutation>;
-export type AddFavoriteFlowMutationResult = ApolloReactCommon.MutationResult<AddFavoriteFlowMutation>;
-export type AddFavoriteFlowMutationOptions = ApolloReactCommon.BaseMutationOptions<
-    AddFavoriteFlowMutation,
-    AddFavoriteFlowMutationVariables
->;
-export const DeleteFavoriteFlowDocument = gql`
-    mutation deleteFavoriteFlow($flowId: ID!) {
-        deleteFavoriteFlow(flowId: $flowId)
-    }
-`;
-export type DeleteFavoriteFlowMutationFn = ApolloReactCommon.MutationFunction<
-    DeleteFavoriteFlowMutation,
-    DeleteFavoriteFlowMutationVariables
->;
-
-/**
- * __useDeleteFavoriteFlowMutation__
- *
- * To run a mutation, you first call `useDeleteFavoriteFlowMutation` within a React component and pass it any options that fit your needs.
- * When your component renders, `useDeleteFavoriteFlowMutation` returns a tuple that includes:
- * - A mutate function that you can call at any time to execute the mutation
- * - An object with fields that represent the current status of the mutation's execution
- *
- * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
- *
- * @example
- * const [deleteFavoriteFlowMutation, { data, loading, error }] = useDeleteFavoriteFlowMutation({
- *   variables: {
- *      flowId: // value for 'flowId'
- *   },
- * });
- */
-export function useDeleteFavoriteFlowMutation(
-    baseOptions?: ApolloReactHooks.MutationHookOptions<DeleteFavoriteFlowMutation, DeleteFavoriteFlowMutationVariables>,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useMutation<DeleteFavoriteFlowMutation, DeleteFavoriteFlowMutationVariables>(
-        DeleteFavoriteFlowDocument,
-        options,
-    );
-}
-export type DeleteFavoriteFlowMutationHookResult = ReturnType<typeof useDeleteFavoriteFlowMutation>;
-export type DeleteFavoriteFlowMutationResult = ApolloReactCommon.MutationResult<DeleteFavoriteFlowMutation>;
-export type DeleteFavoriteFlowMutationOptions = ApolloReactCommon.BaseMutationOptions<
-    DeleteFavoriteFlowMutation,
-    DeleteFavoriteFlowMutationVariables
->;
-export const AnonymizeTextDocument = gql`
-    mutation anonymizeText($text: String!) {
-        anonymizeText(text: $text)
-    }
-`;
-export type AnonymizeTextMutationFn = ApolloReactCommon.MutationFunction<
-    AnonymizeTextMutation,
-    AnonymizeTextMutationVariables
->;
-
-/**
- * __useAnonymizeTextMutation__
- *
- * To run a mutation, you first call `useAnonymizeTextMutation` within a React component and pass it any options that fit your needs.
- * When your component renders, `useAnonymizeTextMutation` returns a tuple that includes:
- * - A mutate function that you can call at any time to execute the mutation
- * - An object with fields that represent the current status of the mutation's execution
- *
- * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
- *
- * @example
- * const [anonymizeTextMutation, { data, loading, error }] = useAnonymizeTextMutation({
- *   variables: {
- *      text: // value for 'text'
- *   },
- * });
- */
-export function useAnonymizeTextMutation(
-    baseOptions?: ApolloReactHooks.MutationHookOptions<AnonymizeTextMutation, AnonymizeTextMutationVariables>,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useMutation<AnonymizeTextMutation, AnonymizeTextMutationVariables>(
-        AnonymizeTextDocument,
-        options,
-    );
-}
-export type AnonymizeTextMutationHookResult = ReturnType<typeof useAnonymizeTextMutation>;
-export type AnonymizeTextMutationResult = ApolloReactCommon.MutationResult<AnonymizeTextMutation>;
-export type AnonymizeTextMutationOptions = ApolloReactCommon.BaseMutationOptions<
-    AnonymizeTextMutation,
-    AnonymizeTextMutationVariables
->;
-export const FlowTemplatesDocument = gql`
-    query flowTemplates {
-        flowTemplates {
-            ...flowTemplateFragment
-        }
-    }
-    ${FlowTemplateFragmentFragmentDoc}
-`;
-
-/**
- * __useFlowTemplatesQuery__
- *
- * To run a query within a React component, call `useFlowTemplatesQuery` and pass it any options that fit your needs.
- * When your component renders, `useFlowTemplatesQuery` returns an object from Apollo Client that contains loading, error, and data properties
- * you can use to render your UI.
- *
- * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
- *
- * @example
- * const { data, loading, error } = useFlowTemplatesQuery({
- *   variables: {
- *   },
- * });
- */
-export function useFlowTemplatesQuery(
-    baseOptions?: ApolloReactHooks.QueryHookOptions<FlowTemplatesQuery, FlowTemplatesQueryVariables>,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useQuery<FlowTemplatesQuery, FlowTemplatesQueryVariables>(FlowTemplatesDocument, options);
-}
-export function useFlowTemplatesLazyQuery(
-    baseOptions?: ApolloReactHooks.LazyQueryHookOptions<FlowTemplatesQuery, FlowTemplatesQueryVariables>,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useLazyQuery<FlowTemplatesQuery, FlowTemplatesQueryVariables>(
-        FlowTemplatesDocument,
-        options,
-    );
-}
-// @ts-ignore
-export function useFlowTemplatesSuspenseQuery(
-    baseOptions?: ApolloReactHooks.SuspenseQueryHookOptions<FlowTemplatesQuery, FlowTemplatesQueryVariables>,
-): ApolloReactHooks.UseSuspenseQueryResult<FlowTemplatesQuery, FlowTemplatesQueryVariables>;
-export function useFlowTemplatesSuspenseQuery(
-    baseOptions?:
-        | ApolloReactHooks.SkipToken
-        | ApolloReactHooks.SuspenseQueryHookOptions<FlowTemplatesQuery, FlowTemplatesQueryVariables>,
-): ApolloReactHooks.UseSuspenseQueryResult<FlowTemplatesQuery | undefined, FlowTemplatesQueryVariables>;
-export function useFlowTemplatesSuspenseQuery(
-    baseOptions?:
-        | ApolloReactHooks.SkipToken
-        | ApolloReactHooks.SuspenseQueryHookOptions<FlowTemplatesQuery, FlowTemplatesQueryVariables>,
-) {
-    const options = baseOptions === ApolloReactHooks.skipToken ? baseOptions : { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useSuspenseQuery<FlowTemplatesQuery, FlowTemplatesQueryVariables>(
-        FlowTemplatesDocument,
-        options,
-    );
-}
-export type FlowTemplatesQueryHookResult = ReturnType<typeof useFlowTemplatesQuery>;
-export type FlowTemplatesLazyQueryHookResult = ReturnType<typeof useFlowTemplatesLazyQuery>;
-export type FlowTemplatesSuspenseQueryHookResult = ReturnType<typeof useFlowTemplatesSuspenseQuery>;
-export type FlowTemplatesQueryResult = ApolloReactCommon.QueryResult<FlowTemplatesQuery, FlowTemplatesQueryVariables>;
-export const FlowTemplateDocument = gql`
-    query flowTemplate($templateId: ID!) {
-        flowTemplate(templateId: $templateId) {
-            ...flowTemplateFragment
-        }
-    }
-    ${FlowTemplateFragmentFragmentDoc}
-`;
-
-/**
- * __useFlowTemplateQuery__
- *
- * To run a query within a React component, call `useFlowTemplateQuery` and pass it any options that fit your needs.
- * When your component renders, `useFlowTemplateQuery` returns an object from Apollo Client that contains loading, error, and data properties
- * you can use to render your UI.
- *
- * @param baseOptions options that will be passed into the query, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
- *
- * @example
- * const { data, loading, error } = useFlowTemplateQuery({
- *   variables: {
- *      templateId: // value for 'templateId'
- *   },
- * });
- */
-export function useFlowTemplateQuery(
-    baseOptions: ApolloReactHooks.QueryHookOptions<FlowTemplateQuery, FlowTemplateQueryVariables> &
-        ({ variables: FlowTemplateQueryVariables; skip?: boolean } | { skip: boolean }),
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useQuery<FlowTemplateQuery, FlowTemplateQueryVariables>(FlowTemplateDocument, options);
-}
-export function useFlowTemplateLazyQuery(
-    baseOptions?: ApolloReactHooks.LazyQueryHookOptions<FlowTemplateQuery, FlowTemplateQueryVariables>,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useLazyQuery<FlowTemplateQuery, FlowTemplateQueryVariables>(FlowTemplateDocument, options);
-}
-// @ts-ignore
-export function useFlowTemplateSuspenseQuery(
-    baseOptions?: ApolloReactHooks.SuspenseQueryHookOptions<FlowTemplateQuery, FlowTemplateQueryVariables>,
-): ApolloReactHooks.UseSuspenseQueryResult<FlowTemplateQuery, FlowTemplateQueryVariables>;
-export function useFlowTemplateSuspenseQuery(
-    baseOptions?:
-        | ApolloReactHooks.SkipToken
-        | ApolloReactHooks.SuspenseQueryHookOptions<FlowTemplateQuery, FlowTemplateQueryVariables>,
-): ApolloReactHooks.UseSuspenseQueryResult<FlowTemplateQuery | undefined, FlowTemplateQueryVariables>;
-export function useFlowTemplateSuspenseQuery(
-    baseOptions?:
-        | ApolloReactHooks.SkipToken
-        | ApolloReactHooks.SuspenseQueryHookOptions<FlowTemplateQuery, FlowTemplateQueryVariables>,
-) {
-    const options = baseOptions === ApolloReactHooks.skipToken ? baseOptions : { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useSuspenseQuery<FlowTemplateQuery, FlowTemplateQueryVariables>(
-        FlowTemplateDocument,
-        options,
-    );
-}
-export type FlowTemplateQueryHookResult = ReturnType<typeof useFlowTemplateQuery>;
-export type FlowTemplateLazyQueryHookResult = ReturnType<typeof useFlowTemplateLazyQuery>;
-export type FlowTemplateSuspenseQueryHookResult = ReturnType<typeof useFlowTemplateSuspenseQuery>;
-export type FlowTemplateQueryResult = ApolloReactCommon.QueryResult<FlowTemplateQuery, FlowTemplateQueryVariables>;
-export const CreateFlowTemplateDocument = gql`
-    mutation createFlowTemplate($input: CreateFlowTemplateInput!) {
-        createFlowTemplate(input: $input) {
-            ...flowTemplateFragment
-        }
-    }
-    ${FlowTemplateFragmentFragmentDoc}
-`;
-export type CreateFlowTemplateMutationFn = ApolloReactCommon.MutationFunction<
-    CreateFlowTemplateMutation,
-    CreateFlowTemplateMutationVariables
->;
-
-/**
- * __useCreateFlowTemplateMutation__
- *
- * To run a mutation, you first call `useCreateFlowTemplateMutation` within a React component and pass it any options that fit your needs.
- * When your component renders, `useCreateFlowTemplateMutation` returns a tuple that includes:
- * - A mutate function that you can call at any time to execute the mutation
- * - An object with fields that represent the current status of the mutation's execution
- *
- * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
- *
- * @example
- * const [createFlowTemplateMutation, { data, loading, error }] = useCreateFlowTemplateMutation({
- *   variables: {
- *      input: // value for 'input'
- *   },
- * });
- */
-export function useCreateFlowTemplateMutation(
-    baseOptions?: ApolloReactHooks.MutationHookOptions<CreateFlowTemplateMutation, CreateFlowTemplateMutationVariables>,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useMutation<CreateFlowTemplateMutation, CreateFlowTemplateMutationVariables>(
-        CreateFlowTemplateDocument,
-        options,
-    );
-}
-export type CreateFlowTemplateMutationHookResult = ReturnType<typeof useCreateFlowTemplateMutation>;
-export type CreateFlowTemplateMutationResult = ApolloReactCommon.MutationResult<CreateFlowTemplateMutation>;
-export type CreateFlowTemplateMutationOptions = ApolloReactCommon.BaseMutationOptions<
-    CreateFlowTemplateMutation,
-    CreateFlowTemplateMutationVariables
->;
-export const UpdateFlowTemplateDocument = gql`
-    mutation updateFlowTemplate($templateId: ID!, $input: UpdateFlowTemplateInput!) {
-        updateFlowTemplate(templateId: $templateId, input: $input) {
-            ...flowTemplateFragment
-        }
-    }
-    ${FlowTemplateFragmentFragmentDoc}
-`;
-export type UpdateFlowTemplateMutationFn = ApolloReactCommon.MutationFunction<
-    UpdateFlowTemplateMutation,
-    UpdateFlowTemplateMutationVariables
->;
-
-/**
- * __useUpdateFlowTemplateMutation__
- *
- * To run a mutation, you first call `useUpdateFlowTemplateMutation` within a React component and pass it any options that fit your needs.
- * When your component renders, `useUpdateFlowTemplateMutation` returns a tuple that includes:
- * - A mutate function that you can call at any time to execute the mutation
- * - An object with fields that represent the current status of the mutation's execution
- *
- * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
- *
- * @example
- * const [updateFlowTemplateMutation, { data, loading, error }] = useUpdateFlowTemplateMutation({
- *   variables: {
- *      templateId: // value for 'templateId'
- *      input: // value for 'input'
- *   },
- * });
- */
-export function useUpdateFlowTemplateMutation(
-    baseOptions?: ApolloReactHooks.MutationHookOptions<UpdateFlowTemplateMutation, UpdateFlowTemplateMutationVariables>,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useMutation<UpdateFlowTemplateMutation, UpdateFlowTemplateMutationVariables>(
-        UpdateFlowTemplateDocument,
-        options,
-    );
-}
-export type UpdateFlowTemplateMutationHookResult = ReturnType<typeof useUpdateFlowTemplateMutation>;
-export type UpdateFlowTemplateMutationResult = ApolloReactCommon.MutationResult<UpdateFlowTemplateMutation>;
-export type UpdateFlowTemplateMutationOptions = ApolloReactCommon.BaseMutationOptions<
-    UpdateFlowTemplateMutation,
-    UpdateFlowTemplateMutationVariables
->;
-export const DeleteFlowTemplateDocument = gql`
-    mutation deleteFlowTemplate($templateId: ID!) {
-        deleteFlowTemplate(templateId: $templateId)
-    }
-`;
-export type DeleteFlowTemplateMutationFn = ApolloReactCommon.MutationFunction<
-    DeleteFlowTemplateMutation,
-    DeleteFlowTemplateMutationVariables
->;
-
-/**
- * __useDeleteFlowTemplateMutation__
- *
- * To run a mutation, you first call `useDeleteFlowTemplateMutation` within a React component and pass it any options that fit your needs.
- * When your component renders, `useDeleteFlowTemplateMutation` returns a tuple that includes:
- * - A mutate function that you can call at any time to execute the mutation
- * - An object with fields that represent the current status of the mutation's execution
- *
- * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
- *
- * @example
- * const [deleteFlowTemplateMutation, { data, loading, error }] = useDeleteFlowTemplateMutation({
- *   variables: {
- *      templateId: // value for 'templateId'
- *   },
- * });
- */
-export function useDeleteFlowTemplateMutation(
-    baseOptions?: ApolloReactHooks.MutationHookOptions<DeleteFlowTemplateMutation, DeleteFlowTemplateMutationVariables>,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useMutation<DeleteFlowTemplateMutation, DeleteFlowTemplateMutationVariables>(
-        DeleteFlowTemplateDocument,
-        options,
-    );
-}
-export type DeleteFlowTemplateMutationHookResult = ReturnType<typeof useDeleteFlowTemplateMutation>;
-export type DeleteFlowTemplateMutationResult = ApolloReactCommon.MutationResult<DeleteFlowTemplateMutation>;
-export type DeleteFlowTemplateMutationOptions = ApolloReactCommon.BaseMutationOptions<
-    DeleteFlowTemplateMutation,
-    DeleteFlowTemplateMutationVariables
->;
-export const CreateFlowDocument = gql`
-    mutation createFlow($modelProvider: String!, $input: String!, $resourceIds: [ID!]) {
-        createFlow(modelProvider: $modelProvider, input: $input, resourceIds: $resourceIds) {
-            ...flowFragment
-        }
-    }
-    ${FlowFragmentFragmentDoc}
-`;
-export type CreateFlowMutationFn = ApolloReactCommon.MutationFunction<CreateFlowMutation, CreateFlowMutationVariables>;
-
-/**
- * __useCreateFlowMutation__
- *
- * To run a mutation, you first call `useCreateFlowMutation` within a React component and pass it any options that fit your needs.
- * When your component renders, `useCreateFlowMutation` returns a tuple that includes:
- * - A mutate function that you can call at any time to execute the mutation
- * - An object with fields that represent the current status of the mutation's execution
- *
- * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
- *
- * @example
- * const [createFlowMutation, { data, loading, error }] = useCreateFlowMutation({
- *   variables: {
- *      modelProvider: // value for 'modelProvider'
- *      input: // value for 'input'
- *      resourceIds: // value for 'resourceIds'
- *   },
- * });
- */
-export function useCreateFlowMutation(
-    baseOptions?: ApolloReactHooks.MutationHookOptions<CreateFlowMutation, CreateFlowMutationVariables>,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useMutation<CreateFlowMutation, CreateFlowMutationVariables>(CreateFlowDocument, options);
-}
-export type CreateFlowMutationHookResult = ReturnType<typeof useCreateFlowMutation>;
-export type CreateFlowMutationResult = ApolloReactCommon.MutationResult<CreateFlowMutation>;
-export type CreateFlowMutationOptions = ApolloReactCommon.BaseMutationOptions<
-    CreateFlowMutation,
-    CreateFlowMutationVariables
->;
-export const DeleteFlowDocument = gql`
-    mutation deleteFlow($flowId: ID!) {
-        deleteFlow(flowId: $flowId)
-    }
-`;
-export type DeleteFlowMutationFn = ApolloReactCommon.MutationFunction<DeleteFlowMutation, DeleteFlowMutationVariables>;
-
-/**
- * __useDeleteFlowMutation__
- *
- * To run a mutation, you first call `useDeleteFlowMutation` within a React component and pass it any options that fit your needs.
- * When your component renders, `useDeleteFlowMutation` returns a tuple that includes:
- * - A mutate function that you can call at any time to execute the mutation
- * - An object with fields that represent the current status of the mutation's execution
- *
- * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
- *
- * @example
- * const [deleteFlowMutation, { data, loading, error }] = useDeleteFlowMutation({
- *   variables: {
- *      flowId: // value for 'flowId'
- *   },
- * });
- */
-export function useDeleteFlowMutation(
-    baseOptions?: ApolloReactHooks.MutationHookOptions<DeleteFlowMutation, DeleteFlowMutationVariables>,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useMutation<DeleteFlowMutation, DeleteFlowMutationVariables>(DeleteFlowDocument, options);
-}
-export type DeleteFlowMutationHookResult = ReturnType<typeof useDeleteFlowMutation>;
-export type DeleteFlowMutationResult = ApolloReactCommon.MutationResult<DeleteFlowMutation>;
-export type DeleteFlowMutationOptions = ApolloReactCommon.BaseMutationOptions<
-    DeleteFlowMutation,
-    DeleteFlowMutationVariables
->;
-export const PutUserInputDocument = gql`
-    mutation putUserInput($flowId: ID!, $input: String!, $modelProvider: String, $resourceIds: [ID!]) {
-        putUserInput(flowId: $flowId, input: $input, modelProvider: $modelProvider, resourceIds: $resourceIds)
-    }
-`;
-export type PutUserInputMutationFn = ApolloReactCommon.MutationFunction<
-    PutUserInputMutation,
-    PutUserInputMutationVariables
->;
-
-/**
- * __usePutUserInputMutation__
- *
- * To run a mutation, you first call `usePutUserInputMutation` within a React component and pass it any options that fit your needs.
- * When your component renders, `usePutUserInputMutation` returns a tuple that includes:
- * - A mutate function that you can call at any time to execute the mutation
- * - An object with fields that represent the current status of the mutation's execution
- *
- * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
- *
- * @example
- * const [putUserInputMutation, { data, loading, error }] = usePutUserInputMutation({
- *   variables: {
- *      flowId: // value for 'flowId'
- *      input: // value for 'input'
- *      modelProvider: // value for 'modelProvider'
- *      resourceIds: // value for 'resourceIds'
- *   },
- * });
- */
-export function usePutUserInputMutation(
-    baseOptions?: ApolloReactHooks.MutationHookOptions<PutUserInputMutation, PutUserInputMutationVariables>,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useMutation<PutUserInputMutation, PutUserInputMutationVariables>(
-        PutUserInputDocument,
-        options,
-    );
-}
-export type PutUserInputMutationHookResult = ReturnType<typeof usePutUserInputMutation>;
-export type PutUserInputMutationResult = ApolloReactCommon.MutationResult<PutUserInputMutation>;
-export type PutUserInputMutationOptions = ApolloReactCommon.BaseMutationOptions<
-    PutUserInputMutation,
-    PutUserInputMutationVariables
->;
-export const FinishFlowDocument = gql`
-    mutation finishFlow($flowId: ID!) {
-        finishFlow(flowId: $flowId)
-    }
-`;
-export type FinishFlowMutationFn = ApolloReactCommon.MutationFunction<FinishFlowMutation, FinishFlowMutationVariables>;
-
-/**
- * __useFinishFlowMutation__
- *
- * To run a mutation, you first call `useFinishFlowMutation` within a React component and pass it any options that fit your needs.
- * When your component renders, `useFinishFlowMutation` returns a tuple that includes:
- * - A mutate function that you can call at any time to execute the mutation
- * - An object with fields that represent the current status of the mutation's execution
- *
- * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
- *
- * @example
- * const [finishFlowMutation, { data, loading, error }] = useFinishFlowMutation({
- *   variables: {
- *      flowId: // value for 'flowId'
- *   },
- * });
- */
-export function useFinishFlowMutation(
-    baseOptions?: ApolloReactHooks.MutationHookOptions<FinishFlowMutation, FinishFlowMutationVariables>,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useMutation<FinishFlowMutation, FinishFlowMutationVariables>(FinishFlowDocument, options);
-}
-export type FinishFlowMutationHookResult = ReturnType<typeof useFinishFlowMutation>;
-export type FinishFlowMutationResult = ApolloReactCommon.MutationResult<FinishFlowMutation>;
-export type FinishFlowMutationOptions = ApolloReactCommon.BaseMutationOptions<
-    FinishFlowMutation,
-    FinishFlowMutationVariables
->;
-export const StopFlowDocument = gql`
-    mutation stopFlow($flowId: ID!) {
-        stopFlow(flowId: $flowId)
-    }
-`;
-export type StopFlowMutationFn = ApolloReactCommon.MutationFunction<StopFlowMutation, StopFlowMutationVariables>;
-
-/**
- * __useStopFlowMutation__
- *
- * To run a mutation, you first call `useStopFlowMutation` within a React component and pass it any options that fit your needs.
- * When your component renders, `useStopFlowMutation` returns a tuple that includes:
- * - A mutate function that you can call at any time to execute the mutation
- * - An object with fields that represent the current status of the mutation's execution
- *
- * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
- *
- * @example
- * const [stopFlowMutation, { data, loading, error }] = useStopFlowMutation({
- *   variables: {
- *      flowId: // value for 'flowId'
- *   },
- * });
- */
-export function useStopFlowMutation(
-    baseOptions?: ApolloReactHooks.MutationHookOptions<StopFlowMutation, StopFlowMutationVariables>,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useMutation<StopFlowMutation, StopFlowMutationVariables>(StopFlowDocument, options);
-}
-export type StopFlowMutationHookResult = ReturnType<typeof useStopFlowMutation>;
-export type StopFlowMutationResult = ApolloReactCommon.MutationResult<StopFlowMutation>;
-export type StopFlowMutationOptions = ApolloReactCommon.BaseMutationOptions<
-    StopFlowMutation,
-    StopFlowMutationVariables
->;
-export const RenameFlowDocument = gql`
-    mutation renameFlow($flowId: ID!, $title: String!) {
-        renameFlow(flowId: $flowId, title: $title)
-    }
-`;
-export type RenameFlowMutationFn = ApolloReactCommon.MutationFunction<RenameFlowMutation, RenameFlowMutationVariables>;
-
-/**
- * __useRenameFlowMutation__
- *
- * To run a mutation, you first call `useRenameFlowMutation` within a React component and pass it any options that fit your needs.
- * When your component renders, `useRenameFlowMutation` returns a tuple that includes:
- * - A mutate function that you can call at any time to execute the mutation
- * - An object with fields that represent the current status of the mutation's execution
- *
- * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
- *
- * @example
- * const [renameFlowMutation, { data, loading, error }] = useRenameFlowMutation({
- *   variables: {
- *      flowId: // value for 'flowId'
- *      title: // value for 'title'
- *   },
- * });
- */
-export function useRenameFlowMutation(
-    baseOptions?: ApolloReactHooks.MutationHookOptions<RenameFlowMutation, RenameFlowMutationVariables>,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useMutation<RenameFlowMutation, RenameFlowMutationVariables>(RenameFlowDocument, options);
-}
-export type RenameFlowMutationHookResult = ReturnType<typeof useRenameFlowMutation>;
-export type RenameFlowMutationResult = ApolloReactCommon.MutationResult<RenameFlowMutation>;
-export type RenameFlowMutationOptions = ApolloReactCommon.BaseMutationOptions<
-    RenameFlowMutation,
-    RenameFlowMutationVariables
->;
-export const CreateAssistantDocument = gql`
-    mutation createAssistant(
-        $flowId: ID!
-        $modelProvider: String!
-        $input: String!
-        $useAgents: Boolean!
-        $resourceIds: [ID!]
-    ) {
-        createAssistant(
-            flowId: $flowId
-            modelProvider: $modelProvider
-            input: $input
-            useAgents: $useAgents
-            resourceIds: $resourceIds
-        ) {
-            flow {
-                ...flowFragment
-            }
-            assistant {
-                ...assistantFragment
-            }
-        }
-    }
-    ${FlowFragmentFragmentDoc}
-    ${AssistantFragmentFragmentDoc}
-`;
-export type CreateAssistantMutationFn = ApolloReactCommon.MutationFunction<
-    CreateAssistantMutation,
-    CreateAssistantMutationVariables
->;
-
-/**
- * __useCreateAssistantMutation__
- *
- * To run a mutation, you first call `useCreateAssistantMutation` within a React component and pass it any options that fit your needs.
- * When your component renders, `useCreateAssistantMutation` returns a tuple that includes:
- * - A mutate function that you can call at any time to execute the mutation
- * - An object with fields that represent the current status of the mutation's execution
- *
- * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
- *
- * @example
- * const [createAssistantMutation, { data, loading, error }] = useCreateAssistantMutation({
- *   variables: {
- *      flowId: // value for 'flowId'
- *      modelProvider: // value for 'modelProvider'
- *      input: // value for 'input'
- *      useAgents: // value for 'useAgents'
- *      resourceIds: // value for 'resourceIds'
- *   },
- * });
- */
-export function useCreateAssistantMutation(
-    baseOptions?: ApolloReactHooks.MutationHookOptions<CreateAssistantMutation, CreateAssistantMutationVariables>,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useMutation<CreateAssistantMutation, CreateAssistantMutationVariables>(
-        CreateAssistantDocument,
-        options,
-    );
-}
-export type CreateAssistantMutationHookResult = ReturnType<typeof useCreateAssistantMutation>;
-export type CreateAssistantMutationResult = ApolloReactCommon.MutationResult<CreateAssistantMutation>;
-export type CreateAssistantMutationOptions = ApolloReactCommon.BaseMutationOptions<
-    CreateAssistantMutation,
-    CreateAssistantMutationVariables
->;
-export const CallAssistantDocument = gql`
-    mutation callAssistant(
-        $flowId: ID!
-        $assistantId: ID!
-        $input: String!
-        $useAgents: Boolean!
-        $resourceIds: [ID!]
-    ) {
-        callAssistant(
-            flowId: $flowId
-            assistantId: $assistantId
-            input: $input
-            useAgents: $useAgents
-            resourceIds: $resourceIds
-        )
-    }
-`;
-export type CallAssistantMutationFn = ApolloReactCommon.MutationFunction<
-    CallAssistantMutation,
-    CallAssistantMutationVariables
->;
-
-/**
- * __useCallAssistantMutation__
- *
- * To run a mutation, you first call `useCallAssistantMutation` within a React component and pass it any options that fit your needs.
- * When your component renders, `useCallAssistantMutation` returns a tuple that includes:
- * - A mutate function that you can call at any time to execute the mutation
- * - An object with fields that represent the current status of the mutation's execution
- *
- * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
- *
- * @example
- * const [callAssistantMutation, { data, loading, error }] = useCallAssistantMutation({
- *   variables: {
- *      flowId: // value for 'flowId'
- *      assistantId: // value for 'assistantId'
- *      input: // value for 'input'
- *      useAgents: // value for 'useAgents'
- *      resourceIds: // value for 'resourceIds'
- *   },
- * });
- */
-export function useCallAssistantMutation(
-    baseOptions?: ApolloReactHooks.MutationHookOptions<CallAssistantMutation, CallAssistantMutationVariables>,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useMutation<CallAssistantMutation, CallAssistantMutationVariables>(
-        CallAssistantDocument,
-        options,
-    );
-}
-export type CallAssistantMutationHookResult = ReturnType<typeof useCallAssistantMutation>;
-export type CallAssistantMutationResult = ApolloReactCommon.MutationResult<CallAssistantMutation>;
-export type CallAssistantMutationOptions = ApolloReactCommon.BaseMutationOptions<
-    CallAssistantMutation,
-    CallAssistantMutationVariables
->;
-export const StopAssistantDocument = gql`
-    mutation stopAssistant($flowId: ID!, $assistantId: ID!) {
-        stopAssistant(flowId: $flowId, assistantId: $assistantId) {
-            ...assistantFragment
-        }
-    }
-    ${AssistantFragmentFragmentDoc}
-`;
-export type StopAssistantMutationFn = ApolloReactCommon.MutationFunction<
-    StopAssistantMutation,
-    StopAssistantMutationVariables
->;
-
-/**
- * __useStopAssistantMutation__
- *
- * To run a mutation, you first call `useStopAssistantMutation` within a React component and pass it any options that fit your needs.
- * When your component renders, `useStopAssistantMutation` returns a tuple that includes:
- * - A mutate function that you can call at any time to execute the mutation
- * - An object with fields that represent the current status of the mutation's execution
- *
- * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
- *
- * @example
- * const [stopAssistantMutation, { data, loading, error }] = useStopAssistantMutation({
- *   variables: {
- *      flowId: // value for 'flowId'
- *      assistantId: // value for 'assistantId'
- *   },
- * });
- */
-export function useStopAssistantMutation(
-    baseOptions?: ApolloReactHooks.MutationHookOptions<StopAssistantMutation, StopAssistantMutationVariables>,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useMutation<StopAssistantMutation, StopAssistantMutationVariables>(
-        StopAssistantDocument,
-        options,
-    );
-}
-export type StopAssistantMutationHookResult = ReturnType<typeof useStopAssistantMutation>;
-export type StopAssistantMutationResult = ApolloReactCommon.MutationResult<StopAssistantMutation>;
-export type StopAssistantMutationOptions = ApolloReactCommon.BaseMutationOptions<
-    StopAssistantMutation,
-    StopAssistantMutationVariables
->;
-export const DeleteAssistantDocument = gql`
-    mutation deleteAssistant($flowId: ID!, $assistantId: ID!) {
-        deleteAssistant(flowId: $flowId, assistantId: $assistantId)
-    }
-`;
-export type DeleteAssistantMutationFn = ApolloReactCommon.MutationFunction<
-    DeleteAssistantMutation,
-    DeleteAssistantMutationVariables
->;
-
-/**
- * __useDeleteAssistantMutation__
- *
- * To run a mutation, you first call `useDeleteAssistantMutation` within a React component and pass it any options that fit your needs.
- * When your component renders, `useDeleteAssistantMutation` returns a tuple that includes:
- * - A mutate function that you can call at any time to execute the mutation
- * - An object with fields that represent the current status of the mutation's execution
- *
- * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
- *
- * @example
- * const [deleteAssistantMutation, { data, loading, error }] = useDeleteAssistantMutation({
- *   variables: {
- *      flowId: // value for 'flowId'
- *      assistantId: // value for 'assistantId'
- *   },
- * });
- */
-export function useDeleteAssistantMutation(
-    baseOptions?: ApolloReactHooks.MutationHookOptions<DeleteAssistantMutation, DeleteAssistantMutationVariables>,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useMutation<DeleteAssistantMutation, DeleteAssistantMutationVariables>(
-        DeleteAssistantDocument,
-        options,
-    );
-}
-export type DeleteAssistantMutationHookResult = ReturnType<typeof useDeleteAssistantMutation>;
-export type DeleteAssistantMutationResult = ApolloReactCommon.MutationResult<DeleteAssistantMutation>;
-export type DeleteAssistantMutationOptions = ApolloReactCommon.BaseMutationOptions<
-    DeleteAssistantMutation,
-    DeleteAssistantMutationVariables
->;
-export const TestAgentDocument = gql`
-    mutation testAgent($type: ProviderType!, $agentType: AgentConfigType!, $agent: AgentConfigInput!) {
-        testAgent(type: $type, agentType: $agentType, agent: $agent) {
-            ...agentTestResultFragment
-        }
-    }
-    ${AgentTestResultFragmentFragmentDoc}
-`;
-export type TestAgentMutationFn = ApolloReactCommon.MutationFunction<TestAgentMutation, TestAgentMutationVariables>;
-
-/**
- * __useTestAgentMutation__
- *
- * To run a mutation, you first call `useTestAgentMutation` within a React component and pass it any options that fit your needs.
- * When your component renders, `useTestAgentMutation` returns a tuple that includes:
- * - A mutate function that you can call at any time to execute the mutation
- * - An object with fields that represent the current status of the mutation's execution
- *
- * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
- *
- * @example
- * const [testAgentMutation, { data, loading, error }] = useTestAgentMutation({
- *   variables: {
- *      type: // value for 'type'
- *      agentType: // value for 'agentType'
- *      agent: // value for 'agent'
- *   },
- * });
- */
-export function useTestAgentMutation(
-    baseOptions?: ApolloReactHooks.MutationHookOptions<TestAgentMutation, TestAgentMutationVariables>,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useMutation<TestAgentMutation, TestAgentMutationVariables>(TestAgentDocument, options);
-}
-export type TestAgentMutationHookResult = ReturnType<typeof useTestAgentMutation>;
-export type TestAgentMutationResult = ApolloReactCommon.MutationResult<TestAgentMutation>;
-export type TestAgentMutationOptions = ApolloReactCommon.BaseMutationOptions<
-    TestAgentMutation,
-    TestAgentMutationVariables
->;
-export const TestProviderDocument = gql`
-    mutation testProvider($type: ProviderType!, $agents: AgentsConfigInput!) {
-        testProvider(type: $type, agents: $agents) {
-            ...providerTestResultFragment
-        }
-    }
-    ${ProviderTestResultFragmentFragmentDoc}
-`;
-export type TestProviderMutationFn = ApolloReactCommon.MutationFunction<
-    TestProviderMutation,
-    TestProviderMutationVariables
->;
-
-/**
- * __useTestProviderMutation__
- *
- * To run a mutation, you first call `useTestProviderMutation` within a React component and pass it any options that fit your needs.
- * When your component renders, `useTestProviderMutation` returns a tuple that includes:
- * - A mutate function that you can call at any time to execute the mutation
- * - An object with fields that represent the current status of the mutation's execution
- *
- * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
- *
- * @example
- * const [testProviderMutation, { data, loading, error }] = useTestProviderMutation({
- *   variables: {
- *      type: // value for 'type'
- *      agents: // value for 'agents'
- *   },
- * });
- */
-export function useTestProviderMutation(
-    baseOptions?: ApolloReactHooks.MutationHookOptions<TestProviderMutation, TestProviderMutationVariables>,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useMutation<TestProviderMutation, TestProviderMutationVariables>(
-        TestProviderDocument,
-        options,
-    );
-}
-export type TestProviderMutationHookResult = ReturnType<typeof useTestProviderMutation>;
-export type TestProviderMutationResult = ApolloReactCommon.MutationResult<TestProviderMutation>;
-export type TestProviderMutationOptions = ApolloReactCommon.BaseMutationOptions<
-    TestProviderMutation,
-    TestProviderMutationVariables
->;
-export const CreateProviderDocument = gql`
-    mutation createProvider($name: String!, $type: ProviderType!, $agents: AgentsConfigInput!) {
-        createProvider(name: $name, type: $type, agents: $agents) {
-            ...providerConfigFragment
-        }
-    }
-    ${ProviderConfigFragmentFragmentDoc}
-`;
-export type CreateProviderMutationFn = ApolloReactCommon.MutationFunction<
-    CreateProviderMutation,
-    CreateProviderMutationVariables
->;
-
-/**
- * __useCreateProviderMutation__
- *
- * To run a mutation, you first call `useCreateProviderMutation` within a React component and pass it any options that fit your needs.
- * When your component renders, `useCreateProviderMutation` returns a tuple that includes:
- * - A mutate function that you can call at any time to execute the mutation
- * - An object with fields that represent the current status of the mutation's execution
- *
- * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
- *
- * @example
- * const [createProviderMutation, { data, loading, error }] = useCreateProviderMutation({
- *   variables: {
- *      name: // value for 'name'
- *      type: // value for 'type'
- *      agents: // value for 'agents'
- *   },
- * });
- */
-export function useCreateProviderMutation(
-    baseOptions?: ApolloReactHooks.MutationHookOptions<CreateProviderMutation, CreateProviderMutationVariables>,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useMutation<CreateProviderMutation, CreateProviderMutationVariables>(
-        CreateProviderDocument,
-        options,
-    );
-}
-export type CreateProviderMutationHookResult = ReturnType<typeof useCreateProviderMutation>;
-export type CreateProviderMutationResult = ApolloReactCommon.MutationResult<CreateProviderMutation>;
-export type CreateProviderMutationOptions = ApolloReactCommon.BaseMutationOptions<
-    CreateProviderMutation,
-    CreateProviderMutationVariables
->;
-export const UpdateProviderDocument = gql`
-    mutation updateProvider($providerId: ID!, $name: String!, $agents: AgentsConfigInput!) {
-        updateProvider(providerId: $providerId, name: $name, agents: $agents) {
-            ...providerConfigFragment
-        }
-    }
-    ${ProviderConfigFragmentFragmentDoc}
-`;
-export type UpdateProviderMutationFn = ApolloReactCommon.MutationFunction<
-    UpdateProviderMutation,
-    UpdateProviderMutationVariables
->;
-
-/**
- * __useUpdateProviderMutation__
- *
- * To run a mutation, you first call `useUpdateProviderMutation` within a React component and pass it any options that fit your needs.
- * When your component renders, `useUpdateProviderMutation` returns a tuple that includes:
- * - A mutate function that you can call at any time to execute the mutation
- * - An object with fields that represent the current status of the mutation's execution
- *
- * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
- *
- * @example
- * const [updateProviderMutation, { data, loading, error }] = useUpdateProviderMutation({
- *   variables: {
- *      providerId: // value for 'providerId'
- *      name: // value for 'name'
- *      agents: // value for 'agents'
- *   },
- * });
- */
-export function useUpdateProviderMutation(
-    baseOptions?: ApolloReactHooks.MutationHookOptions<UpdateProviderMutation, UpdateProviderMutationVariables>,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useMutation<UpdateProviderMutation, UpdateProviderMutationVariables>(
-        UpdateProviderDocument,
-        options,
-    );
-}
-export type UpdateProviderMutationHookResult = ReturnType<typeof useUpdateProviderMutation>;
-export type UpdateProviderMutationResult = ApolloReactCommon.MutationResult<UpdateProviderMutation>;
-export type UpdateProviderMutationOptions = ApolloReactCommon.BaseMutationOptions<
-    UpdateProviderMutation,
-    UpdateProviderMutationVariables
->;
-export const DeleteProviderDocument = gql`
-    mutation deleteProvider($providerId: ID!) {
-        deleteProvider(providerId: $providerId)
-    }
-`;
-export type DeleteProviderMutationFn = ApolloReactCommon.MutationFunction<
-    DeleteProviderMutation,
-    DeleteProviderMutationVariables
->;
-
-/**
- * __useDeleteProviderMutation__
- *
- * To run a mutation, you first call `useDeleteProviderMutation` within a React component and pass it any options that fit your needs.
- * When your component renders, `useDeleteProviderMutation` returns a tuple that includes:
- * - A mutate function that you can call at any time to execute the mutation
- * - An object with fields that represent the current status of the mutation's execution
- *
- * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
- *
- * @example
- * const [deleteProviderMutation, { data, loading, error }] = useDeleteProviderMutation({
- *   variables: {
- *      providerId: // value for 'providerId'
- *   },
- * });
- */
-export function useDeleteProviderMutation(
-    baseOptions?: ApolloReactHooks.MutationHookOptions<DeleteProviderMutation, DeleteProviderMutationVariables>,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useMutation<DeleteProviderMutation, DeleteProviderMutationVariables>(
-        DeleteProviderDocument,
-        options,
-    );
-}
-export type DeleteProviderMutationHookResult = ReturnType<typeof useDeleteProviderMutation>;
-export type DeleteProviderMutationResult = ApolloReactCommon.MutationResult<DeleteProviderMutation>;
-export type DeleteProviderMutationOptions = ApolloReactCommon.BaseMutationOptions<
-    DeleteProviderMutation,
-    DeleteProviderMutationVariables
->;
-export const ValidatePromptDocument = gql`
-    mutation validatePrompt($type: PromptType!, $template: String!) {
-        validatePrompt(type: $type, template: $template) {
-            ...promptValidationResultFragment
-        }
-    }
-    ${PromptValidationResultFragmentFragmentDoc}
-`;
-export type ValidatePromptMutationFn = ApolloReactCommon.MutationFunction<
-    ValidatePromptMutation,
-    ValidatePromptMutationVariables
->;
-
-/**
- * __useValidatePromptMutation__
- *
- * To run a mutation, you first call `useValidatePromptMutation` within a React component and pass it any options that fit your needs.
- * When your component renders, `useValidatePromptMutation` returns a tuple that includes:
- * - A mutate function that you can call at any time to execute the mutation
- * - An object with fields that represent the current status of the mutation's execution
- *
- * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
- *
- * @example
- * const [validatePromptMutation, { data, loading, error }] = useValidatePromptMutation({
- *   variables: {
- *      type: // value for 'type'
- *      template: // value for 'template'
- *   },
- * });
- */
-export function useValidatePromptMutation(
-    baseOptions?: ApolloReactHooks.MutationHookOptions<ValidatePromptMutation, ValidatePromptMutationVariables>,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useMutation<ValidatePromptMutation, ValidatePromptMutationVariables>(
-        ValidatePromptDocument,
-        options,
-    );
-}
-export type ValidatePromptMutationHookResult = ReturnType<typeof useValidatePromptMutation>;
-export type ValidatePromptMutationResult = ApolloReactCommon.MutationResult<ValidatePromptMutation>;
-export type ValidatePromptMutationOptions = ApolloReactCommon.BaseMutationOptions<
-    ValidatePromptMutation,
-    ValidatePromptMutationVariables
->;
-export const CreatePromptDocument = gql`
-    mutation createPrompt($type: PromptType!, $template: String!) {
-        createPrompt(type: $type, template: $template) {
-            ...userPromptFragment
-        }
-    }
-    ${UserPromptFragmentFragmentDoc}
-`;
-export type CreatePromptMutationFn = ApolloReactCommon.MutationFunction<
-    CreatePromptMutation,
-    CreatePromptMutationVariables
->;
-
-/**
- * __useCreatePromptMutation__
- *
- * To run a mutation, you first call `useCreatePromptMutation` within a React component and pass it any options that fit your needs.
- * When your component renders, `useCreatePromptMutation` returns a tuple that includes:
- * - A mutate function that you can call at any time to execute the mutation
- * - An object with fields that represent the current status of the mutation's execution
- *
- * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
- *
- * @example
- * const [createPromptMutation, { data, loading, error }] = useCreatePromptMutation({
- *   variables: {
- *      type: // value for 'type'
- *      template: // value for 'template'
- *   },
- * });
- */
-export function useCreatePromptMutation(
-    baseOptions?: ApolloReactHooks.MutationHookOptions<CreatePromptMutation, CreatePromptMutationVariables>,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useMutation<CreatePromptMutation, CreatePromptMutationVariables>(
-        CreatePromptDocument,
-        options,
-    );
-}
-export type CreatePromptMutationHookResult = ReturnType<typeof useCreatePromptMutation>;
-export type CreatePromptMutationResult = ApolloReactCommon.MutationResult<CreatePromptMutation>;
-export type CreatePromptMutationOptions = ApolloReactCommon.BaseMutationOptions<
-    CreatePromptMutation,
-    CreatePromptMutationVariables
->;
-export const UpdatePromptDocument = gql`
-    mutation updatePrompt($promptId: ID!, $template: String!) {
-        updatePrompt(promptId: $promptId, template: $template) {
-            ...userPromptFragment
-        }
-    }
-    ${UserPromptFragmentFragmentDoc}
-`;
-export type UpdatePromptMutationFn = ApolloReactCommon.MutationFunction<
-    UpdatePromptMutation,
-    UpdatePromptMutationVariables
->;
-
-/**
- * __useUpdatePromptMutation__
- *
- * To run a mutation, you first call `useUpdatePromptMutation` within a React component and pass it any options that fit your needs.
- * When your component renders, `useUpdatePromptMutation` returns a tuple that includes:
- * - A mutate function that you can call at any time to execute the mutation
- * - An object with fields that represent the current status of the mutation's execution
- *
- * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
- *
- * @example
- * const [updatePromptMutation, { data, loading, error }] = useUpdatePromptMutation({
- *   variables: {
- *      promptId: // value for 'promptId'
- *      template: // value for 'template'
- *   },
- * });
- */
-export function useUpdatePromptMutation(
-    baseOptions?: ApolloReactHooks.MutationHookOptions<UpdatePromptMutation, UpdatePromptMutationVariables>,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useMutation<UpdatePromptMutation, UpdatePromptMutationVariables>(
-        UpdatePromptDocument,
-        options,
-    );
-}
-export type UpdatePromptMutationHookResult = ReturnType<typeof useUpdatePromptMutation>;
-export type UpdatePromptMutationResult = ApolloReactCommon.MutationResult<UpdatePromptMutation>;
-export type UpdatePromptMutationOptions = ApolloReactCommon.BaseMutationOptions<
-    UpdatePromptMutation,
-    UpdatePromptMutationVariables
->;
-export const DeletePromptDocument = gql`
-    mutation deletePrompt($promptId: ID!) {
-        deletePrompt(promptId: $promptId)
-    }
-`;
-export type DeletePromptMutationFn = ApolloReactCommon.MutationFunction<
-    DeletePromptMutation,
-    DeletePromptMutationVariables
->;
-
-/**
- * __useDeletePromptMutation__
- *
- * To run a mutation, you first call `useDeletePromptMutation` within a React component and pass it any options that fit your needs.
- * When your component renders, `useDeletePromptMutation` returns a tuple that includes:
- * - A mutate function that you can call at any time to execute the mutation
- * - An object with fields that represent the current status of the mutation's execution
- *
- * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
- *
- * @example
- * const [deletePromptMutation, { data, loading, error }] = useDeletePromptMutation({
- *   variables: {
- *      promptId: // value for 'promptId'
- *   },
- * });
- */
-export function useDeletePromptMutation(
-    baseOptions?: ApolloReactHooks.MutationHookOptions<DeletePromptMutation, DeletePromptMutationVariables>,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useMutation<DeletePromptMutation, DeletePromptMutationVariables>(
-        DeletePromptDocument,
-        options,
-    );
-}
-export type DeletePromptMutationHookResult = ReturnType<typeof useDeletePromptMutation>;
-export type DeletePromptMutationResult = ApolloReactCommon.MutationResult<DeletePromptMutation>;
-export type DeletePromptMutationOptions = ApolloReactCommon.BaseMutationOptions<
-    DeletePromptMutation,
-    DeletePromptMutationVariables
->;
-export const CreateApiTokenDocument = gql`
-    mutation createAPIToken($input: CreateAPITokenInput!) {
-        createAPIToken(input: $input) {
-            ...apiTokenWithSecretFragment
-        }
-    }
-    ${ApiTokenWithSecretFragmentFragmentDoc}
-`;
-export type CreateApiTokenMutationFn = ApolloReactCommon.MutationFunction<
-    CreateApiTokenMutation,
-    CreateApiTokenMutationVariables
->;
-
-/**
- * __useCreateApiTokenMutation__
- *
- * To run a mutation, you first call `useCreateApiTokenMutation` within a React component and pass it any options that fit your needs.
- * When your component renders, `useCreateApiTokenMutation` returns a tuple that includes:
- * - A mutate function that you can call at any time to execute the mutation
- * - An object with fields that represent the current status of the mutation's execution
- *
- * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
- *
- * @example
- * const [createApiTokenMutation, { data, loading, error }] = useCreateApiTokenMutation({
- *   variables: {
- *      input: // value for 'input'
- *   },
- * });
- */
-export function useCreateApiTokenMutation(
-    baseOptions?: ApolloReactHooks.MutationHookOptions<CreateApiTokenMutation, CreateApiTokenMutationVariables>,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useMutation<CreateApiTokenMutation, CreateApiTokenMutationVariables>(
-        CreateApiTokenDocument,
-        options,
-    );
-}
-export type CreateApiTokenMutationHookResult = ReturnType<typeof useCreateApiTokenMutation>;
-export type CreateApiTokenMutationResult = ApolloReactCommon.MutationResult<CreateApiTokenMutation>;
-export type CreateApiTokenMutationOptions = ApolloReactCommon.BaseMutationOptions<
-    CreateApiTokenMutation,
-    CreateApiTokenMutationVariables
->;
-export const UpdateApiTokenDocument = gql`
-    mutation updateAPIToken($tokenId: String!, $input: UpdateAPITokenInput!) {
-        updateAPIToken(tokenId: $tokenId, input: $input) {
-            ...apiTokenFragment
-        }
-    }
-    ${ApiTokenFragmentFragmentDoc}
-`;
-export type UpdateApiTokenMutationFn = ApolloReactCommon.MutationFunction<
-    UpdateApiTokenMutation,
-    UpdateApiTokenMutationVariables
->;
-
-/**
- * __useUpdateApiTokenMutation__
- *
- * To run a mutation, you first call `useUpdateApiTokenMutation` within a React component and pass it any options that fit your needs.
- * When your component renders, `useUpdateApiTokenMutation` returns a tuple that includes:
- * - A mutate function that you can call at any time to execute the mutation
- * - An object with fields that represent the current status of the mutation's execution
- *
- * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
- *
- * @example
- * const [updateApiTokenMutation, { data, loading, error }] = useUpdateApiTokenMutation({
- *   variables: {
- *      tokenId: // value for 'tokenId'
- *      input: // value for 'input'
- *   },
- * });
- */
-export function useUpdateApiTokenMutation(
-    baseOptions?: ApolloReactHooks.MutationHookOptions<UpdateApiTokenMutation, UpdateApiTokenMutationVariables>,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useMutation<UpdateApiTokenMutation, UpdateApiTokenMutationVariables>(
-        UpdateApiTokenDocument,
-        options,
-    );
-}
-export type UpdateApiTokenMutationHookResult = ReturnType<typeof useUpdateApiTokenMutation>;
-export type UpdateApiTokenMutationResult = ApolloReactCommon.MutationResult<UpdateApiTokenMutation>;
-export type UpdateApiTokenMutationOptions = ApolloReactCommon.BaseMutationOptions<
-    UpdateApiTokenMutation,
-    UpdateApiTokenMutationVariables
->;
-export const DeleteApiTokenDocument = gql`
-    mutation deleteAPIToken($tokenId: String!) {
-        deleteAPIToken(tokenId: $tokenId)
-    }
-`;
-export type DeleteApiTokenMutationFn = ApolloReactCommon.MutationFunction<
-    DeleteApiTokenMutation,
-    DeleteApiTokenMutationVariables
->;
-
-/**
- * __useDeleteApiTokenMutation__
- *
- * To run a mutation, you first call `useDeleteApiTokenMutation` within a React component and pass it any options that fit your needs.
- * When your component renders, `useDeleteApiTokenMutation` returns a tuple that includes:
- * - A mutate function that you can call at any time to execute the mutation
- * - An object with fields that represent the current status of the mutation's execution
- *
- * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
- *
- * @example
- * const [deleteApiTokenMutation, { data, loading, error }] = useDeleteApiTokenMutation({
- *   variables: {
- *      tokenId: // value for 'tokenId'
- *   },
- * });
- */
-export function useDeleteApiTokenMutation(
-    baseOptions?: ApolloReactHooks.MutationHookOptions<DeleteApiTokenMutation, DeleteApiTokenMutationVariables>,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useMutation<DeleteApiTokenMutation, DeleteApiTokenMutationVariables>(
-        DeleteApiTokenDocument,
-        options,
-    );
-}
-export type DeleteApiTokenMutationHookResult = ReturnType<typeof useDeleteApiTokenMutation>;
-export type DeleteApiTokenMutationResult = ApolloReactCommon.MutationResult<DeleteApiTokenMutation>;
-export type DeleteApiTokenMutationOptions = ApolloReactCommon.BaseMutationOptions<
-    DeleteApiTokenMutation,
-    DeleteApiTokenMutationVariables
->;
-export const CreateKnowledgeDocumentDocument = gql`
-    mutation createKnowledgeDocument($input: CreateKnowledgeDocumentInput!) {
-        createKnowledgeDocument(input: $input) {
-            ...knowledgeDocumentFragment
-        }
-    }
-    ${KnowledgeDocumentFragmentFragmentDoc}
-`;
-export type CreateKnowledgeDocumentMutationFn = ApolloReactCommon.MutationFunction<
-    CreateKnowledgeDocumentMutation,
-    CreateKnowledgeDocumentMutationVariables
->;
-
-/**
- * __useCreateKnowledgeDocumentMutation__
- *
- * To run a mutation, you first call `useCreateKnowledgeDocumentMutation` within a React component and pass it any options that fit your needs.
- * When your component renders, `useCreateKnowledgeDocumentMutation` returns a tuple that includes:
- * - A mutate function that you can call at any time to execute the mutation
- * - An object with fields that represent the current status of the mutation's execution
- *
- * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
- *
- * @example
- * const [createKnowledgeDocumentMutation, { data, loading, error }] = useCreateKnowledgeDocumentMutation({
- *   variables: {
- *      input: // value for 'input'
- *   },
- * });
- */
-export function useCreateKnowledgeDocumentMutation(
-    baseOptions?: ApolloReactHooks.MutationHookOptions<
-        CreateKnowledgeDocumentMutation,
-        CreateKnowledgeDocumentMutationVariables
-    >,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useMutation<CreateKnowledgeDocumentMutation, CreateKnowledgeDocumentMutationVariables>(
-        CreateKnowledgeDocumentDocument,
-        options,
-    );
-}
-export type CreateKnowledgeDocumentMutationHookResult = ReturnType<typeof useCreateKnowledgeDocumentMutation>;
-export type CreateKnowledgeDocumentMutationResult = ApolloReactCommon.MutationResult<CreateKnowledgeDocumentMutation>;
-export type CreateKnowledgeDocumentMutationOptions = ApolloReactCommon.BaseMutationOptions<
-    CreateKnowledgeDocumentMutation,
-    CreateKnowledgeDocumentMutationVariables
->;
-export const UpdateKnowledgeDocumentDocument = gql`
-    mutation updateKnowledgeDocument($id: String!, $input: UpdateKnowledgeDocumentInput!) {
-        updateKnowledgeDocument(id: $id, input: $input) {
-            ...knowledgeDocumentFragment
-        }
-    }
-    ${KnowledgeDocumentFragmentFragmentDoc}
-`;
-export type UpdateKnowledgeDocumentMutationFn = ApolloReactCommon.MutationFunction<
-    UpdateKnowledgeDocumentMutation,
-    UpdateKnowledgeDocumentMutationVariables
->;
-
-/**
- * __useUpdateKnowledgeDocumentMutation__
- *
- * To run a mutation, you first call `useUpdateKnowledgeDocumentMutation` within a React component and pass it any options that fit your needs.
- * When your component renders, `useUpdateKnowledgeDocumentMutation` returns a tuple that includes:
- * - A mutate function that you can call at any time to execute the mutation
- * - An object with fields that represent the current status of the mutation's execution
- *
- * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
- *
- * @example
- * const [updateKnowledgeDocumentMutation, { data, loading, error }] = useUpdateKnowledgeDocumentMutation({
- *   variables: {
- *      id: // value for 'id'
- *      input: // value for 'input'
- *   },
- * });
- */
-export function useUpdateKnowledgeDocumentMutation(
-    baseOptions?: ApolloReactHooks.MutationHookOptions<
-        UpdateKnowledgeDocumentMutation,
-        UpdateKnowledgeDocumentMutationVariables
-    >,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useMutation<UpdateKnowledgeDocumentMutation, UpdateKnowledgeDocumentMutationVariables>(
-        UpdateKnowledgeDocumentDocument,
-        options,
-    );
-}
-export type UpdateKnowledgeDocumentMutationHookResult = ReturnType<typeof useUpdateKnowledgeDocumentMutation>;
-export type UpdateKnowledgeDocumentMutationResult = ApolloReactCommon.MutationResult<UpdateKnowledgeDocumentMutation>;
-export type UpdateKnowledgeDocumentMutationOptions = ApolloReactCommon.BaseMutationOptions<
-    UpdateKnowledgeDocumentMutation,
-    UpdateKnowledgeDocumentMutationVariables
->;
-export const DeleteKnowledgeDocumentDocument = gql`
-    mutation deleteKnowledgeDocument($id: String!) {
-        deleteKnowledgeDocument(id: $id)
-    }
-`;
-export type DeleteKnowledgeDocumentMutationFn = ApolloReactCommon.MutationFunction<
-    DeleteKnowledgeDocumentMutation,
-    DeleteKnowledgeDocumentMutationVariables
->;
-
-/**
- * __useDeleteKnowledgeDocumentMutation__
- *
- * To run a mutation, you first call `useDeleteKnowledgeDocumentMutation` within a React component and pass it any options that fit your needs.
- * When your component renders, `useDeleteKnowledgeDocumentMutation` returns a tuple that includes:
- * - A mutate function that you can call at any time to execute the mutation
- * - An object with fields that represent the current status of the mutation's execution
- *
- * @param baseOptions options that will be passed into the mutation, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options-2;
- *
- * @example
- * const [deleteKnowledgeDocumentMutation, { data, loading, error }] = useDeleteKnowledgeDocumentMutation({
- *   variables: {
- *      id: // value for 'id'
- *   },
- * });
- */
-export function useDeleteKnowledgeDocumentMutation(
-    baseOptions?: ApolloReactHooks.MutationHookOptions<
-        DeleteKnowledgeDocumentMutation,
-        DeleteKnowledgeDocumentMutationVariables
-    >,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useMutation<DeleteKnowledgeDocumentMutation, DeleteKnowledgeDocumentMutationVariables>(
-        DeleteKnowledgeDocumentDocument,
-        options,
-    );
-}
-export type DeleteKnowledgeDocumentMutationHookResult = ReturnType<typeof useDeleteKnowledgeDocumentMutation>;
-export type DeleteKnowledgeDocumentMutationResult = ApolloReactCommon.MutationResult<DeleteKnowledgeDocumentMutation>;
-export type DeleteKnowledgeDocumentMutationOptions = ApolloReactCommon.BaseMutationOptions<
-    DeleteKnowledgeDocumentMutation,
-    DeleteKnowledgeDocumentMutationVariables
->;
-export const TerminalLogAddedDocument = gql`
-    subscription terminalLogAdded($flowId: ID!) {
-        terminalLogAdded(flowId: $flowId) {
-            ...terminalLogFragment
-        }
-    }
-    ${TerminalLogFragmentFragmentDoc}
-`;
-
-/**
- * __useTerminalLogAddedSubscription__
- *
- * To run a query within a React component, call `useTerminalLogAddedSubscription` and pass it any options that fit your needs.
- * When your component renders, `useTerminalLogAddedSubscription` returns an object from Apollo Client that contains loading, error, and data properties
- * you can use to render your UI.
- *
- * @param baseOptions options that will be passed into the subscription, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
- *
- * @example
- * const { data, loading, error } = useTerminalLogAddedSubscription({
- *   variables: {
- *      flowId: // value for 'flowId'
- *   },
- * });
- */
-export function useTerminalLogAddedSubscription(
-    baseOptions: ApolloReactHooks.SubscriptionHookOptions<
-        TerminalLogAddedSubscription,
-        TerminalLogAddedSubscriptionVariables
-    > &
-        ({ variables: TerminalLogAddedSubscriptionVariables; skip?: boolean } | { skip: boolean }),
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useSubscription<TerminalLogAddedSubscription, TerminalLogAddedSubscriptionVariables>(
-        TerminalLogAddedDocument,
-        options,
-    );
-}
-export type TerminalLogAddedSubscriptionHookResult = ReturnType<typeof useTerminalLogAddedSubscription>;
-export type TerminalLogAddedSubscriptionResult = ApolloReactCommon.SubscriptionResult<TerminalLogAddedSubscription>;
-export const MessageLogAddedDocument = gql`
-    subscription messageLogAdded($flowId: ID!) {
-        messageLogAdded(flowId: $flowId) {
-            ...messageLogFragment
-        }
-    }
-    ${MessageLogFragmentFragmentDoc}
-`;
-
-/**
- * __useMessageLogAddedSubscription__
- *
- * To run a query within a React component, call `useMessageLogAddedSubscription` and pass it any options that fit your needs.
- * When your component renders, `useMessageLogAddedSubscription` returns an object from Apollo Client that contains loading, error, and data properties
- * you can use to render your UI.
- *
- * @param baseOptions options that will be passed into the subscription, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
- *
- * @example
- * const { data, loading, error } = useMessageLogAddedSubscription({
- *   variables: {
- *      flowId: // value for 'flowId'
- *   },
- * });
- */
-export function useMessageLogAddedSubscription(
-    baseOptions: ApolloReactHooks.SubscriptionHookOptions<
-        MessageLogAddedSubscription,
-        MessageLogAddedSubscriptionVariables
-    > &
-        ({ variables: MessageLogAddedSubscriptionVariables; skip?: boolean } | { skip: boolean }),
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useSubscription<MessageLogAddedSubscription, MessageLogAddedSubscriptionVariables>(
-        MessageLogAddedDocument,
-        options,
-    );
-}
-export type MessageLogAddedSubscriptionHookResult = ReturnType<typeof useMessageLogAddedSubscription>;
-export type MessageLogAddedSubscriptionResult = ApolloReactCommon.SubscriptionResult<MessageLogAddedSubscription>;
-export const MessageLogUpdatedDocument = gql`
-    subscription messageLogUpdated($flowId: ID!) {
-        messageLogUpdated(flowId: $flowId) {
-            ...messageLogFragment
-        }
-    }
-    ${MessageLogFragmentFragmentDoc}
-`;
-
-/**
- * __useMessageLogUpdatedSubscription__
- *
- * To run a query within a React component, call `useMessageLogUpdatedSubscription` and pass it any options that fit your needs.
- * When your component renders, `useMessageLogUpdatedSubscription` returns an object from Apollo Client that contains loading, error, and data properties
- * you can use to render your UI.
- *
- * @param baseOptions options that will be passed into the subscription, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
- *
- * @example
- * const { data, loading, error } = useMessageLogUpdatedSubscription({
- *   variables: {
- *      flowId: // value for 'flowId'
- *   },
- * });
- */
-export function useMessageLogUpdatedSubscription(
-    baseOptions: ApolloReactHooks.SubscriptionHookOptions<
-        MessageLogUpdatedSubscription,
-        MessageLogUpdatedSubscriptionVariables
-    > &
-        ({ variables: MessageLogUpdatedSubscriptionVariables; skip?: boolean } | { skip: boolean }),
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useSubscription<MessageLogUpdatedSubscription, MessageLogUpdatedSubscriptionVariables>(
-        MessageLogUpdatedDocument,
-        options,
-    );
-}
-export type MessageLogUpdatedSubscriptionHookResult = ReturnType<typeof useMessageLogUpdatedSubscription>;
-export type MessageLogUpdatedSubscriptionResult = ApolloReactCommon.SubscriptionResult<MessageLogUpdatedSubscription>;
-export const ScreenshotAddedDocument = gql`
-    subscription screenshotAdded($flowId: ID!) {
-        screenshotAdded(flowId: $flowId) {
-            ...screenshotFragment
-        }
-    }
-    ${ScreenshotFragmentFragmentDoc}
-`;
-
-/**
- * __useScreenshotAddedSubscription__
- *
- * To run a query within a React component, call `useScreenshotAddedSubscription` and pass it any options that fit your needs.
- * When your component renders, `useScreenshotAddedSubscription` returns an object from Apollo Client that contains loading, error, and data properties
- * you can use to render your UI.
- *
- * @param baseOptions options that will be passed into the subscription, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
- *
- * @example
- * const { data, loading, error } = useScreenshotAddedSubscription({
- *   variables: {
- *      flowId: // value for 'flowId'
- *   },
- * });
- */
-export function useScreenshotAddedSubscription(
-    baseOptions: ApolloReactHooks.SubscriptionHookOptions<
-        ScreenshotAddedSubscription,
-        ScreenshotAddedSubscriptionVariables
-    > &
-        ({ variables: ScreenshotAddedSubscriptionVariables; skip?: boolean } | { skip: boolean }),
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useSubscription<ScreenshotAddedSubscription, ScreenshotAddedSubscriptionVariables>(
-        ScreenshotAddedDocument,
-        options,
-    );
-}
-export type ScreenshotAddedSubscriptionHookResult = ReturnType<typeof useScreenshotAddedSubscription>;
-export type ScreenshotAddedSubscriptionResult = ApolloReactCommon.SubscriptionResult<ScreenshotAddedSubscription>;
-export const AgentLogAddedDocument = gql`
-    subscription agentLogAdded($flowId: ID!) {
-        agentLogAdded(flowId: $flowId) {
-            ...agentLogFragment
-        }
-    }
-    ${AgentLogFragmentFragmentDoc}
-`;
-
-/**
- * __useAgentLogAddedSubscription__
- *
- * To run a query within a React component, call `useAgentLogAddedSubscription` and pass it any options that fit your needs.
- * When your component renders, `useAgentLogAddedSubscription` returns an object from Apollo Client that contains loading, error, and data properties
- * you can use to render your UI.
- *
- * @param baseOptions options that will be passed into the subscription, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
- *
- * @example
- * const { data, loading, error } = useAgentLogAddedSubscription({
- *   variables: {
- *      flowId: // value for 'flowId'
- *   },
- * });
- */
-export function useAgentLogAddedSubscription(
-    baseOptions: ApolloReactHooks.SubscriptionHookOptions<
-        AgentLogAddedSubscription,
-        AgentLogAddedSubscriptionVariables
-    > &
-        ({ variables: AgentLogAddedSubscriptionVariables; skip?: boolean } | { skip: boolean }),
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useSubscription<AgentLogAddedSubscription, AgentLogAddedSubscriptionVariables>(
-        AgentLogAddedDocument,
-        options,
-    );
-}
-export type AgentLogAddedSubscriptionHookResult = ReturnType<typeof useAgentLogAddedSubscription>;
-export type AgentLogAddedSubscriptionResult = ApolloReactCommon.SubscriptionResult<AgentLogAddedSubscription>;
-export const SearchLogAddedDocument = gql`
-    subscription searchLogAdded($flowId: ID!) {
-        searchLogAdded(flowId: $flowId) {
-            ...searchLogFragment
-        }
-    }
-    ${SearchLogFragmentFragmentDoc}
-`;
-
-/**
- * __useSearchLogAddedSubscription__
- *
- * To run a query within a React component, call `useSearchLogAddedSubscription` and pass it any options that fit your needs.
- * When your component renders, `useSearchLogAddedSubscription` returns an object from Apollo Client that contains loading, error, and data properties
- * you can use to render your UI.
- *
- * @param baseOptions options that will be passed into the subscription, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
- *
- * @example
- * const { data, loading, error } = useSearchLogAddedSubscription({
- *   variables: {
- *      flowId: // value for 'flowId'
- *   },
- * });
- */
-export function useSearchLogAddedSubscription(
-    baseOptions: ApolloReactHooks.SubscriptionHookOptions<
-        SearchLogAddedSubscription,
-        SearchLogAddedSubscriptionVariables
-    > &
-        ({ variables: SearchLogAddedSubscriptionVariables; skip?: boolean } | { skip: boolean }),
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useSubscription<SearchLogAddedSubscription, SearchLogAddedSubscriptionVariables>(
-        SearchLogAddedDocument,
-        options,
-    );
-}
-export type SearchLogAddedSubscriptionHookResult = ReturnType<typeof useSearchLogAddedSubscription>;
-export type SearchLogAddedSubscriptionResult = ApolloReactCommon.SubscriptionResult<SearchLogAddedSubscription>;
-export const VectorStoreLogAddedDocument = gql`
-    subscription vectorStoreLogAdded($flowId: ID!) {
-        vectorStoreLogAdded(flowId: $flowId) {
-            ...vectorStoreLogFragment
-        }
-    }
-    ${VectorStoreLogFragmentFragmentDoc}
-`;
-
-/**
- * __useVectorStoreLogAddedSubscription__
- *
- * To run a query within a React component, call `useVectorStoreLogAddedSubscription` and pass it any options that fit your needs.
- * When your component renders, `useVectorStoreLogAddedSubscription` returns an object from Apollo Client that contains loading, error, and data properties
- * you can use to render your UI.
- *
- * @param baseOptions options that will be passed into the subscription, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
- *
- * @example
- * const { data, loading, error } = useVectorStoreLogAddedSubscription({
- *   variables: {
- *      flowId: // value for 'flowId'
- *   },
- * });
- */
-export function useVectorStoreLogAddedSubscription(
-    baseOptions: ApolloReactHooks.SubscriptionHookOptions<
-        VectorStoreLogAddedSubscription,
-        VectorStoreLogAddedSubscriptionVariables
-    > &
-        ({ variables: VectorStoreLogAddedSubscriptionVariables; skip?: boolean } | { skip: boolean }),
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useSubscription<VectorStoreLogAddedSubscription, VectorStoreLogAddedSubscriptionVariables>(
-        VectorStoreLogAddedDocument,
-        options,
-    );
-}
-export type VectorStoreLogAddedSubscriptionHookResult = ReturnType<typeof useVectorStoreLogAddedSubscription>;
-export type VectorStoreLogAddedSubscriptionResult =
-    ApolloReactCommon.SubscriptionResult<VectorStoreLogAddedSubscription>;
-export const AssistantCreatedDocument = gql`
-    subscription assistantCreated($flowId: ID!) {
-        assistantCreated(flowId: $flowId) {
-            ...assistantFragment
-        }
-    }
-    ${AssistantFragmentFragmentDoc}
-`;
-
-/**
- * __useAssistantCreatedSubscription__
- *
- * To run a query within a React component, call `useAssistantCreatedSubscription` and pass it any options that fit your needs.
- * When your component renders, `useAssistantCreatedSubscription` returns an object from Apollo Client that contains loading, error, and data properties
- * you can use to render your UI.
- *
- * @param baseOptions options that will be passed into the subscription, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
- *
- * @example
- * const { data, loading, error } = useAssistantCreatedSubscription({
- *   variables: {
- *      flowId: // value for 'flowId'
- *   },
- * });
- */
-export function useAssistantCreatedSubscription(
-    baseOptions: ApolloReactHooks.SubscriptionHookOptions<
-        AssistantCreatedSubscription,
-        AssistantCreatedSubscriptionVariables
-    > &
-        ({ variables: AssistantCreatedSubscriptionVariables; skip?: boolean } | { skip: boolean }),
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useSubscription<AssistantCreatedSubscription, AssistantCreatedSubscriptionVariables>(
-        AssistantCreatedDocument,
-        options,
-    );
-}
-export type AssistantCreatedSubscriptionHookResult = ReturnType<typeof useAssistantCreatedSubscription>;
-export type AssistantCreatedSubscriptionResult = ApolloReactCommon.SubscriptionResult<AssistantCreatedSubscription>;
-export const AssistantUpdatedDocument = gql`
-    subscription assistantUpdated($flowId: ID!) {
-        assistantUpdated(flowId: $flowId) {
-            ...assistantFragment
-        }
-    }
-    ${AssistantFragmentFragmentDoc}
-`;
-
-/**
- * __useAssistantUpdatedSubscription__
- *
- * To run a query within a React component, call `useAssistantUpdatedSubscription` and pass it any options that fit your needs.
- * When your component renders, `useAssistantUpdatedSubscription` returns an object from Apollo Client that contains loading, error, and data properties
- * you can use to render your UI.
- *
- * @param baseOptions options that will be passed into the subscription, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
- *
- * @example
- * const { data, loading, error } = useAssistantUpdatedSubscription({
- *   variables: {
- *      flowId: // value for 'flowId'
- *   },
- * });
- */
-export function useAssistantUpdatedSubscription(
-    baseOptions: ApolloReactHooks.SubscriptionHookOptions<
-        AssistantUpdatedSubscription,
-        AssistantUpdatedSubscriptionVariables
-    > &
-        ({ variables: AssistantUpdatedSubscriptionVariables; skip?: boolean } | { skip: boolean }),
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useSubscription<AssistantUpdatedSubscription, AssistantUpdatedSubscriptionVariables>(
-        AssistantUpdatedDocument,
-        options,
-    );
-}
-export type AssistantUpdatedSubscriptionHookResult = ReturnType<typeof useAssistantUpdatedSubscription>;
-export type AssistantUpdatedSubscriptionResult = ApolloReactCommon.SubscriptionResult<AssistantUpdatedSubscription>;
-export const AssistantDeletedDocument = gql`
-    subscription assistantDeleted($flowId: ID!) {
-        assistantDeleted(flowId: $flowId) {
-            ...assistantFragment
-        }
-    }
-    ${AssistantFragmentFragmentDoc}
-`;
-
-/**
- * __useAssistantDeletedSubscription__
- *
- * To run a query within a React component, call `useAssistantDeletedSubscription` and pass it any options that fit your needs.
- * When your component renders, `useAssistantDeletedSubscription` returns an object from Apollo Client that contains loading, error, and data properties
- * you can use to render your UI.
- *
- * @param baseOptions options that will be passed into the subscription, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
- *
- * @example
- * const { data, loading, error } = useAssistantDeletedSubscription({
- *   variables: {
- *      flowId: // value for 'flowId'
- *   },
- * });
- */
-export function useAssistantDeletedSubscription(
-    baseOptions: ApolloReactHooks.SubscriptionHookOptions<
-        AssistantDeletedSubscription,
-        AssistantDeletedSubscriptionVariables
-    > &
-        ({ variables: AssistantDeletedSubscriptionVariables; skip?: boolean } | { skip: boolean }),
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useSubscription<AssistantDeletedSubscription, AssistantDeletedSubscriptionVariables>(
-        AssistantDeletedDocument,
-        options,
-    );
-}
-export type AssistantDeletedSubscriptionHookResult = ReturnType<typeof useAssistantDeletedSubscription>;
-export type AssistantDeletedSubscriptionResult = ApolloReactCommon.SubscriptionResult<AssistantDeletedSubscription>;
-export const FlowFileAddedDocument = gql`
-    subscription flowFileAdded($flowId: ID!) {
-        flowFileAdded(flowId: $flowId) {
-            ...flowFileFragment
-        }
-    }
-    ${FlowFileFragmentFragmentDoc}
-`;
-
-/**
- * __useFlowFileAddedSubscription__
- *
- * To run a query within a React component, call `useFlowFileAddedSubscription` and pass it any options that fit your needs.
- * When your component renders, `useFlowFileAddedSubscription` returns an object from Apollo Client that contains loading, error, and data properties
- * you can use to render your UI.
- *
- * @param baseOptions options that will be passed into the subscription, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
- *
- * @example
- * const { data, loading, error } = useFlowFileAddedSubscription({
- *   variables: {
- *      flowId: // value for 'flowId'
- *   },
- * });
- */
-export function useFlowFileAddedSubscription(
-    baseOptions: ApolloReactHooks.SubscriptionHookOptions<
-        FlowFileAddedSubscription,
-        FlowFileAddedSubscriptionVariables
-    > &
-        ({ variables: FlowFileAddedSubscriptionVariables; skip?: boolean } | { skip: boolean }),
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useSubscription<FlowFileAddedSubscription, FlowFileAddedSubscriptionVariables>(
-        FlowFileAddedDocument,
-        options,
-    );
-}
-export type FlowFileAddedSubscriptionHookResult = ReturnType<typeof useFlowFileAddedSubscription>;
-export type FlowFileAddedSubscriptionResult = ApolloReactCommon.SubscriptionResult<FlowFileAddedSubscription>;
-export const FlowFileUpdatedDocument = gql`
-    subscription flowFileUpdated($flowId: ID!) {
-        flowFileUpdated(flowId: $flowId) {
-            ...flowFileFragment
-        }
-    }
-    ${FlowFileFragmentFragmentDoc}
-`;
-
-/**
- * __useFlowFileUpdatedSubscription__
- *
- * To run a query within a React component, call `useFlowFileUpdatedSubscription` and pass it any options that fit your needs.
- * When your component renders, `useFlowFileUpdatedSubscription` returns an object from Apollo Client that contains loading, error, and data properties
- * you can use to render your UI.
- *
- * @param baseOptions options that will be passed into the subscription, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
- *
- * @example
- * const { data, loading, error } = useFlowFileUpdatedSubscription({
- *   variables: {
- *      flowId: // value for 'flowId'
- *   },
- * });
- */
-export function useFlowFileUpdatedSubscription(
-    baseOptions: ApolloReactHooks.SubscriptionHookOptions<
-        FlowFileUpdatedSubscription,
-        FlowFileUpdatedSubscriptionVariables
-    > &
-        ({ variables: FlowFileUpdatedSubscriptionVariables; skip?: boolean } | { skip: boolean }),
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useSubscription<FlowFileUpdatedSubscription, FlowFileUpdatedSubscriptionVariables>(
-        FlowFileUpdatedDocument,
-        options,
-    );
-}
-export type FlowFileUpdatedSubscriptionHookResult = ReturnType<typeof useFlowFileUpdatedSubscription>;
-export type FlowFileUpdatedSubscriptionResult = ApolloReactCommon.SubscriptionResult<FlowFileUpdatedSubscription>;
-export const FlowFileDeletedDocument = gql`
-    subscription flowFileDeleted($flowId: ID!) {
-        flowFileDeleted(flowId: $flowId) {
-            ...flowFileFragment
-        }
-    }
-    ${FlowFileFragmentFragmentDoc}
-`;
-
-/**
- * __useFlowFileDeletedSubscription__
- *
- * To run a query within a React component, call `useFlowFileDeletedSubscription` and pass it any options that fit your needs.
- * When your component renders, `useFlowFileDeletedSubscription` returns an object from Apollo Client that contains loading, error, and data properties
- * you can use to render your UI.
- *
- * @param baseOptions options that will be passed into the subscription, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
- *
- * @example
- * const { data, loading, error } = useFlowFileDeletedSubscription({
- *   variables: {
- *      flowId: // value for 'flowId'
- *   },
- * });
- */
-export function useFlowFileDeletedSubscription(
-    baseOptions: ApolloReactHooks.SubscriptionHookOptions<
-        FlowFileDeletedSubscription,
-        FlowFileDeletedSubscriptionVariables
-    > &
-        ({ variables: FlowFileDeletedSubscriptionVariables; skip?: boolean } | { skip: boolean }),
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useSubscription<FlowFileDeletedSubscription, FlowFileDeletedSubscriptionVariables>(
-        FlowFileDeletedDocument,
-        options,
-    );
-}
-export type FlowFileDeletedSubscriptionHookResult = ReturnType<typeof useFlowFileDeletedSubscription>;
-export type FlowFileDeletedSubscriptionResult = ApolloReactCommon.SubscriptionResult<FlowFileDeletedSubscription>;
-export const AssistantLogAddedDocument = gql`
-    subscription assistantLogAdded($flowId: ID!) {
-        assistantLogAdded(flowId: $flowId) {
-            ...assistantLogFragment
-        }
-    }
-    ${AssistantLogFragmentFragmentDoc}
-`;
-
-/**
- * __useAssistantLogAddedSubscription__
- *
- * To run a query within a React component, call `useAssistantLogAddedSubscription` and pass it any options that fit your needs.
- * When your component renders, `useAssistantLogAddedSubscription` returns an object from Apollo Client that contains loading, error, and data properties
- * you can use to render your UI.
- *
- * @param baseOptions options that will be passed into the subscription, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
- *
- * @example
- * const { data, loading, error } = useAssistantLogAddedSubscription({
- *   variables: {
- *      flowId: // value for 'flowId'
- *   },
- * });
- */
-export function useAssistantLogAddedSubscription(
-    baseOptions: ApolloReactHooks.SubscriptionHookOptions<
-        AssistantLogAddedSubscription,
-        AssistantLogAddedSubscriptionVariables
-    > &
-        ({ variables: AssistantLogAddedSubscriptionVariables; skip?: boolean } | { skip: boolean }),
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useSubscription<AssistantLogAddedSubscription, AssistantLogAddedSubscriptionVariables>(
-        AssistantLogAddedDocument,
-        options,
-    );
-}
-export type AssistantLogAddedSubscriptionHookResult = ReturnType<typeof useAssistantLogAddedSubscription>;
-export type AssistantLogAddedSubscriptionResult = ApolloReactCommon.SubscriptionResult<AssistantLogAddedSubscription>;
-export const AssistantLogUpdatedDocument = gql`
-    subscription assistantLogUpdated($flowId: ID!) {
-        assistantLogUpdated(flowId: $flowId) {
-            ...assistantLogFragment
-        }
-    }
-    ${AssistantLogFragmentFragmentDoc}
-`;
-
-/**
- * __useAssistantLogUpdatedSubscription__
- *
- * To run a query within a React component, call `useAssistantLogUpdatedSubscription` and pass it any options that fit your needs.
- * When your component renders, `useAssistantLogUpdatedSubscription` returns an object from Apollo Client that contains loading, error, and data properties
- * you can use to render your UI.
- *
- * @param baseOptions options that will be passed into the subscription, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
- *
- * @example
- * const { data, loading, error } = useAssistantLogUpdatedSubscription({
- *   variables: {
- *      flowId: // value for 'flowId'
- *   },
- * });
- */
-export function useAssistantLogUpdatedSubscription(
-    baseOptions: ApolloReactHooks.SubscriptionHookOptions<
-        AssistantLogUpdatedSubscription,
-        AssistantLogUpdatedSubscriptionVariables
-    > &
-        ({ variables: AssistantLogUpdatedSubscriptionVariables; skip?: boolean } | { skip: boolean }),
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useSubscription<AssistantLogUpdatedSubscription, AssistantLogUpdatedSubscriptionVariables>(
-        AssistantLogUpdatedDocument,
-        options,
-    );
-}
-export type AssistantLogUpdatedSubscriptionHookResult = ReturnType<typeof useAssistantLogUpdatedSubscription>;
-export type AssistantLogUpdatedSubscriptionResult =
-    ApolloReactCommon.SubscriptionResult<AssistantLogUpdatedSubscription>;
-export const FlowCreatedDocument = gql`
-    subscription flowCreated {
-        flowCreated {
-            ...flowFragment
-        }
-    }
-    ${FlowFragmentFragmentDoc}
-`;
-
-/**
- * __useFlowCreatedSubscription__
- *
- * To run a query within a React component, call `useFlowCreatedSubscription` and pass it any options that fit your needs.
- * When your component renders, `useFlowCreatedSubscription` returns an object from Apollo Client that contains loading, error, and data properties
- * you can use to render your UI.
- *
- * @param baseOptions options that will be passed into the subscription, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
- *
- * @example
- * const { data, loading, error } = useFlowCreatedSubscription({
- *   variables: {
- *   },
- * });
- */
-export function useFlowCreatedSubscription(
-    baseOptions?: ApolloReactHooks.SubscriptionHookOptions<FlowCreatedSubscription, FlowCreatedSubscriptionVariables>,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useSubscription<FlowCreatedSubscription, FlowCreatedSubscriptionVariables>(
-        FlowCreatedDocument,
-        options,
-    );
-}
-export type FlowCreatedSubscriptionHookResult = ReturnType<typeof useFlowCreatedSubscription>;
-export type FlowCreatedSubscriptionResult = ApolloReactCommon.SubscriptionResult<FlowCreatedSubscription>;
-export const FlowDeletedDocument = gql`
-    subscription flowDeleted {
-        flowDeleted {
-            ...flowFragment
-        }
-    }
-    ${FlowFragmentFragmentDoc}
-`;
-
-/**
- * __useFlowDeletedSubscription__
- *
- * To run a query within a React component, call `useFlowDeletedSubscription` and pass it any options that fit your needs.
- * When your component renders, `useFlowDeletedSubscription` returns an object from Apollo Client that contains loading, error, and data properties
- * you can use to render your UI.
- *
- * @param baseOptions options that will be passed into the subscription, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
- *
- * @example
- * const { data, loading, error } = useFlowDeletedSubscription({
- *   variables: {
- *   },
- * });
- */
-export function useFlowDeletedSubscription(
-    baseOptions?: ApolloReactHooks.SubscriptionHookOptions<FlowDeletedSubscription, FlowDeletedSubscriptionVariables>,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useSubscription<FlowDeletedSubscription, FlowDeletedSubscriptionVariables>(
-        FlowDeletedDocument,
-        options,
-    );
-}
-export type FlowDeletedSubscriptionHookResult = ReturnType<typeof useFlowDeletedSubscription>;
-export type FlowDeletedSubscriptionResult = ApolloReactCommon.SubscriptionResult<FlowDeletedSubscription>;
-export const FlowUpdatedDocument = gql`
-    subscription flowUpdated {
-        flowUpdated {
-            ...flowFragment
-        }
-    }
-    ${FlowFragmentFragmentDoc}
-`;
-
-/**
- * __useFlowUpdatedSubscription__
- *
- * To run a query within a React component, call `useFlowUpdatedSubscription` and pass it any options that fit your needs.
- * When your component renders, `useFlowUpdatedSubscription` returns an object from Apollo Client that contains loading, error, and data properties
- * you can use to render your UI.
- *
- * @param baseOptions options that will be passed into the subscription, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
- *
- * @example
- * const { data, loading, error } = useFlowUpdatedSubscription({
- *   variables: {
- *   },
- * });
- */
-export function useFlowUpdatedSubscription(
-    baseOptions?: ApolloReactHooks.SubscriptionHookOptions<FlowUpdatedSubscription, FlowUpdatedSubscriptionVariables>,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useSubscription<FlowUpdatedSubscription, FlowUpdatedSubscriptionVariables>(
-        FlowUpdatedDocument,
-        options,
-    );
-}
-export type FlowUpdatedSubscriptionHookResult = ReturnType<typeof useFlowUpdatedSubscription>;
-export type FlowUpdatedSubscriptionResult = ApolloReactCommon.SubscriptionResult<FlowUpdatedSubscription>;
-export const TaskCreatedDocument = gql`
-    subscription taskCreated($flowId: ID!) {
-        taskCreated(flowId: $flowId) {
-            ...taskFragment
-        }
-    }
-    ${TaskFragmentFragmentDoc}
-`;
-
-/**
- * __useTaskCreatedSubscription__
- *
- * To run a query within a React component, call `useTaskCreatedSubscription` and pass it any options that fit your needs.
- * When your component renders, `useTaskCreatedSubscription` returns an object from Apollo Client that contains loading, error, and data properties
- * you can use to render your UI.
- *
- * @param baseOptions options that will be passed into the subscription, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
- *
- * @example
- * const { data, loading, error } = useTaskCreatedSubscription({
- *   variables: {
- *      flowId: // value for 'flowId'
- *   },
- * });
- */
-export function useTaskCreatedSubscription(
-    baseOptions: ApolloReactHooks.SubscriptionHookOptions<TaskCreatedSubscription, TaskCreatedSubscriptionVariables> &
-        ({ variables: TaskCreatedSubscriptionVariables; skip?: boolean } | { skip: boolean }),
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useSubscription<TaskCreatedSubscription, TaskCreatedSubscriptionVariables>(
-        TaskCreatedDocument,
-        options,
-    );
-}
-export type TaskCreatedSubscriptionHookResult = ReturnType<typeof useTaskCreatedSubscription>;
-export type TaskCreatedSubscriptionResult = ApolloReactCommon.SubscriptionResult<TaskCreatedSubscription>;
-export const TaskUpdatedDocument = gql`
-    subscription taskUpdated($flowId: ID!) {
-        taskUpdated(flowId: $flowId) {
-            id
-            status
-            result
-            subtasks {
-                ...subtaskFragment
-            }
-            updatedAt
-        }
-    }
-    ${SubtaskFragmentFragmentDoc}
-`;
-
-/**
- * __useTaskUpdatedSubscription__
- *
- * To run a query within a React component, call `useTaskUpdatedSubscription` and pass it any options that fit your needs.
- * When your component renders, `useTaskUpdatedSubscription` returns an object from Apollo Client that contains loading, error, and data properties
- * you can use to render your UI.
- *
- * @param baseOptions options that will be passed into the subscription, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
- *
- * @example
- * const { data, loading, error } = useTaskUpdatedSubscription({
- *   variables: {
- *      flowId: // value for 'flowId'
- *   },
- * });
- */
-export function useTaskUpdatedSubscription(
-    baseOptions: ApolloReactHooks.SubscriptionHookOptions<TaskUpdatedSubscription, TaskUpdatedSubscriptionVariables> &
-        ({ variables: TaskUpdatedSubscriptionVariables; skip?: boolean } | { skip: boolean }),
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useSubscription<TaskUpdatedSubscription, TaskUpdatedSubscriptionVariables>(
-        TaskUpdatedDocument,
-        options,
-    );
-}
-export type TaskUpdatedSubscriptionHookResult = ReturnType<typeof useTaskUpdatedSubscription>;
-export type TaskUpdatedSubscriptionResult = ApolloReactCommon.SubscriptionResult<TaskUpdatedSubscription>;
-export const ProviderCreatedDocument = gql`
-    subscription providerCreated {
-        providerCreated {
-            ...providerConfigFragment
-        }
-    }
-    ${ProviderConfigFragmentFragmentDoc}
-`;
-
-/**
- * __useProviderCreatedSubscription__
- *
- * To run a query within a React component, call `useProviderCreatedSubscription` and pass it any options that fit your needs.
- * When your component renders, `useProviderCreatedSubscription` returns an object from Apollo Client that contains loading, error, and data properties
- * you can use to render your UI.
- *
- * @param baseOptions options that will be passed into the subscription, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
- *
- * @example
- * const { data, loading, error } = useProviderCreatedSubscription({
- *   variables: {
- *   },
- * });
- */
-export function useProviderCreatedSubscription(
-    baseOptions?: ApolloReactHooks.SubscriptionHookOptions<
-        ProviderCreatedSubscription,
-        ProviderCreatedSubscriptionVariables
-    >,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useSubscription<ProviderCreatedSubscription, ProviderCreatedSubscriptionVariables>(
-        ProviderCreatedDocument,
-        options,
-    );
-}
-export type ProviderCreatedSubscriptionHookResult = ReturnType<typeof useProviderCreatedSubscription>;
-export type ProviderCreatedSubscriptionResult = ApolloReactCommon.SubscriptionResult<ProviderCreatedSubscription>;
-export const ProviderUpdatedDocument = gql`
-    subscription providerUpdated {
-        providerUpdated {
-            ...providerConfigFragment
-        }
-    }
-    ${ProviderConfigFragmentFragmentDoc}
-`;
-
-/**
- * __useProviderUpdatedSubscription__
- *
- * To run a query within a React component, call `useProviderUpdatedSubscription` and pass it any options that fit your needs.
- * When your component renders, `useProviderUpdatedSubscription` returns an object from Apollo Client that contains loading, error, and data properties
- * you can use to render your UI.
- *
- * @param baseOptions options that will be passed into the subscription, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
- *
- * @example
- * const { data, loading, error } = useProviderUpdatedSubscription({
- *   variables: {
- *   },
- * });
- */
-export function useProviderUpdatedSubscription(
-    baseOptions?: ApolloReactHooks.SubscriptionHookOptions<
-        ProviderUpdatedSubscription,
-        ProviderUpdatedSubscriptionVariables
-    >,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useSubscription<ProviderUpdatedSubscription, ProviderUpdatedSubscriptionVariables>(
-        ProviderUpdatedDocument,
-        options,
-    );
-}
-export type ProviderUpdatedSubscriptionHookResult = ReturnType<typeof useProviderUpdatedSubscription>;
-export type ProviderUpdatedSubscriptionResult = ApolloReactCommon.SubscriptionResult<ProviderUpdatedSubscription>;
-export const ProviderDeletedDocument = gql`
-    subscription providerDeleted {
-        providerDeleted {
-            ...providerConfigFragment
-        }
-    }
-    ${ProviderConfigFragmentFragmentDoc}
-`;
-
-/**
- * __useProviderDeletedSubscription__
- *
- * To run a query within a React component, call `useProviderDeletedSubscription` and pass it any options that fit your needs.
- * When your component renders, `useProviderDeletedSubscription` returns an object from Apollo Client that contains loading, error, and data properties
- * you can use to render your UI.
- *
- * @param baseOptions options that will be passed into the subscription, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
- *
- * @example
- * const { data, loading, error } = useProviderDeletedSubscription({
- *   variables: {
- *   },
- * });
- */
-export function useProviderDeletedSubscription(
-    baseOptions?: ApolloReactHooks.SubscriptionHookOptions<
-        ProviderDeletedSubscription,
-        ProviderDeletedSubscriptionVariables
-    >,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useSubscription<ProviderDeletedSubscription, ProviderDeletedSubscriptionVariables>(
-        ProviderDeletedDocument,
-        options,
-    );
-}
-export type ProviderDeletedSubscriptionHookResult = ReturnType<typeof useProviderDeletedSubscription>;
-export type ProviderDeletedSubscriptionResult = ApolloReactCommon.SubscriptionResult<ProviderDeletedSubscription>;
-export const ApiTokenCreatedDocument = gql`
-    subscription apiTokenCreated {
-        apiTokenCreated {
-            ...apiTokenFragment
-        }
-    }
-    ${ApiTokenFragmentFragmentDoc}
-`;
-
-/**
- * __useApiTokenCreatedSubscription__
- *
- * To run a query within a React component, call `useApiTokenCreatedSubscription` and pass it any options that fit your needs.
- * When your component renders, `useApiTokenCreatedSubscription` returns an object from Apollo Client that contains loading, error, and data properties
- * you can use to render your UI.
- *
- * @param baseOptions options that will be passed into the subscription, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
- *
- * @example
- * const { data, loading, error } = useApiTokenCreatedSubscription({
- *   variables: {
- *   },
- * });
- */
-export function useApiTokenCreatedSubscription(
-    baseOptions?: ApolloReactHooks.SubscriptionHookOptions<
-        ApiTokenCreatedSubscription,
-        ApiTokenCreatedSubscriptionVariables
-    >,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useSubscription<ApiTokenCreatedSubscription, ApiTokenCreatedSubscriptionVariables>(
-        ApiTokenCreatedDocument,
-        options,
-    );
-}
-export type ApiTokenCreatedSubscriptionHookResult = ReturnType<typeof useApiTokenCreatedSubscription>;
-export type ApiTokenCreatedSubscriptionResult = ApolloReactCommon.SubscriptionResult<ApiTokenCreatedSubscription>;
-export const ApiTokenUpdatedDocument = gql`
-    subscription apiTokenUpdated {
-        apiTokenUpdated {
-            ...apiTokenFragment
-        }
-    }
-    ${ApiTokenFragmentFragmentDoc}
-`;
-
-/**
- * __useApiTokenUpdatedSubscription__
- *
- * To run a query within a React component, call `useApiTokenUpdatedSubscription` and pass it any options that fit your needs.
- * When your component renders, `useApiTokenUpdatedSubscription` returns an object from Apollo Client that contains loading, error, and data properties
- * you can use to render your UI.
- *
- * @param baseOptions options that will be passed into the subscription, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
- *
- * @example
- * const { data, loading, error } = useApiTokenUpdatedSubscription({
- *   variables: {
- *   },
- * });
- */
-export function useApiTokenUpdatedSubscription(
-    baseOptions?: ApolloReactHooks.SubscriptionHookOptions<
-        ApiTokenUpdatedSubscription,
-        ApiTokenUpdatedSubscriptionVariables
-    >,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useSubscription<ApiTokenUpdatedSubscription, ApiTokenUpdatedSubscriptionVariables>(
-        ApiTokenUpdatedDocument,
-        options,
-    );
-}
-export type ApiTokenUpdatedSubscriptionHookResult = ReturnType<typeof useApiTokenUpdatedSubscription>;
-export type ApiTokenUpdatedSubscriptionResult = ApolloReactCommon.SubscriptionResult<ApiTokenUpdatedSubscription>;
-export const ApiTokenDeletedDocument = gql`
-    subscription apiTokenDeleted {
-        apiTokenDeleted {
-            ...apiTokenFragment
-        }
-    }
-    ${ApiTokenFragmentFragmentDoc}
-`;
-
-/**
- * __useApiTokenDeletedSubscription__
- *
- * To run a query within a React component, call `useApiTokenDeletedSubscription` and pass it any options that fit your needs.
- * When your component renders, `useApiTokenDeletedSubscription` returns an object from Apollo Client that contains loading, error, and data properties
- * you can use to render your UI.
- *
- * @param baseOptions options that will be passed into the subscription, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
- *
- * @example
- * const { data, loading, error } = useApiTokenDeletedSubscription({
- *   variables: {
- *   },
- * });
- */
-export function useApiTokenDeletedSubscription(
-    baseOptions?: ApolloReactHooks.SubscriptionHookOptions<
-        ApiTokenDeletedSubscription,
-        ApiTokenDeletedSubscriptionVariables
-    >,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useSubscription<ApiTokenDeletedSubscription, ApiTokenDeletedSubscriptionVariables>(
-        ApiTokenDeletedDocument,
-        options,
-    );
-}
-export type ApiTokenDeletedSubscriptionHookResult = ReturnType<typeof useApiTokenDeletedSubscription>;
-export type ApiTokenDeletedSubscriptionResult = ApolloReactCommon.SubscriptionResult<ApiTokenDeletedSubscription>;
-export const SettingsUserUpdatedDocument = gql`
-    subscription settingsUserUpdated {
-        settingsUserUpdated {
-            ...userPreferencesFragment
-        }
-    }
-    ${UserPreferencesFragmentFragmentDoc}
-`;
-
-/**
- * __useSettingsUserUpdatedSubscription__
- *
- * To run a query within a React component, call `useSettingsUserUpdatedSubscription` and pass it any options that fit your needs.
- * When your component renders, `useSettingsUserUpdatedSubscription` returns an object from Apollo Client that contains loading, error, and data properties
- * you can use to render your UI.
- *
- * @param baseOptions options that will be passed into the subscription, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
- *
- * @example
- * const { data, loading, error } = useSettingsUserUpdatedSubscription({
- *   variables: {
- *   },
- * });
- */
-export function useSettingsUserUpdatedSubscription(
-    baseOptions?: ApolloReactHooks.SubscriptionHookOptions<
-        SettingsUserUpdatedSubscription,
-        SettingsUserUpdatedSubscriptionVariables
-    >,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useSubscription<SettingsUserUpdatedSubscription, SettingsUserUpdatedSubscriptionVariables>(
-        SettingsUserUpdatedDocument,
-        options,
-    );
-}
-export type SettingsUserUpdatedSubscriptionHookResult = ReturnType<typeof useSettingsUserUpdatedSubscription>;
-export type SettingsUserUpdatedSubscriptionResult =
-    ApolloReactCommon.SubscriptionResult<SettingsUserUpdatedSubscription>;
-export const FlowTemplateCreatedDocument = gql`
-    subscription flowTemplateCreated {
-        flowTemplateCreated {
-            ...flowTemplateFragment
-        }
-    }
-    ${FlowTemplateFragmentFragmentDoc}
-`;
-
-/**
- * __useFlowTemplateCreatedSubscription__
- *
- * To run a query within a React component, call `useFlowTemplateCreatedSubscription` and pass it any options that fit your needs.
- * When your component renders, `useFlowTemplateCreatedSubscription` returns an object from Apollo Client that contains loading, error, and data properties
- * you can use to render your UI.
- *
- * @param baseOptions options that will be passed into the subscription, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
- *
- * @example
- * const { data, loading, error } = useFlowTemplateCreatedSubscription({
- *   variables: {
- *   },
- * });
- */
-export function useFlowTemplateCreatedSubscription(
-    baseOptions?: ApolloReactHooks.SubscriptionHookOptions<
-        FlowTemplateCreatedSubscription,
-        FlowTemplateCreatedSubscriptionVariables
-    >,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useSubscription<FlowTemplateCreatedSubscription, FlowTemplateCreatedSubscriptionVariables>(
-        FlowTemplateCreatedDocument,
-        options,
-    );
-}
-export type FlowTemplateCreatedSubscriptionHookResult = ReturnType<typeof useFlowTemplateCreatedSubscription>;
-export type FlowTemplateCreatedSubscriptionResult =
-    ApolloReactCommon.SubscriptionResult<FlowTemplateCreatedSubscription>;
-export const FlowTemplateUpdatedDocument = gql`
-    subscription flowTemplateUpdated {
-        flowTemplateUpdated {
-            ...flowTemplateFragment
-        }
-    }
-    ${FlowTemplateFragmentFragmentDoc}
-`;
-
-/**
- * __useFlowTemplateUpdatedSubscription__
- *
- * To run a query within a React component, call `useFlowTemplateUpdatedSubscription` and pass it any options that fit your needs.
- * When your component renders, `useFlowTemplateUpdatedSubscription` returns an object from Apollo Client that contains loading, error, and data properties
- * you can use to render your UI.
- *
- * @param baseOptions options that will be passed into the subscription, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
- *
- * @example
- * const { data, loading, error } = useFlowTemplateUpdatedSubscription({
- *   variables: {
- *   },
- * });
- */
-export function useFlowTemplateUpdatedSubscription(
-    baseOptions?: ApolloReactHooks.SubscriptionHookOptions<
-        FlowTemplateUpdatedSubscription,
-        FlowTemplateUpdatedSubscriptionVariables
-    >,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useSubscription<FlowTemplateUpdatedSubscription, FlowTemplateUpdatedSubscriptionVariables>(
-        FlowTemplateUpdatedDocument,
-        options,
-    );
-}
-export type FlowTemplateUpdatedSubscriptionHookResult = ReturnType<typeof useFlowTemplateUpdatedSubscription>;
-export type FlowTemplateUpdatedSubscriptionResult =
-    ApolloReactCommon.SubscriptionResult<FlowTemplateUpdatedSubscription>;
-export const FlowTemplateDeletedDocument = gql`
-    subscription flowTemplateDeleted {
-        flowTemplateDeleted {
-            ...flowTemplateFragment
-        }
-    }
-    ${FlowTemplateFragmentFragmentDoc}
-`;
-
-/**
- * __useFlowTemplateDeletedSubscription__
- *
- * To run a query within a React component, call `useFlowTemplateDeletedSubscription` and pass it any options that fit your needs.
- * When your component renders, `useFlowTemplateDeletedSubscription` returns an object from Apollo Client that contains loading, error, and data properties
- * you can use to render your UI.
- *
- * @param baseOptions options that will be passed into the subscription, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
- *
- * @example
- * const { data, loading, error } = useFlowTemplateDeletedSubscription({
- *   variables: {
- *   },
- * });
- */
-export function useFlowTemplateDeletedSubscription(
-    baseOptions?: ApolloReactHooks.SubscriptionHookOptions<
-        FlowTemplateDeletedSubscription,
-        FlowTemplateDeletedSubscriptionVariables
-    >,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useSubscription<FlowTemplateDeletedSubscription, FlowTemplateDeletedSubscriptionVariables>(
-        FlowTemplateDeletedDocument,
-        options,
-    );
-}
-export type FlowTemplateDeletedSubscriptionHookResult = ReturnType<typeof useFlowTemplateDeletedSubscription>;
-export type FlowTemplateDeletedSubscriptionResult =
-    ApolloReactCommon.SubscriptionResult<FlowTemplateDeletedSubscription>;
-export const ResourceAddedDocument = gql`
-    subscription resourceAdded {
-        resourceAdded {
-            ...userResourceFragment
-        }
-    }
-    ${UserResourceFragmentFragmentDoc}
-`;
-
-/**
- * __useResourceAddedSubscription__
- *
- * To run a query within a React component, call `useResourceAddedSubscription` and pass it any options that fit your needs.
- * When your component renders, `useResourceAddedSubscription` returns an object from Apollo Client that contains loading, error, and data properties
- * you can use to render your UI.
- *
- * @param baseOptions options that will be passed into the subscription, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
- *
- * @example
- * const { data, loading, error } = useResourceAddedSubscription({
- *   variables: {
- *   },
- * });
- */
-export function useResourceAddedSubscription(
-    baseOptions?: ApolloReactHooks.SubscriptionHookOptions<
-        ResourceAddedSubscription,
-        ResourceAddedSubscriptionVariables
-    >,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useSubscription<ResourceAddedSubscription, ResourceAddedSubscriptionVariables>(
-        ResourceAddedDocument,
-        options,
-    );
-}
-export type ResourceAddedSubscriptionHookResult = ReturnType<typeof useResourceAddedSubscription>;
-export type ResourceAddedSubscriptionResult = ApolloReactCommon.SubscriptionResult<ResourceAddedSubscription>;
-export const ResourceUpdatedDocument = gql`
-    subscription resourceUpdated {
-        resourceUpdated {
-            ...userResourceFragment
-        }
-    }
-    ${UserResourceFragmentFragmentDoc}
-`;
-
-/**
- * __useResourceUpdatedSubscription__
- *
- * To run a query within a React component, call `useResourceUpdatedSubscription` and pass it any options that fit your needs.
- * When your component renders, `useResourceUpdatedSubscription` returns an object from Apollo Client that contains loading, error, and data properties
- * you can use to render your UI.
- *
- * @param baseOptions options that will be passed into the subscription, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
- *
- * @example
- * const { data, loading, error } = useResourceUpdatedSubscription({
- *   variables: {
- *   },
- * });
- */
-export function useResourceUpdatedSubscription(
-    baseOptions?: ApolloReactHooks.SubscriptionHookOptions<
-        ResourceUpdatedSubscription,
-        ResourceUpdatedSubscriptionVariables
-    >,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useSubscription<ResourceUpdatedSubscription, ResourceUpdatedSubscriptionVariables>(
-        ResourceUpdatedDocument,
-        options,
-    );
-}
-export type ResourceUpdatedSubscriptionHookResult = ReturnType<typeof useResourceUpdatedSubscription>;
-export type ResourceUpdatedSubscriptionResult = ApolloReactCommon.SubscriptionResult<ResourceUpdatedSubscription>;
-export const ResourceDeletedDocument = gql`
-    subscription resourceDeleted {
-        resourceDeleted {
-            ...userResourceFragment
-        }
-    }
-    ${UserResourceFragmentFragmentDoc}
-`;
-
-/**
- * __useResourceDeletedSubscription__
- *
- * To run a query within a React component, call `useResourceDeletedSubscription` and pass it any options that fit your needs.
- * When your component renders, `useResourceDeletedSubscription` returns an object from Apollo Client that contains loading, error, and data properties
- * you can use to render your UI.
- *
- * @param baseOptions options that will be passed into the subscription, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
- *
- * @example
- * const { data, loading, error } = useResourceDeletedSubscription({
- *   variables: {
- *   },
- * });
- */
-export function useResourceDeletedSubscription(
-    baseOptions?: ApolloReactHooks.SubscriptionHookOptions<
-        ResourceDeletedSubscription,
-        ResourceDeletedSubscriptionVariables
-    >,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useSubscription<ResourceDeletedSubscription, ResourceDeletedSubscriptionVariables>(
-        ResourceDeletedDocument,
-        options,
-    );
-}
-export type ResourceDeletedSubscriptionHookResult = ReturnType<typeof useResourceDeletedSubscription>;
-export type ResourceDeletedSubscriptionResult = ApolloReactCommon.SubscriptionResult<ResourceDeletedSubscription>;
-export const KnowledgeDocumentCreatedDocument = gql`
-    subscription knowledgeDocumentCreated {
-        knowledgeDocumentCreated {
-            ...knowledgeDocumentFragment
-        }
-    }
-    ${KnowledgeDocumentFragmentFragmentDoc}
-`;
-
-/**
- * __useKnowledgeDocumentCreatedSubscription__
- *
- * To run a query within a React component, call `useKnowledgeDocumentCreatedSubscription` and pass it any options that fit your needs.
- * When your component renders, `useKnowledgeDocumentCreatedSubscription` returns an object from Apollo Client that contains loading, error, and data properties
- * you can use to render your UI.
- *
- * @param baseOptions options that will be passed into the subscription, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
- *
- * @example
- * const { data, loading, error } = useKnowledgeDocumentCreatedSubscription({
- *   variables: {
- *   },
- * });
- */
-export function useKnowledgeDocumentCreatedSubscription(
-    baseOptions?: ApolloReactHooks.SubscriptionHookOptions<
-        KnowledgeDocumentCreatedSubscription,
-        KnowledgeDocumentCreatedSubscriptionVariables
-    >,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useSubscription<
-        KnowledgeDocumentCreatedSubscription,
-        KnowledgeDocumentCreatedSubscriptionVariables
-    >(KnowledgeDocumentCreatedDocument, options);
-}
-export type KnowledgeDocumentCreatedSubscriptionHookResult = ReturnType<typeof useKnowledgeDocumentCreatedSubscription>;
-export type KnowledgeDocumentCreatedSubscriptionResult =
-    ApolloReactCommon.SubscriptionResult<KnowledgeDocumentCreatedSubscription>;
-export const KnowledgeDocumentUpdatedDocument = gql`
-    subscription knowledgeDocumentUpdated {
-        knowledgeDocumentUpdated {
-            ...knowledgeDocumentFragment
-        }
-    }
-    ${KnowledgeDocumentFragmentFragmentDoc}
-`;
-
-/**
- * __useKnowledgeDocumentUpdatedSubscription__
- *
- * To run a query within a React component, call `useKnowledgeDocumentUpdatedSubscription` and pass it any options that fit your needs.
- * When your component renders, `useKnowledgeDocumentUpdatedSubscription` returns an object from Apollo Client that contains loading, error, and data properties
- * you can use to render your UI.
- *
- * @param baseOptions options that will be passed into the subscription, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
- *
- * @example
- * const { data, loading, error } = useKnowledgeDocumentUpdatedSubscription({
- *   variables: {
- *   },
- * });
- */
-export function useKnowledgeDocumentUpdatedSubscription(
-    baseOptions?: ApolloReactHooks.SubscriptionHookOptions<
-        KnowledgeDocumentUpdatedSubscription,
-        KnowledgeDocumentUpdatedSubscriptionVariables
-    >,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useSubscription<
-        KnowledgeDocumentUpdatedSubscription,
-        KnowledgeDocumentUpdatedSubscriptionVariables
-    >(KnowledgeDocumentUpdatedDocument, options);
-}
-export type KnowledgeDocumentUpdatedSubscriptionHookResult = ReturnType<typeof useKnowledgeDocumentUpdatedSubscription>;
-export type KnowledgeDocumentUpdatedSubscriptionResult =
-    ApolloReactCommon.SubscriptionResult<KnowledgeDocumentUpdatedSubscription>;
-export const KnowledgeDocumentDeletedDocument = gql`
-    subscription knowledgeDocumentDeleted {
-        knowledgeDocumentDeleted {
-            ...knowledgeDocumentFragment
-        }
-    }
-    ${KnowledgeDocumentFragmentFragmentDoc}
-`;
-
-/**
- * __useKnowledgeDocumentDeletedSubscription__
- *
- * To run a query within a React component, call `useKnowledgeDocumentDeletedSubscription` and pass it any options that fit your needs.
- * When your component renders, `useKnowledgeDocumentDeletedSubscription` returns an object from Apollo Client that contains loading, error, and data properties
- * you can use to render your UI.
- *
- * @param baseOptions options that will be passed into the subscription, supported options are listed on: https://www.apollographql.com/docs/react/api/react-hooks/#options;
- *
- * @example
- * const { data, loading, error } = useKnowledgeDocumentDeletedSubscription({
- *   variables: {
- *   },
- * });
- */
-export function useKnowledgeDocumentDeletedSubscription(
-    baseOptions?: ApolloReactHooks.SubscriptionHookOptions<
-        KnowledgeDocumentDeletedSubscription,
-        KnowledgeDocumentDeletedSubscriptionVariables
-    >,
-) {
-    const options = { ...defaultOptions, ...baseOptions };
-    return ApolloReactHooks.useSubscription<
-        KnowledgeDocumentDeletedSubscription,
-        KnowledgeDocumentDeletedSubscriptionVariables
-    >(KnowledgeDocumentDeletedDocument, options);
-}
-export type KnowledgeDocumentDeletedSubscriptionHookResult = ReturnType<typeof useKnowledgeDocumentDeletedSubscription>;
-export type KnowledgeDocumentDeletedSubscriptionResult =
-    ApolloReactCommon.SubscriptionResult<KnowledgeDocumentDeletedSubscription>;
+export const SettingsFragmentFragmentDoc = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'settingsFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Settings' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'debug' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'askUser' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'version' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'dockerInside' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'isDevelopMode' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'assistantUseAgents' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<SettingsFragmentFragment, unknown>;
+export const TerminalFragmentFragmentDoc = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'terminalFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Terminal' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'type' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'name' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'image' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'connected' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<TerminalFragmentFragment, unknown>;
+export const ProviderFragmentFragmentDoc = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'providerFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Provider' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'name' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'type' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<ProviderFragmentFragment, unknown>;
+export const FlowFragmentFragmentDoc = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'flowFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Flow' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'title' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'status' } },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'terminals' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [{ kind: 'FragmentSpread', name: { kind: 'Name', value: 'terminalFragment' } }],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'provider' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [{ kind: 'FragmentSpread', name: { kind: 'Name', value: 'providerFragment' } }],
+                        },
+                    },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'terminalFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Terminal' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'type' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'name' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'image' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'connected' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'providerFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Provider' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'name' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'type' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<FlowFragmentFragment, unknown>;
+export const SubtaskFragmentFragmentDoc = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'subtaskFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Subtask' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'status' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'title' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'description' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'result' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'taskId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<SubtaskFragmentFragment, unknown>;
+export const TaskFragmentFragmentDoc = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'taskFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Task' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'title' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'status' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'input' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'result' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'flowId' } },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'subtasks' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [{ kind: 'FragmentSpread', name: { kind: 'Name', value: 'subtaskFragment' } }],
+                        },
+                    },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'subtaskFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Subtask' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'status' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'title' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'description' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'result' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'taskId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<TaskFragmentFragment, unknown>;
+export const TerminalLogFragmentFragmentDoc = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'terminalLogFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'TerminalLog' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'flowId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'taskId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'subtaskId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'type' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'text' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'terminal' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<TerminalLogFragmentFragment, unknown>;
+export const MessageLogFragmentFragmentDoc = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'messageLogFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'MessageLog' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'type' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'message' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'thinking' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'result' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'resultFormat' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'flowId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'taskId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'subtaskId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<MessageLogFragmentFragment, unknown>;
+export const ScreenshotFragmentFragmentDoc = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'screenshotFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Screenshot' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'flowId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'taskId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'subtaskId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'name' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'url' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<ScreenshotFragmentFragment, unknown>;
+export const FlowFileFragmentFragmentDoc = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'flowFileFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'FlowFile' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'name' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'path' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'size' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'isDir' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'modifiedAt' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<FlowFileFragmentFragment, unknown>;
+export const UserResourceFragmentFragmentDoc = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'userResourceFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'UserResource' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'userId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'name' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'path' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'size' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'isDir' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<UserResourceFragmentFragment, unknown>;
+export const AgentLogFragmentFragmentDoc = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'agentLogFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'AgentLog' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'flowId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'initiator' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'executor' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'task' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'result' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'taskId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'subtaskId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<AgentLogFragmentFragment, unknown>;
+export const SearchLogFragmentFragmentDoc = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'searchLogFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'SearchLog' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'flowId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'initiator' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'executor' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'engine' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'query' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'result' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'taskId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'subtaskId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<SearchLogFragmentFragment, unknown>;
+export const VectorStoreLogFragmentFragmentDoc = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'vectorStoreLogFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'VectorStoreLog' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'flowId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'initiator' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'executor' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'filter' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'query' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'action' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'result' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'taskId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'subtaskId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<VectorStoreLogFragmentFragment, unknown>;
+export const AssistantFragmentFragmentDoc = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'assistantFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Assistant' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'title' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'status' } },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'provider' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [{ kind: 'FragmentSpread', name: { kind: 'Name', value: 'providerFragment' } }],
+                        },
+                    },
+                    { kind: 'Field', name: { kind: 'Name', value: 'flowId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'useAgents' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'providerFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Provider' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'name' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'type' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<AssistantFragmentFragment, unknown>;
+export const AssistantLogFragmentFragmentDoc = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'assistantLogFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'AssistantLog' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'type' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'message' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'thinking' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'result' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'resultFormat' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'appendPart' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'flowId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'assistantId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<AssistantLogFragmentFragment, unknown>;
+export const TestResultFragmentFragmentDoc = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'testResultFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'TestResult' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'name' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'type' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'result' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'reasoning' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'streaming' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'latency' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'error' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<TestResultFragmentFragment, unknown>;
+export const AgentTestResultFragmentFragmentDoc = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'agentTestResultFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'AgentTestResult' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'tests' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'testResultFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'testResultFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'TestResult' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'name' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'type' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'result' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'reasoning' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'streaming' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'latency' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'error' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<AgentTestResultFragmentFragment, unknown>;
+export const ProviderTestResultFragmentFragmentDoc = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'providerTestResultFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'ProviderTestResult' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'simple' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentTestResultFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'simpleJson' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentTestResultFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'primaryAgent' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentTestResultFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'assistant' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentTestResultFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'generator' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentTestResultFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'refiner' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentTestResultFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'adviser' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentTestResultFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'reflector' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentTestResultFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'searcher' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentTestResultFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'enricher' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentTestResultFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'coder' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentTestResultFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'installer' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentTestResultFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'pentester' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentTestResultFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'testResultFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'TestResult' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'name' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'type' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'result' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'reasoning' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'streaming' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'latency' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'error' } },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'agentTestResultFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'AgentTestResult' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'tests' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'testResultFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<ProviderTestResultFragmentFragment, unknown>;
+export const ModelConfigFragmentFragmentDoc = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'modelConfigFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'ModelConfig' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'name' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'thinking' } },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'reasoning' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'Field', name: { kind: 'Name', value: 'mode' } },
+                                { kind: 'Field', name: { kind: 'Name', value: 'efforts' } },
+                                { kind: 'Field', name: { kind: 'Name', value: 'supported' } },
+                                { kind: 'Field', name: { kind: 'Name', value: 'cannotDisable' } },
+                                { kind: 'Field', name: { kind: 'Name', value: 'defaultOn' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'price' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'Field', name: { kind: 'Name', value: 'input' } },
+                                { kind: 'Field', name: { kind: 'Name', value: 'output' } },
+                                { kind: 'Field', name: { kind: 'Name', value: 'cacheRead' } },
+                                { kind: 'Field', name: { kind: 'Name', value: 'cacheWrite' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<ModelConfigFragmentFragment, unknown>;
+export const AgentConfigFragmentFragmentDoc = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'agentConfigFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'AgentConfig' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'model' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'maxTokens' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'temperature' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'topK' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'topP' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'minLength' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'maxLength' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'repetitionPenalty' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'frequencyPenalty' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'presencePenalty' } },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'reasoning' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'Field', name: { kind: 'Name', value: 'mode' } },
+                                { kind: 'Field', name: { kind: 'Name', value: 'effort' } },
+                                { kind: 'Field', name: { kind: 'Name', value: 'maxTokens' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'price' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'Field', name: { kind: 'Name', value: 'input' } },
+                                { kind: 'Field', name: { kind: 'Name', value: 'output' } },
+                                { kind: 'Field', name: { kind: 'Name', value: 'cacheRead' } },
+                                { kind: 'Field', name: { kind: 'Name', value: 'cacheWrite' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<AgentConfigFragmentFragment, unknown>;
+export const AgentsConfigFragmentFragmentDoc = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'agentsConfigFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'AgentsConfig' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'simple' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'simpleJson' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'primaryAgent' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'assistant' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'generator' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'refiner' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'adviser' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'reflector' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'searcher' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'enricher' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'coder' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'installer' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'pentester' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'agentConfigFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'AgentConfig' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'model' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'maxTokens' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'temperature' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'topK' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'topP' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'minLength' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'maxLength' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'repetitionPenalty' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'frequencyPenalty' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'presencePenalty' } },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'reasoning' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'Field', name: { kind: 'Name', value: 'mode' } },
+                                { kind: 'Field', name: { kind: 'Name', value: 'effort' } },
+                                { kind: 'Field', name: { kind: 'Name', value: 'maxTokens' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'price' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'Field', name: { kind: 'Name', value: 'input' } },
+                                { kind: 'Field', name: { kind: 'Name', value: 'output' } },
+                                { kind: 'Field', name: { kind: 'Name', value: 'cacheRead' } },
+                                { kind: 'Field', name: { kind: 'Name', value: 'cacheWrite' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<AgentsConfigFragmentFragment, unknown>;
+export const ProviderConfigFragmentFragmentDoc = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'providerConfigFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'ProviderConfig' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'name' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'type' } },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'agents' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentsConfigFragment' } },
+                            ],
+                        },
+                    },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'agentConfigFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'AgentConfig' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'model' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'maxTokens' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'temperature' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'topK' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'topP' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'minLength' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'maxLength' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'repetitionPenalty' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'frequencyPenalty' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'presencePenalty' } },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'reasoning' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'Field', name: { kind: 'Name', value: 'mode' } },
+                                { kind: 'Field', name: { kind: 'Name', value: 'effort' } },
+                                { kind: 'Field', name: { kind: 'Name', value: 'maxTokens' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'price' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'Field', name: { kind: 'Name', value: 'input' } },
+                                { kind: 'Field', name: { kind: 'Name', value: 'output' } },
+                                { kind: 'Field', name: { kind: 'Name', value: 'cacheRead' } },
+                                { kind: 'Field', name: { kind: 'Name', value: 'cacheWrite' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'agentsConfigFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'AgentsConfig' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'simple' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'simpleJson' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'primaryAgent' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'assistant' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'generator' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'refiner' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'adviser' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'reflector' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'searcher' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'enricher' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'coder' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'installer' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'pentester' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<ProviderConfigFragmentFragment, unknown>;
+export const UserPromptFragmentFragmentDoc = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'userPromptFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'UserPrompt' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'type' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'template' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<UserPromptFragmentFragment, unknown>;
+export const DefaultPromptFragmentFragmentDoc = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'defaultPromptFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'DefaultPrompt' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'type' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'template' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'variables' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<DefaultPromptFragmentFragment, unknown>;
+export const PromptValidationResultFragmentFragmentDoc = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'promptValidationResultFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'PromptValidationResult' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'result' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'errorType' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'message' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'line' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'details' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<PromptValidationResultFragmentFragment, unknown>;
+export const ApiTokenFragmentFragmentDoc = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'apiTokenFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'APIToken' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'tokenId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'userId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'roleId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'name' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'ttl' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'status' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<ApiTokenFragmentFragment, unknown>;
+export const ApiTokenWithSecretFragmentFragmentDoc = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'apiTokenWithSecretFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'APITokenWithSecret' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'tokenId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'userId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'roleId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'name' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'ttl' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'status' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'token' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<ApiTokenWithSecretFragmentFragment, unknown>;
+export const FlowTemplateFragmentFragmentDoc = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'flowTemplateFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'FlowTemplate' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'userId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'title' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'text' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<FlowTemplateFragmentFragment, unknown>;
+export const UsageStatsFragmentFragmentDoc = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'usageStatsFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'UsageStats' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageIn' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageOut' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageCacheIn' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageCacheOut' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageCostIn' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageCostOut' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<UsageStatsFragmentFragment, unknown>;
+export const DailyUsageStatsFragmentFragmentDoc = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'dailyUsageStatsFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'DailyUsageStats' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'date' } },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'stats' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'usageStatsFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'usageStatsFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'UsageStats' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageIn' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageOut' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageCacheIn' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageCacheOut' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageCostIn' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageCostOut' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<DailyUsageStatsFragmentFragment, unknown>;
+export const ProviderUsageStatsFragmentFragmentDoc = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'providerUsageStatsFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'ProviderUsageStats' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'provider' } },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'stats' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'usageStatsFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'usageStatsFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'UsageStats' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageIn' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageOut' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageCacheIn' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageCacheOut' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageCostIn' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageCostOut' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<ProviderUsageStatsFragmentFragment, unknown>;
+export const ModelUsageStatsFragmentFragmentDoc = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'modelUsageStatsFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'ModelUsageStats' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'model' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'provider' } },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'stats' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'usageStatsFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'usageStatsFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'UsageStats' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageIn' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageOut' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageCacheIn' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageCacheOut' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageCostIn' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageCostOut' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<ModelUsageStatsFragmentFragment, unknown>;
+export const AgentTypeUsageStatsFragmentFragmentDoc = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'agentTypeUsageStatsFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'AgentTypeUsageStats' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'agentType' } },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'stats' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'usageStatsFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'usageStatsFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'UsageStats' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageIn' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageOut' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageCacheIn' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageCacheOut' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageCostIn' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageCostOut' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<AgentTypeUsageStatsFragmentFragment, unknown>;
+export const ModelAgentsUsageStatsFragmentFragmentDoc = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'modelAgentsUsageStatsFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'ModelAgentsUsageStats' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'model' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'provider' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'agentTypes' } },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'stats' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'usageStatsFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'usageStatsFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'UsageStats' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageIn' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageOut' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageCacheIn' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageCacheOut' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageCostIn' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageCostOut' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<ModelAgentsUsageStatsFragmentFragment, unknown>;
+export const ToolcallsStatsFragmentFragmentDoc = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'toolcallsStatsFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'ToolcallsStats' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalCount' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalDurationSeconds' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<ToolcallsStatsFragmentFragment, unknown>;
+export const DailyToolcallsStatsFragmentFragmentDoc = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'dailyToolcallsStatsFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'DailyToolcallsStats' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'date' } },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'stats' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'toolcallsStatsFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'toolcallsStatsFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'ToolcallsStats' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalCount' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalDurationSeconds' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<DailyToolcallsStatsFragmentFragment, unknown>;
+export const FunctionToolcallsStatsFragmentFragmentDoc = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'functionToolcallsStatsFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'FunctionToolcallsStats' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'functionName' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'isAgent' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalCount' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalDurationSeconds' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'avgDurationSeconds' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<FunctionToolcallsStatsFragmentFragment, unknown>;
+export const FlowStatsFragmentFragmentDoc = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'flowStatsFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'FlowStats' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalTasksCount' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalSubtasksCount' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalAssistantsCount' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<FlowStatsFragmentFragment, unknown>;
+export const FlowsStatsFragmentFragmentDoc = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'flowsStatsFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'FlowsStats' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalFlowsCount' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalTasksCount' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalSubtasksCount' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalAssistantsCount' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<FlowsStatsFragmentFragment, unknown>;
+export const DailyFlowsStatsFragmentFragmentDoc = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'dailyFlowsStatsFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'DailyFlowsStats' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'date' } },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'stats' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'flowsStatsFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'flowsStatsFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'FlowsStats' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalFlowsCount' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalTasksCount' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalSubtasksCount' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalAssistantsCount' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<DailyFlowsStatsFragmentFragment, unknown>;
+export const SubtaskExecutionStatsFragmentFragmentDoc = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'subtaskExecutionStatsFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'SubtaskExecutionStats' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'subtaskId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'subtaskTitle' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalDurationSeconds' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalToolcallsCount' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<SubtaskExecutionStatsFragmentFragment, unknown>;
+export const TaskExecutionStatsFragmentFragmentDoc = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'taskExecutionStatsFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'TaskExecutionStats' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'taskId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'taskTitle' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalDurationSeconds' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalToolcallsCount' } },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'subtasks' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                {
+                                    kind: 'FragmentSpread',
+                                    name: { kind: 'Name', value: 'subtaskExecutionStatsFragment' },
+                                },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'subtaskExecutionStatsFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'SubtaskExecutionStats' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'subtaskId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'subtaskTitle' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalDurationSeconds' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalToolcallsCount' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<TaskExecutionStatsFragmentFragment, unknown>;
+export const FlowExecutionStatsFragmentFragmentDoc = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'flowExecutionStatsFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'FlowExecutionStats' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'flowId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'flowTitle' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalDurationSeconds' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalToolcallsCount' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalAssistantsCount' } },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'tasks' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'taskExecutionStatsFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'subtaskExecutionStatsFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'SubtaskExecutionStats' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'subtaskId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'subtaskTitle' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalDurationSeconds' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalToolcallsCount' } },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'taskExecutionStatsFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'TaskExecutionStats' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'taskId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'taskTitle' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalDurationSeconds' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalToolcallsCount' } },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'subtasks' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                {
+                                    kind: 'FragmentSpread',
+                                    name: { kind: 'Name', value: 'subtaskExecutionStatsFragment' },
+                                },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<FlowExecutionStatsFragmentFragment, unknown>;
+export const KnowledgeDocumentFragmentFragmentDoc = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'knowledgeDocumentFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'KnowledgeDocument' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'docType' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'content' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'question' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'description' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'userId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'flowId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'taskId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'subtaskId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'guideType' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'answerType' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'codeLang' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'partSize' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalSize' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'manual' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<KnowledgeDocumentFragmentFragment, unknown>;
+export const KnowledgeDocumentWithScoreFragmentFragmentDoc = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'knowledgeDocumentWithScoreFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'KnowledgeDocumentWithScore' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'score' } },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'document' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'knowledgeDocumentFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'knowledgeDocumentFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'KnowledgeDocument' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'docType' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'content' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'question' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'description' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'userId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'flowId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'taskId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'subtaskId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'guideType' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'answerType' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'codeLang' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'partSize' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalSize' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'manual' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<KnowledgeDocumentWithScoreFragmentFragment, unknown>;
+export const UserPreferencesFragmentFragmentDoc = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'userPreferencesFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'UserPreferences' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'favoriteFlows' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<UserPreferencesFragmentFragment, unknown>;
+export const FlowsDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'query',
+            name: { kind: 'Name', value: 'flows' },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'flows' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [{ kind: 'FragmentSpread', name: { kind: 'Name', value: 'flowFragment' } }],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'terminalFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Terminal' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'type' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'name' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'image' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'connected' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'providerFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Provider' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'name' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'type' } },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'flowFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Flow' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'title' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'status' } },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'terminals' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [{ kind: 'FragmentSpread', name: { kind: 'Name', value: 'terminalFragment' } }],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'provider' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [{ kind: 'FragmentSpread', name: { kind: 'Name', value: 'providerFragment' } }],
+                        },
+                    },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<FlowsQuery, FlowsQueryVariables>;
+export const ProvidersDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'query',
+            name: { kind: 'Name', value: 'providers' },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'providers' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [{ kind: 'FragmentSpread', name: { kind: 'Name', value: 'providerFragment' } }],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'providerFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Provider' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'name' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'type' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<ProvidersQuery, ProvidersQueryVariables>;
+export const SettingsDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'query',
+            name: { kind: 'Name', value: 'settings' },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'settings' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [{ kind: 'FragmentSpread', name: { kind: 'Name', value: 'settingsFragment' } }],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'settingsFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Settings' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'debug' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'askUser' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'version' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'dockerInside' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'isDevelopMode' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'assistantUseAgents' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<SettingsQuery, SettingsQueryVariables>;
+export const SettingsProvidersDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'query',
+            name: { kind: 'Name', value: 'settingsProviders' },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'settingsProviders' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                {
+                                    kind: 'Field',
+                                    name: { kind: 'Name', value: 'enabled' },
+                                    selectionSet: {
+                                        kind: 'SelectionSet',
+                                        selections: [
+                                            { kind: 'Field', name: { kind: 'Name', value: 'openai' } },
+                                            { kind: 'Field', name: { kind: 'Name', value: 'anthropic' } },
+                                            { kind: 'Field', name: { kind: 'Name', value: 'gemini' } },
+                                            { kind: 'Field', name: { kind: 'Name', value: 'bedrock' } },
+                                            { kind: 'Field', name: { kind: 'Name', value: 'ollama' } },
+                                            { kind: 'Field', name: { kind: 'Name', value: 'custom' } },
+                                            { kind: 'Field', name: { kind: 'Name', value: 'deepseek' } },
+                                            { kind: 'Field', name: { kind: 'Name', value: 'glm' } },
+                                            { kind: 'Field', name: { kind: 'Name', value: 'kimi' } },
+                                            { kind: 'Field', name: { kind: 'Name', value: 'qwen' } },
+                                            { kind: 'Field', name: { kind: 'Name', value: 'minimax' } },
+                                        ],
+                                    },
+                                },
+                                {
+                                    kind: 'Field',
+                                    name: { kind: 'Name', value: 'default' },
+                                    selectionSet: {
+                                        kind: 'SelectionSet',
+                                        selections: [
+                                            {
+                                                kind: 'Field',
+                                                name: { kind: 'Name', value: 'openai' },
+                                                selectionSet: {
+                                                    kind: 'SelectionSet',
+                                                    selections: [
+                                                        {
+                                                            kind: 'FragmentSpread',
+                                                            name: { kind: 'Name', value: 'providerConfigFragment' },
+                                                        },
+                                                    ],
+                                                },
+                                            },
+                                            {
+                                                kind: 'Field',
+                                                name: { kind: 'Name', value: 'anthropic' },
+                                                selectionSet: {
+                                                    kind: 'SelectionSet',
+                                                    selections: [
+                                                        {
+                                                            kind: 'FragmentSpread',
+                                                            name: { kind: 'Name', value: 'providerConfigFragment' },
+                                                        },
+                                                    ],
+                                                },
+                                            },
+                                            {
+                                                kind: 'Field',
+                                                name: { kind: 'Name', value: 'gemini' },
+                                                selectionSet: {
+                                                    kind: 'SelectionSet',
+                                                    selections: [
+                                                        {
+                                                            kind: 'FragmentSpread',
+                                                            name: { kind: 'Name', value: 'providerConfigFragment' },
+                                                        },
+                                                    ],
+                                                },
+                                            },
+                                            {
+                                                kind: 'Field',
+                                                name: { kind: 'Name', value: 'bedrock' },
+                                                selectionSet: {
+                                                    kind: 'SelectionSet',
+                                                    selections: [
+                                                        {
+                                                            kind: 'FragmentSpread',
+                                                            name: { kind: 'Name', value: 'providerConfigFragment' },
+                                                        },
+                                                    ],
+                                                },
+                                            },
+                                            {
+                                                kind: 'Field',
+                                                name: { kind: 'Name', value: 'ollama' },
+                                                selectionSet: {
+                                                    kind: 'SelectionSet',
+                                                    selections: [
+                                                        {
+                                                            kind: 'FragmentSpread',
+                                                            name: { kind: 'Name', value: 'providerConfigFragment' },
+                                                        },
+                                                    ],
+                                                },
+                                            },
+                                            {
+                                                kind: 'Field',
+                                                name: { kind: 'Name', value: 'custom' },
+                                                selectionSet: {
+                                                    kind: 'SelectionSet',
+                                                    selections: [
+                                                        {
+                                                            kind: 'FragmentSpread',
+                                                            name: { kind: 'Name', value: 'providerConfigFragment' },
+                                                        },
+                                                    ],
+                                                },
+                                            },
+                                            {
+                                                kind: 'Field',
+                                                name: { kind: 'Name', value: 'deepseek' },
+                                                selectionSet: {
+                                                    kind: 'SelectionSet',
+                                                    selections: [
+                                                        {
+                                                            kind: 'FragmentSpread',
+                                                            name: { kind: 'Name', value: 'providerConfigFragment' },
+                                                        },
+                                                    ],
+                                                },
+                                            },
+                                            {
+                                                kind: 'Field',
+                                                name: { kind: 'Name', value: 'glm' },
+                                                selectionSet: {
+                                                    kind: 'SelectionSet',
+                                                    selections: [
+                                                        {
+                                                            kind: 'FragmentSpread',
+                                                            name: { kind: 'Name', value: 'providerConfigFragment' },
+                                                        },
+                                                    ],
+                                                },
+                                            },
+                                            {
+                                                kind: 'Field',
+                                                name: { kind: 'Name', value: 'kimi' },
+                                                selectionSet: {
+                                                    kind: 'SelectionSet',
+                                                    selections: [
+                                                        {
+                                                            kind: 'FragmentSpread',
+                                                            name: { kind: 'Name', value: 'providerConfigFragment' },
+                                                        },
+                                                    ],
+                                                },
+                                            },
+                                            {
+                                                kind: 'Field',
+                                                name: { kind: 'Name', value: 'qwen' },
+                                                selectionSet: {
+                                                    kind: 'SelectionSet',
+                                                    selections: [
+                                                        {
+                                                            kind: 'FragmentSpread',
+                                                            name: { kind: 'Name', value: 'providerConfigFragment' },
+                                                        },
+                                                    ],
+                                                },
+                                            },
+                                            {
+                                                kind: 'Field',
+                                                name: { kind: 'Name', value: 'minimax' },
+                                                selectionSet: {
+                                                    kind: 'SelectionSet',
+                                                    selections: [
+                                                        {
+                                                            kind: 'FragmentSpread',
+                                                            name: { kind: 'Name', value: 'providerConfigFragment' },
+                                                        },
+                                                    ],
+                                                },
+                                            },
+                                        ],
+                                    },
+                                },
+                                {
+                                    kind: 'Field',
+                                    name: { kind: 'Name', value: 'userDefined' },
+                                    selectionSet: {
+                                        kind: 'SelectionSet',
+                                        selections: [
+                                            {
+                                                kind: 'FragmentSpread',
+                                                name: { kind: 'Name', value: 'providerConfigFragment' },
+                                            },
+                                        ],
+                                    },
+                                },
+                                {
+                                    kind: 'Field',
+                                    name: { kind: 'Name', value: 'models' },
+                                    selectionSet: {
+                                        kind: 'SelectionSet',
+                                        selections: [
+                                            {
+                                                kind: 'Field',
+                                                name: { kind: 'Name', value: 'openai' },
+                                                selectionSet: {
+                                                    kind: 'SelectionSet',
+                                                    selections: [
+                                                        {
+                                                            kind: 'FragmentSpread',
+                                                            name: { kind: 'Name', value: 'modelConfigFragment' },
+                                                        },
+                                                    ],
+                                                },
+                                            },
+                                            {
+                                                kind: 'Field',
+                                                name: { kind: 'Name', value: 'anthropic' },
+                                                selectionSet: {
+                                                    kind: 'SelectionSet',
+                                                    selections: [
+                                                        {
+                                                            kind: 'FragmentSpread',
+                                                            name: { kind: 'Name', value: 'modelConfigFragment' },
+                                                        },
+                                                    ],
+                                                },
+                                            },
+                                            {
+                                                kind: 'Field',
+                                                name: { kind: 'Name', value: 'gemini' },
+                                                selectionSet: {
+                                                    kind: 'SelectionSet',
+                                                    selections: [
+                                                        {
+                                                            kind: 'FragmentSpread',
+                                                            name: { kind: 'Name', value: 'modelConfigFragment' },
+                                                        },
+                                                    ],
+                                                },
+                                            },
+                                            {
+                                                kind: 'Field',
+                                                name: { kind: 'Name', value: 'bedrock' },
+                                                selectionSet: {
+                                                    kind: 'SelectionSet',
+                                                    selections: [
+                                                        {
+                                                            kind: 'FragmentSpread',
+                                                            name: { kind: 'Name', value: 'modelConfigFragment' },
+                                                        },
+                                                    ],
+                                                },
+                                            },
+                                            {
+                                                kind: 'Field',
+                                                name: { kind: 'Name', value: 'ollama' },
+                                                selectionSet: {
+                                                    kind: 'SelectionSet',
+                                                    selections: [
+                                                        {
+                                                            kind: 'FragmentSpread',
+                                                            name: { kind: 'Name', value: 'modelConfigFragment' },
+                                                        },
+                                                    ],
+                                                },
+                                            },
+                                            {
+                                                kind: 'Field',
+                                                name: { kind: 'Name', value: 'custom' },
+                                                selectionSet: {
+                                                    kind: 'SelectionSet',
+                                                    selections: [
+                                                        {
+                                                            kind: 'FragmentSpread',
+                                                            name: { kind: 'Name', value: 'modelConfigFragment' },
+                                                        },
+                                                    ],
+                                                },
+                                            },
+                                            {
+                                                kind: 'Field',
+                                                name: { kind: 'Name', value: 'deepseek' },
+                                                selectionSet: {
+                                                    kind: 'SelectionSet',
+                                                    selections: [
+                                                        {
+                                                            kind: 'FragmentSpread',
+                                                            name: { kind: 'Name', value: 'modelConfigFragment' },
+                                                        },
+                                                    ],
+                                                },
+                                            },
+                                            {
+                                                kind: 'Field',
+                                                name: { kind: 'Name', value: 'glm' },
+                                                selectionSet: {
+                                                    kind: 'SelectionSet',
+                                                    selections: [
+                                                        {
+                                                            kind: 'FragmentSpread',
+                                                            name: { kind: 'Name', value: 'modelConfigFragment' },
+                                                        },
+                                                    ],
+                                                },
+                                            },
+                                            {
+                                                kind: 'Field',
+                                                name: { kind: 'Name', value: 'kimi' },
+                                                selectionSet: {
+                                                    kind: 'SelectionSet',
+                                                    selections: [
+                                                        {
+                                                            kind: 'FragmentSpread',
+                                                            name: { kind: 'Name', value: 'modelConfigFragment' },
+                                                        },
+                                                    ],
+                                                },
+                                            },
+                                            {
+                                                kind: 'Field',
+                                                name: { kind: 'Name', value: 'qwen' },
+                                                selectionSet: {
+                                                    kind: 'SelectionSet',
+                                                    selections: [
+                                                        {
+                                                            kind: 'FragmentSpread',
+                                                            name: { kind: 'Name', value: 'modelConfigFragment' },
+                                                        },
+                                                    ],
+                                                },
+                                            },
+                                            {
+                                                kind: 'Field',
+                                                name: { kind: 'Name', value: 'minimax' },
+                                                selectionSet: {
+                                                    kind: 'SelectionSet',
+                                                    selections: [
+                                                        {
+                                                            kind: 'FragmentSpread',
+                                                            name: { kind: 'Name', value: 'modelConfigFragment' },
+                                                        },
+                                                    ],
+                                                },
+                                            },
+                                        ],
+                                    },
+                                },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'agentConfigFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'AgentConfig' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'model' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'maxTokens' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'temperature' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'topK' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'topP' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'minLength' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'maxLength' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'repetitionPenalty' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'frequencyPenalty' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'presencePenalty' } },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'reasoning' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'Field', name: { kind: 'Name', value: 'mode' } },
+                                { kind: 'Field', name: { kind: 'Name', value: 'effort' } },
+                                { kind: 'Field', name: { kind: 'Name', value: 'maxTokens' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'price' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'Field', name: { kind: 'Name', value: 'input' } },
+                                { kind: 'Field', name: { kind: 'Name', value: 'output' } },
+                                { kind: 'Field', name: { kind: 'Name', value: 'cacheRead' } },
+                                { kind: 'Field', name: { kind: 'Name', value: 'cacheWrite' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'agentsConfigFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'AgentsConfig' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'simple' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'simpleJson' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'primaryAgent' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'assistant' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'generator' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'refiner' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'adviser' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'reflector' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'searcher' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'enricher' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'coder' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'installer' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'pentester' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'providerConfigFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'ProviderConfig' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'name' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'type' } },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'agents' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentsConfigFragment' } },
+                            ],
+                        },
+                    },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'modelConfigFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'ModelConfig' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'name' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'thinking' } },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'reasoning' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'Field', name: { kind: 'Name', value: 'mode' } },
+                                { kind: 'Field', name: { kind: 'Name', value: 'efforts' } },
+                                { kind: 'Field', name: { kind: 'Name', value: 'supported' } },
+                                { kind: 'Field', name: { kind: 'Name', value: 'cannotDisable' } },
+                                { kind: 'Field', name: { kind: 'Name', value: 'defaultOn' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'price' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'Field', name: { kind: 'Name', value: 'input' } },
+                                { kind: 'Field', name: { kind: 'Name', value: 'output' } },
+                                { kind: 'Field', name: { kind: 'Name', value: 'cacheRead' } },
+                                { kind: 'Field', name: { kind: 'Name', value: 'cacheWrite' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<SettingsProvidersQuery, SettingsProvidersQueryVariables>;
+export const SettingsPromptsDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'query',
+            name: { kind: 'Name', value: 'settingsPrompts' },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'settingsPrompts' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                {
+                                    kind: 'Field',
+                                    name: { kind: 'Name', value: 'default' },
+                                    selectionSet: {
+                                        kind: 'SelectionSet',
+                                        selections: [
+                                            {
+                                                kind: 'Field',
+                                                name: { kind: 'Name', value: 'agents' },
+                                                selectionSet: {
+                                                    kind: 'SelectionSet',
+                                                    selections: [
+                                                        {
+                                                            kind: 'Field',
+                                                            name: { kind: 'Name', value: 'primaryAgent' },
+                                                            selectionSet: {
+                                                                kind: 'SelectionSet',
+                                                                selections: [
+                                                                    {
+                                                                        kind: 'Field',
+                                                                        name: { kind: 'Name', value: 'system' },
+                                                                        selectionSet: {
+                                                                            kind: 'SelectionSet',
+                                                                            selections: [
+                                                                                {
+                                                                                    kind: 'FragmentSpread',
+                                                                                    name: {
+                                                                                        kind: 'Name',
+                                                                                        value: 'defaultPromptFragment',
+                                                                                    },
+                                                                                },
+                                                                            ],
+                                                                        },
+                                                                    },
+                                                                ],
+                                                            },
+                                                        },
+                                                        {
+                                                            kind: 'Field',
+                                                            name: { kind: 'Name', value: 'assistant' },
+                                                            selectionSet: {
+                                                                kind: 'SelectionSet',
+                                                                selections: [
+                                                                    {
+                                                                        kind: 'Field',
+                                                                        name: { kind: 'Name', value: 'system' },
+                                                                        selectionSet: {
+                                                                            kind: 'SelectionSet',
+                                                                            selections: [
+                                                                                {
+                                                                                    kind: 'FragmentSpread',
+                                                                                    name: {
+                                                                                        kind: 'Name',
+                                                                                        value: 'defaultPromptFragment',
+                                                                                    },
+                                                                                },
+                                                                            ],
+                                                                        },
+                                                                    },
+                                                                ],
+                                                            },
+                                                        },
+                                                        {
+                                                            kind: 'Field',
+                                                            name: { kind: 'Name', value: 'pentester' },
+                                                            selectionSet: {
+                                                                kind: 'SelectionSet',
+                                                                selections: [
+                                                                    {
+                                                                        kind: 'Field',
+                                                                        name: { kind: 'Name', value: 'system' },
+                                                                        selectionSet: {
+                                                                            kind: 'SelectionSet',
+                                                                            selections: [
+                                                                                {
+                                                                                    kind: 'FragmentSpread',
+                                                                                    name: {
+                                                                                        kind: 'Name',
+                                                                                        value: 'defaultPromptFragment',
+                                                                                    },
+                                                                                },
+                                                                            ],
+                                                                        },
+                                                                    },
+                                                                    {
+                                                                        kind: 'Field',
+                                                                        name: { kind: 'Name', value: 'human' },
+                                                                        selectionSet: {
+                                                                            kind: 'SelectionSet',
+                                                                            selections: [
+                                                                                {
+                                                                                    kind: 'FragmentSpread',
+                                                                                    name: {
+                                                                                        kind: 'Name',
+                                                                                        value: 'defaultPromptFragment',
+                                                                                    },
+                                                                                },
+                                                                            ],
+                                                                        },
+                                                                    },
+                                                                ],
+                                                            },
+                                                        },
+                                                        {
+                                                            kind: 'Field',
+                                                            name: { kind: 'Name', value: 'coder' },
+                                                            selectionSet: {
+                                                                kind: 'SelectionSet',
+                                                                selections: [
+                                                                    {
+                                                                        kind: 'Field',
+                                                                        name: { kind: 'Name', value: 'system' },
+                                                                        selectionSet: {
+                                                                            kind: 'SelectionSet',
+                                                                            selections: [
+                                                                                {
+                                                                                    kind: 'FragmentSpread',
+                                                                                    name: {
+                                                                                        kind: 'Name',
+                                                                                        value: 'defaultPromptFragment',
+                                                                                    },
+                                                                                },
+                                                                            ],
+                                                                        },
+                                                                    },
+                                                                    {
+                                                                        kind: 'Field',
+                                                                        name: { kind: 'Name', value: 'human' },
+                                                                        selectionSet: {
+                                                                            kind: 'SelectionSet',
+                                                                            selections: [
+                                                                                {
+                                                                                    kind: 'FragmentSpread',
+                                                                                    name: {
+                                                                                        kind: 'Name',
+                                                                                        value: 'defaultPromptFragment',
+                                                                                    },
+                                                                                },
+                                                                            ],
+                                                                        },
+                                                                    },
+                                                                ],
+                                                            },
+                                                        },
+                                                        {
+                                                            kind: 'Field',
+                                                            name: { kind: 'Name', value: 'installer' },
+                                                            selectionSet: {
+                                                                kind: 'SelectionSet',
+                                                                selections: [
+                                                                    {
+                                                                        kind: 'Field',
+                                                                        name: { kind: 'Name', value: 'system' },
+                                                                        selectionSet: {
+                                                                            kind: 'SelectionSet',
+                                                                            selections: [
+                                                                                {
+                                                                                    kind: 'FragmentSpread',
+                                                                                    name: {
+                                                                                        kind: 'Name',
+                                                                                        value: 'defaultPromptFragment',
+                                                                                    },
+                                                                                },
+                                                                            ],
+                                                                        },
+                                                                    },
+                                                                    {
+                                                                        kind: 'Field',
+                                                                        name: { kind: 'Name', value: 'human' },
+                                                                        selectionSet: {
+                                                                            kind: 'SelectionSet',
+                                                                            selections: [
+                                                                                {
+                                                                                    kind: 'FragmentSpread',
+                                                                                    name: {
+                                                                                        kind: 'Name',
+                                                                                        value: 'defaultPromptFragment',
+                                                                                    },
+                                                                                },
+                                                                            ],
+                                                                        },
+                                                                    },
+                                                                ],
+                                                            },
+                                                        },
+                                                        {
+                                                            kind: 'Field',
+                                                            name: { kind: 'Name', value: 'searcher' },
+                                                            selectionSet: {
+                                                                kind: 'SelectionSet',
+                                                                selections: [
+                                                                    {
+                                                                        kind: 'Field',
+                                                                        name: { kind: 'Name', value: 'system' },
+                                                                        selectionSet: {
+                                                                            kind: 'SelectionSet',
+                                                                            selections: [
+                                                                                {
+                                                                                    kind: 'FragmentSpread',
+                                                                                    name: {
+                                                                                        kind: 'Name',
+                                                                                        value: 'defaultPromptFragment',
+                                                                                    },
+                                                                                },
+                                                                            ],
+                                                                        },
+                                                                    },
+                                                                    {
+                                                                        kind: 'Field',
+                                                                        name: { kind: 'Name', value: 'human' },
+                                                                        selectionSet: {
+                                                                            kind: 'SelectionSet',
+                                                                            selections: [
+                                                                                {
+                                                                                    kind: 'FragmentSpread',
+                                                                                    name: {
+                                                                                        kind: 'Name',
+                                                                                        value: 'defaultPromptFragment',
+                                                                                    },
+                                                                                },
+                                                                            ],
+                                                                        },
+                                                                    },
+                                                                ],
+                                                            },
+                                                        },
+                                                        {
+                                                            kind: 'Field',
+                                                            name: { kind: 'Name', value: 'memorist' },
+                                                            selectionSet: {
+                                                                kind: 'SelectionSet',
+                                                                selections: [
+                                                                    {
+                                                                        kind: 'Field',
+                                                                        name: { kind: 'Name', value: 'system' },
+                                                                        selectionSet: {
+                                                                            kind: 'SelectionSet',
+                                                                            selections: [
+                                                                                {
+                                                                                    kind: 'FragmentSpread',
+                                                                                    name: {
+                                                                                        kind: 'Name',
+                                                                                        value: 'defaultPromptFragment',
+                                                                                    },
+                                                                                },
+                                                                            ],
+                                                                        },
+                                                                    },
+                                                                    {
+                                                                        kind: 'Field',
+                                                                        name: { kind: 'Name', value: 'human' },
+                                                                        selectionSet: {
+                                                                            kind: 'SelectionSet',
+                                                                            selections: [
+                                                                                {
+                                                                                    kind: 'FragmentSpread',
+                                                                                    name: {
+                                                                                        kind: 'Name',
+                                                                                        value: 'defaultPromptFragment',
+                                                                                    },
+                                                                                },
+                                                                            ],
+                                                                        },
+                                                                    },
+                                                                ],
+                                                            },
+                                                        },
+                                                        {
+                                                            kind: 'Field',
+                                                            name: { kind: 'Name', value: 'adviser' },
+                                                            selectionSet: {
+                                                                kind: 'SelectionSet',
+                                                                selections: [
+                                                                    {
+                                                                        kind: 'Field',
+                                                                        name: { kind: 'Name', value: 'system' },
+                                                                        selectionSet: {
+                                                                            kind: 'SelectionSet',
+                                                                            selections: [
+                                                                                {
+                                                                                    kind: 'FragmentSpread',
+                                                                                    name: {
+                                                                                        kind: 'Name',
+                                                                                        value: 'defaultPromptFragment',
+                                                                                    },
+                                                                                },
+                                                                            ],
+                                                                        },
+                                                                    },
+                                                                    {
+                                                                        kind: 'Field',
+                                                                        name: { kind: 'Name', value: 'human' },
+                                                                        selectionSet: {
+                                                                            kind: 'SelectionSet',
+                                                                            selections: [
+                                                                                {
+                                                                                    kind: 'FragmentSpread',
+                                                                                    name: {
+                                                                                        kind: 'Name',
+                                                                                        value: 'defaultPromptFragment',
+                                                                                    },
+                                                                                },
+                                                                            ],
+                                                                        },
+                                                                    },
+                                                                ],
+                                                            },
+                                                        },
+                                                        {
+                                                            kind: 'Field',
+                                                            name: { kind: 'Name', value: 'generator' },
+                                                            selectionSet: {
+                                                                kind: 'SelectionSet',
+                                                                selections: [
+                                                                    {
+                                                                        kind: 'Field',
+                                                                        name: { kind: 'Name', value: 'system' },
+                                                                        selectionSet: {
+                                                                            kind: 'SelectionSet',
+                                                                            selections: [
+                                                                                {
+                                                                                    kind: 'FragmentSpread',
+                                                                                    name: {
+                                                                                        kind: 'Name',
+                                                                                        value: 'defaultPromptFragment',
+                                                                                    },
+                                                                                },
+                                                                            ],
+                                                                        },
+                                                                    },
+                                                                    {
+                                                                        kind: 'Field',
+                                                                        name: { kind: 'Name', value: 'human' },
+                                                                        selectionSet: {
+                                                                            kind: 'SelectionSet',
+                                                                            selections: [
+                                                                                {
+                                                                                    kind: 'FragmentSpread',
+                                                                                    name: {
+                                                                                        kind: 'Name',
+                                                                                        value: 'defaultPromptFragment',
+                                                                                    },
+                                                                                },
+                                                                            ],
+                                                                        },
+                                                                    },
+                                                                ],
+                                                            },
+                                                        },
+                                                        {
+                                                            kind: 'Field',
+                                                            name: { kind: 'Name', value: 'refiner' },
+                                                            selectionSet: {
+                                                                kind: 'SelectionSet',
+                                                                selections: [
+                                                                    {
+                                                                        kind: 'Field',
+                                                                        name: { kind: 'Name', value: 'system' },
+                                                                        selectionSet: {
+                                                                            kind: 'SelectionSet',
+                                                                            selections: [
+                                                                                {
+                                                                                    kind: 'FragmentSpread',
+                                                                                    name: {
+                                                                                        kind: 'Name',
+                                                                                        value: 'defaultPromptFragment',
+                                                                                    },
+                                                                                },
+                                                                            ],
+                                                                        },
+                                                                    },
+                                                                    {
+                                                                        kind: 'Field',
+                                                                        name: { kind: 'Name', value: 'human' },
+                                                                        selectionSet: {
+                                                                            kind: 'SelectionSet',
+                                                                            selections: [
+                                                                                {
+                                                                                    kind: 'FragmentSpread',
+                                                                                    name: {
+                                                                                        kind: 'Name',
+                                                                                        value: 'defaultPromptFragment',
+                                                                                    },
+                                                                                },
+                                                                            ],
+                                                                        },
+                                                                    },
+                                                                ],
+                                                            },
+                                                        },
+                                                        {
+                                                            kind: 'Field',
+                                                            name: { kind: 'Name', value: 'reporter' },
+                                                            selectionSet: {
+                                                                kind: 'SelectionSet',
+                                                                selections: [
+                                                                    {
+                                                                        kind: 'Field',
+                                                                        name: { kind: 'Name', value: 'system' },
+                                                                        selectionSet: {
+                                                                            kind: 'SelectionSet',
+                                                                            selections: [
+                                                                                {
+                                                                                    kind: 'FragmentSpread',
+                                                                                    name: {
+                                                                                        kind: 'Name',
+                                                                                        value: 'defaultPromptFragment',
+                                                                                    },
+                                                                                },
+                                                                            ],
+                                                                        },
+                                                                    },
+                                                                    {
+                                                                        kind: 'Field',
+                                                                        name: { kind: 'Name', value: 'human' },
+                                                                        selectionSet: {
+                                                                            kind: 'SelectionSet',
+                                                                            selections: [
+                                                                                {
+                                                                                    kind: 'FragmentSpread',
+                                                                                    name: {
+                                                                                        kind: 'Name',
+                                                                                        value: 'defaultPromptFragment',
+                                                                                    },
+                                                                                },
+                                                                            ],
+                                                                        },
+                                                                    },
+                                                                ],
+                                                            },
+                                                        },
+                                                        {
+                                                            kind: 'Field',
+                                                            name: { kind: 'Name', value: 'reflector' },
+                                                            selectionSet: {
+                                                                kind: 'SelectionSet',
+                                                                selections: [
+                                                                    {
+                                                                        kind: 'Field',
+                                                                        name: { kind: 'Name', value: 'system' },
+                                                                        selectionSet: {
+                                                                            kind: 'SelectionSet',
+                                                                            selections: [
+                                                                                {
+                                                                                    kind: 'FragmentSpread',
+                                                                                    name: {
+                                                                                        kind: 'Name',
+                                                                                        value: 'defaultPromptFragment',
+                                                                                    },
+                                                                                },
+                                                                            ],
+                                                                        },
+                                                                    },
+                                                                    {
+                                                                        kind: 'Field',
+                                                                        name: { kind: 'Name', value: 'human' },
+                                                                        selectionSet: {
+                                                                            kind: 'SelectionSet',
+                                                                            selections: [
+                                                                                {
+                                                                                    kind: 'FragmentSpread',
+                                                                                    name: {
+                                                                                        kind: 'Name',
+                                                                                        value: 'defaultPromptFragment',
+                                                                                    },
+                                                                                },
+                                                                            ],
+                                                                        },
+                                                                    },
+                                                                ],
+                                                            },
+                                                        },
+                                                        {
+                                                            kind: 'Field',
+                                                            name: { kind: 'Name', value: 'enricher' },
+                                                            selectionSet: {
+                                                                kind: 'SelectionSet',
+                                                                selections: [
+                                                                    {
+                                                                        kind: 'Field',
+                                                                        name: { kind: 'Name', value: 'system' },
+                                                                        selectionSet: {
+                                                                            kind: 'SelectionSet',
+                                                                            selections: [
+                                                                                {
+                                                                                    kind: 'FragmentSpread',
+                                                                                    name: {
+                                                                                        kind: 'Name',
+                                                                                        value: 'defaultPromptFragment',
+                                                                                    },
+                                                                                },
+                                                                            ],
+                                                                        },
+                                                                    },
+                                                                    {
+                                                                        kind: 'Field',
+                                                                        name: { kind: 'Name', value: 'human' },
+                                                                        selectionSet: {
+                                                                            kind: 'SelectionSet',
+                                                                            selections: [
+                                                                                {
+                                                                                    kind: 'FragmentSpread',
+                                                                                    name: {
+                                                                                        kind: 'Name',
+                                                                                        value: 'defaultPromptFragment',
+                                                                                    },
+                                                                                },
+                                                                            ],
+                                                                        },
+                                                                    },
+                                                                ],
+                                                            },
+                                                        },
+                                                        {
+                                                            kind: 'Field',
+                                                            name: { kind: 'Name', value: 'toolCallFixer' },
+                                                            selectionSet: {
+                                                                kind: 'SelectionSet',
+                                                                selections: [
+                                                                    {
+                                                                        kind: 'Field',
+                                                                        name: { kind: 'Name', value: 'system' },
+                                                                        selectionSet: {
+                                                                            kind: 'SelectionSet',
+                                                                            selections: [
+                                                                                {
+                                                                                    kind: 'FragmentSpread',
+                                                                                    name: {
+                                                                                        kind: 'Name',
+                                                                                        value: 'defaultPromptFragment',
+                                                                                    },
+                                                                                },
+                                                                            ],
+                                                                        },
+                                                                    },
+                                                                    {
+                                                                        kind: 'Field',
+                                                                        name: { kind: 'Name', value: 'human' },
+                                                                        selectionSet: {
+                                                                            kind: 'SelectionSet',
+                                                                            selections: [
+                                                                                {
+                                                                                    kind: 'FragmentSpread',
+                                                                                    name: {
+                                                                                        kind: 'Name',
+                                                                                        value: 'defaultPromptFragment',
+                                                                                    },
+                                                                                },
+                                                                            ],
+                                                                        },
+                                                                    },
+                                                                ],
+                                                            },
+                                                        },
+                                                        {
+                                                            kind: 'Field',
+                                                            name: { kind: 'Name', value: 'summarizer' },
+                                                            selectionSet: {
+                                                                kind: 'SelectionSet',
+                                                                selections: [
+                                                                    {
+                                                                        kind: 'Field',
+                                                                        name: { kind: 'Name', value: 'system' },
+                                                                        selectionSet: {
+                                                                            kind: 'SelectionSet',
+                                                                            selections: [
+                                                                                {
+                                                                                    kind: 'FragmentSpread',
+                                                                                    name: {
+                                                                                        kind: 'Name',
+                                                                                        value: 'defaultPromptFragment',
+                                                                                    },
+                                                                                },
+                                                                            ],
+                                                                        },
+                                                                    },
+                                                                ],
+                                                            },
+                                                        },
+                                                    ],
+                                                },
+                                            },
+                                            {
+                                                kind: 'Field',
+                                                name: { kind: 'Name', value: 'tools' },
+                                                selectionSet: {
+                                                    kind: 'SelectionSet',
+                                                    selections: [
+                                                        {
+                                                            kind: 'Field',
+                                                            name: { kind: 'Name', value: 'getFlowDescription' },
+                                                            selectionSet: {
+                                                                kind: 'SelectionSet',
+                                                                selections: [
+                                                                    {
+                                                                        kind: 'FragmentSpread',
+                                                                        name: {
+                                                                            kind: 'Name',
+                                                                            value: 'defaultPromptFragment',
+                                                                        },
+                                                                    },
+                                                                ],
+                                                            },
+                                                        },
+                                                        {
+                                                            kind: 'Field',
+                                                            name: { kind: 'Name', value: 'getTaskDescription' },
+                                                            selectionSet: {
+                                                                kind: 'SelectionSet',
+                                                                selections: [
+                                                                    {
+                                                                        kind: 'FragmentSpread',
+                                                                        name: {
+                                                                            kind: 'Name',
+                                                                            value: 'defaultPromptFragment',
+                                                                        },
+                                                                    },
+                                                                ],
+                                                            },
+                                                        },
+                                                        {
+                                                            kind: 'Field',
+                                                            name: { kind: 'Name', value: 'getExecutionLogs' },
+                                                            selectionSet: {
+                                                                kind: 'SelectionSet',
+                                                                selections: [
+                                                                    {
+                                                                        kind: 'FragmentSpread',
+                                                                        name: {
+                                                                            kind: 'Name',
+                                                                            value: 'defaultPromptFragment',
+                                                                        },
+                                                                    },
+                                                                ],
+                                                            },
+                                                        },
+                                                        {
+                                                            kind: 'Field',
+                                                            name: { kind: 'Name', value: 'getFullExecutionContext' },
+                                                            selectionSet: {
+                                                                kind: 'SelectionSet',
+                                                                selections: [
+                                                                    {
+                                                                        kind: 'FragmentSpread',
+                                                                        name: {
+                                                                            kind: 'Name',
+                                                                            value: 'defaultPromptFragment',
+                                                                        },
+                                                                    },
+                                                                ],
+                                                            },
+                                                        },
+                                                        {
+                                                            kind: 'Field',
+                                                            name: { kind: 'Name', value: 'getShortExecutionContext' },
+                                                            selectionSet: {
+                                                                kind: 'SelectionSet',
+                                                                selections: [
+                                                                    {
+                                                                        kind: 'FragmentSpread',
+                                                                        name: {
+                                                                            kind: 'Name',
+                                                                            value: 'defaultPromptFragment',
+                                                                        },
+                                                                    },
+                                                                ],
+                                                            },
+                                                        },
+                                                        {
+                                                            kind: 'Field',
+                                                            name: { kind: 'Name', value: 'chooseDockerImage' },
+                                                            selectionSet: {
+                                                                kind: 'SelectionSet',
+                                                                selections: [
+                                                                    {
+                                                                        kind: 'FragmentSpread',
+                                                                        name: {
+                                                                            kind: 'Name',
+                                                                            value: 'defaultPromptFragment',
+                                                                        },
+                                                                    },
+                                                                ],
+                                                            },
+                                                        },
+                                                        {
+                                                            kind: 'Field',
+                                                            name: { kind: 'Name', value: 'chooseUserLanguage' },
+                                                            selectionSet: {
+                                                                kind: 'SelectionSet',
+                                                                selections: [
+                                                                    {
+                                                                        kind: 'FragmentSpread',
+                                                                        name: {
+                                                                            kind: 'Name',
+                                                                            value: 'defaultPromptFragment',
+                                                                        },
+                                                                    },
+                                                                ],
+                                                            },
+                                                        },
+                                                        {
+                                                            kind: 'Field',
+                                                            name: { kind: 'Name', value: 'collectToolCallId' },
+                                                            selectionSet: {
+                                                                kind: 'SelectionSet',
+                                                                selections: [
+                                                                    {
+                                                                        kind: 'FragmentSpread',
+                                                                        name: {
+                                                                            kind: 'Name',
+                                                                            value: 'defaultPromptFragment',
+                                                                        },
+                                                                    },
+                                                                ],
+                                                            },
+                                                        },
+                                                        {
+                                                            kind: 'Field',
+                                                            name: { kind: 'Name', value: 'detectToolCallIdPattern' },
+                                                            selectionSet: {
+                                                                kind: 'SelectionSet',
+                                                                selections: [
+                                                                    {
+                                                                        kind: 'FragmentSpread',
+                                                                        name: {
+                                                                            kind: 'Name',
+                                                                            value: 'defaultPromptFragment',
+                                                                        },
+                                                                    },
+                                                                ],
+                                                            },
+                                                        },
+                                                        {
+                                                            kind: 'Field',
+                                                            name: { kind: 'Name', value: 'monitorAgentExecution' },
+                                                            selectionSet: {
+                                                                kind: 'SelectionSet',
+                                                                selections: [
+                                                                    {
+                                                                        kind: 'FragmentSpread',
+                                                                        name: {
+                                                                            kind: 'Name',
+                                                                            value: 'defaultPromptFragment',
+                                                                        },
+                                                                    },
+                                                                ],
+                                                            },
+                                                        },
+                                                        {
+                                                            kind: 'Field',
+                                                            name: { kind: 'Name', value: 'planAgentTask' },
+                                                            selectionSet: {
+                                                                kind: 'SelectionSet',
+                                                                selections: [
+                                                                    {
+                                                                        kind: 'FragmentSpread',
+                                                                        name: {
+                                                                            kind: 'Name',
+                                                                            value: 'defaultPromptFragment',
+                                                                        },
+                                                                    },
+                                                                ],
+                                                            },
+                                                        },
+                                                        {
+                                                            kind: 'Field',
+                                                            name: { kind: 'Name', value: 'wrapAgentTask' },
+                                                            selectionSet: {
+                                                                kind: 'SelectionSet',
+                                                                selections: [
+                                                                    {
+                                                                        kind: 'FragmentSpread',
+                                                                        name: {
+                                                                            kind: 'Name',
+                                                                            value: 'defaultPromptFragment',
+                                                                        },
+                                                                    },
+                                                                ],
+                                                            },
+                                                        },
+                                                    ],
+                                                },
+                                            },
+                                        ],
+                                    },
+                                },
+                                {
+                                    kind: 'Field',
+                                    name: { kind: 'Name', value: 'userDefined' },
+                                    selectionSet: {
+                                        kind: 'SelectionSet',
+                                        selections: [
+                                            {
+                                                kind: 'FragmentSpread',
+                                                name: { kind: 'Name', value: 'userPromptFragment' },
+                                            },
+                                        ],
+                                    },
+                                },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'defaultPromptFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'DefaultPrompt' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'type' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'template' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'variables' } },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'userPromptFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'UserPrompt' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'type' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'template' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<SettingsPromptsQuery, SettingsPromptsQueryVariables>;
+export const FlowDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'query',
+            name: { kind: 'Name', value: 'flow' },
+            variableDefinitions: [
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'id' } },
+                    type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'ID' } } },
+                },
+            ],
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'flow' },
+                        arguments: [
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'flowId' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'id' } },
+                            },
+                        ],
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [{ kind: 'FragmentSpread', name: { kind: 'Name', value: 'flowFragment' } }],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'tasks' },
+                        arguments: [
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'flowId' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'id' } },
+                            },
+                        ],
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [{ kind: 'FragmentSpread', name: { kind: 'Name', value: 'taskFragment' } }],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'screenshots' },
+                        arguments: [
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'flowId' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'id' } },
+                            },
+                        ],
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'screenshotFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'terminalLogs' },
+                        arguments: [
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'flowId' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'id' } },
+                            },
+                        ],
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'terminalLogFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'messageLogs' },
+                        arguments: [
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'flowId' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'id' } },
+                            },
+                        ],
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'messageLogFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'agentLogs' },
+                        arguments: [
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'flowId' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'id' } },
+                            },
+                        ],
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [{ kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentLogFragment' } }],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'searchLogs' },
+                        arguments: [
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'flowId' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'id' } },
+                            },
+                        ],
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'searchLogFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'vectorStoreLogs' },
+                        arguments: [
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'flowId' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'id' } },
+                            },
+                        ],
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'vectorStoreLogFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'terminalFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Terminal' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'type' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'name' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'image' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'connected' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'providerFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Provider' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'name' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'type' } },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'subtaskFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Subtask' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'status' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'title' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'description' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'result' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'taskId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'flowFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Flow' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'title' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'status' } },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'terminals' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [{ kind: 'FragmentSpread', name: { kind: 'Name', value: 'terminalFragment' } }],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'provider' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [{ kind: 'FragmentSpread', name: { kind: 'Name', value: 'providerFragment' } }],
+                        },
+                    },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'taskFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Task' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'title' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'status' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'input' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'result' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'flowId' } },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'subtasks' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [{ kind: 'FragmentSpread', name: { kind: 'Name', value: 'subtaskFragment' } }],
+                        },
+                    },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'screenshotFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Screenshot' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'flowId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'taskId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'subtaskId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'name' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'url' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'terminalLogFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'TerminalLog' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'flowId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'taskId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'subtaskId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'type' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'text' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'terminal' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'messageLogFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'MessageLog' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'type' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'message' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'thinking' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'result' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'resultFormat' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'flowId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'taskId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'subtaskId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'agentLogFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'AgentLog' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'flowId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'initiator' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'executor' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'task' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'result' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'taskId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'subtaskId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'searchLogFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'SearchLog' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'flowId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'initiator' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'executor' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'engine' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'query' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'result' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'taskId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'subtaskId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'vectorStoreLogFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'VectorStoreLog' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'flowId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'initiator' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'executor' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'filter' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'query' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'action' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'result' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'taskId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'subtaskId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<FlowQuery, FlowQueryVariables>;
+export const TasksDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'query',
+            name: { kind: 'Name', value: 'tasks' },
+            variableDefinitions: [
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'flowId' } },
+                    type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'ID' } } },
+                },
+            ],
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'tasks' },
+                        arguments: [
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'flowId' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'flowId' } },
+                            },
+                        ],
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [{ kind: 'FragmentSpread', name: { kind: 'Name', value: 'taskFragment' } }],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'subtaskFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Subtask' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'status' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'title' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'description' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'result' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'taskId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'taskFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Task' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'title' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'status' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'input' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'result' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'flowId' } },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'subtasks' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [{ kind: 'FragmentSpread', name: { kind: 'Name', value: 'subtaskFragment' } }],
+                        },
+                    },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<TasksQuery, TasksQueryVariables>;
+export const FlowFilesDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'query',
+            name: { kind: 'Name', value: 'flowFiles' },
+            variableDefinitions: [
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'flowId' } },
+                    type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'ID' } } },
+                },
+            ],
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'flowFiles' },
+                        arguments: [
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'flowId' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'flowId' } },
+                            },
+                        ],
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [{ kind: 'FragmentSpread', name: { kind: 'Name', value: 'flowFileFragment' } }],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'flowFileFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'FlowFile' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'name' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'path' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'size' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'isDir' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'modifiedAt' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<FlowFilesQuery, FlowFilesQueryVariables>;
+export const ResourcesDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'query',
+            name: { kind: 'Name', value: 'resources' },
+            variableDefinitions: [
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'path' } },
+                    type: { kind: 'NamedType', name: { kind: 'Name', value: 'String' } },
+                },
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'recursive' } },
+                    type: { kind: 'NamedType', name: { kind: 'Name', value: 'Boolean' } },
+                },
+            ],
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'resources' },
+                        arguments: [
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'path' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'path' } },
+                            },
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'recursive' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'recursive' } },
+                            },
+                        ],
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'userResourceFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'userResourceFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'UserResource' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'userId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'name' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'path' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'size' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'isDir' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<ResourcesQuery, ResourcesQueryVariables>;
+export const AssistantsDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'query',
+            name: { kind: 'Name', value: 'assistants' },
+            variableDefinitions: [
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'flowId' } },
+                    type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'ID' } } },
+                },
+            ],
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'assistants' },
+                        arguments: [
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'flowId' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'flowId' } },
+                            },
+                        ],
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'assistantFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'providerFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Provider' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'name' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'type' } },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'assistantFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Assistant' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'title' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'status' } },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'provider' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [{ kind: 'FragmentSpread', name: { kind: 'Name', value: 'providerFragment' } }],
+                        },
+                    },
+                    { kind: 'Field', name: { kind: 'Name', value: 'flowId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'useAgents' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<AssistantsQuery, AssistantsQueryVariables>;
+export const AssistantLogsDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'query',
+            name: { kind: 'Name', value: 'assistantLogs' },
+            variableDefinitions: [
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'flowId' } },
+                    type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'ID' } } },
+                },
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'assistantId' } },
+                    type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'ID' } } },
+                },
+            ],
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'assistantLogs' },
+                        arguments: [
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'flowId' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'flowId' } },
+                            },
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'assistantId' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'assistantId' } },
+                            },
+                        ],
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'assistantLogFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'assistantLogFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'AssistantLog' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'type' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'message' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'thinking' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'result' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'resultFormat' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'appendPart' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'flowId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'assistantId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<AssistantLogsQuery, AssistantLogsQueryVariables>;
+export const FlowReportDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'query',
+            name: { kind: 'Name', value: 'flowReport' },
+            variableDefinitions: [
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'id' } },
+                    type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'ID' } } },
+                },
+            ],
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'flow' },
+                        arguments: [
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'flowId' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'id' } },
+                            },
+                        ],
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [{ kind: 'FragmentSpread', name: { kind: 'Name', value: 'flowFragment' } }],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'tasks' },
+                        arguments: [
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'flowId' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'id' } },
+                            },
+                        ],
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [{ kind: 'FragmentSpread', name: { kind: 'Name', value: 'taskFragment' } }],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'terminalFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Terminal' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'type' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'name' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'image' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'connected' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'providerFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Provider' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'name' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'type' } },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'subtaskFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Subtask' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'status' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'title' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'description' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'result' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'taskId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'flowFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Flow' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'title' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'status' } },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'terminals' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [{ kind: 'FragmentSpread', name: { kind: 'Name', value: 'terminalFragment' } }],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'provider' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [{ kind: 'FragmentSpread', name: { kind: 'Name', value: 'providerFragment' } }],
+                        },
+                    },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'taskFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Task' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'title' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'status' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'input' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'result' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'flowId' } },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'subtasks' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [{ kind: 'FragmentSpread', name: { kind: 'Name', value: 'subtaskFragment' } }],
+                        },
+                    },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<FlowReportQuery, FlowReportQueryVariables>;
+export const UsageStatsTotalDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'query',
+            name: { kind: 'Name', value: 'usageStatsTotal' },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'usageStatsTotal' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'usageStatsFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'usageStatsFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'UsageStats' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageIn' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageOut' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageCacheIn' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageCacheOut' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageCostIn' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageCostOut' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<UsageStatsTotalQuery, UsageStatsTotalQueryVariables>;
+export const UsageStatsByPeriodDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'query',
+            name: { kind: 'Name', value: 'usageStatsByPeriod' },
+            variableDefinitions: [
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'period' } },
+                    type: {
+                        kind: 'NonNullType',
+                        type: { kind: 'NamedType', name: { kind: 'Name', value: 'UsageStatsPeriod' } },
+                    },
+                },
+            ],
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'usageStatsByPeriod' },
+                        arguments: [
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'period' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'period' } },
+                            },
+                        ],
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'dailyUsageStatsFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'usageStatsFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'UsageStats' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageIn' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageOut' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageCacheIn' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageCacheOut' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageCostIn' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageCostOut' } },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'dailyUsageStatsFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'DailyUsageStats' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'date' } },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'stats' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'usageStatsFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<UsageStatsByPeriodQuery, UsageStatsByPeriodQueryVariables>;
+export const UsageStatsByProviderDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'query',
+            name: { kind: 'Name', value: 'usageStatsByProvider' },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'usageStatsByProvider' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'providerUsageStatsFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'usageStatsFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'UsageStats' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageIn' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageOut' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageCacheIn' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageCacheOut' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageCostIn' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageCostOut' } },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'providerUsageStatsFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'ProviderUsageStats' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'provider' } },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'stats' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'usageStatsFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<UsageStatsByProviderQuery, UsageStatsByProviderQueryVariables>;
+export const UsageStatsByModelDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'query',
+            name: { kind: 'Name', value: 'usageStatsByModel' },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'usageStatsByModel' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'modelUsageStatsFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'usageStatsFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'UsageStats' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageIn' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageOut' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageCacheIn' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageCacheOut' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageCostIn' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageCostOut' } },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'modelUsageStatsFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'ModelUsageStats' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'model' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'provider' } },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'stats' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'usageStatsFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<UsageStatsByModelQuery, UsageStatsByModelQueryVariables>;
+export const UsageStatsByAgentTypeDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'query',
+            name: { kind: 'Name', value: 'usageStatsByAgentType' },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'usageStatsByAgentType' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                {
+                                    kind: 'FragmentSpread',
+                                    name: { kind: 'Name', value: 'agentTypeUsageStatsFragment' },
+                                },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'usageStatsFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'UsageStats' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageIn' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageOut' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageCacheIn' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageCacheOut' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageCostIn' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageCostOut' } },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'agentTypeUsageStatsFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'AgentTypeUsageStats' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'agentType' } },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'stats' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'usageStatsFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<UsageStatsByAgentTypeQuery, UsageStatsByAgentTypeQueryVariables>;
+export const UsageStatsByFlowDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'query',
+            name: { kind: 'Name', value: 'usageStatsByFlow' },
+            variableDefinitions: [
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'flowId' } },
+                    type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'ID' } } },
+                },
+            ],
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'usageStatsByFlow' },
+                        arguments: [
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'flowId' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'flowId' } },
+                            },
+                        ],
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'usageStatsFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'usageStatsFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'UsageStats' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageIn' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageOut' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageCacheIn' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageCacheOut' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageCostIn' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageCostOut' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<UsageStatsByFlowQuery, UsageStatsByFlowQueryVariables>;
+export const UsageStatsByAgentTypeForFlowDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'query',
+            name: { kind: 'Name', value: 'usageStatsByAgentTypeForFlow' },
+            variableDefinitions: [
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'flowId' } },
+                    type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'ID' } } },
+                },
+            ],
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'usageStatsByAgentTypeForFlow' },
+                        arguments: [
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'flowId' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'flowId' } },
+                            },
+                        ],
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                {
+                                    kind: 'FragmentSpread',
+                                    name: { kind: 'Name', value: 'agentTypeUsageStatsFragment' },
+                                },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'usageStatsFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'UsageStats' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageIn' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageOut' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageCacheIn' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageCacheOut' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageCostIn' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageCostOut' } },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'agentTypeUsageStatsFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'AgentTypeUsageStats' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'agentType' } },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'stats' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'usageStatsFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<UsageStatsByAgentTypeForFlowQuery, UsageStatsByAgentTypeForFlowQueryVariables>;
+export const UsageStatsByModelAgentsForFlowDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'query',
+            name: { kind: 'Name', value: 'usageStatsByModelAgentsForFlow' },
+            variableDefinitions: [
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'flowId' } },
+                    type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'ID' } } },
+                },
+            ],
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'usageStatsByModelAgentsForFlow' },
+                        arguments: [
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'flowId' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'flowId' } },
+                            },
+                        ],
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                {
+                                    kind: 'FragmentSpread',
+                                    name: { kind: 'Name', value: 'modelAgentsUsageStatsFragment' },
+                                },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'usageStatsFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'UsageStats' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageIn' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageOut' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageCacheIn' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageCacheOut' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageCostIn' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalUsageCostOut' } },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'modelAgentsUsageStatsFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'ModelAgentsUsageStats' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'model' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'provider' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'agentTypes' } },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'stats' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'usageStatsFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<UsageStatsByModelAgentsForFlowQuery, UsageStatsByModelAgentsForFlowQueryVariables>;
+export const ToolcallsStatsTotalDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'query',
+            name: { kind: 'Name', value: 'toolcallsStatsTotal' },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'toolcallsStatsTotal' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'toolcallsStatsFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'toolcallsStatsFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'ToolcallsStats' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalCount' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalDurationSeconds' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<ToolcallsStatsTotalQuery, ToolcallsStatsTotalQueryVariables>;
+export const ToolcallsStatsByPeriodDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'query',
+            name: { kind: 'Name', value: 'toolcallsStatsByPeriod' },
+            variableDefinitions: [
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'period' } },
+                    type: {
+                        kind: 'NonNullType',
+                        type: { kind: 'NamedType', name: { kind: 'Name', value: 'UsageStatsPeriod' } },
+                    },
+                },
+            ],
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'toolcallsStatsByPeriod' },
+                        arguments: [
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'period' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'period' } },
+                            },
+                        ],
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                {
+                                    kind: 'FragmentSpread',
+                                    name: { kind: 'Name', value: 'dailyToolcallsStatsFragment' },
+                                },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'toolcallsStatsFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'ToolcallsStats' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalCount' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalDurationSeconds' } },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'dailyToolcallsStatsFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'DailyToolcallsStats' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'date' } },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'stats' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'toolcallsStatsFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<ToolcallsStatsByPeriodQuery, ToolcallsStatsByPeriodQueryVariables>;
+export const ToolcallsStatsByFunctionDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'query',
+            name: { kind: 'Name', value: 'toolcallsStatsByFunction' },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'toolcallsStatsByFunction' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                {
+                                    kind: 'FragmentSpread',
+                                    name: { kind: 'Name', value: 'functionToolcallsStatsFragment' },
+                                },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'functionToolcallsStatsFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'FunctionToolcallsStats' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'functionName' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'isAgent' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalCount' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalDurationSeconds' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'avgDurationSeconds' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<ToolcallsStatsByFunctionQuery, ToolcallsStatsByFunctionQueryVariables>;
+export const ToolcallsStatsByFlowDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'query',
+            name: { kind: 'Name', value: 'toolcallsStatsByFlow' },
+            variableDefinitions: [
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'flowId' } },
+                    type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'ID' } } },
+                },
+            ],
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'toolcallsStatsByFlow' },
+                        arguments: [
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'flowId' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'flowId' } },
+                            },
+                        ],
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'toolcallsStatsFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'toolcallsStatsFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'ToolcallsStats' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalCount' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalDurationSeconds' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<ToolcallsStatsByFlowQuery, ToolcallsStatsByFlowQueryVariables>;
+export const ToolcallsStatsByFunctionForFlowDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'query',
+            name: { kind: 'Name', value: 'toolcallsStatsByFunctionForFlow' },
+            variableDefinitions: [
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'flowId' } },
+                    type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'ID' } } },
+                },
+            ],
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'toolcallsStatsByFunctionForFlow' },
+                        arguments: [
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'flowId' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'flowId' } },
+                            },
+                        ],
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                {
+                                    kind: 'FragmentSpread',
+                                    name: { kind: 'Name', value: 'functionToolcallsStatsFragment' },
+                                },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'functionToolcallsStatsFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'FunctionToolcallsStats' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'functionName' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'isAgent' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalCount' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalDurationSeconds' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'avgDurationSeconds' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<ToolcallsStatsByFunctionForFlowQuery, ToolcallsStatsByFunctionForFlowQueryVariables>;
+export const FlowsStatsTotalDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'query',
+            name: { kind: 'Name', value: 'flowsStatsTotal' },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'flowsStatsTotal' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'flowsStatsFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'flowsStatsFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'FlowsStats' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalFlowsCount' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalTasksCount' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalSubtasksCount' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalAssistantsCount' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<FlowsStatsTotalQuery, FlowsStatsTotalQueryVariables>;
+export const FlowsStatsByPeriodDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'query',
+            name: { kind: 'Name', value: 'flowsStatsByPeriod' },
+            variableDefinitions: [
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'period' } },
+                    type: {
+                        kind: 'NonNullType',
+                        type: { kind: 'NamedType', name: { kind: 'Name', value: 'UsageStatsPeriod' } },
+                    },
+                },
+            ],
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'flowsStatsByPeriod' },
+                        arguments: [
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'period' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'period' } },
+                            },
+                        ],
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'dailyFlowsStatsFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'flowsStatsFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'FlowsStats' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalFlowsCount' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalTasksCount' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalSubtasksCount' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalAssistantsCount' } },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'dailyFlowsStatsFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'DailyFlowsStats' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'date' } },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'stats' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'flowsStatsFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<FlowsStatsByPeriodQuery, FlowsStatsByPeriodQueryVariables>;
+export const FlowStatsByFlowDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'query',
+            name: { kind: 'Name', value: 'flowStatsByFlow' },
+            variableDefinitions: [
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'flowId' } },
+                    type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'ID' } } },
+                },
+            ],
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'flowStatsByFlow' },
+                        arguments: [
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'flowId' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'flowId' } },
+                            },
+                        ],
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'flowStatsFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'flowStatsFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'FlowStats' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalTasksCount' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalSubtasksCount' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalAssistantsCount' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<FlowStatsByFlowQuery, FlowStatsByFlowQueryVariables>;
+export const FlowsExecutionStatsByPeriodDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'query',
+            name: { kind: 'Name', value: 'flowsExecutionStatsByPeriod' },
+            variableDefinitions: [
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'period' } },
+                    type: {
+                        kind: 'NonNullType',
+                        type: { kind: 'NamedType', name: { kind: 'Name', value: 'UsageStatsPeriod' } },
+                    },
+                },
+            ],
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'flowsExecutionStatsByPeriod' },
+                        arguments: [
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'period' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'period' } },
+                            },
+                        ],
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'flowExecutionStatsFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'subtaskExecutionStatsFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'SubtaskExecutionStats' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'subtaskId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'subtaskTitle' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalDurationSeconds' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalToolcallsCount' } },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'taskExecutionStatsFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'TaskExecutionStats' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'taskId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'taskTitle' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalDurationSeconds' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalToolcallsCount' } },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'subtasks' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                {
+                                    kind: 'FragmentSpread',
+                                    name: { kind: 'Name', value: 'subtaskExecutionStatsFragment' },
+                                },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'flowExecutionStatsFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'FlowExecutionStats' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'flowId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'flowTitle' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalDurationSeconds' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalToolcallsCount' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalAssistantsCount' } },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'tasks' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'taskExecutionStatsFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<FlowsExecutionStatsByPeriodQuery, FlowsExecutionStatsByPeriodQueryVariables>;
+export const ApiTokensDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'query',
+            name: { kind: 'Name', value: 'apiTokens' },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'apiTokens' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [{ kind: 'FragmentSpread', name: { kind: 'Name', value: 'apiTokenFragment' } }],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'apiTokenFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'APIToken' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'tokenId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'userId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'roleId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'name' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'ttl' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'status' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<ApiTokensQuery, ApiTokensQueryVariables>;
+export const ApiTokenDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'query',
+            name: { kind: 'Name', value: 'apiToken' },
+            variableDefinitions: [
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'tokenId' } },
+                    type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'String' } } },
+                },
+            ],
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'apiToken' },
+                        arguments: [
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'tokenId' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'tokenId' } },
+                            },
+                        ],
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [{ kind: 'FragmentSpread', name: { kind: 'Name', value: 'apiTokenFragment' } }],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'apiTokenFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'APIToken' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'tokenId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'userId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'roleId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'name' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'ttl' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'status' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<ApiTokenQuery, ApiTokenQueryVariables>;
+export const KnowledgeDocumentsDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'query',
+            name: { kind: 'Name', value: 'knowledgeDocuments' },
+            variableDefinitions: [
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'filter' } },
+                    type: { kind: 'NamedType', name: { kind: 'Name', value: 'KnowledgeFilter' } },
+                },
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'withContent' } },
+                    type: {
+                        kind: 'NonNullType',
+                        type: { kind: 'NamedType', name: { kind: 'Name', value: 'Boolean' } },
+                    },
+                },
+            ],
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'knowledgeDocuments' },
+                        arguments: [
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'filter' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'filter' } },
+                            },
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'withContent' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'withContent' } },
+                            },
+                        ],
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'knowledgeDocumentFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'knowledgeDocumentFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'KnowledgeDocument' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'docType' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'content' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'question' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'description' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'userId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'flowId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'taskId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'subtaskId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'guideType' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'answerType' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'codeLang' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'partSize' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalSize' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'manual' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<KnowledgeDocumentsQuery, KnowledgeDocumentsQueryVariables>;
+export const KnowledgeDocumentDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'query',
+            name: { kind: 'Name', value: 'knowledgeDocument' },
+            variableDefinitions: [
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'id' } },
+                    type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'String' } } },
+                },
+            ],
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'knowledgeDocument' },
+                        arguments: [
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'id' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'id' } },
+                            },
+                        ],
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'knowledgeDocumentFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'knowledgeDocumentFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'KnowledgeDocument' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'docType' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'content' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'question' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'description' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'userId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'flowId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'taskId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'subtaskId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'guideType' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'answerType' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'codeLang' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'partSize' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalSize' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'manual' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<KnowledgeDocumentQuery, KnowledgeDocumentQueryVariables>;
+export const SearchKnowledgeDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'query',
+            name: { kind: 'Name', value: 'searchKnowledge' },
+            variableDefinitions: [
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'query' } },
+                    type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'String' } } },
+                },
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'filter' } },
+                    type: { kind: 'NamedType', name: { kind: 'Name', value: 'KnowledgeFilter' } },
+                },
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'limit' } },
+                    type: { kind: 'NamedType', name: { kind: 'Name', value: 'Int' } },
+                },
+            ],
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'searchKnowledge' },
+                        arguments: [
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'query' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'query' } },
+                            },
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'filter' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'filter' } },
+                            },
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'limit' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'limit' } },
+                            },
+                        ],
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                {
+                                    kind: 'FragmentSpread',
+                                    name: { kind: 'Name', value: 'knowledgeDocumentWithScoreFragment' },
+                                },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'knowledgeDocumentFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'KnowledgeDocument' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'docType' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'content' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'question' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'description' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'userId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'flowId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'taskId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'subtaskId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'guideType' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'answerType' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'codeLang' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'partSize' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalSize' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'manual' } },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'knowledgeDocumentWithScoreFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'KnowledgeDocumentWithScore' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'score' } },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'document' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'knowledgeDocumentFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<SearchKnowledgeQuery, SearchKnowledgeQueryVariables>;
+export const SettingsUserDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'query',
+            name: { kind: 'Name', value: 'settingsUser' },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'settingsUser' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'userPreferencesFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'userPreferencesFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'UserPreferences' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'favoriteFlows' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<SettingsUserQuery, SettingsUserQueryVariables>;
+export const AddFavoriteFlowDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'mutation',
+            name: { kind: 'Name', value: 'addFavoriteFlow' },
+            variableDefinitions: [
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'flowId' } },
+                    type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'ID' } } },
+                },
+            ],
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'addFavoriteFlow' },
+                        arguments: [
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'flowId' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'flowId' } },
+                            },
+                        ],
+                    },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<AddFavoriteFlowMutation, AddFavoriteFlowMutationVariables>;
+export const DeleteFavoriteFlowDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'mutation',
+            name: { kind: 'Name', value: 'deleteFavoriteFlow' },
+            variableDefinitions: [
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'flowId' } },
+                    type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'ID' } } },
+                },
+            ],
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'deleteFavoriteFlow' },
+                        arguments: [
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'flowId' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'flowId' } },
+                            },
+                        ],
+                    },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<DeleteFavoriteFlowMutation, DeleteFavoriteFlowMutationVariables>;
+export const AnonymizeTextDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'mutation',
+            name: { kind: 'Name', value: 'anonymizeText' },
+            variableDefinitions: [
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'text' } },
+                    type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'String' } } },
+                },
+            ],
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'anonymizeText' },
+                        arguments: [
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'text' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'text' } },
+                            },
+                        ],
+                    },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<AnonymizeTextMutation, AnonymizeTextMutationVariables>;
+export const FlowTemplatesDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'query',
+            name: { kind: 'Name', value: 'flowTemplates' },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'flowTemplates' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'flowTemplateFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'flowTemplateFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'FlowTemplate' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'userId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'title' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'text' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<FlowTemplatesQuery, FlowTemplatesQueryVariables>;
+export const FlowTemplateDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'query',
+            name: { kind: 'Name', value: 'flowTemplate' },
+            variableDefinitions: [
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'templateId' } },
+                    type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'ID' } } },
+                },
+            ],
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'flowTemplate' },
+                        arguments: [
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'templateId' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'templateId' } },
+                            },
+                        ],
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'flowTemplateFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'flowTemplateFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'FlowTemplate' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'userId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'title' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'text' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<FlowTemplateQuery, FlowTemplateQueryVariables>;
+export const CreateFlowTemplateDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'mutation',
+            name: { kind: 'Name', value: 'createFlowTemplate' },
+            variableDefinitions: [
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'input' } },
+                    type: {
+                        kind: 'NonNullType',
+                        type: { kind: 'NamedType', name: { kind: 'Name', value: 'CreateFlowTemplateInput' } },
+                    },
+                },
+            ],
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'createFlowTemplate' },
+                        arguments: [
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'input' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'input' } },
+                            },
+                        ],
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'flowTemplateFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'flowTemplateFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'FlowTemplate' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'userId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'title' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'text' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<CreateFlowTemplateMutation, CreateFlowTemplateMutationVariables>;
+export const UpdateFlowTemplateDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'mutation',
+            name: { kind: 'Name', value: 'updateFlowTemplate' },
+            variableDefinitions: [
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'templateId' } },
+                    type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'ID' } } },
+                },
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'input' } },
+                    type: {
+                        kind: 'NonNullType',
+                        type: { kind: 'NamedType', name: { kind: 'Name', value: 'UpdateFlowTemplateInput' } },
+                    },
+                },
+            ],
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'updateFlowTemplate' },
+                        arguments: [
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'templateId' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'templateId' } },
+                            },
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'input' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'input' } },
+                            },
+                        ],
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'flowTemplateFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'flowTemplateFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'FlowTemplate' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'userId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'title' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'text' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<UpdateFlowTemplateMutation, UpdateFlowTemplateMutationVariables>;
+export const DeleteFlowTemplateDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'mutation',
+            name: { kind: 'Name', value: 'deleteFlowTemplate' },
+            variableDefinitions: [
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'templateId' } },
+                    type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'ID' } } },
+                },
+            ],
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'deleteFlowTemplate' },
+                        arguments: [
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'templateId' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'templateId' } },
+                            },
+                        ],
+                    },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<DeleteFlowTemplateMutation, DeleteFlowTemplateMutationVariables>;
+export const CreateFlowDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'mutation',
+            name: { kind: 'Name', value: 'createFlow' },
+            variableDefinitions: [
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'modelProvider' } },
+                    type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'String' } } },
+                },
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'input' } },
+                    type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'String' } } },
+                },
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'resourceIds' } },
+                    type: {
+                        kind: 'ListType',
+                        type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'ID' } } },
+                    },
+                },
+            ],
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'createFlow' },
+                        arguments: [
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'modelProvider' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'modelProvider' } },
+                            },
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'input' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'input' } },
+                            },
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'resourceIds' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'resourceIds' } },
+                            },
+                        ],
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [{ kind: 'FragmentSpread', name: { kind: 'Name', value: 'flowFragment' } }],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'terminalFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Terminal' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'type' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'name' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'image' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'connected' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'providerFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Provider' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'name' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'type' } },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'flowFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Flow' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'title' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'status' } },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'terminals' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [{ kind: 'FragmentSpread', name: { kind: 'Name', value: 'terminalFragment' } }],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'provider' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [{ kind: 'FragmentSpread', name: { kind: 'Name', value: 'providerFragment' } }],
+                        },
+                    },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<CreateFlowMutation, CreateFlowMutationVariables>;
+export const DeleteFlowDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'mutation',
+            name: { kind: 'Name', value: 'deleteFlow' },
+            variableDefinitions: [
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'flowId' } },
+                    type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'ID' } } },
+                },
+            ],
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'deleteFlow' },
+                        arguments: [
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'flowId' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'flowId' } },
+                            },
+                        ],
+                    },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<DeleteFlowMutation, DeleteFlowMutationVariables>;
+export const PutUserInputDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'mutation',
+            name: { kind: 'Name', value: 'putUserInput' },
+            variableDefinitions: [
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'flowId' } },
+                    type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'ID' } } },
+                },
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'input' } },
+                    type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'String' } } },
+                },
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'modelProvider' } },
+                    type: { kind: 'NamedType', name: { kind: 'Name', value: 'String' } },
+                },
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'resourceIds' } },
+                    type: {
+                        kind: 'ListType',
+                        type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'ID' } } },
+                    },
+                },
+            ],
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'putUserInput' },
+                        arguments: [
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'flowId' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'flowId' } },
+                            },
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'input' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'input' } },
+                            },
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'modelProvider' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'modelProvider' } },
+                            },
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'resourceIds' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'resourceIds' } },
+                            },
+                        ],
+                    },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<PutUserInputMutation, PutUserInputMutationVariables>;
+export const FinishFlowDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'mutation',
+            name: { kind: 'Name', value: 'finishFlow' },
+            variableDefinitions: [
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'flowId' } },
+                    type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'ID' } } },
+                },
+            ],
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'finishFlow' },
+                        arguments: [
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'flowId' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'flowId' } },
+                            },
+                        ],
+                    },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<FinishFlowMutation, FinishFlowMutationVariables>;
+export const StopFlowDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'mutation',
+            name: { kind: 'Name', value: 'stopFlow' },
+            variableDefinitions: [
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'flowId' } },
+                    type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'ID' } } },
+                },
+            ],
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'stopFlow' },
+                        arguments: [
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'flowId' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'flowId' } },
+                            },
+                        ],
+                    },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<StopFlowMutation, StopFlowMutationVariables>;
+export const RenameFlowDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'mutation',
+            name: { kind: 'Name', value: 'renameFlow' },
+            variableDefinitions: [
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'flowId' } },
+                    type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'ID' } } },
+                },
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'title' } },
+                    type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'String' } } },
+                },
+            ],
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'renameFlow' },
+                        arguments: [
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'flowId' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'flowId' } },
+                            },
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'title' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'title' } },
+                            },
+                        ],
+                    },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<RenameFlowMutation, RenameFlowMutationVariables>;
+export const CreateAssistantDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'mutation',
+            name: { kind: 'Name', value: 'createAssistant' },
+            variableDefinitions: [
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'flowId' } },
+                    type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'ID' } } },
+                },
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'modelProvider' } },
+                    type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'String' } } },
+                },
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'input' } },
+                    type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'String' } } },
+                },
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'useAgents' } },
+                    type: {
+                        kind: 'NonNullType',
+                        type: { kind: 'NamedType', name: { kind: 'Name', value: 'Boolean' } },
+                    },
+                },
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'resourceIds' } },
+                    type: {
+                        kind: 'ListType',
+                        type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'ID' } } },
+                    },
+                },
+            ],
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'createAssistant' },
+                        arguments: [
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'flowId' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'flowId' } },
+                            },
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'modelProvider' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'modelProvider' } },
+                            },
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'input' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'input' } },
+                            },
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'useAgents' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'useAgents' } },
+                            },
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'resourceIds' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'resourceIds' } },
+                            },
+                        ],
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                {
+                                    kind: 'Field',
+                                    name: { kind: 'Name', value: 'flow' },
+                                    selectionSet: {
+                                        kind: 'SelectionSet',
+                                        selections: [
+                                            { kind: 'FragmentSpread', name: { kind: 'Name', value: 'flowFragment' } },
+                                        ],
+                                    },
+                                },
+                                {
+                                    kind: 'Field',
+                                    name: { kind: 'Name', value: 'assistant' },
+                                    selectionSet: {
+                                        kind: 'SelectionSet',
+                                        selections: [
+                                            {
+                                                kind: 'FragmentSpread',
+                                                name: { kind: 'Name', value: 'assistantFragment' },
+                                            },
+                                        ],
+                                    },
+                                },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'terminalFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Terminal' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'type' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'name' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'image' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'connected' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'providerFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Provider' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'name' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'type' } },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'flowFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Flow' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'title' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'status' } },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'terminals' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [{ kind: 'FragmentSpread', name: { kind: 'Name', value: 'terminalFragment' } }],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'provider' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [{ kind: 'FragmentSpread', name: { kind: 'Name', value: 'providerFragment' } }],
+                        },
+                    },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'assistantFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Assistant' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'title' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'status' } },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'provider' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [{ kind: 'FragmentSpread', name: { kind: 'Name', value: 'providerFragment' } }],
+                        },
+                    },
+                    { kind: 'Field', name: { kind: 'Name', value: 'flowId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'useAgents' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<CreateAssistantMutation, CreateAssistantMutationVariables>;
+export const CallAssistantDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'mutation',
+            name: { kind: 'Name', value: 'callAssistant' },
+            variableDefinitions: [
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'flowId' } },
+                    type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'ID' } } },
+                },
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'assistantId' } },
+                    type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'ID' } } },
+                },
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'input' } },
+                    type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'String' } } },
+                },
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'useAgents' } },
+                    type: {
+                        kind: 'NonNullType',
+                        type: { kind: 'NamedType', name: { kind: 'Name', value: 'Boolean' } },
+                    },
+                },
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'resourceIds' } },
+                    type: {
+                        kind: 'ListType',
+                        type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'ID' } } },
+                    },
+                },
+            ],
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'callAssistant' },
+                        arguments: [
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'flowId' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'flowId' } },
+                            },
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'assistantId' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'assistantId' } },
+                            },
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'input' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'input' } },
+                            },
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'useAgents' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'useAgents' } },
+                            },
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'resourceIds' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'resourceIds' } },
+                            },
+                        ],
+                    },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<CallAssistantMutation, CallAssistantMutationVariables>;
+export const StopAssistantDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'mutation',
+            name: { kind: 'Name', value: 'stopAssistant' },
+            variableDefinitions: [
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'flowId' } },
+                    type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'ID' } } },
+                },
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'assistantId' } },
+                    type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'ID' } } },
+                },
+            ],
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'stopAssistant' },
+                        arguments: [
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'flowId' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'flowId' } },
+                            },
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'assistantId' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'assistantId' } },
+                            },
+                        ],
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'assistantFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'providerFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Provider' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'name' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'type' } },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'assistantFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Assistant' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'title' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'status' } },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'provider' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [{ kind: 'FragmentSpread', name: { kind: 'Name', value: 'providerFragment' } }],
+                        },
+                    },
+                    { kind: 'Field', name: { kind: 'Name', value: 'flowId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'useAgents' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<StopAssistantMutation, StopAssistantMutationVariables>;
+export const DeleteAssistantDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'mutation',
+            name: { kind: 'Name', value: 'deleteAssistant' },
+            variableDefinitions: [
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'flowId' } },
+                    type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'ID' } } },
+                },
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'assistantId' } },
+                    type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'ID' } } },
+                },
+            ],
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'deleteAssistant' },
+                        arguments: [
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'flowId' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'flowId' } },
+                            },
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'assistantId' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'assistantId' } },
+                            },
+                        ],
+                    },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<DeleteAssistantMutation, DeleteAssistantMutationVariables>;
+export const TestAgentDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'mutation',
+            name: { kind: 'Name', value: 'testAgent' },
+            variableDefinitions: [
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'type' } },
+                    type: {
+                        kind: 'NonNullType',
+                        type: { kind: 'NamedType', name: { kind: 'Name', value: 'ProviderType' } },
+                    },
+                },
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'agentType' } },
+                    type: {
+                        kind: 'NonNullType',
+                        type: { kind: 'NamedType', name: { kind: 'Name', value: 'AgentConfigType' } },
+                    },
+                },
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'agent' } },
+                    type: {
+                        kind: 'NonNullType',
+                        type: { kind: 'NamedType', name: { kind: 'Name', value: 'AgentConfigInput' } },
+                    },
+                },
+            ],
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'testAgent' },
+                        arguments: [
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'type' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'type' } },
+                            },
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'agentType' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'agentType' } },
+                            },
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'agent' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'agent' } },
+                            },
+                        ],
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentTestResultFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'testResultFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'TestResult' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'name' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'type' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'result' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'reasoning' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'streaming' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'latency' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'error' } },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'agentTestResultFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'AgentTestResult' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'tests' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'testResultFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<TestAgentMutation, TestAgentMutationVariables>;
+export const TestProviderDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'mutation',
+            name: { kind: 'Name', value: 'testProvider' },
+            variableDefinitions: [
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'type' } },
+                    type: {
+                        kind: 'NonNullType',
+                        type: { kind: 'NamedType', name: { kind: 'Name', value: 'ProviderType' } },
+                    },
+                },
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'agents' } },
+                    type: {
+                        kind: 'NonNullType',
+                        type: { kind: 'NamedType', name: { kind: 'Name', value: 'AgentsConfigInput' } },
+                    },
+                },
+            ],
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'testProvider' },
+                        arguments: [
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'type' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'type' } },
+                            },
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'agents' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'agents' } },
+                            },
+                        ],
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'providerTestResultFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'testResultFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'TestResult' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'name' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'type' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'result' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'reasoning' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'streaming' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'latency' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'error' } },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'agentTestResultFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'AgentTestResult' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'tests' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'testResultFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'providerTestResultFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'ProviderTestResult' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'simple' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentTestResultFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'simpleJson' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentTestResultFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'primaryAgent' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentTestResultFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'assistant' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentTestResultFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'generator' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentTestResultFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'refiner' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentTestResultFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'adviser' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentTestResultFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'reflector' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentTestResultFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'searcher' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentTestResultFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'enricher' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentTestResultFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'coder' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentTestResultFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'installer' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentTestResultFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'pentester' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentTestResultFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<TestProviderMutation, TestProviderMutationVariables>;
+export const CreateProviderDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'mutation',
+            name: { kind: 'Name', value: 'createProvider' },
+            variableDefinitions: [
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'name' } },
+                    type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'String' } } },
+                },
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'type' } },
+                    type: {
+                        kind: 'NonNullType',
+                        type: { kind: 'NamedType', name: { kind: 'Name', value: 'ProviderType' } },
+                    },
+                },
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'agents' } },
+                    type: {
+                        kind: 'NonNullType',
+                        type: { kind: 'NamedType', name: { kind: 'Name', value: 'AgentsConfigInput' } },
+                    },
+                },
+            ],
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'createProvider' },
+                        arguments: [
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'name' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'name' } },
+                            },
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'type' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'type' } },
+                            },
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'agents' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'agents' } },
+                            },
+                        ],
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'providerConfigFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'agentConfigFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'AgentConfig' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'model' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'maxTokens' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'temperature' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'topK' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'topP' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'minLength' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'maxLength' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'repetitionPenalty' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'frequencyPenalty' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'presencePenalty' } },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'reasoning' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'Field', name: { kind: 'Name', value: 'mode' } },
+                                { kind: 'Field', name: { kind: 'Name', value: 'effort' } },
+                                { kind: 'Field', name: { kind: 'Name', value: 'maxTokens' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'price' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'Field', name: { kind: 'Name', value: 'input' } },
+                                { kind: 'Field', name: { kind: 'Name', value: 'output' } },
+                                { kind: 'Field', name: { kind: 'Name', value: 'cacheRead' } },
+                                { kind: 'Field', name: { kind: 'Name', value: 'cacheWrite' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'agentsConfigFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'AgentsConfig' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'simple' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'simpleJson' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'primaryAgent' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'assistant' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'generator' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'refiner' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'adviser' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'reflector' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'searcher' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'enricher' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'coder' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'installer' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'pentester' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'providerConfigFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'ProviderConfig' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'name' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'type' } },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'agents' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentsConfigFragment' } },
+                            ],
+                        },
+                    },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<CreateProviderMutation, CreateProviderMutationVariables>;
+export const UpdateProviderDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'mutation',
+            name: { kind: 'Name', value: 'updateProvider' },
+            variableDefinitions: [
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'providerId' } },
+                    type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'ID' } } },
+                },
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'name' } },
+                    type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'String' } } },
+                },
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'agents' } },
+                    type: {
+                        kind: 'NonNullType',
+                        type: { kind: 'NamedType', name: { kind: 'Name', value: 'AgentsConfigInput' } },
+                    },
+                },
+            ],
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'updateProvider' },
+                        arguments: [
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'providerId' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'providerId' } },
+                            },
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'name' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'name' } },
+                            },
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'agents' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'agents' } },
+                            },
+                        ],
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'providerConfigFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'agentConfigFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'AgentConfig' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'model' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'maxTokens' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'temperature' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'topK' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'topP' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'minLength' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'maxLength' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'repetitionPenalty' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'frequencyPenalty' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'presencePenalty' } },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'reasoning' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'Field', name: { kind: 'Name', value: 'mode' } },
+                                { kind: 'Field', name: { kind: 'Name', value: 'effort' } },
+                                { kind: 'Field', name: { kind: 'Name', value: 'maxTokens' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'price' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'Field', name: { kind: 'Name', value: 'input' } },
+                                { kind: 'Field', name: { kind: 'Name', value: 'output' } },
+                                { kind: 'Field', name: { kind: 'Name', value: 'cacheRead' } },
+                                { kind: 'Field', name: { kind: 'Name', value: 'cacheWrite' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'agentsConfigFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'AgentsConfig' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'simple' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'simpleJson' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'primaryAgent' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'assistant' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'generator' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'refiner' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'adviser' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'reflector' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'searcher' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'enricher' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'coder' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'installer' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'pentester' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'providerConfigFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'ProviderConfig' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'name' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'type' } },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'agents' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentsConfigFragment' } },
+                            ],
+                        },
+                    },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<UpdateProviderMutation, UpdateProviderMutationVariables>;
+export const DeleteProviderDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'mutation',
+            name: { kind: 'Name', value: 'deleteProvider' },
+            variableDefinitions: [
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'providerId' } },
+                    type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'ID' } } },
+                },
+            ],
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'deleteProvider' },
+                        arguments: [
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'providerId' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'providerId' } },
+                            },
+                        ],
+                    },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<DeleteProviderMutation, DeleteProviderMutationVariables>;
+export const ValidatePromptDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'mutation',
+            name: { kind: 'Name', value: 'validatePrompt' },
+            variableDefinitions: [
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'type' } },
+                    type: {
+                        kind: 'NonNullType',
+                        type: { kind: 'NamedType', name: { kind: 'Name', value: 'PromptType' } },
+                    },
+                },
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'template' } },
+                    type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'String' } } },
+                },
+            ],
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'validatePrompt' },
+                        arguments: [
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'type' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'type' } },
+                            },
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'template' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'template' } },
+                            },
+                        ],
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                {
+                                    kind: 'FragmentSpread',
+                                    name: { kind: 'Name', value: 'promptValidationResultFragment' },
+                                },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'promptValidationResultFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'PromptValidationResult' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'result' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'errorType' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'message' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'line' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'details' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<ValidatePromptMutation, ValidatePromptMutationVariables>;
+export const CreatePromptDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'mutation',
+            name: { kind: 'Name', value: 'createPrompt' },
+            variableDefinitions: [
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'type' } },
+                    type: {
+                        kind: 'NonNullType',
+                        type: { kind: 'NamedType', name: { kind: 'Name', value: 'PromptType' } },
+                    },
+                },
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'template' } },
+                    type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'String' } } },
+                },
+            ],
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'createPrompt' },
+                        arguments: [
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'type' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'type' } },
+                            },
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'template' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'template' } },
+                            },
+                        ],
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'userPromptFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'userPromptFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'UserPrompt' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'type' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'template' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<CreatePromptMutation, CreatePromptMutationVariables>;
+export const UpdatePromptDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'mutation',
+            name: { kind: 'Name', value: 'updatePrompt' },
+            variableDefinitions: [
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'promptId' } },
+                    type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'ID' } } },
+                },
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'template' } },
+                    type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'String' } } },
+                },
+            ],
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'updatePrompt' },
+                        arguments: [
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'promptId' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'promptId' } },
+                            },
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'template' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'template' } },
+                            },
+                        ],
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'userPromptFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'userPromptFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'UserPrompt' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'type' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'template' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<UpdatePromptMutation, UpdatePromptMutationVariables>;
+export const DeletePromptDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'mutation',
+            name: { kind: 'Name', value: 'deletePrompt' },
+            variableDefinitions: [
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'promptId' } },
+                    type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'ID' } } },
+                },
+            ],
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'deletePrompt' },
+                        arguments: [
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'promptId' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'promptId' } },
+                            },
+                        ],
+                    },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<DeletePromptMutation, DeletePromptMutationVariables>;
+export const CreateApiTokenDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'mutation',
+            name: { kind: 'Name', value: 'createAPIToken' },
+            variableDefinitions: [
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'input' } },
+                    type: {
+                        kind: 'NonNullType',
+                        type: { kind: 'NamedType', name: { kind: 'Name', value: 'CreateAPITokenInput' } },
+                    },
+                },
+            ],
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'createAPIToken' },
+                        arguments: [
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'input' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'input' } },
+                            },
+                        ],
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'apiTokenWithSecretFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'apiTokenWithSecretFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'APITokenWithSecret' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'tokenId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'userId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'roleId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'name' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'ttl' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'status' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'token' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<CreateApiTokenMutation, CreateApiTokenMutationVariables>;
+export const UpdateApiTokenDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'mutation',
+            name: { kind: 'Name', value: 'updateAPIToken' },
+            variableDefinitions: [
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'tokenId' } },
+                    type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'String' } } },
+                },
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'input' } },
+                    type: {
+                        kind: 'NonNullType',
+                        type: { kind: 'NamedType', name: { kind: 'Name', value: 'UpdateAPITokenInput' } },
+                    },
+                },
+            ],
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'updateAPIToken' },
+                        arguments: [
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'tokenId' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'tokenId' } },
+                            },
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'input' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'input' } },
+                            },
+                        ],
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [{ kind: 'FragmentSpread', name: { kind: 'Name', value: 'apiTokenFragment' } }],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'apiTokenFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'APIToken' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'tokenId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'userId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'roleId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'name' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'ttl' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'status' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<UpdateApiTokenMutation, UpdateApiTokenMutationVariables>;
+export const DeleteApiTokenDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'mutation',
+            name: { kind: 'Name', value: 'deleteAPIToken' },
+            variableDefinitions: [
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'tokenId' } },
+                    type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'String' } } },
+                },
+            ],
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'deleteAPIToken' },
+                        arguments: [
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'tokenId' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'tokenId' } },
+                            },
+                        ],
+                    },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<DeleteApiTokenMutation, DeleteApiTokenMutationVariables>;
+export const CreateKnowledgeDocumentDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'mutation',
+            name: { kind: 'Name', value: 'createKnowledgeDocument' },
+            variableDefinitions: [
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'input' } },
+                    type: {
+                        kind: 'NonNullType',
+                        type: { kind: 'NamedType', name: { kind: 'Name', value: 'CreateKnowledgeDocumentInput' } },
+                    },
+                },
+            ],
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'createKnowledgeDocument' },
+                        arguments: [
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'input' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'input' } },
+                            },
+                        ],
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'knowledgeDocumentFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'knowledgeDocumentFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'KnowledgeDocument' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'docType' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'content' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'question' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'description' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'userId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'flowId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'taskId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'subtaskId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'guideType' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'answerType' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'codeLang' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'partSize' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalSize' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'manual' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<CreateKnowledgeDocumentMutation, CreateKnowledgeDocumentMutationVariables>;
+export const UpdateKnowledgeDocumentDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'mutation',
+            name: { kind: 'Name', value: 'updateKnowledgeDocument' },
+            variableDefinitions: [
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'id' } },
+                    type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'String' } } },
+                },
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'input' } },
+                    type: {
+                        kind: 'NonNullType',
+                        type: { kind: 'NamedType', name: { kind: 'Name', value: 'UpdateKnowledgeDocumentInput' } },
+                    },
+                },
+            ],
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'updateKnowledgeDocument' },
+                        arguments: [
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'id' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'id' } },
+                            },
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'input' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'input' } },
+                            },
+                        ],
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'knowledgeDocumentFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'knowledgeDocumentFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'KnowledgeDocument' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'docType' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'content' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'question' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'description' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'userId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'flowId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'taskId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'subtaskId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'guideType' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'answerType' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'codeLang' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'partSize' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalSize' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'manual' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<UpdateKnowledgeDocumentMutation, UpdateKnowledgeDocumentMutationVariables>;
+export const RenameKnowledgeDocumentDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'mutation',
+            name: { kind: 'Name', value: 'renameKnowledgeDocument' },
+            variableDefinitions: [
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'id' } },
+                    type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'String' } } },
+                },
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'question' } },
+                    type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'String' } } },
+                },
+            ],
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'renameKnowledgeDocument' },
+                        arguments: [
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'id' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'id' } },
+                            },
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'question' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'question' } },
+                            },
+                        ],
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'knowledgeDocumentFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'knowledgeDocumentFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'KnowledgeDocument' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'docType' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'content' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'question' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'description' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'userId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'flowId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'taskId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'subtaskId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'guideType' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'answerType' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'codeLang' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'partSize' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalSize' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'manual' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<RenameKnowledgeDocumentMutation, RenameKnowledgeDocumentMutationVariables>;
+export const DeleteKnowledgeDocumentDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'mutation',
+            name: { kind: 'Name', value: 'deleteKnowledgeDocument' },
+            variableDefinitions: [
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'id' } },
+                    type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'String' } } },
+                },
+            ],
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'deleteKnowledgeDocument' },
+                        arguments: [
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'id' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'id' } },
+                            },
+                        ],
+                    },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<DeleteKnowledgeDocumentMutation, DeleteKnowledgeDocumentMutationVariables>;
+export const TerminalLogAddedDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'subscription',
+            name: { kind: 'Name', value: 'terminalLogAdded' },
+            variableDefinitions: [
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'flowId' } },
+                    type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'ID' } } },
+                },
+            ],
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'terminalLogAdded' },
+                        arguments: [
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'flowId' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'flowId' } },
+                            },
+                        ],
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'terminalLogFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'terminalLogFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'TerminalLog' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'flowId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'taskId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'subtaskId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'type' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'text' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'terminal' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<TerminalLogAddedSubscription, TerminalLogAddedSubscriptionVariables>;
+export const MessageLogAddedDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'subscription',
+            name: { kind: 'Name', value: 'messageLogAdded' },
+            variableDefinitions: [
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'flowId' } },
+                    type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'ID' } } },
+                },
+            ],
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'messageLogAdded' },
+                        arguments: [
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'flowId' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'flowId' } },
+                            },
+                        ],
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'messageLogFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'messageLogFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'MessageLog' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'type' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'message' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'thinking' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'result' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'resultFormat' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'flowId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'taskId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'subtaskId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<MessageLogAddedSubscription, MessageLogAddedSubscriptionVariables>;
+export const MessageLogUpdatedDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'subscription',
+            name: { kind: 'Name', value: 'messageLogUpdated' },
+            variableDefinitions: [
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'flowId' } },
+                    type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'ID' } } },
+                },
+            ],
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'messageLogUpdated' },
+                        arguments: [
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'flowId' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'flowId' } },
+                            },
+                        ],
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'messageLogFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'messageLogFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'MessageLog' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'type' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'message' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'thinking' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'result' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'resultFormat' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'flowId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'taskId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'subtaskId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<MessageLogUpdatedSubscription, MessageLogUpdatedSubscriptionVariables>;
+export const ScreenshotAddedDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'subscription',
+            name: { kind: 'Name', value: 'screenshotAdded' },
+            variableDefinitions: [
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'flowId' } },
+                    type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'ID' } } },
+                },
+            ],
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'screenshotAdded' },
+                        arguments: [
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'flowId' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'flowId' } },
+                            },
+                        ],
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'screenshotFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'screenshotFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Screenshot' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'flowId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'taskId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'subtaskId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'name' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'url' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<ScreenshotAddedSubscription, ScreenshotAddedSubscriptionVariables>;
+export const AgentLogAddedDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'subscription',
+            name: { kind: 'Name', value: 'agentLogAdded' },
+            variableDefinitions: [
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'flowId' } },
+                    type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'ID' } } },
+                },
+            ],
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'agentLogAdded' },
+                        arguments: [
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'flowId' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'flowId' } },
+                            },
+                        ],
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [{ kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentLogFragment' } }],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'agentLogFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'AgentLog' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'flowId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'initiator' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'executor' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'task' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'result' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'taskId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'subtaskId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<AgentLogAddedSubscription, AgentLogAddedSubscriptionVariables>;
+export const SearchLogAddedDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'subscription',
+            name: { kind: 'Name', value: 'searchLogAdded' },
+            variableDefinitions: [
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'flowId' } },
+                    type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'ID' } } },
+                },
+            ],
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'searchLogAdded' },
+                        arguments: [
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'flowId' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'flowId' } },
+                            },
+                        ],
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'searchLogFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'searchLogFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'SearchLog' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'flowId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'initiator' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'executor' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'engine' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'query' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'result' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'taskId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'subtaskId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<SearchLogAddedSubscription, SearchLogAddedSubscriptionVariables>;
+export const VectorStoreLogAddedDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'subscription',
+            name: { kind: 'Name', value: 'vectorStoreLogAdded' },
+            variableDefinitions: [
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'flowId' } },
+                    type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'ID' } } },
+                },
+            ],
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'vectorStoreLogAdded' },
+                        arguments: [
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'flowId' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'flowId' } },
+                            },
+                        ],
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'vectorStoreLogFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'vectorStoreLogFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'VectorStoreLog' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'flowId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'initiator' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'executor' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'filter' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'query' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'action' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'result' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'taskId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'subtaskId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<VectorStoreLogAddedSubscription, VectorStoreLogAddedSubscriptionVariables>;
+export const AssistantCreatedDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'subscription',
+            name: { kind: 'Name', value: 'assistantCreated' },
+            variableDefinitions: [
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'flowId' } },
+                    type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'ID' } } },
+                },
+            ],
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'assistantCreated' },
+                        arguments: [
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'flowId' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'flowId' } },
+                            },
+                        ],
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'assistantFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'providerFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Provider' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'name' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'type' } },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'assistantFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Assistant' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'title' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'status' } },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'provider' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [{ kind: 'FragmentSpread', name: { kind: 'Name', value: 'providerFragment' } }],
+                        },
+                    },
+                    { kind: 'Field', name: { kind: 'Name', value: 'flowId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'useAgents' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<AssistantCreatedSubscription, AssistantCreatedSubscriptionVariables>;
+export const AssistantUpdatedDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'subscription',
+            name: { kind: 'Name', value: 'assistantUpdated' },
+            variableDefinitions: [
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'flowId' } },
+                    type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'ID' } } },
+                },
+            ],
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'assistantUpdated' },
+                        arguments: [
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'flowId' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'flowId' } },
+                            },
+                        ],
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'assistantFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'providerFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Provider' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'name' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'type' } },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'assistantFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Assistant' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'title' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'status' } },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'provider' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [{ kind: 'FragmentSpread', name: { kind: 'Name', value: 'providerFragment' } }],
+                        },
+                    },
+                    { kind: 'Field', name: { kind: 'Name', value: 'flowId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'useAgents' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<AssistantUpdatedSubscription, AssistantUpdatedSubscriptionVariables>;
+export const AssistantDeletedDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'subscription',
+            name: { kind: 'Name', value: 'assistantDeleted' },
+            variableDefinitions: [
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'flowId' } },
+                    type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'ID' } } },
+                },
+            ],
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'assistantDeleted' },
+                        arguments: [
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'flowId' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'flowId' } },
+                            },
+                        ],
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'assistantFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'providerFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Provider' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'name' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'type' } },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'assistantFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Assistant' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'title' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'status' } },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'provider' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [{ kind: 'FragmentSpread', name: { kind: 'Name', value: 'providerFragment' } }],
+                        },
+                    },
+                    { kind: 'Field', name: { kind: 'Name', value: 'flowId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'useAgents' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<AssistantDeletedSubscription, AssistantDeletedSubscriptionVariables>;
+export const FlowFileAddedDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'subscription',
+            name: { kind: 'Name', value: 'flowFileAdded' },
+            variableDefinitions: [
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'flowId' } },
+                    type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'ID' } } },
+                },
+            ],
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'flowFileAdded' },
+                        arguments: [
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'flowId' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'flowId' } },
+                            },
+                        ],
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [{ kind: 'FragmentSpread', name: { kind: 'Name', value: 'flowFileFragment' } }],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'flowFileFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'FlowFile' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'name' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'path' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'size' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'isDir' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'modifiedAt' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<FlowFileAddedSubscription, FlowFileAddedSubscriptionVariables>;
+export const FlowFileUpdatedDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'subscription',
+            name: { kind: 'Name', value: 'flowFileUpdated' },
+            variableDefinitions: [
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'flowId' } },
+                    type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'ID' } } },
+                },
+            ],
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'flowFileUpdated' },
+                        arguments: [
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'flowId' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'flowId' } },
+                            },
+                        ],
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [{ kind: 'FragmentSpread', name: { kind: 'Name', value: 'flowFileFragment' } }],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'flowFileFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'FlowFile' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'name' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'path' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'size' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'isDir' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'modifiedAt' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<FlowFileUpdatedSubscription, FlowFileUpdatedSubscriptionVariables>;
+export const FlowFileDeletedDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'subscription',
+            name: { kind: 'Name', value: 'flowFileDeleted' },
+            variableDefinitions: [
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'flowId' } },
+                    type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'ID' } } },
+                },
+            ],
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'flowFileDeleted' },
+                        arguments: [
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'flowId' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'flowId' } },
+                            },
+                        ],
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [{ kind: 'FragmentSpread', name: { kind: 'Name', value: 'flowFileFragment' } }],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'flowFileFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'FlowFile' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'name' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'path' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'size' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'isDir' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'modifiedAt' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<FlowFileDeletedSubscription, FlowFileDeletedSubscriptionVariables>;
+export const AssistantLogAddedDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'subscription',
+            name: { kind: 'Name', value: 'assistantLogAdded' },
+            variableDefinitions: [
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'flowId' } },
+                    type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'ID' } } },
+                },
+            ],
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'assistantLogAdded' },
+                        arguments: [
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'flowId' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'flowId' } },
+                            },
+                        ],
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'assistantLogFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'assistantLogFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'AssistantLog' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'type' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'message' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'thinking' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'result' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'resultFormat' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'appendPart' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'flowId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'assistantId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<AssistantLogAddedSubscription, AssistantLogAddedSubscriptionVariables>;
+export const AssistantLogUpdatedDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'subscription',
+            name: { kind: 'Name', value: 'assistantLogUpdated' },
+            variableDefinitions: [
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'flowId' } },
+                    type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'ID' } } },
+                },
+            ],
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'assistantLogUpdated' },
+                        arguments: [
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'flowId' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'flowId' } },
+                            },
+                        ],
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'assistantLogFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'assistantLogFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'AssistantLog' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'type' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'message' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'thinking' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'result' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'resultFormat' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'appendPart' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'flowId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'assistantId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<AssistantLogUpdatedSubscription, AssistantLogUpdatedSubscriptionVariables>;
+export const FlowCreatedDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'subscription',
+            name: { kind: 'Name', value: 'flowCreated' },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'flowCreated' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [{ kind: 'FragmentSpread', name: { kind: 'Name', value: 'flowFragment' } }],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'terminalFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Terminal' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'type' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'name' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'image' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'connected' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'providerFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Provider' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'name' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'type' } },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'flowFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Flow' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'title' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'status' } },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'terminals' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [{ kind: 'FragmentSpread', name: { kind: 'Name', value: 'terminalFragment' } }],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'provider' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [{ kind: 'FragmentSpread', name: { kind: 'Name', value: 'providerFragment' } }],
+                        },
+                    },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<FlowCreatedSubscription, FlowCreatedSubscriptionVariables>;
+export const FlowDeletedDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'subscription',
+            name: { kind: 'Name', value: 'flowDeleted' },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'flowDeleted' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [{ kind: 'FragmentSpread', name: { kind: 'Name', value: 'flowFragment' } }],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'terminalFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Terminal' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'type' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'name' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'image' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'connected' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'providerFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Provider' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'name' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'type' } },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'flowFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Flow' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'title' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'status' } },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'terminals' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [{ kind: 'FragmentSpread', name: { kind: 'Name', value: 'terminalFragment' } }],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'provider' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [{ kind: 'FragmentSpread', name: { kind: 'Name', value: 'providerFragment' } }],
+                        },
+                    },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<FlowDeletedSubscription, FlowDeletedSubscriptionVariables>;
+export const FlowUpdatedDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'subscription',
+            name: { kind: 'Name', value: 'flowUpdated' },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'flowUpdated' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [{ kind: 'FragmentSpread', name: { kind: 'Name', value: 'flowFragment' } }],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'terminalFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Terminal' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'type' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'name' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'image' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'connected' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'providerFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Provider' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'name' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'type' } },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'flowFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Flow' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'title' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'status' } },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'terminals' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [{ kind: 'FragmentSpread', name: { kind: 'Name', value: 'terminalFragment' } }],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'provider' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [{ kind: 'FragmentSpread', name: { kind: 'Name', value: 'providerFragment' } }],
+                        },
+                    },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<FlowUpdatedSubscription, FlowUpdatedSubscriptionVariables>;
+export const TaskCreatedDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'subscription',
+            name: { kind: 'Name', value: 'taskCreated' },
+            variableDefinitions: [
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'flowId' } },
+                    type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'ID' } } },
+                },
+            ],
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'taskCreated' },
+                        arguments: [
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'flowId' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'flowId' } },
+                            },
+                        ],
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [{ kind: 'FragmentSpread', name: { kind: 'Name', value: 'taskFragment' } }],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'subtaskFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Subtask' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'status' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'title' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'description' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'result' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'taskId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'taskFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Task' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'title' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'status' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'input' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'result' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'flowId' } },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'subtasks' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [{ kind: 'FragmentSpread', name: { kind: 'Name', value: 'subtaskFragment' } }],
+                        },
+                    },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<TaskCreatedSubscription, TaskCreatedSubscriptionVariables>;
+export const TaskUpdatedDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'subscription',
+            name: { kind: 'Name', value: 'taskUpdated' },
+            variableDefinitions: [
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'flowId' } },
+                    type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'ID' } } },
+                },
+            ],
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'taskUpdated' },
+                        arguments: [
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'flowId' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'flowId' } },
+                            },
+                        ],
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                                { kind: 'Field', name: { kind: 'Name', value: 'status' } },
+                                { kind: 'Field', name: { kind: 'Name', value: 'result' } },
+                                {
+                                    kind: 'Field',
+                                    name: { kind: 'Name', value: 'subtasks' },
+                                    selectionSet: {
+                                        kind: 'SelectionSet',
+                                        selections: [
+                                            {
+                                                kind: 'FragmentSpread',
+                                                name: { kind: 'Name', value: 'subtaskFragment' },
+                                            },
+                                        ],
+                                    },
+                                },
+                                { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'subtaskFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Subtask' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'status' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'title' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'description' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'result' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'taskId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<TaskUpdatedSubscription, TaskUpdatedSubscriptionVariables>;
+export const ProviderCreatedDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'subscription',
+            name: { kind: 'Name', value: 'providerCreated' },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'providerCreated' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'providerConfigFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'agentConfigFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'AgentConfig' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'model' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'maxTokens' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'temperature' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'topK' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'topP' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'minLength' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'maxLength' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'repetitionPenalty' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'frequencyPenalty' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'presencePenalty' } },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'reasoning' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'Field', name: { kind: 'Name', value: 'mode' } },
+                                { kind: 'Field', name: { kind: 'Name', value: 'effort' } },
+                                { kind: 'Field', name: { kind: 'Name', value: 'maxTokens' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'price' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'Field', name: { kind: 'Name', value: 'input' } },
+                                { kind: 'Field', name: { kind: 'Name', value: 'output' } },
+                                { kind: 'Field', name: { kind: 'Name', value: 'cacheRead' } },
+                                { kind: 'Field', name: { kind: 'Name', value: 'cacheWrite' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'agentsConfigFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'AgentsConfig' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'simple' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'simpleJson' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'primaryAgent' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'assistant' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'generator' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'refiner' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'adviser' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'reflector' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'searcher' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'enricher' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'coder' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'installer' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'pentester' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'providerConfigFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'ProviderConfig' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'name' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'type' } },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'agents' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentsConfigFragment' } },
+                            ],
+                        },
+                    },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<ProviderCreatedSubscription, ProviderCreatedSubscriptionVariables>;
+export const ProviderUpdatedDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'subscription',
+            name: { kind: 'Name', value: 'providerUpdated' },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'providerUpdated' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'providerConfigFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'agentConfigFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'AgentConfig' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'model' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'maxTokens' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'temperature' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'topK' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'topP' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'minLength' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'maxLength' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'repetitionPenalty' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'frequencyPenalty' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'presencePenalty' } },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'reasoning' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'Field', name: { kind: 'Name', value: 'mode' } },
+                                { kind: 'Field', name: { kind: 'Name', value: 'effort' } },
+                                { kind: 'Field', name: { kind: 'Name', value: 'maxTokens' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'price' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'Field', name: { kind: 'Name', value: 'input' } },
+                                { kind: 'Field', name: { kind: 'Name', value: 'output' } },
+                                { kind: 'Field', name: { kind: 'Name', value: 'cacheRead' } },
+                                { kind: 'Field', name: { kind: 'Name', value: 'cacheWrite' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'agentsConfigFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'AgentsConfig' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'simple' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'simpleJson' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'primaryAgent' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'assistant' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'generator' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'refiner' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'adviser' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'reflector' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'searcher' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'enricher' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'coder' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'installer' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'pentester' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'providerConfigFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'ProviderConfig' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'name' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'type' } },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'agents' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentsConfigFragment' } },
+                            ],
+                        },
+                    },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<ProviderUpdatedSubscription, ProviderUpdatedSubscriptionVariables>;
+export const ProviderDeletedDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'subscription',
+            name: { kind: 'Name', value: 'providerDeleted' },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'providerDeleted' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'providerConfigFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'agentConfigFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'AgentConfig' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'model' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'maxTokens' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'temperature' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'topK' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'topP' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'minLength' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'maxLength' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'repetitionPenalty' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'frequencyPenalty' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'presencePenalty' } },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'reasoning' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'Field', name: { kind: 'Name', value: 'mode' } },
+                                { kind: 'Field', name: { kind: 'Name', value: 'effort' } },
+                                { kind: 'Field', name: { kind: 'Name', value: 'maxTokens' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'price' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'Field', name: { kind: 'Name', value: 'input' } },
+                                { kind: 'Field', name: { kind: 'Name', value: 'output' } },
+                                { kind: 'Field', name: { kind: 'Name', value: 'cacheRead' } },
+                                { kind: 'Field', name: { kind: 'Name', value: 'cacheWrite' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'agentsConfigFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'AgentsConfig' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'simple' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'simpleJson' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'primaryAgent' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'assistant' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'generator' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'refiner' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'adviser' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'reflector' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'searcher' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'enricher' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'coder' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'installer' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'pentester' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentConfigFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'providerConfigFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'ProviderConfig' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'name' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'type' } },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'agents' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'agentsConfigFragment' } },
+                            ],
+                        },
+                    },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<ProviderDeletedSubscription, ProviderDeletedSubscriptionVariables>;
+export const ApiTokenCreatedDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'subscription',
+            name: { kind: 'Name', value: 'apiTokenCreated' },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'apiTokenCreated' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [{ kind: 'FragmentSpread', name: { kind: 'Name', value: 'apiTokenFragment' } }],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'apiTokenFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'APIToken' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'tokenId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'userId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'roleId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'name' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'ttl' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'status' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<ApiTokenCreatedSubscription, ApiTokenCreatedSubscriptionVariables>;
+export const ApiTokenUpdatedDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'subscription',
+            name: { kind: 'Name', value: 'apiTokenUpdated' },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'apiTokenUpdated' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [{ kind: 'FragmentSpread', name: { kind: 'Name', value: 'apiTokenFragment' } }],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'apiTokenFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'APIToken' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'tokenId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'userId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'roleId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'name' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'ttl' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'status' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<ApiTokenUpdatedSubscription, ApiTokenUpdatedSubscriptionVariables>;
+export const ApiTokenDeletedDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'subscription',
+            name: { kind: 'Name', value: 'apiTokenDeleted' },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'apiTokenDeleted' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [{ kind: 'FragmentSpread', name: { kind: 'Name', value: 'apiTokenFragment' } }],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'apiTokenFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'APIToken' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'tokenId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'userId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'roleId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'name' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'ttl' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'status' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<ApiTokenDeletedSubscription, ApiTokenDeletedSubscriptionVariables>;
+export const SettingsUserUpdatedDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'subscription',
+            name: { kind: 'Name', value: 'settingsUserUpdated' },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'settingsUserUpdated' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'userPreferencesFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'userPreferencesFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'UserPreferences' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'favoriteFlows' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<SettingsUserUpdatedSubscription, SettingsUserUpdatedSubscriptionVariables>;
+export const FlowTemplateCreatedDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'subscription',
+            name: { kind: 'Name', value: 'flowTemplateCreated' },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'flowTemplateCreated' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'flowTemplateFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'flowTemplateFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'FlowTemplate' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'userId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'title' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'text' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<FlowTemplateCreatedSubscription, FlowTemplateCreatedSubscriptionVariables>;
+export const FlowTemplateUpdatedDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'subscription',
+            name: { kind: 'Name', value: 'flowTemplateUpdated' },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'flowTemplateUpdated' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'flowTemplateFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'flowTemplateFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'FlowTemplate' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'userId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'title' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'text' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<FlowTemplateUpdatedSubscription, FlowTemplateUpdatedSubscriptionVariables>;
+export const FlowTemplateDeletedDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'subscription',
+            name: { kind: 'Name', value: 'flowTemplateDeleted' },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'flowTemplateDeleted' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'flowTemplateFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'flowTemplateFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'FlowTemplate' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'userId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'title' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'text' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<FlowTemplateDeletedSubscription, FlowTemplateDeletedSubscriptionVariables>;
+export const ResourceAddedDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'subscription',
+            name: { kind: 'Name', value: 'resourceAdded' },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'resourceAdded' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'userResourceFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'userResourceFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'UserResource' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'userId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'name' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'path' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'size' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'isDir' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<ResourceAddedSubscription, ResourceAddedSubscriptionVariables>;
+export const ResourceUpdatedDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'subscription',
+            name: { kind: 'Name', value: 'resourceUpdated' },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'resourceUpdated' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'userResourceFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'userResourceFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'UserResource' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'userId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'name' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'path' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'size' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'isDir' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<ResourceUpdatedSubscription, ResourceUpdatedSubscriptionVariables>;
+export const ResourceDeletedDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'subscription',
+            name: { kind: 'Name', value: 'resourceDeleted' },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'resourceDeleted' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'userResourceFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'userResourceFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'UserResource' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'userId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'name' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'path' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'size' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'isDir' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<ResourceDeletedSubscription, ResourceDeletedSubscriptionVariables>;
+export const KnowledgeDocumentCreatedDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'subscription',
+            name: { kind: 'Name', value: 'knowledgeDocumentCreated' },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'knowledgeDocumentCreated' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'knowledgeDocumentFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'knowledgeDocumentFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'KnowledgeDocument' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'docType' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'content' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'question' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'description' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'userId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'flowId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'taskId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'subtaskId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'guideType' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'answerType' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'codeLang' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'partSize' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalSize' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'manual' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<KnowledgeDocumentCreatedSubscription, KnowledgeDocumentCreatedSubscriptionVariables>;
+export const KnowledgeDocumentUpdatedDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'subscription',
+            name: { kind: 'Name', value: 'knowledgeDocumentUpdated' },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'knowledgeDocumentUpdated' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'knowledgeDocumentFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'knowledgeDocumentFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'KnowledgeDocument' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'docType' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'content' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'question' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'description' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'userId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'flowId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'taskId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'subtaskId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'guideType' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'answerType' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'codeLang' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'partSize' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalSize' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'manual' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<KnowledgeDocumentUpdatedSubscription, KnowledgeDocumentUpdatedSubscriptionVariables>;
+export const KnowledgeDocumentDeletedDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'subscription',
+            name: { kind: 'Name', value: 'knowledgeDocumentDeleted' },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'knowledgeDocumentDeleted' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'knowledgeDocumentFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'knowledgeDocumentFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'KnowledgeDocument' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'docType' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'content' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'question' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'description' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'userId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'flowId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'taskId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'subtaskId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'guideType' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'answerType' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'codeLang' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'partSize' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'totalSize' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'manual' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<KnowledgeDocumentDeletedSubscription, KnowledgeDocumentDeletedSubscriptionVariables>;

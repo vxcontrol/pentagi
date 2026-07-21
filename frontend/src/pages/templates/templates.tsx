@@ -5,10 +5,15 @@ import { useCallback, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
+import {
+    AppHeader,
+    AppHeaderAction,
+    AppHeaderActions,
+    AppHeaderContent,
+    AppHeaderTitle,
+} from '@/components/layouts/app/app-header';
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
-import { HeaderButton } from '@/components/shared/header-button';
 import { InlineEditInput } from '@/components/shared/inline-edit';
-import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage } from '@/components/ui/breadcrumb';
 import { Button } from '@/components/ui/button';
 import { ContextMenuItem, ContextMenuSeparator } from '@/components/ui/context-menu';
 import { DataTable, DataTableColumnHeader } from '@/components/ui/data-table';
@@ -19,10 +24,9 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Separator } from '@/components/ui/separator';
-import { SidebarTrigger } from '@/components/ui/sidebar';
 import { StatusCard } from '@/components/ui/status-card';
 import { useTableState } from '@/hooks/use-table-state';
+import { routes } from '@/lib/routes';
 import { mergeHrefWithSearchParams } from '@/lib/url-params';
 import { type Template, useTemplates } from '@/providers/templates-provider';
 
@@ -41,7 +45,7 @@ function Templates() {
 
     const handleTemplateOpen = useCallback(
         (templateId: string) => {
-            navigate(mergeHrefWithSearchParams(`/templates/${templateId}`, new URLSearchParams(location.search)));
+            navigate(mergeHrefWithSearchParams(routes.template(templateId), new URLSearchParams(location.search)));
         },
         [navigate, location.search],
     );
@@ -244,31 +248,19 @@ function Templates() {
     );
 
     const pageHeader = (
-        <header className="bg-background sticky top-0 z-10 flex h-12 w-full shrink-0 items-center gap-2 border-b transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
-            <div className="flex min-w-0 flex-1 items-center gap-2 px-4">
-                <SidebarTrigger className="-ml-1 shrink-0" />
-                <Separator
-                    className="h-4 shrink-0"
-                    orientation="vertical"
-                />
-                <Breadcrumb className="min-w-0 flex-1">
-                    <BreadcrumbList className="min-w-0 flex-nowrap">
-                        <BreadcrumbItem className="min-w-0">
-                            <FileText className="size-4 shrink-0" />
-                            <BreadcrumbPage className="min-w-0 truncate">Templates</BreadcrumbPage>
-                        </BreadcrumbItem>
-                    </BreadcrumbList>
-                </Breadcrumb>
-            </div>
-            <div className="flex shrink-0 items-center gap-2 px-4">
-                <HeaderButton
+        <AppHeader>
+            <AppHeaderContent>
+                <AppHeaderTitle icon={<FileText className="size-4 shrink-0" />}>Templates</AppHeaderTitle>
+            </AppHeaderContent>
+            <AppHeaderActions>
+                <AppHeaderAction
                     icon={<Plus />}
                     label="New Template"
-                    onClick={() => navigate('/templates/new')}
+                    onClick={() => navigate(routes.newTemplate)}
                     variant="secondary"
                 />
-            </div>
-        </header>
+            </AppHeaderActions>
+        </AppHeader>
     );
 
     if (!templates.length) {
@@ -279,7 +271,7 @@ function Templates() {
                     <StatusCard
                         action={
                             <Button
-                                onClick={() => navigate('/templates/new')}
+                                onClick={() => navigate(routes.newTemplate)}
                                 variant="secondary"
                             >
                                 <Plus className="size-4" />

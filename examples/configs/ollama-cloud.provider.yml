@@ -1,93 +1,145 @@
+# Ollama Cloud agent configuration.
+#
+# Ollama Cloud is a flat-rate subscription (no per-token billing), so model
+# selection here is driven purely by capability fit per role, not price - unlike
+# the OpenRouter/native provider configs in this directory, there is no `price:`
+# block and no need to trade quality for cost on any agent.
+#
+# Excluded from the available model list on purpose: `gemini-3-flash-preview` and
+# `gpt-oss:120b`/`gpt-oss:20b`. This product runs cybersecurity/pentesting
+# workloads, and Google/OpenAI-trained models (hosted or open-weight) carry
+# built-in safety alignment prone to false-positive refusals on legitimate
+# exploit-development and offensive security content - the same reasoning applied
+# when curating examples/configs/openrouter.provider.yml.
+#
+# Role assignments (from the models actually offered on this Ollama Cloud
+# account):
+#   - nemotron-3-nano:30b : simple/simple_json/reflector - NVIDIA's smallest
+#     Nemotron-3 tier (30B/3B-active MoE), used for fast, low-latency utility
+#     calls (docker image selection, tool-call retry nudging).
+#   - qwen3.5:397b        : searcher - largest available Qwen3.5 tier, giving the
+#     most context/recall headroom for information-gathering and query
+#     construction.
+#   - minimax-m2.7        : enricher - smallest/fastest MiniMax M-series tier,
+#     sufficient for cheap note enrichment with low latency.
+#   - kimi-k2.6           : primary_agent/assistant - Moonshot's latest flagship
+#     multimodal model, described by Moonshot as having "improved instruction
+#     compliance and self-correction" - a direct fit for a reliable long-chain
+#     tool-calling orchestration loop.
+#   - kimi-k2.7-code      : coder/installer - coding-specialized Kimi variant with
+#     strong long-context programming performance; also covers installer's
+#     environment/build-script setup tasks.
+#   - glm-5.1             : adviser - Z.AI's own positioning for this model is
+#     "designed for long-horizon tasks... best for planning, mentor, and complex
+#     agentic engineering" - a literal match for the adviser/mentor role, which is
+#     invoked frequently (execution monitor + planning).
+#   - mistral-large-3:675b: generator - Mistral's largest available dense model,
+#     used for the highest-stakes step in a flow (initial attack-plan generation).
+#   - nemotron-3-ultra    : refiner - NVIDIA's largest Nemotron-3 tier (550B/55B-
+#     active MoE), used to review/refine the plan generator produced; a different
+#     architecture (MoE vs. dense) from generator's model to catch different
+#     classes of planning errors.
+#   - deepseek-v4-pro     : pentester - "higher-tier reasoning... security
+#     analysis" per its own description; pentester is the most frequently invoked
+#     agent in a flow, so a well-balanced (not maximal) MoE flagship is used to
+#     keep per-call latency reasonable.
+#
+# Reasoning/thinking control note: this file intentionally omits the `reasoning:`
+# field entirely. For the native Ollama provider (pkg/providers/ollama, backed by
+# langchaingo's llms/ollama client, not openaicompat), `reasoning:` is a no-op -
+# llms/ollama's createChatRequest/makeOllamaOptionsFromOptions never reads
+# opts.Reasoning; "reasoning" support in that client is purely passive parsing of
+# `<thinking>` tags already present in a model's response text, not an active
+# request parameter. Each model's own hybrid-thinking default is used as-is.
+
 simple:
-  model: "nemotron-3-super:cloud"
+  model: "nemotron-3-nano:30b-cloud"
   temperature: 1
   top_p: 0.9
   n: 1
-  max_tokens: 65536
+  max_tokens: 8192
 
 simple_json:
-  model: "nemotron-3-super:cloud"
+  model: "nemotron-3-nano:30b-cloud"
   temperature: 1
-  top_p: 0.95
+  top_p: 0.9
   n: 1
-  max_tokens: 65536
+  max_tokens: 8192
   json: true
 
 primary_agent:
-  model: "qwen3-coder-next:cloud"
+  model: "kimi-k2.6:cloud"
   temperature: 1
-  top_p: 0.9
+  top_p: 0.95
   n: 1
-  max_tokens: 32768
-  reasoning:
-    effort: high
+  max_tokens: 16384
 
 assistant:
-  model: "nemotron-3-super:cloud"
+  model: "kimi-k2.6:cloud"
   temperature: 1
-  top_p: 0.9
+  top_p: 0.95
   n: 1
-  max_tokens: 65536
+  max_tokens: 16384
 
 generator:
-  model: "qwen3-coder-next:cloud"
+  model: "mistral-large-3:675b-cloud"
   temperature: 1
   top_p: 0.95
   n: 1
   max_tokens: 32768
 
 refiner:
-  model: "glm-5:cloud"
+  model: "nemotron-3-ultra:cloud"
   temperature: 1
   top_p: 0.95
   n: 1
-  max_tokens: 65536
+  max_tokens: 32768
 
 adviser:
-  model: "minimax-m2.7:cloud"
+  model: "glm-5.1:cloud"
   temperature: 1
   top_p: 0.95
   n: 1
-  max_tokens: 65536
+  max_tokens: 16384
 
 reflector:
-  model: "glm-5:cloud"
+  model: "nemotron-3-nano:30b-cloud"
   temperature: 1
-  top_p: 0.95
+  top_p: 0.9
   n: 1
-  max_tokens: 65536
+  max_tokens: 8192
 
 searcher:
   model: "qwen3.5:397b-cloud"
   temperature: 1
   top_p: 0.95
   n: 1
-  max_tokens: 65536
+  max_tokens: 8192
 
 enricher:
   model: "minimax-m2.7:cloud"
   temperature: 1
   top_p: 0.95
   n: 1
-  max_tokens: 65536
+  max_tokens: 4096
 
 coder:
-  model: "qwen3-coder-next:cloud"
+  model: "kimi-k2.7-code:cloud"
   temperature: 1
   top_p: 0.95
   n: 1
-  max_tokens: 32768
+  max_tokens: 20480
 
 installer:
-  model: "devstral-2:123b-cloud"
-  temperature: 1
-  top_p: 0.9
-  n: 1
-  max_tokens: 65536
-
-pentester:
-  model: "qwen3-coder-next:cloud"
+  model: "kimi-k2.7-code:cloud"
   temperature: 1
   top_p: 0.95
   n: 1
-  max_tokens: 32768
+  max_tokens: 16384
+
+pentester:
+  model: "deepseek-v4-pro:cloud"
+  temperature: 1
+  top_p: 0.95
+  n: 1
+  max_tokens: 16384

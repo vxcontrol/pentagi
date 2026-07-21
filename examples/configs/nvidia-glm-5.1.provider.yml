@@ -1,0 +1,171 @@
+# NVIDIA NIM Provider Configuration — z-ai/glm-5.1 (GLM-5.1)
+# Endpoint: https://integrate.api.nvidia.com/v1 (OpenAI-compatible)
+#
+# Intended environment:
+#   LLM_SERVER_URL=https://integrate.api.nvidia.com/v1
+#   LLM_SERVER_KEY=nvapi-...
+#   LLM_SERVER_MODEL=            # left empty: model is taken from this file
+#   LLM_SERVER_PROVIDER=         # left empty: no model-name prefix filtering
+#   LLM_SERVER_CONFIG_PATH=/opt/pentagi/conf/custom.provider.yml
+#   LLM_SERVER_LEGACY_REASONING=true     # GLM emits inline <think> reasoning
+#   LLM_SERVER_PRESERVE_REASONING=true   # keep reasoning content in history
+#
+# GLM-5.1 facts (from the model card):
+#   - MoE, 754B params, agentic engineering / long-horizon tool use
+#   - Input/Output context length: 131,072 tokens
+#
+# Reasoning ("thinking") on this endpoint is NOT controlled by the OpenAI
+# `reasoning_effort` field, but by the GLM chat template flags passed through
+# `extra_body.chat_template_kwargs`:
+#   - enable_thinking: true|false  — turn the thinking phase on/off
+#   - clear_thinking: false        — keep the reasoning trace (pairs with
+#                                    LLM_SERVER_PRESERVE_REASONING=true)
+#
+# Only OpenAI-compatible sampling fields are used (temperature, top_p, n,
+# max_tokens). vLLM-only fields (top_k, min_p, repetition_penalty) are
+# intentionally omitted: the NVIDIA OpenAI-compatible API does not need them
+# and the confirmed-working request used only temperature + top_p.
+#
+# Sampling profiles:
+#   - reasoning / general tasks: temperature=1.0, top_p=0.95
+#   - precise coding tasks:      temperature=0.6, top_p=0.95
+#   - lightweight non-thinking:  temperature=0.6, top_p=0.95
+
+simple:
+  model: "z-ai/glm-5.1"
+  temperature: 0.6
+  top_p: 0.95
+  n: 1
+  max_tokens: 16384
+  extra_body:
+    chat_template_kwargs:
+      enable_thinking: false
+
+simple_json:
+  model: "z-ai/glm-5.1"
+  temperature: 0.6
+  top_p: 0.95
+  n: 1
+  max_tokens: 16384
+  json: true
+  extra_body:
+    chat_template_kwargs:
+      enable_thinking: false
+
+primary_agent:
+  model: "z-ai/glm-5.1"
+  temperature: 1.0
+  top_p: 0.95
+  n: 1
+  max_tokens: 16384
+  extra_body:
+    chat_template_kwargs:
+      enable_thinking: true
+      clear_thinking: false
+
+assistant:
+  model: "z-ai/glm-5.1"
+  temperature: 1.0
+  top_p: 0.95
+  n: 1
+  max_tokens: 16384
+  extra_body:
+    chat_template_kwargs:
+      enable_thinking: true
+      clear_thinking: false
+
+generator:
+  model: "z-ai/glm-5.1"
+  temperature: 1.0
+  top_p: 0.95
+  n: 1
+  max_tokens: 16384
+  extra_body:
+    chat_template_kwargs:
+      enable_thinking: true
+      clear_thinking: false
+
+refiner:
+  model: "z-ai/glm-5.1"
+  temperature: 1.0
+  top_p: 0.95
+  n: 1
+  max_tokens: 16384
+  extra_body:
+    chat_template_kwargs:
+      enable_thinking: true
+      clear_thinking: false
+
+adviser:
+  model: "z-ai/glm-5.1"
+  temperature: 1.0
+  top_p: 0.95
+  n: 1
+  max_tokens: 16384
+  extra_body:
+    chat_template_kwargs:
+      enable_thinking: true
+      clear_thinking: false
+
+reflector:
+  model: "z-ai/glm-5.1"
+  temperature: 0.6
+  top_p: 0.95
+  n: 1
+  max_tokens: 16384
+  extra_body:
+    chat_template_kwargs:
+      enable_thinking: false
+
+searcher:
+  model: "z-ai/glm-5.1"
+  temperature: 0.6
+  top_p: 0.95
+  n: 1
+  max_tokens: 16384
+  extra_body:
+    chat_template_kwargs:
+      enable_thinking: false
+
+enricher:
+  model: "z-ai/glm-5.1"
+  temperature: 0.6
+  top_p: 0.95
+  n: 1
+  max_tokens: 16384
+  extra_body:
+    chat_template_kwargs:
+      enable_thinking: false
+
+coder:
+  model: "z-ai/glm-5.1"
+  temperature: 0.6
+  top_p: 0.95
+  n: 1
+  max_tokens: 16384
+  extra_body:
+    chat_template_kwargs:
+      enable_thinking: true
+      clear_thinking: false
+
+installer:
+  model: "z-ai/glm-5.1"
+  temperature: 0.6
+  top_p: 0.95
+  n: 1
+  max_tokens: 16384
+  extra_body:
+    chat_template_kwargs:
+      enable_thinking: true
+      clear_thinking: false
+
+pentester:
+  model: "z-ai/glm-5.1"
+  temperature: 0.6
+  top_p: 0.95
+  n: 1
+  max_tokens: 16384
+  extra_body:
+    chat_template_kwargs:
+      enable_thinking: true
+      clear_thinking: false

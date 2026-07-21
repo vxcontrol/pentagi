@@ -1,6 +1,13 @@
+import { gql, type TypedDocumentNode } from '@apollo/client';
 import { describe, expect, it } from 'vitest';
 
 import { apolloTitle, isApolloTitle } from './apollo-title';
+
+const noopDocument = gql`
+    query Noop {
+        __typename
+    }
+` as TypedDocumentNode<unknown, Record<string, never>>;
 
 describe('apolloTitle()', () => {
     // The single most important invariant of the module: the factory must
@@ -11,8 +18,8 @@ describe('apolloTitle()', () => {
     // production build crashes on routes like /flows/:id.
     it('returns a component recognized by isApolloTitle', () => {
         const Title = apolloTitle({
+            document: noopDocument,
             select: () => 'x',
-            useQuery: (() => ({ data: null })) as never,
             variables: () => null,
         });
 
@@ -30,8 +37,8 @@ describe('apolloTitle()', () => {
 
     it('survives function name stripping (simulates Terser minification)', () => {
         const Title = apolloTitle({
+            document: noopDocument,
             select: () => 'x',
-            useQuery: (() => ({ data: null })) as never,
             variables: () => null,
         });
 

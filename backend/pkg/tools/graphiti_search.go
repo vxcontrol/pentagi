@@ -9,6 +9,7 @@ import (
 
 	"pentagi/pkg/graphiti"
 	obs "pentagi/pkg/observability"
+	"pentagi/pkg/observability/langfuse"
 
 	"github.com/sirupsen/logrus"
 )
@@ -51,6 +52,18 @@ var (
 		"low":    {},
 		"medium": {},
 		"high":   {},
+	}
+
+	// graphitiRetrieverTitles maps each search_type to a human-readable
+	// langfuse observation title so the retrieval intent is clear in traces.
+	graphitiRetrieverTitles = map[string]string{
+		"temporal_window":      "retrieve temporal window context from graphiti knowledge graph",
+		"entity_relationships": "retrieve entity relationships from graphiti knowledge graph",
+		"diverse_results":      "retrieve diverse results from graphiti knowledge graph",
+		"episode_context":      "retrieve episode context from graphiti knowledge graph",
+		"successful_tools":     "retrieve successful tools from graphiti knowledge graph",
+		"recent_context":       "retrieve recent context from graphiti knowledge graph",
+		"entity_by_label":      "retrieve entities by label from graphiti knowledge graph",
 	}
 )
 
@@ -110,15 +123,35 @@ func (t *graphitiSearchTool) Handle(ctx context.Context, name string, args json.
 		return "", fmt.Errorf("search_type parameter is required")
 	}
 
+	// Get group ID from flow context
+	groupID := fmt.Sprintf("flow-%d", t.flowID)
+
 	ctx, observation := obs.Observer.NewObservation(ctx)
+
+	retrieverTitle, ok := graphitiRetrieverTitles[searchArgs.SearchType]
+	if !ok {
+		retrieverTitle = "retrieve context from graphiti knowledge graph"
+	}
+
+	retriever := observation.Retriever(
+		langfuse.WithRetrieverName(retrieverTitle),
+		langfuse.WithRetrieverInput(searchArgs.retrieverInput(groupID)),
+		langfuse.WithRetrieverMetadata(langfuse.Metadata{
+			"tool_name":   name,
+			"engine":      "graphiti",
+			"search_type": searchArgs.SearchType,
+			"group_id":    groupID,
+			"query":       searchArgs.Query,
+		}),
+	)
+	ctx, observation = retriever.Observation(ctx)
+
+	// Nest Graphiti server-side observations under the retriever observation
 	observationObject := &graphiti.Observation{
 		ID:      observation.ID(),
 		TraceID: observation.TraceID(),
 		Time:    time.Now().UTC(),
 	}
-
-	// Get group ID from flow context
-	groupID := fmt.Sprintf("flow-%d", t.flowID)
 
 	// Route to appropriate search method
 	var (
@@ -145,11 +178,62 @@ func (t *graphitiSearchTool) Handle(ctx context.Context, name string, args json.
 	}
 
 	if err != nil {
+		retriever.End(
+			langfuse.WithRetrieverStatus(err.Error()),
+			langfuse.WithRetrieverLevel(langfuse.ObservationLevelError),
+		)
 		logger.WithError(err).Errorf("failed to perform graphiti search '%s'", searchArgs.SearchType)
 		return "", err
 	}
 
+	retriever.End(
+		langfuse.WithRetrieverStatus("success"),
+		langfuse.WithRetrieverLevel(langfuse.ObservationLevelDebug),
+		langfuse.WithRetrieverOutput(result),
+	)
+
 	return result, nil
+}
+
+// retrieverInput builds the langfuse retriever input payload, including only
+// the search parameters relevant to the requested search_type.
+func (args GraphitiSearchAction) retrieverInput(groupID string) map[string]any {
+	input := map[string]any{
+		"query":       args.Query,
+		"search_type": args.SearchType,
+		"group_id":    groupID,
+	}
+	if args.MaxResults != nil {
+		input["max_results"] = args.MaxResults.Int()
+	}
+	if args.TimeStart != "" {
+		input["time_start"] = args.TimeStart
+	}
+	if args.TimeEnd != "" {
+		input["time_end"] = args.TimeEnd
+	}
+	if args.CenterNodeUUID != "" {
+		input["center_node_uuid"] = args.CenterNodeUUID
+	}
+	if args.MaxDepth != nil {
+		input["max_depth"] = args.MaxDepth.Int()
+	}
+	if len(args.NodeLabels) > 0 {
+		input["node_labels"] = args.NodeLabels
+	}
+	if len(args.EdgeTypes) > 0 {
+		input["edge_types"] = args.EdgeTypes
+	}
+	if args.DiversityLevel != "" {
+		input["diversity_level"] = args.DiversityLevel
+	}
+	if args.MinMentions != nil {
+		input["min_mentions"] = args.MinMentions.Int()
+	}
+	if args.RecencyWindow != "" {
+		input["recency_window"] = args.RecencyWindow
+	}
+	return input
 }
 
 // handleTemporalWindowSearch performs time-bounded search

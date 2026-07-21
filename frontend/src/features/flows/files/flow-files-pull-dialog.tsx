@@ -1,4 +1,4 @@
-import { ArrowDownToLine, ArrowUp, FolderOpen, Loader2, RefreshCw } from 'lucide-react';
+import { ArrowDownToLine, ArrowUp, FolderOpen, Loader2, RefreshCw, TriangleAlert } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 
 import {
@@ -8,6 +8,7 @@ import {
     type FileNode,
 } from '@/components/shared/file-manager';
 import { OverwriteButtons, OverwriteDialog, useOverwrite } from '@/components/shared/overwrite';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
     Autocomplete,
     AutocompleteContent,
@@ -133,9 +134,11 @@ function FlowFilesPullDialogForm({ cachedFiles, flowId, onClose, onSuccess }: Fl
 
     const {
         error: listingError,
+        failures: listingFailures,
         files,
         isLoading: isListingLoading,
         refetch: refetchListing,
+        truncated: isListingTruncated,
     } = useFlowContainerFiles({ flowId, paths: listingPaths });
 
     /**
@@ -185,12 +188,6 @@ function FlowFilesPullDialogForm({ cachedFiles, flowId, onClose, onSuccess }: Fl
         },
     });
 
-    /**
-     * Drive the canonical "Pull / Pull with overwrite / Replace all" workflow
-     * from the shared hook. The hook owns conflict-state, race-fallback and
-     * close-on-success — this dialog just provides the plan (paths) and the
-     * three pure helpers (find / execute / synthesize).
-     */
     const overwriteAction = useOverwrite<readonly string[]>({
         execute: (paths, force) => pull(paths, force),
         findConflicts: (paths) => findPullConflicts(paths, cachedFiles),
@@ -285,8 +282,7 @@ function FlowFilesPullDialogForm({ cachedFiles, flowId, onClose, onSuccess }: Fl
     // the user is currently browsing. Non-empty selection wins and is mapped
     // back from the FileManager's name-keyed selection to absolute container
     // paths, then deduped so a folder + one of its descendants don't
-    // double-process. (Dedup is mostly defensive in this dialog because the
-    // listing is single-level, so descendants aren't visible.)
+    // double-process.
     const pullTargets = useMemo<readonly string[]>(() => {
         if (selectedPaths.size === 0) {
             return [currentPath];
@@ -337,6 +333,30 @@ function FlowFilesPullDialogForm({ cachedFiles, flowId, onClose, onSuccess }: Fl
                 <EmptyTitle>Failed to list container</EmptyTitle>
                 <EmptyDescription>{listingError.message}</EmptyDescription>
             </EmptyHeader>
+        </Empty>
+    ) : listingFailures.length > 0 ? (
+        <Empty>
+            <EmptyHeader>
+                <EmptyMedia variant="icon">
+                    <TriangleAlert />
+                </EmptyMedia>
+                <EmptyTitle>Nothing readable here</EmptyTitle>
+                <EmptyDescription>
+                    None of the {listingFailures.length} {listingFailures.length === 1 ? 'entry' : 'entries'} in{' '}
+                    <code>{currentPath}</code> could be read.
+                </EmptyDescription>
+            </EmptyHeader>
+            <ul className="text-muted-foreground max-w-full space-y-1 px-4 text-left text-xs">
+                {listingFailures.slice(0, 5).map((failure) => (
+                    <li
+                        className="truncate"
+                        key={failure.path}
+                    >
+                        <span className="text-foreground font-medium">{failure.name}</span> — {failure.message}
+                    </li>
+                ))}
+                {listingFailures.length > 5 && <li>…and {listingFailures.length - 5} more</li>}
+            </ul>
         </Empty>
     ) : (
         <Empty>
@@ -430,6 +450,35 @@ function FlowFilesPullDialogForm({ cachedFiles, flowId, onClose, onSuccess }: Fl
                             <TooltipContent>Refresh listing</TooltipContent>
                         </Tooltip>
                     </div>
+
+                    {listingFailures.length > 0 && flatFiles.length > 0 && (
+                        <Alert>
+                            <TriangleAlert />
+                            <AlertTitle>
+                                {listingFailures.length} {listingFailures.length === 1 ? 'entry' : 'entries'} could not
+                                be read
+                            </AlertTitle>
+                            <AlertDescription>
+                                The readable entries are shown below. Skipped:{' '}
+                                {listingFailures
+                                    .slice(0, 5)
+                                    .map((failure) => failure.name)
+                                    .join(', ')}
+                                {listingFailures.length > 5 ? `, and ${listingFailures.length - 5} more` : ''}.
+                            </AlertDescription>
+                        </Alert>
+                    )}
+
+                    {isListingTruncated && (
+                        <Alert>
+                            <TriangleAlert />
+                            <AlertTitle>Directory truncated</AlertTitle>
+                            <AlertDescription>
+                                This directory has too many entries to list in full; only the first {files.length} are
+                                shown. Open a subfolder to see the rest.
+                            </AlertDescription>
+                        </Alert>
+                    )}
 
                     <FileManager
                         bulkActions={bulkActions}

@@ -34,7 +34,6 @@ export interface FileManagerAction {
     label: string;
     /** Triggered on item activation. Ignored when `getHref` is set. */
     onSelect: (file: FileNode) => void;
-    /** When true, separator is rendered before this action. */
     separatorBefore?: boolean;
     variant?: 'default' | 'destructive';
 }
@@ -118,7 +117,6 @@ export interface FileManagerEmptyAreaAction {
     id: string;
     label: string;
     onSelect: () => void;
-    /** When true, separator is rendered before this item. */
     separatorBefore?: boolean;
     variant?: 'default' | 'destructive';
 }

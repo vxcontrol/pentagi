@@ -1,9 +1,10 @@
+import { skipToken, useQuery } from '@apollo/client/react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 
 import Logo from '@/components/icons/logo';
 import Markdown from '@/components/shared/markdown';
-import { useFlowReportQuery } from '@/graphql/types';
+import { FlowReportDocument } from '@/graphql/types';
 import { Log } from '@/lib/log';
 import { generateFileName, generatePDFFromMarkdown, generateReport } from '@/lib/report';
 
@@ -32,11 +33,7 @@ function FlowReport() {
         data,
         error: queryError,
         loading,
-    } = useFlowReportQuery({
-        errorPolicy: 'all',
-        skip: !flowId,
-        variables: { id: flowId! },
-    });
+    } = useQuery(FlowReportDocument, flowId ? { errorPolicy: 'all', variables: { id: flowId } } : skipToken);
 
     const dataReady = !loading && !queryError && !!data?.flow;
 

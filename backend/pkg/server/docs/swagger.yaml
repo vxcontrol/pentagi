@@ -442,8 +442,21 @@ definitions:
       size:
         type: integer
     type: object
+  models.ContainerFileError:
+    properties:
+      message:
+        type: string
+      name:
+        type: string
+      path:
+        type: string
+    type: object
   models.ContainerFiles:
     properties:
+      failures:
+        items:
+          $ref: '#/definitions/models.ContainerFileError'
+        type: array
       files:
         items:
           $ref: '#/definitions/models.ContainerFile'
@@ -452,6 +465,11 @@ definitions:
         type: string
       total:
         type: integer
+      truncated:
+        description: |-
+          Truncated is true when the directory held more entries than the listing cap
+          and only the first page was returned.
+        type: boolean
     type: object
   models.CopyResourceRequest:
     properties:
@@ -587,6 +605,19 @@ definitions:
     required:
     - date
     - stats
+    type: object
+  models.EmailChange:
+    properties:
+      current_password:
+        maxLength: 100
+        minLength: 5
+        type: string
+      mail:
+        maxLength: 50
+        type: string
+    required:
+    - current_password
+    - mail
     type: object
   models.Flow:
     properties:
@@ -1019,6 +1050,15 @@ definitions:
     - message
     - result_format
     - type
+    type: object
+  models.NameChange:
+    properties:
+      name:
+        maxLength: 70
+        minLength: 1
+        type: string
+    required:
+    - name
     type: object
   models.Password:
     properties:
@@ -6712,6 +6752,80 @@ paths:
       summary: Retrieve current user information
       tags:
       - Users
+  /user/email:
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: container to validate and update account email
+        in: body
+        name: json
+        required: true
+        schema:
+          $ref: '#/definitions/models.EmailChange'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: account email updated successful
+          schema:
+            $ref: '#/definitions/SuccessResponse'
+        "400":
+          description: invalid account email form data
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: updating account email not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: current user not found
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "409":
+          description: email already exists
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on updating account email
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      summary: Update email for current user (account)
+      tags:
+      - Users
+  /user/name:
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: new display name
+        in: body
+        name: json
+        required: true
+        schema:
+          $ref: '#/definitions/models.NameChange'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: account name updated successful
+          schema:
+            $ref: '#/definitions/SuccessResponse'
+        "400":
+          description: invalid account name form data
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: current user not found
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on updating account name
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      summary: Change current account display name
+      tags:
+      - User
   /user/password:
     put:
       consumes:

@@ -1,7 +1,8 @@
-import type { FetchResult, Operation, Reference, StoreObject } from '@apollo/client';
+import type { Reference, StoreObject } from '@apollo/client';
 
-import { ApolloClient, ApolloLink, createHttpLink, InMemoryCache, Observable, split } from '@apollo/client';
-import { onError } from '@apollo/client/link/error';
+import { ApolloClient, ApolloLink, HttpLink, InMemoryCache, Observable, split } from '@apollo/client';
+import { CombinedGraphQLErrors, ServerError, ServerParseError } from '@apollo/client/errors';
+import { ErrorLink } from '@apollo/client/link/error';
 import { GraphQLWsLink } from '@apollo/client/link/subscriptions';
 import { getMainDefinition } from '@apollo/client/utilities';
 import { createClient } from 'graphql-ws';
@@ -20,6 +21,7 @@ const STREAMING_CACHE_TTL_MS = 1000 * 60 * 5;
 const STREAMING_THROTTLE_MS = 50;
 
 type StreamingLogEntry = {
+    lastUpdate: number;
     message: null | string;
     result: null | string;
     thinking: null | string;
@@ -27,7 +29,7 @@ type StreamingLogEntry = {
 
 type SubscriptionAction = 'add' | 'create' | 'delete' | 'update';
 
-const EMPTY_LOG_ENTRY: StreamingLogEntry = { message: null, result: null, thinking: null };
+const EMPTY_LOG_ENTRY: StreamingLogEntry = { lastUpdate: 0, message: null, result: null, thinking: null };
 
 const concatStrings = (existing: null | string | undefined, incoming: null | string | undefined): null | string => {
     if (existing === null || existing === undefined) {
@@ -57,20 +59,22 @@ const resolveSubscriptionAction = (name: string): SubscriptionAction => {
     return 'add';
 };
 
-const isSubscriptionOperation = ({ query }: Operation): boolean => {
+const isSubscriptionOperation = ({ query }: ApolloLink.Operation): boolean => {
     const definition = getMainDefinition(query);
 
     return definition.kind === 'OperationDefinition' && definition.operation === 'subscription';
 };
 
-const createInterceptLink = (transform: (result: FetchResult, operation: Operation) => FetchResult): ApolloLink =>
+const createInterceptLink = (
+    transform: (result: ApolloLink.Result, operation: ApolloLink.Operation) => ApolloLink.Result,
+): ApolloLink =>
     new ApolloLink(
-        (operation: Operation, forward) =>
+        (operation: ApolloLink.Operation, forward) =>
             new Observable((observer) => {
                 const subscription = forward(operation).subscribe({
                     complete: observer.complete.bind(observer),
                     error: observer.error.bind(observer),
-                    next: (result: FetchResult) => observer.next(transform(result, operation)),
+                    next: (result: ApolloLink.Result) => observer.next(transform(result, operation)),
                 });
 
                 return () => subscription.unsubscribe();
@@ -141,7 +145,9 @@ const matchesCacheVariant = (
 
             return String(value) === String(subscriptionVariables[key]);
         });
-    } catch {
+    } catch (error) {
+        Log.error('Could not parse storeFieldName for subscription cache match; updating all variants', error);
+
         return true;
     }
 };
@@ -240,13 +246,12 @@ const createStreamingLink = (): ApolloLink => {
         ttl: STREAMING_CACHE_TTL_MS,
     });
 
-    const lastUpdateTimestamps = new Map<string, number>();
-
     const accumulateStreamingLog = (logUpdate: AssistantLogFragmentFragment): StreamingLogEntry => {
         const cacheKey = `${ASSISTANT_LOG_TYPENAME}:${logUpdate.id}`;
         const cachedLog = streamingLogs.get(cacheKey) ?? EMPTY_LOG_ENTRY;
 
         const accumulatedLog: StreamingLogEntry = {
+            lastUpdate: cachedLog.lastUpdate,
             message: concatStrings(cachedLog.message, logUpdate.message),
             result: concatStrings(cachedLog.result, logUpdate.result),
             thinking: concatStrings(cachedLog.thinking, logUpdate.thinking),
@@ -258,11 +263,16 @@ const createStreamingLink = (): ApolloLink => {
     };
 
     const shouldEmitUpdate = (logId: string): boolean => {
-        const now = Date.now();
-        const lastUpdate = lastUpdateTimestamps.get(logId);
+        const entry = streamingLogs.get(`${ASSISTANT_LOG_TYPENAME}:${logId}`);
 
-        if (!lastUpdate || now - lastUpdate >= STREAMING_THROTTLE_MS) {
-            lastUpdateTimestamps.set(logId, now);
+        if (!entry) {
+            return true;
+        }
+
+        const now = Date.now();
+
+        if (now - entry.lastUpdate >= STREAMING_THROTTLE_MS) {
+            entry.lastUpdate = now;
 
             return true;
         }
@@ -314,7 +324,6 @@ const createStreamingLink = (): ApolloLink => {
                             const cachedLog = streamingLogs.get(cacheKey);
 
                             streamingLogs.delete(cacheKey);
-                            lastUpdateTimestamps.delete(logUpdate.id);
 
                             if (cachedLog) {
                                 observer.next({
@@ -374,7 +383,7 @@ const replaceWithIncoming = {
 };
 
 const createApolloClient = () => {
-    const httpLink = createHttpLink({
+    const httpLink = new HttpLink({
         credentials: 'include',
         uri: `${window.location.origin}${GRAPHQL_ENDPOINT}`,
     });
@@ -389,21 +398,9 @@ const createApolloClient = () => {
                 error: (error) => {
                     Log.error('GraphQL WebSocket error:', error);
 
-                    if (error && typeof error === 'object') {
-                        const errorMessage = 'message' in error ? String(error.message) : '';
-                        const errorString = errorMessage.toLowerCase();
-
-                        if (
-                            errorString.includes('403') ||
-                            errorString.includes('401') ||
-                            errorString.includes('unauthorized') ||
-                            errorString.includes('auth required') ||
-                            errorString.includes('forbidden')
-                        ) {
-                            Log.warn('WebSocket authorization error detected, refreshing auth info');
-                            window.dispatchEvent(new Event('auth:refresh'));
-                        }
-                    }
+                    // A WebSocket error event doesn't expose the handshake HTTP status, so a
+                    // 403 can't be detected here — let /info classify it via auth:refresh.
+                    window.dispatchEvent(new Event('auth:refresh'));
                 },
                 ping: () => Log.debug('GraphQL WebSocket ping'),
                 pong: () => Log.debug('GraphQL WebSocket pong'),
@@ -411,7 +408,8 @@ const createApolloClient = () => {
             retryAttempts: Infinity,
             retryWait: (retries) =>
                 new Promise((resolve) => {
-                    setTimeout(resolve, Math.min(1000 * 2 ** retries, MAX_RETRY_DELAY_MS));
+                    // Jitter so a mass reconnect (e.g. backend restart) doesn't thundering-herd the server.
+                    setTimeout(resolve, Math.min(1000 * 2 ** retries, MAX_RETRY_DELAY_MS) + Math.random() * 3000);
                 }),
             shouldRetry: () => true,
             url: `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}${GRAPHQL_ENDPOINT}`,
@@ -420,9 +418,9 @@ const createApolloClient = () => {
 
     const transportLink = split(isSubscriptionOperation, wsLink, httpLink);
 
-    const errorLink = onError(({ graphQLErrors, networkError, operation }) => {
-        if (graphQLErrors) {
-            for (const { extensions, locations, message, path } of graphQLErrors) {
+    const errorLink = new ErrorLink(({ error, operation }) => {
+        if (CombinedGraphQLErrors.is(error)) {
+            for (const { extensions, locations, message, path } of error.errors) {
                 Log.error(`[GraphQL Error] ${message}`, {
                     locations,
                     operation: operation.operationName,
@@ -442,18 +440,14 @@ const createApolloClient = () => {
                     window.dispatchEvent(new Event('auth:refresh'));
                 }
             }
-        }
+        } else if (error) {
+            Log.error(`[Network Error] ${error.message}`, error);
 
-        if (networkError) {
-            Log.error(`[Network Error] ${networkError.message}`, networkError);
+            const statusCode = ServerError.is(error) || ServerParseError.is(error) ? error.statusCode : undefined;
 
-            if ('statusCode' in networkError) {
-                const statusCode = (networkError as { statusCode?: number }).statusCode;
-
-                if (statusCode === 401 || statusCode === 403) {
-                    Log.warn('Network authorization error detected, refreshing auth info');
-                    window.dispatchEvent(new Event('auth:refresh'));
-                }
+            if (statusCode === 401 || statusCode === 403) {
+                Log.warn('Network authorization error detected, refreshing auth info');
+                window.dispatchEvent(new Event('auth:refresh'));
             }
         }
     });
@@ -462,6 +456,17 @@ const createApolloClient = () => {
         typePolicies: {
             APIToken: {
                 keyFields: ['tokenId'],
+            },
+            KnowledgeDocument: {
+                fields: {
+                    // `content` arrives empty from the list query (withContent:false,
+                    // to save bandwidth) but full from the detail query — both
+                    // normalize to this shared entity. Never let an empty incoming
+                    // blank out a body the detail already loaded.
+                    content: {
+                        merge: (existing: string | undefined, incoming: string) => incoming || existing || '',
+                    },
+                },
             },
             ProviderConfig: {
                 keyFields: (object) => {

@@ -437,7 +437,7 @@ LLM conversation management and usage tracking:
 
 #### Provider
 LLM provider configurations for multi-provider support:
-- `type` - PROVIDER_TYPE enum (openai/anthropic/gemini/bedrock/deepseek/glm/kimi/qwen/ollama/custom)
+- `type` - PROVIDER_TYPE enum (openai/anthropic/gemini/bedrock/deepseek/glm/kimi/qwen/minimax/ollama/custom)
 - `name` - user-defined provider name
 - `config` - JSON configuration for API keys and settings
 - `user_id` - user ownership

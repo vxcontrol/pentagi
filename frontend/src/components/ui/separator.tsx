@@ -16,6 +16,7 @@ function Separator({
                 orientation === 'horizontal' ? 'h-px w-full' : 'h-full w-px',
                 className,
             )}
+            data-slot="separator"
             decorative={decorative}
             orientation={orientation}
             {...props}

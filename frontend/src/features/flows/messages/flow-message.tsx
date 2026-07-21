@@ -158,7 +158,6 @@ function FlowMessage({ log, searchValue = '' }: FlowMessageProps) {
                     resultFormat === ResultFormat.Terminal && isDetailsVisible ? 'w-full' : '',
                 )}
             >
-                {/* Thinking toggle button */}
                 {shouldShowThinkingToggle && (
                     <div className="text-muted-foreground mb-2 text-xs">
                         <div
@@ -170,10 +169,8 @@ function FlowMessage({ log, searchValue = '' }: FlowMessageProps) {
                     </div>
                 )}
 
-                {/* Thinking content */}
                 {renderThinkingContent()}
 
-                {/* Main message content */}
                 {message && (
                     <Markdown
                         className="prose-xs prose-fixed wrap-break-word"
@@ -183,7 +180,6 @@ function FlowMessage({ log, searchValue = '' }: FlowMessageProps) {
                     </Markdown>
                 )}
 
-                {/* Result details */}
                 {result && (
                     <div className="text-muted-foreground mt-2 text-xs">
                         <div

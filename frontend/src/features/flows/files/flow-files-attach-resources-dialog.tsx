@@ -129,11 +129,8 @@ function FlowFilesAttachResourcesDialogBody({
     });
 
     /**
-     * Build the plan for the current selection. Earlier versions deduped
-     * descendants of any picked directory on the assumption that the backend
-     * would copy directory trees recursively — it does not. Until that
-     * becomes recursive on the backend, the user must multi-select a folder
-     * together with its children to attach the contents.
+     * The backend does not copy directory trees recursively, so the user must
+     * multi-select a folder together with its children to attach the contents.
      */
     const buildPlan = useCallback((): AttachPlan | null => {
         if (selectedPaths.size === 0) {

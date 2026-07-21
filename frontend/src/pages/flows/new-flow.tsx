@@ -1,12 +1,11 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage } from '@/components/ui/breadcrumb';
+import { AppHeader, AppHeaderContent, AppHeaderTitle } from '@/components/layouts/app/app-header';
 import { Card, CardContent } from '@/components/ui/card';
-import { Separator } from '@/components/ui/separator';
-import { SidebarTrigger } from '@/components/ui/sidebar';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { FlowForm, type FlowFormValues } from '@/features/flows/flow-form';
+import { routes } from '@/lib/routes';
 import { useFlows } from '@/providers/flows-provider';
 import { useProviders } from '@/providers/providers-provider';
 import { useSystemSettings } from '@/providers/system-settings-provider';
@@ -36,7 +35,7 @@ function NewFlow() {
             const flowId = flowType === 'automation' ? await createFlow(values) : await createFlowWithAssistant(values);
 
             if (flowId) {
-                navigate(`/flows/${flowId}?tab=${flowType}`);
+                navigate(routes.flow(flowId, { tab: flowType }));
             }
         } finally {
             setIsLoading(false);
@@ -45,20 +44,11 @@ function NewFlow() {
 
     return (
         <>
-            <header className="bg-background sticky top-0 z-10 flex h-12 shrink-0 items-center gap-2 border-b px-4">
-                <SidebarTrigger className="-ml-1 shrink-0" />
-                <Separator
-                    className="mr-2 h-4 shrink-0"
-                    orientation="vertical"
-                />
-                <Breadcrumb className="min-w-0 flex-1">
-                    <BreadcrumbList className="min-w-0 flex-nowrap">
-                        <BreadcrumbItem className="min-w-0">
-                            <BreadcrumbPage className="min-w-0 truncate">New flow</BreadcrumbPage>
-                        </BreadcrumbItem>
-                    </BreadcrumbList>
-                </Breadcrumb>
-            </header>
+            <AppHeader>
+                <AppHeaderContent>
+                    <AppHeaderTitle>New flow</AppHeaderTitle>
+                </AppHeaderContent>
+            </AppHeader>
             <div className="flex min-h-[calc(100dvh-3rem)] items-center justify-center p-4">
                 <Card className="w-full max-w-2xl">
                     <CardContent className="flex flex-col gap-4 pt-6">

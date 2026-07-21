@@ -1,8 +1,9 @@
-import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { useQuery } from '@apollo/client/react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
 import type { Provider } from '@/models/provider';
 
-import { useProvidersQuery } from '@/graphql/types';
+import { ProvidersDocument } from '@/graphql/types';
 import { findProviderByName, sortProviders } from '@/models/provider';
 import { useUser } from '@/providers/user-provider';
 
@@ -23,11 +24,11 @@ interface ProvidersProviderProps {
 export function ProvidersProvider({ children }: ProvidersProviderProps) {
     const { isAuthenticated } = useUser();
 
-    const { data: providersData } = useProvidersQuery({
+    const { data: providersData } = useQuery(ProvidersDocument, {
         skip: !isAuthenticated(),
     });
 
-    const providers = sortProviders(providersData?.providers || []);
+    const providers = useMemo(() => sortProviders(providersData?.providers || []), [providersData?.providers]);
 
     const [selectedProviderName, setSelectedProviderName] = useState<null | string>(() => {
         return localStorage.getItem(SELECTED_PROVIDER_KEY);
@@ -55,15 +56,18 @@ export function ProvidersProvider({ children }: ProvidersProviderProps) {
         }
     }, [selectedProvider]);
 
-    const setSelectedProvider = (provider: Provider) => {
+    const setSelectedProvider = useCallback((provider: Provider) => {
         setSelectedProviderName(provider.name);
-    };
+    }, []);
 
-    const value = {
-        providers,
-        selectedProvider,
-        setSelectedProvider,
-    };
+    const value = useMemo(
+        () => ({
+            providers,
+            selectedProvider,
+            setSelectedProvider,
+        }),
+        [providers, selectedProvider, setSelectedProvider],
+    );
 
     return <ProvidersContext.Provider value={value}>{children}</ProvidersContext.Provider>;
 }

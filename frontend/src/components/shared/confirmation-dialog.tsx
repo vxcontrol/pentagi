@@ -50,9 +50,8 @@ function ConfirmationDialog({
 }: ConfirmationDialogProps) {
     const [isProcessing, setIsProcessing] = useState(false);
 
-    // Derive a contextual title from confirm verb + item type so callers don't
-    // see "Confirm Action" for a Delete prompt or a Save prompt. Explicit
-    // `title` always wins.
+    // `verb !== 'Confirm'` treats the default confirmText as "no custom verb": a bare
+    // Confirm gets the generic "Confirm Action" title instead of "Confirm <itemType>".
     const verb = confirmText.trim();
     const resolvedTitle = title ?? (verb && verb !== 'Confirm' ? `${verb} ${itemType}` : 'Confirm Action');
 

@@ -1,5 +1,6 @@
 import type { ColumnDef, Row } from '@tanstack/react-table';
 
+import { useMutation, useQuery } from '@apollo/client/react';
 import {
     AlertCircle,
     ArrowDown,
@@ -7,6 +8,7 @@ import {
     Bot,
     Code,
     Ellipsis,
+    FileText,
     Loader2,
     Pencil,
     RotateCcw,
@@ -15,11 +17,15 @@ import {
     User,
     Wrench,
 } from 'lucide-react';
-import { Fragment, useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import type { AgentPrompt, AgentPrompts, DefaultPrompt, PromptType } from '@/graphql/types';
+import type { DefaultPromptFragmentFragment as DefaultPrompt, PromptType } from '@/graphql/types';
 
+type AgentPrompt = AgentPrompts;
+type AgentPrompts = { human?: DefaultPrompt; system: DefaultPrompt };
+
+import { AppHeader, AppHeaderContent, AppHeaderTitle } from '@/components/layouts/app/app-header';
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -34,8 +40,9 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { StatusCard } from '@/components/ui/status-card';
-import { useDeletePromptMutation, useSettingsPromptsQuery } from '@/graphql/types';
+import { DeletePromptDocument, SettingsPromptsDocument } from '@/graphql/types';
 import { usePageStorageKeys } from '@/hooks/use-page-storage-keys';
+import { routes } from '@/lib/routes';
 
 type AgentPromptTableData = {
     displayName: string;
@@ -59,8 +66,8 @@ type ToolPromptTableData = {
 };
 
 function SettingsPrompts() {
-    const { data, error, loading: isLoading } = useSettingsPromptsQuery();
-    const [deletePrompt, { loading: isDeleteLoading }] = useDeletePromptMutation();
+    const { data, error, loading: isLoading } = useQuery(SettingsPromptsDocument);
+    const [deletePrompt, { loading: isDeleteLoading }] = useMutation(DeletePromptDocument);
     const navigate = useNavigate();
     // Shared base key for the route; each DataTable appends its own suffix so
     // sorting / column visibility / search-column narrowing live in distinct
@@ -92,7 +99,7 @@ function SettingsPrompts() {
     };
 
     const handlePromptEdit = (promptName: string) => {
-        navigate(`/settings/prompts/${promptName}`);
+        navigate(routes.settings.prompt(promptName));
     };
 
     const handleResetDialogOpen = (
@@ -772,29 +779,43 @@ function SettingsPrompts() {
         </>
     );
 
+    const pageHeader = (
+        <AppHeader>
+            <AppHeaderContent>
+                <AppHeaderTitle icon={<FileText className="size-4 shrink-0" />}>Prompts</AppHeaderTitle>
+            </AppHeaderContent>
+        </AppHeader>
+    );
+
     if (isLoading) {
         return (
-            <div className="flex flex-col gap-4">
-                <SettingsPromptsHeader />
-                <StatusCard
-                    description="Please wait while we fetch your prompt templates"
-                    icon={<Loader2 className="text-muted-foreground size-16 animate-spin" />}
-                    title="Loading prompts..."
-                />
-            </div>
+            <>
+                {pageHeader}
+                <div className="flex flex-1 flex-col gap-6 p-4">
+                    <SettingsPromptsHeader />
+                    <StatusCard
+                        description="Please wait while we fetch your prompt templates"
+                        icon={<Loader2 className="text-muted-foreground size-16 animate-spin" />}
+                        title="Loading prompts..."
+                    />
+                </div>
+            </>
         );
     }
 
     if (error) {
         return (
-            <div className="flex flex-col gap-4">
-                <SettingsPromptsHeader />
-                <Alert variant="destructive">
-                    <AlertCircle className="size-4" />
-                    <AlertTitle>Error loading prompts</AlertTitle>
-                    <AlertDescription>{error.message}</AlertDescription>
-                </Alert>
-            </div>
+            <>
+                {pageHeader}
+                <div className="flex flex-1 flex-col gap-6 p-4">
+                    <SettingsPromptsHeader />
+                    <Alert variant="destructive">
+                        <AlertCircle className="size-4" />
+                        <AlertTitle>Error loading prompts</AlertTitle>
+                        <AlertDescription>{error.message}</AlertDescription>
+                    </Alert>
+                </div>
+            </>
         );
     }
 
@@ -803,20 +824,24 @@ function SettingsPrompts() {
 
     if (agentPrompts.length === 0 && toolPrompts.length === 0) {
         return (
-            <div className="flex flex-col gap-4">
-                <SettingsPromptsHeader />
-                <StatusCard
-                    description="Prompt templates could not be loaded"
-                    icon={<Settings className="text-muted-foreground size-8" />}
-                    title="No prompts available"
-                />
-            </div>
+            <>
+                {pageHeader}
+                <div className="flex flex-1 flex-col gap-6 p-4">
+                    <SettingsPromptsHeader />
+                    <StatusCard
+                        description="Prompt templates could not be loaded"
+                        icon={<Settings className="text-muted-foreground size-8" />}
+                        title="No prompts available"
+                    />
+                </div>
+            </>
         );
     }
 
     return (
-        <Fragment>
-            <div className="flex flex-col gap-6">
+        <>
+            {pageHeader}
+            <div className="flex flex-1 flex-col gap-6 p-4">
                 <SettingsPromptsHeader />
 
                 {agentPrompts.length > 0 && (
@@ -882,7 +907,7 @@ function SettingsPrompts() {
                 isOpen={resetDialogOpen}
                 title={`Reset ${resetOperation?.displayName || 'Prompt'}`}
             />
-        </Fragment>
+        </>
     );
 }
 

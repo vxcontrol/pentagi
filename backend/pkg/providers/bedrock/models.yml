@@ -1,4 +1,4 @@
-# Amazon Nova Series - Advanced multimodal models with state-of-the-art performance
+# Amazon Nova Series - Multimodal understanding models
 - name: us.amazon.nova-2-lite-v1:0
   description: Advanced multimodal model with adaptive reasoning and efficient thinking, intelligently balances performance and efficiency by dynamically adjusting reasoning depth based on task complexity
   thinking: false
@@ -6,14 +6,6 @@
   price:
     input: 0.33
     output: 2.75
-
-- name: us.amazon.nova-premier-v1:0
-  description: Most capable multimodal model for complex reasoning tasks, frontier intelligence for advanced analysis, and the best teacher for distilling custom models with exceptional problem-solving capabilities
-  thinking: false
-  release_date: 2025-04-30
-  price:
-    input: 2.5
-    output: 12.5
 
 - name: us.amazon.nova-pro-v1:0
   description: Highly capable multimodal model with optimal balance of accuracy, speed, and cost for wide range of penetration testing tasks and complex security analysis workflows
@@ -39,10 +31,65 @@
     input: 0.035
     output: 0.14
 
-# Anthropic Claude 4.6 Series - Latest generation with world-class coding and agentic capabilities
+# Anthropic Claude Series
+- name: us.anthropic.claude-fable-5
+  description: Anthropic's most capable widely released model for demanding reasoning and long-horizon agentic work; adaptive thinking is always on (raw chain of thought is never returned); requires Bedrock provider data-share retention mode
+  thinking: true
+  reasoning:
+    mode: adaptive-only
+    efforts: [low, medium, high, xhigh, max]
+  release_date: 2026-06-09
+  price:
+    input: 10.0
+    output: 50.0
+    cache_read: 1.0
+    cache_write: 12.5
+
+- name: us.anthropic.claude-opus-4-8
+  description: Anthropic Opus 4.8 - flagship model for coding, agents, and deep reasoning in enterprise security workflows, with adaptive thinking only
+  thinking: true
+  reasoning:
+    mode: adaptive-only
+    efforts: [low, medium, high, xhigh, max]
+  release_date: 2026-05-28
+  price:
+    input: 5.0
+    output: 25.0
+    cache_read: 0.5
+    cache_write: 6.25
+
+- name: us.anthropic.claude-opus-4-7
+  description: Most capable Opus model for advanced software engineering, long-running agentic tasks, professional work, and rigorous security analysis with adaptive thinking
+  thinking: true
+  reasoning:
+    mode: adaptive-only
+    efforts: [low, medium, high, xhigh, max]
+  release_date: 2026-04-16
+  price:
+    input: 5.0
+    output: 25.0
+    cache_read: 0.5
+    cache_write: 6.25
+
+- name: us.anthropic.claude-sonnet-5
+  description: Most capable Sonnet for coding, agents, and professional work at scale with near-Opus intelligence at Sonnet cost; on Bedrock adaptive thinking is always on and cannot be disabled
+  thinking: true
+  reasoning:
+    mode: adaptive-only
+    efforts: [low, medium, high, xhigh, max]
+  release_date: 2026-07-01
+  price:
+    input: 3.0
+    output: 15.0
+    cache_read: 0.3
+    cache_write: 3.75
+
 - name: us.anthropic.claude-opus-4-6-v1
   description: World's best model for coding, enterprise agents, and professional work with industry-leading reliability for agentic workflows and security analysis
   thinking: true
+  reasoning:
+    mode: adaptive
+    efforts: [low, medium, high, max]
   release_date: 2026-02-05
   price:
     input: 5.0
@@ -53,6 +100,9 @@
 - name: us.anthropic.claude-sonnet-4-6
   description: Frontier intelligence at scale built for coding, agents, and enterprise workflows with sustained reasoning and adaptive decision-making
   thinking: true
+  reasoning:
+    mode: adaptive
+    efforts: [low, medium, high, max]
   release_date: 2026-02-17
   price:
     input: 3.0
@@ -60,7 +110,7 @@
     cache_read: 0.3
     cache_write: 3.75
 
-# Anthropic Claude 4.5 Series - Advanced reasoning models with extended thinking
+# Anthropic Claude 4.5 Series - Extended thinking models
 - name: us.anthropic.claude-opus-4-5-20251101-v1:0
   description: Next generation most intelligent model delivering multi-day software development projects in hours with frontier intelligence and deep technical capabilities
   thinking: true
@@ -91,45 +141,79 @@
     cache_read: 0.3
     cache_write: 3.75
 
-# Anthropic Claude 4 Series - State-of-the-art coding and agentic capabilities
-- name: us.anthropic.claude-sonnet-4-20250514-v1:0
-  description: Balanced performance for coding with optimal speed and cost for high-volume use cases, handles production-ready AI assistants and efficient research
-  thinking: true
-  release_date: 2025-05-22
-  price:
-    input: 3.0
-    output: 15.0
-    cache_read: 0.3
-    cache_write: 3.75
-
-# Anthropic Claude 3.5 Series - Enhanced performance and cost-effectiveness
-- name: us.anthropic.claude-3-5-haiku-20241022-v1:0
-  description: Fastest and most cost-effective model perfect for rapid security scanning, automated vulnerability detection, and high-throughput threat intelligence processing
+# Meta Llama Series - Open models for multilingual dialogue and multimodal understanding
+- name: us.meta.llama4-maverick-17b-instruct-v1:0
+  description: Industry-leading image and text understanding across 12 languages; strong for general assistant, chat, precise image understanding, and creative writing
   thinking: false
-  release_date: 2024-11-04
+  release_date: 2025-04-05
   price:
-    input: 0.8
-    output: 4.0
-    cache_read: 0.08
-    cache_write: 1
+    input: 0.20
+    output: 0.80
 
-# Cohere Command Series - Advanced retrieval and tool use for enterprise security
-- name: cohere.command-r-plus-v1:0
-  description: Highly performant generative model optimized for large-scale security operations, advanced threat research, and complex penetration testing with superior RAG capabilities
+- name: us.meta.llama4-scout-17b-instruct-v1:0
+  description: General-purpose MoE model with industry-leading multi-million-token context for multi-document summarization, activity parsing, and reasoning over large codebases
   thinking: false
-  release_date: 2024-04-29
+  release_date: 2025-04-05
   price:
-    input: 3.0
-    output: 15.0
+    input: 0.17
+    output: 0.66
 
-# DeepSeek Series - Advanced reasoning and efficiency models
+- name: us.meta.llama3-3-70b-instruct-v1:0
+  description: Near-405B performance at lower cost with tool use, code generation, advanced reasoning, and steerability for multilingual dialogue
+  thinking: false
+  release_date: 2024-12-06
+  price:
+    input: 0.72
+    output: 0.72
+
+- name: us.meta.llama3-1-70b-instruct-v1:0
+  description: Multilingual Llama 3.1 70B with 128K context and improved reasoning for dialogue and complex instruction following
+  thinking: false
+  release_date: 2024-07-23
+  price:
+    input: 0.72
+    output: 0.72
+
+- name: meta.llama3-1-8b-instruct-v1:0
+  description: Compact multilingual Llama 3.1 8B with 128K context for efficient dialogue and on-budget agent workloads
+  thinking: false
+  release_date: 2024-07-23
+  price:
+    input: 0.22
+    output: 0.22
+
+- name: meta.llama3-70b-instruct-v1:0
+  description: Accessible open Llama 3 70B for content creation, conversational AI, language understanding, and enterprise applications
+  thinking: false
+  release_date: 2024-04-18
+  price:
+    input: 2.65
+    output: 3.5
+
+- name: meta.llama3-8b-instruct-v1:0
+  description: Compact open Llama 3 8B for limited compute, edge-friendly deployments, and faster iteration
+  thinking: false
+  release_date: 2024-04-18
+  price:
+    input: 0.30
+    output: 0.60
+
+# DeepSeek Series - Reasoning and agent efficiency models
 - name: deepseek.v3.2
   description: Harmonizes high computational efficiency with superior reasoning and agent performance, excels at long-context reasoning and agentic tasks with sparse attention design
   thinking: false
   release_date: 2025-12-01
   price:
-    input: 0.58
-    output: 1.68
+    input: 0.62
+    output: 1.85
+
+- name: us.deepseek.r1-v1:0
+  description: State-of-the-art reasoning model optimized for general reasoning, math, science, and code generation; text-only English and Chinese
+  thinking: true
+  release_date: 2025-01-20
+  price:
+    input: 1.35
+    output: 5.40
 
 # OpenAI GPT OSS Series - Open-source reasoning models
 - name: openai.gpt-oss-120b-1:0
@@ -148,7 +232,7 @@
     input: 0.07
     output: 0.3
 
-# Qwen3 Series - Cutting-edge MoE models with ultra-long context
+# Qwen3 Series - MoE, vision-language, and coding models
 - name: qwen.qwen3-next-80b-a3b
   description: Cutting-edge MoE and hybrid attention for ultra-long-context workflows, flagship-level reasoning and coding with only 3B active parameters per token
   thinking: false
@@ -156,6 +240,14 @@
   price:
     input: 0.15
     output: 1.2
+
+- name: qwen.qwen3-vl-235b-a22b
+  description: Frontier vision-language MoE for OCR, layout, multimodal RAG, visual QA, and UI/scene understanding across images, documents, and long videos
+  thinking: false
+  release_date: 2025-09-23
+  price:
+    input: 0.53
+    output: 2.66
 
 - name: qwen.qwen3-32b-v1:0
   description: Balanced dense model with strong reasoning and general-purpose performance, surpasses many larger models in reasoning, coding, and research use cases
@@ -178,14 +270,38 @@
   thinking: false
   release_date: 2026-02-02
   price:
-    input: 0.45
-    output: 1.8
+    input: 0.50
+    output: 1.20
 
-# Mistral Series - Advanced multimodal models with long context
+# Mistral Series - Multimodal, coding, and instruction models
 - name: mistral.mistral-large-3-675b-instruct
   description: Most advanced open-weight multimodal model with granular MoE architecture, state-of-the-art reliability and long-context reasoning for production assistants
   thinking: false
   release_date: 2025-12-02
+  price:
+    input: 0.5
+    output: 1.5
+
+- name: mistral.devstral-2-123b
+  description: Agentic software-engineering model for autonomous coding workflows, multi-file edits, and native tool-calling across repositories
+  thinking: false
+  release_date: 2025-12-09
+  price:
+    input: 0.40
+    output: 2.00
+
+- name: mistral.magistral-small-2509
+  description: Small dense multimodal model optimized for fast, cost-efficient instruction following, reasoning, and coding
+  thinking: true
+  release_date: 2025-09-17
+  price:
+    input: 0.50
+    output: 1.50
+
+- name: mistral.mistral-large-2402-v1:0
+  description: Advanced Mistral Large for complex multilingual reasoning, text understanding, transformation, and code generation
+  thinking: false
+  release_date: 2024-02-26
   price:
     input: 4.0
     output: 12.0
@@ -198,3 +314,70 @@
   price:
     input: 0.6
     output: 3.0
+
+- name: moonshot.kimi-k2-thinking
+  description: Flagship thinking-agent MoE for deep tool-augmented reasoning, long-horizon planning, complex coding, and research agents over large corpora
+  thinking: true
+  release_date: 2025-11-06
+  price:
+    input: 0.60
+    output: 2.50
+
+# Z.AI GLM Series - Reasoning, coding, and agent models
+- name: zai.glm-4.7
+  description: General-purpose GLM focused on clean front-end code and web UI generation alongside standard text and reasoning tasks
+  thinking: true
+  release_date: 2025-12-22
+  price:
+    input: 0.60
+    output: 2.20
+
+- name: zai.glm-4.7-flash
+  description: Lightweight MoE variant of GLM-4.7 for low-latency, cost-efficient interactive assistants and high-traffic services
+  thinking: true
+  release_date: 2025-12-22
+  price:
+    input: 0.07
+    output: 0.40
+
+- name: zai.glm-5
+  description: Frontier reasoning and agentic model with strong tool use and long-context planning for production agent systems
+  thinking: true
+  release_date: 2026-02-11
+  price:
+    input: 1.00
+    output: 3.20
+
+# MiniMax Series - Agent-native coding and planning models
+- name: minimax.minimax-m2.5
+  description: Agent-native frontier model for efficient reasoning, task decomposition, and complex workflows under real-world time and cost constraints
+  thinking: false
+  release_date: 2026-02-12
+  price:
+    input: 0.30
+    output: 1.20
+
+- name: minimax.minimax-m2.1
+  description: Open-weight model focused on coding, tool use, and long-horizon task planning for agent-based applications
+  thinking: false
+  release_date: 2025-12-23
+  price:
+    input: 0.30
+    output: 1.20
+
+- name: minimax.minimax-m2
+  description: Efficient MoE for AI agents with strong reasoning, coding, and multilingual performance at competitive cost
+  thinking: false
+  release_date: 2025-10-27
+  price:
+    input: 0.30
+    output: 1.20
+
+# NVIDIA Nemotron Series
+- name: nvidia.nemotron-super-3-120b
+  description: Open hybrid MoE (about 12B active) built for reasoning, coding, and agentic tasks with strong cost efficiency
+  thinking: true
+  release_date: 2026-01-15
+  price:
+    input: 0.15
+    output: 0.65

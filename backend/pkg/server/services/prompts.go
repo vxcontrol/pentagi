@@ -10,6 +10,7 @@ import (
 	"pentagi/pkg/server/rdb"
 	"pentagi/pkg/server/response"
 	"pentagi/pkg/templates"
+	"pentagi/pkg/templates/validator"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/gorm"
@@ -206,6 +207,10 @@ func (s *PromptService) PatchPrompt(c *gin.Context) {
 		return
 	} else if err = promptType.Valid(); err != nil {
 		logger.FromContext(c).WithError(err).Errorf("error validating prompt type '%s'", promptType)
+		response.Error(c, response.ErrPromptsInvalidRequest, err)
+		return
+	} else if err = validator.ValidatePrompt(templates.PromptType(promptType), prompt.Prompt); err != nil {
+		logger.FromContext(c).WithError(err).Errorf("error validating prompt template '%s'", promptType)
 		response.Error(c, response.ErrPromptsInvalidRequest, err)
 		return
 	}

@@ -10,8 +10,7 @@ export const SEARCH_DEBOUNCE_MS = 300;
 //
 // The backend does not whitelist file extensions — any file is accepted as
 // long as the file name passes `validatePathComponent` (no `/ \ : * ? " < > |`,
-// no control characters, ≤ 255 bytes). We re-state the size limits here so the
-// client can fail fast instead of waiting for a 4xx response on huge uploads.
+// no control characters, ≤ 255 bytes).
 
 /** Mirrors `resources.MaxUploadFileSize` (300 MB). */
 export const MAX_FILE_SIZE_MB = 300;

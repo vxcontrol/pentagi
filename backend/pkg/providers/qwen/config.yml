@@ -16,7 +16,7 @@
 #   - preserve_thinking=true: keeps reasoning_content from previous assistant turns
 #     in subsequent requests. Supported ONLY by qwen3.7-max and qwen3.6-plus families.
 #     Required for agent loops with tool calls to preserve reasoning continuity.
-#     Works together with WithPreserveReasoningContent() in qwen.go.
+#     Works together with WithPreserveReasoningContent() in openaicompat.go.
 #   - qwen3-coder-* (coder, installer) are NOT hybrid thinking models — no thinking
 #     control needed.
 
@@ -30,7 +30,7 @@ simple:
   price:
     input: 0.1
     output: 0.4
-    cache_read: 0.01
+    cache_read: 0.02
 
 simple_json:
   model: "qwen3.5-flash"
@@ -43,7 +43,7 @@ simple_json:
   price:
     input: 0.1
     output: 0.4
-    cache_read: 0.01
+    cache_read: 0.02
 
 primary_agent:
   model: "qwen3.6-plus"
@@ -56,7 +56,7 @@ primary_agent:
   price:
     input: 0.5
     output: 3.0
-    cache_read: 0.05
+    cache_read: 0.10
 
 assistant:
   model: "qwen3.6-plus"
@@ -69,7 +69,7 @@ assistant:
   price:
     input: 0.5
     output: 3.0
-    cache_read: 0.05
+    cache_read: 0.10
 
 generator:
   model: "qwen3.7-max"
@@ -120,7 +120,7 @@ reflector:
   price:
     input: 0.1
     output: 0.4
-    cache_read: 0.01
+    cache_read: 0.02
 
 searcher:
   model: "qwen3.5-flash"
@@ -132,7 +132,7 @@ searcher:
   price:
     input: 0.1
     output: 0.4
-    cache_read: 0.01
+    cache_read: 0.02
 
 enricher:
   model: "qwen3.5-flash"
@@ -144,7 +144,7 @@ enricher:
   price:
     input: 0.1
     output: 0.4
-    cache_read: 0.01
+    cache_read: 0.02
 
 coder:
   model: "qwen3-coder-plus"
@@ -177,4 +177,4 @@ pentester:
   price:
     input: 0.5
     output: 3.0
-    cache_read: 0.05
+    cache_read: 0.10

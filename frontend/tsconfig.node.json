@@ -27,12 +27,10 @@
         /* If your code doesn't run in the DOM: */
         "lib": ["es2022"],
         /* Paths */
-        "baseUrl": ".",
         "paths": {
             "@/*": ["./src/*"],
-            "@env": ["./env.ts"],
             "@pkg": ["./package.json"]
         }
     },
-    "include": ["./env.ts", "types/**/*.d.ts", "vite.config.ts", "scripts"]
+    "include": ["types/**/*.d.ts", "vite.config.ts", "scripts"]
 }

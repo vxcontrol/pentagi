@@ -1,3 +1,4 @@
+import { useMutation, useQuery, useSubscription } from '@apollo/client/react';
 import {
     createContext,
     type ReactNode,
@@ -11,10 +12,10 @@ import {
 import { toast } from 'sonner';
 
 import {
-    useAddFavoriteFlowMutation,
-    useDeleteFavoriteFlowMutation,
-    useSettingsUserQuery,
-    useSettingsUserUpdatedSubscription,
+    AddFavoriteFlowDocument,
+    DeleteFavoriteFlowDocument,
+    SettingsUserDocument,
+    SettingsUserUpdatedDocument,
 } from '@/graphql/types';
 import { Log } from '@/lib/log';
 import { useUser } from '@/providers/user-provider';
@@ -41,15 +42,15 @@ export function FavoritesProvider({ children }: FavoritesProviderProps) {
 
     const shouldFetchPreferences = Boolean(authInfo && authInfo.type !== 'guest' && isAuthenticated());
 
-    const { data: userPreferencesData, loading: isLoadingPreferences } = useSettingsUserQuery({
+    const { data: userPreferencesData, loading: isLoadingPreferences } = useQuery(SettingsUserDocument, {
         fetchPolicy: 'cache-and-network',
         skip: !shouldFetchPreferences,
     });
 
-    const [addFavoriteFlowMutation] = useAddFavoriteFlowMutation();
-    const [deleteFavoriteFlowMutation] = useDeleteFavoriteFlowMutation();
+    const [addFavoriteFlowMutation] = useMutation(AddFavoriteFlowDocument);
+    const [deleteFavoriteFlowMutation] = useMutation(DeleteFavoriteFlowDocument);
 
-    useSettingsUserUpdatedSubscription({
+    useSubscription(SettingsUserUpdatedDocument, {
         skip: !shouldFetchPreferences,
     });
 
@@ -59,9 +60,7 @@ export function FavoritesProvider({ children }: FavoritesProviderProps) {
         return ids.map((id) => +id);
     }, [userPreferencesData?.settingsUser?.favoriteFlows]);
 
-    // Surface the optimistic set so star-clicks flip in the UI before the
-    // mutation + subscription round-trip lands. React rolls back to
-    // `actualFavoriteFlowIds` automatically if the transition's action throws.
+    // React rolls back to `actualFavoriteFlowIds` automatically if the transition's action throws.
     const [favoriteFlowIds, applyOptimisticFavorite] = useOptimistic(
         actualFavoriteFlowIds,
         (current: number[], action: { id: number; type: 'add' | 'remove' }) => {

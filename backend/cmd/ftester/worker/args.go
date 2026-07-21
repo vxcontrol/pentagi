@@ -238,8 +238,21 @@ func ParseFunctionArgs(funcName string, args []string) (any, error) {
 		// Check if there's a value for the argument
 		if i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") {
 			// Next arg is the value
-			parsedArgs[argName] = args[i+1]
+			value := args[i+1]
 			i++ // Skip the value in the next iteration
+
+			if argInfo.Type == "array" {
+				// Array arguments (e.g. []string) can't be passed as a single CLI value,
+				// so each occurrence of the flag appends one element to the resulting slice.
+				// This lets the user fill in at least one element via the command line.
+				if existing, ok := parsedArgs[argName].([]string); ok {
+					parsedArgs[argName] = append(existing, value)
+				} else {
+					parsedArgs[argName] = []string{value}
+				}
+			} else {
+				parsedArgs[argName] = value
+			}
 		} else {
 			// Boolean flag (no value)
 			parsedArgs[argName] = true

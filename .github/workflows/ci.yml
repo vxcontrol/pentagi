@@ -17,6 +17,12 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Verify Node version pins match .nvmrc
+        run: |
+          NVMRC="$(tr -dc '0-9.' < frontend/.nvmrc)"
+          echo "Expected Node: $NVMRC"
+          grep -q "node:${NVMRC}-slim" Dockerfile || { echo "::error::Dockerfile node tag != .nvmrc ($NVMRC)"; exit 1; }
+
       # Go setup and cache
       - name: Set up Go
         uses: actions/setup-go@v6
@@ -46,7 +52,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: '23'
+          node-version-file: frontend/.nvmrc
           cache: 'pnpm'
           cache-dependency-path: 'frontend/pnpm-lock.yaml'
 
@@ -54,22 +60,22 @@ jobs:
       - name: Frontend - Install dependencies
         working-directory: frontend
         run: pnpm install --frozen-lockfile
-        continue-on-error: true
 
       - name: Frontend - Prettier
         working-directory: frontend
         run: pnpm run prettier
-        continue-on-error: true
 
       - name: Frontend - Lint
         working-directory: frontend
         run: pnpm run lint
-        continue-on-error: true
+
+      - name: Frontend - Type check
+        working-directory: frontend
+        run: pnpm run typescript
 
       - name: Frontend - Test
         working-directory: frontend
         run: pnpm run test
-        continue-on-error: true
 
       # Backend lint and test
       - name: Backend - Download dependencies

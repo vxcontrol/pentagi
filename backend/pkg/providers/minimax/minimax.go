@@ -1,30 +1,22 @@
 package minimax
 
 import (
-	"context"
 	"embed"
-	"fmt"
 
 	"pentagi/pkg/config"
+	"pentagi/pkg/providers/openaicompat"
 	"pentagi/pkg/providers/pconfig"
 	"pentagi/pkg/providers/provider"
 	"pentagi/pkg/system"
-	"pentagi/pkg/templates"
 
 	"github.com/vxcontrol/langchaingo/llms"
-	"github.com/vxcontrol/langchaingo/llms/openai"
-	"github.com/vxcontrol/langchaingo/llms/streaming"
 )
 
 //go:embed config.yml models.yml
 var configFS embed.FS
 
-// MiniMaxAgentModel is the fallback model used when no agent-specific configuration exists.
-// MiniMax-M3 is the latest flagship model (512K context, up to 128K output, image input support)
-// and serves as the default for all agent types.
 const MiniMaxAgentModel = "MiniMax-M3"
 
-// MiniMaxToolCallIDTemplate is the pattern template for tool call IDs used by MiniMax.
 const MiniMaxToolCallIDTemplate = "call_{r:24:b}"
 
 func BuildProviderConfig(configData []byte) (*pconfig.ProviderConfig, error) {
@@ -60,23 +52,11 @@ func DefaultModels() (pconfig.ModelsConfig, error) {
 	return pconfig.LoadModelsConfigData(configData)
 }
 
-type minimaxProvider struct {
-	llm            *openai.LLM
-	models         pconfig.ModelsConfig
-	providerName   provider.ProviderName
-	providerConfig *pconfig.ProviderConfig
-	providerPrefix string
-}
-
 func New(
 	cfg *config.Config,
 	providerName provider.ProviderName,
 	providerConfig *pconfig.ProviderConfig,
 ) (provider.Provider, error) {
-	if cfg.MiniMaxAPIKey == "" {
-		return nil, fmt.Errorf("missing MINIMAX_API_KEY environment variable")
-	}
-
 	httpClient, err := system.GetHTTPClient(cfg)
 	if err != nil {
 		return nil, err
@@ -87,108 +67,12 @@ func New(
 		return nil, err
 	}
 
-	client, err := openai.New(
-		openai.WithToken(cfg.MiniMaxAPIKey),
-		openai.WithModel(MiniMaxAgentModel),
-		openai.WithBaseURL(cfg.MiniMaxServerURL),
-		openai.WithHTTPClient(httpClient),
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	return &minimaxProvider{
-		llm:            client,
-		models:         models,
-		providerName:   providerName,
-		providerConfig: providerConfig,
-		providerPrefix: cfg.MiniMaxProvider,
-	}, nil
-}
-
-func (p *minimaxProvider) Type() provider.ProviderType {
-	return provider.ProviderMiniMax
-}
-
-func (p *minimaxProvider) Name() provider.ProviderName {
-	return p.providerName
-}
-
-func (p *minimaxProvider) GetRawConfig() []byte {
-	return p.providerConfig.GetRawConfig()
-}
-
-func (p *minimaxProvider) GetProviderConfig() *pconfig.ProviderConfig {
-	return p.providerConfig
-}
-
-func (p *minimaxProvider) GetPriceInfo(opt pconfig.ProviderOptionsType) *pconfig.PriceInfo {
-	return p.providerConfig.GetPriceInfoForType(opt)
-}
-
-func (p *minimaxProvider) GetModels() pconfig.ModelsConfig {
-	return p.models
-}
-
-func (p *minimaxProvider) Model(opt pconfig.ProviderOptionsType) string {
-	model := MiniMaxAgentModel
-	opts := llms.CallOptions{Model: &model}
-	for _, option := range p.providerConfig.GetOptionsForType(opt) {
-		option(&opts)
-	}
-
-	return opts.GetModel()
-}
-
-func (p *minimaxProvider) ModelWithPrefix(opt pconfig.ProviderOptionsType) string {
-	return provider.ApplyModelPrefix(p.Model(opt), p.providerPrefix)
-}
-
-func (p *minimaxProvider) Call(
-	ctx context.Context,
-	opt pconfig.ProviderOptionsType,
-	prompt string,
-) (string, error) {
-	return provider.WrapGenerateFromSinglePrompt(
-		ctx, p, opt, p.llm, prompt,
-		p.providerConfig.GetOptionsForType(opt)...,
-	)
-}
-
-func (p *minimaxProvider) CallEx(
-	ctx context.Context,
-	opt pconfig.ProviderOptionsType,
-	chain []llms.MessageContent,
-	streamCb streaming.Callback,
-) (*llms.ContentResponse, error) {
-	return provider.WrapGenerateContent(
-		ctx, p, opt, p.llm.GenerateContent, chain,
-		append([]llms.CallOption{
-			llms.WithStreamingFunc(streamCb),
-		}, p.providerConfig.GetOptionsForType(opt)...)...,
-	)
-}
-
-func (p *minimaxProvider) CallWithTools(
-	ctx context.Context,
-	opt pconfig.ProviderOptionsType,
-	chain []llms.MessageContent,
-	tools []llms.Tool,
-	streamCb streaming.Callback,
-) (*llms.ContentResponse, error) {
-	return provider.WrapGenerateContent(
-		ctx, p, opt, p.llm.GenerateContent, chain,
-		append([]llms.CallOption{
-			llms.WithTools(tools),
-			llms.WithStreamingFunc(streamCb),
-		}, p.providerConfig.GetOptionsForType(opt)...)...,
-	)
-}
-
-func (p *minimaxProvider) GetUsage(info map[string]any) pconfig.CallUsage {
-	return pconfig.NewCallUsage(info)
-}
-
-func (p *minimaxProvider) GetToolCallIDTemplate(ctx context.Context, prompter templates.Prompter) (string, error) {
-	return provider.DetermineToolCallIDTemplate(ctx, p, pconfig.OptionsTypeSimple, prompter, MiniMaxToolCallIDTemplate)
+	return openaicompat.New(openaicompat.Spec{
+		Type:               provider.ProviderMiniMax,
+		Model:              MiniMaxAgentModel,
+		ToolCallIDTemplate: MiniMaxToolCallIDTemplate,
+		APIKey:             cfg.MiniMaxAPIKey,
+		ServerURL:          cfg.MiniMaxServerURL,
+		Prefix:             cfg.MiniMaxProvider,
+	}, httpClient, models, providerName, providerConfig)
 }

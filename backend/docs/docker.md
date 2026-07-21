@@ -216,7 +216,7 @@ type DockerClient interface {
 
     // File operations
     ContainerStatPath(ctx context.Context, containerID string, path string) (container.PathStat, error)
-    ListContainerDir(ctx context.Context, containerID string, dirPath string) ([]container.PathStat, error)
+    ListContainerDir(ctx context.Context, containerID string, dirPath string) (ContainerDirListing, error)
     CopyToContainer(ctx context.Context, containerID string, dstPath string, content io.Reader, options container.CopyToContainerOptions) error
     CopyFromContainer(ctx context.Context, containerID string, srcPath string) (io.ReadCloser, container.PathStat, error)
 
@@ -560,11 +560,10 @@ entries, err := dockerClient.ListContainerDir(ctx, containerID, "/work")
 `ListContainerDir` performs a non-recursive directory listing inside a running container:
 
 1. Uses `ContainerStatPath` to verify that `dirPath` exists and is a directory.
-2. Executes `ls -1 -- <dirPath>` inside the container to get direct entry names.
-3. Calls `ContainerStatPath` for every entry to return Docker `container.PathStat` metadata.
-4. Runs entry stat calls through `pkg/queue` with `containerListWorkers = 20` workers to reduce latency for large directories.
+2. Executes `find <dirPath> -maxdepth 1 -mindepth 1 ! -name '.*' -print0` (no TTY) inside the container. `find -print0` emits literal, NUL-delimited entry paths, so names with spaces, newlines, or non-UTF8 bytes survive intact — the old `ls -1` parse mangled them.
+3. Stats every entry concurrently through an `errgroup` bounded to `containerListWorkers = 20`, preserving input order.
 
-The method returns `[]container.PathStat`. The caller is responsible for joining the returned entry name with the requested base path when it needs full paths.
+The method returns a `ContainerDirListing`: `Files` are the readable entries' `container.PathStat` metadata, `Failures` carries any per-entry stat errors so a live directory degrades to a partial listing instead of failing outright, and `Truncated` is set when the directory held more than the entry cap and only the first page was listed.
 
 If `dirPath` is empty, it defaults to `WorkFolderPathInContainer` (`/work`).
 

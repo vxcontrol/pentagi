@@ -26,12 +26,6 @@ export interface FileManagerNodeDndHandlers {
      * destination contract for them.
      */
     canDrag: boolean;
-    /**
-     * `true` when this row is part of the in-flight drag operation. Drives the
-     * "ghosted" appearance for every selected row when the user drags one of them,
-     * so it's obvious that the whole batch is being moved (not just the row whose
-     * native drag image the browser is showing).
-     */
     isBeingDragged: boolean;
     isDropTarget: boolean;
     onDragEnd: () => void;
@@ -214,16 +208,8 @@ export function useFileManagerDnd({
     onMoveItems,
     selectedPaths,
 }: UseFileManagerDndParams): UseFileManagerDndResult {
-    // `isEnabled` keeps its legacy meaning ("internal move DnD is on") so
-    // existing consumers (e.g. row `draggable` flag, container root-drop
-    // wiring) keep working unchanged. External-file drops live on a separate
-    // flag and only contribute row-level handlers; they never make rows
-    // draggable or wire the container.
     const isEnabled = !!onMoveItems;
     const isExternalDropEnabled = !!onExternalFileDrop;
-    // Some node-level branches need to know whether the row should react to
-    // *any* drag event (move OR external) — this combined flag avoids
-    // repeating the OR at every entry.
     const reactsToDrags = isEnabled || isExternalDropEnabled;
 
     // Stash via ref so the dragstart handler doesn't re-create on every selection
@@ -264,11 +250,6 @@ export function useFileManagerDnd({
             const selection = selectionRef.current;
             const isPartOfSelection = !!selection && selection.has(node.path);
 
-            // Build the source path list:
-            //   - If the dragged row IS part of the selection → drag everything selected
-            //     (deduped so a parent dir doesn't ship together with its descendants).
-            //   - Otherwise → drag just this row, and clear the previous selection so
-            //     the user isn't left with a stale highlight pointing at unrelated items.
             const sourcePaths = isPartOfSelection && selection ? dedupeOverlappingPaths(selection) : [node.path];
 
             if (!isPartOfSelection && selection && selection.size > 0) {
@@ -298,9 +279,6 @@ export function useFileManagerDnd({
             // in the ref. Newline-separate so external listeners can still parse it.
             event.dataTransfer.setData(FM_DND_MIME, sources.map((source) => source.path).join('\n'));
 
-            // For multi-source drags swap the browser's default drag image (= the
-            // grabbed row only) with a compact "N items" badge — without it the
-            // user can't tell at a glance that the whole selection is on the move.
             if (sources.length > 1) {
                 const badge = document.createElement('div');
 
@@ -312,8 +290,8 @@ export function useFileManagerDnd({
                     'top: -1000px',
                     'left: -1000px',
                     'padding: 6px 12px',
-                    'background: hsl(var(--primary))',
-                    'color: hsl(var(--primary-foreground))',
+                    'background: var(--primary)',
+                    'color: var(--primary-foreground)',
                     'border-radius: 6px',
                     'font: 500 13px system-ui, -apple-system, "Segoe UI", sans-serif',
                     'white-space: nowrap',
@@ -360,9 +338,6 @@ export function useFileManagerDnd({
                 return;
             }
 
-            // Top-level files behave as part of the root drop area — let the event
-            // bubble so the container handler (for FM-mime drags) or the page-
-            // level external drop handler can pick it up.
             if (isRootPassthrough(node)) {
                 return;
             }
@@ -372,12 +347,6 @@ export function useFileManagerDnd({
             // as a drop into the empty (root) area and call the move API on release.
             event.stopPropagation();
 
-            // Files inside a folder forward their drop logic to the parent dir
-            // (returned here by `resolveDropTargetDir`), so the user can release
-            // anywhere inside the folder and the items land in that folder —
-            // matching Finder/Explorer. The parent's row picks up the highlight
-            // automatically because every row compares `dropTargetPath` to its own
-            // `node.path`, and we set the parent's path here.
             const targetDir = resolveDropTargetDir(node, findNode);
             // External drags accept any directory; move drags additionally need
             // a valid source/destination pairing (no self-into-self / parent etc.).
@@ -705,8 +674,6 @@ export function useFileManagerDnd({
 
             event.preventDefault();
             resetDragState();
-            // Selection paths are about to be invalidated by the move — clear them so
-            // the bulk bar doesn't display stale "N selected".
             onClearSelection?.();
             void onMoveItems?.(sources, '');
         },

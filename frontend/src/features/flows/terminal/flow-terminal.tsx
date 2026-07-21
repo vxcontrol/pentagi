@@ -1,9 +1,9 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import '@xterm/xterm/css/xterm.css';
-import debounce from 'lodash/debounce';
 import { ChevronDown, ChevronUp, ListFilter, Search, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
+import { useDebouncedCallback } from 'use-debounce';
 import { z } from 'zod';
 
 import Terminal from '@/components/shared/terminal';
@@ -47,13 +47,9 @@ function FlowTerminal() {
     const searchValue = form.watch('search');
     const filter = form.watch('filter');
 
-    const debouncedUpdateSearch = useMemo(
-        () =>
-            debounce((value: string) => {
-                setDebouncedSearchValue(value);
-            }, 500),
-        [],
-    );
+    const debouncedUpdateSearch = useDebouncedCallback((value: string) => {
+        setDebouncedSearchValue(value);
+    }, 500);
 
     useEffect(() => {
         debouncedUpdateSearch(searchValue);

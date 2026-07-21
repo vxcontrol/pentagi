@@ -68,7 +68,7 @@ export default defineConfig(({ mode }) => {
                         if (/[\\/]@apollo[\\/]client|[\\/]graphql[\\/]|[\\/]graphql-ws[\\/]/.test(id)) {
                             return 'apollo-client';
                         }
-                        if (/[\\/](react-markdown|rehype-highlight|rehype-raw|rehype-slug|remark-gfm)[\\/]/.test(id)) {
+                        if (/[\\/](react-markdown|rehype-highlight|rehype-slug|remark-gfm)[\\/]/.test(id)) {
                             return 'markdown';
                         }
                         if (/[\\/]@radix-ui[\\/]/.test(id)) {
@@ -76,6 +76,20 @@ export default defineConfig(({ mode }) => {
                         }
                         if (/[\\/]@xterm[\\/]/.test(id)) {
                             return 'terminal';
+                        }
+                        if (/[\\/]recharts[\\/]/.test(id)) {
+                            return 'charts';
+                        }
+                        if (/[\\/]@react-pdf[\\/]/.test(id)) {
+                            return 'pdf';
+                        }
+                        if (/[\\/](@tiptap|prosemirror-[a-z-]+)[\\/]/.test(id)) {
+                            return 'tiptap';
+                        }
+                        // Without an own chunk, marked gets folded into the 527KB tiptap chunk, and report-pdf's
+                        // static `import { marked }` would download all of it for a ~40KB library.
+                        if (/[\\/]node_modules[\\/]marked[\\/]/.test(id)) {
+                            return 'marked';
                         }
                         if (/[\\/](react|react-dom|react-router-dom)[\\/]/.test(id)) {
                             return 'react-vendor';

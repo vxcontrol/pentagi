@@ -1,3 +1,4 @@
+import { useQuery } from '@apollo/client/react';
 import { Activity, CircleDollarSign, Cpu, GitFork, Loader2 } from 'lucide-react';
 
 import type { UsageStatsFragmentFragment } from '@/graphql/types';
@@ -7,24 +8,26 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
-    useFlowsStatsTotalQuery,
-    useToolcallsStatsByFunctionQuery,
-    useToolcallsStatsTotalQuery,
-    useUsageStatsByAgentTypeQuery,
-    useUsageStatsByModelQuery,
-    useUsageStatsByProviderQuery,
-    useUsageStatsTotalQuery,
+    FlowsStatsTotalDocument,
+    ToolcallsStatsByFunctionDocument,
+    ToolcallsStatsTotalDocument,
+    UsageStatsByAgentTypeDocument,
+    UsageStatsByModelDocument,
+    UsageStatsByProviderDocument,
+    UsageStatsTotalDocument,
 } from '@/graphql/types';
 import { formatCost, formatDuration, formatNumber, formatTokenCount } from '@/lib/utils/format';
 
 export function DashboardOverview() {
-    const { data: usageTotalData, loading: usageTotalLoading } = useUsageStatsTotalQuery();
-    const { data: usageByProviderData, loading: usageByProviderLoading } = useUsageStatsByProviderQuery();
-    const { data: usageByModelData, loading: usageByModelLoading } = useUsageStatsByModelQuery();
-    const { data: usageByAgentTypeData, loading: usageByAgentTypeLoading } = useUsageStatsByAgentTypeQuery();
-    const { data: toolcallsTotalData, loading: toolcallsTotalLoading } = useToolcallsStatsTotalQuery();
-    const { data: toolcallsByFunctionData, loading: toolcallsByFunctionLoading } = useToolcallsStatsByFunctionQuery();
-    const { data: flowsTotalData, loading: flowsTotalLoading } = useFlowsStatsTotalQuery();
+    const { data: usageTotalData, loading: usageTotalLoading } = useQuery(UsageStatsTotalDocument);
+    const { data: usageByProviderData, loading: usageByProviderLoading } = useQuery(UsageStatsByProviderDocument);
+    const { data: usageByModelData, loading: usageByModelLoading } = useQuery(UsageStatsByModelDocument);
+    const { data: usageByAgentTypeData, loading: usageByAgentTypeLoading } = useQuery(UsageStatsByAgentTypeDocument);
+    const { data: toolcallsTotalData, loading: toolcallsTotalLoading } = useQuery(ToolcallsStatsTotalDocument);
+    const { data: toolcallsByFunctionData, loading: toolcallsByFunctionLoading } = useQuery(
+        ToolcallsStatsByFunctionDocument,
+    );
+    const { data: flowsTotalData, loading: flowsTotalLoading } = useQuery(FlowsStatsTotalDocument);
 
     const usageTotal = usageTotalData?.usageStatsTotal;
     const toolcallsTotal = toolcallsTotalData?.toolcallsStatsTotal;

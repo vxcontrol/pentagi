@@ -33,7 +33,6 @@ interface UseFileManagerDataArgs {
      */
     isFoldersFirst: boolean;
     rootGroups: FileManagerRootGroup[] | undefined;
-    /** Raw `search.query` from props; trimming and emptiness checks live inside the hook. */
     searchQuery: string | undefined;
     /** Active sort descriptor; `null` preserves insertion order. */
     sorting: FileManagerSortState;
@@ -59,9 +58,7 @@ interface UseFileManagerDataResult {
      * including those filtered out of the visible tree by the search query.
      */
     fullTree: FileManagerInternalNode[];
-    /** CSS `grid-template-columns` value shared by the header and every row. */
     gridTemplate: string;
-    /** True when a non-empty search query is active. Drives auto-expand-on-search. */
     isFiltering: boolean;
     isModifiedVisible: boolean;
     isSizeVisible: boolean;
@@ -71,7 +68,6 @@ interface UseFileManagerDataResult {
      * treat the value as the canonical group list.
      */
     normalizedRootGroups: FileManagerRootGroup[] | undefined;
-    /** Trimmed search query (`''` when missing or whitespace-only). */
     trimmedSearch: string;
     /**
      * The tree as the user actually sees it — same shape as `fullTree` when no
@@ -124,9 +120,6 @@ export function useFileManagerData({
 
     const allSelectablePaths = useMemo(() => collectAllNodePaths(visibleTree), [visibleTree]);
 
-    // Pre-compute the subtree path list for every directory (and group root) once
-    // per tree shape: this powers both the tri-state checkbox value and the
-    // "toggle whole subtree" gesture without re-walking the tree on every render.
     const dirSubtreePaths = useMemo(() => {
         const map = new Map<string, readonly string[]>();
 

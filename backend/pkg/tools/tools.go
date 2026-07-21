@@ -11,6 +11,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"pentagi/pkg/config"
@@ -347,6 +348,16 @@ type FlowToolsExecutor interface {
 	GetReporterExecutor(cfg ReporterExecutorConfig) (ContextToolsExecutor, error)
 }
 
+// sharedReplacer is a process-level singleton for the anonymizer replacer.
+// The replacer is built from immutable sources (embedded patterns + startup
+// config), so it is safe to share across all flow executor instances.
+// ReplaceString is a pure read operation and is goroutine-safe.
+var (
+	sharedReplacer     anonymizer.Replacer
+	sharedReplacerOnce sync.Once
+	sharedReplacerErr  error
+)
+
 func NewFlowToolsExecutor(
 	db database.Querier,
 	cfg *config.Config,
@@ -354,24 +365,28 @@ func NewFlowToolsExecutor(
 	functions *Functions,
 	userID, flowID int64,
 ) (FlowToolsExecutor, error) {
-	allPatterns, err := patterns.LoadPatterns(patterns.PatternListTypeAll)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load all patterns: %v", err)
-	}
+	// Build the replacer exactly once for the lifetime of the process.
+	// cfg.GetSecretPatterns() reads environment variables that are fixed at
+	// startup, so the first caller's config is representative for all callers.
+	sharedReplacerOnce.Do(func() {
+		allPatterns, err := patterns.LoadPatterns(patterns.PatternListTypeAll)
+		if err != nil {
+			sharedReplacerErr = fmt.Errorf("failed to load all patterns: %v", err)
+			return
+		}
+		allPatterns.Patterns = append(allPatterns.Patterns, cfg.GetSecretPatterns()...)
+		sharedReplacer, sharedReplacerErr = anonymizer.NewReplacer(allPatterns.Regexes(), allPatterns.Names())
+	})
 
-	// combine with config secret patterns
-	allPatterns.Patterns = append(allPatterns.Patterns, cfg.GetSecretPatterns()...)
-
-	replacer, err := anonymizer.NewReplacer(allPatterns.Regexes(), allPatterns.Names())
-	if err != nil {
-		return nil, fmt.Errorf("failed to create replacer: %v", err)
+	if sharedReplacerErr != nil {
+		return nil, fmt.Errorf("failed to create replacer: %v", sharedReplacerErr)
 	}
 
 	return &flowToolsExecutor{
 		db:          db,
 		docker:      docker,
 		functions:   functions,
-		replacer:    replacer,
+		replacer:    sharedReplacer,
 		cfg:         cfg,
 		flowID:      flowID,
 		userID:      userID,

@@ -9,7 +9,7 @@ export enum BreakpointName {
 export const breakpoints = {
     [BreakpointName.desktop]: Infinity,
     [BreakpointName.mobile]: 768,
-    [BreakpointName.tablet]: 1200,
+    [BreakpointName.tablet]: 1280,
 } as const;
 
 const breakpointRules: { maxWidth: number; name: BreakpointName }[] = [
@@ -59,7 +59,7 @@ export function useBreakpoint() {
         };
 
         window.addEventListener('resize', handleResize);
-        handleResize(); // Check on mount
+        handleResize();
 
         return () => window.removeEventListener('resize', handleResize);
     }, [updateBreakpointState]);

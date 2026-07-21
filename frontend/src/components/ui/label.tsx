@@ -13,6 +13,7 @@ function Label({
     return (
         <LabelPrimitive.Root
             className={cn(labelVariants(), className)}
+            data-slot="label"
             {...props}
         />
     );

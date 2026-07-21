@@ -49,6 +49,8 @@ type KnowledgeStore interface {
 	CreateDocument(ctx context.Context, userID int64, input model.CreateKnowledgeDocumentInput) (*model.KnowledgeDocument, error)
 	UpdateDocument(ctx context.Context, userID int64, id string, input model.UpdateKnowledgeDocumentInput) (*model.KnowledgeDocument, error)
 	UpdateUserDocument(ctx context.Context, userID int64, id string, input model.UpdateKnowledgeDocumentInput) (*model.KnowledgeDocument, error)
+	RenameDocument(ctx context.Context, userID int64, id, question string) (*model.KnowledgeDocument, error)
+	RenameUserDocument(ctx context.Context, userID int64, id, question string) (*model.KnowledgeDocument, error)
 	DeleteDocument(ctx context.Context, userID int64, id string) error
 	DeleteUserDocument(ctx context.Context, userID int64, id string) error
 }
@@ -539,19 +541,16 @@ func (ks *knowledgeStore) UpdateUserDocument(ctx context.Context, userID int64, 
 	return ks.doUpdate(ctx, userID, id, existing, input)
 }
 
-func (ks *knowledgeStore) doUpdate(ctx context.Context, userID int64, id string, existing *model.KnowledgeDocument, input model.UpdateKnowledgeDocumentInput) (*model.KnowledgeDocument, error) {
-	if err := ks.requireEmbedder(); err != nil {
-		return nil, err
-	}
-
-	// Build updated metadata from existing document.
-	// Preserve the original owner (UserID) — the caller's identity (userID) is
-	// used only for event scoping via the publisher, not stored in cmetadata.
+// metaFromDoc keeps the document's original owner — a rename/update must not rewrite
+// UserID to the caller (whose id is used only for publisher event scoping).
+func metaFromDoc(existing *model.KnowledgeDocument) knowledgeMeta {
 	meta := knowledgeMeta{
-		DocType:  string(existing.DocType),
-		UserID:   existing.UserID,
-		Manual:   existing.Manual,
-		Question: existing.Question,
+		DocType:   string(existing.DocType),
+		UserID:    existing.UserID,
+		Manual:    existing.Manual,
+		Question:  existing.Question,
+		PartSize:  existing.PartSize,
+		TotalSize: existing.TotalSize,
 	}
 	if existing.FlowID != nil {
 		meta.FlowID = existing.FlowID
@@ -574,6 +573,57 @@ func (ks *knowledgeStore) doUpdate(ctx context.Context, userID int64, id string,
 	if existing.CodeLang != nil {
 		meta.CodeLang = *existing.CodeLang
 	}
+	return meta
+}
+
+// ---- RenameDocument (admin) -------------------------------------------------
+
+func (ks *knowledgeStore) RenameDocument(ctx context.Context, userID int64, id, question string) (*model.KnowledgeDocument, error) {
+	existing, err := ks.GetDocument(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return ks.doRename(ctx, userID, id, existing, question)
+}
+
+// ---- RenameUserDocument (user-scoped) ---------------------------------------
+
+func (ks *knowledgeStore) RenameUserDocument(ctx context.Context, userID int64, id, question string) (*model.KnowledgeDocument, error) {
+	existing, err := ks.GetUserDocument(ctx, userID, id)
+	if err != nil {
+		return nil, err
+	}
+	return ks.doRename(ctx, userID, id, existing, question)
+}
+
+func (ks *knowledgeStore) doRename(ctx context.Context, userID int64, id string, existing *model.KnowledgeDocument, question string) (*model.KnowledgeDocument, error) {
+	meta := metaFromDoc(existing)
+	meta.Question = strings.TrimSpace(question)
+
+	cmJSON, err := metaToJSON(meta)
+	if err != nil {
+		return nil, fmt.Errorf("knowledge: marshal cmetadata: %w", err)
+	}
+
+	row, err := ks.db.UpdateKnowledgeDocumentMetadata(ctx, database.UpdateKnowledgeDocumentMetadataParams{
+		Uuid:      nsOf(id),
+		Cmetadata: cmJSON,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("knowledge: rename document %s: %w", id, err)
+	}
+
+	doc := rowToModel(row.ID, row.Document, nullStr(row.Cmetadata), true)
+	ks.newKnp(userID).KnowledgeDocumentUpdated(ctx, doc)
+	return doc, nil
+}
+
+func (ks *knowledgeStore) doUpdate(ctx context.Context, userID int64, id string, existing *model.KnowledgeDocument, input model.UpdateKnowledgeDocumentInput) (*model.KnowledgeDocument, error) {
+	if err := ks.requireEmbedder(); err != nil {
+		return nil, err
+	}
+
+	meta := metaFromDoc(existing)
 
 	// Apply input fields.
 	content := strings.TrimSpace(input.Content)

@@ -1,3 +1,4 @@
+import { useQuery } from '@apollo/client/react';
 import { format } from 'date-fns';
 import { ChevronRight, Clock, Loader2, Wrench } from 'lucide-react';
 import { memo, useDeferredValue, useMemo, useRef, useState } from 'react';
@@ -11,11 +12,11 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
-    useFlowsExecutionStatsByPeriodQuery,
-    useFlowsQuery,
-    useFlowsStatsByPeriodQuery,
-    useToolcallsStatsByPeriodQuery,
-    useUsageStatsByPeriodQuery,
+    FlowsDocument,
+    FlowsExecutionStatsByPeriodDocument,
+    FlowsStatsByPeriodDocument,
+    ToolcallsStatsByPeriodDocument,
+    UsageStatsByPeriodDocument,
 } from '@/graphql/types';
 import { cn } from '@/lib/utils';
 import { formatCost, formatDuration, formatNumber, formatTokenCount } from '@/lib/utils/format';
@@ -59,19 +60,22 @@ type FlowExecution = {
 };
 
 export function DashboardAnalytics({ period }: { period: UsageStatsPeriod }) {
-    const { data: usageByPeriodData, loading: usageByPeriodLoading } = useUsageStatsByPeriodQuery({
+    const { data: usageByPeriodData, loading: usageByPeriodLoading } = useQuery(UsageStatsByPeriodDocument, {
         variables: { period },
     });
-    const { data: toolcallsByPeriodData, loading: toolcallsByPeriodLoading } = useToolcallsStatsByPeriodQuery({
+    const { data: toolcallsByPeriodData, loading: toolcallsByPeriodLoading } = useQuery(
+        ToolcallsStatsByPeriodDocument,
+        {
+            variables: { period },
+        },
+    );
+    const { data: flowsByPeriodData, loading: flowsByPeriodLoading } = useQuery(FlowsStatsByPeriodDocument, {
         variables: { period },
     });
-    const { data: flowsByPeriodData, loading: flowsByPeriodLoading } = useFlowsStatsByPeriodQuery({
+    const { data: executionStatsData, loading: executionStatsLoading } = useQuery(FlowsExecutionStatsByPeriodDocument, {
         variables: { period },
     });
-    const { data: executionStatsData, loading: executionStatsLoading } = useFlowsExecutionStatsByPeriodQuery({
-        variables: { period },
-    });
-    const { data: flowsData } = useFlowsQuery();
+    const { data: flowsData } = useQuery(FlowsDocument);
 
     const flowsTooltip = useChartTooltipAnimation();
     const toolcallsTooltip = useChartTooltipAnimation();
@@ -367,7 +371,7 @@ export function DashboardAnalytics({ period }: { period: UsageStatsPeriod }) {
                     ) : (
                         <div
                             className={cn(
-                                'space-y-1 transition-opacity',
+                                'flex flex-col gap-1 transition-opacity',
                                 deferredExecutionStats !== executionStats && 'opacity-60',
                             )}
                         >
@@ -433,7 +437,7 @@ const FlowExecutionItem = memo(function FlowExecutionItem({
                 </div>
             </CollapsibleTrigger>
             <CollapsibleContent>
-                <div className="ml-7 space-y-1 border-l pl-3">
+                <div className="ml-7 flex flex-col gap-1 border-l pl-3">
                     {flow.tasks.map((task) => (
                         <TaskExecutionItem
                             key={task.taskId}
@@ -478,7 +482,7 @@ const TaskExecutionItem = memo(function TaskExecutionItem({ task }: { task: Flow
             </CollapsibleTrigger>
             {hasSubtasks && (
                 <CollapsibleContent>
-                    <div className="ml-6 space-y-0.5 border-l pl-3">
+                    <div className="ml-6 flex flex-col gap-0.5 border-l pl-3">
                         {task.subtasks.map((subtask) => (
                             <div
                                 className="text-muted-foreground flex items-center gap-3 px-3 py-1 text-xs"

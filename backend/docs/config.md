@@ -31,6 +31,7 @@ This document serves as a comprehensive guide to the configuration system in Pen
     - [GLM LLM Provider](#glm-llm-provider)
     - [Kimi LLM Provider](#kimi-llm-provider)
     - [Qwen LLM Provider](#qwen-llm-provider)
+    - [MiniMax LLM Provider](#minimax-llm-provider)
     - [Custom LLM Provider](#custom-llm-provider)
     - [Usage Details](#usage-details-6)
   - [Embedding Settings](#embedding-settings)
@@ -66,6 +67,7 @@ This document serves as a comprehensive guide to the configuration system in Pen
     - [Usage Details](#usage-details-11)
   - [Graphiti Knowledge Graph Settings](#graphiti-knowledge-graph-settings)
     - [Usage Details](#usage-details-12)
+    - [Current Limitations (Beta)](#current-limitations-beta)
   - [Agent Supervision Settings](#agent-supervision-settings)
     - [Usage Details](#usage-details-13)
     - [Supervision System Integration](#supervision-system-integration)
@@ -119,7 +121,7 @@ These web-console features do not replace the environment variables in this guid
 
 The environment variables documented below remain the source of truth for configuration that is not currently editable from the web console:
 
-- **LLM credentials and connection settings**: API keys, base URLs, auth modes, and provider-specific connection settings for OpenAI, Anthropic, Bedrock, Ollama, custom providers, and similar backends; config-path settings apply only where supported, such as `OLLAMA_SERVER_CONFIG_PATH` and `LLM_SERVER_CONFIG_PATH`.
+- **LLM credentials and connection settings**: API keys, base URLs, auth modes, and provider-specific connection settings for OpenAI, Anthropic, Bedrock, Ollama, custom providers, and similar backends; config-path settings apply only where supported, such as `OLLAMA_SERVER_CONFIG_PATH`, `LLM_SERVER_CONFIG_PATH`, and `BEDROCK_CONFIG_PATH`.
 - **Search provider credentials and options**: DuckDuckGo, Google, Tavily, Traversaal, Perplexity, Searxng, Sploitus, and related search configuration.
 - **Third-party integrations**: Langfuse, Graphiti, and other external observability or knowledge services.
 - **MCP server management**: MCP settings are not currently exposed as a live web-console feature.
@@ -607,6 +609,7 @@ There is no `VERTEX_API_KEY` or `GOOGLE_APPLICATION_CREDENTIALS` variable wired 
 | BedrockSecretKey    | `BEDROCK_SECRET_ACCESS_KEY` | *(none)*      | AWS secret access key for static credentials authentication                                                              |
 | BedrockSessionToken | `BEDROCK_SESSION_TOKEN`     | *(none)*      | AWS session token for temporary credentials (optional, used with static credentials for STS/assumed roles)               |
 | BedrockServerURL    | `BEDROCK_SERVER_URL`        | *(none)*      | Optional custom endpoint URL for Bedrock service (VPC endpoints, local testing)                                          |
+| BedrockConfig       | `BEDROCK_CONFIG_PATH`       | *(none)*      | Path to a custom YAML config that replaces the built-in Bedrock per-agent config (model assignments, prices)             |
 
 **Authentication Priority**: `BedrockDefaultAuth` (highest) → `BedrockBearerToken` → `BedrockAccessKey`+`BedrockSecretKey` (lowest)
 
@@ -663,6 +666,16 @@ There is no `VERTEX_API_KEY` or `GOOGLE_APPLICATION_CREDENTIALS` variable wired 
 - China: `https://dashscope.aliyuncs.com/compatible-mode/v1`
 
 **LiteLLM Integration**: Set `QWEN_PROVIDER=dashscope` to enable model prefixing (e.g., `dashscope/qwen-plus`) when using LiteLLM proxy with default PentAGI configs.
+
+### MiniMax LLM Provider
+
+| Option           | Environment Variable | Default Value               | Description                                             |
+| ---------------- | -------------------- | --------------------------- | ------------------------------------------------------- |
+| MiniMaxAPIKey    | `MINIMAX_API_KEY`    | *(none)*                    | MiniMax API key for authentication                      |
+| MiniMaxServerURL | `MINIMAX_SERVER_URL` | `https://api.minimax.io/v1` | MiniMax API endpoint URL                                |
+| MiniMaxProvider  | `MINIMAX_PROVIDER`   | *(none)*                    | Provider name prefix for LiteLLM integration (optional) |
+
+**LiteLLM Integration**: Set `MINIMAX_PROVIDER=minimax` to enable model prefixing (e.g., `minimax/MiniMax-M3`) when using LiteLLM proxy with default PentAGI configs.
 
 ### Custom LLM Provider
 

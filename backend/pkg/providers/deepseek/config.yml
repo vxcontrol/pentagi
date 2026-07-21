@@ -52,9 +52,9 @@ primary_agent:
     thinking:
       type: enabled
   price:
-    input: 1.74
-    output: 3.48
-    cache_read: 0.0145
+    input: 0.435
+    output: 0.87
+    cache_read: 0.003625
 
 assistant:
   model: deepseek-v4-pro
@@ -66,9 +66,9 @@ assistant:
     thinking:
       type: enabled
   price:
-    input: 1.74
-    output: 3.48
-    cache_read: 0.0145
+    input: 0.435
+    output: 0.87
+    cache_read: 0.003625
 
 generator:
   model: deepseek-v4-pro
@@ -80,9 +80,9 @@ generator:
     thinking:
       type: enabled
   price:
-    input: 1.74
-    output: 3.48
-    cache_read: 0.0145
+    input: 0.435
+    output: 0.87
+    cache_read: 0.003625
 
 refiner:
   model: deepseek-v4-pro
@@ -94,9 +94,9 @@ refiner:
     thinking:
       type: enabled
   price:
-    input: 1.74
-    output: 3.48
-    cache_read: 0.0145
+    input: 0.435
+    output: 0.87
+    cache_read: 0.003625
 
 adviser:
   model: deepseek-v4-pro
@@ -108,9 +108,9 @@ adviser:
     thinking:
       type: enabled
   price:
-    input: 1.74
-    output: 3.48
-    cache_read: 0.0145
+    input: 0.435
+    output: 0.87
+    cache_read: 0.003625
 
 reflector:
   model: deepseek-v4-flash
@@ -164,9 +164,9 @@ coder:
     thinking:
       type: enabled
   price:
-    input: 1.74
-    output: 3.48
-    cache_read: 0.0145
+    input: 0.435
+    output: 0.87
+    cache_read: 0.003625
 
 installer:
   model: deepseek-v4-flash
@@ -192,6 +192,6 @@ pentester:
     thinking:
       type: enabled
   price:
-    input: 1.74
-    output: 3.48
-    cache_read: 0.0145
+    input: 0.435
+    output: 0.87
+    cache_read: 0.003625

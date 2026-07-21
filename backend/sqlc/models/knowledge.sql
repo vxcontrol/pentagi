@@ -75,6 +75,20 @@ RETURNING
   COALESCE(document, '')                  AS document,
   COALESCE(cmetadata::text, '{}')         AS cmetadata;
 
+-- name: UpdateKnowledgeDocumentMetadata :one
+-- Update only the document's metadata, leaving its text and embedding intact.
+-- Used when an update changes no content (e.g. rename) so re-embedding — and
+-- therefore a configured embedder — is unnecessary.
+-- cmetadata must be valid JSON text.
+UPDATE langchain_pg_embedding
+SET cmetadata = sqlc.arg(cmetadata)::json
+WHERE uuid::text = sqlc.arg(uuid)
+  AND collection_id = (SELECT uuid FROM langchain_pg_collection WHERE name = 'langchain')
+RETURNING
+  uuid::text                              AS id,
+  COALESCE(document, '')                  AS document,
+  COALESCE(cmetadata::text, '{}')         AS cmetadata;
+
 -- name: DeleteKnowledgeDocument :exec
 -- Delete a knowledge document by UUID (admin — no user_id check).
 DELETE FROM langchain_pg_embedding

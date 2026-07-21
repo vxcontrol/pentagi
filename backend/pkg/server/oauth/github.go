@@ -18,42 +18,42 @@ type githubEmail struct {
 	Visibility string `json:"visibility"`
 }
 
-func githubEmailResolver(ctx context.Context, nonce string, token *oauth2.Token) (string, error) {
+func githubEmailResolver(ctx context.Context, nonce string, token *oauth2.Token) (string, bool, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.github.com/user/emails", nil)
 	if err != nil {
-		return "", err
+		return "", false, err
 	}
 	req.Header.Set("Authorization", fmt.Sprintf("token %s", token.AccessToken))
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return "", err
+		return "", false, err
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", err
+		return "", false, err
 	}
 
 	emails := []githubEmail{}
 	if err := json.Unmarshal(body, &emails); err != nil {
-		return "", err
+		return "", false, err
 	}
 
 	for _, email := range emails {
 		if email.Verified && email.Primary {
-			return email.Email, nil
+			return email.Email, true, nil
 		}
 	}
 
 	for _, email := range emails {
 		if email.Verified {
-			return email.Email, nil
+			return email.Email, true, nil
 		}
 	}
 
-	return "", fmt.Errorf("no verified primary email found")
+	return "", false, fmt.Errorf("no verified primary email found")
 }
 
 func NewGithubOAuthClient(clientID, clientSecret, redirectURL string) OAuthClient {

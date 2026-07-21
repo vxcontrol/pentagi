@@ -1,4 +1,5 @@
 import { NetworkStatus } from '@apollo/client';
+import { useMutation, useQuery, useSubscription } from '@apollo/client/react';
 import { createContext, useCallback, useContext, useEffect, useMemo } from 'react';
 import { toast } from 'sonner';
 
@@ -6,14 +7,14 @@ import type { FlowFormValues } from '@/features/flows/flow-form';
 import type { FlowFragmentFragment, FlowsQuery } from '@/graphql/types';
 
 import {
-    useCreateAssistantMutation,
-    useCreateFlowMutation,
-    useDeleteFlowMutation,
-    useFinishFlowMutation,
-    useFlowCreatedSubscription,
-    useFlowDeletedSubscription,
-    useFlowsQuery,
-    useFlowUpdatedSubscription,
+    CreateAssistantDocument,
+    CreateFlowDocument,
+    DeleteFlowDocument,
+    FinishFlowDocument,
+    FlowCreatedDocument,
+    FlowDeletedDocument,
+    FlowsDocument,
+    FlowUpdatedDocument,
 } from '@/graphql/types';
 import { Log } from '@/lib/log';
 
@@ -42,16 +43,16 @@ export function FlowsProvider({ children }: FlowsProviderProps) {
         error: flowsError,
         loading,
         networkStatus,
-    } = useFlowsQuery({
+    } = useQuery(FlowsDocument, {
         notifyOnNetworkStatusChange: true,
     });
 
     const isLoading = loading && networkStatus === NetworkStatus.loading;
     const flows = useMemo(() => flowsData?.flows ?? [], [flowsData?.flows]);
 
-    useFlowCreatedSubscription();
-    useFlowDeletedSubscription();
-    useFlowUpdatedSubscription();
+    useSubscription(FlowCreatedDocument);
+    useSubscription(FlowDeletedDocument);
+    useSubscription(FlowUpdatedDocument);
 
     useEffect(() => {
         if (flowsError) {
@@ -62,10 +63,10 @@ export function FlowsProvider({ children }: FlowsProviderProps) {
         }
     }, [flowsError]);
 
-    const [createFlowMutation] = useCreateFlowMutation();
-    const [createAssistantMutation] = useCreateAssistantMutation();
-    const [deleteFlowMutation] = useDeleteFlowMutation();
-    const [finishFlowMutation] = useFinishFlowMutation();
+    const [createFlowMutation] = useMutation(CreateFlowDocument);
+    const [createAssistantMutation] = useMutation(CreateAssistantDocument);
+    const [deleteFlowMutation] = useMutation(DeleteFlowDocument);
+    const [finishFlowMutation] = useMutation(FinishFlowDocument);
 
     const createFlow = useCallback(
         async (values: FlowFormValues) => {

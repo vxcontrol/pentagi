@@ -80,6 +80,7 @@ var Observer Observability
 type Observability interface {
 	Flush(ctx context.Context) error
 	Shutdown(ctx context.Context) error
+	Drain(ctx context.Context) error
 	Meter
 	Tracer
 	Collector
@@ -201,27 +202,80 @@ func InitObserver(ctx context.Context, lfclient LangfuseClient, otelclient Telem
 }
 
 func (obs *observer) Flush(ctx context.Context) error {
+	var errs []error
 	if obs.lfclient != nil {
-		return obs.lfclient.ForceFlush(ctx)
+		if err := obs.lfclient.ForceFlush(ctx); err != nil {
+			errs = append(errs, err)
+		}
 	}
-
 	if obs.otelclient != nil {
-		return obs.otelclient.ForceFlush(ctx)
+		if err := obs.otelclient.ForceFlush(ctx); err != nil {
+			errs = append(errs, err)
+		}
 	}
-
-	return nil
+	return errors.Join(errs...)
 }
 
 func (obs *observer) Shutdown(ctx context.Context) error {
+	var errs []error
 	if obs.lfclient != nil {
-		return obs.lfclient.Shutdown(ctx)
+		if err := obs.lfclient.Shutdown(ctx); err != nil {
+			errs = append(errs, err)
+		}
 	}
-
 	if obs.otelclient != nil {
-		return obs.otelclient.Shutdown(ctx)
+		if err := obs.otelclient.Shutdown(ctx); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
+}
+
+// Drain flushes then shuts down every telemetry sink, each in its own goroutine,
+// bounded by ctx. Draining concurrently (not serially like Flush/Shutdown) is
+// load-bearing: a sink can ignore ctx and block on its own timeout — langfuse's
+// ForceFlush/Shutdown do — so a serial drain lets one unhealthy sink burn the
+// whole budget and starve a healthy one. On deadline the still-blocked sink is
+// abandoned (the process is exiting), rather than holding up shutdown.
+func (obs *observer) Drain(ctx context.Context) error {
+	type sink struct {
+		name            string
+		flush, shutdown func(context.Context) error
+	}
+	var sinks []sink
+	if obs.lfclient != nil {
+		sinks = append(sinks, sink{"langfuse", obs.lfclient.ForceFlush, obs.lfclient.Shutdown})
+	}
+	if obs.otelclient != nil {
+		sinks = append(sinks, sink{"opentelemetry", obs.otelclient.ForceFlush, obs.otelclient.Shutdown})
 	}
 
-	return nil
+	results := make(chan error, len(sinks))
+	for _, s := range sinks {
+		go func(s sink) {
+			var errs []error
+			if err := s.flush(ctx); err != nil {
+				errs = append(errs, fmt.Errorf("%s flush: %w", s.name, err))
+			}
+			if err := s.shutdown(ctx); err != nil {
+				errs = append(errs, fmt.Errorf("%s shutdown: %w", s.name, err))
+			}
+			results <- errors.Join(errs...)
+		}(s)
+	}
+
+	var errs []error
+	for range sinks {
+		select {
+		case err := <-results:
+			if err != nil {
+				errs = append(errs, err)
+			}
+		case <-ctx.Done():
+			return errors.Join(append(errs, ctx.Err())...)
+		}
+	}
+	return errors.Join(errs...)
 }
 
 func (obs *observer) StartProcessMetricCollect(attrs ...attribute.KeyValue) error {

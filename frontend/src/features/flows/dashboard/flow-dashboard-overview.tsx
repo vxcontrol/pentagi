@@ -1,3 +1,4 @@
+import { useQuery } from '@apollo/client/react';
 import { Activity, CircleDollarSign, Cpu, GitFork, Loader2 } from 'lucide-react';
 import { useMemo } from 'react';
 
@@ -10,35 +11,38 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import FlowAgentIcon from '@/features/flows/agents/flow-agent-icon';
 import {
     AgentType,
-    useFlowStatsByFlowQuery,
-    useToolcallsStatsByFlowQuery,
-    useToolcallsStatsByFunctionForFlowQuery,
-    useUsageStatsByAgentTypeForFlowQuery,
-    useUsageStatsByFlowQuery,
-    useUsageStatsByModelAgentsForFlowQuery,
+    FlowStatsByFlowDocument,
+    ToolcallsStatsByFlowDocument,
+    ToolcallsStatsByFunctionForFlowDocument,
+    UsageStatsByAgentTypeForFlowDocument,
+    UsageStatsByFlowDocument,
+    UsageStatsByModelAgentsForFlowDocument,
 } from '@/graphql/types';
 import { formatCost, formatDuration, formatNumber, formatTokenCount } from '@/lib/utils/format';
 
 export function FlowDashboardOverview({ flowId }: { flowId: string }) {
-    const { data: usageData, loading: usageLoading } = useUsageStatsByFlowQuery({
+    const { data: usageData, loading: usageLoading } = useQuery(UsageStatsByFlowDocument, {
         variables: { flowId },
     });
-    const { data: usageByAgentData, loading: usageByAgentLoading } = useUsageStatsByAgentTypeForFlowQuery({
+    const { data: usageByAgentData, loading: usageByAgentLoading } = useQuery(UsageStatsByAgentTypeForFlowDocument, {
         variables: { flowId },
     });
-    const { data: usageByModelAgentsData, loading: usageByModelAgentsLoading } = useUsageStatsByModelAgentsForFlowQuery(
+    const { data: usageByModelAgentsData, loading: usageByModelAgentsLoading } = useQuery(
+        UsageStatsByModelAgentsForFlowDocument,
         {
             variables: { flowId },
         },
     );
-    const { data: toolcallsData, loading: toolcallsLoading } = useToolcallsStatsByFlowQuery({
+    const { data: toolcallsData, loading: toolcallsLoading } = useQuery(ToolcallsStatsByFlowDocument, {
         variables: { flowId },
     });
-    const { data: toolcallsByFunctionData, loading: toolcallsByFunctionLoading } =
-        useToolcallsStatsByFunctionForFlowQuery({
+    const { data: toolcallsByFunctionData, loading: toolcallsByFunctionLoading } = useQuery(
+        ToolcallsStatsByFunctionForFlowDocument,
+        {
             variables: { flowId },
-        });
-    const { data: flowStatsData, loading: flowStatsLoading } = useFlowStatsByFlowQuery({
+        },
+    );
+    const { data: flowStatsData, loading: flowStatsLoading } = useQuery(FlowStatsByFlowDocument, {
         variables: { flowId },
     });
 
@@ -103,7 +107,7 @@ export function FlowDashboardOverview({ flowId }: { flowId: string }) {
     const anyLoading = usageLoading || toolcallsLoading || flowStatsLoading;
 
     return (
-        <div className="space-y-6">
+        <div className="flex flex-col gap-6">
             <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
                 <MetricCard
                     description={`Subtasks: ${flowStats?.totalSubtasksCount ?? 0} · Assistants: ${flowStats?.totalAssistantsCount ?? 0}`}

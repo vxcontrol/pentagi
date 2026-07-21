@@ -1,10 +1,27 @@
 # Kimi (Moonshot) agent configuration.
 #
-# Strategy: kimi-k2.5 for utility/orchestration, kimi-k2.6 for critical reasoning.
+# Strategy: kimi-k2.5 for utility/orchestration, kimi-k2.7-code-highspeed for the
+# primary/assistant loop, kimi-k3 (always-thinking flagship) for critical reasoning
+# (generator/refiner/adviser), kimi-k2.7-code for coder/pentester.
 #
-# K2.6/K2.5 API constraints (any deviation -> invalid_request_error):
-#   thinking:     temperature=1.0, top_p=0.95, n=1, thinking.keep="all" (k2.6 only)
-#   non-thinking: temperature=0.6, top_p=0.95, n=1
+# API constraints per model family (any deviation -> invalid_request_error):
+#   kimi-k3:      always reasons, no `thinking` param at all; reasoning depth is set
+#                 via the top-level `reasoning_effort` field (low/high/max, default
+#                 max). Here it is pinned to "max" via reasoning.effort below, which
+#                 AgentConfig.BuildOptions turns into llms.WithReasoning(ReasoningMax,
+#                 0) (see pconfig/config.go), emitted as the legacy top-level
+#                 reasoning_effort string (ModernReasoningFormat is off for this
+#                 shared openaicompat base). temperature=1.0, top_p=0.95, n=1,
+#                 presence/frequency_penalty=0 are fixed by the API. Do not switch
+#                 effort per call: it invalidates the prefix cache.
+#   kimi-k2.7-code / -highspeed: `thinking` may be omitted; if set explicitly, only
+#                 {"type":"enabled","keep":"all"} is accepted (no `type: disabled`).
+#                 `reasoning_effort` is not supported. temperature=1.0, top_p=0.95,
+#                 n=1 fixed; tool_choice="required" not supported (use auto).
+#   kimi-k2.6:    thinking: temperature=1.0, top_p=0.95, n=1, thinking.keep="all"
+#                 non-thinking: temperature=0.6, top_p=0.95, n=1
+#   kimi-k2.5:    thinking: temperature=1.0, top_p=0.95, n=1 (no `keep` support)
+#                 non-thinking: temperature=0.6, top_p=0.95, n=1
 #   always:       presence_penalty=0, frequency_penalty=0, tool_choice in {auto, none}
 #
 # WORKAROUND (drop after fix in langchaingo): for kimi-k2.5 non-thinking agents we
@@ -51,7 +68,7 @@ simple_json:
     cache_read: 0.10
 
 primary_agent:
-  model: kimi-k2.5
+  model: kimi-k2.7-code-highspeed
   temperature: 1.0
   top_p: 0.95
   n: 1
@@ -59,14 +76,15 @@ primary_agent:
   extra_body:
     thinking:
       type: enabled
+      keep: all
     tool_choice: auto
   price:
-    input: 0.60
-    output: 3.00
-    cache_read: 0.10
+    input: 1.90
+    output: 8.00
+    cache_read: 0.38
 
 assistant:
-  model: kimi-k2.5
+  model: kimi-k2.7-code-highspeed
   temperature: 1.0
   top_p: 0.95
   n: 1
@@ -74,59 +92,63 @@ assistant:
   extra_body:
     thinking:
       type: enabled
+      keep: all
     tool_choice: auto
   price:
-    input: 0.60
-    output: 3.00
-    cache_read: 0.10
+    input: 1.90
+    output: 8.00
+    cache_read: 0.38
 
 generator:
-  model: kimi-k2.6
+  model: kimi-k3
   temperature: 1.0
   top_p: 0.95
+  presence_penalty: 0
+  frequency_penalty: 0
   n: 1
   max_tokens: 32768
+  reasoning:
+    effort: max
   extra_body:
-    thinking:
-      type: enabled
-      keep: all
     tool_choice: auto
   price:
-    input: 0.95
-    output: 4.00
-    cache_read: 0.16
+    input: 3.00
+    output: 15.00
+    cache_read: 0.30
 
 refiner:
-  model: kimi-k2.6
+  model: kimi-k3
   temperature: 1.0
   top_p: 0.95
+  presence_penalty: 0
+  frequency_penalty: 0
   n: 1
   max_tokens: 32768
+  reasoning:
+    effort: max
   extra_body:
-    thinking:
-      type: enabled
-      keep: all
     tool_choice: auto
   price:
-    input: 0.95
-    output: 4.00
-    cache_read: 0.16
+    input: 3.00
+    output: 15.00
+    cache_read: 0.30
 
 adviser:
-  model: kimi-k2.6
+  model: kimi-k3
   temperature: 1.0
   top_p: 0.95
+  presence_penalty: 0
+  frequency_penalty: 0
   n: 1
   max_tokens: 8192
+  reasoning:
+    effort: max
   extra_body:
-    thinking:
-      type: enabled
-      keep: all
     tool_choice: auto
   price:
-    input: 0.95
-    output: 4.00
-    cache_read: 0.16
+    input: 3.00
+    output: 15.00
+    cache_read: 0.30
 
 reflector:
   model: kimi-k2.5
@@ -177,7 +199,7 @@ enricher:
     cache_read: 0.10
 
 coder:
-  model: kimi-k2.6
+  model: kimi-k2.7-code
   temperature: 1.0
   top_p: 0.95
   n: 1
@@ -190,7 +212,7 @@ coder:
   price:
     input: 0.95
     output: 4.00
-    cache_read: 0.16
+    cache_read: 0.19
 
 installer:
   model: kimi-k2.5
@@ -208,7 +230,7 @@ installer:
     cache_read: 0.10
 
 pentester:
-  model: kimi-k2.6
+  model: kimi-k2.7-code
   temperature: 1.0
   top_p: 0.95
   n: 1
@@ -221,4 +243,4 @@ pentester:
   price:
     input: 0.95
     output: 4.00
-    cache_read: 0.16
+    cache_read: 0.19

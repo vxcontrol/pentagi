@@ -19,7 +19,7 @@ import xml from 'highlight.js/lib/languages/xml';
 import yaml from 'highlight.js/lib/languages/yaml';
 import 'highlight.js/styles/atom-one-dark.css';
 import { common, createLowlight } from 'lowlight';
-import { isValidElement, type ReactNode, useCallback, useMemo } from 'react';
+import { isValidElement, type ReactElement, type ReactNode, useCallback, useMemo } from 'react';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import rehypeHighlight from 'rehype-highlight';
 import rehypeSlug from 'rehype-slug';
@@ -141,9 +141,7 @@ function Markdown({ children, className, searchValue }: MarkdownProps) {
     );
 
     const processTextNode = useMemo(() => {
-        const hasChildrenProp = (
-            node: unknown,
-        ): node is { key?: null | React.Key; props: { children: ReactNode } } =>
+        const hasChildrenProp = (node: unknown): node is ReactElement<{ children?: ReactNode }> =>
             isValidElement(node) && (node.props as { children?: ReactNode }).children !== undefined;
 
         const fn = (nodeChildren: ReactNode): ReactNode => {
@@ -196,7 +194,10 @@ function Markdown({ children, className, searchValue }: MarkdownProps) {
         (ComponentName: string) => {
             const Component = ComponentName as React.ElementType;
 
-            const Renderer = ({ children: nodeChildren, ...props }: Record<string, unknown>) => {
+            const Renderer = ({
+                children: nodeChildren,
+                ...props
+            }: React.PropsWithChildren<Record<string, unknown>>) => {
                 const processedChildren = processTextNode(nodeChildren);
 
                 return <Component {...props}>{processedChildren}</Component>;

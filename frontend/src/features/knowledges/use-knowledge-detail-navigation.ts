@@ -1,15 +1,13 @@
 import { useDetailNavigation } from '@/components/shared/detail-navigation';
+import { routes } from '@/lib/routes';
 import { type Knowledge, useKnowledges } from '@/providers/knowledges-provider';
 
 const getLabel = (item: Knowledge) => item.question;
-const getHref = (item: Knowledge) => `/knowledges/${item.id}`;
+const getHref = (item: Knowledge) => routes.knowledge(item.id);
 
 /**
- * Detail-page navigation wired up for knowledge documents. Returns a
- * `DetailNavigationController<Knowledge>` for `<DetailNavigationToolbar>` /
- * `<DetailNavigationButtons>` / `<DetailNavigationSheet>`. The list page
- * filters on `question` and the header shows the same, so `getLabel`
- * doubles as the default searchable text.
+ * The list page filters on `question`, so `getLabel` doubles as the default
+ * searchable text (no explicit `getSearchableText` needed).
  */
 export function useKnowledgeDetailNavigation(currentId: null | string | undefined) {
     const { knowledges } = useKnowledges();

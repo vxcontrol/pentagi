@@ -1,7 +1,7 @@
-import { zodResolver } from '@hookform/resolvers/zod';
+import { useMutation } from '@apollo/client/react';
 import { Save } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { type FieldPath, type SubmitHandler, useForm } from 'react-hook-form';
+import { type ComponentProps, useCallback, useState } from 'react';
+import { type Control, type FieldPath, type SubmitHandler, useWatch } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { z } from 'zod';
@@ -12,11 +12,13 @@ import type {
     UpdateKnowledgeDocumentInput,
 } from '@/graphql/types';
 
-import { HeaderButton } from '@/components/shared/header-button';
+import { AppHeaderAction } from '@/components/layouts/app/app-header';
+import { type EditorViewMode } from '@/components/shared/markdown-editor';
 import { UnsavedChangesDialog, useUnsavedChangesGuard } from '@/components/shared/unsaved-changes';
 import { Form } from '@/components/ui/form';
 import { Spinner } from '@/components/ui/spinner';
-import { KnowledgeAnswerType, KnowledgeDocType, KnowledgeGuideType, useAnonymizeTextMutation } from '@/graphql/types';
+import { AnonymizeTextDocument, KnowledgeAnswerType, KnowledgeDocType, KnowledgeGuideType } from '@/graphql/types';
+import { useAppForm } from '@/hooks/use-app-form';
 import { useBreakpoint } from '@/hooks/use-breakpoint';
 import { Log } from '@/lib/log';
 import { useUser } from '@/providers/user-provider';
@@ -118,9 +120,6 @@ export const documentToFormValues = (k: KnowledgeDocumentFragmentFragment): Form
     question: k.question,
 });
 
-// react-hook-form's `dirtyFields` is a partial map of the same shape as
-// `FormValues`, with `true` for fields the user actually changed compared to
-// `defaultValues`. We project it onto the (flat) FormValues keys here.
 export type DirtyFlags = Partial<Record<keyof FormValues, boolean>>;
 
 // CREATE: send all required fields and only non-empty optional fields. There
@@ -141,10 +140,8 @@ export const formValuesToCreateInput = (values: FormValues): CreateKnowledgeDocu
 // every other field is gated by `dirty`. This way:
 //   - untouched fields stay `undefined` and the backend keeps the existing value;
 //   - cleared fields go out as `""` so the backend wipes them;
-//   - subtype-related fields cleared by `setValue` on docType change are
-//     marked dirty by the form, so they reach the backend with the right
-//     "clear me" value (the backend additionally wipes mismatching subtypes
-//     itself, but we mirror the user-visible state explicitly).
+//   - subtype-related fields cleared by `setValue` on docType change are marked
+//     dirty by the form, so they reach the backend with the right "clear me" value.
 export const formValuesToUpdateInput = (values: FormValues, dirty: DirtyFlags): UpdateKnowledgeDocumentInput => {
     const input: UpdateKnowledgeDocumentInput = { content: values.content };
 
@@ -180,6 +177,11 @@ export interface SubmitResult {
     redirectTo?: string;
 }
 
+interface KnowledgeFormHeaderProps extends Omit<ComponentProps<typeof KnowledgeHeader>, 'isAnonymizeDisabled'> {
+    control: Control<FormValues>;
+    isSaving?: boolean;
+}
+
 interface KnowledgeFormProps {
     initialValues: FormValues;
     isNew: boolean;
@@ -192,18 +194,13 @@ export function KnowledgeForm({ initialValues, isNew, knowledge, onSubmit }: Kno
     const { isDesktop } = useBreakpoint();
     const [isSaving, setIsSaving] = useState(false);
     const [isAnonymizing, setIsAnonymizing] = useState(false);
-    const [anonymizeMutation] = useAnonymizeTextMutation();
+    const [viewMode, setViewMode] = useState<EditorViewMode>('rich');
+    const [anonymizeMutation] = useMutation(AnonymizeTextDocument);
     const { authInfo } = useUser();
     const canAnonymize = authInfo?.privileges?.includes('anonymize.call') ?? false;
 
-    const form = useForm<FormValues>({
+    const form = useAppForm<FormValues>({
         defaultValues: initialValues,
-        // `onTouched` validates a field on its first blur and on every change
-        // afterwards. With `onChange` we'd run the entire Zod schema on every
-        // keystroke (including every emit from the multi-kilobyte `content`
-        // markdown editor) — same UX after the first interaction, no waste
-        // on initial mount or untouched fields.
-        mode: 'onTouched',
         resetOptions: {
             // When `values` changes (e.g. a GraphQL subscription pushes an
             // updated document after an inline rename from the header),
@@ -212,7 +209,7 @@ export function KnowledgeForm({ initialValues, isNew, knowledge, onSubmit }: Kno
             // would silently wipe their in-flight changes.
             keepDirtyValues: true,
         },
-        resolver: zodResolver(formSchema),
+        schema: formSchema,
         // `values` reactively syncs the form with `initialValues`. The page
         // recomputes `initialValues` from `knowledge` whenever the cache
         // refreshes (rename, refetch, etc.), and RHF reapplies the new
@@ -223,8 +220,11 @@ export function KnowledgeForm({ initialValues, isNew, knowledge, onSubmit }: Kno
     const { control, formState, handleSubmit, reset } = form;
     const { isDirty, isValid } = formState;
 
+    // Navigation is the caller's job — it reads `redirectTo` off the returned result.
+    // Pulling it in here would make onSaveFromDialog depend on guard.skipNextBlock and
+    // form a real cycle (guard ← onSaveFromDialog ← performSave ← guard.skipNextBlock).
     const performSave = useCallback(
-        async (values: FormValues): Promise<boolean> => {
+        async (values: FormValues): Promise<null | SubmitResult> => {
             try {
                 // Snapshot dirty flags from the latest formState. We read it
                 // here (instead of capturing into deps) so partial-update
@@ -232,61 +232,22 @@ export function KnowledgeForm({ initialValues, isNew, knowledge, onSubmit }: Kno
                 // `isDirty`/`canSubmit` at submit time.
                 const result = await onSubmit(values, form.formState.dirtyFields as DirtyFlags);
 
-                // Prefer the server's view of the document — backend may have
-                // trimmed/normalized fields, attached derived data, or filled
-                // optional fields. Falling back to the local `values` keeps
-                // the form stable when the mutation hook can't return the
-                // saved fragment for some reason.
+                // The backend may trim/normalize fields, so reset to its returned document when present.
                 const resetValues = result.document ? documentToFormValues(result.document) : values;
 
-                // Reset BEFORE navigate so `isDirty` is false by the time the
-                // blocker re-evaluates. We also `skipNextBlock` defensively
-                // because reset's state propagation is async.
+                // Reset BEFORE the caller navigates so `isDirty` is false by the
+                // time the blocker re-evaluates (the caller also calls
+                // `skipNextBlock` to cover reset's async state propagation).
                 reset(resetValues, { keepDefaultValues: false });
 
-                if (result.redirectTo) {
-                    skipNextBlockRef.current();
-                    navigate(result.redirectTo);
-                }
-
-                return true;
+                return result;
             } catch (error) {
                 Log.error('Failed to save knowledge document', error);
 
-                return false;
+                return null;
             }
         },
-        [form, navigate, onSubmit, reset],
-    );
-
-    // The ref below breaks an otherwise circular hook dependency:
-    //
-    //   performSave           → skipNextBlockRef.current()        (ref filled by effect below)
-    //   onSaveFromDialog      → performSave
-    //   useUnsavedChangesGuard({ onSave: onSaveFromDialog }) → exposes skipNextBlock
-    //   useEffect             → wires the exposed skipNextBlock back into the ref
-    //
-    // Replacing the ref with a plain dep would force `performSave` to depend
-    // on `guard.skipNextBlock`, which is produced by a hook (`guard`) whose
-    // own input (`onSave`) closes over `performSave` — a real cycle that
-    // can't be expressed in deps without `useRef`.
-    const skipNextBlockRef = useRef<() => void>(() => {});
-
-    const onSubmitWithGuard: SubmitHandler<FormValues> = useCallback(
-        async (values) => {
-            if (isSaving) {
-                return;
-            }
-
-            setIsSaving(true);
-
-            try {
-                await performSave(values);
-            } finally {
-                setIsSaving(false);
-            }
-        },
-        [isSaving, performSave],
+        [form, onSubmit, reset],
     );
 
     const onSaveFromDialog = useCallback(async (): Promise<boolean> => {
@@ -307,7 +268,12 @@ export function KnowledgeForm({ initialValues, isNew, knowledge, onSubmit }: Kno
         setIsSaving(true);
 
         try {
-            return await performSave(parsed.data);
+            // The guard proceeds the originally-blocked navigation on success;
+            // a CREATE's `redirectTo` is intentionally not honored here ("Save
+            // and leave" leaves to where the user was going, not the new doc).
+            const result = await performSave(parsed.data);
+
+            return result !== null;
         } finally {
             setIsSaving(false);
         }
@@ -318,27 +284,46 @@ export function KnowledgeForm({ initialValues, isNew, knowledge, onSubmit }: Kno
         isFormValid: isValid,
         onSave: onSaveFromDialog,
     });
+    const { skipNextBlock } = guard;
 
-    useEffect(() => {
-        skipNextBlockRef.current = guard.skipNextBlock;
-    }, [guard.skipNextBlock]);
+    // Defined after `guard` so it can own the post-save redirect (CREATE only)
+    // via the stable `skipNextBlock` — the form-button path navigates to the new
+    // document; the dialog path above deliberately does not.
+    const onSubmitWithGuard: SubmitHandler<FormValues> = useCallback(
+        async (values) => {
+            if (isSaving) {
+                return;
+            }
 
-    const canSubmit = !isSaving && isValid && (isNew || isDirty);
+            setIsSaving(true);
+
+            try {
+                const result = await performSave(values);
+
+                if (result?.redirectTo) {
+                    skipNextBlock();
+                    navigate(result.redirectTo);
+                }
+            } finally {
+                setIsSaving(false);
+            }
+        },
+        [isSaving, navigate, performSave, skipNextBlock],
+    );
+
+    // Not gated on `isValid`: the button must be clickable to trigger the first submit, which is what turns
+    // validation on (mode:'onSubmit'). Clicking an invalid form surfaces the errors instead of silently doing
+    // nothing. `isDirty` still gates edits so an unchanged existing doc can't be re-saved.
+    const canSubmit = !isSaving && (isNew || isDirty);
 
     const saveButton = (
-        <HeaderButton
+        <AppHeaderAction
             disabled={!canSubmit}
             icon={isSaving ? <Spinner variant="circle" /> : <Save aria-hidden="true" />}
             label={isNew ? 'Create' : 'Save'}
             type="submit"
         />
     );
-
-    // Subscribe to `content` so the anonymize button toggles its disabled
-    // state as the user types. `form.watch('content')` triggers a re-render
-    // on every keystroke, which is what we want for snappy UX.
-    const contentValue = form.watch('content');
-    const isAnonymizeDisabled = isAnonymizing || isSaving || !contentValue?.trim();
 
     const handleAnonymize = useCallback(async () => {
         const currentContent = form.getValues('content');
@@ -365,7 +350,7 @@ export function KnowledgeForm({ initialValues, isNew, knowledge, onSubmit }: Kno
                 return;
             }
 
-            form.setValue('content', anonymizedContent, { shouldDirty: true, shouldValidate: true });
+            form.setValue('content', anonymizedContent, { shouldDirty: true });
             toast.success('Content anonymized');
         } catch (error) {
             Log.error('Failed to anonymize content', error);
@@ -378,23 +363,26 @@ export function KnowledgeForm({ initialValues, isNew, knowledge, onSubmit }: Kno
     return (
         <>
             <Form {...form}>
-                <form
-                    // Desktop: lock to the viewport so the resizable panels
+                <form // Desktop: lock to the viewport so the resizable panels
                     // inside the body can fill the remaining space below the
                     // sticky header. Mobile: allow the page to grow with its
                     // content (single column, vertical scroll).
                     className={isDesktop ? 'flex h-[100dvh] min-h-0 w-full flex-col' : 'flex min-h-[100dvh] flex-col'}
+                    noValidate
                     onSubmit={handleSubmit(onSubmitWithGuard)}
                 >
-                    <KnowledgeHeader
+                    <KnowledgeFormHeader
                         canAnonymize={canAnonymize}
-                        isAnonymizeDisabled={isAnonymizeDisabled}
+                        control={control}
                         isAnonymizing={isAnonymizing}
                         isNew={isNew}
+                        isSaving={isSaving}
                         knowledge={knowledge}
                         onAnonymize={handleAnonymize}
-                        onBeforeNavigateAway={() => skipNextBlockRef.current()}
+                        onBeforeNavigateAway={skipNextBlock}
+                        onModeChange={setViewMode}
                         saveButton={saveButton}
+                        viewMode={viewMode}
                     />
                     {isDesktop ? (
                         <KnowledgeFormLayoutDesktop
@@ -402,6 +390,7 @@ export function KnowledgeForm({ initialValues, isNew, knowledge, onSubmit }: Kno
                             isNew={isNew}
                             isSaving={isSaving}
                             knowledge={knowledge}
+                            viewMode={viewMode}
                         />
                     ) : (
                         <KnowledgeFormLayoutMobile
@@ -409,6 +398,7 @@ export function KnowledgeForm({ initialValues, isNew, knowledge, onSubmit }: Kno
                             isNew={isNew}
                             isSaving={isSaving}
                             knowledge={knowledge}
+                            viewMode={viewMode}
                         />
                     )}
                 </form>
@@ -423,5 +413,19 @@ export function KnowledgeForm({ initialValues, isNew, knowledge, onSubmit }: Kno
                 isSavingFromDialog={guard.isSavingFromDialog}
             />
         </>
+    );
+}
+
+// Don't hoist this useWatch to the parent — it would re-render the whole form per keystroke.
+function KnowledgeFormHeader({ control, isAnonymizing, isSaving = false, ...rest }: KnowledgeFormHeaderProps) {
+    const content = useWatch({ control, name: 'content' });
+    const isAnonymizeDisabled = isAnonymizing || isSaving || !content?.trim();
+
+    return (
+        <KnowledgeHeader
+            {...rest}
+            isAnonymizeDisabled={isAnonymizeDisabled}
+            isAnonymizing={isAnonymizing}
+        />
     );
 }

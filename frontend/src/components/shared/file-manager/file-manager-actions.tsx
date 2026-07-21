@@ -26,7 +26,6 @@ export const downloadAction = (
     };
 };
 
-/** Built-in copy-path action. */
 export const copyPathAction = (onCopyPath: (file: FileNode) => void): FileManagerAction => ({
     appliesToDirs: true,
     icon: ClipboardCopy,
@@ -46,15 +45,8 @@ export const deleteAction = (onDelete: (file: FileNode) => void): FileManagerAct
     label: 'Delete',
     onSelect: onDelete,
     separatorBefore: true,
+    variant: 'destructive',
 });
-
-// ── Bulk-action helpers ─────────────────────────────────────────────────────
-//
-// Each helper produces a `FileManagerBulkAction` with sensible defaults; the
-// caller passes any callback / config it needs and lets the bar handle the
-// rendering, confirmation and dedup. Mirrors the row-action helpers above so
-// consumers compose `bulkActions={[bulkXAction(...), bulkYAction(...)]}` the
-// same way they compose `actions={[xAction(...), yAction(...)]}`.
 
 interface BulkDeleteOptions {
     /** Confirm-dialog body formatter. Default: "This will delete N items. This action cannot be undone." */
@@ -202,10 +194,6 @@ export const bulkDownloadAction = (
 
         const href = getDownloadHref(files);
 
-        // Trigger the download via a transient anchor so the browser respects
-        // the `download` attribute and the backend's `Content-Disposition`.
-        // `window.open` would do, but it can be blocked as a popup and doesn't
-        // honour the filename hint the same way.
         const anchor = document.createElement('a');
 
         anchor.href = href;

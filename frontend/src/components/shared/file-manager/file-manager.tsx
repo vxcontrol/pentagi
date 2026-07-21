@@ -78,11 +78,6 @@ const defaultSortHeaderAriaLabel = (
     return `Sort by ${label} (ascending)`;
 };
 
-/**
- * Renders the right-click context menu items for the empty area of the tree.
- * Kept as a plain helper so the same JSX can be reused inside the
- * `<ContextMenuContent>` regardless of where it lives in the render tree.
- */
 const renderEmptyAreaItems = (items: readonly FileManagerEmptyAreaAction[]): ReactNode[] => {
     const nodes: ReactNode[] = [];
 
@@ -222,12 +217,6 @@ export function FileManager({
         toggleSelectAll,
     } = useFileManagerSelection({ allSelectablePaths, dirSubtreePaths, flatVisible });
 
-    // Cumulative byte total of the deduped selection — fed into the bulk bar's
-    // size suffix ("3 selected · 14.2 MB"). Recomputed on selection / tree
-    // changes; cheap because the dedup keeps the visit list short and each
-    // subtree walk uses the same `findNodeByPath` traversal as the bar's other
-    // helpers. Skipped entirely when the bar is hidden so a no-checkbox tree
-    // never pays the cost.
     const selectionTotalBytes = useMemo(() => {
         if (!hasBulkActions || selectedPaths.size === 0) {
             return 0;
@@ -254,9 +243,6 @@ export function FileManager({
         return map;
     }, [dirSubtreePaths, selectedPaths]);
 
-    // Report selection changes upstream without forcing parents to memoize the
-    // callback — stash it in a ref so the effect only re-fires when the actual
-    // selection changes (not when a fresh function instance is passed in).
     const onSelectionChangeRef = useLatestRef(onSelectionChange);
 
     useEffect(() => {
@@ -266,10 +252,6 @@ export function FileManager({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectedPaths]);
 
-    // Same latest-ref pattern for `onOpen` / `onOpenDirectory`: both bleed into
-    // the keyboard handler's deps and through `TreeNode` → `Row`, so a
-    // non-memoized parent callback would otherwise invalidate the memo on every
-    // row whenever the parent re-renders.
     const onOpenRef = useLatestRef(onOpen);
     const onOpenDirectoryRef = useLatestRef(onOpenDirectory);
 
@@ -367,11 +349,6 @@ export function FileManager({
         [clearSelection],
     );
 
-    // Pull labels resolution and search-query trim up to render-top so they can
-    // feed into `display` below. Both must be computed unconditionally — the
-    // memoization that follows is guarded by `Object.is` on each dep, so a
-    // missing `labels` prop ({} on every render) only invalidates `formatModified`
-    // when the inner reference actually changes.
     const effectiveLabels = labels ?? {};
     const formatModified = effectiveLabels.formatModified;
     const effectiveActions = actions ?? EMPTY_ACTIONS;
@@ -399,9 +376,6 @@ export function FileManager({
         );
     };
 
-    // Bundle all per-tree-shared layout / i18n props into a single object so the
-    // memoized `FileManagerRow` only does one reference check (instead of seven
-    // primitive comparisons) on every parent re-render.
     const display = useMemo<FileManagerRowDisplay>(
         () => ({
             formatModified,
@@ -415,9 +389,6 @@ export function FileManager({
         [formatModified, gridTemplate, hasActions, isCheckboxVisible, isModifiedVisible, isSizeVisible, searchQuery],
     );
 
-    // Same trick for callbacks. Every dep here is already stabilized through
-    // a ref or empty deps inside its source hook, so `handlers` is constructed
-    // exactly once per `FileManager` instance and never invalidates row memo.
     const handlers = useMemo<FileManagerRowHandlers>(
         () => ({
             onClick: onRowClick,
@@ -532,21 +503,20 @@ export function FileManager({
                 )}
                 <div className="flex min-w-0 items-center gap-1.5">
                     {allDirPaths.length > 0 ? (
-                        <button
+                        <Button
                             aria-expanded={isAllExpanded}
                             aria-label={
                                 isAllExpanded
                                     ? (effectiveLabels.collapseAllAriaLabel ?? 'Collapse all')
                                     : (effectiveLabels.expandAllAriaLabel ?? 'Expand all')
                             }
-                            className="text-muted-foreground hover:bg-muted hover:text-primary focus-visible:ring-ring -mx-0.5 inline-flex size-4 shrink-0 items-center justify-center rounded transition-colors outline-none focus-visible:ring-1"
+                            className="text-muted-foreground hover:bg-muted -mx-0.5 size-4 shrink-0 rounded hover:text-blue-400"
                             onClick={toggleExpandAll}
-                            type="button"
+                            size="icon-xs"
+                            variant="ghost"
                         >
-                            <ChevronRight
-                                className={cn('size-3.5 transition-transform', isAllExpanded && 'rotate-90')}
-                            />
-                        </button>
+                            <ChevronRight className={cn('size-4 transition-transform', isAllExpanded && 'rotate-90')} />
+                        </Button>
                     ) : (
                         <span
                             aria-hidden="true"

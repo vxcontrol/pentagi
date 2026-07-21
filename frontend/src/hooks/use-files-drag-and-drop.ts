@@ -94,9 +94,6 @@ export function useFilesDragAndDrop({ canAcceptDrop, onDrop }: UseFilesDragAndDr
         (event: React.DragEvent<HTMLDivElement>) => {
             event.preventDefault();
             event.stopPropagation();
-            // Capture-phase already cleared these — keep the lines as a defensive
-            // belt-and-braces in case the capture handler is ever omitted by a
-            // consumer that forgets to spread the full handler bundle.
             dragCounterRef.current = 0;
             setIsDragging(false);
 

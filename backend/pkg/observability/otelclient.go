@@ -2,6 +2,7 @@ package observability
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -62,29 +63,36 @@ func (c *telemetryClient) Meter() otelmetric.MeterProvider {
 }
 
 func (c *telemetryClient) Shutdown(ctx context.Context) error {
+	var errs []error
 	if err := c.logger.Shutdown(ctx); err != nil {
-		return fmt.Errorf("failed to shutdown logger: %w", err)
+		errs = append(errs, fmt.Errorf("failed to shutdown logger: %w", err))
 	}
 	if err := c.meter.Shutdown(ctx); err != nil {
-		return fmt.Errorf("failed to shutdown meter: %w", err)
+		errs = append(errs, fmt.Errorf("failed to shutdown meter: %w", err))
 	}
 	if err := c.tracer.Shutdown(ctx); err != nil {
-		return fmt.Errorf("failed to shutdown tracer: %w", err)
+		errs = append(errs, fmt.Errorf("failed to shutdown tracer: %w", err))
 	}
-	return c.conn.Close()
+	// Always close the connection, even if a provider shutdown failed above, so a
+	// stalled flush can't leak the grpc conn.
+	if err := c.conn.Close(); err != nil {
+		errs = append(errs, fmt.Errorf("failed to close telemetry connection: %w", err))
+	}
+	return errors.Join(errs...)
 }
 
 func (c *telemetryClient) ForceFlush(ctx context.Context) error {
+	var errs []error
 	if err := c.logger.ForceFlush(ctx); err != nil {
-		return fmt.Errorf("failed to force flush logger: %w", err)
+		errs = append(errs, fmt.Errorf("failed to force flush logger: %w", err))
 	}
 	if err := c.meter.ForceFlush(ctx); err != nil {
-		return fmt.Errorf("failed to force flush meter: %w", err)
+		errs = append(errs, fmt.Errorf("failed to force flush meter: %w", err))
 	}
 	if err := c.tracer.ForceFlush(ctx); err != nil {
-		return fmt.Errorf("failed to force flush tracer: %w", err)
+		errs = append(errs, fmt.Errorf("failed to force flush tracer: %w", err))
 	}
-	return nil
+	return errors.Join(errs...)
 }
 
 func NewTelemetryClient(ctx context.Context, cfg *config.Config) (TelemetryClient, error) {
@@ -92,66 +100,62 @@ func NewTelemetryClient(ctx context.Context, cfg *config.Config) (TelemetryClien
 		return nil, fmt.Errorf("telemetry endpoint is not set: %w", ErrNotConfigured)
 	}
 
-	opts := []grpc.DialOption{
-		grpc.WithBlock(),
-		grpc.WithInsecure(),
-		grpc.WithReturnConnectionError(),
-		grpc.WithDefaultCallOptions(grpc.WaitForReady(true)),
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-	}
-
-	conn, err := grpc.DialContext(
-		ctx,
+	// grpc.NewClient is non-blocking: it never dials during startup, so a
+	// set-but-unreachable collector can't stall main(), and the connection is
+	// established (and re-established) lazily in the background — a collector that
+	// comes up after the app does connects on its own, without a restart.
+	conn, err := grpc.NewClient(
 		cfg.TelemetryEndpoint,
-		opts...,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithDefaultCallOptions(grpc.WaitForReady(true)),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to dial telemetry endpoint: %w", err)
+		return nil, fmt.Errorf("failed to create telemetry connection: %w", err)
 	}
 
+	// Build all three exporters before creating any provider. Exporter creation
+	// is the only remaining error path, and at that point no batch/reader
+	// goroutine has started yet, so closing the connection is a complete teardown.
 	logExporter, err := otlploggrpc.New(ctx, otlploggrpc.WithGRPCConn(conn))
 	if err != nil {
+		_ = conn.Close()
 		return nil, fmt.Errorf("failed to create log exporter: %w", err)
 	}
-
-	logProcessor := sdklog.NewBatchProcessor(
-		logExporter,
-		sdklog.WithExportInterval(DefaultLogInterval),
-		sdklog.WithExportTimeout(DefaultLogTimeout),
-	)
-	logProvider := sdklog.NewLoggerProvider(
-		sdklog.WithProcessor(logProcessor),
-		sdklog.WithResource(newResource()),
-	)
-
 	metricExporter, err := otlpmetricgrpc.New(ctx, otlpmetricgrpc.WithGRPCConn(conn))
 	if err != nil {
+		_ = conn.Close()
 		return nil, fmt.Errorf("failed to create metric exporter: %w", err)
 	}
-
-	metricProcessor := sdkmetric.NewPeriodicReader(
-		metricExporter,
-		sdkmetric.WithInterval(DefaultMetricInterval),
-		sdkmetric.WithTimeout(DefaultMetricTimeout),
-	)
-
-	meterProvider := sdkmetric.NewMeterProvider(
-		sdkmetric.WithReader(metricProcessor),
-		sdkmetric.WithResource(newResource()),
-	)
-
 	spanExporter, err := otlptracegrpc.New(ctx, otlptracegrpc.WithGRPCConn(conn))
 	if err != nil {
+		_ = conn.Close()
 		return nil, fmt.Errorf("failed to create tracer exporter: %w", err)
 	}
 
-	spanProcessor := sdktrace.NewBatchSpanProcessor(
-		spanExporter,
-		sdktrace.WithBatchTimeout(DefaultTraceInterval),
-		sdktrace.WithExportTimeout(DefaultTraceTimeout),
+	logProvider := sdklog.NewLoggerProvider(
+		sdklog.WithProcessor(sdklog.NewBatchProcessor(
+			logExporter,
+			sdklog.WithExportInterval(DefaultLogInterval),
+			sdklog.WithExportTimeout(DefaultLogTimeout),
+		)),
+		sdklog.WithResource(newResource()),
 	)
+
+	meterProvider := sdkmetric.NewMeterProvider(
+		sdkmetric.WithReader(sdkmetric.NewPeriodicReader(
+			metricExporter,
+			sdkmetric.WithInterval(DefaultMetricInterval),
+			sdkmetric.WithTimeout(DefaultMetricTimeout),
+		)),
+		sdkmetric.WithResource(newResource()),
+	)
+
 	tracerProvider := sdktrace.NewTracerProvider(
-		sdktrace.WithSpanProcessor(spanProcessor),
+		sdktrace.WithSpanProcessor(sdktrace.NewBatchSpanProcessor(
+			spanExporter,
+			sdktrace.WithBatchTimeout(DefaultTraceInterval),
+			sdktrace.WithExportTimeout(DefaultTraceTimeout),
+		)),
 		sdktrace.WithResource(newResource()),
 	)
 

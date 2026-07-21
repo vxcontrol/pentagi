@@ -2,6 +2,7 @@ package tester
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"sync"
@@ -10,6 +11,9 @@ import (
 	"pentagi/pkg/providers/pconfig"
 	"pentagi/pkg/providers/provider"
 	"pentagi/pkg/providers/tester/testdata"
+
+	"github.com/vxcontrol/langchaingo/llms"
+	"github.com/vxcontrol/langchaingo/llms/reasoning"
 )
 
 // testRequest represents a test execution request
@@ -92,6 +96,14 @@ func collectTestRequests(registry *testdata.TestRegistry, prv provider.Provider,
 				if !isTestCompatibleWithAgent(testCase.Type(), agentType) {
 					continue
 				}
+
+			// skip capability-gated tests (adaptive thinking, reasoning
+			// off, structured output) whose wire behavior this agent's
+			// ACTUAL config wouldn't produce in a real PentAGI flow — see
+			// capabilitySupported for why.
+			if !capabilitySupported(prv, agentType, testCase.Capability()) {
+				continue
+			}
 
 				requests = append(requests, testRequest{
 					agentType: agentType,
@@ -179,8 +191,23 @@ func executeTest(ctx context.Context, req testRequest) (testdata.TestResult, err
 	var response interface{}
 	var err error
 
+	extra := req.testCase.ExtraOptions()
+
 	// execute based on test type and available data
 	switch {
+	case len(extra) > 0:
+		// Only reachable by a CapabilityStructuredOutput test today — see
+		// TestCase.ExtraOptions. adaptive_thinking/reasoning_off are gated to
+		// configs that already produce the wire behavior through the plain
+		// CallWithTools/CallEx path below, so they never populate extra.
+		response, err = req.provider.CallWithExtraOptions(
+			ctx,
+			req.agentType,
+			req.testCase.Messages(),
+			req.testCase.Tools(),
+			req.testCase.StreamingCallback(),
+			extra...,
+		)
 	case len(req.testCase.Messages()) > 0 && len(req.testCase.Tools()) > 0:
 		// tool calling with messages
 		response, err = req.provider.CallWithTools(
@@ -209,18 +236,37 @@ func executeTest(ctx context.Context, req testRequest) (testdata.TestResult, err
 
 	if err != nil {
 		return testdata.TestResult{
-			ID:      req.testCase.ID(),
-			Name:    req.testCase.Name(),
-			Type:    req.testCase.Type(),
-			Group:   req.testCase.Group(),
-			Success: false,
-			Error:   err,
-			Latency: latency,
+			ID:          req.testCase.ID(),
+			Name:        req.testCase.Name(),
+			Type:        req.testCase.Type(),
+			Group:       req.testCase.Group(),
+			Capability:  req.testCase.Capability(),
+			Success:     false,
+			Unsupported: isUnsupportedCapabilityError(err),
+			Error:       err,
+			Latency:     latency,
 		}, nil
 	}
 
 	// let test case validate and produce result
-	return req.testCase.Execute(response, latency), nil
+	result := req.testCase.Execute(response, latency)
+	result.Capability = req.testCase.Capability()
+	return result, nil
+}
+
+// isUnsupportedCapabilityError reports whether err is one of the SDK's typed
+// "this model/provider does not support the requested capability" sentinels,
+// proactively returned by the langchaingo adapters before any network call —
+// distinguishing "the capability isn't available here" (informative, not a
+// defect in the tested configuration) from a genuine call failure.
+func isUnsupportedCapabilityError(err error) bool {
+	var structuredUnsupported *llms.ErrStructuredOutputUnsupported
+	var structuredConflict *llms.ErrStructuredOutputConflict
+	var reasoningOffUnsupported *reasoning.ErrReasoningOffUnsupported
+
+	return errors.As(err, &structuredUnsupported) ||
+		errors.As(err, &structuredConflict) ||
+		errors.As(err, &reasoningOffUnsupported)
 }
 
 // groupResults organizes test results by agent type

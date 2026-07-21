@@ -1,12 +1,10 @@
 import type { Control } from 'react-hook-form';
 
-import { GripVertical } from 'lucide-react';
-
 import type { KnowledgeDocumentFragmentFragment } from '@/graphql/types';
 
+import { DetailSplitLayout } from '@/components/shared/detail-split-layout';
+import { type EditorViewMode } from '@/components/shared/markdown-editor';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent } from '@/components/ui/card';
-import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
 
 import type { FormValues } from './knowledge-form';
 
@@ -17,6 +15,7 @@ interface KnowledgeFormLayoutProps {
     isNew: boolean;
     isSaving: boolean;
     knowledge?: KnowledgeDocumentFragmentFragment | null;
+    viewMode?: EditorViewMode;
 }
 
 interface KnowledgeIntroBlockProps {
@@ -24,58 +23,26 @@ interface KnowledgeIntroBlockProps {
     knowledge?: KnowledgeDocumentFragmentFragment | null;
 }
 
-export function KnowledgeFormLayoutDesktop({ control, isNew, isSaving, knowledge }: KnowledgeFormLayoutProps) {
+export function KnowledgeFormLayoutDesktop({
+    control,
+    isNew,
+    isSaving,
+    knowledge,
+    viewMode,
+}: KnowledgeFormLayoutProps) {
     return (
-        <div className="flex min-h-0 w-full max-w-full flex-1 overflow-hidden">
-            <ResizablePanelGroup
-                className="w-full"
-                direction="horizontal"
-            >
-                <ResizablePanel
-                    defaultSize={45}
-                    minSize={30}
-                >
-                    <div className="h-full min-h-0 overflow-y-auto">
-                        <Card className="mx-auto min-h-full w-full max-w-2xl rounded-none border-0">
-                            <CardContent className="flex flex-col gap-6 py-6">
-                                <KnowledgeIntroBlock
-                                    isNew={isNew}
-                                    knowledge={knowledge}
-                                />
-                                <KnowledgeMetaFields
-                                    control={control}
-                                    isNew={isNew}
-                                    isSaving={isSaving}
-                                />
-                            </CardContent>
-                        </Card>
-                    </div>
-                </ResizablePanel>
-                <ResizableHandle withHandle>
-                    <GripVertical className="size-4" />
-                </ResizableHandle>
-                <ResizablePanel
-                    defaultSize={55}
-                    minSize={30}
-                >
-                    <div className="flex h-full min-h-0 flex-col overflow-hidden p-4">
-                        <KnowledgeContentField
-                            control={control}
-                            fillParent
-                            isSaving={isSaving}
-                        />
-                    </div>
-                </ResizablePanel>
-            </ResizablePanelGroup>
-        </div>
-    );
-}
-
-export function KnowledgeFormLayoutMobile({ control, isNew, isSaving, knowledge }: KnowledgeFormLayoutProps) {
-    return (
-        <div className="flex min-w-0 flex-1 items-start justify-center p-4">
-            <Card className="w-full max-w-3xl">
-                <CardContent className="flex flex-col gap-6 pt-6">
+        <DetailSplitLayout
+            content={
+                <KnowledgeContentField
+                    control={control}
+                    fillParent
+                    isSaving={isSaving}
+                    viewMode={viewMode}
+                />
+            }
+            contentClassName="flex h-full min-h-0 flex-col overflow-hidden p-4"
+            panel={
+                <>
                     <KnowledgeIntroBlock
                         isNew={isNew}
                         knowledge={knowledge}
@@ -85,13 +52,30 @@ export function KnowledgeFormLayoutMobile({ control, isNew, isSaving, knowledge 
                         isNew={isNew}
                         isSaving={isSaving}
                     />
-                    <KnowledgeContentField
-                        control={control}
-                        isSaving={isSaving}
-                        showLabel
-                    />
-                </CardContent>
-            </Card>
+                </>
+            }
+        />
+    );
+}
+
+export function KnowledgeFormLayoutMobile({ control, isNew, isSaving, knowledge, viewMode }: KnowledgeFormLayoutProps) {
+    return (
+        <div className="flex min-h-0 flex-1 flex-col gap-4 p-4">
+            <KnowledgeIntroBlock
+                isNew={isNew}
+                knowledge={knowledge}
+            />
+            <KnowledgeMetaFields
+                control={control}
+                isNew={isNew}
+                isSaving={isSaving}
+            />
+            <KnowledgeContentField
+                control={control}
+                hasLabel
+                isSaving={isSaving}
+                viewMode={viewMode}
+            />
         </div>
     );
 }
@@ -99,11 +83,11 @@ export function KnowledgeFormLayoutMobile({ control, isNew, isSaving, knowledge 
 function KnowledgeIntroBlock({ isNew, knowledge }: KnowledgeIntroBlockProps) {
     return (
         <div className="flex flex-col gap-4">
-            <div className="text-center">
-                <h1 className="text-2xl font-semibold">
+            <div className="flex flex-col gap-2 text-center">
+                <h2 className="text-2xl font-semibold">
                     {isNew ? 'Create a new knowledge document' : 'Edit knowledge document'}
-                </h1>
-                <p className="text-muted-foreground mt-2">
+                </h2>
+                <p className="text-muted-foreground">
                     {isNew
                         ? 'Add an entry to the vector knowledge base'
                         : 'Edits to content or metadata will trigger re-embedding'}

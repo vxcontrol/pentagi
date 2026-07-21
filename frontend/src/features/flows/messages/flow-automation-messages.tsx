@@ -1,8 +1,8 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import debounce from 'lodash/debounce';
 import { ChevronDown, Inbox, ListFilter, Search, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
+import { useDebouncedCallback } from 'use-debounce';
 import { z } from 'zod';
 
 import { Button } from '@/components/ui/button';
@@ -57,13 +57,9 @@ function FlowAutomationMessages({ className }: FlowAutomationMessagesProps) {
     const searchValue = form.watch('search');
     const filter = form.watch('filter');
 
-    const debouncedUpdateSearch = useMemo(
-        () =>
-            debounce((value: string) => {
-                setDebouncedSearchValue(value);
-            }, 500),
-        [],
-    );
+    const debouncedUpdateSearch = useDebouncedCallback((value: string) => {
+        setDebouncedSearchValue(value);
+    }, 500);
 
     useEffect(() => {
         debouncedUpdateSearch(searchValue);

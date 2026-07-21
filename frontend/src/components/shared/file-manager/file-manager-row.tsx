@@ -1,4 +1,5 @@
 import { ChevronRight, Ellipsis } from 'lucide-react';
+import { motion, type Transition, useReducedMotion, type Variants } from 'motion/react';
 import {
     type CSSProperties,
     memo,
@@ -43,6 +44,21 @@ import { formatModifiedRelative as defaultFormatModified, formatFileSize } from 
  */
 const SKIP_ROW_CLICK_ATTR = 'data-fm-skip-row-click';
 const skipRowClickProps = { [SKIP_ROW_CLICK_ATTR]: '' };
+
+// The `rest`/`hover` labels are set by the toggle's `whileHover` and reach both
+// icon layers via motion variant propagation — the layers declare no gesture of
+// their own.
+const ICON_SWAP_TRANSITION: Transition = { duration: 0.15, ease: 'easeOut' };
+const FOLDER_ICON_VARIANTS: Variants = {
+    hover: { opacity: 0, scale: 0.8 },
+    rest: { opacity: 1, scale: 1 },
+};
+const CHEVRON_ICON_VARIANTS: Variants = {
+    hover: { opacity: 1, scale: 1 },
+    rest: { opacity: 0, scale: 0.8 },
+};
+const FOLDER_ICON_VARIANTS_REDUCED: Variants = { hover: { opacity: 0 }, rest: { opacity: 1 } };
+const CHEVRON_ICON_VARIANTS_REDUCED: Variants = { hover: { opacity: 1 }, rest: { opacity: 0 } };
 
 /**
  * Layout/visibility/i18n props that are identical for every row in the tree.
@@ -190,6 +206,10 @@ function FileManagerRowImpl({
         [file.groupIcon, file.isDir, file.name, isExpanded],
     );
 
+    const prefersReducedMotion = useReducedMotion();
+    const folderIconVariants = prefersReducedMotion ? FOLDER_ICON_VARIANTS_REDUCED : FOLDER_ICON_VARIANTS;
+    const chevronIconVariants = prefersReducedMotion ? CHEVRON_ICON_VARIANTS_REDUCED : CHEVRON_ICON_VARIANTS;
+
     const visibleActions = useMemo(() => buildVisibleActions(actions, file), [actions, file]);
 
     const handleRowClick = (event: ReactMouseEvent) => {
@@ -219,9 +239,7 @@ function FileManagerRowImpl({
     // browsers can override this by passing `onOpenDirectory`, which gets called
     // instead — typical for drilling into a remote container directory by
     // replacing the listing rather than expanding inline. Files always forward
-    // to `onOpen` — typically wired to download / preview / open-in-tab. The
-    // chevron icon on the row's left edge always toggles expand/collapse for
-    // directories, regardless of `onOpenDirectory`.
+    // to `onOpen` — typically wired to download / preview / open-in-tab.
     const handleRowDoubleClick = (event: ReactMouseEvent) => {
         // Same React-tree-bubbling guard as `handleRowClick` — a double-click
         // on a portaled menu item must not be treated as a row "open" gesture
@@ -257,16 +275,14 @@ function FileManagerRowImpl({
         action: FileManagerAction,
     ) => {
         const ActionIcon = action.icon;
-        const itemClassName = cn(
-            action.variant === 'destructive' && 'text-destructive focus:bg-destructive/10 focus:text-destructive',
-        );
+        const variant = action.variant === 'destructive' ? 'destructive' : 'default';
 
         if (action.getHref) {
             return (
                 <Component
                     asChild
-                    className={itemClassName}
                     key={action.id}
+                    variant={variant}
                 >
                     <a
                         download={action.getHrefDownloadAttr?.(file) ?? true}
@@ -281,9 +297,9 @@ function FileManagerRowImpl({
 
         return (
             <Component
-                className={itemClassName}
                 key={action.id}
                 onSelect={() => action.onSelect(file)}
+                variant={variant}
             >
                 {ActionIcon ? <ActionIcon className="size-4" /> : null}
                 {action.label}
@@ -442,42 +458,52 @@ function FileManagerRowImpl({
                 />
             )}
 
-            <div className="relative flex min-w-0 items-center gap-1.5 self-stretch pl-[calc(var(--fm-depth)*16px)]">
+            <div className="relative flex min-w-0 items-center gap-1.5 self-stretch pl-[calc(var(--fm-depth)*22px)]">
                 {Array.from({ length: file.depth }, (_, i) => (
                     <span
                         aria-hidden="true"
                         className="bg-border pointer-events-none absolute -inset-y-1.75 w-px"
                         key={i}
-                        style={{ left: `${i * 16 + 6}px` }}
+                        style={{ left: `${i * 22 + 6}px` }}
                     />
                 ))}
                 {file.isDir ? (
-                    <span
+                    <motion.span
+                        animate="rest"
                         aria-hidden="true"
-                        className="text-muted-foreground hover:bg-muted -mx-0.5 inline-flex size-4 shrink-0 items-center justify-center rounded transition-colors"
+                        className="relative -mx-0.5 inline-flex size-4 shrink-0 items-center justify-center text-blue-400"
+                        initial="rest"
                         onClick={() => {
-                            // Mirror the double-click / Enter semantics here so the
-                            // chevron stays consistent with the row-level "open"
-                            // gesture: navigation-style consumers (e.g. the remote
-                            // container browser) drill into the folder instead of
-                            // toggling expansion that has no children to show.
+                            // Mirror the double-click / Enter "open" gesture: navigation-style
+                            // consumers (e.g. the remote container browser) drill into the folder
+                            // via onOpenDirectory instead of toggling inline expansion.
                             if (onOpenDirectory) {
                                 onOpenDirectory(file);
                             } else {
                                 onToggleExpand(file.path, isExpanded);
                             }
                         }}
+                        whileHover="hover"
                         {...skipRowClickProps}
                     >
-                        <ChevronRight className={cn('size-3.5 transition-transform', isExpanded && 'rotate-90')} />
-                    </span>
+                        <motion.span
+                            className="absolute inset-0 flex items-center justify-center"
+                            transition={ICON_SWAP_TRANSITION}
+                            variants={folderIconVariants}
+                        >
+                            <Icon className="size-4 shrink-0" />
+                        </motion.span>
+                        <motion.span
+                            className="absolute inset-0 flex items-center justify-center"
+                            transition={ICON_SWAP_TRANSITION}
+                            variants={chevronIconVariants}
+                        >
+                            <ChevronRight className={cn('size-4 transition-transform', isExpanded && 'rotate-90')} />
+                        </motion.span>
+                    </motion.span>
                 ) : (
-                    <span
-                        aria-hidden="true"
-                        className="-mx-0.5 size-4 shrink-0"
-                    />
+                    <Icon className={cn('-mx-0.5 size-4 shrink-0', tone)} />
                 )}
-                <Icon className={cn('size-4 shrink-0', tone)} />
                 <FileManagerHighlightedName
                     className={cn('text-sm', file.isGroupRoot && 'font-semibold')}
                     name={file.name}

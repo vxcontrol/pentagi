@@ -60,9 +60,6 @@ export function FileManagerBulkActionsBar({
 }: FileManagerBulkActionsBarProps) {
     const [pendingAction, setPendingAction] = useState<FileManagerBulkAction | null>(null);
 
-    // Resolve the deduped FileNode[] once per render — every action callback,
-    // confirm-dialog title and isDisabled / isHidden predicate share it, so
-    // recomputing per call would be wasteful.
     const dedupedFiles = useMemo(() => {
         if (selectedPaths.size === 0) {
             return [];
@@ -89,9 +86,6 @@ export function FileManagerBulkActionsBar({
 
     const runAction = useCallback(
         async (action: FileManagerBulkAction) => {
-            // `dedupedFiles` is captured at click time — the state used by the
-            // bar at that moment matches what the host receives, even if the
-            // selection mutates while an async confirm is open.
             await action.onSelect(dedupedFiles);
         },
         [dedupedFiles],
@@ -215,11 +209,6 @@ export function FileManagerBulkActionsBar({
     );
 }
 
-/**
- * Inline button for a single non-overflow bulk action. Extracted so the icon-only
- * variant (no `label` text on narrow screens) can be added later without bloating
- * the parent's JSX.
- */
 function BulkActionButton({ action, isDisabled, onClick }: BulkActionButtonProps) {
     const Icon = action.icon as ComponentType<{ className?: string }> | undefined;
     const button = (
@@ -235,9 +224,6 @@ function BulkActionButton({ action, isDisabled, onClick }: BulkActionButtonProps
         </Button>
     );
 
-    // Tooltip surfaces the label when the inline text is hidden on narrow
-    // viewports (icon-only mode). On wider screens the label is already visible,
-    // so the tooltip is a harmless duplicate but still helps with keyboard focus.
     if (!action.icon) {
         return button;
     }

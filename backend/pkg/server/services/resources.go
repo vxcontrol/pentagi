@@ -2283,13 +2283,14 @@ func (s *ResourceService) publishResourcesDeleted(ctx context.Context, uid uint6
 
 // ---- utility ---------------------------------------------------------------
 
-// isUniqueViolation returns true if err is a PostgreSQL unique constraint
-// violation (error code 23505).
+// isUniqueViolation returns true if err is a unique-constraint violation. Matches Postgres
+// ("duplicate key value violates unique constraint", SQLSTATE 23505) and SQLite ("UNIQUE
+// constraint failed") case-insensitively.
 func isUniqueViolation(err error) bool {
 	if err == nil {
 		return false
 	}
-	msg := err.Error()
+	msg := strings.ToLower(err.Error())
 	return strings.Contains(msg, "unique") ||
 		strings.Contains(msg, "duplicate") ||
 		strings.Contains(msg, "23505")

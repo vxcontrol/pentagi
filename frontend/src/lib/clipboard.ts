@@ -3,9 +3,6 @@ import { toast } from 'sonner';
 
 import { ResultFormat } from '@/graphql/types';
 
-/**
- * Interface for message data that can be copied to clipboard
- */
 export interface CopyableMessage {
     message?: null | string;
     result?: null | string;
@@ -13,16 +10,12 @@ export interface CopyableMessage {
     thinking?: null | string;
 }
 
-/**
- * Extracts clean text from terminal content using hidden terminal instance
- * This removes ANSI escape codes and returns formatted text as it appears in UI
- */
 export const getCleanTerminalText = (terminalContent: string): Promise<string> => {
     return new Promise((resolve) => {
         let hiddenTerminal: null | XTerminal = null;
         let hiddenDiv: HTMLDivElement | null = null;
-        let timeoutId: NodeJS.Timeout | null = null;
-        let safetyTimeoutId: NodeJS.Timeout | null = null;
+        let timeoutId: null | ReturnType<typeof setTimeout> = null;
+        let safetyTimeoutId: null | ReturnType<typeof setTimeout> = null;
         let isResolved = false;
 
         const cleanup = () => {
@@ -132,9 +125,6 @@ export const getCleanTerminalText = (terminalContent: string): Promise<string> =
     });
 };
 
-/**
- * Formats message content for copying to clipboard as markdown with collapsible sections
- */
 export const formatMessageForClipboard = async (messageData: CopyableMessage): Promise<string> => {
     const { message, result, resultFormat = ResultFormat.Plain, thinking } = messageData;
     let content = '';
@@ -168,9 +158,6 @@ export const formatMessageForClipboard = async (messageData: CopyableMessage): P
     return content;
 };
 
-/**
- * Copies formatted message content to clipboard
- */
 export const copyMessageToClipboard = async (messageData: CopyableMessage): Promise<void> => {
     try {
         const content = await formatMessageForClipboard(messageData);

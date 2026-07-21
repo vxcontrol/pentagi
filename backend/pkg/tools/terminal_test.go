@@ -96,8 +96,8 @@ func (m *contextAwareMockDockerClient) ContainerExecAttach(ctx context.Context, 
 func (m *contextAwareMockDockerClient) ContainerStatPath(_ context.Context, _ string, _ string) (container.PathStat, error) {
 	return container.PathStat{}, nil
 }
-func (m *contextAwareMockDockerClient) ListContainerDir(_ context.Context, _ string, _ string) ([]container.PathStat, error) {
-	return nil, nil
+func (m *contextAwareMockDockerClient) ListContainerDir(_ context.Context, _ string, _ string) (docker.ContainerDirListing, error) {
+	return docker.ContainerDirListing{}, nil
 }
 func (m *contextAwareMockDockerClient) ContainerExecInspect(_ context.Context, _ string) (container.ExecInspect, error) {
 	return m.inspectResp, nil

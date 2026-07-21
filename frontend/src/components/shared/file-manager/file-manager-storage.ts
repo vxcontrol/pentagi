@@ -19,11 +19,6 @@ const fileManagerSortingSchema = z
     })
     .nullable();
 
-/**
- * Loader for the FileManager sort descriptor. Both "nothing stored" and
- * "stored as null" surface as `null` (no-sort) — the two cases are
- * indistinguishable from the consumer's point of view.
- */
 export const loadFileManagerSorting = (key: string): FileManagerSortState =>
     getStorageItem(key, fileManagerSortingSchema);
 

@@ -1,3 +1,4 @@
+import { useMutation, useQuery, useSubscription } from '@apollo/client/react';
 import { createContext, type ReactNode, useCallback, useContext, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -10,25 +11,21 @@ import type {
 } from '@/graphql/types';
 
 import {
-    useCreateKnowledgeDocumentMutation,
-    useDeleteKnowledgeDocumentMutation,
-    useKnowledgeDocumentCreatedSubscription,
-    useKnowledgeDocumentDeletedSubscription,
-    useKnowledgeDocumentsQuery,
-    useKnowledgeDocumentUpdatedSubscription,
-    useSearchKnowledgeQuery,
-    useUpdateKnowledgeDocumentMutation,
+    CreateKnowledgeDocumentDocument,
+    DeleteKnowledgeDocumentDocument,
+    KnowledgeDocumentCreatedDocument,
+    KnowledgeDocumentDeletedDocument,
+    KnowledgeDocumentsDocument,
+    KnowledgeDocumentUpdatedDocument,
+    RenameKnowledgeDocumentDocument,
+    SearchKnowledgeDocument,
+    UpdateKnowledgeDocumentDocument,
 } from '@/graphql/types';
 import { useLatestRef } from '@/hooks/use-latest-ref';
 import { Log } from '@/lib/log';
 import { URL_PARAMS } from '@/lib/url-params';
 import { useUser } from '@/providers/user-provider';
 
-// The provider operates directly on the GraphQL fragment. Previously we kept a
-// hand-rolled `Knowledge` shape that mirrored the fragment field-by-field; that
-// duplication forced a manual mapping step and drifted from the schema. The
-// alias keeps the public surface (`Knowledge`) for callers while making it
-// obvious there is no extra translation layer.
 export type Knowledge = KnowledgeDocumentFragmentFragment;
 
 interface KnowledgesContextValue {
@@ -37,6 +34,7 @@ interface KnowledgesContextValue {
     getKnowledge: (id: string) => Knowledge | undefined;
     isLoading: boolean;
     knowledges: Knowledge[];
+    renameKnowledge: (id: string, question: string) => Promise<Knowledge | undefined>;
     updateKnowledge: (id: string, input: UpdateKnowledgeDocumentInput) => Promise<Knowledge | undefined>;
 }
 
@@ -46,18 +44,11 @@ interface KnowledgesProviderProps {
 
 const KnowledgesContext = createContext<KnowledgesContextValue | undefined>(undefined);
 
-// Cap on the server-returned semantic-search result set. Prev/Next inside
-// `<DetailNavigation>` walks the same array, so the limit also bounds how
-// many neighbours a user can step through after running a search. 100 is
-// generous for a top-K relevance list and matches what other list pages
-// expect to render without virtualization.
+// Also bounds how many neighbours Prev/Next inside `<DetailNavigation>` can step
+// through, since it walks this same result array.
 const SEARCH_RESULT_LIMIT = 100;
 
-// Debounce for `?qs=` before we hit the server. Filter typing fires a
-// keystroke per character; without a debounce we'd spawn an embedding
-// + vector-search round-trip on each one. 400ms is the sweet spot users
-// don't perceive as laggy while still collapsing burst typing into one
-// network call.
+// Debounce `?qs=`: each keystroke otherwise spawns an embedding + vector-search round-trip.
 const SEARCH_DEBOUNCE_MS = 400;
 
 export function KnowledgesProvider({ children }: KnowledgesProviderProps) {
@@ -65,10 +56,6 @@ export function KnowledgesProvider({ children }: KnowledgesProviderProps) {
 
     const shouldFetch = Boolean(authInfo && authInfo.type !== 'guest' && isAuthenticated());
 
-    // `?qs=` is read directly from the URL — there is no in-provider setter.
-    // Pages drive it via `useSearchParams` (or the soon-to-arrive semantic
-    // search input). Trimming + debouncing happens here so the rest of the
-    // provider sees one canonical "is the user actively searching" flag.
     const [searchParams] = useSearchParams();
     const rawSemanticQuery = searchParams.get(URL_PARAMS.SEARCH) ?? '';
     const [debouncedSemanticQueryRaw] = useDebounce(rawSemanticQuery, SEARCH_DEBOUNCE_MS);
@@ -84,28 +71,26 @@ export function KnowledgesProvider({ children }: KnowledgesProviderProps) {
     // That keeps Apollo's cache warm for the inactive branch — when the user
     // toggles `?qs=` on/off, the previous result is shown immediately while
     // the network refetches in the background.
-    const { data: listData, loading: isListLoading } = useKnowledgeDocumentsQuery({
+    const { data: listData, loading: isListLoading } = useQuery(KnowledgeDocumentsDocument, {
         fetchPolicy: 'cache-and-network',
         nextFetchPolicy: 'cache-and-network',
         skip: !shouldFetch || inSearchMode,
-        variables: { withContent: true },
+        variables: { withContent: false },
     });
 
-    // `searchKnowledge` does not honour `withContent` — the backend always
-    // returns the full chunk text plus a relevance score we currently drop.
-    // `filter` is wired as `null` for now; when facet filtering arrives
-    // (`?f.docType=…`), the parsed `KnowledgeFilter` slots in here and into
-    // the list query above without any other downstream change.
-    const { data: searchData, loading: isSearchLoading } = useSearchKnowledgeQuery({
+    // `searchKnowledge` ignores `withContent` — the backend always returns the full
+    // chunk text plus a relevance score we currently drop.
+    const { data: searchData, loading: isSearchLoading } = useQuery(SearchKnowledgeDocument, {
         fetchPolicy: 'cache-and-network',
         nextFetchPolicy: 'cache-and-network',
         skip: !shouldFetch || !inSearchMode,
         variables: { filter: null, limit: SEARCH_RESULT_LIMIT, query: debouncedSemanticQuery },
     });
 
-    const [createKnowledgeMutation] = useCreateKnowledgeDocumentMutation();
-    const [updateKnowledgeMutation] = useUpdateKnowledgeDocumentMutation();
-    const [deleteKnowledgeMutation] = useDeleteKnowledgeDocumentMutation();
+    const [createKnowledgeMutation] = useMutation(CreateKnowledgeDocumentDocument);
+    const [updateKnowledgeMutation] = useMutation(UpdateKnowledgeDocumentDocument);
+    const [renameKnowledgeMutation] = useMutation(RenameKnowledgeDocumentDocument);
+    const [deleteKnowledgeMutation] = useMutation(DeleteKnowledgeDocumentDocument);
 
     // The Apollo subscription link (`createSubscriptionCacheLink` in
     // `lib/apollo.ts`) auto-merges each event into the `knowledgeDocuments`
@@ -128,17 +113,12 @@ export function KnowledgesProvider({ children }: KnowledgesProviderProps) {
         [inSearchModeRef],
     );
 
-    useKnowledgeDocumentCreatedSubscription({ onData: refetchSearchOnEvent, skip: !shouldFetch });
-    useKnowledgeDocumentUpdatedSubscription({ onData: refetchSearchOnEvent, skip: !shouldFetch });
-    useKnowledgeDocumentDeletedSubscription({ onData: refetchSearchOnEvent, skip: !shouldFetch });
+    useSubscription(KnowledgeDocumentCreatedDocument, { onData: refetchSearchOnEvent, skip: !shouldFetch });
+    useSubscription(KnowledgeDocumentUpdatedDocument, { onData: refetchSearchOnEvent, skip: !shouldFetch });
+    useSubscription(KnowledgeDocumentDeletedDocument, { onData: refetchSearchOnEvent, skip: !shouldFetch });
 
     const knowledges = useMemo<Knowledge[]>(() => {
         if (inSearchMode) {
-            // Drop `score` — every consumer (DataTable, DetailNavigation,
-            // mutations) already speaks plain `KnowledgeDocumentFragment`.
-            // If a future UI wants to render relevance, the score is still
-            // reachable via the raw Apollo result by lifting a small helper
-            // into context — out of scope for this change.
             return searchData?.searchKnowledge.map((entry) => entry.document) ?? [];
         }
 
@@ -184,6 +164,22 @@ export function KnowledgesProvider({ children }: KnowledgesProviderProps) {
         [updateKnowledgeMutation],
     );
 
+    const renameKnowledge = useCallback(
+        async (id: string, question: string) => {
+            try {
+                const { data: result } = await renameKnowledgeMutation({ variables: { id, question } });
+
+                return result?.renameKnowledgeDocument;
+            } catch (error) {
+                const errorMessage = error instanceof Error ? error.message : 'Failed to rename knowledge document';
+                toast.error('Failed to rename knowledge document', { description: errorMessage });
+                Log.error('Error renaming knowledge document:', error);
+                throw error;
+            }
+        },
+        [renameKnowledgeMutation],
+    );
+
     const deleteKnowledge = useCallback(
         async (id: string) => {
             try {
@@ -205,9 +201,10 @@ export function KnowledgesProvider({ children }: KnowledgesProviderProps) {
             getKnowledge,
             isLoading,
             knowledges,
+            renameKnowledge,
             updateKnowledge,
         }),
-        [createKnowledge, deleteKnowledge, getKnowledge, isLoading, knowledges, updateKnowledge],
+        [createKnowledge, deleteKnowledge, getKnowledge, isLoading, knowledges, renameKnowledge, updateKnowledge],
     );
 
     return <KnowledgesContext.Provider value={value}>{children}</KnowledgesContext.Provider>;

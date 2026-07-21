@@ -106,6 +106,30 @@ func InteractiveFillArgs(ctx context.Context, funcName string, taskID, subtaskID
 				break
 			}
 
+		case "array":
+			var items []string
+			for {
+				itemTitle := fmt.Sprintf("%s item #%d (leave empty to finish)", title, len(items)+1)
+				strValue, err := terminal.InteractivePromptContext(ctx, itemTitle, os.Stdin)
+				if err != nil {
+					return nil, fmt.Errorf("input cancelled for '%s': %w", arg.Name, err)
+				}
+
+				if strValue == "" {
+					if len(items) == 0 && arg.Required {
+						terminal.PrintError("At least one value is required")
+						continue
+					}
+					break
+				}
+
+				items = append(items, strValue)
+			}
+
+			if len(items) > 0 {
+				value = items
+			}
+
 		default: // string and other types
 			strValue, err := terminal.InteractivePromptContext(ctx, title, os.Stdin)
 			if err != nil {
@@ -170,6 +194,15 @@ func fillStructFromMap(structPtr any, data map[string]any) error {
 					fieldValue.SetInt(int64(value.(int)))
 				case reflect.Bool:
 					fieldValue.SetBool(value.(bool))
+				case reflect.Slice:
+					if fieldValue.Type().Elem().Kind() == reflect.String {
+						switch v := value.(type) {
+						case []string:
+							fieldValue.Set(reflect.ValueOf(v))
+						case string:
+							fieldValue.Set(reflect.ValueOf([]string{v}))
+						}
+					}
 				case reflect.Struct:
 					// For special types that may be in the tools package
 					// This is a simplified version that may require refinement

@@ -1,31 +1,23 @@
 import type { ReactNode } from 'react';
 
-import { zodResolver } from '@hookform/resolvers/zod';
-import {
-    ChevronDown,
-    Ellipsis,
-    FileSymlink,
-    FileText,
-    Loader2,
-    PanelRightClose,
-    PanelRightOpen,
-    Pencil,
-    Save,
-    Trash,
-} from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { skipToken, useQuery } from '@apollo/client/react';
+import { ChevronDown, Ellipsis, FileSymlink, FileText, Loader2, Pencil, Save, Trash } from 'lucide-react';
+import { useCallback, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { z } from 'zod';
 
+import { AppHeader, AppHeaderActions, AppHeaderContent } from '@/components/layouts/app/app-header';
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
 import {
     DetailNavigationButtons,
     DetailNavigationSheet,
     DetailNavigationToolbar,
 } from '@/components/shared/detail-navigation';
+import { DetailSplitLayout } from '@/components/shared/detail-split-layout';
 import { InlineEditInput, useInlineEdit } from '@/components/shared/inline-edit';
+import { type EditorViewMode, EditorViewModeToggle, MarkdownEditorField } from '@/components/shared/markdown-editor';
+import { UnsavedChangesDialog, useUnsavedChangesGuard } from '@/components/shared/unsaved-changes';
 import { Badge } from '@/components/ui/badge';
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage } from '@/components/ui/breadcrumb';
 import { Button } from '@/components/ui/button';
@@ -38,17 +30,16 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Form, FormControl, FormField, FormItem } from '@/components/ui/form';
+import { Form, FormControl, FormField, FormItem, FormMessage } from '@/components/ui/form';
+import { FormSubmitButton } from '@/components/ui/form-submit-button';
 import { Input } from '@/components/ui/input';
-import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupTextareaAutosize } from '@/components/ui/input-group';
-import { Separator } from '@/components/ui/separator';
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { SidebarTrigger } from '@/components/ui/sidebar';
 import { Spinner } from '@/components/ui/spinner';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useTemplateDetailNavigation } from '@/features/templates/use-template-detail-navigation';
-import { useFlowTemplateQuery } from '@/graphql/types';
+import { FlowTemplateDocument } from '@/graphql/types';
+import { useAppForm } from '@/hooks/use-app-form';
 import { useBreakpoint } from '@/hooks/use-breakpoint';
+import { routes } from '@/lib/routes';
 import { cn } from '@/lib/utils';
 import { type Template, useTemplates } from '@/providers/templates-provider';
 
@@ -245,7 +236,7 @@ function Template() {
     const { templateId } = useParams<{ templateId?: string }>();
     const { createTemplate, deleteTemplate, updateTemplate } = useTemplates();
 
-    const { isMobile } = useBreakpoint();
+    const { isDesktop, isMobile } = useBreakpoint();
     const isNew = templateId === 'new';
 
     // Pass `null` while creating a new template — there is no "current item"
@@ -253,7 +244,6 @@ function Template() {
     // below by `canShowActions`).
     const templateNav = useTemplateDetailNavigation(isNew ? null : templateId);
 
-    const [isAsideOpen, setIsAsideOpen] = useState(false);
     const [expandedPresetIndex, setExpandedPresetIndex] = useState<null | number>(null);
     const [isReplaceConfirmOpen, setIsReplaceConfirmOpen] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
@@ -261,6 +251,7 @@ function Template() {
     const [isRenaming, setIsRenaming] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+    const [viewMode, setViewMode] = useState<EditorViewMode>('rich');
 
     const {
         handleDropdownCloseAutoFocus,
@@ -270,29 +261,33 @@ function Template() {
         stopEdit: handleTemplateRenameCancel,
     } = useInlineEdit({ resetKey: templateId });
 
-    const { data: templateData, loading: isLoadingTemplate } = useFlowTemplateQuery({
-        skip: isNew || !templateId,
-        variables: templateId && !isNew ? { templateId } : undefined,
-    });
+    const { data: templateData, loading: isLoadingTemplate } = useQuery(
+        FlowTemplateDocument,
+        templateId && !isNew ? { variables: { templateId } } : skipToken,
+    );
 
-    const form = useForm<FormValues>({
-        defaultValues: { text: '', title: '' },
-        mode: 'onChange',
-        resolver: zodResolver(formSchema),
+    // `values` re-syncs the form whenever the cache refreshes (an inline rename, a refetch), while
+    // `keepDirtyValues` preserves the user's in-flight edits — without it an external re-emit would
+    // silently wipe an unsaved body. Mirrors knowledge-form.
+    const initialValues = useMemo<FormValues>(
+        () => ({
+            text: templateData?.flowTemplate?.text ?? '',
+            title: templateData?.flowTemplate?.title ?? '',
+        }),
+        [templateData?.flowTemplate],
+    );
+
+    const form = useAppForm<FormValues>({
+        defaultValues: initialValues,
+        resetOptions: { keepDirtyValues: true },
+        schema: formSchema,
+        values: initialValues,
     });
 
     const { control, formState, getValues, handleSubmit: handleFormSubmit, reset, setValue } = form;
+    const { isDirty, isValid } = formState;
 
-    useEffect(() => {
-        if (isNew || !templateData?.flowTemplate) {
-            return;
-        }
-
-        const { text, title } = templateData.flowTemplate;
-        reset({ text, title }, { keepDefaultValues: false });
-    }, [templateData, isNew, reset]);
-
-    const hasUnsavedChanges = formState.isDirty;
+    const hasUnsavedChanges = isDirty;
     const templateName = templateData?.flowTemplate?.title ?? null;
 
     const handleTemplateRenameSave = useCallback(async () => {
@@ -312,8 +307,8 @@ function Template() {
         setIsRenaming(true);
 
         try {
-            // Preserve the original `text` from the server so that an inline
-            // rename never overwrites unsaved edits in the form below.
+            // Send the server's current `text`, not the form's, so renaming the title never persists the
+            // user's unsaved body edits — those stay dirty in the form (kept by `keepDirtyValues`) until they save.
             await updateTemplate(templateId, { text: template.text, title: newTitle });
             toast.success('Template renamed successfully');
             handleTemplateRenameCancel();
@@ -333,7 +328,7 @@ function Template() {
 
         try {
             await deleteTemplate(templateId);
-            navigate('/templates', { replace: true });
+            navigate(routes.templates, { replace: true });
         } catch {
             // Error already handled in provider with toast
         } finally {
@@ -341,37 +336,56 @@ function Template() {
         }
     }, [templateId, deleteTemplate, navigate]);
 
+    const performSave = useCallback(
+        async (values: FormValues): Promise<boolean> => {
+            setIsSaving(true);
+
+            try {
+                if (isNew) {
+                    await createTemplate(values.title, values.text);
+                } else if (templateId) {
+                    await updateTemplate(templateId, { text: values.text, title: values.title });
+                    reset(values, { keepDefaultValues: false });
+                }
+
+                return true;
+            } catch {
+                // Error already handled in provider with toast
+                return false;
+            } finally {
+                setIsSaving(false);
+            }
+        },
+        [isNew, templateId, createTemplate, updateTemplate, reset],
+    );
+
+    const handleSaveFromGuard = useCallback(async (): Promise<boolean> => {
+        if (isSaving || !isValid) {
+            return false;
+        }
+
+        const parsed = formSchema.safeParse(getValues());
+
+        return parsed.success ? performSave(parsed.data) : false;
+    }, [getValues, isSaving, isValid, performSave]);
+
+    const guard = useUnsavedChangesGuard({
+        isDirty,
+        isFormValid: isValid,
+        onSave: handleSaveFromGuard,
+    });
+
     const handleSubmit = async (values: FormValues) => {
         if (isSaving) {
             return;
         }
 
-        setIsSaving(true);
-
-        try {
-            if (isNew) {
-                await createTemplate(values.title, values.text);
-                navigate('/templates');
-            } else if (templateId) {
-                await updateTemplate(templateId, { text: values.text, title: values.title });
-                reset(values, { keepDefaultValues: false });
-            }
-        } catch {
-            // Error already handled in provider with toast
-        } finally {
-            setIsSaving(false);
+        if ((await performSave(values)) && isNew) {
+            // A fresh template stays dirty until we leave; skip the guard's blocker so this post-save
+            // navigation doesn't trap the user in the unsaved-changes dialog.
+            guard.skipNextBlock();
+            navigate(routes.templates);
         }
-    };
-
-    const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
-        const { ctrlKey, key, metaKey, shiftKey } = event;
-
-        if (isSaving || key !== 'Enter' || shiftKey || ctrlKey || metaKey) {
-            return;
-        }
-
-        event.preventDefault();
-        handleFormSubmit(handleSubmit)();
     };
 
     const handleApplyPreset = useCallback(
@@ -402,13 +416,8 @@ function Template() {
 
     const pageHeader = (
         <>
-            <header className="bg-background sticky top-0 z-10 flex h-12 shrink-0 items-center gap-2 border-b px-4">
-                <div className="flex min-w-0 flex-1 items-center gap-2">
-                    <SidebarTrigger className="-ml-1 shrink-0" />
-                    <Separator
-                        className="mr-2 h-4 shrink-0"
-                        orientation="vertical"
-                    />
+            <AppHeader>
+                <AppHeaderContent>
                     <Breadcrumb className="min-w-0 flex-1">
                         <BreadcrumbList className="min-w-0 flex-nowrap">
                             <BreadcrumbItem className="min-w-0 gap-2">
@@ -442,8 +451,8 @@ function Template() {
                             </BreadcrumbItem>
                         </BreadcrumbList>
                     </Breadcrumb>
-                </div>
-                <div className="flex shrink-0 items-center gap-2">
+                </AppHeaderContent>
+                <AppHeaderActions>
                     {canShowActions && !isMobile && (
                         <DetailNavigationToolbar<Template>
                             controller={templateNav}
@@ -452,74 +461,98 @@ function Template() {
                             sheetTitle="Templates"
                         />
                     )}
-                    <Button
-                        onClick={() => setIsAsideOpen((open) => !open)}
-                        size="icon"
-                        variant="ghost"
-                    >
-                        {isAsideOpen ? <PanelRightClose /> : <PanelRightOpen />}
-                    </Button>
-                    {canShowActions && (
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button
-                                    aria-label="Template actions"
-                                    className="size-8 p-0"
-                                    variant="ghost"
-                                >
-                                    <Ellipsis />
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent
-                                align="end"
-                                className="min-w-24"
-                                onCloseAutoFocus={handleDropdownCloseAutoFocus}
+                    {(isNew || !!templateData?.flowTemplate) && (
+                        <FormSubmitButton
+                            disabled={isSaving || (!isNew && !hasUnsavedChanges)}
+                            form="template-form"
+                            icon={<Save className="size-4" />}
+                            loading={isSaving}
+                            size="sm"
+                            variant="secondary"
+                        >
+                            {isNew ? 'Create' : 'Save'}
+                        </FormSubmitButton>
+                    )}
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button
+                                aria-label="Template actions"
+                                className="size-8 p-0"
+                                variant="ghost"
                             >
-                                {isMobile && templateNav.total > 0 && (
-                                    <>
-                                        <DropdownMenuItem
-                                            className="cursor-default hover:bg-transparent focus:bg-transparent"
-                                            onSelect={(event) => event.preventDefault()}
-                                        >
-                                            <FileText className="size-4" />
-                                            Templates
-                                            <div className="-my-1.5 -mr-2 ml-auto flex items-center">
-                                                <DetailNavigationButtons<Template>
-                                                    controller={templateNav}
-                                                    sheetTitle="Templates"
-                                                    size="sm"
-                                                />
-                                            </div>
-                                        </DropdownMenuItem>
-                                        <DropdownMenuSeparator />
-                                    </>
-                                )}
-                                <DropdownMenuItem onClick={handleTemplateRenameStart}>
-                                    <Pencil className="size-3" />
-                                    Rename
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem
-                                    disabled={isDeleting}
-                                    onClick={() => setIsDeleteDialogOpen(true)}
-                                >
-                                    {isDeleting ? (
+                                <Ellipsis />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent
+                            align="end"
+                            className="min-w-24"
+                            onCloseAutoFocus={handleDropdownCloseAutoFocus}
+                        >
+                            {canShowActions && (
+                                <>
+                                    {isMobile && templateNav.total > 0 && (
                                         <>
-                                            <Loader2 className="size-4 animate-spin" />
-                                            Deleting...
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Trash className="size-4" />
-                                            Delete
+                                            <DropdownMenuItem
+                                                className="cursor-default hover:bg-transparent focus:bg-transparent"
+                                                onSelect={(event) => event.preventDefault()}
+                                            >
+                                                <FileText className="size-4" />
+                                                Templates
+                                                <div className="-my-1.5 -mr-2 ml-auto flex items-center">
+                                                    <DetailNavigationButtons<Template>
+                                                        controller={templateNav}
+                                                        sheetTitle="Templates"
+                                                        size="sm"
+                                                    />
+                                                </div>
+                                            </DropdownMenuItem>
+                                            <DropdownMenuSeparator />
                                         </>
                                     )}
-                                </DropdownMenuItem>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
-                    )}
-                </div>
-            </header>
+                                    <DropdownMenuItem onClick={handleTemplateRenameStart}>
+                                        <Pencil className="size-3" />
+                                        Rename
+                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+                                </>
+                            )}
+                            <DropdownMenuItem
+                                className="cursor-default gap-4 hover:bg-transparent focus:bg-transparent"
+                                onSelect={(event) => event.preventDefault()}
+                            >
+                                View
+                                <EditorViewModeToggle
+                                    className="-my-1.5 -mr-2 ml-auto"
+                                    mode={viewMode}
+                                    onModeChange={setViewMode}
+                                    rawTooltip="Edit the raw template"
+                                />
+                            </DropdownMenuItem>
+                            {canShowActions && (
+                                <>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem
+                                        disabled={isDeleting}
+                                        onClick={() => setIsDeleteDialogOpen(true)}
+                                    >
+                                        {isDeleting ? (
+                                            <>
+                                                <Loader2 className="size-4 animate-spin" />
+                                                Deleting...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Trash className="size-4" />
+                                                Delete
+                                            </>
+                                        )}
+                                    </DropdownMenuItem>
+                                </>
+                            )}
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                </AppHeaderActions>
+            </AppHeader>
             {isMobile && canShowActions && (
                 <DetailNavigationSheet<Template>
                     controller={templateNav}
@@ -531,247 +564,191 @@ function Template() {
         </>
     );
 
-    const asideContent = useMemo(
+    const presetsPanel = useMemo(
         () => (
-            <div className="flex w-full min-w-0 flex-col gap-2 p-2">
-                {PRESET_TEMPLATES.map((preset, index) => (
-                    <Collapsible
-                        className="w-full min-w-0"
-                        key={index}
-                        onOpenChange={(open) => setExpandedPresetIndex(open ? index : null)}
-                        open={expandedPresetIndex === index}
-                    >
-                        <Card className="w-full min-w-0">
-                            <div className="flex w-full min-w-0">
-                                <Button
-                                    className={cn(
-                                        'h-auto min-w-0 flex-1 justify-start rounded-none rounded-tl-[0.6875rem] px-3 py-2 text-left text-start',
-                                        expandedPresetIndex !== index ? 'rounded-bl-[0.6875rem]' : 'whitespace-normal',
-                                    )}
-                                    onClick={() => handleApplyPreset(preset)}
-                                    variant="ghost"
-                                >
-                                    <span className={cn('min-w-0', expandedPresetIndex !== index && 'truncate')}>
-                                        {preset.title}
-                                    </span>
-                                </Button>
-                                <CollapsibleTrigger asChild>
+            <div className="bg-card overflow-hidden rounded-lg border">
+                <div className="border-b px-4 py-3">
+                    <h4 className="flex items-center gap-2 text-sm font-medium">
+                        Preset templates
+                        <Badge
+                            className="ml-auto font-normal tabular-nums"
+                            variant="secondary"
+                        >
+                            {PRESET_TEMPLATES.length}
+                        </Badge>
+                    </h4>
+                    <p className="text-muted-foreground mt-1 text-xs">
+                        Click a preset to fill the form, or expand it to preview the content.
+                    </p>
+                </div>
+                <div className="flex w-full min-w-0 flex-col gap-2 p-2">
+                    {PRESET_TEMPLATES.map((preset, index) => (
+                        <Collapsible
+                            className="w-full min-w-0"
+                            key={index}
+                            onOpenChange={(open) => setExpandedPresetIndex(open ? index : null)}
+                            open={expandedPresetIndex === index}
+                        >
+                            <Card className="w-full min-w-0">
+                                <div className="flex w-full min-w-0">
                                     <Button
                                         className={cn(
-                                            'h-auto shrink-0 rounded-none rounded-tr-[0.6875rem] border-l px-2 py-2',
-                                            expandedPresetIndex !== index && 'rounded-br-[0.6875rem]',
+                                            'h-auto min-w-0 flex-1 justify-start rounded-none rounded-tl-[0.6875rem] px-3 py-2 text-left text-start',
+                                            expandedPresetIndex !== index
+                                                ? 'rounded-bl-[0.6875rem]'
+                                                : 'whitespace-normal',
                                         )}
+                                        onClick={() => handleApplyPreset(preset)}
                                         variant="ghost"
                                     >
-                                        <ChevronDown
-                                            className={cn(
-                                                'transition-transform',
-                                                expandedPresetIndex === index && 'rotate-180',
-                                            )}
-                                        />
+                                        <span className={cn('min-w-0', expandedPresetIndex !== index && 'truncate')}>
+                                            {preset.title}
+                                        </span>
                                     </Button>
-                                </CollapsibleTrigger>
-                            </div>
-                            <CollapsibleContent>
-                                <CardContent className="border-t px-3 py-2">
-                                    <p className="text-muted-foreground text-sm break-words whitespace-pre-wrap">
-                                        {preset.text}
-                                    </p>
-                                </CardContent>
-                            </CollapsibleContent>
-                        </Card>
-                    </Collapsible>
-                ))}
+                                    <CollapsibleTrigger asChild>
+                                        <Button
+                                            className={cn(
+                                                'h-auto shrink-0 rounded-none rounded-tr-[0.6875rem] border-l px-2 py-2',
+                                                expandedPresetIndex !== index && 'rounded-br-[0.6875rem]',
+                                            )}
+                                            variant="ghost"
+                                        >
+                                            <ChevronDown
+                                                className={cn(
+                                                    'transition-transform',
+                                                    expandedPresetIndex === index && 'rotate-180',
+                                                )}
+                                            />
+                                        </Button>
+                                    </CollapsibleTrigger>
+                                </div>
+                                <CollapsibleContent>
+                                    <CardContent className="border-t px-3 py-2">
+                                        <p className="text-muted-foreground text-sm break-words whitespace-pre-wrap">
+                                            {preset.text}
+                                        </p>
+                                    </CardContent>
+                                </CollapsibleContent>
+                            </Card>
+                        </Collapsible>
+                    ))}
+                </div>
             </div>
         ),
         [expandedPresetIndex, handleApplyPreset],
     );
 
-    const aside = useMemo(
-        () =>
-            isMobile ? (
-                <Sheet
-                    onOpenChange={setIsAsideOpen}
-                    open={isAsideOpen}
-                >
-                    <SheetContent
-                        // The Sheet body is just a list of presets with no
-                        // descriptive sub-text — opt out of the Radix
-                        // Description warning explicitly.
-                        aria-describedby={undefined}
-                        className="flex w-full max-w-sm flex-col gap-0 p-0 sm:max-w-sm"
-                        side="right"
-                    >
-                        <SheetHeader className="border-b p-4">
-                            <SheetTitle className="flex items-center gap-2 pr-8 text-base">
-                                <FileText className="size-4" />
-                                <span>Preset templates</span>
-                                <Badge
-                                    className="ml-auto font-normal tabular-nums"
-                                    variant="secondary"
-                                >
-                                    {PRESET_TEMPLATES.length}
-                                </Badge>
-                            </SheetTitle>
-                        </SheetHeader>
-                        {/* Plain overflow-y-auto instead of Radix ScrollArea —
-                            ScrollArea's Viewport wraps children in a
-                            `display: table` div whose width grows to fit
-                            intrinsic content, defeating `w-full min-w-0` on
-                            inner flex rows and pushing the chevron buttons
-                            off-screen. */}
-                        <div className="min-w-0 flex-1 overflow-y-auto">{asideContent}</div>
-                    </SheetContent>
-                </Sheet>
-            ) : (
-                <aside
-                    className={cn(
-                        'bg-background shrink-0 overflow-hidden transition-[width] duration-200',
-                        isAsideOpen ? 'w-80 border-l sm:w-96' : 'w-0',
-                    )}
-                >
-                    {isAsideOpen ? (
-                        <div className="flex h-full w-80 min-w-0 flex-col sm:w-96">
-                            <div className="border-b p-4">
-                                <h3 className="flex items-center gap-2 text-base font-semibold">
-                                    <FileText className="size-4" />
-                                    <span>Preset templates</span>
-                                    <Badge
-                                        className="ml-auto font-normal tabular-nums"
-                                        variant="secondary"
-                                    >
-                                        {PRESET_TEMPLATES.length}
-                                    </Badge>
-                                </h3>
-                            </div>
-                            <div className="min-w-0 flex-1 overflow-y-auto">{asideContent}</div>
-                        </div>
-                    ) : null}
-                </aside>
-            ),
-        [isMobile, isAsideOpen, asideContent],
+    const introBlock = (
+        <div className="flex flex-col gap-2 text-center">
+            <h2 className="text-2xl font-semibold">{isNew ? 'Create a new template' : 'Edit template'}</h2>
+            <p className="text-muted-foreground">Add a title and content, or start from a preset.</p>
+        </div>
+    );
+
+    const titleField = (
+        <FormField
+            control={control}
+            name="title"
+            render={({ field }) => (
+                <FormItem>
+                    <FormControl>
+                        <Input
+                            autoFocus={isNew}
+                            disabled={isSaving}
+                            placeholder="Title"
+                            {...field}
+                        />
+                    </FormControl>
+                </FormItem>
+            )}
+        />
+    );
+
+    const textEditor = (
+        <FormField
+            control={control}
+            name="text"
+            render={({ field }) => (
+                <FormItem className="flex min-h-0 flex-1 flex-col">
+                    <FormControl>
+                        <MarkdownEditorField
+                            aria-label="Template content"
+                            disabled={isSaving}
+                            mode={viewMode}
+                            onBlur={field.onBlur}
+                            onChange={field.onChange}
+                            placeholder="Content"
+                            ref={field.ref}
+                            value={field.value}
+                        />
+                    </FormControl>
+                    {/* Full-height field: the invalid state shows as the editor's red border (via aria-invalid),
+                        not text below it (no room in the flex layout). Kept sr-only for screen readers. */}
+                    <FormMessage className="sr-only" />
+                </FormItem>
+            )}
+        />
     );
 
     if (!isNew && isLoadingTemplate) {
         return (
-            <>
+            <div className={isDesktop ? 'flex h-[100dvh] min-h-0 flex-col' : 'flex min-h-[100dvh] flex-col'}>
                 {pageHeader}
-                <div className="flex min-h-[calc(100dvh-3rem)] items-center justify-center">
+                <div className="flex flex-1 items-center justify-center">
                     <Spinner variant="circle" />
                 </div>
-            </>
+            </div>
         );
     }
 
     if (!isNew && !isLoadingTemplate && !templateData?.flowTemplate) {
         return (
-            <>
+            <div className={isDesktop ? 'flex h-[100dvh] min-h-0 flex-col' : 'flex min-h-[100dvh] flex-col'}>
                 {pageHeader}
-                <div className="flex min-h-[calc(100dvh-3rem)] items-center justify-center p-4">
+                <div className="flex flex-1 items-center justify-center p-4">
                     <Card className="w-full max-w-2xl">
                         <CardContent className="flex flex-col items-center gap-4 pt-6 text-center">
                             <h2 className="text-xl font-semibold">Template not found</h2>
                             <p className="text-muted-foreground">The template you are looking for does not exist.</p>
-                            <Button onClick={() => navigate('/templates')}>Back to Templates</Button>
+                            <Button onClick={() => navigate(routes.templates)}>Back to Templates</Button>
                         </CardContent>
                     </Card>
                 </div>
-            </>
+            </div>
         );
     }
 
     return (
-        <>
+        <div className={isDesktop ? 'flex h-[100dvh] min-h-0 flex-col' : 'flex min-h-[100dvh] flex-col'}>
             {pageHeader}
-            <div className="flex min-h-[calc(100dvh-3rem)]">
-                <div className="flex min-w-0 flex-1 items-center justify-center p-4">
-                    <Card className="w-full max-w-2xl">
-                        <CardContent className="flex flex-col gap-4 pt-6">
-                            <div className="text-center">
-                                <h1 className="text-2xl font-semibold">
-                                    {isNew ? 'Create a new template' : 'Edit template'}
-                                </h1>
-                                <p className="text-muted-foreground mt-2">
-                                    Add title and content for your template or use a
-                                    <Button
-                                        className="h-auto px-1.5 py-0 text-base"
-                                        onClick={() => setIsAsideOpen((open) => !open)}
-                                        variant="link"
-                                    >
-                                        Preset template
-                                    </Button>
-                                </p>
-                            </div>
-                            <Form {...form}>
-                                <form
-                                    className="flex flex-col gap-4"
-                                    onSubmit={handleFormSubmit(handleSubmit)}
-                                >
-                                    <FormField
-                                        control={control}
-                                        name="title"
-                                        render={({ field }) => (
-                                            <FormItem>
-                                                <FormControl>
-                                                    <Input
-                                                        autoFocus={isNew}
-                                                        disabled={isSaving}
-                                                        placeholder="Title"
-                                                        {...field}
-                                                    />
-                                                </FormControl>
-                                            </FormItem>
-                                        )}
-                                    />
-                                    <FormField
-                                        control={control}
-                                        name="text"
-                                        render={({ field }) => (
-                                            <FormItem>
-                                                <FormControl>
-                                                    <InputGroup className="block">
-                                                        <InputGroupTextareaAutosize
-                                                            {...field}
-                                                            className="min-h-0"
-                                                            disabled={isSaving}
-                                                            maxRows={9}
-                                                            minRows={1}
-                                                            onKeyDown={handleKeyDown}
-                                                            placeholder="Content"
-                                                        />
-                                                        <InputGroupAddon align="block-end">
-                                                            <InputGroupButton
-                                                                aria-label={isNew ? 'Create template' : 'Save template'}
-                                                                className="ml-auto"
-                                                                disabled={
-                                                                    isSaving ||
-                                                                    !formState.isValid ||
-                                                                    (!isNew && !hasUnsavedChanges)
-                                                                }
-                                                                size="icon-xs"
-                                                                title={isNew ? 'Create template' : 'Save template'}
-                                                                type="submit"
-                                                                variant="default"
-                                                            >
-                                                                {isSaving ? (
-                                                                    <Spinner variant="circle" />
-                                                                ) : (
-                                                                    <Save aria-hidden="true" />
-                                                                )}
-                                                            </InputGroupButton>
-                                                        </InputGroupAddon>
-                                                    </InputGroup>
-                                                </FormControl>
-                                            </FormItem>
-                                        )}
-                                    />
-                                </form>
-                            </Form>
-                        </CardContent>
-                    </Card>
-                </div>
-                {aside}
-            </div>
+            <Form {...form}>
+                <form
+                    className="flex min-h-0 flex-1 flex-col"
+                    id="template-form"
+                    noValidate
+                    onSubmit={handleFormSubmit(handleSubmit)}
+                >
+                    {isDesktop ? (
+                        <DetailSplitLayout
+                            content={textEditor}
+                            panel={
+                                <>
+                                    {introBlock}
+                                    {titleField}
+                                    {presetsPanel}
+                                </>
+                            }
+                        />
+                    ) : (
+                        <div className="flex min-h-0 flex-1 flex-col gap-4 p-4">
+                            {introBlock}
+                            {titleField}
+                            {textEditor}
+                            {presetsPanel}
+                        </div>
+                    )}
+                </form>
+            </Form>
             <ConfirmationDialog
                 confirmIcon={<FileSymlink />}
                 confirmText="Replace"
@@ -797,7 +774,16 @@ function Template() {
                 itemName={templateName ?? undefined}
                 itemType="template"
             />
-        </>
+            <UnsavedChangesDialog
+                canSave={isValid}
+                handleCancel={guard.handleCancel}
+                handleDiscard={guard.handleDiscard}
+                handleOpenChange={guard.handleOpenChange}
+                handleSaveAndLeave={guard.handleSaveAndLeave}
+                isOpen={guard.isOpen}
+                isSavingFromDialog={guard.isSavingFromDialog}
+            />
+        </div>
     );
 }
 

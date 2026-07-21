@@ -306,6 +306,15 @@
         --sidebar-accent-foreground: oklch(0.32 0 0);
         --sidebar-border: oklch(0.93 0.01 240);
         --sidebar-ring: oklch(0.25 0.14 245);
+        /* Editor highlight TEXT, tuned for readable contrast on the editor surface (unlike --primary, a fill
+           color that fails WCAG AA as text on dark). Four distinct hues so adjacent tokens don't blur:
+           link = theme blue 245; variable = violet 300; tag = teal 155; inline code = red 25 on a visible chip.
+           --editor-code-bg is the opaque inline-code + code-block chip. Don't fold these back into --primary. */
+        --editor-accent: oklch(0.25 0.12 245);
+        --editor-variable: oklch(0.4 0.18 300);
+        --editor-tag: oklch(0.25 0.12 155);
+        --editor-code: oklch(0.5 0.16 25);
+        --editor-code-bg: oklch(0.94 0.006 245);
         --font-sans: Inter, 'Inter Fallback', sans-serif;
         --font-serif: Inter, 'Inter Fallback', serif;
         --font-mono: 'Roboto Mono', monospace;
@@ -361,6 +370,11 @@
         --sidebar-accent-foreground: oklch(0.92 0.02 245);
         --sidebar-border: oklch(0.3 0.04 245);
         --sidebar-ring: oklch(0.5 0.16 245);
+        --editor-accent: oklch(0.68 0.13 245);
+        --editor-variable: oklch(0.72 0.12 300);
+        --editor-tag: oklch(0.68 0.13 155);
+        --editor-code: oklch(0.7 0.15 25);
+        --editor-code-bg: oklch(0.27 0.03 245);
         --font-sans: Inter, 'Inter Fallback', sans-serif;
         --font-serif: Inter, 'Inter Fallback', serif;
         --font-mono: 'Roboto Mono', monospace;
@@ -417,6 +431,23 @@
     [role='button']:not(:disabled) {
         cursor: pointer;
     }
+}
+
+/* Tailwind Typography wraps inline <code> in literal `backticks` via ::before/::after — that is markdown SOURCE,
+   not how rendered inline code should look. Drop them so it reads as styled code, matching tiptap's demos. */
+.prose code::before,
+.prose code::after {
+    content: none;
+}
+
+/* Inline code in the read-only viewer mirrors the editor (red text on a visible chip) so a document reads
+   the same whether it is being edited or viewed. Code blocks keep hljs syntax highlighting (see below). */
+.prose code:not(pre code) {
+    color: var(--editor-code);
+    background-color: var(--editor-code-bg);
+    padding: 0.125rem 0.25rem;
+    border-radius: calc(var(--radius) - 4px);
+    font-weight: inherit;
 }
 
 .prose-xs {
@@ -595,14 +626,15 @@
 }
 
 .tiptap-content .ProseMirror code:not(pre code) {
-    background-color: var(--muted);
+    color: var(--editor-code);
+    background-color: var(--editor-code-bg);
     padding: 0.125rem 0.25rem;
     border-radius: calc(var(--radius) - 4px);
     font-size: 0.875em;
 }
 
 .tiptap-content .ProseMirror pre {
-    background-color: var(--muted);
+    background-color: var(--editor-code-bg);
     color: var(--foreground);
     padding: 0.75rem 1rem;
     border-radius: calc(var(--radius) - 2px);
@@ -622,7 +654,7 @@
 }
 
 .tiptap-content .ProseMirror a {
-    color: var(--primary);
+    color: var(--editor-accent);
     text-decoration: underline;
     text-underline-offset: 2px;
 }
@@ -631,4 +663,106 @@
     border: 0;
     border-top: 1px solid var(--border);
     margin: 1.5rem 0;
+}
+
+.tiptap-content .ProseMirror table {
+    border-collapse: collapse;
+    table-layout: fixed;
+    width: 100%;
+    margin: 0.75rem 0;
+    overflow: hidden;
+}
+
+.tiptap-content .ProseMirror th,
+.tiptap-content .ProseMirror td {
+    position: relative;
+    min-width: 4rem;
+    border: 1px solid var(--border);
+    padding: 0.375rem 0.5rem;
+    vertical-align: top;
+}
+
+.tiptap-content .ProseMirror th {
+    background-color: var(--muted);
+    font-weight: 600;
+    text-align: left;
+}
+
+.tiptap-content .ProseMirror th > *,
+.tiptap-content .ProseMirror td > * {
+    margin: 0;
+}
+
+/* Selected-cell overlay + column resize handle (prosemirror-tables) */
+.tiptap-content .ProseMirror .selectedCell::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: color-mix(in oklab, var(--primary) 15%, transparent);
+    pointer-events: none;
+}
+
+.tiptap-content .ProseMirror .column-resize-handle {
+    position: absolute;
+    top: 0;
+    bottom: -2px;
+    right: -2px;
+    width: 4px;
+    background-color: var(--primary);
+    pointer-events: none;
+}
+
+.tiptap-content .ProseMirror.resize-cursor {
+    cursor: col-resize;
+}
+
+.tiptap-content .ProseMirror ul[data-type='taskList'] {
+    list-style: none;
+    padding-left: 0;
+}
+
+.tiptap-content .ProseMirror ul[data-type='taskList'] li {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+}
+
+.tiptap-content .ProseMirror ul[data-type='taskList'] li > label {
+    margin-top: 0.2rem;
+    user-select: none;
+}
+
+.tiptap-content .ProseMirror ul[data-type='taskList'] li > div {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.tiptap-content .ProseMirror ul[data-type='taskList'] li > div > p {
+    margin: 0;
+}
+
+.tiptap-content .ProseMirror img {
+    max-width: 100%;
+    height: auto;
+    border-radius: calc(var(--radius) - 4px);
+}
+
+.tiptap-content .ProseMirror img.ProseMirror-selectednode {
+    outline: 2px solid var(--primary);
+}
+
+/* `{{ ... }}` Go-template actions, highlighted via view-only decorations (document bytes untouched). */
+.tiptap-content .ProseMirror .template-variable {
+    color: var(--editor-variable);
+    background-color: color-mix(in oklab, var(--editor-variable) 9%, transparent);
+    border-radius: calc(var(--radius) - 4px);
+    padding: 0 1px;
+}
+
+/* `<xml-tags>`, highlighted view-only (teal --editor-tag reads distinct from the violet variables). */
+.tiptap-content .ProseMirror .template-tag {
+    color: var(--editor-tag);
+    background-color: color-mix(in oklab, var(--editor-tag) 9%, transparent);
+    border-radius: calc(var(--radius) - 4px);
+    padding: 0 1px;
 }

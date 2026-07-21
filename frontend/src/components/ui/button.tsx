@@ -5,7 +5,7 @@ import * as React from 'react';
 import { cn } from '@/lib/utils';
 
 const buttonVariants = cva(
-    'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0',
+    'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0',
     {
         defaultVariants: {
             size: 'default',
@@ -44,6 +44,7 @@ function Button({ asChild = false, className, size, type, variant, ...props }: B
     return (
         <Comp
             className={cn(buttonVariants({ className, size, variant }))}
+            data-slot="button"
             // HTML's default `type` for a `<button>` inside a `<form>` is `submit`,
             // which silently submits the form on every click — every nav cluster,
             // toggle, or dropdown trigger placed inside a form would post the

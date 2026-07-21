@@ -1,14 +1,15 @@
+import { skipToken, useMutation, useQuery, useSubscription } from '@apollo/client/react';
 import { createContext, type ReactNode, useCallback, useContext, useMemo } from 'react';
 import { toast } from 'sonner';
 
 import {
-    useCreateFlowTemplateMutation,
-    useDeleteFlowTemplateMutation,
-    useFlowTemplateCreatedSubscription,
-    useFlowTemplateDeletedSubscription,
-    useFlowTemplatesQuery,
-    useFlowTemplateUpdatedSubscription,
-    useUpdateFlowTemplateMutation,
+    CreateFlowTemplateDocument,
+    DeleteFlowTemplateDocument,
+    FlowTemplateCreatedDocument,
+    FlowTemplateDeletedDocument,
+    FlowTemplatesDocument,
+    FlowTemplateUpdatedDocument,
+    UpdateFlowTemplateDocument,
 } from '@/graphql/types';
 import { Log } from '@/lib/log';
 import { useUser } from '@/providers/user-provider';
@@ -42,24 +43,24 @@ export function TemplatesProvider({ children }: TemplatesProviderProps) {
 
     const shouldFetchTemplates = Boolean(authInfo && authInfo.type !== 'guest' && isAuthenticated());
 
-    const { data: templatesData, loading: isLoadingTemplates } = useFlowTemplatesQuery({
-        fetchPolicy: 'cache-and-network',
+    const { data: templatesData, loading: isLoadingTemplates } = useQuery(
+        FlowTemplatesDocument,
+        shouldFetchTemplates ? { fetchPolicy: 'cache-and-network' } : skipToken,
+    );
+
+    const [createTemplateMutation] = useMutation(CreateFlowTemplateDocument);
+    const [updateTemplateMutation] = useMutation(UpdateFlowTemplateDocument);
+    const [deleteTemplateMutation] = useMutation(DeleteFlowTemplateDocument);
+
+    useSubscription(FlowTemplateCreatedDocument, {
         skip: !shouldFetchTemplates,
     });
 
-    const [createTemplateMutation] = useCreateFlowTemplateMutation();
-    const [updateTemplateMutation] = useUpdateFlowTemplateMutation();
-    const [deleteTemplateMutation] = useDeleteFlowTemplateMutation();
-
-    useFlowTemplateCreatedSubscription({
+    useSubscription(FlowTemplateUpdatedDocument, {
         skip: !shouldFetchTemplates,
     });
 
-    useFlowTemplateUpdatedSubscription({
-        skip: !shouldFetchTemplates,
-    });
-
-    useFlowTemplateDeletedSubscription({
+    useSubscription(FlowTemplateDeletedDocument, {
         skip: !shouldFetchTemplates,
     });
 

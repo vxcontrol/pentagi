@@ -148,9 +148,12 @@ func (p *anthropicProvider) Call(
 	opt pconfig.ProviderOptionsType,
 	prompt string,
 ) (string, error) {
+	ctx, options := p.providerConfig.PrepareAdaptiveCallOptions(
+		ctx, p.models, opt, p.providerConfig.GetOptionsForType(opt),
+	)
 	return provider.WrapGenerateFromSinglePrompt(
 		ctx, p, opt, p.llm, prompt,
-		p.providerConfig.GetOptionsForType(opt)...,
+		options...,
 	)
 }
 
@@ -160,11 +163,12 @@ func (p *anthropicProvider) CallEx(
 	chain []llms.MessageContent,
 	streamCb streaming.Callback,
 ) (*llms.ContentResponse, error) {
+	ctx, options := p.providerConfig.PrepareAdaptiveCallOptions(ctx, p.models, opt, append([]llms.CallOption{
+		llms.WithStreamingFunc(streamCb),
+	}, p.providerConfig.GetOptionsForType(opt)...))
 	return provider.WrapGenerateContent(
 		ctx, p, opt, p.llm.GenerateContent, chain,
-		append([]llms.CallOption{
-			llms.WithStreamingFunc(streamCb),
-		}, p.providerConfig.GetOptionsForType(opt)...)...,
+		options...,
 	)
 }
 
@@ -175,13 +179,36 @@ func (p *anthropicProvider) CallWithTools(
 	tools []llms.Tool,
 	streamCb streaming.Callback,
 ) (*llms.ContentResponse, error) {
+	ctx, options := p.providerConfig.PrepareAdaptiveCallOptions(ctx, p.models, opt, append([]llms.CallOption{
+		llms.WithTools(tools),
+		llms.WithStreamingFunc(streamCb),
+	}, p.providerConfig.GetOptionsForType(opt)...))
 	return provider.WrapGenerateContent(
 		ctx, p, opt, p.llm.GenerateContent, chain,
-		append([]llms.CallOption{
-			llms.WithTools(tools),
-			llms.WithStreamingFunc(streamCb),
-		}, p.providerConfig.GetOptionsForType(opt)...)...,
+		options...,
 	)
+}
+
+// CallWithExtraOptions: extra wins over both the config and the auto-adaptive
+// append below, since it's appended last.
+func (p *anthropicProvider) CallWithExtraOptions(
+	ctx context.Context,
+	opt pconfig.ProviderOptionsType,
+	chain []llms.MessageContent,
+	tools []llms.Tool,
+	streamCb streaming.Callback,
+	extra ...llms.CallOption,
+) (*llms.ContentResponse, error) {
+	base := []llms.CallOption{llms.WithStreamingFunc(streamCb)}
+	if len(tools) > 0 {
+		base = append(base, llms.WithTools(tools))
+	}
+	base = append(base, p.providerConfig.GetOptionsForType(opt)...)
+
+	ctx, options := p.providerConfig.PrepareAdaptiveCallOptions(ctx, p.models, opt, base)
+	options = append(options, extra...)
+
+	return provider.WrapGenerateContent(ctx, p, opt, p.llm.GenerateContent, chain, options...)
 }
 
 func (p *anthropicProvider) GetUsage(info map[string]any) pconfig.CallUsage {

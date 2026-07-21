@@ -7,11 +7,11 @@ import (
 	"golang.org/x/oauth2"
 )
 
-type OAuthEmailResolver func(ctx context.Context, nonce string, token *oauth2.Token) (string, error)
+type OAuthEmailResolver func(ctx context.Context, nonce string, token *oauth2.Token) (string, bool, error)
 
 type OAuthClient interface {
 	ProviderName() string
-	ResolveEmail(ctx context.Context, nonce string, token *oauth2.Token) (string, error)
+	ResolveEmail(ctx context.Context, nonce string, token *oauth2.Token) (string, bool, error)
 	TokenSource(ctx context.Context, token *oauth2.Token) oauth2.TokenSource
 	Exchange(ctx context.Context, code string, opts ...oauth2.AuthCodeOption) (*oauth2.Token, error)
 	RefreshToken(ctx context.Context, token string) (*oauth2.Token, error)
@@ -38,9 +38,9 @@ func (o *oauthClient) ProviderName() string {
 	return o.name
 }
 
-func (o *oauthClient) ResolveEmail(ctx context.Context, nonce string, token *oauth2.Token) (string, error) {
+func (o *oauthClient) ResolveEmail(ctx context.Context, nonce string, token *oauth2.Token) (string, bool, error) {
 	if o.emailResolver == nil {
-		return "", fmt.Errorf("email resolver is not set")
+		return "", false, fmt.Errorf("email resolver is not set")
 	}
 	return o.emailResolver(ctx, nonce, token)
 }

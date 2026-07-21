@@ -29,7 +29,7 @@ import (
 
 func main() {
 	envFile := flag.String("env", ".env", "Path to environment file")
-	providerName := flag.String("provider", "custom", "Provider name (openai, anthropic, gemini, bedrock, ollama, deepseek, glm, kimi, qwen, custom)")
+	providerName := flag.String("provider", "custom", "Provider name (openai, anthropic, gemini, bedrock, ollama, deepseek, glm, kimi, qwen, minimax, custom)")
 	flowID := flag.Int64("flow", 0, "Flow ID for testing functions that require it (0 means using mocks)")
 	userID := flag.Int64("user", 0, "User ID for testing functions that require it (1 is default admin user)")
 	taskID := flag.Int64("task", 0, "Task ID for testing functions with default unset")
@@ -63,21 +63,11 @@ func main() {
 	if err != nil && !errors.Is(err, obs.ErrNotConfigured) {
 		log.Fatalf("Unable to create langfuse client: %v\n", err)
 	}
-	defer func() {
-		if lfclient != nil {
-			lfclient.ForceFlush(context.Background())
-		}
-	}()
 
 	otelclient, err := obs.NewTelemetryClient(ctx, cfg)
 	if err != nil && !errors.Is(err, obs.ErrNotConfigured) {
 		log.Fatalf("Unable to create telemetry client: %v\n", err)
 	}
-	defer func() {
-		if otelclient != nil {
-			otelclient.ForceFlush(context.Background())
-		}
-	}()
 
 	obs.InitObserver(ctx, lfclient, otelclient, []logrus.Level{
 		logrus.DebugLevel,
@@ -85,6 +75,13 @@ func main() {
 		logrus.WarnLevel,
 		logrus.ErrorLevel,
 	})
+	// Drain telemetry on exit, bounded — an unreachable collector must not hang
+	// the tester on the SDK's per-provider timeouts.
+	defer func() {
+		drainCtx, cancelDrain := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancelDrain()
+		_ = obs.Observer.Drain(drainCtx)
+	}()
 
 	// Initialize database connection
 	db, err := sql.Open("postgres", cfg.DatabaseURL)

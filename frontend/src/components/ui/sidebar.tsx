@@ -109,8 +109,8 @@ function Sidebar({
                         } as React.CSSProperties
                     }
                 >
-                    <SheetTitle className="sr-only"></SheetTitle>
-                    <SheetDescription className="sr-only"></SheetDescription>
+                    <SheetTitle className="sr-only">Sidebar</SheetTitle>
+                    <SheetDescription className="sr-only">Displays the mobile sidebar.</SheetDescription>
                     <div className="flex h-full w-full flex-col">{children}</div>
                 </SheetContent>
             </Sheet>
@@ -319,9 +319,6 @@ function SidebarProvider({
     const { isMobile } = useBreakpoint();
     const [openMobile, setOpenMobile] = React.useState(false);
 
-    // This is the internal state of the sidebar.
-    // We use openProp and setOpenProp for control from outside the component.
-    // First, try to read from cookie, fallback to defaultOpen
     const [_open, _setOpen] = React.useState(() => {
         const cookieValue = getSidebarState();
 
@@ -376,8 +373,6 @@ function SidebarProvider({
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [toggleSidebar]);
 
-    // We add a state so that we can do data-state="expanded" or "collapsed".
-    // This makes it easier to style the sidebar with Tailwind classes.
     const state = open ? 'expanded' : 'collapsed';
 
     const contextValue = React.useMemo<SidebarContext>(

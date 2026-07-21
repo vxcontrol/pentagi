@@ -8,7 +8,6 @@ import {
     buildFileManagerGridTemplate,
     buildFileManagerTree,
     clamp,
-    collectAllFilePaths,
     collectAllNodePaths,
     collectDirectoryPaths,
     collectSubtreePaths,
@@ -256,26 +255,6 @@ describe('buildFileManagerTree', () => {
     });
 });
 
-describe('collectAllFilePaths', () => {
-    it('returns only file paths (no directories, no group roots)', () => {
-        const tree = buildFileManagerTree(
-            [file('a/b.txt'), file('a/c.txt'), file('d/e.txt')],
-            [
-                { id: 'a', label: 'A', pathPrefix: 'a' },
-                { id: 'd', label: 'D', pathPrefix: 'd' },
-            ],
-        );
-
-        expect(collectAllFilePaths(tree).sort()).toEqual(['a/b.txt', 'a/c.txt', 'd/e.txt']);
-    });
-
-    it('omits synthetic intermediate directories from the result', () => {
-        const tree = buildFileManagerTree([file('foo/bar/baz.txt')]);
-
-        expect(collectAllFilePaths(tree)).toEqual(['foo/bar/baz.txt']);
-    });
-});
-
 describe('collectVisibleFlat', () => {
     it('walks only expanded directories', () => {
         const tree = buildFileManagerTree([file('a/b.txt'), file('c.txt')]);
@@ -411,7 +390,6 @@ describe('walkTree', () => {
     });
 
     it('powers all collect* helpers consistently', () => {
-        expect(collectAllFilePaths(tree).sort()).toEqual(['a/b/c.txt', 'a/d.txt', 'e.txt']);
         expect(collectAllNodePaths(tree).sort()).toEqual(['a', 'a/b', 'a/b/c.txt', 'a/d.txt', 'e.txt'].sort());
         expect(collectDirectoryPaths(tree).sort()).toEqual(['a', 'a/b']);
     });

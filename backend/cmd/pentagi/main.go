@@ -57,14 +57,18 @@ func main() {
 		logrus.SetLevel(logrus.InfoLevel)
 	}
 
+	// Telemetry is optional — degrade to a no-op observer on init failure so an
+	// unreachable collector can't take the app down.
 	lfclient, err := obs.NewLangfuseClient(ctx, cfg)
 	if err != nil && !errors.Is(err, obs.ErrNotConfigured) {
-		log.Fatalf("Unable to create langfuse client: %v\n", err)
+		logrus.WithError(err).Warn("langfuse telemetry disabled: client init failed")
+		lfclient = nil
 	}
 
 	otelclient, err := obs.NewTelemetryClient(ctx, cfg)
 	if err != nil && !errors.Is(err, obs.ErrNotConfigured) {
-		log.Fatalf("Unable to create telemetry client: %v\n", err)
+		logrus.WithError(err).Warn("opentelemetry disabled: client init failed")
+		otelclient = nil
 	}
 
 	obs.InitObserver(ctx, lfclient, otelclient, []logrus.Level{
@@ -169,6 +173,13 @@ func main() {
 	select {
 	case <-ctx.Done():
 		logrus.Warn("Shutdown signal received, cleaning up resources...")
+		// ctx is already cancelled here — drain telemetry on a fresh deadline so the
+		// final batch still reaches the collector before the process exits.
+		drainCtx, cancelDrain := context.WithTimeout(context.Background(), 5*time.Second)
+		if err := obs.Observer.Drain(drainCtx); err != nil {
+			logrus.WithError(err).Warn("Telemetry drain incomplete")
+		}
+		cancelDrain()
 	case err := <-serverErrChan:
 		logrus.Fatalf("Server terminated unexpectedly: %v", err)
 	}

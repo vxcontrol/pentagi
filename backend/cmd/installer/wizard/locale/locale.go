@@ -366,6 +366,7 @@ const (
 	LLMProviderGLM           = "GLM Zhipu AI"
 	LLMProviderKimi          = "Kimi Moonshot AI"
 	LLMProviderQwen          = "Qwen Alibaba Cloud"
+	LLMProviderMiniMax       = "MiniMax"
 	LLMProviderCustom        = "Custom"
 	LLMProviderOpenAIDesc    = "Industry-leading GPT models with excellent general performance"
 	LLMProviderAnthropicDesc = "Claude models with superior reasoning and safety features"
@@ -376,6 +377,7 @@ const (
 	LLMProviderGLMDesc       = "Zhipu AI's GLM models for Chinese and English tasks"
 	LLMProviderKimiDesc      = "Moonshot AI's long-context models for document analysis"
 	LLMProviderQwenDesc      = "Alibaba Cloud's Qwen models for multilingual tasks"
+	LLMProviderMiniMaxDesc   = "MiniMax's M-series models for agentic reasoning and long-context tasks"
 	LLMProviderCustomDesc    = "Custom OpenAI-compatible endpoint for maximum flexibility"
 )
 
@@ -599,6 +601,31 @@ Best for: Teams operating in Asian markets, multilingual security testing, visua
 Cost: Competitive pricing with flexible tiers for different use cases
 
 Setup: Get your API key from https://dashscope.console.aliyun.com/`
+
+	LLMFormMiniMaxHelp = `MiniMax provides the M-series of agentic models with very large context windows, accessible through an OpenAI-compatible API.
+
+Default PentAGI Models:
+• MiniMax-M3: Latest flagship model (~1M token context) for agentic reasoning, tool use, coding, and long-context tasks
+• MiniMax-M2.7: Previous-generation model with strong reasoning and coding capabilities
+• MiniMax-M2.7-highspeed: Low-latency variant of M2.7 for fast response scenarios
+
+Key Advantages:
+• Very large context window on M3 (~1M tokens) for long codebases and reports
+• Strong agentic tool-calling, JSON output, and streaming support
+• OpenAI- and Anthropic-compatible endpoints for drop-in integration
+
+API Endpoint:
+• Global: https://api.minimax.io/v1 (default)
+
+LiteLLM Integration:
+• Set Provider Name to 'minimax' when using a LiteLLM proxy
+• Enables model prefix (e.g., minimax/MiniMax-M3) without modifying config.yml
+• Optional for direct MiniMax API usage
+
+Best for: Agentic security workflows that benefit from very large context and reliable tool calling
+Cost: Competitive per-token pricing across the M-series
+
+Setup: Get your API key from https://platform.minimax.io/`
 
 	LLMFormCustomHelp = `Configure any OpenAI-compatible API endpoint for maximum flexibility and integration with existing infrastructure.
 
@@ -2196,6 +2223,9 @@ const (
 	EnvDesc_QWEN_API_KEY                      = "Qwen API Key"
 	EnvDesc_QWEN_SERVER_URL                   = "Qwen Server URL"
 	EnvDesc_QWEN_PROVIDER                     = "Qwen Provider Name Prefix (for LiteLLM, e.g., 'dashscope')"
+	EnvDesc_MINIMAX_API_KEY                   = "MiniMax API Key"
+	EnvDesc_MINIMAX_SERVER_URL                = "MiniMax Server URL"
+	EnvDesc_MINIMAX_PROVIDER                  = "MiniMax Provider Name Prefix (for LiteLLM, e.g., 'minimax')"
 	EnvDesc_LLM_SERVER_URL                    = "Custom LLM Server URL"
 	EnvDesc_LLM_SERVER_KEY                    = "Custom LLM API Key"
 	EnvDesc_LLM_SERVER_MODEL                  = "Custom LLM Model"

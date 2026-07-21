@@ -1,3 +1,4 @@
+import { useMutation, useQuery, useSubscription } from '@apollo/client/react';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -6,32 +7,32 @@ import type { FlowFormValues } from '@/features/flows/flow-form';
 import type { AssistantFragmentFragment, AssistantLogFragmentFragment, FlowQuery } from '@/graphql/types';
 
 import {
+    AgentLogAddedDocument,
+    AssistantCreatedDocument,
+    AssistantDeletedDocument,
+    AssistantLogAddedDocument,
+    AssistantLogsDocument,
+    AssistantLogUpdatedDocument,
+    AssistantsDocument,
+    AssistantUpdatedDocument,
+    CallAssistantDocument,
+    CreateAssistantDocument,
+    DeleteAssistantDocument,
+    FlowDocument,
+    FlowUpdatedDocument,
+    MessageLogAddedDocument,
+    MessageLogUpdatedDocument,
+    PutUserInputDocument,
     ResultType,
+    ScreenshotAddedDocument,
+    SearchLogAddedDocument,
     StatusType,
-    useAgentLogAddedSubscription,
-    useAssistantCreatedSubscription,
-    useAssistantDeletedSubscription,
-    useAssistantLogAddedSubscription,
-    useAssistantLogsQuery,
-    useAssistantLogUpdatedSubscription,
-    useAssistantsQuery,
-    useAssistantUpdatedSubscription,
-    useCallAssistantMutation,
-    useCreateAssistantMutation,
-    useDeleteAssistantMutation,
-    useFlowQuery,
-    useFlowUpdatedSubscription,
-    useMessageLogAddedSubscription,
-    useMessageLogUpdatedSubscription,
-    usePutUserInputMutation,
-    useScreenshotAddedSubscription,
-    useSearchLogAddedSubscription,
-    useStopAssistantMutation,
-    useStopFlowMutation,
-    useTaskCreatedSubscription,
-    useTaskUpdatedSubscription,
-    useTerminalLogAddedSubscription,
-    useVectorStoreLogAddedSubscription,
+    StopAssistantDocument,
+    StopFlowDocument,
+    TaskCreatedDocument,
+    TaskUpdatedDocument,
+    TerminalLogAddedDocument,
+    VectorStoreLogAddedDocument,
 } from '@/graphql/types';
 import { Log } from '@/lib/log';
 
@@ -70,7 +71,7 @@ export function FlowProvider({ children }: FlowProviderProps) {
         data: flowData,
         error: flowError,
         loading: isLoading,
-    } = useFlowQuery({
+    } = useQuery(FlowDocument, {
         errorPolicy: 'all',
         fetchPolicy: 'cache-first',
         nextFetchPolicy: 'cache-first',
@@ -79,7 +80,7 @@ export function FlowProvider({ children }: FlowProviderProps) {
         variables: { id: flowId ?? '' },
     });
 
-    const { data: assistantsData, loading: isAssistantsLoading } = useAssistantsQuery({
+    const { data: assistantsData, loading: isAssistantsLoading } = useQuery(AssistantsDocument, {
         fetchPolicy: 'cache-first',
         nextFetchPolicy: 'cache-first',
         skip: !flowId,
@@ -108,7 +109,7 @@ export function FlowProvider({ children }: FlowProviderProps) {
         return assistants?.[0]?.id ?? null;
     }, [flowId, selectedAssistantIds, assistants]);
 
-    const { data: assistantLogsData } = useAssistantLogsQuery({
+    const { data: assistantLogsData } = useQuery(AssistantLogsDocument, {
         fetchPolicy: 'cache-first',
         nextFetchPolicy: 'cache-first',
         skip: !flowId || !selectedAssistantId || selectedAssistantId === '',
@@ -120,23 +121,23 @@ export function FlowProvider({ children }: FlowProviderProps) {
     const subscriptionVariables = useMemo(() => ({ flowId: flowId || '' }), [flowId]);
     const subscriptionSkip = !flowId || isLoading;
 
-    useFlowUpdatedSubscription();
+    useSubscription(FlowUpdatedDocument);
 
-    useTaskCreatedSubscription({ skip: subscriptionSkip, variables: subscriptionVariables });
-    useTaskUpdatedSubscription({ skip: subscriptionSkip, variables: subscriptionVariables });
-    useScreenshotAddedSubscription({ skip: subscriptionSkip, variables: subscriptionVariables });
-    useTerminalLogAddedSubscription({ skip: subscriptionSkip, variables: subscriptionVariables });
-    useMessageLogUpdatedSubscription({ skip: subscriptionSkip, variables: subscriptionVariables });
-    useMessageLogAddedSubscription({ skip: subscriptionSkip, variables: subscriptionVariables });
-    useAgentLogAddedSubscription({ skip: subscriptionSkip, variables: subscriptionVariables });
-    useSearchLogAddedSubscription({ skip: subscriptionSkip, variables: subscriptionVariables });
-    useVectorStoreLogAddedSubscription({ skip: subscriptionSkip, variables: subscriptionVariables });
+    useSubscription(TaskCreatedDocument, { skip: subscriptionSkip, variables: subscriptionVariables });
+    useSubscription(TaskUpdatedDocument, { skip: subscriptionSkip, variables: subscriptionVariables });
+    useSubscription(ScreenshotAddedDocument, { skip: subscriptionSkip, variables: subscriptionVariables });
+    useSubscription(TerminalLogAddedDocument, { skip: subscriptionSkip, variables: subscriptionVariables });
+    useSubscription(MessageLogUpdatedDocument, { skip: subscriptionSkip, variables: subscriptionVariables });
+    useSubscription(MessageLogAddedDocument, { skip: subscriptionSkip, variables: subscriptionVariables });
+    useSubscription(AgentLogAddedDocument, { skip: subscriptionSkip, variables: subscriptionVariables });
+    useSubscription(SearchLogAddedDocument, { skip: subscriptionSkip, variables: subscriptionVariables });
+    useSubscription(VectorStoreLogAddedDocument, { skip: subscriptionSkip, variables: subscriptionVariables });
 
-    useAssistantCreatedSubscription({ skip: subscriptionSkip, variables: subscriptionVariables });
-    useAssistantUpdatedSubscription({ skip: subscriptionSkip, variables: subscriptionVariables });
-    useAssistantDeletedSubscription({ skip: subscriptionSkip, variables: subscriptionVariables });
-    useAssistantLogAddedSubscription({ skip: subscriptionSkip, variables: subscriptionVariables });
-    useAssistantLogUpdatedSubscription({ skip: subscriptionSkip, variables: subscriptionVariables });
+    useSubscription(AssistantCreatedDocument, { skip: subscriptionSkip, variables: subscriptionVariables });
+    useSubscription(AssistantUpdatedDocument, { skip: subscriptionSkip, variables: subscriptionVariables });
+    useSubscription(AssistantDeletedDocument, { skip: subscriptionSkip, variables: subscriptionVariables });
+    useSubscription(AssistantLogAddedDocument, { skip: subscriptionSkip, variables: subscriptionVariables });
+    useSubscription(AssistantLogUpdatedDocument, { skip: subscriptionSkip, variables: subscriptionVariables });
 
     const selectAssistant = useCallback(
         (assistantId: null | string) => {
@@ -160,12 +161,12 @@ export function FlowProvider({ children }: FlowProviderProps) {
         selectAssistant(null);
     }, [flowId, selectAssistant]);
 
-    const [putUserInput] = usePutUserInputMutation();
-    const [stopFlowMutation] = useStopFlowMutation();
-    const [createAssistantMutation] = useCreateAssistantMutation();
-    const [submitAssistantMessageMutation] = useCallAssistantMutation();
-    const [stopAssistantMutation] = useStopAssistantMutation();
-    const [deleteAssistantMutation] = useDeleteAssistantMutation();
+    const [putUserInput] = useMutation(PutUserInputDocument);
+    const [stopFlowMutation] = useMutation(StopFlowDocument);
+    const [createAssistantMutation] = useMutation(CreateAssistantDocument);
+    const [submitAssistantMessageMutation] = useMutation(CallAssistantDocument);
+    const [stopAssistantMutation] = useMutation(StopAssistantDocument);
+    const [deleteAssistantMutation] = useMutation(DeleteAssistantDocument);
 
     const flowStatus = useMemo(() => flowData?.flow?.status, [flowData?.flow?.status]);
 

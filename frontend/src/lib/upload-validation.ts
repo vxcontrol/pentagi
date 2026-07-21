@@ -11,11 +11,8 @@
  */
 
 export interface UploadValidationLimits {
-    /** Maximum number of files allowed per request. */
     maxFiles: number;
-    /** Maximum size of a single file in megabytes. */
     maxFileSizeMb: number;
-    /** Maximum combined size of the batch in megabytes. */
     maxTotalSizeMb: number;
     /**
      * Reject 0-byte files. Defaults to `true` because both servers stream the

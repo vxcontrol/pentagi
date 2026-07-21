@@ -212,6 +212,7 @@ type ComplexityRoot struct {
 		Gemini    func(childComplexity int) int
 		Glm       func(childComplexity int) int
 		Kimi      func(childComplexity int) int
+		Minimax   func(childComplexity int) int
 		Ollama    func(childComplexity int) int
 		Openai    func(childComplexity int) int
 		Qwen      func(childComplexity int) int
@@ -327,6 +328,7 @@ type ComplexityRoot struct {
 		Description func(childComplexity int) int
 		Name        func(childComplexity int) int
 		Price       func(childComplexity int) int
+		Reasoning   func(childComplexity int) int
 		ReleaseDate func(childComplexity int) int
 		Thinking    func(childComplexity int) int
 	}
@@ -336,6 +338,14 @@ type ComplexityRoot struct {
 		CacheWrite func(childComplexity int) int
 		Input      func(childComplexity int) int
 		Output     func(childComplexity int) int
+	}
+
+	ModelReasoningInfo struct {
+		CannotDisable func(childComplexity int) int
+		DefaultOn     func(childComplexity int) int
+		Efforts       func(childComplexity int) int
+		Mode          func(childComplexity int) int
+		Supported     func(childComplexity int) int
 	}
 
 	ModelUsageStats struct {
@@ -366,6 +376,7 @@ type ComplexityRoot struct {
 		FinishFlow              func(childComplexity int, flowID int64) int
 		PutUserInput            func(childComplexity int, flowID int64, input string, modelProvider *string, resourceIds []int64) int
 		RenameFlow              func(childComplexity int, flowID int64, title string) int
+		RenameKnowledgeDocument func(childComplexity int, id string, question string) int
 		StopAssistant           func(childComplexity int, flowID int64, assistantID int64) int
 		StopFlow                func(childComplexity int, flowID int64) int
 		TestAgent               func(childComplexity int, typeArg model.ProviderType, agentType model.AgentConfigType, agent model.AgentConfig) int
@@ -441,6 +452,7 @@ type ComplexityRoot struct {
 		Gemini    func(childComplexity int) int
 		Glm       func(childComplexity int) int
 		Kimi      func(childComplexity int) int
+		Minimax   func(childComplexity int) int
 		Ollama    func(childComplexity int) int
 		Openai    func(childComplexity int) int
 		Qwen      func(childComplexity int) int
@@ -454,6 +466,7 @@ type ComplexityRoot struct {
 		Gemini    func(childComplexity int) int
 		Glm       func(childComplexity int) int
 		Kimi      func(childComplexity int) int
+		Minimax   func(childComplexity int) int
 		Ollama    func(childComplexity int) int
 		Openai    func(childComplexity int) int
 		Qwen      func(childComplexity int) int
@@ -508,6 +521,7 @@ type ComplexityRoot struct {
 	ReasoningConfig struct {
 		Effort    func(childComplexity int) int
 		MaxTokens func(childComplexity int) int
+		Mode      func(childComplexity int) int
 	}
 
 	Screenshot struct {
@@ -764,6 +778,7 @@ type MutationResolver interface {
 	DeleteFlowTemplate(ctx context.Context, templateID int64) (model.ResultType, error)
 	CreateKnowledgeDocument(ctx context.Context, input model.CreateKnowledgeDocumentInput) (*model.KnowledgeDocument, error)
 	UpdateKnowledgeDocument(ctx context.Context, id string, input model.UpdateKnowledgeDocumentInput) (*model.KnowledgeDocument, error)
+	RenameKnowledgeDocument(ctx context.Context, id string, question string) (*model.KnowledgeDocument, error)
 	DeleteKnowledgeDocument(ctx context.Context, id string) (model.ResultType, error)
 	AnonymizeText(ctx context.Context, text string) (string, error)
 }
@@ -1642,6 +1657,13 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.DefaultProvidersConfig.Kimi(childComplexity), true
 
+	case "DefaultProvidersConfig.minimax":
+		if e.complexity.DefaultProvidersConfig.Minimax == nil {
+			break
+		}
+
+		return e.complexity.DefaultProvidersConfig.Minimax(childComplexity), true
+
 	case "DefaultProvidersConfig.ollama":
 		if e.complexity.DefaultProvidersConfig.Ollama == nil {
 			break
@@ -2174,6 +2196,13 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.ModelConfig.Price(childComplexity), true
 
+	case "ModelConfig.reasoning":
+		if e.complexity.ModelConfig.Reasoning == nil {
+			break
+		}
+
+		return e.complexity.ModelConfig.Reasoning(childComplexity), true
+
 	case "ModelConfig.releaseDate":
 		if e.complexity.ModelConfig.ReleaseDate == nil {
 			break
@@ -2215,6 +2244,41 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.ModelPrice.Output(childComplexity), true
+
+	case "ModelReasoningInfo.cannotDisable":
+		if e.complexity.ModelReasoningInfo.CannotDisable == nil {
+			break
+		}
+
+		return e.complexity.ModelReasoningInfo.CannotDisable(childComplexity), true
+
+	case "ModelReasoningInfo.defaultOn":
+		if e.complexity.ModelReasoningInfo.DefaultOn == nil {
+			break
+		}
+
+		return e.complexity.ModelReasoningInfo.DefaultOn(childComplexity), true
+
+	case "ModelReasoningInfo.efforts":
+		if e.complexity.ModelReasoningInfo.Efforts == nil {
+			break
+		}
+
+		return e.complexity.ModelReasoningInfo.Efforts(childComplexity), true
+
+	case "ModelReasoningInfo.mode":
+		if e.complexity.ModelReasoningInfo.Mode == nil {
+			break
+		}
+
+		return e.complexity.ModelReasoningInfo.Mode(childComplexity), true
+
+	case "ModelReasoningInfo.supported":
+		if e.complexity.ModelReasoningInfo.Supported == nil {
+			break
+		}
+
+		return e.complexity.ModelReasoningInfo.Supported(childComplexity), true
 
 	case "ModelUsageStats.model":
 		if e.complexity.ModelUsageStats.Model == nil {
@@ -2488,6 +2552,18 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.Mutation.RenameFlow(childComplexity, args["flowId"].(int64), args["title"].(string)), true
+
+	case "Mutation.renameKnowledgeDocument":
+		if e.complexity.Mutation.RenameKnowledgeDocument == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_renameKnowledgeDocument_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Mutation.RenameKnowledgeDocument(childComplexity, args["id"].(string), args["question"].(string)), true
 
 	case "Mutation.stopAssistant":
 		if e.complexity.Mutation.StopAssistant == nil {
@@ -2896,6 +2972,13 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.ProvidersModelsList.Kimi(childComplexity), true
 
+	case "ProvidersModelsList.minimax":
+		if e.complexity.ProvidersModelsList.Minimax == nil {
+			break
+		}
+
+		return e.complexity.ProvidersModelsList.Minimax(childComplexity), true
+
 	case "ProvidersModelsList.ollama":
 		if e.complexity.ProvidersModelsList.Ollama == nil {
 			break
@@ -2965,6 +3048,13 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.ProvidersReadinessStatus.Kimi(childComplexity), true
+
+	case "ProvidersReadinessStatus.minimax":
+		if e.complexity.ProvidersReadinessStatus.Minimax == nil {
+			break
+		}
+
+		return e.complexity.ProvidersReadinessStatus.Minimax(childComplexity), true
 
 	case "ProvidersReadinessStatus.ollama":
 		if e.complexity.ProvidersReadinessStatus.Ollama == nil {
@@ -3441,6 +3531,13 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.ReasoningConfig.MaxTokens(childComplexity), true
+
+	case "ReasoningConfig.mode":
+		if e.complexity.ReasoningConfig.Mode == nil {
+			break
+		}
+
+		return e.complexity.ReasoningConfig.Mode(childComplexity), true
 
 	case "Screenshot.createdAt":
 		if e.complexity.Screenshot.CreatedAt == nil {
@@ -6002,6 +6099,65 @@ func (ec *executionContext) field_Mutation_renameFlow_argsTitle(
 
 	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("title"))
 	if tmp, ok := rawArgs["title"]; ok {
+		return ec.unmarshalNString2string(ctx, tmp)
+	}
+
+	var zeroVal string
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Mutation_renameKnowledgeDocument_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	arg0, err := ec.field_Mutation_renameKnowledgeDocument_argsID(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg0
+	arg1, err := ec.field_Mutation_renameKnowledgeDocument_argsQuestion(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["question"] = arg1
+	return args, nil
+}
+func (ec *executionContext) field_Mutation_renameKnowledgeDocument_argsID(
+	ctx context.Context,
+	rawArgs map[string]interface{},
+) (string, error) {
+	// We won't call the directive if the argument is null.
+	// Set call_argument_directives_with_null to true to call directives
+	// even if the argument is null.
+	_, ok := rawArgs["id"]
+	if !ok {
+		var zeroVal string
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("id"))
+	if tmp, ok := rawArgs["id"]; ok {
+		return ec.unmarshalNString2string(ctx, tmp)
+	}
+
+	var zeroVal string
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Mutation_renameKnowledgeDocument_argsQuestion(
+	ctx context.Context,
+	rawArgs map[string]interface{},
+) (string, error) {
+	// We won't call the directive if the argument is null.
+	// Set call_argument_directives_with_null to true to call directives
+	// even if the argument is null.
+	_, ok := rawArgs["question"]
+	if !ok {
+		var zeroVal string
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("question"))
+	if tmp, ok := rawArgs["question"]; ok {
 		return ec.unmarshalNString2string(ctx, tmp)
 	}
 
@@ -9648,6 +9804,8 @@ func (ec *executionContext) fieldContext_AgentConfig_reasoning(_ context.Context
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			switch field.Name {
+			case "mode":
+				return ec.fieldContext_ReasoningConfig_mode(ctx, field)
 			case "effort":
 				return ec.fieldContext_ReasoningConfig_effort(ctx, field)
 			case "maxTokens":
@@ -13995,6 +14153,61 @@ func (ec *executionContext) fieldContext_DefaultProvidersConfig_qwen(_ context.C
 	return fc, nil
 }
 
+func (ec *executionContext) _DefaultProvidersConfig_minimax(ctx context.Context, field graphql.CollectedField, obj *model.DefaultProvidersConfig) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_DefaultProvidersConfig_minimax(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Minimax, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*model.ProviderConfig)
+	fc.Result = res
+	return ec.marshalOProviderConfig2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐProviderConfig(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_DefaultProvidersConfig_minimax(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "DefaultProvidersConfig",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_ProviderConfig_id(ctx, field)
+			case "name":
+				return ec.fieldContext_ProviderConfig_name(ctx, field)
+			case "type":
+				return ec.fieldContext_ProviderConfig_type(ctx, field)
+			case "agents":
+				return ec.fieldContext_ProviderConfig_agents(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_ProviderConfig_createdAt(ctx, field)
+			case "updatedAt":
+				return ec.fieldContext_ProviderConfig_updatedAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type ProviderConfig", field.Name)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Flow_id(ctx context.Context, field graphql.CollectedField, obj *model.Flow) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_Flow_id(ctx, field)
 	if err != nil {
@@ -17321,6 +17534,59 @@ func (ec *executionContext) fieldContext_ModelConfig_thinking(_ context.Context,
 	return fc, nil
 }
 
+func (ec *executionContext) _ModelConfig_reasoning(ctx context.Context, field graphql.CollectedField, obj *model.ModelConfig) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_ModelConfig_reasoning(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Reasoning, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*model.ModelReasoningInfo)
+	fc.Result = res
+	return ec.marshalOModelReasoningInfo2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐModelReasoningInfo(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_ModelConfig_reasoning(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModelConfig",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "mode":
+				return ec.fieldContext_ModelReasoningInfo_mode(ctx, field)
+			case "efforts":
+				return ec.fieldContext_ModelReasoningInfo_efforts(ctx, field)
+			case "supported":
+				return ec.fieldContext_ModelReasoningInfo_supported(ctx, field)
+			case "cannotDisable":
+				return ec.fieldContext_ModelReasoningInfo_cannotDisable(ctx, field)
+			case "defaultOn":
+				return ec.fieldContext_ModelReasoningInfo_defaultOn(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type ModelReasoningInfo", field.Name)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _ModelConfig_price(ctx context.Context, field graphql.CollectedField, obj *model.ModelConfig) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_ModelConfig_price(ctx, field)
 	if err != nil {
@@ -17543,6 +17809,211 @@ func (ec *executionContext) fieldContext_ModelPrice_cacheWrite(_ context.Context
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return nil, errors.New("field of type Float does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModelReasoningInfo_mode(ctx context.Context, field graphql.CollectedField, obj *model.ModelReasoningInfo) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_ModelReasoningInfo_mode(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Mode, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*model.ModelReasoningMode)
+	fc.Result = res
+	return ec.marshalOModelReasoningMode2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐModelReasoningMode(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_ModelReasoningInfo_mode(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModelReasoningInfo",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ModelReasoningMode does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModelReasoningInfo_efforts(ctx context.Context, field graphql.CollectedField, obj *model.ModelReasoningInfo) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_ModelReasoningInfo_efforts(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Efforts, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.([]model.ReasoningEffort)
+	fc.Result = res
+	return ec.marshalOReasoningEffort2ᚕpentagiᚋpkgᚋgraphᚋmodelᚐReasoningEffortᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_ModelReasoningInfo_efforts(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModelReasoningInfo",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ReasoningEffort does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModelReasoningInfo_supported(ctx context.Context, field graphql.CollectedField, obj *model.ModelReasoningInfo) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_ModelReasoningInfo_supported(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Supported, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*bool)
+	fc.Result = res
+	return ec.marshalOBoolean2ᚖbool(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_ModelReasoningInfo_supported(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModelReasoningInfo",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModelReasoningInfo_cannotDisable(ctx context.Context, field graphql.CollectedField, obj *model.ModelReasoningInfo) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_ModelReasoningInfo_cannotDisable(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.CannotDisable, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*bool)
+	fc.Result = res
+	return ec.marshalOBoolean2ᚖbool(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_ModelReasoningInfo_cannotDisable(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModelReasoningInfo",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ModelReasoningInfo_defaultOn(ctx context.Context, field graphql.CollectedField, obj *model.ModelReasoningInfo) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_ModelReasoningInfo_defaultOn(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.DefaultOn, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*bool)
+	fc.Result = res
+	return ec.marshalOBoolean2ᚖbool(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_ModelReasoningInfo_defaultOn(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ModelReasoningInfo",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
 		},
 	}
 	return fc, nil
@@ -19559,6 +20030,93 @@ func (ec *executionContext) fieldContext_Mutation_updateKnowledgeDocument(ctx co
 	return fc, nil
 }
 
+func (ec *executionContext) _Mutation_renameKnowledgeDocument(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Mutation_renameKnowledgeDocument(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Mutation().RenameKnowledgeDocument(rctx, fc.Args["id"].(string), fc.Args["question"].(string))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(*model.KnowledgeDocument)
+	fc.Result = res
+	return ec.marshalNKnowledgeDocument2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐKnowledgeDocument(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Mutation_renameKnowledgeDocument(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_KnowledgeDocument_id(ctx, field)
+			case "docType":
+				return ec.fieldContext_KnowledgeDocument_docType(ctx, field)
+			case "content":
+				return ec.fieldContext_KnowledgeDocument_content(ctx, field)
+			case "question":
+				return ec.fieldContext_KnowledgeDocument_question(ctx, field)
+			case "description":
+				return ec.fieldContext_KnowledgeDocument_description(ctx, field)
+			case "userId":
+				return ec.fieldContext_KnowledgeDocument_userId(ctx, field)
+			case "flowId":
+				return ec.fieldContext_KnowledgeDocument_flowId(ctx, field)
+			case "taskId":
+				return ec.fieldContext_KnowledgeDocument_taskId(ctx, field)
+			case "subtaskId":
+				return ec.fieldContext_KnowledgeDocument_subtaskId(ctx, field)
+			case "guideType":
+				return ec.fieldContext_KnowledgeDocument_guideType(ctx, field)
+			case "answerType":
+				return ec.fieldContext_KnowledgeDocument_answerType(ctx, field)
+			case "codeLang":
+				return ec.fieldContext_KnowledgeDocument_codeLang(ctx, field)
+			case "partSize":
+				return ec.fieldContext_KnowledgeDocument_partSize(ctx, field)
+			case "totalSize":
+				return ec.fieldContext_KnowledgeDocument_totalSize(ctx, field)
+			case "manual":
+				return ec.fieldContext_KnowledgeDocument_manual(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type KnowledgeDocument", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_renameKnowledgeDocument_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Mutation_deleteKnowledgeDocument(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_Mutation_deleteKnowledgeDocument(ctx, field)
 	if err != nil {
@@ -21145,6 +21703,8 @@ func (ec *executionContext) fieldContext_ProvidersConfig_enabled(_ context.Conte
 				return ec.fieldContext_ProvidersReadinessStatus_kimi(ctx, field)
 			case "qwen":
 				return ec.fieldContext_ProvidersReadinessStatus_qwen(ctx, field)
+			case "minimax":
+				return ec.fieldContext_ProvidersReadinessStatus_minimax(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type ProvidersReadinessStatus", field.Name)
 		},
@@ -21211,6 +21771,8 @@ func (ec *executionContext) fieldContext_ProvidersConfig_default(_ context.Conte
 				return ec.fieldContext_DefaultProvidersConfig_kimi(ctx, field)
 			case "qwen":
 				return ec.fieldContext_DefaultProvidersConfig_qwen(ctx, field)
+			case "minimax":
+				return ec.fieldContext_DefaultProvidersConfig_minimax(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type DefaultProvidersConfig", field.Name)
 		},
@@ -21332,6 +21894,8 @@ func (ec *executionContext) fieldContext_ProvidersConfig_models(_ context.Contex
 				return ec.fieldContext_ProvidersModelsList_kimi(ctx, field)
 			case "qwen":
 				return ec.fieldContext_ProvidersModelsList_qwen(ctx, field)
+			case "minimax":
+				return ec.fieldContext_ProvidersModelsList_minimax(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type ProvidersModelsList", field.Name)
 		},
@@ -21386,6 +21950,8 @@ func (ec *executionContext) fieldContext_ProvidersModelsList_openai(_ context.Co
 				return ec.fieldContext_ModelConfig_releaseDate(ctx, field)
 			case "thinking":
 				return ec.fieldContext_ModelConfig_thinking(ctx, field)
+			case "reasoning":
+				return ec.fieldContext_ModelConfig_reasoning(ctx, field)
 			case "price":
 				return ec.fieldContext_ModelConfig_price(ctx, field)
 			}
@@ -21442,6 +22008,8 @@ func (ec *executionContext) fieldContext_ProvidersModelsList_anthropic(_ context
 				return ec.fieldContext_ModelConfig_releaseDate(ctx, field)
 			case "thinking":
 				return ec.fieldContext_ModelConfig_thinking(ctx, field)
+			case "reasoning":
+				return ec.fieldContext_ModelConfig_reasoning(ctx, field)
 			case "price":
 				return ec.fieldContext_ModelConfig_price(ctx, field)
 			}
@@ -21498,6 +22066,8 @@ func (ec *executionContext) fieldContext_ProvidersModelsList_gemini(_ context.Co
 				return ec.fieldContext_ModelConfig_releaseDate(ctx, field)
 			case "thinking":
 				return ec.fieldContext_ModelConfig_thinking(ctx, field)
+			case "reasoning":
+				return ec.fieldContext_ModelConfig_reasoning(ctx, field)
 			case "price":
 				return ec.fieldContext_ModelConfig_price(ctx, field)
 			}
@@ -21551,6 +22121,8 @@ func (ec *executionContext) fieldContext_ProvidersModelsList_bedrock(_ context.C
 				return ec.fieldContext_ModelConfig_releaseDate(ctx, field)
 			case "thinking":
 				return ec.fieldContext_ModelConfig_thinking(ctx, field)
+			case "reasoning":
+				return ec.fieldContext_ModelConfig_reasoning(ctx, field)
 			case "price":
 				return ec.fieldContext_ModelConfig_price(ctx, field)
 			}
@@ -21604,6 +22176,8 @@ func (ec *executionContext) fieldContext_ProvidersModelsList_ollama(_ context.Co
 				return ec.fieldContext_ModelConfig_releaseDate(ctx, field)
 			case "thinking":
 				return ec.fieldContext_ModelConfig_thinking(ctx, field)
+			case "reasoning":
+				return ec.fieldContext_ModelConfig_reasoning(ctx, field)
 			case "price":
 				return ec.fieldContext_ModelConfig_price(ctx, field)
 			}
@@ -21657,6 +22231,8 @@ func (ec *executionContext) fieldContext_ProvidersModelsList_custom(_ context.Co
 				return ec.fieldContext_ModelConfig_releaseDate(ctx, field)
 			case "thinking":
 				return ec.fieldContext_ModelConfig_thinking(ctx, field)
+			case "reasoning":
+				return ec.fieldContext_ModelConfig_reasoning(ctx, field)
 			case "price":
 				return ec.fieldContext_ModelConfig_price(ctx, field)
 			}
@@ -21710,6 +22286,8 @@ func (ec *executionContext) fieldContext_ProvidersModelsList_deepseek(_ context.
 				return ec.fieldContext_ModelConfig_releaseDate(ctx, field)
 			case "thinking":
 				return ec.fieldContext_ModelConfig_thinking(ctx, field)
+			case "reasoning":
+				return ec.fieldContext_ModelConfig_reasoning(ctx, field)
 			case "price":
 				return ec.fieldContext_ModelConfig_price(ctx, field)
 			}
@@ -21763,6 +22341,8 @@ func (ec *executionContext) fieldContext_ProvidersModelsList_glm(_ context.Conte
 				return ec.fieldContext_ModelConfig_releaseDate(ctx, field)
 			case "thinking":
 				return ec.fieldContext_ModelConfig_thinking(ctx, field)
+			case "reasoning":
+				return ec.fieldContext_ModelConfig_reasoning(ctx, field)
 			case "price":
 				return ec.fieldContext_ModelConfig_price(ctx, field)
 			}
@@ -21816,6 +22396,8 @@ func (ec *executionContext) fieldContext_ProvidersModelsList_kimi(_ context.Cont
 				return ec.fieldContext_ModelConfig_releaseDate(ctx, field)
 			case "thinking":
 				return ec.fieldContext_ModelConfig_thinking(ctx, field)
+			case "reasoning":
+				return ec.fieldContext_ModelConfig_reasoning(ctx, field)
 			case "price":
 				return ec.fieldContext_ModelConfig_price(ctx, field)
 			}
@@ -21869,6 +22451,63 @@ func (ec *executionContext) fieldContext_ProvidersModelsList_qwen(_ context.Cont
 				return ec.fieldContext_ModelConfig_releaseDate(ctx, field)
 			case "thinking":
 				return ec.fieldContext_ModelConfig_thinking(ctx, field)
+			case "reasoning":
+				return ec.fieldContext_ModelConfig_reasoning(ctx, field)
+			case "price":
+				return ec.fieldContext_ModelConfig_price(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type ModelConfig", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ProvidersModelsList_minimax(ctx context.Context, field graphql.CollectedField, obj *model.ProvidersModelsList) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_ProvidersModelsList_minimax(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Minimax, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.([]*model.ModelConfig)
+	fc.Result = res
+	return ec.marshalOModelConfig2ᚕᚖpentagiᚋpkgᚋgraphᚋmodelᚐModelConfigᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_ProvidersModelsList_minimax(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ProvidersModelsList",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "name":
+				return ec.fieldContext_ModelConfig_name(ctx, field)
+			case "description":
+				return ec.fieldContext_ModelConfig_description(ctx, field)
+			case "releaseDate":
+				return ec.fieldContext_ModelConfig_releaseDate(ctx, field)
+			case "thinking":
+				return ec.fieldContext_ModelConfig_thinking(ctx, field)
+			case "reasoning":
+				return ec.fieldContext_ModelConfig_reasoning(ctx, field)
 			case "price":
 				return ec.fieldContext_ModelConfig_price(ctx, field)
 			}
@@ -22306,6 +22945,50 @@ func (ec *executionContext) _ProvidersReadinessStatus_qwen(ctx context.Context, 
 }
 
 func (ec *executionContext) fieldContext_ProvidersReadinessStatus_qwen(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ProvidersReadinessStatus",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ProvidersReadinessStatus_minimax(ctx context.Context, field graphql.CollectedField, obj *model.ProvidersReadinessStatus) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_ProvidersReadinessStatus_minimax(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Minimax, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(bool)
+	fc.Result = res
+	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_ProvidersReadinessStatus_minimax(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "ProvidersReadinessStatus",
 		Field:      field,
@@ -25205,6 +25888,47 @@ func (ec *executionContext) fieldContext_Query___schema(_ context.Context, field
 				return ec.fieldContext___Schema_directives(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type __Schema", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ReasoningConfig_mode(ctx context.Context, field graphql.CollectedField, obj *model.ReasoningConfig) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_ReasoningConfig_mode(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Mode, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*model.ReasoningMode)
+	fc.Result = res
+	return ec.marshalOReasoningMode2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐReasoningMode(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_ReasoningConfig_mode(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ReasoningConfig",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ReasoningMode does not have child fields")
 		},
 	}
 	return fc, nil
@@ -36388,13 +37112,20 @@ func (ec *executionContext) unmarshalInputReasoningConfigInput(ctx context.Conte
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"effort", "maxTokens"}
+	fieldsInOrder := [...]string{"mode", "effort", "maxTokens"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
 			continue
 		}
 		switch k {
+		case "mode":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("mode"))
+			data, err := ec.unmarshalOReasoningMode2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐReasoningMode(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Mode = data
 		case "effort":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("effort"))
 			data, err := ec.unmarshalOReasoningEffort2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐReasoningEffort(ctx, v)
@@ -37642,6 +38373,8 @@ func (ec *executionContext) _DefaultProvidersConfig(ctx context.Context, sel ast
 			out.Values[i] = ec._DefaultProvidersConfig_kimi(ctx, field, obj)
 		case "qwen":
 			out.Values[i] = ec._DefaultProvidersConfig_qwen(ctx, field, obj)
+		case "minimax":
+			out.Values[i] = ec._DefaultProvidersConfig_minimax(ctx, field, obj)
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -38412,6 +39145,8 @@ func (ec *executionContext) _ModelConfig(ctx context.Context, sel ast.SelectionS
 			out.Values[i] = ec._ModelConfig_releaseDate(ctx, field, obj)
 		case "thinking":
 			out.Values[i] = ec._ModelConfig_thinking(ctx, field, obj)
+		case "reasoning":
+			out.Values[i] = ec._ModelConfig_reasoning(ctx, field, obj)
 		case "price":
 			out.Values[i] = ec._ModelConfig_price(ctx, field, obj)
 		default:
@@ -38468,6 +39203,50 @@ func (ec *executionContext) _ModelPrice(ctx context.Context, sel ast.SelectionSe
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var modelReasoningInfoImplementors = []string{"ModelReasoningInfo"}
+
+func (ec *executionContext) _ModelReasoningInfo(ctx context.Context, sel ast.SelectionSet, obj *model.ModelReasoningInfo) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, modelReasoningInfoImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("ModelReasoningInfo")
+		case "mode":
+			out.Values[i] = ec._ModelReasoningInfo_mode(ctx, field, obj)
+		case "efforts":
+			out.Values[i] = ec._ModelReasoningInfo_efforts(ctx, field, obj)
+		case "supported":
+			out.Values[i] = ec._ModelReasoningInfo_supported(ctx, field, obj)
+		case "cannotDisable":
+			out.Values[i] = ec._ModelReasoningInfo_cannotDisable(ctx, field, obj)
+		case "defaultOn":
+			out.Values[i] = ec._ModelReasoningInfo_defaultOn(ctx, field, obj)
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -38758,6 +39537,13 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		case "updateKnowledgeDocument":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_updateKnowledgeDocument(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "renameKnowledgeDocument":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_renameKnowledgeDocument(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
@@ -39229,6 +40015,8 @@ func (ec *executionContext) _ProvidersModelsList(ctx context.Context, sel ast.Se
 			out.Values[i] = ec._ProvidersModelsList_kimi(ctx, field, obj)
 		case "qwen":
 			out.Values[i] = ec._ProvidersModelsList_qwen(ctx, field, obj)
+		case "minimax":
+			out.Values[i] = ec._ProvidersModelsList_minimax(ctx, field, obj)
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -39310,6 +40098,11 @@ func (ec *executionContext) _ProvidersReadinessStatus(ctx context.Context, sel a
 			}
 		case "qwen":
 			out.Values[i] = ec._ProvidersReadinessStatus_qwen(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "minimax":
+			out.Values[i] = ec._ProvidersReadinessStatus_minimax(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -40304,6 +41097,8 @@ func (ec *executionContext) _ReasoningConfig(ctx context.Context, sel ast.Select
 		switch field.Name {
 		case "__typename":
 			out.Values[i] = graphql.MarshalString("ReasoningConfig")
+		case "mode":
+			out.Values[i] = ec._ReasoningConfig_mode(ctx, field, obj)
 		case "effort":
 			out.Values[i] = ec._ReasoningConfig_effort(ctx, field, obj)
 		case "maxTokens":
@@ -43417,6 +44212,16 @@ func (ec *executionContext) marshalNProvidersReadinessStatus2ᚖpentagiᚋpkgᚋ
 	return ec._ProvidersReadinessStatus(ctx, sel, v)
 }
 
+func (ec *executionContext) unmarshalNReasoningEffort2pentagiᚋpkgᚋgraphᚋmodelᚐReasoningEffort(ctx context.Context, v interface{}) (model.ReasoningEffort, error) {
+	var res model.ReasoningEffort
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNReasoningEffort2pentagiᚋpkgᚋgraphᚋmodelᚐReasoningEffort(ctx context.Context, sel ast.SelectionSet, v model.ReasoningEffort) graphql.Marshaler {
+	return v
+}
+
 func (ec *executionContext) unmarshalNResultFormat2pentagiᚋpkgᚋgraphᚋmodelᚐResultFormat(ctx context.Context, v interface{}) (model.ResultFormat, error) {
 	var res model.ResultFormat
 	err := res.UnmarshalGQL(v)
@@ -44921,6 +45726,29 @@ func (ec *executionContext) unmarshalOModelPriceInput2ᚖpentagiᚋpkgᚋgraph�
 	return &res, graphql.ErrorOnPath(ctx, err)
 }
 
+func (ec *executionContext) marshalOModelReasoningInfo2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐModelReasoningInfo(ctx context.Context, sel ast.SelectionSet, v *model.ModelReasoningInfo) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._ModelReasoningInfo(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalOModelReasoningMode2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐModelReasoningMode(ctx context.Context, v interface{}) (*model.ModelReasoningMode, error) {
+	if v == nil {
+		return nil, nil
+	}
+	var res = new(model.ModelReasoningMode)
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalOModelReasoningMode2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐModelReasoningMode(ctx context.Context, sel ast.SelectionSet, v *model.ModelReasoningMode) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return v
+}
+
 func (ec *executionContext) unmarshalOPromptValidationErrorType2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐPromptValidationErrorType(ctx context.Context, v interface{}) (*model.PromptValidationErrorType, error) {
 	if v == nil {
 		return nil, nil
@@ -45006,6 +45834,73 @@ func (ec *executionContext) unmarshalOReasoningConfigInput2ᚖpentagiᚋpkgᚋgr
 	return &res, graphql.ErrorOnPath(ctx, err)
 }
 
+func (ec *executionContext) unmarshalOReasoningEffort2ᚕpentagiᚋpkgᚋgraphᚋmodelᚐReasoningEffortᚄ(ctx context.Context, v interface{}) ([]model.ReasoningEffort, error) {
+	if v == nil {
+		return nil, nil
+	}
+	var vSlice []interface{}
+	if v != nil {
+		vSlice = graphql.CoerceList(v)
+	}
+	var err error
+	res := make([]model.ReasoningEffort, len(vSlice))
+	for i := range vSlice {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
+		res[i], err = ec.unmarshalNReasoningEffort2pentagiᚋpkgᚋgraphᚋmodelᚐReasoningEffort(ctx, vSlice[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
+}
+
+func (ec *executionContext) marshalOReasoningEffort2ᚕpentagiᚋpkgᚋgraphᚋmodelᚐReasoningEffortᚄ(ctx context.Context, sel ast.SelectionSet, v []model.ReasoningEffort) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	ret := make(graphql.Array, len(v))
+	var wg sync.WaitGroup
+	isLen1 := len(v) == 1
+	if !isLen1 {
+		wg.Add(len(v))
+	}
+	for i := range v {
+		i := i
+		fc := &graphql.FieldContext{
+			Index:  &i,
+			Result: &v[i],
+		}
+		ctx := graphql.WithFieldContext(ctx, fc)
+		f := func(i int) {
+			defer func() {
+				if r := recover(); r != nil {
+					ec.Error(ctx, ec.Recover(ctx, r))
+					ret = nil
+				}
+			}()
+			if !isLen1 {
+				defer wg.Done()
+			}
+			ret[i] = ec.marshalNReasoningEffort2pentagiᚋpkgᚋgraphᚋmodelᚐReasoningEffort(ctx, sel, v[i])
+		}
+		if isLen1 {
+			f(i)
+		} else {
+			go f(i)
+		}
+
+	}
+	wg.Wait()
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
 func (ec *executionContext) unmarshalOReasoningEffort2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐReasoningEffort(ctx context.Context, v interface{}) (*model.ReasoningEffort, error) {
 	if v == nil {
 		return nil, nil
@@ -45016,6 +45911,22 @@ func (ec *executionContext) unmarshalOReasoningEffort2ᚖpentagiᚋpkgᚋgraph�
 }
 
 func (ec *executionContext) marshalOReasoningEffort2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐReasoningEffort(ctx context.Context, sel ast.SelectionSet, v *model.ReasoningEffort) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return v
+}
+
+func (ec *executionContext) unmarshalOReasoningMode2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐReasoningMode(ctx context.Context, v interface{}) (*model.ReasoningMode, error) {
+	if v == nil {
+		return nil, nil
+	}
+	var res = new(model.ReasoningMode)
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalOReasoningMode2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐReasoningMode(ctx context.Context, sel ast.SelectionSet, v *model.ReasoningMode) graphql.Marshaler {
 	if v == nil {
 		return graphql.Null
 	}

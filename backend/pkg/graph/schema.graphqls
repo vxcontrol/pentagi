@@ -21,13 +21,47 @@ enum ProviderType {
   glm
   kimi
   qwen
+  minimax
 }
 
-# Reasoning effort levels for advanced AI models (OpenAI format)
+# Reasoning effort levels for advanced AI models
 enum ReasoningEffort {
+  xhigh
+  max
   high
   medium
   low
+}
+
+# Reasoning control mode for provider-specific thinking APIs. "off" explicitly
+# disables thinking (distinct from an absent mode, which defers to the model
+# default — models like Gemini 2.5 / Claude Fable 5 think by default).
+enum ReasoningMode {
+  adaptive
+  budget
+  off
+}
+
+# A model's reasoning capability — distinct from the per-agent ReasoningMode
+# choice; adaptive_only models reject budget thinking (e.g. Claude Opus 4.7/4.8).
+enum ModelReasoningMode {
+  budget
+  adaptive
+  adaptive_only
+}
+
+# Declares how a model supports extended thinking so the UI can offer a valid
+# mode/effort/on-off without hardcoding model names. The capability fields are
+# derived from the langchaingo reasoning tables. An absent reasoning object means
+# the model is not thinking-capable (no reasoning controls); cannotDisable=true
+# hides the off option (the disable would error or be a no-op); defaultOn=true
+# means the model thinks unless explicitly turned off.
+type ModelReasoningInfo {
+  mode: ModelReasoningMode
+  efforts: [ReasoningEffort!]
+  supported: Boolean
+  cannotDisable: Boolean
+  defaultOn: Boolean
 }
 
 # Template types for AI agent prompts and system operations
@@ -686,6 +720,7 @@ type ModelConfig {
   description: String
   releaseDate: Time
   thinking: Boolean
+  reasoning: ModelReasoningInfo
   price: ModelPrice
 }
 
@@ -701,6 +736,7 @@ type ProvidersModelsList {
   glm: [ModelConfig!]
   kimi: [ModelConfig!]
   qwen: [ModelConfig!]
+  minimax: [ModelConfig!]
 }
 
 # Provider availability status
@@ -715,6 +751,7 @@ type ProvidersReadinessStatus {
   glm: Boolean!
   kimi: Boolean!
   qwen: Boolean!
+  minimax: Boolean!
 }
 
 # Default provider configurations
@@ -729,6 +766,7 @@ type DefaultProvidersConfig {
   glm: ProviderConfig
   kimi: ProviderConfig
   qwen: ProviderConfig
+  minimax: ProviderConfig
 }
 
 # Complete providers configuration
@@ -751,6 +789,7 @@ type ProviderConfig {
 
 # AI model reasoning configuration
 type ReasoningConfig {
+  mode: ReasoningMode
   effort: ReasoningEffort
   maxTokens: Int
 }
@@ -800,6 +839,7 @@ type AgentsConfig {
 
 # Input type for ReasoningConfig
 input ReasoningConfigInput {
+  mode: ReasoningMode
   effort: ReasoningEffort
   maxTokens: Int
 }
@@ -1049,6 +1089,7 @@ type Mutation {
   # Knowledge (vector store) management
   createKnowledgeDocument(input: CreateKnowledgeDocumentInput!): KnowledgeDocument!
   updateKnowledgeDocument(id: String!, input: UpdateKnowledgeDocumentInput!): KnowledgeDocument!
+  renameKnowledgeDocument(id: String!, question: String!): KnowledgeDocument!
   deleteKnowledgeDocument(id: String!): ResultType!
   anonymizeText(text: String!): String!
 }

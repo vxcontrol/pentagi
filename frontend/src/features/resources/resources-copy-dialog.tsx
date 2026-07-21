@@ -1,7 +1,5 @@
-import { zodResolver } from '@hookform/resolvers/zod';
 import { Copy } from 'lucide-react';
 import { useEffect, useMemo } from 'react';
-import { useForm } from 'react-hook-form';
 
 import type { FileNode } from '@/components/shared/file-manager';
 import type { OverwriteConflict } from '@/components/shared/overwrite';
@@ -11,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
+import { useAppForm } from '@/hooks/use-app-form';
 import { useResources } from '@/providers/resources-provider';
 
 import { resourcesCopyFormSchema, type ResourcesCopyFormValues, useResourcesCopy } from './use-resources-copy';
@@ -148,10 +147,9 @@ function ResourcesCopyDialogForm({ files, onClose }: ResourcesCopyDialogFormProp
         return buildSingleDefaultDestination(files[0]);
     }, [files, isMulti]);
 
-    const form = useForm<ResourcesCopyFormValues>({
+    const form = useAppForm<ResourcesCopyFormValues>({
         defaultValues: { destination: defaultDestination },
-        mode: 'onChange',
-        resolver: zodResolver(resourcesCopyFormSchema),
+        schema: resourcesCopyFormSchema,
     });
 
     useEffect(() => {
@@ -182,7 +180,9 @@ function ResourcesCopyDialogForm({ files, onClose }: ResourcesCopyDialogFormProp
         await overwriteAction.forceExecute(buildCopyPlan(files, values));
     });
 
-    const isSubmitDisabled = !form.formState.isValid;
+    // Convention: stay enabled until the first submit, then reflect validity (so an invalid submit surfaces
+    // errors instead of a silently-dead button). Mirrors FormSubmitButton's requireValid gate.
+    const isSubmitDisabled = form.formState.isSubmitted && !form.formState.isValid;
     const titleText = isMulti ? `Copy ${files.length} items` : files[0].isDir ? 'Copy directory' : 'Copy resource';
     const overwriteCtaLabel = isMulti ? `Copy ${files.length} with overwrite` : 'Copy with overwrite';
 
@@ -208,6 +208,7 @@ function ResourcesCopyDialogForm({ files, onClose }: ResourcesCopyDialogFormProp
                 <Form {...form}>
                     <form
                         className="flex flex-col gap-4"
+                        noValidate
                         onSubmit={handleSave}
                     >
                         <FormField

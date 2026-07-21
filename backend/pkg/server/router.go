@@ -249,6 +249,12 @@ func NewRouter(
 	changePasswordGroup.Use(authMiddleware.AuthUserRequired)
 	changePasswordGroup.Use(localUserRequired())
 	changePasswordGroup.PUT("/password", userService.ChangePasswordCurrentUser)
+	changePasswordGroup.PUT("/email", userService.ChangeEmailCurrentUser)
+
+	// Unlike password/email, the display name is editable by OAuth users too — no localUserRequired.
+	changeNameGroup := api.Group("/user")
+	changeNameGroup.Use(authMiddleware.AuthUserRequired)
+	changeNameGroup.PUT("/name", userService.ChangeNameCurrentUser)
 
 	publicGroup := api.Group("/")
 	publicGroup.Use(authMiddleware.TryAuth)
@@ -337,36 +343,55 @@ func NewRouter(
 			}
 		}())
 	} else {
-		router.Use(static.Serve("/", static.LocalFile(cfg.StaticDir, true)))
-
-		indexExists := true
-		indexPath := filepath.Join(cfg.StaticDir, "index.html")
-		if _, err := os.Stat(indexPath); err != nil {
-			indexExists = false
-		}
-
-		router.NoRoute(func(c *gin.Context) {
-			if c.Request.Method == "GET" && !strings.HasPrefix(c.Request.URL.Path, baseURL) {
-				isFrontendRoute := false
-				path := c.Request.URL.Path
-				for _, prefix := range frontendRoutes {
-					if path == prefix || strings.HasPrefix(path, prefix+"/") {
-						isFrontendRoute = true
-						break
-					}
-				}
-
-				if isFrontendRoute && indexExists {
-					c.File(indexPath)
-					return
-				}
-			}
-
-			c.Redirect(http.StatusMovedPermanently, "/")
-		})
+		registerStaticFileServer(router, cfg.StaticDir)
 	}
 
 	return router
+}
+
+// registerStaticFileServer serves the locally-built SPA (used when no STATIC_URL
+// upstream is set): cache headers, hashed assets via static.Serve, and an SPA
+// fallback that serves index.html for client routes but returns 404 for a missing
+// /assets/* — so the module loader fails cleanly and the app can reload to recover
+// instead of getting index.html and a MIME error. Split out to be unit-testable.
+func registerStaticFileServer(router *gin.Engine, staticDir string) {
+	router.Use(staticCacheMiddleware())
+	router.Use(static.Serve("/", static.LocalFile(staticDir, true)))
+
+	indexExists := true
+	indexPath := filepath.Join(staticDir, "index.html")
+	if _, err := os.Stat(indexPath); err != nil {
+		indexExists = false
+	}
+
+	router.NoRoute(func(c *gin.Context) {
+		if c.Request.Method == http.MethodGet && !strings.HasPrefix(c.Request.URL.Path, baseURL) {
+			isFrontendRoute := false
+			path := c.Request.URL.Path
+			for _, prefix := range frontendRoutes {
+				if path == prefix || strings.HasPrefix(path, prefix+"/") {
+					isFrontendRoute = true
+					break
+				}
+			}
+
+			if isFrontendRoute && indexExists {
+				c.File(indexPath)
+				return
+			}
+
+			if strings.HasPrefix(path, "/assets/") {
+				// A missing hashed asset may be a transient rolling-deploy
+				// race, so override the immutable directive set above —
+				// never cache this 404 as a permanent negative.
+				c.Header("Cache-Control", "no-store")
+				c.Status(http.StatusNotFound)
+				return
+			}
+		}
+
+		c.Redirect(http.StatusMovedPermanently, "/")
+	})
 }
 
 func setKnowledgeGroup(parent *gin.RouterGroup, svc *services.KnowledgeService) {

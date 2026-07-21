@@ -1,9 +1,10 @@
+import { useQuery } from '@apollo/client/react';
 import { useEffect, useMemo } from 'react';
 import { toast } from 'sonner';
 
 import type { FileNode } from '@/components/shared/file-manager';
 
-import { useFlowFilesQuery } from '@/graphql/types';
+import { FlowFilesDocument } from '@/graphql/types';
 
 import { toFileNode } from './flow-files-utils';
 
@@ -34,7 +35,7 @@ export function useFlowFilesData({ flowId }: UseFlowFilesDataParams): UseFlowFil
         error: flowFilesError,
         loading: isLoading,
         refetch,
-    } = useFlowFilesQuery({
+    } = useQuery(FlowFilesDocument, {
         skip: !flowId,
         variables: flowFilesVariables,
     });

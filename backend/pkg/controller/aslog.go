@@ -10,14 +10,13 @@ import (
 	"pentagi/pkg/graph/subscriptions"
 	"pentagi/pkg/providers"
 
-	lru "github.com/hashicorp/golang-lru/v2/expirable"
+	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/vxcontrol/langchaingo/llms/reasoning"
 )
 
 const (
 	updateMsgTimeout = 30 * time.Second
 	streamCacheSize  = 1000
-	streamCacheTTL   = 2 * time.Hour
 )
 
 type FlowAssistantLogWorker interface {
@@ -57,7 +56,7 @@ type flowAssistantLogWorker struct {
 	flowID      int64
 	assistantID int64
 	results     map[int64]chan *providers.StreamMessageChunk
-	streamCache *lru.LRU[int64, int64] // streamID -> msgID
+	streamCache *lru.Cache[int64, int64] // streamID -> msgID
 	pub         subscriptions.FlowPublisher
 }
 
@@ -70,7 +69,7 @@ func NewFlowAssistantLogWorker(
 		flowID:      flowID,
 		assistantID: assistantID,
 		results:     make(map[int64]chan *providers.StreamMessageChunk),
-		streamCache: lru.NewLRU[int64, int64](streamCacheSize, nil, streamCacheTTL),
+		streamCache: func() *lru.Cache[int64, int64] { c, _ := lru.New[int64, int64](streamCacheSize); return c }(),
 		pub:         pub,
 	}
 }

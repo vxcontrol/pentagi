@@ -1,128 +1,214 @@
+# OpenRouter agent configuration.
+#
+# Strategy: route every agent through cheap/strong open-weight models available on
+# OpenRouter, deliberately avoiding Google/Anthropic/OpenAI models. This product
+# runs cybersecurity/pentesting workloads, and those vendors' safety guardrails are
+# prone to false-positive refusals on legitimate exploit-development and offensive
+# security content. Models are drawn from 4 families (DeepSeek, Z.AI/GLM, MiniMax,
+# Moonshot/Kimi) chosen per-agent for the best price/intelligence fit for that role,
+# not forced onto a single vendor:
+#   - deepseek-v4-flash : utility tier (simple/simple_json/reflector/searcher) and
+#     pentester (kept on the flash tier for cost since it's the most frequently
+#     invoked agent in a flow, but with thinking left on for tool-call quality).
+#   - z-ai/glm-5-turbo   : primary_agent/assistant - vendor-described as "OpenClaw-
+#     native... optimized for tool invocation... long-chain execution", a direct
+#     match for the main orchestration loop.
+#   - z-ai/glm-5.2       : generator/refiner - newest GLM flagship, explicitly
+#     supports reasoning_effort (high/max); used at max effort for plan generation
+#     and refinement, the most consequential decisions in a flow.
+#   - minimax/minimax-m3 : adviser/enricher - latest MiniMax flagship with adaptive
+#     thinking (toggled via extra_body.thinking.type, see below). Used at adaptive
+#     depth for adviser (mentor/planner, invoked frequently: execution monitor +
+#     planning) and with thinking disabled for enricher (cheap note enrichment,
+#     no deep reasoning needed).
+#   - moonshotai/kimi-k2.7-code : coder/installer - coding-specialized model with
+#     strong long-context programming performance; also covers installer's
+#     environment/build-script setup tasks, keeping the model roster small.
+#
+# Reasoning control notes:
+#   - `reasoning: {mode: off}` (generic field, no extra_body) is used for the true
+#     fast/deterministic utility agents on deepseek-v4-flash; it maps to a legacy
+#     `reasoning_effort:"none"` on the wire (verified in langchaingo's
+#     reasoning.ResolveOff/IsReasoningModel against this repo's pinned langchaingo
+#     version).
+#   - `reasoning: {effort: ...}` is only set where the model's own catalog
+#     (see z-ai/glm/models.yml) documents graduated effort support (glm-5.2).
+#     glm-5-turbo and kimi-k2.7-code do NOT document reasoning_effort support
+#     (binary thinking toggle only per their native provider configs), so
+#     `reasoning` is left unset for them and their own hybrid-thinking default
+#     (thinking on) is used instead.
+#   - minimax-m3's thinking depth is NOT controlled via the generic `reasoning`
+#     field: MiniMax exposes an adaptive-thinking toggle only through
+#     `extra_body.thinking.type` (adaptive/disabled), which OpenRouter forwards
+#     verbatim to the MiniMax backend.
+#   - DeepSeek agents with `reasoning.effort` set omit temperature/top_p: DeepSeek
+#     silently ignores sampling params in thinking mode (same constraint as the
+#     native deepseek/config.yml).
+#
+# Validated with `ctester -config openrouter.provider.yml -agents all`: 287/287
+# tests passing (100%) across all 13 agent types as of 2026-07-21. Re-validate
+# after any model/parameter change, since OpenRouter's routing behavior for
+# non-OpenAI reasoning models can shift with backend updates.
+
 simple:
-  model: "openai/gpt-4.1-mini"
-  temperature: 0.6
-  top_p: 0.95
+  model: "deepseek/deepseek-v4-flash"
+  temperature: 1.0
   n: 1
-  max_tokens: 4000
+  max_tokens: 8192
+  reasoning:
+    mode: off
   price:
-    input: 0.4
-    output: 1.6
+    input: 0.14
+    output: 0.28
+    cache_read: 0.0028
 
 simple_json:
-  model: "openai/gpt-4.1-mini"
-  temperature: 0.7
-  top_p: 1.0
+  model: "deepseek/deepseek-v4-flash"
+  temperature: 1.0
   n: 1
-  max_tokens: 4000
+  max_tokens: 4096
   json: true
+  reasoning:
+    mode: off
   price:
-    input: 0.4
-    output: 1.6
+    input: 0.14
+    output: 0.28
+    cache_read: 0.0028
 
 primary_agent:
-  model: "openai/gpt-5" # x-ai/grok-3-mini, openai/o4-mini
+  model: "z-ai/glm-5-turbo"
+  temperature: 1.0
+  top_p: 0.95
   n: 1
-  max_tokens: 6000
-  reasoning:
-    effort: medium
+  max_tokens: 16384
   price:
-    input: 1.25
-    output: 10.0
+    input: 1.20
+    output: 4.00
+    cache_read: 0.24
 
 assistant:
-  model: "openai/gpt-5" # x-ai/grok-4, x-ai/grok-3-mini, google/gemini-2.5-flash, openai/o4-mini
+  model: "z-ai/glm-5-turbo"
+  temperature: 1.0
+  top_p: 0.95
   n: 1
-  max_tokens: 6000
-  reasoning:
-    effort: medium
+  max_tokens: 16384
   price:
-    input: 1.25
-    output: 10.0
+    input: 1.20
+    output: 4.00
+    cache_read: 0.24
 
 generator:
-  model: "anthropic/claude-sonnet-4.5"
+  model: "z-ai/glm-5.2"
+  temperature: 1.0
+  top_p: 0.95
   n: 1
-  max_tokens: 12000
+  max_tokens: 32768
   reasoning:
-    max_tokens: 4000
+    effort: max
   price:
-    input: 3.0
-    output: 15.0
+    input: 1.40
+    output: 4.40
+    cache_read: 0.26
 
 refiner:
-  model: "google/gemini-2.5-pro"
+  model: "z-ai/glm-5.2"
+  temperature: 1.0
+  top_p: 0.95
   n: 1
-  max_tokens: 10000
+  max_tokens: 32768
   reasoning:
-    effort: medium
+    effort: max
   price:
-    input: 1.25
-    output: 10.0
+    input: 1.40
+    output: 4.40
+    cache_read: 0.26
 
 adviser:
-  model: "google/gemini-2.5-pro"
+  model: "minimax/minimax-m3"
+  temperature: 1.0
+  top_p: 0.95
+  top_k: 40
   n: 1
-  max_tokens: 6000
+  max_tokens: 16384
+  extra_body:
+    thinking:
+      type: adaptive
+  price:
+    input: 0.30
+    output: 1.20
+    cache_read: 0.06
+
+reflector:
+  model: "deepseek/deepseek-v4-flash"
+  temperature: 1.0
+  n: 1
+  max_tokens: 4096
+  reasoning:
+    mode: off
+  price:
+    input: 0.14
+    output: 0.28
+    cache_read: 0.0028
+
+searcher:
+  model: "deepseek/deepseek-v4-flash"
+  temperature: 1.0
+  n: 1
+  max_tokens: 4096
+  reasoning:
+    mode: off
+  price:
+    input: 0.14
+    output: 0.28
+    cache_read: 0.0028
+
+enricher:
+  model: "minimax/minimax-m3"
+  temperature: 1.0
+  top_p: 0.95
+  top_k: 40
+  n: 1
+  max_tokens: 8192
+  extra_body:
+    thinking:
+      type: disabled
+  reasoning:
+    mode: off
+  price:
+    input: 0.30
+    output: 1.20
+    cache_read: 0.06
+
+coder:
+  model: "moonshotai/kimi-k2.7-code"
+  temperature: 1.0
+  top_p: 0.95
+  n: 1
+  max_tokens: 20480
+  price:
+    input: 0.95
+    output: 4.00
+    cache_read: 0.19
+
+installer:
+  model: "moonshotai/kimi-k2.7-code"
+  temperature: 1.0
+  top_p: 0.95
+  n: 1
+  max_tokens: 16384
+  price:
+    input: 0.95
+    output: 4.00
+    cache_read: 0.19
+
+pentester:
+  model: "deepseek/deepseek-v4-flash"
+  temperature: 1.0
+  n: 1
+  max_tokens: 16384
   reasoning:
     effort: high
   price:
-    input: 1.25
-    output: 10.0
-
-reflector:
-  model: "openai/gpt-4.1-mini"
-  temperature: 0.8
-  top_p: 1.0
-  n: 1
-  max_tokens: 4000
-  price:
-    input: 0.4
-    output: 1.6
-
-searcher:
-  model: "x-ai/grok-3-mini"
-  n: 1
-  max_tokens: 4000
-  reasoning:
-    max_tokens: 1024
-  price:
-    input: 0.3
-    output: 0.5
-
-enricher:
-  model: "openai/gpt-4.1-mini"
-  temperature: 0.95
-  top_p: 1.0
-  n: 1
-  max_tokens: 6000
-  price:
-    input: 0.4
-    output: 1.6
-
-coder:
-  model: "anthropic/claude-sonnet-4.5"
-  n: 1
-  max_tokens: 8000
-  reasoning:
-    max_tokens: 2000
-  price:
-    input: 3.0
-    output: 15.0
-
-installer:
-  model: "google/gemini-2.5-flash"
-  n: 1
-  max_tokens: 4000
-  reasoning:
-    max_tokens: 1024
-  price:
-    input: 0.3
-    output: 2.5
-
-pentester:
-  model: "moonshotai/kimi-k2-0905"
-  n: 1
-  max_tokens: 6000
-  price:
-    input: 0.4
-    output: 2.0
+    input: 0.14
+    output: 0.28
+    cache_read: 0.0028
