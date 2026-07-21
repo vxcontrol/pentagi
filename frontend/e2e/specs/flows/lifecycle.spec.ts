@@ -95,6 +95,9 @@ test.describe('flow lifecycle', { tag: '@flows' }, () => {
 
             await page.getByRole('button', { name: 'Flow actions' }).click();
 
+            // Anchor on an item that stays: absence alone also holds while the
+            // reopened menu is still rendering.
+            await expect(page.getByRole('menuitem', { name: 'Rename' })).toBeVisible();
             await expect(page.getByRole('menuitem', { name: 'Finish' })).toBeHidden();
             expectCleanPage(pageErrorLog);
         });
@@ -175,7 +178,10 @@ test.describe('flow lifecycle', { tag: '@flows' }, () => {
             const dialog = page.getByRole('dialog');
 
             await expect(dialog.getByText('Delete flow')).toBeVisible();
-            await expect(dialog.getByRole('button', { name: 'Delete' })).toHaveClass(/destructive/);
+            // Anchored on the variant's own fill: every shadcn Button carries
+            // `border-destructive`/`ring-destructive` in its base for the invalid
+            // state, so a bare /destructive/ matches whatever variant is set.
+            await expect(dialog.getByRole('button', { name: 'Delete' })).toHaveClass(/(^|\s)bg-destructive(\s|$)/);
             await dialog.getByRole('button', { name: 'Delete' }).click();
 
             await expect(page.getByText('Flow deleted successfully')).toBeVisible();

@@ -60,8 +60,13 @@ test.describe('flow message rendering', { tag: '@flows' }, () => {
             expect(await page.evaluate(anyTerminalContains, 'e2e-terminal-marker')).toBe(true);
         }).toPass();
 
-        // input message right-aligns its row
-        await expect(page.locator('.items-end').first()).toBeVisible();
+        // Only the input message right-aligns: pinning the count and the text means
+        // an inverted alignment ternary fails on both counts instead of finding some
+        // other right-aligned element on the page.
+        const rightAligned = page.locator('.items-end');
+
+        await expect(rightAligned).toHaveCount(1);
+        await expect(rightAligned).toContainText('run the smoke command');
 
         expectCleanPage(pageErrorLog);
     });

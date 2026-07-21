@@ -20,14 +20,14 @@ test.describe('themes', { tag: '@cross' }, () => {
     test('switches themes from the sidebar user menu', async ({ page, pageErrorLog }) => {
         await page.goto('/flows');
 
-        await expect(page.locator('html')).not.toHaveClass(/dark/);
+        await expect(page.locator('html')).toHaveClass(/light/);
 
         await page.getByRole('button', { name: /admin@pentagi\.com/ }).click();
         await page.getByRole('tab', { name: 'Dark theme' }).click();
         await expect(page.locator('html')).toHaveClass(/dark/);
 
         await page.getByRole('tab', { name: 'Light theme' }).click();
-        await expect(page.locator('html')).not.toHaveClass(/dark/);
+        await expect(page.locator('html')).toHaveClass(/light/);
         expectCleanPage(pageErrorLog);
     });
 });
