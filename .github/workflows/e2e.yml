@@ -82,9 +82,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: e2e-report
-          path: |
-            frontend/e2e/blob-report
-            frontend/e2e/test-results
+          path: frontend/e2e/test-results
           retention-days: 7
           if-no-files-found: ignore
 
@@ -117,15 +115,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Verify container tag matches @playwright/test
+      # Compare the container's own Playwright build to @playwright/test rather than a
+      # hardcoded literal, so bumping the package without re-tagging the image (or vice
+      # versa) fails here instead of drifting the pixel baselines.
+      - name: Verify container image matches @playwright/test
         run: |
-          node -e "
-            const v = require('./frontend/package.json').devDependencies['@playwright/test'];
-            if (v !== '1.61.1') {
-              console.error('::error::bump the e2e-visual container tag to v' + v + '-noble (and regenerate baselines)');
-              process.exit(1);
-            }
-          "
+          pkg="$(node -p "require('./frontend/package.json').devDependencies['@playwright/test'].replace(/[^0-9.]/g, '')")"
+          container="$(npx playwright --version | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
+          if [ "$pkg" != "$container" ]; then
+            echo "::error::e2e-visual container ships Playwright $container but @playwright/test is $pkg — bump the container tag to v$pkg-noble and regenerate baselines"
+            exit 1
+          fi
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
@@ -149,11 +149,14 @@ jobs:
         run: pnpm run build
 
       - name: Run visual snapshots
+        id: snapshots
         working-directory: frontend
-        run: E2E_VISUAL=1 npx playwright test -c e2e/playwright.config.ts
+        run: E2E_VISUAL=1 E2E_VISUAL_CONTAINER=1 npx playwright test -c e2e/playwright.config.ts
 
+      # Only on a real snapshot diff (not a tag-guard/install/build failure), so its
+      # presence is the precise "snapshots differ" signal the report keys the advisory on.
       - name: Upload diffs
-        if: failure()
+        if: failure() && steps.snapshots.outcome == 'failure'
         uses: actions/upload-artifact@v4
         with:
           name: e2e-visual-diffs

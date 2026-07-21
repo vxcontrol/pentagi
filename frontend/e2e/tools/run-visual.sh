@@ -30,6 +30,7 @@ docker run --rm \
     -v "$REPO_ROOT:/work" \
     -w /work/frontend \
     -e E2E_VISUAL=1 \
+    -e E2E_VISUAL_CONTAINER=1 \
     -e CI="${CI:-}" \
     -e HOME=/tmp \
     --user "$(id -u):$(id -g)" \
