@@ -100,8 +100,21 @@ export const measureContrast = async (page: Page, probe: string): Promise<number
             context.clearRect(0, 0, 1, 1);
 
             for (const layer of layers) {
+                // An unparseable colour is a silent no-op on fillStyle, leaving the previous
+                // value — which measures as a spurious ~21:1 pass. Assign it against two
+                // different sentinels: a colour that applied lands on the same value both
+                // times, an invalid one keeps whichever sentinel preceded it.
                 context.fillStyle = '#000000';
                 context.fillStyle = layer;
+                const fromBlack = context.fillStyle;
+
+                context.fillStyle = '#ffffff';
+                context.fillStyle = layer;
+
+                if (context.fillStyle !== fromBlack) {
+                    throw new Error(`contrast: colour "${layer}" did not apply`);
+                }
+
                 context.fillRect(0, 0, 1, 1);
             }
 
