@@ -76,6 +76,7 @@ type ComplexityRoot struct {
 	}
 
 	AgentConfig struct {
+		ExtraBody         func(childComplexity int) int
 		FrequencyPenalty  func(childComplexity int) int
 		MaxLength         func(childComplexity int) int
 		MaxTokens         func(childComplexity int) int
@@ -1019,6 +1020,13 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.APITokenWithSecret.UserID(childComplexity), true
+
+	case "AgentConfig.extraBody":
+		if e.complexity.AgentConfig.ExtraBody == nil {
+			break
+		}
+
+		return e.complexity.AgentConfig.ExtraBody(childComplexity), true
 
 	case "AgentConfig.frequencyPenalty":
 		if e.complexity.AgentConfig.FrequencyPenalty == nil {
@@ -9868,6 +9876,47 @@ func (ec *executionContext) fieldContext_AgentConfig_price(_ context.Context, fi
 	return fc, nil
 }
 
+func (ec *executionContext) _AgentConfig_extraBody(ctx context.Context, field graphql.CollectedField, obj *model.AgentConfig) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_AgentConfig_extraBody(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.ExtraBody, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(map[string]interface{})
+	fc.Result = res
+	return ec.marshalOMap2map(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_AgentConfig_extraBody(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AgentConfig",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Map does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _AgentLog_id(ctx context.Context, field graphql.CollectedField, obj *model.AgentLog) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_AgentLog_id(ctx, field)
 	if err != nil {
@@ -10639,6 +10688,8 @@ func (ec *executionContext) fieldContext_AgentsConfig_simple(_ context.Context, 
 				return ec.fieldContext_AgentConfig_reasoning(ctx, field)
 			case "price":
 				return ec.fieldContext_AgentConfig_price(ctx, field)
+			case "extraBody":
+				return ec.fieldContext_AgentConfig_extraBody(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type AgentConfig", field.Name)
 		},
@@ -10709,6 +10760,8 @@ func (ec *executionContext) fieldContext_AgentsConfig_simpleJson(_ context.Conte
 				return ec.fieldContext_AgentConfig_reasoning(ctx, field)
 			case "price":
 				return ec.fieldContext_AgentConfig_price(ctx, field)
+			case "extraBody":
+				return ec.fieldContext_AgentConfig_extraBody(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type AgentConfig", field.Name)
 		},
@@ -10779,6 +10832,8 @@ func (ec *executionContext) fieldContext_AgentsConfig_primaryAgent(_ context.Con
 				return ec.fieldContext_AgentConfig_reasoning(ctx, field)
 			case "price":
 				return ec.fieldContext_AgentConfig_price(ctx, field)
+			case "extraBody":
+				return ec.fieldContext_AgentConfig_extraBody(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type AgentConfig", field.Name)
 		},
@@ -10849,6 +10904,8 @@ func (ec *executionContext) fieldContext_AgentsConfig_assistant(_ context.Contex
 				return ec.fieldContext_AgentConfig_reasoning(ctx, field)
 			case "price":
 				return ec.fieldContext_AgentConfig_price(ctx, field)
+			case "extraBody":
+				return ec.fieldContext_AgentConfig_extraBody(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type AgentConfig", field.Name)
 		},
@@ -10919,6 +10976,8 @@ func (ec *executionContext) fieldContext_AgentsConfig_generator(_ context.Contex
 				return ec.fieldContext_AgentConfig_reasoning(ctx, field)
 			case "price":
 				return ec.fieldContext_AgentConfig_price(ctx, field)
+			case "extraBody":
+				return ec.fieldContext_AgentConfig_extraBody(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type AgentConfig", field.Name)
 		},
@@ -10989,6 +11048,8 @@ func (ec *executionContext) fieldContext_AgentsConfig_refiner(_ context.Context,
 				return ec.fieldContext_AgentConfig_reasoning(ctx, field)
 			case "price":
 				return ec.fieldContext_AgentConfig_price(ctx, field)
+			case "extraBody":
+				return ec.fieldContext_AgentConfig_extraBody(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type AgentConfig", field.Name)
 		},
@@ -11059,6 +11120,8 @@ func (ec *executionContext) fieldContext_AgentsConfig_adviser(_ context.Context,
 				return ec.fieldContext_AgentConfig_reasoning(ctx, field)
 			case "price":
 				return ec.fieldContext_AgentConfig_price(ctx, field)
+			case "extraBody":
+				return ec.fieldContext_AgentConfig_extraBody(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type AgentConfig", field.Name)
 		},
@@ -11129,6 +11192,8 @@ func (ec *executionContext) fieldContext_AgentsConfig_reflector(_ context.Contex
 				return ec.fieldContext_AgentConfig_reasoning(ctx, field)
 			case "price":
 				return ec.fieldContext_AgentConfig_price(ctx, field)
+			case "extraBody":
+				return ec.fieldContext_AgentConfig_extraBody(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type AgentConfig", field.Name)
 		},
@@ -11199,6 +11264,8 @@ func (ec *executionContext) fieldContext_AgentsConfig_searcher(_ context.Context
 				return ec.fieldContext_AgentConfig_reasoning(ctx, field)
 			case "price":
 				return ec.fieldContext_AgentConfig_price(ctx, field)
+			case "extraBody":
+				return ec.fieldContext_AgentConfig_extraBody(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type AgentConfig", field.Name)
 		},
@@ -11269,6 +11336,8 @@ func (ec *executionContext) fieldContext_AgentsConfig_enricher(_ context.Context
 				return ec.fieldContext_AgentConfig_reasoning(ctx, field)
 			case "price":
 				return ec.fieldContext_AgentConfig_price(ctx, field)
+			case "extraBody":
+				return ec.fieldContext_AgentConfig_extraBody(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type AgentConfig", field.Name)
 		},
@@ -11339,6 +11408,8 @@ func (ec *executionContext) fieldContext_AgentsConfig_coder(_ context.Context, f
 				return ec.fieldContext_AgentConfig_reasoning(ctx, field)
 			case "price":
 				return ec.fieldContext_AgentConfig_price(ctx, field)
+			case "extraBody":
+				return ec.fieldContext_AgentConfig_extraBody(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type AgentConfig", field.Name)
 		},
@@ -11409,6 +11480,8 @@ func (ec *executionContext) fieldContext_AgentsConfig_installer(_ context.Contex
 				return ec.fieldContext_AgentConfig_reasoning(ctx, field)
 			case "price":
 				return ec.fieldContext_AgentConfig_price(ctx, field)
+			case "extraBody":
+				return ec.fieldContext_AgentConfig_extraBody(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type AgentConfig", field.Name)
 		},
@@ -11479,6 +11552,8 @@ func (ec *executionContext) fieldContext_AgentsConfig_pentester(_ context.Contex
 				return ec.fieldContext_AgentConfig_reasoning(ctx, field)
 			case "price":
 				return ec.fieldContext_AgentConfig_price(ctx, field)
+			case "extraBody":
+				return ec.fieldContext_AgentConfig_extraBody(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type AgentConfig", field.Name)
 		},
@@ -36650,7 +36725,7 @@ func (ec *executionContext) unmarshalInputAgentConfigInput(ctx context.Context, 
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"model", "maxTokens", "temperature", "topK", "topP", "minLength", "maxLength", "repetitionPenalty", "frequencyPenalty", "presencePenalty", "reasoning", "price"}
+	fieldsInOrder := [...]string{"model", "maxTokens", "temperature", "topK", "topP", "minLength", "maxLength", "repetitionPenalty", "frequencyPenalty", "presencePenalty", "reasoning", "price", "extraBody"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -36741,6 +36816,13 @@ func (ec *executionContext) unmarshalInputAgentConfigInput(ctx context.Context, 
 				return it, err
 			}
 			it.Price = data
+		case "extraBody":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("extraBody"))
+			data, err := ec.unmarshalOMap2map(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ExtraBody = data
 		}
 	}
 
@@ -37486,6 +37568,8 @@ func (ec *executionContext) _AgentConfig(ctx context.Context, sel ast.SelectionS
 			out.Values[i] = ec._AgentConfig_reasoning(ctx, field, obj)
 		case "price":
 			out.Values[i] = ec._AgentConfig_price(ctx, field, obj)
+		case "extraBody":
+			out.Values[i] = ec._AgentConfig_extraBody(ctx, field, obj)
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -45615,6 +45699,22 @@ func (ec *executionContext) marshalOKnowledgeGuideType2ᚖpentagiᚋpkgᚋgraph�
 		return graphql.Null
 	}
 	return v
+}
+
+func (ec *executionContext) unmarshalOMap2map(ctx context.Context, v interface{}) (map[string]interface{}, error) {
+	if v == nil {
+		return nil, nil
+	}
+	res, err := graphql.UnmarshalMap(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalOMap2map(ctx context.Context, sel ast.SelectionSet, v map[string]interface{}) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	res := graphql.MarshalMap(v)
+	return res
 }
 
 func (ec *executionContext) marshalOMessageLog2ᚕᚖpentagiᚋpkgᚋgraphᚋmodelᚐMessageLogᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.MessageLog) graphql.Marshaler {

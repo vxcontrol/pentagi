@@ -57,6 +57,7 @@ import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
+import { Textarea } from '@/components/ui/textarea';
 import {
     AgentConfigType,
     CreateProviderDocument,
@@ -546,7 +547,58 @@ function FormModelComboboxItem<T extends FieldValues = FieldValues>({
     );
 }
 
+function FormTextareaItem<T extends FieldValues = FieldValues>({
+    control,
+    description,
+    disabled,
+    label,
+    name,
+    placeholder,
+}: FormInputStringItemProps<T>) {
+    const { field, fieldState } = useController({ control, defaultValue: undefined, disabled, name });
+
+    return (
+        <FormItem>
+            <FormLabel>{label}</FormLabel>
+            <FormControl>
+                <Textarea
+                    {...field}
+                    aria-invalid={fieldState.error ? true : undefined}
+                    className="font-mono text-xs"
+                    maxHeight={320}
+                    minHeight={80}
+                    placeholder={placeholder}
+                    value={field.value ?? ''}
+                />
+            </FormControl>
+            {description && <FormDescription>{description}</FormDescription>}
+            {fieldState.error && <FormMessage>{fieldState.error.message}</FormMessage>}
+        </FormItem>
+    );
+}
+
 const optionalNumber = z.number().nullable().optional();
+
+// Only a JSON object round-trips: extraBody merges into the request body as key/value pairs.
+export const optionalJsonObject = z
+    .string()
+    .optional()
+    .refine(
+        (value) => {
+            if (!value?.trim()) {
+                return true;
+            }
+
+            try {
+                const parsed: unknown = JSON.parse(value);
+
+                return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed);
+            } catch {
+                return false;
+            }
+        },
+        { message: 'Must be a valid JSON object' },
+    );
 
 const requiredString = (message: string) =>
     z
@@ -557,6 +609,7 @@ const requiredString = (message: string) =>
 
 const agentConfigSchema = z
     .object({
+        extraBody: optionalJsonObject,
         frequencyPenalty: optionalNumber,
         maxLength: optionalNumber,
         maxTokens: optionalNumber,
@@ -820,7 +873,7 @@ function ReasoningFields({
     );
 }
 
-const transformFormToGraphQL = (
+export const transformFormToGraphQL = (
     formData: FormInput,
 ): {
     agents: AgentsConfigInput;
@@ -831,6 +884,7 @@ const transformFormToGraphQL = (
         .filter(([key, data]) => key !== '__typename' && data?.model)
         .reduce((configs, [key, data]) => {
             const config: AgentConfigInput = {
+                extraBody: data?.extraBody?.trim() ? (JSON.parse(data.extraBody) as Record<string, unknown>) : null,
                 frequencyPenalty: data?.frequencyPenalty ?? null,
                 maxLength: data?.maxLength ?? null,
                 maxTokens: data?.maxTokens ?? null,
@@ -873,7 +927,7 @@ const transformFormToGraphQL = (
     };
 };
 
-const normalizeGraphQLData = (obj: unknown): unknown => {
+export const normalizeGraphQLData = (obj: unknown): unknown => {
     if (obj === null || obj === undefined) {
         return obj;
     }
@@ -886,7 +940,13 @@ const normalizeGraphQLData = (obj: unknown): unknown => {
         return Object.fromEntries(
             Object.entries(obj)
                 .filter(([key]) => key !== '__typename')
-                .map(([key, value]) => [key, normalizeGraphQLData(value)]),
+                .map(([key, value]) => {
+                    if (key === 'extraBody') {
+                        return [key, value && typeof value === 'object' ? JSON.stringify(value, null, 4) : ''];
+                    }
+
+                    return [key, normalizeGraphQLData(value)];
+                }),
         );
     }
 
@@ -1863,6 +1923,20 @@ function SettingsProvider() {
                                         step="0.000001"
                                     />
                                 </div>
+                            </div>
+                        </div>
+
+                        <div className="col-span-full p-px">
+                            <div className="mt-6 flex flex-col gap-4">
+                                <h4 className="text-sm font-medium">Extra Body</h4>
+                                <FormTextareaItem
+                                    control={control}
+                                    description="Provider-specific request body fields as a JSON object, merged into every call (e.g. vLLM chat_template_kwargs)."
+                                    disabled={isLoading}
+                                    label="Extra Body (JSON)"
+                                    name={`agents.${agentKey}.extraBody`}
+                                    placeholder={'{\n    "chat_template_kwargs": { "enable_thinking": false }\n}'}
+                                />
                             </div>
                         </div>
                     </AccordionContent>

@@ -4,6 +4,7 @@ type Exact<T extends { [key: string]: unknown }> = { [K in keyof T]: T[K] };
 export type Incremental<T> = T | { [P in keyof T]?: P extends ' $fragmentName' | '__typename' ? T[P] : never };
 import type { TypedDocumentNode as DocumentNode } from '@graphql-typed-document-node/core';
 export type AgentConfigInput = {
+    extraBody?: Record<string, unknown> | null | undefined;
     frequencyPenalty?: number | null | undefined;
     maxLength?: number | null | undefined;
     maxTokens?: number | null | undefined;
@@ -546,6 +547,7 @@ export type AgentConfigFragmentFragment = {
     repetitionPenalty: number | null;
     frequencyPenalty: number | null;
     presencePenalty: number | null;
+    extraBody: Record<string, unknown> | null;
     reasoning: { mode: ReasoningMode | null; effort: ReasoningEffort | null; maxTokens: number | null } | null;
     price: { input: number; output: number; cacheRead: number; cacheWrite: number } | null;
 };
@@ -2189,6 +2191,7 @@ export const AgentConfigFragmentFragmentDoc = {
                             ],
                         },
                     },
+                    { kind: 'Field', name: { kind: 'Name', value: 'extraBody' } },
                 ],
             },
         },
@@ -2379,6 +2382,7 @@ export const AgentsConfigFragmentFragmentDoc = {
                             ],
                         },
                     },
+                    { kind: 'Field', name: { kind: 'Name', value: 'extraBody' } },
                 ],
             },
         },
@@ -2454,6 +2458,7 @@ export const ProviderConfigFragmentFragmentDoc = {
                             ],
                         },
                     },
+                    { kind: 'Field', name: { kind: 'Name', value: 'extraBody' } },
                 ],
             },
         },
@@ -3904,6 +3909,7 @@ export const SettingsProvidersDocument = {
                             ],
                         },
                     },
+                    { kind: 'Field', name: { kind: 'Name', value: 'extraBody' } },
                 ],
             },
         },
@@ -8808,6 +8814,7 @@ export const CreateProviderDocument = {
                             ],
                         },
                     },
+                    { kind: 'Field', name: { kind: 'Name', value: 'extraBody' } },
                 ],
             },
         },
@@ -9080,6 +9087,7 @@ export const UpdateProviderDocument = {
                             ],
                         },
                     },
+                    { kind: 'Field', name: { kind: 'Name', value: 'extraBody' } },
                 ],
             },
         },
@@ -11308,6 +11316,7 @@ export const ProviderCreatedDocument = {
                             ],
                         },
                     },
+                    { kind: 'Field', name: { kind: 'Name', value: 'extraBody' } },
                 ],
             },
         },
@@ -11543,6 +11552,7 @@ export const ProviderUpdatedDocument = {
                             ],
                         },
                     },
+                    { kind: 'Field', name: { kind: 'Name', value: 'extraBody' } },
                 ],
             },
         },
@@ -11778,6 +11788,7 @@ export const ProviderDeletedDocument = {
                             ],
                         },
                     },
+                    { kind: 'Field', name: { kind: 'Name', value: 'extraBody' } },
                 ],
             },
         },

@@ -723,6 +723,10 @@ func ConvertAgentConfigToGqlModel(ac *pconfig.AgentConfig) *model.AgentConfig {
 		}
 	}
 
+	if ac.ExtraBody != nil {
+		result.ExtraBody = ac.ExtraBody
+	}
+
 	return result
 }
 
@@ -814,6 +818,10 @@ func ConvertAgentConfigFromGqlModel(ac *model.AgentConfig) *pconfig.AgentConfig 
 			"cache_read":  ac.Price.CacheRead,
 			"cache_write": ac.Price.CacheWrite,
 		}
+	}
+
+	if ac.ExtraBody != nil {
+		rawConfig["extra_body"] = ac.ExtraBody
 	}
 
 	jsonConfig, err := json.Marshal(rawConfig)

@@ -1,4 +1,5 @@
 scalar Time
+scalar Map
 
 # Core execution status for flows, tasks and agents
 enum StatusType {
@@ -816,6 +817,7 @@ type AgentConfig {
   presencePenalty: Float
   reasoning: ReasoningConfig
   price: ModelPrice
+  extraBody: Map
 }
 
 # All agent type configurations for a provider
@@ -866,6 +868,7 @@ input AgentConfigInput {
   presencePenalty: Float
   reasoning: ReasoningConfigInput
   price: ModelPriceInput
+  extraBody: Map
 }
 
 # Input type for AgentsConfig

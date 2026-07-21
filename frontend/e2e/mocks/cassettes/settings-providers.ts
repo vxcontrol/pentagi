@@ -18,6 +18,7 @@ const T = '2026-01-15T09:00:00Z';
 
 const agentConfig = (): AgentConfigFragmentFragment =>
     entity('AgentConfig', {
+        extraBody: null,
         frequencyPenalty: null,
         maxLength: null,
         maxTokens: null,
