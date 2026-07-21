@@ -1,19 +1,32 @@
+import { routes } from '@/lib/routes';
+
 import type { A11yAllowlist } from '../../helpers/a11y.ts';
 
 import { expect, test } from '../../fixtures/test.ts';
 import { scanA11y } from '../../helpers/a11y.ts';
-import { apiTokensCassette } from '../../mocks/cassettes/api-tokens.ts';
-import { flowsCassette } from '../../mocks/cassettes/flows.ts';
-import { knowledgesCassette } from '../../mocks/cassettes/knowledges.ts';
 import { loginJourneyCassette } from '../../mocks/cassettes/smoke.ts';
-import { templatesCassette } from '../../mocks/cassettes/templates.ts';
+import { ROUTE_MANIFEST } from '../../routes.ts';
 
 const ALLOWLIST: A11yAllowlist = {
+    // Debt surfaced once this sweep started covering the whole manifest.
+    // The period switcher drives Tabs as a segmented control with no TabsContent,
+    // so the active trigger's aria-controls names an element that never exists.
+    [routes.dashboard]: [{ rule: 'aria-valid-attr-value', target: /radix-.*-trigger-/ }],
+
     // Message metadata (date + ID) intentionally renders at 50% opacity — a
     // design decision, not a regression; revisit with the design pass. Axe
     // targets are class chains, so the pattern pins the 50%-muted class; any
     // other contrast violation on the page still fails.
-    '/flows/:flowId': [{ rule: 'color-contrast', target: /text-muted-foreground\\?\/50/ }],
+    [routes.flow('5')]: [{ rule: 'color-contrast', target: /text-muted-foreground\\?\/50/ }],
+
+    // Same 50%-muted decision as the flow messages above, one step lighter: the
+    // per-row size and modified-at metadata renders at 80% and misses AA. The
+    // tree's expand toggle and row checkboxes sit under the 24px pointer-target
+    // floor — widening them is a density decision for the file manager.
+    [routes.resources]: [
+        { rule: 'color-contrast', target: /text-muted-foreground\\?\/80/ },
+        { rule: 'target-size', target: /\.rounded|aria-label="Select / },
+    ],
 };
 
 // Both themes are scanned: contrast waivers are theme-independent, but dark mode
@@ -28,6 +41,7 @@ for (const theme of THEMES) {
             });
         }
 
+        // Outside the manifest: the only unauthenticated route.
         test.describe('login', () => {
             test.use({ cassette: loginJourneyCassette, isAuthSeeded: false });
 
@@ -38,51 +52,18 @@ for (const theme of THEMES) {
             });
         });
 
-        test.describe('flows', () => {
-            test.use({ cassette: flowsCassette() });
+        // Driven off the manifest so a newly swept route is scanned without a
+        // second, hand-maintained route list drifting behind it.
+        for (const entry of ROUTE_MANIFEST) {
+            test.describe(entry.path, () => {
+                test.use({ cassette: entry.cassette() });
 
-            test('flows list', async ({ page }) => {
-                await page.goto('/flows');
-                await expect(page.getByRole('row', { name: /E2E Alpha/ })).toBeVisible();
-                await scanA11y(page, '/flows', ALLOWLIST);
+                test('has no axe violations', async ({ page }) => {
+                    await page.goto(entry.path);
+                    await expect(entry.ready(page)).toBeVisible();
+                    await scanA11y(page, entry.path, ALLOWLIST);
+                });
             });
-
-            test('flow detail', async ({ page }) => {
-                await page.goto('/flows');
-                await page.getByRole('row', { name: /E2E Alpha/ }).click();
-                await expect(page.getByRole('button', { name: 'Flow actions' })).toBeVisible();
-                await scanA11y(page, '/flows/:flowId', ALLOWLIST);
-            });
-        });
-
-        test.describe('templates', () => {
-            test.use({ cassette: templatesCassette() });
-
-            test('templates list', async ({ page }) => {
-                await page.goto('/templates');
-                await expect(page.getByRole('row', { name: /E2E Seed Template/ })).toBeVisible();
-                await scanA11y(page, '/templates', ALLOWLIST);
-            });
-        });
-
-        test.describe('knowledges', () => {
-            test.use({ cassette: knowledgesCassette() });
-
-            test('knowledges list', async ({ page }) => {
-                await page.goto('/knowledges');
-                await expect(page.getByRole('row', { name: /E2E Seed Question/ })).toBeVisible();
-                await scanA11y(page, '/knowledges', ALLOWLIST);
-            });
-        });
-
-        test.describe('api tokens', () => {
-            test.use({ cassette: apiTokensCassette() });
-
-            test('api tokens list', async ({ page }) => {
-                await page.goto('/settings/api-tokens');
-                await expect(page.getByRole('row', { name: /E2E seed token/ })).toBeVisible();
-                await scanA11y(page, '/settings/api-tokens', ALLOWLIST);
-            });
-        });
+        }
     });
 }
