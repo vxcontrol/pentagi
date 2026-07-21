@@ -14,11 +14,10 @@ const ALLOWLIST: A11yAllowlist = {
     // targets are class chains, so the pattern pins the 50%-muted class; any
     // other contrast violation on the page still fails.
     '/flows/:flowId': [{ rule: 'color-contrast', target: /text-muted-foreground\\?\/50/ }],
-    // Colored Badge variants use text-{color}-600 with no dark override, so on
-    // the dark near-black background the text fails contrast (all seven color
-    // variants share this; the knowledges list renders the blue one). Real
-    // dark-mode debt, queued for a palette fix — remove when badge dark text
-    // shades land.
+    // Colored Badge variants carry a single text shade for both themes, and no
+    // shade clears AA on both grounds: measured, blue passes on light (4.66) and
+    // fails on dark (3.09) — which is why only the dark scan flags it here. All
+    // seven colors share the defect; queued for a per-theme palette fix.
     '/knowledges': [{ rule: 'color-contrast', target: /border-blue-500/ }],
 };
 
