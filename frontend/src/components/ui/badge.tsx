@@ -11,18 +11,22 @@ const badgeVariants = cva(
             variant: 'default',
         },
         variants: {
+            // Colored variants carry a per-theme text shade: 700 on the light tint,
+            // 400 on the dark one. A shade number is not a constant lightness across
+            // hues, so green needs 800 — at 700 it measures 4.4991 against its tint
+            // and misses AA. Re-measure before changing a shade or a tint.
             variant: {
-                blue: 'border-blue-500/20 bg-blue-500/10 text-blue-600 hover:bg-blue-500/20',
+                blue: 'border-blue-500/20 bg-blue-500/10 text-blue-700 hover:bg-blue-500/20 dark:text-blue-400',
                 default: 'border-transparent bg-primary text-primary-foreground hover:bg-primary/80',
                 destructive: 'border-transparent bg-destructive text-destructive-foreground hover:bg-destructive/80',
-                green: 'border-green-500/20 bg-green-500/10 text-green-600 hover:bg-green-500/20',
-                orange: 'border-orange-500/20 bg-orange-500/10 text-orange-600 hover:bg-orange-500/20',
+                green: 'border-green-500/20 bg-green-500/10 text-green-800 hover:bg-green-500/20 dark:text-green-400',
+                orange: 'border-orange-500/20 bg-orange-500/10 text-orange-700 hover:bg-orange-500/20 dark:text-orange-400',
                 outline: 'text-foreground',
-                pink: 'border-pink-500/20 bg-pink-500/10 text-pink-600 hover:bg-pink-500/20',
-                purple: 'border-purple-500/20 bg-purple-500/10 text-purple-600 hover:bg-purple-500/20',
-                red: 'border-red-500/20 bg-red-500/10 text-red-600 hover:bg-red-500/20',
+                pink: 'border-pink-500/20 bg-pink-500/10 text-pink-700 hover:bg-pink-500/20 dark:text-pink-400',
+                purple: 'border-purple-500/20 bg-purple-500/10 text-purple-700 hover:bg-purple-500/20 dark:text-purple-400',
+                red: 'border-red-500/20 bg-red-500/10 text-red-700 hover:bg-red-500/20 dark:text-red-400',
                 secondary: 'border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80',
-                yellow: 'border-yellow-500/20 bg-yellow-500/10 text-yellow-600 hover:bg-yellow-500/20',
+                yellow: 'border-yellow-500/20 bg-yellow-500/10 text-yellow-700 hover:bg-yellow-500/20 dark:text-yellow-400',
             },
         },
     },
