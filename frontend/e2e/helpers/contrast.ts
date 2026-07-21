@@ -29,6 +29,41 @@ export const mountContrastProbes = async (page: Page, probes: Record<string, str
     );
 };
 
+// Editor highlight tokens are styled through the `.tiptap-content .ProseMirror .template-*`
+// selector, so a flat probe span (as in mountContrastProbes) would pick up none of it and
+// measure nothing. Reproduce the real ancestor chain on the shipped class. Surface is --card,
+// within ~0.005 L of the editor's real `dark:bg-input/30` ground and conservative for the floor.
+export const mountEditorProbes = async (page: Page, probes: Record<string, string>): Promise<void> => {
+    await page.evaluate(
+        ({ entries, hostId }) => {
+            document.getElementById(hostId)?.remove();
+            const host = document.createElement('div');
+
+            host.id = hostId;
+            host.className = 'tiptap-content';
+            host.style.cssText = 'position:fixed;inset:0 auto auto 0;z-index:2147483647;padding:12px';
+
+            const surface = document.createElement('div');
+
+            surface.className = 'ProseMirror';
+            surface.style.cssText = 'background:var(--card);display:flex;gap:8px;padding:8px';
+
+            for (const [name, className] of entries) {
+                const probe = document.createElement('span');
+
+                probe.className = className;
+                probe.dataset.contrast = name;
+                probe.textContent = 'Sample';
+                surface.append(probe);
+            }
+
+            host.append(surface);
+            document.body.append(host);
+        },
+        { entries: Object.entries(probes), hostId: HOST_ID },
+    );
+};
+
 export const measureContrast = async (page: Page, probe: string): Promise<number> =>
     page.evaluate((name) => {
         const element = document.querySelector<HTMLElement>(`[data-contrast="${name}"]`);

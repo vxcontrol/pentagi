@@ -308,11 +308,12 @@
         --sidebar-ring: oklch(0.25 0.14 245);
         /* Editor highlight TEXT, tuned for readable contrast on the editor surface (unlike --primary, a fill
            color that fails WCAG AA as text on dark). Four distinct hues so adjacent tokens don't blur:
-           link = theme blue 245; variable = violet 300; tag = teal 155; inline code = red 25 on a visible chip.
+           link = theme blue 245; variable = green 155 (matches the panel's "used" badge); tag = violet 300;
+           inline code = red 25 on a visible chip.
            --editor-code-bg is the opaque inline-code + code-block chip. Don't fold these back into --primary. */
         --editor-accent: oklch(0.25 0.12 245);
-        --editor-variable: oklch(0.4 0.18 300);
-        --editor-tag: oklch(0.25 0.12 155);
+        --editor-variable: oklch(0.4 0.18 155);
+        --editor-tag: oklch(0.25 0.12 300);
         --editor-code: oklch(0.5 0.16 25);
         --editor-code-bg: oklch(0.94 0.006 245);
         --font-sans: Inter, 'Inter Fallback', sans-serif;
@@ -371,8 +372,8 @@
         --sidebar-border: oklch(0.3 0.04 245);
         --sidebar-ring: oklch(0.5 0.16 245);
         --editor-accent: oklch(0.68 0.13 245);
-        --editor-variable: oklch(0.72 0.12 300);
-        --editor-tag: oklch(0.68 0.13 155);
+        --editor-variable: oklch(0.72 0.12 155);
+        --editor-tag: oklch(0.68 0.13 300);
         --editor-code: oklch(0.7 0.15 25);
         --editor-code-bg: oklch(0.27 0.03 245);
         --font-sans: Inter, 'Inter Fallback', sans-serif;
@@ -759,7 +760,7 @@
     padding: 0 1px;
 }
 
-/* `<xml-tags>`, highlighted view-only (teal --editor-tag reads distinct from the violet variables). */
+/* `<xml-tags>`, highlighted view-only. */
 .tiptap-content .ProseMirror .template-tag {
     color: var(--editor-tag);
     background-color: color-mix(in oklab, var(--editor-tag) 9%, transparent);
