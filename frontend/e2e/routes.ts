@@ -2,6 +2,7 @@ import type { Locator, Page } from '@playwright/test';
 
 import { routes } from '@/lib/routes';
 
+import type { A11yWaiver } from './helpers/a11y.ts';
 import type { Cassette } from './mocks/cassette.ts';
 
 import { apiTokensCassette } from './mocks/cassettes/api-tokens.ts';
@@ -14,6 +15,8 @@ import { settingsProvidersCassette } from './mocks/cassettes/settings-providers.
 import { templatesCassette } from './mocks/cassettes/templates.ts';
 
 export interface RouteManifestEntry {
+    /** Known accessibility debt on this route, waived node-by-node by the axe sweep. */
+    a11yWaivers?: A11yWaiver[];
     cassette: () => Cassette;
     path: string;
     /** The route counts as rendered when this locator is visible. */
@@ -42,6 +45,9 @@ export const ROUTE_MANIFEST: RouteManifestEntry[] = [
         sources: ['src/pages/flows', 'src/features/flows', 'src/providers/flows-provider.tsx'],
     },
     {
+        // Message metadata (date + ID) renders at 50% opacity by design; revisit
+        // with the design pass.
+        a11yWaivers: [{ rule: 'color-contrast', target: /text-muted-foreground\\?\/50/ }],
         cassette: flowsCassette,
         path: routes.flow('5'),
         // The terminal mounts after the header, and the visual spec masks it —
@@ -77,6 +83,10 @@ export const ROUTE_MANIFEST: RouteManifestEntry[] = [
         sources: ['src/pages/settings/settings-api-tokens.tsx'],
     },
     {
+        // The period switcher drives Tabs as a segmented control with no
+        // TabsContent, so the active trigger's aria-controls names an element
+        // that never exists.
+        a11yWaivers: [{ rule: 'aria-valid-attr-value', target: /radix-.*-trigger-/ }],
         cassette: dashboardCassette,
         path: routes.dashboard,
         ready: (page) => page.getByRole('heading', { name: 'Flows Activity Over Time' }),
@@ -95,6 +105,13 @@ export const ROUTE_MANIFEST: RouteManifestEntry[] = [
         sources: ['src/pages/settings/settings-providers.tsx'],
     },
     {
+        // Row size/modified metadata renders at 80% opacity and misses AA; the
+        // tree's expand toggle and row checkboxes sit under the 24px pointer
+        // target floor — widening them is a density decision for the file manager.
+        a11yWaivers: [
+            { rule: 'color-contrast', target: /text-muted-foreground\\?\/80/ },
+            { rule: 'target-size', target: /\.rounded|aria-label="Select / },
+        ],
         cassette: resourcesCassette,
         path: routes.resources,
         ready: (page) => page.getByRole('treeitem', { name: /reports/ }),
