@@ -41,6 +41,8 @@ test.describe('flow message rendering', { tag: '@flows' }, () => {
         const thinkingToggle = page.getByText('Show thinking');
 
         await expect(thinkingToggle).toBeVisible();
+        // Collapsed first, so an always-expanded regression fails instead of passing.
+        await expect(page.getByText('internal reasoning about the plan')).toBeHidden();
         await thinkingToggle.click();
         await expect(page.getByText('Hide thinking')).toBeVisible();
         await expect(page.getByText('internal reasoning about the plan')).toBeVisible();

@@ -26,6 +26,8 @@ test.describe('dashboard', { tag: '@coverage' }, () => {
 
         test('overview tab loads lazily and renders metrics and usage tables', async ({ page, pageErrorLog }) => {
             await page.goto('/dashboard');
+            // Lazy: the overview metrics are not mounted while the Analytics tab is active.
+            await expect(page.getByRole('heading', { exact: true, name: 'Total Flows' })).toBeHidden();
             await page.getByRole('tab', { name: 'Overview' }).click();
 
             for (const title of ['Total Flows', 'Tool Calls', 'Total Tokens', 'Total Cost']) {

@@ -7,13 +7,14 @@ test.describe('smoke', { tag: '@smoke' }, () => {
     test.describe('unauthenticated', () => {
         test.use({ cassette: loginJourneyCassette, isAuthSeeded: false });
 
-        test('redirects a protected route to /login with returnUrl', async ({ page }) => {
+        test('redirects a protected route to /login with returnUrl', async ({ page, pageErrorLog }) => {
             await page.goto('/flows');
 
             await expect(page).toHaveURL(/\/login\?returnUrl=%2Fflows/);
             await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible();
             // The guest /info carries OAuth providers, so the login page renders its OAuth buttons.
             await expect(page.getByRole('button', { name: 'Continue with Google' })).toBeVisible();
+            expectCleanPage(pageErrorLog);
         });
 
         test('logs in through the form and lands on the flows list', async ({ page, pageErrorLog }) => {
@@ -31,7 +32,7 @@ test.describe('smoke', { tag: '@smoke' }, () => {
     test.describe('rejected login', () => {
         test.use({ cassette: loginFailCassette, isAuthSeeded: false });
 
-        test('surfaces the error and re-disables Sign in until a field changes', async ({ page }) => {
+        test('surfaces the error and re-disables Sign in until a field changes', async ({ page, pageErrorLog }) => {
             await page.goto('/login');
             await page.getByLabel('Login').fill(SEEDED_USER.mail);
             await page.getByRole('textbox', { name: 'Password' }).fill('wrong-password');
@@ -42,6 +43,9 @@ test.describe('smoke', { tag: '@smoke' }, () => {
             // react-hook-form leaves Submit disabled after a failed submit until
             // an input changes.
             await expect(page.getByRole('button', { name: 'Sign in' })).toBeDisabled();
+            // The 401 logs an expected browser console error, but the path must raise no
+            // uncaught JS exception / unhandled rejection.
+            expect(pageErrorLog.pageErrors).toEqual([]);
         });
     });
 
