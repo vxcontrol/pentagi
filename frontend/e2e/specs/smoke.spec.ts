@@ -12,6 +12,8 @@ test.describe('smoke', { tag: '@smoke' }, () => {
 
             await expect(page).toHaveURL(/\/login\?returnUrl=%2Fflows/);
             await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible();
+            // The guest /info carries OAuth providers, so the login page renders its OAuth buttons.
+            await expect(page.getByRole('button', { name: 'Continue with Google' })).toBeVisible();
         });
 
         test('logs in through the form and lands on the flows list', async ({ page, pageErrorLog }) => {
