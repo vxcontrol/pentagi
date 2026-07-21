@@ -19,6 +19,9 @@
         "module": "preserve",
         "noEmit": true,
 
+        /* Specs import component cva maps (badge/button) to measure what ships, not a copy. */
+        "jsx": "react-jsx",
+
         /* Specs run in Node, but page.evaluate/addInitScript callbacks run in the DOM. */
         "lib": ["es2023", "dom", "dom.iterable"],
 
