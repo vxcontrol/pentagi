@@ -23,6 +23,10 @@ compose() {
 # sandboxes for any flow id starting with 9.
 remove_e2e_sandboxes() {
     docker ps -aq --filter 'name=^/?pentagi-terminal-9[0-9]{4,}$' | xargs -r docker rm -f
+    # Each sandbox also gets a `<container>-data` volume, created on the socket
+    # outside the compose project — removing the container leaves it behind, so
+    # every Tier-2 run used to add one more dangling volume.
+    docker volume ls -q --filter 'name=^pentagi-terminal-9[0-9]{4,}-data$' | xargs -r docker volume rm
 }
 
 cleanup() {
