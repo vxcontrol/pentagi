@@ -455,15 +455,19 @@ function Template() {
                         </BreadcrumbList>
                     </Breadcrumb>
                 </AppHeaderContent>
-                <AppHeaderActions>
-                    {canShowActions && !isMobile && (
-                        <DetailNavigationToolbar<Template>
-                            controller={templateNav}
-                            renderItem={renderTemplateItem}
-                            sheetIcon={<FileText className="size-4" />}
-                            sheetTitle="Templates"
-                        />
-                    )}
+                <AppHeaderActions
+                    pager={
+                        canShowActions &&
+                        !isMobile && (
+                            <DetailNavigationToolbar<Template>
+                                controller={templateNav}
+                                renderItem={renderTemplateItem}
+                                sheetIcon={<FileText className="size-4" />}
+                                sheetTitle="Templates"
+                            />
+                        )
+                    }
+                >
                     {(isNew || !!templateData?.flowTemplate) && (
                         <AppHeaderAction
                             disabled={!isNew && !hasUnsavedChanges}

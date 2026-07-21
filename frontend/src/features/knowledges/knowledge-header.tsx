@@ -192,15 +192,19 @@ export function KnowledgeHeader({
                         </BreadcrumbList>
                     </Breadcrumb>
                 </AppHeaderContent>
-                <AppHeaderActions>
-                    {canShowActions && !isMobile && (
-                        <DetailNavigationToolbar<Knowledge>
-                            controller={knowledgeNav}
-                            renderItem={renderKnowledgeItem}
-                            sheetIcon={<LibraryBig className="size-4" />}
-                            sheetTitle="Knowledges"
-                        />
-                    )}
+                <AppHeaderActions
+                    pager={
+                        canShowActions &&
+                        !isMobile && (
+                            <DetailNavigationToolbar<Knowledge>
+                                controller={knowledgeNav}
+                                renderItem={renderKnowledgeItem}
+                                sheetIcon={<LibraryBig className="size-4" />}
+                                sheetTitle="Knowledges"
+                            />
+                        )
+                    }
+                >
                     {canAnonymize && !isMobile && (
                         <AppHeaderAction
                             disabled={isAnonymizeDisabled}

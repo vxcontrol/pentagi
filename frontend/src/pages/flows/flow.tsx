@@ -278,15 +278,19 @@ function Flow() {
                         </BreadcrumbList>
                     </Breadcrumb>
                 </AppHeaderContent>
-                <AppHeaderActions>
-                    {flow && !isMobile && (
-                        <DetailNavigationToolbar<FlowItem>
-                            controller={flowNav}
-                            renderItem={renderFlowItem}
-                            sheetIcon={<GitFork className="size-4" />}
-                            sheetTitle="Flows"
-                        />
-                    )}
+                <AppHeaderActions
+                    pager={
+                        flow &&
+                        !isMobile && (
+                            <DetailNavigationToolbar<FlowItem>
+                                controller={flowNav}
+                                renderItem={renderFlowItem}
+                                sheetIcon={<GitFork className="size-4" />}
+                                sheetTitle="Flows"
+                            />
+                        )
+                    }
+                >
                     {flowId && !isMobile && (
                         <Button
                             aria-label="Toggle favorite"
