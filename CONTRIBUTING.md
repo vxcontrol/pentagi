@@ -36,7 +36,7 @@ When adding new dependencies, ensure they use compatible licenses:
    ./scripts/generate-licenses.sh
    ```
    
-   This script automatically collects license information from all dependencies and saves them to the `licenses/` directory. See [licenses/README.md](../licenses/README.md) for details.
+   This script automatically collects license information from all dependencies and saves them to the `licenses/` directory. See [licenses/README.md](licenses/README.md) for details.
 
 3. Scan for issues:
    ```bash

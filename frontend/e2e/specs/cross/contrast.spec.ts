@@ -12,19 +12,20 @@ const EDITOR_TOKENS = {
     'editor-variable': 'template-variable',
 } as const;
 
-const BADGE_VARIANTS = [
-    'blue',
-    'default',
-    'destructive',
-    'green',
-    'orange',
-    'outline',
-    'pink',
-    'purple',
-    'red',
-    'secondary',
-    'yellow',
-] as const satisfies readonly BadgeVariant[];
+// Keyed off the union so a newly added variant fails to compile until it is probed.
+const BADGE_VARIANTS = Object.keys({
+    blue: true,
+    default: true,
+    destructive: true,
+    green: true,
+    orange: true,
+    outline: true,
+    pink: true,
+    purple: true,
+    red: true,
+    secondary: true,
+    yellow: true,
+} satisfies Record<BadgeVariant, true>) as BadgeVariant[];
 
 const THEMES = ['light', 'dark'] as const;
 

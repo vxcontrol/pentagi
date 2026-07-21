@@ -51,6 +51,7 @@ export const ROUTE_MANIFEST: RouteManifestEntry[] = [
             'src/pages/flows',
             'src/features/flows',
             'src/providers/flow-provider.tsx',
+            'src/providers/flows-provider.tsx',
             // Rendered inside the detail page's tabs alongside their owning routes.
             'src/components/shared/file-manager',
             'src/components/dashboard',
@@ -91,7 +92,7 @@ export const ROUTE_MANIFEST: RouteManifestEntry[] = [
         cassette: settingsProvidersCassette,
         path: routes.settings.providers,
         ready: (page) => page.getByText('No providers configured'),
-        sources: ['src/pages/settings/settings-providers.tsx', 'src/pages/settings/settings-provider.tsx'],
+        sources: ['src/pages/settings/settings-providers.tsx'],
     },
     {
         cassette: resourcesCassette,

@@ -19,6 +19,9 @@ export const mountContrastProbes = async (page: Page, probes: Record<string, str
 
                 probe.className = className;
                 probe.dataset.contrast = name;
+                // The variants carry `transition-colors`, so a measurement taken right after
+                // hover() would sample a colour mid-interpolation, near the rest state.
+                probe.style.transition = 'none';
                 probe.textContent = 'Sample';
                 host.append(probe);
             }

@@ -116,8 +116,8 @@ with `--grep` / `--grep-invert` (e.g. `pnpm e2e --grep @smoke`):
 | `@smoke` | Sanity subset — auth, nav, the load-bearing happy paths |
 | `@flows` | Flow list / detail / subscription / terminal specs |
 | `@crud` | Create-read-update-delete journeys (knowledge, api tokens, templates) |
-| `@coverage` | Surface coverage (dashboard, settings, resources, nav sweep) |
-| `@cross` | Cross-cutting: themes, responsive, a11y |
+| `@coverage` | Surface coverage (dashboard, settings, resources) |
+| `@cross` | Cross-cutting: themes, responsive, a11y, contrast, route sweep |
 | `@visual` | Screenshot baselines — runs only in the visual project |
 | `@real` | Tier 2 — real backend + mock LLM (`specs/real/**`) |
 | `@stand` | Tier 3 — LLM-independent smoke against a live stand |
