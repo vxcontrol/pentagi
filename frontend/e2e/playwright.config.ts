@@ -122,7 +122,8 @@ export default defineConfig<BackendOptions>({
                   // binaries — it serves a pre-built dist with plain Node.
                   command: isVisual ? 'node e2e/tools/serve-dist.mjs' : 'pnpm run build && pnpm exec vite preview',
                   cwd: fileURLToPath(new URL('..', import.meta.url)),
-                  env: { VITE_PORT: '8000', VITE_USE_HTTPS: 'false' },
+                  // Pin PORT so an ambient PORT can't move serve-dist off the port Playwright waits on.
+                  env: { PORT: String(PREVIEW_PORT), VITE_PORT: '8000', VITE_USE_HTTPS: 'false' },
                   // Never reuse a listener on the port: the build runs inside
                   // this command, so a reused (possibly orphaned) preview
                   // silently serves a previous commit's dist as the gate.

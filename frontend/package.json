@@ -11,7 +11,7 @@
         "e2e:visual": "./e2e/tools/run-visual.sh",
         "e2e:visual:update": "./e2e/tools/run-visual.sh --update",
         "graphql:generate": "graphql-codegen --config graphql-codegen.ts",
-        "lint": "eslint \"{src,e2e}/**/*.{ts,tsx,js,jsx,mjs}\"",
+        "lint": "eslint --max-warnings 0 \"{src,e2e}/**/*.{ts,tsx,js,jsx,mjs}\"",
         "lint:fix": "eslint \"{src,e2e}/**/*.{ts,tsx,js,jsx,mjs}\" --fix",
         "prettier": "prettier --check \"{src,e2e}/**/*.{ts,tsx,js,jsx,mjs,json,css,scss}\"",
         "prettier:fix": "prettier --write \"{src,e2e}/**/*.{ts,tsx,js,jsx,mjs,json,css,scss}\"",

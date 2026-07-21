@@ -124,6 +124,12 @@ createServer(async (request, response) => {
 
         try {
             payload = JSON.parse((await readBody(request)) || '{}');
+
+            // JSON.parse('null')/'42' succeed, but reading payload.tools/.stream below would
+            // then throw outside this try and kill the process — reject non-objects here.
+            if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) {
+                throw new Error('body must be a JSON object');
+            }
         } catch (error) {
             respondError(response, 400, `mock-llm: invalid JSON body: ${error}`);
 

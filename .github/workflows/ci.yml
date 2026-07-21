@@ -67,6 +67,15 @@ jobs:
         working-directory: frontend
         run: pnpm run typescript
 
+      # The app ships the operations compiled into src/graphql/types.ts; regenerate and
+      # diff so it can't drift from graphql-schema.graphql (the codegen input the stand's
+      # schema-compat pre-flight validates against).
+      - name: Frontend - GraphQL codegen is fresh
+        working-directory: frontend
+        run: |
+          pnpm run graphql:generate
+          git diff --exit-code src/graphql/types.ts
+
       - name: Frontend - Test
         working-directory: frontend
         run: pnpm run test
