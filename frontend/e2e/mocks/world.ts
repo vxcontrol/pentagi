@@ -136,9 +136,7 @@ export class MockWorld {
 
         // Key on the request's variables, not the entry's: an entry written without variables would
         // otherwise merge every flow's subscribers onto one stream, and the second would join delta-only.
-        return entry
-            ? { entry, streamKey: `sub:${operationName}:${stableStringify(variables ?? {})}` }
-            : undefined;
+        return entry ? { entry, streamKey: `sub:${operationName}:${stableStringify(variables ?? {})}` } : undefined;
     }
 
     registerSocket(socket: MockSocket): void {

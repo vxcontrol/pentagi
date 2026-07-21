@@ -18,7 +18,9 @@ setup('authenticate', async ({ page }) => {
     const skip = page.getByRole('button', { name: 'Skip for now' });
     // The user menu is labelled with the signed-in address, so derive the "logged in" signal
     // from E2E_USER rather than a hardcoded admin@ (there is no button named "flows").
-    const loggedIn = page.getByRole('button', { name: new RegExp(E2E_USER.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') });
+    const loggedIn = page.getByRole('button', {
+        name: new RegExp(E2E_USER.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'),
+    });
 
     await expect(skip.or(loggedIn).first()).toBeVisible({ timeout: 15_000 });
 
