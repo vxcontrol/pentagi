@@ -16,7 +16,7 @@ permissions:
 # A cancelled superseded run must not race the report of the run that
 # replaced it and become the sticky comment's last writer.
 concurrency:
-  group: e2e-report-${{ github.event.workflow_run.head_branch }}
+  group: e2e-report-${{ github.event.workflow_run.head_repository.full_name }}-${{ github.event.workflow_run.head_branch }}
   cancel-in-progress: true
 
 jobs:
@@ -58,22 +58,7 @@ jobs:
               return;
             }
 
-            let statsLine = 'The run produced no results file (it likely failed before the tests started).';
-            let mockPassed = false;
-            try {
-              const report = JSON.parse(fs.readFileSync('results/results.json', 'utf8'));
-              const n = (value) => Number(value) || 0;
-              const { expected, unexpected, flaky, skipped } = report.stats ?? {};
-              statsLine = `**${n(expected)} passed**, ${n(unexpected)} failed, ${n(flaky)} flaky, ${n(skipped)} skipped.`;
-              mockPassed = n(unexpected) === 0;
-            } catch (error) {
-              core.info(`results.json unavailable: ${error}`);
-            }
-
-            // The visual job is advisory (never a required check), so the header must
-            // track the mock gate, not the whole-run conclusion — otherwise a visual-only
-            // diff reads as a mock failure over a "0 failed" stats line.
-            let visualDiffers = false;
+            let runJobs = [];
             try {
               const { data: jobs } = await github.rest.actions.listJobsForWorkflowRun({
                 owner: context.repo.owner,
@@ -81,10 +66,40 @@ jobs:
                 run_id: run.id,
                 per_page: 100,
               });
-              visualDiffers = jobs.jobs.some((job) => /visual/.test(job.name) && job.conclusion === 'failure');
+              runJobs = jobs.jobs;
             } catch (error) {
               core.info(`run jobs unavailable: ${error}`);
             }
+
+            // Adding a label skips every gate job, so this run has nothing to say about
+            // the PR — commenting would overwrite the previous run's verdict with "no
+            // results file".
+            const mockJob = runJobs.find((job) => /mock/.test(job.name));
+            if (!mockJob || mockJob.conclusion === 'skipped') {
+              core.info('No completed mock job in this run; leaving the sticky comment as it is.');
+              return;
+            }
+
+            let statsLine = 'The run produced no results file (it likely failed before the tests started).';
+            let noFailures = false;
+            try {
+              const report = JSON.parse(fs.readFileSync('results/results.json', 'utf8'));
+              const n = (value) => Number(value) || 0;
+              const { expected, unexpected, flaky, skipped } = report.stats ?? {};
+              statsLine = `**${n(expected)} passed**, ${n(unexpected)} failed, ${n(flaky)} flaky, ${n(skipped)} skipped.`;
+              noFailures = n(unexpected) === 0;
+            } catch (error) {
+              core.info(`results.json unavailable: ${error}`);
+            }
+
+            // Both halves are required: results.json is written before an abort can be
+            // observed, so a run killed by the global timeout still reports zero failures.
+            const mockPassed = noFailures && mockJob.conclusion === 'success';
+
+            // The visual job is advisory (never a required check), so the header must
+            // track the mock gate, not the whole-run conclusion — otherwise a visual-only
+            // diff reads as a mock failure over a "0 failed" stats line.
+            const visualDiffers = runJobs.some((job) => /visual/.test(job.name) && job.conclusion === 'failure');
 
             const conclusion = !mockPassed ? '❌' : visualDiffers ? '⚠️' : '✅';
             const marker = '<!-- e2e-report -->';

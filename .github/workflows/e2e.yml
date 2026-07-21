@@ -31,10 +31,11 @@ permissions:
   contents: read
 
 # Keyed on the PR number (not the branch name — two fork PRs named identically
-# would cancel each other) and the event action (a `labeled` run must not
-# cancel an in-flight `synchronize` run of the same PR).
+# would cancel each other) and a labeled/not-labeled bucket: a `labeled` run must
+# not cancel an in-flight `synchronize` run, while successive pushes to the same
+# PR must still supersede each other.
 concurrency:
-  group: e2e-${{ github.event.action || 'run' }}-${{ github.event.pull_request.number || github.run_id }}
+  group: e2e-${{ github.event.action == 'labeled' && 'labeled' || 'run' }}-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -265,9 +266,9 @@ jobs:
           E2E_USER: ${{ secrets.E2E_STAND_USER }}
           E2E_PASSWORD: ${{ secrets.E2E_STAND_PASSWORD }}
 
-      # Traces/videos are disabled on this tier (they would embed the live
-      # session cookie in a public-repo artifact) — this uploads results.json
-      # and failure screenshots only; never storageState.
+      # Traces, videos and screenshots are all disabled on this tier — they would
+      # embed the live session cookie, the stand URL or the login into a
+      # public-repo artifact. This uploads results.json only; never storageState.
       - name: Upload report
         if: always()
         uses: actions/upload-artifact@v4

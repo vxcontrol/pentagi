@@ -35,8 +35,10 @@ cleanup() {
     mkdir -p "$REPO_ROOT/frontend/e2e/test-results"
     compose logs --no-color pentagi mock-llm \
         > "$REPO_ROOT/frontend/e2e/test-results/compose.log" 2>&1 || true
-    remove_e2e_sandboxes
-    compose down -v --remove-orphans
+    # The trap is the script's last statement, so an unguarded teardown failure
+    # would become the exit status and turn a passing run red.
+    remove_e2e_sandboxes || true
+    compose down -v --remove-orphans || true
 }
 trap cleanup EXIT
 

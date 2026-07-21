@@ -105,7 +105,7 @@ export default defineConfig<BackendOptions>({
         baseURL: TIERS[tier].baseURL,
         ignoreHTTPSErrors: tier === 'local',
         locale: 'en-US',
-        screenshot: 'only-on-failure',
+        screenshot: tier === 'stand' ? 'off' : 'only-on-failure',
         timezoneId: 'UTC',
         // Stand traces/videos embed the live session cookie and the setup
         // project's password fill; CI uploads test-results as a public-repo
