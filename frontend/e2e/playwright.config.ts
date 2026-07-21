@@ -36,11 +36,12 @@ if (tier === 'stand' && !TIERS.stand.baseURL) {
 }
 
 export default defineConfig<BackendOptions>({
-    // Playwright's 0.2 per-pixel default absorbs cross-machine rendering noise the
-    // pinned container removes by construction; it also let a palette change through
-    // while reporting green. Count differing pixels instead: glyph antialiasing
-    // jitters by 2, while the palette change that slipped moved 71.
-    expect: { toHaveScreenshot: { maxDiffPixels: 20, threshold: 0 } },
+    // Keep Playwright's default per-pixel tolerance. Strict comparison was tried and
+    // reverted: the pinned container fixes the renderer but not the host, and text
+    // rasterisation still differs by 300-400 pixels between a local run and CI —
+    // consistently, not as jitter. Absorbing that needs a budget far larger than the
+    // ~70 pixels a palette change moves, so pixels cannot police colour here.
+    // cross/contrast.spec.ts measures colour numerically instead.
     forbidOnly: isCI,
     fullyParallel: true,
     globalTimeout: isCI ? 10 * 60_000 : undefined,
