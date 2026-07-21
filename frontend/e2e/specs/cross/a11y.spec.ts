@@ -19,6 +19,9 @@ for (const theme of THEMES) {
             test('login page', async ({ page }) => {
                 await page.goto('/login');
                 await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible();
+                // Same guard as the manifest scan: a dark seed that stops applying must not
+                // silently re-scan the light page under a dark label.
+                await expect(page.locator('html')).toHaveClass(theme === 'dark' ? /dark/ : /light/);
                 await scanA11y(page, '/login');
             });
         });
