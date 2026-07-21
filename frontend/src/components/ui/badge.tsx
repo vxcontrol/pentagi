@@ -18,7 +18,12 @@ const badgeVariants = cva(
             variant: {
                 blue: 'border-blue-500/20 bg-blue-500/10 text-blue-700 hover:bg-blue-500/20 dark:text-blue-400',
                 default: 'border-transparent bg-primary text-primary-foreground hover:bg-primary/80',
-                destructive: 'border-transparent bg-destructive text-destructive-foreground hover:bg-destructive/80',
+                // The dark fill is translucent on purpose: composited over the dark
+                // ground it darkens the red, which is what keeps the white foreground
+                // above AA (opaque it measures 3.71). Alphas differ per theme because
+                // the same fade lightens the red over a white ground.
+                destructive:
+                    'border-transparent bg-destructive text-destructive-foreground hover:bg-destructive/90 dark:bg-destructive/80 dark:hover:bg-destructive/70',
                 green: 'border-green-500/20 bg-green-500/10 text-green-800 hover:bg-green-500/20 dark:text-green-400',
                 orange: 'border-orange-500/20 bg-orange-500/10 text-orange-700 hover:bg-orange-500/20 dark:text-orange-400',
                 outline: 'text-foreground',

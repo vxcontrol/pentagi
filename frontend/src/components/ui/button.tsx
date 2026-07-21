@@ -24,7 +24,11 @@ const buttonVariants = cva(
             },
             variant: {
                 default: 'bg-primary text-primary-foreground shadow-sm hover:bg-primary/90',
-                destructive: 'bg-destructive text-destructive-foreground shadow-xs hover:bg-destructive/90',
+                // Translucent dark fill on purpose — over the dark ground it darkens
+                // the red, keeping the white foreground above AA (opaque it is 3.71).
+                // Mirrors the destructive Badge; keep the two in step.
+                destructive:
+                    'bg-destructive text-destructive-foreground shadow-xs hover:bg-destructive/90 dark:bg-destructive/80 dark:hover:bg-destructive/70',
                 ghost: 'hover:bg-accent hover:text-accent-foreground',
                 link: 'text-primary underline-offset-4 hover:underline',
                 outline: 'border border-input bg-background shadow-xs hover:bg-accent hover:text-accent-foreground',
