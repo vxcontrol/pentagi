@@ -11,17 +11,9 @@ const badgeVariants = cva(
             variant: 'default',
         },
         variants: {
-            // Colored variants carry a per-theme text shade: 700 on the light tint,
-            // 400 on the dark one. A shade number is not a constant lightness across
-            // hues, so green needs 800 — at 700 it measures 4.4991 against its tint
-            // and misses AA. Re-measure before changing a shade or a tint.
             variant: {
                 blue: 'border-blue-500/20 bg-blue-500/10 text-blue-700 hover:bg-blue-500/20 dark:text-blue-400',
                 default: 'border-transparent bg-primary text-primary-foreground hover:bg-primary/80',
-                // The dark fill is translucent on purpose: composited over the dark
-                // ground it darkens the red, which is what keeps the white foreground
-                // above AA (opaque it measures 3.71). Alphas differ per theme because
-                // the same fade lightens the red over a white ground.
                 destructive:
                     'border-transparent bg-destructive text-destructive-foreground hover:bg-destructive/90 dark:bg-destructive/80 dark:hover:bg-destructive/70',
                 green: 'border-green-500/20 bg-green-500/10 text-green-800 hover:bg-green-500/20 dark:text-green-400',
