@@ -10,6 +10,14 @@ const isCI = Boolean(process.env.CI);
 // that never match CI pixels.
 const isVisual = process.env.E2E_VISUAL === '1';
 
+// Baselines are linux-suffixed, so a host run writes `*-visual-darwin.png` beside
+// them: new files CI never reads, leaving it red with nothing to explain why.
+if (isVisual && process.platform !== 'linux') {
+    throw new Error(
+        `visual snapshots must run in the pinned container — use e2e/tools/run-visual.sh (got platform "${process.platform}")`,
+    );
+}
+
 // `vite preview` listens on VITE_PORT + 100 and reuses the dev proxy config.
 const PREVIEW_PORT = 8100;
 
