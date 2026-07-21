@@ -173,3 +173,26 @@ func TestOffEffective(t *testing.T) {
 	assert.False(t, offEffective(reasoning.OffOmit, nil), "unknown default + omit = assume no-op")
 	assert.False(t, offEffective(reasoning.OffUnsupported, nil), "rejected")
 }
+
+func TestConvertAgentConfigExtraBodyRoundTrip(t *testing.T) {
+	extraBody := map[string]any{
+		"chat_template_kwargs": map[string]any{"enable_thinking": false},
+		"provider":             "vllm",
+	}
+
+	from := ConvertAgentConfigFromGqlModel(&model.AgentConfig{Model: "m", ExtraBody: extraBody})
+	require.NotNil(t, from)
+	assert.Equal(t, extraBody, from.ExtraBody, "extra_body must survive the GraphQL→pconfig converter, not get dropped")
+
+	back := ConvertAgentConfigToGqlModel(from)
+	require.NotNil(t, back)
+	assert.Equal(t, extraBody, back.ExtraBody, "extra_body must round-trip back to the GraphQL model")
+}
+
+func TestConvertAgentConfigExtraBodyNilStaysNil(t *testing.T) {
+	from := ConvertAgentConfigFromGqlModel(&model.AgentConfig{Model: "m"})
+	require.NotNil(t, from)
+	assert.Nil(t, from.ExtraBody, "absent extra_body must stay nil, not become an empty map")
+
+	assert.Nil(t, ConvertAgentConfigToGqlModel(from).ExtraBody)
+}
