@@ -1,16 +1,9 @@
 import type { Page } from '@playwright/test';
 
-/** Badge and button labels are 12–13px, so the 3:1 large-text allowance never applies. */
 export const AA_NORMAL = 4.5;
 
 const HOST_ID = 'contrast-probes';
 
-/**
- * Paints one sample per class string on a card-coloured surface, on top of the
- * page so each probe is hoverable. Class strings come from the component's own
- * cva, so a palette edit changes what is measured — a probe list copied into the
- * spec would only ever re-test itself.
- */
 export const mountContrastProbes = async (page: Page, probes: Record<string, string>): Promise<void> => {
     await page.evaluate(
         ({ entries, hostId }) => {
@@ -36,13 +29,6 @@ export const mountContrastProbes = async (page: Page, probes: Record<string, str
     );
 };
 
-/**
- * The browser resolves and composites the colours, so oklch tokens and
- * translucent fills are measured as rendered rather than as declared.
- *
- * Returned unrounded: green-700 measures 4.4991 against its tint, which two
- * decimals would report as a passing "4.5".
- */
 export const measureContrast = async (page: Page, probe: string): Promise<number> =>
     page.evaluate((name) => {
         const element = document.querySelector<HTMLElement>(`[data-contrast="${name}"]`);
@@ -66,8 +52,6 @@ export const measureContrast = async (page: Page, probe: string): Promise<number
             context.clearRect(0, 0, 1, 1);
 
             for (const layer of layers) {
-                // An invalid fillStyle silently keeps the previous colour, which
-                // would report a missing token as a passing measurement.
                 context.fillStyle = '#000000';
                 context.fillStyle = layer;
                 context.fillRect(0, 0, 1, 1);
