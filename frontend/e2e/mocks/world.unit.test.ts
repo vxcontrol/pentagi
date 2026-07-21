@@ -66,6 +66,35 @@ describe('MockWorld matching', () => {
         world.matchGraphQL('login', {});
         expect(world.matchGraphQL('info', {})?.data).toEqual({ role: 'user' });
     });
+
+    it('advances to the newly-enabled entry after a second flag, without replaying the first', () => {
+        const world = new MockWorld({
+            mutations: { f1: [{ data: {}, setFlag: 'f1' }], f2: [{ data: {}, setFlag: 'f2' }] },
+            queries: {
+                stage: [
+                    { data: { stage: 'base' } },
+                    { data: { stage: 'after-f1' }, whenFlag: 'f1' },
+                    { data: { stage: 'after-f2' }, whenFlag: 'f2' },
+                ],
+            },
+        });
+
+        expect(world.matchGraphQL('stage', {})?.data).toEqual({ stage: 'base' });
+        world.matchGraphQL('f1', {});
+        expect(world.matchGraphQL('stage', {})?.data).toEqual({ stage: 'after-f1' });
+        world.matchGraphQL('f2', {});
+        // A cursor reset to 0 on the grown eligible subset would replay 'after-f1' here.
+        expect(world.matchGraphQL('stage', {})?.data).toEqual({ stage: 'after-f2' });
+    });
+
+    it('does not treat a non-plain-object pin (a Date) as a vacuous match', () => {
+        const world = new MockWorld({
+            mutations: { save: [{ data: { ok: true }, variables: { at: new Date('2026-01-01') } }] },
+        });
+
+        // With isPlainObject true for a Date, the pin recursed into [] own-keys and matched anything.
+        expect(world.matchGraphQL('save', { at: { anything: true } })).toBeUndefined();
+    });
 });
 
 describe('MockWorld streams', () => {
@@ -85,5 +114,22 @@ describe('MockWorld streams', () => {
         await vi.waitFor(() => expect(first).toHaveLength(2));
 
         expect(late).toEqual([{ data: { n: 2 } }]);
+    });
+
+    it('completes a late subscriber that joins after a complete:true stream has drained', async () => {
+        const world = new MockWorld({});
+        const entry: SubscriptionCassetteEntry = { complete: true, frames: [{ payload: { data: { n: 1 } } }] };
+        let firstDone = false;
+
+        world.subscribeStream('k', entry, { complete: () => (firstDone = true), next: () => {} });
+        await vi.waitFor(() => expect(firstDone).toBe(true));
+
+        const late: unknown[] = [];
+        let lateDone = false;
+
+        world.subscribeStream('k', entry, { complete: () => (lateDone = true), next: (p) => late.push(p) });
+
+        expect(lateDone).toBe(true);
+        expect(late).toEqual([]);
     });
 });
