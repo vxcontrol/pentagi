@@ -634,8 +634,7 @@
     font-size: 0.875em;
 }
 
-/* Background + token colours come from the highlight.js theme on `.hljs`
-   (imported by markdown-editor.tsx), matching the read-only viewer. */
+/* No background/colour here — the .hljs highlight.js theme (imported in markdown-editor.tsx) supplies them. */
 .tiptap-content .ProseMirror pre {
     position: relative;
     padding: 0.75rem 1rem;
@@ -643,8 +642,7 @@
     overflow-x: auto;
 }
 
-/* A caption bar naming the fence language, above the code (data-language is
-   stamped by TunedCodeBlock's renderHTML and never enters the document). */
+/* data-language is a DOM-only attribute (stamped by renderHTML); it never enters the serialized markdown. */
 .tiptap-content .ProseMirror pre[data-language]::before {
     content: attr(data-language);
     display: block;
