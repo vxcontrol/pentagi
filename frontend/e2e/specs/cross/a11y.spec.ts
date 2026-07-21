@@ -35,6 +35,9 @@ for (const theme of THEMES) {
                 test('has no axe violations', async ({ page }) => {
                     await page.goto(entry.path);
                     await expect(entry.ready(page)).toBeVisible();
+                    // A seed that stops taking effect would otherwise re-run the light
+                    // theme under a dark label and pass.
+                    await expect(page.locator('html')).toHaveClass(theme === 'dark' ? /dark/ : /light/);
                     await scanA11y(page, entry.path, entry.a11yWaivers);
                 });
             });

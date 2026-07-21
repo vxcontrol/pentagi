@@ -62,6 +62,16 @@ export const mountEditorProbes = async (page: Page, probes: Record<string, strin
 
             host.append(surface);
             document.body.append(host);
+
+            // Both token rules paint a chip via color-mix, so a transparent probe
+            // means its class matched nothing — a rename, or the rule moving out
+            // from under the ancestor chain above. Without this the measurement
+            // silently falls back to the page's default text pair, which clears AA.
+            for (const probe of surface.children) {
+                if (getComputedStyle(probe).backgroundColor === 'rgba(0, 0, 0, 0)') {
+                    throw new Error(`editor contrast probe "${probe.className}" matched no style rule`);
+                }
+            }
         },
         { entries: Object.entries(probes), hostId: HOST_ID },
     );

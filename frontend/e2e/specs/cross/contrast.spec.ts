@@ -42,6 +42,7 @@ for (const theme of THEMES) {
         test('every badge variant clears AA at rest and on hover', async ({ page }) => {
             await page.goto('/flows');
             await expect(page.getByRole('row', { name: /E2E Alpha/ })).toBeVisible();
+            await expect(page.locator('html')).toHaveClass(theme === 'dark' ? /dark/ : /light/);
 
             await mountContrastProbes(
                 page,
@@ -63,6 +64,7 @@ for (const theme of THEMES) {
         test('the destructive button clears AA at rest and on hover', async ({ page }) => {
             await page.goto('/flows');
             await expect(page.getByRole('row', { name: /E2E Alpha/ })).toBeVisible();
+            await expect(page.locator('html')).toHaveClass(theme === 'dark' ? /dark/ : /light/);
 
             await mountContrastProbes(page, { destructive: buttonVariants({ variant: 'destructive' }) });
 
@@ -77,6 +79,7 @@ for (const theme of THEMES) {
         test('editor highlight tokens clear AA on the editor surface', async ({ page }) => {
             await page.goto('/flows');
             await expect(page.getByRole('row', { name: /E2E Alpha/ })).toBeVisible();
+            await expect(page.locator('html')).toHaveClass(theme === 'dark' ? /dark/ : /light/);
 
             await mountEditorProbes(page, EDITOR_TOKENS);
 

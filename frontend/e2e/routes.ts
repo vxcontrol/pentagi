@@ -110,7 +110,9 @@ export const ROUTE_MANIFEST: RouteManifestEntry[] = [
         // target floor — widening them is a density decision for the file manager.
         a11yWaivers: [
             { rule: 'color-contrast', target: /text-muted-foreground\\?\/80/ },
-            { rule: 'target-size', target: /\.rounded|aria-label="Select / },
+            // `.rounded` unanchored would also match every rounded-* utility, so a
+            // future under-sized control anywhere on the page would be waived too.
+            { rule: 'target-size', target: /\.rounded(?![-\w])|aria-label="Select / },
         ],
         cassette: resourcesCassette,
         path: routes.resources,
