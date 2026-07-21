@@ -35,7 +35,7 @@ test.describe('smoke', { tag: '@smoke' }, () => {
             await page.getByRole('textbox', { name: 'Password' }).fill('wrong-password');
             await page.getByRole('button', { name: 'Sign in' }).click();
 
-            await expect(page.getByText('Invalid login or password').first()).toBeVisible();
+            await expect(page.getByText('Login failed. Please try again.').first()).toBeVisible();
             await expect(page).toHaveURL(/\/login/);
             // react-hook-form leaves Submit disabled after a failed submit until
             // an input changes.
