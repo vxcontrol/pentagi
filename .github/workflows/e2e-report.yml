@@ -59,22 +59,44 @@ jobs:
             }
 
             let statsLine = 'The run produced no results file (it likely failed before the tests started).';
+            let mockPassed = false;
             try {
               const report = JSON.parse(fs.readFileSync('results/results.json', 'utf8'));
               const n = (value) => Number(value) || 0;
               const { expected, unexpected, flaky, skipped } = report.stats ?? {};
               statsLine = `**${n(expected)} passed**, ${n(unexpected)} failed, ${n(flaky)} flaky, ${n(skipped)} skipped.`;
+              mockPassed = n(unexpected) === 0;
             } catch (error) {
               core.info(`results.json unavailable: ${error}`);
             }
 
-            const conclusion = run.conclusion === 'success' ? '✅' : '❌';
+            // The visual job is advisory (never a required check), so the header must
+            // track the mock gate, not the whole-run conclusion — otherwise a visual-only
+            // diff reads as a mock failure over a "0 failed" stats line.
+            let visualDiffers = false;
+            try {
+              const { data: jobs } = await github.rest.actions.listJobsForWorkflowRun({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                run_id: run.id,
+                per_page: 100,
+              });
+              visualDiffers = jobs.jobs.some((job) => /visual/.test(job.name) && job.conclusion === 'failure');
+            } catch (error) {
+              core.info(`run jobs unavailable: ${error}`);
+            }
+
+            const conclusion = !mockPassed ? '❌' : visualDiffers ? '⚠️' : '✅';
             const marker = '<!-- e2e-report -->';
+            const advisoryLine = visualDiffers
+              ? '⚠️ **Visual snapshots differ** — advisory only, does not block merge. Download the `e2e-visual-diffs` artifact to compare expected / actual / diff.'
+              : null;
             const body = [
               marker,
               `### ${conclusion} E2E (mock tier)`,
               '',
               statsLine,
+              ...(advisoryLine ? ['', advisoryLine] : []),
               '',
               `[Run + report/trace artifacts](${run.html_url}) · commit ${run.head_sha.slice(0, 7)}`,
               '',
