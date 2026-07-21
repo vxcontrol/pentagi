@@ -36,6 +36,11 @@ if (tier === 'stand' && !TIERS.stand.baseURL) {
 }
 
 export default defineConfig<BackendOptions>({
+    // Playwright's 0.2 per-pixel default absorbs cross-machine rendering noise the
+    // pinned container removes by construction; it also let a palette change through
+    // while reporting green. Count differing pixels instead: glyph antialiasing
+    // jitters by 2, while the palette change that slipped moved 71.
+    expect: { toHaveScreenshot: { maxDiffPixels: 20, threshold: 0 } },
     forbidOnly: isCI,
     fullyParallel: true,
     globalTimeout: isCI ? 10 * 60_000 : undefined,

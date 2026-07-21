@@ -44,7 +44,9 @@ export const ROUTE_MANIFEST: RouteManifestEntry[] = [
     {
         cassette: flowsCassette,
         path: routes.flow('5'),
-        ready: (page) => page.getByRole('button', { name: 'Flow actions' }),
+        // The terminal mounts after the header, and the visual spec masks it —
+        // capturing before it exists compares live pixels against a masked baseline.
+        ready: (page) => page.locator('.xterm').first(),
         sources: [
             'src/pages/flows',
             'src/features/flows',
