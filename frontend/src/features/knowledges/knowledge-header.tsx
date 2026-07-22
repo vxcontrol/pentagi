@@ -80,15 +80,14 @@ export function KnowledgeHeader({
     viewMode = 'rich',
 }: KnowledgeHeaderProps) {
     const navigate = useNavigate();
-    const { knowledgeId: routeKnowledgeId } = useParams();
+    const { knowledgeId } = useParams();
     const { isMobile } = useBreakpoint();
     const { deleteKnowledge, renameKnowledge } = useKnowledges();
     const [isRenaming, setIsRenaming] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
-    const documentId = knowledge?.id ?? null;
-    const knowledgeNav = useKnowledgeDetailNavigation(isNew ? null : (routeKnowledgeId ?? null));
+    const knowledgeNav = useKnowledgeDetailNavigation(isNew ? null : (knowledgeId ?? null));
 
     // Title source-of-truth is the server-side `question`. We intentionally do
     // not read it from the form draft below — the inline rename flow in this
@@ -108,7 +107,7 @@ export function KnowledgeHeader({
         isEditing: isEditingTitle,
         startEdit: handleRenameStart,
         stopEdit: handleRenameCancel,
-    } = useInlineEdit({ resetKey: documentId });
+    } = useInlineEdit({ resetKey: knowledge?.id ?? null });
 
     const handleRenameSave = useCallback(async () => {
         const newQuestion = editingInputRef.current?.value.trim();
@@ -139,14 +138,14 @@ export function KnowledgeHeader({
     }, [editingInputRef, handleRenameCancel, knowledge, renameKnowledge]);
 
     const handleDelete = useCallback(async () => {
-        if (!documentId) {
+        if (!knowledge) {
             return;
         }
 
         setIsDeleting(true);
 
         try {
-            await deleteKnowledge(documentId);
+            await deleteKnowledge(knowledge.id);
             onBeforeNavigateAway?.();
             navigate(routes.knowledges, { replace: true });
         } catch {
@@ -154,7 +153,7 @@ export function KnowledgeHeader({
         } finally {
             setIsDeleting(false);
         }
-    }, [documentId, deleteKnowledge, navigate, onBeforeNavigateAway]);
+    }, [knowledge, deleteKnowledge, navigate, onBeforeNavigateAway]);
 
     return (
         <>
