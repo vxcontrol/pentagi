@@ -5,7 +5,10 @@ import type { RouteSource } from './affected-routes.ts';
 import { affectedRoutes } from './affected-routes.ts';
 
 const MANIFEST: RouteSource[] = [
-    { path: '/flows', sources: ['src/pages/flows', 'src/features/flows', 'src/providers/flows-provider.tsx'] },
+    {
+        path: '/flows',
+        sources: ['src/pages/flows/flows.tsx', 'src/features/flows', 'src/providers/flows-provider.tsx'],
+    },
     { path: '/templates', sources: ['src/pages/templates', 'src/providers/templates-provider.tsx'] },
     { path: '/settings/api-tokens', sources: ['src/pages/settings/settings-api-tokens.tsx'] },
 ];
@@ -21,6 +24,12 @@ describe('affectedRoutes', () => {
         const result = affectedRoutes(['frontend/src/pages/settings/settings-api-tokens.tsx'], MANIFEST);
 
         expect(result.map((route) => route.path)).toEqual(['/settings/api-tokens']);
+    });
+
+    it('falls back to every route for a page no manifest route renders', () => {
+        const result = affectedRoutes(['frontend/src/pages/flows/flow-report.tsx'], MANIFEST);
+
+        expect(result).toHaveLength(MANIFEST.length);
     });
 
     it('returns every route when shared infra changes', () => {
@@ -43,7 +52,7 @@ describe('affectedRoutes', () => {
 
     it('collapses multiple changes in one route to a single entry', () => {
         const result = affectedRoutes(
-            ['frontend/src/pages/flows/flow.tsx', 'frontend/src/features/flows/flow-form.tsx'],
+            ['frontend/src/pages/flows/flows.tsx', 'frontend/src/features/flows/flow-form.tsx'],
             MANIFEST,
         );
 

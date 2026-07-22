@@ -42,7 +42,9 @@ export const ROUTE_MANIFEST: RouteManifestEntry[] = [
         cassette: flowsCassette,
         path: routes.flows,
         ready: (page) => page.getByRole('row', { name: /E2E Alpha/ }),
-        sources: ['src/pages/flows', 'src/features/flows', 'src/providers/flows-provider.tsx'],
+        // Per file, not the whole dir: the report and create pages sit beside these, and claiming
+        // the dir would scope their diffs to routes that never render them.
+        sources: ['src/pages/flows/flows.tsx', 'src/features/flows', 'src/providers/flows-provider.tsx'],
     },
     {
         // Message metadata (date + ID) renders at 50% opacity by design; revisit
@@ -65,7 +67,7 @@ export const ROUTE_MANIFEST: RouteManifestEntry[] = [
         // capturing before it exists compares live pixels against a masked baseline.
         ready: (page) => page.locator('.xterm').first(),
         sources: [
-            'src/pages/flows',
+            'src/pages/flows/flow.tsx',
             'src/features/flows',
             'src/providers/flow-provider.tsx',
             'src/providers/flows-provider.tsx',
