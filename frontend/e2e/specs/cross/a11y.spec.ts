@@ -1,5 +1,6 @@
 import { expect, test } from '../../fixtures/test.ts';
 import { scanA11y } from '../../helpers/a11y.ts';
+import { populatedSettingsProvidersCassette } from '../../mocks/cassettes/settings-providers.ts';
 import { loginJourneyCassette } from '../../mocks/cassettes/smoke.ts';
 import { ROUTE_MANIFEST } from '../../routes.ts';
 
@@ -26,6 +27,19 @@ for (const theme of THEMES) {
             });
         });
 
+        test.describe('settings providers (populated)', () => {
+            test.use({ cassette: populatedSettingsProvidersCassette() });
+
+            // Not a duplicate of the manifest scan: that one sweeps the empty state, which
+            // renders no provider cards at all.
+            test('provider cards have no axe violations', async ({ page }) => {
+                await page.goto('/settings/providers');
+                await expect(page.getByText('My Custom Endpoint')).toBeVisible();
+                await expect(page.locator('html')).toHaveClass(theme === 'dark' ? /dark/ : /light/);
+                await scanA11y(page, '/settings/providers (populated)');
+            });
+        });
+
         for (const entry of ROUTE_MANIFEST) {
             test.describe(entry.path, () => {
                 test.use({ cassette: entry.cassette() });
@@ -37,6 +51,16 @@ for (const theme of THEMES) {
                     await expect(page.locator('html')).toHaveClass(theme === 'dark' ? /dark/ : /light/);
                     await scanA11y(page, entry.path, entry.a11yWaivers);
                 });
+
+                for (const tab of entry.tabs ?? []) {
+                    test(`tab "${tab}" has no axe violations`, async ({ page }) => {
+                        await page.goto(entry.path);
+                        await expect(entry.ready(page)).toBeVisible();
+                        await expect(page.locator('html')).toHaveClass(theme === 'dark' ? /dark/ : /light/);
+                        await page.getByRole('tab', { name: tab }).click();
+                        await scanA11y(page, `${entry.path} [${tab}]`, entry.a11yWaivers);
+                    });
+                }
             });
         }
     });

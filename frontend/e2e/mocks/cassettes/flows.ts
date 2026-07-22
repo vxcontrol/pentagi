@@ -5,8 +5,15 @@ import type {
     FlowDocument,
     FlowFilesDocument,
     FlowFragmentFragment,
+    FlowStatsByFlowDocument,
     MessageLogFragmentFragment,
     TerminalLogFragmentFragment,
+    ToolcallsStatsByFlowDocument,
+    ToolcallsStatsByFunctionForFlowDocument,
+    UsageStatsByAgentTypeForFlowDocument,
+    UsageStatsByFlowDocument,
+    UsageStatsByModelAgentsForFlowDocument,
+    UsageStatsFragmentFragment,
 } from '@/graphql/types';
 
 import {
@@ -304,11 +311,63 @@ const flowTabsData: ResultOf<typeof FlowDocument> = {
     vectorStoreLogs: [TABS_VECTOR_LOG],
 };
 
+const flowUsage: UsageStatsFragmentFragment = entity('UsageStats', {
+    totalUsageCacheIn: 5,
+    totalUsageCacheOut: 3,
+    totalUsageCostIn: 0.01,
+    totalUsageCostOut: 0.02,
+    totalUsageIn: 100,
+    totalUsageOut: 40,
+});
+
+const usageStatsByFlow: ResultOf<typeof UsageStatsByFlowDocument> = { usageStatsByFlow: flowUsage };
+
+const usageStatsByAgentTypeForFlow: ResultOf<typeof UsageStatsByAgentTypeForFlowDocument> = {
+    usageStatsByAgentTypeForFlow: [entity('AgentTypeUsageStats', { agentType: AgentType.Pentester, stats: flowUsage })],
+};
+
+const usageStatsByModelAgentsForFlow: ResultOf<typeof UsageStatsByModelAgentsForFlowDocument> = {
+    usageStatsByModelAgentsForFlow: [
+        entity('ModelAgentsUsageStats', {
+            agentTypes: [AgentType.Pentester],
+            model: 'e2e-model',
+            provider: 'e2e-provider',
+            stats: flowUsage,
+        }),
+    ],
+};
+
+const toolcallsStatsByFlow: ResultOf<typeof ToolcallsStatsByFlowDocument> = {
+    toolcallsStatsByFlow: entity('ToolcallsStats', { totalCount: 12, totalDurationSeconds: 34 }),
+};
+
+const toolcallsStatsByFunctionForFlow: ResultOf<typeof ToolcallsStatsByFunctionForFlowDocument> = {
+    toolcallsStatsByFunctionForFlow: [
+        entity('FunctionToolcallsStats', {
+            avgDurationSeconds: 2.5,
+            functionName: 'terminal',
+            isAgent: false,
+            totalCount: 8,
+            totalDurationSeconds: 20,
+        }),
+    ],
+};
+
+const flowStatsByFlow: ResultOf<typeof FlowStatsByFlowDocument> = {
+    flowStatsByFlow: entity('FlowStats', { totalAssistantsCount: 1, totalSubtasksCount: 3, totalTasksCount: 1 }),
+};
+
 export const flowTabsCassette = (): Cassette =>
     flowsCassette({
         queries: {
             flow: [{ data: flowTabsData, variables: { id: '5' } }],
             flowFiles: [{ data: flowFiles, variables: { flowId: '5' } }],
+            flowStatsByFlow: [{ data: flowStatsByFlow, variables: { flowId: '5' } }],
+            toolcallsStatsByFlow: [{ data: toolcallsStatsByFlow, variables: { flowId: '5' } }],
+            toolcallsStatsByFunctionForFlow: [{ data: toolcallsStatsByFunctionForFlow, variables: { flowId: '5' } }],
+            usageStatsByAgentTypeForFlow: [{ data: usageStatsByAgentTypeForFlow, variables: { flowId: '5' } }],
+            usageStatsByFlow: [{ data: usageStatsByFlow, variables: { flowId: '5' } }],
+            usageStatsByModelAgentsForFlow: [{ data: usageStatsByModelAgentsForFlow, variables: { flowId: '5' } }],
         },
         rest: {
             [`GET /api/v1/flows/5/screenshots/${TABS_SCREENSHOT_ID}/file`]: [
