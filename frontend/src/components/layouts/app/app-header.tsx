@@ -55,8 +55,6 @@ export function AppHeaderAction({
     );
 }
 
-// Right-pinned: it grows leftward, so a control that comes and goes only leaves the ones
-// before it in place. Put those first.
 export function AppHeaderActions({ children, className }: { children?: ReactNode; className?: string }) {
     return <div className={cn('flex shrink-0 items-center gap-2 px-4', className)}>{children}</div>;
 }

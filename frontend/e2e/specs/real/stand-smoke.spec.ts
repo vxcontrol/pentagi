@@ -28,9 +28,7 @@ test.describe('stand smoke', { tag: '@stand' }, () => {
             // span tag matters: NavLink puts aria-current="page" on the active
             // settings-sidebar <a> at runtime, the breadcrumb title is a span.
             await expect(page.locator('span[aria-current="page"]')).toHaveText(title);
-            // The only assertion here a backend erroring on every request fails: each page
-            // returns early into its ErrorState, rendering neither branch. Both branches are
-            // accepted because a stand may legitimately hold no rows.
+            // Either branch: a query error renders neither, and a stand may hold no rows.
             await expect(page.locator('[data-slot="table"]').first().or(page.getByText(emptyTitle))).toBeVisible();
             expect(pageErrors, `uncaught errors on ${path}`).toEqual([]);
         });

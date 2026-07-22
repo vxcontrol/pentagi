@@ -6,7 +6,6 @@ import { buttonVariants } from '@/components/ui/button';
 import { expect, test } from '../../fixtures/test.ts';
 import { ROUTE_MANIFEST } from '../../routes.ts';
 
-// Keyed off the unions so a new variant joins the sanctioned set without a manual edit.
 const BADGE_VARIANTS = Object.keys({
     blue: true,
     default: true,
@@ -43,11 +42,6 @@ const ACCEPTED: Record<string, string[]> = {
     '/resources': ['button: hover:text-blue-400'],
 };
 
-/**
- * The contrast gate probes cva output, so a colour written straight into a page — the shape of the
- * one badge defect that shipped — is outside it by construction. This walks the rendered DOM
- * instead: every badge and button must draw its colour from the variant set or from a token.
- */
 test.describe('palette compliance', { tag: '@cross' }, () => {
     for (const entry of ROUTE_MANIFEST) {
         test.describe(entry.path, () => {

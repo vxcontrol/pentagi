@@ -568,6 +568,22 @@ const entityNav = useEntityDetailNavigation(isNew ? null : entityId); // null wh
 // both reading `controller={entityNav}`.
 ```
 
+#### Ordering the header actions
+
+`<AppHeaderContent>` takes the remaining width (`flex-1`), so `<AppHeaderActions>` ends up
+against the right edge and grows leftward. Two rules follow:
+
+1. **Controls that appear on a data condition go first** in the children. Everything after
+   them keeps its position when they arrive late — the flow header's Report button loads with
+   the task list, and the pager beside it must not move under a cursor that is clicking Next.
+2. **Controls that are always meaningful for the route render always**, taking `disabled` from
+   an explicit loading flag rather than being unmounted while the entity is null. Unmounting
+   collapses the cluster for the length of every fetch, which costs a step per pager click.
+
+The flow header is the reference: `Report · favourite · pager · actions menu`. A page whose
+entity can be genuinely absent (a not-found card) is the exception — it renders no actions at
+all, because none of them are meaningful there.
+
 ## Design rationale
 
 ### Why URL > storage

@@ -20,11 +20,7 @@ const EXCLUDED: Record<string, string> = {
     '/templates/new': 'create-mode variant of the template detail page',
 };
 
-/**
- * Dynamic route builders are functions, so the static walk below cannot see them — a new detail
- * route could otherwise stay outside every sweep with nothing failing. Each builder must say where
- * it is covered, or why it is not; the test asserts this list matches the builders that exist.
- */
+/** Route builders are functions, so the static walk below cannot see them. */
 const DYNAMIC_ROUTES: Record<string, string> = {
     flow: 'manifest entry (routes.flow("5"))',
     flowReport: 'not swept: needs a finished-flow report cassette',

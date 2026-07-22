@@ -8,9 +8,6 @@ import {
     RICH_PROMPT_TEMPLATE,
 } from '../../mocks/cassettes/settings-prompts.ts';
 
-// The route the editor loads a real Go text/template into. Covered by nothing else: the prompts
-// list spec expands the row in place, which renders a <pre>, never the editor — and the editor's
-// one shipped crash reproduced only in a production build, which is what this tier runs.
 test.describe('settings prompt detail', { tag: '@coverage' }, () => {
     test.use({ cassette: promptDetailCassette() });
 
@@ -29,7 +26,6 @@ test.describe('settings prompt detail', { tag: '@coverage' }, () => {
         const editor = page.getByRole('textbox', { name: EDITOR });
 
         await expect(editor).toBeVisible();
-        // The rich editor parsed the markdown rather than showing source.
         await expect(editor.getByRole('heading', { name: 'Pentester' })).toBeVisible();
         await expect(editor.getByText('nmap -sV {{.Target}}')).toBeVisible();
 
@@ -46,8 +42,6 @@ test.describe('settings prompt detail', { tag: '@coverage' }, () => {
 
         await expect(editor.getByRole('heading', { name: 'Pentester' })).toBeVisible();
 
-        // Typing makes the rich editor emit its own serialization — the half a load-only
-        // assertion cannot see, and where a parse/serialize defect would drop content.
         await editor.click();
         await page.keyboard.press('ControlOrMeta+End');
         await editor.pressSequentially(' E2E-MARK');

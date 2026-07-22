@@ -23,12 +23,7 @@ export const TEMPLATE_SEED = makeTemplate('11', 'E2E Seed Template', 'Scan the t
 
 const flowTemplates: ResultOf<typeof FlowTemplatesDocument> = { flowTemplates: [TEMPLATE_SEED] };
 
-/**
- * Non-trivial body for the template detail route, whose editor loads it from the server.
- * Carries the `{{PLACEHOLDER}}` atoms a flow template is built from, so a parse/serialize
- * round-trip that drops them fails the spec. No list-nested fence — that is a separate,
- * already-tracked editor defect.
- */
+/** No list-nested fence on purpose: that editor defect is tracked separately. */
 export const RICH_TEMPLATE_TEXT = [
     '# Recon',
     '',

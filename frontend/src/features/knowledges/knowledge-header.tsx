@@ -87,8 +87,7 @@ export function KnowledgeHeader({
     const [isDeleting, setIsDeleting] = useState(false);
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
-    const knowledgeId = knowledge?.id ?? null;
-    // The route's id, not `knowledgeId` above: the pager must work while the document loads.
+    const documentId = knowledge?.id ?? null;
     const knowledgeNav = useKnowledgeDetailNavigation(isNew ? null : (routeKnowledgeId ?? null));
 
     // Title source-of-truth is the server-side `question`. We intentionally do
@@ -99,6 +98,7 @@ export function KnowledgeHeader({
     const hasKnowledge = !!knowledge;
     const isEntityPending = !hasKnowledge;
     const hasAnonymizeRow = isMobile && canAnonymize;
+    const hasViewRow = !!onModeChange;
     const hasEntityRows = !isNew;
     const hasNavRow = isMobile && !isNew;
 
@@ -108,7 +108,7 @@ export function KnowledgeHeader({
         isEditing: isEditingTitle,
         startEdit: handleRenameStart,
         stopEdit: handleRenameCancel,
-    } = useInlineEdit({ resetKey: knowledgeId });
+    } = useInlineEdit({ resetKey: documentId });
 
     const handleRenameSave = useCallback(async () => {
         const newQuestion = editingInputRef.current?.value.trim();
@@ -139,14 +139,14 @@ export function KnowledgeHeader({
     }, [editingInputRef, handleRenameCancel, knowledge, renameKnowledge]);
 
     const handleDelete = useCallback(async () => {
-        if (!knowledgeId) {
+        if (!documentId) {
             return;
         }
 
         setIsDeleting(true);
 
         try {
-            await deleteKnowledge(knowledgeId);
+            await deleteKnowledge(documentId);
             onBeforeNavigateAway?.();
             navigate(routes.knowledges, { replace: true });
         } catch {
@@ -154,7 +154,7 @@ export function KnowledgeHeader({
         } finally {
             setIsDeleting(false);
         }
-    }, [knowledgeId, deleteKnowledge, navigate, onBeforeNavigateAway]);
+    }, [documentId, deleteKnowledge, navigate, onBeforeNavigateAway]);
 
     return (
         <>
@@ -307,9 +307,7 @@ export function KnowledgeHeader({
                             ) : null}
                             {hasEntityRows && (
                                 <>
-                                    {/* Unconditional it doubles up: callers without a mode toggle
-                                        render nothing between the two groups. */}
-                                    {onModeChange ? <DropdownMenuSeparator /> : null}
+                                    {hasViewRow && <DropdownMenuSeparator />}
                                     <DropdownMenuItem
                                         disabled={isDeleting || isEntityPending}
                                         onClick={() => setIsDeleteDialogOpen(true)}

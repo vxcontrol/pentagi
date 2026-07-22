@@ -4,8 +4,6 @@ import { expect, test } from '../../fixtures/test.ts';
 import { expectCleanPage } from '../../helpers/errors.ts';
 import { RICH_TEMPLATE_TEXT, TEMPLATE_DETAIL, templateDetailCassette } from '../../mocks/cassettes/templates.ts';
 
-// The other route whose editor loads server content: the templates list spec only exercises
-// create mode, so nothing covered the load path in the production bundle this tier runs.
 test.describe('template detail', { tag: '@coverage' }, () => {
     test.use({ cassette: templateDetailCassette() });
 

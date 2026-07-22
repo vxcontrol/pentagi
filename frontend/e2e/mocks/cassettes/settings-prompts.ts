@@ -19,12 +19,8 @@ const agentPrompt = (system: PromptType) => entity('AgentPrompt', { system: prom
 const agentPromptPair = (system: PromptType, human: PromptType) =>
     entity('AgentPrompts', { human: prompt(human), system: prompt(system) });
 
-/**
- * A realistic Go `text/template` for the prompt detail route: the backend parses these with
- * text/template, so the `{{.Var}}` atoms and the fenced command must survive the editor's
- * parse/serialize round-trip. Deliberately has no list-nested fence — that is a separate,
- * already-tracked editor defect and would make this spec assert a known bug.
- */
+/** No list-nested fence on purpose: that editor defect is tracked separately, and including it
+ * here would make the spec assert a known bug. */
 export const RICH_PROMPT_TEMPLATE = [
     '# Pentester',
     '',

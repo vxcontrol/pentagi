@@ -30,8 +30,7 @@ for (const theme of THEMES) {
         test.describe('settings providers (populated)', () => {
             test.use({ cassette: populatedSettingsProvidersCassette() });
 
-            // Not a duplicate of the manifest scan: that one sweeps the empty state, which
-            // renders no provider cards at all.
+            // The manifest scan sweeps this route empty, so it renders no provider cards.
             test('provider cards have no axe violations', async ({ page }) => {
                 await page.goto('/settings/providers');
                 await expect(page.getByText('My Custom Endpoint')).toBeVisible();
