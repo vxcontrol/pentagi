@@ -88,8 +88,7 @@ export function KnowledgeHeader({
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
     const knowledgeId = knowledge?.id ?? null;
-    // The route's id, not the loaded document's: the pager walks siblings, so it has to work
-    // while this document is in flight — as it already does on the flow and template pages.
+    // The route's id, not `knowledgeId` above: the pager must work while the document loads.
     const knowledgeNav = useKnowledgeDetailNavigation(isNew ? null : (routeKnowledgeId ?? null));
 
     // Title source-of-truth is the server-side `question`. We intentionally do
@@ -308,8 +307,8 @@ export function KnowledgeHeader({
                             ) : null}
                             {hasEntityRows && (
                                 <>
-                                    {/* The View row is the only thing between the two groups, and the
-                                        loading shell has no mode toggle: unconditional, the rules double up. */}
+                                    {/* Unconditional it doubles up: callers without a mode toggle
+                                        render nothing between the two groups. */}
                                     {onModeChange ? <DropdownMenuSeparator /> : null}
                                     <DropdownMenuItem
                                         disabled={isDeleting || isEntityPending}

@@ -24,8 +24,6 @@ test.describe('responsive', { tag: '@cross' }, () => {
             expect(await page.evaluate(hasHorizontalOverflow)).toBe(false);
 
             await page.getByRole('row', { name: /E2E Alpha/ }).click();
-            // The only load gate left here: below md the star is inside the menu, and the
-            // actions trigger renders before the flow arrives.
             await expect(page.locator('header').getByText('E2E Alpha')).toBeVisible();
             await expect(page.getByRole('button', { name: 'Flow actions' })).toBeVisible();
             expect(await page.evaluate(hasHorizontalOverflow)).toBe(false);

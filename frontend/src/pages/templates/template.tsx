@@ -454,8 +454,6 @@ function Template() {
                         </BreadcrumbList>
                     </Breadcrumb>
                 </AppHeaderContent>
-                {/* The not-found card reuses this header; a Save aimed at a form that is not
-                    there and a pager for an id that is not in the list are not "always meaningful". */}
                 {!isTemplateMissing && (
                     <AppHeaderActions>
                         <AppHeaderAction

@@ -55,8 +55,8 @@ export function AppHeaderAction({
     );
 }
 
-// The cluster is right-pinned, so it grows leftward: controls that come and go belong at the
-// start of the children, and everything after them keeps its position when they appear.
+// Right-pinned: it grows leftward, so a control that comes and goes only leaves the ones
+// before it in place. Put those first.
 export function AppHeaderActions({ children, className }: { children?: ReactNode; className?: string }) {
     return <div className={cn('flex shrink-0 items-center gap-2 px-4', className)}>{children}</div>;
 }

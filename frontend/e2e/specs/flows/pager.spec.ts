@@ -8,8 +8,6 @@ test.describe('flow pager', { tag: ['@flows', '@smoke'] }, () => {
     test.describe('with a report to show', () => {
         test.use({ cassette: flowTabsCassette() });
 
-        // Not covered by the pixel baselines: the header cluster is well under the visual
-        // project's maxDiffPixelRatio, so a reordering passes there unnoticed.
         test('keeps the variable action left of the fixed ones', async ({ page }) => {
             await page.goto('/flows/5');
             await expect(page.locator('header').getByRole('button', { name: 'Report' })).toBeVisible();
@@ -31,8 +29,8 @@ test.describe('flow pager', { tag: ['@flows', '@smoke'] }, () => {
         await page.goto('/flows/5');
         await expect(header.getByText('E2E Alpha')).toBeVisible();
 
-        // Hold the sibling's data back so the in-flight window is wide enough to sample: the
-        // cassette answers in single-digit milliseconds, which hides an unmount entirely.
+        // Without the delay the cassette answers before the first sample and the loop below
+        // passes against an unmounting pager — measured.
         await page.route('**/graphql', async (route) => {
             await new Promise((resolve) => setTimeout(resolve, 300));
             await route.fallback();
@@ -57,8 +55,6 @@ test.describe('flow pager', { tag: ['@flows', '@smoke'] }, () => {
         await expect(page).toHaveURL(/\/flows\/6$/);
         await expect(header.getByText('E2E Beta')).toBeVisible();
 
-        // Sampled, not awaited: `toBeVisible` retries, so it passes even if the cluster
-        // unmounts for the length of the fetch and comes back.
         expect(samples.every((sample) => sample.hasPager)).toBe(true);
         expect(samples.map((sample) => sample.path)).not.toContain('/flows');
 

@@ -87,6 +87,20 @@ describe('DetailNavigationToolbar', () => {
         expect(screen.getByRole('button', { name: /–\/0/ })).toBeDisabled();
     });
 
+    it.each([
+        { expected: '3ch', total: 4 },
+        { expected: '5ch', total: 42 },
+        { expected: '11ch', total: 99999 },
+    ])('reserves $expected of counter width for a set of $total', ({ expected, total }) => {
+        const items = Array.from({ length: total }, (_, index) => ({ id: `i${index}`, title: `Item ${index}` }));
+
+        renderToolbar({ currentId: 'i0', items });
+
+        expect(screen.getByRole('button', { name: new RegExp(`1/${total}`) }).firstElementChild).toHaveStyle({
+            minWidth: expected,
+        });
+    });
+
     it('composes Buttons + Sheet: position button opens the listbox', async () => {
         const user = userEvent.setup();
         renderToolbar({ currentId: 'c' });

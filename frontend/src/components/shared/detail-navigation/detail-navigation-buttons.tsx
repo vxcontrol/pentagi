@@ -69,8 +69,6 @@ export function DetailNavigationButtons<T extends { id: string }>({
                         type="button"
                         variant="outline"
                     >
-                        {/* Holding the widest label's width keeps Previous still when stepping past
-                            a digit boundary; on the button itself the reserve would go to padding. */}
                         <span style={{ minWidth: `${widestLabel.length}ch` }}>{controller.positionLabel}</span>
                     </Button>
                 </TooltipTrigger>

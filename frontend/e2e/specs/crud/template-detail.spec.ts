@@ -18,7 +18,6 @@ test.describe('template detail', { tag: '@coverage' }, () => {
         await page.keyboard.press('Escape');
     };
 
-    // This route has no visual baseline at all, so the header order is asserted nowhere else.
     test('keeps the pager between save and the actions menu', async ({ page }) => {
         await page.goto(`/templates/${TEMPLATE_DETAIL.id}`);
         await expect(page.getByRole('button', { name: 'Template actions' })).toBeVisible();
