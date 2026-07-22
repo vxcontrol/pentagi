@@ -9,6 +9,7 @@ import { KnowledgeHeader } from './knowledge-header';
 interface KnowledgeLayoutProps {
     children: ReactNode;
     className?: string;
+    isLoading?: boolean;
     isNew: boolean;
     knowledge?: KnowledgeDocumentFragmentFragment | null;
     saveButton?: ReactNode;
@@ -20,10 +21,18 @@ interface KnowledgeLayoutProps {
  * renders the header inline because the form must be the parent of every
  * input.
  */
-export function KnowledgeLayout({ children, className, isNew, knowledge, saveButton }: KnowledgeLayoutProps) {
+export function KnowledgeLayout({
+    children,
+    className,
+    isLoading,
+    isNew,
+    knowledge,
+    saveButton,
+}: KnowledgeLayoutProps) {
     return (
         <div className={cn('flex min-h-[100dvh] flex-col', className)}>
             <KnowledgeHeader
+                isLoading={isLoading}
                 isNew={isNew}
                 knowledge={knowledge}
                 saveButton={saveButton}

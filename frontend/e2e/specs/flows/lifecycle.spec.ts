@@ -17,7 +17,7 @@ import { FLOW_A, flowsCassette, makeFlow } from '../../mocks/cassettes/flows.ts'
 const openFlowA = async (page: import('@playwright/test').Page) => {
     await page.goto('/flows');
     await page.getByRole('row', { name: /E2E Alpha/ }).click();
-    await expect(page.getByRole('button', { name: 'Flow actions' })).toBeVisible();
+    await expect(page.locator('header').getByRole('button', { name: 'Toggle favorite' })).toBeEnabled();
 };
 
 test.describe('flow lifecycle', { tag: '@flows' }, () => {

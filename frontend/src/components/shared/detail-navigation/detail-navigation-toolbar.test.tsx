@@ -80,10 +80,11 @@ const renderToolbar = (props: HarnessProps = {}) => {
 };
 
 describe('DetailNavigationToolbar', () => {
-    it('renders nothing when raw items is empty', () => {
+    it('renders a disabled cluster when raw items is empty', () => {
         renderToolbar({ items: [] });
-        expect(screen.queryByRole('button', { name: /Previous/i })).not.toBeInTheDocument();
-        expect(screen.queryByRole('button', { name: /Next/i })).not.toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /Previous/i })).toBeDisabled();
+        expect(screen.getByRole('button', { name: /Next/i })).toBeDisabled();
+        expect(screen.getByRole('button', { name: /–\/0/ })).toBeDisabled();
     });
 
     it('composes Buttons + Sheet: position button opens the listbox', async () => {

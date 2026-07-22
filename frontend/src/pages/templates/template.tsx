@@ -241,9 +241,6 @@ function Template() {
     const { isDesktop, isMobile } = useBreakpoint();
     const isNew = templateId === 'new';
 
-    // Pass `null` while creating a new template — there is no "current item"
-    // to highlight, and the toolbar shouldn't render at all anyway (gated
-    // below by `canShowActions`).
     const templateNav = useTemplateDetailNavigation(isNew ? null : templateId);
 
     const [expandedPresetIndex, setExpandedPresetIndex] = useState<null | number>(null);
@@ -415,7 +412,8 @@ function Template() {
         }
     }, [pendingPreset, setValue]);
 
-    const canShowActions = !isNew && !!templateData?.flowTemplate;
+    const hasTemplate = !!templateData?.flowTemplate;
+    const isTemplatePending = !isNew && (isLoadingTemplate || !hasTemplate);
 
     const pageHeader = (
         <>
@@ -424,7 +422,7 @@ function Template() {
                     <Breadcrumb className="min-w-0 flex-1">
                         <BreadcrumbList className="min-w-0 flex-nowrap">
                             <BreadcrumbItem className="min-w-0 gap-2">
-                                {isEditingTitle && canShowActions ? (
+                                {isEditingTitle && hasTemplate ? (
                                     <InlineEditInput
                                         busy={isRenaming}
                                         className="w-64 max-w-full min-w-0 flex-1"
@@ -434,7 +432,7 @@ function Template() {
                                         onSave={handleTemplateRenameSave}
                                         placeholder="Template title"
                                     />
-                                ) : canShowActions ? (
+                                ) : hasTemplate ? (
                                     <Tooltip>
                                         <TooltipTrigger asChild>
                                             <BreadcrumbPage
@@ -455,27 +453,21 @@ function Template() {
                         </BreadcrumbList>
                     </Breadcrumb>
                 </AppHeaderContent>
-                <AppHeaderActions
-                    pager={
-                        canShowActions &&
-                        !isMobile && (
-                            <DetailNavigationToolbar<Template>
-                                controller={templateNav}
-                                renderItem={renderTemplateItem}
-                                sheetIcon={<FileText className="size-4" />}
-                                sheetTitle="Templates"
-                            />
-                        )
-                    }
-                >
-                    {(isNew || !!templateData?.flowTemplate) && (
-                        <AppHeaderAction
-                            disabled={!isNew && !hasUnsavedChanges}
-                            form="template-form"
-                            icon={<Save />}
-                            label={isNew ? 'Create' : 'Save'}
-                            loading={isSaving}
-                            type="submit"
+                <AppHeaderActions>
+                    <AppHeaderAction
+                        disabled={isTemplatePending || (!isNew && !hasUnsavedChanges)}
+                        form="template-form"
+                        icon={<Save />}
+                        label={isNew ? 'Create' : 'Save'}
+                        loading={isSaving}
+                        type="submit"
+                    />
+                    {!isNew && !isMobile && (
+                        <DetailNavigationToolbar<Template>
+                            controller={templateNav}
+                            renderItem={renderTemplateItem}
+                            sheetIcon={<FileText className="size-4" />}
+                            sheetTitle="Templates"
                         />
                     )}
                     <DropdownMenu>
@@ -493,9 +485,9 @@ function Template() {
                             className="min-w-24"
                             onCloseAutoFocus={handleDropdownCloseAutoFocus}
                         >
-                            {canShowActions && (
+                            {!isNew && (
                                 <>
-                                    {isMobile && templateNav.total > 0 && (
+                                    {isMobile && (
                                         <>
                                             <DropdownMenuItem
                                                 className="cursor-default hover:bg-transparent focus:bg-transparent"
@@ -514,7 +506,10 @@ function Template() {
                                             <DropdownMenuSeparator />
                                         </>
                                     )}
-                                    <DropdownMenuItem onClick={handleTemplateRenameStart}>
+                                    <DropdownMenuItem
+                                        disabled={isTemplatePending}
+                                        onClick={handleTemplateRenameStart}
+                                    >
                                         <Pencil />
                                         Rename
                                     </DropdownMenuItem>
@@ -533,11 +528,11 @@ function Template() {
                                     rawTooltip="Edit the raw template"
                                 />
                             </DropdownMenuItem>
-                            {canShowActions && (
+                            {!isNew && (
                                 <>
                                     <DropdownMenuSeparator />
                                     <DropdownMenuItem
-                                        disabled={isDeleting}
+                                        disabled={isDeleting || isTemplatePending}
                                         onClick={() => setIsDeleteDialogOpen(true)}
                                     >
                                         {isDeleting ? (
@@ -558,7 +553,7 @@ function Template() {
                     </DropdownMenu>
                 </AppHeaderActions>
             </AppHeader>
-            {isMobile && canShowActions && (
+            {isMobile && !isNew && (
                 <DetailNavigationSheet<Template>
                     controller={templateNav}
                     renderItem={renderTemplateItem}

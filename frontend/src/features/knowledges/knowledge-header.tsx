@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-import { Ellipsis, HatGlasses, LibraryBig, Pencil, Trash } from 'lucide-react';
+import { Ellipsis, HatGlasses, LibraryBig, Pencil, Save, Trash } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -40,6 +40,7 @@ interface KnowledgeHeaderProps {
     canAnonymize?: boolean;
     isAnonymizeDisabled?: boolean;
     isAnonymizing?: boolean;
+    isLoading?: boolean;
     isNew: boolean;
     knowledge?: KnowledgeDocumentFragmentFragment | null;
     /**
@@ -71,6 +72,7 @@ export function KnowledgeHeader({
     canAnonymize = false,
     isAnonymizeDisabled = false,
     isAnonymizing = false,
+    isLoading = false,
     isNew,
     knowledge,
     onAnonymize,
@@ -95,9 +97,11 @@ export function KnowledgeHeader({
     // header writes through `renameKnowledge`, which refreshes `knowledge` via
     // the cache, and the form picks up the new value separately.
     const knowledgeName = knowledge?.question ?? null;
-    const canShowActions = !isNew && !!knowledge;
+    const hasKnowledge = !!knowledge;
+    const isEntityPending = isLoading || !hasKnowledge;
     const hasAnonymizeRow = isMobile && canAnonymize;
-    const hasNavRow = isMobile && knowledgeNav.total > 0;
+    const hasEntityRows = !isNew;
+    const hasNavRow = isMobile && !isNew;
 
     const {
         handleDropdownCloseAutoFocus,
@@ -161,7 +165,7 @@ export function KnowledgeHeader({
                         <BreadcrumbList className="min-w-0 flex-nowrap">
                             <BreadcrumbItem className="min-w-0 gap-2">
                                 <LibraryBig className="size-4 shrink-0" />
-                                {isEditingTitle && canShowActions ? (
+                                {isEditingTitle && hasKnowledge ? (
                                     <InlineEditInput
                                         busy={isRenaming}
                                         className="w-64 max-w-full min-w-0 flex-1"
@@ -171,7 +175,7 @@ export function KnowledgeHeader({
                                         onSave={handleRenameSave}
                                         placeholder="Knowledge question"
                                     />
-                                ) : canShowActions ? (
+                                ) : hasKnowledge ? (
                                     <Tooltip>
                                         <TooltipTrigger asChild>
                                             <BreadcrumbPage
@@ -192,19 +196,7 @@ export function KnowledgeHeader({
                         </BreadcrumbList>
                     </Breadcrumb>
                 </AppHeaderContent>
-                <AppHeaderActions
-                    pager={
-                        canShowActions &&
-                        !isMobile && (
-                            <DetailNavigationToolbar<Knowledge>
-                                controller={knowledgeNav}
-                                renderItem={renderKnowledgeItem}
-                                sheetIcon={<LibraryBig className="size-4" />}
-                                sheetTitle="Knowledges"
-                            />
-                        )
-                    }
-                >
+                <AppHeaderActions>
                     {canAnonymize && !isMobile && (
                         <AppHeaderAction
                             disabled={isAnonymizeDisabled}
@@ -215,115 +207,131 @@ export function KnowledgeHeader({
                             variant="outline"
                         />
                     )}
-                    {saveButton}
-                    {(canShowActions || (isMobile && canAnonymize) || !!onModeChange) && (
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button
-                                    aria-label="Knowledge actions"
-                                    className="size-8 p-0"
-                                    type="button"
-                                    variant="ghost"
-                                >
-                                    <Ellipsis />
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent
-                                align="end"
-                                className="min-w-24"
-                                onCloseAutoFocus={handleDropdownCloseAutoFocus}
+                    {saveButton ?? (
+                        <AppHeaderAction
+                            disabled
+                            icon={<Save />}
+                            label={isNew ? 'Create' : 'Save'}
+                            type="button"
+                        />
+                    )}
+                    {!isNew && !isMobile && (
+                        <DetailNavigationToolbar<Knowledge>
+                            controller={knowledgeNav}
+                            renderItem={renderKnowledgeItem}
+                            sheetIcon={<LibraryBig className="size-4" />}
+                            sheetTitle="Knowledges"
+                        />
+                    )}
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button
+                                aria-label="Knowledge actions"
+                                className="size-8 p-0"
+                                type="button"
+                                variant="ghost"
                             >
-                                {hasAnonymizeRow && (
+                                <Ellipsis />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent
+                            align="end"
+                            className="min-w-24"
+                            onCloseAutoFocus={handleDropdownCloseAutoFocus}
+                        >
+                            {hasAnonymizeRow && (
+                                <DropdownMenuItem
+                                    disabled={isAnonymizeDisabled}
+                                    onClick={onAnonymize}
+                                >
+                                    {isAnonymizing ? (
+                                        <>
+                                            <Spinner variant="circle" />
+                                            Anonymizing...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <HatGlasses />
+                                            Anonymize
+                                        </>
+                                    )}
+                                </DropdownMenuItem>
+                            )}
+                            {hasNavRow && (
+                                <>
+                                    {hasAnonymizeRow && <DropdownMenuSeparator />}
                                     <DropdownMenuItem
-                                        disabled={isAnonymizeDisabled}
-                                        onClick={onAnonymize}
+                                        className="cursor-default hover:bg-transparent focus:bg-transparent"
+                                        onSelect={(event) => event.preventDefault()}
                                     >
-                                        {isAnonymizing ? (
+                                        <LibraryBig />
+                                        Knowledges
+                                        <div className="-my-1.5 -mr-2 ml-auto flex items-center">
+                                            <DetailNavigationButtons<Knowledge>
+                                                controller={knowledgeNav}
+                                                sheetTitle="Knowledges"
+                                                size="sm"
+                                            />
+                                        </div>
+                                    </DropdownMenuItem>
+                                </>
+                            )}
+                            {hasEntityRows && (
+                                <>
+                                    {(hasAnonymizeRow || hasNavRow) && <DropdownMenuSeparator />}
+                                    <DropdownMenuItem
+                                        disabled={isEntityPending}
+                                        onClick={handleRenameStart}
+                                    >
+                                        <Pencil className="size-3" />
+                                        Rename
+                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+                                </>
+                            )}
+                            {onModeChange ? (
+                                <>
+                                    {!hasEntityRows && (hasAnonymizeRow || hasNavRow) && <DropdownMenuSeparator />}
+                                    <DropdownMenuItem
+                                        className="cursor-default gap-4 hover:bg-transparent focus:bg-transparent"
+                                        onSelect={(event) => event.preventDefault()}
+                                    >
+                                        View
+                                        <EditorViewModeToggle
+                                            className="-my-1.5 -mr-2 ml-auto"
+                                            mode={viewMode}
+                                            onModeChange={onModeChange}
+                                            rawTooltip="Edit the raw markdown"
+                                        />
+                                    </DropdownMenuItem>
+                                </>
+                            ) : null}
+                            {hasEntityRows && (
+                                <>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem
+                                        disabled={isDeleting || isEntityPending}
+                                        onClick={() => setIsDeleteDialogOpen(true)}
+                                    >
+                                        {isDeleting ? (
                                             <>
                                                 <Spinner variant="circle" />
-                                                Anonymizing...
+                                                Deleting...
                                             </>
                                         ) : (
                                             <>
-                                                <HatGlasses />
-                                                Anonymize
+                                                <Trash />
+                                                Delete
                                             </>
                                         )}
                                     </DropdownMenuItem>
-                                )}
-                                {hasNavRow && (
-                                    <>
-                                        {hasAnonymizeRow && <DropdownMenuSeparator />}
-                                        <DropdownMenuItem
-                                            className="cursor-default hover:bg-transparent focus:bg-transparent"
-                                            onSelect={(event) => event.preventDefault()}
-                                        >
-                                            <LibraryBig />
-                                            Knowledges
-                                            <div className="-my-1.5 -mr-2 ml-auto flex items-center">
-                                                <DetailNavigationButtons<Knowledge>
-                                                    controller={knowledgeNav}
-                                                    sheetTitle="Knowledges"
-                                                    size="sm"
-                                                />
-                                            </div>
-                                        </DropdownMenuItem>
-                                    </>
-                                )}
-                                {canShowActions && (
-                                    <>
-                                        {(hasAnonymizeRow || hasNavRow) && <DropdownMenuSeparator />}
-                                        <DropdownMenuItem onClick={handleRenameStart}>
-                                            <Pencil className="size-3" />
-                                            Rename
-                                        </DropdownMenuItem>
-                                        <DropdownMenuSeparator />
-                                    </>
-                                )}
-                                {onModeChange ? (
-                                    <>
-                                        {!canShowActions && (hasAnonymizeRow || hasNavRow) && <DropdownMenuSeparator />}
-                                        <DropdownMenuItem
-                                            className="cursor-default gap-4 hover:bg-transparent focus:bg-transparent"
-                                            onSelect={(event) => event.preventDefault()}
-                                        >
-                                            View
-                                            <EditorViewModeToggle
-                                                className="-my-1.5 -mr-2 ml-auto"
-                                                mode={viewMode}
-                                                onModeChange={onModeChange}
-                                                rawTooltip="Edit the raw markdown"
-                                            />
-                                        </DropdownMenuItem>
-                                    </>
-                                ) : null}
-                                {canShowActions && (
-                                    <>
-                                        <DropdownMenuSeparator />
-                                        <DropdownMenuItem
-                                            disabled={isDeleting}
-                                            onClick={() => setIsDeleteDialogOpen(true)}
-                                        >
-                                            {isDeleting ? (
-                                                <>
-                                                    <Spinner variant="circle" />
-                                                    Deleting...
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <Trash />
-                                                    Delete
-                                                </>
-                                            )}
-                                        </DropdownMenuItem>
-                                    </>
-                                )}
-                            </DropdownMenuContent>
-                        </DropdownMenu>
-                    )}
+                                </>
+                            )}
+                        </DropdownMenuContent>
+                    </DropdownMenu>
                 </AppHeaderActions>
             </AppHeader>
-            {isMobile && canShowActions && (
+            {isMobile && !isNew && (
                 <DetailNavigationSheet<Knowledge>
                     controller={knowledgeNav}
                     renderItem={renderKnowledgeItem}

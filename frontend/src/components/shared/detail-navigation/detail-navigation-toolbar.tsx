@@ -25,9 +25,6 @@ export interface DetailNavigationToolbarProps<T extends { id: string }> {
  * Most desktop call sites use this directly; pages with non-standard chrome
  * (e.g. mobile prev/position/next inside a `<DropdownMenuItem>`) can compose
  * the leaves themselves and read from the same controller.
- *
- * Renders `null` when the controller reports `itemsEmpty` — saves the user
- * from a momentary "–/0" flash while the parent provider's data is in flight.
  */
 export function DetailNavigationToolbar<T extends { id: string }>({
     controller,
@@ -37,10 +34,6 @@ export function DetailNavigationToolbar<T extends { id: string }>({
     sheetIcon,
     sheetTitle,
 }: DetailNavigationToolbarProps<T>) {
-    if (controller.itemsEmpty) {
-        return null;
-    }
-
     return (
         <>
             <DetailNavigationButtons

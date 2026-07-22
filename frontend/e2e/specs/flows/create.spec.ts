@@ -43,7 +43,7 @@ test.describe('flow create', { tag: ['@flows', '@smoke'] }, () => {
         await page.getByRole('button', { name: 'Submit' }).click();
 
         await expect(page).toHaveURL(/\/flows\/7/);
-        await expect(page.getByRole('button', { name: 'Flow actions' })).toBeVisible();
+        await expect(page.locator('header').getByRole('button', { name: 'Toggle favorite' })).toBeEnabled();
         await expect(page.locator('header').getByText('Say Hello Flow')).toBeVisible();
         expectCleanPage(pageErrorLog);
     });

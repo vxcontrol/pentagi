@@ -24,8 +24,17 @@ test.describe('responsive', { tag: '@cross' }, () => {
             expect(await page.evaluate(hasHorizontalOverflow)).toBe(false);
 
             await page.getByRole('row', { name: /E2E Alpha/ }).click();
+            // The title, not the actions trigger: below md the star and the pager live inside
+            // the menu, and the trigger itself renders before the flow arrives.
+            await expect(page.locator('header').getByText('E2E Alpha')).toBeVisible();
             await expect(page.getByRole('button', { name: 'Flow actions' })).toBeVisible();
             expect(await page.evaluate(hasHorizontalOverflow)).toBe(false);
+
+            await page.getByRole('button', { name: 'Flow actions' }).click();
+            await expect(page.getByRole('menuitem', { name: /Flows/ })).toBeVisible();
+            await expect(page.getByRole('menuitem', { name: /favorites/ })).toBeVisible();
+            await page.keyboard.press('Escape');
+
             expectCleanPage(pageErrorLog);
         });
     });
