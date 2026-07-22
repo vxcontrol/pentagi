@@ -1625,7 +1625,7 @@ function SettingsProvider() {
         );
     }
 
-    if (error) {
+    if (error && !data) {
         return (
             <>
                 <AppHeader>

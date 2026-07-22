@@ -404,7 +404,7 @@ function SettingsProviders() {
         </AppHeader>
     );
 
-    if (isLoading) {
+    if (isLoading && !data) {
         return (
             <>
                 {pageHeader}

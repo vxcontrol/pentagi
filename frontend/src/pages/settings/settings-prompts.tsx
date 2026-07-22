@@ -792,7 +792,7 @@ function SettingsPrompts() {
         </AppHeader>
     );
 
-    if (isLoading) {
+    if (isLoading && !data) {
         return (
             <>
                 {pageHeader}

@@ -1,4 +1,4 @@
-import { render } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ProviderType } from '@/graphql/types';
@@ -52,7 +52,7 @@ const settingsProviders = {
 // A stable `data` identity matters: the page's seeding effect lists `data` as a
 // dependency, so a fresh object each render would loop it (Apollo returns a
 // cached reference in production).
-const queryResult = { data: { settingsProviders }, error: undefined, loading: false };
+const queryResult = { data: { settingsProviders }, error: undefined as Error | undefined, loading: false };
 
 vi.mock('@apollo/client/react', () => ({
     useMutation: () => [vi.fn(), {}],
@@ -94,6 +94,8 @@ import SettingsProvider from './settings-provider';
 beforeEach(() => {
     navigate.mockClear();
     setSearch('');
+    queryResult.error = undefined;
+    queryResult.loading = false;
 });
 
 describe('SettingsProvider create-form type guards', () => {
@@ -122,6 +124,17 @@ describe('SettingsProvider create-form type guards', () => {
         setSearch('type=anthropic');
         render(<SettingsProvider />);
 
+        expect(navigate).not.toHaveBeenCalled();
+    });
+
+    // cache-and-network means an error can arrive with cached data still present; the form must
+    // survive it rather than flip to the full-page error screen.
+    it('keeps the form on a refetch error while cached data is present', () => {
+        setSearch('type=anthropic');
+        queryResult.error = new Error('e2e induced refetch failure');
+        render(<SettingsProvider />);
+
+        expect(screen.queryByText('Error loading provider data')).not.toBeInTheDocument();
         expect(navigate).not.toHaveBeenCalled();
     });
 });

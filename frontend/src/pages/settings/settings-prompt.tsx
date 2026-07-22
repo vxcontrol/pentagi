@@ -741,7 +741,7 @@ function SettingsPrompt() {
         );
     }
 
-    if (error) {
+    if (error && !data) {
         return (
             <>
                 {pageHeader}
