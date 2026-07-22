@@ -12,7 +12,13 @@ test.describe('real backend flow run', { tag: '@real' }, () => {
 
         await page.goto('/flows/new');
         await page.getByPlaceholder(/Describe what you would like PentAGI to test/).fill('Say hello');
-        await page.getByRole('button', { name: 'Submit' }).click();
+
+        // The form is invalid until the providers query lands, so a cold stack keeps Submit
+        // disabled for a while — clicking straight away spends the whole test timeout on it.
+        const submit = page.getByRole('button', { name: 'Submit' });
+
+        await expect(submit).toBeEnabled({ timeout: 60_000 });
+        await submit.click();
 
         await expect(page).toHaveURL(/\/flows\/\d+/, { timeout: 30_000 });
         // Scope the list assertion to this attempt's flow id: a retry runs
