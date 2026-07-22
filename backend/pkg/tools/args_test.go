@@ -592,3 +592,155 @@ func TestSearchCodeAction_QuestionsUnmarshal(t *testing.T) {
 		})
 	}
 }
+
+func TestStringsUnmarshalJSON(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		input   string
+		want    []string
+		wantErr bool
+	}{
+		{
+			name:  "real array of strings",
+			input: `["query1", "query2"]`,
+			want:  []string{"query1", "query2"},
+		},
+		{
+			name:  "real array single element",
+			input: `["only one"]`,
+			want:  []string{"only one"},
+		},
+		{
+			name:  "empty array",
+			input: `[]`,
+			want:  []string{},
+		},
+		{
+			name:  "double-encoded array (production bug case)",
+			input: `"[\"SCCM MECM CM_P01\", \"ClientKeyData RSA private keys\"]"`,
+			want:  []string{"SCCM MECM CM_P01", "ClientKeyData RSA private keys"},
+		},
+		{
+			name:  "double-encoded single-element array",
+			input: `"[\"only one\"]"`,
+			want:  []string{"only one"},
+		},
+		{
+			name:  "bare string falls back to single-element slice",
+			input: `"just a plain question, not JSON at all"`,
+			want:  []string{"just a plain question, not JSON at all"},
+		},
+		{
+			name:    "empty bare string is an error",
+			input:   `""`,
+			wantErr: true,
+		},
+		{
+			name:    "null literal is an error",
+			input:   `null`,
+			wantErr: true,
+		},
+		{
+			name:    "array of non-strings is an error",
+			input:   `[1, 2, 3]`,
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var s Strings
+			err := s.UnmarshalJSON([]byte(tt.input))
+			if (err != nil) != tt.wantErr {
+				t.Errorf("UnmarshalJSON(%s) error = %v, wantErr %v", tt.input, err, tt.wantErr)
+				return
+			}
+			if tt.wantErr {
+				return
+			}
+			if len(s) != len(tt.want) {
+				t.Fatalf("UnmarshalJSON(%s) = %v, want %v", tt.input, []string(s), tt.want)
+			}
+			for i := range tt.want {
+				if s[i] != tt.want[i] {
+					t.Errorf("UnmarshalJSON(%s)[%d] = %q, want %q", tt.input, i, s[i], tt.want[i])
+				}
+			}
+		})
+	}
+}
+
+func TestStringsMarshalJSON(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		s    Strings
+		want string
+	}{
+		{name: "multiple elements", s: Strings{"a", "b"}, want: `["a","b"]`},
+		{name: "single element", s: Strings{"only"}, want: `["only"]`},
+		{name: "empty slice", s: Strings{}, want: "[]"},
+		{name: "nil slice", s: nil, want: "[]"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := tt.s.MarshalJSON()
+			if err != nil {
+				t.Fatalf("MarshalJSON() unexpected error: %v", err)
+			}
+			if string(got) != tt.want {
+				t.Errorf("MarshalJSON() = %s, want %s", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestStringsJSONRoundTrip(t *testing.T) {
+	t.Parallel()
+
+	type container struct {
+		Questions Strings `json:"questions"`
+	}
+
+	data, err := json.Marshal(container{Questions: Strings{"q1", "q2"}})
+	if err != nil {
+		t.Fatalf("Marshal() error = %v", err)
+	}
+
+	var c2 container
+	if err := json.Unmarshal(data, &c2); err != nil {
+		t.Fatalf("round-trip Unmarshal() error = %v", err)
+	}
+	if len(c2.Questions) != 2 || c2.Questions[0] != "q1" || c2.Questions[1] != "q2" {
+		t.Errorf("round-trip Questions = %v, want [q1 q2]", []string(c2.Questions))
+	}
+}
+
+// TestSearchInMemoryAction_QuestionsDoubleEncoded reproduces the exact production
+// failure from the error log: the LLM sent "questions" as a JSON string containing
+// an escaped array literal instead of a real JSON array, which used to fail with
+// "json: cannot unmarshal string into ... []string". It must now recover gracefully.
+func TestSearchInMemoryAction_QuestionsDoubleEncoded(t *testing.T) {
+	t.Parallel()
+
+	raw := `{"max_results": 10, "message": "m", "questions": "[\"SCCM MECM CM_P01 database SC_NAA Network Access Account credentials extraction\", \"SCCM ClientKeyData RSA private keys mTLS bypass MECM\"]"}`
+
+	var action SearchInMemoryAction
+	if err := json.Unmarshal([]byte(raw), &action); err != nil {
+		t.Fatalf("Unmarshal() unexpected error: %v", err)
+	}
+	if len(action.Questions) != 2 {
+		t.Fatalf("Questions length = %d, want 2 (got: %v)", len(action.Questions), []string(action.Questions))
+	}
+	if action.Questions[0] != "SCCM MECM CM_P01 database SC_NAA Network Access Account credentials extraction" {
+		t.Errorf("Questions[0] = %q, unexpected value", action.Questions[0])
+	}
+}

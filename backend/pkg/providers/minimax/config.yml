@@ -9,6 +9,7 @@ simple:
     input: 0.30
     output: 1.20
     cache_read: 0.06
+    cache_write: 0.375
 
 simple_json:
   model: MiniMax-M2.7
@@ -22,6 +23,7 @@ simple_json:
     input: 0.30
     output: 1.20
     cache_read: 0.06
+    cache_write: 0.375
 
 primary_agent:
   model: MiniMax-M3

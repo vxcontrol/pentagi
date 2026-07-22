@@ -144,6 +144,19 @@ func (t *terminal) Handle(ctx context.Context, name string, args json.RawMessage
 			return "", fmt.Errorf("failed to unmarshal file action: %w", err)
 		}
 
+		if action.Action == "" {
+			// The LLM occasionally omits the required 'action' field even though the
+			// tool schema marks it required. The intent is almost always unambiguous
+			// from the other fields present, so infer it instead of failing the call
+			// outright and burning a tool-call-fixer round-trip on something that
+			// doesn't need one.
+			if action.Content != "" {
+				action.Action = WriteFile
+			} else {
+				action.Action = ReadFile
+			}
+		}
+
 		logger = logger.WithFields(logrus.Fields{
 			"action": action.Action,
 			"path":   action.Path,
@@ -308,6 +321,10 @@ func (t *terminal) getExecResult(ctx context.Context, id string, timeout time.Du
 }
 
 func (t *terminal) ReadFile(ctx context.Context, flowID int64, path string) (string, error) {
+	if path == "" {
+		return "", fmt.Errorf("path is required and cannot be empty")
+	}
+
 	containerName := PrimaryTerminalName(flowID)
 
 	isRunning, err := t.dockerClient.IsContainerRunning(ctx, t.containerLID)
@@ -390,6 +407,10 @@ func (t *terminal) ReadFile(ctx context.Context, flowID int64, path string) (str
 }
 
 func (t *terminal) WriteFile(ctx context.Context, flowID int64, content string, path string) (string, error) {
+	if path == "" {
+		return "", fmt.Errorf("path is required and cannot be empty")
+	}
+
 	containerName := PrimaryTerminalName(flowID)
 
 	isRunning, err := t.dockerClient.IsContainerRunning(ctx, t.containerLID)

@@ -30,7 +30,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-const stopTaskTimeout = 5 * time.Second
+const stopTaskTimeout = 60 * time.Second
 
 type FlowWorker interface {
 	GetFlowID() int64

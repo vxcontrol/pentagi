@@ -547,10 +547,32 @@ func TestBrowserHandle_ValidationErrors(t *testing.T) {
 
 	t.Run("unknown action", func(t *testing.T) {
 		_, err := b.Handle(t.Context(), "browser", json.RawMessage(`{"url":"https://example.com","action":"unknown","message":"m"}`))
-		if err == nil || !strings.Contains(err.Error(), "unknown file action") {
+		if err == nil || !strings.Contains(err.Error(), "unknown browser action") {
 			t.Fatalf("expected unknown action error, got: %v", err)
 		}
 	})
+}
+
+func TestBrowserHandle_MissingAction_DefaultsToMarkdown(t *testing.T) {
+	ts := newTestScraper(t, "ok")
+	defer ts.Close()
+
+	b := &browser{
+		flowID:   1,
+		dataDir:  t.TempDir(),
+		scPubURL: ts.URL,
+		scp:      &screenshotProviderMock{},
+	}
+
+	// Mirrors production tool calls observed in the logs where the LLM omits
+	// the required 'action' field entirely.
+	result, err := b.Handle(t.Context(), "browser", json.RawMessage(`{"url":"https://example.com/page","message":"m"}`))
+	if err != nil {
+		t.Fatalf("expected inferred markdown action to succeed, got error: %v", err)
+	}
+	if result == "" {
+		t.Fatal("Handle() returned empty result for inferred markdown action")
+	}
 }
 
 func TestBrowserHandle_MarkdownSuccess_StoresScreenshot(t *testing.T) {

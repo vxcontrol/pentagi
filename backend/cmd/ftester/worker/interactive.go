@@ -166,7 +166,9 @@ func InteractiveFillArgs(ctx context.Context, funcName string, taskID, subtaskID
 	return structValue, nil
 }
 
-// fillStructFromMap fills a structure with data from a map
+// fillStructFromMap fills a structure with data from a map. Every conversion
+// uses a safe (two-value) type assertion so a mismatch between the collected
+// value and the field's Go type returns a clear error instead of panicking.
 func fillStructFromMap(structPtr any, data map[string]any) error {
 	val := reflect.ValueOf(structPtr).Elem()
 
@@ -184,32 +186,68 @@ func fillStructFromMap(structPtr any, data map[string]any) error {
 			fieldName = fieldName[:comma]
 		}
 
-		if value, ok := data[fieldName]; ok {
-			fieldValue := val.Field(i)
-			if fieldValue.CanSet() {
-				switch fieldValue.Kind() {
-				case reflect.String:
-					fieldValue.SetString(value.(string))
-				case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-					fieldValue.SetInt(int64(value.(int)))
-				case reflect.Bool:
-					fieldValue.SetBool(value.(bool))
-				case reflect.Slice:
-					if fieldValue.Type().Elem().Kind() == reflect.String {
-						switch v := value.(type) {
-						case []string:
-							fieldValue.Set(reflect.ValueOf(v))
-						case string:
-							fieldValue.Set(reflect.ValueOf([]string{v}))
-						}
-					}
-				case reflect.Struct:
-					// For special types that may be in the tools package
-					// This is a simplified version that may require refinement
-					// depending on specific types
-					fmt.Printf("Complex structure field detected: %s\n", fieldName)
-				}
+		value, ok := data[fieldName]
+		if !ok {
+			continue
+		}
+
+		fieldValue := val.Field(i)
+		if !fieldValue.CanSet() {
+			continue
+		}
+
+		switch fieldValue.Kind() {
+		case reflect.String:
+			strValue, ok := value.(string)
+			if !ok {
+				return fmt.Errorf("unexpected type for argument '%s': expected string, got %T", fieldName, value)
 			}
+			fieldValue.SetString(strValue)
+
+		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+			intValue, ok := value.(int)
+			if !ok {
+				return fmt.Errorf("unexpected type for argument '%s': expected int, got %T", fieldName, value)
+			}
+			fieldValue.SetInt(int64(intValue))
+
+		case reflect.Bool:
+			boolValue, ok := value.(bool)
+			if !ok {
+				return fmt.Errorf("unexpected type for argument '%s': expected bool, got %T", fieldName, value)
+			}
+			fieldValue.SetBool(boolValue)
+
+		case reflect.Slice:
+			if fieldValue.Type().Elem().Kind() != reflect.String {
+				return fmt.Errorf("unsupported slice element type for argument '%s': %s", fieldName, fieldValue.Type().Elem().Kind())
+			}
+
+			// Build the slice explicitly against the field's own type (e.g.
+			// tools.Strings, not a plain []string) rather than relying on Go's
+			// slice-assignability rules, so this keeps working correctly even
+			// if the field is a named type with custom (un)marshaling.
+			var items []string
+			switch v := value.(type) {
+			case []string:
+				items = v
+			case string:
+				items = []string{v}
+			default:
+				return fmt.Errorf("unexpected type for argument '%s': expected []string or string, got %T", fieldName, value)
+			}
+
+			converted := reflect.MakeSlice(fieldValue.Type(), len(items), len(items))
+			for idx, item := range items {
+				converted.Index(idx).SetString(item)
+			}
+			fieldValue.Set(converted)
+
+		case reflect.Struct:
+			// For special types that may be in the tools package
+			// This is a simplified version that may require refinement
+			// depending on specific types
+			fmt.Printf("Complex structure field detected: %s\n", fieldName)
 		}
 	}
 

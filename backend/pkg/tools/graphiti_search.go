@@ -3,7 +3,9 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"net/url"
 	"strings"
 	"time"
 
@@ -178,6 +180,26 @@ func (t *graphitiSearchTool) Handle(ctx context.Context, name string, args json.
 	}
 
 	if err != nil {
+		// Transport-level failures (connection refused, DNS, timeout, TLS handshake
+		// timeout, context deadline exceeded) surface from the underlying http.Client
+		// as *url.Error. This is not a malformed-arguments problem, so it must not be
+		// routed through the tool-call arg-fixer (which cannot fix a network outage
+		// and would burn 3 retries doing so) — degrade gracefully instead, matching
+		// the terminal/browser tools' handling of the same class of failure.
+		var urlErr *url.Error
+		if errors.As(err, &urlErr) {
+			softMsg := fmt.Sprintf(
+				"Graphiti knowledge graph is temporarily unavailable (%v); continuing without historical context.",
+				err,
+			)
+			retriever.End(
+				langfuse.WithRetrieverStatus(softMsg),
+				langfuse.WithRetrieverLevel(langfuse.ObservationLevelWarning),
+			)
+			logger.WithError(err).Warnf("graphiti search '%s' unavailable, degrading gracefully", searchArgs.SearchType)
+			return softMsg, nil
+		}
+
 		retriever.End(
 			langfuse.WithRetrieverStatus(err.Error()),
 			langfuse.WithRetrieverLevel(langfuse.ObservationLevelError),

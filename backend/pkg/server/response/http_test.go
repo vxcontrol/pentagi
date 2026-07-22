@@ -10,6 +10,8 @@ import (
 	"pentagi/pkg/version"
 
 	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus/hooks/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -292,6 +294,42 @@ func TestErrorResponse_NilOriginalError(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &body)
 	require.NoError(t, err)
 	assert.Equal(t, "NotPermitted", body["code"])
+}
+
+func TestErrorWithLevel_LogsAtGivenLevel(t *testing.T) {
+	hook := test.NewGlobal()
+	defer hook.Reset()
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/test", nil)
+
+	ErrorWithLevel(c, ErrAuthRequired, errors.New("cookie claim invalid"), logrus.WarnLevel)
+
+	require.NotEmpty(t, hook.Entries)
+	entry := hook.LastEntry()
+	assert.Equal(t, logrus.WarnLevel, entry.Level)
+	assert.Equal(t, "api error", entry.Message)
+
+	// The HTTP response itself must be identical to what Error() would produce -
+	// only the log level differs.
+	assert.Equal(t, http.StatusForbidden, w.Code)
+}
+
+func TestError_StillLogsAtErrorLevel(t *testing.T) {
+	hook := test.NewGlobal()
+	defer hook.Reset()
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/test", nil)
+
+	Error(c, ErrInternal, errors.New("db connection failed"))
+
+	require.NotEmpty(t, hook.Entries)
+	entry := hook.LastEntry()
+	assert.Equal(t, logrus.ErrorLevel, entry.Level)
+	assert.Equal(t, "api error", entry.Message)
 }
 
 func TestHttpError_MultipleInstancesIndependent(t *testing.T) {

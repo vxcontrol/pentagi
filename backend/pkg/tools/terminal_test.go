@@ -5,11 +5,13 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -33,7 +35,10 @@ func (m *contextTestTermLogProvider) PutMsg(_ context.Context, _ database.Termlo
 var _ TermLogProvider = (*contextTestTermLogProvider)(nil)
 
 // contextAwareMockDockerClient tracks whether the context was canceled
-// when getExecResult runs, proving context.WithoutCancel works.
+// when getExecResult runs, proving context.WithoutCancel works. It also
+// records which of CopyFromContainer (read_file) / CopyToContainer
+// (write_file) was invoked, for tests asserting on the file-tool's
+// inferred/validated action.
 type contextAwareMockDockerClient struct {
 	isRunning      bool
 	execCreateResp container.ExecCreateResponse
@@ -43,6 +48,10 @@ type contextAwareMockDockerClient struct {
 
 	// Set by ContainerExecAttach to track if ctx was canceled during attach
 	ctxWasCanceled bool
+
+	// Set by CopyFromContainer/CopyToContainer to track which file operation ran
+	copyFromCalled bool
+	copyToCalled   bool
 }
 
 func (m *contextAwareMockDockerClient) RunContainer(_ context.Context, _ string, _ database.ContainerType,
@@ -103,10 +112,12 @@ func (m *contextAwareMockDockerClient) ContainerExecInspect(_ context.Context, _
 	return m.inspectResp, nil
 }
 func (m *contextAwareMockDockerClient) CopyToContainer(_ context.Context, _ string, _ string, _ io.Reader, _ container.CopyToContainerOptions) error {
+	m.copyToCalled = true
 	return nil
 }
 func (m *contextAwareMockDockerClient) CopyFromContainer(_ context.Context, _ string, _ string) (io.ReadCloser, container.PathStat, error) {
-	return io.NopCloser(nil), container.PathStat{}, nil
+	m.copyFromCalled = true
+	return io.NopCloser(bytes.NewReader(nil)), container.PathStat{}, nil
 }
 func (m *contextAwareMockDockerClient) Cleanup(_ context.Context) error { return nil }
 func (m *contextAwareMockDockerClient) GetDefaultImage() string         { return "test-image" }
@@ -195,6 +206,127 @@ func TestExecCommandNonDetachRespectsParentCancel(t *testing.T) {
 	assert.Error(t, err)
 	assert.True(t, mock.ctxWasCanceled,
 		"non-detached command SHOULD see parent context cancellation")
+}
+
+func TestTerminalHandle_FileAction_DefaultsToWriteFile_WhenContentPresent(t *testing.T) {
+	mock := &contextAwareMockDockerClient{isRunning: true}
+	term := &terminal{
+		flowID:       1,
+		containerID:  1,
+		containerLID: "test-container",
+		dockerClient: mock,
+		tlp:          &contextTestTermLogProvider{},
+	}
+
+	// No "action" field at all - mirrors the malformed tool calls observed in
+	// production logs (LLM omits the required 'action' when content+path make
+	// the intent unambiguous).
+	args := json.RawMessage(`{"path":"/work/test.py","content":"print(1)","message":"m"}`)
+	_, err := term.Handle(t.Context(), FileToolName, args)
+
+	if err != nil {
+		t.Fatalf("expected inferred write_file to succeed, got error: %v", err)
+	}
+	if !mock.copyToCalled || mock.copyFromCalled {
+		t.Fatalf("expected CopyToContainer (write_file) to be called, copyTo=%v copyFrom=%v",
+			mock.copyToCalled, mock.copyFromCalled)
+	}
+}
+
+func TestTerminalHandle_FileAction_DefaultsToReadFile_WhenContentAbsent(t *testing.T) {
+	mock := &contextAwareMockDockerClient{isRunning: true}
+	term := &terminal{
+		flowID:       1,
+		containerID:  1,
+		containerLID: "test-container",
+		dockerClient: mock,
+		tlp:          &contextTestTermLogProvider{},
+	}
+
+	args := json.RawMessage(`{"path":"/work/test.py","message":"m"}`)
+	_, err := term.Handle(t.Context(), FileToolName, args)
+
+	if err != nil {
+		t.Fatalf("expected inferred read_file to succeed, got error: %v", err)
+	}
+	if !mock.copyFromCalled || mock.copyToCalled {
+		t.Fatalf("expected CopyFromContainer (read_file) to be called, copyFrom=%v copyTo=%v",
+			mock.copyFromCalled, mock.copyToCalled)
+	}
+}
+
+func TestTerminalHandle_FileAction_EmptyPath_ReadFile_ReturnsClearError(t *testing.T) {
+	mock := &contextAwareMockDockerClient{isRunning: true}
+	term := &terminal{
+		flowID:       1,
+		containerID:  1,
+		containerLID: "test-container",
+		dockerClient: mock,
+		tlp:          &contextTestTermLogProvider{},
+	}
+
+	args := json.RawMessage(`{"action":"read_file","path":"","message":"m"}`)
+	// Handle() wraps ReadFile/WriteFile errors into a soft (nil-error) response
+	// via wrapCommandResult, same as every other terminal-tool failure - so the
+	// error text is asserted on the returned string, not a returned Go error.
+	result, err := term.Handle(t.Context(), FileToolName, args)
+
+	if err != nil {
+		t.Fatalf("expected soft-failed (nil error) response, got error: %v", err)
+	}
+	if !strings.Contains(result, "path is required and cannot be empty") {
+		t.Fatalf("expected result to mention the empty-path error, got: %q", result)
+	}
+	if mock.copyFromCalled {
+		t.Fatal("expected CopyFromContainer to not be called for an empty path")
+	}
+}
+
+func TestTerminalHandle_FileAction_EmptyPath_WriteFile_ReturnsClearError(t *testing.T) {
+	mock := &contextAwareMockDockerClient{isRunning: true}
+	term := &terminal{
+		flowID:       1,
+		containerID:  1,
+		containerLID: "test-container",
+		dockerClient: mock,
+		tlp:          &contextTestTermLogProvider{},
+	}
+
+	args := json.RawMessage(`{"action":"write_file","path":"","content":"data","message":"m"}`)
+	result, err := term.Handle(t.Context(), FileToolName, args)
+
+	if err != nil {
+		t.Fatalf("expected soft-failed (nil error) response, got error: %v", err)
+	}
+	if !strings.Contains(result, "path is required and cannot be empty") {
+		t.Fatalf("expected result to mention the empty-path error, got: %q", result)
+	}
+	if mock.copyToCalled {
+		t.Fatal("expected CopyToContainer to not be called for an empty path")
+	}
+}
+
+func TestTerminalHandle_FileAction_ExplicitInvalidAction_StillFails(t *testing.T) {
+	mock := &contextAwareMockDockerClient{isRunning: true}
+	term := &terminal{
+		flowID:       1,
+		containerID:  1,
+		containerLID: "test-container",
+		dockerClient: mock,
+		tlp:          &contextTestTermLogProvider{},
+	}
+
+	// An explicit but invalid action must still be a hard failure - inference
+	// only kicks in when the field is empty.
+	args := json.RawMessage(`{"path":"/work/test.py","action":"delete_file","message":"m"}`)
+	_, err := term.Handle(t.Context(), FileToolName, args)
+
+	if err == nil || !strings.Contains(err.Error(), "unknown file action") {
+		t.Fatalf("expected unknown file action error, got: %v", err)
+	}
+	if mock.copyFromCalled || mock.copyToCalled {
+		t.Fatalf("expected no docker calls for an invalid explicit action")
+	}
 }
 
 func TestPrimaryTerminalName(t *testing.T) {
