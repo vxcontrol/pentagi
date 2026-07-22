@@ -36,9 +36,7 @@ export function DetailNavigationButtons<T extends { id: string }>({
     const isSm = size === 'sm';
     const sideButtonSize = isSm ? 'size-7' : 'size-8';
     const middleHeight = isSm ? 'h-7' : 'h-8';
-    // Reserve the widest label the set can produce ("2409/2409"), so stepping across a digit
-    // boundary cannot widen the counter and slide Previous out from under the cursor.
-    const reservedLabelWidth = `${String(controller.total).length * 2 + 1}ch`;
+    const widestLabel = `${controller.total}/${controller.total}`;
 
     return (
         <div className="flex items-center">
@@ -68,11 +66,12 @@ export function DetailNavigationButtons<T extends { id: string }>({
                         )}
                         disabled={!controller.hasEntries}
                         onClick={controller.openSheet}
-                        style={{ minWidth: reservedLabelWidth }}
                         type="button"
                         variant="outline"
                     >
-                        {controller.positionLabel}
+                        {/* Holding the widest label's width keeps Previous still when stepping past
+                            a digit boundary; on the button itself the reserve would go to padding. */}
+                        <span style={{ minWidth: `${widestLabel.length}ch` }}>{controller.positionLabel}</span>
                     </Button>
                 </TooltipTrigger>
                 <TooltipContent>Show all matching {lowerTitle}</TooltipContent>

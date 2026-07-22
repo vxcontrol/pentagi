@@ -85,9 +85,8 @@ export function FlowProvider({ children }: FlowProviderProps) {
         variables: { id: flowId ?? '' },
     });
 
-    // In flight with nothing to show. A background refetch (the reconnect reconcile) still
-    // holds the previous flow, so it must not raise this: it would cover the page with the
-    // spinner overlay and tear down the 14 live subscriptions mid-flight.
+    // A refetch that still holds the previous flow must not raise this: it drives the spinner
+    // overlay and `subscriptionSkip`, so it would tear down 14 live subscriptions mid-flight.
     const isLoading = loading && !flowData?.flow;
 
     // A real load failure that left nothing to show (cold cache + backend error on a
@@ -95,8 +94,7 @@ export function FlowProvider({ children }: FlowProviderProps) {
     // in-page ErrorState + Retry instead of silently bouncing to the list.
     const flowLoadError = flowError && !flowData?.flow && !isFlowNotFoundError(flowError) ? flowError : undefined;
 
-    // Absence of data is not absence of the flow — it is also what an in-flight switch to
-    // another flow looks like, so this reads only settled outcomes.
+    // Settled outcomes only: missing data is also what an in-flight switch looks like.
     const isFlowMissing = Boolean(flowData && !flowData.flow) || Boolean(flowError && isFlowNotFoundError(flowError));
 
     const { data: assistantsData, loading: isAssistantsLoading } = useQuery(AssistantsDocument, {

@@ -2,8 +2,6 @@ import { expect, test } from '../../fixtures/test.ts';
 import { expectCleanPage } from '../../helpers/errors.ts';
 import { flowsCassette, flowTabsCassette } from '../../mocks/cassettes/flows.ts';
 
-// Nothing else in the suite presses Prev/Next, which is how a redirect that fired mid-switch
-// shipped: every other flow spec reaches a detail page through the list.
 test.describe('flow pager', { tag: ['@flows', '@smoke'] }, () => {
     test.use({ cassette: flowsCassette() });
 
@@ -21,8 +19,6 @@ test.describe('flow pager', { tag: ['@flows', '@smoke'] }, () => {
                 .evaluateAll((buttons) => buttons.map((button) => button.getAttribute('aria-label') ?? ''));
             const positionOf = (label: string) => labels.findIndex((candidate) => candidate.startsWith(label));
 
-            // Report comes and goes with the task list; anchored leftmost, its arrival cannot shift
-            // the controls that are always there.
             expect(positionOf('Report')).toBeLessThan(positionOf('Toggle favorite'));
             expect(positionOf('Toggle favorite')).toBeLessThan(positionOf('Previous'));
             expect(positionOf('Next')).toBeLessThan(positionOf('Flow actions'));
@@ -61,9 +57,8 @@ test.describe('flow pager', { tag: ['@flows', '@smoke'] }, () => {
         await expect(page).toHaveURL(/\/flows\/6$/);
         await expect(header.getByText('E2E Beta')).toBeVisible();
 
-        // Sampled rather than awaited: `toBeVisible` retries, so it passes even if the cluster
-        // unmounts for the length of the fetch and comes back — which is what gating the pager
-        // on the loaded flow did, costing the user a round trip per step.
+        // Sampled, not awaited: `toBeVisible` retries, so it passes even if the cluster
+        // unmounts for the length of the fetch and comes back.
         expect(samples.every((sample) => sample.hasPager)).toBe(true);
         expect(samples.map((sample) => sample.path)).not.toContain('/flows');
 
