@@ -1,6 +1,6 @@
 import type { ResultOf } from '@graphql-typed-document-node/core';
 
-import type { FlowTemplateFragmentFragment, FlowTemplatesDocument } from '@/graphql/types';
+import type { FlowTemplateDocument, FlowTemplateFragmentFragment, FlowTemplatesDocument } from '@/graphql/types';
 
 import type { Cassette } from '../cassette.ts';
 
@@ -23,6 +23,35 @@ export const TEMPLATE_SEED = makeTemplate('11', 'E2E Seed Template', 'Scan the t
 
 const flowTemplates: ResultOf<typeof FlowTemplatesDocument> = { flowTemplates: [TEMPLATE_SEED] };
 
+/**
+ * Non-trivial body for the template detail route, whose editor loads it from the server.
+ * Carries the `{{PLACEHOLDER}}` atoms a flow template is built from, so a parse/serialize
+ * round-trip that drops them fails the spec. No list-nested fence — that is a separate,
+ * already-tracked editor defect.
+ */
+export const RICH_TEMPLATE_TEXT = [
+    '# Recon',
+    '',
+    'Target: **{{TARGET}}** (scope {{SCOPE}}).',
+    '',
+    '## Steps',
+    '',
+    '- enumerate services',
+    '- capture evidence for each finding',
+    '',
+    '```bash',
+    'nmap -sV {{TARGET}}',
+    '```',
+    '',
+    '| Field | Value |',
+    '| --- | --- |',
+    '| Scope | {{SCOPE}} |',
+].join('\n');
+
+export const TEMPLATE_DETAIL = makeTemplate('11', 'E2E Seed Template', RICH_TEMPLATE_TEXT);
+
+const flowTemplate: ResultOf<typeof FlowTemplateDocument> = { flowTemplate: TEMPLATE_DETAIL };
+
 export const templatesCassette = (override: Cassette = {}): Cassette =>
     mergeCassettes(
         {
@@ -33,4 +62,17 @@ export const templatesCassette = (override: Cassette = {}): Cassette =>
             rest: baseRest(),
         },
         override,
+    );
+
+/** Adds the single-template query the detail route issues for TEMPLATE_DETAIL. */
+export const templateDetailCassette = (override: Cassette = {}): Cassette =>
+    templatesCassette(
+        mergeCassettes(
+            {
+                queries: {
+                    flowTemplate: [{ data: flowTemplate, variables: { templateId: TEMPLATE_DETAIL.id } }],
+                },
+            },
+            override,
+        ),
     );
