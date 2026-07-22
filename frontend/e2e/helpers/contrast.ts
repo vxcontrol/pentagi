@@ -32,11 +32,16 @@ export const mountContrastProbes = async (page: Page, probes: Record<string, str
     );
 };
 
-// Editor highlight tokens are styled through the `.tiptap-content .ProseMirror .template-*`
-// selector, so a flat probe span (as in mountContrastProbes) would pick up none of it and
-// measure nothing. Reproduce the real ancestor chain on the shipped class. Surface is --card,
-// within ~0.005 L of the editor's real `dark:bg-input/30` ground and conservative for the floor.
-export const mountEditorProbes = async (page: Page, probes: Record<string, string>): Promise<void> => {
+export interface EditorProbe {
+    className?: string;
+    tag: string;
+}
+
+// Editor highlight tokens are styled through `.tiptap-content .ProseMirror <selector>`, so a flat
+// probe span (as in mountContrastProbes) would pick up none of it and measure nothing. Reproduce
+// the real ancestor chain on the shipped element. Surface is --card, within ~0.005 L of the
+// editor's real `dark:bg-input/30` ground and conservative for the floor.
+export const mountEditorProbes = async (page: Page, probes: Record<string, EditorProbe>): Promise<void> => {
     await page.evaluate(
         ({ entries, hostId }) => {
             document.getElementById(hostId)?.remove();
@@ -51,10 +56,10 @@ export const mountEditorProbes = async (page: Page, probes: Record<string, strin
             surface.className = 'ProseMirror';
             surface.style.cssText = 'background:var(--card);display:flex;gap:8px;padding:8px';
 
-            for (const [name, className] of entries) {
-                const probe = document.createElement('span');
+            for (const [name, { className, tag }] of entries) {
+                const probe = document.createElement(tag);
 
-                probe.className = className;
+                probe.className = className ?? '';
                 probe.dataset.contrast = name;
                 probe.textContent = 'Sample';
                 surface.append(probe);
@@ -63,13 +68,13 @@ export const mountEditorProbes = async (page: Page, probes: Record<string, strin
             host.append(surface);
             document.body.append(host);
 
-            // Both token rules paint a chip via color-mix, so a transparent probe
-            // means its class matched nothing — a rename, or the rule moving out
-            // from under the ancestor chain above. Without this the measurement
-            // silently falls back to the page's default text pair, which clears AA.
+            // A probe still wearing the surface's own colour matched no rule. Without this the
+            // measurement falls back to the page's default text pair, which clears AA silently.
+            const inherited = getComputedStyle(surface).color;
+
             for (const probe of surface.children) {
-                if (getComputedStyle(probe).backgroundColor === 'rgba(0, 0, 0, 0)') {
-                    throw new Error(`editor contrast probe "${probe.className}" matched no style rule`);
+                if (getComputedStyle(probe).color === inherited) {
+                    throw new Error(`editor contrast probe "${probe.getAttribute('data-contrast')}" matched no rule`);
                 }
             }
         },
