@@ -80,7 +80,7 @@ function Flow() {
     const { isDesktop, isMobile } = useBreakpoint();
     const navigate = useNavigate();
 
-    const { flowData, flowId, flowLoadError, isLoading: isFlowLoading, refetchFlow } = useFlow();
+    const { flowData, flowId, flowLoadError, isFlowMissing, isLoading: isFlowLoading, refetchFlow } = useFlow();
     const { deleteFlow, finishFlow } = useFlows();
     const { isFavoriteFlow, toggleFavoriteFlow } = useFavorites();
 
@@ -109,13 +109,10 @@ function Flow() {
     const [renameFlowMutation, { loading: isRenameLoading }] = useMutation(RenameFlowDocument);
 
     useEffect(() => {
-        // Redirect only when the flow is genuinely gone (query resolved with no flow, or
-        // a not-found error). A real load failure keeps the user here behind the
-        // ErrorState + Retry below instead of silently bouncing to the list.
-        if (!isFlowLoading && !flowData?.flow && !flowLoadError) {
+        if (isFlowMissing) {
             navigate(routes.flows, { replace: true });
         }
-    }, [flowData, flowLoadError, isFlowLoading, navigate]);
+    }, [isFlowMissing, navigate]);
 
     const handleFlowRenameSave = useCallback(async () => {
         const newTitle = editingInputRef.current?.value.trim();
@@ -278,24 +275,14 @@ function Flow() {
                         </BreadcrumbList>
                     </Breadcrumb>
                 </AppHeaderContent>
-                <AppHeaderActions
-                    pager={
-                        flow &&
-                        !isMobile && (
-                            <DetailNavigationToolbar<FlowItem>
-                                controller={flowNav}
-                                renderItem={renderFlowItem}
-                                sheetIcon={<GitFork className="size-4" />}
-                                sheetTitle="Flows"
-                            />
-                        )
-                    }
-                >
+                <AppHeaderActions>
+                    {!!(flowData?.tasks ?? [])?.length && <FlowReportDropdown />}
                     {flowId && !isMobile && (
                         <Button
                             aria-label="Toggle favorite"
                             aria-pressed={isFavoriteFlow(flowId)}
                             className="shrink-0"
+                            disabled={isFlowLoading}
                             onClick={() => toggleFavoriteFlow(flowId)}
                             size="icon"
                             variant="ghost"
@@ -303,101 +290,112 @@ function Flow() {
                             <Star className={isFavoriteFlow(flowId) ? 'fill-yellow-500 stroke-yellow-500' : ''} />
                         </Button>
                     )}
-                    {!!(flowData?.tasks ?? [])?.length && <FlowReportDropdown />}
-                    {flow && (
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button
-                                    aria-label="Flow actions"
-                                    className="size-8 p-0"
-                                    variant="ghost"
-                                >
-                                    <Ellipsis />
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent
-                                align="end"
-                                className="min-w-24"
-                                onCloseAutoFocus={handleDropdownCloseAutoFocus}
+                    {!isMobile && (
+                        <DetailNavigationToolbar<FlowItem>
+                            controller={flowNav}
+                            renderItem={renderFlowItem}
+                            sheetIcon={<GitFork className="size-4" />}
+                            sheetTitle="Flows"
+                        />
+                    )}
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button
+                                aria-label="Flow actions"
+                                className="size-8 p-0"
+                                variant="ghost"
                             >
-                                {isMobile && flowNav.total > 0 && (
-                                    <>
-                                        {/* onSelect={preventDefault} stops the Radix menu from closing on label
+                                <Ellipsis />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent
+                            align="end"
+                            className="min-w-24"
+                            onCloseAutoFocus={handleDropdownCloseAutoFocus}
+                        >
+                            {isMobile && (
+                                <>
+                                    {/* onSelect={preventDefault} stops the Radix menu from closing on label
                                                 clicks; DetailNavigationButtons owns its own click handlers. */}
-                                        <DropdownMenuItem
-                                            className="cursor-default hover:bg-transparent focus:bg-transparent"
-                                            onSelect={(event) => event.preventDefault()}
-                                        >
-                                            <GitFork />
-                                            Flows
-                                            <div className="-my-1.5 -mr-2 ml-auto flex items-center">
-                                                <DetailNavigationButtons<FlowItem>
-                                                    controller={flowNav}
-                                                    sheetTitle="Flows"
-                                                    size="sm"
-                                                />
-                                            </div>
-                                        </DropdownMenuItem>
-                                        {flowId && (
-                                            <DropdownMenuItem onClick={() => toggleFavoriteFlow(flowId)}>
-                                                <Star
-                                                    className={
-                                                        isFavoriteFlow(flowId)
-                                                            ? 'size-4 fill-yellow-500 stroke-yellow-500'
-                                                            : 'size-4'
-                                                    }
-                                                />
-                                                {isFavoriteFlow(flowId) ? 'Remove from favorites' : 'Add to favorites'}
-                                            </DropdownMenuItem>
-                                        )}
-                                        <DropdownMenuSeparator />
-                                    </>
-                                )}
-                                <DropdownMenuItem onClick={handleFlowRenameStart}>
-                                    <PencilLine className="size-3" />
-                                    Rename
-                                </DropdownMenuItem>
-                                {isFlowRunning && (
                                     <DropdownMenuItem
-                                        disabled={isFinishing}
-                                        onClick={() => handleFlowFinish()}
+                                        className="cursor-default hover:bg-transparent focus:bg-transparent"
+                                        onSelect={(event) => event.preventDefault()}
                                     >
-                                        {isFinishing ? (
-                                            <>
-                                                <Spinner variant="circle" />
-                                                Finishing...
-                                            </>
-                                        ) : (
-                                            <>
-                                                <Pause />
-                                                Finish
-                                            </>
-                                        )}
+                                        <GitFork />
+                                        Flows
+                                        <div className="-my-1.5 -mr-2 ml-auto flex items-center">
+                                            <DetailNavigationButtons<FlowItem>
+                                                controller={flowNav}
+                                                sheetTitle="Flows"
+                                                size="sm"
+                                            />
+                                        </div>
                                     </DropdownMenuItem>
-                                )}
-                                <DropdownMenuSeparator />
+                                    {flowId && (
+                                        <DropdownMenuItem
+                                            disabled={isFlowLoading}
+                                            onClick={() => toggleFavoriteFlow(flowId)}
+                                        >
+                                            <Star
+                                                className={
+                                                    isFavoriteFlow(flowId)
+                                                        ? 'size-4 fill-yellow-500 stroke-yellow-500'
+                                                        : 'size-4'
+                                                }
+                                            />
+                                            {isFavoriteFlow(flowId) ? 'Remove from favorites' : 'Add to favorites'}
+                                        </DropdownMenuItem>
+                                    )}
+                                    <DropdownMenuSeparator />
+                                </>
+                            )}
+                            <DropdownMenuItem
+                                disabled={isFlowLoading}
+                                onClick={handleFlowRenameStart}
+                            >
+                                <PencilLine className="size-3" />
+                                Rename
+                            </DropdownMenuItem>
+                            {isFlowRunning && (
                                 <DropdownMenuItem
-                                    disabled={isDeleting}
-                                    onClick={() => setIsDeleteDialogOpen(true)}
+                                    disabled={isFinishing}
+                                    onClick={() => handleFlowFinish()}
                                 >
-                                    {isDeleting ? (
+                                    {isFinishing ? (
                                         <>
                                             <Spinner variant="circle" />
-                                            Deleting...
+                                            Finishing...
                                         </>
                                     ) : (
                                         <>
-                                            <Trash />
-                                            Delete
+                                            <Pause />
+                                            Finish
                                         </>
                                     )}
                                 </DropdownMenuItem>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
-                    )}
+                            )}
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                                disabled={isDeleting || isFlowLoading}
+                                onClick={() => setIsDeleteDialogOpen(true)}
+                            >
+                                {isDeleting ? (
+                                    <>
+                                        <Spinner variant="circle" />
+                                        Deleting...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Trash />
+                                        Delete
+                                    </>
+                                )}
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
                 </AppHeaderActions>
             </AppHeader>
-            {isMobile && flow && (
+            {isMobile && (
                 <DetailNavigationSheet<FlowItem>
                     controller={flowNav}
                     renderItem={renderFlowItem}
