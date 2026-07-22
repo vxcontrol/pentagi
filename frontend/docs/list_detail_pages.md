@@ -4,8 +4,9 @@ Reusable surface for **list-and-detail** pages: a filterable/sortable table, a
 Prev/Next/Sheet toolbar that walks the _same_ filtered subset on detail pages,
 inline-rename inputs, and the URL-vs-storage state model that keeps them in
 lockstep. Every list page in the app (`/flows`, `/knowledges`, `/templates`,
-`/settings/providers`, `/settings/api-tokens`) and its matching detail page is
-built from these pieces.
+`/settings/prompts`, `/settings/providers`, `/settings/api-tokens`) is built
+from these pieces, as is each one's detail page — `/settings/api-tokens` is the
+exception, editing its rows in place with no detail route of its own.
 
 > **Scope / how to trust this doc.** It describes code under `frontend/src`.
 > Signatures below are copied verbatim from source. If a signature and the code
@@ -112,16 +113,16 @@ frontend/src/
     └── use-<entity>-detail-navigation.ts  # feature-scoped nav hook (one per entity)
 ```
 
-| Area | File(s) | Public surface |
-| --- | --- | --- |
-| List URL state | `hooks/use-table-state.ts` | `useTableState` |
-| Detail URL read | `hooks/use-table-query-filter.ts` | `useTableQueryFilterReader` |
-| Storage keys | `hooks/use-page-storage-keys.ts` | `usePageStorageKeys` |
-| Table | `components/ui/data-table.tsx` | `DataTable`, `DataTableColumnHeader`, `cycleColumnSort` |
-| Detail nav | `components/shared/detail-navigation/` | `DetailNavigationToolbar`, `DetailNavigationButtons`, `DetailNavigationSheet`, `useDetailNavigation`, type `DetailNavigationController` |
-| Inline edit | `components/shared/inline-edit/` | `InlineEditInput`, `useInlineEdit` |
-| Storage slots | `lib/table-state.ts`, `lib/view-options-storage.ts` | `loadTableState`/`updateTableState`/`migrateLegacyTableState`, `loadViewOptions`/`saveViewOptions`/`migrateLegacyViewOptions` |
-| Key + URL utils | `lib/storage-keys.ts`, `lib/url-params.ts` | `getTableStorageKey`/`getTopLevelPath`, `URL_PARAMS`/`mergeHrefWithSearchParams` |
+| Area            | File(s)                                             | Public surface                                                                                                                          |
+| --------------- | --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| List URL state  | `hooks/use-table-state.ts`                          | `useTableState`                                                                                                                         |
+| Detail URL read | `hooks/use-table-query-filter.ts`                   | `useTableQueryFilterReader`                                                                                                             |
+| Storage keys    | `hooks/use-page-storage-keys.ts`                    | `usePageStorageKeys`                                                                                                                    |
+| Table           | `components/ui/data-table.tsx`                      | `DataTable`, `DataTableColumnHeader`, `cycleColumnSort`                                                                                 |
+| Detail nav      | `components/shared/detail-navigation/`              | `DetailNavigationToolbar`, `DetailNavigationButtons`, `DetailNavigationSheet`, `useDetailNavigation`, type `DetailNavigationController` |
+| Inline edit     | `components/shared/inline-edit/`                    | `InlineEditInput`, `useInlineEdit`                                                                                                      |
+| Storage slots   | `lib/table-state.ts`, `lib/view-options-storage.ts` | `loadTableState`/`updateTableState`/`migrateLegacyTableState`, `loadViewOptions`/`saveViewOptions`/`migrateLegacyViewOptions`           |
+| Key + URL utils | `lib/storage-keys.ts`, `lib/url-params.ts`          | `getTableStorageKey`/`getTopLevelPath`, `URL_PARAMS`/`mergeHrefWithSearchParams`                                                        |
 
 ## Core concepts
 
@@ -130,11 +131,11 @@ frontend/src/
 `useTableState` reads and writes three-ish query params through
 `react-router`'s `useSearchParams`:
 
-| Param | Meaning | Owner |
-| --- | --- | --- |
-| `?q=` | client-side free-text filter | `useTableState` (list) / `useTableQueryFilterReader` (detail, read-only) |
-| `?page=` | **1-based** page number; absent ≡ page 1 | `useTableState` |
-| `?qs=` | server-side semantic search (vector store); orthogonal to `?q=` | page-local `useSearchParams` (e.g. knowledges) |
+| Param    | Meaning                                                         | Owner                                                                    |
+| -------- | --------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `?q=`    | client-side free-text filter                                    | `useTableState` (list) / `useTableQueryFilterReader` (detail, read-only) |
+| `?page=` | **1-based** page number; absent ≡ page 1                        | `useTableState`                                                          |
+| `?qs=`   | server-side semantic search (vector store); orthogonal to `?q=` | page-local `useSearchParams` (e.g. knowledges)                           |
 
 `pageIndex` is exposed **0-based** in JS; the URL param is **1-based**.
 `useTableState` converts on read (`parsed - 1`) and write (`index + 1`) and
@@ -159,30 +160,30 @@ It also threads the current `?q=` through every prev/next/select destination via
 
 ## Hooks
 
-| Hook | File | Source of truth | Writes URL? | Used by |
-| --- | --- | --- | --- | --- |
-| `useTableState` | `hooks/use-table-state.ts` | URL `?q=` + `?page=` | **yes** | List pages |
-| `useTableQueryFilterReader` | `hooks/use-table-query-filter.ts` | URL `?q=` | no | Detail pages (indirect, via `useDetailNavigation`) |
-| `usePageStorageKeys` | `hooks/use-page-storage-keys.ts` | router | no | `DataTable`, dashboards |
-| `useDetailNavigation` | `components/shared/detail-navigation/` | URL + props | no (navigates only) | Feature-scoped nav hooks |
-| `useInlineEdit` | `components/shared/inline-edit/` | local state | no | List cells, detail breadcrumbs |
+| Hook                        | File                                   | Source of truth      | Writes URL?         | Used by                                            |
+| --------------------------- | -------------------------------------- | -------------------- | ------------------- | -------------------------------------------------- |
+| `useTableState`             | `hooks/use-table-state.ts`             | URL `?q=` + `?page=` | **yes**             | List pages                                         |
+| `useTableQueryFilterReader` | `hooks/use-table-query-filter.ts`      | URL `?q=`            | no                  | Detail pages (indirect, via `useDetailNavigation`) |
+| `usePageStorageKeys`        | `hooks/use-page-storage-keys.ts`       | router               | no                  | `DataTable`, dashboards                            |
+| `useDetailNavigation`       | `components/shared/detail-navigation/` | URL + props          | no (navigates only) | Feature-scoped nav hooks                           |
+| `useInlineEdit`             | `components/shared/inline-edit/`       | local state          | no                  | List cells, detail breadcrumbs                     |
 
 ### `useTableState` — list-page URL state
 
 ```ts
 function useTableState(options?: {
-  clearPageOnFilterChange?: boolean; // default true — setFilter also drops ?page=
-  debounceMs?: number;               // default 200
-  filterParamName?: string;          // default 'q'  (URL_PARAMS.QUERY)
-  pageParamName?: string;            // default 'page' (URL_PARAMS.PAGE)
+    clearPageOnFilterChange?: boolean; // default true — setFilter also drops ?page=
+    debounceMs?: number; // default 200
+    filterParamName?: string; // default 'q'  (URL_PARAMS.QUERY)
+    pageParamName?: string; // default 'page' (URL_PARAMS.PAGE)
 }): {
-  debouncedFilter: string;
-  filter: string;
-  pageIndex: number;                 // 0-based
-  resetFilter: () => void;
-  setFilter: (value: string) => void;
-  setPage: (pageIndex: number, options?: { replace?: boolean }) => void;
-  update: (patch: { filter?: null | string; pageIndex?: number; replace?: boolean }) => void;
+    debouncedFilter: string;
+    filter: string;
+    pageIndex: number; // 0-based
+    resetFilter: () => void;
+    setFilter: (value: string) => void;
+    setPage: (pageIndex: number, options?: { replace?: boolean }) => void;
+    update: (patch: { filter?: null | string; pageIndex?: number; replace?: boolean }) => void;
 };
 ```
 
@@ -201,8 +202,8 @@ function useTableState(options?: {
 
 ```ts
 function useTableQueryFilterReader(options?: {
-  debounceMs?: number; // default 200
-  paramName?: string;  // default 'q'
+    debounceMs?: number; // default 200
+    paramName?: string; // default 'q'
 }): { debouncedFilter: string; filter: string };
 ```
 
@@ -216,8 +217,8 @@ directly; `useDetailNavigation` uses it internally.
 
 ```ts
 function usePageStorageKeys(options?: {
-  pathname?: string;     // override the path used to build keys
-  useTopLevel?: boolean; // default false; /flows/abc-123 → /flows when true
+    pathname?: string; // override the path used to build keys
+    useTopLevel?: boolean; // default false; /flows/abc-123 → /flows when true
 }): { period: string; table: string; viewOptions: string };
 ```
 
@@ -229,18 +230,22 @@ to share its parent list's storage bucket passes `{ useTopLevel: true }`.
 
 ```ts
 function useDetailNavigation<T extends { id: string }>(options: {
-  currentId: null | string | undefined;   // pass null while creating/new
-  getHref: (item: T) => string;
-  getLabel: (item: T) => string;
-  items: readonly T[];
-  getId?: (item: T) => string;                                   // default item.id
-  getSearchableText?: (item: T) => null | string | undefined;    // default getLabel
-  sortFn?: (a: T, b: T) => number;
-  // controlled sheet (optional):
-  open?: boolean; defaultOpen?: boolean; onOpenChange?: (open: boolean) => void;
-  // controlled in-sheet local search (optional):
-  searchQuery?: string; defaultSearchQuery?: string;
-  onSearchQueryChange?: (query: string) => void; searchDebounceMs?: number; // default 150
+    currentId: null | string | undefined; // pass null while creating/new
+    getHref: (item: T) => string;
+    getLabel: (item: T) => string;
+    items: readonly T[];
+    getId?: (item: T) => string; // default item.id
+    getSearchableText?: (item: T) => null | string | undefined; // default getLabel
+    sortFn?: (a: T, b: T) => number;
+    // controlled sheet (optional):
+    open?: boolean;
+    defaultOpen?: boolean;
+    onOpenChange?: (open: boolean) => void;
+    // controlled in-sheet local search (optional):
+    searchQuery?: string;
+    defaultSearchQuery?: string;
+    onSearchQueryChange?: (query: string) => void;
+    searchDebounceMs?: number; // default 150
 }): DetailNavigationController<T>;
 ```
 
@@ -261,13 +266,13 @@ in-sheet local search, combined with AND.
 
 ```ts
 function useInlineEdit<TElement extends HTMLElement = HTMLInputElement>(options?: {
-  resetKey?: null | string | undefined; // changing it closes any open editor (pass the entity id)
+    resetKey?: null | string | undefined; // changing it closes any open editor (pass the entity id)
 }): {
-  handleDropdownCloseAutoFocus: (event: Event) => void; // spread onto Radix <DropdownMenuContent>
-  inputRef: React.RefObject<null | TElement>;
-  isEditing: boolean;
-  startEdit: () => void;
-  stopEdit: () => void;
+    handleDropdownCloseAutoFocus: (event: Event) => void; // spread onto Radix <DropdownMenuContent>
+    inputRef: React.RefObject<null | TElement>;
+    isEditing: boolean;
+    startEdit: () => void;
+    stopEdit: () => void;
 };
 ```
 
@@ -287,29 +292,29 @@ optional window virtualization). Controlled or uncontrolled per axis.
 ```ts
 // exported: DataTable, DataTableColumnHeader, cycleColumnSort
 function DataTable<TData, TValue = unknown>(props: {
-  columns: ColumnDef<TData, TValue>[];   // required
-  data: TData[];                          // required
-  empty?: { entityName?: string };        // plural lowercase, e.g. "flows"
-  filterColumn?: string | string[];       // omit → zero-config: columns w/ meta.searchable === true
-  filterPlaceholder?: string;             // default "Filter..."
-  filterValue?: string;                   // controlled filter (pair with onFilterChange)
-  onFilterChange?: (value: string) => void;
-  pageIndex?: number;                     // controlled page (0-based)
-  onPageChange?: (pageIndex: number, options?: { replace?: boolean }) => void;
-  initialPageSize?: number;               // default 10
-  initialSorting?: SortingState;          // default []
-  columnVisibility?: VisibilityState;
-  onColumnVisibilityChange?: (visibility: VisibilityState) => void;
-  onRowClick?: (row: TData) => void;
-  renderRowContextMenu?: (row: TData) => ReactNode;
-  renderSubComponent?: (props: { row: Row<TData> }) => ReactElement;
-  isVirtualized?: boolean;                // default false; ignored when renderSubComponent set; activates > 50 rows
-  storageKey?: string;                    // default `table_4_<pathname>` (usePageStorageKeys().table)
+    columns: ColumnDef<TData, TValue>[]; // required
+    data: TData[]; // required
+    empty?: { entityName?: string }; // plural lowercase, e.g. "flows"
+    filterColumn?: string | string[]; // omit → zero-config: columns w/ meta.searchable === true
+    filterPlaceholder?: string; // default "Filter..."
+    filterValue?: string; // controlled filter (pair with onFilterChange)
+    onFilterChange?: (value: string) => void;
+    pageIndex?: number; // controlled page (0-based)
+    onPageChange?: (pageIndex: number, options?: { replace?: boolean }) => void;
+    initialPageSize?: number; // default 10
+    initialSorting?: SortingState; // default []
+    columnVisibility?: VisibilityState;
+    onColumnVisibilityChange?: (visibility: VisibilityState) => void;
+    onRowClick?: (row: TData) => void;
+    renderRowContextMenu?: (row: TData) => ReactNode;
+    renderSubComponent?: (props: { row: Row<TData> }) => ReactElement;
+    isVirtualized?: boolean; // default false; ignored when renderSubComponent set; activates > 50 rows
+    storageKey?: string; // default `table_4_<pathname>` (usePageStorageKeys().table)
 }): JSX.Element;
 
 function DataTableColumnHeader<TData, TValue = unknown>(props: {
-  column: Column<TData, TValue>;          // TanStack column — sorting + cycle action target it
-  title: ReactNode;
+    column: Column<TData, TValue>; // TanStack column — sorting + cycle action target it
+    title: ReactNode;
 }): JSX.Element;
 ```
 
@@ -326,18 +331,18 @@ Key rules:
 - **Empty state** text comes from `empty={{ entityName: 'flows' }}`.
 - **Storage aliasing:** two `<DataTable>`s on the same route share the default
   `table_4_<path>` key and overwrite each other — give each a distinct
-  `storageKey` (e.g. ``` `${base}:agents` ```).
+  `storageKey` (e.g. `` `${base}:agents` ``).
 
 ### `<DetailNavigationToolbar>` and leaves
 
 ```ts
 function DetailNavigationToolbar<T extends { id: string }>(props: {
-  controller: DetailNavigationController<T>; // required — from the feature nav hook
-  sheetTitle: string;                        // required
-  sheetIcon?: ReactNode;
-  renderItem?: (item: T, isCurrent: boolean) => ReactNode;
-  hasSearch?: boolean;                       // default true — in-sheet search input
-  searchPlaceholder?: string;
+    controller: DetailNavigationController<T>; // required — from the feature nav hook
+    sheetTitle: string; // required
+    sheetIcon?: ReactNode;
+    renderItem?: (item: T, isCurrent: boolean) => ReactNode;
+    hasSearch?: boolean; // default true — in-sheet search input
+    searchPlaceholder?: string;
 }): JSX.Element | null; // null when controller.itemsEmpty
 ```
 
@@ -352,15 +357,15 @@ their own presentation props — **there is no `toolbarProps` object to spread.*
 
 ```ts
 function InlineEditInput(props: {
-  onSave: () => void;    // required — read latest text from the bound inputRef
-  onCancel: () => void;  // required
-  autoFocus?: boolean;   // default false
-  busy?: boolean;        // default false — disables the Save + Cancel buttons while saving (the input stays editable)
-  className?: string;
-  defaultValue?: string; // uncontrolled input
-  inputRef?: Ref<HTMLInputElement>; // pair with useInlineEdit().inputRef
-  maxLength?: number;    // default 200 (native maxLength guard, not a validation gate)
-  placeholder?: string;
+    onSave: () => void; // required — read latest text from the bound inputRef
+    onCancel: () => void; // required
+    autoFocus?: boolean; // default false
+    busy?: boolean; // default false — disables the Save + Cancel buttons while saving (the input stays editable)
+    className?: string;
+    defaultValue?: string; // uncontrolled input
+    inputRef?: Ref<HTMLInputElement>; // pair with useInlineEdit().inputRef
+    maxLength?: number; // default 200 (native maxLength guard, not a validation gate)
+    placeholder?: string;
 }): JSX.Element;
 ```
 
@@ -374,14 +379,14 @@ keystroke.
 
 ```ts
 type TableState = {
-  columnVisibility?: Record<string, boolean>;
-  filter?: string;
-  pageSize?: number;
-  searchColumns?: string[];
-  sorting?: { desc: boolean; id: string }[];
+    columnVisibility?: Record<string, boolean>;
+    filter?: string;
+    pageSize?: number;
+    searchColumns?: string[];
+    sorting?: { desc: boolean; id: string }[];
 };
 
-const loadTableState:   (key: string) => TableState;                        // {} when missing/invalid
+const loadTableState: (key: string) => TableState; // {} when missing/invalid
 const updateTableState: (key: string, patch: Partial<TableState>) => TableState; // undefined/empty clears a field; empty object removes the key
 const migrateLegacyTableState: (path: string, unifiedKey: string) => TableState;
 ```
@@ -396,8 +401,8 @@ layout: it folds the four legacy keys (`column_4_`, `sorting_4_`, `filter_4_`,
 
 ```ts
 type ViewOptionsRecord = Record<string, boolean>;
-const loadViewOptions:          (key: string) => ViewOptionsRecord;
-const saveViewOptions:          (key: string, value: ViewOptionsRecord) => void; // removes key on empty
+const loadViewOptions: (key: string) => ViewOptionsRecord;
+const saveViewOptions: (key: string, value: ViewOptionsRecord) => void; // removes key on empty
 const migrateLegacyViewOptions: (path: string, unifiedKey: string) => ViewOptionsRecord;
 ```
 
@@ -407,13 +412,13 @@ toggle, expanded dirs) that aren't backed by `DataTable`.
 ### `lib/storage-keys.ts` — key conventions
 
 ```ts
-const STORAGE_KEY_SEPARATOR = '_4_';                       // reads as "for": table_4_/flows = "table for /flows"
+const STORAGE_KEY_SEPARATOR = '_4_'; // reads as "for": table_4_/flows = "table for /flows"
 type LocalStorageKeyType = 'period' | 'table' | 'viewOptions';
 function getStorageKey(type: LocalStorageKeyType, urlPath: string): string; // `${type}_4_${urlPath}`
-function getTableStorageKey(urlPath: string): string;      // table_4_<path>
-function getPeriodStorageKey(urlPath: string): string;     // period_4_<path> (dashboard time window)
-function getViewOptionsStorageKey(urlPath: string): string;// viewOptions_4_<path>
-function getTopLevelPath(pathname: string): string;        // /flows/abc → /flows ; / → ''
+function getTableStorageKey(urlPath: string): string; // table_4_<path>
+function getPeriodStorageKey(urlPath: string): string; // period_4_<path> (dashboard time window)
+function getViewOptionsStorageKey(urlPath: string): string; // viewOptions_4_<path>
+function getTopLevelPath(pathname: string): string; // /flows/abc → /flows ; / → ''
 ```
 
 The key embeds the full `urlPath` **including** its leading slash — the literal
@@ -425,10 +430,7 @@ detail page must hardcode its parent path instead.
 
 ```ts
 const URL_PARAMS = { PAGE: 'page', QUERY: 'q', SEARCH: 'qs' } as const;
-function mergeHrefWithSearchParams(
-  base: string,
-  incoming: Iterable<[string, string]> | URLSearchParams,
-): string;
+function mergeHrefWithSearchParams(base: string, incoming: Iterable<[string, string]> | URLSearchParams): string;
 ```
 
 `mergeHrefWithSearchParams` adds every incoming key to `base` unless `base`
@@ -443,51 +445,75 @@ For a new entity at `/<entities>` + `/<entities>/:id`:
 
 ```tsx
 export function EntitiesPage() {
-  const { entities, isLoading, error, refetch } = useEntities();
+    const { entities, isLoading, error, refetch } = useEntities();
 
-  // Paginated variant. For a page without ?page=, destructure only { filter, setFilter }.
-  const { filter, pageIndex: currentPage, setFilter, setPage: handlePageChange } = useTableState();
+    // Paginated variant. For a page without ?page=, destructure only { filter, setFilter }.
+    const { filter, pageIndex: currentPage, setFilter, setPage: handlePageChange } = useTableState();
 
-  const columns: ColumnDef<Entity>[] = [
-    {
-      accessorKey: 'title',
-      header: ({ column }) => <DataTableColumnHeader column={column} title="Title" />,
-      meta: { searchable: true }, // opt this column into the global filter
-    },
-    // ...more columns
-  ];
+    const columns: ColumnDef<Entity>[] = [
+        {
+            accessorKey: 'title',
+            header: ({ column }) => (
+                <DataTableColumnHeader
+                    column={column}
+                    title="Title"
+                />
+            ),
+            meta: { searchable: true }, // opt this column into the global filter
+        },
+        // ...more columns
+    ];
 
-  const pageHeader = <AppHeader title="Entities" /* ...actions */ />;
+    const pageHeader = <AppHeader title="Entities" /* ...actions */ />;
 
-  // Canonical 4-branch render gate — pageHeader renders in ALL branches:
-  if (isLoading) {
-    return <>{pageHeader}<LoadingState title="Loading entities…" /></>;
-  }
-  // Show the error surface only when there's no data — a failed background
-  // refetch must not blank a working list.
-  if (error && entities.length === 0) {
-    return <>{pageHeader}<ErrorState title="Couldn't load entities" message={error.message} onRetry={refetch} /></>;
-  }
-  if (entities.length === 0) {
-    return <>{pageHeader}<Empty>{/* EmptyHeader / EmptyTitle / EmptyContent */}</Empty></>;
-  }
+    // Canonical 4-branch render gate — pageHeader renders in ALL branches:
+    if (isLoading) {
+        return (
+            <>
+                {pageHeader}
+                <LoadingState title="Loading entities…" />
+            </>
+        );
+    }
+    // Show the error surface only when there's no data — a failed background
+    // refetch must not blank a working list.
+    if (error && entities.length === 0) {
+        return (
+            <>
+                {pageHeader}
+                <ErrorState
+                    title="Couldn't load entities"
+                    message={error.message}
+                    onRetry={refetch}
+                />
+            </>
+        );
+    }
+    if (entities.length === 0) {
+        return (
+            <>
+                {pageHeader}
+                <Empty>{/* EmptyHeader / EmptyTitle / EmptyContent */}</Empty>
+            </>
+        );
+    }
 
-  return (
-    <>
-      {pageHeader}
-      <DataTable<Entity>
-        columns={columns}
-        data={entities}
-        empty={{ entityName: 'entities' }}
-        filterPlaceholder="Filter entities..."
-        filterValue={filter}
-        onFilterChange={setFilter}
-        onPageChange={handlePageChange}  // omit this + pageIndex on non-paginated pages
-        pageIndex={currentPage}
-        onRowClick={(entity) => navigate(routes.entity(entity.id))}
-      />
-    </>
-  );
+    return (
+        <>
+            {pageHeader}
+            <DataTable<Entity>
+                columns={columns}
+                data={entities}
+                empty={{ entityName: 'entities' }}
+                filterPlaceholder="Filter entities..."
+                filterValue={filter}
+                onFilterChange={setFilter}
+                onPageChange={handlePageChange} // omit this + pageIndex on non-paginated pages
+                pageIndex={currentPage}
+                onRowClick={(entity) => navigate(routes.entity(entity.id))}
+            />
+        </>
+    );
 }
 ```
 
@@ -505,16 +531,16 @@ const getId = (item: Entity) => String(item.id);
 const getHref = (item: Entity) => routes.entity(item.id);
 
 export function useEntityDetailNavigation(currentId: null | string | undefined) {
-  const { entities } = useEntities();
+    const { entities } = useEntities();
 
-  return useDetailNavigation<Entity>({
-    currentId,
-    getHref,
-    getId,
-    getLabel,
-    getSearchableText,
-    items: entities,
-  });
+    return useDetailNavigation<Entity>({
+        currentId,
+        getHref,
+        getId,
+        getLabel,
+        getSearchableText,
+        items: entities,
+    });
 }
 ```
 
@@ -524,21 +550,39 @@ export function useEntityDetailNavigation(currentId: null | string | undefined) 
 const entityNav = useEntityDetailNavigation(isNew ? null : entityId); // null while creating
 
 // Desktop: inside the header actions.
-{!isMobile && (
-  <DetailNavigationToolbar<Entity>
-    controller={entityNav}
-    renderItem={(item, isCurrent) => (
-      <span className={cn('min-w-0 flex-1 truncate', isCurrent && 'font-medium')}>{item.title}</span>
-    )}
-    sheetIcon={<EntityIcon className="size-4" />}
-    sheetTitle="Entities"
-  />
-)}
+{
+    !isMobile && (
+        <DetailNavigationToolbar<Entity>
+            controller={entityNav}
+            renderItem={(item, isCurrent) => (
+                <span className={cn('min-w-0 flex-1 truncate', isCurrent && 'font-medium')}>{item.title}</span>
+            )}
+            sheetIcon={<EntityIcon className="size-4" />}
+            sheetTitle="Entities"
+        />
+    );
+}
 
 // Mobile: leaves composed by hand — <DetailNavigationButtons> inside a
 // <DropdownMenuItem>, and a standalone <DetailNavigationSheet> outside the header,
 // both reading `controller={entityNav}`.
 ```
+
+#### Ordering the header actions
+
+`<AppHeaderContent>` takes the remaining width (`flex-1`), so `<AppHeaderActions>` ends up
+against the right edge and grows leftward. Two rules follow:
+
+1. **Controls that appear on a data condition go first** in the children. Everything after
+   them keeps its position when they arrive late — the flow header's Report button loads with
+   the task list, and the pager beside it must not move under a cursor that is clicking Next.
+2. **Controls that are always meaningful for the route render always**, taking `disabled` from
+   an explicit loading flag rather than being unmounted while the entity is null. Unmounting
+   collapses the cluster for the length of every fetch, which costs a step per pager click.
+
+The flow header is the reference: `Report · favourite · pager · actions menu`. A page whose
+entity can be genuinely absent (a not-found card) is the exception — it renders no actions at
+all, because none of them are meaningful there.
 
 ## Design rationale
 
@@ -584,18 +628,18 @@ legacy keys in on first mount and deletes them.
 `pnpm run test` (Vitest, `jsdom`, `globals: false` — every test imports
 `describe`/`it`/`expect`/`vi` explicitly). Coverage across the surface:
 
-| File | Focus |
-| --- | --- |
-| `lib/table-state.test.ts` | `load`/`update`/`migrate` — partial patch, empty-collapse, key removal, legacy fold, path variants |
-| `lib/view-options-storage.test.ts` | load/save/migrate for the view-options slot |
-| `lib/url-params.test.ts` | `mergeHrefWithSearchParams` — append, href-wins, hash preserved, encoding |
-| `lib/storage-keys.test.ts` | `getTopLevelPath` edge cases + `_4_` key join |
-| `hooks/use-table-state.test.tsx` | URL read/write, **atomic `update` race regression** (two updaters in one tick keep both params), `?page=1` canonicalization, filter-is-URL-only |
-| `hooks/use-table-query-filter.test.tsx` | read-only filter subscription |
-| `hooks/use-page-storage-keys.test.tsx` | reactive key resolution (incl. `table_4_` for empty path) |
-| `components/ui/data-table.test.tsx` | filter/sort/pagination + sorting persistence into `table_4_<path>` |
-| `components/shared/detail-navigation/*.test.*` | pure `use-navigation` core (headless), toolbar + sheet behavior |
-| `components/shared/inline-edit/use-inline-edit.test.tsx` | edit toggle + deferred focus |
+| File                                                     | Focus                                                                                                                                           |
+| -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `lib/table-state.test.ts`                                | `load`/`update`/`migrate` — partial patch, empty-collapse, key removal, legacy fold, path variants                                              |
+| `lib/view-options-storage.test.ts`                       | load/save/migrate for the view-options slot                                                                                                     |
+| `lib/url-params.test.ts`                                 | `mergeHrefWithSearchParams` — append, href-wins, hash preserved, encoding                                                                       |
+| `lib/storage-keys.test.ts`                               | `getTopLevelPath` edge cases + `_4_` key join                                                                                                   |
+| `hooks/use-table-state.test.tsx`                         | URL read/write, **atomic `update` race regression** (two updaters in one tick keep both params), `?page=1` canonicalization, filter-is-URL-only |
+| `hooks/use-table-query-filter.test.tsx`                  | read-only filter subscription                                                                                                                   |
+| `hooks/use-page-storage-keys.test.tsx`                   | reactive key resolution (incl. `table_4_` for empty path)                                                                                       |
+| `components/ui/data-table.test.tsx`                      | filter/sort/pagination + sorting persistence into `table_4_<path>`                                                                              |
+| `components/shared/detail-navigation/*.test.*`           | pure `use-navigation` core (headless), toolbar + sheet behavior                                                                                 |
+| `components/shared/inline-edit/use-inline-edit.test.tsx` | edit toggle + deferred focus                                                                                                                    |
 
 `frontend/vitest.setup.ts` polyfills jsdom gaps used by these components and
 wires RTL cleanup:
@@ -610,10 +654,10 @@ wires RTL cleanup:
 These names appear in older docs/comments but **do not exist** in the code. Do
 not reintroduce them:
 
-| Old / phantom name | Reality |
-| --- | --- |
-| `usePagination` | Never existed as a hook. Page state lives in `useTableState` (`pageIndex` in `?page=`) and `<DataTable>` (`pageIndex`/`onPageChange`). |
-| `useTableQueryFilter` (writer) | Removed. `use-table-query-filter.ts` exports **only** `useTableQueryFilterReader`. List pages write the filter through `useTableState`. (Stray prose mentions remain in a few comments — `data-table.tsx`, `url-params.ts` — those are stale text, not symbols.) |
-| `toolbarProps` spread into `<DetailNavigationToolbar>` | No such object. Pass `controller={nav}` + discrete `renderItem`/`sheetIcon`/`sheetTitle`. |
-| `hooks/use-inline-edit` | Wrong path. It lives at `components/shared/inline-edit/use-inline-edit.ts`. |
-| `components/shared/data-table` | Wrong path. It lives at `components/ui/data-table.tsx`. |
+| Old / phantom name                                     | Reality                                                                                                                                 |
+| ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `usePagination`                                        | Never existed as a hook. Page state lives in `useTableState` (`pageIndex` in `?page=`) and `<DataTable>` (`pageIndex`/`onPageChange`).  |
+| `useTableQueryFilter` (writer)                         | Removed. `use-table-query-filter.ts` exports **only** `useTableQueryFilterReader`. List pages write the filter through `useTableState`. |
+| `toolbarProps` spread into `<DetailNavigationToolbar>` | No such object. Pass `controller={nav}` + discrete `renderItem`/`sheetIcon`/`sheetTitle`.                                               |
+| `hooks/use-inline-edit`                                | Wrong path. It lives at `components/shared/inline-edit/use-inline-edit.ts`.                                                             |
+| `components/shared/data-table`                         | Wrong path. It lives at `components/ui/data-table.tsx`.                                                                                 |

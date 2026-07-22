@@ -36,6 +36,18 @@ jobs:
           run-id: ${{ github.event.workflow_run.id }}
           github-token: ${{ github.token }}
 
+      # Present only when the visual snapshot step itself failed (a real pixel diff),
+      # so its download outcome is the precise advisory signal — see visualDiffers below.
+      - name: Download visual diffs
+        id: visualdiffs
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: e2e-visual-diffs
+          path: visual-diffs
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+
       - name: Post sticky comment
         uses: actions/github-script@v7
         with:
@@ -59,6 +71,7 @@ jobs:
             }
 
             let runJobs = [];
+            let jobsFetched = false;
             try {
               const { data: jobs } = await github.rest.actions.listJobsForWorkflowRun({
                 owner: context.repo.owner,
@@ -67,15 +80,16 @@ jobs:
                 per_page: 100,
               });
               runJobs = jobs.jobs;
+              jobsFetched = true;
             } catch (error) {
               core.info(`run jobs unavailable: ${error}`);
             }
 
-            // Adding a label skips every gate job, so this run has nothing to say about
-            // the PR — commenting would overwrite the previous run's verdict with "no
-            // results file".
+            // Only skip when we actually fetched the jobs and this run has no completed mock
+            // job (e.g. it failed before e2e-mock). A transient jobs-API failure must not be
+            // mistaken for that and silently leave a stale comment; fall through to results.json.
             const mockJob = runJobs.find((job) => /mock/.test(job.name));
-            if (!mockJob || mockJob.conclusion === 'skipped') {
+            if (jobsFetched && (!mockJob || mockJob.conclusion === 'skipped')) {
               core.info('No completed mock job in this run; leaving the sticky comment as it is.');
               return;
             }
@@ -94,12 +108,13 @@ jobs:
 
             // Both halves are required: results.json is written before an abort can be
             // observed, so a run killed by the global timeout still reports zero failures.
-            const mockPassed = noFailures && mockJob.conclusion === 'success';
+            // When the jobs API was unreachable, fall back to results.json alone.
+            const mockPassed = noFailures && (jobsFetched ? mockJob?.conclusion === 'success' : true);
 
-            // The visual job is advisory (never a required check), so the header must
-            // track the mock gate, not the whole-run conclusion — otherwise a visual-only
-            // diff reads as a mock failure over a "0 failed" stats line.
-            const visualDiffers = runJobs.some((job) => /visual/.test(job.name) && job.conclusion === 'failure');
+            // Key the advisory on the e2e-visual-diffs artifact (uploaded only when the snapshot
+            // step itself failed), not on the visual job's conclusion — a tag-guard, install or
+            // build failure would otherwise read as "snapshots differ".
+            const visualDiffers = '${{ steps.visualdiffs.outcome }}' === 'success';
 
             const conclusion = !mockPassed ? '❌' : visualDiffers ? '⚠️' : '✅';
             const marker = '<!-- e2e-report -->';

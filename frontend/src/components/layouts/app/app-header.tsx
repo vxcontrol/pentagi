@@ -55,23 +55,8 @@ export function AppHeaderAction({
     );
 }
 
-export function AppHeaderActions({
-    children,
-    className,
-    pager,
-}: {
-    children?: ReactNode;
-    className?: string;
-    pager?: ReactNode;
-}) {
-    // Pass a detail prev/next control as `pager`, not as a child: as the trailing child it stays edge-pinned,
-    // so a conditional neighbour (e.g. a Report button that loads late) can't shift it under the cursor mid-click.
-    return (
-        <div className={cn('flex shrink-0 items-center gap-2 px-4', className)}>
-            {children}
-            {pager}
-        </div>
-    );
+export function AppHeaderActions({ children, className }: { children?: ReactNode; className?: string }) {
+    return <div className={cn('flex shrink-0 items-center gap-2 px-4', className)}>{children}</div>;
 }
 
 export function AppHeaderContent({ children, className }: { children: ReactNode; className?: string }) {

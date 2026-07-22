@@ -19,7 +19,36 @@ const agentPrompt = (system: PromptType) => entity('AgentPrompt', { system: prom
 const agentPromptPair = (system: PromptType, human: PromptType) =>
     entity('AgentPrompts', { human: prompt(human), system: prompt(system) });
 
-const settingsPrompts: ResultOf<typeof SettingsPromptsDocument> = {
+/** No list-nested fence on purpose: that editor defect is tracked separately, and including it
+ * here would make the spec assert a known bug. */
+export const RICH_PROMPT_TEMPLATE = [
+    '# Pentester',
+    '',
+    'You are assessing **{{.Target}}** within {{.Scope}}.',
+    '',
+    '## Rules',
+    '',
+    '- stay inside the agreed scope',
+    '- report every finding with evidence',
+    '',
+    '```bash',
+    'nmap -sV {{.Target}}',
+    '```',
+    '',
+    '| Field | Value |',
+    '| --- | --- |',
+    '| Scope | {{.Scope}} |',
+].join('\n');
+
+const richPentesterSystem = entity('DefaultPrompt', {
+    template: RICH_PROMPT_TEMPLATE,
+    type: PromptType.Pentester,
+    variables: ['Target', 'Scope'],
+});
+
+const makeSettingsPrompts = (
+    pentesterSystem: DefaultPromptFragmentFragment = prompt(PromptType.Pentester),
+): ResultOf<typeof SettingsPromptsDocument> => ({
     settingsPrompts: entity('PromptsConfig', {
         default: entity('DefaultPrompts', {
             agents: entity('AgentsPrompts', {
@@ -30,7 +59,10 @@ const settingsPrompts: ResultOf<typeof SettingsPromptsDocument> = {
                 generator: agentPromptPair(PromptType.Generator, PromptType.SubtasksGenerator),
                 installer: agentPromptPair(PromptType.Installer, PromptType.QuestionInstaller),
                 memorist: agentPromptPair(PromptType.Memorist, PromptType.QuestionMemorist),
-                pentester: agentPromptPair(PromptType.Pentester, PromptType.QuestionPentester),
+                pentester: entity('AgentPrompts', {
+                    human: prompt(PromptType.QuestionPentester),
+                    system: pentesterSystem,
+                }),
                 primaryAgent: agentPrompt(PromptType.PrimaryAgent),
                 refiner: agentPromptPair(PromptType.Refiner, PromptType.SubtasksRefiner),
                 reflector: agentPromptPair(PromptType.Reflector, PromptType.QuestionReflector),
@@ -56,7 +88,9 @@ const settingsPrompts: ResultOf<typeof SettingsPromptsDocument> = {
         }),
         userDefined: [],
     }),
-};
+});
+
+const settingsPrompts = makeSettingsPrompts();
 
 export const settingsPromptsCassette = (override: Cassette = {}): Cassette =>
     mergeCassettes(
@@ -64,6 +98,22 @@ export const settingsPromptsCassette = (override: Cassette = {}): Cassette =>
             queries: {
                 ...baseQueries(),
                 settingsPrompts: [{ data: settingsPrompts }],
+            },
+            rest: baseRest(),
+        },
+        override,
+    );
+
+/** The agent key the prompt detail route resolves from its `:promptId` param. */
+export const PROMPT_DETAIL_AGENT = 'pentester';
+
+/** Same config, but that agent's system prompt carries RICH_PROMPT_TEMPLATE. */
+export const promptDetailCassette = (override: Cassette = {}): Cassette =>
+    mergeCassettes(
+        {
+            queries: {
+                ...baseQueries(),
+                settingsPrompts: [{ data: makeSettingsPrompts(richPentesterSystem) }],
             },
             rest: baseRest(),
         },

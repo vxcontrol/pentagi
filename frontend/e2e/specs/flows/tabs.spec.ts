@@ -21,7 +21,7 @@ test.describe('flow detail tabs', { tag: '@flows' }, () => {
 
     test('each tab renders its populated content', async ({ page, pageErrorLog }) => {
         await page.goto('/flows/5');
-        await expect(page.getByRole('button', { name: 'Flow actions' })).toBeVisible();
+        await expect(page.locator('header').getByRole('button', { name: 'Toggle favorite' })).toBeEnabled();
 
         for (const { marker, name } of TABS) {
             await page.getByRole('tab', { name }).click();
@@ -33,7 +33,7 @@ test.describe('flow detail tabs', { tag: '@flows' }, () => {
 
     test('the screenshot image decodes from its REST endpoint', async ({ page, pageErrorLog }) => {
         await page.goto('/flows/5');
-        await expect(page.getByRole('button', { name: 'Flow actions' })).toBeVisible();
+        await expect(page.locator('header').getByRole('button', { name: 'Toggle favorite' })).toBeEnabled();
         await page.getByRole('tab', { name: 'Screenshots' }).click();
 
         const image = page.getByRole('img', { name: TABS_SCREENSHOT_NAME });

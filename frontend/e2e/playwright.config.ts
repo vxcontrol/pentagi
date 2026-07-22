@@ -7,11 +7,14 @@ const rawTier = process.env.E2E_TIER ?? 'mock';
 const isCI = Boolean(process.env.CI);
 const isVisual = process.env.E2E_VISUAL === '1';
 
-// Baselines are linux-suffixed, so a host run writes `*-visual-darwin.png` beside
-// them: new files CI never reads, leaving it red with nothing to explain why.
-if (isVisual && process.platform !== 'linux') {
+// Baselines are pinned-container pixels. Gate on a marker the container run sets
+// (run-visual.sh and the CI job), not on the host OS: a Linux workstation passes a
+// bare platform check and an --update there would overwrite the baselines with
+// host-font pixels the container then fails against.
+if (isVisual && process.env.E2E_VISUAL_CONTAINER !== '1') {
     throw new Error(
-        `visual snapshots must run in the pinned container — use e2e/tools/run-visual.sh (got platform "${process.platform}")`,
+        'visual snapshots must run in the pinned container — use e2e/tools/run-visual.sh ' +
+            `(E2E_VISUAL_CONTAINER unset, platform "${process.platform}")`,
     );
 }
 
@@ -39,15 +42,21 @@ if (tier === 'stand' && !TIERS.stand.baseURL) {
 }
 
 export default defineConfig<BackendOptions>({
-    // Keep Playwright's default per-pixel tolerance. Strict comparison was tried and
-    // reverted: the pinned container fixes the renderer but not the host, and text
-    // rasterisation still differs by 300-400 pixels between a local run and CI —
-    // consistently, not as jitter. Absorbing that needs a budget far larger than the
-    // ~70 pixels a palette change moves, so pixels cannot police colour here.
-    // cross/contrast.spec.ts measures colour numerically instead.
+    // A colour change must move enough pixels to fail. The baselines and the run both
+    // render in the pinned container (the host path is blocked above), so there is no
+    // host-vs-CI rasterisation noise to absorb — tighten the per-pixel threshold below
+    // Playwright's default 0.2 so a one-step palette shift is caught, with a small
+    // maxDiffPixelRatio for anti-aliasing at glyph edges. cross/contrast.spec.ts still
+    // measures colour numerically as the belt-and-suspenders check.
+    expect: {
+        toHaveScreenshot: { maxDiffPixelRatio: 0.01, threshold: 0.02 },
+    },
     forbidOnly: isCI,
     fullyParallel: true,
-    globalTimeout: isCI ? 10 * 60_000 : undefined,
+    // Only the mock tier: the real tiers' serial worst case (auth.setup + two flow-run
+    // attempts + the stand smokes) exceeds 10 min and would abort mid-retry, reporting
+    // "timed out" instead of the real failure while the job still has budget.
+    globalTimeout: isCI && tier === 'mock' ? 10 * 60_000 : undefined,
     outputDir: './test-results',
     projects:
         tier === 'mock'
@@ -59,6 +68,9 @@ export default defineConfig<BackendOptions>({
                             use: { ...devices['Desktop Chrome'] },
                         }
                       : {
+                            // @quarantine specs are documented as excluded from the gate; wire it here
+                            // (there is no CLI grep) so they cannot fail the retry:0 mock run.
+                            grepInvert: /@quarantine/,
                             name: 'mock-chromium',
                             testIgnore: ['**/specs/real/**', '**/specs/visual/**'],
                             use: { ...devices['Desktop Chrome'] },
@@ -81,14 +93,12 @@ export default defineConfig<BackendOptions>({
                   },
               ],
     reporter: isCI
-        ? [
-              ['blob', { outputDir: here('./blob-report') }],
-              ['json', { outputFile: here('./test-results/results.json') }],
-              ['github'],
-              ['list'],
-          ]
+        ? [['json', { outputFile: here('./test-results/results.json') }], ['github'], ['list']]
         : [['html', { open: 'never', outputFolder: here('./playwright-report') }], ['list']],
-    retries: 1,
+    // No retry on the hermetic mock tier: a pinned clock/locale/network with no real
+    // backend makes a retry-recovered failure a real race, not infrastructure noise, and
+    // "flaky" counts as pass. The real tiers keep one retry for genuine network flake.
+    retries: tier === 'mock' ? 0 : 1,
     testDir: './specs',
     use: {
         backend: { installMocks: TIERS[tier].installMocks },
@@ -112,7 +122,8 @@ export default defineConfig<BackendOptions>({
                   // binaries — it serves a pre-built dist with plain Node.
                   command: isVisual ? 'node e2e/tools/serve-dist.mjs' : 'pnpm run build && pnpm exec vite preview',
                   cwd: fileURLToPath(new URL('..', import.meta.url)),
-                  env: { VITE_PORT: '8000', VITE_USE_HTTPS: 'false' },
+                  // Pin PORT so an ambient PORT can't move serve-dist off the port Playwright waits on.
+                  env: { PORT: String(PREVIEW_PORT), VITE_PORT: '8000', VITE_USE_HTTPS: 'false' },
                   // Never reuse a listener on the port: the build runs inside
                   // this command, so a reused (possibly orphaned) preview
                   // silently serves a previous commit's dist as the gate.

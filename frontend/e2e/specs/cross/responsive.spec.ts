@@ -18,11 +18,21 @@ test.describe('responsive', { tag: '@cross' }, () => {
             await page.goto('/flows');
 
             await expect(page.getByRole('button', { name: 'Toggle Sidebar' })).toBeVisible();
+            // Owned by the mobile shell: the sidebar collapses to an off-canvas sheet, so its
+            // nav links are hidden until the trigger opens it (they are inline-visible on desktop).
+            await expect(page.getByRole('link', { name: 'Dashboard' })).toBeHidden();
             expect(await page.evaluate(hasHorizontalOverflow)).toBe(false);
 
             await page.getByRole('row', { name: /E2E Alpha/ }).click();
+            await expect(page.locator('header').getByText('E2E Alpha')).toBeVisible();
             await expect(page.getByRole('button', { name: 'Flow actions' })).toBeVisible();
             expect(await page.evaluate(hasHorizontalOverflow)).toBe(false);
+
+            await page.getByRole('button', { name: 'Flow actions' }).click();
+            await expect(page.getByRole('menuitem', { name: /Flows/ })).toBeVisible();
+            await expect(page.getByRole('menuitem', { name: /favorites/ })).toBeVisible();
+            await page.keyboard.press('Escape');
+
             expectCleanPage(pageErrorLog);
         });
     });
@@ -33,9 +43,13 @@ test.describe('responsive', { tag: '@cross' }, () => {
             await page.goto('/flows');
             await page.getByRole('row', { name: /E2E Alpha/ }).click();
             await expect(page.getByRole('separator').first()).toBeVisible();
+            // Split layout: the central panel and the right rail are two separate tab rows.
+            await expect(page.getByRole('tablist')).toHaveCount(2);
 
             await page.setViewportSize({ height: 800, width: 1279 });
             await expect(page.getByRole('separator')).toBeHidden();
+            // Merged: the two tab groups collapse into a single tab row.
+            await expect(page.getByRole('tablist')).toHaveCount(1);
             expect(await page.evaluate(hasHorizontalOverflow)).toBe(false);
             expectCleanPage(pageErrorLog);
         });

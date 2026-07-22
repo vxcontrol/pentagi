@@ -39,9 +39,10 @@ export interface GraphQLPayload {
 export interface RestCassetteEntry extends WorldFlagged {
     body?: unknown;
     /**
-     * Deep-subset match against the request's JSON body. Without it a path hit
-     * answers success no matter what the app sent — pin it on every mutation
-     * entry whose payload matters (login credentials, create/update bodies).
+     * Subset match against the request's JSON body: nested plain objects are matched
+     * recursively, but an array value is compared by full equality, not element-wise.
+     * Without it a path hit answers success no matter what the app sent — pin it on every
+     * mutation entry whose payload matters (login credentials, create/update bodies).
      */
     bodySubset?: Record<string, unknown>;
     /**

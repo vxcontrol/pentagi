@@ -1,4 +1,3 @@
-import { NetworkStatus } from '@apollo/client';
 import { useMutation, useQuery, useSubscription } from '@apollo/client/react';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
@@ -50,6 +49,7 @@ interface FlowContextValue {
     flowStatus: StatusType | undefined;
     initiateAssistantCreation: () => void;
     isAssistantsLoading: boolean;
+    isFlowMissing: boolean;
     isLoading: boolean;
     refetchFlow: () => void;
     selectAssistant: (assistantId: null | string) => void;
@@ -75,7 +75,6 @@ export function FlowProvider({ children }: FlowProviderProps) {
         data: flowData,
         error: flowError,
         loading,
-        networkStatus,
         refetch: refetchFlow,
     } = useQuery(FlowDocument, {
         errorPolicy: 'all',
@@ -86,16 +85,16 @@ export function FlowProvider({ children }: FlowProviderProps) {
         variables: { id: flowId ?? '' },
     });
 
-    // Only the initial load blocks the UI and gates subscriptions. A background
-    // refetch (e.g. the reconnect reconcile) stays at networkStatus `refetch`, so
-    // it must NOT flip isLoading — otherwise it covers the page with the spinner
-    // overlay and tears down the 14 live subscriptions mid-flight.
-    const isLoading = loading && networkStatus === NetworkStatus.loading;
+    // Also gates `subscriptionSkip` below: raising it on a refetch that still holds the flow
+    // would tear down 14 live subscriptions mid-flight.
+    const isLoading = loading && !flowData?.flow;
 
     // A real load failure that left nothing to show (cold cache + backend error on a
     // deep link), as opposed to a genuine not-found. The detail page renders this as an
     // in-page ErrorState + Retry instead of silently bouncing to the list.
     const flowLoadError = flowError && !flowData?.flow && !isFlowNotFoundError(flowError) ? flowError : undefined;
+
+    const isFlowMissing = Boolean(flowData && !flowData.flow) || Boolean(flowError && isFlowNotFoundError(flowError));
 
     const { data: assistantsData, loading: isAssistantsLoading } = useQuery(AssistantsDocument, {
         fetchPolicy: 'cache-first',
@@ -397,6 +396,7 @@ export function FlowProvider({ children }: FlowProviderProps) {
             flowStatus,
             initiateAssistantCreation,
             isAssistantsLoading,
+            isFlowMissing,
             isLoading,
             refetchFlow,
             selectAssistant,
@@ -417,6 +417,7 @@ export function FlowProvider({ children }: FlowProviderProps) {
             flowStatus,
             initiateAssistantCreation,
             isAssistantsLoading,
+            isFlowMissing,
             isLoading,
             refetchFlow,
             selectAssistant,

@@ -26,6 +26,7 @@ const DATES = ['2026-01-15', '2026-01-14', '2026-01-13'];
 // The month period returns a distinct date range so the period switch is
 // asserted on rendered data (the x-axis labels), not just the refetch firing.
 const MONTH_DATES = ['2026-08-15', '2026-08-10', '2026-08-05'];
+const FLOW_TITLES = { month: 'E2E Beta', week: 'E2E Alpha' };
 
 const usageStats = (seed: number): UsageStatsFragmentFragment =>
     entity('UsageStats', {
@@ -41,17 +42,17 @@ const usageStatsByPeriodFor = (dates: string[]): ResultOf<typeof UsageStatsByPer
     usageStatsByPeriod: dates.map((date, index) => entity('DailyUsageStats', { date, stats: usageStats(index + 1) })),
 });
 
-const toolcallsStatsByPeriod: ResultOf<typeof ToolcallsStatsByPeriodDocument> = {
-    toolcallsStatsByPeriod: DATES.map((date, index) =>
+const toolcallsStatsByPeriodFor = (dates: string[]): ResultOf<typeof ToolcallsStatsByPeriodDocument> => ({
+    toolcallsStatsByPeriod: dates.map((date, index) =>
         entity('DailyToolcallsStats', {
             date,
             stats: entity('ToolcallsStats', { totalCount: index + 2, totalDurationSeconds: (index + 1) * 6 }),
         }),
     ),
-};
+});
 
-const flowsStatsByPeriod: ResultOf<typeof FlowsStatsByPeriodDocument> = {
-    flowsStatsByPeriod: DATES.map((date, index) =>
+const flowsStatsByPeriodFor = (dates: string[]): ResultOf<typeof FlowsStatsByPeriodDocument> => ({
+    flowsStatsByPeriod: dates.map((date, index) =>
         entity('DailyFlowsStats', {
             date,
             stats: entity('FlowsStats', {
@@ -62,13 +63,16 @@ const flowsStatsByPeriod: ResultOf<typeof FlowsStatsByPeriodDocument> = {
             }),
         }),
     ),
-};
+});
 
-const flowsExecutionStatsByPeriod: ResultOf<typeof FlowsExecutionStatsByPeriodDocument> = {
+const flowsExecutionStatsByPeriodFor = (
+    flowId: string,
+    flowTitle: string,
+): ResultOf<typeof FlowsExecutionStatsByPeriodDocument> => ({
     flowsExecutionStatsByPeriod: [
         entity('FlowExecutionStats', {
-            flowId: '5',
-            flowTitle: 'E2E Alpha',
+            flowId,
+            flowTitle,
             tasks: [
                 entity('TaskExecutionStats', {
                     subtasks: [
@@ -90,7 +94,7 @@ const flowsExecutionStatsByPeriod: ResultOf<typeof FlowsExecutionStatsByPeriodDo
             totalToolcallsCount: 7,
         }),
     ],
-};
+});
 
 const usageStatsTotal: ResultOf<typeof UsageStatsTotalDocument> = { usageStatsTotal: usageStats(10) };
 
@@ -138,11 +142,26 @@ export const dashboardCassette = (override: Cassette = {}): Cassette =>
         {
             queries: {
                 ...baseQueries(),
-                flowsExecutionStatsByPeriod: [{ data: flowsExecutionStatsByPeriod }],
-                flowsStatsByPeriod: [{ data: flowsStatsByPeriod }],
+                flowsExecutionStatsByPeriod: [
+                    {
+                        data: flowsExecutionStatsByPeriodFor('5', FLOW_TITLES.week),
+                        variables: { period: UsageStatsPeriod.Week },
+                    },
+                    {
+                        data: flowsExecutionStatsByPeriodFor('6', FLOW_TITLES.month),
+                        variables: { period: UsageStatsPeriod.Month },
+                    },
+                ],
+                flowsStatsByPeriod: [
+                    { data: flowsStatsByPeriodFor(DATES), variables: { period: UsageStatsPeriod.Week } },
+                    { data: flowsStatsByPeriodFor(MONTH_DATES), variables: { period: UsageStatsPeriod.Month } },
+                ],
                 flowsStatsTotal: [{ data: flowsStatsTotal }],
                 toolcallsStatsByFunction: [{ data: toolcallsStatsByFunction }],
-                toolcallsStatsByPeriod: [{ data: toolcallsStatsByPeriod }],
+                toolcallsStatsByPeriod: [
+                    { data: toolcallsStatsByPeriodFor(DATES), variables: { period: UsageStatsPeriod.Week } },
+                    { data: toolcallsStatsByPeriodFor(MONTH_DATES), variables: { period: UsageStatsPeriod.Month } },
+                ],
                 toolcallsStatsTotal: [{ data: toolcallsStatsTotal }],
                 usageStatsByAgentType: [{ data: usageStatsByAgentType }],
                 usageStatsByModel: [{ data: usageStatsByModel }],

@@ -26,6 +26,8 @@ test.describe('dashboard', { tag: '@coverage' }, () => {
 
         test('overview tab loads lazily and renders metrics and usage tables', async ({ page, pageErrorLog }) => {
             await page.goto('/dashboard');
+            // Lazy: the overview metrics are not mounted while the Analytics tab is active.
+            await expect(page.getByRole('heading', { exact: true, name: 'Total Flows' })).toBeHidden();
             await page.getByRole('tab', { name: 'Overview' }).click();
 
             for (const title of ['Total Flows', 'Tool Calls', 'Total Tokens', 'Total Cost']) {
@@ -44,8 +46,13 @@ test.describe('dashboard', { tag: '@coverage' }, () => {
 
             await expect(page.getByRole('heading', { exact: true, name: 'Flows Activity Over Time' })).toBeVisible();
 
-            const tokenCard = cardWith(page, 'Token Usage Over Time');
-            await expect(tokenCard.getByText('Jan 15', { exact: true })).toBeVisible();
+            const periodCards = CHART_TITLES.map((title) => cardWith(page, title));
+
+            for (const card of periodCards) {
+                await expect(card.getByText('Jan 15', { exact: true })).toBeVisible();
+            }
+
+            await expect(page.getByText('E2E Alpha')).toBeVisible();
 
             const monthRequest = page.waitForRequest((request) => {
                 if (request.method() !== 'POST' || !request.url().includes('/api/v1/graphql')) {
@@ -65,13 +72,14 @@ test.describe('dashboard', { tag: '@coverage' }, () => {
 
             await expect(page.getByRole('tab', { name: 'Month' })).toHaveAttribute('aria-selected', 'true');
 
-            await expect(tokenCard.getByText('Aug 15', { exact: true })).toBeVisible();
-            await expect(tokenCard.getByText('Jan 15', { exact: true })).toBeHidden();
-
-            for (const title of CHART_TITLES) {
-                await expect(page.getByRole('heading', { exact: true, name: title })).toBeVisible();
+            for (const card of periodCards) {
+                await expect(card.getByText('Aug 15', { exact: true })).toBeVisible();
+                await expect(card.getByText('Jan 15', { exact: true })).toBeHidden();
             }
 
+            // The execution breakdown carries no dates; its month dataset is a different flow.
+            await expect(page.getByText('E2E Beta')).toBeVisible();
+            await expect(page.getByText('E2E Alpha')).toBeHidden();
             expectCleanPage(pageErrorLog);
         });
     });

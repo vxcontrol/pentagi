@@ -43,11 +43,11 @@ kill it and rerun.
 
 ## Tiers
 
-| Tier | Backend | Needs | Used for |
-|---|---|---|---|
-| `mock` (default) | Playwright route/WS mocks replaying cassettes against the **production bundle** | nothing | the PR gate; every cassette spec |
-| `local` | branch-built image in an isolated compose stack (`pentagi-e2e`, ports 8444/5433 — coexists with a dev stack) + an OpenAI-compatible **mock LLM** driving the real agent loop | docker | `specs/real/**`: the fidelity check — real GraphQL/WS/pub-sub end to end |
-| `stand` | a live stand | `E2E_BASE_URL` + creds | deploy smoke, version-skew checks |
+| Tier             | Backend                                                                                                                                                                      | Needs                  | Used for                                                                 |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- | ------------------------------------------------------------------------ |
+| `mock` (default) | Playwright route/WS mocks replaying cassettes against the **production bundle**                                                                                              | nothing                | the PR gate; every cassette spec                                         |
+| `local`          | branch-built image in an isolated compose stack (`pentagi-e2e`, ports 8444/5433 — coexists with a dev stack) + an OpenAI-compatible **mock LLM** driving the real agent loop | docker                 | `specs/real/**`: the fidelity check — real GraphQL/WS/pub-sub end to end |
+| `stand`          | a live stand                                                                                                                                                                 | `E2E_BASE_URL` + creds | deploy smoke, version-skew checks                                        |
 
 Tier-2 notes: the runner isolates the stack from your `.env` (`--env-file
 /dev/null`), seeds flow ids from 90001 so sandbox containers
@@ -111,16 +111,16 @@ Key conventions:
 Specs are tagged (`test.describe(..., { tag: '@x' })`) so runs can be filtered
 with `--grep` / `--grep-invert` (e.g. `pnpm e2e --grep @smoke`):
 
-| Tag | Meaning |
-|---|---|
-| `@smoke` | Sanity subset — auth, nav, the load-bearing happy paths |
-| `@flows` | Flow list / detail / subscription / terminal specs |
-| `@crud` | Create-read-update-delete journeys (knowledge, api tokens, templates) |
-| `@coverage` | Surface coverage (dashboard, settings, resources) |
-| `@cross` | Cross-cutting: themes, responsive, a11y, contrast, route sweep |
-| `@visual` | Screenshot baselines — runs only in the visual project |
-| `@real` | Tier 2 — real backend + mock LLM (`specs/real/**`) |
-| `@stand` | Tier 3 — LLM-independent smoke against a live stand |
+| Tag         | Meaning                                                               |
+| ----------- | --------------------------------------------------------------------- |
+| `@smoke`    | Sanity subset — auth, nav, the load-bearing happy paths               |
+| `@flows`    | Flow list / detail / subscription / terminal specs                    |
+| `@crud`     | Create-read-update-delete journeys (knowledge, api tokens, templates) |
+| `@coverage` | Surface coverage (dashboard, settings, resources)                     |
+| `@cross`    | Cross-cutting: themes, responsive, a11y, contrast, route sweep        |
+| `@visual`   | Screenshot baselines — runs only in the visual project                |
+| `@real`     | Tier 2 — real backend + mock LLM (`specs/real/**`)                    |
+| `@stand`    | Tier 3 — LLM-independent smoke against a live stand                   |
 
 Two conventions the gate reserves:
 
@@ -132,17 +132,22 @@ Two conventions the gate reserves:
 
 ## Stand tier (Tier 3)
 
-Runs the LLM-independent `@stand` smoke against a real deployment. Label a PR
-`e2e:stand` (or dispatch the workflow with `tier: stand`); the job runs in a protected
-`e2e-stand` Environment whose required reviewers approve before any secret is
-exposed, so even a mislabeled run blocks on a human. Fork PRs never reach it.
+Runs the LLM-independent `@stand` smoke against a real deployment. It lives in its
+own workflow (`e2e-stand.yml`) so the PR gate never subscribes to `labeled`. Label a
+PR `e2e:stand` (or dispatch the workflow with `tier: stand`); the job runs in a
+protected `e2e-stand` Environment whose required reviewers approve before any secret
+is exposed. That Environment gate — not the job's label condition — is what protects
+the secrets, so even a mislabeled or fork-PR run blocks on a human before it can reach
+them. The stand's URL and login come from the `E2E_STAND_URL` / `E2E_STAND_USER` /
+`E2E_STAND_PASSWORD` secrets (exposed to the tools as `E2E_BASE_URL` / `E2E_USER` /
+`E2E_PASSWORD`).
 
 Before the browser specs, a **schema-compat pre-flight**
 (`e2e/tools/schema-compat.mjs`) introspects the stand's live GraphQL schema and
 validates every frontend operation against it — a renamed or missing field
 fails once, readably, instead of as dozens of red specs (the deploy-skew class
-we hit manually). Run it anywhere: `E2E_BASE_URL=https://… node
-e2e/tools/schema-compat.mjs` (against the local self-signed Tier-2 stack,
+we hit manually). Run it anywhere: `E2E_BASE_URL=https://… E2E_USER=… E2E_PASSWORD=…
+node e2e/tools/schema-compat.mjs` (against the local self-signed Tier-2 stack,
 prefix `NODE_TLS_REJECT_UNAUTHORIZED=0`; a real stand has a valid cert).
 
 ## Trends and selective runs

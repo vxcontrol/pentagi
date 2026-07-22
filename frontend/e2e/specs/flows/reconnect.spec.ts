@@ -5,12 +5,15 @@ import { assertNoDuplicates, extractMessageIds, MESSAGE_ID_TESTID } from '../../
 import {
     FLOW_A_INITIAL_IDS,
     FLOW_A_RECONNECT_ID,
+    FLOW_A_REPLAY_SENTINEL_ID,
     FLOW_A_STREAMED_IDS,
     flowsCassette,
+    REPLAY_FLAG,
 } from '../../mocks/cassettes/flows.ts';
 
 const BEFORE_DROP = [...FLOW_A_INITIAL_IDS, ...FLOW_A_STREAMED_IDS];
 const AFTER_RECONNECT = [...BEFORE_DROP, FLOW_A_RECONNECT_ID];
+const AFTER_REPLAY = [...AFTER_RECONNECT, FLOW_A_REPLAY_SENTINEL_ID];
 
 test.describe('flow reconnect', { tag: ['@flows', '@smoke'] }, () => {
     test.use({ cassette: flowsCassette() });
@@ -24,10 +27,14 @@ test.describe('flow reconnect', { tag: ['@flows', '@smoke'] }, () => {
 
         await expect(page.getByTestId(MESSAGE_ID_TESTID)).toHaveCount(AFTER_RECONNECT.length);
 
+        world.raiseFlag(REPLAY_FLAG);
+
+        await expect(page.getByTestId(MESSAGE_ID_TESTID)).toHaveCount(AFTER_REPLAY.length);
+
         const ids = await extractMessageIds(page.locator('body'));
 
         assertNoDuplicates(ids);
-        expect([...ids].sort()).toEqual([...AFTER_RECONNECT].sort());
+        expect([...ids].sort()).toEqual([...AFTER_REPLAY].sort());
         expectCleanPage(pageErrorLog);
     });
 });

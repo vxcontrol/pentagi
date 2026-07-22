@@ -241,9 +241,6 @@ function Template() {
     const { isDesktop, isMobile } = useBreakpoint();
     const isNew = templateId === 'new';
 
-    // Pass `null` while creating a new template — there is no "current item"
-    // to highlight, and the toolbar shouldn't render at all anyway (gated
-    // below by `canShowActions`).
     const templateNav = useTemplateDetailNavigation(isNew ? null : templateId);
 
     const [expandedPresetIndex, setExpandedPresetIndex] = useState<null | number>(null);
@@ -415,7 +412,9 @@ function Template() {
         }
     }, [pendingPreset, setValue]);
 
-    const canShowActions = !isNew && !!templateData?.flowTemplate;
+    const hasTemplate = !!templateData?.flowTemplate;
+    const isTemplatePending = !isNew && (isLoadingTemplate || !hasTemplate);
+    const isTemplateMissing = !isNew && !isLoadingTemplate && !hasTemplate;
 
     const pageHeader = (
         <>
@@ -424,7 +423,7 @@ function Template() {
                     <Breadcrumb className="min-w-0 flex-1">
                         <BreadcrumbList className="min-w-0 flex-nowrap">
                             <BreadcrumbItem className="min-w-0 gap-2">
-                                {isEditingTitle && canShowActions ? (
+                                {isEditingTitle && hasTemplate ? (
                                     <InlineEditInput
                                         busy={isRenaming}
                                         className="w-64 max-w-full min-w-0 flex-1"
@@ -434,7 +433,7 @@ function Template() {
                                         onSave={handleTemplateRenameSave}
                                         placeholder="Template title"
                                     />
-                                ) : canShowActions ? (
+                                ) : hasTemplate ? (
                                     <Tooltip>
                                         <TooltipTrigger asChild>
                                             <BreadcrumbPage
@@ -455,110 +454,109 @@ function Template() {
                         </BreadcrumbList>
                     </Breadcrumb>
                 </AppHeaderContent>
-                <AppHeaderActions
-                    pager={
-                        canShowActions &&
-                        !isMobile && (
-                            <DetailNavigationToolbar<Template>
-                                controller={templateNav}
-                                renderItem={renderTemplateItem}
-                                sheetIcon={<FileText className="size-4" />}
-                                sheetTitle="Templates"
-                            />
-                        )
-                    }
-                >
-                    {(isNew || !!templateData?.flowTemplate) && (
+                {!isTemplateMissing && (
+                    <AppHeaderActions>
                         <AppHeaderAction
-                            disabled={!isNew && !hasUnsavedChanges}
+                            disabled={isTemplatePending || (!isNew && !hasUnsavedChanges)}
                             form="template-form"
                             icon={<Save />}
                             label={isNew ? 'Create' : 'Save'}
                             loading={isSaving}
                             type="submit"
                         />
-                    )}
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button
-                                aria-label="Template actions"
-                                className="size-8 p-0"
-                                variant="ghost"
+                        {!isNew && !isMobile && (
+                            <DetailNavigationToolbar<Template>
+                                controller={templateNav}
+                                renderItem={renderTemplateItem}
+                                sheetIcon={<FileText className="size-4" />}
+                                sheetTitle="Templates"
+                            />
+                        )}
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button
+                                    aria-label="Template actions"
+                                    className="size-8 p-0"
+                                    variant="ghost"
+                                >
+                                    <Ellipsis />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent
+                                align="end"
+                                className="min-w-24"
+                                onCloseAutoFocus={handleDropdownCloseAutoFocus}
                             >
-                                <Ellipsis />
-                            </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent
-                            align="end"
-                            className="min-w-24"
-                            onCloseAutoFocus={handleDropdownCloseAutoFocus}
-                        >
-                            {canShowActions && (
-                                <>
-                                    {isMobile && templateNav.total > 0 && (
-                                        <>
-                                            <DropdownMenuItem
-                                                className="cursor-default hover:bg-transparent focus:bg-transparent"
-                                                onSelect={(event) => event.preventDefault()}
-                                            >
-                                                <FileText />
-                                                Templates
-                                                <div className="-my-1.5 -mr-2 ml-auto flex items-center">
-                                                    <DetailNavigationButtons<Template>
-                                                        controller={templateNav}
-                                                        sheetTitle="Templates"
-                                                        size="sm"
-                                                    />
-                                                </div>
-                                            </DropdownMenuItem>
-                                            <DropdownMenuSeparator />
-                                        </>
-                                    )}
-                                    <DropdownMenuItem onClick={handleTemplateRenameStart}>
-                                        <Pencil />
-                                        Rename
-                                    </DropdownMenuItem>
-                                    <DropdownMenuSeparator />
-                                </>
-                            )}
-                            <DropdownMenuItem
-                                className="cursor-default gap-4 hover:bg-transparent focus:bg-transparent"
-                                onSelect={(event) => event.preventDefault()}
-                            >
-                                View
-                                <EditorViewModeToggle
-                                    className="-my-1.5 -mr-2 ml-auto"
-                                    mode={viewMode}
-                                    onModeChange={setViewMode}
-                                    rawTooltip="Edit the raw template"
-                                />
-                            </DropdownMenuItem>
-                            {canShowActions && (
-                                <>
-                                    <DropdownMenuSeparator />
-                                    <DropdownMenuItem
-                                        disabled={isDeleting}
-                                        onClick={() => setIsDeleteDialogOpen(true)}
-                                    >
-                                        {isDeleting ? (
+                                {!isNew && (
+                                    <>
+                                        {isMobile && (
                                             <>
-                                                <Spinner variant="circle" />
-                                                Deleting...
-                                            </>
-                                        ) : (
-                                            <>
-                                                <Trash />
-                                                Delete
+                                                <DropdownMenuItem
+                                                    className="cursor-default hover:bg-transparent focus:bg-transparent"
+                                                    onSelect={(event) => event.preventDefault()}
+                                                >
+                                                    <FileText />
+                                                    Templates
+                                                    <div className="-my-1.5 -mr-2 ml-auto flex items-center">
+                                                        <DetailNavigationButtons<Template>
+                                                            controller={templateNav}
+                                                            sheetTitle="Templates"
+                                                            size="sm"
+                                                        />
+                                                    </div>
+                                                </DropdownMenuItem>
+                                                <DropdownMenuSeparator />
                                             </>
                                         )}
-                                    </DropdownMenuItem>
-                                </>
-                            )}
-                        </DropdownMenuContent>
-                    </DropdownMenu>
-                </AppHeaderActions>
+                                        <DropdownMenuItem
+                                            disabled={isTemplatePending}
+                                            onClick={handleTemplateRenameStart}
+                                        >
+                                            <Pencil />
+                                            Rename
+                                        </DropdownMenuItem>
+                                        <DropdownMenuSeparator />
+                                    </>
+                                )}
+                                <DropdownMenuItem
+                                    className="cursor-default gap-4 hover:bg-transparent focus:bg-transparent"
+                                    onSelect={(event) => event.preventDefault()}
+                                >
+                                    View
+                                    <EditorViewModeToggle
+                                        className="-my-1.5 -mr-2 ml-auto"
+                                        mode={viewMode}
+                                        onModeChange={setViewMode}
+                                        rawTooltip="Edit the raw template"
+                                    />
+                                </DropdownMenuItem>
+                                {!isNew && (
+                                    <>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuItem
+                                            disabled={isDeleting || isTemplatePending}
+                                            onClick={() => setIsDeleteDialogOpen(true)}
+                                        >
+                                            {isDeleting ? (
+                                                <>
+                                                    <Spinner variant="circle" />
+                                                    Deleting...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Trash />
+                                                    Delete
+                                                </>
+                                            )}
+                                        </DropdownMenuItem>
+                                    </>
+                                )}
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    </AppHeaderActions>
+                )}
             </AppHeader>
-            {isMobile && canShowActions && (
+            {isMobile && !isNew && (
                 <DetailNavigationSheet<Template>
                     controller={templateNav}
                     renderItem={renderTemplateItem}

@@ -4,15 +4,15 @@ import { expect, test } from '@playwright/test';
 // stand): the authenticated shell renders and each core route loads without an
 // uncaught error. No seeded data and no agent run — safe against a shared stand.
 const ROUTES = [
-    { path: '/flows', title: 'Flows' },
-    { path: '/templates', title: 'Templates' },
-    { path: '/knowledges', title: 'Knowledges' },
-    { path: '/settings/prompts', title: 'Prompts' },
-    { path: '/settings/api-tokens', title: 'API Tokens' },
+    { emptyTitle: 'No flows found', path: '/flows', title: 'Flows' },
+    { emptyTitle: 'No templates yet', path: '/templates', title: 'Templates' },
+    { emptyTitle: 'No knowledge documents yet', path: '/knowledges', title: 'Knowledges' },
+    { emptyTitle: 'No prompts available', path: '/settings/prompts', title: 'Prompts' },
+    { emptyTitle: 'No API tokens configured', path: '/settings/api-tokens', title: 'API Tokens' },
 ];
 
 test.describe('stand smoke', { tag: '@stand' }, () => {
-    for (const { path, title } of ROUTES) {
+    for (const { emptyTitle, path, title } of ROUTES) {
         test(`renders ${path} without a page error`, async ({ page }) => {
             const pageErrors: string[] = [];
 
@@ -28,6 +28,8 @@ test.describe('stand smoke', { tag: '@stand' }, () => {
             // span tag matters: NavLink puts aria-current="page" on the active
             // settings-sidebar <a> at runtime, the breadcrumb title is a span.
             await expect(page.locator('span[aria-current="page"]')).toHaveText(title);
+            // Either branch: a query error renders neither, and a stand may hold no rows.
+            await expect(page.locator('[data-slot="table"]').first().or(page.getByText(emptyTitle))).toBeVisible();
             expect(pageErrors, `uncaught errors on ${path}`).toEqual([]);
         });
     }

@@ -9,6 +9,7 @@ import type {
 import { ResultType } from '@/graphql/types';
 
 import { expect, test } from '../../fixtures/test.ts';
+import { typeIntoEditor } from '../../helpers/editor.ts';
 import { expectCleanPage } from '../../helpers/errors.ts';
 import { makeTemplate, TEMPLATE_SEED, templatesCassette } from '../../mocks/cassettes/templates.ts';
 
@@ -55,13 +56,7 @@ test.describe('templates crud', { tag: '@crud' }, () => {
             await expect(page).toHaveURL(/\/templates\/new$/);
 
             await page.getByLabel('Title').fill(NEW_TITLE);
-
-            // fill() mutates the contenteditable DOM directly and races ProseMirror's
-            // observer flush against the submit click; real key events apply synchronously.
-            const editor = page.getByRole('textbox', { name: 'Template content' });
-
-            await editor.click();
-            await editor.pressSequentially(NEW_TEXT);
+            await typeIntoEditor(page, 'Template content', NEW_TEXT);
             await page.getByRole('button', { name: 'Create' }).click();
 
             await expect(page).toHaveURL(/\/templates$/);

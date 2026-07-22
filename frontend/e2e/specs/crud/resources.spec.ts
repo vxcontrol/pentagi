@@ -23,7 +23,13 @@ test.describe('resources', { tag: '@coverage' }, () => {
     });
 
     test.describe('mkdir', () => {
-        const added: ResultOf<typeof ResourceAddedDocument> = { resourceAdded: CREATED_FOLDER };
+        // Type a name distinct from the dialog's default so the request body proves the
+        // typed value reached it — a value equal to the default would match even if the
+        // input→payload binding were broken.
+        const TYPED_PATH = 'e2e-typed-folder';
+        const added: ResultOf<typeof ResourceAddedDocument> = {
+            resourceAdded: { ...CREATED_FOLDER, name: TYPED_PATH, path: TYPED_PATH },
+        };
 
         test.use({
             cassette: resourcesCassette({
@@ -31,7 +37,7 @@ test.describe('resources', { tag: '@coverage' }, () => {
                     'POST /api/v1/resources/mkdir': [
                         {
                             body: { data: {}, status: 'success' },
-                            bodySubset: { path: 'new-folder' },
+                            bodySubset: { path: TYPED_PATH },
                             setFlag: 'folder-created',
                         },
                     ],
@@ -50,10 +56,11 @@ test.describe('resources', { tag: '@coverage' }, () => {
 
             await expect(dialog.getByRole('heading', { name: 'Create directory' })).toBeVisible();
             await expect(dialog.getByLabel('Path')).toHaveValue('new-folder');
+            await dialog.getByLabel('Path').fill(TYPED_PATH);
             await dialog.getByRole('button', { name: 'Create' }).click();
 
             await expect(page.getByText('Directory created')).toBeVisible();
-            await expect(page.getByRole('treeitem', { name: /new-folder/ })).toBeVisible();
+            await expect(page.getByRole('treeitem', { name: new RegExp(TYPED_PATH) })).toBeVisible();
             expectCleanPage(pageErrorLog);
         });
     });

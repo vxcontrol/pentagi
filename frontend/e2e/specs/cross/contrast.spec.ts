@@ -1,16 +1,29 @@
+import { readFileSync } from 'node:fs';
+
 import type { BadgeVariant } from '@/components/ui/badge';
 
 import { badgeVariants } from '@/components/ui/badge';
 import { buttonVariants } from '@/components/ui/button';
 
+import type { EditorProbe } from '../../helpers/contrast.ts';
+
 import { expect, test } from '../../fixtures/test.ts';
 import { AA_NORMAL, measureContrast, mountContrastProbes, mountEditorProbes } from '../../helpers/contrast.ts';
 import { flowsCassette } from '../../mocks/cassettes/flows.ts';
 
-const EDITOR_TOKENS = {
-    'editor-tag': 'template-tag',
-    'editor-variable': 'template-variable',
-} as const;
+const EDITOR_PROBES = {
+    'editor-accent': { tag: 'a' },
+    'editor-code': { tag: 'code' },
+    'editor-tag': { className: 'template-tag', tag: 'span' },
+    'editor-variable': { className: 'template-variable', tag: 'span' },
+} satisfies Record<string, EditorProbe>;
+
+/** The stylesheet is the token list, so a newly declared `--editor-*` has to be probed or exempted. */
+const declaredEditorTokens = (): string[] => {
+    const css = readFileSync(new URL('../../../src/styles/index.css', import.meta.url), 'utf8');
+
+    return [...new Set(css.match(/--editor-[\w-]+/g) ?? [])].map((token) => token.slice(2));
+};
 
 // Keyed off the union so a newly added variant fails to compile until it is probed.
 const BADGE_VARIANTS = Object.keys({
@@ -28,6 +41,16 @@ const BADGE_VARIANTS = Object.keys({
 } satisfies Record<BadgeVariant, true>) as BadgeVariant[];
 
 const THEMES = ['light', 'dark'] as const;
+
+test('every editor colour token is probed', { tag: '@cross' }, () => {
+    const probed = new Set(Object.keys(EDITOR_PROBES));
+    // A `-bg` token is the paired ground of its base probe, measured with it.
+    const uncovered = declaredEditorTokens().filter(
+        (token) => !probed.has(token) && !(token.endsWith('-bg') && probed.has(token.slice(0, -3))),
+    );
+
+    expect(uncovered).toEqual([]);
+});
 
 for (const theme of THEMES) {
     test.describe(`contrast (${theme})`, { tag: '@cross' }, () => {
@@ -81,9 +104,9 @@ for (const theme of THEMES) {
             await expect(page.getByRole('row', { name: /E2E Alpha/ })).toBeVisible();
             await expect(page.locator('html')).toHaveClass(theme === 'dark' ? /dark/ : /light/);
 
-            await mountEditorProbes(page, EDITOR_TOKENS);
+            await mountEditorProbes(page, EDITOR_PROBES);
 
-            for (const token of Object.keys(EDITOR_TOKENS)) {
+            for (const token of Object.keys(EDITOR_PROBES)) {
                 expect
                     .soft(await measureContrast(page, token), `${token} (${theme})`)
                     .toBeGreaterThanOrEqual(AA_NORMAL);

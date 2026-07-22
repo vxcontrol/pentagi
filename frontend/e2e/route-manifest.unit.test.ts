@@ -8,8 +8,7 @@ import { ROUTE_MANIFEST } from './routes.ts';
  * Routes deliberately outside the manifest sweeps (nav, visual, a11y,
  * diff-scoping), each with the reason. Adding a route to lib/routes forces a
  * decision here: give it a manifest entry or list it with a reason — it cannot
- * silently stay out of every sweep. Dynamic builders (`routes.flow(id)`, …)
- * are functions and out of this static check's scope.
+ * silently stay out of every sweep.
  */
 const EXCLUDED: Record<string, string> = {
     '/': 'redirects to /dashboard',
@@ -21,6 +20,18 @@ const EXCLUDED: Record<string, string> = {
     '/templates/new': 'create-mode variant of the template detail page',
 };
 
+/** Route builders are functions, so the static walk below cannot see them. */
+const DYNAMIC_ROUTES: Record<string, string> = {
+    flow: 'manifest entry (routes.flow("5"))',
+    flowReport: 'not swept: needs a finished-flow report cassette',
+    knowledge: 'specs/crud/knowledges.spec.ts — detail page after create',
+    login: 'specs/smoke.spec.ts + the /login a11y scan',
+    'settings.newProvider': 'specs/settings/providers.spec.ts — opened from the empty state',
+    'settings.prompt': 'specs/settings/prompt-detail.spec.ts',
+    'settings.provider': 'not swept: provider form; unit-covered by settings-provider.test.tsx',
+    template: 'specs/crud/template-detail.spec.ts',
+};
+
 const staticPaths = (node: unknown): string[] => {
     if (typeof node === 'string') {
         return [node];
@@ -28,6 +39,20 @@ const staticPaths = (node: unknown): string[] => {
 
     if (node && typeof node === 'object') {
         return Object.values(node).flatMap(staticPaths);
+    }
+
+    return [];
+};
+
+const dynamicRouteKeys = (node: unknown, prefix = ''): string[] => {
+    if (typeof node === 'function') {
+        return [prefix];
+    }
+
+    if (node && typeof node === 'object') {
+        return Object.entries(node).flatMap(([key, value]) =>
+            dynamicRouteKeys(value, prefix ? `${prefix}.${key}` : key),
+        );
     }
 
     return [];
@@ -44,5 +69,9 @@ describe('ROUTE_MANIFEST completeness', () => {
 
     it('keeps the exclusion list free of routes the manifest already covers', () => {
         expect(Object.keys(EXCLUDED).filter((path) => manifestPaths.has(path))).toEqual([]);
+    });
+
+    it('forces a coverage decision for every dynamic route builder', () => {
+        expect(dynamicRouteKeys(routes).sort()).toEqual(Object.keys(DYNAMIC_ROUTES).sort());
     });
 });

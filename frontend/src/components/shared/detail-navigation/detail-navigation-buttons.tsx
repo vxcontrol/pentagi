@@ -36,6 +36,7 @@ export function DetailNavigationButtons<T extends { id: string }>({
     const isSm = size === 'sm';
     const sideButtonSize = isSm ? 'size-7' : 'size-8';
     const middleHeight = isSm ? 'h-7' : 'h-8';
+    const widestLabel = `${controller.total}/${controller.total}`;
 
     return (
         <div className="flex items-center">
@@ -68,7 +69,7 @@ export function DetailNavigationButtons<T extends { id: string }>({
                         type="button"
                         variant="outline"
                     >
-                        {controller.positionLabel}
+                        <span style={{ minWidth: `${widestLabel.length}ch` }}>{controller.positionLabel}</span>
                     </Button>
                 </TooltipTrigger>
                 <TooltipContent>Show all matching {lowerTitle}</TooltipContent>

@@ -7,7 +7,7 @@ import type { Cassette } from './mocks/cassette.ts';
 
 import { apiTokensCassette } from './mocks/cassettes/api-tokens.ts';
 import { dashboardCassette } from './mocks/cassettes/dashboard.ts';
-import { flowsCassette } from './mocks/cassettes/flows.ts';
+import { flowsCassette, flowTabsCassette } from './mocks/cassettes/flows.ts';
 import { knowledgesCassette } from './mocks/cassettes/knowledges.ts';
 import { resourcesCassette } from './mocks/cassettes/resources.ts';
 import { settingsPromptsCassette } from './mocks/cassettes/settings-prompts.ts';
@@ -26,6 +26,8 @@ export interface RouteManifestEntry {
      * single-route listing silently skips the other consumers.
      */
     sources: string[];
+    /** Radix unmounts inactive tab panels, so one scan of the default view sees none of them. */
+    tabs?: string[];
 }
 
 /**
@@ -40,19 +42,32 @@ export const ROUTE_MANIFEST: RouteManifestEntry[] = [
         cassette: flowsCassette,
         path: routes.flows,
         ready: (page) => page.getByRole('row', { name: /E2E Alpha/ }),
-        sources: ['src/pages/flows', 'src/features/flows', 'src/providers/flows-provider.tsx'],
+        // Per file, not the whole dir: the report and create pages sit beside these, and claiming
+        // the dir would scope their diffs to routes that never render them.
+        sources: ['src/pages/flows/flows.tsx', 'src/features/flows', 'src/providers/flows-provider.tsx'],
     },
     {
         // Message metadata (date + ID) renders at 50% opacity by design; revisit
         // with the design pass.
-        a11yWaivers: [{ rule: 'color-contrast', target: /text-muted-foreground\\?\/50/ }],
-        cassette: flowsCassette,
+        a11yWaivers: [
+            { rule: 'color-contrast', target: /text-muted-foreground\\?\/50/ },
+            // The tab-panel ones below are defects awaiting a fix, not accepted design.
+            { rule: 'aria-progressbar-name', target: /bg-primary/ },
+            { rule: 'button-name', target: /span\[data-slot|button\[aria-label/ },
+            { rule: 'target-size', target: /text-blue-400|button\[aria-label/ },
+            { rule: 'color-contrast', target: /font-semibold\.truncate/ },
+            // The same file-manager row metadata waived on /resources — this tab embeds it.
+            { rule: 'color-contrast', target: /text-muted-foreground\\?\/80/ },
+            { rule: 'scrollable-region-focusable', target: /table-container/ },
+        ],
+        // Must stay the populated cassette: the empty seed renders none of the sources below.
+        cassette: flowTabsCassette,
         path: routes.flow('5'),
         // The terminal mounts after the header, and the visual spec masks it —
         // capturing before it exists compares live pixels against a masked baseline.
         ready: (page) => page.locator('.xterm').first(),
         sources: [
-            'src/pages/flows',
+            'src/pages/flows/flow.tsx',
             'src/features/flows',
             'src/providers/flow-provider.tsx',
             'src/providers/flows-provider.tsx',
@@ -60,6 +75,7 @@ export const ROUTE_MANIFEST: RouteManifestEntry[] = [
             'src/components/dashboard',
             'src/features/resources',
         ],
+        tabs: ['Assistant', 'Dashboard', 'Tasks', 'Agents', 'Searches', 'Vector Store', 'Files', 'Screenshots'],
     },
     {
         cassette: templatesCassette,

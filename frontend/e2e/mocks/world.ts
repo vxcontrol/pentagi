@@ -15,8 +15,17 @@ const stableStringify = (value: unknown): string =>
             : node,
     ) ?? 'undefined';
 
-const isPlainObject = (value: unknown): value is Record<string, unknown> =>
-    typeof value === 'object' && value !== null && !Array.isArray(value);
+const isPlainObject = (value: unknown): value is Record<string, unknown> => {
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+        return false;
+    }
+
+    // Only true plain objects recurse in isSubsetMatch. A Date/Map/Set/class instance has no own
+    // enumerable entries, so `every` over [] would be vacuously true and the pin would match any object.
+    const proto = Object.getPrototypeOf(value) as unknown;
+
+    return proto === Object.prototype || proto === null;
+};
 
 const isSubsetMatch = (expected?: Record<string, unknown>, actual?: Record<string, unknown>): boolean =>
     !expected ||
@@ -55,7 +64,7 @@ export class MockWorld {
      */
     readonly unmatchedSubscriptions: string[] = [];
 
-    private readonly consumed = new Map<string, { index: number; signature: string }>();
+    private readonly consumed = new Map<string, Set<number>>();
     private readonly flags = new Set<string>();
     private readonly flagWaiters = new Map<string, Array<() => void>>();
     private readonly sockets = new Set<MockSocket>();
@@ -110,8 +119,10 @@ export class MockWorld {
         );
         const candidates = this.eligible(matching);
 
+        // Include the body in the cursor key (as the GraphQL half keys on variables): two
+        // body-differentiated sequences for one path must not reset each other's cursor.
         return matching && candidates?.length
-            ? this.nextEntry(`rest:${method}:${normalized}`, candidates, matching)
+            ? this.nextEntry(`rest:${method}:${normalized}:${stableStringify(body ?? {})}`, candidates, matching)
             : undefined;
     }
 
@@ -123,9 +134,15 @@ export class MockWorld {
             isSubsetMatch(candidate.variables, variables),
         );
 
-        return entry
-            ? { entry, streamKey: `sub:${operationName}:${JSON.stringify(entry.variables ?? {})}` }
-            : undefined;
+        // Key on the request's variables, not the entry's: an entry written without variables would
+        // otherwise merge every flow's subscribers onto one stream, and the second would join delta-only.
+        return entry ? { entry, streamKey: `sub:${operationName}:${stableStringify(variables ?? {})}` } : undefined;
+    }
+
+    raiseFlag(flag: string): void {
+        this.flags.add(flag);
+        this.flagWaiters.get(flag)?.forEach((resolve) => resolve());
+        this.flagWaiters.delete(flag);
     }
 
     registerSocket(socket: MockSocket): void {
@@ -149,6 +166,10 @@ export class MockWorld {
         if (!state.isDriving) {
             state.isDriving = true;
             void this.driveStream(state, entry.frames, entry.complete ?? false);
+        } else if (state.cursor >= entry.frames.length && (entry.complete ?? false)) {
+            // Late subscriber to an already-exhausted stream: no frame replay (the no-replay-after-
+            // reconnect contract), but a complete:true stream must still signal completion.
+            subscriber.complete();
         }
 
         return () => state.subscribers.delete(subscriber);
@@ -186,30 +207,24 @@ export class MockWorld {
     }
 
     /**
-     * Sequenced responses: entries for the same match key are consumed in
-     * order; the last one repeats. The cursor is scoped to the current eligible
-     * subset — when a raised flag changes which entries are visible, carrying a
-     * pre-flag cursor over would skip the new subset's leading entries.
+     * Sequenced responses: entries for one match key are served in order and the last repeats.
+     * Consumption is tracked by entry identity (its index in the unfiltered `all` list), not by a
+     * cursor into the current eligible subset — so a raised flag that grows the subset serves the
+     * newly-enabled entry next, instead of restarting at 0 and replaying an already-served one.
      */
     private nextEntry<T extends WorldFlagged>(key: string, candidates: T[], all: T[]): T {
-        const signature = candidates.map((candidate) => all.indexOf(candidate)).join(',');
-        const state = this.consumed.get(key);
-        const index = state?.signature === signature ? state.index : 0;
+        const served = this.consumed.get(key) ?? new Set<number>();
 
-        this.consumed.set(key, { index: index + 1, signature });
+        this.consumed.set(key, served);
 
-        const entry = candidates[Math.min(index, candidates.length - 1)] as T;
+        const entry = candidates.find((candidate) => !served.has(all.indexOf(candidate))) ?? candidates.at(-1)!;
+
+        served.add(all.indexOf(entry));
 
         if (entry.setFlag) {
             this.raiseFlag(entry.setFlag);
         }
 
         return entry;
-    }
-
-    private raiseFlag(flag: string): void {
-        this.flags.add(flag);
-        this.flagWaiters.get(flag)?.forEach((resolve) => resolve());
-        this.flagWaiters.delete(flag);
     }
 }

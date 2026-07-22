@@ -113,12 +113,22 @@ describe('graphql-ws mock protocol contract', () => {
 
     it('completes the sink only for streams that opt into complete', async () => {
         const { client } = await start({
-            subscriptions: { finite: [{ complete: true, frames: [{ payload: { data: { finite: 1 } } }] }] },
+            subscriptions: {
+                finite: [{ complete: true, frames: [{ payload: { data: { finite: 1 } } }] }],
+                open: [{ frames: [{ payload: { data: { open: 1 } } }] }],
+            },
         });
-        const sink = collect(client, 'finite');
+        const finite = collect(client, 'finite');
+        const open = collect(client, 'open');
 
-        await vi.waitFor(() => expect(sink.isComplete()).toBe(true));
-        expect(sink.received).toEqual([{ data: { finite: 1 } }]);
+        await vi.waitFor(() => expect(finite.isComplete()).toBe(true));
+        expect(finite.received).toEqual([{ data: { finite: 1 } }]);
+
+        // A stream without `complete` delivers its frames but must stay open — the real server
+        // never completes live subscriptions, so flipping the default to complete would fail here.
+        await vi.waitFor(() => expect(open.received).toEqual([{ data: { open: 1 } }]));
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        expect(open.isComplete()).toBe(false);
     });
 
     it('recovers from a 1001 drop and never replays already-delivered frames', async () => {
