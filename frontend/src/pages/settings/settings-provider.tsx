@@ -1605,7 +1605,7 @@ function SettingsProvider() {
         }
     };
 
-    if (loading) {
+    if (loading && !data) {
         return (
             <>
                 <AppHeader>

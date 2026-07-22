@@ -466,8 +466,13 @@ export function EntitiesPage() {
 
     const pageHeader = <AppHeader title="Entities" /* ...actions */ />;
 
-    // Canonical 4-branch render gate — pageHeader renders in ALL branches:
-    if (isLoading) {
+    // Canonical 4-branch render gate — pageHeader renders in ALL branches.
+    // Both loading and error gate on "nothing to show yet": the query is
+    // cache-and-network, so a background revalidation reports loading (and, on
+    // failure, error) with cached data still present. Without `&& !data` that
+    // refetch blanks a working list — or an edit form with unsaved changes —
+    // with the spinner/error for the round-trip.
+    if (isLoading && entities.length === 0) {
         return (
             <>
                 {pageHeader}
@@ -475,8 +480,6 @@ export function EntitiesPage() {
             </>
         );
     }
-    // Show the error surface only when there's no data — a failed background
-    // refetch must not blank a working list.
     if (error && entities.length === 0) {
         return (
             <>

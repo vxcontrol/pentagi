@@ -734,7 +734,7 @@ function Template() {
         />
     );
 
-    if (!isNew && isLoadingTemplate) {
+    if (!isNew && isLoadingTemplate && !template) {
         return (
             <div className={isDesktop ? 'flex h-[100dvh] min-h-0 flex-col' : 'flex min-h-[100dvh] flex-col'}>
                 {pageHeader}

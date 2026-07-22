@@ -137,4 +137,15 @@ describe('SettingsProvider create-form type guards', () => {
         expect(screen.queryByText('Error loading provider data')).not.toBeInTheDocument();
         expect(navigate).not.toHaveBeenCalled();
     });
+
+    // The loading branch runs before the error branch, so it needs the same guard: a background
+    // refetch reports loading:true with cached data and must not blank the form to the spinner.
+    it('keeps the form on a background refetch while cached data is present', () => {
+        setSearch('type=anthropic');
+        queryResult.loading = true;
+        render(<SettingsProvider />);
+
+        expect(screen.queryByText('Loading provider data...')).not.toBeInTheDocument();
+        expect(navigate).not.toHaveBeenCalled();
+    });
 });

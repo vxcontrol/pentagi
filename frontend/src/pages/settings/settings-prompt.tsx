@@ -727,7 +727,7 @@ function SettingsPrompt() {
         </AppHeader>
     );
 
-    if (loading) {
+    if (loading && !data) {
         return (
             <>
                 {pageHeader}
