@@ -29,6 +29,7 @@ import {
 
 import type { Cassette } from '../cassette.ts';
 
+import { RECONNECTED_FLAG } from '../../helpers/reconnect.ts';
 import { entity, mergeCassettes } from '../cassette.ts';
 import { baseQueries, baseRest } from './base.ts';
 
@@ -118,6 +119,9 @@ const FLOW_A_TERMINAL_LOGS = [
 export const FLOW_A_INITIAL_IDS = ['101', '102', '103'];
 export const FLOW_A_STREAMED_IDS = ['104', '105'];
 export const FLOW_A_RECONNECT_ID = '106';
+export const FLOW_A_REPLAY_SENTINEL_ID = '107';
+/** Gates the resubscribe replay; the spec raises it once the reconnect has landed. */
+export const REPLAY_FLAG = 'flow-a-replay';
 export const FLOW_B_INITIAL_IDS = ['201', '202'];
 export const FLOW_B_STREAMED_IDS = ['203', '204'];
 
@@ -163,6 +167,7 @@ export const flowsCassette = (override: Cassette = {}): Cassette =>
                             FLOW_A_TERMINAL_LOGS,
                         ),
                         variables: { id: '5' },
+                        whenFlag: RECONNECTED_FLAG,
                     },
                     { data: flowQueryData(FLOW_B, messagesFor('6', FLOW_B_INITIAL_IDS)), variables: { id: '6' } },
                 ],
@@ -172,7 +177,16 @@ export const flowsCassette = (override: Cassette = {}): Cassette =>
             subscriptions: {
                 messageLogAdded: [
                     {
-                        frames: FLOW_A_STREAMED_IDS.map((id) => addedFrame(makeMessage(id, '5'), 80)),
+                        frames: [
+                            ...FLOW_A_STREAMED_IDS.map((id) => addedFrame(makeMessage(id, '5'), 80)),
+                            // Not a copy-paste: a resubscribe replays what the refetch already
+                            // delivered, and the sentinel after it proves the replay was received.
+                            {
+                                ...addedFrame(makeMessage(FLOW_A_RECONNECT_ID, '5'), 0),
+                                whenFlag: REPLAY_FLAG,
+                            },
+                            addedFrame(makeMessage(FLOW_A_REPLAY_SENTINEL_ID, '5'), 0),
+                        ],
                         variables: { flowId: '5' },
                     },
                     {

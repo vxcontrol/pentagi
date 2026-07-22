@@ -139,6 +139,12 @@ export class MockWorld {
         return entry ? { entry, streamKey: `sub:${operationName}:${stableStringify(variables ?? {})}` } : undefined;
     }
 
+    raiseFlag(flag: string): void {
+        this.flags.add(flag);
+        this.flagWaiters.get(flag)?.forEach((resolve) => resolve());
+        this.flagWaiters.delete(flag);
+    }
+
     registerSocket(socket: MockSocket): void {
         this.sockets.add(socket);
     }
@@ -220,11 +226,5 @@ export class MockWorld {
         }
 
         return entry;
-    }
-
-    private raiseFlag(flag: string): void {
-        this.flags.add(flag);
-        this.flagWaiters.get(flag)?.forEach((resolve) => resolve());
-        this.flagWaiters.delete(flag);
     }
 }
