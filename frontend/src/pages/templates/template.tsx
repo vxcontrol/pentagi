@@ -15,6 +15,7 @@ import {
     DetailNavigationToolbar,
 } from '@/components/shared/detail-navigation';
 import { DetailSplitLayout } from '@/components/shared/detail-split-layout';
+import { ErrorState } from '@/components/shared/error-state';
 import { InlineEditInput, useInlineEdit } from '@/components/shared/inline-edit';
 import { type EditorViewMode, EditorViewModeToggle, MarkdownEditorField } from '@/components/shared/markdown-editor';
 import { UnsavedChangesDialog, useUnsavedChangesGuard } from '@/components/shared/unsaved-changes';
@@ -39,6 +40,7 @@ import { useTemplateDetailNavigation } from '@/features/templates/use-template-d
 import { FlowTemplateDocument } from '@/graphql/types';
 import { useAppForm } from '@/hooks/use-app-form';
 import { useBreakpoint } from '@/hooks/use-breakpoint';
+import { isNotFoundError } from '@/lib/errors';
 import { routes } from '@/lib/routes';
 import { cn } from '@/lib/utils';
 import { type Template, useTemplates } from '@/providers/templates-provider';
@@ -261,10 +263,17 @@ function Template() {
         stopEdit: handleTemplateRenameCancel,
     } = useInlineEdit({ resetKey: templateId });
 
-    const { data: templateData, loading: isLoadingTemplate } = useQuery(
-        FlowTemplateDocument,
-        templateId && !isNew ? { variables: { templateId } } : skipToken,
-    );
+    const {
+        data: templateData,
+        error: templateError,
+        loading: isLoadingTemplate,
+        refetch: refetchTemplate,
+    } = useQuery(FlowTemplateDocument, templateId && !isNew ? { variables: { templateId } } : skipToken);
+
+    const template = templateData?.flowTemplate;
+    // A real load failure that left nothing to show, as opposed to a genuine not-found: the page
+    // renders it as an in-page ErrorState + Retry instead of the "not found" card. Mirrors flow.
+    const templateLoadError = templateError && !template && !isNotFoundError(templateError) ? templateError : undefined;
 
     // `values` re-syncs the form whenever the cache refreshes (an inline rename, a refetch), while
     // `keepDirtyValues` preserves the user's in-flight edits — without it an external re-emit would
@@ -736,7 +745,22 @@ function Template() {
         );
     }
 
-    if (!isNew && !isLoadingTemplate && !templateData?.flowTemplate) {
+    if (templateLoadError) {
+        return (
+            <div className={isDesktop ? 'flex h-[100dvh] min-h-0 flex-col' : 'flex min-h-[100dvh] flex-col'}>
+                {pageHeader}
+                <div className="flex flex-1 flex-col gap-4 p-4">
+                    <ErrorState
+                        message={templateLoadError.message}
+                        onRetry={() => refetchTemplate()}
+                        title="Error loading template"
+                    />
+                </div>
+            </div>
+        );
+    }
+
+    if (!isNew && !isLoadingTemplate && !template) {
         return (
             <div className={isDesktop ? 'flex h-[100dvh] min-h-0 flex-col' : 'flex min-h-[100dvh] flex-col'}>
                 {pageHeader}

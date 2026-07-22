@@ -122,4 +122,21 @@ test.describe('knowledges crud', { tag: '@crud' }, () => {
             expectCleanPage(pageErrorLog);
         });
     });
+
+    // A real load failure on the detail route used to be mislabelled "not found" and bounced to
+    // the list with no way back in; it must keep the user on the route behind Retry instead.
+    test.describe('detail load failure', () => {
+        test.use({
+            cassette: knowledgesCassette({
+                queries: { knowledgeDocument: [{ errors: [{ message: 'e2e induced load failure' }] }] },
+            }),
+        });
+
+        test('shows an in-page error with Retry, not a bounce to the list', async ({ page }) => {
+            await page.goto(`/knowledges/${KNOWLEDGE_DOC.id}`);
+
+            await expect(page.getByRole('button', { name: 'Try again' })).toBeVisible();
+            await expect(page).toHaveURL(new RegExp(`/knowledges/${KNOWLEDGE_DOC.id}$`));
+        });
+    });
 });

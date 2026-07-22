@@ -66,4 +66,22 @@ test.describe('template detail', { tag: '@coverage' }, () => {
         expect(raw).toContain('E2E-MARK');
         expectCleanPage(pageErrorLog);
     });
+
+    // A real load failure must offer Retry in place, not the "Template not found" card that a
+    // genuine 404 shows — the two used to collapse into the same dead-end.
+    test.describe('load failure', () => {
+        test.use({
+            cassette: templateDetailCassette({
+                queries: { flowTemplate: [{ errors: [{ message: 'e2e induced load failure' }] }] },
+            }),
+        });
+
+        test('shows an in-page error with Retry, not "not found"', async ({ page }) => {
+            await page.goto(`/templates/${TEMPLATE_DETAIL.id}`);
+
+            await expect(page.getByRole('button', { name: 'Try again' })).toBeVisible();
+            await expect(page.getByText('Template not found')).toBeHidden();
+            await expect(page).toHaveURL(new RegExp(`/templates/${TEMPLATE_DETAIL.id}$`));
+        });
+    });
 });
