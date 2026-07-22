@@ -18,6 +18,20 @@ test.describe('template detail', { tag: '@coverage' }, () => {
         await page.keyboard.press('Escape');
     };
 
+    // This route has no visual baseline at all, so the header order is asserted nowhere else.
+    test('keeps the pager between save and the actions menu', async ({ page }) => {
+        await page.goto(`/templates/${TEMPLATE_DETAIL.id}`);
+        await expect(page.getByRole('button', { name: 'Template actions' })).toBeVisible();
+
+        const labels = await page
+            .locator('header button')
+            .evaluateAll((buttons) => buttons.map((button) => button.getAttribute('aria-label') ?? button.textContent));
+        const positionOf = (label: string) => labels.findIndex((candidate) => (candidate ?? '').includes(label));
+
+        expect(positionOf('Save')).toBeLessThan(positionOf('Previous'));
+        expect(positionOf('Next')).toBeLessThan(positionOf('Template actions'));
+    });
+
     test('loads the template body into the editor byte-exact', async ({ page, pageErrorLog }) => {
         await page.goto(`/templates/${TEMPLATE_DETAIL.id}`);
 

@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 
 import { Ellipsis, HatGlasses, LibraryBig, Pencil, Save, Trash } from 'lucide-react';
 import { useCallback, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 
 import type { KnowledgeDocumentFragmentFragment } from '@/graphql/types';
@@ -40,7 +40,6 @@ interface KnowledgeHeaderProps {
     canAnonymize?: boolean;
     isAnonymizeDisabled?: boolean;
     isAnonymizing?: boolean;
-    isLoading?: boolean;
     isNew: boolean;
     knowledge?: KnowledgeDocumentFragmentFragment | null;
     /**
@@ -72,7 +71,6 @@ export function KnowledgeHeader({
     canAnonymize = false,
     isAnonymizeDisabled = false,
     isAnonymizing = false,
-    isLoading = false,
     isNew,
     knowledge,
     onAnonymize,
@@ -82,6 +80,7 @@ export function KnowledgeHeader({
     viewMode = 'rich',
 }: KnowledgeHeaderProps) {
     const navigate = useNavigate();
+    const { knowledgeId: routeKnowledgeId } = useParams();
     const { isMobile } = useBreakpoint();
     const { deleteKnowledge, renameKnowledge } = useKnowledges();
     const [isRenaming, setIsRenaming] = useState(false);
@@ -89,8 +88,9 @@ export function KnowledgeHeader({
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
     const knowledgeId = knowledge?.id ?? null;
-
-    const knowledgeNav = useKnowledgeDetailNavigation(knowledgeId);
+    // The route's id, not the loaded document's: the pager walks siblings, so it has to work
+    // while this document is in flight — as it already does on the flow and template pages.
+    const knowledgeNav = useKnowledgeDetailNavigation(isNew ? null : (routeKnowledgeId ?? null));
 
     // Title source-of-truth is the server-side `question`. We intentionally do
     // not read it from the form draft below — the inline rename flow in this
@@ -98,7 +98,7 @@ export function KnowledgeHeader({
     // the cache, and the form picks up the new value separately.
     const knowledgeName = knowledge?.question ?? null;
     const hasKnowledge = !!knowledge;
-    const isEntityPending = isLoading || !hasKnowledge;
+    const isEntityPending = !hasKnowledge;
     const hasAnonymizeRow = isMobile && canAnonymize;
     const hasEntityRows = !isNew;
     const hasNavRow = isMobile && !isNew;
@@ -308,7 +308,9 @@ export function KnowledgeHeader({
                             ) : null}
                             {hasEntityRows && (
                                 <>
-                                    <DropdownMenuSeparator />
+                                    {/* The View row is the only thing between the two groups, and the
+                                        loading shell has no mode toggle: unconditional, the rules double up. */}
+                                    {onModeChange ? <DropdownMenuSeparator /> : null}
                                     <DropdownMenuItem
                                         disabled={isDeleting || isEntityPending}
                                         onClick={() => setIsDeleteDialogOpen(true)}

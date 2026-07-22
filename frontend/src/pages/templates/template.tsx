@@ -414,6 +414,7 @@ function Template() {
 
     const hasTemplate = !!templateData?.flowTemplate;
     const isTemplatePending = !isNew && (isLoadingTemplate || !hasTemplate);
+    const isTemplateMissing = !isNew && !isLoadingTemplate && !hasTemplate;
 
     const pageHeader = (
         <>
@@ -453,105 +454,109 @@ function Template() {
                         </BreadcrumbList>
                     </Breadcrumb>
                 </AppHeaderContent>
-                <AppHeaderActions>
-                    <AppHeaderAction
-                        disabled={isTemplatePending || (!isNew && !hasUnsavedChanges)}
-                        form="template-form"
-                        icon={<Save />}
-                        label={isNew ? 'Create' : 'Save'}
-                        loading={isSaving}
-                        type="submit"
-                    />
-                    {!isNew && !isMobile && (
-                        <DetailNavigationToolbar<Template>
-                            controller={templateNav}
-                            renderItem={renderTemplateItem}
-                            sheetIcon={<FileText className="size-4" />}
-                            sheetTitle="Templates"
+                {/* The not-found card reuses this header; a Save aimed at a form that is not
+                    there and a pager for an id that is not in the list are not "always meaningful". */}
+                {!isTemplateMissing && (
+                    <AppHeaderActions>
+                        <AppHeaderAction
+                            disabled={isTemplatePending || (!isNew && !hasUnsavedChanges)}
+                            form="template-form"
+                            icon={<Save />}
+                            label={isNew ? 'Create' : 'Save'}
+                            loading={isSaving}
+                            type="submit"
                         />
-                    )}
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button
-                                aria-label="Template actions"
-                                className="size-8 p-0"
-                                variant="ghost"
+                        {!isNew && !isMobile && (
+                            <DetailNavigationToolbar<Template>
+                                controller={templateNav}
+                                renderItem={renderTemplateItem}
+                                sheetIcon={<FileText className="size-4" />}
+                                sheetTitle="Templates"
+                            />
+                        )}
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button
+                                    aria-label="Template actions"
+                                    className="size-8 p-0"
+                                    variant="ghost"
+                                >
+                                    <Ellipsis />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent
+                                align="end"
+                                className="min-w-24"
+                                onCloseAutoFocus={handleDropdownCloseAutoFocus}
                             >
-                                <Ellipsis />
-                            </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent
-                            align="end"
-                            className="min-w-24"
-                            onCloseAutoFocus={handleDropdownCloseAutoFocus}
-                        >
-                            {!isNew && (
-                                <>
-                                    {isMobile && (
-                                        <>
-                                            <DropdownMenuItem
-                                                className="cursor-default hover:bg-transparent focus:bg-transparent"
-                                                onSelect={(event) => event.preventDefault()}
-                                            >
-                                                <FileText />
-                                                Templates
-                                                <div className="-my-1.5 -mr-2 ml-auto flex items-center">
-                                                    <DetailNavigationButtons<Template>
-                                                        controller={templateNav}
-                                                        sheetTitle="Templates"
-                                                        size="sm"
-                                                    />
-                                                </div>
-                                            </DropdownMenuItem>
-                                            <DropdownMenuSeparator />
-                                        </>
-                                    )}
-                                    <DropdownMenuItem
-                                        disabled={isTemplatePending}
-                                        onClick={handleTemplateRenameStart}
-                                    >
-                                        <Pencil />
-                                        Rename
-                                    </DropdownMenuItem>
-                                    <DropdownMenuSeparator />
-                                </>
-                            )}
-                            <DropdownMenuItem
-                                className="cursor-default gap-4 hover:bg-transparent focus:bg-transparent"
-                                onSelect={(event) => event.preventDefault()}
-                            >
-                                View
-                                <EditorViewModeToggle
-                                    className="-my-1.5 -mr-2 ml-auto"
-                                    mode={viewMode}
-                                    onModeChange={setViewMode}
-                                    rawTooltip="Edit the raw template"
-                                />
-                            </DropdownMenuItem>
-                            {!isNew && (
-                                <>
-                                    <DropdownMenuSeparator />
-                                    <DropdownMenuItem
-                                        disabled={isDeleting || isTemplatePending}
-                                        onClick={() => setIsDeleteDialogOpen(true)}
-                                    >
-                                        {isDeleting ? (
+                                {!isNew && (
+                                    <>
+                                        {isMobile && (
                                             <>
-                                                <Spinner variant="circle" />
-                                                Deleting...
-                                            </>
-                                        ) : (
-                                            <>
-                                                <Trash />
-                                                Delete
+                                                <DropdownMenuItem
+                                                    className="cursor-default hover:bg-transparent focus:bg-transparent"
+                                                    onSelect={(event) => event.preventDefault()}
+                                                >
+                                                    <FileText />
+                                                    Templates
+                                                    <div className="-my-1.5 -mr-2 ml-auto flex items-center">
+                                                        <DetailNavigationButtons<Template>
+                                                            controller={templateNav}
+                                                            sheetTitle="Templates"
+                                                            size="sm"
+                                                        />
+                                                    </div>
+                                                </DropdownMenuItem>
+                                                <DropdownMenuSeparator />
                                             </>
                                         )}
-                                    </DropdownMenuItem>
-                                </>
-                            )}
-                        </DropdownMenuContent>
-                    </DropdownMenu>
-                </AppHeaderActions>
+                                        <DropdownMenuItem
+                                            disabled={isTemplatePending}
+                                            onClick={handleTemplateRenameStart}
+                                        >
+                                            <Pencil />
+                                            Rename
+                                        </DropdownMenuItem>
+                                        <DropdownMenuSeparator />
+                                    </>
+                                )}
+                                <DropdownMenuItem
+                                    className="cursor-default gap-4 hover:bg-transparent focus:bg-transparent"
+                                    onSelect={(event) => event.preventDefault()}
+                                >
+                                    View
+                                    <EditorViewModeToggle
+                                        className="-my-1.5 -mr-2 ml-auto"
+                                        mode={viewMode}
+                                        onModeChange={setViewMode}
+                                        rawTooltip="Edit the raw template"
+                                    />
+                                </DropdownMenuItem>
+                                {!isNew && (
+                                    <>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuItem
+                                            disabled={isDeleting || isTemplatePending}
+                                            onClick={() => setIsDeleteDialogOpen(true)}
+                                        >
+                                            {isDeleting ? (
+                                                <>
+                                                    <Spinner variant="circle" />
+                                                    Deleting...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Trash />
+                                                    Delete
+                                                </>
+                                            )}
+                                        </DropdownMenuItem>
+                                    </>
+                                )}
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    </AppHeaderActions>
+                )}
             </AppHeader>
             {isMobile && !isNew && (
                 <DetailNavigationSheet<Template>

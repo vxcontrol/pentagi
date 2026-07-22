@@ -76,7 +76,6 @@ function Knowledge() {
     if (!isNew && !knowledge) {
         return (
             <KnowledgeLayout
-                isLoading={isLoadingKnowledge}
                 isNew={false}
                 knowledge={knowledge}
             >
