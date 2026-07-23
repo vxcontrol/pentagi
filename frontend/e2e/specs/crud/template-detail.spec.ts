@@ -25,6 +25,12 @@ test.describe('template detail', { tag: '@coverage' }, () => {
             .evaluateAll((buttons) => buttons.map((button) => button.getAttribute('aria-label') ?? button.textContent));
         const positionOf = (label: string) => labels.findIndex((candidate) => (candidate ?? '').includes(label));
 
+        // findIndex returns -1 for an absent label, and -1 < any real index, so the ordering below
+        // passes vacuously when a button is missing. Require presence first.
+        for (const label of ['Save', 'Previous', 'Next', 'Template actions']) {
+            expect(positionOf(label), `header is missing the "${label}" button`).toBeGreaterThanOrEqual(0);
+        }
+
         expect(positionOf('Save')).toBeLessThan(positionOf('Previous'));
         expect(positionOf('Next')).toBeLessThan(positionOf('Template actions'));
     });

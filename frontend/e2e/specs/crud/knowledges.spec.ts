@@ -139,4 +139,23 @@ test.describe('knowledges crud', { tag: '@crud' }, () => {
             await expect(page).toHaveURL(new RegExp(`/knowledges/${KNOWLEDGE_DOC.id}$`));
         });
     });
+
+    // The backend authz denial (graph/context.go) contains "not found", so a naive match would
+    // mistake it for a missing record and bounce a user who merely lacks access.
+    test.describe('detail authz denial', () => {
+        test.use({
+            cassette: knowledgesCassette({
+                queries: {
+                    knowledgeDocument: [{ errors: [{ message: "requested permission 'knowledge.read' not found" }] }],
+                },
+            }),
+        });
+
+        test('does not bounce a permission denial to the list', async ({ page }) => {
+            await page.goto(`/knowledges/${KNOWLEDGE_DOC.id}`);
+
+            await expect(page.getByRole('button', { name: 'Try again' })).toBeVisible();
+            await expect(page).toHaveURL(new RegExp(`/knowledges/${KNOWLEDGE_DOC.id}$`));
+        });
+    });
 });
