@@ -78,9 +78,29 @@ jobs:
           E2E_USER: ${{ secrets.E2E_STAND_USER }}
           E2E_PASSWORD: ${{ secrets.E2E_STAND_PASSWORD }}
 
-      # Traces, videos and screenshots are all disabled on this tier — they would
-      # embed the live session cookie, the stand URL or the login into a
-      # public-repo artifact. results.json carries none of those.
+      # Traces, videos and screenshots are disabled on this tier. results.json still
+      # embeds the stand URL (baseURL in navigation/locator error messages) and the
+      # user (in locator text) on a failing run, so redact the secrets before the
+      # public-repo upload — GitHub masks secrets in logs, never in artifacts.
+      - name: Redact secrets from report
+        if: always()
+        working-directory: frontend
+        run: |
+          node -e '
+            const fs = require("fs");
+            const f = "e2e/test-results/results.json";
+            if (!fs.existsSync(f)) process.exit(0);
+            let s = fs.readFileSync(f, "utf8");
+            for (const v of [process.env.E2E_BASE_URL, process.env.E2E_USER, process.env.E2E_PASSWORD]) {
+              if (v) s = s.split(v).join("<redacted>");
+            }
+            fs.writeFileSync(f, s);
+          '
+        env:
+          E2E_BASE_URL: ${{ secrets.E2E_STAND_URL }}
+          E2E_USER: ${{ secrets.E2E_STAND_USER }}
+          E2E_PASSWORD: ${{ secrets.E2E_STAND_PASSWORD }}
+
       - name: Upload report
         if: always()
         uses: actions/upload-artifact@v4
