@@ -422,7 +422,7 @@ function Template() {
     }, [pendingPreset, setValue]);
 
     const hasTemplate = !!templateData?.flowTemplate;
-    const isTemplatePending = !isNew && (isLoadingTemplate || !hasTemplate);
+    const isTemplatePending = !isNew && !hasTemplate;
     const isTemplateMissing = !isNew && !isLoadingTemplate && !hasTemplate;
 
     const pageHeader = (
