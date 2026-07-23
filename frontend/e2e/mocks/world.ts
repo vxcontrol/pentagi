@@ -175,6 +175,11 @@ export class MockWorld {
         return () => state.subscribers.delete(subscriber);
     }
 
+    /** Live subscriber count for a stream — lets a reconnect test wait for the resubscribe to land. */
+    subscriberCount(streamKey: string): number {
+        return this.streams.get(streamKey)?.subscribers.size ?? 0;
+    }
+
     unregisterSocket(socket: MockSocket): void {
         this.sockets.delete(socket);
     }
