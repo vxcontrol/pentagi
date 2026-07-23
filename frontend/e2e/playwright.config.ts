@@ -26,7 +26,7 @@ const here = (relative: string) => fileURLToPath(new URL(relative, import.meta.u
 export const AUTH_STATE_PATH = here('./.auth/user.json');
 
 const TIERS: Record<BackendTier, { baseURL: string; installMocks: boolean }> = {
-    local: { baseURL: process.env.E2E_BASE_URL ?? 'https://localhost:8443', installMocks: false },
+    local: { baseURL: process.env.E2E_BASE_URL ?? '', installMocks: false },
     mock: { baseURL: `http://localhost:${PREVIEW_PORT}`, installMocks: true },
     stand: { baseURL: process.env.E2E_BASE_URL ?? '', installMocks: false },
 };
@@ -37,8 +37,11 @@ if (!(rawTier in TIERS)) {
 
 const tier = rawTier as BackendTier;
 
-if (tier === 'stand' && !TIERS.stand.baseURL) {
-    throw new Error('E2E_TIER=stand requires E2E_BASE_URL');
+// Both stand and local hit a real backend and bake the real (paid) flow-run specs, so neither may
+// fall back to a default: a bare `E2E_TIER=local` must not silently target the dev stack. run-local-tier.sh
+// supplies E2E_BASE_URL for the legitimate path.
+if ((tier === 'stand' || tier === 'local') && !TIERS[tier].baseURL) {
+    throw new Error(`E2E_TIER=${tier} requires E2E_BASE_URL`);
 }
 
 export default defineConfig<BackendOptions>({
