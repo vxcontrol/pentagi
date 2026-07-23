@@ -176,9 +176,10 @@ var registryDefinitions = map[string]llms.FunctionDefinition{
 		Parameters: reflector.Reflect(&TerminalAction{}),
 	},
 	FileToolName: {
-		Name:        FileToolName,
-		Description: "Modifies or reads local files",
-		Parameters:  reflector.Reflect(&FileAction{}),
+		Name: FileToolName,
+		Description: "Reads, writes, or edits local files (see 'action'). " +
+			"Prefer edit_file for targeted changes to an existing file; use write_file only for a new file or a full rewrite.",
+		Parameters: reflector.Reflect(&FileAction{}),
 	},
 	ReportResultToolName: {
 		Name:        ReportResultToolName,

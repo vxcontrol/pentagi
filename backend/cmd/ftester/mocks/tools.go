@@ -40,11 +40,15 @@ func MockResponse(funcName string, args json.RawMessage) (string, error) {
 
 		terminal.PrintMock("File operation:")
 		terminal.PrintKeyValue("Operation", string(fileArgs.Action))
-		terminal.PrintKeyValue("Path", fileArgs.Path)
+		terminal.PrintKeyValue("Path", fileArgs.Path.String())
 
-		if fileArgs.Action == tools.ReadFile {
+		switch fileArgs.Action {
+		case tools.ReadFile:
 			resultObj = fmt.Sprintf("Mock content of file: %s\nThis is a sample content that would be read from the file.\nIt contains multiple lines to simulate a real file.", fileArgs.Path)
-		} else {
+		case tools.EditFile:
+			terminal.PrintKeyValue("Diff", fileArgs.Diff.String())
+			resultObj = fmt.Sprintf("Applied 1 diff hunk(s) to %s (mock)", fileArgs.Path)
+		default:
 			resultObj = fmt.Sprintf("file %s written successfully", fileArgs.Path)
 		}
 
@@ -211,8 +215,8 @@ func MockResponse(funcName string, args json.RawMessage) (string, error) {
 
 		terminal.PrintMock("Sploitus search:")
 		terminal.PrintKeyValue("Query", sploitusArgs.Query)
-		terminal.PrintKeyValue("Exploit type", exploitType)
-		terminal.PrintKeyValue("Sort", sploitusArgs.Sort)
+		terminal.PrintKeyValue("Exploit type", exploitType.String())
+		terminal.PrintKeyValue("Sort", sploitusArgs.Sort.String())
 		terminal.PrintKeyValueFormat("Max results", "%d", sploitusArgs.MaxResults.Int())
 
 		var builder strings.Builder
@@ -414,7 +418,7 @@ func MockResponse(funcName string, args json.RawMessage) (string, error) {
 		for i, q := range searchGuideArgs.Questions {
 			terminal.PrintKeyValueFormat(fmt.Sprintf("Question %d", i+1), "%s", q)
 		}
-		terminal.PrintKeyValue("Guide type", searchGuideArgs.Type)
+		terminal.PrintKeyValue("Guide type", searchGuideArgs.Type.String())
 
 		questionsText := strings.Join(searchGuideArgs.Questions, " | ")
 
@@ -433,7 +437,7 @@ func MockResponse(funcName string, args json.RawMessage) (string, error) {
 		}
 
 		terminal.PrintMock("Store guide:")
-		terminal.PrintKeyValue("Type", storeGuideArgs.Type)
+		terminal.PrintKeyValue("Type", storeGuideArgs.Type.String())
 		terminal.PrintKeyValueFormat("Guide length", "%d chars", len(storeGuideArgs.Guide))
 		terminal.PrintKeyValue("Guide question", storeGuideArgs.Question)
 
@@ -450,7 +454,7 @@ func MockResponse(funcName string, args json.RawMessage) (string, error) {
 		for i, q := range searchAnswerArgs.Questions {
 			terminal.PrintKeyValueFormat(fmt.Sprintf("Question %d", i+1), "%s", q)
 		}
-		terminal.PrintKeyValue("Answer type", searchAnswerArgs.Type)
+		terminal.PrintKeyValue("Answer type", searchAnswerArgs.Type.String())
 
 		questionsText := strings.Join(searchAnswerArgs.Questions, " | ")
 
@@ -467,7 +471,7 @@ func MockResponse(funcName string, args json.RawMessage) (string, error) {
 		}
 
 		terminal.PrintMock("Store answer:")
-		terminal.PrintKeyValue("Type", storeAnswerArgs.Type)
+		terminal.PrintKeyValue("Type", storeAnswerArgs.Type.String())
 		terminal.PrintKeyValueFormat("Answer length", "%d chars", len(storeAnswerArgs.Answer))
 		terminal.PrintKeyValue("Question", storeAnswerArgs.Question)
 
@@ -520,7 +524,7 @@ func MockResponse(funcName string, args json.RawMessage) (string, error) {
 		}
 
 		terminal.PrintMock("Graphiti Search:")
-		terminal.PrintKeyValue("Search Type", searchArgs.SearchType)
+		terminal.PrintKeyValue("Search Type", searchArgs.SearchType.String())
 		terminal.PrintKeyValue("Query", searchArgs.Query)
 
 		var builder strings.Builder

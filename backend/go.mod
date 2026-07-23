@@ -39,10 +39,11 @@ require (
 	github.com/joho/godotenv v1.5.1
 	github.com/lib/pq v1.10.9
 	github.com/mattn/go-runewidth v0.0.16
-	github.com/ollama/ollama v0.18.0
+	github.com/ollama/ollama v0.23.0
 	github.com/pgvector/pgvector-go v0.1.1
 	github.com/pressly/goose/v3 v3.19.2
 	github.com/rivo/uniseg v0.4.7
+	github.com/sergi/go-diff v1.3.1
 	github.com/shirou/gopsutil/v3 v3.24.5
 	github.com/sirupsen/logrus v1.9.3
 	github.com/sqlc-dev/pqtype v0.3.0
@@ -52,7 +53,7 @@ require (
 	github.com/vektah/gqlparser/v2 v2.5.19
 	github.com/vxcontrol/cloud v0.9.0
 	github.com/vxcontrol/graphiti-go-client v0.9.0
-	github.com/vxcontrol/langchaingo v0.1.15-0.20260717093433-cf5f5f41f4eb
+	github.com/vxcontrol/langchaingo v0.1.15-0.20260723091023-35da5c0f0620
 	github.com/wasilibs/go-re2 v1.10.0
 	github.com/xeipuuv/gojsonschema v1.2.0
 	go.opentelemetry.io/otel v1.39.0

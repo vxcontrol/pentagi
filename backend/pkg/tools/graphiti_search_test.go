@@ -75,6 +75,78 @@ func fakeNetError() error {
 	)
 }
 
+// fakeStatusError mimics the exact error shape graphiti-go-client's `do`
+// produces for a non-2xx HTTP response: a plain fmt.Errorf embedding the raw
+// response body, further wrapped by the handle*Search method's own %w wrap.
+func fakeStatusError(statusCode int, body string) error {
+	return fmt.Errorf(
+		"recent context search failed: API request failed with status %d: %s",
+		statusCode, body,
+	)
+}
+
+func TestGraphitiSearchTool_Handle_ServerError5xx_DegradesGracefullyWithBody(t *testing.T) {
+	tool := NewGraphitiSearchTool(1, nil, nil, &stubGraphitiSearcher{
+		enabled: true,
+		err:     fakeStatusError(502, "<html><body>502 Bad Gateway</body></html>"),
+	})
+
+	args := []byte(`{"search_type":"recent_context","query":"test query","message":"m"}`)
+	result, err := tool.Handle(t.Context(), GraphitiSearchToolName, args)
+
+	if err != nil {
+		t.Fatalf("expected graceful degradation (nil error) on 5xx, got error: %v", err)
+	}
+	if !strings.Contains(result, "HTTP 502") {
+		t.Fatalf("expected result to mention the status code, got: %q", result)
+	}
+	if !strings.Contains(result, "502 Bad Gateway") {
+		t.Fatalf("expected result to include the response body, got: %q", result)
+	}
+}
+
+func TestGraphitiSearchTool_Handle_ServerError5xx_BodyTruncatedAt512Bytes(t *testing.T) {
+	hugeBody := strings.Repeat("x", 2000)
+	tool := NewGraphitiSearchTool(1, nil, nil, &stubGraphitiSearcher{
+		enabled: true,
+		err:     fakeStatusError(500, hugeBody),
+	})
+
+	args := []byte(`{"search_type":"recent_context","query":"test query","message":"m"}`)
+	result, err := tool.Handle(t.Context(), GraphitiSearchToolName, args)
+
+	if err != nil {
+		t.Fatalf("expected graceful degradation (nil error) on 5xx, got error: %v", err)
+	}
+	if strings.Count(result, "x") >= 2000 {
+		t.Fatalf("expected the 2000-byte body to be truncated to the 512-byte cap, got a result of length %d", len(result))
+	}
+	if !strings.Contains(result, "truncated") {
+		t.Fatalf("expected result to indicate truncation, got: %q", result)
+	}
+}
+
+func TestGraphitiSearchTool_Handle_ClientError4xx_StaysHardWithTruncatedBody(t *testing.T) {
+	hugeBody := strings.Repeat("y", 2000)
+	tool := NewGraphitiSearchTool(1, nil, nil, &stubGraphitiSearcher{
+		enabled: true,
+		err:     fakeStatusError(400, hugeBody),
+	})
+
+	args := []byte(`{"search_type":"recent_context","query":"test query","message":"m"}`)
+	_, err := tool.Handle(t.Context(), GraphitiSearchToolName, args)
+
+	if err == nil {
+		t.Fatal("expected a hard failure for a 4xx status, got nil error")
+	}
+	if !strings.Contains(err.Error(), "status 400") {
+		t.Fatalf("expected error to mention the status code, got: %v", err)
+	}
+	if strings.Count(err.Error(), "y") >= 2000 {
+		t.Fatalf("expected the 2000-byte body to be truncated to the 512-byte cap even on the hard-fail path, got error of length %d", len(err.Error()))
+	}
+}
+
 func TestGraphitiSearchTool_Handle_NetworkFailure_DegradesGracefully(t *testing.T) {
 	tool := NewGraphitiSearchTool(1, nil, nil, &stubGraphitiSearcher{enabled: true, err: fakeNetError()})
 

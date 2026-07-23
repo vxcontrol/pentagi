@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -15,6 +17,18 @@ import (
 
 	"github.com/sirupsen/logrus"
 )
+
+// maxGraphitiResponsePreviewBytes bounds how much of a non-2xx Graphiti
+// response body is ever shown to the LLM (via truncateString), so a verbose
+// error page or stack trace from the Graphiti backend can't blow up the
+// agent's context window.
+const maxGraphitiResponsePreviewBytes = 512
+
+// graphitiAPIStatusErrorRe matches the one fixed error shape the vendored
+// graphiti-go-client emits for a non-2xx HTTP response: a plain fmt.Errorf
+// (see client.go's `do`) with no typed status code, so this is the only way
+// to recover the status and body without forking the dependency.
+var graphitiAPIStatusErrorRe = regexp.MustCompile(`(?s)API request failed with status (\d+): (.*)`)
 
 type GraphitiSearcher interface {
 	IsEnabled() bool
@@ -130,7 +144,7 @@ func (t *graphitiSearchTool) Handle(ctx context.Context, name string, args json.
 
 	ctx, observation := obs.Observer.NewObservation(ctx)
 
-	retrieverTitle, ok := graphitiRetrieverTitles[searchArgs.SearchType]
+	retrieverTitle, ok := graphitiRetrieverTitles[searchArgs.SearchType.String()]
 	if !ok {
 		retrieverTitle = "retrieve context from graphiti knowledge graph"
 	}
@@ -189,8 +203,8 @@ func (t *graphitiSearchTool) Handle(ctx context.Context, name string, args json.
 		var urlErr *url.Error
 		if errors.As(err, &urlErr) {
 			softMsg := fmt.Sprintf(
-				"Graphiti knowledge graph is temporarily unavailable (%v); continuing without historical context.",
-				err,
+				"Graphiti knowledge graph is temporarily unavailable (%s); continuing without historical context.",
+				truncateString(err.Error(), maxGraphitiResponsePreviewBytes),
 			)
 			retriever.End(
 				langfuse.WithRetrieverStatus(softMsg),
@@ -198,6 +212,37 @@ func (t *graphitiSearchTool) Handle(ctx context.Context, name string, args json.
 			)
 			logger.WithError(err).Warnf("graphiti search '%s' unavailable, degrading gracefully", searchArgs.SearchType)
 			return softMsg, nil
+		}
+
+		// The Graphiti server responded (connection succeeded), but with a
+		// non-2xx status. graphiti-go-client has no typed error for this - it
+		// embeds the raw, unbounded response body in a plain fmt.Errorf - so
+		// recover the status/body via the one fixed message shape it emits.
+		if m := graphitiAPIStatusErrorRe.FindStringSubmatch(err.Error()); m != nil {
+			statusCode, convErr := strconv.Atoi(m[1])
+			body := truncateString(strings.TrimSpace(m[2]), maxGraphitiResponsePreviewBytes)
+
+			if convErr == nil && statusCode >= 500 {
+				// A 5xx from Graphiti's own backend is the same class of
+				// problem as a transport failure: not fixable by editing
+				// arguments, so degrade gracefully and show the LLM whatever
+				// of the response body we could read.
+				softMsg := fmt.Sprintf(
+					"Graphiti knowledge graph returned HTTP %d and is likely temporarily unavailable; continuing without historical context. Response: %s",
+					statusCode, body,
+				)
+				retriever.End(
+					langfuse.WithRetrieverStatus(softMsg),
+					langfuse.WithRetrieverLevel(langfuse.ObservationLevelWarning),
+				)
+				logger.WithError(err).Warnf("graphiti search '%s' returned HTTP %d, degrading gracefully", searchArgs.SearchType, statusCode)
+				return softMsg, nil
+			}
+
+			// 4xx (or an unparseable status) likely means our own request was
+			// malformed - stays a hard failure so the tool-call fixer can act
+			// on it, but capped so a verbose error page can't blow up its context.
+			err = fmt.Errorf("graphiti API request failed with status %s: %s", m[1], body)
 		}
 
 		retriever.End(
@@ -371,7 +416,7 @@ func (t *graphitiSearchTool) handleDiverseResultsSearch(
 		maxResults = DefaultDiverseMaxResults
 	}
 
-	diversityLevel := args.DiversityLevel
+	diversityLevel := args.DiversityLevel.String()
 	if diversityLevel == "" {
 		diversityLevel = DefaultDiversityLevel
 	}
@@ -467,7 +512,7 @@ func (t *graphitiSearchTool) handleRecentContextSearch(
 		maxResults = DefaultRecentMaxResults
 	}
 
-	recencyWindow := args.RecencyWindow
+	recencyWindow := args.RecencyWindow.String()
 	if recencyWindow == "" {
 		recencyWindow = DefaultRecencyWindow
 	}

@@ -483,8 +483,8 @@ github.com/ncruces/go-strftime v0.1.9 h1:bY0MQC28UADQmHmaF5dgpLmImcShSi2kHU9XLdh
 github.com/ncruces/go-strftime v0.1.9/go.mod h1:Fwc5htZGVVkseilnfgOVb9mKy6w1naJmn9CehxcKcls=
 github.com/nikolalohinski/gonja v1.5.3 h1:GsA+EEaZDZPGJ8JtpeGN78jidhOlxeJROpqMT9fTj9c=
 github.com/nikolalohinski/gonja v1.5.3/go.mod h1:RmjwxNiXAEqcq1HeK5SSMmqFJvKOfTfXhkJv6YBtPa4=
-github.com/ollama/ollama v0.18.0 h1:loPvswLB07Cn3SnRy5E9tZziGS4nqfnoVllSKO68vX8=
-github.com/ollama/ollama v0.18.0/go.mod h1:tCX4IMV8DHjl3zY0THxuEkpWDZSOchJpzTuLACpMwFw=
+github.com/ollama/ollama v0.23.0 h1:13V15B9Pkwl+WAaaU90NW6vik54dYgPhVrdjtw+dqck=
+github.com/ollama/ollama v0.23.0/go.mod h1:274niu48upWz/M7vL53i1WFe+TJRRw5oo4GiacbIYrA=
 github.com/opencontainers/go-digest v1.0.0 h1:apOUWs51W5PlhuyGyz9FCeeBIOUDA/6nW8Oi/yOhh5U=
 github.com/opencontainers/go-digest v1.0.0/go.mod h1:0JzlMkj0TRzQZfJkVvzbP0HBR3IKzErnv2BNG4W4MAM=
 github.com/opencontainers/image-spec v1.1.1 h1:y0fUlFfIZhPF1W537XOLg0/fcx6zcHCJwooC2xJA040=
@@ -632,8 +632,8 @@ github.com/vxcontrol/cloud v0.9.0 h1:p7xYTgUctbY8w6YfhugNzvfi3/0EQoZGumMe67keAng
 github.com/vxcontrol/cloud v0.9.0/go.mod h1:AeiQFqiMgJJAXy6FYXtDS2a3P/PMB56iiBNY2vGrZhQ=
 github.com/vxcontrol/graphiti-go-client v0.9.0 h1:3GxpFmQoHmz/d7/9tyEqD8+S99v2cuqG1UEmrbAFrLU=
 github.com/vxcontrol/graphiti-go-client v0.9.0/go.mod h1:6UHL5uqAKp4KAdziva4qgcAxFtBzU05Hm/BAo4NkAuo=
-github.com/vxcontrol/langchaingo v0.1.15-0.20260717093433-cf5f5f41f4eb h1:rufkyNpHdmdXXw2YcBZRLocgNMAHrdDDrQyosGubhr4=
-github.com/vxcontrol/langchaingo v0.1.15-0.20260717093433-cf5f5f41f4eb/go.mod h1:VcRflCqD/8y/qPEZaqdtDFCMX378SZwChm5XXuV8xQk=
+github.com/vxcontrol/langchaingo v0.1.15-0.20260723091023-35da5c0f0620 h1:k03Hr4LKY09OnwUaXXKlXR0rZfJ3TVilSClY60Ch/Nk=
+github.com/vxcontrol/langchaingo v0.1.15-0.20260723091023-35da5c0f0620/go.mod h1:Lpk9Nc9N7B3/CuMy2Ay9c68Xh/AQhPABG1NH3cFI+sE=
 github.com/wasilibs/go-re2 v1.10.0 h1:vQZEBYZOCA9jdBMmrO4+CvqyCj0x4OomXTJ4a5/urQ0=
 github.com/wasilibs/go-re2 v1.10.0/go.mod h1:k+5XqO2bCJS+QpGOnqugyfwC04nw0jaglmjrrkG8U6o=
 github.com/wasilibs/wazero-helpers v0.0.0-20240620070341-3dff1577cd52 h1:OvLBa8SqJnZ6P+mjlzc2K7PM22rRUPE1x32G9DTPrC4=

@@ -97,13 +97,13 @@ func collectTestRequests(registry *testdata.TestRegistry, prv provider.Provider,
 					continue
 				}
 
-			// skip capability-gated tests (adaptive thinking, reasoning
-			// off, structured output) whose wire behavior this agent's
-			// ACTUAL config wouldn't produce in a real PentAGI flow — see
-			// capabilitySupported for why.
-			if !capabilitySupported(prv, agentType, testCase.Capability()) {
-				continue
-			}
+				// skip capability-gated tests (adaptive thinking, reasoning
+				// off, structured output) whose wire behavior this agent's
+				// ACTUAL config wouldn't produce in a real PentAGI flow — see
+				// capabilitySupported for why.
+				if !capabilitySupported(prv, agentType, testCase.Capability()) {
+					continue
+				}
 
 				requests = append(requests, testRequest{
 					agentType: agentType,
@@ -111,6 +111,50 @@ func collectTestRequests(registry *testdata.TestRegistry, prv provider.Provider,
 					provider:  prv,
 				})
 			}
+		}
+
+		if group != testdata.TestGroupAdvanced {
+			continue
+		}
+
+		// fileEditTestCase is hand-built in Go, not tests.yml (see
+		// newFileEditTestCase) - its whole point is a genuinely dynamic
+		// exchange that can't be expressed as a fixed message list, so it
+		// can't come from the YAML-driven registry like every other test
+		// here. It's added for TestGroupAdvanced so it still runs by default
+		// without a special opt-in.
+		//
+		// Unlike every YAML-driven TestCase above (immutable once built, so
+		// sharing one instance across every agentType request is harmless),
+		// fileEditTestCase mutates itself turn by turn (see
+		// HandleToolResponse): reusing a single instance across multiple
+		// agentType requests would leak one agent's conversation and outcome
+		// into the next agent's run. A fresh instance per agentType is
+		// required, not just a style preference.
+		for _, agentType := range config.agentTypes {
+			if len(agentFilter) > 0 && !agentFilter[agentType] {
+				continue
+			}
+			if !isTestCompatibleWithAgent(testdata.TestTypeFileEdit, agentType) {
+				continue
+			}
+			if !capabilitySupported(prv, agentType, testdata.CapabilityNone) {
+				continue
+			}
+
+			fileEdit, err := newFileEditTestCase()
+			if err != nil {
+				if config.verbose {
+					log.Printf("Warning: failed to build file_edit test case: %v", err)
+				}
+				break // same failure for every agentType - no point retrying
+			}
+
+			requests = append(requests, testRequest{
+				agentType: agentType,
+				testCase:  fileEdit,
+				provider:  prv,
+			})
 		}
 	}
 
@@ -188,7 +232,7 @@ func testWorker(ctx context.Context, requests <-chan testRequest, responses chan
 func executeTest(ctx context.Context, req testRequest) (testdata.TestResult, error) {
 	startTime := time.Now()
 
-	var response interface{}
+	var response any
 	var err error
 
 	extra := req.testCase.ExtraOptions()
@@ -217,6 +261,31 @@ func executeTest(ctx context.Context, req testRequest) (testdata.TestResult, err
 			req.testCase.Tools(),
 			req.testCase.StreamingCallback(),
 		)
+
+		// MultiTurnTestCase (e.g. fileEditTestCase's read_file -> edit_file
+		// exchange) answers each tool call itself and asks for another round
+		// by returning true; every other TestCase leaves this a no-op.
+		if err == nil {
+			if multiTurn, ok := req.testCase.(testdata.MultiTurnTestCase); ok {
+				for {
+					contentResp, isContentResp := response.(*llms.ContentResponse)
+					if !isContentResp || !multiTurn.HandleToolResponse(contentResp) {
+						break
+					}
+
+					response, err = req.provider.CallWithTools(
+						ctx,
+						req.agentType,
+						req.testCase.Messages(),
+						req.testCase.Tools(),
+						req.testCase.StreamingCallback(),
+					)
+					if err != nil {
+						break
+					}
+				}
+			}
+		}
 	case len(req.testCase.Messages()) > 0:
 		// messages without tools
 		response, err = req.provider.CallEx(

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"pentagi/pkg/providers/pconfig"
@@ -20,17 +21,26 @@ type Provider struct {
 	providerType   provider.ProviderType
 	providerName   provider.ProviderName
 	modelName      string
-	responses      map[string]interface{} // key -> response mapping
+	responses      map[string]any // key -> response mapping
 	defaultResp    string
 	streamingDelay time.Duration
 	providerConfig *pconfig.ProviderConfig
 	models         pconfig.ModelsConfig
+
+	// sequence, when set via SetSequentialResponses, makes CallWithTools
+	// ignore content-based matching and return each response strictly in
+	// call order instead. Needed for multi-turn tool-calling scenarios
+	// where a tool call is answered and the model is called again with the
+	// same TextContent (a tool response carries no text), so content-based
+	// matching alone can't tell the calls apart.
+	sequence      []any
+	sequenceCalls atomic.Int32
 }
 
 // ResponseConfig configures mock responses
 type ResponseConfig struct {
-	Key      string      // Request identifier (prompt/message content)
-	Response interface{} // Response (string, *llms.ContentResponse, or error)
+	Key      string // Request identifier (prompt/message content)
+	Response any    // Response (string, *llms.ContentResponse, or error)
 }
 
 // NewProvider creates a new mock provider
@@ -39,7 +49,7 @@ func NewProvider(providerType provider.ProviderType, providerName provider.Provi
 		providerType:   providerType,
 		providerName:   providerName,
 		modelName:      modelName,
-		responses:      make(map[string]interface{}),
+		responses:      make(map[string]any),
 		defaultResp:    "Mock response",
 		streamingDelay: time.Millisecond * 10,
 	}
@@ -55,6 +65,16 @@ func (p *Provider) SetResponses(configs []ResponseConfig) {
 // SetDefaultResponse sets fallback response for unmatched requests
 func (p *Provider) SetDefaultResponse(response string) {
 	p.defaultResp = response
+}
+
+// SetSequentialResponses configures CallWithTools to return responses
+// strictly in order, one per call, bypassing content-based matching
+// entirely. The last response repeats for any call beyond len(responses).
+// Each element is handled exactly like a ResponseConfig.Response value
+// (string, *llms.ContentResponse, or error).
+func (p *Provider) SetSequentialResponses(responses ...any) {
+	p.sequence = responses
+	p.sequenceCalls.Store(0)
 }
 
 // SetStreamingDelay configures delay between streaming chunks
@@ -151,7 +171,7 @@ func (p *Provider) CallEx(
 	content = strings.TrimSpace(content)
 
 	// Look for response
-	var respInterface interface{}
+	var respInterface any
 	if resp, ok := p.responses[content]; ok {
 		respInterface = resp
 	} else {
@@ -184,6 +204,18 @@ func (p *Provider) CallWithTools(
 	tools []llms.Tool,
 	streamCb streaming.Callback,
 ) (*llms.ContentResponse, error) {
+	if p.sequence != nil {
+		idx := int(p.sequenceCalls.Add(1)) - 1
+		if idx >= len(p.sequence) {
+			idx = len(p.sequence) - 1 // repeat the last configured response past the end
+		}
+
+		if streamCb != nil {
+			return p.handleStreamingResponse(ctx, p.sequence[idx], streamCb)
+		}
+		return p.handleContentResponse(p.sequence[idx])
+	}
+
 	// Extract content for matching
 	var content string
 	for _, msg := range chain {
@@ -196,7 +228,7 @@ func (p *Provider) CallWithTools(
 	content = strings.TrimSpace(content)
 
 	// Look for tool-specific response
-	var respInterface interface{}
+	var respInterface any
 	toolKey := fmt.Sprintf("tools:%s", content)
 	if resp, ok := p.responses[toolKey]; ok {
 		respInterface = resp
@@ -264,7 +296,7 @@ func (p *Provider) CallWithExtraOptions(
 	}
 	content = strings.TrimSpace(content)
 
-	var respInterface interface{}
+	var respInterface any
 	if resp, ok := p.responses[content]; ok {
 		respInterface = resp
 	} else {
@@ -326,7 +358,7 @@ func (p *Provider) GetPriceInfo(opt pconfig.ProviderOptionsType) *pconfig.PriceI
 }
 
 // handleResponse processes different response types for Call method
-func (p *Provider) handleResponse(resp interface{}) (string, error) {
+func (p *Provider) handleResponse(resp any) (string, error) {
 	switch r := resp.(type) {
 	case string:
 		return r, nil
@@ -343,7 +375,7 @@ func (p *Provider) handleResponse(resp interface{}) (string, error) {
 }
 
 // handleContentResponse processes responses for CallEx/CallWithTools
-func (p *Provider) handleContentResponse(resp interface{}) (*llms.ContentResponse, error) {
+func (p *Provider) handleContentResponse(resp any) (*llms.ContentResponse, error) {
 	switch r := resp.(type) {
 	case error:
 		return nil, r
@@ -371,7 +403,7 @@ func (p *Provider) handleContentResponse(resp interface{}) (*llms.ContentRespons
 // handleStreamingResponse simulates streaming behavior
 func (p *Provider) handleStreamingResponse(
 	ctx context.Context,
-	resp interface{},
+	resp any,
 	streamCb streaming.Callback,
 ) (*llms.ContentResponse, error) {
 	contentResp, err := p.handleContentResponse(resp)

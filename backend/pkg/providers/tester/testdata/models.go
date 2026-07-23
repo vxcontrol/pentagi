@@ -16,6 +16,9 @@ const (
 	TestTypeCompletion TestType = "completion"
 	TestTypeJSON       TestType = "json"
 	TestTypeTool       TestType = "tool"
+	// TestTypeFileEdit is a MultiTurnTestCase: it isn't built from tests.yml
+	// (see tester.newFileEditTestCase), only used to label its TestResult.
+	TestTypeFileEdit TestType = "file_edit"
 )
 
 type TestGroup string
@@ -221,6 +224,24 @@ type TestCase interface {
 
 	// result validation and state management
 	Execute(response any, latency time.Duration) TestResult
+}
+
+// MultiTurnTestCase is an optional extension of TestCase for scenarios that
+// need more than one round-trip to the provider before Execute can judge the
+// outcome - e.g. a tool call whose result must be answered before the model
+// makes its next call. The runner (tester.executeTest) detects it via a type
+// assertion; every TestCase that doesn't implement it keeps going through
+// the plain single-call path unmodified.
+type MultiTurnTestCase interface {
+	TestCase
+
+	// HandleToolResponse receives the latest provider response. If it
+	// recognizes something it needs to answer, it records the exchange
+	// internally (so the next Messages() call reflects it) and returns
+	// true, asking the runner for another round. Returning false ends the
+	// exchange: the runner calls Execute with this same response, exactly
+	// as it would for a plain TestCase.
+	HandleToolResponse(resp *llms.ContentResponse) bool
 }
 
 // TestSuite contains stateful test cases for execution

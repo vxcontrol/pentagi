@@ -77,13 +77,13 @@ func (s *sploitus) Handle(ctx context.Context, name string, args json.RawMessage
 	}
 
 	// Normalise exploit type
-	exploitType := strings.ToLower(strings.TrimSpace(action.ExploitType))
+	exploitType := strings.ToLower(strings.TrimSpace(action.ExploitType.String()))
 	if exploitType == "" {
 		exploitType = defaultSploitusType
 	}
 
 	// Normalise sort order
-	sort := strings.ToLower(strings.TrimSpace(action.Sort))
+	sort := strings.ToLower(strings.TrimSpace(action.Sort.String()))
 	if sort == "" {
 		sort = sploitusDefaultSort
 	}

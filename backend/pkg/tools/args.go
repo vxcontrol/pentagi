@@ -7,21 +7,36 @@ import (
 	"strings"
 )
 
-type FileOp string
+// FileOp is a type alias (not a distinct type) for String: it shares the
+// exact same lenient UnmarshalJSON, so every FileOp value - including the
+// ReadFile/WriteFile/EditFile constants below - automatically benefits from
+// the quote-unwrapping behaviour documented on String, with zero changes
+// needed at any existing call site (switches, comparisons, assignments)
+// elsewhere in the codebase.
+type FileOp = String
 
 const (
 	ReadFile  FileOp = "read_file"
 	WriteFile FileOp = "write_file"
+	EditFile  FileOp = "edit_file"
 )
 
+// FileAction's field descriptions are layered on purpose, each one adding
+// only what the level above doesn't already say: the tool description (see
+// registry.go) gives the read/write/edit decision; Action's enum values name
+// which payload field each one consumes; Content/Diff each spec out the
+// format of their own payload. Path/Message never vary by action, so they're
+// described once, action-agnostically.
 type FileAction struct {
-	Action  FileOp `json:"action" jsonschema:"required,enum=read_file,enum=write_file" jsonschema_description:"Action to perform with the code. 'read_file' - Returns the content of the file. 'write_file' - Writes or updates the content of the file"`
-	Content string `json:"content" jsonschema_description:"Content to write to the file (raw file content, not a localized message)"`
-	Path    string `json:"path" jsonschema:"required" jsonschema_description:"Absolute path to the file to read or write"`
-	Message string `json:"message" jsonschema:"required,title=File action message" jsonschema_description:"Engagement-log entry — a 1-2 short sentence running commentary describing what you are reading from or writing to the file and why. Written in the engagement language declared by your system prompt."`
+	Action  FileOp `json:"action" jsonschema:"required,type=string,enum=read_file,enum=write_file,enum=edit_file" jsonschema_description:"'read_file' reads the file (no other field needed). 'write_file' overwrites it with 'content' (the whole file). 'edit_file' applies the patch in 'diff' (existing content elsewhere is untouched)."`
+	Content string `json:"content,omitempty" jsonschema_description:"write_file only: the complete new file content (not a diff, not a partial update)."`
+	Diff    String `json:"diff,omitempty" jsonschema:"type=string" jsonschema_description:"edit_file only: unified-diff hunk(s) - '@@ -old +new @@' header, then ' '/'-'/'+' lines. Always keep at least one unchanged context line so the location is unambiguous; context/removed lines must match the file's current content verbatim (read_file first). Header line numbers are only a hint - the line text is what must match."`
+	Path    String `json:"path" jsonschema:"required,type=string" jsonschema_description:"Absolute path to the file"`
+	Message string `json:"message" jsonschema:"required,title=File action message" jsonschema_description:"Engagement-log entry — a 1-2 short sentence running commentary describing what you are reading, writing, or editing and why. Written in the engagement language declared by your system prompt."`
 }
 
-type BrowserAction string
+// BrowserAction is a type alias for String - see the FileOp comment above.
+type BrowserAction = String
 
 const (
 	Markdown BrowserAction = "markdown"
@@ -31,7 +46,7 @@ const (
 
 type Browser struct {
 	Url     string        `json:"url" jsonschema:"required" jsonschema_description:"URL to open in the browser"`
-	Action  BrowserAction `json:"action" jsonschema:"required,enum=markdown,enum=html,enum=links" jsonschema_description:"Action to perform in the browser. 'markdown' - Returns the content of the page in markdown format. 'html' - Returns the content of the page in html format. 'links' - Get the list of all URLs on the page to be used in later calls (e.g., open search results after the initial search lookup)."`
+	Action  BrowserAction `json:"action" jsonschema:"required,type=string,enum=markdown,enum=html,enum=links" jsonschema_description:"Action to perform in the browser. 'markdown' - Returns the content of the page in markdown format. 'html' - Returns the content of the page in html format. 'links' - Get the list of all URLs on the page to be used in later calls (e.g., open search results after the initial search lookup)."`
 	Message string        `json:"message" jsonschema:"required,title=Browser action message" jsonschema_description:"Engagement-log entry — a 1-2 short sentence running commentary describing what content you are fetching, in which format, and why. Written in the engagement language declared by your system prompt."`
 }
 
@@ -45,8 +60,9 @@ type SubtaskList struct {
 	Message  string        `json:"message" jsonschema:"required,title=Subtask generation result" jsonschema_description:"Engagement-log entry — a 1-2 short sentence running commentary on the generation result and the main goal of the plan. Written in the engagement language declared by your system prompt."`
 }
 
-// SubtaskOperationType defines the type of operation to perform on a subtask
-type SubtaskOperationType string
+// SubtaskOperationType defines the type of operation to perform on a subtask.
+// It is a type alias for String - see the FileOp comment above.
+type SubtaskOperationType = String
 
 const (
 	SubtaskOpAdd     SubtaskOperationType = "add"
@@ -57,7 +73,7 @@ const (
 
 // SubtaskOperation defines a single operation on the subtask list for delta-based refinement
 type SubtaskOperation struct {
-	Op          SubtaskOperationType `json:"op" jsonschema:"required,enum=add,enum=remove,enum=modify,enum=reorder" jsonschema_description:"Operation type: 'add' creates a new subtask, 'remove' deletes a subtask by ID, 'modify' updates title/description of existing subtask, 'reorder' moves a subtask to a different position"`
+	Op          SubtaskOperationType `json:"op" jsonschema:"required,type=string,enum=add,enum=remove,enum=modify,enum=reorder" jsonschema_description:"Operation type: 'add' creates a new subtask, 'remove' deletes a subtask by ID, 'modify' updates title/description of existing subtask, 'reorder' moves a subtask to a different position"`
 	ID          *int64               `json:"id,omitempty" jsonschema:"title=Subtask ID" jsonschema_description:"ID of existing subtask (required for remove/modify/reorder operations)"`
 	AfterID     *int64               `json:"after_id,omitempty" jsonschema:"title=Insert after ID" jsonschema_description:"For add/reorder: insert after this subtask ID (null/0 = insert at beginning)"`
 	Title       string               `json:"title,omitempty" jsonschema:"title=New title" jsonschema_description:"Engagement-log plan entry — new subtask title (required for add, optional for modify). Written in the engagement language declared by your system prompt."`
@@ -124,14 +140,14 @@ type SearchResult struct {
 
 type SploitusAction struct {
 	Query       string `json:"query" jsonschema:"required" jsonschema_description:"Technical-channel payload — search query for Sploitus (e.g. 'ssh', 'apache 2.4', 'CVE-2021-44228'). ALWAYS written in English; the Sploitus index is English-only. Short and precise queries return the best results."`
-	ExploitType string `json:"exploit_type,omitempty" jsonschema:"enum=exploits,enum=tools" jsonschema_description:"What to search for: 'exploits' (default) for exploit code and PoCs, 'tools' for offensive security tools"`
-	Sort        string `json:"sort,omitempty" jsonschema:"enum=default,enum=date,enum=score" jsonschema_description:"Result ordering: 'default' (relevance), 'date' (newest first), 'score' (highest CVSS first)"`
+	ExploitType String `json:"exploit_type,omitempty" jsonschema:"type=string,enum=exploits,enum=tools" jsonschema_description:"What to search for: 'exploits' (default) for exploit code and PoCs, 'tools' for offensive security tools"`
+	Sort        String `json:"sort,omitempty" jsonschema:"type=string,enum=default,enum=date,enum=score" jsonschema_description:"Result ordering: 'default' (relevance), 'date' (newest first), 'score' (highest CVSS first)"`
 	MaxResults  Int64  `json:"max_results" jsonschema:"required,type=integer" jsonschema_description:"Maximum number of results to return (minimum 1; maximum 25; default 10)"`
 	Message     string `json:"message" jsonschema:"required,title=Search query message" jsonschema_description:"Engagement-log entry — a 1-2 short sentence running commentary explaining the expected result and how it advances the goal. Written in the engagement language declared by your system prompt."`
 }
 
 type GraphitiSearchAction struct {
-	SearchType     string   `json:"search_type" jsonschema:"required,enum=temporal_window,enum=entity_relationships,enum=diverse_results,enum=episode_context,enum=successful_tools,enum=recent_context,enum=entity_by_label" jsonschema_description:"Type of search to perform: temporal_window (time-bounded search), entity_relationships (graph traversal from an entity), diverse_results (anti-redundancy search), episode_context (full agent reasoning and tool outputs), successful_tools (proven techniques), recent_context (latest findings), entity_by_label (type-specific entity search)"`
+	SearchType     String   `json:"search_type" jsonschema:"required,type=string,enum=temporal_window,enum=entity_relationships,enum=diverse_results,enum=episode_context,enum=successful_tools,enum=recent_context,enum=entity_by_label" jsonschema_description:"Type of search to perform: temporal_window (time-bounded search), entity_relationships (graph traversal from an entity), diverse_results (anti-redundancy search), episode_context (full agent reasoning and tool outputs), successful_tools (proven techniques), recent_context (latest findings), entity_by_label (type-specific entity search)"`
 	Query          string   `json:"query" jsonschema:"required" jsonschema_description:"Technical-channel payload — natural language query against the team's temporal knowledge graph. ALWAYS written in English regardless of the engagement language: the graph is indexed in English and shared across all engagements; non-English queries will fail to retrieve stored episodic memory."`
 	MaxResults     *Int64   `json:"max_results,omitempty" jsonschema:"title=Maximum Results,type=integer" jsonschema_description:"Maximum number of results to return (default varies by search type)"`
 	TimeStart      string   `json:"time_start,omitempty" jsonschema_description:"Start of time window (ISO 8601 format, required for temporal_window)"`
@@ -140,9 +156,9 @@ type GraphitiSearchAction struct {
 	MaxDepth       *Int64   `json:"max_depth,omitempty" jsonschema:"title=Maximum Depth,type=integer" jsonschema_description:"Maximum graph traversal depth (default: 2, max: 3, for entity_relationships)"`
 	NodeLabels     []string `json:"node_labels,omitempty" jsonschema_description:"Filter to specific node types (e.g., ['IP_ADDRESS', 'SERVICE', 'VULNERABILITY'])"`
 	EdgeTypes      []string `json:"edge_types,omitempty" jsonschema_description:"Filter to specific relationship types (e.g., ['HAS_PORT', 'EXPLOITS'])"`
-	DiversityLevel string   `json:"diversity_level,omitempty" jsonschema:"enum=low,enum=medium,enum=high" jsonschema_description:"How much diversity to prioritize (default: medium, for diverse_results)"`
+	DiversityLevel String   `json:"diversity_level,omitempty" jsonschema:"type=string,enum=low,enum=medium,enum=high" jsonschema_description:"How much diversity to prioritize (default: medium, for diverse_results)"`
 	MinMentions    *Int64   `json:"min_mentions,omitempty" jsonschema:"title=Minimum Mentions,type=integer" jsonschema_description:"Minimum episode mentions (default: 2, for successful_tools)"`
-	RecencyWindow  string   `json:"recency_window,omitempty" jsonschema:"enum=1h,enum=6h,enum=24h,enum=7d" jsonschema_description:"How far back to search (default: 24h, for recent_context)"`
+	RecencyWindow  String   `json:"recency_window,omitempty" jsonschema:"type=string,enum=1h,enum=6h,enum=24h,enum=7d" jsonschema_description:"How far back to search (default: 24h, for recent_context)"`
 	Message        string   `json:"message" jsonschema:"required,title=Search message" jsonschema_description:"Engagement-log entry — a 1-2 short sentence running commentary summarizing the search query and expected results. Written in the engagement language declared by your system prompt."`
 }
 
@@ -172,27 +188,27 @@ type SearchInMemoryAction struct {
 
 type SearchGuideAction struct {
 	Questions Strings `json:"questions" jsonschema:"required,type=array,minItems=1,maxItems=5" jsonschema_description:"Technical-channel payload — 1 to 5 detailed, context-rich semantic queries for the team's guide vector store. Must be a real JSON array of strings, e.g. [\"query 1\",\"query 2\"] - NOT a JSON-encoded string containing an array. ALWAYS written in English regardless of the engagement language: the store is indexed in English and shared across all engagements, so non-English queries will fail to retrieve relevant guides. Each query should include scenario context, objectives, and specific intent. Note: The 'Type' field acts as a strict filter."`
-	Type      string  `json:"type" jsonschema:"required,enum=install,enum=configure,enum=use,enum=pentest,enum=development,enum=other" jsonschema_description:"The specific type of guide you need. This required field acts as a strict filter to enhance the relevance of search results by narrowing down the scope to the specified guide type."`
+	Type      String  `json:"type" jsonschema:"required,type=string,enum=install,enum=configure,enum=use,enum=pentest,enum=development,enum=other" jsonschema_description:"The specific type of guide you need. This required field acts as a strict filter to enhance the relevance of search results by narrowing down the scope to the specified guide type."`
 	Message   string  `json:"message" jsonschema:"required,title=Guide search message" jsonschema_description:"Engagement-log entry — a 1-2 short sentence running commentary summarizing the queries and the type of guide needed. Written in the engagement language declared by your system prompt."`
 }
 
 type StoreGuideAction struct {
 	Guide    string `json:"guide" jsonschema:"required" jsonschema_description:"Technical-channel payload — ready guide in markdown format that will be stored in the team's vector store for future retrieval. ALWAYS written in English regardless of the engagement language: the store is indexed in English and shared across all engagements; non-English content becomes unreachable to future searches. Anonymize all sensitive data (IPs, domains, credentials, paths) using descriptive placeholders."`
 	Question string `json:"question" jsonschema:"required" jsonschema_description:"Technical-channel payload — question that was used to prepare this guide; co-indexed with the guide. Always written in English; never translated."`
-	Type     string `json:"type" jsonschema:"required,enum=install,enum=configure,enum=use,enum=pentest,enum=development,enum=other" jsonschema_description:"Type of the guide to store; it will be used as a hard filter for search"`
+	Type     String `json:"type" jsonschema:"required,type=string,enum=install,enum=configure,enum=use,enum=pentest,enum=development,enum=other" jsonschema_description:"Type of the guide to store; it will be used as a hard filter for search"`
 	Message  string `json:"message" jsonschema:"required,title=Store guide message" jsonschema_description:"Engagement-log entry — a 1-2 short sentence running commentary summarizing the guide. Written in the engagement language declared by your system prompt."`
 }
 
 type SearchAnswerAction struct {
 	Questions Strings `json:"questions" jsonschema:"required,type=array,minItems=1,maxItems=5" jsonschema_description:"Technical-channel payload — 1 to 5 detailed, context-rich semantic queries for the team's answer vector store. Must be a real JSON array of strings, e.g. [\"query 1\",\"query 2\"] - NOT a JSON-encoded string containing an array. ALWAYS written in English regardless of the engagement language: the store is indexed in English and shared across all engagements, so non-English queries will fail to retrieve relevant answers. Each query should include the context, what you want to find, what you intend to do with the information, and why you need it. Note: The 'Type' field acts as a strict filter."`
-	Type      string  `json:"type" jsonschema:"required,enum=guide,enum=vulnerability,enum=code,enum=tool,enum=other" jsonschema_description:"The specific type of information or answer you are seeking. This required field acts as a strict filter to enhance the relevance of search results by narrowing down the scope to the specified type."`
+	Type      String  `json:"type" jsonschema:"required,type=string,enum=guide,enum=vulnerability,enum=code,enum=tool,enum=other" jsonschema_description:"The specific type of information or answer you are seeking. This required field acts as a strict filter to enhance the relevance of search results by narrowing down the scope to the specified type."`
 	Message   string  `json:"message" jsonschema:"required,title=Answer search message" jsonschema_description:"Engagement-log entry — a 1-2 short sentence running commentary summarizing the queries and the type of answer needed. Written in the engagement language declared by your system prompt."`
 }
 
 type StoreAnswerAction struct {
 	Answer   string `json:"answer" jsonschema:"required" jsonschema_description:"Technical-channel payload — ready answer in markdown format that will be stored in the team's vector store for future retrieval. ALWAYS written in English regardless of the engagement language: the store is indexed in English and shared across all engagements; non-English content becomes unreachable to future searches. Anonymize all sensitive data (IPs, domains, credentials) using descriptive placeholders."`
 	Question string `json:"question" jsonschema:"required" jsonschema_description:"Technical-channel payload — question that was used to prepare this answer; co-indexed with the answer. Always written in English; never translated."`
-	Type     string `json:"type" jsonschema:"required,enum=guide,enum=vulnerability,enum=code,enum=tool,enum=other" jsonschema_description:"Type of the search query and answer to store; it will be used as a hard filter for search"`
+	Type     String `json:"type" jsonschema:"required,type=string,enum=guide,enum=vulnerability,enum=code,enum=tool,enum=other" jsonschema_description:"Type of the search query and answer to store; it will be used as a hard filter for search"`
 	Message  string `json:"message" jsonschema:"required,title=Store answer message" jsonschema_description:"Engagement-log entry — a 1-2 short sentence running commentary summarizing the answer. Written in the engagement language declared by your system prompt."`
 }
 
@@ -242,7 +258,8 @@ type HackResult struct {
 }
 
 // FlowStatusDetail controls the level of detail returned by get_flow_status.
-type FlowStatusDetail string
+// It is a type alias for String - see the FileOp comment above.
+type FlowStatusDetail = String
 
 const (
 	FlowStatusDetailSummary  FlowStatusDetail = "summary"
@@ -254,7 +271,7 @@ const (
 
 // GetFlowStatusAction defines arguments for the get_flow_status tool.
 type GetFlowStatusAction struct {
-	Detail  FlowStatusDetail `json:"detail" jsonschema:"required,enum=summary,enum=tasks,enum=subtasks,enum=running,enum=planned" jsonschema_description:"Level of detail: 'summary' - flow health snapshot with status and counts; 'tasks' - all tasks with ID/status/title; 'subtasks' - all subtasks optionally filtered by task_id; 'running' - full Task→Subtask execution chain including task input and recent agent messages; 'planned' - only subtasks with status 'created' (not yet started), optionally filtered by task_id"`
+	Detail  FlowStatusDetail `json:"detail" jsonschema:"required,type=string,enum=summary,enum=tasks,enum=subtasks,enum=running,enum=planned" jsonschema_description:"Level of detail: 'summary' - flow health snapshot with status and counts; 'tasks' - all tasks with ID/status/title; 'subtasks' - all subtasks optionally filtered by task_id; 'running' - full Task→Subtask execution chain including task input and recent agent messages; 'planned' - only subtasks with status 'created' (not yet started), optionally filtered by task_id"`
 	TaskID  *Int64           `json:"task_id,omitempty" jsonschema:"title=Task ID,type=integer" jsonschema_description:"Optional task ID filter. Applies to detail=subtasks and detail=planned to narrow results to a specific task."`
 	Verbose Bool             `json:"verbose,omitempty" jsonschema:"type=boolean" jsonschema_description:"Set to true for deeper investigation: includes descriptions, inputs, results, and execution context per entry; shows up to 50 recent agent messages instead of 10."`
 	Message string           `json:"message" jsonschema:"required,title=Status message" jsonschema_description:"Engagement-log entry — a 1-2 short sentence running commentary describing what status information you are requesting. Written in the engagement language declared by your system prompt."`
@@ -400,6 +417,66 @@ func (i *Int64) String() string {
 		return ""
 	}
 	return strconv.FormatInt(int64(*i), 10)
+}
+
+// String is a lenient string for LLM-generated tool-call arguments, in
+// particular enum-like fields (action/type/search_type/... - anywhere a
+// value is compared or switched on rather than read as free text). Models
+// occasionally wrap the value in an extra, literal pair of quote characters
+// - e.g. the JSON string "\"write_file\"" decodes via a plain string
+// UnmarshalJSON into the 12-character Go string `"write_file"` (quotes
+// included), which then matches no known enum value, fails validation, and
+// forces an unnecessary tool-call-fixer round-trip. UnmarshalJSON unwraps
+// that redundant quoting instead of failing outright.
+//
+// FileOp, BrowserAction, SubtaskOperationType, and FlowStatusDetail are type
+// aliases for String (not distinct types), so every field declared with one
+// of those names gets this leniency automatically, with zero changes needed
+// at any existing call site: switches, `==` comparisons, and assignments
+// against their constants all keep working exactly as before, because the
+// alias makes them the exact same type as String, not merely a similar one.
+type String string
+
+func (s *String) UnmarshalJSON(data []byte) error {
+	// A bare JSON "null" unmarshals into an empty string with no error by
+	// default, which would silently mask a required field being omitted -
+	// treat it as invalid instead, consistent with Bool/Int64/Strings above.
+	if trimmed := strings.TrimSpace(string(data)); trimmed == "null" {
+		return fmt.Errorf("invalid string value: got null")
+	}
+
+	var raw string
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	*s = String(unwrapRedundantQuotes(raw))
+	return nil
+}
+
+func (s String) MarshalJSON() ([]byte, error) {
+	return json.Marshal(string(s))
+}
+
+// String implements fmt.Stringer, so %s/%v formatting and logrus fields show
+// the unwrapped value, and callers that need a plain string (map keys,
+// strings.* helpers, external struct fields, typed casts) can call it explicitly.
+func (s String) String() string {
+	return string(s)
+}
+
+// unwrapRedundantQuotes strips at most a few layers of a matching leading+
+// trailing '"' pair from a decoded JSON string value. Bounded to guard
+// against pathological input; the observed corruption is a single extra
+// layer, but a small bound costs nothing and covers repeated wrapping too.
+func unwrapRedundantQuotes(s string) string {
+	for range 3 {
+		trimmed := strings.TrimSpace(s)
+		if len(trimmed) < 2 || trimmed[0] != '"' || trimmed[len(trimmed)-1] != '"' {
+			return s
+		}
+		s = trimmed[1 : len(trimmed)-1]
+	}
+	return s
 }
 
 // Strings is a lenient []string for LLM-generated tool-call arguments (e.g.

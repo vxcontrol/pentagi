@@ -52,6 +52,15 @@ type contextAwareMockDockerClient struct {
 	// Set by CopyFromContainer/CopyToContainer to track which file operation ran
 	copyFromCalled bool
 	copyToCalled   bool
+
+	// readFileContent, when non-empty, is what CopyFromContainer returns as
+	// the "current" file content (wrapped in a single-file tar archive) -
+	// used by EditFile tests that need to read-then-patch existing content.
+	readFileContent string
+	// writtenContent captures the last file content CopyToContainer received
+	// (unwrapped from its tar archive), so tests can assert on the result of
+	// an edit_file/write_file operation.
+	writtenContent string
 }
 
 func (m *contextAwareMockDockerClient) RunContainer(_ context.Context, _ string, _ database.ContainerType,
@@ -111,13 +120,36 @@ func (m *contextAwareMockDockerClient) ListContainerDir(_ context.Context, _ str
 func (m *contextAwareMockDockerClient) ContainerExecInspect(_ context.Context, _ string) (container.ExecInspect, error) {
 	return m.inspectResp, nil
 }
-func (m *contextAwareMockDockerClient) CopyToContainer(_ context.Context, _ string, _ string, _ io.Reader, _ container.CopyToContainerOptions) error {
+func (m *contextAwareMockDockerClient) CopyToContainer(_ context.Context, _ string, _ string, src io.Reader, _ container.CopyToContainerOptions) error {
 	m.copyToCalled = true
+
+	tarReader := tar.NewReader(src)
+	if hdr, err := tarReader.Next(); err == nil {
+		buf := make([]byte, hdr.Size)
+		_, _ = io.ReadFull(tarReader, buf)
+		m.writtenContent = string(buf)
+	}
+
 	return nil
 }
 func (m *contextAwareMockDockerClient) CopyFromContainer(_ context.Context, _ string, _ string) (io.ReadCloser, container.PathStat, error) {
 	m.copyFromCalled = true
-	return io.NopCloser(bytes.NewReader(nil)), container.PathStat{}, nil
+
+	if m.readFileContent == "" {
+		return io.NopCloser(bytes.NewReader(nil)), container.PathStat{}, nil
+	}
+
+	var tarBuffer bytes.Buffer
+	tarWriter := tar.NewWriter(&tarBuffer)
+	_ = tarWriter.WriteHeader(&tar.Header{
+		Name: "file",
+		Mode: 0600,
+		Size: int64(len(m.readFileContent)),
+	})
+	_, _ = tarWriter.Write([]byte(m.readFileContent))
+	_ = tarWriter.Close()
+
+	return io.NopCloser(&tarBuffer), container.PathStat{}, nil
 }
 func (m *contextAwareMockDockerClient) Cleanup(_ context.Context) error { return nil }
 func (m *contextAwareMockDockerClient) GetDefaultImage() string         { return "test-image" }
@@ -231,6 +263,179 @@ func TestTerminalHandle_FileAction_DefaultsToWriteFile_WhenContentPresent(t *tes
 		t.Fatalf("expected CopyToContainer (write_file) to be called, copyTo=%v copyFrom=%v",
 			mock.copyToCalled, mock.copyFromCalled)
 	}
+}
+
+// TestTerminalHandle_FileAction_ExtraQuotedAction_StillDispatches reproduces
+// the exact production failure: the LLM sent action/path wrapped in an extra
+// literal pair of quotes (e.g. `"action": "\"write_file\""`), which used to
+// fail with "unknown file action" since the corrupted value matched no case.
+// The String type now unwraps this at unmarshal time, so dispatch succeeds.
+func TestTerminalHandle_FileAction_ExtraQuotedAction_StillDispatches(t *testing.T) {
+	mock := &contextAwareMockDockerClient{isRunning: true}
+	term := &terminal{
+		flowID:       1,
+		containerID:  1,
+		containerLID: "test-container",
+		dockerClient: mock,
+		tlp:          &contextTestTermLogProvider{},
+	}
+
+	args := json.RawMessage(`{"action": "\"write_file\"", "path": "\"/home/evidence/inject.py\"", "content": "print(1)", "message": "m"}`)
+	_, err := term.Handle(t.Context(), FileToolName, args)
+
+	if err != nil {
+		t.Fatalf("expected extra-quoted write_file to still dispatch, got error: %v", err)
+	}
+	if !mock.copyToCalled || mock.copyFromCalled {
+		t.Fatalf("expected CopyToContainer (write_file) to be called, copyTo=%v copyFrom=%v",
+			mock.copyToCalled, mock.copyFromCalled)
+	}
+}
+
+// TestTerminalHandle_FileAction_EditFile_AppliesDiff exercises edit_file end
+// to end through Handle(): it reads the mock's current content, applies the
+// diff in memory, and writes the result back - all via CopyFromContainer /
+// CopyToContainer, exactly like write_file, but without resending unchanged
+// content.
+func TestTerminalHandle_FileAction_EditFile_AppliesDiff(t *testing.T) {
+	mock := &contextAwareMockDockerClient{
+		isRunning:       true,
+		readFileContent: "line1\nline2\nline3\n",
+	}
+	term := &terminal{
+		flowID:       1,
+		containerID:  1,
+		containerLID: "test-container",
+		dockerClient: mock,
+		tlp:          &contextTestTermLogProvider{},
+	}
+
+	diff := "@@ -1,2 +1,2 @@\n line1\n-line2\n+line2 changed\n"
+	args := json.RawMessage(fmt.Sprintf(
+		`{"action":"edit_file","path":"/work/test.py","diff":%s,"message":"m"}`,
+		mustJSONString(t, diff),
+	))
+	result, err := term.Handle(t.Context(), FileToolName, args)
+
+	if err != nil {
+		t.Fatalf("expected edit_file to succeed, got error: %v", err)
+	}
+	if !mock.copyFromCalled || !mock.copyToCalled {
+		t.Fatalf("expected both CopyFromContainer (read) and CopyToContainer (write), got from=%v to=%v",
+			mock.copyFromCalled, mock.copyToCalled)
+	}
+	want := "line1\nline2 changed\nline3\n"
+	if mock.writtenContent != want {
+		t.Errorf("written content = %q, want %q", mock.writtenContent, want)
+	}
+	if !strings.Contains(result, "1 diff hunk") {
+		t.Errorf("result = %q, want it to mention the number of hunks applied", result)
+	}
+}
+
+// TestTerminalHandle_FileAction_DefaultsToEditFile_WhenDiffPresent mirrors
+// the write_file/read_file action-inference tests: when 'action' is omitted
+// but 'diff' is present, the intent is unambiguous.
+func TestTerminalHandle_FileAction_DefaultsToEditFile_WhenDiffPresent(t *testing.T) {
+	mock := &contextAwareMockDockerClient{
+		isRunning:       true,
+		readFileContent: "line1\nline2\n",
+	}
+	term := &terminal{
+		flowID:       1,
+		containerID:  1,
+		containerLID: "test-container",
+		dockerClient: mock,
+		tlp:          &contextTestTermLogProvider{},
+	}
+
+	diff := "@@ -2,1 +2,1 @@\n-line2\n+line2 changed\n"
+	args := json.RawMessage(fmt.Sprintf(
+		`{"path":"/work/test.py","diff":%s,"message":"m"}`,
+		mustJSONString(t, diff),
+	))
+	_, err := term.Handle(t.Context(), FileToolName, args)
+
+	if err != nil {
+		t.Fatalf("expected inferred edit_file to succeed, got error: %v", err)
+	}
+	if !mock.copyFromCalled || !mock.copyToCalled {
+		t.Fatalf("expected inferred edit_file to read then write, got from=%v to=%v",
+			mock.copyFromCalled, mock.copyToCalled)
+	}
+}
+
+// TestTerminalHandle_FileAction_EditFile_NoMatch_LeavesFileUntouched checks
+// that a diff whose context doesn't match the current content fails clearly
+// and never reaches CopyToContainer - a bad edit must not corrupt the file.
+func TestTerminalHandle_FileAction_EditFile_NoMatch_LeavesFileUntouched(t *testing.T) {
+	mock := &contextAwareMockDockerClient{
+		isRunning:       true,
+		readFileContent: "line1\nline2\nline3\n",
+	}
+	term := &terminal{
+		flowID:       1,
+		containerID:  1,
+		containerLID: "test-container",
+		dockerClient: mock,
+		tlp:          &contextTestTermLogProvider{},
+	}
+
+	diff := "@@ -2,1 +2,1 @@\n-this text is not in the file\n+replacement\n"
+	args := json.RawMessage(fmt.Sprintf(
+		`{"action":"edit_file","path":"/work/test.py","diff":%s,"message":"m"}`,
+		mustJSONString(t, diff),
+	))
+	result, err := term.Handle(t.Context(), FileToolName, args)
+
+	// Handle() wraps tool errors into a successful-looking result string (see
+	// wrapCommandResult) rather than a Go error, so assert on the message.
+	if err != nil {
+		t.Fatalf("Handle() should swallow tool errors via wrapCommandResult, got error: %v", err)
+	}
+	if !strings.Contains(result, "could not be applied") {
+		t.Errorf("result = %q, want it to mention the hunk could not be applied", result)
+	}
+	if mock.copyToCalled {
+		t.Fatal("expected CopyToContainer to NOT be called when the diff doesn't apply")
+	}
+}
+
+// TestTerminalHandle_FileAction_EmptyDiff_ReturnsClearError checks edit_file
+// with an empty diff fails with a clear message instead of a Docker-level error.
+func TestTerminalHandle_FileAction_EmptyDiff_ReturnsClearError(t *testing.T) {
+	mock := &contextAwareMockDockerClient{isRunning: true}
+	term := &terminal{
+		flowID:       1,
+		containerID:  1,
+		containerLID: "test-container",
+		dockerClient: mock,
+		tlp:          &contextTestTermLogProvider{},
+	}
+
+	args := json.RawMessage(`{"action":"edit_file","path":"/work/test.py","diff":"","message":"m"}`)
+	result, err := term.Handle(t.Context(), FileToolName, args)
+
+	if err != nil {
+		t.Fatalf("Handle() should swallow tool errors via wrapCommandResult, got error: %v", err)
+	}
+	if !strings.Contains(result, "diff is required") {
+		t.Errorf("result = %q, want it to mention that diff is required", result)
+	}
+	if mock.copyFromCalled || mock.copyToCalled {
+		t.Fatal("expected neither CopyFromContainer nor CopyToContainer to be called for an empty diff")
+	}
+}
+
+// mustJSONString marshals s as a JSON string literal, for embedding
+// multi-line diff text into a hand-written JSON args payload in tests.
+func mustJSONString(t *testing.T, s string) string {
+	t.Helper()
+	b, err := json.Marshal(s)
+	if err != nil {
+		t.Fatalf("json.Marshal(%q) error: %v", s, err)
+	}
+	return string(b)
 }
 
 func TestTerminalHandle_FileAction_DefaultsToReadFile_WhenContentAbsent(t *testing.T) {
