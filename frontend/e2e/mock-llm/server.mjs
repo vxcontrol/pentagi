@@ -137,7 +137,11 @@ createServer(async (request, response) => {
         }
 
         const rule = pickAnswer(payload);
-        const toolNames = (payload.tools ?? []).map((tool) => tool.function?.name ?? tool.type).join(',');
+        // Array.isArray, not ?? []: the top-level guard only rejects non-object bodies, so a payload
+        // like {"tools":5} reaches here and `.map` on a non-array would throw outside the try/catch
+        // and kill the process — violating the guard's own contract.
+        const toolList = Array.isArray(payload.tools) ? payload.tools : [];
+        const toolNames = toolList.map((tool) => tool.function?.name ?? tool.type).join(',');
 
         console.log(`[mock-llm] ${rule.label}: ${payload.stream ? 'stream' : 'plain'} tools=[${toolNames}]`);
         respondCompletion(response, payload, rule);
