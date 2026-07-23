@@ -158,8 +158,8 @@ var ErrKnowledgeInvalidData = NewHttpError(500, "Knowledge.InvalidData", "invali
 // toolcalls
 
 var ErrToolcallsInvalidRequest = NewHttpError(400, "Toolcalls.InvalidRequest", "invalid toolcall request data")
-var ErrToolcallsNotFound       = NewHttpError(404, "Toolcalls.NotFound", "toolcall not found")
-var ErrToolcallsInvalidData    = NewHttpError(500, "Toolcalls.InvalidData", "invalid toolcall data")
+var ErrToolcallsNotFound = NewHttpError(404, "Toolcalls.NotFound", "toolcall not found")
+var ErrToolcallsInvalidData = NewHttpError(500, "Toolcalls.InvalidData", "invalid toolcall data")
 
 // anonymize
 

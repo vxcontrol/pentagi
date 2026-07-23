@@ -1,11 +1,11 @@
 # DeepInfra config. Direct-hosted models only - excludes Partner-tagged entries
-# (Qwen3-Max-Thinking, Seed-1.6/2.0-*, MiniMax-M2.7-Turbo) and Google/Gemma
-# (guardrail false positives on offensive-security content).
+# (Qwen3-Max-Thinking, Seed-1.6/2.0-*, MiniMax-M2.7-Turbo).
 #
-# MiniMaxAI/MiniMax-M3      -> simple/reflector/searcher/enricher/adviser
-# moonshotai/Kimi-K2.6      -> primary_agent/assistant/pentester/simple_json
+# google/gemma-4-31B-it     -> simple/simple_json
+# moonshotai/Kimi-K2.7-Code -> primary_agent/assistant/adviser/coder
+#                              (occasional HTTP 429 on coder, transient)
 # zai-org/GLM-5.2           -> generator/refiner (effort: xhigh only; "max" = HTTP 422)
-# moonshotai/Kimi-K2.7-Code -> coder/installer (occasional HTTP 429, transient)
+# MiniMaxAI/MiniMax-M3      -> reflector/searcher/enricher/installer/pentester
 #
 # Dropped: DeepSeek-V4-flash (HTTP 400, no deployment), GLM-4.7-flash (hangs,
 # never errors). Kimi-K2.5 rejected for simple_json: cheaper but corrupts plain
@@ -20,48 +20,47 @@
 # <type> -workers 1 (default 600s timeout otherwise blocks on hanging models).
 
 simple:
-  model: "MiniMaxAI/MiniMax-M3"
+  model: "google/gemma-4-31B-it"
   temperature: 1.0
-  top_p: 0.95
-  top_k: 40
+  top_p: 0.9
+  repetition_penalty: 1.0
   n: 1
   max_tokens: 8192
   price:
-    input: 0.30
-    output: 1.20
-    cache_read: 0.06
+    input: 0.13
+    output: 0.38
 
 simple_json:
-  model: "moonshotai/Kimi-K2.6"
-  temperature: 0.6
-  top_p: 0.95
+  model: "google/gemma-4-31B-it"
+  temperature: 0.7
+  top_p: 0.9
+  repetition_penalty: 1.0
   n: 1
   max_tokens: 4096
   json: true
   price:
-    input: 0.75
-    output: 3.50
-    cache_read: 0.15
+    input: 0.13
+    output: 0.38
 
 primary_agent:
-  model: "moonshotai/Kimi-K2.6"
+  model: "moonshotai/Kimi-K2.7-Code"
   temperature: 1.0
   top_p: 0.95
   n: 1
   max_tokens: 16384
   price:
-    input: 0.75
+    input: 0.74
     output: 3.50
     cache_read: 0.15
 
 assistant:
-  model: "moonshotai/Kimi-K2.6"
+  model: "moonshotai/Kimi-K2.7-Code"
   temperature: 1.0
   top_p: 0.95
   n: 1
   max_tokens: 16384
   price:
-    input: 0.75
+    input: 0.74
     output: 3.50
     cache_read: 0.15
 
@@ -92,22 +91,20 @@ refiner:
     cache_read: 0.18
 
 adviser:
-  model: "MiniMaxAI/MiniMax-M3"
+  model: "moonshotai/Kimi-K2.7-Code"
   temperature: 1.0
   top_p: 0.95
-  top_k: 40
   n: 1
   max_tokens: 16384
   price:
-    input: 0.30
-    output: 1.20
-    cache_read: 0.06
+    input: 0.74
+    output: 3.50
+    cache_read: 0.15
 
 reflector:
   model: "MiniMaxAI/MiniMax-M3"
   temperature: 1.0
   top_p: 0.95
-  top_k: 40
   n: 1
   max_tokens: 4096
   price:
@@ -119,7 +116,6 @@ searcher:
   model: "MiniMaxAI/MiniMax-M3"
   temperature: 1.0
   top_p: 0.95
-  top_k: 40
   n: 1
   max_tokens: 4096
   price:
@@ -131,7 +127,6 @@ enricher:
   model: "MiniMaxAI/MiniMax-M3"
   temperature: 1.0
   top_p: 0.95
-  top_k: 40
   n: 1
   max_tokens: 8192
   price:
@@ -151,23 +146,23 @@ coder:
     cache_read: 0.15
 
 installer:
-  model: "moonshotai/Kimi-K2.7-Code"
+  model: "MiniMaxAI/MiniMax-M3"
   temperature: 1.0
   top_p: 0.95
   n: 1
   max_tokens: 16384
   price:
-    input: 0.74
-    output: 3.50
-    cache_read: 0.15
+    input: 0.30
+    output: 1.20
+    cache_read: 0.06
 
 pentester:
-  model: "moonshotai/Kimi-K2.6"
+  model: "MiniMaxAI/MiniMax-M3"
   temperature: 1.0
   top_p: 0.95
   n: 1
   max_tokens: 16384
   price:
-    input: 0.75
-    output: 3.50
-    cache_read: 0.15
+    input: 0.30
+    output: 1.20
+    cache_read: 0.06
