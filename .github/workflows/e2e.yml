@@ -117,11 +117,14 @@ jobs:
 
       # Compare the container's own Playwright build to @playwright/test rather than a
       # hardcoded literal, so bumping the package without re-tagging the image (or vice
-      # versa) fails here instead of drifting the pixel baselines.
+      # versa) fails here instead of drifting the pixel baselines. Read the version from
+      # the image's own /ms-playwright/.docker-info: this image ships no global
+      # playwright, so `npx playwright --version` (before pnpm install) would fetch the
+      # registry latest and compare the package against that, not against the container.
       - name: Verify container image matches @playwright/test
         run: |
           pkg="$(node -p "require('./frontend/package.json').devDependencies['@playwright/test'].replace(/[^0-9.]/g, '')")"
-          container="$(npx playwright --version | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
+          container="$(node -p "JSON.parse(require('fs').readFileSync('/ms-playwright/.docker-info','utf8')).driverVersion")"
           if [ "$pkg" != "$container" ]; then
             echo "::error::e2e-visual container ships Playwright $container but @playwright/test is $pkg — bump the container tag to v$pkg-noble and regenerate baselines"
             exit 1
