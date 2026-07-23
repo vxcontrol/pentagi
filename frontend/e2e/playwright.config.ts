@@ -110,7 +110,10 @@ export default defineConfig<BackendOptions>({
         // Stand traces/videos embed the live session cookie and the setup
         // project's password fill; CI uploads test-results as a public-repo
         // artifact, so they must never be recorded on that tier.
-        trace: tier === 'stand' ? 'off' : 'on-first-retry',
+        // retain-on-failure, not on-first-retry: the mock PR gate runs retries:0,
+        // so on-first-retry would never write a trace — yet the docs and the PR
+        // comment tell you to open trace.zip from that tier's report.
+        trace: tier === 'stand' ? 'off' : 'retain-on-failure',
         video: tier === 'stand' ? 'off' : 'retain-on-failure',
     },
     // The gate must test the shipped artifact: keep this on the production build,
