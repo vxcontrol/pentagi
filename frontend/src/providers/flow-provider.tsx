@@ -37,6 +37,17 @@ import {
 import { isNotFoundError } from '@/lib/errors';
 import { Log } from '@/lib/log';
 
+/**
+ * Under `errorPolicy:'all'` a partial not-found error surfaces alongside a flow that loaded fine, so
+ * the not-found disjunct gates on `!flowData?.flow` — mirroring `flowLoadError` and the toast below.
+ * Without the gate that partial error redirects the user off a flow that rendered correctly.
+ */
+export const deriveFlowMissing = (
+    flowData: null | undefined | { flow: unknown },
+    flowError: undefined | { message: string },
+): boolean =>
+    Boolean(flowData && !flowData.flow) || Boolean(flowError && !flowData?.flow && isNotFoundError(flowError));
+
 interface FlowContextValue {
     assistantLogs: Array<AssistantLogFragmentFragment>;
     assistants: Array<AssistantFragmentFragment>;
@@ -93,7 +104,7 @@ export function FlowProvider({ children }: FlowProviderProps) {
     // in-page ErrorState + Retry instead of silently bouncing to the list.
     const flowLoadError = flowError && !flowData?.flow && !isNotFoundError(flowError) ? flowError : undefined;
 
-    const isFlowMissing = Boolean(flowData && !flowData.flow) || Boolean(flowError && isNotFoundError(flowError));
+    const isFlowMissing = deriveFlowMissing(flowData, flowError);
 
     const { data: assistantsData, loading: isAssistantsLoading } = useQuery(AssistantsDocument, {
         fetchPolicy: 'cache-first',

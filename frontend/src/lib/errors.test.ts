@@ -3,17 +3,25 @@ import { describe, expect, it } from 'vitest';
 import { isNotFoundError } from './errors';
 
 describe('isNotFoundError', () => {
-    // The two shapes the backend uses for a genuinely missing record — these redirect to the list.
-    it.each(['no rows in result set', 'flow not found', 'Record Not Found'])('treats %j as not-found', (message) => {
-        expect(isNotFoundError(new Error(message))).toBe(true);
-    });
-
-    // Everything else is a real load failure — the detail page must keep the user behind Retry,
-    // not bounce them, so these must NOT read as not-found.
-    it.each(['network error', 'Failed to fetch', 'connection refused', 'internal server error', 'permission denied'])(
-        'treats %j as a real failure',
+    it.each(['no rows in result set', 'flow not found', 'template not found: sql: no rows', 'Record Not Found'])(
+        'treats %j as not-found',
         (message) => {
-            expect(isNotFoundError(new Error(message))).toBe(false);
+            expect(isNotFoundError(new Error(message))).toBe(true);
         },
     );
+
+    // The authz strings are real backend messages that also contain "not found" (see errors.ts) —
+    // they must stay classified as real failures, so do not drop them as odd-looking fixtures.
+    it.each([
+        'network error',
+        'Failed to fetch',
+        'connection refused',
+        'internal server error',
+        "requested permission 'flows.read' not found",
+        'not authorized to access this token',
+        'no permissions granted',
+        'privileges are not set',
+    ])('treats %j as a real failure', (message) => {
+        expect(isNotFoundError(new Error(message))).toBe(false);
+    });
 });
