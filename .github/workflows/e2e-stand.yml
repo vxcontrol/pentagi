@@ -30,7 +30,7 @@ jobs:
   e2e-stand:
     if: >
       github.event_name == 'workflow_dispatch' ||
-      contains(github.event.pull_request.labels.*.name, 'e2e:stand')
+      github.event.label.name == 'e2e:stand'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: e2e-stand
