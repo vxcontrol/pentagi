@@ -63,7 +63,13 @@ jobs:
                 repo: context.repo.repo,
                 commit_sha: run.head_sha,
               });
-              prNumber = prs[0]?.number;
+              // One commit can be associated with several PRs, so match the one whose head is
+              // still this run's — `prs[0]` hands the report to whichever is listed first.
+              prNumber = prs.find((pr) =>
+                pr.head?.sha === run.head_sha &&
+                pr.head?.ref === run.head_branch &&
+                pr.head?.repo?.full_name === run.head_repository?.full_name
+              )?.number;
             }
             if (!prNumber) {
               core.info(`No PR found for ${run.head_sha}; skipping comment.`);
