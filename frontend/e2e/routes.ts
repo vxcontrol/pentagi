@@ -73,15 +73,15 @@ export const ROUTE_MANIFEST: RouteManifestEntry[] = [
         a11yWaivers: [
             { rule: 'color-contrast', target: /text-muted-foreground\\?\/50/ },
             // The tab-panel ones below are defects awaiting a fix, not accepted design.
-            { rule: 'aria-progressbar-name', target: /bg-primary/ },
+            { rule: 'aria-progressbar-name', target: /\.bg-primary\\\/20/ },
             // Both are the Files tab's file-manager controls. Anchored on the offending nodes: matching
             // `button[aria-label` instead would waive the rule for every labelled button on the route.
             { rule: 'button-name', target: /tooltip-trigger.*size-8\[data-slot="button"\]/ },
             { rule: 'target-size', target: /text-blue-400|button\[aria-label="Select / },
-            { rule: 'color-contrast', target: /font-semibold\.truncate/ },
+            { rule: 'color-contrast', target: /\.text-primary > \.font-semibold\.truncate/ },
             // The same file-manager row metadata waived on /resources — this tab embeds it.
             { rule: 'color-contrast', target: /text-muted-foreground\\?\/80/ },
-            { rule: 'scrollable-region-focusable', target: /table-container/ },
+            { rule: 'scrollable-region-focusable', target: /\[data-slot="table-container"\]/ },
         ],
         // Must stay the populated cassette: the empty seed renders none of the sources below.
         cassette: flowTabsCassette,
@@ -104,13 +104,18 @@ export const ROUTE_MANIFEST: RouteManifestEntry[] = [
         cassette: templatesCassette,
         path: routes.templates,
         ready: (page) => page.getByRole('row', { name: /E2E Seed Template/ }),
-        sources: ['src/pages/templates', 'src/providers/templates-provider.tsx'],
+        // The list file, not the dir: template.tsx sits beside it and no manifest route renders it,
+        // so owning the dir scopes a detail-only diff here instead of to the run-everything path.
+        sources: ['src/pages/templates/templates.tsx', 'src/providers/templates-provider.tsx'],
     },
     {
         cassette: knowledgesCassette,
         path: routes.knowledges,
         ready: (page) => page.getByRole('row', { name: /E2E Seed Question/ }),
-        sources: ['src/pages/knowledges', 'src/features/knowledges', 'src/providers/knowledges-provider.tsx'],
+        // `src/features/knowledges` is left unowned deliberately: knowledge.tsx is its only importer
+        // and that route is not swept, so claiming it here would scope its diffs to a route that
+        // never renders it rather than to the run-everything fallback.
+        sources: ['src/pages/knowledges/knowledges.tsx', 'src/providers/knowledges-provider.tsx'],
     },
     {
         cassette: apiTokensCassette,
