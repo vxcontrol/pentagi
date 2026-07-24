@@ -11,6 +11,10 @@ const ROUTES = [
     { emptyTitle: 'No API tokens configured', path: '/settings/api-tokens', title: 'API Tokens' },
 ];
 
+// The data assertion waits on a real backend query, so it must not run on the 5s default expect
+// timeout — a healthy but slow stand would flake. The config overrides only the screenshot timeout.
+const STAND_DATA_TIMEOUT = 30_000;
+
 test.describe('stand smoke', { tag: '@stand' }, () => {
     for (const { emptyTitle, path, title } of ROUTES) {
         test(`renders ${path} without a page error`, async ({ page }) => {
@@ -29,7 +33,9 @@ test.describe('stand smoke', { tag: '@stand' }, () => {
             // settings-sidebar <a> at runtime, the breadcrumb title is a span.
             await expect(page.locator('span[aria-current="page"]')).toHaveText(title);
             // Either branch: a query error renders neither, and a stand may hold no rows.
-            await expect(page.locator('[data-slot="table"]').first().or(page.getByText(emptyTitle))).toBeVisible();
+            await expect(page.locator('[data-slot="table"]').first().or(page.getByText(emptyTitle))).toBeVisible({
+                timeout: STAND_DATA_TIMEOUT,
+            });
             expect(pageErrors, `uncaught errors on ${path}`).toEqual([]);
         });
     }
