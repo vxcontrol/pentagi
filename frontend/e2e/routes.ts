@@ -152,9 +152,11 @@ export const ROUTE_MANIFEST: RouteManifestEntry[] = [
         // target floor — widening them is a density decision for the file manager.
         a11yWaivers: [
             { rule: 'color-contrast', target: /text-muted-foreground\\?\/80/ },
-            // `.rounded` unanchored would also match every rounded-* utility, so a
-            // future under-sized control anywhere on the page would be waived too.
-            { rule: 'target-size', target: /\.rounded(?![-\w])|aria-label="Select / },
+            // `.rounded` is anchored with a boundary so it can't match every rounded-* utility. axe
+            // emits the row-select buttons as a bare `button[aria-label="Select <name>"]` with no
+            // parent path, so the label is the only available anchor — require the button tag at
+            // least, rather than a bare `aria-label="Select ` that would also waive a non-button.
+            { rule: 'target-size', target: /\.rounded(?![-\w])|button\[aria-label="Select / },
         ],
         cassette: resourcesCassette,
         path: routes.resources,
