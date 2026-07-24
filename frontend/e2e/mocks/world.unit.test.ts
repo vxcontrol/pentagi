@@ -67,6 +67,26 @@ describe('MockWorld matching', () => {
         expect(world.matchGraphQL('info', {})?.data).toEqual({ role: 'user' });
     });
 
+    it('prefers the newly-enabled entry over the next unserved one, not merely the next in order', () => {
+        // Three candidates, so sequencing and the flag rule disagree: with the rule the raised flag
+        // jumps straight to `flagged`; without it the cursor would just hand out `second`. The
+        // two-entry cases above cannot tell the two apart.
+        const world = new MockWorld({
+            mutations: { go: [{ data: {}, setFlag: 'go' }] },
+            queries: {
+                stage: [
+                    { data: { stage: 'first' } },
+                    { data: { stage: 'second' } },
+                    { data: { stage: 'flagged' }, whenFlag: 'go' },
+                ],
+            },
+        });
+
+        expect(world.matchGraphQL('stage', {})?.data).toEqual({ stage: 'first' });
+        world.matchGraphQL('go', {});
+        expect(world.matchGraphQL('stage', {})?.data).toEqual({ stage: 'flagged' });
+    });
+
     it('advances to the newly-enabled entry after a second flag, without replaying the first', () => {
         const world = new MockWorld({
             mutations: { f1: [{ data: {}, setFlag: 'f1' }], f2: [{ data: {}, setFlag: 'f2' }] },
