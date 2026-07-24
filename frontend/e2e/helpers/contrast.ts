@@ -138,11 +138,14 @@ export const measureContrast = async (page: Page, probe: string): Promise<number
             return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
         };
 
-        const surface = paint(
+        // The text goes on top of the same stack, not on its own: `paint` starts from transparent,
+        // where a translucent colour keeps its opaque base and reads as a contrast it does not have.
+        const ground = [
             getComputedStyle(element.parentElement).backgroundColor,
             getComputedStyle(element).backgroundColor,
-        );
-        const label = paint(getComputedStyle(element).color);
+        ];
+        const surface = paint(...ground);
+        const label = paint(...ground, getComputedStyle(element).color);
         const [high = 0, low = 0] = [luminance(label), luminance(surface)].sort((a, b) => b - a);
 
         return (high + 0.05) / (low + 0.05);
