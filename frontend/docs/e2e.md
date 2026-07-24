@@ -163,6 +163,28 @@ prefix `NODE_TLS_REJECT_UNAUTHORIZED=0`; a real stand has a valid cert).
   substrate for scoping runs and the exploratory agent to the changed surface;
   the mapping logic is unit-tested (`e2e/affected-routes.unit.test.ts`).
 
+## Reviewing with agents
+
+Verifying a claim about a gate usually means breaking something on purpose — deleting a
+guard, injecting the regression it should catch, patching a fixture. Do that in a sandbox,
+never in your checkout:
+
+```bash
+SANDBOX=$(./e2e/tools/review-sandbox.sh create --dirty --with-deps)
+# …mutate and run anything inside $SANDBOX…
+./e2e/tools/review-sandbox.sh clean "$SANDBOX"
+```
+
+`--dirty` carries uncommitted work across (usually what you are reviewing); `--with-deps`
+hardlinks `node_modules` so pnpm, vitest and playwright run there — skip it for read-only
+work, it costs ~30s. `clean` with no path removes every stale sandbox.
+
+The sandbox is a `git worktree` under `$TMPDIR`, so a deleted file or an edited spec inside
+it cannot reach your tree. Two caveats: an absolute path still escapes it, and a tool that
+rewrites a dependency **in place** would reach the shared inode — don't hand `--with-deps`
+to an agent whose job is patching libraries. Check `git status` in your own tree when a run
+finishes; that is the only proof nothing leaked.
+
 ## LLM advisory layer (Phase 3, opt-in)
 
 Deterministic specs are the gate; an LLM is only ever an advisory second
