@@ -39,9 +39,22 @@ create() {
     path="$SANDBOX_ROOT/wt-$$-$(date +%s)"
     mkdir -p "$SANDBOX_ROOT"
     git -C "$REPO_ROOT" worktree add --detach --quiet "$path" HEAD
+    # Anything that fails from here leaves a worktree behind, and the caller reads stdout as the
+    # sandbox path — so take the worktree down and say so on stderr rather than printing a stub.
+    trap 'clean "$path" >/dev/null 2>&1; echo "review-sandbox: failed to prepare $path" >&2' ERR
 
-    if [[ -n "$carry_dirty" ]] && ! git -C "$REPO_ROOT" diff --quiet HEAD; then
-        git -C "$REPO_ROOT" diff HEAD | git -C "$path" apply --allow-empty
+    if [[ -n "$carry_dirty" ]]; then
+        # --binary or a regenerated PNG baseline aborts the patch ("cannot apply binary patch
+        # without full index line"). Untracked files are absent from the diff entirely, so a new
+        # spec would never reach the sandbox — copy them separately, minus the ignored ones.
+        if ! git -C "$REPO_ROOT" diff --quiet HEAD; then
+            git -C "$REPO_ROOT" diff HEAD --binary | git -C "$path" apply --allow-empty
+        fi
+
+        while IFS= read -r -d '' file; do
+            mkdir -p "$path/$(dirname "$file")"
+            cp "$REPO_ROOT/$file" "$path/$file"
+        done < <(git -C "$REPO_ROOT" ls-files --others --exclude-standard -z)
     fi
 
     if [[ -n "$with_deps" ]]; then
