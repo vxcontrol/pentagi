@@ -46,8 +46,9 @@ Two rules make the whole thing predictable:
 
 1. **URL is authoritative** for filter + page, so a shared link reproduces the
    exact view.
-2. **Prev/Next walks the same subset** — the detail toolbar runs the same
-   matcher the list filter uses, so siblings stay in step with the table.
+2. **Prev/Next walks the same subset** — the detail toolbar filters on the same
+   `?q=` the table does, so siblings stay in step with the list. The two
+   matchers are close but not identical; see the caveat below.
 
 ## Mental model
 
@@ -152,11 +153,17 @@ The current page index and the ad-hoc `?q=` filter stay URL-only.
 ### Prev/Next walks the same subset
 
 `useDetailNavigation` subscribes to the URL filter via
-`useTableQueryFilterReader`, runs the same pure matcher the list uses, and
+`useTableQueryFilterReader`, applies a pure matcher over the same `?q=`, and
 resolves the Prev / Next siblings + a `"3/10"` position label over that filtered
-subset — so the toolbar is always in step with what the user saw in the table.
-It also threads the current `?q=` through every prev/next/select destination via
-`mergeHrefWithSearchParams`, so navigating siblings never drops the filter.
+subset. It also threads the current `?q=` through every prev/next/select
+destination via `mergeHrefWithSearchParams`, so navigating siblings never drops
+the filter.
+
+The two matchers are not the same function, and they disagree on diacritics:
+the toolbar folds them (`createTextMatcher` normalizes NFKD and strips combining
+marks), while `DataTable`'s `globalFilterFn` only lowercases. Searching `cafe`
+therefore hides a `café` row from the table while Prev/Next still steps onto it.
+Align the two before relying on the subsets being identical.
 
 ## Hooks
 
@@ -343,7 +350,7 @@ function DetailNavigationToolbar<T extends { id: string }>(props: {
     renderItem?: (item: T, isCurrent: boolean) => ReactNode;
     hasSearch?: boolean; // default true — in-sheet search input
     searchPlaceholder?: string;
-}): JSX.Element | null; // null when controller.itemsEmpty
+}): JSX.Element;
 ```
 
 The toolbar composes `<DetailNavigationButtons>` (Prev / position / Next) and
@@ -622,9 +629,10 @@ legacy keys in on first mount and deletes them.
   filter (`?q=`, via `useTableState`) and a server-side semantic search (`?qs=`,
   via page-local `useSearchParams`) are independent — don't conflate them. A
   copied list recipe only needs the `?q=` one.
-- **`DetailNavigationToolbar` renders `null` when `controller.itemsEmpty`** (raw
-  items empty, pre-filter), so it can mount before the provider's list arrives
-  without flashing "–/0".
+- **`DetailNavigationToolbar` always renders.** It has no empty-list branch, so
+  it mounts before the provider's list arrives and shows the buttons' own
+  disabled/"–/0" state until items land. `controller.itemsEmpty` exists for a
+  caller that wants to skip rendering it, but nothing reads it today.
 
 ## Testing
 
