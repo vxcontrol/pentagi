@@ -84,13 +84,14 @@ test.describe('palette compliance', { tag: '@cross' }, () => {
             // Tabs mount their panels lazily (Radix unmounts inactive ones), so the default-view scan
             // above never sees them — sweep each panel like the a11y gate does.
             for (const tab of entry.tabs ?? []) {
-                test(`tab "${tab}" carries no off-palette colour`, async ({ page }) => {
+                test(`tab "${tab.name}" carries no off-palette colour`, async ({ page }) => {
                     await page.goto(entry.path);
                     await expect(entry.ready(page)).toBeVisible();
-                    await page.getByRole('tab', { name: tab }).click();
+                    await page.getByRole('tab', { name: tab.name }).click();
+                    await expect(tab.ready(page)).toBeVisible();
 
                     const offenders = await scanOffenders(page);
-                    const key = `${entry.path} [${tab}]`;
+                    const key = `${entry.path} [${tab.name}]`;
 
                     expect([...new Set(offenders)], `off-palette colours on ${key}`).toEqual(ACCEPTED[key] ?? []);
                 });

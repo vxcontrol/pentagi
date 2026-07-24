@@ -1,20 +1,7 @@
 import { expect, test } from '../../fixtures/test.ts';
 import { expectCleanPage } from '../../helpers/errors.ts';
-import {
-    flowTabsCassette,
-    TABS_FILE_NAME,
-    TABS_SCREENSHOT_NAME,
-    TABS_SCREENSHOT_URL,
-} from '../../mocks/cassettes/flows.ts';
-
-const TABS = [
-    { marker: 'E2E Task Alpha', name: 'Tasks' },
-    { marker: 'E2E agent reconnaissance', name: 'Agents' },
-    { marker: 'E2E search for the CVE', name: 'Searches' },
-    { marker: 'E2E recall prior findings', name: 'Vector Store' },
-    { marker: TABS_FILE_NAME, name: 'Files' },
-    { marker: TABS_SCREENSHOT_URL, name: 'Screenshots' },
-] as const;
+import { flowTabsCassette, TABS_SCREENSHOT_NAME } from '../../mocks/cassettes/flows.ts';
+import { FLOW_DETAIL_TABS } from '../../routes.ts';
 
 test.describe('flow detail tabs', { tag: '@flows' }, () => {
     test.use({ cassette: flowTabsCassette() });
@@ -23,9 +10,12 @@ test.describe('flow detail tabs', { tag: '@flows' }, () => {
         await page.goto('/flows/5');
         await expect(page.locator('header').getByRole('button', { name: 'Toggle favorite' })).toBeEnabled();
 
-        for (const { marker, name } of TABS) {
+        for (const { name, ready } of FLOW_DETAIL_TABS) {
+            // Pins that the click is what reveals the panel. Ordering this sweep so a tab is already
+            // open when its turn comes (the flow auto-opens Assistant) makes its iteration a no-op.
+            await expect(ready(page), `"${name}" must not be on screen before its own click`).not.toBeAttached();
             await page.getByRole('tab', { name }).click();
-            await expect(page.getByText(marker)).toBeVisible();
+            await expect(ready(page)).toBeVisible();
         }
 
         expectCleanPage(pageErrorLog);

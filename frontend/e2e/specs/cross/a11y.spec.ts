@@ -52,12 +52,13 @@ for (const theme of THEMES) {
                 });
 
                 for (const tab of entry.tabs ?? []) {
-                    test(`tab "${tab}" has no axe violations`, async ({ page }) => {
+                    test(`tab "${tab.name}" has no axe violations`, async ({ page }) => {
                         await page.goto(entry.path);
                         await expect(entry.ready(page)).toBeVisible();
                         await expect(page.locator('html')).toHaveClass(theme === 'dark' ? /dark/ : /light/);
-                        await page.getByRole('tab', { name: tab }).click();
-                        await scanA11y(page, `${entry.path} [${tab}]`, entry.a11yWaivers);
+                        await page.getByRole('tab', { name: tab.name }).click();
+                        await expect(tab.ready(page)).toBeVisible();
+                        await scanA11y(page, `${entry.path} [${tab.name}]`, entry.a11yWaivers);
                     });
                 }
             });

@@ -7,7 +7,7 @@ import type { Cassette } from './mocks/cassette.ts';
 
 import { apiTokensCassette } from './mocks/cassettes/api-tokens.ts';
 import { dashboardCassette } from './mocks/cassettes/dashboard.ts';
-import { flowsCassette, flowTabsCassette } from './mocks/cassettes/flows.ts';
+import { flowsCassette, flowTabsCassette, TABS_FILE_NAME, TABS_SCREENSHOT_URL } from './mocks/cassettes/flows.ts';
 import { knowledgesCassette } from './mocks/cassettes/knowledges.ts';
 import { resourcesCassette } from './mocks/cassettes/resources.ts';
 import { settingsPromptsCassette } from './mocks/cassettes/settings-prompts.ts';
@@ -27,8 +27,29 @@ export interface RouteManifestEntry {
      */
     sources: string[];
     /** Radix unmounts inactive tab panels, so one scan of the default view sees none of them. */
-    tabs?: string[];
+    tabs?: RouteTab[];
 }
+
+export interface RouteTab {
+    name: string;
+    /**
+     * Must be absent while the panel loads: a marker that also renders on the
+     * skeleton lets every per-tab scan pass on an empty panel.
+     */
+    ready: (page: Page) => Locator;
+}
+
+/** Order matters: the flow auto-opens Assistant, so tabs.spec pins that no entry is already open. */
+export const FLOW_DETAIL_TABS: RouteTab[] = [
+    { name: 'Dashboard', ready: (page) => page.getByText('Usage by Model & Provider') },
+    { name: 'Assistant', ready: (page) => page.getByText('New assistant', { exact: true }) },
+    { name: 'Tasks', ready: (page) => page.getByText('E2E Task Alpha') },
+    { name: 'Agents', ready: (page) => page.getByText('E2E agent reconnaissance') },
+    { name: 'Searches', ready: (page) => page.getByText('E2E search for the CVE') },
+    { name: 'Vector Store', ready: (page) => page.getByText('E2E recall prior findings') },
+    { name: 'Files', ready: (page) => page.getByText(TABS_FILE_NAME) },
+    { name: 'Screenshots', ready: (page) => page.getByText(TABS_SCREENSHOT_URL) },
+];
 
 /**
  * The routes swept by NAV/visual/a11y specs and CI diff-scoping. This is a
@@ -75,7 +96,7 @@ export const ROUTE_MANIFEST: RouteManifestEntry[] = [
             'src/components/dashboard',
             'src/features/resources',
         ],
-        tabs: ['Assistant', 'Dashboard', 'Tasks', 'Agents', 'Searches', 'Vector Store', 'Files', 'Screenshots'],
+        tabs: FLOW_DETAIL_TABS,
     },
     {
         cassette: templatesCassette,
