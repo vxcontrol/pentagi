@@ -12,6 +12,19 @@
     cache_read: 1.0
     cache_write: 12.5
 
+- name: claude-opus-5
+  description: Anthropic's flagship model for complex agentic coding and enterprise work, succeeding Opus 4.8. Adaptive thinking is on by default (a change from Opus 4.8, which defaulted off) but can still be explicitly disabled; manual budget thinking is rejected and sampling parameters are not supported.
+  thinking: true
+  reasoning:
+    mode: adaptive-only
+    efforts: [low, medium, high, xhigh, max]
+  release_date: 2026-07-24
+  price:
+    input: 5.0
+    output: 25.0
+    cache_read: 0.5
+    cache_write: 6.25
+
 - name: claude-sonnet-5
   description: Best combination of speed and intelligence for coding, agents, and professional work at scale. Adaptive thinking only (manual budget thinking is rejected); sampling parameters are not supported.
   thinking: true
@@ -19,29 +32,6 @@
     mode: adaptive-only
     efforts: [low, medium, high, xhigh, max]
   release_date: 2026-07-01
-  price:
-    input: 3.0
-    output: 15.0
-    cache_read: 0.3
-    cache_write: 3.75
-
-- name: claude-haiku-4-5
-  description: Fast and efficient model with exceptional function calling and low latency. Ideal for high-frequency security scanning, rapid vulnerability detection, real-time monitoring, and bulk automated testing where speed is paramount. Strong tool orchestration capabilities at minimal cost.
-  thinking: false
-  release_date: 2025-10-15
-  price:
-    input: 1.0
-    output: 5.0
-    cache_read: 0.1
-    cache_write: 1.25
-
-- name: claude-sonnet-4-6
-  description: Best combination of speed and intelligence with adaptive thinking support. Exceptional for balanced penetration testing workflows requiring both rapid execution and sophisticated reasoning. Optimized for multi-phase security assessments, intelligent vulnerability analysis, and real-time threat hunting with advanced tool coordination.
-  thinking: true
-  reasoning:
-    mode: adaptive
-    efforts: [low, medium, high, max]
-  release_date: 2026-02-17
   price:
     input: 3.0
     output: 15.0
@@ -86,6 +76,29 @@
     output: 25.0
     cache_read: 0.5
     cache_write: 6.25
+
+- name: claude-sonnet-4-6
+  description: Best combination of speed and intelligence with adaptive thinking support. Exceptional for balanced penetration testing workflows requiring both rapid execution and sophisticated reasoning. Optimized for multi-phase security assessments, intelligent vulnerability analysis, and real-time threat hunting with advanced tool coordination.
+  thinking: true
+  reasoning:
+    mode: adaptive
+    efforts: [low, medium, high, max]
+  release_date: 2026-02-17
+  price:
+    input: 3.0
+    output: 15.0
+    cache_read: 0.3
+    cache_write: 3.75
+
+- name: claude-haiku-4-5
+  description: Fast and efficient model with exceptional function calling and low latency. Ideal for high-frequency security scanning, rapid vulnerability detection, real-time monitoring, and bulk automated testing where speed is paramount. Strong tool orchestration capabilities at minimal cost.
+  thinking: false
+  release_date: 2025-10-15
+  price:
+    input: 1.0
+    output: 5.0
+    cache_read: 0.1
+    cache_write: 1.25
 
 # Legacy models - Still supported but consider migrating to newer versions
 - name: claude-sonnet-4-5
