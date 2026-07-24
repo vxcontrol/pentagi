@@ -26,10 +26,11 @@ const BADGE_VARIANTS = Object.keys({
 
 const BUTTON_VARIANTS = ['default', 'destructive', 'ghost', 'link', 'outline', 'secondary'] as const;
 
-// A hard-coded hue (`text-green-800`, `bg-[#16a34a]`) rather than a semantic token
-// (`bg-primary`, `text-muted-foreground`) or a non-colour utility (`text-xs`).
+// A hard-coded colour (`text-green-800`, `bg-[#16a34a]`, `text-white`) rather than a semantic token
+// (`bg-primary`, `text-muted-foreground`) or a non-colour utility (`text-xs`). white/black/transparent
+// are absolute too: an overlay like `text-white` on a coloured badge is off-palette, not a token.
 const PALETTE_UTILITY =
-    /^(?:[a-z-]+:)*(?:bg|text|border|ring|from|via|to|fill|stroke|shadow|outline|decoration|divide|accent|caret|placeholder)-(?:\[[^\]]*\]|(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-\d{2,3}(?:\/\d{1,3})?)$/;
+    /^(?:[a-z-]+:)*(?:bg|text|border|ring|from|via|to|fill|stroke|shadow|outline|decoration|divide|accent|caret|placeholder)-(?:white|black|transparent|\[[^\]]*\]|(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-\d{2,3})(?:\/\d{1,3})?$/;
 
 /**
  * Per-variant, not one union: a flat union sanctions every variant's hue on every badge and button,
