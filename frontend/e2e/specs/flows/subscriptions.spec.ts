@@ -93,9 +93,7 @@ test.describe('flow subscriptions across a pager switch', { tag: '@flows' }, () 
         // The DOM cannot witness this leak: `messageLogs` is keyed by flowId, so a frame carrying
         // {flowId:'5'} is written to flow A's cache slot and never rendered under flow 6 however long
         // the stale stream stays open. The live subscriber set is the only place it shows.
-        await expect
-            .poll(() => world.subscriberCount(streamA), 'the superseded stream must be torn down')
-            .toBe(0);
+        await expect.poll(() => world.subscriberCount(streamA), 'the superseded stream must be torn down').toBe(0);
         expect(world.subscriberCount(streamB), 'the switched-to flow must be streaming').toBe(1);
 
         world.raiseFlag(PAGER_SWITCH_FLAG);

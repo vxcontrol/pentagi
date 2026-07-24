@@ -209,7 +209,10 @@ export const pagerStreamsCassette = (): Cassette =>
     flowsCassette({
         subscriptions: {
             messageLogAdded: [
-                { frames: FLOW_A_STREAMED_IDS.map((id) => addedFrame(makeMessage(id, '5'), 80)), variables: { flowId: '5' } },
+                {
+                    frames: FLOW_A_STREAMED_IDS.map((id) => addedFrame(makeMessage(id, '5'), 80)),
+                    variables: { flowId: '5' },
+                },
                 {
                     frames: [
                         ...FLOW_B_STREAMED_IDS.map((id) => addedFrame(makeMessage(id, '6'), 80)),
