@@ -16,14 +16,14 @@ import { baseQueries, baseRest } from './base.ts';
 
 const T = '2026-01-15T09:00:00Z';
 
-const agentConfig = (): AgentConfigFragmentFragment =>
+const agentConfig = (model = 'e2e-model'): AgentConfigFragmentFragment =>
     entity('AgentConfig', {
         extraBody: null,
         frequencyPenalty: null,
         maxLength: null,
         maxTokens: null,
         minLength: null,
-        model: 'e2e-model',
+        model,
         presencePenalty: null,
         price: null,
         reasoning: null,
@@ -33,29 +33,35 @@ const agentConfig = (): AgentConfigFragmentFragment =>
         topP: null,
     });
 
-const agentsConfig = (): AgentsConfigFragmentFragment =>
+const agentsConfig = (model?: string): AgentsConfigFragmentFragment =>
     entity('AgentsConfig', {
-        adviser: agentConfig(),
-        assistant: agentConfig(),
-        coder: agentConfig(),
-        enricher: agentConfig(),
-        generator: agentConfig(),
-        installer: agentConfig(),
-        pentester: agentConfig(),
-        primaryAgent: agentConfig(),
-        refiner: agentConfig(),
-        reflector: agentConfig(),
-        searcher: agentConfig(),
-        simple: agentConfig(),
-        simpleJson: agentConfig(),
+        adviser: agentConfig(model),
+        assistant: agentConfig(model),
+        coder: agentConfig(model),
+        enricher: agentConfig(model),
+        generator: agentConfig(model),
+        installer: agentConfig(model),
+        pentester: agentConfig(model),
+        primaryAgent: agentConfig(model),
+        refiner: agentConfig(model),
+        reflector: agentConfig(model),
+        searcher: agentConfig(model),
+        simple: agentConfig(model),
+        simpleJson: agentConfig(model),
     });
 
-const defaultConfig = (id: string, type: ProviderType): ProviderConfigFragmentFragment =>
+/**
+ * Defaults are not database rows: the resolver builds them without an ID, so the wire carries the
+ * bare number `0` for every one. `ProviderConfig.keyFields`'s id-0 branch exists for that shape, and
+ * a distinct string id here leaves it unexercised.
+ */
+const defaultConfig = (type: ProviderType): ProviderConfigFragmentFragment =>
     entity('ProviderConfig', {
-        agents: agentsConfig(),
+        // Distinct per type, so two defaults collapsing onto one cache entry is observable.
+        agents: agentsConfig(`e2e-${type}-model`),
         createdAt: T,
-        id,
-        name: `default-${type}`,
+        id: 0 as unknown as string,
+        name: type,
         type,
         updatedAt: T,
     });
@@ -63,7 +69,7 @@ const defaultConfig = (id: string, type: ProviderType): ProviderConfigFragmentFr
 const noProviders: ResultOf<typeof SettingsProvidersDocument> = {
     settingsProviders: entity('ProvidersConfig', {
         default: entity('DefaultProvidersConfig', {
-            anthropic: defaultConfig('default-anthropic', ProviderType.Anthropic),
+            anthropic: defaultConfig(ProviderType.Anthropic),
             bedrock: null,
             custom: null,
             deepseek: null,
@@ -72,7 +78,7 @@ const noProviders: ResultOf<typeof SettingsProvidersDocument> = {
             kimi: null,
             minimax: null,
             ollama: null,
-            openai: defaultConfig('default-openai', ProviderType.Openai),
+            openai: defaultConfig(ProviderType.Openai),
             qwen: null,
         }),
         enabled: entity('ProvidersReadinessStatus', {
@@ -120,7 +126,7 @@ export const settingsProvidersCassette = (override: Cassette = {}): Cassette =>
 const populatedProviders: ResultOf<typeof SettingsProvidersDocument> = {
     settingsProviders: entity('ProvidersConfig', {
         default: entity('DefaultProvidersConfig', {
-            anthropic: defaultConfig('default-anthropic', ProviderType.Anthropic),
+            anthropic: defaultConfig(ProviderType.Anthropic),
             bedrock: null,
             custom: null,
             deepseek: null,
@@ -129,7 +135,7 @@ const populatedProviders: ResultOf<typeof SettingsProvidersDocument> = {
             kimi: null,
             minimax: null,
             ollama: null,
-            openai: defaultConfig('default-openai', ProviderType.Openai),
+            openai: defaultConfig(ProviderType.Openai),
             qwen: null,
         }),
         enabled: entity('ProvidersReadinessStatus', {
