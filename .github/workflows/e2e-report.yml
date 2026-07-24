@@ -112,19 +112,27 @@ jobs:
               core.info(`results.json unavailable: ${error}`);
             }
 
-            // Both halves are required: results.json is written before an abort can be
-            // observed, so a run killed by the global timeout still reports zero failures.
-            // When the jobs API was unreachable, fall back to results.json alone.
-            const mockPassed = noFailures && (jobsFetched ? mockJob?.conclusion === 'success' : true);
+            // The job conclusion is load-bearing, not a nicety: results.json is written before a
+            // global-timeout abort can be observed (its un-run tests land in `skipped`, so
+            // `unexpected` stays 0), and only the job's own conclusion reflects the abort. So a
+            // green needs BOTH zero failures AND a successful job. When the jobs API was
+            // unreachable we cannot confirm the job, so the verdict is unknown — never a green.
+            const mockStatus = !noFailures || (jobsFetched && mockJob?.conclusion !== 'success')
+              ? 'fail'
+              : jobsFetched
+                ? 'pass'
+                : 'unknown';
 
             // Key the advisory on the e2e-visual-diffs artifact (uploaded only when the snapshot
             // step itself failed), not on the visual job's conclusion — a tag-guard, install or
             // build failure would otherwise read as "snapshots differ".
             const visualDiffers = '${{ steps.visualdiffs.outcome }}' === 'success';
 
-            const conclusion = !mockPassed ? '❌' : visualDiffers ? '⚠️' : '✅';
+            const conclusion = mockStatus === 'fail' ? '❌' : mockStatus === 'unknown' || visualDiffers ? '⚠️' : '✅';
             const marker = '<!-- e2e-report -->';
-            const advisoryLine = visualDiffers
+            const advisoryLine = mockStatus === 'unknown'
+              ? '⚠️ **Result unconfirmed** — the workflow jobs API was unreachable, so this reflects `results.json` alone, which cannot distinguish a clean pass from a run killed mid-flight. Check the run before merging.'
+              : visualDiffers
               ? '⚠️ **Visual snapshots differ** — advisory only, does not block merge. Download the `e2e-visual-diffs` artifact to compare expected / actual / diff.'
               : null;
             const body = [
