@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ProviderType } from '@/graphql/types';
@@ -6,7 +6,7 @@ import { routes } from '@/lib/routes';
 
 const { navigate } = vi.hoisted(() => ({ navigate: vi.fn() }));
 
-const state = vi.hoisted(() => ({ params: new URLSearchParams() }));
+const state = vi.hoisted(() => ({ params: new URLSearchParams(), providerId: 'new' }));
 
 const setSearch = (search: string) => {
     state.params = new URLSearchParams(search);
@@ -37,6 +37,14 @@ const userDefined = [
         type: ProviderType.Minimax,
         updatedAt: '',
     },
+    {
+        agents: {},
+        createdAt: '',
+        id: 'edit-1',
+        name: 'Persisted Name',
+        type: ProviderType.Anthropic,
+        updatedAt: '',
+    },
 ];
 
 const settingsProviders = {
@@ -65,7 +73,7 @@ vi.mock('react-router-dom', async (importOriginal) => ({
     ...(await importOriginal<typeof import('react-router-dom')>()),
     useBlocker: () => ({ proceed: undefined, reset: undefined, state: 'unblocked' }),
     useNavigate: () => navigate,
-    useParams: () => ({ providerId: 'new' }),
+    useParams: () => ({ providerId: state.providerId }),
     useSearchParams: () => [state.params, vi.fn()],
 }));
 
@@ -94,6 +102,8 @@ import SettingsProvider from './settings-provider';
 beforeEach(() => {
     navigate.mockClear();
     setSearch('');
+    state.providerId = 'new';
+    queryResult.data = { settingsProviders };
     queryResult.error = undefined;
     queryResult.loading = false;
 });
@@ -147,5 +157,26 @@ describe('SettingsProvider create-form type guards', () => {
 
         expect(screen.queryByText('Loading provider data...')).not.toBeInTheDocument();
         expect(navigate).not.toHaveBeenCalled();
+    });
+
+    // The seeding effect re-runs on every settingsProviders refetch (a fresh `data` reference under
+    // cache-and-network); keepDirtyValues is what stops that reset from wiping an in-flight edit.
+    it('preserves an in-flight edit across a background refetch', () => {
+        state.providerId = 'edit-1';
+        const { rerender } = render(<SettingsProvider />);
+
+        const nameInput = screen.getByPlaceholderText('Enter provider name') as HTMLInputElement;
+
+        expect(nameInput.value).toBe('Persisted Name');
+
+        fireEvent.change(nameInput, { target: { value: 'My Unsaved Edit' } });
+
+        // A refetch delivers a new `data` object with the same server content, re-firing the effect.
+        queryResult.data = { settingsProviders };
+        rerender(<SettingsProvider />);
+
+        expect((screen.getByPlaceholderText('Enter provider name') as HTMLInputElement).value).toBe(
+            'My Unsaved Edit',
+        );
     });
 });
