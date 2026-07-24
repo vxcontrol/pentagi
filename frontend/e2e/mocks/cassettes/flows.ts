@@ -199,6 +199,26 @@ export const flowsCassette = (override: Cassette = {}): Cassette =>
         override,
     );
 
+export const FLOW_B_SENTINEL_ID = '205';
+export const PAGER_SWITCH_FLAG = 'pager-switched';
+
+/** Holds flow B a frame back so the spec can prove the new stream still delivers after the switch. */
+export const pagerStreamsCassette = (): Cassette =>
+    flowsCassette({
+        subscriptions: {
+            messageLogAdded: [
+                { frames: FLOW_A_STREAMED_IDS.map((id) => addedFrame(makeMessage(id, '5'), 80)), variables: { flowId: '5' } },
+                {
+                    frames: [
+                        ...FLOW_B_STREAMED_IDS.map((id) => addedFrame(makeMessage(id, '6'), 80)),
+                        { ...addedFrame(makeMessage(FLOW_B_SENTINEL_ID, '6'), 0), whenFlag: PAGER_SWITCH_FLAG },
+                    ],
+                    variables: { flowId: '6' },
+                },
+            ],
+        },
+    });
+
 export const variedMessagesCassette = (): Cassette =>
     flowsCassette({
         queries: { flow: [{ data: flowQueryData(FLOW_A, VARIED_MESSAGES), variables: { id: '5' } }] },

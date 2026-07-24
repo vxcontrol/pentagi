@@ -39,6 +39,9 @@ const isSubsetMatch = (expected?: Record<string, unknown>, actual?: Record<strin
 
 const sleep = (delayMs: number) => new Promise<void>((resolve) => setTimeout(resolve, delayMs));
 
+export const subscriptionStreamKey = (operationName: string, variables?: Record<string, unknown>): string =>
+    `sub:${operationName}:${stableStringify(variables ?? {})}`;
+
 export interface MockSocket {
     close: (options?: { code?: number; reason?: string }) => unknown;
 }
@@ -136,7 +139,7 @@ export class MockWorld {
 
         // Key on the request's variables, not the entry's: an entry written without variables would
         // otherwise merge every flow's subscribers onto one stream, and the second would join delta-only.
-        return entry ? { entry, streamKey: `sub:${operationName}:${stableStringify(variables ?? {})}` } : undefined;
+        return entry ? { entry, streamKey: subscriptionStreamKey(operationName, variables) } : undefined;
     }
 
     raiseFlag(flag: string): void {
@@ -157,6 +160,10 @@ export class MockWorld {
         this.unmatchedSubscriptions.push(description);
     }
 
+    subscriberCount(streamKey: string): number {
+        return this.streams.get(streamKey)?.subscribers.size ?? 0;
+    }
+
     subscribeStream(streamKey: string, entry: SubscriptionCassetteEntry, subscriber: StreamSubscriber): () => void {
         const state = this.streams.get(streamKey) ?? { cursor: 0, isDriving: false, subscribers: new Set() };
 
@@ -173,11 +180,6 @@ export class MockWorld {
         }
 
         return () => state.subscribers.delete(subscriber);
-    }
-
-    /** Live subscriber count for a stream — lets a reconnect test wait for the resubscribe to land. */
-    subscriberCount(streamKey: string): number {
-        return this.streams.get(streamKey)?.subscribers.size ?? 0;
     }
 
     unregisterSocket(socket: MockSocket): void {
