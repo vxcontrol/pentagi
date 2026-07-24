@@ -51,8 +51,10 @@ export default defineConfig<BackendOptions>({
     // Playwright's default 0.2 so a one-step palette shift is caught, with a small
     // maxDiffPixelRatio for anti-aliasing at glyph edges. cross/contrast.spec.ts still
     // measures colour numerically as the belt-and-suspenders check.
+    // Absolute, not a ratio: 1% of a 1280x720 baseline is 9,216 pixels, more than any one foreground
+    // token covers, so a token could change hue with every baseline still matching.
     expect: {
-        toHaveScreenshot: { maxDiffPixelRatio: 0.01, threshold: 0.02 },
+        toHaveScreenshot: { maxDiffPixels: 200, threshold: 0.02 },
     },
     forbidOnly: isCI,
     fullyParallel: true,
