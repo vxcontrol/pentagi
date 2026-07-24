@@ -74,8 +74,10 @@ export const ROUTE_MANIFEST: RouteManifestEntry[] = [
             { rule: 'color-contrast', target: /text-muted-foreground\\?\/50/ },
             // The tab-panel ones below are defects awaiting a fix, not accepted design.
             { rule: 'aria-progressbar-name', target: /bg-primary/ },
-            { rule: 'button-name', target: /span\[data-slot|button\[aria-label/ },
-            { rule: 'target-size', target: /text-blue-400|button\[aria-label/ },
+            // Both are the Files tab's file-manager controls. Anchored on the offending nodes: matching
+            // `button[aria-label` instead would waive the rule for every labelled button on the route.
+            { rule: 'button-name', target: /tooltip-trigger.*size-8\[data-slot="button"\]/ },
+            { rule: 'target-size', target: /text-blue-400|button\[aria-label="Select / },
             { rule: 'color-contrast', target: /font-semibold\.truncate/ },
             // The same file-manager row metadata waived on /resources — this tab embeds it.
             { rule: 'color-contrast', target: /text-muted-foreground\\?\/80/ },

@@ -26,7 +26,9 @@ test.describe('dashboard', { tag: '@coverage' }, () => {
 
         test('overview tab loads lazily and renders metrics and usage tables', async ({ page, pageErrorLog }) => {
             await page.goto('/dashboard');
-            // Lazy: the overview metrics are not mounted while the Analytics tab is active.
+            // The route is lazy, so this must wait for the Analytics panel first: a bare negative
+            // assert is satisfied by "nothing has rendered yet" and can never fail.
+            await expect(page.getByRole('heading', { name: 'Flows Activity Over Time' })).toBeVisible();
             // not.toBeAttached, not toBeHidden — the latter also passes for a mounted-but-hidden node,
             // so it would not catch the panel being eagerly mounted (all its queries firing).
             await expect(page.getByRole('heading', { exact: true, name: 'Total Flows' })).not.toBeAttached();

@@ -43,6 +43,10 @@ test.describe('smoke', { tag: '@smoke' }, () => {
             // react-hook-form leaves Submit disabled after a failed submit until
             // an input changes.
             await expect(page.getByRole('button', { name: 'Sign in' })).toBeDisabled();
+
+            await page.getByRole('textbox', { name: 'Password' }).fill('another-password');
+
+            await expect(page.getByRole('button', { name: 'Sign in' })).toBeEnabled();
             // The 401 logs an expected browser console error, but the path must raise no
             // uncaught JS exception / unhandled rejection.
             expect(pageErrorLog.pageErrors).toEqual([]);
