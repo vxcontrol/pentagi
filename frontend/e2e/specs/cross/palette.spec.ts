@@ -7,6 +7,7 @@ import { buttonVariants } from '@/components/ui/button';
 import { routes } from '@/lib/routes';
 
 import { expect, test } from '../../fixtures/test.ts';
+import { populatedSettingsProvidersCassette } from '../../mocks/cassettes/settings-providers.ts';
 import { ROUTE_MANIFEST } from '../../routes.ts';
 
 const BADGE_VARIANTS = Object.keys({
@@ -25,19 +26,29 @@ const BADGE_VARIANTS = Object.keys({
 
 const BUTTON_VARIANTS = ['default', 'destructive', 'ghost', 'link', 'outline', 'secondary'] as const;
 
-const SANCTIONED = new Set(
-    [
-        ...BADGE_VARIANTS.map((variant) => badgeVariants({ variant })),
-        ...BUTTON_VARIANTS.map((variant) => buttonVariants({ variant })),
-    ]
-        .join(' ')
-        .split(/\s+/),
-);
-
 // A hard-coded hue (`text-green-800`, `bg-[#16a34a]`) rather than a semantic token
 // (`bg-primary`, `text-muted-foreground`) or a non-colour utility (`text-xs`).
 const PALETTE_UTILITY =
     /^(?:[a-z-]+:)*(?:bg|text|border|ring|from|via|to|fill|stroke|shadow|outline|decoration|divide|accent|caret|placeholder)-(?:\[[^\]]*\]|(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-\d{2,3}(?:\/\d{1,3})?)$/;
+
+/**
+ * Per-variant, not one union: a flat union sanctions every variant's hue on every badge and button,
+ * so the wrong-variant reuse this gate exists for reads as legal.
+ */
+const paletteTokensOf = (classes: string) => classes.split(/\s+/).filter((token) => PALETTE_UTILITY.test(token));
+
+const SANCTIONED_VARIANTS = [
+    ...BADGE_VARIANTS.map((variant) => ({
+        slot: 'badge',
+        tokens: paletteTokensOf(badgeVariants({ variant })),
+        variant,
+    })),
+    ...BUTTON_VARIANTS.map((variant) => ({
+        slot: 'button',
+        tokens: paletteTokensOf(buttonVariants({ variant })),
+        variant,
+    })),
+];
 
 /**
  * Off-palette colours already on the page, keyed by scan surface. A route's default view is keyed by
@@ -52,20 +63,51 @@ const ACCEPTED: Record<string, string[]> = {
 
 const scanOffenders = (page: Page) =>
     page.evaluate(
-        ({ pattern, sanctioned }) => {
+        ({ pattern, variants }) => {
             const palette = new RegExp(pattern);
-            const allowed = new Set(sanctioned);
 
-            return [...document.querySelectorAll('[data-slot="badge"],[data-slot="button"]')].flatMap((element) =>
-                [...element.classList]
-                    .filter((token) => palette.test(token) && !allowed.has(token))
-                    .map((token) => `${element.getAttribute('data-slot')}: ${token}`),
-            );
+            return [...document.querySelectorAll('[data-slot="badge"],[data-slot="button"]')].flatMap((element) => {
+                const slot = element.getAttribute('data-slot') ?? '';
+                const used = [...element.classList].filter((token) => palette.test(token));
+
+                if (!used.length) {
+                    return [];
+                }
+
+                // Equality, not containment: a single token borrowed from another variant is a
+                // subset of that variant's set, so containment would wave through exactly the
+                // wrong-variant reuse this gate exists to catch.
+                const covered = variants.some(
+                    (candidate) =>
+                        candidate.slot === slot &&
+                        candidate.tokens.length === used.length &&
+                        used.every((token) => candidate.tokens.includes(token)),
+                );
+
+                return covered ? [] : used.map((token) => `${slot}: ${token}`);
+            });
         },
-        { pattern: PALETTE_UTILITY.source, sanctioned: [...SANCTIONED] },
+        { pattern: PALETTE_UTILITY.source, variants: SANCTIONED_VARIANTS },
     );
 
 test.describe('palette compliance', { tag: '@cross' }, () => {
+    // The manifest sweeps this route with the empty seed, so the provider cards — the surface the
+    // shipped badge defect actually lived on — render nowhere in the loop below. The a11y and visual
+    // gates each carry the same dedicated populated sweep.
+    test.describe('settings providers (populated)', () => {
+        test.use({ cassette: populatedSettingsProvidersCassette() });
+
+        test('provider cards carry no off-palette colour', async ({ page }) => {
+            await page.goto(routes.settings.providers);
+            await expect(page.getByText('My Custom Endpoint')).toBeVisible();
+
+            const offenders = await scanOffenders(page);
+            const key = `${routes.settings.providers} (populated)`;
+
+            expect([...new Set(offenders)], `off-palette colours on ${key}`).toEqual(ACCEPTED[key] ?? []);
+        });
+    });
+
     for (const entry of ROUTE_MANIFEST) {
         test.describe(entry.path, () => {
             test.use({ cassette: entry.cassette() });
