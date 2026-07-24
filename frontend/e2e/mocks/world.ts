@@ -136,14 +136,16 @@ export class MockWorld {
         );
         const candidates = this.eligible(matching);
 
-        // Include body and query in the cursor key (as the GraphQL half keys on variables): two
-        // payload-differentiated sequences for one path must not reset each other's cursor.
+        // Key the cursor on which entries the request selected — their pins — not the raw body/query.
+        // Two payload-differentiated sequences still get distinct keys (their entries pin different
+        // subsets), but a request carrying a per-call volatile field (an idempotency key, a timestamp)
+        // no longer fragments its own cursor into a fresh sequence on every call.
+        const signature = matching
+            ?.map((entry) => stableStringify([entry.bodySubset ?? null, entry.querySubset ?? null]))
+            .join('|');
+
         return matching && candidates?.length
-            ? this.nextEntry(
-                  `rest:${method}:${normalized}:${stableStringify(body ?? {})}:${stableStringify(query)}`,
-                  candidates,
-                  matching,
-              )
+            ? this.nextEntry(`rest:${method}:${normalized}:${signature}`, candidates, matching)
             : undefined;
     }
 

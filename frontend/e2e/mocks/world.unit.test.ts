@@ -77,6 +77,21 @@ describe('MockWorld matching', () => {
         expect(world.matchRest('DELETE', '/api/v1/resources/', undefined, query('paths[]=secret.txt'))).toBeUndefined();
     });
 
+    it('advances a REST sequence even when each request carries a volatile body field', () => {
+        const world = new MockWorld({
+            rest: {
+                'POST /api/v1/resources/mkdir': [{ body: { step: 1 } }, { body: { step: 2 } }],
+            },
+        });
+        // Each call sends a fresh idempotency key — a field no entry pins. The cursor must key on the
+        // selected entries, not the raw body, or every call re-serves step 1.
+        const first = world.matchRest('POST', '/api/v1/resources/mkdir', { idempotencyKey: 'a1' });
+        const second = world.matchRest('POST', '/api/v1/resources/mkdir', { idempotencyKey: 'b2' });
+
+        expect(first?.body).toEqual({ step: 1 });
+        expect(second?.body).toEqual({ step: 2 });
+    });
+
     it('hides a flag-gated entry until the flag is raised, then lets it outrank the unflagged one', () => {
         const world = new MockWorld({
             mutations: { login: [{ data: { ok: true }, setFlag: 'logged-in' }] },
