@@ -105,7 +105,7 @@ test.describe('palette compliance', { tag: '@cross' }, () => {
             const offenders = await scanOffenders(page);
             const key = `${routes.settings.providers} (populated)`;
 
-            expect([...new Set(offenders)], `off-palette colours on ${key}`).toEqual(ACCEPTED[key] ?? []);
+            expect(offenders.sort(), `off-palette colours on ${key}`).toEqual([...(ACCEPTED[key] ?? [])].sort());
         });
     });
 
@@ -119,8 +119,8 @@ test.describe('palette compliance', { tag: '@cross' }, () => {
 
                 const offenders = await scanOffenders(page);
 
-                expect([...new Set(offenders)], `off-palette colours on ${entry.path}`).toEqual(
-                    ACCEPTED[entry.path] ?? [],
+                expect(offenders.sort(), `off-palette colours on ${entry.path}`).toEqual(
+                    [...(ACCEPTED[entry.path] ?? [])].sort(),
                 );
             });
 
@@ -136,7 +136,7 @@ test.describe('palette compliance', { tag: '@cross' }, () => {
                     const offenders = await scanOffenders(page);
                     const key = `${entry.path} [${tab.name}]`;
 
-                    expect([...new Set(offenders)], `off-palette colours on ${key}`).toEqual(ACCEPTED[key] ?? []);
+                    expect(offenders.sort(), `off-palette colours on ${key}`).toEqual([...(ACCEPTED[key] ?? [])].sort());
                 });
             }
         });
