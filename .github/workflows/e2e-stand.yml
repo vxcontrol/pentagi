@@ -22,15 +22,20 @@ on:
 permissions:
   contents: read
 
+# Keyed on the label too: concurrency is evaluated for the whole run before the job's `if`, so a run
+# started by an unrelated label would share this group and cancel an approved stand run mid-flight.
 concurrency:
-  group: e2e-stand-${{ github.event.pull_request.number || github.run_id }}
+  group: e2e-stand-${{ github.event.pull_request.number || github.run_id }}-${{ github.event.label.name }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   e2e-stand:
+    # GitHub withholds secrets from fork `pull_request` runs: without the fork check a labelled fork
+    # PR holds reviewers for an environment approval and then fails on empty credentials.
     if: >
       github.event_name == 'workflow_dispatch' ||
-      github.event.label.name == 'e2e:stand'
+      (github.event.label.name == 'e2e:stand' &&
+       github.event.pull_request.head.repo.fork == false)
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: e2e-stand
