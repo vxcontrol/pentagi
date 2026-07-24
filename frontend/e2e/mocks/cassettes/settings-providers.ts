@@ -3,6 +3,7 @@ import type { ResultOf } from '@graphql-typed-document-node/core';
 import type {
     AgentConfigFragmentFragment,
     AgentsConfigFragmentFragment,
+    ModelConfigFragmentFragment,
     ProviderConfigFragmentFragment,
     SettingsProvidersDocument,
 } from '@/graphql/types';
@@ -66,21 +67,48 @@ const defaultConfig = (type: ProviderType): ProviderConfigFragmentFragment =>
         updatedAt: T,
     });
 
+const modelConfig = (name: string): ModelConfigFragmentFragment =>
+    entity('ModelConfig', { name, price: null, reasoning: null, thinking: null });
+
+// The backend fills a default config AND a model catalog for EVERY type, keyed or not (verified live:
+// gemini/deepseek/ollama all return a non-null default and a populated catalog with zero keys). A
+// cassette leaving them null/[] encodes a wire state the resolver never emits and leaves the
+// create-form's model-dropdown seeding path structurally unreachable.
+const allDefaults = () =>
+    entity('DefaultProvidersConfig', {
+        anthropic: defaultConfig(ProviderType.Anthropic),
+        bedrock: defaultConfig(ProviderType.Bedrock),
+        custom: defaultConfig(ProviderType.Custom),
+        deepseek: defaultConfig(ProviderType.Deepseek),
+        gemini: defaultConfig(ProviderType.Gemini),
+        glm: defaultConfig(ProviderType.Glm),
+        kimi: defaultConfig(ProviderType.Kimi),
+        minimax: defaultConfig(ProviderType.Minimax),
+        ollama: defaultConfig(ProviderType.Ollama),
+        openai: defaultConfig(ProviderType.Openai),
+        qwen: defaultConfig(ProviderType.Qwen),
+    });
+
+const catalog = (type: ProviderType) => [modelConfig(`e2e-${type}-model`), modelConfig(`e2e-${type}-model-mini`)];
+
+const allModels = () =>
+    entity('ProvidersModelsList', {
+        anthropic: catalog(ProviderType.Anthropic),
+        bedrock: catalog(ProviderType.Bedrock),
+        custom: catalog(ProviderType.Custom),
+        deepseek: catalog(ProviderType.Deepseek),
+        gemini: catalog(ProviderType.Gemini),
+        glm: catalog(ProviderType.Glm),
+        kimi: catalog(ProviderType.Kimi),
+        minimax: catalog(ProviderType.Minimax),
+        ollama: catalog(ProviderType.Ollama),
+        openai: catalog(ProviderType.Openai),
+        qwen: catalog(ProviderType.Qwen),
+    });
+
 const noProviders: ResultOf<typeof SettingsProvidersDocument> = {
     settingsProviders: entity('ProvidersConfig', {
-        default: entity('DefaultProvidersConfig', {
-            anthropic: defaultConfig(ProviderType.Anthropic),
-            bedrock: null,
-            custom: null,
-            deepseek: null,
-            gemini: null,
-            glm: null,
-            kimi: null,
-            minimax: null,
-            ollama: null,
-            openai: defaultConfig(ProviderType.Openai),
-            qwen: null,
-        }),
+        default: allDefaults(),
         enabled: entity('ProvidersReadinessStatus', {
             anthropic: false,
             bedrock: false,
@@ -94,19 +122,7 @@ const noProviders: ResultOf<typeof SettingsProvidersDocument> = {
             openai: false,
             qwen: false,
         }),
-        models: entity('ProvidersModelsList', {
-            anthropic: [],
-            bedrock: [],
-            custom: [],
-            deepseek: [],
-            gemini: [],
-            glm: [],
-            kimi: [],
-            minimax: [],
-            ollama: [],
-            openai: [],
-            qwen: [],
-        }),
+        models: allModels(),
         userDefined: [],
     }),
 };
@@ -125,19 +141,7 @@ export const settingsProvidersCassette = (override: Cassette = {}): Cassette =>
 
 const populatedProviders: ResultOf<typeof SettingsProvidersDocument> = {
     settingsProviders: entity('ProvidersConfig', {
-        default: entity('DefaultProvidersConfig', {
-            anthropic: defaultConfig(ProviderType.Anthropic),
-            bedrock: null,
-            custom: null,
-            deepseek: null,
-            gemini: null,
-            glm: null,
-            kimi: null,
-            minimax: null,
-            ollama: null,
-            openai: defaultConfig(ProviderType.Openai),
-            qwen: null,
-        }),
+        default: allDefaults(),
         enabled: entity('ProvidersReadinessStatus', {
             anthropic: true,
             bedrock: false,
@@ -151,19 +155,7 @@ const populatedProviders: ResultOf<typeof SettingsProvidersDocument> = {
             openai: true,
             qwen: false,
         }),
-        models: entity('ProvidersModelsList', {
-            anthropic: [],
-            bedrock: [],
-            custom: [],
-            deepseek: [],
-            gemini: [],
-            glm: [],
-            kimi: [],
-            minimax: [],
-            ollama: [],
-            openai: [],
-            qwen: [],
-        }),
+        models: allModels(),
         userDefined: [
             entity('ProviderConfig', {
                 agents: agentsConfig(),
