@@ -156,10 +156,23 @@ jobs:
         working-directory: frontend
         run: E2E_VISUAL=1 E2E_VISUAL_CONTAINER=1 npx playwright test -c e2e/playwright.config.ts
 
-      # Only on a real snapshot diff (not a tag-guard/install/build failure), so its
-      # presence is the precise "snapshots differ" signal the report keys the advisory on.
-      - name: Upload diffs
+      # The step failing is not the same signal as a snapshot differing: a webServer or build
+      # failure inside it also exits non-zero and still leaves results.json behind, which would
+      # publish the artifact and make the report say "snapshots differ". Look for the diff images.
+      - name: Detect snapshot diffs
+        id: diffs
         if: failure() && steps.snapshots.outcome == 'failure'
+        working-directory: frontend
+        run: |
+          if find e2e/test-results -name '*-diff.png' -print -quit | grep -q .; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Its presence is the precise "snapshots differ" signal the report keys the advisory on.
+      - name: Upload diffs
+        if: always() && steps.diffs.outputs.found == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: e2e-visual-diffs
@@ -172,8 +185,7 @@ jobs:
   e2e-local:
     if: >
       github.event_name == 'schedule' ||
-      (github.event_name == 'workflow_dispatch' &&
-       contains(fromJSON('["local", "all"]'), inputs.tier))
+      (github.event_name == 'workflow_dispatch' && inputs.tier == 'local')
     runs-on: ubuntu-latest
     timeout-minutes: 40
     steps:

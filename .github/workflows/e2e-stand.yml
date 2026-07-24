@@ -10,14 +10,6 @@ on:
   pull_request:
     types: [labeled]
   workflow_dispatch:
-    inputs:
-      tier:
-        description: "Run the stand tier"
-        type: choice
-        options:
-          - stand
-          - all
-        default: stand
 
 permissions:
   contents: read
@@ -96,8 +88,17 @@ jobs:
             const f = "e2e/test-results/results.json";
             if (!fs.existsSync(f)) process.exit(0);
             let s = fs.readFileSync(f, "utf8");
+            // Derived forms too, not just the raw value: auth.setup.ts builds a locator name from
+            // the regex-escaped user, so a failed login writes `user@host\.com` into the error —
+            // and since this redacts the JSON text, that backslash is itself encoded as `\\`.
+            const regexEscaped = (v) => v.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+            const jsonEncoded = (v) => JSON.stringify(v).slice(1, -1);
             for (const v of [process.env.E2E_BASE_URL, process.env.E2E_USER, process.env.E2E_PASSWORD]) {
-              if (v) s = s.split(v).join("<redacted>");
+              if (!v) continue;
+              const forms = [v, regexEscaped(v), encodeURIComponent(v)];
+              for (const form of new Set([...forms, ...forms.map(jsonEncoded)])) {
+                s = s.split(form).join("<redacted>");
+              }
             }
             fs.writeFileSync(f, s);
           '
