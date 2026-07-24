@@ -55,21 +55,25 @@ jobs:
             const fs = require('fs');
             const run = context.payload.workflow_run;
 
-            // workflow_run.pull_requests is empty for fork PRs — resolve by head SHA.
-            let prNumber = run.pull_requests[0]?.number;
+            // Match the PR whose head is still this run's — one commit can belong to several PRs, so
+            // taking the first association (either source) could hand the report to a stale or
+            // foreign one. Same filter on both paths: workflow_run.pull_requests (empty for forks)
+            // and the head-SHA lookup that covers them.
+            // workflow_run.pull_requests carries head.repo.name but no full_name, unlike the API
+            // lookup — enforce the repo only when it is present, so the primary path still matches.
+            const isThisRun = (pr) =>
+              pr.head?.sha === run.head_sha &&
+              pr.head?.ref === run.head_branch &&
+              (pr.head?.repo?.full_name == null || pr.head.repo.full_name === run.head_repository?.full_name);
+
+            let prNumber = run.pull_requests.find(isThisRun)?.number;
             if (!prNumber) {
               const { data: prs } = await github.rest.repos.listPullRequestsAssociatedWithCommit({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 commit_sha: run.head_sha,
               });
-              // One commit can be associated with several PRs, so match the one whose head is
-              // still this run's — `prs[0]` hands the report to whichever is listed first.
-              prNumber = prs.find((pr) =>
-                pr.head?.sha === run.head_sha &&
-                pr.head?.ref === run.head_branch &&
-                pr.head?.repo?.full_name === run.head_repository?.full_name
-              )?.number;
+              prNumber = prs.find(isThisRun)?.number;
             }
             if (!prNumber) {
               core.info(`No PR found for ${run.head_sha}; skipping comment.`);
