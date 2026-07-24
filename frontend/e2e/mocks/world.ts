@@ -39,6 +39,14 @@ const isSubsetMatch = (expected?: Record<string, unknown>, actual?: Record<strin
 
 const sleep = (delayMs: number) => new Promise<void>((resolve) => setTimeout(resolve, delayMs));
 
+/** Repeated keys (`paths[]=a&paths[]=b`) collapse to the full list, so a subset match sees both. */
+const queryRecord = (search?: URLSearchParams): Record<string, string | string[]> =>
+    Object.fromEntries(
+        [...(search?.keys() ?? [])]
+            .map((key) => [key, search!.getAll(key)])
+            .map(([key, values]) => [key, (values as string[]).length > 1 ? values : (values as string[])[0]]),
+    );
+
 export const subscriptionStreamKey = (operationName: string, variables?: Record<string, unknown>): string =>
     `sub:${operationName}:${stableStringify(variables ?? {})}`;
 
@@ -110,22 +118,32 @@ export class MockWorld {
         return undefined;
     }
 
-    matchRest(method: string, pathname: string, body?: Record<string, unknown>): RestCassetteEntry | undefined {
+    matchRest(
+        method: string,
+        pathname: string,
+        body?: Record<string, unknown>,
+        search?: URLSearchParams,
+    ): RestCassetteEntry | undefined {
         const normalized = pathname.replace(/\/+$/, '');
         const key = Object.keys(this.cassette.rest ?? {}).find((candidate) => {
             const [candidateMethod, candidatePath = ''] = candidate.split(' ');
 
             return candidateMethod === method && candidatePath.replace(/\/+$/, '') === normalized;
         });
-        const matching = (key ? this.cassette.rest?.[key] : undefined)?.filter((entry) =>
-            isSubsetMatch(entry.bodySubset, body),
+        const query = queryRecord(search);
+        const matching = (key ? this.cassette.rest?.[key] : undefined)?.filter(
+            (entry) => isSubsetMatch(entry.bodySubset, body) && isSubsetMatch(entry.querySubset, query),
         );
         const candidates = this.eligible(matching);
 
-        // Include the body in the cursor key (as the GraphQL half keys on variables): two
-        // body-differentiated sequences for one path must not reset each other's cursor.
+        // Include body and query in the cursor key (as the GraphQL half keys on variables): two
+        // payload-differentiated sequences for one path must not reset each other's cursor.
         return matching && candidates?.length
-            ? this.nextEntry(`rest:${method}:${normalized}:${stableStringify(body ?? {})}`, candidates, matching)
+            ? this.nextEntry(
+                  `rest:${method}:${normalized}:${stableStringify(body ?? {})}:${stableStringify(query)}`,
+                  candidates,
+                  matching,
+              )
             : undefined;
     }
 

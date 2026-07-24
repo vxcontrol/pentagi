@@ -51,6 +51,13 @@ export interface RestCassetteEntry extends WorldFlagged {
      * a broken image while the request still counts as matched.
      */
     contentType?: string;
+    /**
+     * Subset match against the request's query string, the counterpart to `bodySubset` for
+     * endpoints that carry their payload there and send no body — a delete addressed by
+     * `?paths[]=…` is otherwise answered success whatever it names. Repeated keys are compared
+     * as the full list of values.
+     */
+    querySubset?: Record<string, string | string[]>;
     status?: number;
 }
 

@@ -56,6 +56,27 @@ describe('MockWorld matching', () => {
         expect(world.matchRest('POST', '/api/v1/resources/mkdir/', { path: 'new-folder' })).toBeDefined();
     });
 
+    it('pins a query-carrying request on querySubset, the way bodySubset pins a payload', () => {
+        const world = new MockWorld({
+            rest: {
+                'DELETE /api/v1/resources/': [
+                    { body: { deleted: 'notes' }, querySubset: { 'paths[]': 'notes.txt' } },
+                    { body: { deleted: 'both' }, querySubset: { 'paths[]': ['a.txt', 'b.txt'] } },
+                ],
+            },
+        });
+        const query = (search: string) => new URLSearchParams(search);
+
+        expect(world.matchRest('DELETE', '/api/v1/resources/', undefined, query('paths[]=notes.txt'))?.body).toEqual({
+            deleted: 'notes',
+        });
+        expect(
+            world.matchRest('DELETE', '/api/v1/resources/', undefined, query('paths[]=a.txt&paths[]=b.txt'))?.body,
+        ).toEqual({ deleted: 'both' });
+        // The path alone must not answer for a payload no entry describes.
+        expect(world.matchRest('DELETE', '/api/v1/resources/', undefined, query('paths[]=secret.txt'))).toBeUndefined();
+    });
+
     it('hides a flag-gated entry until the flag is raised, then lets it outrank the unflagged one', () => {
         const world = new MockWorld({
             mutations: { login: [{ data: { ok: true }, setFlag: 'logged-in' }] },

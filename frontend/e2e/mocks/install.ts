@@ -14,7 +14,7 @@ export const installMockRoutes = async (page: Page, world: MockWorld): Promise<v
     // instead of leaking through the vite preview proxy to a live backend.
     await page.route('**/api/v1/**', async (route) => {
         const request = route.request();
-        const { pathname } = new URL(request.url());
+        const { pathname, searchParams } = new URL(request.url());
 
         if (pathname === GRAPHQL_PATH && request.method() === 'POST') {
             const body = request.postDataJSON() as {
@@ -50,7 +50,7 @@ export const installMockRoutes = async (page: Page, world: MockWorld): Promise<v
         const body = contentType.includes('application/json')
             ? (request.postDataJSON() as Record<string, unknown> | undefined)
             : undefined;
-        const entry = world.matchRest(request.method(), pathname, body ?? undefined);
+        const entry = world.matchRest(request.method(), pathname, body ?? undefined, searchParams);
 
         if (entry) {
             await route.fulfill(
@@ -66,7 +66,7 @@ export const installMockRoutes = async (page: Page, world: MockWorld): Promise<v
             return;
         }
 
-        world.reportUnmatched(`${request.method()} ${pathname}`);
+        world.reportUnmatched(`${request.method()} ${pathname}${searchParams.size ? `?${searchParams}` : ''}`);
         await route.fulfill({
             json: { error: `e2e: no cassette entry for ${request.method()} ${pathname}`, status: 'error' },
             status: 501,
