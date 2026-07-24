@@ -1,4 +1,4 @@
-package tools
+package searchers
 
 import (
 	"bytes"
@@ -25,7 +25,7 @@ import (
 const (
 	perplexityURL         = "https://api.perplexity.ai/chat/completions"
 	perplexityTimeout     = 60 * time.Second
-	perplexityModel       = "sonar"
+	perplexityModel       = "sonar-pro"
 	perplexityTemperature = 0.5
 	perplexityTopP        = 0.9
 	perplexityMaxTokens   = 4000
@@ -83,85 +83,50 @@ type Usage struct {
 // perplexity - structure for working with Perplexity API
 type perplexity struct {
 	cfg        *config.Config
-	flowID     int64
-	taskID     *int64
-	subtaskID  *int64
-	slp        SearchLogProvider
 	summarizer SummarizeHandler
 }
 
-func NewPerplexityTool(
-	cfg *config.Config,
-	flowID int64,
-	taskID, subtaskID *int64,
-	slp SearchLogProvider,
-	summarizer SummarizeHandler,
-) Tool {
+func NewPerplexity(cfg *config.Config, summarizer SummarizeHandler) Searcher {
 	return &perplexity{
 		cfg:        cfg,
-		flowID:     flowID,
-		taskID:     taskID,
-		subtaskID:  subtaskID,
-		slp:        slp,
 		summarizer: summarizer,
 	}
 }
 
+func (p *perplexity) Engine() database.SearchengineType {
+	return database.SearchengineTypePerplexity
+}
+
 // Handle processes a search request through Perplexity API
-func (p *perplexity) Handle(ctx context.Context, name string, args json.RawMessage) (string, error) {
+func (p *perplexity) Handle(ctx context.Context, req Request) (string, error) {
 	if !p.IsAvailable() {
-		return "", fmt.Errorf("perplexity is not available")
+		return "", ErrNotConfigured
 	}
 
-	var action SearchAction
 	ctx, observation := obs.Observer.NewObservation(ctx)
-	logger := logrus.WithContext(ctx).WithFields(enrichLogrusFields(p.flowID, p.taskID, p.subtaskID, logrus.Fields{
-		"tool": name,
-		"args": string(args),
-	}))
-
-	if err := json.Unmarshal(args, &action); err != nil {
-		logger.WithError(err).Error("failed to unmarshal perplexity search action")
-		return "", fmt.Errorf("failed to unmarshal %s search action arguments: %w", name, err)
-	}
-
-	logger = logger.WithFields(logrus.Fields{
-		"query":       action.Query[:min(len(action.Query), 1000)],
-		"max_results": action.MaxResults,
+	logger := logrus.WithContext(ctx).WithFields(logrus.Fields{
+		"engine": "perplexity",
+		"query":  req.Query[:min(len(req.Query), 1000)],
+		"model":  p.model(),
 	})
 
-	result, err := p.search(ctx, action.Query)
+	result, err := p.search(ctx, req.Query)
 	if err != nil {
 		observation.Event(
-			langfuse.WithEventName("search engine error swallowed"),
-			langfuse.WithEventInput(action.Query),
+			langfuse.WithEventName("search engine error"),
+			langfuse.WithEventInput(req.Query),
 			langfuse.WithEventStatus(err.Error()),
 			langfuse.WithEventLevel(langfuse.ObservationLevelWarning),
 			langfuse.WithEventMetadata(langfuse.Metadata{
-				"tool_name":   PerplexityToolName,
-				"engine":      "perplexity",
-				"query":       action.Query,
-				"model":       p.model(),
-				"max_results": action.MaxResults.Int(),
-				"error":       err.Error(),
+				"engine": "perplexity",
+				"query":  req.Query,
+				"model":  p.model(),
+				"error":  err.Error(),
 			}),
 		)
 
 		logger.WithError(err).Error("failed to search in perplexity")
-		return fmt.Sprintf("failed to search in perplexity: %v", err), nil
-	}
-
-	if agentCtx, ok := GetAgentContext(ctx); ok {
-		_, _ = p.slp.PutLog(
-			ctx,
-			agentCtx.ParentAgentType,
-			agentCtx.CurrentAgentType,
-			database.SearchengineTypePerplexity,
-			action.Query,
-			result,
-			p.taskID,
-			p.subtaskID,
-		)
+		return "", err
 	}
 
 	return result, nil
@@ -171,7 +136,7 @@ func (p *perplexity) Handle(ctx context.Context, name string, args json.RawMessa
 func (p *perplexity) search(ctx context.Context, query string) (string, error) {
 	client, err := system.GetHTTPClient(p.cfg)
 	if err != nil {
-		return "", fmt.Errorf("failed to create http client: %w", err)
+		return "", Fatal(fmt.Errorf("failed to create http client: %w", err))
 	}
 
 	client.Timeout = p.timeout()
@@ -200,13 +165,13 @@ func (p *perplexity) search(ctx context.Context, query string) (string, error) {
 	// Serializing the request
 	reqBody, err := json.Marshal(reqPayload)
 	if err != nil {
-		return "", fmt.Errorf("failed to marshal request body: %w", err)
+		return "", Fatal(fmt.Errorf("failed to marshal request body: %w", err))
 	}
 
 	// Creating HTTP request
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, perplexityURL, bytes.NewBuffer(reqBody))
 	if err != nil {
-		return "", fmt.Errorf("failed to create request: %w", err)
+		return "", Fatal(fmt.Errorf("failed to create request: %w", err))
 	}
 
 	// Setting request headers
@@ -216,25 +181,30 @@ func (p *perplexity) search(ctx context.Context, query string) (string, error) {
 	// Sending the request
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("failed to send request: %w", err)
+		return "", Retryable(fmt.Errorf("failed to send request: %w", err), 0)
 	}
 	defer resp.Body.Close()
 
-	// Handling the response
+	// Handling the response. handleErrorResponse keeps the per-status message; the
+	// retryable/fatal classification is decided here from the status code.
 	if resp.StatusCode != http.StatusOK {
-		return "", p.handleErrorResponse(resp.StatusCode)
+		baseErr := p.handleErrorResponse(resp.StatusCode)
+		if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500 {
+			return "", Retryable(baseErr, 0)
+		}
+		return "", Fatal(baseErr)
 	}
 
 	// Reading the response body
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", fmt.Errorf("failed to read response body: %w", err)
+		return "", Retryable(fmt.Errorf("failed to read response body: %w", err), 0)
 	}
 
 	// Deserializing the response
 	var response CompletionResponse
 	if err := json.Unmarshal(body, &response); err != nil {
-		return "", fmt.Errorf("failed to unmarshal response: %w", err)
+		return "", Fatal(fmt.Errorf("failed to unmarshal response: %w", err))
 	}
 
 	// Forming the result

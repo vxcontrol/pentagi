@@ -146,6 +146,18 @@ type SploitusAction struct {
 	Message     string `json:"message" jsonschema:"required,title=Search query message" jsonschema_description:"Engagement-log entry — a 1-2 short sentence running commentary explaining the expected result and how it advances the goal. Written in the engagement language declared by your system prompt."`
 }
 
+// WebSearchAction is the LLM-facing schema for the unified web_search tool. The agent
+// supplies a query and an intent `mode`; web_search selects the concrete engine,
+// retries transient failures, and falls back across providers automatically.
+type WebSearchAction struct {
+	Query       string `json:"query" jsonschema:"required" jsonschema_description:"Technical-channel payload — the search query. ALWAYS written in English regardless of the engagement language: internet sources and the underlying engines are indexed in English and non-English queries return poor or empty results. Keep it short and keyword-focused."`
+	Mode        String `json:"mode,omitempty" jsonschema:"type=string,enum=links,enum=answer,enum=research,enum=exploit" jsonschema_description:"What you need back (default 'answer'). 'links' — a list of source links with snippets (fastest/cheapest). 'answer' — a synthesized answer over live sources. 'research' — deep multi-source analysis with reasoning (most thorough). 'exploit' — exploit code, PoCs, and offensive tools. web_search picks the concrete engine for you and falls back automatically; you do NOT name an engine."`
+	MaxResults  Int64  `json:"max_results,omitempty" jsonschema:"type=integer" jsonschema_description:"Maximum number of results to return (1–25; default 5). Ignored by answer/research engines that return a single synthesized answer."`
+	ExploitType String `json:"exploit_type,omitempty" jsonschema:"type=string,enum=exploits,enum=tools" jsonschema_description:"exploit mode only: 'exploits' (default) for exploit code and PoCs, 'tools' for offensive-security tools."`
+	Sort        String `json:"sort,omitempty" jsonschema:"type=string,enum=default,enum=date,enum=score" jsonschema_description:"exploit mode only: result ordering — 'default' (relevance), 'date' (newest first), 'score' (highest CVSS first)."`
+	Message     string `json:"message" jsonschema:"required,title=Search query message" jsonschema_description:"Engagement-log entry — a 1-2 short sentence running commentary explaining the expected result and how it advances the goal. Written in the engagement language declared by your system prompt."`
+}
+
 type GraphitiSearchAction struct {
 	SearchType     String   `json:"search_type" jsonschema:"required,type=string,enum=temporal_window,enum=entity_relationships,enum=diverse_results,enum=episode_context,enum=successful_tools,enum=recent_context,enum=entity_by_label" jsonschema_description:"Type of search to perform: temporal_window (time-bounded search), entity_relationships (graph traversal from an entity), diverse_results (anti-redundancy search), episode_context (full agent reasoning and tool outputs), successful_tools (proven techniques), recent_context (latest findings), entity_by_label (type-specific entity search)"`
 	Query          string   `json:"query" jsonschema:"required" jsonschema_description:"Technical-channel payload — natural language query against the team's temporal knowledge graph. ALWAYS written in English regardless of the engagement language: the graph is indexed in English and shared across all engagements; non-English queries will fail to retrieve stored episodic memory."`

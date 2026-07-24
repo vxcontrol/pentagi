@@ -1,4 +1,4 @@
-package tools
+package searchers
 
 import (
 	"fmt"
@@ -66,27 +66,23 @@ func TestSploitusHandle(t *testing.T) {
 	}
 	defer proxy.Close()
 
-	flowID := int64(1)
-	taskID := int64(10)
-	subtaskID := int64(20)
-	slp := &searchLogProviderMock{}
-
 	cfg := &config.Config{
 		SploitusEnabled:   true,
 		ProxyURL:          proxy.URL(),
 		ExternalSSLCAPath: proxy.CACertPath(),
 	}
 
-	sp := NewSploitusTool(cfg, flowID, &taskID, &subtaskID, slp)
+	sp := NewSploitus(cfg)
 
-	ctx := PutAgentContext(t.Context(), database.MsgchainTypeSearcher)
 	got, err := sp.Handle(
-		ctx,
-		SploitusToolName,
-		[]byte(`{"query":"nginx","exploit_type":"exploits","sort":"date","max_results":5}`),
+		t.Context(),
+		Request{Query: "nginx", ExploitType: "exploits", Sort: "date", MaxResults: 5},
 	)
 	if err != nil {
 		t.Fatalf("Handle() unexpected error: %v", err)
+	}
+	if sp.Engine() != database.SearchengineTypeSploitus {
+		t.Errorf("Engine() = %q, want %q", sp.Engine(), database.SearchengineTypeSploitus)
 	}
 
 	// Verify mock handler was called
@@ -136,29 +132,6 @@ func TestSploitusHandle(t *testing.T) {
 	if !strings.Contains(got, "Test Exploit for nginx") {
 		t.Errorf("result missing expected title: %q", got)
 	}
-
-	// Verify search log was written with agent context
-	if slp.calls != 1 {
-		t.Errorf("PutLog() calls = %d, want 1", slp.calls)
-	}
-	if slp.engine != database.SearchengineTypeSploitus {
-		t.Errorf("engine = %q, want %q", slp.engine, database.SearchengineTypeSploitus)
-	}
-	if slp.query != "nginx" {
-		t.Errorf("logged query = %q, want %q", slp.query, "nginx")
-	}
-	if slp.parentType != database.MsgchainTypeSearcher {
-		t.Errorf("parent agent type = %q, want %q", slp.parentType, database.MsgchainTypeSearcher)
-	}
-	if slp.currType != database.MsgchainTypeSearcher {
-		t.Errorf("current agent type = %q, want %q", slp.currType, database.MsgchainTypeSearcher)
-	}
-	if slp.taskID == nil || *slp.taskID != taskID {
-		t.Errorf("task ID = %v, want %d", slp.taskID, taskID)
-	}
-	if slp.subtaskID == nil || *slp.subtaskID != subtaskID {
-		t.Errorf("subtask ID = %v, want %d", slp.subtaskID, subtaskID)
-	}
 }
 
 func TestSploitusIsAvailable(t *testing.T) {
@@ -194,16 +167,8 @@ func TestSploitusIsAvailable(t *testing.T) {
 	}
 }
 
-func TestSploitusHandle_ValidationAndSwallowedError(t *testing.T) {
-	t.Run("invalid json", func(t *testing.T) {
-		sp := &sploitus{cfg: testSploitusConfig()}
-		_, err := sp.Handle(t.Context(), SploitusToolName, []byte("{"))
-		if err == nil || !strings.Contains(err.Error(), "failed to unmarshal") {
-			t.Fatalf("expected unmarshal error, got: %v", err)
-		}
-	})
-
-	t.Run("search error swallowed", func(t *testing.T) {
+func TestSploitusHandle_ReturnsTypedError(t *testing.T) {
+	t.Run("search error returned as typed error", func(t *testing.T) {
 		var seenRequest bool
 		mockMux := http.NewServeMux()
 		mockMux.HandleFunc("/search", func(w http.ResponseWriter, r *http.Request) {
@@ -218,7 +183,6 @@ func TestSploitusHandle_ValidationAndSwallowedError(t *testing.T) {
 		defer proxy.Close()
 
 		sp := &sploitus{
-			flowID: 1,
 			cfg: &config.Config{
 				SploitusEnabled:   true,
 				ProxyURL:          proxy.URL(),
@@ -228,21 +192,23 @@ func TestSploitusHandle_ValidationAndSwallowedError(t *testing.T) {
 
 		result, err := sp.Handle(
 			t.Context(),
-			SploitusToolName,
-			[]byte(`{"query":"test","exploit_type":"exploits"}`),
+			Request{Query: "test", ExploitType: "exploits"},
 		)
-		if err != nil {
-			t.Fatalf("Handle() unexpected error: %v", err)
-		}
 
 		// Verify mock handler was called (request was intercepted)
 		if !seenRequest {
 			t.Error("request was not intercepted by proxy - mock handler was not called")
 		}
 
-		// Verify error was swallowed and returned as string
-		if !strings.Contains(result, "failed to search in Sploitus") {
-			t.Errorf("Handle() = %q, expected swallowed error message", result)
+		// The error is now surfaced (not swallowed) and classified. A 502 is retryable.
+		if err == nil {
+			t.Fatal("Handle() expected an error, got nil")
+		}
+		if result != "" {
+			t.Errorf("Handle() result = %q, want empty on error", result)
+		}
+		if !IsRetryable(err) {
+			t.Errorf("Handle() error = %v, want a RetryableError", err)
 		}
 	})
 }
@@ -272,7 +238,6 @@ func TestSploitusHandle_StatusCodeErrors(t *testing.T) {
 			defer proxy.Close()
 
 			sp := &sploitus{
-				flowID: 1,
 				cfg: &config.Config{
 					SploitusEnabled:   true,
 					ProxyURL:          proxy.URL(),
@@ -282,19 +247,21 @@ func TestSploitusHandle_StatusCodeErrors(t *testing.T) {
 
 			result, err := sp.Handle(
 				t.Context(),
-				SploitusToolName,
-				[]byte(`{"query":"test","exploit_type":"exploits"}`),
+				Request{Query: "test", ExploitType: "exploits"},
 			)
-			if err != nil {
-				t.Fatalf("Handle() unexpected error: %v", err)
-			}
 
-			// Error should be swallowed and returned as string
-			if !strings.Contains(result, "failed to search in Sploitus") {
-				t.Errorf("Handle() = %q, expected swallowed error", result)
+			// Errors are now surfaced (not swallowed). 499/422 and 5xx are all retryable.
+			if err == nil {
+				t.Fatal("Handle() expected an error, got nil")
 			}
-			if !strings.Contains(result, tt.errContain) {
-				t.Errorf("Handle() = %q, expected to contain %q", result, tt.errContain)
+			if result != "" {
+				t.Errorf("Handle() result = %q, want empty on error", result)
+			}
+			if !IsRetryable(err) {
+				t.Errorf("Handle() error = %v, want a RetryableError", err)
+			}
+			if !strings.Contains(err.Error(), tt.errContain) {
+				t.Errorf("Handle() error = %v, expected to contain %q", err, tt.errContain)
 			}
 		})
 	}
@@ -437,7 +404,6 @@ func TestSploitusDefaultValues(t *testing.T) {
 	defer proxy.Close()
 
 	sp := &sploitus{
-		flowID: 1,
 		cfg: &config.Config{
 			SploitusEnabled:   true,
 			ProxyURL:          proxy.URL(),
@@ -445,11 +411,10 @@ func TestSploitusDefaultValues(t *testing.T) {
 		},
 	}
 
-	// Test with minimal action (only query, no type/sort/maxResults)
+	// Test with minimal request (only query, no type/sort/maxResults)
 	_, err = sp.Handle(
 		t.Context(),
-		SploitusToolName,
-		[]byte(`{"query":"test"}`),
+		Request{Query: "test"},
 	)
 	if err != nil {
 		t.Fatalf("Handle() unexpected error: %v", err)

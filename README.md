@@ -105,7 +105,7 @@ flowchart TB
     llm["🧠 llm-provider
     (OpenAI/Anthropic/Ollama/Bedrock/Gemini/Custom)"]
     search["🔍 search-systems
-    (Google/DuckDuckGo/Tavily/Traversaal/Perplexity/Sploitus/Searxng)"]
+    (Google/DuckDuckGo/Tavily/Firecrawl/Traversaal/Perplexity/Sploitus/Searxng)"]
     langfuse["📊 langfuse-ui
     (LLM Observability Dashboard)"]
     grafana["📈 grafana
@@ -636,8 +636,8 @@ The installer requires appropriate privileges to interact with the Docker API fo
 The installer will:
 1. **System Checks**: Verify Docker, network connectivity, and system requirements
 2. **Environment Setup**: Create and configure `.env` file with optimal defaults
-3. **Provider Configuration**: Set up LLM providers (OpenAI, Anthropic, Gemini, Bedrock, Ollama, Custom)
-4. **Search Engines**: Configure DuckDuckGo, Google, Tavily, Firecrawl, Traversaal, Perplexity, Sploitus, Searxng
+3. **Provider Configuration**: Set up LLM providers (OpenAI, Anthropic, Gemini, Bedrock, Ollama, DeepSeek, GLM, Kimi, Qwen, MiniMax, Custom)
+4. **Search Engines**: Configure DuckDuckGo, Google, Tavily, Firecrawl, Traversaal, Perplexity, Sploitus, Searxng, and the optional internal browser-analytics fallback engine
 5. **Security Hardening**: Generate secure credentials and configure SSL certificates
 6. **Deployment**: Start PentAGI with docker-compose
 
@@ -655,7 +655,7 @@ The PentAGI web console already manages several settings areas after the server 
 The following configuration areas still need to be set on the server through environment variables, compose files, or mounted config files:
 
 - **LLM credentials and connection details**: API keys, endpoints, auth modes, and provider-specific connection settings for OpenAI, Anthropic, Bedrock, Ollama, custom providers, and similar backends; config-path settings apply only where supported, such as `OLLAMA_SERVER_CONFIG_PATH` and `LLM_SERVER_CONFIG_PATH`.
-- **Search provider credentials and options**: Settings such as `DUCKDUCKGO_*`, `GOOGLE_*`, `TAVILY_API_KEY`, `FIRECRAWL_API_KEY`, `FIRECRAWL_API_URL`, `TRAVERSAAL_API_KEY`, `PERPLEXITY_*`, `SEARXNG_*`, and `SPLOITUS_ENABLED`.
+- **Search provider credentials and options**: Settings such as `DUCKDUCKGO_*`, `GOOGLE_*`, `TAVILY_API_KEY`, `FIRECRAWL_API_KEY`, `FIRECRAWL_API_URL`, `TRAVERSAAL_API_KEY`, `PERPLEXITY_*`, `SEARXNG_*`, `SPLOITUS_ENABLED`, and the optional `WEB_SEARCH_INTERNAL_*` browser-analytics fallback settings.
 - **Third-party integrations**: Langfuse, Graphiti, and similar external services remain server-side configuration.
 - **MCP server management**: MCP settings pages are not currently exposed as a live web-console feature.
 
@@ -718,6 +718,7 @@ BEDROCK_DEFAULT_AUTH=true                        # Option 1: Use AWS SDK default
 # GLM_API_KEY=your_glm_key                       # GLM (Zhipu AI)
 # KIMI_API_KEY=your_kimi_key                     # Kimi (Moonshot AI, ultra-long context)
 # QWEN_API_KEY=your_qwen_key                     # Qwen (Alibaba Cloud, multimodal)
+# MINIMAX_API_KEY=your_minimax_key               # MiniMax
 
 # Optional: Local LLM provider (zero-cost inference)
 OLLAMA_SERVER_URL=http://localhost:11434
@@ -733,6 +734,7 @@ GOOGLE_API_KEY=your_google_key
 GOOGLE_CX_KEY=your_google_cx
 TAVILY_API_KEY=your_tavily_key
 FIRECRAWL_API_KEY=your_firecrawl_key
+FIRECRAWL_API_URL=
 TRAVERSAAL_API_KEY=your_traversaal_key
 PERPLEXITY_API_KEY=your_perplexity_key
 PERPLEXITY_MODEL=sonar-pro
@@ -745,6 +747,12 @@ SEARXNG_LANGUAGE=
 SEARXNG_SAFESEARCH=0
 SEARXNG_TIME_RANGE=
 SEARXNG_TIMEOUT=
+
+# Optional: internal browser-analytics fallback engine for web_search (off by default;
+# scrapes and summarizes pages instead of calling a paid analytic API)
+WEB_SEARCH_INTERNAL_ENABLED=false
+WEB_SEARCH_INTERNAL_MAX_SITES=5
+WEB_SEARCH_INTERNAL_MAX_SITE_BYTES=10240
 
 ## Graphiti knowledge graph settings
 GRAPHITI_ENABLED=true
@@ -3625,6 +3633,7 @@ go run cmd/ftester/main.go browser
 
 ### Search Functions
 - **browser**: Access websites and capture screenshots
+- **web_search**: Unified search orchestrator that agents actually call — pass a `query` and a `mode` (`links`, `answer`, `research`, `exploit`) and it auto-selects, retries, and falls back across the engines below, so you never name an engine explicitly
 - **google**: Search the web using Google Custom Search
 - **duckduckgo**: Search the web using DuckDuckGo
 - **tavily**: Search using Tavily AI search engine
@@ -3633,6 +3642,7 @@ go run cmd/ftester/main.go browser
 - **perplexity**: Search using Perplexity AI
 - **sploitus**: Search for security exploits, vulnerabilities (CVEs), and pentesting tools
 - **searxng**: Search using Searxng meta search engine (aggregates results from multiple engines)
+- **internal** *(ftester-only debug function, not an agent tool)*: Opt-in browser-analytics fallback engine that discovers links, scrapes each page, and summarizes the result; requires `WEB_SEARCH_INTERNAL_ENABLED=true`, a configured scraper, and at least one available link engine
 
 ### Vector Database Functions
 - **search_in_memory**: Search for information in vector database
@@ -3803,8 +3813,9 @@ To access detailed logs:
 The main utility accepts several options:
 
 - `-env <path>` - Path to environment file (optional, default: `.env`)
-- `-provider <type>` - Provider type to use (default: `custom`, options: `openai`, `anthropic`, `ollama`, `bedrock`, `gemini`, `custom`)
-- `-flow <id>` - Flow ID for testing (0 means using mocks, default: `0`)
+- `-provider <type>` - Provider type to use (default: `custom`, options: `openai`, `anthropic`, `gemini`, `bedrock`, `ollama`, `deepseek`, `glm`, `kimi`, `qwen`, `minimax`, `custom`)
+- `-flow <id>` - Flow ID for testing functions that require it (0 means using mocks, default: `0`)
+- `-user <id>` - User ID for testing functions that require it (default: `0`; `1` is the default admin user)
 - `-task <id>` - Task ID for agent context (optional)
 - `-subtask <id>` - Subtask ID for agent context (optional)
 

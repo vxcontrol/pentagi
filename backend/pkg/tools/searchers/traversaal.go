@@ -1,4 +1,4 @@
-package tools
+package searchers
 
 import (
 	"bytes"
@@ -25,81 +25,44 @@ type traversaalSearchResult struct {
 }
 
 type traversaal struct {
-	cfg       *config.Config
-	flowID    int64
-	taskID    *int64
-	subtaskID *int64
-	slp       SearchLogProvider
+	cfg *config.Config
 }
 
-func NewTraversaalTool(
-	cfg *config.Config,
-	flowID int64,
-	taskID, subtaskID *int64,
-	slp SearchLogProvider,
-) Tool {
-	return &traversaal{
-		cfg:       cfg,
-		flowID:    flowID,
-		taskID:    taskID,
-		subtaskID: subtaskID,
-		slp:       slp,
-	}
+func NewTraversaal(cfg *config.Config) Searcher {
+	return &traversaal{cfg: cfg}
 }
 
-func (t *traversaal) Handle(ctx context.Context, name string, args json.RawMessage) (string, error) {
+func (t *traversaal) Engine() database.SearchengineType {
+	return database.SearchengineTypeTraversaal
+}
+
+func (t *traversaal) Handle(ctx context.Context, req Request) (string, error) {
 	if !t.IsAvailable() {
-		return "", fmt.Errorf("traversaal is not available")
+		return "", ErrNotConfigured
 	}
 
-	var action SearchAction
 	ctx, observation := obs.Observer.NewObservation(ctx)
-	logger := logrus.WithContext(ctx).WithFields(enrichLogrusFields(t.flowID, t.taskID, t.subtaskID, logrus.Fields{
-		"tool": name,
-		"args": string(args),
-	}))
-
-	if err := json.Unmarshal(args, &action); err != nil {
-		logger.WithError(err).Error("failed to unmarshal traversaal search action")
-		return "", fmt.Errorf("failed to unmarshal %s search action arguments: %w", name, err)
-	}
-
-	logger = logger.WithFields(logrus.Fields{
-		"query":       action.Query[:min(len(action.Query), 1000)],
-		"max_results": action.MaxResults,
+	logger := logrus.WithContext(ctx).WithFields(logrus.Fields{
+		"engine": "traversaal",
+		"query":  req.Query[:min(len(req.Query), 1000)],
 	})
 
-	result, err := t.search(ctx, action.Query)
+	result, err := t.search(ctx, req.Query)
 	if err != nil {
 		observation.Event(
-			langfuse.WithEventName("search engine error swallowed"),
-			langfuse.WithEventInput(action.Query),
+			langfuse.WithEventName("search engine error"),
+			langfuse.WithEventInput(req.Query),
 			langfuse.WithEventStatus(err.Error()),
 			langfuse.WithEventLevel(langfuse.ObservationLevelWarning),
 			langfuse.WithEventMetadata(langfuse.Metadata{
-				"tool_name":   TraversaalToolName,
-				"engine":      "traversaal",
-				"query":       action.Query,
-				"max_results": action.MaxResults.Int(),
-				"error":       err.Error(),
+				"engine": "traversaal",
+				"query":  req.Query,
+				"error":  err.Error(),
 			}),
 		)
 
 		logger.WithError(err).Error("failed to search in traversaal")
-		return fmt.Sprintf("failed to search in traversaal: %v", err), nil
-	}
-
-	if agentCtx, ok := GetAgentContext(ctx); ok {
-		_, _ = t.slp.PutLog(
-			ctx,
-			agentCtx.ParentAgentType,
-			agentCtx.CurrentAgentType,
-			database.SearchengineTypeTraversaal,
-			action.Query,
-			result,
-			t.taskID,
-			t.subtaskID,
-		)
+		return "", err
 	}
 
 	return result, nil
@@ -108,7 +71,7 @@ func (t *traversaal) Handle(ctx context.Context, name string, args json.RawMessa
 func (t *traversaal) search(ctx context.Context, query string) (string, error) {
 	client, err := system.GetHTTPClient(t.cfg)
 	if err != nil {
-		return "", fmt.Errorf("failed to create http client: %w", err)
+		return "", Fatal(fmt.Errorf("failed to create http client: %w", err))
 	}
 
 	reqBody, err := json.Marshal(struct {
@@ -117,12 +80,12 @@ func (t *traversaal) search(ctx context.Context, query string) (string, error) {
 		Query: query,
 	})
 	if err != nil {
-		return "", fmt.Errorf("failed to marshal request body: %v", err)
+		return "", Fatal(fmt.Errorf("failed to marshal request body: %v", err))
 	}
 
 	req, err := http.NewRequest(http.MethodPost, traversaalURL, bytes.NewBuffer(reqBody))
 	if err != nil {
-		return "", fmt.Errorf("failed to build request: %v", err)
+		return "", Fatal(fmt.Errorf("failed to build request: %v", err))
 	}
 
 	req = req.WithContext(ctx)
@@ -131,7 +94,7 @@ func (t *traversaal) search(ctx context.Context, query string) (string, error) {
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("failed to do request: %v", err)
+		return "", Retryable(fmt.Errorf("failed to do request: %v", err), 0)
 	}
 	defer resp.Body.Close()
 
@@ -140,13 +103,17 @@ func (t *traversaal) search(ctx context.Context, query string) (string, error) {
 
 func (t *traversaal) parseHTTPResponse(resp *http.Response) (string, error) {
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+		err := fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+		if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500 {
+			return "", Retryable(err, 0)
+		}
+		return "", Fatal(err)
 	}
 	var respBody struct {
 		Data traversaalSearchResult `json:"data"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&respBody); err != nil {
-		return "", fmt.Errorf("failed to decode response body: %v", err)
+		return "", Fatal(fmt.Errorf("failed to decode response body: %v", err))
 	}
 
 	var writer strings.Builder

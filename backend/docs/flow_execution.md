@@ -43,15 +43,16 @@ This document describes the internal architecture and execution workflow of Flow
   - User-provided flow files are available under `/work/uploads` and `/work/resources`
   
 - **Search Network Tools** - External information sources
-  - `browser` - Web scraping with screenshot capture  
-  - `google` - Google Custom Search API integration
-  - `duckduckgo` - Anonymous search engine
-  - `tavily` - Advanced research with citations
-  - `firecrawl` - Web search with full-page content scraping
-  - `traversaal` - Structured Q&A search
-  - `perplexity` - AI-powered comprehensive research
-  - `sploitus` - Search for security exploits and pentest tools
-  - `searxng` - Privacy-focused meta search engine
+  - `browser` - Web scraping with screenshot capture
+  - `web_search` - Unified web search. The agent supplies a `query` and an intent `mode`
+    (`links`, `answer`, `research`, `exploit`); the orchestrator selects the underlying
+    engine, retries transient failures, and falls back across providers automatically.
+    Engines orchestrated under the hood (when configured): Google, DuckDuckGo, Searxng,
+    Tavily, Traversaal, Perplexity, Firecrawl, Sploitus, and the optional internal
+    browser-analytics engine (`WEB_SEARCH_INTERNAL_ENABLED`, off by default). The
+    per-mode fallback order is a single data table at the top of
+    `backend/pkg/tools/web_search.go`; the engine primitives live in
+    `backend/pkg/tools/searchers/`.
   
 - **Vector Database Tools** - Semantic search in long-term memory
   - `search_in_memory` - General execution memory search
@@ -225,22 +226,14 @@ graph TD
         Searcher --> MemoryFirst[Priority 1: Memory Tools]
         MemoryFirst --> AnswerSearch[Search Answers]
         MemoryFirst --> VectorDB
-        
-        Searcher --> ReconTools[Priority 3-4: Reconnaissance]
-        ReconTools --> Google[Google Search]
-        ReconTools --> DuckDuckGo[DuckDuckGo Search]
-        ReconTools --> Browser
-        
-        Searcher --> DeepAnalysis[Priority 5: Deep Analysis]
-        DeepAnalysis --> Tavily[Tavily Search]
-        DeepAnalysis --> Perplexity[Perplexity Search]
-        DeepAnalysis --> Traversaal[Traversaal Search]
-        
-        Searcher --> SecurityTools[Security Research]
-        SecurityTools --> Sploitus[Sploitus - Exploit Database]
-        
-        Searcher --> MetaSearch[Meta Search Engine]
-        MetaSearch --> Searxng[Searxng - Privacy Meta Search]
+
+        Searcher --> WebSearch[web_search Orchestrator<br/>picks engine + falls back]
+        WebSearch --> ModeLinks[mode: links<br/>Google → DuckDuckGo → Searxng → Firecrawl]
+        WebSearch --> ModeAnswer[mode: answer<br/>Tavily → Traversaal → Perplexity → Internal]
+        WebSearch --> ModeResearch[mode: research<br/>Perplexity → Tavily → Traversaal → Internal]
+        WebSearch --> ModeExploit[mode: exploit<br/>Sploitus → Tavily → Traversaal → Perplexity]
+
+        Searcher --> Browser[browser: read a specific URL]
     end
     
     subgraph "Adviser Workflows"
@@ -307,7 +300,7 @@ sequenceDiagram
     else UseAgents = false
         Note over AA,DirectTools: Direct tools only mode  
         AA->>DirectTools: terminal, file, browser
-        AA->>DirectTools: google, duckduckgo, sploitus, tavily, traversaal, perplexity
+        AA->>DirectTools: web_search (modes: links/answer/research/exploit)
         AA->>DirectTools: search_in_memory, search_guide, search_answer, search_code
         DirectTools-->>AA: Tool responses (no agent delegation)
     end
@@ -345,9 +338,9 @@ graph LR
         StoreOps[store_guide<br/>store_answer<br/>store_code<br/>auto-store from 18 tools]
     end
     
-    subgraph "Auto-Storage Tools (18 total)"
+    subgraph "Auto-Storage Tools"
         EnvTools[terminal, file]
-        SearchEngines[google, duckduckgo, tavily,<br/>traversaal, perplexity, sploitus, searxng]
+        SearchEngines[web_search]
         AgentTools[search, maintenance, coder,<br/>pentester, advice]
     end
     
@@ -753,28 +746,34 @@ The Searcher Agent follows a strict hierarchy for information retrieval:
 1. **Priority 1-2: Memory Tools** - Always check internal knowledge first
    - `search_answer` - Primary tool for accessing existing knowledge
    - `memorist` - Retrieves task/subtask execution history
-   
-2. **Priority 3-4: Reconnaissance Tools** - Fast source discovery
-   - `google` and `duckduckgo` - Rapid link collection and basic searches
-   - `browser` - Targeted content extraction from specific URLs
-   
-3. **Priority 5: Deep Analysis Tools** - Complex research synthesis
-   - `traversaal` - Structured answers for common questions
-   - `tavily` - Research-grade exploration of technical topics
-   - `firecrawl` - Deep research with main-content markdown scraped from discovered sites
-   - `perplexity` - Comprehensive analysis with advanced reasoning
 
-**Available Search Engines**: Google, DuckDuckGo, Tavily, Firecrawl, Traversaal, Perplexity, Sploitus, Searxng
+2. **Priority 3: `web_search`** - All external web search, via one unified tool
+   - The agent supplies a `query` and an intent `mode`; it does NOT choose a provider.
+   - **Modes**: `links` (fast link discovery), `answer` (synthesized answer, default),
+     `research` (deep multi-source synthesis), `exploit` (exploits/PoCs/offensive tools).
 
-**Search Engine Configurations**:
-- **Google** - Custom Search API with CX key and language restrictions
-- **DuckDuckGo** - Anonymous search with VQD token authentication
-- **Tavily** - Advanced research with raw content and citations
+3. **Priority 4: `browser`** - Targeted content extraction from a specific, known URL
+
+**web_search orchestration**: For the chosen mode, the orchestrator walks a per-mode
+fallback chain, skipping engines that are not configured, retrying only *retryable*
+failures (HTTP 429/5xx/transport) on the same engine, and moving on immediately for
+*fatal* ones (HTTP 4xx/decode). It returns an error to the agent only after every
+available engine is exhausted, and it records one search-log entry attributed to the
+engine that actually served the result. The fallback table is the single source of
+truth at the top of `backend/pkg/tools/web_search.go`.
+
+**Engines orchestrated** (used only when configured):
+- **Google** - Custom Search API with CX key and language restrictions (links)
+- **DuckDuckGo** - Anonymous search (links)
+- **Searxng** - Privacy meta search aggregating multiple engines (links)
 - **Firecrawl** - Web search with main-content markdown scraped from each result
-- **Perplexity** - AI-powered synthesis with configurable context size
-- **Traversaal** - Structured Q&A responses with web links
-- **Sploitus** - Search for security exploits and pentest tools
-- **Searxng** - Meta search aggregating multiple engines with privacy focus
+- **Tavily** - Research-grade exploration with raw content and citations (answer/research)
+- **Traversaal** - Structured Q&A responses with web links (answer/research)
+- **Perplexity** - AI-powered synthesis with configurable context size (answer/research)
+- **Sploitus** - Security exploits and pentest tools (exploit)
+- **Internal Analytics Engine** - optional, off by default (`WEB_SEARCH_INTERNAL_ENABLED`);
+  answers analytic queries by scraping and summarizing pages via the browser, bounded to
+  a configurable byte budget per site
 
 **Action Economy Rules**: Maximum 3-5 search actions per query, stop immediately when sufficient information is found
 

@@ -1,4 +1,4 @@
-package tools
+package searchers
 
 import (
 	"context"
@@ -25,87 +25,53 @@ const (
 
 type searxng struct {
 	cfg        *config.Config
-	flowID     int64
-	taskID     *int64
-	subtaskID  *int64
-	slp        SearchLogProvider
 	summarizer SummarizeHandler
 }
 
-func NewSearxngTool(
-	cfg *config.Config,
-	flowID int64,
-	taskID, subtaskID *int64,
-	slp SearchLogProvider,
-	summarizer SummarizeHandler,
-) Tool {
+func NewSearxng(cfg *config.Config, summarizer SummarizeHandler) Searcher {
 	return &searxng{
 		cfg:        cfg,
-		flowID:     flowID,
-		taskID:     taskID,
-		subtaskID:  subtaskID,
-		slp:        slp,
 		summarizer: summarizer,
 	}
+}
+
+func (s *searxng) Engine() database.SearchengineType {
+	return database.SearchengineTypeSearxng
 }
 
 func (s *searxng) IsAvailable() bool {
 	return s.baseURL() != ""
 }
 
-func (s *searxng) Handle(ctx context.Context, name string, args json.RawMessage) (string, error) {
+func (s *searxng) Handle(ctx context.Context, req Request) (string, error) {
 	if !s.IsAvailable() {
-		return "", fmt.Errorf("searxng is not available")
+		return "", ErrNotConfigured
 	}
 
-	var action SearchAction
 	ctx, observation := obs.Observer.NewObservation(ctx)
-	logger := logrus.WithContext(ctx).WithFields(enrichLogrusFields(s.flowID, s.taskID, s.subtaskID, logrus.Fields{
-		"tool": name,
-		"args": string(args),
-	}))
-
-	if err := json.Unmarshal(args, &action); err != nil {
-		logger.WithError(err).Error("failed to unmarshal searxng search action")
-		return "", fmt.Errorf("failed to unmarshal %s search action arguments: %w", name, err)
-	}
-
-	logger = logger.WithFields(logrus.Fields{
-		"query":       action.Query[:min(len(action.Query), 1000)],
-		"max_results": action.MaxResults,
+	logger := logrus.WithContext(ctx).WithFields(logrus.Fields{
+		"engine":      "searxng",
+		"query":       req.Query[:min(len(req.Query), 1000)],
+		"max_results": req.MaxResults,
 	})
 
-	result, err := s.search(ctx, action.Query, action.MaxResults.Int())
+	result, err := s.search(ctx, req.Query, req.MaxResults)
 	if err != nil {
 		observation.Event(
-			langfuse.WithEventName("search engine error swallowed"),
-			langfuse.WithEventInput(action.Query),
+			langfuse.WithEventName("search engine error"),
+			langfuse.WithEventInput(req.Query),
 			langfuse.WithEventStatus(err.Error()),
 			langfuse.WithEventLevel(langfuse.ObservationLevelWarning),
 			langfuse.WithEventMetadata(langfuse.Metadata{
-				"tool_name":   SearxngToolName,
 				"engine":      "searxng",
-				"query":       action.Query,
-				"max_results": action.MaxResults.Int(),
+				"query":       req.Query,
+				"max_results": req.MaxResults,
 				"error":       err.Error(),
 			}),
 		)
 
 		logger.WithError(err).Error("failed to search in searxng")
-		return fmt.Sprintf("failed to search in searxng: %v", err), nil
-	}
-
-	if agentCtx, ok := GetAgentContext(ctx); ok {
-		_, _ = s.slp.PutLog(
-			ctx,
-			agentCtx.ParentAgentType,
-			agentCtx.CurrentAgentType,
-			database.SearchengineTypeSearxng,
-			action.Query,
-			result,
-			s.taskID,
-			s.subtaskID,
-		)
+		return "", err
 	}
 
 	return result, nil
@@ -114,7 +80,7 @@ func (s *searxng) Handle(ctx context.Context, name string, args json.RawMessage)
 func (s *searxng) search(ctx context.Context, query string, maxResults int) (string, error) {
 	apiURL, err := url.Parse(s.baseURL())
 	if err != nil {
-		return "", fmt.Errorf("invalid searxng base URL: %w", err)
+		return "", Fatal(fmt.Errorf("invalid searxng base URL: %w", err))
 	}
 
 	if !strings.HasSuffix(apiURL.Path, "/search") {
@@ -142,21 +108,21 @@ func (s *searxng) search(ctx context.Context, query string, maxResults int) (str
 
 	client, err := system.GetHTTPClient(s.cfg)
 	if err != nil {
-		return "", fmt.Errorf("failed to create http client: %w", err)
+		return "", Fatal(fmt.Errorf("failed to create http client: %w", err))
 	}
 
 	client.Timeout = s.timeout()
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL.String(), nil)
 	if err != nil {
-		return "", fmt.Errorf("failed to create request: %w", err)
+		return "", Fatal(fmt.Errorf("failed to create request: %w", err))
 	}
 
 	req.Header.Set("User-Agent", "PentAGI/1.0")
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("failed to do request: %w", err)
+		return "", Retryable(fmt.Errorf("failed to do request: %w", err), 0)
 	}
 	defer resp.Body.Close()
 
@@ -165,12 +131,16 @@ func (s *searxng) search(ctx context.Context, query string, maxResults int) (str
 
 func (s *searxng) parseHTTPResponse(resp *http.Response, query string) (string, error) {
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+		err := fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+		if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500 {
+			return "", Retryable(err, 0)
+		}
+		return "", Fatal(err)
 	}
 
 	var searxngResponse SearxngResponse
 	if err := json.NewDecoder(resp.Body).Decode(&searxngResponse); err != nil {
-		return "", fmt.Errorf("failed to decode response body: %w", err)
+		return "", Fatal(fmt.Errorf("failed to decode response body: %w", err))
 	}
 
 	return s.formatResults(searxngResponse.Results, query), nil

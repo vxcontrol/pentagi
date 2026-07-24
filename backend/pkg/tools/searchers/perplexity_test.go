@@ -1,4 +1,4 @@
-package tools
+package searchers
 
 import (
 	"io"
@@ -63,11 +63,6 @@ func TestPerplexityHandle(t *testing.T) {
 	}
 	defer proxy.Close()
 
-	flowID := int64(1)
-	taskID := int64(10)
-	subtaskID := int64(20)
-	slp := &searchLogProviderMock{}
-
 	cfg := &config.Config{
 		PerplexityAPIKey:      testPerplexityAPIKey,
 		PerplexityModel:       "sonar",
@@ -76,16 +71,17 @@ func TestPerplexityHandle(t *testing.T) {
 		ExternalSSLCAPath:     proxy.CACertPath(),
 	}
 
-	px := NewPerplexityTool(cfg, flowID, &taskID, &subtaskID, slp, nil)
+	px := NewPerplexity(cfg, nil)
 
-	ctx := PutAgentContext(t.Context(), database.MsgchainTypeSearcher)
 	got, err := px.Handle(
-		ctx,
-		PerplexityToolName,
-		[]byte(`{"query":"test query","max_results":5,"message":"m"}`),
+		t.Context(),
+		Request{Query: "test query"},
 	)
 	if err != nil {
 		t.Fatalf("Handle() unexpected error: %v", err)
+	}
+	if px.Engine() != database.SearchengineTypePerplexity {
+		t.Errorf("Engine() = %q, want %q", px.Engine(), database.SearchengineTypePerplexity)
 	}
 
 	// Verify mock handler was called
@@ -126,29 +122,6 @@ func TestPerplexityHandle(t *testing.T) {
 	if !strings.Contains(got, "https://example.com") {
 		t.Errorf("result missing expected citation 'https://example.com': %q", got)
 	}
-
-	// Verify search log was written with agent context
-	if slp.calls != 1 {
-		t.Errorf("PutLog() calls = %d, want 1", slp.calls)
-	}
-	if slp.engine != database.SearchengineTypePerplexity {
-		t.Errorf("engine = %q, want %q", slp.engine, database.SearchengineTypePerplexity)
-	}
-	if slp.query != "test query" {
-		t.Errorf("logged query = %q, want %q", slp.query, "test query")
-	}
-	if slp.parentType != database.MsgchainTypeSearcher {
-		t.Errorf("parent agent type = %q, want %q", slp.parentType, database.MsgchainTypeSearcher)
-	}
-	if slp.currType != database.MsgchainTypeSearcher {
-		t.Errorf("current agent type = %q, want %q", slp.currType, database.MsgchainTypeSearcher)
-	}
-	if slp.taskID == nil || *slp.taskID != taskID {
-		t.Errorf("task ID = %v, want %d", slp.taskID, taskID)
-	}
-	if slp.subtaskID == nil || *slp.subtaskID != subtaskID {
-		t.Errorf("subtask ID = %v, want %d", slp.subtaskID, subtaskID)
-	}
 }
 
 func TestPerplexityIsAvailable(t *testing.T) {
@@ -185,7 +158,7 @@ func TestPerplexityIsAvailable(t *testing.T) {
 }
 
 func TestPerplexityHandleErrorResponse(t *testing.T) {
-	px := &perplexity{flowID: 1}
+	px := &perplexity{}
 
 	tests := []struct {
 		name       string
@@ -263,7 +236,7 @@ func TestPerplexityHandleErrorResponse(t *testing.T) {
 }
 
 func TestPerplexityFormatResponse(t *testing.T) {
-	px := &perplexity{flowID: 1}
+	px := &perplexity{}
 
 	t.Run("empty choices returns fallback message", func(t *testing.T) {
 		resp := &CompletionResponse{Choices: []Choice{}}
@@ -373,16 +346,8 @@ func TestPerplexityGetSummarizePrompt(t *testing.T) {
 	})
 }
 
-func TestPerplexityHandle_ValidationAndSwallowedError(t *testing.T) {
-	t.Run("invalid json", func(t *testing.T) {
-		px := &perplexity{cfg: testPerplexityConfig()}
-		_, err := px.Handle(t.Context(), PerplexityToolName, []byte("{"))
-		if err == nil || !strings.Contains(err.Error(), "failed to unmarshal") {
-			t.Fatalf("expected unmarshal error, got: %v", err)
-		}
-	})
-
-	t.Run("search error swallowed", func(t *testing.T) {
+func TestPerplexityHandle_ReturnsTypedError(t *testing.T) {
+	t.Run("upstream 502 returns a retryable error", func(t *testing.T) {
 		var seenRequest bool
 		mockMux := http.NewServeMux()
 		mockMux.HandleFunc("/chat/completions", func(w http.ResponseWriter, r *http.Request) {
@@ -397,7 +362,6 @@ func TestPerplexityHandle_ValidationAndSwallowedError(t *testing.T) {
 		defer proxy.Close()
 
 		px := &perplexity{
-			flowID: 1,
 			cfg: &config.Config{
 				PerplexityAPIKey:  testPerplexityAPIKey,
 				ProxyURL:          proxy.URL(),
@@ -407,21 +371,23 @@ func TestPerplexityHandle_ValidationAndSwallowedError(t *testing.T) {
 
 		result, err := px.Handle(
 			t.Context(),
-			PerplexityToolName,
-			[]byte(`{"query":"q","max_results":5,"message":"m"}`),
+			Request{Query: "q"},
 		)
-		if err != nil {
-			t.Fatalf("Handle() unexpected error: %v", err)
-		}
 
 		// Verify mock handler was called (request was intercepted)
 		if !seenRequest {
 			t.Error("request was not intercepted by proxy - mock handler was not called")
 		}
 
-		// Verify error was swallowed and returned as string
-		if !strings.Contains(result, "failed to search in perplexity") {
-			t.Errorf("Handle() = %q, expected swallowed error message", result)
+		// The error is now surfaced (not swallowed) and classified. A 502 is retryable.
+		if err == nil {
+			t.Fatal("Handle() expected an error, got nil")
+		}
+		if result != "" {
+			t.Errorf("Handle() result = %q, want empty on error", result)
+		}
+		if !IsRetryable(err) {
+			t.Errorf("Handle() error = %v, want a RetryableError", err)
 		}
 	})
 }
@@ -431,9 +397,10 @@ func TestPerplexityHandle_StatusCodeErrors(t *testing.T) {
 		name       string
 		statusCode int
 		errContain string
+		retryable  bool
 	}{
-		{"unauthorized", http.StatusUnauthorized, "API key"},
-		{"server error", http.StatusInternalServerError, "server"},
+		{"unauthorized", http.StatusUnauthorized, "API key", false},
+		{"server error", http.StatusInternalServerError, "server", true},
 	}
 
 	for _, tt := range tests {
@@ -450,7 +417,6 @@ func TestPerplexityHandle_StatusCodeErrors(t *testing.T) {
 			defer proxy.Close()
 
 			px := &perplexity{
-				flowID: 1,
 				cfg: &config.Config{
 					PerplexityAPIKey:  testPerplexityAPIKey,
 					ProxyURL:          proxy.URL(),
@@ -460,19 +426,27 @@ func TestPerplexityHandle_StatusCodeErrors(t *testing.T) {
 
 			result, err := px.Handle(
 				t.Context(),
-				PerplexityToolName,
-				[]byte(`{"query":"test","max_results":5,"message":"m"}`),
+				Request{Query: "test"},
 			)
-			if err != nil {
-				t.Fatalf("Handle() unexpected error: %v", err)
-			}
 
-			// Error should be swallowed and returned as string
-			if !strings.Contains(result, "failed to search in perplexity") {
-				t.Errorf("Handle() = %q, expected swallowed error", result)
+			// The status-code failure surfaces as a typed error (not swallowed).
+			if err == nil {
+				t.Fatal("Handle() expected an error, got nil")
 			}
-			if !strings.Contains(result, tt.errContain) {
-				t.Errorf("Handle() = %q, expected to contain %q", result, tt.errContain)
+			if result != "" {
+				t.Errorf("Handle() result = %q, want empty on error", result)
+			}
+			if tt.retryable {
+				if !IsRetryable(err) {
+					t.Errorf("Handle() error = %v, want a RetryableError", err)
+				}
+			} else {
+				if !IsFatal(err) {
+					t.Errorf("Handle() error = %v, want a FatalError", err)
+				}
+			}
+			if !strings.Contains(err.Error(), tt.errContain) {
+				t.Errorf("Handle() error = %v, expected to contain %q", err, tt.errContain)
 			}
 		})
 	}

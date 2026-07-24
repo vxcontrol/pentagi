@@ -179,7 +179,7 @@ type Config struct {
 
 	// === Search Engine: Perplexity AI ===
 	PerplexityAPIKey      string `env:"PERPLEXITY_API_KEY"`
-	PerplexityModel       string `env:"PERPLEXITY_MODEL" envDefault:"sonar"`
+	PerplexityModel       string `env:"PERPLEXITY_MODEL" envDefault:"sonar-pro"`
 	PerplexityContextSize string `env:"PERPLEXITY_CONTEXT_SIZE" envDefault:"low"`
 
 	// === Search Engine: SearXNG (Self-Hosted) ===
@@ -189,6 +189,16 @@ type Config struct {
 	SearxngSafeSearch string `env:"SEARXNG_SAFESEARCH" envDefault:"0"`
 	SearxngTimeRange  string `env:"SEARXNG_TIME_RANGE"`
 	SearxngTimeout    int    `env:"SEARXNG_TIMEOUT"`
+
+	// === Web Search Orchestrator: Internal Analytics Engine ===
+	// The internal analytics engine is an OPTIONAL, opt-in fallback for the
+	// analytic web_search modes (answer/research). It produces a synthesized answer
+	// without a paid analytic API by combining link discovery + the browser scraper
+	// + the summarizer. It is OFF by default because per-page scraping and
+	// summarization can cost more than a purpose-built third-party analytic call.
+	WebSearchInternalEnabled      bool `env:"WEB_SEARCH_INTERNAL_ENABLED" envDefault:"false"`
+	WebSearchInternalMaxSites     int  `env:"WEB_SEARCH_INTERNAL_MAX_SITES" envDefault:"5"`
+	WebSearchInternalMaxSiteBytes int  `env:"WEB_SEARCH_INTERNAL_MAX_SITE_BYTES" envDefault:"10240"`
 
 	// === AI Assistant Mode Configuration ===
 	AssistantUseAgents                bool `env:"ASSISTANT_USE_AGENTS" envDefault:"false"`

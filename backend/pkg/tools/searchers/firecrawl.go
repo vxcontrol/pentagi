@@ -1,4 +1,4 @@
-package tools
+package searchers
 
 import (
 	"bytes"
@@ -83,83 +83,49 @@ func (r firecrawlResult) resolvedTitle() string {
 
 type firecrawl struct {
 	cfg        *config.Config
-	flowID     int64
-	taskID     *int64
-	subtaskID  *int64
-	slp        SearchLogProvider
 	summarizer SummarizeHandler
 }
 
-func NewFirecrawlTool(
-	cfg *config.Config,
-	flowID int64,
-	taskID, subtaskID *int64,
-	slp SearchLogProvider,
-	summarizer SummarizeHandler,
-) Tool {
+func NewFirecrawl(cfg *config.Config, summarizer SummarizeHandler) Searcher {
 	return &firecrawl{
 		cfg:        cfg,
-		flowID:     flowID,
-		taskID:     taskID,
-		subtaskID:  subtaskID,
-		slp:        slp,
 		summarizer: summarizer,
 	}
 }
 
-func (f *firecrawl) Handle(ctx context.Context, name string, args json.RawMessage) (string, error) {
+func (f *firecrawl) Engine() database.SearchengineType {
+	return database.SearchengineTypeFirecrawl
+}
+
+func (f *firecrawl) Handle(ctx context.Context, req Request) (string, error) {
 	if !f.IsAvailable() {
-		return "", fmt.Errorf("firecrawl is not available")
+		return "", ErrNotConfigured
 	}
 
-	var action SearchAction
 	ctx, observation := obs.Observer.NewObservation(ctx)
-	logger := logrus.WithContext(ctx).WithFields(enrichLogrusFields(f.flowID, f.taskID, f.subtaskID, logrus.Fields{
-		"tool": name,
-		"args": string(args),
-	}))
-
-	if err := json.Unmarshal(args, &action); err != nil {
-		logger.WithError(err).Error("failed to unmarshal firecrawl search action")
-		return "", fmt.Errorf("failed to unmarshal %s search action arguments: %w", name, err)
-	}
-
-	logger = logger.WithFields(logrus.Fields{
-		"query":       action.Query[:min(len(action.Query), 1000)],
-		"max_results": action.MaxResults,
+	logger := logrus.WithContext(ctx).WithFields(logrus.Fields{
+		"engine":      "firecrawl",
+		"query":       req.Query[:min(len(req.Query), 1000)],
+		"max_results": req.MaxResults,
 	})
 
-	result, err := f.search(ctx, action.Query, action.MaxResults.Int())
+	result, err := f.search(ctx, req.Query, req.MaxResults)
 	if err != nil {
 		observation.Event(
-			langfuse.WithEventName("search engine error swallowed"),
-			langfuse.WithEventInput(action.Query),
+			langfuse.WithEventName("search engine error"),
+			langfuse.WithEventInput(req.Query),
 			langfuse.WithEventStatus(err.Error()),
 			langfuse.WithEventLevel(langfuse.ObservationLevelWarning),
 			langfuse.WithEventMetadata(langfuse.Metadata{
-				"tool_name":   FirecrawlToolName,
 				"engine":      "firecrawl",
-				"query":       action.Query,
-				"max_results": action.MaxResults.Int(),
+				"query":       req.Query,
+				"max_results": req.MaxResults,
 				"error":       err.Error(),
 			}),
 		)
 
 		logger.WithError(err).Error("failed to search in firecrawl")
-		return fmt.Sprintf("failed to search in firecrawl: %v", err), nil
-	}
-
-	if agentCtx, ok := GetAgentContext(ctx); ok {
-		_, _ = f.slp.PutLog(
-			ctx,
-			agentCtx.ParentAgentType,
-			agentCtx.CurrentAgentType,
-			database.SearchengineTypeFirecrawl,
-			action.Query,
-			result,
-			f.taskID,
-			f.subtaskID,
-		)
+		return "", err
 	}
 
 	return result, nil
@@ -168,7 +134,7 @@ func (f *firecrawl) Handle(ctx context.Context, name string, args json.RawMessag
 func (f *firecrawl) search(ctx context.Context, query string, maxResults int) (string, error) {
 	client, err := system.GetHTTPClient(f.cfg)
 	if err != nil {
-		return "", fmt.Errorf("failed to create http client: %w", err)
+		return "", Fatal(fmt.Errorf("failed to create http client: %w", err))
 	}
 
 	// sources is intentionally omitted: /v2/search defaults to ["web"], which is
@@ -184,12 +150,12 @@ func (f *firecrawl) search(ctx context.Context, query string, maxResults int) (s
 	}
 	reqBody, err := json.Marshal(reqPayload)
 	if err != nil {
-		return "", fmt.Errorf("failed to marshal request body: %v", err)
+		return "", Fatal(fmt.Errorf("failed to marshal request body: %v", err))
 	}
 
 	req, err := http.NewRequest(http.MethodPost, f.searchURL(), bytes.NewBuffer(reqBody))
 	if err != nil {
-		return "", fmt.Errorf("failed to build request: %v", err)
+		return "", Fatal(fmt.Errorf("failed to build request: %v", err))
 	}
 
 	req = req.WithContext(ctx)
@@ -198,7 +164,7 @@ func (f *firecrawl) search(ctx context.Context, query string, maxResults int) (s
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("failed to do request: %v", err)
+		return "", Retryable(fmt.Errorf("failed to do request: %v", err), 0)
 	}
 	defer resp.Body.Close()
 
@@ -210,41 +176,41 @@ func (f *firecrawl) parseHTTPResponse(ctx context.Context, query string, resp *h
 	case http.StatusOK:
 		var respBody firecrawlSearchResult
 		if err := json.NewDecoder(resp.Body).Decode(&respBody); err != nil {
-			return "", fmt.Errorf("failed to decode response body: %v", err)
+			return "", Fatal(fmt.Errorf("failed to decode response body: %v", err))
 		}
 		if !respBody.Success {
 			if respBody.Error != "" {
-				return "", fmt.Errorf("request failed: %s", respBody.Error)
+				return "", Fatal(fmt.Errorf("request failed: %s", respBody.Error))
 			}
-			return "", fmt.Errorf("request failed")
+			return "", Fatal(fmt.Errorf("request failed"))
 		}
 		return f.buildFirecrawlResult(ctx, query, &respBody), nil
 	case http.StatusBadRequest:
-		return "", fmt.Errorf("request is invalid")
+		return "", Fatal(fmt.Errorf("request is invalid"))
 	case http.StatusUnauthorized:
-		return "", fmt.Errorf("API key is wrong")
+		return "", Fatal(fmt.Errorf("API key is wrong"))
 	case http.StatusPaymentRequired:
-		return "", fmt.Errorf("insufficient credits to perform this request")
+		return "", Fatal(fmt.Errorf("insufficient credits to perform this request"))
 	case http.StatusForbidden:
-		return "", fmt.Errorf("the endpoint requested is hidden for administrators only")
+		return "", Fatal(fmt.Errorf("the endpoint requested is hidden for administrators only"))
 	case http.StatusNotFound:
-		return "", fmt.Errorf("the specified endpoint could not be found")
+		return "", Fatal(fmt.Errorf("the specified endpoint could not be found"))
 	case http.StatusMethodNotAllowed:
-		return "", fmt.Errorf("there need to try to access an endpoint with an invalid method")
+		return "", Fatal(fmt.Errorf("there need to try to access an endpoint with an invalid method"))
 	case http.StatusRequestTimeout:
-		return "", fmt.Errorf("the request timed out. try again later")
+		return "", Retryable(fmt.Errorf("the request timed out. try again later"), 0)
 	case http.StatusTooManyRequests:
-		return "", fmt.Errorf("there are requesting too many results")
+		return "", Retryable(fmt.Errorf("there are requesting too many results"), 0)
 	case http.StatusInternalServerError:
-		return "", fmt.Errorf("there had a problem with our server. try again later")
+		return "", Retryable(fmt.Errorf("there had a problem with our server. try again later"), 0)
 	case http.StatusBadGateway:
-		return "", fmt.Errorf("there was a problem with the server. Please try again later")
+		return "", Retryable(fmt.Errorf("there was a problem with the server. Please try again later"), 0)
 	case http.StatusServiceUnavailable:
-		return "", fmt.Errorf("there are temporarily offline for maintenance. please try again later")
+		return "", Retryable(fmt.Errorf("there are temporarily offline for maintenance. please try again later"), 0)
 	case http.StatusGatewayTimeout:
-		return "", fmt.Errorf("there are temporarily offline for maintenance. please try again later")
+		return "", Retryable(fmt.Errorf("there are temporarily offline for maintenance. please try again later"), 0)
 	default:
-		return "", fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+		return "", Fatal(fmt.Errorf("unexpected status code: %d", resp.StatusCode))
 	}
 }
 

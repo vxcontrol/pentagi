@@ -1,8 +1,7 @@
-package tools
+package searchers
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -69,54 +68,34 @@ type searchResponse struct {
 }
 
 type duckduckgo struct {
-	cfg       *config.Config
-	flowID    int64
-	taskID    *int64
-	subtaskID *int64
-	slp       SearchLogProvider
+	cfg *config.Config
 }
 
-func NewDuckDuckGoTool(
-	cfg *config.Config,
-	flowID int64,
-	taskID, subtaskID *int64,
-	slp SearchLogProvider,
-) Tool {
-	return &duckduckgo{
-		cfg:       cfg,
-		flowID:    flowID,
-		taskID:    taskID,
-		subtaskID: subtaskID,
-		slp:       slp,
-	}
+func NewDuckDuckGo(cfg *config.Config) Searcher {
+	return &duckduckgo{cfg: cfg}
 }
 
-// Handle processes the search request from an AI agent
-func (d *duckduckgo) Handle(ctx context.Context, name string, args json.RawMessage) (string, error) {
+func (d *duckduckgo) Engine() database.SearchengineType {
+	return database.SearchengineTypeDuckduckgo
+}
+
+// Handle processes the search request from the orchestrator
+func (d *duckduckgo) Handle(ctx context.Context, req Request) (string, error) {
 	if !d.IsAvailable() {
-		return "", fmt.Errorf("duckduckgo is not available")
+		return "", ErrNotConfigured
 	}
 
-	var action SearchAction
 	ctx, observation := obs.Observer.NewObservation(ctx)
-	logger := logrus.WithContext(ctx).WithFields(enrichLogrusFields(d.flowID, d.taskID, d.subtaskID, logrus.Fields{
-		"tool": name,
-		"args": string(args),
-	}))
-
-	if err := json.Unmarshal(args, &action); err != nil {
-		logger.WithError(err).Error("failed to unmarshal duckduckgo search action")
-		return "", fmt.Errorf("failed to unmarshal %s search action arguments: %w", name, err)
-	}
 
 	// Set default number of results if invalid
-	numResults := int(action.MaxResults)
+	numResults := int(req.MaxResults)
 	if numResults < 1 || numResults > duckduckgoMaxResults {
 		numResults = duckduckgoMaxResults
 	}
 
-	logger = logger.WithFields(logrus.Fields{
-		"query":       action.Query[:min(len(action.Query), 1000)],
+	logger := logrus.WithContext(ctx).WithFields(logrus.Fields{
+		"engine":      "duckduckgo",
+		"query":       req.Query[:min(len(req.Query), 1000)],
 		"num_results": numResults,
 		"region":      d.region(),
 		"safe_search": d.safeSearch(),
@@ -124,17 +103,16 @@ func (d *duckduckgo) Handle(ctx context.Context, name string, args json.RawMessa
 	})
 
 	// Perform search
-	result, err := d.search(ctx, action.Query, numResults)
+	result, err := d.search(ctx, req.Query, numResults)
 	if err != nil {
 		observation.Event(
-			langfuse.WithEventName("search engine error swallowed"),
-			langfuse.WithEventInput(action.Query),
+			langfuse.WithEventName("search engine error"),
+			langfuse.WithEventInput(req.Query),
 			langfuse.WithEventStatus(err.Error()),
 			langfuse.WithEventLevel(langfuse.ObservationLevelWarning),
 			langfuse.WithEventMetadata(langfuse.Metadata{
-				"tool_name":   DuckDuckGoToolName,
 				"engine":      "duckduckgo",
-				"query":       action.Query,
+				"query":       req.Query,
 				"max_results": numResults,
 				"region":      d.region(),
 				"error":       err.Error(),
@@ -142,21 +120,10 @@ func (d *duckduckgo) Handle(ctx context.Context, name string, args json.RawMessa
 		)
 
 		logger.WithError(err).Error("failed to search in DuckDuckGo")
-		return fmt.Sprintf("failed to search in DuckDuckGo: %v", err), nil
-	}
-
-	// Log search results if configured
-	if agentCtx, ok := GetAgentContext(ctx); ok {
-		_, _ = d.slp.PutLog(
-			ctx,
-			agentCtx.ParentAgentType,
-			agentCtx.CurrentAgentType,
-			database.SearchengineTypeDuckduckgo,
-			action.Query,
-			result,
-			d.taskID,
-			d.subtaskID,
-		)
+		// DuckDuckGo already retries transient failures internally (see search);
+		// by the time an error surfaces here, moving to the next engine is the
+		// right call rather than burning another round-trip on the same one.
+		return "", Fatal(fmt.Errorf("duckduckgo search failed: %w", err))
 	}
 
 	return result, nil

@@ -1,7 +1,6 @@
-package tools
+package searchers
 
 import (
-	"context"
 	"io"
 	"net/http"
 	"strings"
@@ -58,11 +57,6 @@ func TestSearxngHandle(t *testing.T) {
 	}
 	defer proxy.Close()
 
-	flowID := int64(1)
-	taskID := int64(10)
-	subtaskID := int64(20)
-	slp := &searchLogProviderMock{}
-
 	cfg := &config.Config{
 		SearxngURL:        testSearxngURL,
 		SearxngLanguage:   "en",
@@ -73,16 +67,17 @@ func TestSearxngHandle(t *testing.T) {
 		ExternalSSLCAPath: proxy.CACertPath(),
 	}
 
-	sx := NewSearxngTool(cfg, flowID, &taskID, &subtaskID, slp, nil)
+	sx := NewSearxng(cfg, nil)
 
-	ctx := PutAgentContext(t.Context(), database.MsgchainTypeSearcher)
 	got, err := sx.Handle(
-		ctx,
-		SearxngToolName,
-		[]byte(`{"query":"test query","max_results":5,"message":"m"}`),
+		t.Context(),
+		Request{Query: "test query", MaxResults: 5},
 	)
 	if err != nil {
 		t.Fatalf("Handle() unexpected error: %v", err)
+	}
+	if sx.Engine() != database.SearchengineTypeSearxng {
+		t.Errorf("Engine() = %q, want %q", sx.Engine(), database.SearchengineTypeSearxng)
 	}
 
 	// Verify mock handler was called
@@ -126,29 +121,6 @@ func TestSearxngHandle(t *testing.T) {
 	if !strings.Contains(got, "Test content") {
 		t.Errorf("result missing expected content 'Test content': %q", got)
 	}
-
-	// Verify search log was written with agent context
-	if slp.calls != 1 {
-		t.Errorf("PutLog() calls = %d, want 1", slp.calls)
-	}
-	if slp.engine != database.SearchengineTypeSearxng {
-		t.Errorf("engine = %q, want %q", slp.engine, database.SearchengineTypeSearxng)
-	}
-	if slp.query != "test query" {
-		t.Errorf("logged query = %q, want %q", slp.query, "test query")
-	}
-	if slp.parentType != database.MsgchainTypeSearcher {
-		t.Errorf("parent agent type = %q, want %q", slp.parentType, database.MsgchainTypeSearcher)
-	}
-	if slp.currType != database.MsgchainTypeSearcher {
-		t.Errorf("current agent type = %q, want %q", slp.currType, database.MsgchainTypeSearcher)
-	}
-	if slp.taskID == nil || *slp.taskID != taskID {
-		t.Errorf("task ID = %v, want %d", slp.taskID, taskID)
-	}
-	if slp.subtaskID == nil || *slp.subtaskID != subtaskID {
-		t.Errorf("subtask ID = %v, want %d", slp.subtaskID, subtaskID)
-	}
 }
 
 func TestSearxngIsAvailable(t *testing.T) {
@@ -185,7 +157,7 @@ func TestSearxngIsAvailable(t *testing.T) {
 }
 
 func TestSearxngParseHTTPResponse_StatusAndDecodeErrors(t *testing.T) {
-	sx := &searxng{flowID: 1}
+	sx := &searxng{}
 
 	t.Run("status error", func(t *testing.T) {
 		resp := &http.Response{
@@ -228,7 +200,7 @@ func TestSearxngParseHTTPResponse_StatusAndDecodeErrors(t *testing.T) {
 }
 
 func TestSearxngFormatResults_NoResults(t *testing.T) {
-	sx := &searxng{flowID: 1}
+	sx := &searxng{}
 
 	result := sx.formatResults([]SearxngResult{}, "test query")
 	if !strings.Contains(result, "No Results Found") {
@@ -240,7 +212,7 @@ func TestSearxngFormatResults_NoResults(t *testing.T) {
 }
 
 func TestSearxngFormatResults_WithResults(t *testing.T) {
-	sx := &searxng{flowID: 1}
+	sx := &searxng{}
 
 	results := []SearxngResult{
 		{
@@ -278,16 +250,8 @@ func TestSearxngFormatResults_WithResults(t *testing.T) {
 	}
 }
 
-func TestSearxngHandle_ValidationAndSwallowedError(t *testing.T) {
-	t.Run("invalid json", func(t *testing.T) {
-		sx := &searxng{cfg: testSearxngConfig()}
-		_, err := sx.Handle(t.Context(), SearxngToolName, []byte("{"))
-		if err == nil || !strings.Contains(err.Error(), "failed to unmarshal") {
-			t.Fatalf("expected unmarshal error, got: %v", err)
-		}
-	})
-
-	t.Run("search error swallowed", func(t *testing.T) {
+func TestSearxngHandle_ReturnsTypedError(t *testing.T) {
+	t.Run("upstream 502 returns a retryable error", func(t *testing.T) {
 		var seenRequest bool
 		mockMux := http.NewServeMux()
 		mockMux.HandleFunc("/search", func(w http.ResponseWriter, r *http.Request) {
@@ -302,7 +266,6 @@ func TestSearxngHandle_ValidationAndSwallowedError(t *testing.T) {
 		defer proxy.Close()
 
 		sx := &searxng{
-			flowID: 1,
 			cfg: &config.Config{
 				SearxngURL:        testSearxngURL,
 				ProxyURL:          proxy.URL(),
@@ -312,22 +275,24 @@ func TestSearxngHandle_ValidationAndSwallowedError(t *testing.T) {
 		}
 
 		result, err := sx.Handle(
-			context.Background(),
-			SearxngToolName,
-			[]byte(`{"query":"q","max_results":5,"message":"m"}`),
+			t.Context(),
+			Request{Query: "q", MaxResults: 5},
 		)
-		if err != nil {
-			t.Fatalf("Handle() unexpected error: %v", err)
-		}
 
 		// Verify mock handler was called (request was intercepted)
 		if !seenRequest {
 			t.Error("request was not intercepted by proxy - mock handler was not called")
 		}
 
-		// Verify error was swallowed and returned as string
-		if !strings.Contains(result, "failed to search in searxng") {
-			t.Errorf("Handle() = %q, expected swallowed error message", result)
+		// The error is now surfaced (not swallowed) and classified. A 502 is retryable.
+		if err == nil {
+			t.Fatal("Handle() expected an error, got nil")
+		}
+		if result != "" {
+			t.Errorf("Handle() result = %q, want empty on error", result)
+		}
+		if !IsRetryable(err) {
+			t.Errorf("Handle() error = %v, want a RetryableError", err)
 		}
 	})
 }
@@ -356,12 +321,11 @@ func TestSearxngHandle_DefaultLimit(t *testing.T) {
 		SearxngTimeout:    30,
 	}
 
-	sx := NewSearxngTool(cfg, 1, nil, nil, nil, nil)
+	sx := NewSearxng(cfg, nil)
 
 	_, err = sx.Handle(
 		t.Context(),
-		SearxngToolName,
-		[]byte(`{"query":"test","message":"m"}`),
+		Request{Query: "test"},
 	)
 	if err != nil {
 		t.Fatalf("Handle() unexpected error: %v", err)
@@ -397,12 +361,11 @@ func TestSearxngHandle_TimeRange(t *testing.T) {
 		SearxngTimeout:    30,
 	}
 
-	sx := NewSearxngTool(cfg, 1, nil, nil, nil, nil)
+	sx := NewSearxng(cfg, nil)
 
 	_, err = sx.Handle(
 		t.Context(),
-		SearxngToolName,
-		[]byte(`{"query":"test","max_results":5,"message":"m"}`),
+		Request{Query: "test", MaxResults: 5},
 	)
 	if err != nil {
 		t.Fatalf("Handle() unexpected error: %v", err)

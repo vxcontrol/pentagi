@@ -1,4 +1,4 @@
-package tools
+package searchers
 
 import (
 	"bytes"
@@ -35,83 +35,62 @@ const (
 
 // sploitus represents the Sploitus exploit search tool
 type sploitus struct {
-	cfg       *config.Config
-	flowID    int64
-	taskID    *int64
-	subtaskID *int64
-	slp       SearchLogProvider
+	cfg *config.Config
 }
 
-// NewSploitusTool creates a new Sploitus search tool instance
-func NewSploitusTool(
-	cfg *config.Config,
-	flowID int64,
-	taskID, subtaskID *int64,
-	slp SearchLogProvider,
-) Tool {
-	return &sploitus{
-		cfg:       cfg,
-		flowID:    flowID,
-		taskID:    taskID,
-		subtaskID: subtaskID,
-		slp:       slp,
-	}
+// NewSploitus creates a new Sploitus search primitive.
+func NewSploitus(cfg *config.Config) Searcher {
+	return &sploitus{cfg: cfg}
 }
 
-// Handle processes a Sploitus exploit search request from an AI agent
-func (s *sploitus) Handle(ctx context.Context, name string, args json.RawMessage) (string, error) {
+func (s *sploitus) Engine() database.SearchengineType {
+	return database.SearchengineTypeSploitus
+}
+
+// Handle processes a Sploitus exploit search request from the orchestrator.
+func (s *sploitus) Handle(ctx context.Context, req Request) (string, error) {
 	if !s.IsAvailable() {
-		return "", fmt.Errorf("sploitus is not available")
+		return "", ErrNotConfigured
 	}
 
-	var action SploitusAction
 	ctx, observation := obs.Observer.NewObservation(ctx)
-	logger := logrus.WithContext(ctx).WithFields(enrichLogrusFields(s.flowID, s.taskID, s.subtaskID, logrus.Fields{
-		"tool": name,
-		"args": string(args),
-	}))
-
-	if err := json.Unmarshal(args, &action); err != nil {
-		logger.WithError(err).Error("failed to unmarshal sploitus search action")
-		return "", fmt.Errorf("failed to unmarshal %s search action arguments: %w", name, err)
-	}
 
 	// Normalise exploit type
-	exploitType := strings.ToLower(strings.TrimSpace(action.ExploitType.String()))
+	exploitType := strings.ToLower(strings.TrimSpace(req.ExploitType))
 	if exploitType == "" {
 		exploitType = defaultSploitusType
 	}
 
 	// Normalise sort order
-	sort := strings.ToLower(strings.TrimSpace(action.Sort.String()))
+	sort := strings.ToLower(strings.TrimSpace(req.Sort))
 	if sort == "" {
 		sort = sploitusDefaultSort
 	}
 
 	// Clamp max results
-	limit := action.MaxResults.Int()
+	limit := req.MaxResults
 	if limit < 1 || limit > maxSploitusLimit {
 		limit = defaultSploitusLimit
 	}
 
-	logger = logger.WithFields(logrus.Fields{
-		"query":        action.Query[:min(len(action.Query), 1000)],
+	logger := logrus.WithContext(ctx).WithFields(logrus.Fields{
+		"engine":       "sploitus",
+		"query":        req.Query[:min(len(req.Query), 1000)],
 		"exploit_type": exploitType,
 		"sort":         sort,
 		"limit":        limit,
 	})
 
-	result, err := s.search(ctx, action.Query, exploitType, sort, limit)
+	result, err := s.search(ctx, req.Query, exploitType, sort, limit)
 	if err != nil {
 		observation.Event(
-			langfuse.WithEventName("sploitus search error swallowed"),
-			langfuse.WithEventInput(action.Query),
+			langfuse.WithEventName("sploitus search error"),
+			langfuse.WithEventInput(req.Query),
 			langfuse.WithEventStatus(err.Error()),
 			langfuse.WithEventLevel(langfuse.ObservationLevelWarning),
 			langfuse.WithEventMetadata(langfuse.Metadata{
-				"tool_name":    SploitusToolName,
 				"engine":       "sploitus",
-				"query":        action.Query,
+				"query":        req.Query,
 				"exploit_type": exploitType,
 				"sort":         sort,
 				"limit":        limit,
@@ -120,20 +99,7 @@ func (s *sploitus) Handle(ctx context.Context, name string, args json.RawMessage
 		)
 
 		logger.WithError(err).Error("failed to search in Sploitus")
-		return fmt.Sprintf("failed to search in Sploitus: %v", err), nil
-	}
-
-	if agentCtx, ok := GetAgentContext(ctx); ok {
-		_, _ = s.slp.PutLog(
-			ctx,
-			agentCtx.ParentAgentType,
-			agentCtx.CurrentAgentType,
-			database.SearchengineTypeSploitus,
-			action.Query,
-			result,
-			s.taskID,
-			s.subtaskID,
-		)
+		return "", err
 	}
 
 	return result, nil
@@ -151,19 +117,19 @@ func (s *sploitus) search(ctx context.Context, query, exploitType, sort string, 
 
 	bodyBytes, err := json.Marshal(reqBody)
 	if err != nil {
-		return "", fmt.Errorf("failed to marshal request body: %w", err)
+		return "", Fatal(fmt.Errorf("failed to marshal request body: %w", err))
 	}
 
 	client, err := system.GetHTTPClient(s.cfg)
 	if err != nil {
-		return "", fmt.Errorf("failed to create http client: %w", err)
+		return "", Fatal(fmt.Errorf("failed to create http client: %w", err))
 	}
 
 	client.Timeout = sploitusRequestTimeout
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, sploitusAPIURL, bytes.NewReader(bodyBytes))
 	if err != nil {
-		return "", fmt.Errorf("failed to create request: %w", err)
+		return "", Fatal(fmt.Errorf("failed to create request: %w", err))
 	}
 
 	// Build referer with query to mimic browser behavior
@@ -186,22 +152,27 @@ func (s *sploitus) search(ctx context.Context, query, exploitType, sort string, 
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("request to Sploitus failed: %w", err)
+		return "", Retryable(fmt.Errorf("request to Sploitus failed: %w", err), 0)
 	}
 	defer resp.Body.Close()
 
-	// Sploitus API returns 499 when rate limit is temporarily exceeded
+	// Sploitus API returns 499 (and sometimes 422) when its rate limit is temporarily
+	// exceeded — a transient condition that may clear on retry.
 	if resp.StatusCode == 499 || resp.StatusCode == 422 {
-		return "", fmt.Errorf("Sploitus API rate limit exceeded (HTTP %d), please try again later", resp.StatusCode)
+		return "", Retryable(fmt.Errorf("Sploitus API rate limit exceeded (HTTP %d), please try again later", resp.StatusCode), 0)
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("Sploitus API returned HTTP %d", resp.StatusCode)
+		err := fmt.Errorf("Sploitus API returned HTTP %d", resp.StatusCode)
+		if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500 {
+			return "", Retryable(err, 0)
+		}
+		return "", Fatal(err)
 	}
 
 	var apiResp sploitusResponse
 	if err := json.NewDecoder(resp.Body).Decode(&apiResp); err != nil {
-		return "", fmt.Errorf("failed to decode Sploitus response: %w", err)
+		return "", Fatal(fmt.Errorf("failed to decode Sploitus response: %w", err))
 	}
 
 	return formatSploitusResults(query, exploitType, limit, apiResp), nil

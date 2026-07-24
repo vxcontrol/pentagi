@@ -1,4 +1,4 @@
-package tools
+package searchers
 
 import (
 	"context"
@@ -46,11 +46,6 @@ func TestTavilyHandle(t *testing.T) {
 	}
 	defer proxy.Close()
 
-	flowID := int64(1)
-	taskID := int64(10)
-	subtaskID := int64(20)
-	slp := &searchLogProviderMock{}
-
 	cfg := &config.Config{
 		TavilyAPIKey:        testTavilyAPIKey,
 		ProxyURL:            proxy.URL(),
@@ -58,16 +53,17 @@ func TestTavilyHandle(t *testing.T) {
 		ExternalSSLInsecure: false,
 	}
 
-	tav := NewTavilyTool(cfg, flowID, &taskID, &subtaskID, slp, nil)
+	tav := NewTavily(cfg, nil)
 
-	ctx := PutAgentContext(t.Context(), database.MsgchainTypeSearcher)
 	got, err := tav.Handle(
-		ctx,
-		TavilyToolName,
-		[]byte(`{"query":"test query","max_results":5,"message":"m"}`),
+		t.Context(),
+		Request{Query: "test query", MaxResults: 5},
 	)
 	if err != nil {
 		t.Fatalf("Handle() unexpected error: %v", err)
+	}
+	if tav.Engine() != database.SearchengineTypeTavily {
+		t.Errorf("Engine() = %q, want %q", tav.Engine(), database.SearchengineTypeTavily)
 	}
 
 	// Verify mock handler was called
@@ -106,28 +102,6 @@ func TestTavilyHandle(t *testing.T) {
 		t.Errorf("result missing expected URL 'https://example.com': %q", got)
 	}
 
-	// Verify search log was written with agent context
-	if slp.calls != 1 {
-		t.Errorf("PutLog() calls = %d, want 1", slp.calls)
-	}
-	if slp.engine != database.SearchengineTypeTavily {
-		t.Errorf("engine = %q, want %q", slp.engine, database.SearchengineTypeTavily)
-	}
-	if slp.query != "test query" {
-		t.Errorf("logged query = %q, want %q", slp.query, "test query")
-	}
-	if slp.parentType != database.MsgchainTypeSearcher {
-		t.Errorf("parent agent type = %q, want %q", slp.parentType, database.MsgchainTypeSearcher)
-	}
-	if slp.currType != database.MsgchainTypeSearcher {
-		t.Errorf("current agent type = %q, want %q", slp.currType, database.MsgchainTypeSearcher)
-	}
-	if slp.taskID == nil || *slp.taskID != taskID {
-		t.Errorf("task ID = %v, want %d", slp.taskID, taskID)
-	}
-	if slp.subtaskID == nil || *slp.subtaskID != subtaskID {
-		t.Errorf("subtask ID = %v, want %d", slp.subtaskID, subtaskID)
-	}
 }
 
 func TestTavilyIsAvailable(t *testing.T) {
@@ -164,7 +138,7 @@ func TestTavilyIsAvailable(t *testing.T) {
 }
 
 func TestTavilyParseHTTPResponse_StatusAndDecodeErrors(t *testing.T) {
-	tav := &tavily{flowID: 1}
+	tav := &tavily{}
 
 	tests := []struct {
 		name       string
@@ -381,16 +355,8 @@ func TestTavilyBuildResult_WithSummarizer(t *testing.T) {
 	})
 }
 
-func TestTavilyHandle_ValidationAndSwallowedError(t *testing.T) {
-	t.Run("invalid json", func(t *testing.T) {
-		tav := &tavily{cfg: testTavilyConfig()}
-		_, err := tav.Handle(t.Context(), TavilyToolName, []byte("{"))
-		if err == nil || !strings.Contains(err.Error(), "failed to unmarshal") {
-			t.Fatalf("expected unmarshal error, got: %v", err)
-		}
-	})
-
-	t.Run("search error swallowed", func(t *testing.T) {
+func TestTavilyHandle_ReturnsTypedError(t *testing.T) {
+	t.Run("upstream 502 returns a retryable error", func(t *testing.T) {
 		var seenRequest bool
 		mockMux := http.NewServeMux()
 		mockMux.HandleFunc("/search", func(w http.ResponseWriter, r *http.Request) {
@@ -405,7 +371,6 @@ func TestTavilyHandle_ValidationAndSwallowedError(t *testing.T) {
 		defer proxy.Close()
 
 		tav := &tavily{
-			flowID: 1,
 			cfg: &config.Config{
 				TavilyAPIKey:        testTavilyAPIKey,
 				ProxyURL:            proxy.URL(),
@@ -416,21 +381,23 @@ func TestTavilyHandle_ValidationAndSwallowedError(t *testing.T) {
 
 		result, err := tav.Handle(
 			t.Context(),
-			TavilyToolName,
-			[]byte(`{"query":"q","max_results":5,"message":"m"}`),
+			Request{Query: "q", MaxResults: 5},
 		)
-		if err != nil {
-			t.Fatalf("Handle() unexpected error: %v", err)
-		}
 
 		// Verify mock handler was called (request was intercepted)
 		if !seenRequest {
 			t.Error("request was not intercepted by proxy - mock handler was not called")
 		}
 
-		// Verify error was swallowed and returned as string
-		if !strings.Contains(result, "failed to search in tavily") {
-			t.Errorf("Handle() = %q, expected swallowed error message", result)
+		// The error is now surfaced (not swallowed) and classified. A 502 is retryable.
+		if err == nil {
+			t.Fatal("Handle() expected an error, got nil")
+		}
+		if result != "" {
+			t.Errorf("Handle() result = %q, want empty on error", result)
+		}
+		if !IsRetryable(err) {
+			t.Errorf("Handle() error = %v, want a RetryableError", err)
 		}
 	})
 }

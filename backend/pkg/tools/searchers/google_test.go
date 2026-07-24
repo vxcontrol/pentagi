@@ -1,8 +1,8 @@
-package tools
+package searchers
 
 import (
 	"context"
-	"fmt"
+	"net/http"
 	"strings"
 	"testing"
 
@@ -69,8 +69,15 @@ func TestGoogleIsAvailable(t *testing.T) {
 	}
 }
 
+func TestGoogleEngine(t *testing.T) {
+	g := NewGoogle(testGoogleConfig())
+	if g.Engine() != database.SearchengineTypeGoogle {
+		t.Errorf("Engine() = %q, want %q", g.Engine(), database.SearchengineTypeGoogle)
+	}
+}
+
 func TestGoogleFormatResults(t *testing.T) {
-	g := &google{flowID: 1}
+	g := &google{}
 
 	t.Run("empty results", func(t *testing.T) {
 		res := &customsearch.Search{Items: nil}
@@ -178,89 +185,29 @@ func TestGoogleNewSearchService(t *testing.T) {
 	})
 }
 
-func TestGoogleHandle_ValidationAndSwallowedError(t *testing.T) {
-	t.Run("invalid json", func(t *testing.T) {
-		g := &google{cfg: testGoogleConfig()}
-		_, err := g.Handle(t.Context(), GoogleToolName, []byte("{"))
-		if err == nil || !strings.Contains(err.Error(), "failed to unmarshal") {
-			t.Fatalf("expected unmarshal error, got: %v", err)
-		}
-	})
-
-	t.Run("search error swallowed", func(t *testing.T) {
-		// Use canceled context to make Do() fail immediately
+func TestGoogleHandle_ReturnsTypedError(t *testing.T) {
+	t.Run("search error returned as typed error", func(t *testing.T) {
+		// Use a canceled context to make Do() fail immediately.
 		ctx, cancel := context.WithCancel(t.Context())
 		cancel()
 
 		g := &google{cfg: testGoogleConfig()}
 
-		got, err := g.Handle(
-			ctx,
-			GoogleToolName,
-			[]byte(`{"query":"q","max_results":5,"message":"m"}`),
-		)
-		if err != nil {
-			t.Fatalf("Handle() unexpected error: %v", err)
+		result, err := g.Handle(ctx, Request{Query: "q", MaxResults: 5})
+
+		// The error is now surfaced (not swallowed). A canceled request is a
+		// transport-level failure (not a *googleapi.Error), so classifyGoogleError
+		// classifies it as retryable.
+		if err == nil {
+			t.Fatal("Handle() expected an error, got nil")
 		}
-		if !strings.Contains(got, "failed to search in google") {
-			t.Fatalf("Handle() = %q, expected swallowed error", got)
+		if result != "" {
+			t.Errorf("Handle() result = %q, want empty on error", result)
+		}
+		if !IsRetryable(err) {
+			t.Errorf("Handle() error = %v, want a RetryableError", err)
 		}
 	})
-}
-
-func TestGoogleHandle_WithAgentContext(t *testing.T) {
-	// Note: This test cannot fully verify search behavior without a real API call.
-	// It verifies parameter handling and agent context propagation.
-
-	flowID := int64(1)
-	taskID := int64(10)
-	subtaskID := int64(20)
-	slp := &searchLogProviderMock{}
-
-	g := NewGoogleTool(testGoogleConfig(), flowID, &taskID, &subtaskID, slp)
-
-	// Use canceled context to make search fail quickly
-	ctx, cancel := context.WithCancel(t.Context())
-	cancel()
-	ctx = PutAgentContext(ctx, database.MsgchainTypeSearcher)
-
-	// This will fail due to canceled context, but we can verify the structure
-	result, err := g.Handle(
-		ctx,
-		GoogleToolName,
-		[]byte(`{"query":"test query","max_results":5,"message":"m"}`),
-	)
-
-	// Error should be swallowed
-	if err != nil {
-		t.Fatalf("Handle() unexpected error: %v", err)
-	}
-	if !strings.Contains(result, "failed to search in google") {
-		t.Errorf("Handle() = %q, expected swallowed error message", result)
-	}
-
-	// Search log should be written even on error
-	if slp.calls != 1 {
-		t.Errorf("PutLog() calls = %d, want 1", slp.calls)
-	}
-	if slp.engine != database.SearchengineTypeGoogle {
-		t.Errorf("engine = %q, want %q", slp.engine, database.SearchengineTypeGoogle)
-	}
-	if slp.query != "test query" {
-		t.Errorf("logged query = %q, want %q", slp.query, "test query")
-	}
-	if slp.parentType != database.MsgchainTypeSearcher {
-		t.Errorf("parent agent type = %q, want %q", slp.parentType, database.MsgchainTypeSearcher)
-	}
-	if slp.currType != database.MsgchainTypeSearcher {
-		t.Errorf("current agent type = %q, want %q", slp.currType, database.MsgchainTypeSearcher)
-	}
-	if slp.taskID == nil || *slp.taskID != taskID {
-		t.Errorf("task ID = %v, want %d", slp.taskID, taskID)
-	}
-	if slp.subtaskID == nil || *slp.subtaskID != subtaskID {
-		t.Errorf("subtask ID = %v, want %d", slp.subtaskID, subtaskID)
-	}
 }
 
 func TestGoogleMaxResultsClamp(t *testing.T) {
@@ -280,24 +227,22 @@ func TestGoogleMaxResultsClamp(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			g := &google{cfg: testGoogleConfig()}
 
-			// Use canceled context to fail quickly without real API call
+			// Use a canceled context to fail quickly without a real API call.
 			ctx, cancel := context.WithCancel(t.Context())
 			cancel()
 
-			result, err := g.Handle(
-				ctx,
-				GoogleToolName,
-				[]byte(`{"query":"test","max_results":`+strings.TrimSpace(fmt.Sprintf("%d", tt.maxResults))+`,"message":"m"}`),
-			)
+			result, err := g.Handle(ctx, Request{Query: "test", MaxResults: tt.maxResults})
 
-			// Should not return error (errors are swallowed)
-			if err != nil {
-				t.Fatalf("Handle() unexpected error: %v", err)
+			// Errors are now surfaced (not swallowed): a canceled request is a
+			// transport-level failure, classified as retryable.
+			if err == nil {
+				t.Fatal("Handle() expected an error, got nil")
 			}
-
-			// Should contain error message since context is canceled
-			if !strings.Contains(result, "failed to search in google") {
-				t.Errorf("Handle() = %q, expected swallowed error", result)
+			if result != "" {
+				t.Errorf("Handle() result = %q, want empty on error", result)
+			}
+			if !IsRetryable(err) {
+				t.Errorf("Handle() error = %v, want a RetryableError", err)
 			}
 		})
 	}
@@ -328,5 +273,84 @@ func TestGoogleConfigHelpers_NilConfig(t *testing.T) {
 	}
 	if g.lrKey() != "" {
 		t.Errorf("lrKey() with nil config = %q, want empty", g.lrKey())
+	}
+}
+
+// roundTripFunc adapts a function to http.RoundTripper for transport unit tests.
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) { return f(req) }
+
+// TestGoogleAPIKeyTransport_AddsKeyParam guards the fix for the WithHTTPClient /
+// WithAPIKey drop: the wrapping transport must add `key` to every request, preserve
+// existing params, and not mutate the caller's request.
+func TestGoogleAPIKeyTransport_AddsKeyParam(t *testing.T) {
+	var captured *http.Request
+	base := roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		captured = req
+		return &http.Response{StatusCode: http.StatusOK, Body: http.NoBody, Header: make(http.Header)}, nil
+	})
+
+	rt := &googleAPIKeyTransport{key: "test-key", base: base}
+	req, err := http.NewRequest(http.MethodGet, "https://customsearch.googleapis.com/customsearch/v1?q=hello&cx=cx1", nil)
+	if err != nil {
+		t.Fatalf("failed to build request: %v", err)
+	}
+
+	if _, err := rt.RoundTrip(req); err != nil {
+		t.Fatalf("RoundTrip() unexpected error: %v", err)
+	}
+
+	if got := captured.URL.Query().Get("key"); got != "test-key" {
+		t.Errorf("key param = %q, want test-key", got)
+	}
+	if got := captured.URL.Query().Get("q"); got != "hello" {
+		t.Errorf("q param = %q, want hello (existing params must be preserved)", got)
+	}
+	if req.URL.Query().Get("key") != "" {
+		t.Error("the caller's original request was mutated (key added to it)")
+	}
+}
+
+// TestGoogleHandle_SendsAPIKeyThroughProxy is the end-to-end regression guard: it
+// drives a real Handle through the proxy/TLS client (the exact setup that dropped the
+// key) and asserts the API key and cx reach the wire, producing a parsed result.
+func TestGoogleHandle_SendsAPIKeyThroughProxy(t *testing.T) {
+	var receivedURL string
+	mockMux := http.NewServeMux()
+	mockMux.HandleFunc("/customsearch/v1", func(w http.ResponseWriter, r *http.Request) {
+		receivedURL = r.URL.String()
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"items":[{"title":"Doc","link":"https://example.com","snippet":"snip"}]}`))
+	})
+
+	proxy, err := newTestProxy("customsearch.googleapis.com", mockMux)
+	if err != nil {
+		t.Fatalf("failed to create proxy: %v", err)
+	}
+	defer proxy.Close()
+
+	cfg := &config.Config{
+		GoogleAPIKey:      "test-key",
+		GoogleCXKey:       "test-cx",
+		ProxyURL:          proxy.URL(),
+		ExternalSSLCAPath: proxy.CACertPath(),
+	}
+	g := NewGoogle(cfg)
+
+	got, err := g.Handle(t.Context(), Request{Query: "hello world", MaxResults: 5})
+	if err != nil {
+		t.Fatalf("Handle() unexpected error: %v", err)
+	}
+
+	if !strings.Contains(receivedURL, "key=test-key") {
+		t.Errorf("request URL = %q, expected it to carry key=test-key", receivedURL)
+	}
+	if !strings.Contains(receivedURL, "cx=test-cx") {
+		t.Errorf("request URL = %q, expected it to carry cx=test-cx", receivedURL)
+	}
+	if !strings.Contains(got, "https://example.com") {
+		t.Errorf("result missing expected URL: %q", got)
 	}
 }

@@ -1,4 +1,4 @@
-package tools
+package searchers
 
 import (
 	"context"
@@ -48,11 +48,6 @@ func TestFirecrawlHandle(t *testing.T) {
 	}
 	defer proxy.Close()
 
-	flowID := int64(1)
-	taskID := int64(10)
-	subtaskID := int64(20)
-	slp := &searchLogProviderMock{}
-
 	cfg := &config.Config{
 		FirecrawlAPIKey:     testFirecrawlAPIKey,
 		ProxyURL:            proxy.URL(),
@@ -60,16 +55,17 @@ func TestFirecrawlHandle(t *testing.T) {
 		ExternalSSLInsecure: false,
 	}
 
-	fc := NewFirecrawlTool(cfg, flowID, &taskID, &subtaskID, slp, nil)
+	fc := NewFirecrawl(cfg, nil)
 
-	ctx := PutAgentContext(t.Context(), database.MsgchainTypeSearcher)
 	got, err := fc.Handle(
-		ctx,
-		FirecrawlToolName,
-		[]byte(`{"query":"test query","max_results":5,"message":"m"}`),
+		t.Context(),
+		Request{Query: "test query", MaxResults: 5},
 	)
 	if err != nil {
 		t.Fatalf("Handle() unexpected error: %v", err)
+	}
+	if fc.Engine() != database.SearchengineTypeFirecrawl {
+		t.Errorf("Engine() = %q, want %q", fc.Engine(), database.SearchengineTypeFirecrawl)
 	}
 
 	// Verify mock handler was called
@@ -103,29 +99,6 @@ func TestFirecrawlHandle(t *testing.T) {
 	}
 	if !strings.Contains(got, "https://example.com") {
 		t.Errorf("result missing expected URL 'https://example.com': %q", got)
-	}
-
-	// Verify search log was written with agent context
-	if slp.calls != 1 {
-		t.Errorf("PutLog() calls = %d, want 1", slp.calls)
-	}
-	if slp.engine != database.SearchengineTypeFirecrawl {
-		t.Errorf("engine = %q, want %q", slp.engine, database.SearchengineTypeFirecrawl)
-	}
-	if slp.query != "test query" {
-		t.Errorf("logged query = %q, want %q", slp.query, "test query")
-	}
-	if slp.parentType != database.MsgchainTypeSearcher {
-		t.Errorf("parent agent type = %q, want %q", slp.parentType, database.MsgchainTypeSearcher)
-	}
-	if slp.currType != database.MsgchainTypeSearcher {
-		t.Errorf("current agent type = %q, want %q", slp.currType, database.MsgchainTypeSearcher)
-	}
-	if slp.taskID == nil || *slp.taskID != taskID {
-		t.Errorf("task ID = %v, want %d", slp.taskID, taskID)
-	}
-	if slp.subtaskID == nil || *slp.subtaskID != subtaskID {
-		t.Errorf("subtask ID = %v, want %d", slp.subtaskID, subtaskID)
 	}
 }
 
@@ -201,7 +174,7 @@ func TestFirecrawlSearchURL(t *testing.T) {
 }
 
 func TestFirecrawlParseHTTPResponse_StatusAndDecodeErrors(t *testing.T) {
-	fc := &firecrawl{flowID: 1}
+	fc := &firecrawl{}
 
 	tests := []struct {
 		name       string
@@ -471,16 +444,8 @@ func TestFirecrawlBuildResult_WithSummarizer(t *testing.T) {
 	})
 }
 
-func TestFirecrawlHandle_ValidationAndSwallowedError(t *testing.T) {
-	t.Run("invalid json", func(t *testing.T) {
-		fc := &firecrawl{cfg: testFirecrawlConfig()}
-		_, err := fc.Handle(t.Context(), FirecrawlToolName, []byte("{"))
-		if err == nil || !strings.Contains(err.Error(), "failed to unmarshal") {
-			t.Fatalf("expected unmarshal error, got: %v", err)
-		}
-	})
-
-	t.Run("search error swallowed", func(t *testing.T) {
+func TestFirecrawlHandle_ReturnsTypedError(t *testing.T) {
+	t.Run("upstream 502 returns a retryable error", func(t *testing.T) {
 		var seenRequest bool
 		mockMux := http.NewServeMux()
 		mockMux.HandleFunc("/v2/search", func(w http.ResponseWriter, r *http.Request) {
@@ -495,7 +460,6 @@ func TestFirecrawlHandle_ValidationAndSwallowedError(t *testing.T) {
 		defer proxy.Close()
 
 		fc := &firecrawl{
-			flowID: 1,
 			cfg: &config.Config{
 				FirecrawlAPIKey:     testFirecrawlAPIKey,
 				ProxyURL:            proxy.URL(),
@@ -506,21 +470,23 @@ func TestFirecrawlHandle_ValidationAndSwallowedError(t *testing.T) {
 
 		result, err := fc.Handle(
 			t.Context(),
-			FirecrawlToolName,
-			[]byte(`{"query":"q","max_results":5,"message":"m"}`),
+			Request{Query: "q", MaxResults: 5},
 		)
-		if err != nil {
-			t.Fatalf("Handle() unexpected error: %v", err)
-		}
 
 		// Verify mock handler was called (request was intercepted)
 		if !seenRequest {
 			t.Error("request was not intercepted by proxy - mock handler was not called")
 		}
 
-		// Verify error was swallowed and returned as string
-		if !strings.Contains(result, "failed to search in firecrawl") {
-			t.Errorf("Handle() = %q, expected swallowed error message", result)
+		// The error is now surfaced (not swallowed) and classified. A 502 is retryable.
+		if err == nil {
+			t.Fatal("Handle() expected an error, got nil")
+		}
+		if result != "" {
+			t.Errorf("Handle() result = %q, want empty on error", result)
+		}
+		if !IsRetryable(err) {
+			t.Errorf("Handle() error = %v, want a RetryableError", err)
 		}
 	})
 }

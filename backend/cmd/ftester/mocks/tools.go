@@ -136,6 +136,42 @@ func MockResponse(funcName string, args json.RawMessage) (string, error) {
 
 		resultObj = builder.String()
 
+	case tools.WebSearchToolName:
+		var searchArgs tools.WebSearchAction
+		if err := json.Unmarshal(args, &searchArgs); err != nil {
+			return "", fmt.Errorf("error unmarshaling web_search arguments: %w", err)
+		}
+
+		mode := strings.ToLower(strings.TrimSpace(searchArgs.Mode.String()))
+		if mode == "" {
+			mode = "answer"
+		}
+		n := searchArgs.MaxResults.Int()
+		if n < 1 || n > 3 {
+			n = 3
+		}
+
+		terminal.PrintMock("web_search:")
+		terminal.PrintKeyValue("Query", searchArgs.Query)
+		terminal.PrintKeyValue("Mode", mode)
+
+		var builder strings.Builder
+		builder.WriteString(fmt.Sprintf("# Mock web_search result (mode=%s)\n\n", mode))
+		builder.WriteString(fmt.Sprintf("The web_search orchestrator would pick the best available engine for mode '%s', retry transient failures, and fall back across providers automatically.\n\n", mode))
+		switch mode {
+		case "links":
+			builder.WriteString("# Links\n\n")
+			for i := 1; i <= n; i++ {
+				builder.WriteString(fmt.Sprintf("## %d. Mock result %d\n\n* URL https://example.com/web_search/result%d\n\n### Snippet\n\nBrief snippet about '%s'.\n\n", i, i, i, searchArgs.Query))
+			}
+		case "exploit":
+			builder.WriteString(fmt.Sprintf("# Exploits\n\n## 1. Mock exploit for '%s'\n\n* URL https://sploitus.com/exploit/mock\n* CVSS 9.8\n\n", searchArgs.Query))
+		default: // answer / research
+			builder.WriteString(fmt.Sprintf("# Answer\n\nThis is a synthesized mock answer to '%s' that web_search would return in mode '%s', combining multiple sources.\n", searchArgs.Query, mode))
+		}
+
+		resultObj = builder.String()
+
 	case tools.FirecrawlToolName:
 		var searchArgs tools.SearchAction
 		if err := json.Unmarshal(args, &searchArgs); err != nil {

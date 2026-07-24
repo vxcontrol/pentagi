@@ -922,90 +922,12 @@ func (fte *flowToolsExecutor) GetAssistantExecutor(cfg AssistantExecutorConfig) 
 			definitions = append(definitions, registryDefinitions[SearchCodeToolName])
 			handlers[SearchCodeToolName] = code.Handle
 		}
+	}
 
-		google := NewGoogleTool(
-			fte.cfg,
-			fte.flowID, nil, nil,
-			fte.slp,
-		)
-		if google.IsAvailable() {
-			definitions = append(definitions, registryDefinitions[GoogleToolName])
-			handlers[GoogleToolName] = google.Handle
-		}
-
-		duckduckgo := NewDuckDuckGoTool(
-			fte.cfg,
-			fte.flowID, nil, nil,
-			fte.slp,
-		)
-		if duckduckgo.IsAvailable() {
-			definitions = append(definitions, registryDefinitions[DuckDuckGoToolName])
-			handlers[DuckDuckGoToolName] = duckduckgo.Handle
-		}
-
-		tavily := NewTavilyTool(
-			fte.cfg,
-			fte.flowID, nil, nil,
-			fte.slp,
-			cfg.Summarizer,
-		)
-		if tavily.IsAvailable() {
-			definitions = append(definitions, registryDefinitions[TavilyToolName])
-			handlers[TavilyToolName] = tavily.Handle
-		}
-
-		firecrawl := NewFirecrawlTool(
-			fte.cfg,
-			fte.flowID, nil, nil,
-			fte.slp,
-			cfg.Summarizer,
-		)
-		if firecrawl.IsAvailable() {
-			definitions = append(definitions, registryDefinitions[FirecrawlToolName])
-			handlers[FirecrawlToolName] = firecrawl.Handle
-		}
-
-		traversaal := NewTraversaalTool(
-			fte.cfg,
-			fte.flowID, nil, nil,
-			fte.slp,
-		)
-		if traversaal.IsAvailable() {
-			definitions = append(definitions, registryDefinitions[TraversaalToolName])
-			handlers[TraversaalToolName] = traversaal.Handle
-		}
-
-		perplexity := NewPerplexityTool(
-			fte.cfg,
-			fte.flowID, nil, nil,
-			fte.slp,
-			cfg.Summarizer,
-		)
-		if perplexity.IsAvailable() {
-			definitions = append(definitions, registryDefinitions[PerplexityToolName])
-			handlers[PerplexityToolName] = perplexity.Handle
-		}
-
-		searxng := NewSearxngTool(
-			fte.cfg,
-			fte.flowID, nil, nil,
-			fte.slp,
-			cfg.Summarizer,
-		)
-		if searxng.IsAvailable() {
-			definitions = append(definitions, registryDefinitions[SearxngToolName])
-			handlers[SearxngToolName] = searxng.Handle
-		}
-
-		sploitus := NewSploitusTool(
-			fte.cfg,
-			fte.flowID, nil, nil,
-			fte.slp,
-		)
-		if sploitus.IsAvailable() {
-			definitions = append(definitions, registryDefinitions[SploitusToolName])
-			handlers[SploitusToolName] = sploitus.Handle
-		}
+	webSearch := buildWebSearch(fte, nil, nil, cfg.Summarizer)
+	if webSearch.IsAvailable() {
+		definitions = append(definitions, registryDefinitions[WebSearchToolName])
+		handlers[WebSearchToolName] = webSearch.Handle
 	}
 
 	flowStatus := NewFlowStatusTool(fte.flowID, fte.db, cfg.Summarizer)
@@ -1468,16 +1390,10 @@ func (fte *flowToolsExecutor) GetPentesterExecutor(cfg PentesterExecutorConfig) 
 		ce.handlers[GraphitiSearchToolName] = graphitiSearch.Handle
 	}
 
-	sploitus := NewSploitusTool(
-		fte.cfg,
-		fte.flowID,
-		cfg.TaskID,
-		cfg.SubtaskID,
-		fte.slp,
-	)
-	if sploitus.IsAvailable() {
-		ce.definitions = append(ce.definitions, registryDefinitions[SploitusToolName])
-		ce.handlers[SploitusToolName] = sploitus.Handle
+	webSearch := buildWebSearch(fte, cfg.TaskID, cfg.SubtaskID, cfg.Summarizer)
+	if webSearch.IsAvailable() {
+		ce.definitions = append(ce.definitions, registryDefinitions[WebSearchToolName])
+		ce.handlers[WebSearchToolName] = webSearch.Handle
 	}
 
 	return ce, nil
@@ -1530,104 +1446,10 @@ func (fte *flowToolsExecutor) GetSearcherExecutor(cfg SearcherExecutorConfig) (C
 		ce.handlers[BrowserToolName] = browser.Handle
 	}
 
-	google := NewGoogleTool(
-		fte.cfg,
-		fte.flowID,
-		cfg.TaskID,
-		cfg.SubtaskID,
-		fte.slp,
-	)
-	if google.IsAvailable() {
-		ce.definitions = append(ce.definitions, registryDefinitions[GoogleToolName])
-		ce.handlers[GoogleToolName] = google.Handle
-	}
-
-	duckduckgo := NewDuckDuckGoTool(
-		fte.cfg,
-		fte.flowID,
-		cfg.TaskID,
-		cfg.SubtaskID,
-		fte.slp,
-	)
-	if duckduckgo.IsAvailable() {
-		ce.definitions = append(ce.definitions, registryDefinitions[DuckDuckGoToolName])
-		ce.handlers[DuckDuckGoToolName] = duckduckgo.Handle
-	}
-
-	tavily := NewTavilyTool(
-		fte.cfg,
-		fte.flowID,
-		cfg.TaskID,
-		cfg.SubtaskID,
-		fte.slp,
-		cfg.Summarizer,
-	)
-	if tavily.IsAvailable() {
-		ce.definitions = append(ce.definitions, registryDefinitions[TavilyToolName])
-		ce.handlers[TavilyToolName] = tavily.Handle
-	}
-
-	firecrawl := NewFirecrawlTool(
-		fte.cfg,
-		fte.flowID,
-		cfg.TaskID,
-		cfg.SubtaskID,
-		fte.slp,
-		cfg.Summarizer,
-	)
-	if firecrawl.IsAvailable() {
-		ce.definitions = append(ce.definitions, registryDefinitions[FirecrawlToolName])
-		ce.handlers[FirecrawlToolName] = firecrawl.Handle
-	}
-
-	traversaal := NewTraversaalTool(
-		fte.cfg,
-		fte.flowID,
-		cfg.TaskID,
-		cfg.SubtaskID,
-		fte.slp,
-	)
-	if traversaal.IsAvailable() {
-		ce.definitions = append(ce.definitions, registryDefinitions[TraversaalToolName])
-		ce.handlers[TraversaalToolName] = traversaal.Handle
-	}
-
-	perplexity := NewPerplexityTool(
-		fte.cfg,
-		fte.flowID,
-		cfg.TaskID,
-		cfg.SubtaskID,
-		fte.slp,
-		cfg.Summarizer,
-	)
-	if perplexity.IsAvailable() {
-		ce.definitions = append(ce.definitions, registryDefinitions[PerplexityToolName])
-		ce.handlers[PerplexityToolName] = perplexity.Handle
-	}
-
-	searxng := NewSearxngTool(
-		fte.cfg,
-		fte.flowID,
-		cfg.TaskID,
-		cfg.SubtaskID,
-		fte.slp,
-		cfg.Summarizer,
-	)
-	if searxng.IsAvailable() {
-		ce.definitions = append(ce.definitions, registryDefinitions[SearxngToolName])
-		ce.handlers[SearxngToolName] = searxng.Handle
-	}
-
-	sploitus := NewSploitusTool(
-		fte.cfg,
-		fte.flowID,
-		cfg.TaskID,
-		cfg.SubtaskID,
-		fte.slp,
-	)
-	if sploitus.IsAvailable() {
-		ce.definitions = append(ce.definitions, registryDefinitions[SploitusToolName])
-		ce.handlers[SploitusToolName] = sploitus.Handle
+	webSearch := buildWebSearch(fte, cfg.TaskID, cfg.SubtaskID, cfg.Summarizer)
+	if webSearch.IsAvailable() {
+		ce.definitions = append(ce.definitions, registryDefinitions[WebSearchToolName])
+		ce.handlers[WebSearchToolName] = webSearch.Handle
 	}
 
 	search := NewSearchTool(

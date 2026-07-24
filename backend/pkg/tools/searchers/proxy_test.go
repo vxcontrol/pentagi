@@ -1,4 +1,4 @@
-package tools
+package searchers
 
 import (
 	"bufio"
@@ -23,8 +23,6 @@ import (
 	"sync"
 	"testing"
 	"time"
-
-	"pentagi/pkg/database"
 )
 
 var _ SummarizeHandler = testSummarizerHandler
@@ -32,40 +30,6 @@ var _ SummarizeHandler = testSummarizerHandler
 // testSummarizerHandler implements a simple mock summarizer
 func testSummarizerHandler(ctx context.Context, result string) (string, error) {
 	return "test summarized: " + result, nil
-}
-
-var _ SearchLogProvider = &searchLogProviderMock{}
-
-type searchLogProviderMock struct {
-	calls      int64
-	engine     database.SearchengineType
-	query      string
-	result     string
-	taskID     *int64
-	subtaskID  *int64
-	parentType database.MsgchainType
-	currType   database.MsgchainType
-}
-
-func (m *searchLogProviderMock) PutLog(
-	_ context.Context,
-	initiator database.MsgchainType,
-	executor database.MsgchainType,
-	engine database.SearchengineType,
-	query string,
-	result string,
-	taskID *int64,
-	subtaskID *int64,
-) (int64, error) {
-	m.calls++
-	m.parentType = initiator
-	m.currType = executor
-	m.engine = engine
-	m.query = query
-	m.result = result
-	m.taskID = taskID
-	m.subtaskID = subtaskID
-	return m.calls, nil
 }
 
 // testProxy is a MITM HTTP/HTTPS proxy server for unit testing that intercepts

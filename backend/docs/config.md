@@ -62,6 +62,7 @@ This document serves as a comprehensive guide to the configuration system in Pen
     - [Firecrawl Search](#firecrawl-search)
     - [Perplexity Search](#perplexity-search)
     - [Searxng Search](#searxng-search)
+    - [Internal Analytics Engine](#internal-analytics-engine)
     - [Usage Details](#usage-details-10)
   - [Network and Proxy Settings](#network-and-proxy-settings)
     - [Usage Details](#usage-details-11)
@@ -1474,7 +1475,7 @@ These settings control the integration with various search engines used for web 
 | Option                | Environment Variable      | Default Value | Description                                                  |
 | --------------------- | ------------------------- | ------------- | ------------------------------------------------------------ |
 | PerplexityAPIKey      | `PERPLEXITY_API_KEY`      | *(none)*      | API key for Perplexity search engine                         |
-| PerplexityModel       | `PERPLEXITY_MODEL`        | `sonar`       | Model to use for Perplexity search                           |
+| PerplexityModel       | `PERPLEXITY_MODEL`        | `sonar-pro`   | Model to use for Perplexity search                           |
 | PerplexityContextSize | `PERPLEXITY_CONTEXT_SIZE` | `low`         | Context size for Perplexity search (`low`, `medium`, `high`) |
 
 ### Searxng Search
@@ -1487,6 +1488,16 @@ These settings control the integration with various search engines used for web 
 | SearxngSafeSearch | `SEARXNG_SAFESEARCH` | `0`           | Safe search filter level (`0` = none, `1` = moderate, `2` = strict) |
 | SearxngTimeRange  | `SEARXNG_TIME_RANGE` | *(none)*      | Time range filter (e.g., `day`, `month`, `year`)                    |
 | SearxngTimeout    | `SEARXNG_TIMEOUT`    | *(none)*      | Request timeout in seconds for Searxng API calls                    |
+
+### Internal Analytics Engine
+
+An optional, opt-in fallback engine for the `web_search` tool's analytic modes (`answer`/`research`). When enabled, it discovers links via the first available link engine, fetches each page's main-content markdown through the browser scraper, and asks the summarizer to synthesize a query-focused answer — without a paid analytic API. Off by default because per-page scraping and summarization can cost more than a purpose-built third-party analytic call. Requires a configured scraper and at least one available link engine (e.g. DuckDuckGo, Google).
+
+| Option                        | Environment Variable                 | Default Value | Description                                                   |
+| ----------------------------- | ------------------------------------- | -------------- | -------------------------------------------------------------- |
+| WebSearchInternalEnabled      | `WEB_SEARCH_INTERNAL_ENABLED`         | `false`        | Enable or disable the internal browser-analytics engine        |
+| WebSearchInternalMaxSites     | `WEB_SEARCH_INTERNAL_MAX_SITES`       | `5`            | Maximum number of pages to fetch and summarize per query       |
+| WebSearchInternalMaxSiteBytes | `WEB_SEARCH_INTERNAL_MAX_SITE_BYTES`  | `10240`        | Maximum markdown bytes read from each page before truncation   |
 
 ### Usage Details
 

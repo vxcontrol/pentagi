@@ -424,11 +424,16 @@ func TestNewConfig_SearchEngineDefaults(t *testing.T) {
 	config, err := NewConfig()
 	require.NoError(t, err)
 
-	assert.Equal(t, "sonar", config.PerplexityModel)
+	assert.Equal(t, "sonar-pro", config.PerplexityModel)
 	assert.Equal(t, "low", config.PerplexityContextSize)
 	assert.Equal(t, "general", config.SearxngCategories)
 	assert.Equal(t, "0", config.SearxngSafeSearch)
 	assert.Equal(t, "lang_en", config.GoogleLRKey)
+
+	// web_search internal analytics engine: off by default, with bounded scraping.
+	assert.False(t, config.WebSearchInternalEnabled)
+	assert.Equal(t, 5, config.WebSearchInternalMaxSites)
+	assert.Equal(t, 10240, config.WebSearchInternalMaxSiteBytes)
 }
 
 func TestEnsureInstallationID_GeneratesNewUUID(t *testing.T) {

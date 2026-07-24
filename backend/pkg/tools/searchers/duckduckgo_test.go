@@ -1,7 +1,6 @@
-package tools
+package searchers
 
 import (
-	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -66,11 +65,6 @@ func TestDuckDuckGoHandle(t *testing.T) {
 	}
 	defer proxy.Close()
 
-	flowID := int64(1)
-	taskID := int64(10)
-	subtaskID := int64(20)
-	slp := &searchLogProviderMock{}
-
 	cfg := &config.Config{
 		DuckDuckGoEnabled:    true,
 		DuckDuckGoRegion:     RegionUS,
@@ -79,16 +73,17 @@ func TestDuckDuckGoHandle(t *testing.T) {
 		ExternalSSLCAPath:    proxy.CACertPath(),
 	}
 
-	ddg := NewDuckDuckGoTool(cfg, flowID, &taskID, &subtaskID, slp)
+	ddg := NewDuckDuckGo(cfg)
 
-	ctx := PutAgentContext(t.Context(), database.MsgchainTypeSearcher)
 	got, err := ddg.Handle(
-		ctx,
-		DuckDuckGoToolName,
-		[]byte(`{"query":"test query","max_results":5,"message":"m"}`),
+		t.Context(),
+		Request{Query: "test query", MaxResults: 5},
 	)
 	if err != nil {
 		t.Fatalf("Handle() unexpected error: %v", err)
+	}
+	if ddg.Engine() != database.SearchengineTypeDuckduckgo {
+		t.Errorf("Engine() = %q, want %q", ddg.Engine(), database.SearchengineTypeDuckduckgo)
 	}
 
 	// Verify mock handler was called
@@ -127,28 +122,6 @@ func TestDuckDuckGoHandle(t *testing.T) {
 		t.Errorf("result missing expected description: %q", got)
 	}
 
-	// Verify search log was written with agent context
-	if slp.calls != 1 {
-		t.Errorf("PutLog() calls = %d, want 1", slp.calls)
-	}
-	if slp.engine != database.SearchengineTypeDuckduckgo {
-		t.Errorf("engine = %q, want %q", slp.engine, database.SearchengineTypeDuckduckgo)
-	}
-	if slp.query != "test query" {
-		t.Errorf("logged query = %q, want %q", slp.query, "test query")
-	}
-	if slp.parentType != database.MsgchainTypeSearcher {
-		t.Errorf("parent agent type = %q, want %q", slp.parentType, database.MsgchainTypeSearcher)
-	}
-	if slp.currType != database.MsgchainTypeSearcher {
-		t.Errorf("current agent type = %q, want %q", slp.currType, database.MsgchainTypeSearcher)
-	}
-	if slp.taskID == nil || *slp.taskID != taskID {
-		t.Errorf("task ID = %v, want %d", slp.taskID, taskID)
-	}
-	if slp.subtaskID == nil || *slp.subtaskID != subtaskID {
-		t.Errorf("subtask ID = %v, want %d", slp.subtaskID, subtaskID)
-	}
 }
 
 func TestDuckDuckGoIsAvailable(t *testing.T) {
@@ -184,16 +157,8 @@ func TestDuckDuckGoIsAvailable(t *testing.T) {
 	}
 }
 
-func TestDuckDuckGoHandle_ValidationAndSwallowedError(t *testing.T) {
-	t.Run("invalid json", func(t *testing.T) {
-		ddg := &duckduckgo{cfg: testDuckDuckGoConfig()}
-		_, err := ddg.Handle(t.Context(), DuckDuckGoToolName, []byte("{"))
-		if err == nil || !strings.Contains(err.Error(), "failed to unmarshal") {
-			t.Fatalf("expected unmarshal error, got: %v", err)
-		}
-	})
-
-	t.Run("search error swallowed", func(t *testing.T) {
+func TestDuckDuckGoHandle_ReturnsTypedError(t *testing.T) {
+	t.Run("search error returned as typed error", func(t *testing.T) {
 		var seenRequest bool
 		mockMux := http.NewServeMux()
 		mockMux.HandleFunc("/html/", func(w http.ResponseWriter, r *http.Request) {
@@ -208,7 +173,6 @@ func TestDuckDuckGoHandle_ValidationAndSwallowedError(t *testing.T) {
 		defer proxy.Close()
 
 		ddg := &duckduckgo{
-			flowID: 1,
 			cfg: &config.Config{
 				DuckDuckGoEnabled: true,
 				ProxyURL:          proxy.URL(),
@@ -218,21 +182,24 @@ func TestDuckDuckGoHandle_ValidationAndSwallowedError(t *testing.T) {
 
 		result, err := ddg.Handle(
 			t.Context(),
-			DuckDuckGoToolName,
-			[]byte(`{"query":"test","max_results":5,"message":"m"}`),
+			Request{Query: "test", MaxResults: 5},
 		)
-		if err != nil {
-			t.Fatalf("Handle() unexpected error: %v", err)
-		}
 
 		// Verify mock handler was called (request was intercepted)
 		if !seenRequest {
 			t.Error("request was not intercepted by proxy - mock handler was not called")
 		}
 
-		// Verify error was swallowed and returned as string
-		if !strings.Contains(result, "failed to search in DuckDuckGo") {
-			t.Errorf("Handle() = %q, expected swallowed error message", result)
+		// The error is now surfaced (not swallowed). DuckDuckGo retries internally, so
+		// a post-retry failure is classified as fatal (move to the next engine).
+		if err == nil {
+			t.Fatal("Handle() expected an error, got nil")
+		}
+		if result != "" {
+			t.Errorf("Handle() result = %q, want empty on error", result)
+		}
+		if !IsFatal(err) {
+			t.Errorf("Handle() error = %v, want a FatalError", err)
 		}
 	})
 }
@@ -261,7 +228,6 @@ func TestDuckDuckGoHandle_StatusCodeErrors(t *testing.T) {
 			defer proxy.Close()
 
 			ddg := &duckduckgo{
-				flowID: 1,
 				cfg: &config.Config{
 					DuckDuckGoEnabled: true,
 					ProxyURL:          proxy.URL(),
@@ -271,19 +237,21 @@ func TestDuckDuckGoHandle_StatusCodeErrors(t *testing.T) {
 
 			result, err := ddg.Handle(
 				t.Context(),
-				DuckDuckGoToolName,
-				[]byte(`{"query":"test","max_results":5,"message":"m"}`),
+				Request{Query: "test", MaxResults: 5},
 			)
-			if err != nil {
-				t.Fatalf("Handle() unexpected error: %v", err)
-			}
 
-			// Error should be swallowed and returned as string
-			if !strings.Contains(result, "failed to search in DuckDuckGo") {
-				t.Errorf("Handle() = %q, expected swallowed error", result)
+			// The status-code failure surfaces as a typed (fatal) error.
+			if err == nil {
+				t.Fatal("Handle() expected an error, got nil")
 			}
-			if !strings.Contains(result, "unexpected status code") {
-				t.Errorf("Handle() = %q, expected status code error", result)
+			if result != "" {
+				t.Errorf("Handle() result = %q, want empty on error", result)
+			}
+			if !IsFatal(err) {
+				t.Errorf("Handle() error = %v, want a FatalError", err)
+			}
+			if !strings.Contains(err.Error(), "unexpected status code") {
+				t.Errorf("Handle() error = %v, expected status code detail", err)
 			}
 		})
 	}
@@ -574,7 +542,6 @@ func TestDuckDuckGoMaxResultsClamp(t *testing.T) {
 			defer proxy.Close()
 
 			ddg := &duckduckgo{
-				flowID: 1,
 				cfg: &config.Config{
 					DuckDuckGoEnabled: true,
 					ProxyURL:          proxy.URL(),
@@ -584,8 +551,7 @@ func TestDuckDuckGoMaxResultsClamp(t *testing.T) {
 
 			_, err = ddg.Handle(
 				t.Context(),
-				DuckDuckGoToolName,
-				[]byte(fmt.Sprintf(`{"query":"test","max_results":%d,"message":"m"}`, tt.maxResults)),
+				Request{Query: "test", MaxResults: tt.maxResults},
 			)
 			if err != nil {
 				t.Fatalf("Handle() unexpected error: %v", err)
