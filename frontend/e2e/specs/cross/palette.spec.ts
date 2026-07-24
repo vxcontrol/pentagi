@@ -136,7 +136,9 @@ test.describe('palette compliance', { tag: '@cross' }, () => {
                     const offenders = await scanOffenders(page);
                     const key = `${entry.path} [${tab.name}]`;
 
-                    expect(offenders.sort(), `off-palette colours on ${key}`).toEqual([...(ACCEPTED[key] ?? [])].sort());
+                    expect(offenders.sort(), `off-palette colours on ${key}`).toEqual(
+                        [...(ACCEPTED[key] ?? [])].sort(),
+                    );
                 });
             }
         });

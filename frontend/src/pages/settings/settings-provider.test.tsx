@@ -175,8 +175,6 @@ describe('SettingsProvider create-form type guards', () => {
         queryResult.data = { settingsProviders };
         rerender(<SettingsProvider />);
 
-        expect((screen.getByPlaceholderText('Enter provider name') as HTMLInputElement).value).toBe(
-            'My Unsaved Edit',
-        );
+        expect((screen.getByPlaceholderText('Enter provider name') as HTMLInputElement).value).toBe('My Unsaved Edit');
     });
 });

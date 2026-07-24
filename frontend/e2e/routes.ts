@@ -68,8 +68,6 @@ export const ROUTE_MANIFEST: RouteManifestEntry[] = [
         sources: ['src/pages/flows/flows.tsx', 'src/features/flows', 'src/providers/flows-provider.tsx'],
     },
     {
-        // Message metadata (date + ID) renders at 50% opacity by design; revisit
-        // with the design pass.
         // Message metadata (date + ID) is by design and route-wide; the rest are defects awaiting a
         // fix, each scoped to the tab whose panel owns it so it cannot silence the rule elsewhere.
         a11yWaivers: [
@@ -80,7 +78,11 @@ export const ROUTE_MANIFEST: RouteManifestEntry[] = [
             { rule: 'color-contrast', tabs: ['Screenshots'], target: /\.text-primary > \.font-semibold\.truncate/ },
             // The same file-manager row metadata waived on /resources — the Files tab embeds it.
             { rule: 'color-contrast', tabs: ['Files'], target: /text-muted-foreground\\?\/80/ },
-            { rule: 'scrollable-region-focusable', tabs: ['Dashboard', 'Files'], target: /\[data-slot="table-container"\]/ },
+            {
+                rule: 'scrollable-region-focusable',
+                tabs: ['Dashboard', 'Files'],
+                target: /\[data-slot="table-container"\]/,
+            },
         ],
         // Must stay the populated cassette: the empty seed renders none of the sources below.
         cassette: flowTabsCassette,

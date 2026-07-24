@@ -58,7 +58,11 @@ for (const theme of THEMES) {
                         await expect(page.locator('html')).toHaveClass(theme === 'dark' ? /dark/ : /light/);
                         await page.getByRole('tab', { name: tab.name }).click();
                         await expect(tab.ready(page)).toBeVisible();
-                        await scanA11y(page, `${entry.path} [${tab.name}]`, waiversForScan(entry.a11yWaivers, tab.name));
+                        await scanA11y(
+                            page,
+                            `${entry.path} [${tab.name}]`,
+                            waiversForScan(entry.a11yWaivers, tab.name),
+                        );
                     });
                 }
             });
