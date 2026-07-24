@@ -12,8 +12,17 @@ import { expect } from '@playwright/test';
  */
 export interface A11yWaiver {
     rule: string;
+    /**
+     * Flow-detail tab names whose panel owns this debt. Omitted = route-wide (applies to the base
+     * view and every tab). Scoped so a Files-tab waiver cannot silence the same rule on Assistant.
+     */
+    tabs?: string[];
     target: RegExp;
 }
+
+/** Waivers in force for one scan: route-wide ones always, tab-scoped ones only on their own tab. */
+export const waiversForScan = (waivers: A11yWaiver[] = [], tab?: string): A11yWaiver[] =>
+    waivers.filter((waiver) => !waiver.tabs || (tab !== undefined && waiver.tabs.includes(tab)));
 
 const BLOCKING_IMPACTS = new Set(['critical', 'serious']);
 

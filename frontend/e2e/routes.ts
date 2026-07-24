@@ -70,18 +70,17 @@ export const ROUTE_MANIFEST: RouteManifestEntry[] = [
     {
         // Message metadata (date + ID) renders at 50% opacity by design; revisit
         // with the design pass.
+        // Message metadata (date + ID) is by design and route-wide; the rest are defects awaiting a
+        // fix, each scoped to the tab whose panel owns it so it cannot silence the rule elsewhere.
         a11yWaivers: [
             { rule: 'color-contrast', target: /text-muted-foreground\\?\/50/ },
-            // The tab-panel ones below are defects awaiting a fix, not accepted design.
-            { rule: 'aria-progressbar-name', target: /\.bg-primary\\\/20/ },
-            // Both are the Files tab's file-manager controls. Anchored on the offending nodes: matching
-            // `button[aria-label` instead would waive the rule for every labelled button on the route.
-            { rule: 'button-name', target: /tooltip-trigger.*size-8\[data-slot="button"\]/ },
-            { rule: 'target-size', target: /text-blue-400|button\[aria-label="Select / },
-            { rule: 'color-contrast', target: /\.text-primary > \.font-semibold\.truncate/ },
-            // The same file-manager row metadata waived on /resources — this tab embeds it.
-            { rule: 'color-contrast', target: /text-muted-foreground\\?\/80/ },
-            { rule: 'scrollable-region-focusable', target: /\[data-slot="table-container"\]/ },
+            { rule: 'aria-progressbar-name', tabs: ['Tasks'], target: /\.bg-primary\\\/20/ },
+            { rule: 'button-name', tabs: ['Files'], target: /tooltip-trigger.*size-8\[data-slot="button"\]/ },
+            { rule: 'target-size', tabs: ['Files'], target: /text-blue-400|button\[aria-label="Select / },
+            { rule: 'color-contrast', tabs: ['Screenshots'], target: /\.text-primary > \.font-semibold\.truncate/ },
+            // The same file-manager row metadata waived on /resources — the Files tab embeds it.
+            { rule: 'color-contrast', tabs: ['Files'], target: /text-muted-foreground\\?\/80/ },
+            { rule: 'scrollable-region-focusable', tabs: ['Dashboard', 'Files'], target: /\[data-slot="table-container"\]/ },
         ],
         // Must stay the populated cassette: the empty seed renders none of the sources below.
         cassette: flowTabsCassette,

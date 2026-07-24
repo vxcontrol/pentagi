@@ -1,5 +1,5 @@
 import { expect, test } from '../../fixtures/test.ts';
-import { scanA11y } from '../../helpers/a11y.ts';
+import { scanA11y, waiversForScan } from '../../helpers/a11y.ts';
 import { populatedSettingsProvidersCassette } from '../../mocks/cassettes/settings-providers.ts';
 import { loginJourneyCassette } from '../../mocks/cassettes/smoke.ts';
 import { ROUTE_MANIFEST } from '../../routes.ts';
@@ -48,7 +48,7 @@ for (const theme of THEMES) {
                     await expect(entry.ready(page)).toBeVisible();
                     // Not redundant: a theme seed that silently stops applying reruns light under a dark label.
                     await expect(page.locator('html')).toHaveClass(theme === 'dark' ? /dark/ : /light/);
-                    await scanA11y(page, entry.path, entry.a11yWaivers);
+                    await scanA11y(page, entry.path, waiversForScan(entry.a11yWaivers));
                 });
 
                 for (const tab of entry.tabs ?? []) {
@@ -58,7 +58,7 @@ for (const theme of THEMES) {
                         await expect(page.locator('html')).toHaveClass(theme === 'dark' ? /dark/ : /light/);
                         await page.getByRole('tab', { name: tab.name }).click();
                         await expect(tab.ready(page)).toBeVisible();
-                        await scanA11y(page, `${entry.path} [${tab.name}]`, entry.a11yWaivers);
+                        await scanA11y(page, `${entry.path} [${tab.name}]`, waiversForScan(entry.a11yWaivers, tab.name));
                     });
                 }
             });
