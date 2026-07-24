@@ -50,6 +50,11 @@ test.describe('flow message rendering', { tag: '@flows' }, () => {
         await expect(page.getByRole('heading', { name: 'Report' })).toBeVisible();
         await expect(page.getByText('Hide details').first()).toBeVisible();
 
+        // Only a report auto-expands, so the terminal message starts collapsed and its xterm is
+        // not mounted — the panel's is the only one on screen until the toggle is used.
+        await expect(page.locator('.xterm')).toHaveCount(1);
+        await page.getByText('Show details').click();
+
         await expect(page.locator('.xterm')).toHaveCount(2);
         await expect(async () => {
             expect(await page.evaluate(anyTerminalContains, 'e2e-terminal-marker')).toBe(true);

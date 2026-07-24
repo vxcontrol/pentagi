@@ -85,11 +85,13 @@ export const VARIED_MESSAGES = [
         resultFormat: ResultFormat.Markdown,
         type: MessageLogType.Report,
     }),
+    // Terminal, not Report: `getMessageType` pairs the terminal tool's output with the terminal
+    // type, so a Report carrying a Terminal body is a state the backend cannot emit.
     makeMessage('503', '5', {
         message: '',
         result: 'e2e-terminal-marker\nexit 0',
         resultFormat: ResultFormat.Terminal,
-        type: MessageLogType.Report,
+        type: MessageLogType.Terminal,
     }),
     makeMessage('504', '5', { message: 'run the smoke command', type: MessageLogType.Input }),
 ];
