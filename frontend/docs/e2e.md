@@ -133,14 +133,15 @@ Two conventions the gate reserves:
 ## Stand tier (Tier 3)
 
 Runs the LLM-independent `@stand` smoke against a real deployment. It lives in its
-own workflow (`e2e-stand.yml`) so the PR gate never subscribes to `labeled`. Label a
-PR `e2e:stand` (or dispatch the workflow with `tier: stand`); the job runs in a
-protected `e2e-stand` Environment whose required reviewers approve before any secret
-is exposed. That Environment gate — not the job's label condition — is what protects
-the secrets, so even a mislabeled or fork-PR run blocks on a human before it can reach
-them. The stand's URL and login come from the `E2E_STAND_URL` / `E2E_STAND_USER` /
-`E2E_STAND_PASSWORD` secrets (exposed to the tools as `E2E_BASE_URL` / `E2E_USER` /
-`E2E_PASSWORD`).
+own workflow (`e2e-stand.yml`) so the PR gate never subscribes to `labeled`. Trigger
+it by labelling a PR `e2e:stand`, or from **Actions → E2E Stand → Run workflow**
+(`workflow_dispatch` takes no inputs). The job's `if` is the first gate: it runs only
+for a `workflow_dispatch`, or a labelled PR whose head is **not** a fork — a
+mislabeled or fork-PR run skips the job entirely and never reaches the secrets. For a
+run that clears that gate, the protected `e2e-stand` Environment is the second gate:
+its required reviewers approve before any secret is exposed. The stand's URL and login
+come from the `E2E_STAND_URL` / `E2E_STAND_USER` / `E2E_STAND_PASSWORD` secrets
+(exposed to the tools as `E2E_BASE_URL` / `E2E_USER` / `E2E_PASSWORD`).
 
 Before the browser specs, a **schema-compat pre-flight**
 (`e2e/tools/schema-compat.mjs`) introspects the stand's live GraphQL schema and
