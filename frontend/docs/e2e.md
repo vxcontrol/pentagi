@@ -100,8 +100,12 @@ Key conventions:
   types — schema or operation drift fails `pnpm typescript`, not the runtime.
 - **The clock is pinned** (UTC, fixed epoch) on the mock tier: keep cassette
   timestamps on the `CASSETTE_EPOCH` day or date renders change under you.
-- **Unmatched calls fail the test** — the mock tier is hermetic by design;
-  nothing ever leaks to a real backend.
+- **Unmatched HTTP calls fail the test** — every GraphQL POST and REST call needs
+  a cassette entry or teardown fails. An unmatched _subscription_ is legal (a flow
+  page opens ~15 and a cassette mocks only the ones it cares about): it gets ack'd
+  silence, so a typo'd subscription key surfaces as a UI timeout, with the missed
+  operations in the `unmatched-subscriptions` report attachment. Either way the
+  tier is hermetic — the WebSocket is routed too, so nothing reaches a real backend.
 - Assert errors via `pageerror`/`unhandledrejection` (`expectCleanPage`): the
   production bundle strips app console output, so console-based asserts are
   meaningless on the mock tier.

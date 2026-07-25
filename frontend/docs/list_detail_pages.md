@@ -4,9 +4,12 @@ Reusable surface for **list-and-detail** pages: a filterable/sortable table, a
 Prev/Next/Sheet toolbar that walks the _same_ filtered subset on detail pages,
 inline-rename inputs, and the URL-vs-storage state model that keeps them in
 lockstep. Every list page in the app (`/flows`, `/knowledges`, `/templates`,
-`/settings/prompts`, `/settings/providers`, `/settings/api-tokens`) is built
-from these pieces, as is each one's detail page — `/settings/api-tokens` is the
-exception, editing its rows in place with no detail route of its own.
+`/settings/prompts`, `/settings/providers`, `/settings/api-tokens`) renders a
+`<DataTable>`. The detail half applies to `/flows/:id`, `/knowledges/:id` and
+`/templates/:id` only. `/settings/api-tokens` has no detail route at all (it edits
+rows in place, through its own state rather than the inline-edit surface below),
+and `/settings/prompts/:name` and `/settings/providers/:id` are single-entity
+forms with no sibling navigation, so neither has a feature nav hook.
 
 > **Scope / how to trust this doc.** It describes code under `frontend/src`.
 > Signatures below are copied verbatim from source. If a signature and the code
@@ -672,3 +675,5 @@ not reintroduce them:
 | `toolbarProps` spread into `<DetailNavigationToolbar>` | No such object. Pass `controller={nav}` + discrete `renderItem`/`sheetIcon`/`sheetTitle`.                                               |
 | `hooks/use-inline-edit`                                | Wrong path. It lives at `components/shared/inline-edit/use-inline-edit.ts`.                                                             |
 | `components/shared/data-table`                         | Wrong path. It lives at `components/ui/data-table.tsx`.                                                                                 |
+| `features/providers/use-provider-detail-navigation.ts` | Never existed. `/settings/providers/:id` is a form with no sibling nav — only `flows`, `knowledges` and `templates` have nav hooks.     |
+| `features/prompts/use-prompt-detail-navigation.ts`     | Never existed. Same for `/settings/prompts/:name`.                                                                                      |
