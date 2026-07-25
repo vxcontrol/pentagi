@@ -17,7 +17,10 @@ const passwordChangeSchema = z
         newPassword: z
             .string()
             .min(8, { message: 'Password must be at least 8 characters' })
-            .max(100, { message: 'Password must not exceed 100 characters' })
+            // bcrypt, which hashes it server-side, refuses anything longer than 72 bytes.
+            .refine((password) => new TextEncoder().encode(password).length <= 72, {
+                message: 'Password must not exceed 72 characters',
+            })
             .refine(
                 (password) => {
                     if (password.length > 15) {

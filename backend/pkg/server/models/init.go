@@ -87,6 +87,22 @@ func strongPasswordValidatorString() validator.Func {
 	}
 }
 
+// MaxPasswordBytes is the longest password bcrypt.GenerateFromPassword accepts.
+const MaxPasswordBytes = 72
+
+func passwordLengthValidatorString() validator.Func {
+	return func(fl validator.FieldLevel) bool {
+		field := fl.Field()
+
+		switch field.Kind() {
+		case reflect.String:
+			return len(field.String()) <= MaxPasswordBytes
+		default:
+			return false
+		}
+	}
+}
+
 var emailFormatRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`)
 
 func isRealEmail(email string) bool {
@@ -223,6 +239,7 @@ func init() {
 	_ = validate.RegisterValidation("semver", templateValidatorString(semverRegexString))
 	_ = validate.RegisterValidation("semverex", templateValidatorString(semverexRegexString))
 	_ = validate.RegisterValidation("stpass", strongPasswordValidatorString())
+	_ = validate.RegisterValidation("passlen", passwordLengthValidatorString())
 	_ = validate.RegisterValidation("vmail", emailValidatorString())
 	_ = validate.RegisterValidation("realemail", strictEmailValidatorString())
 	_ = validate.RegisterValidation("oauth_min_scope", oauthMinScope())
