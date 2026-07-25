@@ -6,7 +6,8 @@
 #
 # Usage:
 #   review-sandbox.sh create [--dirty] [--with-deps]   # prints the sandbox path on stdout
-#   review-sandbox.sh clean [<path>]                   # one sandbox, or every stale one
+#   review-sandbox.sh clean <path>                     # one sandbox, refuses anything else
+#   review-sandbox.sh clean --all                      # sweep sandboxes untouched for 2h
 #
 #   --dirty      carry the uncommitted working tree across, for a scope that includes it
 #   --with-deps  hardlink node_modules in, for agents that run pnpm/playwright/vitest
@@ -66,14 +67,45 @@ create() {
     echo "$path"
 }
 
-clean() {
-    local target="${1:-}"
+# `git worktree remove` exits 128 for the main working tree and for any directory that is not a
+# worktree, so the rm fallback is what runs for every wrong argument — and being left of `||` it
+# does not trip `set -e`. Resolve the target and refuse anything outside the sandbox root before
+# going near it. The sweep is opt-in and age-filtered for the same reason: this root is shared by
+# every agent on the host, so a bare `clean` used to take out a concurrent agent's live sandbox.
+STALE_MINUTES=120
 
-    if [[ -n "$target" ]]; then
-        git -C "$REPO_ROOT" worktree remove --force "$target" 2>/dev/null || rm -rf "$target"
-    else
-        rm -rf "$SANDBOX_ROOT"
-    fi
+clean() {
+    local target="${1:-}" root resolved
+
+    case "$target" in
+        --all)
+            if [[ -d "$SANDBOX_ROOT" ]]; then
+                find "$SANDBOX_ROOT" -maxdepth 1 -name 'wt-*' -mmin "+$STALE_MINUTES" -exec rm -rf {} +
+            fi
+            ;;
+        '')
+            echo "review-sandbox: clean needs a sandbox path, or --all to sweep stale ones" >&2
+            exit 2
+            ;;
+        *)
+            mkdir -p "$SANDBOX_ROOT"
+            root="$(cd "$SANDBOX_ROOT" && pwd -P)"
+            resolved="$(cd "$(dirname "$target")" 2>/dev/null && pwd -P || true)/$(basename "$target")"
+
+            case "$resolved" in
+                */. | */..) resolved="" ;;
+                "$root"/?*) ;;
+                *) resolved="" ;;
+            esac
+
+            if [[ -z "$resolved" ]]; then
+                echo "review-sandbox: refusing to clean '$target' — not a sandbox under $root" >&2
+                exit 2
+            fi
+
+            git -C "$REPO_ROOT" worktree remove --force "$resolved" || rm -rf "$resolved"
+            ;;
+    esac
 
     git -C "$REPO_ROOT" worktree prune
 }
@@ -85,7 +117,7 @@ case "${1:-}" in
         ;;
     clean) clean "${2:-}" ;;
     *)
-        echo "usage: $(basename "$0") create [--dirty] [--with-deps] | clean [<path>]" >&2
+        echo "usage: $(basename "$0") create [--dirty] [--with-deps] | clean <path>|--all" >&2
         exit 2
         ;;
 esac

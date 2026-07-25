@@ -178,7 +178,9 @@ SANDBOX=$(./e2e/tools/review-sandbox.sh create --dirty --with-deps)
 
 `--dirty` carries uncommitted work across (usually what you are reviewing); `--with-deps`
 hardlinks `node_modules` so pnpm, vitest and playwright run there — skip it for read-only
-work, it costs ~30s. `clean` with no path removes every stale sandbox.
+work, it costs ~30s. `clean` takes a path under the sandbox root and refuses anything else,
+including the root itself; `clean --all` sweeps sandboxes untouched for two hours, so it
+cannot take out a concurrent agent's live one. A bare `clean` is an error, not a sweep.
 
 The sandbox is a `git worktree` under `$TMPDIR`, so a deleted file or an edited spec inside
 it cannot reach your tree. Two caveats: an absolute path still escapes it, and a tool that
