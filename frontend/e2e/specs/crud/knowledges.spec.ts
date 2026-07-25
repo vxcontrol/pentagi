@@ -158,4 +158,41 @@ test.describe('knowledges crud', { tag: '@crud' }, () => {
             await expect(page).toHaveURL(new RegExp(`/knowledges/${KNOWLEDGE_DOC.id}$`));
         });
     });
+
+    test.describe('save', () => {
+        test.use({
+            cassette: knowledgesCassette({
+                mutations: {
+                    updateKnowledgeDocument: [{ data: { updateKnowledgeDocument: KNOWLEDGE_DOC } as never }],
+                },
+                queries: {
+                    knowledgeDocument: [
+                        { data: { knowledgeDocument: KNOWLEDGE_DOC }, variables: { id: KNOWLEDGE_DOC.id } },
+                    ],
+                },
+            }),
+        });
+
+        // The write half of the editor: until now the suite proved the document loads and round-trips
+        // in memory, never that Save puts the edited bytes on the wire.
+        test('Save sends the edited content and keeps the document id', async ({ page, pageErrorLog }) => {
+            await page.goto(`/knowledges/${KNOWLEDGE_DOC.id}`);
+
+            await typeIntoEditor(page, 'Content', 'E2E-SAVE-MARK');
+
+            const request = page.waitForRequest(
+                (candidate) =>
+                    candidate.method() === 'POST' &&
+                    candidate.postDataJSON()?.operationName === 'updateKnowledgeDocument',
+            );
+
+            await page.getByRole('button', { exact: true, name: 'Save' }).click();
+
+            const { variables } = (await request).postDataJSON();
+
+            expect(variables.id).toBe(KNOWLEDGE_DOC.id);
+            expect(variables.input.content).toContain('E2E-SAVE-MARK');
+            expectCleanPage(pageErrorLog);
+        });
+    });
 });

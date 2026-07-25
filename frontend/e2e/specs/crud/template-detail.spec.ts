@@ -5,7 +5,13 @@ import { expectCleanPage } from '../../helpers/errors.ts';
 import { RICH_TEMPLATE_TEXT, TEMPLATE_DETAIL, templateDetailCassette } from '../../mocks/cassettes/templates.ts';
 
 test.describe('template detail', { tag: '@coverage' }, () => {
-    test.use({ cassette: templateDetailCassette() });
+    test.use({
+        cassette: templateDetailCassette({
+            mutations: {
+                updateFlowTemplate: [{ data: { updateFlowTemplate: TEMPLATE_DETAIL } as never }],
+            },
+        }),
+    });
 
     const EDITOR = 'Template content';
 
@@ -75,6 +81,38 @@ test.describe('template detail', { tag: '@coverage' }, () => {
 
     // A real load failure must offer Retry in place, not the "Template not found" card that a
     // genuine 404 shows — the two used to collapse into the same dead-end.
+
+    // Save is the only operation that can destroy a user's template, and no spec has ever let it reach
+    // the wire — the round-trip units stop at the editor boundary.
+    test('Save sends the edited body verbatim, placeholders intact', async ({ page, pageErrorLog }) => {
+        await page.goto(`/templates/${TEMPLATE_DETAIL.id}`);
+
+        const editor = page.getByRole('textbox', { name: EDITOR });
+
+        await expect(editor.getByRole('heading', { name: 'Recon' })).toBeVisible();
+        await editor.click();
+        await page.keyboard.press('ControlOrMeta+End');
+        await editor.pressSequentially(' E2E-SAVE-MARK');
+
+        const request = page.waitForRequest(
+            (candidate) =>
+                candidate.method() === 'POST' && candidate.postDataJSON()?.operationName === 'updateFlowTemplate',
+        );
+
+        await page.getByRole('button', { exact: true, name: 'Save' }).click();
+
+        const { variables } = (await request).postDataJSON();
+
+        expect(variables.templateId).toBe(TEMPLATE_DETAIL.id);
+        expect(variables.input.text).toContain('E2E-SAVE-MARK');
+
+        for (const atom of ['# Recon', '{{TARGET}}', 'nmap -sV']) {
+            expect(variables.input.text, `"${atom}" survived the save`).toContain(atom);
+        }
+
+        expectCleanPage(pageErrorLog);
+    });
+
     test.describe('load failure', () => {
         test.use({
             cassette: templateDetailCassette({
