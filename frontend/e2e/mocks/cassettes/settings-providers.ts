@@ -17,17 +17,19 @@ import { baseQueries, baseRest } from './base.ts';
 
 const T = '2026-01-15T09:00:00Z';
 
+/** `n: 1` and `json: true` are the shipped simple_json defaults; they are pinned in the create payload
+ *  because dropping exactly these on the way to the wire is a regression this repo has already had. */
 const agentConfig = (model = 'e2e-model'): AgentConfigFragmentFragment =>
     entity('AgentConfig', {
         extraBody: null,
         frequencyPenalty: null,
-        json: null,
+        json: true,
         maxLength: null,
-        maxTokens: null,
+        maxTokens: 4096,
         minLength: null,
         minP: null,
         model,
-        n: null,
+        n: 1,
         presencePenalty: null,
         price: null,
         reasoning: null,

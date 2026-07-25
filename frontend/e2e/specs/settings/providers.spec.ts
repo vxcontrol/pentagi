@@ -53,3 +53,53 @@ test.describe('settings providers create form', { tag: '@coverage' }, () => {
         expectCleanPage(pageErrorLog);
     });
 });
+
+test.describe('settings providers write path', { tag: '@coverage' }, () => {
+    const CREATED_NAME = 'E2E created provider';
+
+    test.use({
+        cassette: populatedSettingsProvidersCassette({
+            mutations: {
+                createProvider: [
+                    {
+                        data: { createProvider: { __typename: 'ResultType', result: 'success' } } as never,
+                        variables: { name: CREATED_NAME, type: 'anthropic' },
+                    },
+                ],
+            },
+        }),
+    });
+
+    // The create form is seeded from the type's defaults and then serialises the whole agents map back.
+    // Fields the user never touches are exactly the ones that get dropped on the way to the wire — this
+    // asserts the payload, because the UI looks identical either way.
+    test('create sends every agent field it was seeded with, zero-ish values included', async ({
+        page,
+        pageErrorLog,
+    }) => {
+        await page.goto('/settings/providers/new?type=anthropic');
+
+        await expect(page.getByLabel('Name', { exact: true })).toBeVisible();
+        await page.getByLabel('Name', { exact: true }).fill(CREATED_NAME);
+
+        const request = page.waitForRequest(
+            (candidate) =>
+                candidate.method() === 'POST' && candidate.postDataJSON()?.operationName === 'createProvider',
+        );
+
+        await page.getByRole('button', { exact: true, name: 'Create' }).click();
+
+        const { variables } = (await request).postDataJSON();
+
+        expect(variables.name).toBe(CREATED_NAME);
+        expect(variables.type).toBe('anthropic');
+        expect(Object.keys(variables.agents), 'every agent is serialised, not just the edited one').toHaveLength(13);
+        expect(variables.agents.simpleJson).toMatchObject({
+            json: true,
+            maxTokens: 4096,
+            model: 'e2e-anthropic-model',
+            n: 1,
+        });
+        expectCleanPage(pageErrorLog);
+    });
+});
