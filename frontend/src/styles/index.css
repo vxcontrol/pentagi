@@ -634,8 +634,12 @@
     font-size: 0.875em;
 }
 
-/* No background/colour here — the .hljs highlight.js theme (imported in markdown-editor.tsx) supplies them. */
+/* No background/colour here — the .hljs highlight.js theme (imported in markdown-editor.tsx) supplies them.
+   That surface is dark in both themes, so the highlight tokens are re-pointed at values that clear AA on it. */
 .tiptap-content .ProseMirror pre {
+    --editor-variable: oklch(0.76 0.12 155);
+    --editor-tag: oklch(0.76 0.13 300);
+
     position: relative;
     padding: 0.75rem 1rem;
     border-radius: calc(var(--radius) - 2px);

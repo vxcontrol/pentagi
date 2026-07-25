@@ -83,11 +83,14 @@ export const mountEditorProbes = async (page: Page, probes: Record<string, Edito
 };
 
 export const measureContrast = async (page: Page, probe: string): Promise<number> =>
-    page.evaluate((name) => {
-        const element = document.querySelector<HTMLElement>(`[data-contrast="${name}"]`);
+    measureContrastAt(page, `[data-contrast="${probe}"]`);
+
+export const measureContrastAt = async (page: Page, selector: string): Promise<number> =>
+    page.evaluate((target) => {
+        const element = document.querySelector<HTMLElement>(target);
 
         if (!element?.parentElement) {
-            throw new Error(`contrast probe "${name}" is not mounted`);
+            throw new Error(`contrast target "${target}" is not mounted`);
         }
 
         const canvas = document.createElement('canvas');
@@ -138,15 +141,31 @@ export const measureContrast = async (page: Page, probe: string): Promise<number
             return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
         };
 
-        // The text goes on top of the same stack, not on its own: `paint` starts from transparent,
-        // where a translucent colour keeps its opaque base and reads as a contrast it does not have.
-        const ground = [
-            getComputedStyle(element.parentElement).backgroundColor,
-            getComputedStyle(element).backgroundColor,
-        ];
+        // Walk to the first opaque ancestor, not just the parent: a probe inside a code block sits on
+        // `pre.hljs` through a transparent `code`, and stopping at the parent would measure it against
+        // nothing. `paint` starts from transparent, so a translucent layer with no opaque base under it
+        // keeps its own colour and reads as a contrast it does not have.
+        const stack: string[] = [];
+
+        for (let node: HTMLElement | null = element.parentElement; node; node = node.parentElement) {
+            const background = getComputedStyle(node).backgroundColor;
+            const alpha = Number(background.match(/rgba?\([^)]*,\s*([\d.]+)\s*\)/)?.[1] ?? '1');
+
+            if (alpha === 0) {
+                continue;
+            }
+
+            stack.unshift(background);
+
+            if (alpha === 1) {
+                break;
+            }
+        }
+
+        const ground = [...stack, getComputedStyle(element).backgroundColor];
         const surface = paint(...ground);
         const label = paint(...ground, getComputedStyle(element).color);
         const [high = 0, low = 0] = [luminance(label), luminance(surface)].sort((a, b) => b - a);
 
         return (high + 0.05) / (low + 0.05);
-    }, probe);
+    }, selector);

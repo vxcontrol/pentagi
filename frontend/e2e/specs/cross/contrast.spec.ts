@@ -8,8 +8,15 @@ import { buttonVariants } from '@/components/ui/button';
 import type { EditorProbe } from '../../helpers/contrast.ts';
 
 import { expect, test } from '../../fixtures/test.ts';
-import { AA_NORMAL, measureContrast, mountContrastProbes, mountEditorProbes } from '../../helpers/contrast.ts';
+import {
+    AA_NORMAL,
+    measureContrast,
+    measureContrastAt,
+    mountContrastProbes,
+    mountEditorProbes,
+} from '../../helpers/contrast.ts';
 import { flowsCassette } from '../../mocks/cassettes/flows.ts';
+import { PROMPT_DETAIL_AGENT, promptDetailCassette } from '../../mocks/cassettes/settings-prompts.ts';
 
 const EDITOR_PROBES = {
     'editor-accent': { tag: 'a' },
@@ -109,6 +116,39 @@ for (const theme of THEMES) {
             for (const token of Object.keys(EDITOR_PROBES)) {
                 expect
                     .soft(await measureContrast(page, token), `${token} (${theme})`)
+                    .toBeGreaterThanOrEqual(AA_NORMAL);
+            }
+        });
+    });
+
+    test.describe(`contrast in a code block (${theme})`, { tag: '@cross' }, () => {
+        test.use({ cassette: promptDetailCassette() });
+
+        if (theme === 'dark') {
+            test.beforeEach(async ({ page }) => {
+                await page.addInitScript(() => window.localStorage.setItem('theme', 'dark'));
+            });
+        }
+
+        test('editor highlight tokens clear AA inside a fence', async ({ page }) => {
+            await page.goto(`/settings/prompts/${PROMPT_DETAIL_AGENT}`);
+
+            const fence = page.locator('.tiptap-content .ProseMirror pre');
+
+            await expect(fence).toBeVisible();
+            await expect(page.locator('html')).toHaveClass(theme === 'dark' ? /dark/ : /light/);
+
+            // The atom-one-dark stylesheet ships with the editor chunk. Measuring before it lands would
+            // put the probes on the page ground and pass on a surface no user ever sees.
+            await expect(fence).toHaveCSS('background-color', 'rgb(40, 44, 52)');
+
+            for (const token of ['variable', 'tag'] as const) {
+                await expect(fence.locator(`.template-${token}`).first()).toBeVisible();
+                expect
+                    .soft(
+                        await measureContrastAt(page, `.tiptap-content .ProseMirror pre .template-${token}`),
+                        `editor-${token} inside a code block (${theme})`,
+                    )
                     .toBeGreaterThanOrEqual(AA_NORMAL);
             }
         });

@@ -32,7 +32,7 @@ export const RICH_PROMPT_TEMPLATE = [
     '- report every finding with evidence',
     '',
     '```bash',
-    'nmap -sV {{.Target}}',
+    'nmap -sV {{.Target}} --script <default>',
     '```',
     '',
     '| Field | Value |',
