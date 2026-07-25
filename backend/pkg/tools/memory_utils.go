@@ -27,7 +27,7 @@ func MergeAndDeduplicateDocs(docs []schema.Document, maxDocs int) []schema.Docum
 
 	for _, doc := range docs {
 		hash := hashContent(doc.PageContent)
-		
+
 		// If document with this hash already exists, keep the one with higher score
 		if existing, found := docMap[hash]; found {
 			if doc.Score > existing.Score {

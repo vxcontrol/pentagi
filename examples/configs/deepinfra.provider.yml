@@ -1,119 +1,168 @@
+# DeepInfra config. Direct-hosted models only - excludes Partner-tagged entries
+# (Qwen3-Max-Thinking, Seed-1.6/2.0-*, MiniMax-M2.7-Turbo).
+#
+# google/gemma-4-31B-it     -> simple/simple_json
+# moonshotai/Kimi-K2.7-Code -> primary_agent/assistant/adviser/coder
+#                              (occasional HTTP 429 on coder, transient)
+# zai-org/GLM-5.2           -> generator/refiner (effort: xhigh only; "max" = HTTP 422)
+# MiniMaxAI/MiniMax-M3      -> reflector/searcher/enricher/installer/pentester
+#
+# Dropped: DeepSeek-V4-flash (HTTP 400, no deployment), GLM-4.7-flash (hangs,
+# never errors). Kimi-K2.5 rejected for simple_json: cheaper but corrupts plain
+# JSON (turned "10.1.1.50" into 10.11). MiniMax-M3 rejects `thinking` (HTTP 400)
+# and `json_schema` (HTTP 405) - no reasoning fields on it, not used for
+# simple_json.
+#
+# Prices from DeepInfra's model API: $/1M = cents_per_token * 10000; cache_read
+# = input_price * rate_per_input_token_cached.
+#
+# Test: HTTP_CLIENT_TIMEOUT=30 ctester -config deepinfra.provider.yml -agents
+# <type> -workers 1 (default 600s timeout otherwise blocks on hanging models).
+
 simple:
-  model: "Qwen/Qwen3-Next-80B-A3B-Instruct"
-  temperature: 0.7
-  top_p: 0.95
+  model: "google/gemma-4-31B-it"
+  temperature: 1.0
+  top_p: 0.9
+  repetition_penalty: 1.0
   n: 1
-  max_tokens: 4000
+  max_tokens: 8192
   price:
-    input: 0.14
-    output: 1.4
+    input: 0.13
+    output: 0.38
 
 simple_json:
-  model: "Qwen/Qwen3-Next-80B-A3B-Instruct"
+  model: "google/gemma-4-31B-it"
   temperature: 0.7
-  top_p: 1.0
+  top_p: 0.9
+  repetition_penalty: 1.0
   n: 1
-  max_tokens: 4000
+  max_tokens: 4096
   json: true
   price:
-    input: 0.14
-    output: 1.4
+    input: 0.13
+    output: 0.38
 
 primary_agent:
-  model: "moonshotai/Kimi-K2-Instruct-0905"
+  model: "moonshotai/Kimi-K2.7-Code"
   temperature: 1.0
+  top_p: 0.95
   n: 1
-  max_tokens: 6000
+  max_tokens: 16384
   price:
-    input: 0.4
-    output: 2.0
+    input: 0.74
+    output: 3.50
+    cache_read: 0.15
 
 assistant:
-  model: "moonshotai/Kimi-K2-Instruct-0905"
+  model: "moonshotai/Kimi-K2.7-Code"
   temperature: 1.0
+  top_p: 0.95
   n: 1
-  max_tokens: 8000
+  max_tokens: 16384
   price:
-    input: 0.4
-    output: 2.0
+    input: 0.74
+    output: 3.50
+    cache_read: 0.15
 
 generator:
-  model: "google/gemini-2.5-pro"
+  model: "zai-org/GLM-5.2"
   temperature: 1.0
+  top_p: 0.95
   n: 1
-  max_tokens: 8000
+  max_tokens: 32768
+  reasoning:
+    effort: xhigh
   price:
-    input: 1.25
-    output: 10.0
+    input: 0.93
+    output: 3.00
+    cache_read: 0.18
 
 refiner:
-  model: "deepseek-ai/DeepSeek-R1-0528-Turbo"
+  model: "zai-org/GLM-5.2"
   temperature: 1.0
+  top_p: 0.95
   n: 1
-  max_tokens: 8000
+  max_tokens: 32768
+  reasoning:
+    effort: xhigh
   price:
-    input: 1.0
-    output: 3.0
+    input: 0.93
+    output: 3.00
+    cache_read: 0.18
 
 adviser:
-  model: "google/gemini-2.5-pro"
+  model: "moonshotai/Kimi-K2.7-Code"
   temperature: 1.0
+  top_p: 0.95
   n: 1
-  max_tokens: 4000
+  max_tokens: 16384
   price:
-    input: 1.25
-    output: 10.0
+    input: 0.74
+    output: 3.50
+    cache_read: 0.15
 
 reflector:
-  model: "Qwen/Qwen3-Next-80B-A3B-Instruct"
+  model: "MiniMaxAI/MiniMax-M3"
   temperature: 1.0
+  top_p: 0.95
   n: 1
-  max_tokens: 4000
+  max_tokens: 4096
   price:
-    input: 0.14
-    output: 1.4
+    input: 0.30
+    output: 1.20
+    cache_read: 0.06
 
 searcher:
-  model: "Qwen/Qwen3-32B"
+  model: "MiniMaxAI/MiniMax-M3"
   temperature: 1.0
+  top_p: 0.95
   n: 1
-  max_tokens: 4000
+  max_tokens: 4096
   price:
-    input: 0.1
-    output: 0.3
+    input: 0.30
+    output: 1.20
+    cache_read: 0.06
 
 enricher:
-  model: "Qwen/Qwen3-32B"
+  model: "MiniMaxAI/MiniMax-M3"
   temperature: 1.0
+  top_p: 0.95
   n: 1
-  max_tokens: 6000
+  max_tokens: 8192
   price:
-    input: 0.1
-    output: 0.3
+    input: 0.30
+    output: 1.20
+    cache_read: 0.06
 
 coder:
-  model: "anthropic/claude-4-sonnet"
+  model: "moonshotai/Kimi-K2.7-Code"
   temperature: 1.0
+  top_p: 0.95
   n: 1
-  max_tokens: 8000
+  max_tokens: 20480
   price:
-    input: 3.3
-    output: 16.5
+    input: 0.74
+    output: 3.50
+    cache_read: 0.15
 
 installer:
-  model: "google/gemini-2.5-flash"
+  model: "MiniMaxAI/MiniMax-M3"
   temperature: 1.0
+  top_p: 0.95
   n: 1
-  max_tokens: 6000
+  max_tokens: 16384
   price:
-    input: 0.3
-    output: 2.5
+    input: 0.30
+    output: 1.20
+    cache_read: 0.06
 
 pentester:
-  model: "moonshotai/Kimi-K2-Instruct-0905"
+  model: "MiniMaxAI/MiniMax-M3"
   temperature: 1.0
+  top_p: 0.95
   n: 1
-  max_tokens: 6000
+  max_tokens: 16384
   price:
-    input: 0.4
-    output: 2.0
+    input: 0.30
+    output: 1.20
+    cache_read: 0.06

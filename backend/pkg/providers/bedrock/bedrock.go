@@ -29,7 +29,7 @@ import (
 //go:embed config.yml models.yml
 var configFS embed.FS
 
-const BedrockAgentModel = bedrock.ModelAnthropicClaudeSonnet4
+const BedrockAgentModel = bedrock.ModelAnthropicClaudeSonnet46
 
 const BedrockToolCallIDTemplate = "tooluse_{r:22:x}"
 
@@ -67,7 +67,7 @@ func DefaultProviderConfig(cfg *config.Config) (*pconfig.ProviderConfig, error) 
 	return BuildProviderConfig(configData)
 }
 
-func DefaultModels(cfg *config.Config) (pconfig.ModelsConfig, error) {
+func DefaultModels() (pconfig.ModelsConfig, error) {
 	configData, err := configFS.ReadFile("models.yml")
 	if err != nil {
 		return nil, err
@@ -78,42 +78,7 @@ func DefaultModels(cfg *config.Config) (pconfig.ModelsConfig, error) {
 		return nil, err
 	}
 
-	if cfg.BedrockModels == "" {
-		return models, nil
-	}
-
-	externalData, err := os.ReadFile(cfg.BedrockModels)
-	if err != nil {
-		return nil, err
-	}
-
-	externalModels, err := pconfig.LoadModelsConfigData(externalData)
-	if err != nil {
-		return nil, err
-	}
-
-	return mergeModels(models, externalModels), nil
-}
-
-// mergeModels returns base plus override; on a name collision the override entry wins.
-func mergeModels(base, override pconfig.ModelsConfig) pconfig.ModelsConfig {
-	indexByName := make(map[string]int, len(base))
-	merged := make(pconfig.ModelsConfig, len(base))
-	for i, m := range base {
-		indexByName[m.Name] = i
-		merged[i] = m
-	}
-
-	for _, m := range override {
-		if i, ok := indexByName[m.Name]; ok {
-			merged[i] = m
-		} else {
-			indexByName[m.Name] = len(merged)
-			merged = append(merged, m)
-		}
-	}
-
-	return merged
+	return models, nil
 }
 
 type bedrockProvider struct {
@@ -179,7 +144,7 @@ func New(
 
 	bclient := bedrockruntime.NewFromConfig(bcfg)
 
-	models, err := DefaultModels(cfg)
+	models, err := DefaultModels()
 	if err != nil {
 		return nil, err
 	}
@@ -306,6 +271,33 @@ func (p *bedrockProvider) CallWithTools(
 	// Put cleaned tools after config to override any dirty tools restored from config.
 	options := append(configOptions, llms.WithStreamingFunc(streamCb), llms.WithTools(tools))
 	ctx, options = p.providerConfig.PrepareAdaptiveCallOptions(ctx, p.models, opt, options)
+
+	return provider.WrapGenerateContent(ctx, p, opt, p.llm.GenerateContent, chain, options...)
+}
+
+// CallWithExtraOptions: extra wins over both the config and the auto-adaptive
+// append below, since it's appended last.
+func (p *bedrockProvider) CallWithExtraOptions(
+	ctx context.Context,
+	opt pconfig.ProviderOptionsType,
+	chain []llms.MessageContent,
+	tools []llms.Tool,
+	streamCb streaming.Callback,
+	extra ...llms.CallOption,
+) (*llms.ContentResponse, error) {
+	tools = restoreMissedToolsFromChain(chain, tools)
+	tools = cleanToolSchemas(tools)
+
+	configOptions := p.providerConfig.GetOptionsForType(opt)
+
+	base := []llms.CallOption{llms.WithStreamingFunc(streamCb)}
+	base = append(base, configOptions...)
+	if len(tools) > 0 {
+		base = append(base, llms.WithTools(tools))
+	}
+
+	ctx, options := p.providerConfig.PrepareAdaptiveCallOptions(ctx, p.models, opt, base)
+	options = append(options, extra...)
 
 	return provider.WrapGenerateContent(ctx, p, opt, p.llm.GenerateContent, chain, options...)
 }

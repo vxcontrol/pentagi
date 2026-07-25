@@ -89,6 +89,72 @@
     active: true
   streaming: false
 
+# Structured Output tests (llms.WithStructuredOutput) - provider-native
+# schema-constrained decoding, distinct from the plain best-effort JSON-mode
+# tests above. Gated by capability: structured_output (optimistic - attempted
+# on every provider, a proactive ErrStructuredOutputUnsupported/Conflict is
+# reported as Unsupported rather than a hard failure). Runs ahead of
+# AgentConfig.BuildOptions actually wiring this into simple_json (landing
+# soon) so the LLM/backend is already verified capable of it by the time that
+# integration ships.
+#
+# The prompt explicitly forbids markdown/code fences, matching how the SDK's
+# own passing structured-output tests are written for weak-compliance
+# backends (see langchaingo/llms/ollama/ollama_cloud_test.go's
+# TestCloudStructuredOutput): some backends only apply the schema as a soft
+# hint rather than a hard grammar constraint, so a model that isn't told not
+# to wrap its answer in ```json fences may do so out of habit even though it
+# received the schema. structuredoutput.ValidateText deliberately does not
+# strip markdown before validating (schema used verbatim, nothing stripped),
+# so a backend/model that still wraps output after this explicit instruction
+# is a genuine ErrStructuredOutputValidation failure, not a test artifact —
+# it means this configuration is not yet ready for real schema-constrained
+# output in production.
+- id: "structured_output_with_schema"
+  name: "Structured Output With JSON Schema"
+  type: "json"
+  group: "json"
+  capability: "structured_output"
+  schema_name: "person_info"
+  schema:
+    type: "object"
+    properties:
+      name:
+        type: "string"
+      age:
+        type: "integer"
+      city:
+        type: "string"
+    required: ["name", "age", "city"]
+    additionalProperties: false
+  messages:
+    - role: "system"
+      content: "You must respond only with valid JSON. No explanations, no markdown, no code fences — just the bare JSON value."
+    - role: "user"
+      content: |
+        Return a JSON with a person's information with correct types:
+        name='Alice Smith', age=28, city='Seattle'
+  expected:
+    name: "Alice Smith"
+    age: 28
+    city: "Seattle"
+  streaming: false
+
+# No-schema counterpart: NOT a duplicate of the plain-JSON tests above (which
+# already cover the no-schema/object-shaped case) - this instead exercises the
+# array-shaped response path via the empty/nil `expected` handling in
+# extractJSON/validateArgumentValue, which no other test in this file reaches.
+- id: "color_list_json_array_no_schema"
+  name: "JSON Array Response Without Schema"
+  type: "json"
+  group: "json"
+  messages:
+    - role: "system"
+      content: "You must respond only with valid JSON. No explanations or additional text."
+    - role: "user"
+      content: "Return a JSON array with exactly two color objects, each having 'name' and 'hex' fields: red (#FF0000) and blue (#0000FF)"
+  streaming: false
+
 # Basic function calling tests
 - id: "echo_function_basic"
   name: "Basic Echo Function"
@@ -652,6 +718,45 @@
     - role: "user"
       content: "What is the domain associated with 10.0.0.50? Answer only with the domain name without any other text."
   expected: "example.com"
+  streaming: false
+
+# Reasoning capability tests - gated by capability so they only run against an
+# agent whose ACTUAL loaded config already triggers this wire behavior in a
+# real PentAGI flow (explicit reasoning:{mode: adaptive|off} in the provider
+# YAML, or - for adaptive_thinking - an adaptive-only model): see
+# tester.capabilitySupported. An agent whose config doesn't request it never
+# gets these requests at all: they are absent from the results rather than a
+# false pass/fail on a call PentAGI's runtime would never actually make.
+- id: "adaptive_thinking_reasoning_present"
+  name: "Adaptive Thinking Produces Reasoning"
+  type: "completion"
+  group: "advanced"
+  capability: "adaptive_thinking"
+  require_reasoning: true
+  messages:
+    - role: "system"
+      content: "You are a careful assistant that thinks through problems step by step before answering."
+    - role: "user"
+      content: |
+        A farmer has 17 sheep. All but 9 run away. He then buys back exactly
+        half of the sheep that ran away. How many sheep does the farmer have
+        now? Think it through, then give only the final number as your very
+        last line, with no other text after it.
+  expected: "13"
+  streaming: false
+
+- id: "reasoning_off_suppresses_reasoning"
+  name: "Explicit Reasoning Off Suppresses Reasoning"
+  type: "completion"
+  group: "advanced"
+  capability: "reasoning_off"
+  require_reasoning: false
+  messages:
+    - role: "system"
+      content: "You are a helpful assistant that follows instructions precisely."
+    - role: "user"
+      content: "What is the capital of France? Answer with only the city name, no other text."
+  expected: "Paris"
   streaming: false
 
 - id: "vulnerability_report_memory"

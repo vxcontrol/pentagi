@@ -90,6 +90,8 @@ func (t *testCaseTool) Streaming() bool                 { return t.def.Streaming
 func (t *testCaseTool) Prompt() string                  { return "" }
 func (t *testCaseTool) Messages() []llms.MessageContent { return t.messages }
 func (t *testCaseTool) Tools() []llms.Tool              { return t.tools }
+func (t *testCaseTool) Capability() TestCapability      { return CapabilityNone }
+func (t *testCaseTool) ExtraOptions() []llms.CallOption { return nil }
 
 func (t *testCaseTool) StreamingCallback() streaming.Callback {
 	if !t.def.Streaming {

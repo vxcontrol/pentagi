@@ -264,6 +264,7 @@ type AgentConfig struct {
 
 // ProviderConfig represents the configuration for all agents
 type ProviderConfig struct {
+	Name           string            `json:"name,omitempty" yaml:"name,omitempty"`
 	Simple         *AgentConfig      `json:"simple,omitempty" yaml:"simple,omitempty"`
 	SimpleJSON     *AgentConfig      `json:"simple_json,omitempty" yaml:"simple_json,omitempty"`
 	PrimaryAgent   *AgentConfig      `json:"primary_agent,omitempty" yaml:"primary_agent,omitempty"`
@@ -336,8 +337,8 @@ func (ac *AgentConfig) Validate() error {
 	if ac.PresencePenalty < -2 || ac.PresencePenalty > 2 {
 		return fmt.Errorf("presence_penalty %v out of range [-2, 2]", ac.PresencePenalty)
 	}
-	if ac.Reasoning.MaxTokens < 0 || ac.Reasoning.MaxTokens > 32000 {
-		return fmt.Errorf("reasoning.max_tokens %d out of range [0, 32000]", ac.Reasoning.MaxTokens)
+	if ac.Reasoning.MaxTokens < 0 || ac.Reasoning.MaxTokens > 32768 {
+		return fmt.Errorf("reasoning.max_tokens %d out of range [0, 32768]", ac.Reasoning.MaxTokens)
 	}
 	if ac.Price != nil &&
 		(ac.Price.Input < 0 || ac.Price.Output < 0 || ac.Price.CacheRead < 0 || ac.Price.CacheWrite < 0) {
@@ -717,6 +718,21 @@ func (ac *AgentConfig) BuildOptions() []llms.CallOption {
 	if _, ok := ac.raw["response_mime_type"]; ok && ac.ResponseMIMEType != "" {
 		options = append(options, llms.WithResponseMIMEType(ac.ResponseMIMEType))
 	}
+	// This "reasoning" block is the generic, provider-agnostic thinking control:
+	// on the wire it only ever produces the standard OpenAI-shaped top-level
+	// `reasoning_effort` string (or its disable token), via langchaingo's shared
+	// openai adapter. GLM (Z.AI), Kimi (Moonshot), Qwen (DashScope), and DeepSeek
+	// additionally expose their OWN vendor-specific thinking toggle through
+	// `extra_body` (`thinking.type` for GLM/Kimi/DeepSeek, `enable_thinking` for
+	// Qwen) — see each provider's config.yml for the exact keys. The two
+	// mechanisms are independent and are not reconciled here: `extra_body` is
+	// raw passthrough (below) that this switch never inspects, so for those
+	// vendors, whether the model actually thinks at all is decided by
+	// `extra_body`, while `reasoning.effort` (where the vendor documents support
+	// for it, e.g. GLM-5.2+/Kimi K3) only tunes depth once thinking is already
+	// running. Setting only `reasoning: {mode: off}` on those providers does NOT
+	// guarantee thinking is disabled unless the matching `extra_body` toggle is
+	// also set to disabled.
 	if _, ok := ac.raw["reasoning"]; ok && !ac.Reasoning.IsZero() {
 		switch ac.Reasoning.EffectiveMode() {
 		case ReasoningModeOff:
@@ -725,7 +741,7 @@ func (ac *AgentConfig) BuildOptions() []llms.CallOption {
 			// Adaptive thinking is applied per-call by PrepareAdaptiveCallOptions
 			// (it appends llms.WithAdaptiveReasoning); no CallOption is emitted here.
 		case ReasoningModeBudget:
-			if ac.Reasoning.MaxTokens > 0 && ac.Reasoning.MaxTokens <= 32000 {
+			if ac.Reasoning.MaxTokens > 0 && ac.Reasoning.MaxTokens <= 32768 {
 				options = append(options, llms.WithReasoning(llms.ReasoningNone, ac.Reasoning.MaxTokens))
 			}
 		default:
@@ -1002,6 +1018,14 @@ func (pc *ProviderConfig) reasoningConfigForType(opt ProviderOptionsType) (Reaso
 // UsesAdaptiveThinking reports whether this agent's call must use adaptive
 // thinking: the agent selected adaptive mode, or the model only supports adaptive
 // (e.g. Opus 4.7/4.8, where budget thinking returns a 400).
+//
+// Caveat: an adaptive-only model forces this to true even when the agent has no
+// reasoning config at all (see the first branch below), and an empty effort
+// defaults to "high" on the wire (PrepareAdaptiveCallOptions). Assigning such a
+// model to a fast/cheap utility role (simple, simple_json, reflector, searcher,
+// ...) therefore silently adds real latency/cost to what is meant to be a quick
+// call, unless the operator explicitly sets `reasoning: {mode: off}` for that
+// agent. There is currently no lower-effort default for these roles.
 func (pc *ProviderConfig) UsesAdaptiveThinking(models ModelsConfig, opt ProviderOptionsType) bool {
 	// An explicit off wins over the adaptive-only auto-adaptive below: the caller
 	// disabled thinking, so no adaptive CallOption may be appended (the disable is

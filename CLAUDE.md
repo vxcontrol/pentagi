@@ -119,7 +119,7 @@ State is managed primarily through Apollo Client (GraphQL) with real-time update
 ### Key Integrations
 
 - **LLM Providers**: OpenAI, Anthropic, Gemini, AWS Bedrock, Ollama, DeepSeek, GLM, Kimi, Qwen, and custom HTTP endpoints — configured via environment variables or the Settings UI
-- **Search**: DuckDuckGo, Google, Tavily, Traversaal, Perplexity, Searxng
+- **Search**: DuckDuckGo, Google, Tavily, Firecrawl, Traversaal, Perplexity, Searxng
 - **Databases**: PostgreSQL + pgvector (required), Neo4j (optional, for knowledge graph)
 - **Observability**: OpenTelemetry → VictoriaMetrics + Loki + Jaeger → Grafana; Langfuse for LLM analytics
 
@@ -133,6 +133,17 @@ State is managed primarily through Apollo Client (GraphQL) with real-time update
 6. Add the new `PROVIDER_TYPE` enum value via a goose migration in `backend/migrations/sql/`.
 7. Add the provider icon in `frontend/src/components/icons/<name>.tsx` and register it in `frontend/src/components/icons/provider-icon.tsx`.
 8. Update the GraphQL schema/types and frontend settings page if needed.
+
+### Adding a New Search Engine
+
+Search engines are primitives under `backend/pkg/tools/searchers/`, orchestrated by the single `web_search` tool (`backend/pkg/tools/web_search.go`). Agents never call an engine directly — they call `web_search` with an intent `mode`.
+
+1. Create `backend/pkg/tools/searchers/<name>.go` implementing the `searchers.Searcher` interface: `New<Name>(cfg, …)` constructor, `IsAvailable()`, `Engine()`, and a `Handle(ctx, Request)` that returns **typed** errors (`searchers.Retryable` / `searchers.Fatal` / `searchers.ErrNotConfigured`, or `searchers.ClassifyHTTPStatus`). Never swallow an error into a result string. `searchers` must not import `pkg/tools`.
+2. Add the engine's config field(s) to `pkg/config/config.go`, plus `.env.example`, `docker-compose.yml`, and `config_test.go` defaults.
+3. Construct the engine in `buildSearchEngines` and place its id in the relevant `fallbackStrategy` chains in `web_search.go` — that table is the only place engine priority per mode lives.
+4. Attribution: if the engine needs a **new** `SearchengineType` value (not one that already exists), add a goose migration in `backend/migrations/sql/`, a `SearchengineType<Name>` constant in `pkg/database/models.go`, and reconcile `pkg/server/models/searchlogs.go`. Reusing an existing value needs no migration.
+5. Add `<name>_test.go` in `searchers/` (the shared MITM proxy harness is in `proxy_test.go`); add orchestrator coverage in `web_search_test.go` if behavior changes.
+6. No frontend change is needed: the frontend treats `SearchLog.engine` as an opaque string and displays whatever the orchestrator logs.
 
 ### Code Generation
 

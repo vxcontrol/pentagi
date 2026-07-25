@@ -21,8 +21,18 @@ func (p ProviderType) String() string {
 }
 
 // ReasoningProvider maps the provider type to the langchaingo reasoning.Provider
-// consumed by capability introspection (llms.ReasoningSupportFor) and the disable
-// resolver. OpenAI-compatible providers all speak the OpenAI reasoning wire.
+// consumed ONLY by capability introspection for the settings UI (CannotDisable /
+// Supported hints via llms.ReasoningSupportFor / reasoning.ResolveOff) — it has no
+// effect on the actual wire call, which each provider builds independently.
+//
+// DeepSeek/GLM/Kimi/Qwen/MiniMax/Custom are folded into reasoning.ProviderOpenAI
+// as a best-effort approximation, not because they share OpenAI's real disable
+// semantics: GLM/Kimi/DeepSeek's actual thinking on/off switch is their own
+// extra_body toggle (see BuildOptions' reasoning-block comment), and Custom can
+// front literally any backend behind LLM_SERVER_URL. So the resulting hint may
+// say "reasoning can be disabled via effort=none" for a model whose real API
+// ignores that field entirely and only obeys extra_body. Treat this mapping as
+// a rough default for the UI, not a guarantee of correct wire behavior.
 func (p ProviderType) ReasoningProvider() reasoning.Provider {
 	switch p {
 	case ProviderAnthropic:
@@ -109,6 +119,19 @@ type Provider interface {
 		chain []llms.MessageContent,
 		tools []llms.Tool,
 		streamCb streaming.Callback,
+	) (*llms.ContentResponse, error)
+	// CallWithExtraOptions is CallWithTools with extra appended after the
+	// agent's own configured options, so it always wins. Lets a caller force a
+	// wire behavior (e.g. adaptive thinking, reasoning off, structured output)
+	// the agent's static config doesn't already request — used by the
+	// provider tester, but not limited to it.
+	CallWithExtraOptions(
+		ctx context.Context,
+		opt pconfig.ProviderOptionsType,
+		chain []llms.MessageContent,
+		tools []llms.Tool,
+		streamCb streaming.Callback,
+		extra ...llms.CallOption,
 	) (*llms.ContentResponse, error)
 
 	// Configuration access methods

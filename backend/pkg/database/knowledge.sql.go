@@ -477,12 +477,11 @@ type UpdateKnowledgeDocumentMetadataRow struct {
 }
 
 // Update only the document's metadata, leaving its text and embedding intact.
-// Used when an update changes no content (e.g. rename), so no embedder is needed.
+// Used when an update changes no content (e.g. rename) so re-embedding — and
+// therefore a configured embedder — is unnecessary.
+// cmetadata must be valid JSON text.
 func (q *Queries) UpdateKnowledgeDocumentMetadata(ctx context.Context, arg UpdateKnowledgeDocumentMetadataParams) (UpdateKnowledgeDocumentMetadataRow, error) {
-	row := q.db.QueryRowContext(ctx, updateKnowledgeDocumentMetadata,
-		arg.Cmetadata,
-		arg.Uuid,
-	)
+	row := q.db.QueryRowContext(ctx, updateKnowledgeDocumentMetadata, arg.Cmetadata, arg.Uuid)
 	var i UpdateKnowledgeDocumentMetadataRow
 	err := row.Scan(&i.ID, &i.Document, &i.Cmetadata)
 	return i, err

@@ -14,6 +14,7 @@ import (
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/gorm"
+	"github.com/sirupsen/logrus"
 )
 
 type authResult int
@@ -73,11 +74,23 @@ func (p *AuthMiddleware) tryAuth(
 	}
 
 	if withFail && result != authResultOk {
-		response.Error(c, response.ErrAuthRequired, authErr)
+		if errors.Is(authErr, errCookieClaimInvalid) {
+			// An expired/absent session cookie hitting a protected endpoint is
+			// routine (e.g. a stale browser tab polling after logout/expiry),
+			// not an application error - log it quietly instead of at Error.
+			response.ErrorWithLevel(c, response.ErrAuthRequired, authErr, logrus.WarnLevel)
+		} else {
+			response.Error(c, response.ErrAuthRequired, authErr)
+		}
 		return
 	}
 	c.Next()
 }
+
+// errCookieClaimInvalid is returned by tryUserCookieAuthentication when the
+// session cookie is present but missing one or more required claims (expired
+// or otherwise invalid session) - a routine, expected condition.
+var errCookieClaimInvalid = errors.New("cookie claim invalid")
 
 func (p *AuthMiddleware) tryUserCookieAuthentication(c *gin.Context) (authResult, error) {
 	sessionObject, exists := c.Get(sessions.DefaultKey)
@@ -101,7 +114,7 @@ func (p *AuthMiddleware) tryUserCookieAuthentication(c *gin.Context) (authResult
 
 	for _, attr := range []any{uid, rid, prm, exp, gtm, uname, uhash, tid} {
 		if attr == nil {
-			return authResultFail, errors.New("cookie claim invalid")
+			return authResultFail, errCookieClaimInvalid
 		}
 	}
 

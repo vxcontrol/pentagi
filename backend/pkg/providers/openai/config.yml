@@ -1,3 +1,60 @@
+# OpenAI agent configuration.
+#
+# Strategy: gpt-5.4-nano for utility/orchestration (simple/searcher/enricher),
+# gpt-5.4-mini for the primary/assistant loop and lightweight security agents,
+# gpt-5.6-terra (newest mid-tier flagship, same price as gpt-5.4) for critical
+# reasoning (generator/refiner/adviser/coder).
+#
+# All models below are current (non-deprecated) per OpenAI's model catalog. Do not
+# reintroduce o3/o4-mini/gpt-4.1/gpt-4o-class models here: see models.yml for the
+# full list of models OpenAI has marked deprecated (kept there only for backward
+# compatibility with pre-existing agent configs pinned to those names).
+#
+# Every gpt-5.4-mini / gpt-5.6-terra agent below sets `reasoning: {mode: off}`.
+# PentAGI calls OpenAI through /v1/chat/completions (never /v1/responses), and
+# for these two models that endpoint rejects ANY request that both attaches
+# function tools and leaves reasoning at its (default-on) level — even when no
+# `reasoning_effort` field is sent at all:
+#   API returned unexpected status code: 400: Function tools with
+#   reasoning_effort are not supported for <model> in /v1/chat/completions. To
+#   use function tools, use /v1/responses or set reasoning_effort to 'none'.
+#
+# This was verified live against the real OpenAI API with `ctester` (see
+# `.vscode/launch.json` "Launch Agents Tests", `-type openai -agents <name>`):
+#   - Omitting `reasoning:` entirely (the previous state of this file) is NOT
+#     enough: it still 400s on every test of `type: tool` for gpt-5.6-terra
+#     (verified on the `coder` agent, 15/23 passing — every failure was a
+#     tool-attached call, every pass was a plain completion). These models
+#     default to thinking ON even with no reasoning CallOption set, and the
+#     API refuses to combine that default-on thinking with tools on this
+#     endpoint.
+#   - `reasoning: {effort: none}` is ALSO not a fix: `pconfig.AgentConfig.
+#     BuildOptions` (pkg/providers/pconfig/config.go) only forwards the typed
+#     constants llms.ReasoningLow/Medium/High/XHigh/Max to llms.WithReasoning;
+#     the plain string "none" matches none of them, so it silently emits no
+#     CallOption — byte-for-byte the same (and byte-for-byte the same failure)
+#     as omitting `reasoning:` altogether.
+#   - `reasoning: {mode: off}` is the only config value that actually forces
+#     the wire to send "none": it calls llms.WithReasoningDisabled() ->
+#     reasoning.ResolveOff() (langchaingo v0.1.14-update.6, llms/reasoning/off.go).
+#     gpt-5.4-mini/gpt-5.6-terra are reasoning models (IsReasoningModel's
+#     "gpt-5" prefix match) that are NOT in the hard-mandatory o1/o3/o4-mini/
+#     gpt-5-pro set, so ResolveOff returns OffEffortNone and openaillm.go's
+#     setReasoningOff sends a real "reasoning_effort":"none". Re-tested the
+#     `coder` agent with this set: 24/24 (100%) passing, including every
+#     `type: tool` and streaming test.
+#   - gpt-5.4-nano (simple/simple_json/searcher/enricher) needs no such
+#     override: re-tested live and it is 100% passing (69/69) as-is — the
+#     tester's "Reasoning" column reports `false` for it, i.e. this tier does
+#     not default to thinking ON, so tools attach without conflict.
+#
+# Net effect: every gpt-5.4-mini/gpt-5.6-terra agent below runs with thinking
+# fully OFF (not "low effort" — genuinely disabled), because that model
+# family cannot combine any nonzero reasoning with function tools on
+# /v1/chat/completions. Do not remove `mode: off` or replace it with an
+# `effort:` value on these agents without re-verifying against a live account
+# that every `type: tool` test still passes.
+
 simple:
   model: gpt-5.4-nano
   temperature: 0.5
@@ -22,122 +79,122 @@ simple_json:
     cache_read: 0.02
 
 primary_agent:
-  model: o4-mini
+  model: gpt-5.4-mini
   n: 1
   max_tokens: 16384
   reasoning:
-    effort: medium
+    mode: off
   price:
-    input: 1.1
-    output: 4.4
-    cache_read: 0.275
+    input: 0.75
+    output: 4.5
+    cache_read: 0.075
 
 assistant:
-  model: o4-mini
+  model: gpt-5.4-mini
   n: 1
   max_tokens: 16384
   reasoning:
-    effort: medium
+    mode: off
   price:
-    input: 1.1
-    output: 4.4
-    cache_read: 0.275
+    input: 0.75
+    output: 4.5
+    cache_read: 0.075
 
 generator:
-  model: o3
+  model: gpt-5.6-terra
   n: 1
   max_tokens: 32768
   reasoning:
-    effort: medium
+    mode: off
   price:
-    input: 2.0
-    output: 8.0
-    cache_read: 0.5
+    input: 2.5
+    output: 15.0
+    cache_read: 0.25
 
 refiner:
-  model: o3
+  model: gpt-5.6-terra
   n: 1
   max_tokens: 20480
   reasoning:
-    effort: high
+    mode: off
   price:
-    input: 2.0
-    output: 8.0
-    cache_read: 0.5
+    input: 2.5
+    output: 15.0
+    cache_read: 0.25
 
 adviser:
-  model: gpt-5.4
+  model: gpt-5.6-terra
   n: 1
   max_tokens: 8192
   reasoning:
-    effort: low
+    mode: off
   price:
     input: 2.5
     output: 15.0
     cache_read: 0.25
 
 reflector:
-  model: o4-mini
+  model: gpt-5.4-mini
   n: 1
   max_tokens: 4096
   reasoning:
-    effort: medium
+    mode: off
   price:
-    input: 1.1
-    output: 4.4
-    cache_read: 0.275
+    input: 0.75
+    output: 4.5
+    cache_read: 0.075
 
 searcher:
-  model: gpt-4.1-mini
+  model: gpt-5.4-nano
   temperature: 0.7
   top_p: 0.8
   n: 1
   max_tokens: 8192
   price:
-    input: 0.4
-    output: 1.6
-    cache_read: 0.1
+    input: 0.2
+    output: 1.25
+    cache_read: 0.02
 
 enricher:
-  model: gpt-4.1-mini
+  model: gpt-5.4-nano
   temperature: 0.7
   top_p: 0.8
   n: 1
   max_tokens: 4096
   price:
-    input: 0.4
-    output: 1.6
-    cache_read: 0.1
+    input: 0.2
+    output: 1.25
+    cache_read: 0.02
 
 coder:
-  model: o3
+  model: gpt-5.6-terra
   n: 1
   max_tokens: 20480
   reasoning:
-    effort: low
+    mode: off
   price:
-    input: 2.0
-    output: 8.0
-    cache_read: 0.5
+    input: 2.5
+    output: 15.0
+    cache_read: 0.25
 
 installer:
-  model: o4-mini
+  model: gpt-5.4-mini
   n: 1
   max_tokens: 16384
   reasoning:
-    effort: low
+    mode: off
   price:
-    input: 1.1
-    output: 4.4
-    cache_read: 0.275
+    input: 0.75
+    output: 4.5
+    cache_read: 0.075
 
 pentester:
-  model: o4-mini
+  model: gpt-5.4-mini
   n: 1
   max_tokens: 8192
   reasoning:
-    effort: low
+    mode: off
   price:
-    input: 1.1
-    output: 4.4
-    cache_read: 0.275
+    input: 0.75
+    output: 4.5
+    cache_read: 0.075

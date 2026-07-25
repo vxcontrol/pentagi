@@ -174,7 +174,6 @@ type flowToolsExecutor struct {
 	db             database.Querier
 	cfg            *config.Config
 	embedder       embeddings.Embedder
-	evidence       evidenceReceiptRecorder
 	store          *pgvector.Store
 	graphitiClient *graphiti.Client
 	image          string
@@ -389,7 +388,6 @@ func NewFlowToolsExecutor(
 		functions:   functions,
 		replacer:    sharedReplacer,
 		cfg:         cfg,
-		evidence:    newEvidenceReceiptRecorder(cfg.DataDir, flowID, cfg.EvidenceReceiptsEnabled),
 		flowID:      flowID,
 		userID:      userID,
 		definitions: make(map[string]llms.FunctionDefinition),
@@ -403,7 +401,6 @@ func (fte *flowToolsExecutor) SetUserID(userID int64) {
 
 func (fte *flowToolsExecutor) SetFlowID(flowID int64) {
 	fte.flowID = flowID
-	fte.evidence = newEvidenceReceiptRecorder(fte.cfg.DataDir, flowID, fte.cfg.EvidenceReceiptsEnabled)
 }
 
 func (fte *flowToolsExecutor) SetImage(image string) {
@@ -788,7 +785,6 @@ func (fte *flowToolsExecutor) GetCustomExecutor(cfg CustomExecutorConfig) (Conte
 		vslp:        fte.vslp,
 		db:          fte.db,
 		store:       fte.store,
-		evidence:    fte.evidence,
 		definitions: cfg.Definitions,
 		handlers:    cfg.Handlers,
 		barriers:    barriers,
@@ -926,79 +922,12 @@ func (fte *flowToolsExecutor) GetAssistantExecutor(cfg AssistantExecutorConfig) 
 			definitions = append(definitions, registryDefinitions[SearchCodeToolName])
 			handlers[SearchCodeToolName] = code.Handle
 		}
+	}
 
-		google := NewGoogleTool(
-			fte.cfg,
-			fte.flowID, nil, nil,
-			fte.slp,
-		)
-		if google.IsAvailable() {
-			definitions = append(definitions, registryDefinitions[GoogleToolName])
-			handlers[GoogleToolName] = google.Handle
-		}
-
-		duckduckgo := NewDuckDuckGoTool(
-			fte.cfg,
-			fte.flowID, nil, nil,
-			fte.slp,
-		)
-		if duckduckgo.IsAvailable() {
-			definitions = append(definitions, registryDefinitions[DuckDuckGoToolName])
-			handlers[DuckDuckGoToolName] = duckduckgo.Handle
-		}
-
-		tavily := NewTavilyTool(
-			fte.cfg,
-			fte.flowID, nil, nil,
-			fte.slp,
-			cfg.Summarizer,
-		)
-		if tavily.IsAvailable() {
-			definitions = append(definitions, registryDefinitions[TavilyToolName])
-			handlers[TavilyToolName] = tavily.Handle
-		}
-
-		traversaal := NewTraversaalTool(
-			fte.cfg,
-			fte.flowID, nil, nil,
-			fte.slp,
-		)
-		if traversaal.IsAvailable() {
-			definitions = append(definitions, registryDefinitions[TraversaalToolName])
-			handlers[TraversaalToolName] = traversaal.Handle
-		}
-
-		perplexity := NewPerplexityTool(
-			fte.cfg,
-			fte.flowID, nil, nil,
-			fte.slp,
-			cfg.Summarizer,
-		)
-		if perplexity.IsAvailable() {
-			definitions = append(definitions, registryDefinitions[PerplexityToolName])
-			handlers[PerplexityToolName] = perplexity.Handle
-		}
-
-		searxng := NewSearxngTool(
-			fte.cfg,
-			fte.flowID, nil, nil,
-			fte.slp,
-			cfg.Summarizer,
-		)
-		if searxng.IsAvailable() {
-			definitions = append(definitions, registryDefinitions[SearxngToolName])
-			handlers[SearxngToolName] = searxng.Handle
-		}
-
-		sploitus := NewSploitusTool(
-			fte.cfg,
-			fte.flowID, nil, nil,
-			fte.slp,
-		)
-		if sploitus.IsAvailable() {
-			definitions = append(definitions, registryDefinitions[SploitusToolName])
-			handlers[SploitusToolName] = sploitus.Handle
-		}
+	webSearch := buildWebSearch(fte, nil, nil, cfg.Summarizer)
+	if webSearch.IsAvailable() {
+		definitions = append(definitions, registryDefinitions[WebSearchToolName])
+		handlers[WebSearchToolName] = webSearch.Handle
 	}
 
 	flowStatus := NewFlowStatusTool(fte.flowID, fte.db, cfg.Summarizer)
@@ -1037,7 +966,6 @@ func (fte *flowToolsExecutor) GetAssistantExecutor(cfg AssistantExecutorConfig) 
 		vslp:        fte.vslp,
 		db:          fte.db,
 		store:       fte.store,
-		evidence:    fte.evidence,
 		definitions: definitions,
 		handlers:    handlers,
 		barriers:    map[string]struct{}{},
@@ -1086,7 +1014,6 @@ func (fte *flowToolsExecutor) GetPrimaryExecutor(cfg PrimaryExecutorConfig) (Con
 		vslp:      fte.vslp,
 		db:        fte.db,
 		store:     fte.store,
-		evidence:  fte.evidence,
 		definitions: []llms.FunctionDefinition{
 			registryDefinitions[FinalyToolName],
 			registryDefinitions[AdviceToolName],
@@ -1163,7 +1090,6 @@ func (fte *flowToolsExecutor) GetInstallerExecutor(cfg InstallerExecutorConfig) 
 		vslp:      fte.vslp,
 		db:        fte.db,
 		store:     fte.store,
-		evidence:  fte.evidence,
 		definitions: []llms.FunctionDefinition{
 			registryDefinitions[MaintenanceResultToolName],
 			registryDefinitions[AdviceToolName],
@@ -1270,7 +1196,6 @@ func (fte *flowToolsExecutor) GetCoderExecutor(cfg CoderExecutorConfig) (Context
 		vslp:      fte.vslp,
 		db:        fte.db,
 		store:     fte.store,
-		evidence:  fte.evidence,
 		definitions: []llms.FunctionDefinition{
 			registryDefinitions[CodeResultToolName],
 			registryDefinitions[AdviceToolName],
@@ -1394,7 +1319,6 @@ func (fte *flowToolsExecutor) GetPentesterExecutor(cfg PentesterExecutorConfig) 
 		vslp:      fte.vslp,
 		db:        fte.db,
 		store:     fte.store,
-		evidence:  fte.evidence,
 		definitions: []llms.FunctionDefinition{
 			registryDefinitions[HackResultToolName],
 			registryDefinitions[AdviceToolName],
@@ -1466,16 +1390,10 @@ func (fte *flowToolsExecutor) GetPentesterExecutor(cfg PentesterExecutorConfig) 
 		ce.handlers[GraphitiSearchToolName] = graphitiSearch.Handle
 	}
 
-	sploitus := NewSploitusTool(
-		fte.cfg,
-		fte.flowID,
-		cfg.TaskID,
-		cfg.SubtaskID,
-		fte.slp,
-	)
-	if sploitus.IsAvailable() {
-		ce.definitions = append(ce.definitions, registryDefinitions[SploitusToolName])
-		ce.handlers[SploitusToolName] = sploitus.Handle
+	webSearch := buildWebSearch(fte, cfg.TaskID, cfg.SubtaskID, cfg.Summarizer)
+	if webSearch.IsAvailable() {
+		ce.definitions = append(ce.definitions, registryDefinitions[WebSearchToolName])
+		ce.handlers[WebSearchToolName] = webSearch.Handle
 	}
 
 	return ce, nil
@@ -1500,7 +1418,6 @@ func (fte *flowToolsExecutor) GetSearcherExecutor(cfg SearcherExecutorConfig) (C
 		vslp:      fte.vslp,
 		db:        fte.db,
 		store:     fte.store,
-		evidence:  fte.evidence,
 		definitions: []llms.FunctionDefinition{
 			registryDefinitions[SearchResultToolName],
 			registryDefinitions[MemoristToolName],
@@ -1529,91 +1446,10 @@ func (fte *flowToolsExecutor) GetSearcherExecutor(cfg SearcherExecutorConfig) (C
 		ce.handlers[BrowserToolName] = browser.Handle
 	}
 
-	google := NewGoogleTool(
-		fte.cfg,
-		fte.flowID,
-		cfg.TaskID,
-		cfg.SubtaskID,
-		fte.slp,
-	)
-	if google.IsAvailable() {
-		ce.definitions = append(ce.definitions, registryDefinitions[GoogleToolName])
-		ce.handlers[GoogleToolName] = google.Handle
-	}
-
-	duckduckgo := NewDuckDuckGoTool(
-		fte.cfg,
-		fte.flowID,
-		cfg.TaskID,
-		cfg.SubtaskID,
-		fte.slp,
-	)
-	if duckduckgo.IsAvailable() {
-		ce.definitions = append(ce.definitions, registryDefinitions[DuckDuckGoToolName])
-		ce.handlers[DuckDuckGoToolName] = duckduckgo.Handle
-	}
-
-	tavily := NewTavilyTool(
-		fte.cfg,
-		fte.flowID,
-		cfg.TaskID,
-		cfg.SubtaskID,
-		fte.slp,
-		cfg.Summarizer,
-	)
-	if tavily.IsAvailable() {
-		ce.definitions = append(ce.definitions, registryDefinitions[TavilyToolName])
-		ce.handlers[TavilyToolName] = tavily.Handle
-	}
-
-	traversaal := NewTraversaalTool(
-		fte.cfg,
-		fte.flowID,
-		cfg.TaskID,
-		cfg.SubtaskID,
-		fte.slp,
-	)
-	if traversaal.IsAvailable() {
-		ce.definitions = append(ce.definitions, registryDefinitions[TraversaalToolName])
-		ce.handlers[TraversaalToolName] = traversaal.Handle
-	}
-
-	perplexity := NewPerplexityTool(
-		fte.cfg,
-		fte.flowID,
-		cfg.TaskID,
-		cfg.SubtaskID,
-		fte.slp,
-		cfg.Summarizer,
-	)
-	if perplexity.IsAvailable() {
-		ce.definitions = append(ce.definitions, registryDefinitions[PerplexityToolName])
-		ce.handlers[PerplexityToolName] = perplexity.Handle
-	}
-
-	searxng := NewSearxngTool(
-		fte.cfg,
-		fte.flowID,
-		cfg.TaskID,
-		cfg.SubtaskID,
-		fte.slp,
-		cfg.Summarizer,
-	)
-	if searxng.IsAvailable() {
-		ce.definitions = append(ce.definitions, registryDefinitions[SearxngToolName])
-		ce.handlers[SearxngToolName] = searxng.Handle
-	}
-
-	sploitus := NewSploitusTool(
-		fte.cfg,
-		fte.flowID,
-		cfg.TaskID,
-		cfg.SubtaskID,
-		fte.slp,
-	)
-	if sploitus.IsAvailable() {
-		ce.definitions = append(ce.definitions, registryDefinitions[SploitusToolName])
-		ce.handlers[SploitusToolName] = sploitus.Handle
+	webSearch := buildWebSearch(fte, cfg.TaskID, cfg.SubtaskID, cfg.Summarizer)
+	if webSearch.IsAvailable() {
+		ce.definitions = append(ce.definitions, registryDefinitions[WebSearchToolName])
+		ce.handlers[WebSearchToolName] = webSearch.Handle
 	}
 
 	search := NewSearchTool(
@@ -1665,15 +1501,14 @@ func (fte *flowToolsExecutor) GetGeneratorExecutor(cfg GeneratorExecutorConfig) 
 	)
 
 	ce := &customExecutor{
-		userID:   fte.userID,
-		flowID:   fte.flowID,
-		taskID:   &cfg.TaskID,
-		mlp:      fte.mlp,
-		tclp:     fte.tclp,
-		vslp:     fte.vslp,
-		db:       fte.db,
-		store:    fte.store,
-		evidence: fte.evidence,
+		userID: fte.userID,
+		flowID: fte.flowID,
+		taskID: &cfg.TaskID,
+		mlp:    fte.mlp,
+		tclp:   fte.tclp,
+		vslp:   fte.vslp,
+		db:     fte.db,
+		store:  fte.store,
 		definitions: []llms.FunctionDefinition{
 			registryDefinitions[MemoristToolName],
 			registryDefinitions[SearchToolName],
@@ -1734,15 +1569,14 @@ func (fte *flowToolsExecutor) GetRefinerExecutor(cfg RefinerExecutorConfig) (Con
 	)
 
 	ce := &customExecutor{
-		userID:   fte.userID,
-		flowID:   fte.flowID,
-		taskID:   &cfg.TaskID,
-		mlp:      fte.mlp,
-		tclp:     fte.tclp,
-		vslp:     fte.vslp,
-		db:       fte.db,
-		store:    fte.store,
-		evidence: fte.evidence,
+		userID: fte.userID,
+		flowID: fte.flowID,
+		taskID: &cfg.TaskID,
+		mlp:    fte.mlp,
+		tclp:   fte.tclp,
+		vslp:   fte.vslp,
+		db:     fte.db,
+		store:  fte.store,
 		definitions: []llms.FunctionDefinition{
 			registryDefinitions[MemoristToolName],
 			registryDefinitions[SearchToolName],
@@ -1808,7 +1642,6 @@ func (fte *flowToolsExecutor) GetMemoristExecutor(cfg MemoristExecutorConfig) (C
 		vslp:      fte.vslp,
 		db:        fte.db,
 		store:     fte.store,
-		evidence:  fte.evidence,
 		definitions: []llms.FunctionDefinition{
 			registryDefinitions[MemoristResultToolName],
 			registryDefinitions[TerminalToolName],
@@ -1880,7 +1713,6 @@ func (fte *flowToolsExecutor) GetEnricherExecutor(cfg EnricherExecutorConfig) (C
 		vslp:      fte.vslp,
 		db:        fte.db,
 		store:     fte.store,
-		evidence:  fte.evidence,
 		definitions: []llms.FunctionDefinition{
 			registryDefinitions[EnricherResultToolName],
 			registryDefinitions[TerminalToolName],
@@ -1950,7 +1782,6 @@ func (fte *flowToolsExecutor) GetReporterExecutor(cfg ReporterExecutorConfig) (C
 		vslp:        fte.vslp,
 		db:          fte.db,
 		store:       fte.store,
-		evidence:    fte.evidence,
 		definitions: []llms.FunctionDefinition{registryDefinitions[ReportResultToolName]},
 		handlers:    map[string]ExecutorHandler{ReportResultToolName: cfg.ReportResult},
 		barriers:    map[string]struct{}{ReportResultToolName: {}},

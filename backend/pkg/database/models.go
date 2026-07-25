@@ -475,6 +475,7 @@ type SearchengineType string
 const (
 	SearchengineTypeGoogle     SearchengineType = "google"
 	SearchengineTypeTavily     SearchengineType = "tavily"
+	SearchengineTypeFirecrawl  SearchengineType = "firecrawl"
 	SearchengineTypeTraversaal SearchengineType = "traversaal"
 	SearchengineTypeBrowser    SearchengineType = "browser"
 	SearchengineTypeDuckduckgo SearchengineType = "duckduckgo"

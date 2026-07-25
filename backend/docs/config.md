@@ -59,13 +59,16 @@ This document serves as a comprehensive guide to the configuration system in Pen
     - [Google Search](#google-search)
     - [Traversaal Search](#traversaal-search)
     - [Tavily Search](#tavily-search)
+    - [Firecrawl Search](#firecrawl-search)
     - [Perplexity Search](#perplexity-search)
     - [Searxng Search](#searxng-search)
+    - [Internal Analytics Engine](#internal-analytics-engine)
     - [Usage Details](#usage-details-10)
   - [Network and Proxy Settings](#network-and-proxy-settings)
     - [Usage Details](#usage-details-11)
   - [Graphiti Knowledge Graph Settings](#graphiti-knowledge-graph-settings)
     - [Usage Details](#usage-details-12)
+    - [Current Limitations (Beta)](#current-limitations-beta)
   - [Agent Supervision Settings](#agent-supervision-settings)
     - [Usage Details](#usage-details-13)
     - [Supervision System Integration](#supervision-system-integration)
@@ -119,7 +122,7 @@ These web-console features do not replace the environment variables in this guid
 
 The environment variables documented below remain the source of truth for configuration that is not currently editable from the web console:
 
-- **LLM credentials and connection settings**: API keys, base URLs, auth modes, and provider-specific connection settings for OpenAI, Anthropic, Bedrock, Ollama, custom providers, and similar backends; config-path settings apply only where supported, such as `OLLAMA_SERVER_CONFIG_PATH`, `LLM_SERVER_CONFIG_PATH`, and `BEDROCK_CONFIG_PATH`/`BEDROCK_MODELS_PATH`.
+- **LLM credentials and connection settings**: API keys, base URLs, auth modes, and provider-specific connection settings for OpenAI, Anthropic, Bedrock, Ollama, custom providers, and similar backends; config-path settings apply only where supported, such as `OLLAMA_SERVER_CONFIG_PATH`, `LLM_SERVER_CONFIG_PATH`, and `BEDROCK_CONFIG_PATH`.
 - **Search provider credentials and options**: DuckDuckGo, Google, Tavily, Traversaal, Perplexity, Searxng, Sploitus, and related search configuration.
 - **Third-party integrations**: Langfuse, Graphiti, and other external observability or knowledge services.
 - **MCP server management**: MCP settings are not currently exposed as a live web-console feature.
@@ -128,18 +131,17 @@ The environment variables documented below remain the source of truth for config
 
 These settings control basic application behavior and are foundational for the system's operation.
 
-| Option                  | Environment Variable        | Default Value                                                                | Description                                                              |
-| ----------------------- | --------------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| DatabaseURL             | `DATABASE_URL`              | `postgres://pentagiuser:pentagipass@pgvector:5432/pentagidb?sslmode=disable` | Connection string for the PostgreSQL database with pgvector extension    |
-| DBMaxOpenConns          | `DATABASE_MAX_OPEN_CONNS`   | `25`                                                                         | Maximum open connections in the shared `sql.DB` pool (sqlc + GORM combined). See [database.md §Connection Pooling](database.md#connection-pooling). |
-| DBMaxIdleConns          | `DATABASE_MAX_IDLE_CONNS`   | `5`                                                                          | Maximum idle connections kept open between requests                      |
-| DBVectorMaxConns        | `DATABASE_VECTOR_MAX_CONNS` | `10`                                                                         | Maximum connections in the shared `pgxpool` for all pgvector stores      |
-| Debug                   | `DEBUG`                     | `false`                                                                      | Enables debug mode with additional logging                               |
-| DataDir                 | `DATA_DIR`                  | `./data`                                                                     | Directory for storing persistent data                                    |
-| AskUser                 | `ASK_USER`                  | `false`                                                                      | When enabled, requires explicit user confirmation for certain operations |
-| EvidenceReceiptsEnabled | `EVIDENCE_RECEIPTS_ENABLED` | `false`                                                                      | Enables export-only toolcall evidence receipts                           |
-| InstallationID          | `INSTALLATION_ID`           | *(none)*                                                                     | Unique installation identifier for PentAGI Cloud API communication       |
-| LicenseKey              | `LICENSE_KEY`               | *(none)*                                                                     | License key for PentAGI Cloud API authentication and feature activation  |
+| Option           | Environment Variable        | Default Value                                                                | Description                                                              |
+| ---------------- | --------------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| DatabaseURL      | `DATABASE_URL`              | `postgres://pentagiuser:pentagipass@pgvector:5432/pentagidb?sslmode=disable` | Connection string for the PostgreSQL database with pgvector extension    |
+| DBMaxOpenConns   | `DATABASE_MAX_OPEN_CONNS`   | `25`                                                                         | Maximum open connections in the shared `sql.DB` pool (sqlc + GORM combined). See [database.md §Connection Pooling](database.md#connection-pooling). |
+| DBMaxIdleConns   | `DATABASE_MAX_IDLE_CONNS`   | `5`                                                                          | Maximum idle connections kept open between requests                      |
+| DBVectorMaxConns | `DATABASE_VECTOR_MAX_CONNS` | `10`                                                                         | Maximum connections in the shared `pgxpool` for all pgvector stores      |
+| Debug            | `DEBUG`                     | `false`                                                                      | Enables debug mode with additional logging                               |
+| DataDir          | `DATA_DIR`                  | `./data`                                                                     | Directory for storing persistent data                                    |
+| AskUser          | `ASK_USER`                  | `false`                                                                      | When enabled, requires explicit user confirmation for certain operations |
+| InstallationID   | `INSTALLATION_ID`           | *(none)*                                                                     | Unique installation identifier for PentAGI Cloud API communication       |
+| LicenseKey       | `LICENSE_KEY`               | *(none)*                                                                     | License key for PentAGI Cloud API authentication and feature activation  |
 
 ### Usage Details
 
@@ -609,7 +611,6 @@ There is no `VERTEX_API_KEY` or `GOOGLE_APPLICATION_CREDENTIALS` variable wired 
 | BedrockSessionToken | `BEDROCK_SESSION_TOKEN`     | *(none)*      | AWS session token for temporary credentials (optional, used with static credentials for STS/assumed roles)               |
 | BedrockServerURL    | `BEDROCK_SERVER_URL`        | *(none)*      | Optional custom endpoint URL for Bedrock service (VPC endpoints, local testing)                                          |
 | BedrockConfig       | `BEDROCK_CONFIG_PATH`       | *(none)*      | Path to a custom YAML config that replaces the built-in Bedrock per-agent config (model assignments, prices)             |
-| BedrockModels       | `BEDROCK_MODELS_PATH`       | *(none)*      | Path to a custom YAML model catalog merged onto the built-in Bedrock models (adds new ids; matching names override)      |
 
 **Authentication Priority**: `BedrockDefaultAuth` (highest) → `BedrockBearerToken` → `BedrockAccessKey`+`BedrockSecretKey` (lowest)
 
@@ -1414,6 +1415,7 @@ Common built-in functions that can be disabled:
 - `google` - Google Search
 - `duckduckgo` - DuckDuckGo Search
 - `tavily` - Tavily Search
+- `firecrawl` - Firecrawl Search
 - `traversaal` - Traversaal Search
 - `perplexity` - Perplexity Search
 - `searxng` - SearXNG Search
@@ -1461,12 +1463,19 @@ These settings control the integration with various search engines used for web 
 | ------------ | -------------------- | ------------- | -------------------------------- |
 | TavilyAPIKey | `TAVILY_API_KEY`     | *(none)*      | API key for Tavily search engine |
 
+### Firecrawl Search
+
+| Option          | Environment Variable | Default Value               | Description                                                                    |
+| --------------- | -------------------- | --------------------------- | ------------------------------------------------------------------------------ |
+| FirecrawlAPIKey | `FIRECRAWL_API_KEY`  | *(none)*                    | API key for Firecrawl search engine                                            |
+| FirecrawlAPIURL | `FIRECRAWL_API_URL`  | `https://api.firecrawl.dev` | Base URL for the Firecrawl API (override to point at a self-hosted deployment) |
+
 ### Perplexity Search
 
 | Option                | Environment Variable      | Default Value | Description                                                  |
 | --------------------- | ------------------------- | ------------- | ------------------------------------------------------------ |
 | PerplexityAPIKey      | `PERPLEXITY_API_KEY`      | *(none)*      | API key for Perplexity search engine                         |
-| PerplexityModel       | `PERPLEXITY_MODEL`        | `sonar`       | Model to use for Perplexity search                           |
+| PerplexityModel       | `PERPLEXITY_MODEL`        | `sonar-pro`   | Model to use for Perplexity search                           |
 | PerplexityContextSize | `PERPLEXITY_CONTEXT_SIZE` | `low`         | Context size for Perplexity search (`low`, `medium`, `high`) |
 
 ### Searxng Search
@@ -1479,6 +1488,16 @@ These settings control the integration with various search engines used for web 
 | SearxngSafeSearch | `SEARXNG_SAFESEARCH` | `0`           | Safe search filter level (`0` = none, `1` = moderate, `2` = strict) |
 | SearxngTimeRange  | `SEARXNG_TIME_RANGE` | *(none)*      | Time range filter (e.g., `day`, `month`, `year`)                    |
 | SearxngTimeout    | `SEARXNG_TIMEOUT`    | *(none)*      | Request timeout in seconds for Searxng API calls                    |
+
+### Internal Analytics Engine
+
+An optional, opt-in fallback engine for the `web_search` tool's analytic modes (`answer`/`research`). When enabled, it discovers links via the first available link engine, fetches each page's main-content markdown through the browser scraper, and asks the summarizer to synthesize a query-focused answer — without a paid analytic API. Off by default because per-page scraping and summarization can cost more than a purpose-built third-party analytic call. Requires a configured scraper and at least one available link engine (e.g. DuckDuckGo, Google).
+
+| Option                        | Environment Variable                 | Default Value | Description                                                   |
+| ----------------------------- | ------------------------------------- | -------------- | -------------------------------------------------------------- |
+| WebSearchInternalEnabled      | `WEB_SEARCH_INTERNAL_ENABLED`         | `false`        | Enable or disable the internal browser-analytics engine        |
+| WebSearchInternalMaxSites     | `WEB_SEARCH_INTERNAL_MAX_SITES`       | `5`            | Maximum number of pages to fetch and summarize per query       |
+| WebSearchInternalMaxSiteBytes | `WEB_SEARCH_INTERNAL_MAX_SITE_BYTES`  | `10240`        | Maximum markdown bytes read from each page before truncation   |
 
 ### Usage Details
 
@@ -1505,6 +1524,16 @@ tavilySearch: &functions.TavilySearchFunc{
     proxyURL:   fte.cfg.ProxyURL,
     summarizer: cfg.Summarizer,
 },
+
+// Firecrawl Search configuration (FirecrawlAPIKey / FirecrawlAPIURL read from fte.cfg)
+firecrawl := NewFirecrawlTool(
+    fte.cfg,
+    fte.flowID,
+    cfg.TaskID,
+    cfg.SubtaskID,
+    fte.slp,
+    cfg.Summarizer,
+)
 
 // Perplexity Search configuration
 perplexitySearch: &functions.PerplexitySearchFunc{
@@ -1858,10 +1887,6 @@ The supervision settings work together as a comprehensive system:
    AgentPlanningStepEnabled: false
    ```
    Disabled supervision for debugging to observe natural agent behavior.
-
-## Evidence Receipt Settings
-
-When `EVIDENCE_RECEIPTS_ENABLED=true`, PentAGI writes hash-chain-only JSONL receipts for finished and failed tool calls to `<DATA_DIR>/flow-<flow_id>/evidence/receipts.jsonl`. Receipts include toolcall provenance metadata plus hashes of arguments and results, not raw argument or result content. Ed25519 signing and report bundle export are deferred to a later evidence-chain milestone.
 
 ## Observability Settings
 

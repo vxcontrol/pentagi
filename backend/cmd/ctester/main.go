@@ -335,19 +335,32 @@ func convertToAgentResults(results tester.ProviderTestResults, prv provider.Prov
 		var totalLatency time.Duration
 		for _, testResult := range agentTestResults {
 			oldResult := TestResult{
-				Name:      testResult.Name,
-				Type:      string(testResult.Type),
-				Success:   testResult.Success,
-				Error:     testResult.Error,
-				Streaming: testResult.Streaming,
-				Reasoning: testResult.Reasoning,
-				LatencyMs: testResult.Latency.Milliseconds(),
+				Name:        testResult.Name,
+				Type:        string(testResult.Type),
+				Capability:  string(testResult.Capability),
+				Success:     testResult.Success,
+				Unsupported: testResult.Unsupported,
+				Error:       testResult.Error,
+				Streaming:   testResult.Streaming,
+				Reasoning:   testResult.Reasoning,
+				LatencyMs:   testResult.Latency.Milliseconds(),
 			}
 
-			if testResult.Group == testdata.TestGroupBasic {
+			switch {
+			case testResult.Capability != "":
+				result.CapabilityTests = append(result.CapabilityTests, oldResult)
+			case testResult.Group == testdata.TestGroupBasic:
 				result.BasicTests = append(result.BasicTests, oldResult)
-			} else {
+			default:
 				result.AdvancedTests = append(result.AdvancedTests, oldResult)
+			}
+
+			// an unsupported optional capability doesn't count against the
+			// overall success rate — it's not attempted-and-failed, it's
+			// attempted-and-not-available on this model.
+			if testResult.Unsupported {
+				totalLatency += testResult.Latency
+				continue
 			}
 
 			result.TotalTests++

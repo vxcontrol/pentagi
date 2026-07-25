@@ -11,6 +11,7 @@ import (
 	"pentagi/pkg/providers/tester/testdata"
 
 	"github.com/vxcontrol/langchaingo/llms"
+	"github.com/vxcontrol/langchaingo/llms/reasoning"
 )
 
 func TestTestProvider(t *testing.T) {
@@ -322,6 +323,148 @@ func TestTestProviderGroups(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestTestProviderCapabilityGating_AdaptiveThinking verifies that
+// adaptive_thinking_reasoning_present runs — via the plain CallWithTools/
+// CallEx path, not a forced extra option — only when the agent's assigned
+// model is adaptive-only, exactly the condition
+// ProviderConfig.UsesAdaptiveThinking uses in production to decide whether to
+// append llms.WithAdaptiveReasoning. reasoning_off_suppresses_reasoning must
+// NOT run: this config never sets reasoning mode to off, so PentAGI's runtime
+// would never send that disable signal for this agent either.
+func TestTestProviderCapabilityGating_AdaptiveThinking(t *testing.T) {
+	const model = "claude-opus-4-8"
+	mockProvider := mock.NewProvider(provider.ProviderAnthropic, provider.DefaultProviderNameAnthropic, model)
+	mockProvider.SetProviderConfig(&pconfig.ProviderConfig{
+		Simple: &pconfig.AgentConfig{Model: model},
+	})
+	mockProvider.SetModels(pconfig.ModelsConfig{
+		{Name: model, Reasoning: &pconfig.ModelReasoningInfo{Mode: pconfig.ModelReasoningAdaptiveOnly}},
+	})
+	mockProvider.SetResponses([]mock.ResponseConfig{
+		{Key: "farmer has 17 sheep", Response: &llms.ContentResponse{
+			Choices: []*llms.ContentChoice{{
+				Content:   "The answer is 13",
+				Reasoning: &reasoning.ContentReasoning{Content: "mock reasoning trace"},
+			}},
+		}},
+	})
+
+	results, err := TestProvider(
+		t.Context(),
+		mockProvider,
+		WithAgentTypes(pconfig.OptionsTypeSimple),
+		WithGroups(testdata.TestGroupAdvanced),
+		WithStreamingMode(false),
+	)
+	if err != nil {
+		t.Fatalf("TestProvider capability gating failed: %v", err)
+	}
+
+	var foundAdaptive, foundOff bool
+	for _, result := range results.Simple {
+		switch result.ID {
+		case "adaptive_thinking_reasoning_present":
+			foundAdaptive = true
+			if !result.Success {
+				t.Errorf("adaptive_thinking test failed: %v", result.Error)
+			}
+			if result.Capability != testdata.CapabilityAdaptiveThinking {
+				t.Errorf("expected capability %q, got %q", testdata.CapabilityAdaptiveThinking, result.Capability)
+			}
+		case "reasoning_off_suppresses_reasoning":
+			foundOff = true
+		}
+	}
+
+	if !foundAdaptive {
+		t.Errorf("expected adaptive_thinking_reasoning_present to run for an adaptive-only model")
+	}
+	if foundOff {
+		t.Errorf("reasoning_off_suppresses_reasoning must not run: this config never sets reasoning mode to off")
+	}
+}
+
+// TestTestProviderCapabilityGating_ReasoningOff verifies that
+// reasoning_off_suppresses_reasoning runs — via the plain CallWithTools/
+// CallEx path — only when the agent's own config explicitly sets
+// `reasoning: {mode: off}`, exactly the condition AgentConfig.BuildOptions
+// uses in production to decide whether to append llms.WithReasoningDisabled.
+// adaptive_thinking_reasoning_present must NOT run for this config.
+func TestTestProviderCapabilityGating_ReasoningOff(t *testing.T) {
+	mockProvider := mock.NewProvider(provider.ProviderCustom, provider.DefaultProviderNameCustom, "some-model")
+	mockProvider.SetProviderConfig(&pconfig.ProviderConfig{
+		Simple: &pconfig.AgentConfig{
+			Model:     "some-model",
+			Reasoning: pconfig.ReasoningConfig{Mode: pconfig.ReasoningModeOff},
+		},
+	})
+	mockProvider.SetResponses([]mock.ResponseConfig{
+		{Key: "capital of France", Response: &llms.ContentResponse{
+			Choices: []*llms.ContentChoice{{Content: "Paris"}},
+		}},
+	})
+
+	results, err := TestProvider(
+		t.Context(),
+		mockProvider,
+		WithAgentTypes(pconfig.OptionsTypeSimple),
+		WithGroups(testdata.TestGroupAdvanced),
+		WithStreamingMode(false),
+	)
+	if err != nil {
+		t.Fatalf("TestProvider capability gating failed: %v", err)
+	}
+
+	var foundAdaptive, foundOff bool
+	for _, result := range results.Simple {
+		switch result.ID {
+		case "reasoning_off_suppresses_reasoning":
+			foundOff = true
+			if !result.Success {
+				t.Errorf("reasoning_off test failed: %v", result.Error)
+			}
+			if result.Capability != testdata.CapabilityReasoningOff {
+				t.Errorf("expected capability %q, got %q", testdata.CapabilityReasoningOff, result.Capability)
+			}
+		case "adaptive_thinking_reasoning_present":
+			foundAdaptive = true
+		}
+	}
+
+	if !foundOff {
+		t.Errorf("expected reasoning_off_suppresses_reasoning to run when the agent's config sets reasoning mode to off")
+	}
+	if foundAdaptive {
+		t.Errorf("adaptive_thinking_reasoning_present must not run: this config doesn't request adaptive thinking")
+	}
+}
+
+// TestTestProviderCapabilityGating_SkipsDefaultConfig verifies that capability
+// tests are entirely absent (not failed) for a provider whose config sets
+// neither an adaptive mode nor an explicit reasoning-off — i.e. a flow that
+// would never trigger either CallOption in production.
+func TestTestProviderCapabilityGating_SkipsDefaultConfig(t *testing.T) {
+	mockProvider := mock.NewProvider(provider.ProviderCustom, provider.DefaultProviderNameCustom, "test-model")
+	mockProvider.SetDefaultResponse("Mock response")
+
+	results, err := TestProvider(
+		t.Context(),
+		mockProvider,
+		WithAgentTypes(pconfig.OptionsTypeSimple),
+		WithGroups(testdata.TestGroupAdvanced),
+		WithStreamingMode(false),
+	)
+	if err != nil {
+		t.Fatalf("TestProvider capability gating failed: %v", err)
+	}
+
+	for _, result := range results.Simple {
+		if result.Capability != testdata.CapabilityNone {
+			t.Errorf("default config must not run capability test %s (capability=%s)", result.ID, result.Capability)
+		}
 	}
 }
 

@@ -1418,13 +1418,16 @@ const (
 • Sploitus - Security exploits and vulnerabilities database (no API key required)
 • Perplexity - AI-powered search with reasoning
 • Tavily - Search API for AI applications
+• Firecrawl - Web search with full-page scraping (self-hosting supported)
 • Traversaal - Web scraping and search
 • Google Search - Requires API key and Custom Search Engine ID
 • Searxng - Internet metasearch engine
+• Internal Analytics Engine - Optional browser-based fallback (scrape + summarize, off by default, no API key required)
 
 Get API keys from:
 • Perplexity: https://www.perplexity.ai/
 • Tavily: https://tavily.com/
+• Firecrawl: https://www.firecrawl.dev/
 • Traversaal: https://traversaal.ai/
 • Google: https://developers.google.com/custom-search/v1/introduction`
 
@@ -1442,6 +1445,10 @@ Get API keys from:
 	ToolsSearchEnginesPerplexityKeyDesc        = "API key for Perplexity AI search"
 	ToolsSearchEnginesTavilyKey                = "Tavily API Key"
 	ToolsSearchEnginesTavilyKeyDesc            = "API key for Tavily search service"
+	ToolsSearchEnginesFirecrawlKey             = "Firecrawl API Key"
+	ToolsSearchEnginesFirecrawlKeyDesc         = "API key for Firecrawl search service"
+	ToolsSearchEnginesFirecrawlURL             = "Firecrawl API URL"
+	ToolsSearchEnginesFirecrawlURLDesc         = "Firecrawl API base URL (leave empty for cloud; set for self-hosted)"
 	ToolsSearchEnginesTraversaalKey            = "Traversaal API Key"
 	ToolsSearchEnginesTraversaalKeyDesc        = "API key for Traversaal web scraping"
 	ToolsSearchEnginesGoogleKey                = "Google Search API Key"
@@ -1462,6 +1469,12 @@ Get API keys from:
 	ToolsSearchEnginesSearxngTimeRangeDesc     = "Searxng search engine time range (day, month, year)"
 	ToolsSearchEnginesSearxngTimeout           = "Searxng Timeout"
 	ToolsSearchEnginesSearxngTimeoutDesc       = "Searxng request timeout in seconds"
+	ToolsSearchEnginesInternalEnabled          = "Internal Analytics Engine"
+	ToolsSearchEnginesInternalEnabledDesc      = "Enable the built-in browser-analytics fallback for answer/research queries (no API key required; scrapes and summarizes pages, so it requires a configured scraper and at least one available link engine, e.g. DuckDuckGo or Google)"
+	ToolsSearchEnginesInternalMaxSites         = "Internal Engine Max Sites"
+	ToolsSearchEnginesInternalMaxSitesDesc     = "Maximum number of pages to fetch and summarize per query"
+	ToolsSearchEnginesInternalMaxSiteBytes     = "Internal Engine Max Site Bytes"
+	ToolsSearchEnginesInternalMaxSiteBytesDesc = "Maximum markdown bytes read from each page before truncation"
 )
 
 // Scraper screen strings
@@ -2301,6 +2314,8 @@ const (
 	EnvDesc_SPLOITUS_ENABLED      = "Sploitus Search"
 	EnvDesc_PERPLEXITY_API_KEY    = "Perplexity API Key"
 	EnvDesc_TAVILY_API_KEY        = "Tavily API Key"
+	EnvDesc_FIRECRAWL_API_KEY     = "Firecrawl API Key"
+	EnvDesc_FIRECRAWL_API_URL     = "Firecrawl API URL"
 	EnvDesc_TRAVERSAAL_API_KEY    = "Traversaal API Key"
 	EnvDesc_GOOGLE_API_KEY        = "Google Search API Key"
 	EnvDesc_GOOGLE_CX_KEY         = "Google Search CX Key"

@@ -601,6 +601,7 @@ func (fp *flowProvider) GetPentesterHandler(ctx context.Context, taskID, subtask
 			},
 			"system": {
 				"HackResultToolName":      tools.HackResultToolName,
+				"WebSearchToolName":       tools.WebSearchToolName,
 				"SearchGuideToolName":     tools.SearchGuideToolName,
 				"StoreGuideToolName":      tools.StoreGuideToolName,
 				"GraphitiEnabled":         fp.graphitiClient != nil && fp.graphitiClient.IsEnabled(),

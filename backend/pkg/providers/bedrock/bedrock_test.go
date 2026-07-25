@@ -86,7 +86,7 @@ func TestProviderType(t *testing.T) {
 }
 
 func TestModelsLoading(t *testing.T) {
-	models, err := DefaultModels(&config.Config{})
+	models, err := DefaultModels()
 	if err != nil {
 		t.Fatalf("Failed to load models: %v", err)
 	}
@@ -145,53 +145,25 @@ func TestBedrockProviderConfigPathOverride(t *testing.T) {
 	}
 }
 
-func TestBedrockModelsPathMerge(t *testing.T) {
-	embedded, err := DefaultModels(&config.Config{})
-	if err != nil {
-		t.Fatalf("Failed to load embedded models: %v", err)
-	}
-
-	dir := t.TempDir()
-	path := filepath.Join(dir, "bedrock.models.yml")
-	external := "- name: zai.glm-4.7-flash\n  description: GLM 4.7 Flash on Bedrock\n  thinking: false\n  price:\n    input: 0.15\n    output: 0.6\n"
-	if err := os.WriteFile(path, []byte(external), 0o600); err != nil {
-		t.Fatalf("Failed to write external models: %v", err)
-	}
-
-	merged, err := DefaultModels(&config.Config{BedrockModels: path})
-	if err != nil {
-		t.Fatalf("Failed to load merged models: %v", err)
-	}
-
-	if len(merged) != len(embedded)+1 {
-		t.Errorf("merged models = %d, want %d (embedded + 1 external)", len(merged), len(embedded)+1)
-	}
-
-	found := false
-	for _, m := range merged {
-		if m.Name == "zai.glm-4.7-flash" {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Error("external model zai.glm-4.7-flash not found in merged catalog")
-	}
-}
-
 func TestBedrockSpecificFeatures(t *testing.T) {
-	models, err := DefaultModels(&config.Config{})
+	models, err := DefaultModels()
 	if err != nil {
 		t.Fatalf("Failed to load models: %v", err)
 	}
 
-	// Test that we have current Bedrock models
+	// Models present in langchaingo/llms/bedrock models_list (and this catalog)
 	expectedModels := []string{
-		"us.anthropic.claude-sonnet-4-20250514-v1:0",
-		"us.anthropic.claude-3-5-haiku-20241022-v1:0",
-		"us.amazon.nova-premier-v1:0",
+		"us.amazon.nova-2-lite-v1:0",
 		"us.amazon.nova-pro-v1:0",
-		"us.amazon.nova-lite-v1:0",
+		"us.anthropic.claude-fable-5",
+		"us.anthropic.claude-sonnet-5",
+		"us.anthropic.claude-opus-4-8",
+		"us.anthropic.claude-opus-4-6-v1",
+		"us.meta.llama4-maverick-17b-instruct-v1:0",
+		"deepseek.v3.2",
+		"zai.glm-4.7-flash",
+		"minimax.minimax-m2.5",
+		"nvidia.nemotron-super-3-120b",
 	}
 	for _, expectedModel := range expectedModels {
 		found := false
@@ -207,9 +179,9 @@ func TestBedrockSpecificFeatures(t *testing.T) {
 	}
 
 	// Test default agent model
-	if BedrockAgentModel != bedrock.ModelAnthropicClaudeSonnet4 {
+	if BedrockAgentModel != bedrock.ModelAnthropicClaudeSonnet46 {
 		t.Errorf("Expected default agent model to be %s, got %s",
-			bedrock.ModelAnthropicClaudeSonnet4, BedrockAgentModel)
+			bedrock.ModelAnthropicClaudeSonnet46, BedrockAgentModel)
 	}
 }
 

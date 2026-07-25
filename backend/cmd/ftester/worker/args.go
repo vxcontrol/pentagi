@@ -45,6 +45,23 @@ var describeFuncInfo = FunctionInfo{
 	},
 }
 
+// internalFuncInfo describes the ftester-only "internal" engine (the internal
+// browser-analytics engine — the opt-in alternative to Tavily). It is NOT a registered
+// agent tool (agents call web_search), so — like "describe" — it is special-cased here
+// instead of coming from the tool registry. It takes the same SearchAction arguments as
+// the other search engines.
+var internalFuncInfo = FunctionInfo{
+	Name: "internal",
+	Description: "Internal browser-analytics engine (ftester debug): discovers links, scrapes each page, " +
+		"and summarizes the result — the opt-in alternative to Tavily. Requires WEB_SEARCH_INTERNAL_ENABLED=true, " +
+		"a configured scraper, and at least one available link engine.",
+	Arguments: []ArgumentInfo{
+		{Name: "query", Type: "string", Description: "Search query (English)", Required: true},
+		{Name: "max_results", Type: "integer", Description: "Maximum number of results (1-10; default 5)", Required: true},
+		{Name: "message", Type: "string", Description: "Engagement-log message", Required: true},
+	},
+}
+
 // GetAvailableFunctions returns all available functions with their descriptions
 func GetAvailableFunctions() []FunctionInfo {
 	funcInfos := []FunctionInfo{}
@@ -63,7 +80,7 @@ func GetAvailableFunctions() []FunctionInfo {
 	}
 
 	// Add custom ftester functions
-	funcInfos = append(funcInfos, describeFuncInfo)
+	funcInfos = append(funcInfos, describeFuncInfo, internalFuncInfo)
 
 	return funcInfos
 }
@@ -73,6 +90,9 @@ func GetFunctionInfo(funcName string) (FunctionInfo, error) {
 	// Check for custom ftester functions
 	if funcName == "describe" {
 		return describeFuncInfo, nil
+	}
+	if funcName == "internal" {
+		return internalFuncInfo, nil
 	}
 
 	definitions := tools.GetRegistryDefinitions()
@@ -238,8 +258,21 @@ func ParseFunctionArgs(funcName string, args []string) (any, error) {
 		// Check if there's a value for the argument
 		if i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") {
 			// Next arg is the value
-			parsedArgs[argName] = args[i+1]
+			value := args[i+1]
 			i++ // Skip the value in the next iteration
+
+			if argInfo.Type == "array" {
+				// Array arguments (e.g. []string) can't be passed as a single CLI value,
+				// so each occurrence of the flag appends one element to the resulting slice.
+				// This lets the user fill in at least one element via the command line.
+				if existing, ok := parsedArgs[argName].([]string); ok {
+					parsedArgs[argName] = append(existing, value)
+				} else {
+					parsedArgs[argName] = []string{value}
+				}
+			} else {
+				parsedArgs[argName] = value
+			}
 		} else {
 			// Boolean flag (no value)
 			parsedArgs[argName] = true
@@ -293,10 +326,13 @@ func getStructTypeForFunction(funcName string) (reflect.Type, error) {
 		tools.GoogleToolName:            &tools.SearchAction{},
 		tools.DuckDuckGoToolName:        &tools.SearchAction{},
 		tools.TavilyToolName:            &tools.SearchAction{},
+		tools.FirecrawlToolName:         &tools.SearchAction{},
 		tools.TraversaalToolName:        &tools.SearchAction{},
 		tools.PerplexityToolName:        &tools.SearchAction{},
 		tools.SearxngToolName:           &tools.SearchAction{},
 		tools.SploitusToolName:          &tools.SploitusAction{},
+		tools.WebSearchToolName:         &tools.WebSearchAction{},
+		"internal":                      &tools.SearchAction{}, // internal analytics engine (ftester-only, debug)
 		tools.MemoristToolName:          &tools.MemoristAction{},
 		tools.SearchInMemoryToolName:    &tools.SearchInMemoryAction{},
 		tools.SearchGuideToolName:       &tools.SearchGuideAction{},

@@ -171,7 +171,7 @@ Follow this prioritized approach to gather SUPPLEMENTARY information:
 <tool name="{{.GraphitiSearchToolName}}">
 <purpose>Search knowledge graph for episodic memory and execution history</purpose>
 <usage>Find what agents discovered and executed during operations</usage>
-<search_types>recent_context, episode_context, successful_tools, entity_relationships</search_types>
+<search_types>recent_context, episode_context, successful_tools, entity_relationships (only after another search type returns a node UUID; needs center_node_uuid)</search_types>
 </tool>
 {{- end}}
 

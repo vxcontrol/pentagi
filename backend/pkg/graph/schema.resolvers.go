@@ -1143,35 +1143,6 @@ func (r *mutationResolver) DeleteFlowTemplate(ctx context.Context, templateID in
 	return model.ResultTypeSuccess, nil
 }
 
-// Knowledge-document field limits. MUST stay in sync with the REST request models
-// (server/models/knowledge.go `validate` tags) and the frontend zod schema.
-const (
-	maxKnowledgeContentLen     = 65536
-	maxKnowledgeQuestionLen    = 2048
-	maxKnowledgeDescriptionLen = 1000
-	maxKnowledgeCodeLangLen    = 100
-)
-
-// maxAPITokenNameLen MUST stay in sync with the REST model (server/models/api_tokens.go
-// `validate` tag) and the frontend tokenNameSchema.
-const maxAPITokenNameLen = 100
-
-func validateKnowledgeFieldLengths(content string, question, description, codeLang *string) error {
-	if len(content) > maxKnowledgeContentLen {
-		return fmt.Errorf("content must not exceed %d characters", maxKnowledgeContentLen)
-	}
-	if question != nil && len(*question) > maxKnowledgeQuestionLen {
-		return fmt.Errorf("question must not exceed %d characters", maxKnowledgeQuestionLen)
-	}
-	if description != nil && len(*description) > maxKnowledgeDescriptionLen {
-		return fmt.Errorf("description must not exceed %d characters", maxKnowledgeDescriptionLen)
-	}
-	if codeLang != nil && len(*codeLang) > maxKnowledgeCodeLangLen {
-		return fmt.Errorf("code language must not exceed %d characters", maxKnowledgeCodeLangLen)
-	}
-	return nil
-}
-
 // CreateKnowledgeDocument is the resolver for the createKnowledgeDocument field.
 func (r *mutationResolver) CreateKnowledgeDocument(ctx context.Context, input model.CreateKnowledgeDocumentInput) (*model.KnowledgeDocument, error) {
 	uid, _, err := validatePermission(ctx, "knowledge.create")
@@ -2102,6 +2073,10 @@ func (r *queryResolver) SettingsProviders(ctx context.Context) (*model.Providers
 		"uid": uid,
 	}).Debug("get providers")
 
+	if err := r.ProvidersCtrl.SeedDefaultProviders(ctx, uid); err != nil {
+		r.Logger.WithError(err).Warn("failed to seed default providers")
+	}
+
 	config := model.ProvidersConfig{
 		Enabled:     &model.ProvidersReadinessStatus{},
 		Default:     &model.DefaultProvidersConfig{},
@@ -2138,11 +2113,8 @@ func (r *queryResolver) SettingsProviders(ctx context.Context) (*model.Providers
 			}
 		case provider.ProviderBedrock:
 			config.Default.Bedrock = mpcfg
-			if models, err := bedrock.DefaultModels(r.Config); err == nil {
+			if models, err := bedrock.DefaultModels(); err == nil {
 				config.Models.Bedrock = converter.ConvertModels(models, prvtype.ReasoningProvider())
-			} else {
-				// A bad BEDROCK_MODELS_PATH otherwise yields an empty model list with no signal.
-				r.Logger.WithError(err).Warn("failed to load bedrock models")
 			}
 		case provider.ProviderOllama:
 			config.Default.Ollama = mpcfg
@@ -2187,6 +2159,9 @@ func (r *queryResolver) SettingsProviders(ctx context.Context) (*model.Providers
 			config.Enabled.Gemini = true
 		case provider.ProviderBedrock:
 			config.Enabled.Bedrock = true
+			if p, ok := defaultProviders[provider.DefaultProviderNameBedrock]; ok {
+				config.Models.Bedrock = converter.ConvertModels(p.GetModels(), prvtype.ReasoningProvider())
+			}
 		case provider.ProviderOllama:
 			config.Enabled.Ollama = true
 			if p, ok := defaultProviders[provider.DefaultProviderNameOllama]; ok {

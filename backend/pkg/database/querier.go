@@ -286,6 +286,10 @@ type Querier interface {
 	// embedding must be formatted as a PostgreSQL vector literal: '[f1,f2,...]'
 	// cmetadata must be valid JSON text.
 	UpdateKnowledgeDocument(ctx context.Context, arg UpdateKnowledgeDocumentParams) (UpdateKnowledgeDocumentRow, error)
+	// Update only the document's metadata, leaving its text and embedding intact.
+	// Used when an update changes no content (e.g. rename) so re-embedding — and
+	// therefore a configured embedder — is unnecessary.
+	// cmetadata must be valid JSON text.
 	UpdateKnowledgeDocumentMetadata(ctx context.Context, arg UpdateKnowledgeDocumentMetadataParams) (UpdateKnowledgeDocumentMetadataRow, error)
 	UpdateMsgChain(ctx context.Context, arg UpdateMsgChainParams) (Msgchain, error)
 	UpdateMsgChainUsage(ctx context.Context, arg UpdateMsgChainUsageParams) (Msgchain, error)

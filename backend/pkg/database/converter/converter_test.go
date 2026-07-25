@@ -101,8 +101,8 @@ func TestConvertModels_OffCapability(t *testing.T) {
 		// Gemini: thinking:true, no reasoning block -> capability still surfaced,
 		// Off effective via thinkingBudget:0.
 		{Name: "gemini-2.5-flash", Thinking: tr(true)},
-		// Unclassified OpenAI-family reasoning model: Off is a silent no-op (OffOmit,
-		// default-on unknown) -> cannotDisable must be true so the UI hides Off.
+		// Reasoning model with no provider-specific disable wire (OffOmit) and
+		// unknown default-on -> Off is a silent no-op, so cannotDisable is true.
 		{Name: "glm-5.2", Reasoning: &pconfig.ModelReasoningInfo{Mode: pconfig.ModelReasoningBudget}},
 		// Adaptive-only but off by default: Off works by omission -> disablable.
 		{Name: "claude-opus-4-8", Reasoning: &pconfig.ModelReasoningInfo{Mode: pconfig.ModelReasoningAdaptiveOnly}},
@@ -114,10 +114,12 @@ func TestConvertModels_OffCapability(t *testing.T) {
 
 	byProvider := map[string]reasoning.Provider{
 		"gemini-2.5-flash": reasoning.ProviderGoogleAI,
-		"glm-5.2":          reasoning.ProviderOpenAI,
-		"claude-opus-4-8":  reasoning.ProviderAnthropic,
-		"claude-fable-5":   reasoning.ProviderAnthropic,
-		"gpt-4.1":          reasoning.ProviderOpenAI,
+		// ProviderUnknown: ResolveOff returns OffOmit (no clean disable signal).
+		// ProviderOpenAI would instead return OffEffortNone (optimistic).
+		"glm-5.2":         reasoning.ProviderUnknown,
+		"claude-opus-4-8": reasoning.ProviderAnthropic,
+		"claude-fable-5":  reasoning.ProviderAnthropic,
+		"gpt-4.1":         reasoning.ProviderOpenAI,
 	}
 
 	get := func(name string) *model.ModelReasoningInfo {
@@ -135,11 +137,20 @@ func TestConvertModels_OffCapability(t *testing.T) {
 	require.NotNil(t, gem.CannotDisable)
 	assert.False(t, *gem.CannotDisable, "Gemini Off works via thinkingBudget:0")
 
-	// glm-5.2: Off is a no-op -> cannotDisable true (UI hides Off).
+	// glm-5.2: OffOmit + unknown default-on -> no-op, hide Off.
 	glm := get("glm-5.2")
 	require.NotNil(t, glm)
 	require.NotNil(t, glm.CannotDisable)
-	assert.True(t, *glm.CannotDisable, "unclassified default-on model: Off is a no-op, must hide it")
+	assert.True(t, *glm.CannotDisable, "OffOmit with unknown default-on is a no-op, must hide Off")
+
+	// Same model on OpenAI: ResolveOff is optimistic (OffEffortNone) -> Off offered.
+	glmOA := ConvertModels(
+		pconfig.ModelsConfig{lookup(models, "glm-5.2")},
+		reasoning.ProviderOpenAI,
+	)[0].Reasoning
+	require.NotNil(t, glmOA)
+	require.NotNil(t, glmOA.CannotDisable)
+	assert.False(t, *glmOA.CannotDisable, "OpenAI ResolveOff attempts effort none")
 
 	// opus-4-8: off by default -> disablable.
 	opus := get("claude-opus-4-8")

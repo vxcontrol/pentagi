@@ -23,9 +23,6 @@ type Config struct {
 	DataDir     string `env:"DATA_DIR" envDefault:"./data"`
 	AskUser     bool   `env:"ASK_USER" envDefault:"false"`
 
-	// === Evidence Receipt Prototype ===
-	EvidenceReceiptsEnabled bool `env:"EVIDENCE_RECEIPTS_ENABLED" envDefault:"false"`
-
 	// === PentAGI Cloud Service Integration ===
 	InstallationID string `env:"INSTALLATION_ID"`
 	LicenseKey     string `env:"LICENSE_KEY"`
@@ -118,7 +115,6 @@ type Config struct {
 	BedrockSessionToken string `env:"BEDROCK_SESSION_TOKEN"`
 	BedrockServerURL    string `env:"BEDROCK_SERVER_URL"`
 	BedrockConfig       string `env:"BEDROCK_CONFIG_PATH"`
-	BedrockModels       string `env:"BEDROCK_MODELS_PATH"`
 
 	// === LLM Provider: DeepSeek ===
 	DeepSeekAPIKey    string `env:"DEEPSEEK_API_KEY"`
@@ -177,9 +173,13 @@ type Config struct {
 	// === Search Engine: Tavily AI ===
 	TavilyAPIKey string `env:"TAVILY_API_KEY"`
 
+	// === Search Engine: Firecrawl ===
+	FirecrawlAPIKey string `env:"FIRECRAWL_API_KEY"`
+	FirecrawlAPIURL string `env:"FIRECRAWL_API_URL" envDefault:"https://api.firecrawl.dev"`
+
 	// === Search Engine: Perplexity AI ===
 	PerplexityAPIKey      string `env:"PERPLEXITY_API_KEY"`
-	PerplexityModel       string `env:"PERPLEXITY_MODEL" envDefault:"sonar"`
+	PerplexityModel       string `env:"PERPLEXITY_MODEL" envDefault:"sonar-pro"`
 	PerplexityContextSize string `env:"PERPLEXITY_CONTEXT_SIZE" envDefault:"low"`
 
 	// === Search Engine: SearXNG (Self-Hosted) ===
@@ -189,6 +189,16 @@ type Config struct {
 	SearxngSafeSearch string `env:"SEARXNG_SAFESEARCH" envDefault:"0"`
 	SearxngTimeRange  string `env:"SEARXNG_TIME_RANGE"`
 	SearxngTimeout    int    `env:"SEARXNG_TIMEOUT"`
+
+	// === Web Search Orchestrator: Internal Analytics Engine ===
+	// The internal analytics engine is an OPTIONAL, opt-in fallback for the
+	// analytic web_search modes (answer/research). It produces a synthesized answer
+	// without a paid analytic API by combining link discovery + the browser scraper
+	// + the summarizer. It is OFF by default because per-page scraping and
+	// summarization can cost more than a purpose-built third-party analytic call.
+	WebSearchInternalEnabled      bool `env:"WEB_SEARCH_INTERNAL_ENABLED" envDefault:"false"`
+	WebSearchInternalMaxSites     int  `env:"WEB_SEARCH_INTERNAL_MAX_SITES" envDefault:"5"`
+	WebSearchInternalMaxSiteBytes int  `env:"WEB_SEARCH_INTERNAL_MAX_SITE_BYTES" envDefault:"10240"`
 
 	// === AI Assistant Mode Configuration ===
 	AssistantUseAgents                bool `env:"ASSISTANT_USE_AGENTS" envDefault:"false"`
@@ -341,6 +351,7 @@ func (c *Config) GetSecretPatterns() []patterns.Pattern {
 		{c.OAuthGithubClientSecret, "Github Client Secret"},
 		{c.TraversaalAPIKey, "Traversaal Key"},
 		{c.TavilyAPIKey, "Tavily Key"},
+		{c.FirecrawlAPIKey, "Firecrawl Key"},
 		{c.PerplexityAPIKey, "Perplexity Key"},
 		{c.ProxyURL, "Proxy URL"},
 		{c.LangfusePublicKey, "Langfuse Public Key"},

@@ -2,6 +2,7 @@ package tester
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"sync"
@@ -10,6 +11,9 @@ import (
 	"pentagi/pkg/providers/pconfig"
 	"pentagi/pkg/providers/provider"
 	"pentagi/pkg/providers/tester/testdata"
+
+	"github.com/vxcontrol/langchaingo/llms"
+	"github.com/vxcontrol/langchaingo/llms/reasoning"
 )
 
 // testRequest represents a test execution request
@@ -93,12 +97,64 @@ func collectTestRequests(registry *testdata.TestRegistry, prv provider.Provider,
 					continue
 				}
 
+				// skip capability-gated tests (adaptive thinking, reasoning
+				// off, structured output) whose wire behavior this agent's
+				// ACTUAL config wouldn't produce in a real PentAGI flow — see
+				// capabilitySupported for why.
+				if !capabilitySupported(prv, agentType, testCase.Capability()) {
+					continue
+				}
+
 				requests = append(requests, testRequest{
 					agentType: agentType,
 					testCase:  testCase,
 					provider:  prv,
 				})
 			}
+		}
+
+		if group != testdata.TestGroupAdvanced {
+			continue
+		}
+
+		// fileEditTestCase is hand-built in Go, not tests.yml (see
+		// newFileEditTestCase) - its whole point is a genuinely dynamic
+		// exchange that can't be expressed as a fixed message list, so it
+		// can't come from the YAML-driven registry like every other test
+		// here. It's added for TestGroupAdvanced so it still runs by default
+		// without a special opt-in.
+		//
+		// Unlike every YAML-driven TestCase above (immutable once built, so
+		// sharing one instance across every agentType request is harmless),
+		// fileEditTestCase mutates itself turn by turn (see
+		// HandleToolResponse): reusing a single instance across multiple
+		// agentType requests would leak one agent's conversation and outcome
+		// into the next agent's run. A fresh instance per agentType is
+		// required, not just a style preference.
+		for _, agentType := range config.agentTypes {
+			if len(agentFilter) > 0 && !agentFilter[agentType] {
+				continue
+			}
+			if !isTestCompatibleWithAgent(testdata.TestTypeFileEdit, agentType) {
+				continue
+			}
+			if !capabilitySupported(prv, agentType, testdata.CapabilityNone) {
+				continue
+			}
+
+			fileEdit, err := newFileEditTestCase()
+			if err != nil {
+				if config.verbose {
+					log.Printf("Warning: failed to build file_edit test case: %v", err)
+				}
+				break // same failure for every agentType - no point retrying
+			}
+
+			requests = append(requests, testRequest{
+				agentType: agentType,
+				testCase:  fileEdit,
+				provider:  prv,
+			})
 		}
 	}
 
@@ -176,11 +232,26 @@ func testWorker(ctx context.Context, requests <-chan testRequest, responses chan
 func executeTest(ctx context.Context, req testRequest) (testdata.TestResult, error) {
 	startTime := time.Now()
 
-	var response interface{}
+	var response any
 	var err error
+
+	extra := req.testCase.ExtraOptions()
 
 	// execute based on test type and available data
 	switch {
+	case len(extra) > 0:
+		// Only reachable by a CapabilityStructuredOutput test today — see
+		// TestCase.ExtraOptions. adaptive_thinking/reasoning_off are gated to
+		// configs that already produce the wire behavior through the plain
+		// CallWithTools/CallEx path below, so they never populate extra.
+		response, err = req.provider.CallWithExtraOptions(
+			ctx,
+			req.agentType,
+			req.testCase.Messages(),
+			req.testCase.Tools(),
+			req.testCase.StreamingCallback(),
+			extra...,
+		)
 	case len(req.testCase.Messages()) > 0 && len(req.testCase.Tools()) > 0:
 		// tool calling with messages
 		response, err = req.provider.CallWithTools(
@@ -190,6 +261,31 @@ func executeTest(ctx context.Context, req testRequest) (testdata.TestResult, err
 			req.testCase.Tools(),
 			req.testCase.StreamingCallback(),
 		)
+
+		// MultiTurnTestCase (e.g. fileEditTestCase's read_file -> edit_file
+		// exchange) answers each tool call itself and asks for another round
+		// by returning true; every other TestCase leaves this a no-op.
+		if err == nil {
+			if multiTurn, ok := req.testCase.(testdata.MultiTurnTestCase); ok {
+				for {
+					contentResp, isContentResp := response.(*llms.ContentResponse)
+					if !isContentResp || !multiTurn.HandleToolResponse(contentResp) {
+						break
+					}
+
+					response, err = req.provider.CallWithTools(
+						ctx,
+						req.agentType,
+						req.testCase.Messages(),
+						req.testCase.Tools(),
+						req.testCase.StreamingCallback(),
+					)
+					if err != nil {
+						break
+					}
+				}
+			}
+		}
 	case len(req.testCase.Messages()) > 0:
 		// messages without tools
 		response, err = req.provider.CallEx(
@@ -209,18 +305,37 @@ func executeTest(ctx context.Context, req testRequest) (testdata.TestResult, err
 
 	if err != nil {
 		return testdata.TestResult{
-			ID:      req.testCase.ID(),
-			Name:    req.testCase.Name(),
-			Type:    req.testCase.Type(),
-			Group:   req.testCase.Group(),
-			Success: false,
-			Error:   err,
-			Latency: latency,
+			ID:          req.testCase.ID(),
+			Name:        req.testCase.Name(),
+			Type:        req.testCase.Type(),
+			Group:       req.testCase.Group(),
+			Capability:  req.testCase.Capability(),
+			Success:     false,
+			Unsupported: isUnsupportedCapabilityError(err),
+			Error:       err,
+			Latency:     latency,
 		}, nil
 	}
 
 	// let test case validate and produce result
-	return req.testCase.Execute(response, latency), nil
+	result := req.testCase.Execute(response, latency)
+	result.Capability = req.testCase.Capability()
+	return result, nil
+}
+
+// isUnsupportedCapabilityError reports whether err is one of the SDK's typed
+// "this model/provider does not support the requested capability" sentinels,
+// proactively returned by the langchaingo adapters before any network call —
+// distinguishing "the capability isn't available here" (informative, not a
+// defect in the tested configuration) from a genuine call failure.
+func isUnsupportedCapabilityError(err error) bool {
+	var structuredUnsupported *llms.ErrStructuredOutputUnsupported
+	var structuredConflict *llms.ErrStructuredOutputConflict
+	var reasoningOffUnsupported *reasoning.ErrReasoningOffUnsupported
+
+	return errors.As(err, &structuredUnsupported) ||
+		errors.As(err, &structuredConflict) ||
+		errors.As(err, &reasoningOffUnsupported)
 }
 
 // groupResults organizes test results by agent type

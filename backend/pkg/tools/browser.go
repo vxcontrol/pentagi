@@ -22,9 +22,10 @@ import (
 )
 
 const (
-	minMdContentSize   = 50
-	minHtmlContentSize = 300
-	minImgContentSize  = 2048
+	minMdContentSize         = 50
+	minHtmlContentSize       = 300
+	minImgContentSize        = 2048
+	maxScraperErrorBodyBytes = 512
 )
 
 // nonHTMLExtensions lists URL path suffixes that point to resources the scraper
@@ -147,6 +148,15 @@ func (b *browser) Handle(ctx context.Context, name string, args json.RawMessage)
 		return "", fmt.Errorf("failed to unmarshal browser action: %w", err)
 	}
 
+	if action.Action == "" {
+		// The LLM occasionally omits the required 'action' field even though the
+		// tool schema marks it required. 'markdown' is the safest default: it is
+		// the most commonly used and most versatile content format, so infer it
+		// instead of failing the call outright and burning a tool-call-fixer
+		// round-trip on something that doesn't need one.
+		action.Action = Markdown
+	}
+
 	logger = logger.WithFields(logrus.Fields{
 		"action": action.Action,
 		"url":    action.Url,
@@ -163,8 +173,8 @@ func (b *browser) Handle(ctx context.Context, name string, args json.RawMessage)
 		result, screen, err := b.Links(ctx, action.Url)
 		return b.wrapCommandResult(ctx, name, result, action.Url, screen, err)
 	default:
-		logger.Error("unknown file action")
-		return "", fmt.Errorf("unknown file action: %s", action.Action)
+		logger.Error("unknown browser action")
+		return "", fmt.Errorf("unknown browser action: %s", action.Action)
 	}
 }
 
@@ -502,6 +512,17 @@ func (b *browser) callScraper(url string) ([]byte, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		if resp.StatusCode >= 500 {
+			body, _ := io.ReadAll(io.LimitReader(resp.Body, maxScraperErrorBodyBytes+1))
+			if preview := strings.TrimSpace(string(body)); preview != "" {
+				if truncated := len(body) > maxScraperErrorBodyBytes; truncated {
+					preview = preview[:maxScraperErrorBodyBytes] + "... [truncated]"
+				}
+				return nil, fmt.Errorf(
+					"unexpected resp code for scraper '%s': %d, response: %s", url, resp.StatusCode, preview,
+				)
+			}
+		}
 		return nil, fmt.Errorf("unexpected resp code for scraper '%s': %d", url, resp.StatusCode)
 	}
 

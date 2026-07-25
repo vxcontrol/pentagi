@@ -15,7 +15,6 @@ import (
 	"pentagi/pkg/observability/langfuse"
 	"pentagi/pkg/schema"
 
-	"github.com/sirupsen/logrus"
 	"github.com/vxcontrol/langchaingo/documentloaders"
 	"github.com/vxcontrol/langchaingo/llms"
 	"github.com/vxcontrol/langchaingo/textsplitter"
@@ -136,12 +135,11 @@ type customExecutor struct {
 	taskID    *int64
 	subtaskID *int64
 
-	db       database.Querier
-	mlp      MsgLogProvider
-	tclp     ToolCallLogProvider
-	store    *pgvector.Store
-	vslp     VectorStoreLogProvider
-	evidence evidenceReceiptRecorder
+	db    database.Querier
+	mlp   MsgLogProvider
+	tclp  ToolCallLogProvider
+	store *pgvector.Store
+	vslp  VectorStoreLogProvider
 
 	definitions []llms.FunctionDefinition
 	handlers    map[string]ExecutorHandler
@@ -301,11 +299,12 @@ func (ce *customExecutor) Execute(
 	wrapHandler := func(ctx context.Context, name string, args json.RawMessage) (string, database.MsglogResultFormat, error) {
 		resultFormat := getMessageResultFormat(name)
 		result, err := handler(ctx, name, args)
+		persistCtx := context.WithoutCancel(ctx)
+
 		if err != nil {
 			durationDelta := time.Since(startTime).Seconds()
 			failureResult := fmt.Sprintf("failed to execute handler: %s", err.Error())
-			_ = ce.tclp.UpdateLogFailed(ctx, tcID, failureResult, durationDelta)
-			ce.recordEvidenceReceipt(ctx, tcID, id, name, args, evidenceReceiptStatusFailed, failureResult)
+			_ = ce.tclp.UpdateLogFailed(persistCtx, tcID, failureResult, durationDelta)
 			return "", resultFormat, fmt.Errorf("failed to execute handler: %w", err)
 		}
 
@@ -316,12 +315,11 @@ func (ce *customExecutor) Execute(
 			if err != nil {
 				return "", resultFormat, fmt.Errorf("failed to get summarize prompt: %w", err)
 			}
-			result, err = ce.summarizer(ctx, summarizePrompt)
+			result, err = ce.summarizer(persistCtx, summarizePrompt)
 			if err != nil {
 				durationDelta := time.Since(startTime).Seconds()
 				failureResult := fmt.Sprintf("failed to summarize result: %s", err.Error())
-				_ = ce.tclp.UpdateLogFailed(ctx, tcID, failureResult, durationDelta)
-				ce.recordEvidenceReceipt(ctx, tcID, id, name, args, evidenceReceiptStatusFailed, failureResult)
+				_ = ce.tclp.UpdateLogFailed(persistCtx, tcID, failureResult, durationDelta)
 				return "", resultFormat, fmt.Errorf("failed to summarize result: %w", err)
 			}
 			resultFormat = database.MsglogResultFormatMarkdown
@@ -336,11 +334,10 @@ func (ce *customExecutor) Execute(
 		}
 
 		durationDelta := time.Since(startTime).Seconds()
-		err = ce.tclp.UpdateLogSuccess(ctx, tcID, result, durationDelta)
+		err = ce.tclp.UpdateLogSuccess(persistCtx, tcID, result, durationDelta)
 		if err != nil {
 			return "", resultFormat, fmt.Errorf("failed to update toolcall result: %w", err)
 		}
-		ce.recordEvidenceReceipt(ctx, tcID, id, name, args, evidenceReceiptStatusFinished, result)
 
 		return result, resultFormat, nil
 	}
@@ -372,50 +369,6 @@ func (ce *customExecutor) Execute(
 	obsWrapper.end(result, nil, time.Since(startTime).Seconds())
 
 	return result, nil
-}
-
-// A recording failure is logged and swallowed: evidence receipts are an
-// optional audit feature and must never fail an otherwise-successful toolcall.
-func (ce *customExecutor) recordEvidenceReceipt(
-	ctx context.Context,
-	tcID int64,
-	callID, toolName string,
-	args json.RawMessage,
-	status, result string,
-) {
-	if ce.evidence == nil {
-		return
-	}
-
-	event := evidenceReceiptEvent{
-		FlowID:     ce.flowID,
-		TaskID:     ce.taskID,
-		SubtaskID:  ce.subtaskID,
-		ToolcallID: tcID,
-		CallID:     callID,
-		ToolName:   toolName,
-		Args:       args,
-		Result:     result,
-	}
-
-	var err error
-	switch status {
-	case evidenceReceiptStatusFinished:
-		err = ce.evidence.RecordFinished(ctx, event)
-	case evidenceReceiptStatusFailed:
-		err = ce.evidence.RecordFailed(ctx, event)
-	default:
-		err = fmt.Errorf("unknown evidence receipt status %q", status)
-	}
-	if err != nil {
-		logrus.WithContext(ctx).
-			WithError(err).
-			WithFields(enrichLogrusFields(ce.flowID, ce.taskID, ce.subtaskID, logrus.Fields{
-				"tool_name":   toolName,
-				"toolcall_id": tcID,
-			})).
-			Error("failed to record evidence receipt")
-	}
 }
 
 func (ce *customExecutor) IsBarrierFunction(name string) bool {

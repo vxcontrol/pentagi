@@ -189,6 +189,28 @@ func (p *anthropicProvider) CallWithTools(
 	)
 }
 
+// CallWithExtraOptions: extra wins over both the config and the auto-adaptive
+// append below, since it's appended last.
+func (p *anthropicProvider) CallWithExtraOptions(
+	ctx context.Context,
+	opt pconfig.ProviderOptionsType,
+	chain []llms.MessageContent,
+	tools []llms.Tool,
+	streamCb streaming.Callback,
+	extra ...llms.CallOption,
+) (*llms.ContentResponse, error) {
+	base := []llms.CallOption{llms.WithStreamingFunc(streamCb)}
+	if len(tools) > 0 {
+		base = append(base, llms.WithTools(tools))
+	}
+	base = append(base, p.providerConfig.GetOptionsForType(opt)...)
+
+	ctx, options := p.providerConfig.PrepareAdaptiveCallOptions(ctx, p.models, opt, base)
+	options = append(options, extra...)
+
+	return provider.WrapGenerateContent(ctx, p, opt, p.llm.GenerateContent, chain, options...)
+}
+
 func (p *anthropicProvider) GetUsage(info map[string]any) pconfig.CallUsage {
 	return pconfig.NewCallUsage(info)
 }

@@ -52,6 +52,29 @@ func PrintAgentResults(result AgentTestResult) {
 		fmt.Printf("    %s\n", result.SkippedReason)
 	}
 
+	// Capability tests section (adaptive thinking / reasoning off / structured
+	// output): only present when the model was actually classified as
+	// supporting the capability, so its absence here means "not applicable to
+	// this model", not "not tested".
+	if len(result.CapabilityTests) > 0 {
+		fmt.Println("\nCapability Tests:")
+		for _, test := range result.CapabilityTests {
+			status := "✓"
+			switch {
+			case test.Unsupported:
+				status = "⊘"
+			case !test.Success:
+				status = "✗"
+			}
+			fmt.Printf("[%s] %s (%s) (%.3fs)\n", status, test.Name, test.Capability, float64(test.LatencyMs)/1000)
+			if test.Unsupported {
+				fmt.Printf("    Not supported by this model/provider: %v\n", test.Error)
+			} else if !test.Success && test.Error != nil {
+				fmt.Printf("    Error: %v\n", test.Error)
+			}
+		}
+	}
+
 	// Summary
 	successRate := float64(result.TotalSuccess) / float64(result.TotalTests) * 100
 	fmt.Printf("\nSummary: %d/%d (%.2f%%) successful tests\n",
@@ -212,6 +235,41 @@ func WriteReportToFile(results []AgentTestResult, filePath string) error {
 		} else if result.SkippedAdvanced {
 			file.WriteString("#### Advanced Tests\n\n")
 			file.WriteString(fmt.Sprintf("*%s*\n\n", result.SkippedReason))
+		}
+
+		// Capability tests (adaptive thinking / reasoning off / structured
+		// output) - absent entirely for a model not classified as supporting
+		// the capability at all, distinguished from "attempted but rejected"
+		// (Unsupported) and from a genuine failure.
+		if len(result.CapabilityTests) > 0 {
+			file.WriteString("#### Capability Tests\n\n")
+			file.WriteString("| Test | Capability | Result | Latency | Note |\n")
+			file.WriteString("|------|------------|--------|---------|------|\n")
+
+			for _, test := range result.CapabilityTests {
+				status := "✅ Pass"
+				note := ""
+				switch {
+				case test.Unsupported:
+					status = "⊘ Not Supported"
+					if test.Error != nil {
+						note = TruncateString(EscapeMarkdown(test.Error.Error()), 150)
+					}
+				case !test.Success:
+					status = "❌ Fail"
+					if test.Error != nil {
+						note = TruncateString(EscapeMarkdown(test.Error.Error()), 150)
+					}
+				}
+
+				file.WriteString(fmt.Sprintf("| %s | %s | %s | %.3fs | %s |\n",
+					test.Name,
+					test.Capability,
+					status,
+					float64(test.LatencyMs)/1000,
+					note))
+			}
+			file.WriteString("\n")
 		}
 
 		// Summary

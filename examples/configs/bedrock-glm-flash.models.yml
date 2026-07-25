@@ -1,9 +1,0 @@
-# Extra Bedrock model catalog merged on top of the built-in models (BEDROCK_MODELS_PATH).
-# Entries with a new name are added; an entry whose name matches a built-in one replaces it.
-- name: zai.glm-4.7-flash
-  description: Z.AI GLM 4.7 Flash on AWS Bedrock — lightweight, low-latency model (203K context, 4K max output)
-  thinking: false
-  release_date: 2026-01-19
-  price:
-    input: 0.15
-    output: 0.6

@@ -1,11 +1,30 @@
-# Kimi K2.7 Code - Code-specialized flagship model
+# Kimi K3 - Flagship for long-horizon coding and end-to-end knowledge work
+- name: kimi-k3
+  description: Kimi K3 - Flagship model for long-horizon coding and end-to-end knowledge work with 1M context. Always reasons; reasoning_effort currently supports max only. ToolCalls, JSON Mode, structured output, automatic context caching, tool_choice constraints, and dynamically loaded tools
+  thinking: true
+  reasoning:
+    efforts: [max]
+  price:
+    input: 3.00
+    output: 15.00
+    cache_read: 0.30
+
+# Kimi K2.7 Code - Coding-focused model (and high-speed variant)
 - name: kimi-k2.7-code
-  description: Kimi K2.7 Code - Code-specialist variant of K2.7 with native architecture. Stronger code generation and long-term reasoning than K2.6; supports thinking/non-thinking modes, 256k context, automatic context caching, ToolCalls, JSON Mode
+  description: Kimi K2.7 Code - Coding-focused model with higher success rates on long-context programming tasks. Supports text/image/video input, thinking mode, dialogue and agent tasks, 256k context, automatic context caching, ToolCalls, JSON Mode, Partial Mode
   thinking: true
   price:
     input: 0.95
     output: 4.00
     cache_read: 0.19
+
+- name: kimi-k2.7-code-highspeed
+  description: Kimi K2.7 Code HighSpeed - Same model as kimi-k2.7-code with higher output throughput (~180 tokens/s, up to ~260 tokens/s in short context). Supports text/image/video input, thinking mode, 256k context, automatic context caching, ToolCalls, JSON Mode, Partial Mode
+  thinking: true
+  price:
+    input: 1.90
+    output: 8.00
+    cache_read: 0.38
 
 # Kimi K2.6 - Latest flagship multimodal model with native architecture
 - name: kimi-k2.6

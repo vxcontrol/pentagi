@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"math/big"
@@ -120,6 +121,8 @@ type ProviderController interface {
 		prvID int64,
 	) (database.Provider, error)
 
+	SeedDefaultProviders(ctx context.Context, userID int64) error
+
 	TestAgent(
 		ctx context.Context,
 		prvtype provider.ProviderType,
@@ -151,24 +154,36 @@ type providerController struct {
 
 	defaultConfigs provider.ProvidersConfig
 
+	// defaultConfigErrors records, per provider type, why buildDefaultConfigs
+	// tolerated a load failure (type disabled + unreadable custom config path).
+	// patchProviderConfig surfaces this instead of a bare "not found" so a later
+	// CreateProvider/UpdateProvider attempt on that type reports the real root
+	// cause (e.g. a bad BEDROCK_CONFIG_PATH) rather than an ambiguous message
+	// that reads the same as "this provider type does not exist at all".
+	defaultConfigErrors map[provider.ProviderType]error
+
 	provider.Providers
 }
 
-func buildDefaultConfigs(cfg *config.Config) (provider.ProvidersConfig, error) {
+func buildDefaultConfigs(
+	cfg *config.Config,
+) (provider.ProvidersConfig, map[provider.ProviderType]error, error) {
 	defaultConfigs := make(provider.ProvidersConfig)
+	skipReasons := make(map[provider.ProviderType]error)
 	for _, e := range providerRegistry {
 		config, err := e.NewConfig(cfg)
 		if err != nil {
 			// A returned error here aborts startup; tolerate it for disabled providers.
 			if !e.Enabled(cfg) {
 				logrus.WithError(err).Warnf("skipping config for disabled %s provider", e.Type)
+				skipReasons[e.Type] = err
 				continue
 			}
-			return nil, fmt.Errorf("failed to create %s provider config: %w", e.Type, err)
+			return nil, nil, fmt.Errorf("failed to create %s provider config: %w", e.Type, err)
 		}
 		defaultConfigs[e.Type] = config
 	}
-	return defaultConfigs, nil
+	return defaultConfigs, skipReasons, nil
 }
 
 func NewProviderController(
@@ -187,7 +202,7 @@ func NewProviderController(
 
 	providers := make(provider.Providers)
 
-	defaultConfigs, err := buildDefaultConfigs(cfg)
+	defaultConfigs, defaultConfigErrors, err := buildDefaultConfigs(cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -237,7 +252,7 @@ func NewProviderController(
 		graphitiClient = &graphiti.Client{}
 	}
 
-	return &providerController{
+	pc := &providerController{
 		db:             db,
 		cfg:            cfg,
 		docker:         docker,
@@ -253,10 +268,28 @@ func NewProviderController(
 		summarizerAgent:     summarizerAgent,
 		summarizerAssistant: summarizerAssistant,
 
-		defaultConfigs: defaultConfigs,
+		defaultConfigs:      defaultConfigs,
+		defaultConfigErrors: defaultConfigErrors,
 
 		Providers: providers,
-	}, nil
+	}
+
+	// Seed configured system providers into the DB for all existing users so
+	// they are immediately available without any UI interaction. This runs on
+	// every startup, so editing a YAML config file and restarting PentAGI
+	// automatically propagates new values.
+	ctx := context.Background()
+	if users, err := db.GetUsers(ctx); err != nil {
+		logrus.WithError(err).Warn("failed to fetch users for provider seeding")
+	} else {
+		for _, u := range users {
+			if err := pc.SeedDefaultProviders(ctx, u.ID); err != nil {
+				logrus.WithError(err).Warnf("failed to seed default providers for user %d", u.ID)
+			}
+		}
+	}
+
+	return pc, nil
 }
 
 func (pc *providerController) NewFlowProvider(
@@ -285,7 +318,7 @@ func (pc *providerController) NewFlowProvider(
 		return nil, fmt.Errorf("failed to get primary docker image template: %w", err)
 	}
 
-	image, err := prv.Call(ctx, pconfig.OptionsTypeSimple, imageTmpl)
+	image, err := callWithSetupRetries(ctx, prv, pconfig.OptionsTypeSimple, imageTmpl)
 	if err != nil {
 		return nil, fmt.Errorf("failed to select primary docker image via llm call: %w", err)
 	}
@@ -298,7 +331,7 @@ func (pc *providerController) NewFlowProvider(
 		return nil, fmt.Errorf("failed to get language template: %w", err)
 	}
 
-	language, err := prv.Call(ctx, pconfig.OptionsTypeSimple, languageTmpl)
+	language, err := callWithSetupRetries(ctx, prv, pconfig.OptionsTypeSimple, languageTmpl)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get language: %w", err)
 	}
@@ -314,7 +347,7 @@ func (pc *providerController) NewFlowProvider(
 		return nil, fmt.Errorf("failed to get flow title template: %w", err)
 	}
 
-	title, err := prv.Call(ctx, pconfig.OptionsTypeSimple, titleTmpl)
+	title, err := callWithSetupRetries(ctx, prv, pconfig.OptionsTypeSimple, titleTmpl)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get flow title: %w", err)
 	}
@@ -444,7 +477,7 @@ func (pc *providerController) NewAssistantProvider(
 		return nil, fmt.Errorf("failed to get language template: %w", err)
 	}
 
-	language, err := prv.Call(ctx, pconfig.OptionsTypeSimple, languageTmpl)
+	language, err := callWithSetupRetries(ctx, prv, pconfig.OptionsTypeSimple, languageTmpl)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get language: %w", err)
 	}
@@ -460,7 +493,7 @@ func (pc *providerController) NewAssistantProvider(
 		return nil, fmt.Errorf("failed to get flow title template: %w", err)
 	}
 
-	title, err := prv.Call(ctx, pconfig.OptionsTypeSimple, titleTmpl)
+	title, err := callWithSetupRetries(ctx, prv, pconfig.OptionsTypeSimple, titleTmpl)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get flow title: %w", err)
 	}
@@ -615,9 +648,11 @@ func (pc *providerController) GetProviders(
 		if err != nil {
 			// Any unbuildable saved provider (its type is disabled, or its stored
 			// config is stale/invalid) is skipped, not propagated — one bad row must
-			// not take down the whole list. Debug, not Warn: it re-fires on every
-			// providers fetch; WithError carries the specific reason.
-			logrus.WithError(err).Debugf("skipping unusable user provider '%s' (type '%s')", prv.Name, prv.Type)
+			// not take down the whole list. Logged at Warn (not Error) since this is
+			// an expected, recoverable condition (e.g. a type disabled via env vars),
+			// but it must stay visible in production logs rather than silently
+			// disappearing the provider from the list on every fetch.
+			logrus.WithError(err).Warnf("skipping unusable user provider '%s' (type '%s')", prv.Name, prv.Type)
 			continue
 		}
 		providersMap[provider.ProviderName(prv.Name)] = p
@@ -649,6 +684,52 @@ func (pc *providerController) NewProvider(prv database.Provider) (provider.Provi
 	}
 
 	return e.New(pc.cfg, providerName, config)
+}
+
+func (pc *providerController) SeedDefaultProviders(ctx context.Context, userID int64) error {
+	if pc.cfg.BedrockConfig == "" {
+		return nil
+	}
+	if !pc.cfg.BedrockDefaultAuth && pc.cfg.BedrockBearerToken == "" &&
+		(pc.cfg.BedrockAccessKey == "" || pc.cfg.BedrockSecretKey == "") {
+		return nil
+	}
+
+	bedrockCfg, ok := pc.defaultConfigs[provider.ProviderBedrock]
+	if !ok {
+		return nil
+	}
+
+	rawConfig, err := json.Marshal(bedrockCfg)
+	if err != nil {
+		return fmt.Errorf("failed to marshal bedrock config: %w", err)
+	}
+
+	prvname := bedrockCfg.Name
+	if prvname == "" {
+		prvname = string(provider.DefaultProviderNameBedrock)
+	}
+	existing, err := pc.db.GetUserProviderByName(ctx, database.GetUserProviderByNameParams{
+		Name:   prvname,
+		UserID: userID,
+	})
+	if err != nil {
+		_, err = pc.db.CreateProvider(ctx, database.CreateProviderParams{
+			UserID: userID,
+			Type:   database.ProviderType(provider.ProviderBedrock),
+			Name:   prvname,
+			Config: rawConfig,
+		})
+		return err
+	}
+
+	_, err = pc.db.UpdateUserProvider(ctx, database.UpdateUserProviderParams{
+		ID:     existing.ID,
+		UserID: userID,
+		Config: rawConfig,
+		Name:   existing.Name,
+	})
+	return err
 }
 
 func (pc *providerController) CreateProvider(
@@ -914,6 +995,12 @@ func (pc *providerController) patchProviderConfig(
 	)
 
 	if defaultCfg, ok = pc.defaultConfigs[prvtype]; !ok {
+		if reason, hasReason := pc.defaultConfigErrors[prvtype]; hasReason {
+			return nil, fmt.Errorf(
+				"provider type '%s' has no default config because it failed to load at startup: %w",
+				prvtype.String(), reason,
+			)
+		}
 		return nil, fmt.Errorf("default provider config not found for type: %s", prvtype.String())
 	}
 
@@ -992,4 +1079,45 @@ func newAtomicInt64(seed int64) *atomic.Int64 {
 
 	number.Store(seed)
 	return &number
+}
+
+// callWithSetupRetries wraps a single-shot LLM prompt call used during flow/
+// assistant bootstrap (docker image, language, and title selection) with the
+// same short retry-with-backoff already used for the agent execution loop
+// (see performSimpleChain/callWithRetries), so one transient error from the
+// LLM gateway (e.g. a bad gateway from a litellm proxy) does not fail flow or
+// assistant creation outright.
+func callWithSetupRetries(
+	ctx context.Context,
+	prv provider.Provider,
+	opt pconfig.ProviderOptionsType,
+	prompt string,
+) (string, error) {
+	var (
+		result string
+		err    error
+	)
+
+	for idx := 0; idx <= maxRetriesToCallSimpleChain; idx++ {
+		if idx == maxRetriesToCallSimpleChain {
+			return "", fmt.Errorf("failed to call llm after %d retries: %w", idx, err)
+		}
+
+		result, err = prv.Call(ctx, opt, prompt)
+		if err == nil {
+			return result, nil
+		}
+
+		if errors.Is(err, context.Canceled) {
+			return "", err
+		}
+
+		select {
+		case <-ctx.Done():
+			return "", ctx.Err()
+		case <-time.After(delayBetweenRetries):
+		}
+	}
+
+	return "", err
 }

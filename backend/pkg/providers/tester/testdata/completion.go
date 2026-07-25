@@ -49,6 +49,15 @@ func (t *testCaseCompletion) Streaming() bool                 { return t.def.Str
 func (t *testCaseCompletion) Prompt() string                  { return t.def.Prompt }
 func (t *testCaseCompletion) Messages() []llms.MessageContent { return t.messages }
 func (t *testCaseCompletion) Tools() []llms.Tool              { return nil }
+func (t *testCaseCompletion) Capability() TestCapability      { return t.def.Capability }
+
+// ExtraOptions is always nil for completion tests: CapabilityAdaptiveThinking
+// and CapabilityReasoningOff are gated (see tester.capabilitySupported) to
+// only run when the agent's own static config already requests that wire
+// behavior, so the plain CallWithTools/CallEx path — the same one PentAGI's
+// runtime uses — produces it naturally. Forcing it here on top would test a
+// CallOption combination the real app never sends.
+func (t *testCaseCompletion) ExtraOptions() []llms.CallOption { return nil }
 
 func (t *testCaseCompletion) StreamingCallback() streaming.Callback {
 	if !t.def.Streaming {
@@ -126,6 +135,20 @@ func (t *testCaseCompletion) Execute(response any, latency time.Duration) TestRe
 	result.Success = success
 	if !success {
 		result.Error = fmt.Errorf("expected text '%s' not found", t.expected)
+		return result
+	}
+
+	// for capability tests (adaptive thinking / reasoning off), the content
+	// match alone isn't enough: verify the capability actually took effect on
+	// the wire, since a model that silently ignores the request would still
+	// answer correctly while telling us nothing useful about the capability.
+	if t.def.RequireReasoning != nil && *t.def.RequireReasoning != hasReasoning {
+		result.Success = false
+		if *t.def.RequireReasoning {
+			result.Error = fmt.Errorf("expected reasoning content for capability %q, but none was returned", t.def.Capability)
+		} else {
+			result.Error = fmt.Errorf("expected no reasoning content for capability %q, but reasoning was returned", t.def.Capability)
+		}
 	}
 
 	return result
