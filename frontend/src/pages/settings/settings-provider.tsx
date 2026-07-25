@@ -12,7 +12,7 @@ import {
     Trash2,
     XCircle,
 } from 'lucide-react';
-import { type ComponentProps, useEffect, useMemo, useState } from 'react';
+import { type ComponentProps, useEffect, useMemo, useRef, useState } from 'react';
 import {
     type Control,
     type FieldPath,
@@ -1213,6 +1213,7 @@ function SettingsProvider() {
     const { control, formState, handleSubmit: handleFormSubmit, reset, setValue, trigger, watch } = form;
 
     const { isDirty } = useFormState({ control });
+    const seededTypeRef = useRef<null | string>(null);
 
     useEffect(() => {
         if (submitError) {
@@ -1280,6 +1281,17 @@ function SettingsProvider() {
 
     useEffect(() => {
         if (!isNew || !selectedType || !data?.settingsProviders?.default || availableModels.length === 0) {
+            return;
+        }
+
+        // setValue is outside the form's keepDirtyValues, so a background refetch re-runs this effect
+        // with a fresh `data` identity and overwrites agent edits the user has not saved. Re-seed only
+        // when the type actually changed — that is the case where the previous type's agents are wrong.
+        const isSameType = seededTypeRef.current === selectedType;
+
+        seededTypeRef.current = selectedType;
+
+        if (isSameType && form.getFieldState('agents').isDirty) {
             return;
         }
 

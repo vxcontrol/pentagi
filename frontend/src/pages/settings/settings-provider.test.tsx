@@ -26,8 +26,6 @@ const enabled = {
     qwen: true,
 };
 
-const emptyProvider = { agents: {} };
-
 const userDefined = [
     {
         agents: {},
@@ -47,13 +45,23 @@ const userDefined = [
     },
 ];
 
+// The create form seeds agents from the type's defaults, and bails when the type has no models —
+// so a fixture with an empty catalogue would make the seeding tests vacuously green.
+const agentDefaults = (model: string, temperature: number) => ({
+    simple: { maxTokens: 1000, model, temperature },
+});
+
 const settingsProviders = {
     default: {
-        anthropic: emptyProvider,
-        openai: emptyProvider,
+        anthropic: { agents: agentDefaults('claude-e2e', 0.2) },
+        openai: { agents: agentDefaults('gpt-e2e', 0.7) },
     },
     enabled,
-    models: { anthropic: [], minimax: [], openai: [] },
+    models: {
+        anthropic: [{ name: 'claude-e2e' }],
+        minimax: [],
+        openai: [{ name: 'gpt-e2e' }],
+    },
     userDefined,
 };
 
@@ -157,6 +165,47 @@ describe('SettingsProvider create-form type guards', () => {
 
         expect(screen.queryByText('Loading provider data...')).not.toBeInTheDocument();
         expect(navigate).not.toHaveBeenCalled();
+    });
+
+    const expandAgent = () => {
+        if (!screen.queryByLabelText('Temperature')) {
+            fireEvent.click(screen.getByRole('button', { name: /Simple/ }));
+        }
+    };
+
+    const temperatureInput = () => screen.getByLabelText('Temperature') as HTMLInputElement;
+
+    it('preserves an in-flight agent edit on the create form across a background refetch', () => {
+        setSearch('type=openai');
+        const { rerender } = render(<SettingsProvider />);
+
+        expandAgent();
+        expect(temperatureInput().value).toBe('0.7');
+
+        fireEvent.change(temperatureInput(), { target: { value: '1.5' } });
+
+        // A refetch that carries no change leaves `data` referentially equal and is inert, so the
+        // payload has to actually differ for this to exercise the seeding effect.
+        queryResult.data = {
+            settingsProviders: { ...settingsProviders, userDefined: [...userDefined] },
+        };
+        rerender(<SettingsProvider />);
+
+        expect(temperatureInput().value).toBe('1.5');
+    });
+
+    it('still re-seeds the agents when the type changes mid-edit', () => {
+        setSearch('type=openai');
+        const { rerender } = render(<SettingsProvider />);
+
+        expandAgent();
+        fireEvent.change(temperatureInput(), { target: { value: '1.5' } });
+
+        setSearch('type=anthropic');
+        rerender(<SettingsProvider />);
+        expandAgent();
+
+        expect(temperatureInput().value).toBe('0.2');
     });
 
     it('preserves an in-flight edit across a background refetch', () => {
