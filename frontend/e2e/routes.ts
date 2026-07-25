@@ -43,6 +43,7 @@ export interface RouteTab {
 export const FLOW_DETAIL_TABS: RouteTab[] = [
     { name: 'Dashboard', ready: (page) => page.getByText('Usage by Model & Provider') },
     { name: 'Assistant', ready: (page) => page.getByText('New assistant', { exact: true }) },
+    { name: 'Automation', ready: (page) => page.getByText('No active tasks') },
     { name: 'Tasks', ready: (page) => page.getByText('E2E Task Alpha') },
     { name: 'Agents', ready: (page) => page.getByText('E2E agent reconnaissance') },
     { name: 'Searches', ready: (page) => page.getByText('E2E search for the CVE') },
@@ -97,6 +98,8 @@ export const ROUTE_MANIFEST: RouteManifestEntry[] = [
             'src/components/shared/file-manager',
             'src/components/dashboard',
             'src/features/resources',
+            // Assistant-tab FlowForm reads useTemplates, so a provider change reaches this route too.
+            'src/providers/templates-provider.tsx',
         ],
         tabs: FLOW_DETAIL_TABS,
     },
@@ -130,8 +133,9 @@ export const ROUTE_MANIFEST: RouteManifestEntry[] = [
         a11yWaivers: [{ rule: 'aria-valid-attr-value', target: /radix-.*-trigger-/ }],
         cassette: dashboardCassette,
         path: routes.dashboard,
-        ready: (page) => page.getByRole('heading', { name: 'Flows Activity Over Time' }),
+        ready: (page) => page.getByText('E2E Alpha'),
         sources: ['src/pages/dashboard', 'src/components/dashboard'],
+        tabs: [{ name: 'Overview', ready: (page) => page.getByRole('cell', { exact: true, name: 'e2e-provider' }) }],
     },
     {
         cassette: settingsPromptsCassette,
