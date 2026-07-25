@@ -74,6 +74,25 @@ describe('review-sandbox clean — containment', () => {
     });
 });
 
+describe('review-sandbox create — where the sandbox lands', () => {
+    it('honours PENTAGI_SANDBOX_ROOT, the escape hatch for a $TMPDIR on another filesystem', () => {
+        const override = mkdtempSync(join(tmpdir(), 'override-root-'));
+        const sandbox = execFileSync(SCRIPT, ['create'], {
+            encoding: 'utf8',
+            env: { ...process.env, PENTAGI_SANDBOX_ROOT: override, TMPDIR: sandboxRoot },
+        }).trim();
+
+        expect(sandbox.startsWith(`${override}/pentagi-review-sandboxes/`)).toBe(true);
+
+        execFileSync(SCRIPT, ['clean', sandbox], {
+            env: { ...process.env, PENTAGI_SANDBOX_ROOT: override, TMPDIR: sandboxRoot },
+        });
+        expect(existsSync(sandbox)).toBe(false);
+
+        rmSync(override, { force: true, recursive: true });
+    });
+});
+
 describe('review-sandbox clean — the sweep', () => {
     it('refuses a bare clean rather than taking the whole root', () => {
         const { stdout: sandbox } = run('create');

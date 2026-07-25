@@ -21,10 +21,38 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-SANDBOX_ROOT="${TMPDIR:-/tmp}/pentagi-review-sandboxes"
+SANDBOX_ROOT="${PENTAGI_SANDBOX_ROOT:-${TMPDIR:-/tmp}}/pentagi-review-sandboxes"
+# A hardlink cannot cross filesystems, so --with-deps is unusable when $TMPDIR is its own mount
+# (tmpfs /tmp, a separate /home, a container volume): `cp -al` fails outright and no sandbox is
+# built. This sibling of the repo is on the repo's filesystem by construction.
+FALLBACK_ROOT="$(dirname "$REPO_ROOT")/.pentagi-review-sandboxes"
+
+# Pick a root node_modules can actually be hardlinked into: probe with a real link, fall back to
+# the repo's own filesystem when the probe hits EXDEV.
+linkable_root() {
+    local probe="$SANDBOX_ROOT/.linkprobe"
+
+    mkdir -p "$SANDBOX_ROOT"
+
+    if ln "${BASH_SOURCE[0]}" "$probe" 2>/dev/null; then
+        rm -f "$probe"
+        echo "$SANDBOX_ROOT"
+
+        return
+    fi
+
+    if ! mkdir -p "$FALLBACK_ROOT" 2>/dev/null; then
+        echo "review-sandbox: $SANDBOX_ROOT is on another filesystem than the repo and" \
+            "$FALLBACK_ROOT is not writable — set PENTAGI_SANDBOX_ROOT to a same-filesystem path" >&2
+        exit 2
+    fi
+
+    echo "review-sandbox: hardlinks cannot reach $SANDBOX_ROOT — using $FALLBACK_ROOT" >&2
+    echo "$FALLBACK_ROOT"
+}
 
 create() {
-    local carry_dirty="" with_deps="" path
+    local carry_dirty="" with_deps="" path root="$SANDBOX_ROOT"
 
     for arg in "$@"; do
         case "$arg" in
@@ -37,8 +65,12 @@ create() {
         esac
     done
 
-    path="$SANDBOX_ROOT/wt-$$-$(date +%s)"
-    mkdir -p "$SANDBOX_ROOT"
+    if [[ -n "$with_deps" ]]; then
+        root="$(linkable_root)"
+    fi
+
+    path="$root/wt-$$-$(date +%s)"
+    mkdir -p "$root"
     git -C "$REPO_ROOT" worktree add --detach --quiet "$path" HEAD
     # Anything that fails from here leaves a worktree behind, and the caller reads stdout as the
     # sandbox path — so take the worktree down and say so on stderr rather than printing a stub.
@@ -74,32 +106,48 @@ create() {
 # every agent on the host, so a bare `clean` used to take out a concurrent agent's live sandbox.
 STALE_MINUTES=120
 
+# A strict child of either sandbox root — never a root itself, so a sibling like <root>-old and the
+# root's own path are both rejected.
+contained() {
+    local candidate="$1" root
+
+    for root in "$SANDBOX_ROOT" "$FALLBACK_ROOT"; do
+        mkdir -p "$root"
+
+        case "$candidate" in
+            "$(cd "$root" && pwd -P)"/?*) return 0 ;;
+        esac
+    done
+
+    return 1
+}
+
 clean() {
     local target="${1:-}" root resolved
 
     case "$target" in
         --all)
-            if [[ -d "$SANDBOX_ROOT" ]]; then
-                find "$SANDBOX_ROOT" -maxdepth 1 -name 'wt-*' -mmin "+$STALE_MINUTES" -exec rm -rf {} +
-            fi
+            for root in "$SANDBOX_ROOT" "$FALLBACK_ROOT"; do
+                if [[ -d "$root" ]]; then
+                    find "$root" -maxdepth 1 -name 'wt-*' -mmin "+$STALE_MINUTES" -exec rm -rf {} +
+                fi
+            done
             ;;
         '')
             echo "review-sandbox: clean needs a sandbox path, or --all to sweep stale ones" >&2
             exit 2
             ;;
         *)
-            mkdir -p "$SANDBOX_ROOT"
-            root="$(cd "$SANDBOX_ROOT" && pwd -P)"
             resolved="$(cd "$(dirname "$target")" 2>/dev/null && pwd -P || true)/$(basename "$target")"
 
             case "$resolved" in
                 */. | */..) resolved="" ;;
-                "$root"/?*) ;;
-                *) resolved="" ;;
+                *) contained "$resolved" || resolved="" ;;
             esac
 
             if [[ -z "$resolved" ]]; then
-                echo "review-sandbox: refusing to clean '$target' — not a sandbox under $root" >&2
+                echo "review-sandbox: refusing to clean '$target' — not a sandbox under" \
+                    "$SANDBOX_ROOT or $FALLBACK_ROOT" >&2
                 exit 2
             fi
 

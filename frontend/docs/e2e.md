@@ -183,7 +183,10 @@ including the root itself; `clean --all` sweeps sandboxes untouched for two hour
 cannot take out a concurrent agent's live one. A bare `clean` is an error, not a sweep.
 
 The sandbox is a `git worktree` under `$TMPDIR`, so a deleted file or an edited spec inside
-it cannot reach your tree. Two caveats: an absolute path still escapes it, and a tool that
+it cannot reach your tree. `--with-deps` needs the root to be on the repo's own filesystem —
+hardlinks cannot cross mounts — so where `$TMPDIR` is its own mount (tmpfs `/tmp`, a separate
+`/home`) the tool says so and falls back to `.pentagi-review-sandboxes` beside the repo;
+`PENTAGI_SANDBOX_ROOT` overrides both. Two caveats: an absolute path still escapes it, and a tool that
 rewrites a dependency **in place** would reach the shared inode — don't hand `--with-deps`
 to an agent whose job is patching libraries. Check `git status` in your own tree when a run
 finishes; that is the only proof nothing leaked.
