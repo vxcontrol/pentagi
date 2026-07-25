@@ -19,11 +19,28 @@ test.describe('flow reconnect', { tag: ['@flows', '@smoke'] }, () => {
     test.use({ cassette: flowsCassette() });
 
     test('reconciles the missed delta exactly once after a socket drop', async ({ page, pageErrorLog, world }) => {
+        // The GraphQL sweep after a reconnect skips the resources slot (it is cache-only), so the
+        // REST re-hydration rides on the `ws:reconnected` event alone. Count the calls rather than
+        // arming a one-shot expectation: the mount-time hydration would satisfy that on its own.
+        const resourceLoads: string[] = [];
+
+        page.on('request', (request) => {
+            if (request.method() === 'GET' && new URL(request.url()).pathname.startsWith('/api/v1/resources')) {
+                resourceLoads.push(request.url());
+            }
+        });
+
         await page.goto('/flows');
         await page.getByRole('row', { name: /E2E Alpha/ }).click();
         await expect(page.getByTestId(MESSAGE_ID_TESTID)).toHaveCount(BEFORE_DROP.length);
 
+        const loadsBeforeDrop = resourceLoads.length;
+
         await dropAndReconnect(page, world);
+
+        await expect
+            .poll(() => resourceLoads.length, { message: 'the reconnect re-hydrates the REST resources slot' })
+            .toBe(loadsBeforeDrop + 1);
 
         await expect(page.getByTestId(MESSAGE_ID_TESTID)).toHaveCount(AFTER_RECONNECT.length);
 
