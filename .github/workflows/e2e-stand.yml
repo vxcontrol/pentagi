@@ -23,11 +23,13 @@ concurrency:
 jobs:
   e2e-stand:
     # GitHub withholds secrets from fork `pull_request` runs: without the fork check a labelled fork
-    # PR holds reviewers for an environment approval and then fails on empty credentials.
+    # PR holds reviewers for an environment approval and then fails on empty credentials. Assert repo
+    # identity rather than negating `head.repo.fork`: a deleted fork sends `head.repo: null`, and
+    # GitHub coerces null and false alike to 0, so the negation lets that PR through.
     if: >
       github.event_name == 'workflow_dispatch' ||
       (github.event.label.name == 'e2e:stand' &&
-       github.event.pull_request.head.repo.fork == false)
+       github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: e2e-stand
