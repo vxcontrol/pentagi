@@ -82,7 +82,9 @@ const TunedCodeBlock = CodeBlockLowlight.extend({
         ];
     },
     renderMarkdown: renderTunedCodeBlock,
-}).configure({ HTMLAttributes: { class: 'hljs' }, lowlight });
+    // Without defaultLanguage an info-string-less fence falls to highlightAuto, which re-scans all 37 `common`
+    // grammars over every code block in the document on each keystroke inside one.
+}).configure({ defaultLanguage: 'plaintext', HTMLAttributes: { class: 'hljs' }, lowlight });
 
 // A paragraph line that literally starts with `# ` or `> ` re-parses as a heading / blockquote on the next load
 // (an ATX heading interrupts a paragraph; `>` opens a quote), silently changing the block TYPE of body text —

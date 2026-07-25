@@ -52,6 +52,34 @@ describe('code-block language attribute', () => {
     });
 });
 
+describe('code-block highlighting', () => {
+    const highlightClasses = (md: string): string[] => {
+        const element = document.createElement('div');
+        const editor = new Editor({
+            content: md,
+            contentType: 'markdown',
+            element,
+            extensions: createMarkdownExtensions(),
+        });
+        const classes = [...editor.view.dom.querySelectorAll('pre code span')].flatMap((span) => [...span.classList]);
+        editor.destroy();
+
+        return [...new Set(classes)];
+    };
+
+    const SNIPPET = 'const total = items.map((item) => item.price).reduce((a, b) => a + b, 0);';
+
+    it('highlights a fence that declares its language', () => {
+        expect(highlightClasses(`\`\`\`javascript\n${SNIPPET}\n\`\`\``)).toContain('hljs-keyword');
+    });
+
+    // An undeclared fence must resolve to the plaintext grammar, not to highlightAuto: auto-detection re-runs
+    // over every code block in the document on each keystroke inside one, and it is quadratic in document size.
+    it('leaves a fence with no language unhighlighted rather than guessing', () => {
+        expect(highlightClasses(`\`\`\`\n${SNIPPET}\n\`\`\``)).toEqual([]);
+    });
+});
+
 // KNOWN UPSTREAM LIMITATION — not fixable in this layer. @tiptap/markdown derives a MARK's opening/closing
 // delimiter by rendering it around a fixed placeholder (getMarkOpening/getMarkClosing), so the `code` mark's
 // real content is never seen at delimiter time and it always emits a SINGLE backtick. A code span whose
