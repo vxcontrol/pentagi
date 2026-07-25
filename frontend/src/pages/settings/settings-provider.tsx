@@ -611,10 +611,13 @@ const agentConfigSchema = z
     .object({
         extraBody: optionalJsonObject,
         frequencyPenalty: optionalNumber,
+        json: z.boolean().nullable().optional(),
         maxLength: optionalNumber,
         maxTokens: optionalNumber,
         minLength: optionalNumber,
+        minP: optionalNumber,
         model: requiredString('Model is required'),
+        n: optionalNumber,
         presencePenalty: optionalNumber,
         price: z
             .object({
@@ -634,6 +637,7 @@ const agentConfigSchema = z
             .nullable()
             .optional(),
         repetitionPenalty: optionalNumber,
+        responseMimeType: z.string().nullable().optional(),
         temperature: optionalNumber,
         topK: optionalNumber,
         topP: optionalNumber,
@@ -886,10 +890,15 @@ export const transformFormToGraphQL = (
             const config: AgentConfigInput = {
                 extraBody: data?.extraBody?.trim() ? (JSON.parse(data.extraBody) as Record<string, unknown>) : null,
                 frequencyPenalty: data?.frequencyPenalty ?? null,
+                // Not user-editable: carried through so saving a provider does not strip what the
+                // shipped defaults set (json drives WithJSONMode on the simple_json agent).
+                json: data?.json ?? null,
                 maxLength: data?.maxLength ?? null,
                 maxTokens: data?.maxTokens ?? null,
                 minLength: data?.minLength ?? null,
+                minP: data?.minP ?? null,
                 model: data?.model ?? '',
+                n: data?.n ?? null,
                 presencePenalty: data?.presencePenalty ?? null,
                 price:
                     data?.price &&
@@ -912,6 +921,7 @@ export const transformFormToGraphQL = (
                       }
                     : null,
                 repetitionPenalty: data?.repetitionPenalty ?? null,
+                responseMimeType: data?.responseMimeType ?? null,
                 temperature: data?.temperature ?? null,
                 topK: data?.topK ?? null,
                 topP: data?.topP ?? null,

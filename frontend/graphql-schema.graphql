@@ -321,6 +321,10 @@ fragment agentConfigFragment on AgentConfig {
     repetitionPenalty
     frequencyPenalty
     presencePenalty
+    minP
+    n
+    json
+    responseMimeType
     reasoning {
         mode
         effort

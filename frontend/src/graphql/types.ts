@@ -6,14 +6,18 @@ import type { TypedDocumentNode as DocumentNode } from '@graphql-typed-document-
 export type AgentConfigInput = {
     extraBody?: Record<string, unknown> | null | undefined;
     frequencyPenalty?: number | null | undefined;
+    json?: boolean | null | undefined;
     maxLength?: number | null | undefined;
     maxTokens?: number | null | undefined;
     minLength?: number | null | undefined;
+    minP?: number | null | undefined;
     model: string;
+    n?: number | null | undefined;
     presencePenalty?: number | null | undefined;
     price?: ModelPriceInput | null | undefined;
     reasoning?: ReasoningConfigInput | null | undefined;
     repetitionPenalty?: number | null | undefined;
+    responseMimeType?: string | null | undefined;
     temperature?: number | null | undefined;
     topK?: number | null | undefined;
     topP?: number | null | undefined;
@@ -547,6 +551,10 @@ export type AgentConfigFragmentFragment = {
     repetitionPenalty: number | null;
     frequencyPenalty: number | null;
     presencePenalty: number | null;
+    minP: number | null;
+    n: number | null;
+    json: boolean | null;
+    responseMimeType: string | null;
     extraBody: Record<string, unknown> | null;
     reasoning: { mode: ReasoningMode | null; effort: ReasoningEffort | null; maxTokens: number | null } | null;
     price: { input: number; output: number; cacheRead: number; cacheWrite: number } | null;
@@ -2166,6 +2174,10 @@ export const AgentConfigFragmentFragmentDoc = {
                     { kind: 'Field', name: { kind: 'Name', value: 'repetitionPenalty' } },
                     { kind: 'Field', name: { kind: 'Name', value: 'frequencyPenalty' } },
                     { kind: 'Field', name: { kind: 'Name', value: 'presencePenalty' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'minP' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'n' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'json' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'responseMimeType' } },
                     {
                         kind: 'Field',
                         name: { kind: 'Name', value: 'reasoning' },
@@ -2357,6 +2369,10 @@ export const AgentsConfigFragmentFragmentDoc = {
                     { kind: 'Field', name: { kind: 'Name', value: 'repetitionPenalty' } },
                     { kind: 'Field', name: { kind: 'Name', value: 'frequencyPenalty' } },
                     { kind: 'Field', name: { kind: 'Name', value: 'presencePenalty' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'minP' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'n' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'json' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'responseMimeType' } },
                     {
                         kind: 'Field',
                         name: { kind: 'Name', value: 'reasoning' },
@@ -2433,6 +2449,10 @@ export const ProviderConfigFragmentFragmentDoc = {
                     { kind: 'Field', name: { kind: 'Name', value: 'repetitionPenalty' } },
                     { kind: 'Field', name: { kind: 'Name', value: 'frequencyPenalty' } },
                     { kind: 'Field', name: { kind: 'Name', value: 'presencePenalty' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'minP' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'n' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'json' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'responseMimeType' } },
                     {
                         kind: 'Field',
                         name: { kind: 'Name', value: 'reasoning' },
@@ -3884,6 +3904,10 @@ export const SettingsProvidersDocument = {
                     { kind: 'Field', name: { kind: 'Name', value: 'repetitionPenalty' } },
                     { kind: 'Field', name: { kind: 'Name', value: 'frequencyPenalty' } },
                     { kind: 'Field', name: { kind: 'Name', value: 'presencePenalty' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'minP' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'n' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'json' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'responseMimeType' } },
                     {
                         kind: 'Field',
                         name: { kind: 'Name', value: 'reasoning' },
@@ -8789,6 +8813,10 @@ export const CreateProviderDocument = {
                     { kind: 'Field', name: { kind: 'Name', value: 'repetitionPenalty' } },
                     { kind: 'Field', name: { kind: 'Name', value: 'frequencyPenalty' } },
                     { kind: 'Field', name: { kind: 'Name', value: 'presencePenalty' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'minP' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'n' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'json' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'responseMimeType' } },
                     {
                         kind: 'Field',
                         name: { kind: 'Name', value: 'reasoning' },
@@ -9062,6 +9090,10 @@ export const UpdateProviderDocument = {
                     { kind: 'Field', name: { kind: 'Name', value: 'repetitionPenalty' } },
                     { kind: 'Field', name: { kind: 'Name', value: 'frequencyPenalty' } },
                     { kind: 'Field', name: { kind: 'Name', value: 'presencePenalty' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'minP' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'n' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'json' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'responseMimeType' } },
                     {
                         kind: 'Field',
                         name: { kind: 'Name', value: 'reasoning' },
@@ -11291,6 +11323,10 @@ export const ProviderCreatedDocument = {
                     { kind: 'Field', name: { kind: 'Name', value: 'repetitionPenalty' } },
                     { kind: 'Field', name: { kind: 'Name', value: 'frequencyPenalty' } },
                     { kind: 'Field', name: { kind: 'Name', value: 'presencePenalty' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'minP' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'n' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'json' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'responseMimeType' } },
                     {
                         kind: 'Field',
                         name: { kind: 'Name', value: 'reasoning' },
@@ -11527,6 +11563,10 @@ export const ProviderUpdatedDocument = {
                     { kind: 'Field', name: { kind: 'Name', value: 'repetitionPenalty' } },
                     { kind: 'Field', name: { kind: 'Name', value: 'frequencyPenalty' } },
                     { kind: 'Field', name: { kind: 'Name', value: 'presencePenalty' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'minP' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'n' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'json' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'responseMimeType' } },
                     {
                         kind: 'Field',
                         name: { kind: 'Name', value: 'reasoning' },
@@ -11763,6 +11803,10 @@ export const ProviderDeletedDocument = {
                     { kind: 'Field', name: { kind: 'Name', value: 'repetitionPenalty' } },
                     { kind: 'Field', name: { kind: 'Name', value: 'frequencyPenalty' } },
                     { kind: 'Field', name: { kind: 'Name', value: 'presencePenalty' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'minP' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'n' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'json' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'responseMimeType' } },
                     {
                         kind: 'Field',
                         name: { kind: 'Name', value: 'reasoning' },

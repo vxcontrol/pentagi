@@ -45,6 +45,10 @@ type AgentConfig struct {
 	RepetitionPenalty *float64               `json:"repetitionPenalty,omitempty"`
 	FrequencyPenalty  *float64               `json:"frequencyPenalty,omitempty"`
 	PresencePenalty   *float64               `json:"presencePenalty,omitempty"`
+	MinP              *float64               `json:"minP,omitempty"`
+	N                 *int                   `json:"n,omitempty"`
+	JSON              *bool                  `json:"json,omitempty"`
+	ResponseMimeType  *string                `json:"responseMimeType,omitempty"`
 	Reasoning         *ReasoningConfig       `json:"reasoning,omitempty"`
 	Price             *ModelPrice            `json:"price,omitempty"`
 	ExtraBody         map[string]interface{} `json:"extraBody,omitempty"`

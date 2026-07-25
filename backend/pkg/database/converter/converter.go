@@ -695,6 +695,18 @@ func ConvertAgentConfigToGqlModel(ac *pconfig.AgentConfig) *model.AgentConfig {
 	if ac.PresencePenalty != 0 {
 		result.PresencePenalty = &ac.PresencePenalty
 	}
+	if ac.MinP != 0 {
+		result.MinP = &ac.MinP
+	}
+	if ac.N != 0 {
+		result.N = &ac.N
+	}
+	if ac.JSON {
+		result.JSON = &ac.JSON
+	}
+	if ac.ResponseMIMEType != "" {
+		result.ResponseMimeType = &ac.ResponseMIMEType
+	}
 
 	if !ac.Reasoning.IsZero() {
 		reasoning := &model.ReasoningConfig{}
@@ -795,6 +807,21 @@ func ConvertAgentConfigFromGqlModel(ac *model.AgentConfig) *pconfig.AgentConfig 
 	}
 	if ac.PresencePenalty != nil {
 		rawConfig["presence_penalty"] = *ac.PresencePenalty
+	}
+	// BuildOptions gates these on the key being present, not on its value, so a zero has to be
+	// written as an absent key — otherwise `json: false` would switch JSON mode on and `n: 0`
+	// would emit an invalid request parameter.
+	if ac.MinP != nil && *ac.MinP != 0 {
+		rawConfig["min_p"] = *ac.MinP
+	}
+	if ac.N != nil && *ac.N != 0 {
+		rawConfig["n"] = *ac.N
+	}
+	if ac.JSON != nil && *ac.JSON {
+		rawConfig["json"] = *ac.JSON
+	}
+	if ac.ResponseMimeType != nil && *ac.ResponseMimeType != "" {
+		rawConfig["response_mime_type"] = *ac.ResponseMimeType
 	}
 
 	if ac.Reasoning != nil {

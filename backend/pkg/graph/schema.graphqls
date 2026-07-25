@@ -815,6 +815,10 @@ type AgentConfig {
   repetitionPenalty: Float
   frequencyPenalty: Float
   presencePenalty: Float
+  minP: Float
+  n: Int
+  json: Boolean
+  responseMimeType: String
   reasoning: ReasoningConfig
   price: ModelPrice
   extraBody: Map
@@ -866,6 +870,10 @@ input AgentConfigInput {
   repetitionPenalty: Float
   frequencyPenalty: Float
   presencePenalty: Float
+  minP: Float
+  n: Int
+  json: Boolean
+  responseMimeType: String
   reasoning: ReasoningConfigInput
   price: ModelPriceInput
   extraBody: Map
