@@ -164,7 +164,9 @@ jobs:
         if: failure() && steps.snapshots.outcome == 'failure'
         working-directory: frontend
         run: |
-          if find e2e/test-results -name '*-diff.png' -print -quit | grep -q .; then
+          # -actual.png too: a missing baseline fails the test but writes no diff image, and only the
+          # snapshot matcher writes either name — a non-snapshot failure leaves test-failed-N.png.
+          if find e2e/test-results \( -name '*-diff.png' -o -name '*-actual.png' \) -print -quit | grep -q .; then
             echo "found=true" >> "$GITHUB_OUTPUT"
           else
             echo "found=false" >> "$GITHUB_OUTPUT"

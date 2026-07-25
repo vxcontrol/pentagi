@@ -137,7 +137,7 @@ jobs:
             const advisoryLine = mockStatus === 'unknown'
               ? '⚠️ **Result unconfirmed** — the workflow jobs API was unreachable, so this reflects `results.json` alone, which cannot distinguish a clean pass from a run killed mid-flight. Check the run before merging.'
               : visualDiffers
-              ? '⚠️ **Visual snapshots differ** — advisory only, does not block merge. Download the `e2e-visual-diffs` artifact to compare expected / actual / diff.'
+              ? '⚠️ **Visual snapshots differ** — advisory only, does not block merge. Download the `e2e-visual-diffs` artifact to compare expected / actual / diff (a missing baseline uploads actual only).'
               : null;
             const body = [
               marker,
