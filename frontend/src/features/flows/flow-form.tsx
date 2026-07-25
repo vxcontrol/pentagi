@@ -234,9 +234,12 @@ export function FlowForm({
             })
             .forEach(([fieldName, defaultValue]) => {
                 const typedFieldName = fieldName as keyof FlowFormValues;
-                setValue(typedFieldName, defaultValue as never, { shouldDirty: false });
+                // resetField, not setValue: it moves react-hook-form's own baseline too, so a later
+                // pick that happens to equal the mount-time default still counts as dirty and this
+                // effect leaves it alone.
+                resetField(typedFieldName, { defaultValue: defaultValue as never });
             });
-    }, [defaultValues, dirtyFields, setValue, getValues]);
+    }, [defaultValues, dirtyFields, resetField, getValues]);
 
     const isFormDisabled = isDisabled || isLoading || isSubmitting || isCanceling;
 
