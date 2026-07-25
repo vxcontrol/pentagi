@@ -166,6 +166,7 @@
     --color-popover-foreground: var(--popover-foreground);
     --color-primary: var(--primary);
     --color-primary-foreground: var(--primary-foreground);
+    --color-link: var(--link);
     --color-secondary: var(--secondary);
     --color-secondary-foreground: var(--secondary-foreground);
     --color-muted: var(--muted);
@@ -306,6 +307,9 @@
         --sidebar-accent-foreground: oklch(0.32 0 0);
         --sidebar-border: oklch(0.93 0.01 240);
         --sidebar-ring: oklch(0.25 0.14 245);
+        /* Link TEXT. --primary is a fill (paired with white --primary-foreground) and cannot double as
+           text: on dark it measures 3.12:1 on --card, and no lightness clears AA in both roles at once. */
+        --link: oklch(0.25 0.14 245);
         /* Editor highlight TEXT, tuned for readable contrast on the editor surface (unlike --primary, a fill
            color that fails WCAG AA as text on dark). Four distinct hues so adjacent tokens don't blur:
            link = theme blue 245; variable = green 155 (matches the panel's "used" badge); tag = violet 300;
@@ -371,6 +375,7 @@
         --sidebar-accent-foreground: oklch(0.92 0.02 245);
         --sidebar-border: oklch(0.3 0.04 245);
         --sidebar-ring: oklch(0.5 0.16 245);
+        --link: oklch(0.68 0.13 245);
         --editor-accent: oklch(0.68 0.13 245);
         --editor-variable: oklch(0.72 0.12 155);
         --editor-tag: oklch(0.68 0.13 300);

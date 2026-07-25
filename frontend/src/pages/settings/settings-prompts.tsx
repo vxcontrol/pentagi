@@ -336,7 +336,7 @@ function SettingsPrompts() {
 
                 return (
                     <Button
-                        className="text-muted-foreground hover:text-primary flex items-center gap-2 p-0 no-underline hover:no-underline"
+                        className="text-muted-foreground hover:text-link flex items-center gap-2 p-0 no-underline hover:no-underline"
                         onClick={() => handleColumnSort(column)}
                         variant="link"
                     >
@@ -512,7 +512,7 @@ function SettingsPrompts() {
 
                 return (
                     <Button
-                        className="text-muted-foreground hover:text-primary flex items-center gap-2 p-0 hover:no-underline"
+                        className="text-muted-foreground hover:text-link flex items-center gap-2 p-0 hover:no-underline"
                         onClick={() => handleColumnSort(column)}
                         variant="link"
                     >

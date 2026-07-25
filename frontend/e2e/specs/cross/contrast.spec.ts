@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 
 import type { BadgeVariant } from '@/components/ui/badge';
+import type { ButtonVariant } from '@/components/ui/button';
 
 import { badgeVariants } from '@/components/ui/badge';
 import { buttonVariants } from '@/components/ui/button';
@@ -32,7 +33,16 @@ const declaredEditorTokens = (): string[] => {
     return [...new Set(css.match(/--editor-[\w-]+/g) ?? [])].map((token) => token.slice(2));
 };
 
-// Keyed off the union so a newly added variant fails to compile until it is probed.
+// Keyed off the unions so a newly added variant fails to compile until it is probed.
+const BUTTON_VARIANTS = Object.keys({
+    default: true,
+    destructive: true,
+    ghost: true,
+    link: true,
+    outline: true,
+    secondary: true,
+} satisfies Record<ButtonVariant, true>) as ButtonVariant[];
+
 const BADGE_VARIANTS = Object.keys({
     blue: true,
     default: true,
@@ -91,19 +101,26 @@ for (const theme of THEMES) {
             }
         });
 
-        test('the destructive button clears AA at rest and on hover', async ({ page }) => {
+        test('every button variant clears AA at rest and on hover', async ({ page }) => {
             await page.goto('/flows');
             await expect(page.getByRole('row', { name: /E2E Alpha/ })).toBeVisible();
             await expect(page.locator('html')).toHaveClass(theme === 'dark' ? /dark/ : /light/);
 
-            await mountContrastProbes(page, { destructive: buttonVariants({ variant: 'destructive' }) });
+            await mountContrastProbes(
+                page,
+                Object.fromEntries(BUTTON_VARIANTS.map((variant) => [variant, buttonVariants({ variant })])),
+            );
 
-            expect.soft(await measureContrast(page, 'destructive'), 'button at rest').toBeGreaterThanOrEqual(AA_NORMAL);
+            for (const variant of BUTTON_VARIANTS) {
+                expect
+                    .soft(await measureContrast(page, variant), `button ${variant} at rest`)
+                    .toBeGreaterThanOrEqual(AA_NORMAL);
 
-            await page.locator('[data-contrast="destructive"]').hover();
-            expect
-                .soft(await measureContrast(page, 'destructive'), 'button on hover')
-                .toBeGreaterThanOrEqual(AA_NORMAL);
+                await page.locator(`[data-contrast="${variant}"]`).hover();
+                expect
+                    .soft(await measureContrast(page, variant), `button ${variant} on hover`)
+                    .toBeGreaterThanOrEqual(AA_NORMAL);
+            }
         });
 
         test('editor highlight tokens clear AA on the editor surface', async ({ page }) => {

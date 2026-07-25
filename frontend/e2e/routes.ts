@@ -75,7 +75,6 @@ export const ROUTE_MANIFEST: RouteManifestEntry[] = [
             { rule: 'aria-progressbar-name', tabs: ['Tasks'], target: /\.bg-primary\\\/20/ },
             { rule: 'button-name', tabs: ['Files'], target: /tooltip-trigger.*size-8\[data-slot="button"\]/ },
             { rule: 'target-size', tabs: ['Files'], target: /text-blue-400|button\[aria-label="Select / },
-            { rule: 'color-contrast', tabs: ['Screenshots'], target: /\.text-primary > \.font-semibold\.truncate/ },
             // The same file-manager row metadata waived on /resources — the Files tab embeds it.
             { rule: 'color-contrast', tabs: ['Files'], target: /text-muted-foreground\\?\/80/ },
             {
