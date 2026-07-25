@@ -12,9 +12,8 @@ const errorsTest = base.extend<{ pageErrorLog: PageErrorLog }>({
 
             await use(log);
 
-            // Asserted here rather than left to the spec: a spec that never destructured this
-            // fixture collected nothing, so opting in was the same as opting out. Console errors
-            // stay with `expectCleanPage` — several specs drive genuine 4xx paths that log one.
+            // Auto (not opt-in): a spec that never destructured this fixture would assert nothing.
+            // Console errors stay with `expectCleanPage` — several specs drive 4xx paths that log one.
             baseExpect(log.pageErrors, 'no uncaught page errors').toEqual([]);
         },
         { auto: true },

@@ -4,8 +4,8 @@ import { readTerminalBuffer } from '../../helpers/terminal.ts';
 
 test.describe('real backend flow run', { tag: '@real' }, () => {
     test('runs a flow end-to-end through the mock LLM', async ({ page }) => {
-        // Above the sum of the step timeouts below (60+30+90+90+90+60 = 420s); at 240s a legitimately
-        // slow-but-passing real run was killed mid-step with a generic timeout, masking the real state.
+        // Above the sum of the step timeouts below (60+30+90+90+90+60 = 420s), so a slow-but-passing
+        // run is not killed mid-step with a generic timeout that masks the real state.
         test.setTimeout(450_000);
 
         const pageErrors: string[] = [];

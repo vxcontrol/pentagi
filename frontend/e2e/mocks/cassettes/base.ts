@@ -18,9 +18,8 @@ const flows: ResultOf<typeof FlowsDocument> = { flows: [] };
 
 const flowTemplates: ResultOf<typeof FlowTemplatesDocument> = { flowTemplates: [] };
 
-// Live entry, not dead weight: after a websocket reconnect the app re-requests
-// resources on the wire with {recursive:true} (removing this red-lights the
-// reconnect spec on the 501 gate).
+// After a websocket reconnect the app re-requests resources on the wire with {recursive:true};
+// removing this entry red-lights the reconnect spec on the 501 gate.
 const resources: ResultOf<typeof ResourcesDocument> = { resources: [] };
 
 const providers: ResultOf<typeof ProvidersDocument> = { providers: [] };

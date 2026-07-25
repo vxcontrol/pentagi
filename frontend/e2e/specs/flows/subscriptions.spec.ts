@@ -69,9 +69,9 @@ test.describe('flow subscriptions', { tag: ['@flows', '@smoke'] }, () => {
 });
 
 /**
- * Not a duplicate of the round trip above: leaving via `/flows` unmounts FlowProvider (app.tsx
- * wraps only `flows/:flowId`), so stream A is already closed there. Only the pager keeps the
- * provider mounted and merely swaps the subscription variables.
+ * Leaving via `/flows` unmounts FlowProvider (app.tsx wraps only `flows/:flowId`), so stream A is
+ * already closed there. Only the pager keeps the provider mounted and merely swaps the subscription
+ * variables — the one path where a superseded stream can still write into the flow on screen.
  */
 test.describe('flow subscriptions across a pager switch', { tag: '@flows' }, () => {
     test.use({ cassette: pagerStreamsCassette() });

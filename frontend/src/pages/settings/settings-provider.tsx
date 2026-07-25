@@ -1205,7 +1205,7 @@ function SettingsProvider() {
         },
         // The seeding effect re-runs on every settingsProviders refetch (cache-and-network +
         // replaceWithIncoming gives a fresh `data`); without this a background refetch landing
-        // mid-edit silently wipes the unsaved form. Matches settings-prompt and template.
+        // mid-edit silently wipes the unsaved form.
         resetOptions: { keepDirtyValues: true },
         schema: formSchema,
     });

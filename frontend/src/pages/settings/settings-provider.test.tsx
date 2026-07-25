@@ -159,8 +159,6 @@ describe('SettingsProvider create-form type guards', () => {
         expect(navigate).not.toHaveBeenCalled();
     });
 
-    // The seeding effect re-runs on every settingsProviders refetch (a fresh `data` reference under
-    // cache-and-network); keepDirtyValues is what stops that reset from wiping an in-flight edit.
     it('preserves an in-flight edit across a background refetch', () => {
         state.providerId = 'edit-1';
         const { rerender } = render(<SettingsProvider />);
@@ -171,7 +169,6 @@ describe('SettingsProvider create-form type guards', () => {
 
         fireEvent.change(nameInput, { target: { value: 'My Unsaved Edit' } });
 
-        // A refetch delivers a new `data` object with the same server content, re-firing the effect.
         queryResult.data = { settingsProviders };
         rerender(<SettingsProvider />);
 

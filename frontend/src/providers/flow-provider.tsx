@@ -39,8 +39,8 @@ import { Log } from '@/lib/log';
 
 /**
  * Under `errorPolicy:'all'` a partial not-found error surfaces alongside a flow that loaded fine, so
- * the not-found disjunct gates on `!flowData?.flow` — mirroring `flowLoadError` and the toast below.
- * Without the gate that partial error redirects the user off a flow that rendered correctly.
+ * the not-found disjunct gates on `!flowData?.flow`. Without the gate that partial error redirects
+ * the user off a flow that rendered correctly.
  */
 export const deriveFlowMissing = (
     flowData: null | undefined | { flow: unknown },

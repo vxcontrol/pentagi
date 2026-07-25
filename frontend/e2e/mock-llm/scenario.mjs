@@ -35,8 +35,6 @@ export const RULES = [
         match: /get_number/,
         toolCalls: [{ args: { value: 1 }, name: 'get_number' }],
     },
-    // The task reporter summarizes the finished task and only accepts the
-    // report_result tool.
     {
         label: 'task-report',
         match: /report_result|TASK EXECUTION EVALUATOR AND REPORTER/,
@@ -51,8 +49,7 @@ export const RULES = [
             },
         ],
     },
-    // The refiner re-plans between subtasks and only accepts subtask_patch;
-    // an empty operations list means "plan unchanged".
+    // An empty operations list means "plan unchanged".
     {
         label: 'subtask-refine',
         match: /subtask_patch/,

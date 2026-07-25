@@ -181,8 +181,8 @@ export const flowsCassette = (override: Cassette = {}): Cassette =>
                     {
                         frames: [
                             ...FLOW_A_STREAMED_IDS.map((id) => addedFrame(makeMessage(id, '5'), 80)),
-                            // Not a copy-paste: a resubscribe replays what the refetch already
-                            // delivered, and the sentinel after it proves the replay was received.
+                            // A resubscribe replays what the refetch already delivered; the sentinel
+                            // after it proves the replay was received.
                             {
                                 ...addedFrame(makeMessage(FLOW_A_RECONNECT_ID, '5'), 0),
                                 whenFlag: REPLAY_FLAG,

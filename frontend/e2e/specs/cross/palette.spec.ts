@@ -56,8 +56,7 @@ const SANCTIONED_VARIANTS = [
  * its path; a tab panel by `${path} [${tab}]`. Exact strings: they waive one node, not a rule.
  */
 const ACCEPTED: Record<string, string[]> = {
-    // file-manager.tsx expand-all control; changing it moves pixels, so it goes with the design pass.
-    // Same control renders in the flow Files tab, so it is waived there under the same rationale.
+    // file-manager.tsx expand-all control, on /resources and embedded in the flow Files tab.
     '/resources': ['button: hover:text-blue-400'],
     [`${routes.flow('5')} [Files]`]: ['button: hover:text-blue-400'],
 };

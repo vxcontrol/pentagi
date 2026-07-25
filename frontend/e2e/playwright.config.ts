@@ -45,14 +45,10 @@ if ((tier === 'stand' || tier === 'local') && !TIERS[tier].baseURL) {
 }
 
 export default defineConfig<BackendOptions>({
-    // A colour change must move enough pixels to fail. The baselines and the run both
-    // render in the pinned container (the host path is blocked above), so there is no
-    // host-vs-CI rasterisation noise to absorb — tighten the per-pixel threshold below
-    // Playwright's default 0.2 so a one-step palette shift is caught, with a small
-    // maxDiffPixelRatio for anti-aliasing at glyph edges. cross/contrast.spec.ts still
-    // measures colour numerically as the belt-and-suspenders check.
     // Absolute, not a ratio: 1% of a 1280x720 baseline is 9,216 pixels, more than any one foreground
-    // token covers, so a token could change hue with every baseline still matching.
+    // token covers, so a token could change hue with every baseline still matching. Baselines and
+    // run both render in the pinned container (the host path is blocked above), so 200px absorbs the
+    // glyph anti-aliasing without host-vs-CI noise.
     expect: {
         toHaveScreenshot: { maxDiffPixels: 200, threshold: 0.02 },
     },

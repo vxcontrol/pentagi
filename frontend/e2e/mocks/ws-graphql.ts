@@ -54,7 +54,7 @@ export const handleWsConnection = (
 
                 case 'connection_init': {
                     // Ack immediately; a frame sent before the ack is a graphql-ws protocol
-                    // violation that closes the socket. Ack-first ordering is pinned by the unit test.
+                    // violation that closes the socket.
                     send({ type: 'connection_ack' });
                     break;
                 }

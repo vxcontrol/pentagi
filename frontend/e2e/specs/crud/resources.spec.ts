@@ -72,7 +72,6 @@ test.describe('resources', { tag: '@coverage' }, () => {
             await page.goto('/resources');
 
             await expect(page.getByText('No resources yet')).toBeVisible();
-            // The CTA, not just the title — the empty state's whole point is the upload affordance.
             // Scope to the drop zone (its hint is unique) so the toolbar's Upload button is excluded.
             const dropZone = page.locator('div').filter({ hasText: 'Up to 300 MB per file' }).last();
 
