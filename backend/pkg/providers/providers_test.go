@@ -2,8 +2,11 @@ package providers
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"pentagi/pkg/config"
 	"pentagi/pkg/database"
@@ -223,4 +226,87 @@ func TestAgentConfigPricesMatchCatalog(t *testing.T) {
 			}
 		}
 	}
+}
+
+// fakeCallProvider overrides only Call(); embedding provider.Provider means
+// every other interface method is unimplemented and would panic on use,
+// which is fine since callWithSetupRetries only ever calls Call().
+type fakeCallProvider struct {
+	provider.Provider
+	callCount int
+	failTimes int
+	err       error
+	result    string
+}
+
+func (f *fakeCallProvider) Call(ctx context.Context, opt pconfig.ProviderOptionsType, prompt string) (string, error) {
+	f.callCount++
+	if f.callCount <= f.failTimes {
+		return "", f.err
+	}
+	return f.result, nil
+}
+
+func TestCallWithSetupRetries_SucceedsImmediately(t *testing.T) {
+	prv := &fakeCallProvider{result: "kali-linux"}
+
+	got, err := callWithSetupRetries(context.Background(), prv, pconfig.OptionsTypeSimple, "prompt")
+
+	require.NoError(t, err)
+	assert.Equal(t, "kali-linux", got)
+	assert.Equal(t, 1, prv.callCount, "a first-try success must not retry")
+}
+
+func TestCallWithSetupRetries_RetriesOnTransientErrorThenSucceeds(t *testing.T) {
+	// Exercises the real backoff once (a single delayBetweenRetries wait), so this
+	// test genuinely proves a transient 5xx from the LLM gateway self-heals
+	// instead of failing flow/assistant creation outright.
+	prv := &fakeCallProvider{
+		failTimes: 1,
+		err:       fmt.Errorf("API returned unexpected status code: 502: bad gateway"),
+		result:    "kali-linux",
+	}
+
+	got, err := callWithSetupRetries(context.Background(), prv, pconfig.OptionsTypeSimple, "prompt")
+
+	require.NoError(t, err)
+	assert.Equal(t, "kali-linux", got)
+	assert.Equal(t, 2, prv.callCount, "must retry exactly once after the transient failure")
+}
+
+func TestCallWithSetupRetries_ContextCanceledDuringWait_ReturnsWithoutFullBackoff(t *testing.T) {
+	prv := &fakeCallProvider{
+		failTimes: maxRetriesToCallSimpleChain, // always fails within the retry budget
+		err:       errors.New("connection refused"),
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		time.Sleep(20 * time.Millisecond)
+		cancel()
+	}()
+
+	start := time.Now()
+	_, err := callWithSetupRetries(ctx, prv, pconfig.OptionsTypeSimple, "prompt")
+	elapsed := time.Since(start)
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, context.Canceled)
+	assert.Less(t, elapsed, delayBetweenRetries, "canceling context mid-wait must abort immediately, not wait out the full backoff")
+}
+
+func TestCallWithSetupRetries_ContextAlreadyCanceled_StopsWithoutRetrying(t *testing.T) {
+	prv := &fakeCallProvider{
+		failTimes: maxRetriesToCallSimpleChain,
+		err:       context.Canceled,
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err := callWithSetupRetries(ctx, prv, pconfig.OptionsTypeSimple, "prompt")
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, context.Canceled)
+	assert.Equal(t, 1, prv.callCount, "a context.Canceled error from Call must stop retrying immediately")
 }

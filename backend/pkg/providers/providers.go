@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"math/big"
@@ -317,7 +318,7 @@ func (pc *providerController) NewFlowProvider(
 		return nil, fmt.Errorf("failed to get primary docker image template: %w", err)
 	}
 
-	image, err := prv.Call(ctx, pconfig.OptionsTypeSimple, imageTmpl)
+	image, err := callWithSetupRetries(ctx, prv, pconfig.OptionsTypeSimple, imageTmpl)
 	if err != nil {
 		return nil, fmt.Errorf("failed to select primary docker image via llm call: %w", err)
 	}
@@ -330,7 +331,7 @@ func (pc *providerController) NewFlowProvider(
 		return nil, fmt.Errorf("failed to get language template: %w", err)
 	}
 
-	language, err := prv.Call(ctx, pconfig.OptionsTypeSimple, languageTmpl)
+	language, err := callWithSetupRetries(ctx, prv, pconfig.OptionsTypeSimple, languageTmpl)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get language: %w", err)
 	}
@@ -346,7 +347,7 @@ func (pc *providerController) NewFlowProvider(
 		return nil, fmt.Errorf("failed to get flow title template: %w", err)
 	}
 
-	title, err := prv.Call(ctx, pconfig.OptionsTypeSimple, titleTmpl)
+	title, err := callWithSetupRetries(ctx, prv, pconfig.OptionsTypeSimple, titleTmpl)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get flow title: %w", err)
 	}
@@ -476,7 +477,7 @@ func (pc *providerController) NewAssistantProvider(
 		return nil, fmt.Errorf("failed to get language template: %w", err)
 	}
 
-	language, err := prv.Call(ctx, pconfig.OptionsTypeSimple, languageTmpl)
+	language, err := callWithSetupRetries(ctx, prv, pconfig.OptionsTypeSimple, languageTmpl)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get language: %w", err)
 	}
@@ -492,7 +493,7 @@ func (pc *providerController) NewAssistantProvider(
 		return nil, fmt.Errorf("failed to get flow title template: %w", err)
 	}
 
-	title, err := prv.Call(ctx, pconfig.OptionsTypeSimple, titleTmpl)
+	title, err := callWithSetupRetries(ctx, prv, pconfig.OptionsTypeSimple, titleTmpl)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get flow title: %w", err)
 	}
@@ -1078,4 +1079,45 @@ func newAtomicInt64(seed int64) *atomic.Int64 {
 
 	number.Store(seed)
 	return &number
+}
+
+// callWithSetupRetries wraps a single-shot LLM prompt call used during flow/
+// assistant bootstrap (docker image, language, and title selection) with the
+// same short retry-with-backoff already used for the agent execution loop
+// (see performSimpleChain/callWithRetries), so one transient error from the
+// LLM gateway (e.g. a bad gateway from a litellm proxy) does not fail flow or
+// assistant creation outright.
+func callWithSetupRetries(
+	ctx context.Context,
+	prv provider.Provider,
+	opt pconfig.ProviderOptionsType,
+	prompt string,
+) (string, error) {
+	var (
+		result string
+		err    error
+	)
+
+	for idx := 0; idx <= maxRetriesToCallSimpleChain; idx++ {
+		if idx == maxRetriesToCallSimpleChain {
+			return "", fmt.Errorf("failed to call llm after %d retries: %w", idx, err)
+		}
+
+		result, err = prv.Call(ctx, opt, prompt)
+		if err == nil {
+			return result, nil
+		}
+
+		if errors.Is(err, context.Canceled) {
+			return "", err
+		}
+
+		select {
+		case <-ctx.Done():
+			return "", ctx.Err()
+		case <-time.After(delayBetweenRetries):
+		}
+	}
+
+	return "", err
 }

@@ -29,7 +29,10 @@ func (s *stubGraphitiSearcher) TemporalWindowSearch(
 func (s *stubGraphitiSearcher) EntityRelationshipsSearch(
 	ctx context.Context, req graphiti.EntityRelationshipSearchRequest,
 ) (*graphiti.EntityRelationshipSearchResponse, error) {
-	return nil, s.err
+	if s.err != nil {
+		return nil, s.err
+	}
+	return &graphiti.EntityRelationshipSearchResponse{}, nil
 }
 
 func (s *stubGraphitiSearcher) DiverseResultsSearch(
@@ -59,7 +62,10 @@ func (s *stubGraphitiSearcher) RecentContextSearch(
 func (s *stubGraphitiSearcher) EntityByLabelSearch(
 	ctx context.Context, req graphiti.EntityByLabelSearchRequest,
 ) (*graphiti.EntityByLabelSearchResponse, error) {
-	return nil, s.err
+	if s.err != nil {
+		return nil, s.err
+	}
+	return &graphiti.EntityByLabelSearchResponse{}, nil
 }
 
 // fakeNetError mimics the *url.Error shape produced by http.Client.Do on a
@@ -172,6 +178,76 @@ func TestGraphitiSearchTool_Handle_ValidationError_StaysHard(t *testing.T) {
 
 	if err == nil || !strings.Contains(err.Error(), "unknown search_type") {
 		t.Fatalf("expected hard 'unknown search_type' error, got: %v", err)
+	}
+}
+
+func TestGraphitiSearchTool_Handle_EntityByLabel_MissingNodeLabels_GivesActionableError(t *testing.T) {
+	tool := NewGraphitiSearchTool(1, nil, nil, &stubGraphitiSearcher{enabled: true})
+
+	args := []byte(`{"search_type":"entity_by_label","query":"test query","message":"m"}`)
+	_, err := tool.Handle(t.Context(), GraphitiSearchToolName, args)
+
+	if err == nil {
+		t.Fatal("expected a hard failure when node_labels is missing for entity_by_label, got nil error")
+	}
+	if !strings.Contains(err.Error(), "node_labels is required") {
+		t.Fatalf("expected error to state node_labels is required, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "Vulnerability") {
+		t.Fatalf("expected error to include a real taxonomy example value to guide the LLM, got: %v", err)
+	}
+}
+
+func TestGraphitiSearchTool_Handle_EntityByLabel_WithNodeLabels_Succeeds(t *testing.T) {
+	tool := NewGraphitiSearchTool(1, nil, nil, &stubGraphitiSearcher{enabled: true})
+
+	args := []byte(`{"search_type":"entity_by_label","query":"test query","node_labels":["Vulnerability"],"message":"m"}`)
+	_, err := tool.Handle(t.Context(), GraphitiSearchToolName, args)
+
+	if err != nil {
+		t.Fatalf("expected no error when node_labels is present, got: %v", err)
+	}
+}
+
+func TestGraphitiSearchTool_Handle_EntityRelationships_MissingCenterNodeUUID_StaysHard(t *testing.T) {
+	tool := NewGraphitiSearchTool(1, nil, nil, &stubGraphitiSearcher{enabled: true})
+
+	args := []byte(`{"search_type":"entity_relationships","query":"test query","message":"m"}`)
+	_, err := tool.Handle(t.Context(), GraphitiSearchToolName, args)
+
+	if err == nil || !strings.Contains(err.Error(), "center_node_uuid is required") {
+		t.Fatalf("expected hard 'center_node_uuid is required' error, got: %v", err)
+	}
+}
+
+func TestGraphitiSearchTool_Handle_EntityRelationships_MalformedCenterNodeUUID_GivesActionableError(t *testing.T) {
+	tool := NewGraphitiSearchTool(1, nil, nil, &stubGraphitiSearcher{enabled: true})
+
+	// Simulates a diagnostic string, truncated ID, or otherwise non-UUID value
+	// ending up in center_node_uuid (e.g. a hallucinated or mangled value) -
+	// this must be rejected before ever reaching the graph backend.
+	args := []byte(`{"search_type":"entity_relationships","query":"test query","center_node_uuid":"not-a-real-uuid","message":"m"}`)
+	_, err := tool.Handle(t.Context(), GraphitiSearchToolName, args)
+
+	if err == nil {
+		t.Fatal("expected a hard failure for a malformed center_node_uuid, got nil error")
+	}
+	if !strings.Contains(err.Error(), "must be a valid UUID") {
+		t.Fatalf("expected error to explain the UUID requirement, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "not-a-real-uuid") {
+		t.Fatalf("expected error to echo back the offending value, got: %v", err)
+	}
+}
+
+func TestGraphitiSearchTool_Handle_EntityRelationships_ValidCenterNodeUUID_Succeeds(t *testing.T) {
+	tool := NewGraphitiSearchTool(1, nil, nil, &stubGraphitiSearcher{enabled: true})
+
+	args := []byte(`{"search_type":"entity_relationships","query":"test query","center_node_uuid":"f7b95dfc-ee58-4a8b-8d85-582cf117b4df","message":"m"}`)
+	_, err := tool.Handle(t.Context(), GraphitiSearchToolName, args)
+
+	if err != nil {
+		t.Fatalf("expected no error for a well-formed center_node_uuid, got: %v", err)
 	}
 }
 

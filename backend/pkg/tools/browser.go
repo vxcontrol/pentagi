@@ -22,9 +22,10 @@ import (
 )
 
 const (
-	minMdContentSize   = 50
-	minHtmlContentSize = 300
-	minImgContentSize  = 2048
+	minMdContentSize         = 50
+	minHtmlContentSize       = 300
+	minImgContentSize        = 2048
+	maxScraperErrorBodyBytes = 512
 )
 
 // nonHTMLExtensions lists URL path suffixes that point to resources the scraper
@@ -511,6 +512,17 @@ func (b *browser) callScraper(url string) ([]byte, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		if resp.StatusCode >= 500 {
+			body, _ := io.ReadAll(io.LimitReader(resp.Body, maxScraperErrorBodyBytes+1))
+			if preview := strings.TrimSpace(string(body)); preview != "" {
+				if truncated := len(body) > maxScraperErrorBodyBytes; truncated {
+					preview = preview[:maxScraperErrorBodyBytes] + "... [truncated]"
+				}
+				return nil, fmt.Errorf(
+					"unexpected resp code for scraper '%s': %d, response: %s", url, resp.StatusCode, preview,
+				)
+			}
+		}
 		return nil, fmt.Errorf("unexpected resp code for scraper '%s': %d", url, resp.StatusCode)
 	}
 

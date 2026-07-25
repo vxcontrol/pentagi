@@ -15,6 +15,7 @@ import (
 	obs "pentagi/pkg/observability"
 	"pentagi/pkg/observability/langfuse"
 
+	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 )
 
@@ -361,6 +362,12 @@ func (t *graphitiSearchTool) handleEntityRelationshipsSearch(
 	if args.CenterNodeUUID == "" {
 		return "", fmt.Errorf("center_node_uuid is required for entity_relationships search")
 	}
+	if _, err := uuid.Parse(args.CenterNodeUUID); err != nil {
+		return "", fmt.Errorf(
+			"center_node_uuid must be a valid UUID copied verbatim from the 'UUID:' field of a prior "+
+				"graphiti_search result, got %q", args.CenterNodeUUID,
+		)
+	}
 
 	maxResults := args.MaxResults.Int()
 	if maxResults <= 0 {
@@ -544,7 +551,10 @@ func (t *graphitiSearchTool) handleEntityByLabelSearch(
 	observationObject *graphiti.Observation,
 ) (string, error) {
 	if len(args.NodeLabels) == 0 {
-		return "", fmt.Errorf("node_labels is required for entity_by_label search")
+		return "", fmt.Errorf(
+			"node_labels is required for entity_by_label search: pass one or more EXACT taxonomy node names " +
+				`(PascalCase singular), e.g. node_labels: ["Host", "Service", "Vulnerability"]`,
+		)
 	}
 
 	maxResults := args.MaxResults.Int()
