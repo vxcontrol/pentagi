@@ -5,6 +5,7 @@ import type {
     FlowDocument,
     FlowFilesDocument,
     FlowFragmentFragment,
+    FlowReportDocument,
     FlowStatsByFlowDocument,
     MessageLogFragmentFragment,
     TerminalLogFragmentFragment,
@@ -395,6 +396,18 @@ const toolcallsStatsByFunctionForFlow: ResultOf<typeof ToolcallsStatsByFunctionF
 const flowStatsByFlow: ResultOf<typeof FlowStatsByFlowDocument> = {
     flowStatsByFlow: entity('FlowStats', { totalAssistantsCount: 1, totalSubtasksCount: 3, totalTasksCount: 1 }),
 };
+
+const flowReportData: ResultOf<typeof FlowReportDocument> = { flow: FLOW_A, tasks: [TABS_TASK] };
+
+/** The Report menu only appears when the flow query returns tasks, so this overrides `flow` too. */
+export const flowReportCassette = (): Cassette =>
+    flowsCassette({
+        queries: {
+            flow: [{ data: flowTabsData, variables: { id: '5' } }],
+            flowReport: [{ data: flowReportData, variables: { id: '5' } }],
+        },
+        subscriptions: { messageLogAdded: [{ frames: [], variables: { flowId: '5' } }] },
+    });
 
 export const flowTabsCassette = (): Cassette =>
     flowsCassette({
