@@ -111,7 +111,12 @@ export class MockWorld {
             const candidates = this.eligible(matching);
 
             if (matching && candidates?.length) {
-                return this.nextEntry(`gql:${operationName}:${stableStringify(variables ?? {})}`, candidates, matching);
+                // Same cursor rule as matchRest below: key on the selected entries' pins, so an
+                // operation whose variables carry a per-call volatile field still advances its
+                // sequence instead of re-serving step one.
+                const signature = matching.map((entry) => stableStringify(entry.variables ?? null)).join('|');
+
+                return this.nextEntry(`gql:${operationName}:${signature}`, candidates, matching);
             }
         }
 

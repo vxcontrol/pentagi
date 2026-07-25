@@ -92,6 +92,30 @@ describe('MockWorld matching', () => {
         expect(second?.body).toEqual({ step: 2 });
     });
 
+    it('advances a GraphQL sequence even when each request carries a volatile variable', () => {
+        const world = new MockWorld({
+            queries: { flows: [{ data: { step: 1 } }, { data: { step: 2 } }] },
+        });
+
+        expect(world.matchGraphQL('flows', { nonce: 'a' })?.data).toEqual({ step: 1 });
+        expect(world.matchGraphQL('flows', { nonce: 'b' })?.data).toEqual({ step: 2 });
+    });
+
+    it('keeps variable-pinned sequences apart from one another', () => {
+        const world = new MockWorld({
+            queries: {
+                stats: [
+                    { data: { period: 'week' }, variables: { period: 'week' } },
+                    { data: { period: 'month' }, variables: { period: 'month' } },
+                ],
+            },
+        });
+
+        expect(world.matchGraphQL('stats', { period: 'week' })?.data).toEqual({ period: 'week' });
+        expect(world.matchGraphQL('stats', { period: 'month' })?.data).toEqual({ period: 'month' });
+        expect(world.matchGraphQL('stats', { period: 'week' })?.data).toEqual({ period: 'week' });
+    });
+
     it('hides a flag-gated entry until the flag is raised, then lets it outrank the unflagged one', () => {
         const world = new MockWorld({
             mutations: { login: [{ data: { ok: true }, setFlag: 'logged-in' }] },
