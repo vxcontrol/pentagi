@@ -33,6 +33,20 @@ export const CREATED_FOLDER: UserResourceFragmentFragment = entity('UserResource
     userId: '1',
 });
 
+export const UPLOADED_RESOURCE = makeRestResource(4, 'uploaded-notes.txt', 42, false);
+
+/** What the server broadcasts once the upload lands — the list only grows through this frame. */
+export const UPLOADED_FRAGMENT: UserResourceFragmentFragment = entity('UserResource', {
+    createdAt: '2026-01-15T12:00:00Z',
+    id: '4',
+    isDir: false,
+    name: UPLOADED_RESOURCE.name,
+    path: UPLOADED_RESOURCE.path,
+    size: UPLOADED_RESOURCE.size,
+    updatedAt: '2026-01-15T12:00:00Z',
+    userId: '1',
+});
+
 const seededList: RestResourceList = { items: [FOLDER_RESOURCE, FILE_RESOURCE], total: 2 };
 
 export const emptyResourcesCassette = (): Cassette => ({
