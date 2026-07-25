@@ -7,7 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 const SCRIPT = join(__dirname, '..', '..', '.github', 'scripts', 'codegen-inputs-changed.sh');
 
 let repo = '';
-const sha: Record<string, string> = {};
+const sha = { base: '', merge: '', schema: '', unrelated: '' };
 
 const git = (...args: string[]) => execFileSync('git', ['-C', repo, ...args], { encoding: 'utf8' }).trim();
 
