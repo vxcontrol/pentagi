@@ -1,6 +1,11 @@
 frontend/coverage
 frontend/dist
 frontend/node_modules
+frontend/e2e/test-results
+frontend/e2e/playwright-report
+frontend/e2e/blob-report
+frontend/e2e/.auth
+**/*.tsbuildinfo
 frontend/ssl
 
 **/*.log
