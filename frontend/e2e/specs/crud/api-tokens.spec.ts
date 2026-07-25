@@ -2,6 +2,7 @@ import type { ResultOf } from '@graphql-typed-document-node/core';
 
 import type { CreateApiTokenDocument, DeleteApiTokenDocument } from '@/graphql/types';
 
+import { CASSETTE_EPOCH } from '../../fixtures/backend.ts';
 import { expect, test } from '../../fixtures/test.ts';
 import { expectCleanPage } from '../../helpers/errors.ts';
 import {
@@ -40,6 +41,10 @@ test.describe('api tokens crud', { tag: '@crud' }, () => {
             }),
         });
 
+        // The picker's date and the pinned clock together fix what the form must put on the wire.
+        const EXPIRES_AT = new Date('2026-01-20T00:00:00Z');
+        const EXPECTED_TTL = Math.ceil((EXPIRES_AT.getTime() - CASSETTE_EPOCH.getTime()) / 1000);
+
         test('creates a token through the inline row and reveals the secret', async ({ page, pageErrorLog }) => {
             await page.goto('/settings/api-tokens');
 
@@ -57,7 +62,20 @@ test.describe('api tokens crud', { tag: '@crud' }, () => {
             await page.keyboard.press('Escape');
 
             await expect(submit).toBeEnabled();
+
+            // The cassette cannot pin a clock-derived value, so the expiry the operator picked is
+            // asserted on the request itself: without this the mutation matches with any ttl at all,
+            // including the 60s floor a broken calculateTTL would send.
+            const createRequest = page.waitForRequest(
+                (request) => request.method() === 'POST' && request.postDataJSON()?.operationName === 'createAPIToken',
+            );
+
             await submit.click();
+
+            const { variables } = (await createRequest).postDataJSON();
+
+            expect(variables.input.ttl).toBeLessThanOrEqual(EXPECTED_TTL);
+            expect(variables.input.ttl).toBeGreaterThan(EXPECTED_TTL - 1_000);
 
             const dialog = page.getByRole('dialog');
 
