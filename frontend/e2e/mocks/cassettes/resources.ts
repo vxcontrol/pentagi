@@ -40,6 +40,30 @@ export const emptyResourcesCassette = (): Cassette => ({
     rest: baseRest(),
 });
 
+export const RENAMED_PATH = 'renamed-notes.txt';
+export const COPY_DESTINATION = 'archive/notes.txt';
+
+/** The write verbs differ per action — move is a PUT, copy a POST, delete a DELETE with the paths in
+ *  the query string. A method mismatch does not 404 here: it falls through to the SPA and answers 200
+ *  with HTML, so each entry pins the method as well as the payload. */
+export const resourceWrites = (): Cassette['rest'] => ({
+    'DELETE /api/v1/resources/': [
+        { body: { data: {}, status: 'success' }, querySubset: { 'paths[]': FILE_RESOURCE.path } },
+    ],
+    'POST /api/v1/resources/copy': [
+        {
+            body: { data: {}, status: 'success' },
+            bodySubset: { destination: COPY_DESTINATION, sources: [FILE_RESOURCE.path] },
+        },
+    ],
+    'PUT /api/v1/resources/move': [
+        {
+            body: { data: {}, status: 'success' },
+            bodySubset: { destination: RENAMED_PATH, sources: [FILE_RESOURCE.path] },
+        },
+    ],
+});
+
 export const resourcesCassette = (override: Cassette = {}): Cassette =>
     mergeCassettes(
         {
