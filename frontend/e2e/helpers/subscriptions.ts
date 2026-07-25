@@ -2,7 +2,9 @@ import type { Locator, TestInfo } from '@playwright/test';
 
 import { expect } from '@playwright/test';
 
-export const MESSAGE_ID_TESTID = 'flow-message-id';
+/** The message-id badge carries no accessible name, so it is addressed by its slot like every other
+ *  shadcn primitive in this codebase — `data-testid` is not used in product code. */
+export const MESSAGE_ID_SELECTOR = '[data-slot="flow-message-id"]';
 
 export const attachIdSet = async (testInfo: TestInfo, name: string, ids: string[]): Promise<void> => {
     await testInfo.attach(name, {
@@ -12,7 +14,7 @@ export const attachIdSet = async (testInfo: TestInfo, name: string, ids: string[
 };
 
 export const extractMessageIds = async (panel: Locator): Promise<string[]> => {
-    const raw = await panel.getByTestId(MESSAGE_ID_TESTID).allTextContents();
+    const raw = await panel.locator(MESSAGE_ID_SELECTOR).allTextContents();
 
     return raw.map((text) => text.replace(/\D/g, '')).filter(Boolean);
 };

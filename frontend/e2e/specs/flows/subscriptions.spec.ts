@@ -5,7 +5,7 @@ import {
     assertNoDuplicates,
     attachIdSet,
     extractMessageIds,
-    MESSAGE_ID_TESTID,
+    MESSAGE_ID_SELECTOR,
 } from '../../helpers/subscriptions.ts';
 import {
     FLOW_A_INITIAL_IDS,
@@ -29,7 +29,7 @@ test.describe('flow subscriptions', { tag: ['@flows', '@smoke'] }, () => {
         await page.goto('/flows');
         await page.getByRole('row', { name: /E2E Alpha/ }).click();
 
-        await expect(page.getByTestId(MESSAGE_ID_TESTID)).toHaveCount(FLOW_A_IDS.length);
+        await expect(page.locator(MESSAGE_ID_SELECTOR)).toHaveCount(FLOW_A_IDS.length);
 
         const ids = await extractMessageIds(page.locator('body'));
 
@@ -42,13 +42,13 @@ test.describe('flow subscriptions', { tag: ['@flows', '@smoke'] }, () => {
     test('keeps concurrent flows exact-set disjoint across a round trip', async ({ page, pageErrorLog }, testInfo) => {
         await page.goto('/flows');
         await page.getByRole('row', { name: /E2E Alpha/ }).click();
-        await expect(page.getByTestId(MESSAGE_ID_TESTID)).toHaveCount(FLOW_A_IDS.length);
+        await expect(page.locator(MESSAGE_ID_SELECTOR)).toHaveCount(FLOW_A_IDS.length);
 
         const idsA = await extractMessageIds(page.locator('body'));
 
         await page.goBack();
         await page.getByRole('row', { name: /E2E Beta/ }).click();
-        await expect(page.getByTestId(MESSAGE_ID_TESTID)).toHaveCount(FLOW_B_IDS.length);
+        await expect(page.locator(MESSAGE_ID_SELECTOR)).toHaveCount(FLOW_B_IDS.length);
 
         const idsB = await extractMessageIds(page.locator('body'));
 
@@ -59,7 +59,7 @@ test.describe('flow subscriptions', { tag: ['@flows', '@smoke'] }, () => {
 
         await page.goBack();
         await page.getByRole('row', { name: /E2E Alpha/ }).click();
-        await expect(page.getByTestId(MESSAGE_ID_TESTID)).toHaveCount(FLOW_A_IDS.length);
+        await expect(page.locator(MESSAGE_ID_SELECTOR)).toHaveCount(FLOW_A_IDS.length);
 
         const idsAgain = await extractMessageIds(page.locator('body'));
 
@@ -81,14 +81,14 @@ test.describe('flow subscriptions across a pager switch', { tag: '@flows' }, () 
         const streamB = subscriptionStreamKey('messageLogAdded', { flowId: '6' });
 
         await page.goto('/flows/5');
-        await expect(page.getByTestId(MESSAGE_ID_TESTID)).toHaveCount(FLOW_A_IDS.length);
+        await expect(page.locator(MESSAGE_ID_SELECTOR)).toHaveCount(FLOW_A_IDS.length);
         expect(world.subscriberCount(streamA), 'flow A must be streaming before the switch').toBe(1);
 
         const idsA = await extractMessageIds(page.locator('body'));
 
         await page.locator('header').getByRole('button', { name: 'Next' }).click();
         await expect(page).toHaveURL(/\/flows\/6$/);
-        await expect(page.getByTestId(MESSAGE_ID_TESTID)).toHaveCount(FLOW_B_IDS.length);
+        await expect(page.locator(MESSAGE_ID_SELECTOR)).toHaveCount(FLOW_B_IDS.length);
 
         // The DOM cannot witness this leak: `messageLogs` is keyed by flowId, so a frame carrying
         // {flowId:'5'} is written to flow A's cache slot and never rendered under flow 6 however long
@@ -98,7 +98,7 @@ test.describe('flow subscriptions across a pager switch', { tag: '@flows' }, () 
 
         world.raiseFlag(PAGER_SWITCH_FLAG);
 
-        await expect(page.getByTestId(MESSAGE_ID_TESTID).filter({ hasText: FLOW_B_SENTINEL_ID })).toHaveCount(1);
+        await expect(page.locator(MESSAGE_ID_SELECTOR).filter({ hasText: FLOW_B_SENTINEL_ID })).toHaveCount(1);
 
         const idsB = await extractMessageIds(page.locator('body'));
 

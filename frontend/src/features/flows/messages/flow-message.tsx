@@ -210,7 +210,7 @@ function FlowMessage({ log, searchValue = '' }: FlowMessageProps) {
                 <span className="text-muted-foreground/50">{formatDate(new Date(createdAt))}</span>
                 <span
                     className="text-muted-foreground/50"
-                    data-testid="flow-message-id"
+                    data-slot="flow-message-id"
                 >
                     {log.id}
                 </span>

@@ -1,6 +1,6 @@
 import { expect, test } from '../../fixtures/test.ts';
 import { expectCleanPage } from '../../helpers/errors.ts';
-import { MESSAGE_ID_TESTID } from '../../helpers/subscriptions.ts';
+import { MESSAGE_ID_SELECTOR } from '../../helpers/subscriptions.ts';
 import { flowsCassette } from '../../mocks/cassettes/flows.ts';
 
 test.describe('themes', { tag: '@cross' }, () => {
@@ -12,7 +12,7 @@ test.describe('themes', { tag: '@cross' }, () => {
         await page.getByRole('row', { name: /E2E Alpha/ }).click();
 
         await expect(page.locator('html')).toHaveClass(/dark/);
-        await expect(page.getByTestId(MESSAGE_ID_TESTID).first()).toBeVisible();
+        await expect(page.locator(MESSAGE_ID_SELECTOR).first()).toBeVisible();
         await expect(page.locator('.xterm')).toBeVisible();
         expectCleanPage(pageErrorLog);
     });

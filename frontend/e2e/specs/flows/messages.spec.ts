@@ -1,5 +1,6 @@
 import { expect, test } from '../../fixtures/test.ts';
 import { expectCleanPage } from '../../helpers/errors.ts';
+import { MESSAGE_ID_SELECTOR } from '../../helpers/subscriptions.ts';
 import { variedMessagesCassette } from '../../mocks/cassettes/flows.ts';
 
 type XtermHost = {
@@ -36,7 +37,7 @@ test.describe('flow message rendering', { tag: '@flows' }, () => {
         pageErrorLog,
     }) => {
         await page.goto('/flows/5?tab=automation');
-        await expect(page.getByTestId('flow-message-id')).toHaveCount(4);
+        await expect(page.locator(MESSAGE_ID_SELECTOR)).toHaveCount(4);
 
         const thinkingToggle = page.getByText('Show thinking');
 

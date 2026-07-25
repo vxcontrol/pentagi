@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 
+import { MESSAGE_ID_SELECTOR } from '../../helpers/subscriptions.ts';
 import { readTerminalBuffer } from '../../helpers/terminal.ts';
 
 test.describe('real backend flow run', { tag: '@real' }, () => {
@@ -29,7 +30,7 @@ test.describe('real backend flow run', { tag: '@real' }, () => {
         // violation.
         const flowId = new URL(page.url()).pathname.match(/\d+/)?.[0] ?? '';
 
-        await expect(page.getByTestId('flow-message-id').first()).toBeVisible({ timeout: 90_000 });
+        await expect(page.locator(MESSAGE_ID_SELECTOR).first()).toBeVisible({ timeout: 90_000 });
         await expect(page.getByText('Hello from the e2e mock LLM!').first()).toBeVisible({ timeout: 90_000 });
 
         // The scenario's `uname -a` exec must stream its sandbox output back

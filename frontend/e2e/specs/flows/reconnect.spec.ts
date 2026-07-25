@@ -1,7 +1,7 @@
 import { expect, test } from '../../fixtures/test.ts';
 import { expectCleanPage } from '../../helpers/errors.ts';
 import { dropAndReconnect } from '../../helpers/reconnect.ts';
-import { assertNoDuplicates, extractMessageIds, MESSAGE_ID_TESTID } from '../../helpers/subscriptions.ts';
+import { assertNoDuplicates, extractMessageIds, MESSAGE_ID_SELECTOR } from '../../helpers/subscriptions.ts';
 import {
     FLOW_A_INITIAL_IDS,
     FLOW_A_RECONNECT_ID,
@@ -32,7 +32,7 @@ test.describe('flow reconnect', { tag: ['@flows', '@smoke'] }, () => {
 
         await page.goto('/flows');
         await page.getByRole('row', { name: /E2E Alpha/ }).click();
-        await expect(page.getByTestId(MESSAGE_ID_TESTID)).toHaveCount(BEFORE_DROP.length);
+        await expect(page.locator(MESSAGE_ID_SELECTOR)).toHaveCount(BEFORE_DROP.length);
 
         const loadsBeforeDrop = resourceLoads.length;
 
@@ -42,11 +42,11 @@ test.describe('flow reconnect', { tag: ['@flows', '@smoke'] }, () => {
             .poll(() => resourceLoads.length, { message: 'the reconnect re-hydrates the REST resources slot' })
             .toBe(loadsBeforeDrop + 1);
 
-        await expect(page.getByTestId(MESSAGE_ID_TESTID)).toHaveCount(AFTER_RECONNECT.length);
+        await expect(page.locator(MESSAGE_ID_SELECTOR)).toHaveCount(AFTER_RECONNECT.length);
 
         world.raiseFlag(REPLAY_FLAG);
 
-        await expect(page.getByTestId(MESSAGE_ID_TESTID)).toHaveCount(AFTER_REPLAY.length);
+        await expect(page.locator(MESSAGE_ID_SELECTOR)).toHaveCount(AFTER_REPLAY.length);
 
         const ids = await extractMessageIds(page.locator('body'));
 
