@@ -53,7 +53,8 @@ function FlowReport() {
 
         pdfTriggered.current = true;
 
-        const fileName = `${generateFileName(data.flow)}.pdf`;
+        // The generator appends the extension itself.
+        const fileName = generateFileName(data.flow);
 
         generatePDFFromMarkdown(reportContent, fileName)
             .then(() => {

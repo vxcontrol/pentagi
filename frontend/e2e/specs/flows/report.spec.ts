@@ -5,6 +5,7 @@ import { expectCleanPage } from '../../helpers/errors.ts';
 import { flowReportCassette } from '../../mocks/cassettes/flows.ts';
 
 const REPORT_FILE = /^report_flow_5_e2e_alpha_2026\d{10}\.md$/;
+const REPORT_PDF = /^report_flow_5_e2e_alpha_2026\d{10}\.pdf$/;
 
 const openReportMenu = async (page: Page) => {
     await page.goto('/flows/5');
@@ -84,6 +85,15 @@ test.describe('flow report', { tag: '@flows' }, () => {
 
         await expect(page.getByText('Report copied to clipboard')).toBeVisible();
         expect(await page.evaluate(() => navigator.clipboard.readText())).toContain('E2E Task Alpha');
+        expectCleanPage(pageErrorLog);
+    });
+
+    test('the print route writes a PDF named like its markdown twin', async ({ page, pageErrorLog }) => {
+        const download = page.waitForEvent('download');
+
+        await page.goto('/flows/5/report?download=true');
+
+        expect((await download).suggestedFilename()).toMatch(REPORT_PDF);
         expectCleanPage(pageErrorLog);
     });
 });
