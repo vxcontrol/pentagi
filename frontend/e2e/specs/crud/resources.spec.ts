@@ -188,18 +188,43 @@ test.describe('resources', { tag: '@coverage' }, () => {
             expectCleanPage(pageErrorLog);
         });
 
-        // The download is an anchor, not a fetch: assert the href the row builds, which is the only
-        // thing the app controls — the transfer itself belongs to the browser.
-        test('download offers an href scoped to the row', async ({ page, pageErrorLog }) => {
+        // A `<a download>` transfer is performed outside the page context, so neither the mock nor
+        // page-level request events can see it — the Download object is the only observable. What it
+        // proves is still the whole client half: the click path, the built URL and the saved name.
+        // The bytes are asserted against the real backend in specs/real/resources-download.spec.ts.
+        test('download starts a transfer for the row, named after it', async ({ page, pageErrorLog }) => {
             await page.goto('/resources');
             await rowActions(page, FILE_RESOURCE.name).click();
 
-            const href = await page.getByRole('menuitem', { name: 'Download' }).getAttribute('href');
+            const started = page.waitForEvent('download');
 
-            expect(href).toContain('/api/v1/resources/download');
-            expect(new URL(href ?? '', 'https://localhost').searchParams.getAll('paths[]')).toEqual([
-                FILE_RESOURCE.path,
-            ]);
+            await page.getByRole('menuitem', { name: 'Download' }).click();
+
+            const download = await started;
+
+            expect(new URL(download.url()).pathname).toBe('/api/v1/resources/download');
+            expect(new URL(download.url()).searchParams.getAll('paths[]')).toEqual([FILE_RESOURCE.path]);
+            expect(download.suggestedFilename()).toBe(FILE_RESOURCE.name);
+            expectCleanPage(pageErrorLog);
+        });
+
+        // Multi-select is a different code path: one transfer carrying every selected path, saved
+        // under an archive name. Neither is derivable from the single-row case.
+        test('the bulk action asks for every selected path in one archive', async ({ page, pageErrorLog }) => {
+            await page.goto('/resources');
+            await page.getByRole('checkbox', { name: `Select ${FILE_RESOURCE.name}` }).click();
+            await page.getByRole('checkbox', { name: `Select ${FOLDER_RESOURCE.name}` }).click();
+
+            const started = page.waitForEvent('download');
+
+            await page.getByRole('button', { exact: true, name: 'Download' }).click();
+
+            const download = await started;
+
+            expect(new URL(download.url()).searchParams.getAll('paths[]').sort()).toEqual(
+                [FILE_RESOURCE.path, FOLDER_RESOURCE.path].sort(),
+            );
+            expect(download.suggestedFilename()).toMatch(/\.zip$/);
             expectCleanPage(pageErrorLog);
         });
     });
