@@ -76,7 +76,7 @@ Choose the appropriate search type based on the information need:
    - When: Looking for working command examples, successful approaches
    - Example: `search_type: "successful_tools", query: "successful nmap scans revealing services", min_mentions: 2`
 
-5. **entity_relationships** - Explore entity connections (requires center_node_uuid from a prior search result; node_labels/edge_types are optional filters from the taxonomy reference above)
+5. **entity_relationships** - Explore entity connections (requires center_node_uuid copied verbatim from a 'UUID:' field in a prior search result — never invent one; node_labels/edge_types are optional filters from the taxonomy reference above)
    - Use: "What is connected to [entity]?"
    - When: Understanding relationships between discovered entities
    - Example: `search_type: "entity_relationships", query: "related vulnerabilities and services", center_node_uuid: "[uuid]", max_depth: 2`
