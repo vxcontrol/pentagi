@@ -23,6 +23,22 @@ function DialogClose({ ...props }: React.ComponentProps<typeof DialogPrimitive.C
 }
 
 function DialogContent({ children, className, ...props }: React.ComponentProps<typeof DialogPrimitive.Content>) {
+    // Radix hands focus back to its own DialogTrigger, and almost every dialog here is a controlled
+    // `<Dialog open>` with no trigger — and its content is unmounted by the page before Radix's
+    // close sequence runs at all, so `onCloseAutoFocus` never fires. Without this, closing a dialog
+    // drops focus on <body> and a keyboard user restarts from the top of the page. Captured during
+    // the first render, because by the time effects run focus is already inside the dialog.
+    const [opener] = React.useState(() => document.activeElement as HTMLElement | null);
+
+    React.useEffect(
+        () => () => {
+            if (opener?.isConnected) {
+                opener.focus();
+            }
+        },
+        [opener],
+    );
+
     return (
         <DialogPortal>
             <DialogOverlay />

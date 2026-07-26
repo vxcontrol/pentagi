@@ -1,5 +1,7 @@
 import { expect, test } from '../../fixtures/test.ts';
 import { scanA11y, waiversForScan } from '../../helpers/a11y.ts';
+import { expectCleanPage } from '../../helpers/errors.ts';
+import { resourcesCassette } from '../../mocks/cassettes/resources.ts';
 import { populatedSettingsProvidersCassette } from '../../mocks/cassettes/settings-providers.ts';
 import { loginJourneyCassette } from '../../mocks/cassettes/smoke.ts';
 import { ROUTE_MANIFEST } from '../../routes.ts';
@@ -69,3 +71,26 @@ for (const theme of THEMES) {
         }
     });
 }
+
+test.describe('dialog keyboard contract', { tag: '@cross' }, () => {
+    test.use({ cassette: resourcesCassette() });
+
+    // Closing a dialog must hand focus back to whatever opened it. Radix only does that for its own
+    // DialogTrigger, and this app opens dialogs from controlled state, so without help focus lands on
+    // <body> and a keyboard user starts again from the top of the page.
+    test('Escape returns focus to the control that opened the dialog', async ({ page, pageErrorLog }) => {
+        await page.goto('/resources');
+
+        const opener = page.getByRole('button', { name: 'New folder' });
+
+        await opener.focus();
+        await page.keyboard.press('Enter');
+        await expect(page.getByRole('dialog')).toBeVisible();
+
+        await page.keyboard.press('Escape');
+        await expect(page.getByRole('dialog')).toBeHidden();
+
+        await expect(opener).toBeFocused();
+        expectCleanPage(pageErrorLog);
+    });
+});
