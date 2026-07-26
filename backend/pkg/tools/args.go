@@ -160,11 +160,11 @@ type WebSearchAction struct {
 
 type GraphitiSearchAction struct {
 	SearchType     String   `json:"search_type" jsonschema:"required,type=string,enum=temporal_window,enum=entity_relationships,enum=diverse_results,enum=episode_context,enum=successful_tools,enum=recent_context,enum=entity_by_label" jsonschema_description:"Type of search to perform: temporal_window (time-bounded search), entity_relationships (graph traversal from an entity), diverse_results (anti-redundancy search), episode_context (full agent reasoning and tool outputs), successful_tools (proven techniques), recent_context (latest findings), entity_by_label (type-specific entity search, REQUIRES node_labels)"`
-	Query          string   `json:"query" jsonschema:"required" jsonschema_description:"Technical-channel payload — natural language query against the team's temporal knowledge graph. ALWAYS written in English regardless of the engagement language: the graph is indexed in English and shared across all engagements; non-English queries will fail to retrieve stored episodic memory."`
+	Query          string   `json:"query" jsonschema:"required" jsonschema_description:"Technical-channel payload — natural language query against the team's temporal knowledge graph. REQUIRED for EVERY search_type, including entity_relationships/entity_by_label: it re-ranks/filters the graph traversal, it is never optional just because center_node_uuid or node_labels is set. ALWAYS written in English regardless of the engagement language: the graph is indexed in English and shared across all engagements; non-English queries will fail to retrieve stored episodic memory."`
 	MaxResults     *Int64   `json:"max_results,omitempty" jsonschema:"title=Maximum Results,type=integer" jsonschema_description:"Maximum number of results to return (default varies by search type)"`
 	TimeStart      string   `json:"time_start,omitempty" jsonschema_description:"Start of time window (ISO 8601 format, required for temporal_window)"`
 	TimeEnd        string   `json:"time_end,omitempty" jsonschema_description:"End of time window (ISO 8601 format, required for temporal_window)"`
-	CenterNodeUUID string   `json:"center_node_uuid,omitempty" jsonschema_description:"UUID of entity to search from (required for entity_relationships)"`
+	CenterNodeUUID string   `json:"center_node_uuid,omitempty" jsonschema_description:"REQUIRED for entity_relationships. Copy verbatim from the 'UUID:' field of an entity/community returned by an EARLIER graphiti_search call in this conversation (any search_type). NEVER invent one — not a flow/task ID, hostname, or title; if no prior result yielded a UUID, run recent_context/entity_by_label first"`
 	MaxDepth       *Int64   `json:"max_depth,omitempty" jsonschema:"title=Maximum Depth,type=integer" jsonschema_description:"Maximum graph traversal depth (default: 2, max: 3, for entity_relationships)"`
 	NodeLabels     []string `json:"node_labels,omitempty" jsonschema_description:"Filter to specific node types — EXACT taxonomy names, PascalCase singular (e.g., ['Host', 'Service', 'Vulnerability']). REQUIRED (non-empty) when search_type is entity_by_label; optional filter otherwise"`
 	EdgeTypes      []string `json:"edge_types,omitempty" jsonschema_description:"Filter to specific relationship types — EXACT taxonomy names, UPPER_SNAKE_CASE (e.g., ['HAS_PORT', 'HAS_VULNERABILITY'])"`
@@ -387,6 +387,10 @@ type Int64 int64
 
 func (i *Int64) UnmarshalJSON(data []byte) error {
 	sdata := strings.Trim(strings.ToLower(string(data)), "' \"\n\r\t")
+	if sdata == "" {
+		*i = 0
+		return nil
+	}
 	num, err := strconv.ParseInt(sdata, 10, 64)
 	if err != nil {
 		return fmt.Errorf("invalid int value: %s", sdata)

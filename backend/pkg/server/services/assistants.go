@@ -20,6 +20,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/gorm"
+	"github.com/sirupsen/logrus"
 )
 
 type assistants struct {
@@ -432,6 +433,10 @@ func (s *AssistantService) PatchAssistant(c *gin.Context) {
 
 	fw, err := s.fc.GetFlow(c, int64(flowID))
 	if err != nil {
+		if errors.Is(err, controller.ErrFlowNotFound) {
+			response.ErrorWithLevel(c, response.ErrFlowsNotFound, err, logrus.WarnLevel)
+			return
+		}
 		logger.FromContext(c).WithError(err).Errorf("error getting flow by id in flow controller")
 		response.Error(c, response.ErrInternal, err)
 		return
@@ -565,6 +570,10 @@ func (s *AssistantService) DeleteAssistant(c *gin.Context) {
 
 	fw, err := s.fc.GetFlow(c, int64(flowID))
 	if err != nil {
+		if errors.Is(err, controller.ErrFlowNotFound) {
+			response.ErrorWithLevel(c, response.ErrFlowsNotFound, err, logrus.WarnLevel)
+			return
+		}
 		logger.FromContext(c).WithError(err).Errorf("error getting flow by id in flow controller")
 		response.Error(c, response.ErrInternal, err)
 		return

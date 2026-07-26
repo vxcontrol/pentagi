@@ -169,7 +169,7 @@ func TestInt64UnmarshalJSON(t *testing.T) {
 		{name: "underflow int64", input: `"-9223372036854775809"`, wantErr: true},
 		{name: "invalid string", input: `"abc"`, wantErr: true},
 		{name: "invalid float", input: `"1.5"`, wantErr: true},
-		{name: "empty string", input: `""`, wantErr: true},
+		{name: "empty string treated as 0 (production near-miss: LLM sends timeout: \"\")", input: `""`, want: 0},
 		{name: "bool string", input: `"true"`, wantErr: true},
 	}
 
@@ -419,6 +419,20 @@ func TestInt64JSONRoundTrip(t *testing.T) {
 				t.Errorf("round-trip Value = %v, want %v", c2.Value, tt.want)
 			}
 		})
+	}
+}
+
+func TestTerminalAction_EmptyTimeout_ProductionBugReproduction(t *testing.T) {
+	t.Parallel()
+
+	data := []byte(`{"input": "curl -s http://example.com/", "cwd": "/", "detach": false, "message": "test", "timeout": ""}`)
+
+	var action TerminalAction
+	if err := json.Unmarshal(data, &action); err != nil {
+		t.Fatalf("Unmarshal() unexpected error for timeout: \"\": %v", err)
+	}
+	if action.Timeout != 0 {
+		t.Errorf("Timeout = %v, want 0 (empty string treated as unset/default)", action.Timeout)
 	}
 }
 

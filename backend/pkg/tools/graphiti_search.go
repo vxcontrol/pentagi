@@ -58,6 +58,35 @@ const (
 	DefaultRecencyWindow  = "24h"
 )
 
+// graphitiTimeFormats are the layouts accepted for temporal_window's
+// time_start/time_end, tried in order. RFC3339 is the documented format;
+// the remaining layouts tolerate a common LLM near-miss - a timestamp
+// missing the timezone designator (e.g. "2026-07-24T11:53:34") - which
+// would otherwise fail with a confusing parse error even though the value
+// is unambiguous. Layouts without a zone parse as UTC, matching the
+// graph's own UTC timestamps.
+var graphitiTimeFormats = []string{
+	time.RFC3339,
+	"2006-01-02T15:04:05",
+	"2006-01-02 15:04:05",
+}
+
+// parseGraphitiTime parses a temporal_window time_start/time_end value,
+// trying each of graphitiTimeFormats in order and returning the error from
+// the strict RFC3339 attempt if none match (the most informative for the LLM
+// tool-call fixer, since it's the documented/expected format).
+func parseGraphitiTime(value string) (time.Time, error) {
+	rfc3339Err := error(nil)
+	for i, format := range graphitiTimeFormats {
+		if t, err := time.Parse(format, value); err == nil {
+			return t, nil
+		} else if i == 0 {
+			rfc3339Err = err
+		}
+	}
+	return time.Time{}, rfc3339Err
+}
+
 var (
 	allowedRecencyWindows = map[string]struct{}{
 		"1h":  {},
@@ -316,14 +345,14 @@ func (t *graphitiSearchTool) handleTemporalWindowSearch(
 		return "", fmt.Errorf("time_start and time_end are required for temporal_window search")
 	}
 
-	timeStart, err := time.Parse(time.RFC3339, args.TimeStart)
+	timeStart, err := parseGraphitiTime(args.TimeStart)
 	if err != nil {
-		return "", fmt.Errorf("invalid time_start format (use ISO 8601): %w", err)
+		return "", fmt.Errorf("invalid time_start format (use ISO 8601, e.g. 2026-01-02T15:04:05Z): %w", err)
 	}
 
-	timeEnd, err := time.Parse(time.RFC3339, args.TimeEnd)
+	timeEnd, err := parseGraphitiTime(args.TimeEnd)
 	if err != nil {
-		return "", fmt.Errorf("invalid time_end format (use ISO 8601): %w", err)
+		return "", fmt.Errorf("invalid time_end format (use ISO 8601, e.g. 2026-01-02T15:04:05Z): %w", err)
 	}
 
 	if timeEnd.Before(timeStart) {
@@ -728,6 +757,7 @@ func FormatGraphitiDiverseResults(
 				score = fmt.Sprintf(" (MMR score: %.3f)", resp.CommunityMMRScores[i])
 			}
 			builder.WriteString(fmt.Sprintf("%d. **%s**%s\n", i+1, comm.Name, score))
+			builder.WriteString(fmt.Sprintf("   - UUID: %s\n", comm.UUID))
 			builder.WriteString(fmt.Sprintf("   - Summary: %s\n\n", comm.Summary))
 		}
 	}
@@ -791,7 +821,7 @@ func FormatGraphitiEpisodeContextResults(
 			if i < len(resp.MentionedNodeScores) {
 				score = fmt.Sprintf(" (relevance: %.3f)", resp.MentionedNodeScores[i])
 			}
-			builder.WriteString(fmt.Sprintf("- **%s**%s: %s\n", node.Name, score, node.Summary))
+			builder.WriteString(fmt.Sprintf("- **%s**%s (UUID: %s): %s\n", node.Name, score, node.UUID, node.Summary))
 		}
 	}
 
@@ -864,6 +894,7 @@ func FormatGraphitiRecentContextResults(
 				score = fmt.Sprintf(" (score: %.3f)", resp.NodeScores[i])
 			}
 			builder.WriteString(fmt.Sprintf("%d. **%s**%s\n", i+1, node.Name, score))
+			builder.WriteString(fmt.Sprintf("   - UUID: %s\n", node.UUID))
 			builder.WriteString(fmt.Sprintf("   - Labels: %v\n", node.Labels))
 			builder.WriteString(fmt.Sprintf("   - Summary: %s\n\n", node.Summary))
 		}
