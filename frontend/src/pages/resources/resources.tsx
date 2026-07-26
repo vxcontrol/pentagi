@@ -489,6 +489,7 @@ function Resources() {
                         {search.rawQuery ? (
                             <InputGroupAddon align="inline-end">
                                 <InputGroupButton
+                                    aria-label="Clear resource search"
                                     onClick={search.resetSearch}
                                     type="button"
                                 >

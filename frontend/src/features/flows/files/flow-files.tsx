@@ -233,6 +233,7 @@ function FlowFiles() {
                                             {field.value && (
                                                 <InputGroupAddon align="inline-end">
                                                     <InputGroupButton
+                                                        aria-label="Clear file search"
                                                         onClick={search.resetSearch}
                                                         type="button"
                                                     >

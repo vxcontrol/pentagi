@@ -1043,6 +1043,7 @@ function DataTableFilter({ onQueryChange, placeholder, query }: DataTableFilterP
             {localValue ? (
                 <InputGroupAddon align="inline-end">
                     <InputGroupButton
+                        aria-label="Clear search"
                         onClick={handleClear}
                         type="button"
                     >

@@ -235,6 +235,7 @@ function FlowFilesAttachResourcesDialogBody({
                         {searchQuery && (
                             <InputGroupAddon align="inline-end">
                                 <InputGroupButton
+                                    aria-label="Clear resource search"
                                     onClick={() => setSearchQuery('')}
                                     type="button"
                                 >
