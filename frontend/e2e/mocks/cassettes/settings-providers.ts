@@ -3,9 +3,12 @@ import type { ResultOf } from '@graphql-typed-document-node/core';
 import type {
     AgentConfigFragmentFragment,
     AgentsConfigFragmentFragment,
+    AgentTestResultFragmentFragment,
     ModelConfigFragmentFragment,
     ProviderConfigFragmentFragment,
+    ProviderTestResultFragmentFragment,
     SettingsProvidersDocument,
+    TestResultFragmentFragment,
 } from '@/graphql/types';
 
 import { ProviderType } from '@/graphql/types';
@@ -145,7 +148,25 @@ export const settingsProvidersCassette = (override: Cassette = {}): Cassette =>
         override,
     );
 
-const populatedProviders: ResultOf<typeof SettingsProvidersDocument> = {
+export const SEEDED_PROVIDER = {
+    id: 'custom-1',
+    name: 'My Custom Endpoint',
+    type: ProviderType.Custom,
+};
+
+export const seededProviderRow = (): ProviderConfigFragmentFragment =>
+    entity('ProviderConfig', {
+        agents: agentsConfig(),
+        createdAt: T,
+        id: SEEDED_PROVIDER.id,
+        name: SEEDED_PROVIDER.name,
+        type: SEEDED_PROVIDER.type,
+        updatedAt: T,
+    });
+
+/** The whole settingsProviders answer with a chosen set of user-defined rows — a delete asserts against
+ *  the follow-up answer, so the list has to be expressible without the deleted row. */
+export const providersList = (...userDefined: ProviderConfigFragmentFragment[]) => ({
     settingsProviders: entity('ProvidersConfig', {
         default: allDefaults(),
         enabled: entity('ProvidersReadinessStatus', {
@@ -162,18 +183,66 @@ const populatedProviders: ResultOf<typeof SettingsProvidersDocument> = {
             qwen: false,
         }),
         models: allModels(),
-        userDefined: [
-            entity('ProviderConfig', {
-                agents: agentsConfig(),
-                createdAt: T,
-                id: 'custom-1',
-                name: 'My Custom Endpoint',
-                type: ProviderType.Custom,
-                updatedAt: T,
-            }),
-        ],
+        userDefined,
     }),
-};
+});
+
+/** A second row so a delete spec can prove the table survived rather than merely emptied. */
+export const OTHER_PROVIDER_ROW = (): ProviderConfigFragmentFragment =>
+    entity('ProviderConfig', {
+        agents: agentsConfig(),
+        createdAt: T,
+        id: 'custom-2',
+        name: 'Second Endpoint',
+        type: ProviderType.Custom,
+        updatedAt: T,
+    });
+
+/** updateProvider answers with ProviderConfig, and Apollo writes it straight onto the row the list
+ *  renders — returning the pre-edit name would make the list contradict the save. */
+export const renamedProviderRow = (name: string): ProviderConfigFragmentFragment =>
+    entity('ProviderConfig', {
+        agents: agentsConfig(),
+        createdAt: T,
+        id: SEEDED_PROVIDER.id,
+        name,
+        type: SEEDED_PROVIDER.type,
+        updatedAt: T,
+    });
+
+const populatedProviders: ResultOf<typeof SettingsProvidersDocument> = providersList(seededProviderRow());
+
+const testResult = (name: string, result: boolean): TestResultFragmentFragment =>
+    entity('TestResult', {
+        error: result ? null : 'e2e simulated failure',
+        latency: 42,
+        name,
+        reasoning: false,
+        result,
+        streaming: false,
+        type: 'chat',
+    });
+
+export const agentTestResult = (result = true): AgentTestResultFragmentFragment =>
+    entity('AgentTestResult', { tests: [testResult('chat completion', result)] });
+
+/** One agent fails on purpose: a dialog that renders only the passing rows would still look right. */
+export const providerTestResult = (): ProviderTestResultFragmentFragment =>
+    entity('ProviderTestResult', {
+        adviser: agentTestResult(),
+        assistant: agentTestResult(),
+        coder: agentTestResult(),
+        enricher: agentTestResult(),
+        generator: agentTestResult(),
+        installer: agentTestResult(),
+        pentester: agentTestResult(false),
+        primaryAgent: agentTestResult(),
+        refiner: agentTestResult(),
+        reflector: agentTestResult(),
+        searcher: agentTestResult(),
+        simple: agentTestResult(),
+        simpleJson: agentTestResult(),
+    });
 
 export const populatedSettingsProvidersCassette = (override: Cassette = {}): Cassette =>
     mergeCassettes(
