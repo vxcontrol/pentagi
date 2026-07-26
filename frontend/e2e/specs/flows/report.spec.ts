@@ -2,6 +2,7 @@ import type { Page } from '@playwright/test';
 
 import { expect, test } from '../../fixtures/test.ts';
 import { expectCleanPage } from '../../helpers/errors.ts';
+import { inspectPdf } from '../../helpers/pdf.ts';
 import { flowReportCassette } from '../../mocks/cassettes/flows.ts';
 
 const REPORT_FILE = /^report_flow_5_e2e_alpha_2026\d{10}\.md$/;
@@ -88,12 +89,32 @@ test.describe('flow report', { tag: '@flows' }, () => {
         expectCleanPage(pageErrorLog);
     });
 
-    test('the print route writes a PDF named like its markdown twin', async ({ page, pageErrorLog }) => {
+    test('the print route writes a real PDF, not just a file with the right name', async ({ page, pageErrorLog }) => {
         const download = page.waitForEvent('download');
 
         await page.goto('/flows/5/report?download=true');
 
-        expect((await download).suggestedFilename()).toMatch(REPORT_PDF);
+        const file = await download;
+
+        expect(file.suggestedFilename()).toMatch(REPORT_PDF);
+
+        const stream = await file.createReadStream();
+        const chunks: Buffer[] = [];
+
+        for await (const chunk of stream) {
+            chunks.push(Buffer.from(chunk));
+        }
+
+        const shape = inspectPdf(Buffer.concat(chunks));
+
+        // A generator that silently produced a blank document, or an error page saved under a .pdf
+        // name, passes a filename check and fails every line of this one.
+        expect(shape.isPdf && shape.trailerComplete, 'a complete PDF document').toBe(true);
+        expect(shape.pages, 'the report paginated').toBeGreaterThan(0);
+        // The seeded report is small; the threshold only has to be above what a title-only or blank
+        // document produces, which is what a silently failing generator emits.
+        expect(shape.textRuns, 'glyphs were actually drawn').toBeGreaterThan(5);
+        expect(shape.fonts, 'a font subset was embedded').toBeGreaterThan(0);
         expectCleanPage(pageErrorLog);
     });
 });
