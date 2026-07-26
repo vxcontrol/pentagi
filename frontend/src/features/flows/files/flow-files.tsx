@@ -250,6 +250,7 @@ function FlowFiles() {
                             <TooltipTrigger asChild>
                                 <span>
                                     <Button
+                                        aria-label="Upload files"
                                         disabled={upload.isUploading || isLoading}
                                         onClick={upload.openFilePicker}
                                         size="icon-sm"
@@ -272,6 +273,7 @@ function FlowFiles() {
                             <TooltipTrigger asChild>
                                 <span>
                                     <Button
+                                        aria-label="Attach resources"
                                         disabled={isAttachResourcesDisabled}
                                         onClick={handleOpenAttachResourcesDialog}
                                         size="icon-sm"
@@ -295,6 +297,7 @@ function FlowFiles() {
                             <TooltipTrigger asChild>
                                 <span>
                                     <Button
+                                        aria-label="Pull from container"
                                         disabled={isPullDisabled}
                                         onClick={handleOpenPullDialog}
                                         size="icon-sm"
