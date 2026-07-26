@@ -526,6 +526,7 @@ function FlowAssistantMessages({ className }: FlowAssistantMessagesProps) {
                                             {field.value && (
                                                 <InputGroupAddon align="inline-end">
                                                     <InputGroupButton
+                                                        aria-label="Clear message search"
                                                         disabled={isAssistantCreating}
                                                         onClick={() => {
                                                             form.reset({ search: '' });

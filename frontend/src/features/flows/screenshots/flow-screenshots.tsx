@@ -99,6 +99,7 @@ function FlowScreenshots() {
                                         {field.value && (
                                             <InputGroupAddon align="inline-end">
                                                 <InputGroupButton
+                                                    aria-label="Clear screenshot search"
                                                     onClick={() => {
                                                         form.reset({ search: '' });
                                                         setDebouncedSearchValue('');

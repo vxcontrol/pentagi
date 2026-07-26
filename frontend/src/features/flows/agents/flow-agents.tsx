@@ -157,6 +157,7 @@ function FlowAgents() {
                                         {field.value && (
                                             <InputGroupAddon align="inline-end">
                                                 <InputGroupButton
+                                                    aria-label="Clear agent search"
                                                     onClick={() => {
                                                         form.reset({ search: '' });
                                                         setDebouncedSearchValue('');

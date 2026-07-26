@@ -187,13 +187,18 @@ export const providersList = (...userDefined: ProviderConfigFragmentFragment[]) 
     }),
 });
 
-/** A second row so a delete spec can prove the table survived rather than merely emptied. */
+/** A second row so a delete spec can operate a row that is not index 0, and prove the table survived. */
+export const OTHER_PROVIDER = {
+    id: 'custom-2',
+    name: 'Second Endpoint',
+};
+
 export const OTHER_PROVIDER_ROW = (): ProviderConfigFragmentFragment =>
     entity('ProviderConfig', {
         agents: agentsConfig(),
         createdAt: T,
-        id: 'custom-2',
-        name: 'Second Endpoint',
+        id: OTHER_PROVIDER.id,
+        name: OTHER_PROVIDER.name,
         type: ProviderType.Custom,
         updatedAt: T,
     });

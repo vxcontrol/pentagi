@@ -45,8 +45,9 @@ const inflateStreams = (pdf: Buffer): Buffer[] => {
 
 /**
  * Structural read of a generated PDF. It deliberately does not decode the text: each font subset
- * carries its own glyph map, so a merged decode garbles the result. What the report's text says is
- * pinned by the markdown export, which is asserted byte for byte from the same source string.
+ * carries its own glyph map, so a merged decode garbles the result. The report's wording is checked
+ * on the markdown export instead, which is built from the same string and whose bytes are searched
+ * for the task and result text.
  */
 export const inspectPdf = (pdf: Buffer): PdfShape => {
     const head = pdf.subarray(0, 5).toString();

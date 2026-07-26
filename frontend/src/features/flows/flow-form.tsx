@@ -339,6 +339,7 @@ export function FlowForm({
                     {templateSearch && (
                         <InputGroupAddon align="inline-end">
                             <InputGroupButton
+                                aria-label="Clear template search"
                                 onClick={(event) => {
                                     event.stopPropagation();
                                     setTemplateSearch('');
@@ -393,6 +394,7 @@ export function FlowForm({
                     {resourceSearch && (
                         <InputGroupAddon align="inline-end">
                             <InputGroupButton
+                                aria-label="Clear resource search"
                                 onClick={(event) => {
                                     event.stopPropagation();
                                     setResourceSearch('');
@@ -577,6 +579,7 @@ export function FlowForm({
                                                                 {providerSearch && (
                                                                     <InputGroupAddon align="inline-end">
                                                                         <InputGroupButton
+                                                                            aria-label="Clear provider search"
                                                                             onClick={(event) => {
                                                                                 event.stopPropagation();
                                                                                 setProviderSearch('');

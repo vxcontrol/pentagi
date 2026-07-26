@@ -216,6 +216,7 @@ function FlowAutomationMessages({ className }: FlowAutomationMessagesProps) {
                                         {field.value && (
                                             <InputGroupAddon align="inline-end">
                                                 <InputGroupButton
+                                                    aria-label="Clear message search"
                                                     onClick={() => {
                                                         form.reset({ search: '' });
                                                         setDebouncedSearchValue('');

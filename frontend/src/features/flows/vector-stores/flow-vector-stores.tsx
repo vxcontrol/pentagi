@@ -159,6 +159,7 @@ function FlowVectorStores() {
                                         {field.value && (
                                             <InputGroupAddon align="inline-end">
                                                 <InputGroupButton
+                                                    aria-label="Clear vector store search"
                                                     onClick={() => {
                                                         form.reset({ search: '' });
                                                         setDebouncedSearchValue('');

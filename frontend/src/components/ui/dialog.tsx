@@ -23,22 +23,6 @@ function DialogClose({ ...props }: React.ComponentProps<typeof DialogPrimitive.C
 }
 
 function DialogContent({ children, className, ...props }: React.ComponentProps<typeof DialogPrimitive.Content>) {
-    // Radix hands focus back to its own DialogTrigger, and almost every dialog here is a controlled
-    // `<Dialog open>` with no trigger — and its content is unmounted by the page before Radix's
-    // close sequence runs at all, so `onCloseAutoFocus` never fires. Without this, closing a dialog
-    // drops focus on <body> and a keyboard user restarts from the top of the page. Captured during
-    // the first render, because by the time effects run focus is already inside the dialog.
-    const [opener] = React.useState(() => document.activeElement as HTMLElement | null);
-
-    React.useEffect(
-        () => () => {
-            if (opener?.isConnected) {
-                opener.focus();
-            }
-        },
-        [opener],
-    );
-
     return (
         <DialogPortal>
             <DialogOverlay />
@@ -50,6 +34,10 @@ function DialogContent({ children, className, ...props }: React.ComponentProps<t
                 data-slot="dialog-content"
                 {...props}
             >
+                {/* Radix returns focus to its own DialogTrigger; these dialogs are opened from state,
+                    and their content is often unmounted before Radix's close sequence runs, so its
+                    `onCloseAutoFocus` never fires. */}
+                <DialogFocusReturn />
                 {children}
                 <DialogPrimitive.Close
                     className="ring-offset-background focus:ring-ring data-[state=open]:bg-accent data-[state=open]:text-muted-foreground absolute top-4 right-4 rounded-sm opacity-70 transition-opacity hover:opacity-100 focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none"
@@ -72,6 +60,28 @@ function DialogDescription({ className, ...props }: React.ComponentProps<typeof 
             {...props}
         />
     );
+}
+
+/**
+ * Rendered inside the content, so it mounts when the dialog opens and unmounts when it closes —
+ * a wrapper-level hook would instead run when the PAGE mounts, because most dialogs here render
+ * `<DialogContent>` unconditionally and let Radix decide whether it is on screen.
+ */
+function DialogFocusReturn() {
+    // Captured during this component's first render: by the time effects run, Radix has already
+    // moved focus inside the dialog.
+    const [opener] = React.useState(() => document.activeElement as HTMLElement | null);
+
+    React.useEffect(
+        () => () => {
+            if (opener?.isConnected) {
+                opener.focus();
+            }
+        },
+        [opener],
+    );
+
+    return null;
 }
 
 function DialogFooter({ className, ...props }: React.ComponentProps<'div'>) {

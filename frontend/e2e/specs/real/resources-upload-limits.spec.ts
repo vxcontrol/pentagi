@@ -35,7 +35,11 @@ test.describe('resources upload limits at the endpoint', { tag: '@real' }, () =>
 
         const tooMany = await upload(request, many);
 
-        expect(tooMany.status(), 'one file past the 1000-file cap').toBe(400);
+        // 400, but not from the handler's own count check: Go's multipart reader caps a form at 1000
+        // parts and answers `multipart: message too large` first (confirmed in the backend log), which
+        // makes `resources.MaxUploadFiles` unreachable for this endpoint. What this pins is the
+        // user-visible contract — 1001 is refused and nothing is written.
+        expect(tooMany.status(), 'a batch past 1000 files is refused').toBe(400);
 
         const afterReject = await request.get('/api/v1/resources/', { params: { recursive: 'true' } });
         const rejectedPaths = ((await afterReject.json()).data.items ?? []).map((item: { path: string }) => item.path);
@@ -51,9 +55,15 @@ test.describe('resources upload limits at the endpoint', { tag: '@real' }, () =>
 
         expect(atCap.status(), 'a batch exactly on the cap').toBe(200);
 
-        await request.delete('/api/v1/resources/', {
-            params: Object.fromEntries(many.slice(0, 1000).map(({ name }) => ['paths[]', name])),
-        });
+        // Repeated keys, not an object: `Object.fromEntries` keeps only the last of 1000 identical
+        // `paths[]` entries and would delete one file while leaving 999 on the stand.
+        const cleanup = new URLSearchParams();
+
+        many.slice(0, 1000).forEach(({ name }) => cleanup.append('paths[]', name));
+
+        const deleted = await request.delete(`/api/v1/resources/?${cleanup}`);
+
+        expect(deleted.status(), 'the seeded batch is removed again').toBe(200);
     });
 
     // The server sanitises rather than rejects, which is a legitimate choice — what must hold is that

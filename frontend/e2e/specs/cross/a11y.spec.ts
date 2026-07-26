@@ -1,7 +1,7 @@
 import { expect, test } from '../../fixtures/test.ts';
 import { scanA11y, waiversForScan } from '../../helpers/a11y.ts';
 import { expectCleanPage } from '../../helpers/errors.ts';
-import { resourcesCassette } from '../../mocks/cassettes/resources.ts';
+import { FILE_RESOURCE, resourcesCassette } from '../../mocks/cassettes/resources.ts';
 import { populatedSettingsProvidersCassette } from '../../mocks/cassettes/settings-providers.ts';
 import { loginJourneyCassette } from '../../mocks/cassettes/smoke.ts';
 import { ROUTE_MANIFEST } from '../../routes.ts';
@@ -85,6 +85,25 @@ test.describe('dialog keyboard contract', { tag: '@cross' }, () => {
 
         await opener.focus();
         await page.keyboard.press('Enter');
+        await expect(page.getByRole('dialog')).toBeVisible();
+
+        await page.keyboard.press('Escape');
+        await expect(page.getByRole('dialog')).toBeHidden();
+
+        await expect(opener).toBeFocused();
+        expectCleanPage(pageErrorLog);
+    });
+
+    // The other dialog family: ConfirmationDialog renders its DialogContent unconditionally, so a
+    // focus hook living on the wrapper would capture whatever had focus when the PAGE mounted and
+    // restore it on navigation instead. This case is what tells the two apart.
+    test('Escape returns focus for a dialog whose content is always mounted', async ({ page, pageErrorLog }) => {
+        await page.goto('/resources');
+        await page.getByRole('checkbox', { name: `Select ${FILE_RESOURCE.name}` }).click();
+
+        const opener = page.getByRole('button', { exact: true, name: 'Delete' });
+
+        await opener.click();
         await expect(page.getByRole('dialog')).toBeVisible();
 
         await page.keyboard.press('Escape');

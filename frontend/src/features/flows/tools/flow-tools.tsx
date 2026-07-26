@@ -158,6 +158,7 @@ function FlowTools() {
                                         {field.value && (
                                             <InputGroupAddon align="inline-end">
                                                 <InputGroupButton
+                                                    aria-label="Clear tool search"
                                                     onClick={() => {
                                                         form.reset({ search: '' });
                                                         setDebouncedSearchValue('');

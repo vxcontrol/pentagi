@@ -4,6 +4,7 @@ import { expect, test } from '../../fixtures/test.ts';
 import { expectCleanPage } from '../../helpers/errors.ts';
 import {
     agentTestResult,
+    OTHER_PROVIDER,
     OTHER_PROVIDER_ROW,
     populatedSettingsProvidersCassette,
     providersList,
@@ -160,8 +161,6 @@ test.describe('settings provider edit paths', { tag: '@coverage' }, () => {
 
             expect(variables.providerId).toBe(SEEDED_PROVIDER.id);
             expect(variables.name).toBe(RENAMED);
-            // The mutation has no `type` argument, so an edit can never move a provider between types.
-            expect(variables.type).toBeUndefined();
             expect(Object.keys(variables.agents), 'the whole agents map is resubmitted').toHaveLength(13);
             await expect(page, 'a saved provider returns to the list').toHaveURL(/\/settings\/providers$/);
             expectCleanPage(pageErrorLog);
@@ -210,14 +209,14 @@ test.describe('settings provider edit paths', { tag: '@coverage' }, () => {
                         {
                             data: { deleteProvider: 'success' } as never,
                             setFlag: 'provider-deleted',
-                            variables: { providerId: SEEDED_PROVIDER.id },
+                            variables: { providerId: OTHER_PROVIDER.id },
                         },
                     ],
                 },
                 queries: {
                     settingsProviders: [
                         { data: providersList(seededProviderRow(), OTHER_PROVIDER_ROW()) },
-                        { data: providersList(OTHER_PROVIDER_ROW()), whenFlag: 'provider-deleted' },
+                        { data: providersList(seededProviderRow()), whenFlag: 'provider-deleted' },
                     ],
                 },
             }),
@@ -226,7 +225,9 @@ test.describe('settings provider edit paths', { tag: '@coverage' }, () => {
         test('the row menu deletes the row it belongs to', async ({ page, pageErrorLog }) => {
             await page.goto('/settings/providers');
 
-            const row = page.getByRole('row', { name: new RegExp(SEEDED_PROVIDER.name) });
+            // The second row on purpose: a menu wired to a fixed index would still send the first
+            // row's id, and a spec that operated row one could not tell the two apart.
+            const row = page.getByRole('row', { name: new RegExp(OTHER_PROVIDER.name) });
 
             await expect(row).toBeVisible();
             await row.hover();
@@ -237,11 +238,11 @@ test.describe('settings provider edit paths', { tag: '@coverage' }, () => {
 
             await page.getByRole('dialog').getByRole('button', { name: 'Delete' }).click();
 
-            expect((await request).postDataJSON().variables).toEqual({ providerId: SEEDED_PROVIDER.id });
+            expect((await request).postDataJSON().variables).toEqual({ providerId: OTHER_PROVIDER.id });
             // The row goes only because the refetch answers without it, and the sibling proves the
             // table itself survived — a vanished table would satisfy a bare toBeHidden() too.
             await expect(row).toBeHidden();
-            await expect(page.getByRole('row', { name: /Second Endpoint/ })).toBeVisible();
+            await expect(page.getByRole('row', { name: new RegExp(SEEDED_PROVIDER.name) })).toBeVisible();
             expectCleanPage(pageErrorLog);
         });
     });

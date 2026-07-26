@@ -192,6 +192,7 @@ function FlowTerminal() {
                                             )}
                                             {field.value && (
                                                 <InputGroupButton
+                                                    aria-label="Clear terminal search"
                                                     onClick={handleClearSearch}
                                                     size="icon-xs"
                                                     title="Clear search"
