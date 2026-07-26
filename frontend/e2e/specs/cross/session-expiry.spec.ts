@@ -71,4 +71,44 @@ test.describe('session expiry', { tag: '@cross' }, () => {
             await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible();
         });
     });
+
+    test.describe('the interceptor itself', () => {
+        test.use({
+            cassette: {
+                queries: baseQueries(),
+                rest: {
+                    ...baseRest(),
+                    // The login page re-reads /info and would write the key back; failing that read is
+                    // the only way to observe what the interceptor left behind.
+                    'GET /api/v1/info': [
+                        authenticatedInfoEntry(),
+                        { body: { code: 'Internal', status: 'error' }, status: 500, whenFlag: EXPIRED },
+                    ],
+                    'GET /api/v1/resources/': [
+                        {
+                            body: { code: 'AuthRequired', msg: 'auth required', status: 'error' },
+                            setFlag: EXPIRED,
+                            status: 401,
+                        },
+                    ],
+                },
+            },
+        });
+
+        test('clears the stored session outright, not just its user', async ({ page, pageErrorLog }) => {
+            await page.goto('/resources');
+
+            await expect(page).toHaveURL(/\/login/);
+            expect(
+                await page.evaluate(() => window.localStorage.getItem('auth')),
+                'the key is removed, not overwritten',
+            ).toBeNull();
+
+            expect(pageErrorLog.pageErrors, 'no uncaught page errors').toEqual([]);
+            expect(
+                pageErrorLog.consoleErrors.filter((text) => !/401|500/.test(text)),
+                'only the rejected requests are logged',
+            ).toEqual([]);
+        });
+    });
 });
