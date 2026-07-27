@@ -16,6 +16,11 @@ import {
     resourceWrites,
 } from '../../mocks/cassettes/resources.ts';
 
+interface DownloadClick {
+    download: string;
+    href: string;
+}
+
 test.describe('resources', { tag: '@coverage' }, () => {
     test.describe('listing', () => {
         test.use({ cassette: resourcesCassette() });
@@ -188,43 +193,64 @@ test.describe('resources', { tag: '@coverage' }, () => {
             expectCleanPage(pageErrorLog);
         });
 
-        // A `<a download>` transfer is performed outside the page context, so neither the mock nor
-        // page-level request events can see it — the Download object is the only observable. What it
-        // proves is still the whole client half: the click path, the built URL and the saved name.
-        // The bytes are asserted against the real backend in specs/real/resources-download.spec.ts.
-        test('download starts a transfer for the row, named after it', async ({ page, pageErrorLog }) => {
+        // An `<a download>` transfer is carried out by the browser outside the page, so no Playwright
+        // route — page- or context-scoped — is ever offered it: one started here leaves for whatever
+        // the preview proxy targets. The bytes are asserted in specs/real/resources-download.spec.ts.
+        test('the row download action links at the row, saved under its name', async ({ page, pageErrorLog }) => {
             await page.goto('/resources');
             await rowActions(page, FILE_RESOURCE.name).click();
 
-            const started = page.waitForEvent('download');
+            const link = page.getByRole('menuitem', { name: 'Download' });
 
-            await page.getByRole('menuitem', { name: 'Download' }).click();
+            await expect(link).toHaveAttribute('download', FILE_RESOURCE.name);
 
-            const download = await started;
+            const href = new URL((await link.getAttribute('href')) ?? '', page.url());
 
-            expect(new URL(download.url()).pathname).toBe('/api/v1/resources/download');
-            expect(new URL(download.url()).searchParams.getAll('paths[]')).toEqual([FILE_RESOURCE.path]);
-            expect(download.suggestedFilename()).toBe(FILE_RESOURCE.name);
+            expect(href.pathname).toBe('/api/v1/resources/download');
+            expect(href.searchParams.getAll('paths[]')).toEqual([FILE_RESOURCE.path]);
             expectCleanPage(pageErrorLog);
         });
 
         // Multi-select is a different code path: one transfer carrying every selected path, saved
         // under an archive name. Neither is derivable from the single-row case.
         test('the bulk action asks for every selected path in one archive', async ({ page, pageErrorLog }) => {
+            // Its anchor is created, clicked and dropped inside one handler, so nothing survives in
+            // the DOM to read — record the click and swallow it instead of starting a transfer.
+            await page.addInitScript(() => {
+                const recorded: DownloadClick[] = [];
+
+                (window as unknown as { e2eDownloads: DownloadClick[] }).e2eDownloads = recorded;
+
+                const { click } = HTMLAnchorElement.prototype;
+
+                HTMLAnchorElement.prototype.click = function (this: HTMLAnchorElement) {
+                    if (!this.hasAttribute('download')) {
+                        click.call(this);
+
+                        return;
+                    }
+
+                    recorded.push({ download: this.download, href: this.href });
+                };
+            });
             await page.goto('/resources');
             await page.getByRole('checkbox', { name: `Select ${FILE_RESOURCE.name}` }).click();
             await page.getByRole('checkbox', { name: `Select ${FOLDER_RESOURCE.name}` }).click();
-
-            const started = page.waitForEvent('download');
-
             await page.getByRole('button', { exact: true, name: 'Download' }).click();
 
-            const download = await started;
+            const clicks = await page.evaluate(
+                () => (window as unknown as { e2eDownloads: DownloadClick[] }).e2eDownloads,
+            );
 
-            expect(new URL(download.url()).searchParams.getAll('paths[]').sort()).toEqual(
+            expect(clicks, 'one transfer for the whole selection').toHaveLength(1);
+
+            const { download, href } = clicks[0]!;
+
+            expect(new URL(href).pathname).toBe('/api/v1/resources/download');
+            expect(new URL(href).searchParams.getAll('paths[]').sort()).toEqual(
                 [FILE_RESOURCE.path, FOLDER_RESOURCE.path].sort(),
             );
-            expect(download.suggestedFilename()).toMatch(/\.zip$/);
+            expect(download).toMatch(/\.zip$/);
             expectCleanPage(pageErrorLog);
         });
     });

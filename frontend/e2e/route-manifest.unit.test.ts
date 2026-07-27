@@ -1,8 +1,16 @@
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 import { routes } from '@/lib/routes';
 
+import { affectedRoutes } from './affected-routes.ts';
 import { ROUTE_MANIFEST } from './routes.ts';
+
+const { RULES } = (await import(pathToFileURL(join(__dirname, 'mock-llm', 'scenario.mjs')).href)) as {
+    RULES: { label: string; match: RegExp }[];
+};
 
 /**
  * Routes deliberately outside the manifest sweeps (nav, visual, a11y,
@@ -73,5 +81,44 @@ describe('ROUTE_MANIFEST completeness', () => {
 
     it('forces a coverage decision for every dynamic route builder', () => {
         expect(dynamicRouteKeys(routes).sort()).toEqual(Object.keys(DYNAMIC_ROUTES).sort());
+    });
+});
+
+const SHELL_DIR = 'components/layouts/main';
+
+const shellImports = (): string[] => {
+    const dir = join(__dirname, '..', 'src', SHELL_DIR);
+
+    return readdirSync(dir)
+        .filter((file) => file.endsWith('.tsx') && !file.endsWith('.test.tsx'))
+        .flatMap((file) => [...readFileSync(join(dir, file), 'utf8').matchAll(/from '@\/([^']+)'/g)])
+        .flatMap(([, imported]) => (imported ? [`frontend/src/${imported}`] : []));
+};
+
+describe('ROUTE_MANIFEST ownership', () => {
+    it('never scopes a source the app shell imports to a subset of the swept routes', () => {
+        const underScoped = shellImports().filter(
+            (file) => affectedRoutes([file], ROUTE_MANIFEST).length < ROUTE_MANIFEST.length,
+        );
+
+        expect(underScoped).toEqual([]);
+    });
+});
+
+describe('mock-llm rule matching', () => {
+    const rule = RULES.find((entry) => entry.label === 'subagent-terminal-report');
+
+    it('answers only a request carrying both markers', () => {
+        expect(rule?.match.test('{"tools":["hack_result"],"text":"E2E_TERMINAL_OK"}')).toBe(true);
+        expect(rule?.match.test('{"tools":["hack_result"]}')).toBe(false);
+        expect(rule?.match.test('{"text":"E2E_TERMINAL_OK"}')).toBe(false);
+    });
+
+    it('rejects a marker-less request without re-scanning from every offset', () => {
+        const request = JSON.stringify({ messages: 'a'.repeat(120 * 1024) });
+        const started = performance.now();
+
+        expect(rule?.match.test(request)).toBe(false);
+        expect(performance.now() - started).toBeLessThan(500);
     });
 });

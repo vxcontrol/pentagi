@@ -62,7 +62,7 @@ export const assistantsCassette = (override: Cassette = {}): Cassette =>
                         data: { assistantLogs: [assistantLog('42', '12', 'keep going')] },
                         variables: { assistantId: '12', flowId: '5' },
                     },
-                    { data: { assistantLogs: [] } },
+                    { data: { assistantLogs: [] }, variables: { assistantId: '13', flowId: '5' } },
                 ],
                 assistants: [{ data: seeded, variables: { flowId: '5' } }],
                 providers: [{ data: { providers: [PROVIDER] } }],

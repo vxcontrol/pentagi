@@ -78,7 +78,7 @@ export const RULES = [
     // matching that agent's turn.
     {
         label: 'subagent-terminal-report',
-        match: /(?=[\s\S]*"hack_result")(?=[\s\S]*E2E_TERMINAL_OK)/,
+        match: /^(?=[\s\S]*"hack_result")(?=[\s\S]*E2E_TERMINAL_OK)/,
         toolCalls: [
             {
                 args: {

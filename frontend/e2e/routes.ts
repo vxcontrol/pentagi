@@ -97,7 +97,6 @@ export const ROUTE_MANIFEST: RouteManifestEntry[] = [
             'src/providers/flows-provider.tsx',
             'src/components/shared/file-manager',
             'src/components/dashboard',
-            'src/features/resources',
             // Assistant-tab FlowForm reads useTemplates, so a provider change reaches this route too.
             'src/providers/templates-provider.tsx',
         ],
@@ -164,6 +163,8 @@ export const ROUTE_MANIFEST: RouteManifestEntry[] = [
         cassette: resourcesCassette,
         path: routes.resources,
         ready: (page) => page.getByRole('treeitem', { name: /reports/ }),
-        sources: ['src/pages/resources', 'src/features/resources', 'src/components/shared/file-manager'],
+        // `src/features/resources` is left unowned deliberately: main-sidebar.tsx pulls its upload
+        // hook into every route's shell, so any per-route listing under-reports the rest.
+        sources: ['src/pages/resources', 'src/components/shared/file-manager'],
     },
 ];

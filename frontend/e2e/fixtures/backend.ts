@@ -33,7 +33,7 @@ export const test = base.extend<BackendFixtures & BackendOptions & { _installMoc
     // first 401 wipes it and hard-redirects to login. Real tiers authenticate
     // once in the setup project and reuse storageState.
     _installMocks: [
-        async ({ backend, isAuthSeeded, page, world }, use, testInfo) => {
+        async ({ backend, context, isAuthSeeded, page, world }, use, testInfo) => {
             if (!backend.installMocks) {
                 await use();
 
@@ -46,7 +46,7 @@ export const test = base.extend<BackendFixtures & BackendOptions & { _installMoc
                 await seedAuthenticated(page);
             }
 
-            await installMockRoutes(page, world);
+            await installMockRoutes(context, world);
             await use();
 
             // Silently-dead subscriptions are legal (cassettes mock only the

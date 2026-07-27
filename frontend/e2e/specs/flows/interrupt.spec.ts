@@ -106,8 +106,6 @@ test.describe('flow interrupt', { tag: '@flows' }, () => {
 
             await page.getByRole('button', { name: 'Submit' }).click();
 
-            // Exact, not a subset: an empty `resourceIds` on the wire means "detach every
-            // resource", so the argument has to be absent rather than sent empty.
             expect((await request).postDataJSON().variables).toEqual({
                 flowId: '5',
                 input: 'follow up on the open port',

@@ -38,6 +38,9 @@ test.describe('flow report', { tag: '@flows' }, () => {
         const opened = await popup;
 
         expect(new URL(opened.url()).pathname).toBe('/flows/5/report');
+        // This tab is mocked only because the fixture re-arms the route on every page the context
+        // opens; without that it talks to the preview proxy and the report never arrives.
+        await expect(opened.getByRole('heading', { name: /E2E Alpha/ })).toBeVisible();
         await opened.close();
         expectCleanPage(pageErrorLog);
     });

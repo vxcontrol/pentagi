@@ -71,8 +71,10 @@ test.describe('flow assistants', { tag: '@flows' }, () => {
             await page.getByRole('option', { name: 'Create new assistant' }).click();
 
             const composer = page.getByPlaceholder('Type a message to create a new assistant...');
+            const picker = page.getByRole('button', { name: 'Select assistant' });
 
             await expect(composer).toBeVisible();
+            await expect(picker).toHaveText('New');
             await composer.fill('plan the recon');
 
             // A brand-new assistant inherits no provider. The only one on offer is also the one the
@@ -91,6 +93,10 @@ test.describe('flow assistants', { tag: '@flows' }, () => {
                 modelProvider: PROVIDER.name,
                 useAgents: false,
             });
+
+            // `Create new assistant` leaves the picker on an explicit "none" that the
+            // fall-back-to-first selection never overrides — only the create response does.
+            await expect(picker).toHaveText(/1$/);
 
             await openPicker(page);
             await expect(page.getByRole('option', { name: new RegExp(CREATED_ASSISTANT.title) })).toBeVisible();
