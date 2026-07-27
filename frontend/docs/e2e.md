@@ -104,8 +104,15 @@ Key conventions:
   a cassette entry or teardown fails. An unmatched _subscription_ is legal (a flow
   page opens ~15 and a cassette mocks only the ones it cares about): it gets ack'd
   silence, so a typo'd subscription key surfaces as a UI timeout, with the missed
-  operations in the `unmatched-subscriptions` report attachment. Either way the
-  tier is hermetic — the WebSocket is routed too, so nothing reaches a real backend.
+  operations in the `unmatched-subscriptions` report attachment. Either way nothing
+  reaches a real backend: the WebSocket is routed too, and the HTTP route is re-armed
+  on every page the context opens, so a popup (the report tabs) is mocked like the
+  page that opened it — Playwright does not inherit a page's routes into its popups.
+- **Downloads are the one hole in that.** The browser performs an `<a download>`
+  transfer outside the page, so no route — page- or context-scoped — is ever offered
+  it: it goes to the `vite preview` proxy and out to whatever `VITE_API_URL` names. A
+  mock-tier spec must therefore never start one — assert the anchor's `href`/`download`
+  (see `specs/crud/resources.spec.ts`) and leave the bytes to `specs/real/**`.
 - Assert errors via `pageerror`/`unhandledrejection` (`expectCleanPage`): the
   production bundle strips app console output, so console-based asserts are
   meaningless on the mock tier.
