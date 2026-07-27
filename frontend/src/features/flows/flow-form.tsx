@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRef } from 'react';
-import { useWatch } from 'react-hook-form';
+import { useController } from 'react-hook-form';
 import { z } from 'zod';
 
 import type { UserResourceFragmentFragment } from '@/graphql/types';
@@ -164,7 +164,10 @@ export function FlowForm({
         setValue,
     } = form;
 
-    const resourceIds = useWatch({ control, name: 'resourceIds' });
+    // useController registers the field; with useWatch alone `resetField('resourceIds')` is a no-op.
+    const {
+        field: { value: resourceIds },
+    } = useController({ control, name: 'resourceIds' });
 
     const updateResourceIds = useCallback(
         (updater: ((current: string[]) => string[]) | Array<number | string>) => {
