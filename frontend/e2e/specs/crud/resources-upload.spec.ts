@@ -16,18 +16,6 @@ const textFile = (name: string, body: string) => ({
     name,
 });
 
-const uploadRequests = (page: Page): string[] => {
-    const seen: string[] = [];
-
-    page.on('request', (request) => {
-        if (request.method() === 'POST' && new URL(request.url()).pathname === UPLOAD_ENDPOINT) {
-            seen.push(request.url());
-        }
-    });
-
-    return seen;
-};
-
 test.describe('resources upload', { tag: '@crud' }, () => {
     test.describe('accepted', () => {
         test.use({
@@ -80,19 +68,32 @@ test.describe('resources upload', { tag: '@crud' }, () => {
         });
     });
 
-    test.describe('rejected before the wire', () => {
-        test.use({ cassette: resourcesCassette() });
+    test.describe('a zero-byte file', () => {
+        test.use({
+            cassette: resourcesCassette({
+                rest: {
+                    'POST /api/v1/resources/': [
+                        { body: { data: { items: [UPLOADED_RESOURCE], total: 1 }, status: 'success' } },
+                    ],
+                },
+            }),
+        });
 
-        test('an empty file never becomes a request', async ({ page, pageErrorLog }) => {
+        // The Go handler bounds a part only from above (UploadResources rejects fh.Size over the cap,
+        // never a zero one), so refusing an empty file here would make `.gitkeep` unuploadable through
+        // the UI while the API accepts it.
+        test('reaches the wire like any other', async ({ page, pageErrorLog }) => {
             await page.goto('/resources');
             await expect(page.getByRole('treeitem', { name: /notes\.txt/ })).toBeVisible();
 
-            const attempts = uploadRequests(page);
+            const posted = page.waitForRequest(
+                (request) => request.method() === 'POST' && new URL(request.url()).pathname === UPLOAD_ENDPOINT,
+            );
 
             await pickFiles(page, [textFile('hollow.txt', '')]);
 
-            await expect(page.getByText('is empty')).toBeVisible();
-            expect(attempts, 'the guard runs before the upload is built').toEqual([]);
+            expect((await posted).postData() ?? '').toContain('filename="hollow.txt"');
+            await expect(page.getByText('is empty')).toHaveCount(0);
             expectCleanPage(pageErrorLog);
         });
     });
@@ -103,8 +104,13 @@ test.describe('resources upload', { tag: '@crud' }, () => {
                 rest: {
                     'POST /api/v1/resources/': [
                         {
-                            // No `msg`: the client's own 409 copy is only reached when the server sends none.
-                            body: { code: 'Resources.AlreadyExists', status: 'error' },
+                            // The Go response layer writes `msg` on every error, so this copy — not the
+                            // client's own 409 fallback — is what an operator reads.
+                            body: {
+                                code: 'Resources.AlreadyExists',
+                                msg: 'resource already exists',
+                                status: 'error',
+                            },
                             status: 409,
                         },
                     ],
@@ -119,7 +125,7 @@ test.describe('resources upload', { tag: '@crud' }, () => {
             await pickFiles(page, [textFile('notes.txt', 'same name, new bytes')]);
 
             await expect(page.getByText('Upload failed')).toBeVisible();
-            await expect(page.getByText(/already exists/i)).toBeVisible();
+            await expect(page.getByText('resource already exists', { exact: true })).toBeVisible();
 
             expect(pageErrorLog.pageErrors, 'no uncaught page errors').toEqual([]);
             expect(pageErrorLog.consoleErrors.filter((text) => !text.includes('409'))).toEqual([]);

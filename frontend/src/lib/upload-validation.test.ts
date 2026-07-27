@@ -97,16 +97,16 @@ describe('validateUploadBatch', () => {
         );
     });
 
-    it('rejects 0-byte files by default', () => {
-        const files = [makeFile('ok.txt', 1 * MB), makeFile('empty.txt', 0)];
+    it('accepts 0-byte files alongside other files', () => {
+        const files = [makeFile('ok.txt', 1 * MB), makeFile('.gitkeep', 0)];
 
-        expect(validateUploadBatch(files, DEFAULT_LIMITS)).toBe('File "empty.txt" is empty');
+        expect(validateUploadBatch(files, DEFAULT_LIMITS)).toBeNull();
     });
 
-    it('lets 0-byte files through when rejectEmpty is disabled', () => {
-        const files = [makeFile('ok.txt', 1 * MB), makeFile('empty.txt', 0)];
+    it('accepts a batch made only of 0-byte files', () => {
+        const files = [makeFile('.gitkeep', 0), makeFile('__init__.py', 0)];
 
-        expect(validateUploadBatch(files, { ...DEFAULT_LIMITS, rejectEmpty: false })).toBeNull();
+        expect(validateUploadBatch(files, DEFAULT_LIMITS)).toBeNull();
     });
 
     it('reports the first violation when multiple rules would fail', () => {

@@ -24,9 +24,11 @@ const upload = (request: APIRequestContext, files: Array<{ body: string; name: s
     });
 
 test.describe('resources upload limits at the endpoint', { tag: '@real' }, () => {
-    // The browser-side guard is one DevTools click from gone, so every rule it enforces has to hold
-    // when the request is built by hand.
-    test('refuses what the client-side guard would have refused', async ({ request }) => {
+    // The browser-side guard is one DevTools click from gone, so what matters is the set of rules the
+    // endpoint itself keeps — a smaller set than the client's, as the empty-file case below records.
+    // The size caps (300 MB per file, 2 GB per batch) are left to the backend's own tests: proving
+    // them here means pushing gigabytes through the stand.
+    test('caps a batch at 1000 files and writes nothing from an over-cap batch', async ({ request }) => {
         const stamp = Date.now();
         const many = Array.from({ length: 1001 }, (_, index) => ({
             body: 'x',
@@ -64,6 +66,28 @@ test.describe('resources upload limits at the endpoint', { tag: '@real' }, () =>
         const deleted = await request.delete(`/api/v1/resources/?${cleanup}`);
 
         expect(deleted.status(), 'the seeded batch is removed again').toBe(200);
+    });
+
+    // What licenses the client to send a 0-byte file at all: the endpoint stores it. A client-side
+    // refusal here would only have hidden an upload the API accepts.
+    test('stores an empty file rather than refusing it', async ({ request }) => {
+        const name = `e2e-hollow-${Date.now()}.txt`;
+        const accepted = await upload(request, [{ body: '', name }]);
+
+        expect(accepted.status(), 'a 0-byte part is not a server-side error').toBe(200);
+
+        const [stored] = (await accepted.json()).data.items ?? [];
+
+        expect(stored?.path, 'it is created, not silently dropped').toBe(name);
+        expect(stored?.size, 'as a zero-byte resource').toBe(0);
+
+        await request.delete('/api/v1/resources/', { params: { 'paths[]': name } });
+    });
+
+    test('refuses a batch that carries no file part at all', async ({ request }) => {
+        const nothing = await upload(request, []);
+
+        expect(nothing.status(), 'at least one file is required').toBe(400);
     });
 
     // The server sanitises rather than rejects, which is a legitimate choice — what must hold is that
