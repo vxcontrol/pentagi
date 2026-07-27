@@ -1943,7 +1943,7 @@ PROXY_URL=http://your-proxy:8080
 
 #### Custom Provider Config and Models (advanced)
 
-By default the Bedrock provider uses a per-agent config and model catalog compiled into the binary. Two optional paths override them without rebuilding:
+By default the Bedrock provider uses a per-agent config and model catalog compiled into the binary. One optional path overrides them without rebuilding:
 
 - `BEDROCK_CONFIG_PATH` — a YAML file (same shape as the other provider configs) that **replaces** the built-in per-agent model/price assignments. See [`examples/configs/bedrock-glm-flash.provider.yml`](examples/configs/bedrock-glm-flash.provider.yml).
 
@@ -1952,9 +1952,9 @@ This is useful to expose a Bedrock model newer than the compiled-in catalog — 
 With Docker Compose, set the host-side mount source and the in-container path together:
 
 ```bash
-# host files mounted into the container
+# host file mounted into the container at /opt/pentagi/conf/bedrock.provider.yml
 PENTAGI_BEDROCK_CONFIG_PATH=./examples/configs/bedrock-glm-flash.provider.yml
-# tell the backend to read the mounted files
+# tell the backend to read the mounted file
 BEDROCK_CONFIG_PATH=/opt/pentagi/conf/bedrock.provider.yml
 ```
 
