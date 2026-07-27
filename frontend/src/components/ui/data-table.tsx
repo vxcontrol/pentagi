@@ -283,6 +283,26 @@ export function cycleColumnSort<TData, TValue = unknown>(column: Column<TData, T
     column.toggleSorting(false);
 }
 
+function columnAriaSort<TData, TValue = unknown>(
+    column: Column<TData, TValue>,
+): 'ascending' | 'descending' | 'none' | undefined {
+    if (!column.getCanSort()) {
+        return undefined;
+    }
+
+    const sorted = column.getIsSorted();
+
+    if (sorted === 'asc') {
+        return 'ascending';
+    }
+
+    if (sorted === 'desc') {
+        return 'descending';
+    }
+
+    return 'none';
+}
+
 function DataTable<TData, TValue = unknown>({
     columns,
     columnVisibility: externalColumnVisibility,
@@ -764,6 +784,7 @@ function DataTable<TData, TValue = unknown>({
                             >
                                 {headerGroup.headers.map((header) => (
                                     <TableHead
+                                        aria-sort={columnAriaSort(header.column)}
                                         className={cn('truncate', header.column.columnDef.meta?.headerClassName)}
                                         key={header.id}
                                         style={
