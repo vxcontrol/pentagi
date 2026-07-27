@@ -1,10 +1,11 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { toast } from 'sonner';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ProviderType } from '@/graphql/types';
 import { routes } from '@/lib/routes';
 
-const { navigate } = vi.hoisted(() => ({ navigate: vi.fn() }));
+const { mutate, navigate } = vi.hoisted(() => ({ mutate: vi.fn(), navigate: vi.fn() }));
 
 const state = vi.hoisted(() => ({ params: new URLSearchParams(), providerId: 'new' }));
 
@@ -71,7 +72,7 @@ const settingsProviders = {
 const queryResult = { data: { settingsProviders }, error: undefined as Error | undefined, loading: false };
 
 vi.mock('@apollo/client/react', () => ({
-    useMutation: () => [vi.fn(), {}],
+    useMutation: () => [mutate, {}],
     useQuery: () => queryResult,
 }));
 
@@ -93,10 +94,20 @@ vi.mock('@/hooks/use-breakpoint', () => ({
 // whole family so the guard effect under test renders without that scaffolding.
 vi.mock('@/components/layouts/app/app-header', () => {
     const Pass = ({ children }: { children?: React.ReactNode }) => <div>{children}</div>;
+    const Action = ({
+        icon: _icon,
+        label,
+        loading: _loading,
+        ...props
+    }: React.ComponentProps<'button'> & {
+        icon?: React.ReactNode;
+        label?: React.ReactNode;
+        loading?: boolean;
+    }) => <button {...props}>{label}</button>;
 
     return {
         AppHeader: Pass,
-        AppHeaderAction: Pass,
+        AppHeaderAction: Action,
         AppHeaderActions: Pass,
         AppHeaderContent: Pass,
         AppHeaderTitle: Pass,
@@ -108,7 +119,9 @@ vi.mock('sonner', () => ({ toast: { error: vi.fn(), info: vi.fn(), success: vi.f
 import SettingsProvider from './settings-provider';
 
 beforeEach(() => {
+    mutate.mockClear();
     navigate.mockClear();
+    vi.mocked(toast.error).mockClear();
     setSearch('');
     state.providerId = 'new';
     queryResult.data = { settingsProviders };
@@ -222,5 +235,56 @@ describe('SettingsProvider create-form type guards', () => {
         rerender(<SettingsProvider />);
 
         expect((screen.getByPlaceholderText('Enter provider name') as HTMLInputElement).value).toBe('My Unsaved Edit');
+    });
+});
+
+describe('SettingsProvider save feedback', () => {
+    const toggleAgent = () => fireEvent.click(screen.getByRole('button', { name: /Simple/ }));
+
+    const saveButton = () => screen.getByRole('button', { name: 'Create' });
+
+    const renderCreateForm = () => {
+        setSearch('type=openai');
+        render(<SettingsProvider />);
+        fireEvent.change(screen.getByPlaceholderText('Enter provider name'), { target: { value: 'My Provider' } });
+    };
+
+    const typeInvalidExtraBody = () => {
+        toggleAgent();
+        fireEvent.change(screen.getByLabelText('Extra Body (JSON)'), { target: { value: '{ nope' } });
+        toggleAgent();
+    };
+
+    it('toasts an agent-level error raised inside a collapsed panel', async () => {
+        renderCreateForm();
+        typeInvalidExtraBody();
+
+        expect(screen.queryByLabelText('Extra Body (JSON)')).not.toBeInTheDocument();
+
+        fireEvent.click(saveButton());
+
+        await waitFor(() => expect(toast.error).toHaveBeenCalledTimes(1));
+        expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('Must be a valid JSON object'));
+        expect(mutate).not.toHaveBeenCalled();
+    });
+
+    it('toasts again when the same invalid form is submitted twice', async () => {
+        renderCreateForm();
+        typeInvalidExtraBody();
+
+        fireEvent.click(saveButton());
+        await waitFor(() => expect(toast.error).toHaveBeenCalledTimes(1));
+
+        fireEvent.click(saveButton());
+        await waitFor(() => expect(toast.error).toHaveBeenCalledTimes(2));
+    });
+
+    it('runs the create mutation when the form is valid', async () => {
+        renderCreateForm();
+
+        fireEvent.click(saveButton());
+
+        await waitFor(() => expect(mutate).toHaveBeenCalledTimes(1));
+        expect(toast.error).not.toHaveBeenCalled();
     });
 });

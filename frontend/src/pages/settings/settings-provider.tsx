@@ -12,9 +12,10 @@ import {
     Trash2,
     XCircle,
 } from 'lucide-react';
-import { type ComponentProps, useEffect, useMemo, useRef, useState } from 'react';
+import { type ComponentProps, type FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import {
     type Control,
+    type FieldErrors,
     type FieldPath,
     type FieldValues,
     useController,
@@ -1535,6 +1536,18 @@ function SettingsProvider() {
         }
     };
 
+    const handleInvalidSubmit = (errors: FieldErrors<FormInput>) => {
+        setSubmitError(
+            `Please fix the following validation errors:\n\n${formatFormErrors(errors as Record<string, unknown>)}`,
+        );
+    };
+
+    const handleFormEvent = async (event: FormEvent<HTMLFormElement>) => {
+        setSubmitError(null);
+
+        await handleFormSubmit(handleSubmit, handleInvalidSubmit)(event);
+    };
+
     const handleDelete = () => {
         if (isNew || !providerId) {
             return;
@@ -2028,7 +2041,7 @@ function SettingsProvider() {
                     className="flex min-h-0 flex-1 flex-col"
                     id="provider-form"
                     noValidate
-                    onSubmit={handleFormSubmit(handleSubmit)}
+                    onSubmit={handleFormEvent}
                 >
                     {isDesktop ? (
                         <DetailSplitLayout
