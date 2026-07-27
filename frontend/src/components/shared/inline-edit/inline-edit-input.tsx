@@ -13,7 +13,10 @@ interface InlineEditInputProps {
      * so focus must be requested explicitly.
      */
     autoFocus?: boolean;
-    /** Disable the Save + Cancel buttons while a mutation is in flight. The input stays editable. */
+    /**
+     * Inert Save + Cancel while a mutation is in flight — both the buttons and
+     * the `Enter`/`Escape` shortcuts. The input itself stays editable.
+     */
     busy?: boolean;
     /** Optional className passed through to the outer `<InputGroup>`. */
     className?: string;
@@ -66,6 +69,10 @@ export function InlineEditInput({
     placeholder,
 }: InlineEditInputProps) {
     const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+        if (busy) {
+            return;
+        }
+
         if (event.key === 'Enter') {
             event.preventDefault();
             onSave();
