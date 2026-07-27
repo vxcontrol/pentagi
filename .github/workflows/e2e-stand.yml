@@ -82,6 +82,7 @@ jobs:
       # user (in locator text) on a failing run, so redact the secrets before the
       # public-repo upload — GitHub masks secrets in logs, never in artifacts.
       - name: Redact secrets from report
+        id: redact
         if: always()
         working-directory: frontend
         run: |
@@ -110,7 +111,7 @@ jobs:
           E2E_PASSWORD: ${{ secrets.E2E_STAND_PASSWORD }}
 
       - name: Upload report
-        if: always()
+        if: always() && steps.redact.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
           name: e2e-stand-report
