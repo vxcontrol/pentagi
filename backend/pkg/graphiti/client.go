@@ -45,6 +45,13 @@ type Client struct {
 	timeout time.Duration
 }
 
+// The verdict is permanent for the process: on failure the caller keeps a disabled client for its whole
+// lifetime, so one timeout against a slow endpoint must not decide it.
+const (
+	healthCheckAttempts = 3
+	healthCheckBackoff  = 2 * time.Second
+)
+
 // NewClient creates a new Graphiti client wrapper
 func NewClient(url string, timeout time.Duration, enabled bool) (*Client, error) {
 	if !enabled {
@@ -53,9 +60,17 @@ func NewClient(url string, timeout time.Duration, enabled bool) (*Client, error)
 
 	client := graphiti.NewClient(url, graphiti.WithTimeout(timeout))
 
-	_, err := client.HealthCheck()
-	if err != nil {
-		return nil, fmt.Errorf("graphiti health check failed: %w", err)
+	var err error
+	for attempt := 1; ; attempt++ {
+		if _, err = client.HealthCheck(); err == nil {
+			break
+		}
+
+		if attempt == healthCheckAttempts {
+			return nil, fmt.Errorf("graphiti health check failed after %d attempts: %w", attempt, err)
+		}
+
+		time.Sleep(healthCheckBackoff)
 	}
 
 	return &Client{
