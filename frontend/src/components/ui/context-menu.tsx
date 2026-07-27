@@ -214,6 +214,8 @@ function ContextMenuTrigger({ ...props }: React.ComponentProps<typeof ContextMen
     return (
         <ContextMenuPrimitive.Trigger
             data-slot="context-menu-trigger"
+            // Radix renders this as a plain span, which cannot take focus back from a closing dialog.
+            tabIndex={-1}
             {...props}
         />
     );
