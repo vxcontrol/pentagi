@@ -861,6 +861,32 @@ describe('DataTable — multi-column search', () => {
         expect(screen.getByText('Charlie')).toBeInTheDocument();
     });
 
+    it('folds diacritics so an unaccented query matches an accented cell', async () => {
+        const user = userEvent.setup();
+        const accentedRows: MultiRow[] = [
+            { id: 'a', name: 'Café Runner', role: 'admin' },
+            { id: 'b', name: 'Plain', role: 'user' },
+        ];
+
+        render(
+            <DataTable<MultiRow>
+                columns={MULTI_COLUMNS}
+                data={accentedRows}
+                filterPlaceholder="Filter..."
+            />,
+            { wrapper: Wrapper },
+        );
+
+        await user.type(screen.getByPlaceholderText('Filter...'), 'cafe');
+
+        // The list filter shares matching semantics with detail-navigation's
+        // Prev/Next subset — if this stops matching, the two have diverged.
+        await waitFor(() => {
+            expect(screen.queryByText('Plain')).not.toBeInTheDocument();
+        });
+        expect(screen.getByText('Café Runner')).toBeInTheDocument();
+    });
+
     it('narrows the search when the picker disables a candidate', async () => {
         const user = userEvent.setup();
         render(

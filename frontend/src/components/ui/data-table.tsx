@@ -59,6 +59,7 @@ import { useLatestRef } from '@/hooks/use-latest-ref';
 import { usePageStorageKeys } from '@/hooks/use-page-storage-keys';
 import { useWindowVirtualList } from '@/hooks/use-window-virtual-list';
 import { migrateLegacyTableState, updateTableState } from '@/lib/table-state';
+import { matchesTextFilter } from '@/lib/text-filter';
 import { cn } from '@/lib/utils';
 
 /**
@@ -578,10 +579,9 @@ function DataTable<TData, TValue = unknown>({
         [handlePaginationChange],
     );
 
-    // Case-insensitive substring predicate that consults the composite
-    // filter for both "what to look for" and "where to look". Returning
-    // `true` for the empty query keeps the default "no filter = all rows"
-    // behaviour identical to TanStack's built-in `includesString`.
+    // Matching is delegated to the shared text-filter because the same `?q=`
+    // also drives detail-navigation's Prev/Next subset, and the two must agree
+    // on what matches.
     const globalFilterFn = useCallback<FilterFn<TData>>((row, columnId, filter: DataTableGlobalFilter) => {
         if (!filter.query) {
             return true;
@@ -593,9 +593,7 @@ function DataTable<TData, TValue = unknown>({
 
         const value = row.getValue(columnId);
 
-        return String(value ?? '')
-            .toLowerCase()
-            .includes(filter.query.toLowerCase());
+        return matchesTextFilter(String(value ?? ''), filter.query);
     }, []);
 
     const table = useReactTable({

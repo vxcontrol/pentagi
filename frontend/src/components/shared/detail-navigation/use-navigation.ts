@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 
-import { createTextMatcher } from './text-filter';
+import { createTextMatcher } from '@/lib/text-filter';
 
 interface NavigationInput<T> {
     currentId: null | string | undefined;
