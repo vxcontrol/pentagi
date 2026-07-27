@@ -8,13 +8,14 @@ const SCRIPT = join(__dirname, 'review-sandbox.sh');
 
 let sandboxRoot = '';
 
-// The script derives its root from TMPDIR, so a per-test TMPDIR keeps every case inside its own
-// throwaway tree — a run must never be able to name a real path.
+// TMPDIR alone does NOT contain this script: `clean --all` also sweeps a fallback root derived from
+// the script's own location, so a bare `pnpm test` used to rm -rf real directories in the repo's
+// parent. PENTAGI_SANDBOX_ROOT moves both roots, which is what keeps a run inside its own tree.
 const run = (...args: string[]) => {
     try {
         const stdout = execFileSync(SCRIPT, args, {
             encoding: 'utf8',
-            env: { ...process.env, TMPDIR: sandboxRoot },
+            env: { ...process.env, PENTAGI_SANDBOX_ROOT: sandboxRoot, TMPDIR: sandboxRoot },
             stdio: ['ignore', 'pipe', 'pipe'],
         });
 
@@ -25,6 +26,11 @@ const run = (...args: string[]) => {
         return { code: failure.status, stdout: failure.stdout.trim() };
     }
 };
+
+// -h, because the checkout contains symlinks and touch would otherwise age their targets while the
+// links themselves keep a current mtime — which is what the sweep reads.
+const backdate = (sandbox: string) =>
+    execFileSync('find', [sandbox, '-exec', 'touch', '-h', '-t', '202001010000', '{}', '+']);
 
 beforeEach(() => {
     sandboxRoot = mkdtempSync(join(tmpdir(), 'sandbox-test-'));
@@ -75,6 +81,22 @@ describe('review-sandbox clean — containment', () => {
 });
 
 describe('review-sandbox create — where the sandbox lands', () => {
+    // `clean --all` also sweeps a root derived from the script's own location, which no TMPDIR can
+    // move: before PENTAGI_SANDBOX_ROOT governed it too, running this very file deleted real stale
+    // sandboxes from the repo's parent directory on the developer's machine.
+    it('sweeps no root outside the one it was given', () => {
+        const swept = run('clean', '--all')
+            .stdout.split('\n')
+            .filter((line) => line.startsWith('swept '))
+            .map((line) => line.slice('swept '.length));
+
+        expect(swept.length, 'clean --all names every root it sweeps').toBeGreaterThan(0);
+
+        for (const root of swept) {
+            expect(root.startsWith(sandboxRoot), `${root} is outside ${sandboxRoot}`).toBe(true);
+        }
+    });
+
     it('honours PENTAGI_SANDBOX_ROOT, the escape hatch for a $TMPDIR on another filesystem', () => {
         const override = mkdtempSync(join(tmpdir(), 'override-root-'));
         const sandbox = execFileSync(SCRIPT, ['create'], {
@@ -107,8 +129,20 @@ describe('review-sandbox clean — the sweep', () => {
         expect(run('clean', '--all').code).toBe(0);
         expect(existsSync(fresh), 'a live sandbox survives the sweep').toBe(true);
 
-        execFileSync('touch', ['-t', '202001010000', fresh]);
+        backdate(fresh);
         expect(run('clean', '--all').code).toBe(0);
         expect(existsSync(fresh), 'a stale sandbox is swept').toBe(false);
+    });
+
+    it('keeps a sandbox an agent is still working in, however deep the edit sits', () => {
+        const { stdout: busy } = run('create');
+
+        backdate(busy);
+        writeFileSync(join(busy, 'frontend', 'src', 'probe.tsx'), 'export const probe = 1;\n');
+
+        expect(run('clean', '--all').code).toBe(0);
+        expect(existsSync(busy), 'a live sandbox survives the sweep').toBe(true);
+
+        expect(run('clean', busy).code).toBe(0);
     });
 });

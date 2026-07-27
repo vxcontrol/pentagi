@@ -25,7 +25,11 @@ SANDBOX_ROOT="${PENTAGI_SANDBOX_ROOT:-${TMPDIR:-/tmp}}/pentagi-review-sandboxes"
 # A hardlink cannot cross filesystems, so --with-deps is unusable when $TMPDIR is its own mount
 # (tmpfs /tmp, a separate /home, a container volume): `cp -al` fails outright and no sandbox is
 # built. This sibling of the repo is on the repo's filesystem by construction.
-FALLBACK_ROOT="$(dirname "$REPO_ROOT")/.pentagi-review-sandboxes"
+# Under the escape hatch BOTH roots move: `clean --all` sweeps this one too, so a caller that cannot
+# afford a sweep of the repo's parent (the unit test, which otherwise rm -rf's real directories on the
+# developer's machine) needs a single variable that contains every path this script may delete.
+FALLBACK_ROOT="${PENTAGI_SANDBOX_ROOT:+${PENTAGI_SANDBOX_ROOT}/.pentagi-review-sandboxes}"
+FALLBACK_ROOT="${FALLBACK_ROOT:-$(dirname "$REPO_ROOT")/.pentagi-review-sandboxes}"
 
 # Pick a root node_modules can actually be hardlinked into: probe with a real link, fall back to
 # the repo's own filesystem when the probe hits EXDEV.
@@ -106,6 +110,13 @@ create() {
 # every agent on the host, so a bare `clean` used to take out a concurrent agent's live sandbox.
 STALE_MINUTES=120
 
+# A worktree directory's own mtime moves only when a top-level entry is added or removed, so it dates
+# the sandbox's creation — an agent editing frontend/src/... for hours never refreshes it. Age the
+# sandbox by the newest write anywhere inside it instead.
+recently_touched() {
+    [[ -n "$(find "$1" -mmin "-$STALE_MINUTES" -print -quit 2>/dev/null)" ]]
+}
+
 # A strict child of either sandbox root — never a root itself, so a sibling like <root>-old and the
 # root's own path are both rejected.
 contained() {
@@ -128,9 +139,14 @@ clean() {
     case "$target" in
         --all)
             for root in "$SANDBOX_ROOT" "$FALLBACK_ROOT"; do
-                if [[ -d "$root" ]]; then
-                    find "$root" -maxdepth 1 -name 'wt-*' -mmin "+$STALE_MINUTES" -exec rm -rf {} +
-                fi
+                # The roots are derived, not passed in: naming them is how a caller — or a test —
+                # can tell where this is about to delete.
+                echo "swept $root"
+                for path in "$root"/wt-*; do
+                    if [[ -d "$path" ]] && ! recently_touched "$path"; then
+                        rm -rf "$path"
+                    fi
+                done
             done
             ;;
         '')
