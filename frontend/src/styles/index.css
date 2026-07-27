@@ -673,6 +673,19 @@
     font-size: 0.875em;
 }
 
+.tiptap-content .ProseMirror pre .hljs-comment,
+.tiptap-content .ProseMirror pre .hljs-quote {
+    color: #949ba7;
+}
+
+.tiptap-content .ProseMirror pre .hljs-section,
+.tiptap-content .ProseMirror pre .hljs-name,
+.tiptap-content .ProseMirror pre .hljs-selector-tag,
+.tiptap-content .ProseMirror pre .hljs-deletion,
+.tiptap-content .ProseMirror pre .hljs-subst {
+    color: #e27880;
+}
+
 .tiptap-content .ProseMirror blockquote {
     border-left: 3px solid var(--border);
     padding-left: 1rem;

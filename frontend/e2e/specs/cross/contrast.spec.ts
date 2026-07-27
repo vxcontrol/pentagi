@@ -15,9 +15,12 @@ import {
     measureContrastAt,
     mountContrastProbes,
     mountEditorProbes,
+    mountFenceProbes,
 } from '../../helpers/contrast.ts';
 import { flowsCassette } from '../../mocks/cassettes/flows.ts';
 import { PROMPT_DETAIL_AGENT, promptDetailCassette } from '../../mocks/cassettes/settings-prompts.ts';
+
+const HLJS_TOKENS = ['hljs-comment', 'hljs-section'];
 
 const EDITOR_PROBES = {
     'editor-accent': { tag: 'a' },
@@ -158,6 +161,14 @@ for (const theme of THEMES) {
             // The atom-one-dark stylesheet ships with the editor chunk. Measuring before it lands would
             // put the probes on the page ground and pass on a surface no user ever sees.
             await expect(fence).toHaveCSS('background-color', 'rgb(40, 44, 52)');
+
+            await mountFenceProbes(page, HLJS_TOKENS);
+
+            for (const token of HLJS_TOKENS) {
+                expect
+                    .soft(await measureContrast(page, token), `${token} inside a code block (${theme})`)
+                    .toBeGreaterThanOrEqual(AA_NORMAL);
+            }
 
             for (const token of ['variable', 'tag'] as const) {
                 await expect(fence.locator(`.template-${token}`).first()).toBeVisible();
