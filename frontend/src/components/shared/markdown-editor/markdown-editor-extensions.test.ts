@@ -1,4 +1,5 @@
 import { Editor } from '@tiptap/core';
+import { OrderedList, TaskList } from '@tiptap/extension-list';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import { createMarkdownExtensions } from './markdown-editor-extensions';
@@ -487,5 +488,106 @@ describe('multi-paragraph table cell does not persist a raw control byte on save
         expect(md).not.toContain('\u001f');
         expect(md).toContain('one two');
         expect(md).toContain('z');
+    });
+});
+
+type MarkdownTokenizerShape = {
+    start?: (src: string) => number;
+    tokenize: (src: string, tokens: unknown[], lexer: unknown) => unknown;
+};
+
+describe('list tokenizers are guarded against the upstream per-block full-source split', () => {
+    const extensionOf = (name: string) => {
+        const editor = new Editor({ content: '', extensions: createMarkdownExtensions() });
+        const extension = editor.extensionManager.extensions.find((e) => e.name === name);
+
+        editor.destroy();
+
+        return extension as
+            | undefined
+            | {
+                  config: { markdownTokenizer?: MarkdownTokenizerShape };
+                  parent?: { config: { markdownTokenizer?: MarkdownTokenizerShape } };
+              };
+    };
+
+    const tokenizerOf = (name: string) => extensionOf(name)?.config.markdownTokenizer;
+
+    it.each([
+        ['orderedList', OrderedList],
+        ['taskList', TaskList],
+    ])('%s tokenize is wrapped, not the upstream function', (name, upstream) => {
+        const ours = tokenizerOf(name);
+        const theirs = (upstream.config as { markdownTokenizer?: { tokenize: unknown } }).markdownTokenizer;
+
+        expect(theirs?.tokenize).toBeTypeOf('function');
+        expect(ours?.tokenize).toBeTypeOf('function');
+        // An unwrapped tokenizer splits the whole remaining document at every block boundary — O(n²) loads.
+        expect(ours?.tokenize).not.toBe(theirs?.tokenize);
+    });
+
+    // The guard must stay at least as wide as ORDERED_LIST_MARKER_PATTERN
+    // (`\d+|[ivxlcdmIVXLCDM]+|[a-zA-Z]{1,2}`); a marker form it rejects is silently demoted to a paragraph.
+    it.each([
+        ['single digit', '1. alpha\n2. beta'],
+        ['multi digit', '10. alpha\n11. beta'],
+        ['lower roman', 'i. alpha\nii. beta'],
+        ['upper roman', 'IX. alpha\nX. beta'],
+        ['single alpha', 'a. alpha\nb. beta'],
+        ['two-letter alpha', 'aa. alpha\nab. beta'],
+        ['two-letter upper alpha', 'AB. alpha\nAC. beta'],
+    ])('ordered list with a %s marker survives the guard', (_name, md) => {
+        // Byte equality alone is blind here: a demoted paragraph holding the same two lines re-serialises
+        // to identical bytes, so the node type is the only assertion that can see the marker being rejected.
+        expect(structuralCounts(roundTrip(md)).orderedList).toBe(1);
+        expect(roundTrip(md)).toBe(md);
+    });
+
+    // Upstream normalises `)` to `.` and drops a leading indent (verified identical without the guard), so
+    // these two assert only what the guard governs: the block is still a list, not demoted to a paragraph.
+    it.each([
+        ['paren delimiter', 'aa) alpha\nab) beta'],
+        ['indented', '  1. alpha\n  2. beta'],
+    ])('ordered list with a %s marker is not demoted to a paragraph', (_name, md) => {
+        expect(structuralCounts(roundTrip(md)).orderedList).toBe(1);
+    });
+
+    // Identity alone would also hold for a pass-through wrapper, which would silently restore the O(n^2)
+    // load. This is the assertion that the short-circuit itself is wired.
+    it.each(['orderedList', 'taskList'])(
+        '%s never reaches upstream tokenize when the source does not open a list',
+        (name) => {
+            const extension = extensionOf(name);
+            const upstream = extension?.parent?.config.markdownTokenizer;
+            const wrapped = extension?.config.markdownTokenizer;
+
+            expect(upstream?.tokenize).toBeTypeOf('function');
+
+            const real = upstream!.tokenize;
+            let calls = 0;
+
+            upstream!.tokenize = (...args: Parameters<typeof real>) => {
+                calls += 1;
+
+                return real(...args);
+            };
+
+            try {
+                expect(wrapped?.tokenize('plain paragraph line\n'.repeat(500), [], undefined)).toBeUndefined();
+                expect(calls).toBe(0);
+            } finally {
+                upstream!.tokenize = real;
+            }
+        },
+    );
+
+    it.each([
+        ['dash unchecked', '- [ ] open'],
+        ['dash checked', '- [x] done'],
+        ['asterisk', '* [ ] open'],
+        ['plus', '+ [x] done'],
+        ['upper X', '- [X] done'],
+    ])('task list with a %s marker survives the guard', (_name, md) => {
+        expect(structuralCounts(roundTrip(md)).taskList).toBe(1);
     });
 });

@@ -1,4 +1,5 @@
 import type {
+    AnyExtension,
     JSONContent,
     MarkdownParseHelpers,
     MarkdownParseResult,
@@ -23,6 +24,35 @@ import { VariableHighlight } from './markdown-editor-variable-highlight';
 
 const dropUnderscoreRules = (rules: { find: unknown }[]) =>
     rules.filter((rule) => !(rule.find instanceof RegExp && rule.find.source.includes('_')));
+
+type MarkdownTokenizer = {
+    start?: (src: string) => number;
+    tokenize: (src: string, tokens: unknown[], lexer: unknown) => unknown;
+};
+
+// marked runs every block extension's `tokenize` at EVERY block boundary, handing it the whole remaining
+// document, and @tiptap/extension-list's ordered/task tokenizers open with `src.split('\n')` before bailing
+// on a first line that isn't a list item — so each boundary materialises all remaining lines, O(n²).
+//
+// The gate is the tokenizer's OWN `start`, never a copy of its marker syntax: `start` is anchored and cheap,
+// and reusing it means the guard cannot drift narrower than the grammar upstream accepts. A non-zero result
+// says the block does not begin here, which is exactly when `tokenize` would have returned undefined anyway.
+const guardBlockTokenizer = <T extends AnyExtension>(extension: T): T => {
+    const original = (extension.config as { markdownTokenizer?: MarkdownTokenizer }).markdownTokenizer;
+    const start = original?.start;
+
+    if (!original || !start) {
+        return extension;
+    }
+
+    return extension.extend({
+        markdownTokenizer: {
+            ...original,
+            tokenize: (src: string, tokens: unknown[], lexer: unknown) =>
+                start(src) === 0 ? original.tokenize(src, tokens, lexer) : undefined,
+        },
+    }) as T;
+};
 
 const longestRun = (text: string, runs: RegExp): number =>
     (text.match(runs) ?? []).reduce((max, run) => Math.max(max, run.length), 0);
@@ -122,6 +152,10 @@ const TunedStarterKit = StarterKit.extend({
                 });
             }
 
+            if (extension.name === 'orderedList') {
+                return guardBlockTokenizer(extension);
+            }
+
             if (extension.name === 'paragraph') {
                 return extension.extend({
                     renderMarkdown(node: JSONContent, helpers: MarkdownRendererHelpers) {
@@ -157,7 +191,7 @@ export const createMarkdownExtensions = (placeholder?: string) => [
     TableRow,
     TableHeader,
     TableCell,
-    TaskList,
+    guardBlockTokenizer(TaskList),
     TaskItem.configure({ nested: true }),
     Image,
     VariableHighlight,
