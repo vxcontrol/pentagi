@@ -159,6 +159,7 @@ function AssistantsDropdown({
 
                 {!isDisabled && (
                     <Button
+                        aria-label={`Delete ${assistant.title}`}
                         className="text-muted-foreground hover:text-destructive absolute top-1/2 right-0.5 shrink-0 -translate-y-1/2 opacity-0 transition-opacity group-hover:opacity-100"
                         onClick={(event) => {
                             event.stopPropagation();
@@ -577,6 +578,7 @@ function FlowAssistantMessages({ className }: FlowAssistantMessagesProps) {
 
                         {!isScrolledToBottom && (
                             <Button
+                                aria-label="Scroll to latest message"
                                 className="absolute right-4 bottom-4 z-10 shadow-md hover:shadow-lg"
                                 onClick={() => scrollToEnd()}
                                 size="icon-sm"

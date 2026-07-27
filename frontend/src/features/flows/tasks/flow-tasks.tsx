@@ -153,6 +153,7 @@ function FlowTasks() {
 
                     {!isScrolledToBottom && (
                         <Button
+                            aria-label="Scroll to latest task"
                             className="absolute right-4 bottom-4 z-10 shadow-md hover:shadow-lg"
                             onClick={() => scrollToEnd()}
                             size="icon-sm"
