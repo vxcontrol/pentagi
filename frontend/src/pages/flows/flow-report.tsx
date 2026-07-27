@@ -29,13 +29,13 @@ function FlowReport() {
         setPdfError(null);
     }
 
-    const {
-        data,
-        error: queryError,
-        loading,
-    } = useQuery(FlowReportDocument, flowId ? { errorPolicy: 'all', variables: { id: flowId } } : skipToken);
+    const { data, loading } = useQuery(
+        FlowReportDocument,
+        flowId ? { errorPolicy: 'all', variables: { id: flowId } } : skipToken,
+    );
 
-    const dataReady = !loading && !queryError && !!data?.flow;
+    // Under `errorPolicy:'all'` a partial error arrives alongside a flow that loaded fine.
+    const dataReady = !loading && !!data?.flow;
 
     const reportContent = useMemo(
         () => (dataReady ? generateReport(data.tasks || [], data.flow!) : ''),
@@ -76,7 +76,7 @@ function FlowReport() {
 
     if (loading) {
         state = 'loading';
-    } else if (queryError || !data?.flow) {
+    } else if (!data?.flow) {
         state = 'error';
         errorMessage = 'Failed to load flow data';
     } else if (pdfPhase === 'error') {
