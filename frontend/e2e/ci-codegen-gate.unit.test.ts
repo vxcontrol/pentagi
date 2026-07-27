@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -23,6 +23,9 @@ const commit = (path: string, body: string, message: string) => {
 const run = (event: string, before: string, baseSha: string, headSha: string) =>
     execFileSync(SCRIPT, [event, before, baseSha, headSha], { cwd: repo, encoding: 'utf8' }).trim();
 
+const runReason = (event: string, before: string, baseSha: string, headSha: string) =>
+    spawnSync(SCRIPT, [event, before, baseSha, headSha], { cwd: repo, encoding: 'utf8' }).stderr.trim();
+
 // The PR arrives as the merge commit GitHub builds, not as the branch head — the range the gate
 // picks has to span the whole PR, not the newest push.
 beforeAll(() => {
@@ -45,8 +48,16 @@ describe('codegen freshness gate — range selection', () => {
         expect(run('pull_request', '', sha.base, sha.merge)).toBe('changed=true');
     });
 
+    // The answer alone cannot tell this branch from the diff-failed fallback below, which prints
+    // the same `changed=true`; only the reason distinguishes them.
     it('checks a force-push, where the previous head no longer resolves', () => {
-        expect(run('pull_request', '0'.repeat(40), sha.base, sha.merge)).toBe('changed=true');
+        expect(run('push', 'b'.repeat(40), '', sha.schema)).toBe('changed=true');
+        expect(runReason('push', 'b'.repeat(40), '', sha.schema)).toContain('reason=unresolvable-base');
+    });
+
+    it('checks the first push of a branch, where there is no previous head at all', () => {
+        expect(run('push', '0'.repeat(40), '', sha.schema)).toBe('changed=true');
+        expect(runReason('push', '0'.repeat(40), '', sha.schema)).toContain('reason=unresolvable-base');
     });
 
     it('keeps checking a push by its own range', () => {
@@ -55,5 +66,21 @@ describe('codegen freshness gate — range selection', () => {
 
     it('still skips a PR that touches no codegen input', () => {
         expect(run('pull_request', '', sha.schema, sha.unrelated)).toBe('changed=false');
+    });
+
+    it('checks a codegen input whose diff is larger than one pipe buffer', () => {
+        const pad = 'x'.repeat(180);
+        mkdirSync(join(repo, 'frontend', 'filler'), { recursive: true });
+
+        for (let i = 0; i < 1000; i += 1) {
+            writeFileSync(join(repo, 'frontend', 'filler', `${i}-${pad}.txt`), '');
+        }
+
+        const bulk = commit('backend/pkg/graph/schema.graphqls', 'type Query { a: Int, b: Int }\n', 'bulk');
+        const names = git('diff', '--name-only', sha.unrelated, bulk);
+
+        expect(names.split('\n')[0]).toBe('backend/pkg/graph/schema.graphqls');
+        expect(names.length).toBeGreaterThan(64 * 1024);
+        expect(run('push', sha.unrelated, '', bulk)).toBe('changed=true');
     });
 });

@@ -21,16 +21,37 @@ else
 fi
 
 # When the range can't be resolved (new branch, force-push, tag), check anyway.
+# stdout is consumed verbatim as a workflow output, so diagnostics go to stderr.
 if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ] \
     || ! git cat-file -e "$base^{commit}" 2>/dev/null; then
+    echo "reason=unresolvable-base" >&2
     echo "changed=true"
     exit 0
 fi
 
 # The generated file is in the list too: a push that edits only it would otherwise skip
 # the check, and the drift surfaces later on someone else's unrelated codegen push.
-if git diff --name-only "$base" "$HEAD_SHA" | grep -qE '^(backend/pkg/graph/schema\.graphqls|frontend/graphql-schema\.graphql|frontend/graphql-codegen\.ts|frontend/pnpm-lock\.yaml|frontend/src/graphql/types\.ts)$'; then
+INPUTS=(
+    backend/pkg/graph/schema.graphqls
+    frontend/graphql-schema.graphql
+    frontend/graphql-codegen.ts
+    frontend/pnpm-lock.yaml
+    frontend/src/graphql/types.ts
+)
+
+if ! files=$(git diff --name-only "$base" "$HEAD_SHA"); then
+    echo "reason=diff-failed" >&2
     echo "changed=true"
-else
-    echo "changed=false"
+    exit 0
 fi
+
+for input in "${INPUTS[@]}"; do
+    case $'\n'"$files"$'\n' in
+        *$'\n'"$input"$'\n'*)
+            echo "changed=true"
+            exit 0
+            ;;
+    esac
+done
+
+echo "changed=false"
