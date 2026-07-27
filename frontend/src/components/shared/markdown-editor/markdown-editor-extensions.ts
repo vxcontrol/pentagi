@@ -24,22 +24,20 @@ import { VariableHighlight } from './markdown-editor-variable-highlight';
 const dropUnderscoreRules = (rules: { find: unknown }[]) =>
     rules.filter((rule) => !(rule.find instanceof RegExp && rule.find.source.includes('_')));
 
-const longestBacktickRun = (text: string): number =>
-    (text.match(/`+/g) ?? []).reduce((max, run) => Math.max(max, run.length), 0);
+const longestRun = (text: string, runs: RegExp): number =>
+    (text.match(runs) ?? []).reduce((max, run) => Math.max(max, run.length), 0);
 
 // @tiptap/extension-code-block's renderMarkdown always emits a 3-backtick fence, so a code block whose content
 // contains a ``` line (a doc demonstrating fenced markdown — common in knowledge/prompt examples) re-parses as
 // TWO blocks on the next load: the inner fence closes the outer one. CommonMark requires the fence to be longer
-// than any backtick run inside — widen it. Otherwise identical to upstream.
+// than any backtick run inside — widen it. CommonMark also forbids a backtick in a BACKTICK fence's info
+// string while allowing one in a tilde fence's, so a language holding a backtick must ride a `~~~` fence.
+// Otherwise identical to upstream.
 const renderTunedCodeBlock = (node: JSONContent, helpers: MarkdownRendererHelpers): string => {
-    const language = node.attrs?.language || '';
-
-    if (!node.content) {
-        return `\`\`\`${language}\n\n\`\`\``;
-    }
-
-    const content = helpers.renderChildren(node.content);
-    const fence = '`'.repeat(Math.max(3, longestBacktickRun(content) + 1));
+    const language: string = node.attrs?.language || '';
+    const [marker, runs] = language.includes('`') ? (['~', /~+/g] as const) : (['`', /`+/g] as const);
+    const content = node.content ? helpers.renderChildren(node.content) : '';
+    const fence = marker.repeat(Math.max(3, longestRun(content, runs) + 1));
 
     return [`${fence}${language}`, content, fence].join('\n');
 };
@@ -71,6 +69,14 @@ const lowlight = createLowlight(common);
 // stamps the fence language onto the `<pre>` as data-language so a CSS caption
 // (index.css) can name the block — the label lives in the DOM, not the document.
 const TunedCodeBlock = CodeBlockLowlight.extend({
+    // `defaultLanguage` below feeds the highlight plugin, which reads `attrs.language || defaultLanguage`.
+    // As an ATTRIBUTE default it would also stamp `plaintext` onto every block created in the editor, and
+    // renderMarkdown would write that into the fence — a language the author never typed.
+    addAttributes() {
+        const attributes = this.parent?.() as undefined | { language?: Record<string, unknown> };
+
+        return { ...attributes, language: { ...attributes?.language, default: null } };
+    },
     parseMarkdown: parseTunedCodeBlock,
     renderHTML({ HTMLAttributes, node }) {
         const language = (node.attrs.language as null | string) || null;
