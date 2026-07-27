@@ -17,7 +17,9 @@ const storedUser = (page: Page) =>
     page.evaluate(() => JSON.parse(window.localStorage.getItem('auth') ?? 'null')?.user ?? null);
 
 test.describe('session expiry', { tag: '@cross' }, () => {
-    test.describe('a REST 401', () => {
+    // A private endpoint answers an expired session with 403 + code AuthRequired, never 401 — pinning
+    // 401 here would drive an interceptor branch production never reaches.
+    test.describe('a REST 403', () => {
         test.use({
             cassette: {
                 queries: baseQueries(),
@@ -28,7 +30,7 @@ test.describe('session expiry', { tag: '@cross' }, () => {
                         {
                             body: { code: 'AuthRequired', msg: 'auth required', status: 'error' },
                             setFlag: EXPIRED,
-                            status: 401,
+                            status: 403,
                         },
                     ],
                 },
@@ -51,8 +53,35 @@ test.describe('session expiry', { tag: '@cross' }, () => {
             // The login page's own /info rewrites the key, so only the identity inside it matters.
             expect(await storedUser(page), 'the expired identity must not survive in storage').toBeNull();
 
-            // A login page that kept honouring the return URL would land back on the 401 and loop.
+            // A login page that kept honouring the return URL would land back on the 403 and loop.
             expect(rejected, 'the rejected endpoint is called once').toHaveLength(1);
+        });
+    });
+
+    // `/api/v1/graphql` is registered on the same private group as the REST endpoints, so an expired
+    // session is refused by the middleware and gqlgen never runs: the client sees a transport 403
+    // carrying the REST error body, not a GraphQL `errors` array.
+    test.describe('a GraphQL 403', () => {
+        test.use({
+            cassette: flowsCassette({
+                queries: {
+                    flows: [
+                        {
+                            body: { code: 'AuthRequired', msg: 'auth required', status: 'error' },
+                            setFlag: EXPIRED,
+                            status: 403,
+                        },
+                    ],
+                },
+                rest: { ...baseRest(), ...infoTurningGuest() },
+            }),
+        });
+
+        test('re-checks the session and sends the operator to login', async ({ page }) => {
+            await page.goto('/flows');
+
+            await expect(page).toHaveURL(/\/login\?returnUrl=%2Fflows/);
+            await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible();
         });
     });
 
@@ -64,7 +93,7 @@ test.describe('session expiry', { tag: '@cross' }, () => {
             }),
         });
 
-        test('re-checks the session and sends the operator to login', async ({ page }) => {
+        test('re-checks the session on an auth-worded resolver error too', async ({ page }) => {
             await page.goto('/flows');
 
             await expect(page).toHaveURL(/\/login\?returnUrl=%2Fflows/);
@@ -88,7 +117,7 @@ test.describe('session expiry', { tag: '@cross' }, () => {
                         {
                             body: { code: 'AuthRequired', msg: 'auth required', status: 'error' },
                             setFlag: EXPIRED,
-                            status: 401,
+                            status: 403,
                         },
                     ],
                 },
@@ -106,7 +135,7 @@ test.describe('session expiry', { tag: '@cross' }, () => {
 
             expect(pageErrorLog.pageErrors, 'no uncaught page errors').toEqual([]);
             expect(
-                pageErrorLog.consoleErrors.filter((text) => !/401|500/.test(text)),
+                pageErrorLog.consoleErrors.filter((text) => !/403|500/.test(text)),
                 'only the rejected requests are logged',
             ).toEqual([]);
         });

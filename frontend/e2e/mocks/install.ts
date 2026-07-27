@@ -1,18 +1,19 @@
-import type { Page } from '@playwright/test';
+import type { BrowserContext, Route } from '@playwright/test';
 
 import type { MockWorld } from './world.ts';
 
 import { installWsMock } from './ws-graphql.ts';
 
+const API_GLOB = '**/api/v1/**';
 const GRAPHQL_PATH = '/api/v1/graphql';
 
-export const installMockRoutes = async (page: Page, world: MockWorld): Promise<void> => {
-    await installWsMock(page, world);
+export const installMockRoutes = async (context: BrowserContext, world: MockWorld): Promise<void> => {
+    await installWsMock(context, world);
 
     // Single catch-all over the whole API surface: anything without a cassette
     // entry fails fast (501 + recorded in world.unmatched, asserted at teardown)
     // instead of leaking through the vite preview proxy to a live backend.
-    await page.route('**/api/v1/**', async (route) => {
+    const serve = async (route: Route) => {
         const request = route.request();
         const { pathname, searchParams } = new URL(request.url());
 
@@ -26,10 +27,11 @@ export const installMockRoutes = async (page: Page, world: MockWorld): Promise<v
 
             if (entry) {
                 await route.fulfill({
-                    json: {
+                    json: entry.body ?? {
                         ...(entry.data === undefined ? {} : { data: entry.data }),
                         ...(entry.errors ? { errors: entry.errors } : {}),
                     },
+                    status: entry.status ?? 200,
                 });
 
                 return;
@@ -71,5 +73,10 @@ export const installMockRoutes = async (page: Page, world: MockWorld): Promise<v
             json: { error: `e2e: no cassette entry for ${request.method()} ${pathname}`, status: 'error' },
             status: 501,
         });
-    });
+    };
+
+    // A page route is not inherited by the popups that page opens, so arm every page the context gets.
+    context.on('page', (opened) => void opened.route(API_GLOB, serve));
+
+    await Promise.all(context.pages().map((existing) => existing.route(API_GLOB, serve)));
 };

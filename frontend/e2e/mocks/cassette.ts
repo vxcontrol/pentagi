@@ -28,6 +28,14 @@ export const mergeCassettes = (base: Cassette, override: Cassette): Cassette => 
 });
 
 export interface GraphQLCassetteEntry extends GraphQLPayload, WorldFlagged {
+    /**
+     * Served verbatim in place of the `{ data, errors }` envelope. The GraphQL endpoint sits behind
+     * the same auth middleware as the REST ones, so a rejected request answers with the REST error
+     * body and never reaches gqlgen.
+     */
+    body?: unknown;
+    /** A transport-level status the client reads instead of the GraphQL `errors` array. */
+    status?: number;
     variables?: Record<string, unknown>;
 }
 
