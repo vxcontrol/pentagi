@@ -22,7 +22,7 @@ test.describe('template detail', { tag: '@coverage' }, () => {
         await page.keyboard.press('Escape');
     };
 
-    test('keeps the pager between save and the actions menu', async ({ page }) => {
+    test('keeps the pager left of save and the actions menu', async ({ page }) => {
         await page.goto(`/templates/${TEMPLATE_DETAIL.id}`);
         await expect(page.getByRole('button', { name: 'Template actions' })).toBeVisible();
 
@@ -37,8 +37,9 @@ test.describe('template detail', { tag: '@coverage' }, () => {
             expect(positionOf(label), `header is missing the "${label}" button`).toBeGreaterThanOrEqual(0);
         }
 
-        expect(positionOf('Save')).toBeLessThan(positionOf('Previous'));
-        expect(positionOf('Next')).toBeLessThan(positionOf('Template actions'));
+        expect(positionOf('Previous')).toBeLessThan(positionOf('Save'));
+        expect(positionOf('Next')).toBeLessThan(positionOf('Save'));
+        expect(positionOf('Save')).toBeLessThan(positionOf('Template actions'));
     });
 
     test('loads the template body into the editor byte-exact', async ({ page, pageErrorLog }) => {

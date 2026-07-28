@@ -8,7 +8,7 @@ test.describe('flow pager', { tag: ['@flows', '@smoke'] }, () => {
     test.describe('with a report to show', () => {
         test.use({ cassette: flowTabsCassette() });
 
-        test('keeps the variable action left of the fixed ones', async ({ page }) => {
+        test('keeps the variable Report action left of the pager and fixed actions', async ({ page }) => {
             await page.goto('/flows/5');
             await expect(page.locator('header').getByRole('button', { name: 'Report' })).toBeVisible();
 
@@ -23,9 +23,10 @@ test.describe('flow pager', { tag: ['@flows', '@smoke'] }, () => {
                 expect(positionOf(label), `header is missing the "${label}" button`).toBeGreaterThanOrEqual(0);
             }
 
-            expect(positionOf('Report')).toBeLessThan(positionOf('Toggle favorite'));
-            expect(positionOf('Toggle favorite')).toBeLessThan(positionOf('Previous'));
-            expect(positionOf('Next')).toBeLessThan(positionOf('Flow actions'));
+            expect(positionOf('Report')).toBeLessThan(positionOf('Previous'));
+            expect(positionOf('Previous')).toBeLessThan(positionOf('Next'));
+            expect(positionOf('Next')).toBeLessThan(positionOf('Toggle favorite'));
+            expect(positionOf('Toggle favorite')).toBeLessThan(positionOf('Flow actions'));
         });
     });
 
