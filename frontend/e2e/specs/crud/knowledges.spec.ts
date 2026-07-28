@@ -12,7 +12,12 @@ import { ResultType } from '@/graphql/types';
 import { expect, test } from '../../fixtures/test.ts';
 import { typeIntoEditor } from '../../helpers/editor.ts';
 import { expectCleanPage } from '../../helpers/errors.ts';
-import { KNOWLEDGE_DOC, knowledgesCassette, makeKnowledge } from '../../mocks/cassettes/knowledges.ts';
+import {
+    KNOWLEDGE_DOC,
+    knowledgeDetailCassette,
+    knowledgesCassette,
+    makeKnowledge,
+} from '../../mocks/cassettes/knowledges.ts';
 
 const openNewKnowledgeForm = async (page: Page) => {
     await page.goto('/knowledges');
@@ -193,6 +198,32 @@ test.describe('knowledges crud', { tag: '@crud' }, () => {
             expect(variables.id).toBe(KNOWLEDGE_DOC.id);
             expect(variables.input.content).toContain('E2E-SAVE-MARK');
             expectCleanPage(pageErrorLog);
+        });
+    });
+
+    test.describe('detail header', () => {
+        test.use({ cassette: knowledgeDetailCassette() });
+
+        test('keeps the pager left of save and the actions menu', async ({ page }) => {
+            await page.goto(`/knowledges/${KNOWLEDGE_DOC.id}`);
+            await expect(page.getByRole('button', { name: 'Knowledge actions' })).toBeVisible();
+
+            const labels = await page
+                .locator('header button')
+                .evaluateAll((buttons) =>
+                    buttons.map((button) => button.getAttribute('aria-label') ?? button.textContent),
+                );
+            const positionOf = (label: string) => labels.findIndex((candidate) => (candidate ?? '').includes(label));
+
+            // findIndex returns -1 for an absent label, and -1 < any real index, so the ordering below
+            // passes vacuously when a button is missing. Require presence first.
+            for (const label of ['Save', 'Previous', 'Next', 'Knowledge actions']) {
+                expect(positionOf(label), `header is missing the "${label}" button`).toBeGreaterThanOrEqual(0);
+            }
+
+            expect(positionOf('Previous')).toBeLessThan(positionOf('Save'));
+            expect(positionOf('Next')).toBeLessThan(positionOf('Save'));
+            expect(positionOf('Save')).toBeLessThan(positionOf('Knowledge actions'));
         });
     });
 });
