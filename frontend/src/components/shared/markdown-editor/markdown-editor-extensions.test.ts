@@ -988,3 +988,62 @@ describe('whole-document block toggles across document shapes', () => {
         expect(lowlightPlugins).toHaveLength(1);
     });
 });
+
+describe('line-leading block markers are escaped to marked grammar, inline backslashes are not touched', () => {
+    // marked's heading is /^ {0,3}(#{1,6})(?=\s|$)…/ and its blockquote is /^( {0,3}> ?…)+/ — the space after
+    // the marker is a lookahead, not a literal. A serializer that escapes only `# `/`> ` leaves these live, and
+    // the block type flips on the next load.
+    // Starts from a PARAGRAPH node, not from markdown: `>foo` as stored markdown is legitimately a quote. The
+    // defect is that a paragraph the user typed serializes to bytes that read back as a different block.
+    const paragraphSurvives = (text: string) => {
+        const editor = new Editor({
+            content: { content: [{ content: [{ text, type: 'text' }], type: 'paragraph' }], type: 'doc' },
+            extensions: createMarkdownExtensions(),
+        });
+        const saved = editor.getMarkdown();
+
+        editor.destroy();
+
+        const reloaded = new Editor({
+            content: saved,
+            contentType: 'markdown',
+            extensions: createMarkdownExtensions(),
+        });
+        const out = { counts: structuralCounts(saved), text: reloaded.state.doc.textContent };
+
+        reloaded.destroy();
+
+        return out;
+    };
+
+    it.each([
+        ['>foo', 'a quote marker with no space'],
+        ['#', 'a lone hash'],
+        ['###', 'three hashes alone'],
+        ['#\tfoo', 'a hash followed by a tab'],
+        ['>', 'a lone quote marker'],
+    ])('a typed paragraph of %s stays a paragraph (%s)', (text) => {
+        expect(paragraphSurvives(text)).toEqual({ counts: {}, text });
+    });
+
+    it('leaves a real heading and a real quote alone', () => {
+        expect(structuralCounts(roundTrip('# real heading'))).toEqual({ heading: 1 });
+        expect(structuralCounts(roundTrip('> real quote'))).toEqual({ blockquote: 1 });
+    });
+
+    it('leaves seven hashes as a paragraph, exactly as marked reads them', () => {
+        expect(roundTrip('####### seven')).toBe('####### seven');
+    });
+
+    // The load side used to unescape `\#`/`\>` at ANY inline position while the serializer only re-escaped them
+    // line-leading, so a backslash in the middle of a line was eaten. `\<root\>` is a GNU-grep word boundary;
+    // dropping the second backslash changes what the command matches.
+    it.each([
+        'use \\# for comments and \\> for redirect',
+        "grep '\\<root\\>' /etc/passwd",
+        'sed -e "s/\\>/gt/" file',
+        'shell: cat file \\> out.txt',
+    ])('keeps an inline backslash escape byte-identical: %s', (source) => {
+        expect(roundTrip(source)).toBe(source);
+    });
+});

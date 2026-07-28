@@ -23,9 +23,10 @@ const createTunedMarked = () => {
             //   • del      — keep GFM `~~strike~~`, drop a lone `~…~` (else `~5~` / ranges become <del>)
             //   • emStrong — keep `*`/`**`, drop `_`-delimited emphasis (else `__init__`/`_word_` become em/strong)
             //   • escape   — keep `\`+punct literal (`\.` `\*` `\|` `\\`); marked's default DROPS the backslash
-            //                (CommonMark unescape), silently corrupting regex/paths on the first load. EXCEPT
-            //                `\#`/`\>`: unescape those, symmetric with the paragraph serializer escaping a
-            //                line-leading `# `/`> ` so body text doesn't re-parse as a heading/quote
+            //                (CommonMark unescape), silently corrupting regex/paths on the first load. The
+            //                `\#`/`\>` counterpart to the paragraph serializer is NOT here: an inline tokenizer
+            //                fires at any position, so it also ate the backslash mid-line (`grep '\<root\>'`).
+            //                It lives in the Lexer's inlineTokens override below, which sees line starts.
             //   • html/tag — keep `<xml-like>` tags literal (marked swallows real-HTML-element names)
             // NB: autolink/url are intentionally NOT neutralised — a bare `https://…`, `<url>` or email is
             // meant to become a link (see markdown-editor-extensions.ts link config, kept symmetric with typing).
@@ -36,11 +37,7 @@ const createTunedMarked = () => {
             // `&lt;` — that re-freezes the artifacts.
             del: (src: string) => (/^~~(?!~)/.test(src) ? false : undefined),
             emStrong: (src: string) => (/^_/.test(src) ? undefined : false),
-            escape: (src: string) => {
-                const marker = /^\\([#>])/.exec(src);
-
-                return marker ? { raw: marker[0], text: marker[1]!, type: 'escape' as const } : undefined;
-            },
+            escape: () => undefined,
             html: () => undefined,
             tag: () => undefined,
         },
@@ -51,10 +48,18 @@ const createTunedMarked = () => {
     // tokenization, dropping trailing cells). @tiptap/markdown's manager builds its block lexer via
     // `new markedInstance.Lexer(...)` — including for the construction-time initial parse — so subclassing
     // this PRIVATE instance's Lexer keeps the transform instance-scoped (no shared-class mutation) and still
-    // catches every load. `inlineTokens` is inherited unchanged, so inline fragments are not touched.
+    // catches every load.
     const BaseLexer = instance.Lexer;
 
     instance.Lexer = class extends BaseLexer {
+        // Undo the paragraph serializer's line-leading `\#`/`\>` here rather than in an inline tokenizer or in
+        // `lex`. An inline tokenizer has no notion of position and ate the backslash mid-line; `lex` runs
+        // BEFORE block tokenization, so unescaping there hands marked a live `#`/`>` and the paragraph the
+        // escape exists to protect becomes a heading or a quote again.
+        override inlineTokens(src: string, tokens = []) {
+            return super.inlineTokens(src.replace(/(^|\n)\\([#>])/g, '$1$2'), tokens);
+        }
+
         override lex(src: string) {
             return super.lex(escapeTablePipes(src));
         }

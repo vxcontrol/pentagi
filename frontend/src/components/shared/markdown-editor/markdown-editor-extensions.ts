@@ -423,7 +423,7 @@ const TunedCodeBlock = CodeBlockLowlight.extend({
 // `1.`/fences overlap with literal regex/glob/backref escapes (`\*`, `\1`, `\|`) the editor must preserve.
 const escapeLineLeadingBlockMarkers = (markdown: string): string =>
     markdown.replace(
-        /(^|\n)( {0,3})(#{1,6} |> )/g,
+        /(^|\n)( {0,3})(#{1,6}(?=[ \t\n]|$)|>)/g,
         (_match, lineStart: string, indent: string, marker: string) => `${lineStart}${indent}\\${marker}`,
     );
 
