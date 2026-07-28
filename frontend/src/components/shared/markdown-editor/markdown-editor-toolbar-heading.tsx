@@ -42,12 +42,13 @@ interface HeadingMenuProps {
     activeLevel: 0 | HeadingLevel;
     disabled?: boolean;
     editor: Editor;
+    isInTableCell: boolean;
 }
 
 const isSelectedIn = (activeLevel: 0 | HeadingLevel, value: HeadingOption['value']) =>
     value === 'paragraph' ? activeLevel === 0 : value === activeLevel;
 
-export function HeadingMenu({ activeLevel, disabled, editor }: HeadingMenuProps) {
+export function HeadingMenu({ activeLevel, disabled, editor, isInTableCell }: HeadingMenuProps) {
     const active = OPTIONS.find((option) => isSelectedIn(activeLevel, option.value)) ?? OPTIONS[0];
     const ActiveIcon = active?.icon ?? Type;
 
@@ -80,13 +81,22 @@ export function HeadingMenu({ activeLevel, disabled, editor }: HeadingMenuProps)
                 <HeadingMenuItems
                     activeLevel={activeLevel}
                     editor={editor}
+                    isInTableCell={isInTableCell}
                 />
             </DropdownMenuContent>
         </DropdownMenu>
     );
 }
 
-function HeadingMenuItems({ activeLevel, editor }: { activeLevel: 0 | HeadingLevel; editor: Editor }) {
+function HeadingMenuItems({
+    activeLevel,
+    editor,
+    isInTableCell,
+}: {
+    activeLevel: 0 | HeadingLevel;
+    editor: Editor;
+    isInTableCell: boolean;
+}) {
     const applyOption = (value: HeadingOption['value']) => {
         if (value === 'paragraph') {
             editor.chain().focus().setParagraph().run();
@@ -100,6 +110,7 @@ function HeadingMenuItems({ activeLevel, editor }: { activeLevel: 0 | HeadingLev
     return OPTIONS.map((option) => (
         <DropdownMenuItem
             aria-checked={isSelectedIn(activeLevel, option.value)}
+            disabled={isInTableCell && option.value !== 'paragraph'}
             key={option.value}
             onSelect={() => applyOption(option.value)}
             role="menuitemradio"

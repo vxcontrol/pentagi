@@ -206,6 +206,11 @@ export const MarkdownEditorToolbar = memo(function MarkdownEditorToolbar({
             isCode: editor.isActive('code'),
             isCodeBlock: isBlockApplied(editor, 'codeBlock'),
             isHeaderRow: hasHeaderRow(editor),
+            // A cell serialises inline, so these controls silently degrade the document from a caret inside
+            // one: a code block becomes an inline span on reload, a horizontal rule applied mid-word splits
+            // the word permanently, a list marker and a quote marker survive only as literal text. `can()`
+            // reports true for all of them, so the guard is structural rather than command-driven.
+            isInTableCell: editor.isActive('tableCell') || editor.isActive('tableHeader'),
             isItalic: editor.isActive('italic'),
             isLink: editor.isActive('link'),
             isStrike: editor.isActive('strike'),
@@ -243,6 +248,7 @@ export const MarkdownEditorToolbar = memo(function MarkdownEditorToolbar({
                         activeLevel={state.headingLevel}
                         disabled={disabled}
                         editor={editor}
+                        isInTableCell={state.isInTableCell}
                     />
 
                     <Separator
@@ -304,6 +310,7 @@ export const MarkdownEditorToolbar = memo(function MarkdownEditorToolbar({
                         activeType={state.activeListType}
                         disabled={disabled}
                         editor={editor}
+                        isInTableCell={state.isInTableCell}
                     />
 
                     <Separator
@@ -337,7 +344,7 @@ export const MarkdownEditorToolbar = memo(function MarkdownEditorToolbar({
                             <Quote />
                         </ToolbarToggle>
                         <ToolbarToggle
-                            disabled={disabled}
+                            disabled={disabled || state.isInTableCell}
                             label="Code block"
                             onPressedChange={() => editor.chain().focus().toggleCodeBlock().run()}
                             pressed={state.isCodeBlock}
@@ -349,7 +356,7 @@ export const MarkdownEditorToolbar = memo(function MarkdownEditorToolbar({
                             editor={editor}
                         />
                         <ToolbarButton
-                            disabled={disabled}
+                            disabled={disabled || state.isInTableCell}
                             label="Horizontal rule"
                             onClick={() => editor.chain().focus().setHorizontalRule().run()}
                         >

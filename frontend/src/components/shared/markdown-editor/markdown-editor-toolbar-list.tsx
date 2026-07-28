@@ -33,9 +33,10 @@ interface ListMenuProps {
     activeType: ListType | null;
     disabled?: boolean;
     editor: Editor;
+    isInTableCell: boolean;
 }
 
-export function ListMenu({ activeType, disabled, editor }: ListMenuProps) {
+export function ListMenu({ activeType, disabled, editor, isInTableCell }: ListMenuProps) {
     const active = OPTIONS.find((option) => option.value === activeType);
     // The bullet-list icon doubles as the resting affordance, so the active background — not the glyph — is what
     // distinguishes "in a bullet list" from "no list".
@@ -70,13 +71,22 @@ export function ListMenu({ activeType, disabled, editor }: ListMenuProps) {
                 <ListMenuItems
                     activeType={activeType}
                     editor={editor}
+                    isInTableCell={isInTableCell}
                 />
             </DropdownMenuContent>
         </DropdownMenu>
     );
 }
 
-function ListMenuItems({ activeType, editor }: { activeType: ListType | null; editor: Editor }) {
+function ListMenuItems({
+    activeType,
+    editor,
+    isInTableCell,
+}: {
+    activeType: ListType | null;
+    editor: Editor;
+    isInTableCell: boolean;
+}) {
     const applyOption = (value: ListType) => {
         const chain = editor.chain().focus();
 
@@ -92,6 +102,7 @@ function ListMenuItems({ activeType, editor }: { activeType: ListType | null; ed
     return OPTIONS.map((option) => (
         <DropdownMenuItem
             aria-checked={activeType === option.value}
+            disabled={isInTableCell}
             key={option.value}
             onSelect={() => applyOption(option.value)}
             role="menuitemradio"

@@ -135,3 +135,80 @@ describe('returnFocusToEditor', () => {
         cleanup();
     });
 });
+
+describe('block controls that a table cell cannot hold are disabled inside one', () => {
+    const TABLE_DOC = ['| A | B |', '| --- | --- |', '| alpha | beta |'].join('\n');
+
+    const mountWithCaretInCell = () => {
+        const element = document.createElement('div');
+
+        document.body.append(element);
+
+        const editor = new Editor({
+            content: TABLE_DOC,
+            contentType: 'markdown',
+            element,
+            extensions: createMarkdownExtensions(),
+        });
+        let caret = 0;
+
+        editor.state.doc.descendants((node, pos) => {
+            if (!caret && node.type.name === 'tableCell') {
+                caret = pos + 2;
+            }
+
+            return true;
+        });
+        editor.commands.setTextSelection(caret);
+
+        const view = render(<MarkdownEditorToolbar editor={editor} />);
+
+        return {
+            cleanup: () => {
+                view.unmount();
+                editor.destroy();
+                element.remove();
+            },
+            editor,
+        };
+    };
+
+    // A cell serialises inline, so one click silently degrades the document: a code block in a cell saves as
+    // `| ``` alpha ``` |` and reloads as INLINE code, and a horizontal rule applied mid-word splits the word.
+    it.each(['Code block', 'Horizontal rule'])('%s is disabled with the caret inside a cell', async (label) => {
+        const mounted = mountWithCaretInCell();
+
+        await waitFor(() => expect(screen.getByLabelText(label)).toBeDisabled());
+        mounted.cleanup();
+    });
+
+    it('disables every list kind inside a cell', async () => {
+        const mounted = mountWithCaretInCell();
+        const user = userEvent.setup();
+
+        await user.click(screen.getByLabelText(/^List:/));
+
+        for (const label of ['Bullet list', 'Ordered list', 'Task list']) {
+            await waitFor(() =>
+                expect(screen.getByRole('menuitemradio', { name: new RegExp(label) })).toHaveAttribute(
+                    'aria-disabled',
+                    'true',
+                ),
+            );
+        }
+
+        mounted.cleanup();
+    });
+
+    it('disables every heading level inside a cell', async () => {
+        const mounted = mountWithCaretInCell();
+        const user = userEvent.setup();
+
+        await user.click(screen.getByLabelText(/^Text style:/));
+
+        await waitFor(() =>
+            expect(screen.getByRole('menuitemradio', { name: /Heading 2/ })).toHaveAttribute('aria-disabled', 'true'),
+        );
+        mounted.cleanup();
+    });
+});
