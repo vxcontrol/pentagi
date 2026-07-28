@@ -21,7 +21,6 @@ import { toast } from 'sonner';
 
 import type { DefaultPromptFragmentFragment as DefaultPrompt, PromptType } from '@/graphql/types';
 
-type AgentPrompt = AgentPrompts;
 type AgentPrompts = { human?: DefaultPrompt; system: DefaultPrompt };
 
 import { AppHeader, AppHeaderContent, AppHeaderTitle } from '@/components/layouts/app/app-header';
@@ -44,6 +43,8 @@ import { Spinner } from '@/components/ui/spinner';
 import { DeletePromptDocument, SettingsPromptsDocument } from '@/graphql/types';
 import { usePageStorageKeys } from '@/hooks/use-page-storage-keys';
 import { routes } from '@/lib/routes';
+
+const formatName = (key: string): string => key.replaceAll(/([A-Z])/g, ' $1').replace(/^./, (str) => str.toUpperCase());
 
 type AgentPromptTableData = {
     displayName: string;
@@ -249,16 +250,12 @@ function SettingsPrompts() {
         const userDefined = data.settingsPrompts.userDefined || [];
         const agentEntries: AgentPromptTableData[] = [];
 
-        const formatName = (key: string): string => {
-            return key.replaceAll(/([A-Z])/g, ' $1').replace(/^./, (str) => str.toUpperCase());
-        };
-
         Object.entries(agents).forEach(([key, prompts]) => {
             if (key === '__typename') {
                 return;
             }
 
-            const systemType = (prompts as AgentPrompt | AgentPrompts)?.system?.type;
+            const systemType = (prompts as AgentPrompts)?.system?.type;
             const humanType = (prompts as AgentPrompts)?.human?.type;
 
             const hasCustomSystem = userDefined.some((p) => p.type === systemType);
@@ -267,17 +264,13 @@ function SettingsPrompts() {
             const agentData: AgentPromptTableData = {
                 displayName: formatName(key),
                 hasHuman: !!(prompts as AgentPrompts)?.human,
-                hasSystem: !!(prompts as AgentPrompt | AgentPrompts)?.system,
+                hasSystem: !!(prompts as AgentPrompts)?.system,
                 humanStatus: (prompts as AgentPrompts)?.human ? (hasCustomHuman ? 'Custom' : 'Default') : 'N/A',
                 humanTemplate: (prompts as AgentPrompts)?.human?.template,
                 humanType,
                 name: key,
-                systemStatus: (prompts as AgentPrompt | AgentPrompts)?.system
-                    ? hasCustomSystem
-                        ? 'Custom'
-                        : 'Default'
-                    : 'N/A',
-                systemTemplate: (prompts as AgentPrompt | AgentPrompts)?.system?.template || '',
+                systemStatus: (prompts as AgentPrompts)?.system ? (hasCustomSystem ? 'Custom' : 'Default') : 'N/A',
+                systemTemplate: (prompts as AgentPrompts)?.system?.template || '',
                 systemType,
             };
 
@@ -295,10 +288,6 @@ function SettingsPrompts() {
         const { tools } = data.settingsPrompts.default;
         const userDefined = data.settingsPrompts.userDefined || [];
         const toolEntries: ToolPromptTableData[] = [];
-
-        const formatName = (key: string): string => {
-            return key.replaceAll(/([A-Z])/g, ' $1').replace(/^./, (str) => str.toUpperCase());
-        };
 
         Object.entries(tools).forEach(([key, prompt]) => {
             if (key === '__typename') {
