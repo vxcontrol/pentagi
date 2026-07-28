@@ -23,6 +23,7 @@ import type { HeadingLevel } from './markdown-editor-toolbar-heading';
 import type { ListType } from './markdown-editor-toolbar-list';
 import type { ColumnAlign } from './markdown-editor-toolbar-table';
 
+import { isBlockApplied } from './markdown-editor-extensions';
 import { hasHeaderRow } from './markdown-editor-table-commands';
 import { ToolbarButton, ToolbarToggle } from './markdown-editor-toolbar-button';
 import { HeadingMenu } from './markdown-editor-toolbar-heading';
@@ -163,11 +164,11 @@ export const MarkdownEditorToolbar = memo(function MarkdownEditorToolbar({
     const state = useEditorState({
         editor,
         selector: ({ editor }) => ({
-            activeListType: (editor.isActive('bulletList')
+            activeListType: (isBlockApplied(editor, 'bulletList')
                 ? 'bullet'
-                : editor.isActive('orderedList')
+                : isBlockApplied(editor, 'orderedList')
                   ? 'ordered'
-                  : editor.isActive('taskList')
+                  : isBlockApplied(editor, 'taskList')
                     ? 'task'
                     : null) as ListType | null,
             canRedo: editor.can().redo(),
@@ -178,10 +179,10 @@ export const MarkdownEditorToolbar = memo(function MarkdownEditorToolbar({
             headingLevel: (HEADING_LEVELS.find((level) => editor.isActive('heading', { level })) ?? 0) as
                 | 0
                 | HeadingLevel,
-            isBlockquote: editor.isActive('blockquote'),
+            isBlockquote: isBlockApplied(editor, 'blockquote'),
             isBold: editor.isActive('bold'),
             isCode: editor.isActive('code'),
-            isCodeBlock: editor.isActive('codeBlock'),
+            isCodeBlock: isBlockApplied(editor, 'codeBlock'),
             isHeaderRow: hasHeaderRow(editor),
             isItalic: editor.isActive('italic'),
             isLink: editor.isActive('link'),

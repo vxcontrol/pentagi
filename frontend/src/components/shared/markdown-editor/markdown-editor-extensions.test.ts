@@ -1,8 +1,9 @@
 import { Editor } from '@tiptap/core';
 import { OrderedList, TaskList } from '@tiptap/extension-list';
+import { TextSelection } from '@tiptap/pm/state';
 import { beforeAll, describe, expect, it } from 'vitest';
 
-import { createMarkdownExtensions } from './markdown-editor-extensions';
+import { createMarkdownExtensions, isBlockApplied } from './markdown-editor-extensions';
 import { roundTrip, setupEditorJsdom, structuralCounts } from './markdown-editor-test-setup';
 import { findVariableOccurrences } from './markdown-editor-variable-highlight';
 
@@ -736,5 +737,198 @@ describe('a task checkbox is announced with its own text, not its subtree', () =
 
     it('an empty task still gets a name', () => {
         expect(labelsFor('- [ ] \n')).toEqual(['Task item checkbox for empty task item']);
+    });
+});
+
+describe('whole-document block toggles across document shapes', () => {
+    const TOGGLES = [
+        ['blockquote', 'toggleBlockquote'],
+        ['bulletList', 'toggleBulletList'],
+        ['orderedList', 'toggleOrderedList'],
+        ['taskList', 'toggleTaskList'],
+        ['codeBlock', 'toggleCodeBlock'],
+    ] as const;
+
+    // The shapes whose first child is not a textblock are the ones a hardcoded start position gets wrong; the
+    // plain ones pass either way, so trimming the list to them takes the coverage away.
+    const SHAPES = [
+        ['single paragraph', 'sample text'],
+        ['three paragraphs', 'one\n\ntwo\n\nthree'],
+        ['table only', '| A | B |\n| --- | --- |\n| 1 | 2 |'],
+        ['table then paragraph', '| A | B |\n| --- | --- |\n| 1 | 2 |\n\ntail'],
+        ['list only', '- a\n- b\n- c'],
+        ['nested list', '- a\n  - b\n- c'],
+        ['leading rule', '---\n\nbody text'],
+        ['leading image', '![alt](https://x/y.png)\n\nbody text'],
+        ['leading heading', '# Title\n\nbody'],
+        ['fenced code only', '```js\nconst a = 1;\n```'],
+        ['already quoted', '> quoted\n\nplain'],
+    ] as const;
+
+    const editorWith = (markdown: string) =>
+        new Editor({ content: markdown, contentType: 'markdown', extensions: createMarkdownExtensions() });
+
+    const press = (editor: Editor, command: string) =>
+        (editor.commands as unknown as Record<string, () => boolean>)[command]!();
+
+    const topLevelTypes = (editor: Editor) => {
+        const types: string[] = [];
+
+        editor.state.doc.forEach((node) => types.push(node.type.name));
+
+        return types;
+    };
+
+    // Conversions that drop an attribute the target block cannot carry (a listItem holds no heading level, a
+    // paragraph no fence info-string). Measured irreversible with a plain caret too, so making these byte-exact
+    // is an upstream change, not a bug in this path.
+    const LOSSY = new Set([
+        'fenced code only|toggleBulletList',
+        'fenced code only|toggleCodeBlock',
+        'fenced code only|toggleOrderedList',
+        'fenced code only|toggleTaskList',
+        'leading heading|toggleBulletList',
+        'leading heading|toggleCodeBlock',
+        'leading heading|toggleOrderedList',
+        'leading heading|toggleTaskList',
+        'list only|toggleOrderedList',
+        'list only|toggleTaskList',
+        'nested list|toggleOrderedList',
+    ]);
+
+    const cases = SHAPES.flatMap(([shape, source]) =>
+        TOGGLES.map(([, command]) => ({ command, isLossy: LOSSY.has(`${shape}|${command}`), shape, source })),
+    );
+
+    // structuralCounts is blind to the destruction this guards: a rule left OUTSIDE the quote and one inside it
+    // produce identical counts, and a table rebuilt around itself still counts one table.
+    it.each(cases)(
+        '$shape + $command either applies reversibly or refuses harmlessly',
+        ({ command, isLossy, source }) => {
+            const editor = editorWith(source);
+
+            // Baseline AFTER selectAll: TrailingNode materialises its empty paragraph on that transaction, so a
+            // baseline taken before it would blame the toggle for a block the selection itself added.
+            editor.commands.selectAll();
+
+            const original = editor.getMarkdown();
+            const originalText = editor.state.doc.textContent;
+            const originalTypes = topLevelTypes(editor);
+            const applied = press(editor, command);
+
+            if (!applied) {
+                const { selection } = editor.state;
+
+                expect(editor.getMarkdown()).toBe(original);
+                expect(topLevelTypes(editor)).toEqual(originalTypes);
+                expect(selection.empty).toBe(false);
+                editor.destroy();
+
+                return;
+            }
+
+            expect(editor.getMarkdown()).not.toBe(original);
+
+            editor.commands.selectAll();
+            press(editor, command);
+
+            const out = editor.getMarkdown();
+            const outText = editor.state.doc.textContent;
+
+            editor.destroy();
+
+            if (isLossy) {
+                // Text content, not markdown: the declared loss is an attribute (heading level, fence info-string),
+                // and comparing source words would count `js` from ```js as content.
+                sameWords(originalText, outText);
+
+                return;
+            }
+
+            expect(out.trimEnd()).toBe(original.trimEnd());
+        },
+    );
+
+    // Selecting everything with the mouse is a TextSelection, so a guard keyed on AllSelection misses it entirely
+    // and leaves this path on the unfixed code.
+    it.each(TOGGLES)('%s is reversible under a drag-style whole-document selection', (_node, command) => {
+        const editor = editorWith('one\n\ntwo');
+
+        const selectByDrag = () => {
+            const { doc } = editor.state;
+
+            editor.view.dispatch(
+                editor.state.tr.setSelection(TextSelection.between(doc.resolve(1), doc.resolve(doc.content.size - 1))),
+            );
+        };
+
+        selectByDrag();
+
+        expect(editor.state.selection).toBeInstanceOf(TextSelection);
+        expect(press(editor, command)).toBe(true);
+
+        selectByDrag();
+        press(editor, command);
+
+        const out = editor.getMarkdown();
+
+        editor.destroy();
+
+        expect(out.trimEnd()).toBe('one\n\ntwo');
+    });
+
+    it.each(TOGGLES)('%s reports the same state to the toolbar as its own click performs', (node, command) => {
+        const editor = editorWith('sample text');
+
+        editor.commands.selectAll();
+
+        expect(isBlockApplied(editor, node)).toBe(false);
+
+        press(editor, command);
+        editor.commands.selectAll();
+
+        expect(isBlockApplied(editor, node)).toBe(true);
+
+        press(editor, command);
+        editor.commands.selectAll();
+
+        expect(isBlockApplied(editor, node)).toBe(false);
+        editor.destroy();
+    });
+
+    it('reports an already-quoted document as quoted under a whole-document selection', () => {
+        const editor = editorWith('> quoted');
+
+        editor.commands.selectAll();
+
+        expect(isBlockApplied(editor, 'blockquote')).toBe(true);
+        editor.destroy();
+    });
+
+    it.each(TOGGLES)('%s leaves the document untouched when only probed through can()', (_node, command) => {
+        const editor = editorWith('| A | B |\n| --- | --- |\n| 1 | 2 |');
+
+        editor.commands.selectAll();
+
+        const original = editor.getMarkdown();
+
+        (editor.can() as unknown as Record<string, () => boolean>)[command]!();
+
+        const out = editor.getMarkdown();
+
+        editor.destroy();
+
+        expect(out).toBe(original);
+    });
+
+    it('builds exactly one lowlight plugin', () => {
+        const editor = new Editor({ content: '', extensions: createMarkdownExtensions() });
+        const lowlightPlugins = editor.state.plugins.filter((plugin) =>
+            String((plugin as { key?: string }).key).startsWith('lowlight'),
+        );
+
+        editor.destroy();
+
+        expect(lowlightPlugins).toHaveLength(1);
     });
 });

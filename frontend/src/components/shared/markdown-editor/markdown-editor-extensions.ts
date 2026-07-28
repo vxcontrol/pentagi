@@ -1,20 +1,25 @@
 import type {
     AnyExtension,
-    ChainedCommands,
+    CommandProps,
+    Editor,
     JSONContent,
     MarkdownParseHelpers,
     MarkdownParseResult,
     MarkdownRendererHelpers,
     MarkdownToken,
 } from '@tiptap/core';
+import type { NodeType, Node as ProseMirrorNode } from '@tiptap/pm/model';
+import type { EditorState } from '@tiptap/pm/state';
 
-import { mergeAttributes } from '@tiptap/core';
+import { isList, mergeAttributes } from '@tiptap/core';
 import { CodeBlockLowlight } from '@tiptap/extension-code-block-lowlight';
 import { Image } from '@tiptap/extension-image';
 import { TaskItem, TaskList } from '@tiptap/extension-list';
 import { TableCell, TableHeader, TableRow } from '@tiptap/extension-table';
 import { Placeholder } from '@tiptap/extensions';
-import { AllSelection, TextSelection } from '@tiptap/pm/state';
+import { NodeRange } from '@tiptap/pm/model';
+import { Selection, TextSelection } from '@tiptap/pm/state';
+import { findWrapping, liftTarget } from '@tiptap/pm/transform';
 import StarterKit from '@tiptap/starter-kit';
 import { common, createLowlight } from 'lowlight';
 
@@ -27,23 +32,267 @@ import { VariableHighlight } from './markdown-editor-variable-highlight';
 const dropUnderscoreRules = (rules: { find: unknown }[]) =>
     rules.filter((rule) => !(rule.find instanceof RegExp && rule.find.source.includes('_')));
 
+type BlockFamily = {
+    isApplied: (type: NodeType, state: EditorState) => boolean;
+    toggle: (type: NodeType, props: CommandProps, delegate: DelegatedToggle) => boolean;
+};
 type CommandMap = Record<string, ToggleCommand | undefined>;
+type DelegatedToggle = (props?: CommandProps) => boolean;
 type ToggleCommand = (...args: never[]) => (props: never) => boolean;
+type TopLevelChild = { node: ProseMirrorNode; pos: number };
 
-// Under Ctrl+A a block toggle wraps a second time instead of unwrapping, for two independent reasons:
-// TrailingNode's empty paragraph sits inside the selection but outside the wrapper, so `isNodeActive` — which
-// demands the type cover the WHOLE selection — reads false; and AllSelection anchors at depth 0, so
-// `blockRange` resolves to the doc and `liftTarget` is null, making the unwrap a silent no-op.
-//
-// Excluding the trailing paragraph is what fixes both. Trimming to `1 … size - 1` is NOT enough: the
-// paragraph stays inside the range and `isNodeActive` still reads false.
-// Upstream https://github.com/ueberdosis/tiptap/issues/7398 covers only the two list cases — drop this once
-// it lands, after checking quote/fence/task and the lift no-op are covered too.
-const withSelectAllRetargeted = <T extends AnyExtension>(extension: T, commandName: string): T =>
+// Ctrl+A and a mouse drag across everything are different Selection classes but the same intent, so keying off
+// `instanceof AllSelection` silently leaves the drag path on the broken code path.
+const isWholeDocumentSelection = ({ doc, selection }: EditorState): boolean => {
+    const { empty, from, to } = selection;
+
+    return (
+        !empty &&
+        ((from === 0 && to === doc.content.size) ||
+            (from <= Selection.atStart(doc).from && to >= Selection.atEnd(doc).to))
+    );
+};
+
+// TrailingNode appends its empty paragraph on the selectAll transaction itself, so it is already inside the
+// user's selection before any toggle runs. Counting it makes an already-wrapped document read as unwrapped.
+const contentChildren = (doc: ProseMirrorNode): TopLevelChild[] => {
+    const children: TopLevelChild[] = [];
+
+    doc.forEach((node, pos) => children.push({ node, pos }));
+
+    const last = children.at(-1);
+
+    if (children.length > 1 && last?.node.isTextblock && last.node.content.size === 0) {
+        children.pop();
+    }
+
+    return children;
+};
+
+const contentSpan = (children: TopLevelChild[]) => {
+    const last = children.at(-1)!;
+
+    return { end: last.pos + last.node.nodeSize, start: children[0]!.pos };
+};
+
+// `liftTarget` is null for EVERY range at depth 0, so `commands.lift` can never undo a wrapper spanning the
+// whole document. A range over the wrapper's own content resolves at depth 1, which does have a target.
+const liftRangeOf = (doc: ProseMirrorNode, pos: number, node: ProseMirrorNode) =>
+    doc.resolve(pos + 1).blockRange(doc.resolve(pos + node.nodeSize - 1));
+
+const wrapFamily: BlockFamily = {
+    isApplied: (type, { doc }) => {
+        const children = contentChildren(doc);
+
+        return children.length > 0 && children.every(({ node }) => node.type === type);
+    },
+    toggle: (type, { dispatch, state, tr }) => {
+        const children = contentChildren(state.doc);
+
+        if (!children.length) {
+            return false;
+        }
+
+        if (wrapFamily.isApplied(type, state)) {
+            const targets = children.map(({ node, pos }) => {
+                const range = liftRangeOf(state.doc, pos, node);
+
+                return range ? liftTarget(range) : null;
+            });
+
+            if (targets.some((target) => target === null)) {
+                return false;
+            }
+
+            if (dispatch) {
+                for (const { node, pos } of [...children].reverse()) {
+                    const range = liftRangeOf(tr.doc, tr.mapping.map(pos), node);
+                    const target = range ? liftTarget(range) : null;
+
+                    if (range && target !== null) {
+                        tr.lift(range, target);
+                    }
+                }
+            }
+
+            return true;
+        }
+
+        const { end, start } = contentSpan(children);
+        const range = new NodeRange(state.doc.resolve(start), state.doc.resolve(end), 0);
+        const wrapping = findWrapping(range, type);
+
+        if (!wrapping) {
+            return false;
+        }
+
+        if (dispatch) {
+            tr.wrap(range, wrapping);
+        }
+
+        return true;
+    },
+};
+
+const canRetype = (doc: ProseMirrorNode, pos: number, type: NodeType) => {
+    const $pos = doc.resolve(pos);
+
+    return $pos.parent.canReplaceWith($pos.index(), $pos.index() + 1, type);
+};
+
+const blockTypeCandidates = (state: EditorState, type: NodeType): TopLevelChild[] => {
+    const children = contentChildren(state.doc);
+
+    if (!children.length) {
+        return [];
+    }
+
+    const { end, start } = contentSpan(children);
+    const candidates: TopLevelChild[] = [];
+
+    state.doc.nodesBetween(start, end, (node, pos) => {
+        // A cell serialises inline, so a fence placed inside one comes back from the next load as literal
+        // backticks. Descending into a table trades a reversible refusal for silent corruption.
+        if (node.type.spec.tableRole === 'table') {
+            return false;
+        }
+
+        if (node.isTextblock && (node.type === type || canRetype(state.doc, pos, type))) {
+            candidates.push({ node, pos });
+        }
+
+        return true;
+    });
+
+    return candidates;
+};
+
+const blockTypeFamily: BlockFamily = {
+    isApplied: (type, state) => {
+        const candidates = blockTypeCandidates(state, type);
+
+        return candidates.length > 0 && candidates.every(({ node }) => node.type === type);
+    },
+    toggle: (type, { dispatch, state, tr }) => {
+        const candidates = blockTypeCandidates(state, type);
+
+        if (!candidates.length) {
+            return false;
+        }
+
+        const target = blockTypeFamily.isApplied(type, state) ? state.schema.nodes.paragraph! : type;
+
+        if (!candidates.some(({ node, pos }) => node.type !== target && canRetype(state.doc, pos, target))) {
+            return false;
+        }
+
+        if (dispatch) {
+            for (const { node, pos } of [...candidates].reverse()) {
+                tr.setBlockType(pos, pos + node.nodeSize, target);
+            }
+        }
+
+        return true;
+    },
+};
+
+const listFamily: BlockFamily = {
+    isApplied: (type, state) => {
+        const children = contentChildren(state.doc);
+
+        return children.length > 0 && children.every(({ node }) => node.type === type);
+    },
+    toggle: (type, { chain, editor, state }, delegate) => {
+        const { extensions } = editor.extensionManager;
+        const children = contentChildren(state.doc);
+        // Derived from `children` rather than recomputed, so the index lookups below compare the same objects.
+        const candidates = children.filter(({ node }) => node.isTextblock || isList(node.type.name, extensions));
+        const first = candidates[0];
+        const last = candidates.at(-1);
+
+        if (!first || !last) {
+            return false;
+        }
+
+        const isApplied = children.every(({ node }) => node.type === type);
+        const hasGap = children.indexOf(last) - children.indexOf(first) + 1 !== candidates.length;
+
+        if (!isApplied && hasGap) {
+            return false;
+        }
+
+        const { end, start } = contentSpan(candidates);
+        const seated = isApplied
+            ? TextSelection.between(state.doc.resolve(start + 1), state.doc.resolve(end - 1))
+            : TextSelection.between(state.doc.resolve(start), state.doc.resolve(end));
+        const restored = state.selection;
+        let hasToggled = false;
+
+        return (
+            chain()
+                .command(({ dispatch, tr }) => {
+                    if (dispatch) {
+                        tr.setSelection(seated);
+                    }
+
+                    return true;
+                })
+                .command((chained) => {
+                    hasToggled = delegate(chained);
+
+                    return hasToggled;
+                })
+                // A chain dispatches what its callbacks already wrote even when one returns false, so a delegate
+                // that half-applied its `clearNodes` fallback would commit a flattened document without this.
+                .command(({ dispatch, tr }) => {
+                    if (!dispatch) {
+                        return true;
+                    }
+
+                    if (hasToggled) {
+                        tr.setSelection(restored.map(tr.doc, tr.mapping));
+                    } else {
+                        tr.setMeta('preventDispatch', true);
+                    }
+
+                    return true;
+                })
+                .run()
+        );
+    },
+};
+
+const BLOCK_FAMILIES: Record<string, BlockFamily | undefined> = {
+    blockquote: wrapFamily,
+    bulletList: listFamily,
+    codeBlock: blockTypeFamily,
+    orderedList: listFamily,
+    taskList: listFamily,
+};
+
+/**
+ * The toolbar MUST read its pressed state from here rather than from `editor.isActive`: tiptap's predicate
+ * demands the type cover the whole selection, so an already-quoted document under Ctrl+A reads as not quoted
+ * and the button would contradict what its own click does.
+ */
+export const isBlockApplied = (editor: Editor, nodeName: string): boolean => {
+    const { state } = editor;
+    const family = BLOCK_FAMILIES[nodeName];
+    const type = state.schema.nodes[nodeName];
+
+    if (!family || !type || !isWholeDocumentSelection(state)) {
+        return editor.isActive(nodeName);
+    }
+
+    return family.isApplied(type, state);
+};
+
+const withWholeDocumentToggle = <T extends AnyExtension>(extension: T, commandName: string, family: BlockFamily): T =>
     extension.extend({
         addCommands() {
             const parent = (this.parent?.() ?? {}) as CommandMap;
             const original = parent[commandName];
+            const { name } = this;
 
             if (!original) {
                 return parent;
@@ -53,26 +302,16 @@ const withSelectAllRetargeted = <T extends AnyExtension>(extension: T, commandNa
                 ...parent,
                 [commandName]:
                     (...args: never[]) =>
-                    ({ chain }: { chain: () => ChainedCommands }) =>
-                        chain()
-                            .command(({ state, tr }) => {
-                                if (!(state.selection instanceof AllSelection)) {
-                                    return true;
-                                }
+                    (props: never) => {
+                        const commandProps = props as CommandProps;
+                        const delegate = (chained: CommandProps = commandProps) => original(...args)(chained as never);
 
-                                const last = tr.doc.lastChild;
-                                const trailing =
-                                    last && last.type.name === 'paragraph' && last.content.size === 0
-                                        ? last.nodeSize
-                                        : 0;
-                                const to = Math.max(1, tr.doc.content.size - trailing - 1);
+                        if (!isWholeDocumentSelection(commandProps.state)) {
+                            return delegate();
+                        }
 
-                                tr.setSelection(TextSelection.create(tr.doc, 1, to));
-
-                                return true;
-                            })
-                            .command((props) => original(...args)(props as never))
-                            .run(),
+                        return family.toggle(commandProps.state.schema.nodes[name]!, commandProps, delegate);
+                    },
             };
         },
     }) as T;
@@ -159,6 +398,12 @@ const TunedCodeBlock = CodeBlockLowlight.extend({
 
         return { ...attributes, language: { ...attributes?.language, default: null } };
     },
+    // CodeBlockLowlight builds its plugins as `[...this.parent?.(), LowlightPlugin(...)]` and `.extend()` copies
+    // that into every layer, so each layer highlights the whole document again. Measured: this pass-through
+    // collapses them to one only from INSIDE this literal — as an outer `.extend()` layer it leaves three.
+    addProseMirrorPlugins() {
+        return this.parent?.() ?? [];
+    },
     parseMarkdown: parseTunedCodeBlock,
     renderHTML({ HTMLAttributes, node }) {
         const language = (node.attrs.language as null | string) || null;
@@ -205,15 +450,15 @@ const TunedStarterKit = StarterKit.extend({
             }
 
             if (extension.name === 'orderedList') {
-                return withSelectAllRetargeted(guardBlockTokenizer(extension), 'toggleOrderedList');
+                return withWholeDocumentToggle(guardBlockTokenizer(extension), 'toggleOrderedList', listFamily);
             }
 
             if (extension.name === 'bulletList') {
-                return withSelectAllRetargeted(extension, 'toggleBulletList');
+                return withWholeDocumentToggle(extension, 'toggleBulletList', listFamily);
             }
 
             if (extension.name === 'blockquote') {
-                return withSelectAllRetargeted(extension, 'toggleBlockquote');
+                return withWholeDocumentToggle(extension, 'toggleBlockquote', wrapFamily);
             }
 
             if (extension.name === 'paragraph') {
@@ -245,13 +490,13 @@ export const createMarkdownExtensions = (placeholder?: string) => [
         link: { autolink: true, linkOnPaste: true, openOnClick: false },
         underline: false,
     }),
-    withSelectAllRetargeted(TunedCodeBlock, 'toggleCodeBlock'),
+    withWholeDocumentToggle(TunedCodeBlock, 'toggleCodeBlock', blockTypeFamily),
     HeadingAutoformat,
     TunedTable.configure({ resizable: true }),
     TableRow,
     TableHeader,
     TableCell,
-    withSelectAllRetargeted(guardBlockTokenizer(TaskList), 'toggleTaskList'),
+    withWholeDocumentToggle(guardBlockTokenizer(TaskList), 'toggleTaskList', listFamily),
     TaskItem.configure({
         a11y: {
             checkboxLabel: (node) => `Task item checkbox for ${node.firstChild?.textContent || 'empty task item'}`,
