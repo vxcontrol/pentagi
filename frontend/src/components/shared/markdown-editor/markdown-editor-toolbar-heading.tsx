@@ -13,6 +13,8 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
+import { returnFocusToEditor } from './markdown-editor-focus';
+
 export type HeadingLevel = 1 | 2 | 3 | 4 | 5 | 6;
 
 interface HeadingOption {
@@ -73,11 +75,7 @@ export function HeadingMenu({ activeLevel, disabled, editor }: HeadingMenuProps)
             <DropdownMenuContent
                 align="start"
                 className="min-w-[140px]"
-                onCloseAutoFocus={(event) => {
-                    // Return focus to the editor caret (not the trigger button) so the user keeps typing.
-                    event.preventDefault();
-                    editor.commands.focus();
-                }}
+                onCloseAutoFocus={returnFocusToEditor(editor)}
             >
                 <HeadingMenuItems
                     activeLevel={activeLevel}

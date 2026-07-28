@@ -28,6 +28,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Switch } from '@/components/ui/switch';
 
+import { returnFocusToEditor } from './markdown-editor-focus';
 import { getEditorScrollParent } from './markdown-editor-styles';
 import { ALIGN_OPTIONS, clearLineContents, hasHeaderRow, setColumnAlign } from './markdown-editor-table-commands';
 
@@ -93,10 +94,7 @@ export function TableHandles({ editor }: { editor: Editor }) {
                 <DropdownMenuContent
                     align="start"
                     className="min-w-[176px]"
-                    onCloseAutoFocus={(event) => {
-                        event.preventDefault();
-                        editor.commands.focus();
-                    }}
+                    onCloseAutoFocus={returnFocusToEditor(editor)}
                 >
                     <DropdownMenuItem onSelect={() => focusTarget().addColumnBefore().run()}>
                         <ArrowLeft className="text-muted-foreground size-4 shrink-0" />
@@ -168,10 +166,7 @@ export function TableHandles({ editor }: { editor: Editor }) {
                 <DropdownMenuContent
                     align="start"
                     className="min-w-[176px]"
-                    onCloseAutoFocus={(event) => {
-                        event.preventDefault();
-                        editor.commands.focus();
-                    }}
+                    onCloseAutoFocus={returnFocusToEditor(editor)}
                 >
                     <RowHeaderToggleItem
                         cellPos={target.cellPos}

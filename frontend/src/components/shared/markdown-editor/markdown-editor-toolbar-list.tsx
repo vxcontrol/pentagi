@@ -13,6 +13,8 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
+import { returnFocusToEditor } from './markdown-editor-focus';
+
 export type ListType = 'bullet' | 'ordered' | 'task';
 
 interface ListOption {
@@ -63,10 +65,7 @@ export function ListMenu({ activeType, disabled, editor }: ListMenuProps) {
             <DropdownMenuContent
                 align="start"
                 className="min-w-[160px]"
-                onCloseAutoFocus={(event) => {
-                    event.preventDefault();
-                    editor.commands.focus();
-                }}
+                onCloseAutoFocus={returnFocusToEditor(editor)}
             >
                 <ListMenuItems
                     activeType={activeType}

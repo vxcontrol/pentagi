@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover';
 
+import { returnFocusToEditor } from './markdown-editor-focus';
 import { LinkEditForm } from './markdown-editor-link-edit-form';
 import { getEditorScrollParent } from './markdown-editor-styles';
 
@@ -47,10 +48,7 @@ export function LinkHandle({ editor }: { editor: Editor }) {
                 align="start"
                 className="w-80 p-2"
                 data-link-handle=""
-                onCloseAutoFocus={(event) => {
-                    event.preventDefault();
-                    editor.commands.focus();
-                }}
+                onCloseAutoFocus={returnFocusToEditor(editor)}
                 onOpenAutoFocus={(event) => {
                     // The popover appears whenever the caret enters a link, so keep focus in the doc — stealing it
                     // would interrupt typing/navigation. The user clicks into the URL field only to actually edit.

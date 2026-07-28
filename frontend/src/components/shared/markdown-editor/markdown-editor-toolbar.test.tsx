@@ -4,6 +4,7 @@ import { Editor } from '@tiptap/core';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import { createMarkdownExtensions } from './markdown-editor-extensions';
+import { returnFocusToEditor } from './markdown-editor-focus';
 import { setupEditorJsdom } from './markdown-editor-test-setup';
 import { MarkdownEditorToolbar } from './markdown-editor-toolbar';
 
@@ -91,4 +92,46 @@ describe('toolbar disables controls whose command reports unavailable', () => {
             mounted.cleanup();
         },
     );
+});
+
+describe('returnFocusToEditor', () => {
+    const editorWithElement = () => {
+        const element = document.createElement('div');
+
+        document.body.append(element);
+
+        return {
+            cleanup: () => element.remove(),
+            editor: new Editor({ content: 'text', element, extensions: createMarkdownExtensions() }),
+        };
+    };
+
+    // jsdom never reports real DOM focus for the contenteditable, so the observable proof that the call reached
+    // the editor is the transaction `focus()` dispatches.
+    it('reaches the editor while it is alive', () => {
+        const { cleanup, editor } = editorWithElement();
+        let transactions = 0;
+
+        editor.on('transaction', () => {
+            transactions += 1;
+        });
+
+        returnFocusToEditor(editor)(new Event('closeAutoFocus'));
+
+        expect(transactions).toBeGreaterThan(0);
+        editor.destroy();
+        cleanup();
+    });
+
+    // Radix closes a still-open layer asynchronously, so unmounting with a menu open lands this callback on a
+    // destroyed editor. Without the guard `editor.commands` throws outside any test's stack: every test still
+    // reads green and `vitest run` exits 1.
+    it('does nothing once the editor is destroyed, instead of throwing off-stack', () => {
+        const { cleanup, editor } = editorWithElement();
+
+        editor.destroy();
+
+        expect(() => returnFocusToEditor(editor)(new Event('closeAutoFocus'))).not.toThrow();
+        cleanup();
+    });
 });

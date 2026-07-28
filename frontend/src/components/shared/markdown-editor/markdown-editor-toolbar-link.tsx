@@ -7,6 +7,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Toggle } from '@/components/ui/toggle';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
+import { returnFocusToEditor } from './markdown-editor-focus';
 import { LinkEditForm } from './markdown-editor-link-edit-form';
 
 interface LinkPopoverProps {
@@ -42,11 +43,7 @@ export function LinkPopover({ disabled, editor, isActive }: LinkPopoverProps) {
             <PopoverContent
                 align="start"
                 className="w-80 p-2"
-                onCloseAutoFocus={(event) => {
-                    // Return focus to the editor caret (not the trigger) so the user keeps typing after apply/cancel.
-                    event.preventDefault();
-                    editor.commands.focus();
-                }}
+                onCloseAutoFocus={returnFocusToEditor(editor)}
             >
                 <LinkEditForm
                     editor={editor}
