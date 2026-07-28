@@ -20,7 +20,28 @@ import {
 import { flowsCassette } from '../../mocks/cassettes/flows.ts';
 import { PROMPT_DETAIL_AGENT, promptDetailCassette } from '../../mocks/cassettes/settings-prompts.ts';
 
-const HLJS_TOKENS = ['hljs-comment', 'hljs-section'];
+const HLJS_TOKENS = [
+    'hljs-comment',
+    'hljs-keyword',
+    'hljs-section',
+    'hljs-literal',
+    'hljs-string',
+    'hljs-attr',
+    'hljs-symbol',
+    'hljs-built_in',
+];
+
+const SYNTAX_TOKEN_CLASS: Record<string, string> = {
+    'editor-syntax-attr': 'hljs-attr',
+    'editor-syntax-class': 'hljs-built_in',
+    'editor-syntax-comment': 'hljs-comment',
+    'editor-syntax-entity': 'hljs-section',
+    'editor-syntax-fg': 'fence text',
+    'editor-syntax-keyword': 'hljs-keyword',
+    'editor-syntax-literal': 'hljs-literal',
+    'editor-syntax-string': 'hljs-string',
+    'editor-syntax-symbol': 'hljs-symbol',
+};
 
 const EDITOR_PROBES = {
     'editor-accent': { tag: 'a' },
@@ -66,10 +87,21 @@ test('every editor colour token is probed', { tag: '@cross' }, () => {
     const probed = new Set(Object.keys(EDITOR_PROBES));
     // A `-bg` token is the paired ground of its base probe, measured with it.
     const uncovered = declaredEditorTokens().filter(
-        (token) => !probed.has(token) && !(token.endsWith('-bg') && probed.has(token.slice(0, -3))),
+        (token) =>
+            !probed.has(token) &&
+            !(token.endsWith('-bg') && probed.has(token.slice(0, -3))) &&
+            !(token in SYNTAX_TOKEN_CLASS),
     );
 
     expect(uncovered).toEqual([]);
+});
+
+test('every syntax token is measured through a mounted hljs class', { tag: '@cross' }, () => {
+    const measured = new Set([...HLJS_TOKENS, 'fence text']);
+    const declared = declaredEditorTokens().filter((token) => token.startsWith('editor-syntax-'));
+
+    expect(declared.filter((token) => !measured.has(SYNTAX_TOKEN_CLASS[token] ?? ''))).toEqual([]);
+    expect(declared.sort()).toEqual(Object.keys(SYNTAX_TOKEN_CLASS).sort());
 });
 
 for (const theme of THEMES) {
@@ -158,9 +190,23 @@ for (const theme of THEMES) {
             await expect(fence).toBeVisible();
             await expect(page.locator('html')).toHaveClass(theme === 'dark' ? /dark/ : /light/);
 
-            // The atom-one-dark stylesheet ships with the editor chunk. Measuring before it lands would
-            // put the probes on the page ground and pass on a surface no user ever sees.
-            await expect(fence).toHaveCSS('background-color', 'rgb(40, 44, 52)');
+            // Resolve the token through a probe, not getPropertyValue: the minifier rewrites the authored
+            // text (`oklch(0.94 …)` ships as `oklch(94% …)`), which never equals the computed colour.
+            const surface = await page.evaluate(() => {
+                const probe = document.createElement('div');
+
+                probe.style.backgroundColor = 'var(--editor-code-bg)';
+                document.body.append(probe);
+
+                const resolved = getComputedStyle(probe).backgroundColor;
+
+                probe.remove();
+
+                return resolved;
+            });
+
+            expect(surface).not.toBe('');
+            await expect(fence).toHaveCSS('background-color', surface);
 
             await mountFenceProbes(page, HLJS_TOKENS);
 
