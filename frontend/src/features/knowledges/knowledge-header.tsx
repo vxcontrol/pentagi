@@ -195,6 +195,14 @@ export function KnowledgeHeader({
                     </Breadcrumb>
                 </AppHeaderContent>
                 <AppHeaderActions>
+                    {!isNew && !isMobile && (
+                        <DetailNavigationToolbar<Knowledge>
+                            controller={knowledgeNav}
+                            renderItem={renderKnowledgeItem}
+                            sheetIcon={<LibraryBig className="size-4" />}
+                            sheetTitle="Knowledges"
+                        />
+                    )}
                     {canAnonymize && !isMobile && (
                         <AppHeaderAction
                             disabled={isAnonymizeDisabled}
@@ -211,14 +219,6 @@ export function KnowledgeHeader({
                             icon={<Save />}
                             label={isNew ? 'Create' : 'Save'}
                             type="button"
-                        />
-                    )}
-                    {!isNew && !isMobile && (
-                        <DetailNavigationToolbar<Knowledge>
-                            controller={knowledgeNav}
-                            renderItem={renderKnowledgeItem}
-                            sheetIcon={<LibraryBig className="size-4" />}
-                            sheetTitle="Knowledges"
                         />
                     )}
                     <DropdownMenu>

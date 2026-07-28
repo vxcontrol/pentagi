@@ -481,14 +481,6 @@ function TemplateForm({ templateId }: { templateId?: string }) {
                 </AppHeaderContent>
                 {!isTemplateMissing && (
                     <AppHeaderActions>
-                        <AppHeaderAction
-                            disabled={isTemplatePending || (!isNew && !hasUnsavedChanges)}
-                            form="template-form"
-                            icon={<Save />}
-                            label={isNew ? 'Create' : 'Save'}
-                            loading={isSaving}
-                            type="submit"
-                        />
                         {!isNew && !isMobile && (
                             <DetailNavigationToolbar<Template>
                                 controller={templateNav}
@@ -497,6 +489,14 @@ function TemplateForm({ templateId }: { templateId?: string }) {
                                 sheetTitle="Templates"
                             />
                         )}
+                        <AppHeaderAction
+                            disabled={isTemplatePending || (!isNew && !hasUnsavedChanges)}
+                            form="template-form"
+                            icon={<Save />}
+                            label={isNew ? 'Create' : 'Save'}
+                            loading={isSaving}
+                            type="submit"
+                        />
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                                 <Button

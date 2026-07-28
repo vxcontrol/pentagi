@@ -267,6 +267,14 @@ function Flow() {
                 </AppHeaderContent>
                 <AppHeaderActions>
                     {!!(flowData?.tasks ?? [])?.length && <FlowReportDropdown />}
+                    {!isMobile && (
+                        <DetailNavigationToolbar<FlowItem>
+                            controller={flowNav}
+                            renderItem={renderFlowItem}
+                            sheetIcon={<GitFork className="size-4" />}
+                            sheetTitle="Flows"
+                        />
+                    )}
                     {flowId && !isMobile && (
                         <Button
                             aria-label="Toggle favorite"
@@ -279,14 +287,6 @@ function Flow() {
                         >
                             <Star className={isFavoriteFlow(flowId) ? 'fill-yellow-500 stroke-yellow-500' : ''} />
                         </Button>
-                    )}
-                    {!isMobile && (
-                        <DetailNavigationToolbar<FlowItem>
-                            controller={flowNav}
-                            renderItem={renderFlowItem}
-                            sheetIcon={<GitFork className="size-4" />}
-                            sheetTitle="Flows"
-                        />
                     )}
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
