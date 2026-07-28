@@ -39,18 +39,6 @@ export function ListMenu({ activeType, disabled, editor }: ListMenuProps) {
     // distinguishes "in a bullet list" from "no list".
     const TriggerIcon = active?.icon ?? List;
 
-    const applyOption = (value: ListType) => {
-        const chain = editor.chain().focus();
-
-        if (value === 'bullet') {
-            chain.toggleBulletList().run();
-        } else if (value === 'ordered') {
-            chain.toggleOrderedList().run();
-        } else {
-            chain.toggleTaskList().run();
-        }
-    };
-
     return (
         <DropdownMenu>
             <Tooltip>
@@ -80,19 +68,48 @@ export function ListMenu({ activeType, disabled, editor }: ListMenuProps) {
                     editor.commands.focus();
                 }}
             >
-                {OPTIONS.map((option) => (
-                    <DropdownMenuItem
-                        aria-checked={activeType === option.value}
-                        key={option.value}
-                        onSelect={() => applyOption(option.value)}
-                        role="menuitemradio"
-                    >
-                        <option.icon className="text-muted-foreground size-4 shrink-0" />
-                        <span>{option.label}</span>
-                        {activeType === option.value ? <Check className="ml-auto size-4 shrink-0" /> : null}
-                    </DropdownMenuItem>
-                ))}
+                <ListMenuItems
+                    activeType={activeType}
+                    editor={editor}
+                />
             </DropdownMenuContent>
         </DropdownMenu>
     );
+}
+
+// Asked per open, not per keystroke: Radix mounts this content only while the menu is open, and `can()`
+// rebuilds the whole command map on every call.
+function ListMenuItems({ activeType, editor }: { activeType: ListType | null; editor: Editor }) {
+    const can = editor.can();
+    const isAvailable: Record<ListType, boolean> = {
+        bullet: can.toggleBulletList(),
+        ordered: can.toggleOrderedList(),
+        task: can.toggleTaskList(),
+    };
+
+    const applyOption = (value: ListType) => {
+        const chain = editor.chain().focus();
+
+        if (value === 'bullet') {
+            chain.toggleBulletList().run();
+        } else if (value === 'ordered') {
+            chain.toggleOrderedList().run();
+        } else {
+            chain.toggleTaskList().run();
+        }
+    };
+
+    return OPTIONS.map((option) => (
+        <DropdownMenuItem
+            aria-checked={activeType === option.value}
+            disabled={!isAvailable[option.value]}
+            key={option.value}
+            onSelect={() => applyOption(option.value)}
+            role="menuitemradio"
+        >
+            <option.icon className="text-muted-foreground size-4 shrink-0" />
+            <span>{option.label}</span>
+            {activeType === option.value ? <Check className="ml-auto size-4 shrink-0" /> : null}
+        </DropdownMenuItem>
+    ));
 }

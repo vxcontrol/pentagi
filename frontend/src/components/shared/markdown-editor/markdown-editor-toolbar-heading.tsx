@@ -42,21 +42,12 @@ interface HeadingMenuProps {
     editor: Editor;
 }
 
+const isSelectedIn = (activeLevel: 0 | HeadingLevel, value: HeadingOption['value']) =>
+    value === 'paragraph' ? activeLevel === 0 : value === activeLevel;
+
 export function HeadingMenu({ activeLevel, disabled, editor }: HeadingMenuProps) {
-    const isSelected = (value: HeadingOption['value']) =>
-        value === 'paragraph' ? activeLevel === 0 : value === activeLevel;
-    const active = OPTIONS.find((option) => isSelected(option.value)) ?? OPTIONS[0];
+    const active = OPTIONS.find((option) => isSelectedIn(activeLevel, option.value)) ?? OPTIONS[0];
     const ActiveIcon = active?.icon ?? Type;
-
-    const applyOption = (value: HeadingOption['value']) => {
-        if (value === 'paragraph') {
-            editor.chain().focus().setParagraph().run();
-
-            return;
-        }
-
-        editor.chain().focus().toggleHeading({ level: value }).run();
-    };
 
     return (
         <DropdownMenu>
@@ -88,19 +79,44 @@ export function HeadingMenu({ activeLevel, disabled, editor }: HeadingMenuProps)
                     editor.commands.focus();
                 }}
             >
-                {OPTIONS.map((option) => (
-                    <DropdownMenuItem
-                        aria-checked={isSelected(option.value)}
-                        key={option.value}
-                        onSelect={() => applyOption(option.value)}
-                        role="menuitemradio"
-                    >
-                        <option.icon className={cn('text-muted-foreground size-4 shrink-0', option.iconClassName)} />
-                        <span>{option.label}</span>
-                        {isSelected(option.value) ? <Check className="ml-auto size-4 shrink-0" /> : null}
-                    </DropdownMenuItem>
-                ))}
+                <HeadingMenuItems
+                    activeLevel={activeLevel}
+                    editor={editor}
+                />
             </DropdownMenuContent>
         </DropdownMenu>
     );
+}
+
+// Asked per open, not per keystroke: Radix mounts this content only while the menu is open, and `can()`
+// rebuilds the whole command map on every call.
+// `setParagraph` is not probed: it reports false whenever the block already IS a paragraph, which is this
+// menu's checked item rather than an unavailable one.
+function HeadingMenuItems({ activeLevel, editor }: { activeLevel: 0 | HeadingLevel; editor: Editor }) {
+    const can = editor.can();
+    const isAvailable = (value: HeadingOption['value']) => value === 'paragraph' || can.toggleHeading({ level: value });
+
+    const applyOption = (value: HeadingOption['value']) => {
+        if (value === 'paragraph') {
+            editor.chain().focus().setParagraph().run();
+
+            return;
+        }
+
+        editor.chain().focus().toggleHeading({ level: value }).run();
+    };
+
+    return OPTIONS.map((option) => (
+        <DropdownMenuItem
+            aria-checked={isSelectedIn(activeLevel, option.value)}
+            disabled={!isAvailable(option.value)}
+            key={option.value}
+            onSelect={() => applyOption(option.value)}
+            role="menuitemradio"
+        >
+            <option.icon className={cn('text-muted-foreground size-4 shrink-0', option.iconClassName)} />
+            <span>{option.label}</span>
+            {isSelectedIn(activeLevel, option.value) ? <Check className="ml-auto size-4 shrink-0" /> : null}
+        </DropdownMenuItem>
+    ));
 }

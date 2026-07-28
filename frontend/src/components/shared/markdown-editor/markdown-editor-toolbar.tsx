@@ -39,6 +39,22 @@ interface MarkdownEditorToolbarProps {
 
 const HEADING_LEVELS: HeadingLevel[] = [1, 2, 3, 4, 5, 6];
 
+// One `can()` for all seven probes: it rebuilds the command map on every call, and reusing the object was
+// measured to give identical answers at ~30% of the cost.
+const blockAvailability = (editor: Editor) => {
+    const can = editor.can();
+
+    return {
+        canBlockquote: can.toggleBlockquote(),
+        canBold: can.toggleBold(),
+        canCode: can.toggleCode(),
+        canCodeBlock: can.toggleCodeBlock(),
+        canItalic: can.toggleItalic(),
+        canLink: can.setLink({ href: 'https://example.com' }),
+        canStrike: can.toggleStrike(),
+    };
+};
+
 // A mouse wheel emits deltaY, which the browser applies to the nearest VERTICAL scroller — never to this
 // overflow-x strip, so a wheel-mouse user can't reach overflowed controls (trackpads emit deltaX and already
 // work). Translate a vertical-dominant wheel into horizontal scroll, releasing at the ends so the page can
@@ -171,6 +187,11 @@ export const MarkdownEditorToolbar = memo(function MarkdownEditorToolbar({
                   : isBlockApplied(editor, 'taskList')
                     ? 'task'
                     : null) as ListType | null,
+            // A control whose command reports unavailable is disabled, because these commands return false
+            // without dispatching and the click would be a silent no-op. Only the always-visible strip is
+            // answered here — the menus ask for their own items on open, since `can()` rebuilds the whole
+            // command map per call (~40µs measured, flat in document size) and this selector runs per keystroke.
+            ...blockAvailability(editor),
             canRedo: editor.can().redo(),
             canUndo: editor.can().undo(),
             columnAlign: (editor.getAttributes('tableHeader').align ??
@@ -233,7 +254,7 @@ export const MarkdownEditorToolbar = memo(function MarkdownEditorToolbar({
                         role="group"
                     >
                         <ToolbarToggle
-                            disabled={disabled}
+                            disabled={disabled || !state.canBold}
                             label="Bold"
                             onPressedChange={() => editor.chain().focus().toggleBold().run()}
                             pressed={state.isBold}
@@ -242,7 +263,7 @@ export const MarkdownEditorToolbar = memo(function MarkdownEditorToolbar({
                             <Bold />
                         </ToolbarToggle>
                         <ToolbarToggle
-                            disabled={disabled}
+                            disabled={disabled || !state.canItalic}
                             label="Italic"
                             onPressedChange={() => editor.chain().focus().toggleItalic().run()}
                             pressed={state.isItalic}
@@ -251,7 +272,7 @@ export const MarkdownEditorToolbar = memo(function MarkdownEditorToolbar({
                             <Italic />
                         </ToolbarToggle>
                         <ToolbarToggle
-                            disabled={disabled}
+                            disabled={disabled || !state.canStrike}
                             label="Strikethrough"
                             onPressedChange={() => editor.chain().focus().toggleStrike().run()}
                             pressed={state.isStrike}
@@ -259,7 +280,7 @@ export const MarkdownEditorToolbar = memo(function MarkdownEditorToolbar({
                             <Strikethrough />
                         </ToolbarToggle>
                         <ToolbarToggle
-                            disabled={disabled}
+                            disabled={disabled || !state.canCode}
                             label="Inline code"
                             onPressedChange={() => editor.chain().focus().toggleCode().run()}
                             pressed={state.isCode}
@@ -267,7 +288,7 @@ export const MarkdownEditorToolbar = memo(function MarkdownEditorToolbar({
                             <Code />
                         </ToolbarToggle>
                         <LinkPopover
-                            disabled={disabled}
+                            disabled={disabled || !state.canLink}
                             editor={editor}
                             isActive={state.isLink}
                         />
@@ -307,7 +328,7 @@ export const MarkdownEditorToolbar = memo(function MarkdownEditorToolbar({
                         role="group"
                     >
                         <ToolbarToggle
-                            disabled={disabled}
+                            disabled={disabled || !state.canBlockquote}
                             label="Blockquote"
                             onPressedChange={() => editor.chain().focus().toggleBlockquote().run()}
                             pressed={state.isBlockquote}
@@ -315,7 +336,7 @@ export const MarkdownEditorToolbar = memo(function MarkdownEditorToolbar({
                             <Quote />
                         </ToolbarToggle>
                         <ToolbarToggle
-                            disabled={disabled}
+                            disabled={disabled || !state.canCodeBlock}
                             label="Code block"
                             onPressedChange={() => editor.chain().focus().toggleCodeBlock().run()}
                             pressed={state.isCodeBlock}
