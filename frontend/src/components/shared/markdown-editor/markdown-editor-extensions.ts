@@ -508,6 +508,17 @@ const TunedStarterKit = StarterKit.extend({
                 });
             }
 
+            // Emit the code mark's content with NO backtick fence: the real content-sized fence comes from
+            // serializeCodeSpan in the text encoder (markdown-editor-marked.ts). The two are paired — restoring a
+            // fence here double-wraps every code span.
+            if (extension.name === 'code') {
+                return extension.extend({
+                    renderMarkdown(node: JSONContent, helpers: MarkdownRendererHelpers) {
+                        return node.content ? helpers.renderChildren(node.content) : '';
+                    },
+                });
+            }
+
             return extension;
         });
     },

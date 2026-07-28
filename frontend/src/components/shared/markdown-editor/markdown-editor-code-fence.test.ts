@@ -102,19 +102,27 @@ describe('code-block highlighting', () => {
     });
 });
 
-// KNOWN UPSTREAM LIMITATION — not fixable in this layer. @tiptap/markdown derives a MARK's opening/closing
-// delimiter by rendering it around a fixed placeholder (getMarkOpening/getMarkClosing), so the `code` mark's
-// real content is never seen at delimiter time and it always emits a SINGLE backtick. A code span whose
-// content contains a backtick therefore collapses on save and never converges. A NODE (codeBlock, above) DOES
-// receive its real content and is content-aware — hence the fence widening is fixable but this is not. Pinned so
-// the gap stays visible: this test turns RED (the canary to revisit it) if a future @tiptap/markdown makes mark
-// delimiters content-aware and the span starts round-tripping.
-describe('inline code containing a backtick — known lossy on save (upstream mark-delimiter limitation)', () => {
-    it('collapses a backtick-containing code span (does not round-trip)', () => {
+// Guards the two paired seams of the code-span fix: serializeCodeSpan (markdown-editor-marked.ts) and the
+// code-mark renderMarkdown override that zeroes the placeholder fence. A regression in either turns these red.
+describe('inline code containing a backtick round-trips exactly', () => {
+    it('preserves and converges a backtick-containing code span', () => {
         const out = roundTrip('x ``a `b` c`` y');
 
-        expect(out).not.toContain('``a `b` c``');
-        expect(roundTrip(out)).not.toBe(out);
+        expect(out).toContain('``a `b` c``');
+        expect(roundTrip(out)).toBe(out);
+    });
+
+    it.each([
+        'a ``` `XSS` ``` b',
+        'x ``` `key` = value ``` y',
+        'run ``` echo `whoami` ``` now',
+        'p ```` a```b ```` q',
+        'a `simple` b',
+        'use `{{.Host}}` here',
+    ])('reaches a stable fixed point for %j', (src) => {
+        const once = roundTrip(src);
+
+        expect(roundTrip(once)).toBe(once);
     });
 });
 

@@ -75,13 +75,30 @@ const createTunedMarked = () => {
     return instance;
 };
 
-// The serialize-side counterpart to createTunedMarked. @tiptap/markdown's MarkdownManager
-// .encodeTextForMarkdown HTML-entity-encodes text (`<` → `&lt;`) and backslash-escapes ``` ` * _ [ ] ~ \ ```.
-// Both are wrong here: the load side keeps `\`+punct literal (escape tokenizer off), so re-escaping on save
-// would double every backslash; and named HTML entities are DECODED on load (`&lt;`→`<`), so re-encoding
-// would freeze them back into `&lt;`. Serialization is hard-coded in the manager (no per-extension hook), so
-// replace that one method with identity — save emits exactly the text the doc holds.
-type ManagerWithEncode = { encodeTextForMarkdown: (text: string) => string };
+type ManagerWithEncode = { encodeTextForMarkdown: (text: string, node?: SerializedNode, parent?: unknown) => string };
+type SerializedNode = { marks?: (string | { type?: string })[]; text?: string };
+
+const hasCodeMark = (node?: SerializedNode): boolean =>
+    (node?.marks ?? []).some((mark) => (typeof mark === 'string' ? mark : mark.type) === 'code');
+
+// Serialize a literal string as a CommonMark code span (spec 0.31.2 §6.1). @tiptap/markdown's mark path
+// can't do this: it derives the code fence by rendering the mark against a placeholder, so the fence is a
+// fixed single backtick blind to the content — a span whose text holds a backtick (`` `x` ``, common in
+// pentest write-ups) serialises to invalid `` ``x`` `` and degrades further on every save. Choose a fence
+// one longer than the longest backtick run inside, and pad with a space when the content starts or ends
+// with a backtick (or is all-but-not-only spaces) so the reader strips exactly that pad back off. Mirrors
+// prosemirror-markdown's backticksFor; the code-mark renderMarkdown override in markdown-editor-extensions.ts
+// zeroes the placeholder fence so this is the ONLY fence emitted.
+export const serializeCodeSpan = (content: string): string => {
+    const longestRun = (content.match(/`+/g) ?? []).reduce((max, run) => Math.max(max, run.length), 0);
+    const fence = '`'.repeat(longestRun + 1);
+    const needsPad =
+        content.startsWith('`') ||
+        content.endsWith('`') ||
+        (content.startsWith(' ') && content.endsWith(' ') && /\S/.test(content));
+
+    return `${fence}${needsPad ? ` ${content} ` : content}${fence}`;
+};
 
 const TunedMarkdownText = Extension.create({
     name: 'tunedMarkdownText',
@@ -91,7 +108,14 @@ const TunedMarkdownText = Extension.create({
         // lossy default encoder.
         const manager = this.editor.markdown as unknown as ManagerWithEncode;
 
-        manager.encodeTextForMarkdown = (text) => text;
+        // Replace the manager's encoder. Upstream HTML-entity-encodes (`<`→`&lt;`) and backslash-escapes
+        // ``` ` * _ [ ] ~ \ ```; both are wrong here — the load side keeps `\`+punct literal and decodes named
+        // entities, so re-applying either would double backslashes or re-freeze `&lt;`. Prose is therefore
+        // emitted verbatim. The one exception is an inline code span: it needs a real CommonMark fence sized to
+        // its content (see serializeCodeSpan). The code MARK is the discriminator, NOT the manager's broader
+        // isInsideCode — a code BLOCK's body arrives here with empty marks (parent is codeBlock) and must stay
+        // verbatim, its fence coming from TunedCodeBlock.
+        manager.encodeTextForMarkdown = (text, node) => (hasCodeMark(node) ? serializeCodeSpan(text) : text);
     },
     // Lower priority than the Markdown extension so this runs AFTER its onBeforeCreate has created the
     // manager and assigned editor.markdown. onBeforeCreate (not onCreate) because it is synchronous —

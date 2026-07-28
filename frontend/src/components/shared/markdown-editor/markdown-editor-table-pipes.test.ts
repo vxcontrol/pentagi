@@ -83,6 +83,14 @@ describe('table cell with a piped code span — content survives load and conver
         expect(out).not.toContain('\\|');
         expect(roundTrip(out)).toBe(out);
     });
+
+    it('keeps a code span with a backtick and a pipe inside a cell', () => {
+        const out = roundTrip('| Op | Meaning |\n| --- | --- |\n| `` `x` | y `` | kept |');
+
+        expect(out).toContain('kept');
+        expect(out).toContain('`` `x` \\| y ``');
+        expect(roundTrip(out)).toBe(out);
+    });
 });
 
 describe('pipe-less GFM tables (no outer pipe) — cells survive too', () => {
