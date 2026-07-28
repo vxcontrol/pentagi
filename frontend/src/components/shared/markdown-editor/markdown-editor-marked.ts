@@ -127,6 +127,27 @@ export const escapeCellPipes = (text: string): string => {
 // drop cells (tiptap PR #7884). renderTableToMarkdown emits cell content only via h.renderChildren, so wrapping
 // that one call to escape pipes fixes the save side, on the official alignment-aware renderer.
 // The LOAD side of the same class is covered by the tuned Lexer subclass in createTunedMarked above.
+// GFM has no headerless table, and renderTableToMarkdown answers that by emitting an EMPTY header row above
+// the demoted rows — so every header-off + save + reload cycle grew the table by one blank row and the header
+// switch silently flipped back on. Promote the first row instead: the row count and every cell survive, and a
+// second save is a no-op because the promoted table already has a header.
+const withPromotedHeaderRow = (node: JSONContent): JSONContent => {
+    const rows = node.content ?? [];
+    const firstRow = rows[0];
+
+    if (!firstRow?.content?.length || firstRow.content.some((cell) => cell.type === 'tableHeader')) {
+        return node;
+    }
+
+    return {
+        ...node,
+        content: [
+            { ...firstRow, content: firstRow.content.map((cell) => ({ ...cell, type: 'tableHeader' })) },
+            ...rows.slice(1),
+        ],
+    };
+};
+
 export const TunedTable = Table.extend({
     renderMarkdown(node: JSONContent, helpers: MarkdownRendererHelpers) {
         const pipeEscaping: MarkdownRendererHelpers = {
@@ -137,7 +158,10 @@ export const TunedTable = Table.extend({
         // renderTableToMarkdown joins a multi-block cell's children (e.g. two paragraphs from Enter-in-cell) with
         // a U+001F separator, outside renderChildren. A GFM cell is single-line, so collapse it to a space rather
         // than persist a raw control byte that survives into the saved .tmpl/knowledge and round-trips unchanged.
-        return renderTableToMarkdown(node, pipeEscaping).replaceAll(String.fromCharCode(0x1f), ' ');
+        return renderTableToMarkdown(withPromotedHeaderRow(node), pipeEscaping).replaceAll(
+            String.fromCharCode(0x1f),
+            ' ',
+        );
     },
 });
 

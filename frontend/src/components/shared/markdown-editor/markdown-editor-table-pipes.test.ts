@@ -435,3 +435,53 @@ describe('a Go template pipeline in a table cell keeps its own pipe', () => {
         expect(roundTrip('| a | b |\n| --- | --- |\n| `x | y` | z |')).toContain('\\|');
     });
 });
+
+describe('a table with no header row keeps its row count across a save', () => {
+    const rowsOf = (markdown: string) => {
+        const editor = new Editor({
+            content: markdown,
+            contentType: 'markdown',
+            extensions: createMarkdownExtensions(),
+        });
+        let rows = 0;
+
+        editor.state.doc.descendants((node) => {
+            if (node.type.name === 'tableRow') {
+                rows += 1;
+            }
+
+            return true;
+        });
+
+        const saved = editor.getMarkdown();
+
+        editor.destroy();
+
+        return { rows, saved };
+    };
+
+    // GFM has no headerless table, so the serializer used to emit an EMPTY header row above the demoted rows:
+    // every header-off + save + reload cycle grew the table by one blank row (2 → 3 → 4) and the switch
+    // silently flipped back on. Promoting the first row keeps the row count and every cell.
+    it('does not grow when the header row is toggled off', () => {
+        const editor = new Editor({
+            content: ['| a | b |', '| --- | --- |', '| 1 | 2 |'].join('\n'),
+            contentType: 'markdown',
+            extensions: createMarkdownExtensions(),
+        });
+
+        editor.commands.setTextSelection(3);
+        editor.commands.toggleHeaderRow();
+
+        const saved = editor.getMarkdown();
+
+        editor.destroy();
+
+        const first = rowsOf(saved);
+
+        expect(first.rows).toBe(2);
+        expect(saved).toContain('a');
+        expect(saved).toContain('1');
+        expect(rowsOf(first.saved).rows).toBe(2);
+    });
+});
