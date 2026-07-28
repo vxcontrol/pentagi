@@ -285,8 +285,22 @@ function FormMarkdownItem<T extends FieldValues>({
     );
 }
 
+// Same class as templates: one element serves every `/settings/prompts/:promptId`, so a POP across prompt
+// URLs kept the previous prompt's dirty template — and the previous `activeTab`, which on a tool prompt renders
+// no TabsContent and left the header Save submitting a form id that no longer exists. A key per prompt gives
+// both a fresh start.
 function SettingsPrompt() {
     const { promptId } = useParams<{ promptId: string }>();
+
+    return (
+        <SettingsPromptEditor
+            key={promptId ?? 'new'}
+            promptId={promptId}
+        />
+    );
+}
+
+function SettingsPromptEditor({ promptId }: { promptId?: string }) {
     const { isDesktop } = useBreakpoint();
 
     const { data, error, loading, refetch } = useQuery(SettingsPromptsDocument);

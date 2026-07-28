@@ -235,9 +235,23 @@ const renderTemplateItem = (item: Template, isCurrent: boolean): ReactNode => (
     <span className={cn('min-w-0 flex-1 truncate', isCurrent && 'font-medium')}>{item.title}</span>
 );
 
+// One React element serves every `/templates/:templateId`, so without a key the form instance — which sets
+// `keepDirtyValues` so a subscription resync cannot wipe an unsaved body — carried one template's edited text
+// onto the next template and Save wrote it to the wrong row. Keying by id gives each entity its own form, the
+// way knowledge.tsx already keys <KnowledgeForm>. It also stops `/templates/new` inheriting an abandoned draft.
 function Template() {
-    const navigate = useNavigate();
     const { templateId } = useParams<{ templateId?: string }>();
+
+    return (
+        <TemplateForm
+            key={templateId ?? 'new'}
+            templateId={templateId}
+        />
+    );
+}
+
+function TemplateForm({ templateId }: { templateId?: string }) {
+    const navigate = useNavigate();
     const { createTemplate, deleteTemplate, updateTemplate } = useTemplates();
 
     const { isDesktop, isMobile } = useBreakpoint();
@@ -354,7 +368,9 @@ function Template() {
                     await createTemplate(values.title, values.text);
                 } else if (templateId) {
                     await updateTemplate(templateId, { text: values.text, title: values.title });
-                    reset(values, { keepDefaultValues: false });
+                    // See knowledge-form.tsx: the form-level `resetOptions` are merged into every manual
+                    // reset, so a post-save reset inherits `keepDirtyValues` unless it opts out.
+                    reset(values, { keepDefaultValues: false, keepDirtyValues: false });
                 }
 
                 return true;
