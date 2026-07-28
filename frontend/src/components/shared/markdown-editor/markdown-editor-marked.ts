@@ -57,7 +57,13 @@ const createTunedMarked = () => {
         // BEFORE block tokenization, so unescaping there hands marked a live `#`/`>` and the paragraph the
         // escape exists to protect becomes a heading or a quote again.
         override inlineTokens(src: string, tokens = []) {
-            return super.inlineTokens(src.replace(/(^|\n)\\([#>])/g, '$1$2'), tokens);
+            const unescaped = src
+                .replace(/(^|\n)\\([#>])/g, '$1$2')
+                // Only a backslash before a run that FILLS the line, matching what the serializer escapes —
+                // an author's `\-` inside `[a-z\-_]` keeps its backslash.
+                .replace(/(\n {0,3})\\((?:=+|-+) *)(?=\n|$)/g, '$1$2');
+
+            return super.inlineTokens(unescaped, tokens);
         }
 
         override lex(src: string) {

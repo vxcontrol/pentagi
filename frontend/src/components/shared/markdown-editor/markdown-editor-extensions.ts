@@ -427,6 +427,17 @@ const escapeLineLeadingBlockMarkers = (markdown: string): string =>
         (_match, lineStart: string, indent: string, marker: string) => `${lineStart}${indent}\\${marker}`,
     );
 
+// marked reads a line of only `=` or `-` sitting directly under text as a setext underline (`(=+|-+) *` — no
+// three-character minimum), so a hard break followed by such a line turns the whole paragraph into a heading
+// and eats the run. Only continuation lines need it: a paragraph's first line is preceded by a blank line,
+// which stops lheading. The load side unescapes exactly this shape, so an author's `\-` inside a character
+// class is left alone.
+const escapeSetextUnderlines = (markdown: string): string =>
+    markdown.replace(
+        /(\n {0,3})((?:=+|-+) *)(?=\n|$)/g,
+        (_match, lineStart: string, run: string) => `${lineStart}\\${run}`,
+    );
+
 // StarterKit's Bold/Italic register BOTH `**`/`*` and `__`/`_` input+paste rules. The marked layer keeps
 // `_`-emphasis literal on load/paste, so leaving the underscore TYPING rules on would diverge — typed
 // `__init__`/`_word_` would emphasize (→ `**init**`/`*word*`) while the same text loaded stays literal,
@@ -461,7 +472,9 @@ const TunedStarterKit = StarterKit.extend({
             if (extension.name === 'paragraph') {
                 return extension.extend({
                     renderMarkdown(node: JSONContent, helpers: MarkdownRendererHelpers) {
-                        return escapeLineLeadingBlockMarkers(helpers.renderChildren(node.content ?? []));
+                        return escapeSetextUnderlines(
+                            escapeLineLeadingBlockMarkers(helpers.renderChildren(node.content ?? [])),
+                        );
                     },
                 });
             }

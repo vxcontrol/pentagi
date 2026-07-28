@@ -1047,3 +1047,56 @@ describe('line-leading block markers are escaped to marked grammar, inline backs
         expect(roundTrip(source)).toBe(source);
     });
 });
+
+describe('a setext underline after a hard break does not turn the paragraph into a heading', () => {
+    const hardBreakParagraph = (first: string, second: string) => {
+        const editor = new Editor({
+            content: {
+                content: [
+                    {
+                        content: [{ text: first, type: 'text' }, { type: 'hardBreak' }, { text: second, type: 'text' }],
+                        type: 'paragraph',
+                    },
+                ],
+                type: 'doc',
+            },
+            extensions: createMarkdownExtensions(),
+        });
+        const saved = editor.getMarkdown();
+
+        editor.destroy();
+
+        const reloaded = new Editor({
+            content: saved,
+            contentType: 'markdown',
+            extensions: createMarkdownExtensions(),
+        });
+        const out = { counts: structuralCounts(saved), saved, text: reloaded.state.doc.textContent };
+
+        reloaded.destroy();
+
+        return out;
+    };
+
+    // marked's lheading run is `(=+|-+) *` — no three-character minimum, and trailing spaces are allowed. A
+    // single `-` on the line after a hard break was enough to swallow the paragraph into an H2.
+    it.each(['===', '---', '=', '-', '--', '===   '])('a continuation line of %s stays text', (underline) => {
+        const result = hardBreakParagraph('foo', underline);
+
+        expect(result.counts).toEqual({});
+        expect(result.text).toBe(`foo${underline}`);
+    });
+
+    it('leaves a real setext heading in stored markdown alone', () => {
+        expect(structuralCounts(roundTrip('Title\n===')).heading).toBe(1);
+    });
+
+    // The escape must not leak a literal backslash into the document text, and it must not eat a backslash the
+    // author wrote inside a character class.
+    it.each(['char class [a-z\\-_] here', 'sed s/a\\=b/x/', 'a \\- b and c \\= d'])(
+        'keeps an inline backslash before = or - byte-identical: %s',
+        (source) => {
+            expect(roundTrip(source)).toBe(source);
+        },
+    );
+});
