@@ -485,3 +485,33 @@ describe('a table with no header row keeps its row count across a save', () => {
         expect(rowsOf(first.saved).rows).toBe(2);
     });
 });
+
+describe('adjacent tables do not accumulate blank paragraphs', () => {
+    const kindsOf = (markdown: string) => {
+        const editor = new Editor({
+            content: markdown,
+            contentType: 'markdown',
+            extensions: createMarkdownExtensions(),
+        });
+        const kinds: string[] = [];
+
+        editor.state.doc.forEach((node) => kinds.push(node.type.name));
+        editor.destroy();
+
+        return kinds.join(',');
+    };
+
+    // The table renderer emits a newline of its own on top of the block separator, so between two adjacent
+    // tables that extra line reloaded as an empty paragraph — which serialised to another blank line on the
+    // next save. Measured before the fix: 68 → 88 → 90 → 92 → 94 bytes, one paragraph per cycle, no fixed point.
+    it('keeps two tables adjacent across repeated saves', () => {
+        const source = ['| a | b |', '| --- | --- |', '| 1 | 2 |', '', '| c | d |', '| --- | --- |', '| 3 | 4 |'].join(
+            '\n',
+        );
+        const once = roundTrip(source);
+
+        expect(kindsOf(source)).toBe('table,table');
+        expect(kindsOf(once)).toBe('table,table');
+        expect(roundTrip(once)).toBe(once);
+    });
+});

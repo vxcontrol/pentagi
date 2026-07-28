@@ -158,10 +158,14 @@ export const TunedTable = Table.extend({
         // renderTableToMarkdown joins a multi-block cell's children (e.g. two paragraphs from Enter-in-cell) with
         // a U+001F separator, outside renderChildren. A GFM cell is single-line, so collapse it to a space rather
         // than persist a raw control byte that survives into the saved .tmpl/knowledge and round-trips unchanged.
-        return renderTableToMarkdown(withPromotedHeaderRow(node), pipeEscaping).replaceAll(
-            String.fromCharCode(0x1f),
-            ' ',
-        );
+        // Trim the renderer's own surrounding blank lines. It emits a leading and trailing newline on top of the
+        // block separator the manager already adds, and between two ADJACENT tables that extra line reloads as an
+        // empty paragraph — which serialises to another blank line on the next save. Measured before the trim:
+        // two tables separated by one blank line gained one empty paragraph per cycle and never converged.
+        return renderTableToMarkdown(withPromotedHeaderRow(node), pipeEscaping)
+            .replaceAll(String.fromCharCode(0x1f), ' ')
+            .replace(/^\n+/, '')
+            .replace(/\n+$/, '');
     },
 });
 
