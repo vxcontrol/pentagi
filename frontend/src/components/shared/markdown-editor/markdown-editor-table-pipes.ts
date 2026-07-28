@@ -20,7 +20,11 @@
 // Capture the full fence run (not a fixed 3) plus the trailing text: renderTunedCodeBlock widens a fence to
 // 4+ backticks when its content holds a ``` line, and CommonMark closes a fence only with a run of the same
 // char, length >= the opener, and no info string — so length- and char-aware tracking is load-bearing.
-const FENCE_LINE = /^ {0,3}(`{3,}|~{3,})(.*)$/;
+// The backtick branch carries marked's own lookahead: a backtick anywhere in the rest of the line means this
+// is prose holding an inline code span, not a fence. Without it the scanner opens a fence marked never opened
+// and the two run out of step in BOTH directions — tables after it lose pipe protection, and once the phantom
+// closes the parity is inverted and pipes get escaped inside real code. Tilde fences carry no such rule.
+const FENCE_LINE = /^ {0,3}(`{3,}(?=[^`\n]*$)|~{3,})(.*)$/;
 // Written to be linear: the trailing `(?: *\|)? *$` (not `\|? *$`) plus per-cell spacing keep any two space
 // runs from competing for the same characters, so a crafted delimiter-looking line can't force O(n²) backtracking.
 const TABLE_DELIMITER_LINE = /^ {0,3}\|? *:?-+:?(?: *\| *:?-+:?)*(?: *\|)? *$/;

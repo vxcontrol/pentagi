@@ -1,5 +1,7 @@
+import { Editor } from '@tiptap/core';
 import { describe, expect, it } from 'vitest';
 
+import { createMarkdownExtensions } from './markdown-editor-extensions';
 import { escapeTablePipes } from './markdown-editor-table-pipes';
 import { roundTrip, setupEditorJsdom } from './markdown-editor-test-setup';
 
@@ -235,5 +237,70 @@ describe('TABLE_DELIMITER_LINE is linear (ReDoS guard)', () => {
         escapeTablePipes(evil);
 
         expect(performance.now() - started).toBeLessThan(100);
+    });
+});
+
+describe('a backtick in a backtick fence info string is not a fence opener', () => {
+    const cellsOf = (markdown: string) => {
+        const editor = new Editor({
+            content: markdown,
+            contentType: 'markdown',
+            extensions: createMarkdownExtensions(),
+        });
+        const cells: string[] = [];
+
+        editor.state.doc.descendants((node) => {
+            if (node.type.name === 'tableCell' || node.type.name === 'tableHeader') {
+                cells.push(node.textContent);
+            }
+
+            return true;
+        });
+        editor.destroy();
+
+        return cells;
+    };
+
+    const TABLE = ['| Op | Meaning |', '| --- | --- |', '| `x | y` | KEEP |'].join('\n');
+
+    // marked's fence rule is /^ {0,3}(`{3,}(?=[^`\n]*(?:\n|$))|~{3,})…/ — the no-backtick lookahead applies to
+    // the BACKTICK branch only. A prose line holding an inline triple-backtick span is not a fence for marked,
+    // so treating it as one desynchronises the scanner from the parser.
+    it('keeps pipe protection for a table that follows an inline triple-backtick span', () => {
+        expect(cellsOf(['```pnpm run dev``` starts it', '', TABLE].join('\n'))).toEqual([
+            'Op',
+            'Meaning',
+            'x | y',
+            'KEEP',
+        ]);
+    });
+
+    it('protects a table that follows no fence at all, unchanged', () => {
+        expect(cellsOf(TABLE)).toEqual(['Op', 'Meaning', 'x | y', 'KEEP']);
+    });
+
+    // The opposite direction of the same desynchronisation: once the phantom fence closes, the scanner's parity
+    // is inverted and it escapes pipes INSIDE a real code block, injecting a backslash into code content.
+    it('leaves a real code block byte-identical, injecting no escape into its content', () => {
+        const source = ['```a`b', '```', '', TABLE].join('\n');
+        const editor = new Editor({ content: source, contentType: 'markdown', extensions: createMarkdownExtensions() });
+        const codeBlocks: string[] = [];
+
+        editor.state.doc.descendants((node) => {
+            if (node.type.name === 'codeBlock') {
+                codeBlocks.push(node.textContent);
+            }
+
+            return true;
+        });
+        editor.destroy();
+
+        expect(codeBlocks.join('')).not.toContain('\\|');
+    });
+
+    it('still treats a genuine fence as a fence', () => {
+        expect(escapeTablePipes(['```js', '| a | b |', '```'].join('\n'))).toBe(
+            ['```js', '| a | b |', '```'].join('\n'),
+        );
     });
 });
