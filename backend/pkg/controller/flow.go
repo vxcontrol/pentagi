@@ -651,7 +651,7 @@ func (fw *flowWorker) PutInput(
 
 		select {
 		case err := <-flin.done:
-			return err // nil or error
+			return err
 		case <-timer.C:
 			return nil // no early error
 		case <-fw.ctx.Done():

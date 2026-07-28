@@ -250,7 +250,6 @@ func TestAPIKeyTransportRoundTrip(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// create mock round tripper that captures the request
 			var capturedReq *http.Request
 			mockRT := &mockRoundTripper{
 				roundTripFunc: func(req *http.Request) (*http.Response, error) {
@@ -270,7 +269,6 @@ func TestAPIKeyTransportRoundTrip(t *testing.T) {
 				ProxyURL:  "",
 			}
 
-			// create test request
 			reqURL := tt.requestURL
 			if tt.requestQuery != "" {
 				reqURL += "?" + tt.requestQuery
@@ -280,13 +278,11 @@ func TestAPIKeyTransportRoundTrip(t *testing.T) {
 				t.Fatalf("Failed to create request: %v", err)
 			}
 
-			// execute RoundTrip
 			_, err = transport.RoundTrip(req)
 			if err != nil {
 				t.Fatalf("RoundTrip failed: %v", err)
 			}
 
-			// verify captured request
 			if capturedReq == nil {
 				t.Fatal("Request was not captured")
 			}

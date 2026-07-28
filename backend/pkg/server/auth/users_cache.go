@@ -39,25 +39,20 @@ func (uc *UserCache) SetTTL(ttl time.Duration) {
 
 // GetUserHash retrieves user hash and status from cache or database
 func (uc *UserCache) GetUserHash(userID uint64) (string, models.UserStatus, error) {
-	// check cache first
 	if entry, ok := uc.cache.Load(userID); ok {
 		cached := entry.(userCacheEntry)
 		if time.Now().Before(cached.expiresAt) {
-			// return cached "not found" error
 			if cached.notFound {
 				return "", "", gorm.ErrRecordNotFound
 			}
 			return cached.hash, cached.status, nil
 		}
-		// cache entry expired, remove it
 		uc.cache.Delete(userID)
 	}
 
-	// load from database
 	var user models.User
 	if err := uc.db.Where("id = ?", userID).First(&user).Error; err != nil {
 		if gorm.IsRecordNotFoundError(err) {
-			// cache negative result (user not found)
 			uc.cache.Store(userID, userCacheEntry{
 				notFound:  true,
 				expiresAt: time.Now().Add(uc.ttl),
@@ -67,7 +62,6 @@ func (uc *UserCache) GetUserHash(userID uint64) (string, models.UserStatus, erro
 		return "", "", err
 	}
 
-	// update cache with positive result
 	uc.cache.Store(userID, userCacheEntry{
 		hash:      user.Hash,
 		status:    user.Status,

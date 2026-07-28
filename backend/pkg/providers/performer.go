@@ -70,7 +70,6 @@ func (fp *flowProvider) performAgentChain(
 		"msg_chain_id": chainID,
 	}))
 
-	// Track execution time for duration calculation
 	lastUpdateTime := time.Now()
 	rollLastUpdateTime := func() float64 {
 		durationDelta := time.Since(lastUpdateTime).Seconds()

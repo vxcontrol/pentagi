@@ -559,7 +559,7 @@ func (aw *assistantWorker) PutInput(ctx context.Context, input string, useAgents
 
 		select {
 		case err := <-ain.done:
-			return err // nil or error
+			return err
 		case <-timer.C:
 			return nil // no early error
 		case <-aw.ctx.Done():

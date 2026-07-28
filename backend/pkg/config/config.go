@@ -257,7 +257,6 @@ type Config struct {
 }
 
 func NewConfig() (*Config, error) {
-	// Attempt to load .env file (silently ignore if not present)
 	_ = godotenv.Load()
 
 	var config Config
@@ -282,12 +281,10 @@ func NewConfig() (*Config, error) {
 }
 
 func ensureInstallationID(config *Config) {
-	// validate current installation ID from environment
 	if config.InstallationID != "" && uuid.Validate(config.InstallationID) == nil {
 		return
 	}
 
-	// check local file for installation ID
 	installationIDPath := filepath.Join(config.DataDir, "installation_id")
 	installationID, err := os.ReadFile(installationIDPath)
 	if err != nil {
@@ -298,17 +295,14 @@ func ensureInstallationID(config *Config) {
 		config.InstallationID = uuid.New().String()
 	}
 
-	// write installation ID to local file
 	_ = os.WriteFile(installationIDPath, []byte(config.InstallationID), 0644)
 }
 
 func ensureLicenseKey(config *Config) {
-	// validate current license key from environment
 	if config.LicenseKey == "" {
 		return
 	}
 
-	// check license key validity, if invalid, set to empty
 	info, err := sdk.IntrospectLicenseKey(config.LicenseKey)
 	if err != nil {
 		config.LicenseKey = ""
@@ -364,7 +358,6 @@ func (c *Config) GetSecretPatterns() []patterns.Pattern {
 			continue
 		}
 
-		// escape regex special characters
 		escaped := regexp.QuoteMeta(trimmed)
 		pattern := patterns.Pattern{
 			Name:  s.name,

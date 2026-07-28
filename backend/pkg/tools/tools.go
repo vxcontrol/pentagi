@@ -657,7 +657,6 @@ func (fte *flowToolsExecutor) findMissingInContainer(ctx context.Context, entrie
 		return nil, fmt.Errorf("file-check exec failed with exit code %d: %s", inspect.ExitCode, strings.TrimSpace(string(output)))
 	}
 
-	// Build a lookup map for O(1) access.
 	byContainerPath := make(map[string]fileSyncEntry, len(entries))
 	for _, e := range entries {
 		byContainerPath[e.containerPath] = e

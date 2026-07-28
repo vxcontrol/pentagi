@@ -432,7 +432,6 @@ func (mc *ModelConfig) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
-	// Parse each field manually
 	if name, ok := raw["name"].(string); ok {
 		mc.Name = name
 	}
@@ -487,7 +486,6 @@ func (mc *ModelConfig) UnmarshalYAML(value *yaml.Node) error {
 		return err
 	}
 
-	// Parse each field manually
 	if name, ok := raw["name"].(string); ok {
 		mc.Name = name
 	}
@@ -763,7 +761,6 @@ func (ac *AgentConfig) marshalMap() map[string]any {
 		return nil
 	}
 
-	// use raw map if available, otherwise create a new one
 	if ac.raw != nil {
 		return ac.raw
 	}

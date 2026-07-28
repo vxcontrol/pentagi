@@ -92,10 +92,8 @@ func New(
 		return nil, err
 	}
 
-	// Use centralized model loading with prefix filtering
 	models, err := provider.LoadModelsFromHTTP(baseURL, baseKey, httpClient, cfg.LLMServerProvider)
 	if err != nil {
-		// If loading fails, fallback to empty models list
 		models = pconfig.ModelsConfig{}
 	}
 

@@ -39,25 +39,20 @@ func (tc *TokenCache) SetTTL(ttl time.Duration) {
 
 // GetStatus retrieves token status and privileges from cache or database
 func (tc *TokenCache) GetStatus(tokenID string) (models.TokenStatus, []string, error) {
-	// check cache first
 	if entry, ok := tc.cache.Load(tokenID); ok {
 		cached := entry.(tokenCacheEntry)
 		if time.Now().Before(cached.expiresAt) {
-			// return cached "not found" error
 			if cached.notFound {
 				return "", nil, gorm.ErrRecordNotFound
 			}
 			return cached.status, cached.privileges, nil
 		}
-		// cache entry expired, remove it
 		tc.cache.Delete(tokenID)
 	}
 
-	// load from database with role privileges
 	var token models.APIToken
 	if err := tc.db.Where("token_id = ? AND deleted_at IS NULL", tokenID).First(&token).Error; err != nil {
 		if gorm.IsRecordNotFoundError(err) {
-			// cache negative result (token not found)
 			tc.cache.Store(tokenID, tokenCacheEntry{
 				notFound:  true,
 				expiresAt: time.Now().Add(tc.ttl),
@@ -67,13 +62,11 @@ func (tc *TokenCache) GetStatus(tokenID string) (models.TokenStatus, []string, e
 		return "", nil, err
 	}
 
-	// load privileges for the token's role
 	var privileges []models.Privilege
 	if err := tc.db.Where("role_id = ?", token.RoleID).Find(&privileges).Error; err != nil {
 		return "", nil, err
 	}
 
-	// extract privilege names
 	privNames := make([]string, len(privileges))
 	for i, priv := range privileges {
 		privNames[i] = priv.Name
@@ -82,7 +75,6 @@ func (tc *TokenCache) GetStatus(tokenID string) (models.TokenStatus, []string, e
 	// always add automation privilege for API tokens
 	privNames = append(privNames, PrivilegeAutomation)
 
-	// update cache with positive result
 	tc.cache.Store(tokenID, tokenCacheEntry{
 		status:     token.Status,
 		privileges: privNames,
@@ -100,13 +92,11 @@ func (tc *TokenCache) Invalidate(tokenID string) {
 
 // InvalidateUser removes all tokens for a specific user from cache
 func (tc *TokenCache) InvalidateUser(userID uint64) {
-	// load all tokens for this user
 	var tokens []models.APIToken
 	if err := tc.db.Where("user_id = ? AND deleted_at IS NULL", userID).Find(&tokens).Error; err != nil {
 		return
 	}
 
-	// invalidate each token in cache
 	for _, token := range tokens {
 		tc.cache.Delete(token.TokenID)
 	}

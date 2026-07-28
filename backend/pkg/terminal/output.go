@@ -151,14 +151,11 @@ func RenderMarkdown(markdown string) {
 
 // InteractivePromptContext prompts the user for input with support for context cancellation
 func InteractivePromptContext(ctx context.Context, message string, reader io.Reader) (string, error) {
-	// Display the prompt
 	infoColor.Printf("%s: ", message)
 
-	// Create a channel for the user input
 	inputCh := make(chan string, 1)
 	errCh := make(chan error, 1)
 
-	// Start a goroutine to read user input
 	go func() {
 		// Use a buffered reader to properly handle input
 		r, ok := reader.(*os.File)
@@ -186,7 +183,6 @@ func InteractivePromptContext(ctx context.Context, message string, reader io.Rea
 		}
 	}()
 
-	// Wait for input or context cancellation
 	select {
 	case input := <-inputCh:
 		return input, nil
@@ -228,7 +224,6 @@ func GetYesNoInputContext(ctx context.Context, message string, reader io.Reader)
 
 // IsMarkdownContent checks if the input string is likely markdown content
 func IsMarkdownContent(content string) bool {
-	// Determine if content is likely markdown by checking for common indicators
 	if strings.HasPrefix(content, "#") ||
 		strings.Contains(content, "\n#") ||
 		strings.Contains(content, "[") && strings.Contains(content, "](") ||

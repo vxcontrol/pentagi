@@ -257,7 +257,6 @@ func (r *mutationResolver) RenameFlow(ctx context.Context, flowID int64, title s
 
 	err = r.Controller.RenameFlow(ctx, flowID, title)
 	if errors.Is(err, controller.ErrFlowNotFound) {
-		// if flow worker not found, update flow title in DB and notify about it
 		flow, err := r.DB.UpdateFlowTitle(ctx, database.UpdateFlowTitleParams{
 			ID:    flowID,
 			Title: title,
@@ -1956,7 +1955,6 @@ func (r *queryResolver) FlowsExecutionStatsByPeriod(ctx context.Context, period 
 		"period": period,
 	}).Debug("get flows execution stats by period")
 
-	// Step 1: Get flows for the period
 	type flowInfo struct {
 		ID    int64
 		Title string
@@ -1992,23 +1990,19 @@ func (r *queryResolver) FlowsExecutionStatsByPeriod(ctx context.Context, period 
 		return nil, fmt.Errorf("unsupported period: %s", period)
 	}
 
-	// Step 2: Build stats for each flow using analytics functions
 	result := make([]*model.FlowExecutionStats, 0, len(flows))
 
 	for _, flow := range flows {
-		// Get raw data for this flow
 		tasks, err := r.DB.GetTasksForFlow(ctx, flow.ID)
 		if err != nil {
 			return nil, err
 		}
 
-		// Collect task IDs
 		taskIDs := make([]int64, len(tasks))
 		for i, task := range tasks {
 			taskIDs[i] = task.ID
 		}
 
-		// Get subtasks for all tasks
 		var subtasks []database.GetSubtasksForTasksRow
 		if len(taskIDs) > 0 {
 			subtasks, err = r.DB.GetSubtasksForTasks(ctx, taskIDs)
@@ -2017,25 +2011,21 @@ func (r *queryResolver) FlowsExecutionStatsByPeriod(ctx context.Context, period 
 			}
 		}
 
-		// Get msgchains for the flow
 		msgchains, err := r.DB.GetMsgchainsForFlow(ctx, flow.ID)
 		if err != nil {
 			return nil, err
 		}
 
-		// Get toolcalls for the flow
 		toolcalls, err := r.DB.GetToolcallsForFlow(ctx, flow.ID)
 		if err != nil {
 			return nil, err
 		}
 
-		// Get assistants count for the flow
 		assistantsCount, err := r.DB.GetAssistantsCountForFlow(ctx, flow.ID)
 		if err != nil {
 			return nil, err
 		}
 
-		// Build execution stats using analytics functions
 		flowStats := converter.BuildFlowExecutionStats(flow.ID, flow.Title, tasks, subtasks, msgchains, toolcalls, int(assistantsCount))
 		result = append(result, flowStats)
 	}

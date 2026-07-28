@@ -126,7 +126,6 @@ func (w *noopObservationWrapper) ctx() context.Context {
 }
 
 func (w *noopObservationWrapper) end(result string, err error, durationSeconds float64) {
-	// no-op
 }
 
 type customExecutor struct {
@@ -258,7 +257,6 @@ func (ce *customExecutor) Execute(
 		return fmt.Sprintf("failed to unmarshal '%s' tool call arguments: %v: fix it", name, err), nil
 	}
 
-	// Create observation based on tool type
 	toolType := GetToolType(name)
 	var obsWrapper observationWrapper
 
@@ -273,11 +271,9 @@ func (ce *customExecutor) Execute(
 		// Skip - handlers create RETRIEVER internally
 		obsWrapper = &noopObservationWrapper{context: ctx}
 	default:
-		// Unknown type - use no-op wrapper
 		obsWrapper = &noopObservationWrapper{context: ctx}
 	}
 
-	// Use context from observation wrapper
 	ctx = obsWrapper.ctx()
 
 	var err error

@@ -56,7 +56,6 @@ func NewTokenService(
 // @Failure 500 {object} response.errorResp "internal error on creating token"
 // @Router /tokens [post]
 func (s *TokenService) CreateToken(c *gin.Context) {
-	// check for default salt
 	if s.globalSalt == "" || s.globalSalt == "salt" {
 		logger.FromContext(c).Errorf("token creation attempted with default salt")
 		response.Error(c, response.ErrTokenCreationDisabled, errors.New("token creation is disabled with default salt"))
@@ -79,7 +78,6 @@ func (s *TokenService) CreateToken(c *gin.Context) {
 		return
 	}
 
-	// check if name is unique for this user (if provided)
 	if req.Name != nil && *req.Name != "" {
 		var existing models.APIToken
 		err := s.db.
@@ -93,7 +91,6 @@ func (s *TokenService) CreateToken(c *gin.Context) {
 		}
 	}
 
-	// generate token_id
 	tokenID, err := auth.GenerateTokenID()
 	if err != nil {
 		logger.FromContext(c).WithError(err).Errorf("error generating token ID")
@@ -101,10 +98,8 @@ func (s *TokenService) CreateToken(c *gin.Context) {
 		return
 	}
 
-	// create JWT claims
 	claims := auth.MakeAPITokenClaims(tokenID, uhash, uid, rid, req.TTL)
 
-	// sign token
 	token, err := auth.MakeAPIToken(s.globalSalt, claims)
 	if err != nil {
 		logger.FromContext(c).WithError(err).Errorf("error signing token")
@@ -112,7 +107,6 @@ func (s *TokenService) CreateToken(c *gin.Context) {
 		return
 	}
 
-	// save to database
 	apiToken := models.APIToken{
 		TokenID: tokenID,
 		UserID:  uid,
@@ -162,10 +156,8 @@ func (s *TokenService) ListTokens(c *gin.Context) {
 
 	query := s.db.Where("deleted_at IS NULL")
 
-	// check if user has admin privilege
 	hasAdmin := auth.LookupPerm(prms, "settings.tokens.admin")
 	if !hasAdmin {
-		// regular user sees only their own tokens
 		query = query.Where("user_id = ?", uid)
 	}
 
@@ -220,7 +212,6 @@ func (s *TokenService) GetToken(c *gin.Context) {
 		return
 	}
 
-	// check authorization
 	hasAdmin := auth.LookupPerm(prms, "settings.tokens.admin")
 	if !hasAdmin && token.UserID != uid {
 		logger.FromContext(c).Errorf("user %d attempted to access token of user %d", uid, token.UserID)
@@ -283,7 +274,6 @@ func (s *TokenService) UpdateToken(c *gin.Context) {
 		return
 	}
 
-	// check authorization
 	hasAdmin := auth.LookupPerm(prms, "settings.tokens.admin")
 	if !hasAdmin && token.UserID != uid {
 		logger.FromContext(c).Errorf("user %d attempted to update token of user %d", uid, token.UserID)
@@ -291,10 +281,8 @@ func (s *TokenService) UpdateToken(c *gin.Context) {
 		return
 	}
 
-	// update fields
 	updates := make(map[string]any)
 	if req.Name != nil {
-		// check uniqueness if name is changing
 		if token.Name == nil || *token.Name != *req.Name {
 			if *req.Name != "" {
 				var existing models.APIToken
@@ -327,14 +315,12 @@ func (s *TokenService) UpdateToken(c *gin.Context) {
 			return
 		}
 
-		// invalidate cache if status changed
 		if req.Status != "" {
 			s.tokenCache.Invalidate(tokenID)
 			// also invalidate all tokens for this user (in case of role change or security event)
 			s.tokenCache.InvalidateUser(token.UserID)
 		}
 
-		// reload token
 		if err := s.db.Where("token_id = ?", tokenID).First(&token).Error; err != nil {
 			logger.FromContext(c).WithError(err).Errorf("error reloading token")
 			response.Error(c, response.ErrInternal, err)
@@ -381,7 +367,6 @@ func (s *TokenService) DeleteToken(c *gin.Context) {
 		return
 	}
 
-	// check authorization
 	hasAdmin := auth.LookupPerm(prms, "settings.tokens.admin")
 	if !hasAdmin && token.UserID != uid {
 		logger.FromContext(c).Errorf("user %d attempted to delete token of user %d", uid, token.UserID)
@@ -396,7 +381,6 @@ func (s *TokenService) DeleteToken(c *gin.Context) {
 		return
 	}
 
-	// invalidate cache for this token and all user's tokens
 	s.tokenCache.Invalidate(tokenID)
 	s.tokenCache.InvalidateUser(token.UserID)
 

@@ -194,7 +194,6 @@ func (fp *flowProvider) performSubtasksRefiner(
 
 	logger.Debug("starting subtasks refiner")
 
-	// Track execution time for duration calculation
 	startTime := time.Now()
 
 	restoreChain := func(msgChain json.RawMessage) ([]llms.MessageContent, error) {

@@ -959,7 +959,6 @@ func ConvertUsageStats[T UsageStatsRow](stats T) *model.UsageStats {
 	var in, out, cacheIn, cacheOut int64
 	var costIn, costOut float64
 
-	// Extract fields based on type
 	switch v := any(stats).(type) {
 	case database.GetFlowUsageStatsRow:
 		in, out = v.TotalUsageIn, v.TotalUsageOut
@@ -1134,7 +1133,6 @@ func ConvertToolcallsStats[T ToolcallsStatsRow](stats T) *model.ToolcallsStats {
 	var count int64
 	var duration float64
 
-	// Extract fields based on type
 	switch v := any(stats).(type) {
 	case database.GetFlowToolcallsStatsRow:
 		count, duration = v.TotalCount, v.TotalDurationSeconds
@@ -1204,7 +1202,6 @@ func isAgentTool(functionName string) bool {
 	if !exists {
 		return false
 	}
-	// Agent tools include AgentToolType and StoreAgentResultToolType
 	return toolType == tools.AgentToolType || toolType == tools.StoreAgentResultToolType
 }
 
@@ -1244,7 +1241,6 @@ func ConvertFunctionToolcallsStatsForFlow(stats []database.GetToolcallsStatsByFu
 func ConvertFlowsStats[T FlowsStatsRow](stats T) *model.FlowsStats {
 	var flowsCount, tasksCount, subtasksCount, assistantsCount int64
 
-	// Extract fields based on type
 	switch v := any(stats).(type) {
 	case database.GetUserTotalFlowsStatsRow:
 		flowsCount, tasksCount, subtasksCount, assistantsCount = v.TotalFlowsCount, v.TotalTasksCount, v.TotalSubtasksCount, v.TotalAssistantsCount
@@ -1262,7 +1258,6 @@ func ConvertFlowsStats[T FlowsStatsRow](stats T) *model.FlowsStats {
 func ConvertFlowStats[T FlowStatsRow](stats T) *model.FlowStats {
 	var tasksCount, subtasksCount, assistantsCount int64
 
-	// Extract fields based on type
 	switch v := any(stats).(type) {
 	case database.GetFlowStatsRow:
 		tasksCount, subtasksCount, assistantsCount = v.TotalTasksCount, v.TotalSubtasksCount, v.TotalAssistantsCount

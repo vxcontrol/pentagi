@@ -42,7 +42,6 @@ var nonHTMLExtensions = []string{
 // isBinaryURL returns true when the URL points to a known non-HTML resource.
 func isBinaryURL(rawURL string) bool {
 	lower := strings.ToLower(rawURL)
-	// strip query string for extension matching
 	if idx := strings.Index(lower, "?"); idx != -1 {
 		lower = lower[:idx]
 	}
@@ -303,7 +302,6 @@ func (b *browser) resolveUrl(targetURL string) (*url.URL, error) {
 		host = u.Host
 	}
 
-	// determine if target is private or public
 	isPrivate := false
 
 	hostIP := net.ParseIP(host)
@@ -328,7 +326,6 @@ func (b *browser) resolveUrl(targetURL string) (*url.URL, error) {
 		}
 	}
 
-	// select appropriate scraper URL with fallback
 	var scraperURL string
 	if isPrivate {
 		scraperURL = b.scPrvURL

@@ -22,7 +22,6 @@ func CalculateSubtaskDuration(subtask database.Subtask, msgchains []database.Msg
 		return 0
 	}
 
-	// Calculate linear duration
 	var linearDuration float64
 	if subtask.Status == database.SubtaskStatusRunning {
 		// For running subtasks: from created_at to now
