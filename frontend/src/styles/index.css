@@ -575,6 +575,15 @@
     overflow: visible;
 }
 
+/* The editor gives itself this override (see the `.tiptap-content .ProseMirror pre` rules); the viewer used to
+   keep stock atom-one-dark, whose comment colour measures 2.43 light / 3.25 dark on the ground `.prose` paints
+   — below AA in BOTH themes, on the token most present in agent-generated code. The same value clears it at
+   5.24 / 7.03. Stock red is NOT mirrored: measured 4.59 / 6.15, it already passes. */
+.prose pre code.hljs .hljs-comment,
+.prose pre code.hljs .hljs-quote {
+    color: #949ba7;
+}
+
 /* Sonner */
 [data-sonner-toast][data-styled='true'] {
     gap: 8px !important;
@@ -786,8 +795,24 @@
     border-radius: calc(var(--radius) - 4px);
 }
 
-.tiptap-content .ProseMirror img.ProseMirror-selectednode {
+/* Every selectable node, not just images: a NodeSelection on an `hr` had no visual at all, and since
+   `.ProseMirror-hideselection` blanks the native highlight at the same time, the next keystroke replaced a
+   node the user could not see was selected. prosemirror-view ships an outline rule for this, but its
+   stylesheet is imported nowhere and tiptap's injected CSS carries no equivalent. */
+.tiptap-content .ProseMirror .ProseMirror-selectednode {
     outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+
+.tiptap-content .ProseMirror img.ProseMirror-selectednode {
+    outline-offset: 0;
+}
+
+/* tiptap injects `border-top: 1px solid black` for the gap cursor, so on the dark theme the caret you get
+   between two block nodes (pressing left/up at the start of a leading table or fence) is a black line on a
+   near-black background — a caret position with no visible caret. */
+.tiptap-content .ProseMirror-gapcursor::after {
+    border-top-color: var(--foreground);
 }
 
 /* `{{ ... }}` Go-template actions, highlighted via view-only decorations (document bytes untouched). */
