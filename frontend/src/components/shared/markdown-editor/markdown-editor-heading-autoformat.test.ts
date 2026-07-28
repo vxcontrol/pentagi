@@ -592,6 +592,18 @@ describe('re-entrancy & inert nodes', () => {
         expect(firstBlock(json).type).toBe('codeBlock');
     });
 
+    it('a leading code span whose content starts with "# " keeps its hash and stays a paragraph', () => {
+        const editor = new Editor({ content: '', contentType: 'markdown', extensions: createMarkdownExtensions() });
+
+        // The plugin runs from appendTransaction, so a bare `new Editor({ content })` never reaches it —
+        // the load has to arrive as a transaction, the way every real load does.
+        editor.commands.setContent('`# Title` trailing', { contentType: 'markdown' });
+
+        expect(liveHeadings(editor)).toBe(0);
+        expect(editor.state.doc.textContent).toBe('# Title trailing');
+        expect(editor.getMarkdown().trimEnd()).toBe('`# Title` trailing');
+    });
+
     it('an empty paragraph is skipped without throwing during the scan', () => {
         expect(() =>
             run(doc(para(), para(t('body'))), (editor) => {

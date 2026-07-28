@@ -55,7 +55,8 @@ export const HeadingAutoformat = Extension.create({
                         }
 
                         const first = node.firstChild;
-                        const match = first?.isText && first.text ? HEADING_MARKER.exec(first.text) : null;
+                        const isMarkup = first?.isText && !first.marks.some((mark) => mark.type.name === 'code');
+                        const match = isMarkup && first.text ? HEADING_MARKER.exec(first.text) : null;
 
                         if (match && !containsHardBreak(node, hardBreak)) {
                             const start = pos + 1;
