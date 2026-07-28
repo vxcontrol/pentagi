@@ -39,8 +39,10 @@ interface MarkdownEditorToolbarProps {
 
 const HEADING_LEVELS: HeadingLevel[] = [1, 2, 3, 4, 5, 6];
 
-// One `can()` for all seven probes: it rebuilds the command map on every call, and reusing the object was
-// measured to give identical answers at ~30% of the cost.
+// Only commands whose dry run is FAITHFUL belong here. tiptap runs `can()` with dispatch undefined, so
+// `toggleList`'s `clearNodes()` fallback does nothing and the following `wrapInList` fails — the three list
+// kinds, `toggleCodeBlock` and `toggleHeading` all report false for conversions that work. Disabling on that
+// answer takes a working action away from the user, which is worse than a no-op click.
 const blockAvailability = (editor: Editor) => {
     const can = editor.can();
 
@@ -48,7 +50,6 @@ const blockAvailability = (editor: Editor) => {
         canBlockquote: can.toggleBlockquote(),
         canBold: can.toggleBold(),
         canCode: can.toggleCode(),
-        canCodeBlock: can.toggleCodeBlock(),
         canItalic: can.toggleItalic(),
         canLink: can.setLink({ href: 'https://example.com' }),
         canStrike: can.toggleStrike(),
@@ -336,7 +337,7 @@ export const MarkdownEditorToolbar = memo(function MarkdownEditorToolbar({
                             <Quote />
                         </ToolbarToggle>
                         <ToolbarToggle
-                            disabled={disabled || !state.canCodeBlock}
+                            disabled={disabled}
                             label="Code block"
                             onPressedChange={() => editor.chain().focus().toggleCodeBlock().run()}
                             pressed={state.isCodeBlock}

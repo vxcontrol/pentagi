@@ -62,46 +62,33 @@ describe('toolbar disables controls whose command reports unavailable', () => {
         mounted.cleanup();
     });
 
-    it('disables the list kinds a code block cannot become, on open', async () => {
+    it('keeps Code block enabled inside a code block, where a second press unwraps it', async () => {
         const mounted = mount(CODE_BLOCK_CARET);
-        const user = userEvent.setup();
 
-        await user.click(screen.getByLabelText(/^List:/));
-
-        await waitFor(() =>
-            expect(screen.getByRole('menuitemradio', { name: /Bullet list/ })).toHaveAttribute('aria-disabled', 'true'),
-        );
-        expect(screen.getByRole('menuitemradio', { name: /Ordered list/ })).toHaveAttribute('aria-disabled', 'true');
+        await waitFor(() => expect(screen.getByLabelText('Code block')).toBeEnabled());
         mounted.cleanup();
     });
 
-    it('leaves the list kinds enabled in a paragraph', async () => {
-        const mounted = mount(PARAGRAPH_CARET);
-        const user = userEvent.setup();
+    // Turning a code block into a list WORKS, but `can().toggleBulletList()` reports false for it, because the
+    // `clearNodes()` fallback inside toggleList does nothing when dispatch is undefined. Disabling on that
+    // answer would take a working conversion away from the user, so these items stay enabled.
+    it.each(['Bullet list', 'Ordered list', 'Task list'])(
+        '%s stays enabled inside a code block, where can() under-reports it',
+        async (label) => {
+            const mounted = mount(CODE_BLOCK_CARET);
+            const user = userEvent.setup();
 
-        await user.click(screen.getByLabelText(/^List:/));
+            expect(mounted.editor.can().toggleBulletList()).toBe(false);
 
-        await waitFor(() =>
-            expect(screen.getByRole('menuitemradio', { name: /Bullet list/ })).not.toHaveAttribute(
-                'aria-disabled',
-                'true',
-            ),
-        );
-        mounted.cleanup();
-    });
+            await user.click(screen.getByLabelText(/^List:/));
 
-    // The menu asks `can()` when Radix mounts its content, so a caret move while it was closed must still be
-    // reflected — a value cached at the toolbar's last render would be stale here.
-    it('reflects a caret move that happened while the menu was closed', async () => {
-        const mounted = mount(PARAGRAPH_CARET);
-        const user = userEvent.setup();
-
-        mounted.editor.commands.setTextSelection(CODE_BLOCK_CARET);
-        await user.click(screen.getByLabelText(/^List:/));
-
-        await waitFor(() =>
-            expect(screen.getByRole('menuitemradio', { name: /Bullet list/ })).toHaveAttribute('aria-disabled', 'true'),
-        );
-        mounted.cleanup();
-    });
+            await waitFor(() =>
+                expect(screen.getByRole('menuitemradio', { name: new RegExp(label) })).not.toHaveAttribute(
+                    'aria-disabled',
+                    'true',
+                ),
+            );
+            mounted.cleanup();
+        },
+    );
 });

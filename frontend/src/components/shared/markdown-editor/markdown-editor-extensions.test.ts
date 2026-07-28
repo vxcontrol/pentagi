@@ -921,6 +921,62 @@ describe('whole-document block toggles across document shapes', () => {
         expect(out).toBe(original);
     });
 
+    // Only these commands may drive a disabled state in the toolbar. `can()` runs with dispatch undefined, and
+    // `toggleList`'s `clearNodes()` fallback is a no-op there, so the three list kinds, toggleCodeBlock and
+    // toggleHeading report false for conversions that work. A tiptap upgrade that makes one faithful may add it.
+    it.each([
+        [
+            'toggleBlockquote',
+            (editor: Editor) => editor.can().toggleBlockquote(),
+            (editor: Editor) => editor.commands.toggleBlockquote(),
+        ],
+        ['toggleBold', (editor: Editor) => editor.can().toggleBold(), (editor: Editor) => editor.commands.toggleBold()],
+        ['toggleCode', (editor: Editor) => editor.can().toggleCode(), (editor: Editor) => editor.commands.toggleCode()],
+        [
+            'toggleItalic',
+            (editor: Editor) => editor.can().toggleItalic(),
+            (editor: Editor) => editor.commands.toggleItalic(),
+        ],
+        [
+            'toggleStrike',
+            (editor: Editor) => editor.can().toggleStrike(),
+            (editor: Editor) => editor.commands.toggleStrike(),
+        ],
+        [
+            'setLink',
+            (editor: Editor) => editor.can().setLink({ href: 'https://example.com' }),
+            (editor: Editor) => editor.commands.setLink({ href: 'https://example.com' }),
+        ],
+    ] as const)(
+        '%s answers can() exactly as it performs, on every shape and both selection modes',
+        (_name, ask, perform) => {
+            const disagreements: string[] = [];
+
+            for (const [shape, source] of SHAPES) {
+                for (const mode of ['caret', 'selectAll'] as const) {
+                    const probe = editorWith(source);
+
+                    if (mode === 'caret') {
+                        probe.commands.setTextSelection(3);
+                    } else {
+                        probe.commands.selectAll();
+                    }
+
+                    const canSays = ask(probe);
+                    const commandSays = perform(probe);
+
+                    probe.destroy();
+
+                    if (canSays !== commandSays) {
+                        disagreements.push(`${shape}/${mode}: can=${canSays} command=${commandSays}`);
+                    }
+                }
+            }
+
+            expect(disagreements).toEqual([]);
+        },
+    );
+
     it('builds exactly one lowlight plugin', () => {
         const editor = new Editor({ content: '', extensions: createMarkdownExtensions() });
         const lowlightPlugins = editor.state.plugins.filter((plugin) =>

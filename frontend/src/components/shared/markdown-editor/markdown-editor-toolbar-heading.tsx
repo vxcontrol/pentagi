@@ -88,14 +88,7 @@ export function HeadingMenu({ activeLevel, disabled, editor }: HeadingMenuProps)
     );
 }
 
-// Asked per open, not per keystroke: Radix mounts this content only while the menu is open, and `can()`
-// rebuilds the whole command map on every call.
-// `setParagraph` is not probed: it reports false whenever the block already IS a paragraph, which is this
-// menu's checked item rather than an unavailable one.
 function HeadingMenuItems({ activeLevel, editor }: { activeLevel: 0 | HeadingLevel; editor: Editor }) {
-    const can = editor.can();
-    const isAvailable = (value: HeadingOption['value']) => value === 'paragraph' || can.toggleHeading({ level: value });
-
     const applyOption = (value: HeadingOption['value']) => {
         if (value === 'paragraph') {
             editor.chain().focus().setParagraph().run();
@@ -109,7 +102,6 @@ function HeadingMenuItems({ activeLevel, editor }: { activeLevel: 0 | HeadingLev
     return OPTIONS.map((option) => (
         <DropdownMenuItem
             aria-checked={isSelectedIn(activeLevel, option.value)}
-            disabled={!isAvailable(option.value)}
             key={option.value}
             onSelect={() => applyOption(option.value)}
             role="menuitemradio"

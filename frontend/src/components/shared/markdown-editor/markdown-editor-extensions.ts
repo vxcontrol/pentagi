@@ -229,11 +229,12 @@ const listFamily: BlockFamily = {
         let hasToggled = false;
 
         return (
+            // Nothing here may branch on `dispatch`. Under `can()` the transaction is discarded anyway, so
+            // seating costs nothing — but skipping it there hands the delegate the whole-document selection it
+            // cannot use, and the control reports unavailable for a click that would have worked.
             chain()
-                .command(({ dispatch, tr }) => {
-                    if (dispatch) {
-                        tr.setSelection(seated);
-                    }
+                .command(({ tr }) => {
+                    tr.setSelection(seated);
 
                     return true;
                 })
@@ -244,11 +245,7 @@ const listFamily: BlockFamily = {
                 })
                 // A chain dispatches what its callbacks already wrote even when one returns false, so a delegate
                 // that half-applied its `clearNodes` fallback would commit a flattened document without this.
-                .command(({ dispatch, tr }) => {
-                    if (!dispatch) {
-                        return true;
-                    }
-
+                .command(({ tr }) => {
                     if (hasToggled) {
                         tr.setSelection(restored.map(tr.doc, tr.mapping));
                     } else {

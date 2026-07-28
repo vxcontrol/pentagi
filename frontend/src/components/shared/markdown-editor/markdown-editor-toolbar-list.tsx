@@ -77,16 +77,7 @@ export function ListMenu({ activeType, disabled, editor }: ListMenuProps) {
     );
 }
 
-// Asked per open, not per keystroke: Radix mounts this content only while the menu is open, and `can()`
-// rebuilds the whole command map on every call.
 function ListMenuItems({ activeType, editor }: { activeType: ListType | null; editor: Editor }) {
-    const can = editor.can();
-    const isAvailable: Record<ListType, boolean> = {
-        bullet: can.toggleBulletList(),
-        ordered: can.toggleOrderedList(),
-        task: can.toggleTaskList(),
-    };
-
     const applyOption = (value: ListType) => {
         const chain = editor.chain().focus();
 
@@ -102,7 +93,6 @@ function ListMenuItems({ activeType, editor }: { activeType: ListType | null; ed
     return OPTIONS.map((option) => (
         <DropdownMenuItem
             aria-checked={activeType === option.value}
-            disabled={!isAvailable[option.value]}
             key={option.value}
             onSelect={() => applyOption(option.value)}
             role="menuitemradio"
