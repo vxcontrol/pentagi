@@ -252,7 +252,12 @@ export const createMarkdownExtensions = (placeholder?: string) => [
     TableHeader,
     TableCell,
     withSelectAllRetargeted(guardBlockTokenizer(TaskList), 'toggleTaskList'),
-    TaskItem.configure({ nested: true }),
+    TaskItem.configure({
+        a11y: {
+            checkboxLabel: (node) => `Task item checkbox for ${node.firstChild?.textContent || 'empty task item'}`,
+        },
+        nested: true,
+    }),
     Image,
     VariableHighlight,
     TagHighlight,

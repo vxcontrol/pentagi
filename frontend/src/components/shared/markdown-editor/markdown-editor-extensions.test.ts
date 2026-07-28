@@ -702,3 +702,39 @@ describe('block toggles are reversible under a whole-document selection', () => 
         expect(out.trim()).toBe('sample text');
     });
 });
+
+describe('a task checkbox is announced with its own text, not its subtree', () => {
+    const labelsFor = (markdown: string) => {
+        const element = document.createElement('div');
+
+        document.body.appendChild(element);
+
+        const editor = new Editor({
+            content: markdown,
+            contentType: 'markdown',
+            element,
+            extensions: createMarkdownExtensions(),
+        });
+        const labels = [...element.querySelectorAll('input[type=checkbox]')].map(
+            (checkbox) => (checkbox as HTMLInputElement).ariaLabel,
+        );
+
+        editor.destroy();
+        element.remove();
+
+        return labels;
+    };
+
+    it('a parent task does not absorb the text of its nested tasks', () => {
+        expect(labelsFor('- [ ] task open\n- [x] task done\n    - [ ] nested open\n    - [x] nested done\n')).toEqual([
+            'Task item checkbox for task open',
+            'Task item checkbox for task done',
+            'Task item checkbox for nested open',
+            'Task item checkbox for nested done',
+        ]);
+    });
+
+    it('an empty task still gets a name', () => {
+        expect(labelsFor('- [ ] \n')).toEqual(['Task item checkbox for empty task item']);
+    });
+});
