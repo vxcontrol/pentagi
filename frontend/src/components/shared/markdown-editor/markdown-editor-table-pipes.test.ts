@@ -304,3 +304,69 @@ describe('a backtick in a backtick fence info string is not a fence opener', () 
         );
     });
 });
+
+describe('tables nested inside list items keep their pipe protection', () => {
+    const cellsOf = (markdown: string) => {
+        const editor = new Editor({
+            content: markdown,
+            contentType: 'markdown',
+            extensions: createMarkdownExtensions(),
+        });
+        const cells: string[] = [];
+
+        editor.state.doc.descendants((node) => {
+            if (node.type.name === 'tableCell' || node.type.name === 'tableHeader') {
+                cells.push(node.textContent);
+            }
+
+            return true;
+        });
+        editor.destroy();
+
+        return cells;
+    };
+
+    const table = (indent: string) =>
+        [`${indent}| Op | Meaning |`, `${indent}| --- | --- |`, `${indent}| \`x | y\` | KEEP |`].join('\n');
+
+    const EXPECTED = ['Op', 'Meaning', 'x | y', 'KEEP'];
+
+    it('protects a table under a bullet at its natural content column', () => {
+        expect(cellsOf(['- item', '', table('  ')].join('\n'))).toEqual(EXPECTED);
+    });
+
+    // The ordinary way anyone writes a table under a sub-bullet: the content column is 4, which the top-level
+    // scanner reads as indented code and skips.
+    it('protects a table under a nested bullet', () => {
+        expect(cellsOf(['- outer', '  - inner', '', table('    ')].join('\n'))).toEqual(EXPECTED);
+    });
+
+    it('protects a table under an ordered item', () => {
+        expect(cellsOf(['1. item', '', table('   ')].join('\n'))).toEqual(EXPECTED);
+    });
+
+    it('protects a table under a bullet inside a blockquote', () => {
+        expect(cellsOf(['> - item', '>', `> ${table('  ').split('\n').join('\n> ')}`].join('\n'))).toEqual(EXPECTED);
+    });
+
+    // Relative to the item's content column, four more spaces is still indented code — marked does not make a
+    // table there, so escaping it would write a backslash into code content.
+    it('leaves a table indented four columns past the item content alone', () => {
+        const source = ['- item', '', table('      ')].join('\n');
+
+        expect(escapeTablePipes(source)).toBe(source);
+    });
+
+    // The same rule at top level, which is what a blanket relaxation of the leading-space cap would break.
+    it('leaves a four-space-indented table at top level alone', () => {
+        const source = table('    ');
+
+        expect(escapeTablePipes(source)).toBe(source);
+    });
+
+    it('does not swallow the next item at the same level', () => {
+        const source = ['- first', '', table('  '), '', '- second | not a table'].join('\n');
+
+        expect(escapeTablePipes(source)).toContain('- second | not a table');
+    });
+});

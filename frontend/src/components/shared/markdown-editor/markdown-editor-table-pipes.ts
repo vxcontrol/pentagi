@@ -33,6 +33,10 @@ const TEMPLATE_ACTION = /\{\{[^{}]*\}\}/g;
 // strips this prefix and re-lexes the inner content, so a table inside a blockquote needs the prefix removed
 // before detection — see the recursive handling in escapeTablePipes.
 const BLOCKQUOTE_PREFIX = /^ {0,3}> ?/;
+// A list item whose content actually starts on the same line. CommonMark puts that content at the column after
+// the marker plus its following spaces, except that 5+ spaces mean the item opens with indented code and the
+// content column is one past the marker.
+const LIST_ITEM_START = /^( {0,3})([*+-]|\d{1,9}[.)])( +)(?=\S)/;
 
 // A table's body ends at a blank line or the first line that starts a different block — the same interrupts
 // marked's gfmTable body-row negative lookahead lists (heading, blockquote, fences, list, hr, indented code).
@@ -215,6 +219,46 @@ export const escapeTablePipes = (markdown: string): string => {
             index = end - 1;
 
             continue;
+        }
+
+        // A list item indents its content to its own column, and once that column reaches 4 the top-level scan
+        // reads the table as indented code and skips it — while marked dedents the item and re-lexes, where the
+        // table is live. Mirror that: dedent by the content column, recurse, re-indent. The indented-code rule
+        // then applies RELATIVE to the item, so a line four columns past the content start stays unprotected —
+        // which is why this recurses instead of relaxing TABLE_DELIMITER_LINE's leading-space cap.
+        const item = LIST_ITEM_START.exec(line);
+
+        if (item) {
+            const [, indent = '', marker = '', spaces = ''] = item;
+            const contentColumn = indent.length + marker.length + (spaces.length >= 5 ? 1 : spaces.length);
+            let end = index + 1;
+
+            while (end < lines.length && (!lines[end]!.trim() || /^ */.exec(lines[end]!)![0].length >= contentColumn)) {
+                end++;
+            }
+
+            while (end > index + 1 && !lines[end - 1]!.trim()) {
+                end--;
+            }
+
+            const run = lines.slice(index, end);
+
+            if (end > index + 1 && run.some((row) => row.includes('|'))) {
+                const escaped = escapeTablePipes(run.map((row) => row.slice(contentColumn)).join('\n')).split('\n');
+
+                for (let row = index; row < end; row++) {
+                    const rebuilt = lines[row]!.slice(0, contentColumn) + escaped[row - index]!;
+
+                    if (rebuilt !== lines[row]) {
+                        lines[row] = rebuilt;
+                        isChanged = true;
+                    }
+                }
+
+                index = end - 1;
+
+                continue;
+            }
         }
 
         if (!line.includes('|')) {
