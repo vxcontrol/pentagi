@@ -438,6 +438,12 @@ const escapeSetextUnderlines = (markdown: string): string =>
         (_match, lineStart: string, run: string) => `${lineStart}\\${run}`,
     );
 
+// A `]` inside an image alt closes the markdown label early and the image loses its node entirely on reload.
+// marked unescapes `\[`/`\]` inside a label through its own outputLink pass, independent of the neutralised
+// inline escape tokenizer, so escaping just those two closes the round trip. A lone `\` is NOT escaped —
+// marked would not unescape it back.
+const escapeBracketsInLabel = (text: string): string => text.replace(/[[\]]/g, (bracket) => `\\${bracket}`);
+
 // StarterKit's Bold/Italic register BOTH `**`/`*` and `__`/`_` input+paste rules. The marked layer keeps
 // `_`-emphasis literal on load/paste, so leaving the underscore TYPING rules on would diverge — typed
 // `__init__`/`_word_` would emphasize (→ `**init**`/`*word*`) while the same text loaded stays literal,
@@ -513,7 +519,14 @@ export const createMarkdownExtensions = (placeholder?: string) => [
         },
         nested: true,
     }),
-    Image,
+    Image.extend({
+        renderMarkdown(node: JSONContent) {
+            const { alt = '', src = '', title = '' } = node.attrs ?? {};
+            const label = escapeBracketsInLabel(String(alt));
+
+            return title ? `![${label}](${src} "${title}")` : `![${label}](${src})`;
+        },
+    }),
     VariableHighlight,
     TagHighlight,
     Placeholder.configure({ emptyEditorClass: 'is-editor-empty', placeholder }),

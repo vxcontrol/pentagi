@@ -1100,3 +1100,95 @@ describe('a setext underline after a hard break does not turn the paragraph into
         },
     );
 });
+
+describe('brackets in a link label or an image alt do not break the node on reload', () => {
+    const reload = (markdown: string) => {
+        const editor = new Editor({
+            content: markdown,
+            contentType: 'markdown',
+            extensions: createMarkdownExtensions(),
+        });
+        const out = {
+            counts: structuralCounts(markdown),
+            markdown: editor.getMarkdown(),
+            text: editor.state.doc.textContent,
+        };
+
+        editor.destroy();
+
+        return out;
+    };
+
+    const linkDoc = (label: string) => ({
+        content: [
+            {
+                content: [
+                    { marks: [{ attrs: { href: 'https://example.com/a' }, type: 'link' }], text: label, type: 'text' },
+                ],
+                type: 'paragraph',
+            },
+        ],
+        type: 'doc',
+    });
+
+    const imageDoc = (alt: string) => ({
+        content: [{ attrs: { alt, src: 'https://example.com/a.png' }, type: 'image' }],
+        type: 'doc',
+    });
+
+    const saveOf = (content: object) => {
+        const editor = new Editor({ content, extensions: createMarkdownExtensions() });
+        const saved = editor.getMarkdown();
+
+        editor.destroy();
+
+        return saved;
+    };
+
+    // A bracket-free label round-trips; the bracket case is handled where the link is inserted, because the
+    // label text is serialized by the text path and @tiptap/markdown hands a mark's renderMarkdown a
+    // placeholder rather than the text, so the escape cannot live there.
+    it.each(['a\\b', 'plain label', 'http://[::1]:8080/x'])('a link label of %s survives a round trip', (label) => {
+        const saved = saveOf(linkDoc(label));
+        const first = reload(saved);
+
+        expect(first.text).toBe(label);
+        expect(reload(first.markdown).markdown).toBe(first.markdown);
+    });
+
+    // An unbalanced bracket in alt broke `![alt](src)` outright: the reload parsed ZERO image nodes.
+    it.each(['a]b', 'a[b'])('an image alt of %s keeps the image node', (alt) => {
+        const saved = saveOf(imageDoc(alt));
+
+        expect(structuralCounts(saved).image).toBe(1);
+        expect(reload(saved).markdown).toBe(saved);
+    });
+});
+
+describe('a URL inserted as its own link label settles instead of growing', () => {
+    // The Link popover inserts the URL as the visible text when there is no selection. A `]` in that text
+    // closed the markdown label early — `[https://example.com/a]b](…)` — and the serialized form grew on
+    // every load+save cycle (measured 50 → 103 → 156 → 260). The form keeps brackets out of the label; this
+    // pins the property that matters, that the document converges.
+    it.each(['https://example.com/a]b', 'http://[::1]:8080/x', 'https://example.com/plain'])(
+        'inserting %s converges',
+        (url) => {
+            const editor = new Editor({ content: '', extensions: createMarkdownExtensions() });
+
+            editor
+                .chain()
+                .insertContent({
+                    marks: [{ attrs: { href: url }, type: 'link' }],
+                    text: url.replace(/[[\]]/g, ''),
+                    type: 'text',
+                })
+                .run();
+
+            const first = editor.getMarkdown();
+
+            editor.destroy();
+
+            expect(roundTrip(first)).toBe(first);
+        },
+    );
+});
