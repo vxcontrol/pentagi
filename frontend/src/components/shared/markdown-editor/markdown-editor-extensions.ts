@@ -1,5 +1,6 @@
 import type {
     AnyExtension,
+    ChainedCommands,
     JSONContent,
     MarkdownParseHelpers,
     MarkdownParseResult,
@@ -13,6 +14,7 @@ import { Image } from '@tiptap/extension-image';
 import { TaskItem, TaskList } from '@tiptap/extension-list';
 import { TableCell, TableHeader, TableRow } from '@tiptap/extension-table';
 import { Placeholder } from '@tiptap/extensions';
+import { AllSelection, TextSelection } from '@tiptap/pm/state';
 import StarterKit from '@tiptap/starter-kit';
 import { common, createLowlight } from 'lowlight';
 
@@ -24,6 +26,56 @@ import { VariableHighlight } from './markdown-editor-variable-highlight';
 
 const dropUnderscoreRules = (rules: { find: unknown }[]) =>
     rules.filter((rule) => !(rule.find instanceof RegExp && rule.find.source.includes('_')));
+
+type CommandMap = Record<string, ToggleCommand | undefined>;
+type ToggleCommand = (...args: never[]) => (props: never) => boolean;
+
+// Under Ctrl+A a block toggle wraps a second time instead of unwrapping, for two independent reasons:
+// TrailingNode's empty paragraph sits inside the selection but outside the wrapper, so `isNodeActive` — which
+// demands the type cover the WHOLE selection — reads false; and AllSelection anchors at depth 0, so
+// `blockRange` resolves to the doc and `liftTarget` is null, making the unwrap a silent no-op.
+//
+// Excluding the trailing paragraph is what fixes both. Trimming to `1 … size - 1` is NOT enough: the
+// paragraph stays inside the range and `isNodeActive` still reads false.
+// Upstream https://github.com/ueberdosis/tiptap/issues/7398 covers only the two list cases — drop this once
+// it lands, after checking quote/fence/task and the lift no-op are covered too.
+const withSelectAllRetargeted = <T extends AnyExtension>(extension: T, commandName: string): T =>
+    extension.extend({
+        addCommands() {
+            const parent = (this.parent?.() ?? {}) as CommandMap;
+            const original = parent[commandName];
+
+            if (!original) {
+                return parent;
+            }
+
+            return {
+                ...parent,
+                [commandName]:
+                    (...args: never[]) =>
+                    ({ chain }: { chain: () => ChainedCommands }) =>
+                        chain()
+                            .command(({ state, tr }) => {
+                                if (!(state.selection instanceof AllSelection)) {
+                                    return true;
+                                }
+
+                                const last = tr.doc.lastChild;
+                                const trailing =
+                                    last && last.type.name === 'paragraph' && last.content.size === 0
+                                        ? last.nodeSize
+                                        : 0;
+                                const to = Math.max(1, tr.doc.content.size - trailing - 1);
+
+                                tr.setSelection(TextSelection.create(tr.doc, 1, to));
+
+                                return true;
+                            })
+                            .command((props) => original(...args)(props as never))
+                            .run(),
+            };
+        },
+    }) as T;
 
 type MarkdownTokenizer = {
     start?: (src: string) => number;
@@ -153,7 +205,15 @@ const TunedStarterKit = StarterKit.extend({
             }
 
             if (extension.name === 'orderedList') {
-                return guardBlockTokenizer(extension);
+                return withSelectAllRetargeted(guardBlockTokenizer(extension), 'toggleOrderedList');
+            }
+
+            if (extension.name === 'bulletList') {
+                return withSelectAllRetargeted(extension, 'toggleBulletList');
+            }
+
+            if (extension.name === 'blockquote') {
+                return withSelectAllRetargeted(extension, 'toggleBlockquote');
             }
 
             if (extension.name === 'paragraph') {
@@ -185,13 +245,13 @@ export const createMarkdownExtensions = (placeholder?: string) => [
         link: { autolink: true, linkOnPaste: true, openOnClick: false },
         underline: false,
     }),
-    TunedCodeBlock,
+    withSelectAllRetargeted(TunedCodeBlock, 'toggleCodeBlock'),
     HeadingAutoformat,
     TunedTable.configure({ resizable: true }),
     TableRow,
     TableHeader,
     TableCell,
-    guardBlockTokenizer(TaskList),
+    withSelectAllRetargeted(guardBlockTokenizer(TaskList), 'toggleTaskList'),
     TaskItem.configure({ nested: true }),
     Image,
     VariableHighlight,

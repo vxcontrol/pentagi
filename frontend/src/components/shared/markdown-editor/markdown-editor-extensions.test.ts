@@ -497,21 +497,40 @@ type MarkdownTokenizerShape = {
 };
 
 describe('list tokenizers are guarded against the upstream per-block full-source split', () => {
+    type Layer = {
+        config: { markdownTokenizer?: MarkdownTokenizerShape };
+        parent?: Layer;
+    };
+
+    // `.extend()` MERGES config into the child, so every wrapper layer reports a `markdownTokenizer` and
+    // walking to "the first layer that has one" lands on a wrapper, not on upstream. The root of the chain is
+    // the only unambiguous handle on the untouched implementation.
+    const rootOf = (layer: Layer): Layer => {
+        let current = layer;
+
+        while (current.parent) {
+            current = current.parent;
+        }
+
+        return current;
+    };
+
     const extensionOf = (name: string) => {
         const editor = new Editor({ content: '', extensions: createMarkdownExtensions() });
-        const extension = editor.extensionManager.extensions.find((e) => e.name === name);
+        const extension = editor.extensionManager.extensions.find((e) => e.name === name) as Layer | undefined;
 
         editor.destroy();
 
-        return extension as
-            | undefined
-            | {
-                  config: { markdownTokenizer?: MarkdownTokenizerShape };
-                  parent?: { config: { markdownTokenizer?: MarkdownTokenizerShape } };
-              };
+        return extension;
     };
 
     const tokenizerOf = (name: string) => extensionOf(name)?.config.markdownTokenizer;
+
+    const upstreamTokenizerOf = (name: string) => {
+        const extension = extensionOf(name);
+
+        return extension ? rootOf(extension).config.markdownTokenizer : undefined;
+    };
 
     it.each([
         ['orderedList', OrderedList],
@@ -557,9 +576,8 @@ describe('list tokenizers are guarded against the upstream per-block full-source
     it.each(['orderedList', 'taskList'])(
         '%s never reaches upstream tokenize when the source does not open a list',
         (name) => {
-            const extension = extensionOf(name);
-            const upstream = extension?.parent?.config.markdownTokenizer;
-            const wrapped = extension?.config.markdownTokenizer;
+            const upstream = upstreamTokenizerOf(name);
+            const wrapped = tokenizerOf(name);
 
             expect(upstream?.tokenize).toBeTypeOf('function');
 
@@ -589,5 +607,98 @@ describe('list tokenizers are guarded against the upstream per-block full-source
         ['upper X', '- [X] done'],
     ])('task list with a %s marker survives the guard', (_name, md) => {
         expect(structuralCounts(roundTrip(md)).taskList).toBe(1);
+    });
+});
+
+describe('block toggles are reversible under a whole-document selection', () => {
+    const CONTROLS = [
+        ['blockquote', 'toggleBlockquote'],
+        ['bulletList', 'toggleBulletList'],
+        ['orderedList', 'toggleOrderedList'],
+        ['taskList', 'toggleTaskList'],
+        ['codeBlock', 'toggleCodeBlock'],
+    ] as const;
+
+    const apply = (editor: Editor, command: string) =>
+        (editor.chain().focus() as unknown as Record<string, () => { run: () => boolean }>)[command]!().run();
+
+    const editorWith = (markdown: string) =>
+        new Editor({ content: markdown, contentType: 'markdown', extensions: createMarkdownExtensions() });
+
+    it.each(CONTROLS)('%s applied over Ctrl+A is removed by a second press', (node, command) => {
+        const editor = editorWith('sample text');
+
+        editor.commands.selectAll();
+        apply(editor, command);
+
+        expect(structuralCounts(editor.getMarkdown())[node]).toBe(1);
+
+        editor.commands.selectAll();
+        apply(editor, command);
+
+        const out = editor.getMarkdown();
+
+        editor.destroy();
+
+        // Node counts, not bytes: a second wrap nests a quote / adds an empty item, and several of those
+        // re-serialise to text that still "contains" the original words.
+        expect(structuralCounts(out)[node]).toBeUndefined();
+        expect(out.trim()).toBe('sample text');
+    });
+
+    it.each(CONTROLS)('%s stays reversible over a multi-block Ctrl+A', (node, command) => {
+        const editor = editorWith('one\n\ntwo\n\nthree');
+
+        editor.commands.selectAll();
+        apply(editor, command);
+        editor.commands.selectAll();
+        apply(editor, command);
+
+        const out = editor.getMarkdown();
+
+        editor.destroy();
+
+        expect(structuralCounts(out)[node]).toBeUndefined();
+        expect(words(out).sort()).toEqual(['one', 'three', 'two']);
+    });
+
+    // The keyboard shortcuts (Mod-Shift-b / Mod-Alt-c / Mod-Shift-7..9) go through `editor.commands.x()`,
+    // not through a chain, so the retarget has to hold on that path too or only the toolbar is fixed.
+    it.each(CONTROLS)('%s is reversible through editor.commands, the path the shortcuts use', (node, command) => {
+        const editor = editorWith('sample text');
+        const run = () => (editor.commands as unknown as Record<string, () => boolean>)[command]!();
+
+        editor.commands.selectAll();
+        run();
+
+        expect(structuralCounts(editor.getMarkdown())[node]).toBe(1);
+
+        editor.commands.selectAll();
+        run();
+
+        const out = editor.getMarkdown();
+
+        editor.destroy();
+
+        expect(structuralCounts(out)[node]).toBeUndefined();
+        expect(out.trim()).toBe('sample text');
+    });
+
+    it.each(CONTROLS)('%s is unaffected for a caret selection', (node, command) => {
+        const editor = editorWith('sample text');
+
+        editor.commands.setTextSelection(4);
+        apply(editor, command);
+
+        expect(structuralCounts(editor.getMarkdown())[node]).toBe(1);
+
+        apply(editor, command);
+
+        const out = editor.getMarkdown();
+
+        editor.destroy();
+
+        expect(structuralCounts(out)[node]).toBeUndefined();
+        expect(out.trim()).toBe('sample text');
     });
 });
