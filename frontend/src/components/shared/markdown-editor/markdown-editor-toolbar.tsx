@@ -18,6 +18,7 @@ import { memo, useEffect, useRef } from 'react';
 import { Separator } from '@/components/ui/separator';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
+import { isMac } from '@/lib/utils/platform';
 
 import type { HeadingLevel } from './markdown-editor-toolbar-heading';
 import type { ListType } from './markdown-editor-toolbar-list';
@@ -38,6 +39,12 @@ interface MarkdownEditorToolbarProps {
 }
 
 const HEADING_LEVELS: HeadingLevel[] = [1, 2, 3, 4, 5, 6];
+
+// prosemirror-keymap resolves `Mod` per platform, so advertising ⌘ on Windows and Linux names a key the
+// binding does not use. Same shape as input-search.tsx's `modifier`. Redo is `Shift+Ctrl+Z` rather than
+// `Ctrl+Y` because both are registered and the shifted form matches the Mac label the user sees elsewhere.
+const shortcutFor = (key: string) => (isMac() ? `⌘${key}` : `Ctrl+${key}`);
+const shiftShortcutFor = (key: string) => (isMac() ? `⇧⌘${key}` : `Ctrl+Shift+${key}`);
 
 // Only commands whose dry run is FAITHFUL belong here. tiptap runs `can()` with dispatch undefined, so
 // `toggleList`'s `clearNodes()` fallback does nothing and the following `wrapInList` fails — the three list
@@ -265,7 +272,7 @@ export const MarkdownEditorToolbar = memo(function MarkdownEditorToolbar({
                             label="Bold"
                             onPressedChange={() => editor.chain().focus().toggleBold().run()}
                             pressed={state.isBold}
-                            shortcut="⌘B"
+                            shortcut={shortcutFor('B')}
                         >
                             <Bold />
                         </ToolbarToggle>
@@ -274,7 +281,7 @@ export const MarkdownEditorToolbar = memo(function MarkdownEditorToolbar({
                             label="Italic"
                             onPressedChange={() => editor.chain().focus().toggleItalic().run()}
                             pressed={state.isItalic}
-                            shortcut="⌘I"
+                            shortcut={shortcutFor('I')}
                         >
                             <Italic />
                         </ToolbarToggle>
@@ -391,7 +398,7 @@ export const MarkdownEditorToolbar = memo(function MarkdownEditorToolbar({
                         disabled={disabled || !state.canUndo}
                         label="Undo"
                         onClick={() => editor.chain().focus().undo().run()}
-                        shortcut="⌘Z"
+                        shortcut={shortcutFor('Z')}
                     >
                         <Undo />
                     </ToolbarButton>
@@ -399,7 +406,7 @@ export const MarkdownEditorToolbar = memo(function MarkdownEditorToolbar({
                         disabled={disabled || !state.canRedo}
                         label="Redo"
                         onClick={() => editor.chain().focus().redo().run()}
-                        shortcut="⇧⌘Z"
+                        shortcut={shiftShortcutFor('Z')}
                     >
                         <Redo />
                     </ToolbarButton>
