@@ -234,11 +234,8 @@ function SettingsPrompts() {
                 case 'system': {
                     return systemType ? userDefined.some((p) => p.type === systemType) : false;
                 }
-                // No default
             }
         }
-
-        return false;
     };
 
     const getAgentPromptsData = (): AgentPromptTableData[] => {
