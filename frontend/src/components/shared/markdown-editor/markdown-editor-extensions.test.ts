@@ -1192,3 +1192,44 @@ describe('a URL inserted as its own link label settles instead of growing', () =
         },
     );
 });
+
+describe('a heading applied over the whole document', () => {
+    const apply = (source: string, level: number) => {
+        const editor = new Editor({ content: source, contentType: 'markdown', extensions: createMarkdownExtensions() });
+
+        editor.commands.selectAll();
+        editor.commands.toggleHeading({ level: level as 1 | 2 | 3 | 4 | 5 | 6 });
+
+        // selectAll materialises TrailingNode's empty paragraph, which serialises as a trailing blank line.
+        const out = editor.getMarkdown().trimEnd();
+
+        editor.destroy();
+
+        return out;
+    };
+
+    // toggleHeading had no whole-document wrapper, so Ctrl+A + "Heading 2" converted every table cell paragraph
+    // to a heading; saved as `| ## h | ## i |`, it reloads as literal cell text and escalates on each save.
+    it('leaves table cells alone', () => {
+        const source = ['lead', '', '| h | i |', '| --- | --- |', '| x | y |'].join('\n');
+        const out = apply(source, 2);
+
+        expect(out).not.toContain('## h');
+        expect(out).toContain('| h');
+        expect(out).toContain('## lead');
+    });
+
+    // The level the user picked has to reach setBlockType — a family that drops the attrs stamps H1 for every
+    // choice, and one that compares only the node type reads an all-H1 document as "already Heading 2".
+    it('applies the level the user chose, not the schema default', () => {
+        expect(apply('intro\n\nsecond', 2)).toBe('## intro\n\n## second');
+    });
+
+    it('promotes an all-H1 document to the chosen level instead of demoting it', () => {
+        expect(apply('# one\n\n# two', 2)).toBe('## one\n\n## two');
+    });
+
+    it('demotes to paragraphs when the chosen level is already applied', () => {
+        expect(apply('## one\n\n## two', 2)).toBe('one\n\ntwo');
+    });
+});

@@ -32,9 +32,10 @@ import { VariableHighlight } from './markdown-editor-variable-highlight';
 const dropUnderscoreRules = (rules: { find: unknown }[]) =>
     rules.filter((rule) => !(rule.find instanceof RegExp && rule.find.source.includes('_')));
 
+type BlockAttrs = Record<string, unknown> | undefined;
 type BlockFamily = {
-    isApplied: (type: NodeType, state: EditorState) => boolean;
-    toggle: (type: NodeType, props: CommandProps, delegate: DelegatedToggle) => boolean;
+    isApplied: (type: NodeType, state: EditorState, attrs?: BlockAttrs) => boolean;
+    toggle: (type: NodeType, props: CommandProps, delegate: DelegatedToggle, attrs?: BlockAttrs) => boolean;
 };
 type CommandMap = Record<string, ToggleCommand | undefined>;
 type DelegatedToggle = (props?: CommandProps) => boolean;
@@ -167,28 +168,41 @@ const blockTypeCandidates = (state: EditorState, type: NodeType): TopLevelChild[
     return candidates;
 };
 
+// A heading carries its level in attrs, so "already applied" and the value written both have to account for
+// them: comparing node type alone reads an all-H1 document as already being Heading 2 and demotes it, and
+// dropping the attrs on the way in stamps the schema default level for every choice the user makes.
+const hasAttrs = (node: ProseMirrorNode, attrs: BlockAttrs) =>
+    !attrs || Object.entries(attrs).every(([key, value]) => node.attrs[key] === value);
+
 const blockTypeFamily: BlockFamily = {
-    isApplied: (type, state) => {
+    isApplied: (type, state, attrs) => {
         const candidates = blockTypeCandidates(state, type);
 
-        return candidates.length > 0 && candidates.every(({ node }) => node.type === type);
+        return candidates.length > 0 && candidates.every(({ node }) => node.type === type && hasAttrs(node, attrs));
     },
-    toggle: (type, { dispatch, state, tr }) => {
+    toggle: (type, { dispatch, state, tr }, _delegate, attrs) => {
         const candidates = blockTypeCandidates(state, type);
 
         if (!candidates.length) {
             return false;
         }
 
-        const target = blockTypeFamily.isApplied(type, state) ? state.schema.nodes.paragraph! : type;
+        const isApplied = blockTypeFamily.isApplied(type, state, attrs);
+        const target = isApplied ? state.schema.nodes.paragraph! : type;
+        const targetAttrs = isApplied ? null : ((attrs ?? null) as null | Record<string, unknown>);
 
-        if (!candidates.some(({ node, pos }) => node.type !== target && canRetype(state.doc, pos, target))) {
+        if (
+            !candidates.some(
+                ({ node, pos }) =>
+                    (node.type !== target || !hasAttrs(node, attrs)) && canRetype(state.doc, pos, target),
+            )
+        ) {
             return false;
         }
 
         if (dispatch) {
             for (const { node, pos } of [...candidates].reverse()) {
-                tr.setBlockType(pos, pos + node.nodeSize, target);
+                tr.setBlockType(pos, pos + node.nodeSize, target, targetAttrs);
             }
         }
 
@@ -307,7 +321,12 @@ const withWholeDocumentToggle = <T extends AnyExtension>(extension: T, commandNa
                             return delegate();
                         }
 
-                        return family.toggle(commandProps.state.schema.nodes[name]!, commandProps, delegate);
+                        return family.toggle(
+                            commandProps.state.schema.nodes[name]!,
+                            commandProps,
+                            delegate,
+                            args[0] as BlockAttrs,
+                        );
                     },
             };
         },
@@ -473,6 +492,10 @@ const TunedStarterKit = StarterKit.extend({
 
             if (extension.name === 'blockquote') {
                 return withWholeDocumentToggle(extension, 'toggleBlockquote', wrapFamily);
+            }
+
+            if (extension.name === 'heading') {
+                return withWholeDocumentToggle(extension, 'toggleHeading', blockTypeFamily);
             }
 
             if (extension.name === 'paragraph') {
