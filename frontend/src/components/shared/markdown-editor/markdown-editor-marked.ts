@@ -5,7 +5,7 @@ import { renderTableToMarkdown, Table } from '@tiptap/extension-table';
 import { Markdown } from '@tiptap/markdown';
 import { Marked } from 'marked';
 
-import { escapeTablePipes } from './markdown-editor-table-pipes';
+import { escapeTablePipes, TEMPLATE_ACTION } from './markdown-editor-table-pipes';
 
 // @tiptap/markdown parses with `marked`, which — unlike markdown-it's `html: false` — always tries to
 // interpret `<...>` as HTML. Our content uses literal XML-ish tags (`<container_environment>`, `<input>`)
@@ -104,8 +104,23 @@ const TunedMarkdownText = Extension.create({
 // has NO exact GFM encoding: escaping the pipe alone yields `\\|`, a live delimiter that drops the trailing
 // cells on the next load. Pad an odd run by one backslash — the cell gains a `\`, the table keeps its cells,
 // and the padded form is byte-stable from the first save.
-export const escapeCellPipes = (text: string): string =>
-    text.replace(/(\\*)\|/g, (_, run: string) => `${run}${run.length % 2 ? '\\\\|' : '\\|'}`);
+// A pipe inside a Go action is the template's pipeline operator. Escaping it makes text/template reject the
+// whole prompt (`unexpected "\" in operand`), so the file cannot be saved at all — and every save re-added the
+// backslash, leaving no way out from rich mode. The loader counts cells with action pipes masked, so leaving
+// them raw no longer skews the header/delimiter comparison.
+export const escapeCellPipes = (text: string): string => {
+    const escapeOutsideActions = (segment: string) =>
+        segment.replace(/(\\*)\|/g, (_, run: string) => `${run}${run.length % 2 ? '\\\\|' : '\\|'}`);
+    let result = '';
+    let cursor = 0;
+
+    for (const action of text.matchAll(TEMPLATE_ACTION)) {
+        result += escapeOutsideActions(text.slice(cursor, action.index)) + action[0];
+        cursor = action.index + action[0].length;
+    }
+
+    return result + escapeOutsideActions(text.slice(cursor));
+};
 
 // @tiptap/extension-table's renderTableToMarkdown is alignment-aware but never escapes pipes, so a literal
 // `|` a cell emits (even from inside inline code) would re-parse as a column delimiter on the next SAVE and

@@ -72,11 +72,15 @@ describe('table cell with a piped code span — content survives load and conver
         expect(roundTrip(out)).toBe(out);
     });
 
+    // This used to pin `{{.X \| upper}}` — the escaped form, which Go text/template rejects outright
+    // (`unexpected "\" in operand`), so the prompt could not be saved at all. The pipe is the template's
+    // pipeline operator and stays raw; the cell count survives because the loader masks action pipes.
     it('keeps a Go-template action with a pipe inside a cell', () => {
         const out = roundTrip('| Var | Out |\n| --- | --- |\n| {{.X | upper}} | done |');
 
         expect(out).toContain('done');
-        expect(out).toContain('{{.X \\| upper}}');
+        expect(out).toContain('{{.X | upper}}');
+        expect(out).not.toContain('\\|');
         expect(roundTrip(out)).toBe(out);
     });
 });
@@ -100,7 +104,7 @@ describe('pipe-less GFM tables (no outer pipe) — cells survive too', () => {
         const out = roundTrip('Var | Out\n--- | ---\n{{.Host | lower}} | done');
 
         expect(out).toContain('done');
-        expect(out).toContain('{{.Host \\| lower}}');
+        expect(out).toContain('{{.Host | lower}}');
     });
 
     it('protects rows whether or not each has a leading pipe (mixed)', () => {
@@ -368,5 +372,66 @@ describe('tables nested inside list items keep their pipe protection', () => {
         const source = ['- first', '', table('  '), '', '- second | not a table'].join('\n');
 
         expect(escapeTablePipes(source)).toContain('- second | not a table');
+    });
+});
+
+describe('a Go template pipeline in a table cell keeps its own pipe', () => {
+    const cellsOf = (markdown: string) => {
+        const editor = new Editor({
+            content: markdown,
+            contentType: 'markdown',
+            extensions: createMarkdownExtensions(),
+        });
+        const cells: string[] = [];
+
+        editor.state.doc.descendants((node) => {
+            if (node.type.name === 'tableCell' || node.type.name === 'tableHeader') {
+                cells.push(node.textContent);
+            }
+
+            return true;
+        });
+        editor.destroy();
+
+        return cells;
+    };
+
+    // `{{.Host | urlquery}}` is a Go text/template pipeline. Escaping its pipe makes text/template reject the
+    // whole file with `unexpected "\" in operand`, so the prompt cannot be saved at all.
+    it('does not escape a pipeline in a body cell on save', () => {
+        expect(roundTrip('| host | value |\n| --- | --- |\n| a | {{.Host | urlquery}} |')).not.toContain('\\|');
+    });
+
+    it('keeps every cell of a table whose body holds a pipeline', () => {
+        expect(cellsOf('| host | value |\n| --- | --- |\n| a | {{.Host | urlquery}} |')).toEqual([
+            'host',
+            'value',
+            'a',
+            '{{.Host | urlquery}}',
+        ]);
+    });
+
+    // The header row is where dropping the escape without an action-aware cell count destroys the table: the
+    // raw pipe makes the header count 3 against the delimiter's 2, detection bails, and marked degrades the
+    // whole table to a paragraph.
+    it('keeps every cell of a table whose HEADER holds a pipeline', () => {
+        expect(cellsOf('| {{.A | urlquery}} | note |\n| --- | --- |\n| x | y |')).toEqual([
+            '{{.A | urlquery}}',
+            'note',
+            'x',
+            'y',
+        ]);
+    });
+
+    it('round-trips a pipeline-bearing table byte-identically on the second save', () => {
+        const source = '| host | value |\n| --- | --- |\n| a | {{.Host | urlquery}} |';
+        const once = roundTrip(source);
+
+        expect(roundTrip(once)).toBe(once);
+    });
+
+    // A structural pipe still has to be escaped when it is real content, not a template operator.
+    it('still escapes a pipe inside a code span', () => {
+        expect(roundTrip('| a | b |\n| --- | --- |\n| `x | y` | z |')).toContain('\\|');
     });
 });

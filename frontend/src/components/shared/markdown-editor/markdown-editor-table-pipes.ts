@@ -28,7 +28,12 @@ const FENCE_LINE = /^ {0,3}(`{3,}(?=[^`\n]*$)|~{3,})(.*)$/;
 // Written to be linear: the trailing `(?: *\|)? *$` (not `\|? *$`) plus per-cell spacing keep any two space
 // runs from competing for the same characters, so a crafted delimiter-looking line can't force O(n²) backtracking.
 const TABLE_DELIMITER_LINE = /^ {0,3}\|? *:?-+:?(?: *\| *:?-+:?)*(?: *\|)? *$/;
-const TEMPLATE_ACTION = /\{\{[^{}]*\}\}/g;
+export const TEMPLATE_ACTION = /\{\{[^{}]*\}\}/g;
+// A pipe inside a Go action is the template's pipeline operator, never a column separator — marked's splitter
+// does not know that, so the scanner masks those pipes before counting. Without this the serializer cannot
+// stop escaping them: an unescaped pipeline in the HEADER row would count one cell too many, detection would
+// bail, and marked would degrade the whole table to a paragraph.
+const maskActionPipes = (row: string): string => row.replace(TEMPLATE_ACTION, (action) => action.replace(/\|/g, ''));
 // One blockquote marker (`>` + an optional space). The line scanner only recognizes top-level tables, but marked
 // strips this prefix and re-lexes the inner content, so a table inside a blockquote needs the prefix removed
 // before detection — see the recursive handling in escapeTablePipes.
@@ -68,7 +73,7 @@ const escapeUnescapedPipes = (text: string): string =>
 
 // Mirrors marked's splitCells: split on unescaped pipes, drop a blank leading/trailing cell.
 const countCells = (row: string): number => {
-    const cells = row
+    const cells = maskActionPipes(row)
         .replace(/\|/g, (pipe, offset: number, source: string) => (isEscapedAt(source, offset) ? pipe : ' |'))
         .split(/ \|/);
 
