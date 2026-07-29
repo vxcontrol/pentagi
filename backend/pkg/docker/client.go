@@ -55,18 +55,20 @@ const (
 )
 
 type dockerClient struct {
-	db        database.Querier
-	logger    *logrus.Logger
-	dataDir   string
-	hostDir   string
-	client    *client.Client
-	inside    bool
-	defImage  string
-	socket    string
-	network   string
-	publicIP  string
-	portsBase int
-	labels    map[string]string
+	db             database.Querier
+	logger         *logrus.Logger
+	dataDir        string
+	hostDir        string
+	client         *client.Client
+	inside         bool
+	defImage       string
+	socket         string
+	network        string
+	publicIP       string
+	portsBase      int
+	labels         map[string]string
+	insideEnv      []string
+	insideCertPath string
 }
 
 type DockerClient interface {
@@ -112,10 +114,12 @@ func NewDockerClient(ctx context.Context, db database.Querier, cfg *config.Confi
 		return nil, fmt.Errorf("failed to get docker info: %w", err)
 	}
 
-	var socket string
-	if cfg.DockerSocket != "" {
-		socket = cfg.DockerSocket
-	} else {
+	// Resolve which host socket (if any) gets bind-mounted into worker containers.
+	// Autodetection is skipped when DOCKER_INSIDE_HOST designates a daemon
+	// endpoint for sandboxes: mounting the host socket alongside it would grant an
+	// agent control of the daemon running PentAGI itself.
+	socket, autodetectSocket := cfg.WorkerDockerSocket()
+	if autodetectSocket {
 		socket = getHostDockerSocket(ctx, cli)
 	}
 	inside := cfg.DockerInside
@@ -151,30 +155,33 @@ func NewDockerClient(ctx context.Context, db database.Querier, cfg *config.Confi
 
 	logger := logrus.StandardLogger()
 	logger.WithFields(logrus.Fields{
-		"docker_name":    info.Name,
-		"docker_arch":    info.Architecture,
-		"docker_version": info.ServerVersion,
-		"client_version": cli.ClientVersion(),
-		"data_dir":       dataDir,
-		"host_dir":       hostDir,
-		"docker_inside":  inside,
-		"docker_socket":  socket,
-		"public_ip":      publicIP,
+		"docker_name":        info.Name,
+		"docker_arch":        info.Architecture,
+		"docker_version":     info.ServerVersion,
+		"client_version":     cli.ClientVersion(),
+		"data_dir":           dataDir,
+		"host_dir":           hostDir,
+		"docker_inside":      inside,
+		"docker_socket":      socket,
+		"docker_inside_host": cfg.DockerInsideHost,
+		"public_ip":          publicIP,
 	}).Debug("Docker client initialized")
 
 	return &dockerClient{
-		db:        db,
-		client:    cli,
-		dataDir:   dataDir,
-		hostDir:   hostDir,
-		logger:    logger,
-		inside:    inside,
-		defImage:  defImage,
-		socket:    socket,
-		network:   netName,
-		publicIP:  publicIP,
-		portsBase: cfg.DockerPortsBase,
-		labels:    cfg.TenantLabels(),
+		db:             db,
+		client:         cli,
+		dataDir:        dataDir,
+		hostDir:        hostDir,
+		logger:         logger,
+		inside:         inside,
+		defImage:       defImage,
+		socket:         socket,
+		network:        netName,
+		publicIP:       publicIP,
+		portsBase:      cfg.DockerPortsBase,
+		labels:         cfg.TenantLabels(),
+		insideEnv:      cfg.WorkerDockerEnv(),
+		insideCertPath: cfg.WorkerDockerCertPath(),
 	}, nil
 }
 
@@ -302,7 +309,21 @@ func (dc *dockerClient) RunContainer(
 	hostConfig.Binds = append(hostConfig.Binds, fmt.Sprintf("%s:%s", hostDir, WorkFolderPathInContainer))
 
 	if dc.inside {
-		hostConfig.Binds = append(hostConfig.Binds, fmt.Sprintf("%s:%s", dc.socket, defaultDockerSocketPath))
+		// The socket is empty when DOCKER_INSIDE_HOST designates a daemon endpoint
+		// instead; binding "" would produce a malformed mount spec.
+		if dc.socket != "" {
+			hostConfig.Binds = append(hostConfig.Binds, fmt.Sprintf("%s:%s", dc.socket, defaultDockerSocketPath))
+		}
+
+		// Point the sandbox's Docker CLI at the designated daemon.
+		config.Env = append(config.Env, dc.insideEnv...)
+
+		// TLS material is mounted read-only at the same path on both sides so the
+		// injected DOCKER_CERT_PATH resolves unchanged inside the container.
+		if dc.insideCertPath != "" {
+			hostConfig.Binds = append(hostConfig.Binds,
+				fmt.Sprintf("%s:%s:ro", dc.insideCertPath, dc.insideCertPath))
+		}
 	}
 
 	// Defense-in-depth: block setuid/setgid and file-capability escalation

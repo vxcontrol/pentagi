@@ -1209,6 +1209,44 @@ const (
 	ServerSettingsLicenseKey     = "License Key"
 	ServerSettingsLicenseKeyDesc = "PentAGI License Key in format of XXXX-XXXX-XXXX-XXXX"
 
+	ToolsDockerInsideHost     = "Worker Docker Daemon Host"
+	ToolsDockerInsideHostDesc = "Daemon endpoint given to worker containers (e.g., tcp://dind:2376); empty keeps socket mounting"
+
+	ToolsDockerInsideTLSVerify     = "Worker Docker TLS Verify"
+	ToolsDockerInsideTLSVerifyDesc = "Enable TLS verification for the worker container's Docker connection"
+
+	ToolsDockerInsideCertPath     = "Worker Docker Certificate Path"
+	ToolsDockerInsideCertPathDesc = "TLS certificate directory on the WORKER NODE, mounted read-only into worker containers"
+
+	ToolsDockerInsideHostHelp = `Docker daemon endpoint handed to worker containers when Docker Access is enabled.
+
+It is injected into each sandbox as DOCKER_HOST, so the Docker CLI inside the container talks to this daemon.
+
+Setting it also STOPS the host socket from being auto-detected and bind-mounted into sandboxes: an agent then reaches only the daemon you designated, not the one running PentAGI itself. An explicitly configured Docker Socket still takes precedence and is mounted as before.
+
+Leave empty to keep the historical behaviour (auto-detected socket mount).
+
+Examples:
+• tcp://dind:2376
+• tcp://10.0.0.5:2375
+• unix:///var/run/docker.sock`
+
+	ToolsDockerInsideTLSVerifyHelp = `Enables TLS verification for the worker container's connection to the Docker daemon.
+
+Injected into each sandbox as DOCKER_TLS_VERIFY. Use it together with Worker Docker Daemon Host and Worker Docker Certificate Path when the daemon requires mutual TLS.
+
+Leave disabled for a plain (non-TLS) endpoint.`
+
+	ToolsDockerInsideCertPathHelp = `Directory holding the TLS client material (ca.pem, cert.pem, key.pem) used by worker containers.
+
+Injected into each sandbox as DOCKER_CERT_PATH and bind-mounted read-only at the SAME path, so the value resolves identically inside the container.
+
+IMPORTANT: this path is resolved on the WORKER NODE — the machine whose Docker daemon creates sandbox containers — not on the machine running this installer. It is therefore not validated here; make sure it exists on the worker node.
+
+Examples:
+• /etc/docker/certs
+• /opt/pentagi/docker/ssl`
+
 	ServerSettingsTenantID     = "Tenant ID"
 	ServerSettingsTenantIDDesc = "Optional namespace for multi-instance deployment on one host (e.g., acme, team_alpha)"
 
@@ -2360,6 +2398,9 @@ const (
 	EnvDesc_DOCKER_HOST                      = "Docker Host"
 	EnvDesc_DOCKER_TLS_VERIFY                = "Docker TLS Verify"
 	EnvDesc_DOCKER_CERT_PATH                 = "Docker Certificate Path"
+	EnvDesc_DOCKER_INSIDE_HOST               = "Worker Docker Daemon Host"
+	EnvDesc_DOCKER_INSIDE_TLS_VERIFY         = "Worker Docker TLS Verify"
+	EnvDesc_DOCKER_INSIDE_CERT_PATH          = "Worker Docker Certificate Path"
 
 	EnvDesc_TENANT_ID                         = "PentAGI Tenant ID"
 	EnvDesc_LICENSE_KEY                       = "PentAGI License Key"

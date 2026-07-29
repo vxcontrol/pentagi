@@ -13,6 +13,7 @@ This document serves as a comprehensive guide to the configuration system in Pen
     - [Multi-Instance Deployment (`TENANT_ID`)](#multi-instance-deployment-tenant_id)
     - [Usage Details](#usage-details)
   - [Docker Settings](#docker-settings)
+    - [Worker Docker Access (DOCKER_INSIDE_*)](#worker-docker-access-docker_inside_)
     - [Usage Details](#usage-details-1)
   - [Server Settings](#server-settings)
     - [Usage Details](#usage-details-2)
@@ -148,27 +149,15 @@ These settings control basic application behavior and are foundational for the s
 
 ### Multi-Instance Deployment (`TENANT_ID`)
 
-`TENANT_ID` namespaces the artifacts a PentAGI instance creates in **shared external
-services**, so that several independent installations can use one PostgreSQL server,
-one worker node (Docker daemon), one Neo4j/Graphiti and one Langfuse without
-colliding.
+`TENANT_ID` namespaces the artifacts a PentAGI instance creates in **shared external services**, so that several independent installations can use one PostgreSQL server, one worker node (Docker daemon), one Neo4j/Graphiti and one Langfuse without colliding.
 
-**Primary use case: several management instances, shared resources.** The typical
-deployment puts each PentAGI management backend on its own server, while the heavy
-shared resources — the worker node where sandbox containers run, and the database —
-are common. `TENANT_ID` is what keeps those instances from writing over each other.
+**Primary use case: several management instances, shared resources.** The typical deployment puts each PentAGI management backend on its own server, while the heavy shared resources — the worker node where sandbox containers run, and the database — are common. `TENANT_ID` is what keeps those instances from writing over each other.
 
-Running several management instances on **one** server is also possible (for example
-behind an nginx reverse proxy), but that is not what the installer or the stock
-`docker-compose.yml` are built for — see *Deployment topologies* below.
+Running several management instances on **one** server is also possible (for example behind an nginx reverse proxy), but that is not what the installer or the stock `docker-compose.yml` are built for — see *Deployment topologies* below.
 
-**When empty (the default) nothing changes.** Every helper degrades to an identity
-function: container names stay `pentagi-terminal-<id>`, the database schema stays
-`public`, Graphiti group ids stay `flow-<id>`, and the session cookie stays `auth`.
-This is enforced in one place (`backend/pkg/config/tenant.go`) and covered by tests.
+**When empty (the default) nothing changes.** Every helper degrades to an identity function: container names stay `pentagi-terminal-<id>`, the database schema stays `public`, Graphiti group ids stay `flow-<id>`, and the session cookie stays `auth`. This is enforced in one place (`backend/pkg/config/tenant.go`) and covered by tests.
 
-**Validation.** `TENANT_ID` must match `^[a-z][a-z0-9_]{0,31}$` — the intersection of
-the constraints imposed by every consumer:
+**Validation.** `TENANT_ID` must match `^[a-z][a-z0-9_]{0,31}$` — the intersection of the constraints imposed by every consumer:
 
 | Consumer | Constraint |
 | --- | --- |
@@ -176,10 +165,7 @@ the constraints imposed by every consumer:
 | PostgreSQL identifier | ≤ 63 bytes; unquoted-safe as `[a-z_][a-z0-9_]*` |
 | Graphiti / Neo4j group id | parsed on a hyphen boundary, so no hyphens |
 
-Hyphens are excluded deliberately: they separate the tenant from the rest of a group
-id or object name. An invalid value **aborts startup** rather than being normalised,
-because collapsing two distinct tenants onto one namespace is exactly the collision
-tenancy exists to prevent.
+Hyphens are excluded deliberately: they separate the tenant from the rest of a group id or object name. An invalid value **aborts startup** rather than being normalised, because collapsing two distinct tenants onto one namespace is exactly the collision tenancy exists to prevent.
 
 #### What the application namespaces automatically
 
@@ -194,8 +180,7 @@ tenancy exists to prevent.
 
 #### What stays the operator's responsibility
 
-`TENANT_ID` does **not** rewrite infrastructure-level settings. The following must be
-given distinct values per instance by whoever provisions it:
+`TENANT_ID` does **not** rewrite infrastructure-level settings. The following must be given distinct values per instance by whoever provisions it:
 
 | Setting | Why it is not derived from `TENANT_ID` |
 | --- | --- |
@@ -205,9 +190,7 @@ given distinct values per instance by whoever provisions it:
 | `INSTALLATION_ID` | Unique per installation, or left empty to be generated once and cached in `DATA_DIR`. |
 | Database privileges | The configured user needs `CREATE SCHEMA`, and on first boot `CREATE EXTENSION` — unless an administrator pre-installed `vector` and `pg_trgm` into `public`. |
 
-The values actually in effect are written to the startup log under
-`Instance identity` (`tenant_id`, `data_dir`, `schema`, `installation_id`), which is
-the quickest way to confirm two instances are not sharing something they should not.
+The values actually in effect are written to the startup log under `Instance identity` (`tenant_id`, `data_dir`, `schema`, `installation_id`), which is the quickest way to confirm two instances are not sharing something they should not.
 
 `DOCKER_INSIDE` is orthogonal to tenancy and may be enabled alongside it.
 
@@ -218,16 +201,9 @@ the quickest way to confirm two instances are not sharing something they should 
 | One instance per server, shared PostgreSQL and/or worker node | The installer and the stock `docker-compose.yml`, with `TENANT_ID` set per server. This is the intended setup. |
 | Several instances on one server | Manual configuration only. The stock `docker-compose.yml` uses fixed `container_name` and network names, so copying it verbatim will not start a second stack. Adapt it to your network and infrastructure — for example, distinct container names behind a shared nginx — and give each instance its own `DATA_DIR` and ports. |
 
-The installer provisions **one** instance per server; it does not manage several
-side by side. Note that it does scope the sandbox resources it cleans up — worker
-containers and volumes are matched by the tenant prefix — so a purge run for one
-management instance will not remove another's sandboxes from a shared worker node.
+The installer provisions **one** instance per server; it does not manage several side by side. Note that it does scope the sandbox resources it cleans up — worker containers and volumes are matched by the tenant prefix — so a purge run for one management instance will not remove another's sandboxes from a shared worker node.
 
-**Upgrading an existing deployment.** Leave `TENANT_ID` empty. The instance keeps
-using `public` and its current data directory; no migration is required. Setting
-`TENANT_ID` on an existing installation points it at a **new, empty schema** — the
-data in `public` is not migrated and will appear to be gone. Do not point an existing
-`public` deployment at a `search_path` that lists another tenant's schema.
+**Upgrading an existing deployment.** Leave `TENANT_ID` empty. The instance keeps using `public` and its current data directory; no migration is required. Setting `TENANT_ID` on an existing installation points it at a **new, empty schema** — the data in `public` is not migrated and will appear to be gone. Do not point an existing `public` deployment at a `search_path` that lists another tenant's schema.
 
 ### Usage Details
 
@@ -325,6 +301,9 @@ These settings control how PentAGI interacts with Docker, which is used for term
 | DockerInside                 | `DOCKER_INSIDE`                    | `false`                | Set to `true` if PentAGI runs inside Docker and needs to access the host Docker daemon. |
 | DockerNetAdmin               | `DOCKER_NET_ADMIN`                 | `false`                | Set to `true` to grant the primary container NET_ADMIN capability for advanced networking. |
 | DockerSocket                 | `DOCKER_SOCKET`                    | *(none)*               | Path to Docker socket for container management |
+| DockerInsideHost             | `DOCKER_INSIDE_HOST`               | *(none)*               | Docker daemon endpoint given to worker containers; also disables host-socket autodetection. See [Worker Docker Access](#worker-docker-access-docker_inside_) |
+| DockerInsideTLSVerify        | `DOCKER_INSIDE_TLS_VERIFY`         | *(none)*               | TLS verification for the worker container's Docker connection |
+| DockerInsideCertPath         | `DOCKER_INSIDE_CERT_PATH`          | *(none)*               | TLS certificate directory **on the worker node**, mounted read-only into worker containers |
 | DockerNetwork                | `DOCKER_NETWORK`                   | *(none)*               | Docker network name for bridge mode, or `host` for host network mode. See network modes below. |
 | DockerPublicIP               | `DOCKER_PUBLIC_IP`                 | `0.0.0.0`              | Public IP address for Docker containers' port bindings (bridge mode only) |
 | DockerWorkDir                | `DOCKER_WORK_DIR`                  | *(none)*               | Custom working directory inside Docker containers |
@@ -332,6 +311,43 @@ These settings control how PentAGI interacts with Docker, which is used for term
 | DockerDefaultImageForPentest | `DOCKER_DEFAULT_IMAGE_FOR_PENTEST` | `vxcontrol/kali-linux` | Default Docker image for penetration testing tasks |
 | TerminalToolTimeout          | `TERMINAL_TOOL_TIMEOUT`            | `1200`                 | Default execution timeout in seconds applied when an agent requests `timeout=0` or a negative value. Accepted range: `1`–`10800` (3 hours). Values `<= 0` or above `10800` are clamped to the 3-hour maximum. Negative values are treated identically to `0`. |
 
+### Worker Docker Access (`DOCKER_INSIDE_*`)
+
+`DOCKER_HOST`, `DOCKER_TLS_VERIFY` and `DOCKER_CERT_PATH` tell **PentAGI itself** which daemon to create worker containers on. The `DOCKER_INSIDE_*` trio is the mirror image: it tells a **worker container** which daemon *it* may talk to. Both sets are independent — sandboxes can be pointed at a different daemon than the one that spawned them.
+
+They are read only when `DOCKER_INSIDE=true`; with it disabled the sandbox gets no Docker access and no Docker configuration whatsoever.
+
+**How the socket is chosen.** With `DOCKER_INSIDE=true`:
+
+| `DOCKER_SOCKET` | `DOCKER_INSIDE_HOST` | Result |
+| --- | --- | --- |
+| set | any | That socket is bind-mounted at `/var/run/docker.sock` — historical behaviour, an explicit socket always wins. |
+| empty | set | **Nothing is mounted.** The sandbox reaches Docker over `DOCKER_INSIDE_HOST` instead. |
+| empty | empty | The host socket is autodetected and mounted — historical behaviour. |
+
+The middle row is the point of the feature: mounting the host socket into a sandbox gives an autonomous agent control of the daemon running PentAGI itself, including every other flow's containers. Designating a separate endpoint — a DinD sidecar, a remote daemon, a socket proxy — keeps that authority out of the sandbox.
+
+**What is injected.** Every non-empty `DOCKER_INSIDE_*` value is passed into the container as an environment variable with the `_INSIDE_` segment removed, so the Docker CLI inside picks it up with no extra configuration:
+
+| Configured | Seen inside the worker container |
+| --- | --- |
+| `DOCKER_INSIDE_HOST=tcp://dind:2376` | `DOCKER_HOST=tcp://dind:2376` |
+| `DOCKER_INSIDE_TLS_VERIFY=1` | `DOCKER_TLS_VERIFY=1` |
+| `DOCKER_INSIDE_CERT_PATH=/certs/client` | `DOCKER_CERT_PATH=/certs/client` |
+
+Empty values are omitted rather than injected blank.
+
+When `DOCKER_INSIDE_CERT_PATH` is set, that directory is additionally bind-mounted **read-only at the same path** inside the container, so the injected `DOCKER_CERT_PATH` resolves unchanged. The path is resolved on the **worker node** — the machine whose daemon creates sandboxes — which may not be the machine running PentAGI or the installer. For that reason the installer does not verify it exists.
+
+**Example — sandboxes use a DinD sidecar over mutual TLS:**
+
+```bash
+DOCKER_INSIDE=true
+DOCKER_SOCKET=                      # leave empty so the host socket is not mounted
+DOCKER_INSIDE_HOST=tcp://dind:2376
+DOCKER_INSIDE_TLS_VERIFY=1
+DOCKER_INSIDE_CERT_PATH=/certs/client
+```
 
 ### Usage Details
 

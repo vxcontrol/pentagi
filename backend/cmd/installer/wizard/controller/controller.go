@@ -1862,6 +1862,13 @@ type DockerConfig struct {
 	DockerTLSVerify    loader.EnvVar // DOCKER_TLS_VERIFY
 	HostDockerCertPath loader.EnvVar // PENTAGI_DOCKER_CERT_PATH
 
+	// Daemon endpoint exposed to worker containers when DOCKER_INSIDE is enabled.
+	// These mirror the trio above but describe the sandbox's view, and their paths
+	// resolve on the worker node rather than on the machine running the installer.
+	DockerInsideHost      loader.EnvVar // DOCKER_INSIDE_HOST
+	DockerInsideTLSVerify loader.EnvVar // DOCKER_INSIDE_TLS_VERIFY
+	DockerInsideCertPath  loader.EnvVar // DOCKER_INSIDE_CERT_PATH
+
 	// computed fields (not directly mapped to env vars)
 	Configured bool
 }
@@ -1880,6 +1887,9 @@ func (c *controller) GetDockerConfig() *DockerConfig {
 		"DOCKER_HOST",
 		"DOCKER_TLS_VERIFY",
 		"PENTAGI_DOCKER_CERT_PATH",
+		"DOCKER_INSIDE_HOST",
+		"DOCKER_INSIDE_TLS_VERIFY",
+		"DOCKER_INSIDE_CERT_PATH",
 	})
 
 	config := &DockerConfig{
@@ -1894,6 +1904,9 @@ func (c *controller) GetDockerConfig() *DockerConfig {
 		DockerHost:                   vars["DOCKER_HOST"],
 		DockerTLSVerify:              vars["DOCKER_TLS_VERIFY"],
 		HostDockerCertPath:           vars["PENTAGI_DOCKER_CERT_PATH"],
+		DockerInsideHost:             vars["DOCKER_INSIDE_HOST"],
+		DockerInsideTLSVerify:        vars["DOCKER_INSIDE_TLS_VERIFY"],
+		DockerInsideCertPath:         vars["DOCKER_INSIDE_CERT_PATH"],
 	}
 
 	// patch docker host default value
@@ -1924,6 +1937,9 @@ func (c *controller) UpdateDockerConfig(config *DockerConfig) error {
 		"DOCKER_HOST":                      config.DockerHost.Value,
 		"DOCKER_TLS_VERIFY":                config.DockerTLSVerify.Value,
 		"PENTAGI_DOCKER_CERT_PATH":         config.HostDockerCertPath.Value,
+		"DOCKER_INSIDE_HOST":               config.DockerInsideHost.Value,
+		"DOCKER_INSIDE_TLS_VERIFY":         config.DockerInsideTLSVerify.Value,
+		"DOCKER_INSIDE_CERT_PATH":          config.DockerInsideCertPath.Value,
 	}
 
 	dockerHost := config.DockerHost.Value
@@ -1962,6 +1978,9 @@ func (c *controller) ResetDockerConfig() *DockerConfig {
 		"DOCKER_HOST",
 		"DOCKER_TLS_VERIFY",
 		"DOCKER_CERT_PATH",
+		"DOCKER_INSIDE_HOST",
+		"DOCKER_INSIDE_TLS_VERIFY",
+		"DOCKER_INSIDE_CERT_PATH",
 		// Volume mapping for docker socket
 		"PENTAGI_DOCKER_SOCKET",
 		"PENTAGI_DOCKER_CERT_PATH",
@@ -2355,6 +2374,9 @@ func (c *controller) getVariableDescription(varName string) string {
 		"DOCKER_HOST":                      locale.EnvDesc_DOCKER_HOST,
 		"DOCKER_TLS_VERIFY":                locale.EnvDesc_DOCKER_TLS_VERIFY,
 		"DOCKER_CERT_PATH":                 locale.EnvDesc_DOCKER_CERT_PATH,
+		"DOCKER_INSIDE_HOST":               locale.EnvDesc_DOCKER_INSIDE_HOST,
+		"DOCKER_INSIDE_TLS_VERIFY":         locale.EnvDesc_DOCKER_INSIDE_TLS_VERIFY,
+		"DOCKER_INSIDE_CERT_PATH":          locale.EnvDesc_DOCKER_INSIDE_CERT_PATH,
 
 		"TENANT_ID":                         locale.EnvDesc_TENANT_ID,
 		"LICENSE_KEY":                       locale.EnvDesc_LICENSE_KEY,
@@ -2566,6 +2588,9 @@ var criticalVariables = map[string]bool{
 	"DOCKER_HOST":                      true,
 	"DOCKER_TLS_VERIFY":                true,
 	"DOCKER_CERT_PATH":                 true,
+	"DOCKER_INSIDE_HOST":               true,
+	"DOCKER_INSIDE_TLS_VERIFY":         true,
+	"DOCKER_INSIDE_CERT_PATH":          true,
 	"PENTAGI_DOCKER_SOCKET":            true,
 
 	// observability changes

@@ -21,6 +21,8 @@
 - [Architecture](#architecture)
   - [Agent Supervision](#advanced-agent-supervision)
 - [Quick Start](#quick-start)
+  - [Agent Docker Access](#giving-agents-docker-without-giving-away-the-host)
+  - [Running Several Instances](#running-several-instances-tenant_id)
 - [How to Use PentAGI After Login](#how-to-use-pentagi-after-login)
 - [API Access](#api-access)
   - [LLM Provider Configuration](#custom-llm-provider-configuration)
@@ -671,6 +673,53 @@ The two-node setup provides:
 - **Security Boundaries**: Docker-in-Docker with TLS authentication
 - **OOB Attack Support**: Dedicated port ranges for out-of-band techniques
 
+#### Giving Agents Docker Without Giving Away the Host
+
+Many pentest workflows need `docker` inside the agent's sandbox. There are two ways to provide it, and they differ sharply in risk.
+
+**Recommended — point sandboxes at a hardened dind daemon over TLS.** Set `DOCKER_INSIDE=true`, leave `DOCKER_SOCKET` empty, and configure the daemon the sandbox may talk to:
+
+```bash
+DOCKER_INSIDE=true
+DOCKER_SOCKET=                                          # mount no socket
+DOCKER_INSIDE_HOST=tcp://10.0.0.5:3376                  # hardened dind endpoint
+DOCKER_INSIDE_TLS_VERIFY=1
+DOCKER_INSIDE_CERT_PATH=/etc/docker/dind/certs/client   # path on the worker node
+```
+
+PentAGI injects these into every worker container as `DOCKER_HOST`, `DOCKER_TLS_VERIFY` and `DOCKER_CERT_PATH` (the `_INSIDE_` segment is dropped) and bind-mounts the certificate directory read-only at the same path, so `docker` works inside the sandbox with no further setup.
+
+**Not recommended — bind-mounting a Docker socket (`DOCKER_SOCKET`).** This has two failure modes:
+
+- **Boot-order race**: a bind-mount source that does not exist yet is created by Docker as a *directory*. After a worker-node reboot, a worker container can start before dind has recreated its socket — Docker then puts a directory where the socket belongs, and dind cannot start until it is removed by hand.
+- **Blast radius**: the race is only reliably avoided when the mounted socket is the **host** daemon's, since that one always exists first. But that grants an autonomous agent the host Docker API: it can start a privileged container, mount `/`, and compromise the entire node — PentAGI included.
+
+Use `DOCKER_SOCKET` only on single-node development setups where the host daemon is already trusted.
+
+**See**: [Worker Node Setup](examples/guides/worker_node.md) for the full dind hardening and TLS configuration, and [Worker Docker Access](backend/docs/docker.md#worker-docker-access) for the exact resolution algorithm.
+
+#### Running Several Instances (`TENANT_ID`)
+
+A single PentAGI installation needs none of this — leave `TENANT_ID` empty (the default) and nothing changes.
+
+Set it when several PentAGI installations share external resources: one PostgreSQL server, one worker node, one Neo4j/Graphiti, one Langfuse. The typical case is a management backend per server with a common worker node and database. Because every instance numbers its flows from `1`, they would otherwise collide on container names, database rows, knowledge-graph namespaces and session cookies. `TENANT_ID` namespaces all of it:
+
+| Area | Effect when `TENANT_ID=acme` |
+| ---- | ---------------------------- |
+| PostgreSQL | The instance creates and works inside schema `acme` instead of `public`; extensions stay shared in `public` |
+| Worker containers | `acme-pentagi-terminal-<flow>` instead of `pentagi-terminal-<flow>`; volumes and hostnames follow, and both carry a `pentagi.tenant` label |
+| Knowledge graph | Graphiti/Neo4j group ids become `acme-flow-<id>` |
+| Auth | Cookie and API token keys are derived from `COOKIE_SIGNING_SALT` **plus** the tenant, and the session cookie is renamed |
+| Telemetry | Langfuse traces carry the tenant as their `environment` and a `tenant:acme` tag; OTel resources gain `tenant_id` |
+
+The value must match `^[a-z][a-z0-9_]{0,31}$` — an invalid one aborts startup rather than being silently normalised.
+
+Some things stay yours to set per instance, because they are host resources rather than names: `DATA_DIR` (two instances sharing it **will** overwrite each other's flow data), `DOCKER_PORTS_BASE`, the published ports, and `INSTALLATION_ID`. The effective values are printed at startup under `Instance identity`.
+
+The installer provisions one instance per server. Running several on one server is possible — for example behind a shared nginx — but the stock `docker-compose.yml` uses fixed container and network names, so it has to be adapted to your own network layout first.
+
+**See**: [Multi-Instance Deployment](backend/docs/config.md#multi-instance-deployment-tenant_id) for validation rules, upgrade notes and the full list of operator responsibilities.
+
 ### Manual Installation
 
 1. Create a working directory or clone the repository:
@@ -779,6 +828,7 @@ ASSISTANT_USE_AGENTS=false         # Default value for agent usage when creating
 - `COOKIE_SIGNING_SALT` - Salt for cookie signing, change to random value
 - `PUBLIC_URL` - Public URL of your server (eg. `https://pentagi.example.com`)
 - `SERVER_SSL_CRT` and `SERVER_SSL_KEY` - Custom paths to your existing SSL certificate and key for HTTPS (these paths should be used in the docker-compose.yml file to mount as volumes)
+- `TENANT_ID` - Leave empty unless this instance shares external resources with another PentAGI installation. When set, it is mixed into the cookie and API token signing keys and renames the session cookie, so a session minted by one instance is rejected by the others even though they share the same `COOKIE_SIGNING_SALT`. See [Running Several Instances](#running-several-instances-tenant_id)
 
 ### Scraper Access
 - `SCRAPER_PUBLIC_URL` - Public URL for scraper if you want to use different scraper server for public URLs

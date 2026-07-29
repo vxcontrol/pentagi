@@ -32,9 +32,24 @@ type Config struct {
 	LicenseKey     string `env:"LICENSE_KEY"`
 
 	// === Container Runtime Configuration ===
-	DockerInside                 bool   `env:"DOCKER_INSIDE" envDefault:"false"`
-	DockerNetAdmin               bool   `env:"DOCKER_NET_ADMIN" envDefault:"false"`
-	DockerSocket                 string `env:"DOCKER_SOCKET"`
+	DockerInside   bool   `env:"DOCKER_INSIDE" envDefault:"false"`
+	DockerNetAdmin bool   `env:"DOCKER_NET_ADMIN" envDefault:"false"`
+	DockerSocket   string `env:"DOCKER_SOCKET"`
+
+	// DOCKER_INSIDE_* describe how a worker container reaches a Docker daemon when
+	// DOCKER_INSIDE is enabled. They mirror the DOCKER_HOST / DOCKER_TLS_VERIFY /
+	// DOCKER_CERT_PATH trio that this process itself uses, but apply to the
+	// sandbox rather than to PentAGI, and are injected into it with the _INSIDE
+	// segment stripped from the name.
+	//
+	// Setting DockerInsideHost points sandboxes at a dedicated daemon endpoint
+	// instead of a bind-mounted host socket, which is the safer arrangement: an
+	// agent then talks to whichever daemon the operator designated rather than the
+	// one running PentAGI itself. All three are ignored when DOCKER_INSIDE is off.
+	DockerInsideHost      string `env:"DOCKER_INSIDE_HOST"`
+	DockerInsideTLSVerify string `env:"DOCKER_INSIDE_TLS_VERIFY"`
+	DockerInsideCertPath  string `env:"DOCKER_INSIDE_CERT_PATH"`
+
 	DockerNetwork                string `env:"DOCKER_NETWORK"`
 	DockerPublicIP               string `env:"DOCKER_PUBLIC_IP" envDefault:"0.0.0.0"`
 	DockerWorkDir                string `env:"DOCKER_WORK_DIR"`
@@ -337,6 +352,66 @@ func (c *Config) WorkerPublicIP() string {
 		return "0.0.0.0"
 	}
 	return c.DockerPublicIP
+}
+
+// WorkerDockerEnv returns the DOCKER_* environment entries to inject into a
+// worker container so that the Docker CLI inside it talks to the daemon the
+// operator designated. Each DOCKER_INSIDE_* value is passed through with the
+// _INSIDE segment removed; empty values are omitted entirely.
+//
+// Returns nil when DOCKER_INSIDE is disabled, so a sandbox that is not meant to
+// reach Docker at all receives no Docker configuration.
+func (c *Config) WorkerDockerEnv() []string {
+	if c == nil || !c.DockerInside {
+		return nil
+	}
+
+	var env []string
+	for _, kv := range []struct{ name, value string }{
+		{"DOCKER_HOST", c.DockerInsideHost},
+		{"DOCKER_TLS_VERIFY", c.DockerInsideTLSVerify},
+		{"DOCKER_CERT_PATH", c.DockerInsideCertPath},
+	} {
+		if kv.value != "" {
+			env = append(env, kv.name+"="+kv.value)
+		}
+	}
+
+	return env
+}
+
+// WorkerDockerCertPath returns the TLS certificate directory that must be made
+// visible inside a worker container, or "" when there is nothing to mount. The
+// path is identical on both sides so that the injected DOCKER_CERT_PATH resolves
+// unchanged within the sandbox.
+func (c *Config) WorkerDockerCertPath() string {
+	if c == nil || !c.DockerInside {
+		return ""
+	}
+	return c.DockerInsideCertPath
+}
+
+// WorkerDockerSocket decides which host socket, if any, is bind-mounted into a
+// worker container.
+//
+//   - An explicit DOCKER_SOCKET always wins and is mounted as before.
+//   - Otherwise, if DOCKER_INSIDE_HOST is set, nothing is mounted: the sandbox
+//     reaches Docker over that endpoint, and exposing the host socket as well
+//     would hand it control of the daemon running PentAGI itself.
+//   - Otherwise the caller falls back to autodetecting the host socket, which is
+//     the historical behaviour; this is signalled by returning autodetect=true.
+func (c *Config) WorkerDockerSocket() (socket string, autodetect bool) {
+	if c == nil {
+		return "", true
+	}
+	switch {
+	case c.DockerSocket != "":
+		return c.DockerSocket, false
+	case c.DockerInsideHost != "":
+		return "", false
+	default:
+		return "", true
+	}
 }
 
 // WorkerNetwork returns the network for the worker container
