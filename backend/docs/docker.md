@@ -171,21 +171,32 @@ When `DOCKER_NET_ADMIN=true`, containers receive the following networking capabi
 
 #### Container Capability Assignment
 
-The NET_ADMIN capability is applied differently based on container type and configuration:
+The primary container does not rely on Docker's implicit default capability set. `tools.go` (`flowToolsExecutor.Prepare`) sets `CapDrop: ["ALL"]` and then adds back an explicit allow-list — Docker's own default 14-capability set minus `MKNOD`, plus `NET_ADMIN` when `DOCKER_NET_ADMIN=true`:
 
 ```go
-// Primary containers (when DOCKER_NET_ADMIN=true)
-hostConfig := &container.HostConfig{
-    CapAdd: []string{"NET_RAW", "NET_ADMIN"},  // Full networking capabilities
-    // ... other configurations
-}
-
 // Primary containers (when DOCKER_NET_ADMIN=false)
 hostConfig := &container.HostConfig{
-    CapAdd: []string{"NET_RAW"},  // Basic raw socket access only
-    // ... other configurations
+    CapDrop: []string{"ALL"},
+    CapAdd: []string{
+        "CHOWN", "DAC_OVERRIDE", "FSETID", "FOWNER",
+        "NET_RAW", "SETGID", "SETUID", "SETFCAP", "SETPCAP",
+        "NET_BIND_SERVICE", "SYS_CHROOT", "KILL", "AUDIT_WRITE", "SYS_PTRACE",
+    },
+}
+
+// Primary containers (when DOCKER_NET_ADMIN=true) — same list, plus NET_ADMIN
+hostConfig := &container.HostConfig{
+    CapDrop: []string{"ALL"},
+    CapAdd: []string{
+        "CHOWN", "DAC_OVERRIDE", "FSETID", "FOWNER",
+        "NET_RAW", "SETGID", "SETUID", "SETFCAP", "SETPCAP",
+        "NET_BIND_SERVICE", "SYS_CHROOT", "KILL", "AUDIT_WRITE", "SYS_PTRACE",
+        "NET_ADMIN",
+    },
 }
 ```
+
+Why the full default set (minus one) instead of just `NET_RAW`/`NET_ADMIN`: pentest workflows routinely install new tools at runtime via `apt`/`dpkg` (the Installer Agent's core job), and several common network tools' `postinst` maintainer scripts call `setcap` on their binaries instead of relying on setuid (`ping`, `traceroute`, `nmap`, `dumpcap`, `hping3`, …). That needs `SETFCAP`; `SETPCAP`/`FSETID`/`AUDIT_WRITE` round out the rest of Docker's default set that ordinary package management and privilege-dropping daemons expect. See [Capability Management](#capability-management) below for the full rationale, including the one deliberate omission (`MKNOD`).
 
 ### Worker Docker Access
 
@@ -376,8 +387,16 @@ containerConfig := &container.Config{
     },
 }
 
+pidsLimit := int64(2048) // fork-bomb guard, default when the caller does not set one
+
 hostConfig := &container.HostConfig{
-    CapAdd: []string{"NET_RAW"},                 // Required capabilities for network tools
+    CapDrop: []string{"ALL"},                    // Explicit allow-list below, see Capability Management
+    CapAdd: []string{
+        "CHOWN", "DAC_OVERRIDE", "FSETID", "FOWNER",
+        "NET_RAW", "SETGID", "SETUID", "SETFCAP", "SETPCAP",
+        "NET_BIND_SERVICE", "SYS_CHROOT", "KILL", "AUDIT_WRITE", "SYS_PTRACE",
+    },
+    PidsLimit: &pidsLimit,
     RestartPolicy: container.RestartPolicy{
         Name:              "on-failure",         // Restart failed containers only
         MaximumRetryCount: 5,
@@ -457,12 +476,46 @@ PentAGI implements a multi-layered security approach for container isolation:
 - **Volume Separation**: Each flow gets isolated storage space
 
 #### Capability Management
+
+The primary container uses an explicit allow-list instead of Docker's implicit defaults: `CapDrop: ["ALL"]`, then `CapAdd` back Docker's own default 14-capability set minus `MKNOD`, plus `NET_ADMIN` when `DOCKER_NET_ADMIN=true` and `SYS_PTRACE` (one deliberate addition beyond Docker's defaults, see below):
+
 ```go
 hostConfig := &container.HostConfig{
-    CapAdd: []string{"NET_RAW"},  // Required for network scanning tools
-    // Other dangerous capabilities are not granted
+    CapDrop: []string{"ALL"},
+    CapAdd: []string{
+        "CHOWN", "DAC_OVERRIDE", "FSETID", "FOWNER",
+        "NET_RAW", "SETGID", "SETUID", "SETFCAP", "SETPCAP",
+        "NET_BIND_SERVICE", "SYS_CHROOT", "KILL", "AUDIT_WRITE", "SYS_PTRACE",
+        // + "NET_ADMIN" when DOCKER_NET_ADMIN=true
+    },
 }
 ```
+
+Why this exact set, rather than a minimal `NET_RAW`-only list:
+
+| Capability | Why it is needed |
+|---|---|
+| `NET_RAW` | Raw sockets — nmap, ping, packet crafting |
+| `NET_BIND_SERVICE` | Bind ports below 1024 — reverse shells, Responder, rogue DNS |
+| `SETUID` / `SETGID` | Daemons and tools that drop privileges after starting as root |
+| `SETFCAP` / `SETPCAP` | `apt`/`dpkg` `postinst` scripts that `setcap` network tools instead of relying on setuid (`ping`, `traceroute`, `nmap`, `dumpcap`, `hping3`, …) — without these, on-the-fly package installs (the Installer Agent's core job) fail |
+| `FSETID` | Preserves set-id bits when dpkg installs/modifies files as a non-owner |
+| `CHOWN` / `DAC_OVERRIDE` / `FOWNER` | Root file-permission overrides needed during package installs and builds |
+| `KILL` | Signal other processes inside the container |
+| `SYS_CHROOT` | chroot-based isolation within the sandbox |
+| `AUDIT_WRITE` | Lets `sudo`/`sshd` write audit-log entries instead of warning |
+| `SYS_PTRACE` | Not a Docker default — added so `gdb`/`strace`/`ltrace`/dynamic binary analysis (`pwndbg`, `radare2`) work for the Coder Agent's exploit-development role. Without it, `ptrace()` and friends (`process_vm_readv`/`writev`, `kcmp`) stay blocked by Docker's *default seccomp profile*, which independently gates them behind `CAP_SYS_PTRACE` — no custom seccomp profile is needed to unblock them, since moby/containerd auto-extend the default profile's syscall allow-list to match added capabilities. Scope stays contained to the sandbox: `ptrace` only works within the container's own PID namespace, never against host or sibling-container processes. |
+| `NET_ADMIN` (opt-in via `DOCKER_NET_ADMIN`) | Interface/routing/firewall control for advanced network pentesting |
+
+**`MKNOD` is the one deliberate omission** from Docker's default set: creating device nodes has no legitimate use for pentest tooling or package management, and this repository's own dind-hardening research (see [Worker Node Setup](../../examples/guides/worker_node.md) and its [`authz.rego`](../../examples/guides/worker_node/authz.rego)) identifies block-device `mknod` combined with `debugfs` as "the primary confirmed escape vector" for a hostile-code container. `SYS_ADMIN`, `SYS_MODULE`, `SYS_RAWIO`, and `SYS_BOOT` are never granted — none are part of Docker's default set and none are required by any supported workflow.
+
+Docker's default set minus `MKNOD`, plus `NET_ADMIN`, is exactly the `allowed_caps` whitelist already vetted in `authz.rego` for nested dind containers running the same kind of pentest workload — the two are kept intentionally consistent at that shared baseline. `SYS_PTRACE` is the one place the primary container's allow-list goes further than `authz.rego`'s: it is not offered to nested dind containers (an agent there can request arbitrary `containers/create` calls, and the dind threat model does not special-case debugging), but the primary worker container is created solely by PentAGI itself with a fixed capability list, so granting it here does not expand what an agent can ask for.
+
+An earlier revision of this container also forced `no-new-privileges:true` via `SecurityOpt`, intended as defense-in-depth against setuid/file-capability escalation. It was removed: the capability bounding set above already caps what any process can ever gain regardless of setuid, so the flag added no protection beyond the allow-list while unconditionally breaking SUID/SGID privilege-escalation testing and `sudo`/`su` from a non-root shell — both routine penetration-testing workflows.
+
+#### Resource Limits
+- **PidsLimit**: Defaults to 2048 when the caller does not set one — a cheap fork-bomb / resource-exhaustion guard, generous enough for parallel scans (nmap, hydra). Mirrors the same default used for the dind daemon in the [Worker Node Setup](../../examples/guides/worker_node.md) guide.
+- **Memory/CPU**: Controlled via standard `HostConfig` resource fields when set by the caller.
 
 #### Process Isolation
 - **User Namespaces**: Containers run with isolated user space
@@ -593,7 +646,15 @@ container, err := dockerClient.RunContainer(
         Entrypoint: []string{"tail", "-f", "/dev/null"},
     },
     &container.HostConfig{
-        CapAdd: []string{"NET_RAW", "NET_ADMIN"},
+        // See Container Capability Assignment above for the full allow-list
+        // that flowToolsExecutor.Prepare actually passes in production.
+        CapDrop: []string{"ALL"},
+        CapAdd: []string{
+            "CHOWN", "DAC_OVERRIDE", "FSETID", "FOWNER",
+            "NET_RAW", "SETGID", "SETUID", "SETFCAP", "SETPCAP",
+            "NET_BIND_SERVICE", "SYS_CHROOT", "KILL", "AUDIT_WRITE", "SYS_PTRACE",
+            "NET_ADMIN",
+        },
     },
 )
 ```

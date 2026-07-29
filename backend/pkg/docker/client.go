@@ -124,11 +124,20 @@ func NewDockerClient(ctx context.Context, db database.Querier, cfg *config.Confi
 	}
 	inside := cfg.DockerInside
 	if inside {
-		logrus.Warn("DOCKER_INSIDE=true: the host Docker socket will be bind-mounted into " +
-			"every sandbox container. Any process inside the sandbox can use the socket " +
-			"to ask the host daemon to launch a privileged container, achieving a full " +
-			"host escape (issue #337). Set DOCKER_INSIDE=false unless DinD is required, " +
-			"or front the socket with a least-privilege proxy (e.g. Tecnativa/docker-socket-proxy).")
+		switch {
+		case cfg.DockerSocket != "":
+			logrus.Infof("DOCKER_INSIDE=true: worker containers will be given Docker access "+
+				"via the configured socket %q.", cfg.DockerSocket)
+		case cfg.DockerInsideHost != "":
+			logrus.Infof("DOCKER_INSIDE=true: worker containers will be given Docker access "+
+				"to the configured external daemon at %q.", cfg.DockerInsideHost)
+		default:
+			logrus.Warn("DOCKER_INSIDE=true with neither DOCKER_SOCKET nor DOCKER_INSIDE_HOST set: " +
+				"the host Docker socket will be autodetected and bind-mounted into every worker " +
+				"container, so any process inside it gets control of the same daemon that runs " +
+				"PentAGI. Set DOCKER_SOCKET or DOCKER_INSIDE_HOST explicitly, or front the socket " +
+				"with a least-privilege proxy (e.g. Tecnativa/docker-socket-proxy), if that is not intended.")
+		}
 	}
 	netName := cfg.DockerNetwork
 	publicIP := cfg.DockerPublicIP
@@ -326,18 +335,11 @@ func (dc *dockerClient) RunContainer(
 		}
 	}
 
-	// Defense-in-depth: block setuid/setgid and file-capability escalation
-	// *within* the container (PR_SET_NO_NEW_PRIVS / no-new-privileges).
-	// NOTE: this does NOT mitigate the docker.sock host-escape in issue #337 —
-	// an attacker with socket access can ask the host daemon to spawn a privileged
-	// container regardless of this flag. The real mitigation for #337 is to avoid
-	// mounting the raw socket (DOCKER_INSIDE=false) or to front it with a
-	// least-privilege proxy such as https://github.com/Tecnativa/docker-socket-proxy.
-	// NOTE: no-new-privileges causes the kernel to ignore setuid-root bits on
-	// execve, so sudo/su from a non-root uid will not work inside the sandbox.
-	if !slices.Contains(hostConfig.SecurityOpt, "no-new-privileges:true") {
-		hostConfig.SecurityOpt = append(hostConfig.SecurityOpt, "no-new-privileges:true")
-	}
+	// no-new-privileges was evaluated and deliberately not applied: the capability
+	// bounding set in tools.go Prepare already caps what any process can gain, so
+	// it added no protection beyond that (and none against issue #337) while
+	// breaking SUID/SGID privesc testing and sudo/su. See "Capability Management"
+	// in docker.md for the full rationale.
 
 	// Cap fork-bomb / resource-exhaustion risk at a bounded limit.
 	// 2048 pids is generous for most pentest workloads (nmap, hydra, parallel scans).
