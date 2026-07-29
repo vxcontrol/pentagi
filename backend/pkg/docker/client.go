@@ -110,6 +110,13 @@ func NewDockerClient(ctx context.Context, db database.Querier, cfg *config.Confi
 		socket = getHostDockerSocket(ctx, cli)
 	}
 	inside := cfg.DockerInside
+	if inside {
+		logrus.Warn("DOCKER_INSIDE=true: the host Docker socket will be bind-mounted into " +
+			"every sandbox container. Any process inside the sandbox can use the socket " +
+			"to ask the host daemon to launch a privileged container, achieving a full " +
+			"host escape (issue #337). Set DOCKER_INSIDE=false unless DinD is required, " +
+			"or front the socket with a least-privilege proxy (e.g. Tecnativa/docker-socket-proxy).")
+	}
 	netName := cfg.DockerNetwork
 	publicIP := cfg.DockerPublicIP
 	defImage := strings.ToLower(cfg.DockerDefaultImage)
@@ -280,6 +287,27 @@ func (dc *dockerClient) RunContainer(
 
 	if dc.inside {
 		hostConfig.Binds = append(hostConfig.Binds, fmt.Sprintf("%s:%s", dc.socket, defaultDockerSocketPath))
+	}
+
+	// Defense-in-depth: block setuid/setgid and file-capability escalation
+	// *within* the container (PR_SET_NO_NEW_PRIVS / no-new-privileges).
+	// NOTE: this does NOT mitigate the docker.sock host-escape in issue #337 —
+	// an attacker with socket access can ask the host daemon to spawn a privileged
+	// container regardless of this flag. The real mitigation for #337 is to avoid
+	// mounting the raw socket (DOCKER_INSIDE=false) or to front it with a
+	// least-privilege proxy such as https://github.com/Tecnativa/docker-socket-proxy.
+	// NOTE: no-new-privileges causes the kernel to ignore setuid-root bits on
+	// execve, so sudo/su from a non-root uid will not work inside the sandbox.
+	if !slices.Contains(hostConfig.SecurityOpt, "no-new-privileges:true") {
+		hostConfig.SecurityOpt = append(hostConfig.SecurityOpt, "no-new-privileges:true")
+	}
+
+	// Cap fork-bomb / resource-exhaustion risk at a bounded limit.
+	// 2048 pids is generous for most pentest workloads (nmap, hydra, parallel scans).
+	// Callers can override by setting hostConfig.PidsLimit before calling RunContainer.
+	if hostConfig.PidsLimit == nil {
+		pidsLimit := int64(2048)
+		hostConfig.PidsLimit = &pidsLimit
 	}
 
 	hostConfig.LogConfig = container.LogConfig{

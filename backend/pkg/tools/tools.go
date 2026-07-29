@@ -494,7 +494,22 @@ func (fte *flowToolsExecutor) Prepare(ctx context.Context) error {
 		}
 	}
 
-	capAdd := []string{"NET_RAW"}
+	// Start with capabilities pentest tooling genuinely needs.
+	// NET_RAW: raw sockets (nmap, ping, packet crafting)
+	// NET_BIND_SERVICE: bind ports <1024 (reverse shells, Responder, rogue DNS)
+	// SETUID/SETGID: needed by daemons/tools that drop privileges (setuid DOWN).
+	//   NOTE: RunContainer also sets no-new-privileges:true, which causes the kernel
+	//   to ignore setuid-root bits on execve — sudo/su from a non-root uid will NOT
+	//   work. These caps do not re-enable setuid-root escalation.
+	// CHOWN/DAC_OVERRIDE/FOWNER: root file-permission overrides (dpkg, package builds)
+	// KILL: signal other processes inside the container
+	// SYS_CHROOT: chroot-based isolation within the sandbox
+	capAdd := []string{
+		"NET_RAW", "NET_BIND_SERVICE",
+		"SETUID", "SETGID",
+		"CHOWN", "DAC_OVERRIDE", "FOWNER",
+		"KILL", "SYS_CHROOT",
+	}
 	if fte.cfg.DockerNetAdmin {
 		capAdd = append(capAdd, "NET_ADMIN")
 	}
@@ -510,7 +525,8 @@ func (fte *flowToolsExecutor) Prepare(ctx context.Context) error {
 			Entrypoint: []string{"tail", "-f", "/dev/null"},
 		},
 		&container.HostConfig{
-			CapAdd: capAdd,
+			CapDrop: []string{"ALL"},
+			CapAdd:  capAdd,
 		},
 	)
 	if err != nil {
