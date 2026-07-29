@@ -18,10 +18,9 @@ import (
 
 type Config struct {
 	// === Core System Configuration ===
-	DatabaseURL string `env:"DATABASE_URL" envDefault:"postgres://pentagiuser:pentagipass@pgvector:5432/pentagidb?sslmode=disable"`
-	Debug       bool   `env:"DEBUG" envDefault:"false"`
-	DataDir     string `env:"DATA_DIR" envDefault:"./data"`
-	AskUser     bool   `env:"ASK_USER" envDefault:"false"`
+	Debug   bool   `env:"DEBUG" envDefault:"false"`
+	DataDir string `env:"DATA_DIR" envDefault:"./data"`
+	AskUser bool   `env:"ASK_USER" envDefault:"false"`
 
 	// TenantID namespaces every externally-visible artifact this instance creates
 	// (PostgreSQL schema, docker object names, Graphiti group ids, telemetry identity)
@@ -269,10 +268,19 @@ type Config struct {
 	// === Agent Planning Phase Configuration ===
 	AgentPlanningStepEnabled bool `env:"AGENT_PLANNING_STEP_ENABLED" envDefault:"false"`
 
+	// === Database Configuration ===
+	DatabaseURL string `env:"DATABASE_URL" envDefault:"postgres://pentagiuser:pentagipass@pgvector:5432/pentagidb?sslmode=disable"`
+
 	// === Database Connection Pool Sizing ===
 	DBMaxOpenConns   int `env:"DATABASE_MAX_OPEN_CONNS" envDefault:"25"`
 	DBMaxIdleConns   int `env:"DATABASE_MAX_IDLE_CONNS" envDefault:"5"`
 	DBVectorMaxConns int `env:"DATABASE_VECTOR_MAX_CONNS" envDefault:"10"`
+
+	// DatabaseExtensionsSchema/DatabaseSearchPathViaOptions only matter with
+	// TenantID set; see backend/docs/config.md -> "Multi-Instance Deployment
+	// (TENANT_ID)" for what they do and when to override them.
+	DatabaseExtensionsSchema     string `env:"DATABASE_EXTENSIONS_SCHEMA" envDefault:""`
+	DatabaseSearchPathViaOptions bool   `env:"DATABASE_SEARCH_PATH_VIA_OPTIONS" envDefault:"false"`
 
 	// PgxPool is the shared pgxpool.Pool for all pgvector stores. Populated by
 	// main after pool creation; NOT sourced from environment variables.

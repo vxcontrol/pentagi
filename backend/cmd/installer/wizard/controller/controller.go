@@ -1996,21 +1996,23 @@ func (c *controller) ResetDockerConfig() *DockerConfig {
 // ServerSettingsConfig represents PentAGI server settings configuration
 type ServerSettingsConfig struct {
 	// direct form field mappings using loader.EnvVar
-	TenantID            loader.EnvVar // TENANT_ID
-	LicenseKey          loader.EnvVar // LICENSE_KEY
-	PprofAddr           loader.EnvVar // PPROF_ADDR
-	ListenIP            loader.EnvVar // PENTAGI_LISTEN_IP
-	ListenPort          loader.EnvVar // PENTAGI_LISTEN_PORT
-	PublicURL           loader.EnvVar // PUBLIC_URL
-	CorsOrigins         loader.EnvVar // CORS_ORIGINS
-	CookieSigningSalt   loader.EnvVar // COOKIE_SIGNING_SALT
-	ProxyURL            loader.EnvVar // PROXY_URL
-	HTTPClientTimeout   loader.EnvVar // HTTP_CLIENT_TIMEOUT
-	TerminalToolTimeout loader.EnvVar // TERMINAL_TOOL_TIMEOUT
-	ExternalSSLCAPath   loader.EnvVar // EXTERNAL_SSL_CA_PATH
-	ExternalSSLInsecure loader.EnvVar // EXTERNAL_SSL_INSECURE
-	SSLDir              loader.EnvVar // PENTAGI_SSL_DIR
-	DataDir             loader.EnvVar // PENTAGI_DATA_DIR
+	TenantID                 loader.EnvVar // TENANT_ID
+	LicenseKey               loader.EnvVar // LICENSE_KEY
+	PprofAddr                loader.EnvVar // PPROF_ADDR
+	ListenIP                 loader.EnvVar // PENTAGI_LISTEN_IP
+	ListenPort               loader.EnvVar // PENTAGI_LISTEN_PORT
+	PublicURL                loader.EnvVar // PUBLIC_URL
+	CorsOrigins              loader.EnvVar // CORS_ORIGINS
+	CookieSigningSalt        loader.EnvVar // COOKIE_SIGNING_SALT
+	ProxyURL                 loader.EnvVar // PROXY_URL
+	HTTPClientTimeout        loader.EnvVar // HTTP_CLIENT_TIMEOUT
+	TerminalToolTimeout      loader.EnvVar // TERMINAL_TOOL_TIMEOUT
+	ExternalSSLCAPath        loader.EnvVar // EXTERNAL_SSL_CA_PATH
+	ExternalSSLInsecure      loader.EnvVar // EXTERNAL_SSL_INSECURE
+	SSLDir                   loader.EnvVar // PENTAGI_SSL_DIR
+	DataDir                  loader.EnvVar // PENTAGI_DATA_DIR
+	DatabaseExtensionsSchema loader.EnvVar // DATABASE_EXTENSIONS_SCHEMA
+	DatabaseSearchPathViaOpt loader.EnvVar // DATABASE_SEARCH_PATH_VIA_OPTIONS
 
 	// parsed credentials for proxy server (extracted from URLs)
 	ProxyUsername string
@@ -2035,20 +2037,24 @@ func (c *controller) GetServerSettingsConfig() *ServerSettingsConfig {
 		"EXTERNAL_SSL_INSECURE",
 		"PENTAGI_SSL_DIR",
 		"PENTAGI_DATA_DIR",
+		"DATABASE_EXTENSIONS_SCHEMA",
+		"DATABASE_SEARCH_PATH_VIA_OPTIONS",
 	})
 
 	defaults := map[string]string{
-		"LICENSE_KEY":           "",
-		"PPROF_ADDR":            "",
-		"PENTAGI_LISTEN_IP":     "127.0.0.1",
-		"PENTAGI_LISTEN_PORT":   "8443",
-		"PUBLIC_URL":            "https://localhost:8443",
-		"CORS_ORIGINS":          "https://localhost:8443",
-		"PENTAGI_DATA_DIR":      "pentagi-data",
-		"PENTAGI_SSL_DIR":       "pentagi-ssl",
-		"HTTP_CLIENT_TIMEOUT":   "600",
-		"TERMINAL_TOOL_TIMEOUT": "600",
-		"EXTERNAL_SSL_INSECURE": "false",
+		"LICENSE_KEY":                      "",
+		"PPROF_ADDR":                       "",
+		"PENTAGI_LISTEN_IP":                "127.0.0.1",
+		"PENTAGI_LISTEN_PORT":              "8443",
+		"PUBLIC_URL":                       "https://localhost:8443",
+		"CORS_ORIGINS":                     "https://localhost:8443",
+		"PENTAGI_DATA_DIR":                 "pentagi-data",
+		"PENTAGI_SSL_DIR":                  "pentagi-ssl",
+		"HTTP_CLIENT_TIMEOUT":              "600",
+		"TERMINAL_TOOL_TIMEOUT":            "600",
+		"EXTERNAL_SSL_INSECURE":            "false",
+		"DATABASE_EXTENSIONS_SCHEMA":       "public",
+		"DATABASE_SEARCH_PATH_VIA_OPTIONS": "false",
 	}
 
 	for varName, defaultValue := range defaults {
@@ -2059,21 +2065,23 @@ func (c *controller) GetServerSettingsConfig() *ServerSettingsConfig {
 	}
 
 	cfg := &ServerSettingsConfig{
-		TenantID:            vars["TENANT_ID"],
-		LicenseKey:          vars["LICENSE_KEY"],
-		PprofAddr:           vars["PPROF_ADDR"],
-		ListenIP:            vars["PENTAGI_LISTEN_IP"],
-		ListenPort:          vars["PENTAGI_LISTEN_PORT"],
-		PublicURL:           vars["PUBLIC_URL"],
-		CorsOrigins:         vars["CORS_ORIGINS"],
-		CookieSigningSalt:   vars["COOKIE_SIGNING_SALT"],
-		ProxyURL:            vars["PROXY_URL"],
-		HTTPClientTimeout:   vars["HTTP_CLIENT_TIMEOUT"],
-		TerminalToolTimeout: vars["TERMINAL_TOOL_TIMEOUT"],
-		ExternalSSLCAPath:   vars["EXTERNAL_SSL_CA_PATH"],
-		ExternalSSLInsecure: vars["EXTERNAL_SSL_INSECURE"],
-		SSLDir:              vars["PENTAGI_SSL_DIR"],
-		DataDir:             vars["PENTAGI_DATA_DIR"],
+		TenantID:                 vars["TENANT_ID"],
+		LicenseKey:               vars["LICENSE_KEY"],
+		PprofAddr:                vars["PPROF_ADDR"],
+		ListenIP:                 vars["PENTAGI_LISTEN_IP"],
+		ListenPort:               vars["PENTAGI_LISTEN_PORT"],
+		PublicURL:                vars["PUBLIC_URL"],
+		CorsOrigins:              vars["CORS_ORIGINS"],
+		CookieSigningSalt:        vars["COOKIE_SIGNING_SALT"],
+		ProxyURL:                 vars["PROXY_URL"],
+		HTTPClientTimeout:        vars["HTTP_CLIENT_TIMEOUT"],
+		TerminalToolTimeout:      vars["TERMINAL_TOOL_TIMEOUT"],
+		ExternalSSLCAPath:        vars["EXTERNAL_SSL_CA_PATH"],
+		ExternalSSLInsecure:      vars["EXTERNAL_SSL_INSECURE"],
+		SSLDir:                   vars["PENTAGI_SSL_DIR"],
+		DataDir:                  vars["PENTAGI_DATA_DIR"],
+		DatabaseExtensionsSchema: vars["DATABASE_EXTENSIONS_SCHEMA"],
+		DatabaseSearchPathViaOpt: vars["DATABASE_SEARCH_PATH_VIA_OPTIONS"],
 	}
 
 	// split proxy URL into credentials + naked URL for UI
@@ -2101,21 +2109,23 @@ func (c *controller) UpdateServerSettingsConfig(config *ServerSettingsConfig) er
 	}
 
 	updates := map[string]string{
-		"TENANT_ID":             config.TenantID.Value,
-		"LICENSE_KEY":           config.LicenseKey.Value,
-		"PPROF_ADDR":            config.PprofAddr.Value,
-		"PENTAGI_LISTEN_IP":     config.ListenIP.Value,
-		"PENTAGI_LISTEN_PORT":   config.ListenPort.Value,
-		"PUBLIC_URL":            config.PublicURL.Value,
-		"CORS_ORIGINS":          config.CorsOrigins.Value,
-		"COOKIE_SIGNING_SALT":   config.CookieSigningSalt.Value,
-		"PROXY_URL":             proxyURL,
-		"HTTP_CLIENT_TIMEOUT":   config.HTTPClientTimeout.Value,
-		"TERMINAL_TOOL_TIMEOUT": config.TerminalToolTimeout.Value,
-		"EXTERNAL_SSL_CA_PATH":  config.ExternalSSLCAPath.Value,
-		"EXTERNAL_SSL_INSECURE": config.ExternalSSLInsecure.Value,
-		"PENTAGI_SSL_DIR":       config.SSLDir.Value,
-		"PENTAGI_DATA_DIR":      config.DataDir.Value,
+		"TENANT_ID":                        config.TenantID.Value,
+		"LICENSE_KEY":                      config.LicenseKey.Value,
+		"PPROF_ADDR":                       config.PprofAddr.Value,
+		"PENTAGI_LISTEN_IP":                config.ListenIP.Value,
+		"PENTAGI_LISTEN_PORT":              config.ListenPort.Value,
+		"PUBLIC_URL":                       config.PublicURL.Value,
+		"CORS_ORIGINS":                     config.CorsOrigins.Value,
+		"COOKIE_SIGNING_SALT":              config.CookieSigningSalt.Value,
+		"PROXY_URL":                        proxyURL,
+		"HTTP_CLIENT_TIMEOUT":              config.HTTPClientTimeout.Value,
+		"TERMINAL_TOOL_TIMEOUT":            config.TerminalToolTimeout.Value,
+		"EXTERNAL_SSL_CA_PATH":             config.ExternalSSLCAPath.Value,
+		"EXTERNAL_SSL_INSECURE":            config.ExternalSSLInsecure.Value,
+		"PENTAGI_SSL_DIR":                  config.SSLDir.Value,
+		"PENTAGI_DATA_DIR":                 config.DataDir.Value,
+		"DATABASE_EXTENSIONS_SCHEMA":       config.DatabaseExtensionsSchema.Value,
+		"DATABASE_SEARCH_PATH_VIA_OPTIONS": config.DatabaseSearchPathViaOpt.Value,
 	}
 
 	if err := c.SetVars(updates); err != nil {
@@ -2143,6 +2153,8 @@ func (c *controller) ResetServerSettingsConfig() *ServerSettingsConfig {
 		"EXTERNAL_SSL_INSECURE",
 		"PENTAGI_SSL_DIR",
 		"PENTAGI_DATA_DIR",
+		"DATABASE_EXTENSIONS_SCHEMA",
+		"DATABASE_SEARCH_PATH_VIA_OPTIONS",
 	}
 
 	if err := c.ResetVars(vars); err != nil {
@@ -2395,6 +2407,8 @@ func (c *controller) getVariableDescription(varName string) string {
 		"PENTAGI_DOCKER_CERT_PATH":          locale.EnvDesc_PENTAGI_DOCKER_CERT_PATH,
 		"PENTAGI_LLM_SERVER_CONFIG_PATH":    locale.EnvDesc_PENTAGI_LLM_SERVER_CONFIG_PATH,
 		"PENTAGI_OLLAMA_SERVER_CONFIG_PATH": locale.EnvDesc_PENTAGI_OLLAMA_SERVER_CONFIG_PATH,
+		"DATABASE_EXTENSIONS_SCHEMA":        locale.EnvDesc_DATABASE_EXTENSIONS_SCHEMA,
+		"DATABASE_SEARCH_PATH_VIA_OPTIONS":  locale.EnvDesc_DATABASE_SEARCH_PATH_VIA_OPTIONS,
 
 		"STATIC_DIR":     locale.EnvDesc_STATIC_DIR,
 		"STATIC_URL":     locale.EnvDesc_STATIC_URL,
@@ -2610,26 +2624,28 @@ var criticalVariables = map[string]bool{
 	"MAX_LIMITED_AGENT_TOOL_CALLS":       true,
 	"AGENT_PLANNING_STEP_ENABLED":        true,
 
-	"TENANT_ID":             true,
-	"LICENSE_KEY":           true,
-	"PPROF_ADDR":            true,
-	"PENTAGI_LISTEN_IP":     true,
-	"PENTAGI_LISTEN_PORT":   true,
-	"PUBLIC_URL":            true,
-	"CORS_ORIGINS":          true,
-	"COOKIE_SIGNING_SALT":   true,
-	"PROXY_URL":             true,
-	"EXTERNAL_SSL_CA_PATH":  true,
-	"EXTERNAL_SSL_INSECURE": true,
-	"STATIC_DIR":            true,
-	"STATIC_URL":            true,
-	"SERVER_PORT":           true,
-	"SERVER_HOST":           true,
-	"SERVER_SSL_CRT":        true,
-	"SERVER_SSL_KEY":        true,
-	"SERVER_USE_SSL":        true,
-	"PENTAGI_SSL_DIR":       true,
-	"PENTAGI_DATA_DIR":      true,
+	"TENANT_ID":                        true,
+	"LICENSE_KEY":                      true,
+	"PPROF_ADDR":                       true,
+	"PENTAGI_LISTEN_IP":                true,
+	"PENTAGI_LISTEN_PORT":              true,
+	"PUBLIC_URL":                       true,
+	"CORS_ORIGINS":                     true,
+	"COOKIE_SIGNING_SALT":              true,
+	"PROXY_URL":                        true,
+	"EXTERNAL_SSL_CA_PATH":             true,
+	"EXTERNAL_SSL_INSECURE":            true,
+	"STATIC_DIR":                       true,
+	"STATIC_URL":                       true,
+	"SERVER_PORT":                      true,
+	"SERVER_HOST":                      true,
+	"SERVER_SSL_CRT":                   true,
+	"SERVER_SSL_KEY":                   true,
+	"SERVER_USE_SSL":                   true,
+	"PENTAGI_SSL_DIR":                  true,
+	"PENTAGI_DATA_DIR":                 true,
+	"DATABASE_EXTENSIONS_SCHEMA":       true,
+	"DATABASE_SEARCH_PATH_VIA_OPTIONS": true,
 
 	// scraper settings
 	"SCRAPER_PUBLIC_URL":  true,

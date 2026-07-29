@@ -1293,23 +1293,31 @@ Examples:
 	ServerSettingsCookieSigningSalt     = "Cookie Signing Salt"
 	ServerSettingsCookieSigningSaltDesc = "Secret used to sign cookies (keep private)"
 
+	ServerSettingsDatabaseExtensionsSchema     = "Database Extensions Schema"
+	ServerSettingsDatabaseExtensionsSchemaDesc = "Schema holding shared extensions when Tenant ID is set (e.g., public, extensions for Supabase)"
+
+	ServerSettingsDatabaseSearchPathViaOptions     = "Search Path via Options"
+	ServerSettingsDatabaseSearchPathViaOptionsDesc = "Send the tenant search_path inside the options startup parameter (needed by some poolers)"
+
 	// Hints for fields overview
-	ServerSettingsLicenseKeyHint          = "License Key"
-	ServerSettingsTenantIDHint            = "Tenant ID"
-	ServerSettingsPprofAddrHint           = "pprof Address"
-	ServerSettingsHostHint                = "Listen IP"
-	ServerSettingsPortHint                = "Listen Port"
-	ServerSettingsPublicURLHint           = "Public URL"
-	ServerSettingsCORSOriginsHint         = "CORS Origins"
-	ServerSettingsProxyURLHint            = "Proxy URL"
-	ServerSettingsProxyUsernameHint       = "Proxy Username"
-	ServerSettingsProxyPasswordHint       = "Proxy Password"
-	ServerSettingsHTTPClientTimeoutHint   = "HTTP Timeout"
-	ServerSettingsTerminalToolTimeoutHint = "Terminal Timeout"
-	ServerSettingsExternalSSLCAPathHint   = "Custom CA Path"
-	ServerSettingsExternalSSLInsecureHint = "Skip SSL Verification"
-	ServerSettingsSSLDirHint              = "SSL Directory"
-	ServerSettingsDataDirHint             = "Data Directory"
+	ServerSettingsLicenseKeyHint                   = "License Key"
+	ServerSettingsTenantIDHint                     = "Tenant ID"
+	ServerSettingsPprofAddrHint                    = "pprof Address"
+	ServerSettingsHostHint                         = "Listen IP"
+	ServerSettingsPortHint                         = "Listen Port"
+	ServerSettingsPublicURLHint                    = "Public URL"
+	ServerSettingsCORSOriginsHint                  = "CORS Origins"
+	ServerSettingsProxyURLHint                     = "Proxy URL"
+	ServerSettingsProxyUsernameHint                = "Proxy Username"
+	ServerSettingsProxyPasswordHint                = "Proxy Password"
+	ServerSettingsHTTPClientTimeoutHint            = "HTTP Timeout"
+	ServerSettingsTerminalToolTimeoutHint          = "Terminal Timeout"
+	ServerSettingsExternalSSLCAPathHint            = "Custom CA Path"
+	ServerSettingsExternalSSLInsecureHint          = "Skip SSL Verification"
+	ServerSettingsSSLDirHint                       = "SSL Directory"
+	ServerSettingsDataDirHint                      = "Data Directory"
+	ServerSettingsDatabaseExtensionsSchemaHint     = "Extensions Schema"
+	ServerSettingsDatabaseSearchPathViaOptionsHint = "Search Path via Options"
 
 	// Help texts per-field
 	ServerSettingsGeneralHelp = `PentAGI exposes its web UI via Docker with configurable host and port.
@@ -1399,6 +1407,20 @@ When enabled, all certificate validation is bypassed, making connections vulnera
 	ServerSettingsDataDirHelp = `Host directory for persistent data. PentAGI stores agent artifacts under flow-N subdirectories, which map to /work inside worker containers.`
 
 	ServerSettingsCookieSigningSaltHelp = `Secret salt used to sign cookies. Keep it private.`
+
+	ServerSettingsDatabaseExtensionsSchemaHelp = `PostgreSQL schema that holds the shared extensions (vector, pg_trgm) every tenant must reach through its search_path.
+
+Only used when Tenant ID is set; leave empty for the default "public", which is where a stock PostgreSQL install keeps them. Set it when your database follows another convention — Supabase installs its extensions into "extensions", and startup aborts with a message naming the schema it found if this does not match.
+
+Examples:
+• public
+• extensions`
+
+	ServerSettingsDatabaseSearchPathViaOptionsHelp = `Sends the tenant search_path as options=--search_path=<value> instead of a bare search_path connection parameter.
+
+Only used when Tenant ID is set. Keep it false for a direct PostgreSQL connection. Enable it when connecting through a pooler that forwards the "options" startup parameter but drops an unrecognized bare search_path — reported to be the case for some versions of Supabase's Supavisor. It is not guaranteed to work: startup fails with a clear schema-mismatch error if the value never reaches the backend.
+
+Values: true, false`
 )
 
 // Human-in-the-loop screen strings
@@ -2410,6 +2432,8 @@ const (
 	EnvDesc_PUBLIC_URL                        = "PentAGI Public URL"
 	EnvDesc_CORS_ORIGINS                      = "PentAGI CORS Origins"
 	EnvDesc_COOKIE_SIGNING_SALT               = "PentAGI Cookie Signing Salt"
+	EnvDesc_DATABASE_EXTENSIONS_SCHEMA        = "PostgreSQL Extensions Schema"
+	EnvDesc_DATABASE_SEARCH_PATH_VIA_OPTIONS  = "PostgreSQL Search Path via Options"
 	EnvDesc_PROXY_URL                         = "HTTP/HTTPS Proxy URL"
 	EnvDesc_HTTP_CLIENT_TIMEOUT               = "HTTP Client Timeout (seconds)"
 	EnvDesc_TERMINAL_TOOL_TIMEOUT             = "Terminal Tool Timeout (seconds)"

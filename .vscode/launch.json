@@ -141,9 +141,9 @@
                 "LLM_SERVER_CONFIG_PATH": "${workspaceFolder}/examples/configs/openrouter.provider.yml",
                 "DATABASE_URL": "postgres://postgres:postgres@localhost:5432/pentagidb?sslmode=disable",
                 // Langfuse (optional) uncomment to enable
-                "LANGFUSE_BASE_URL": "http://localhost:4000",
+                // "LANGFUSE_BASE_URL": "http://localhost:4000",
                 // Observability (optional) uncomment to enable
-                "OTEL_HOST": "localhost:8148",
+                // "OTEL_HOST": "localhost:8148",
             },
             "args": [
                 "-flow", "0",

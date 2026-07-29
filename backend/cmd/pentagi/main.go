@@ -96,7 +96,7 @@ func main() {
 
 	// Create this tenant's schema and repoint DATABASE_URL at it before any
 	// consumer reads the DSN. No-op when TENANT_ID is empty.
-	if err := ensureTenantSchema(ctx, cfg); err != nil {
+	if err := database.EnsureTenantSchema(ctx, cfg); err != nil {
 		logrus.WithError(err).Fatal("Tenant schema initialization failed")
 	}
 
@@ -109,7 +109,7 @@ func main() {
 	db.SetMaxIdleConns(cfg.DBMaxIdleConns)
 	db.SetConnMaxLifetime(time.Hour)
 
-	if err := verifySearchPath(ctx, db, cfg); err != nil {
+	if err := database.VerifySearchPath(ctx, db, cfg); err != nil {
 		logrus.WithError(err).Fatal("Tenant schema verification failed")
 	}
 
@@ -146,10 +146,16 @@ func main() {
 		logrus.WithError(err).Fatal("Database dialect configuration failed")
 	}
 
+	// goose's own queries are unqualified, so without this a fresh tenant
+	// schema silently inherits public's version table via search_path and
+	// skips its migrations. See pkg/database/tenant.go for the
+	// schema/search_path setup.
+	goose.SetTableName(cfg.SchemaName() + ".goose_db_version")
+
 	// Hold an advisory lock so simultaneous boots cannot execute the same
 	// migration set concurrently; the initial migration uses bare CREATE TABLE,
 	// so the loser would otherwise abort on "relation already exists".
-	if err := runMigrations(ctx, db, cfg, func(db *sql.DB) error {
+	if err := database.RunMigrations(ctx, db, cfg, func(db *sql.DB) error {
 		return goose.Up(db, "sql")
 	}); err != nil {
 		// Fatal: continuing on a half-migrated schema and then serving traffic is

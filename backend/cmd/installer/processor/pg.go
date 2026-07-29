@@ -4,6 +4,11 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strconv"
+	"strings"
+
+	"pentagi/pkg/config"
+	"pentagi/pkg/database"
 
 	_ "github.com/lib/pq"
 	"golang.org/x/crypto/bcrypt"
@@ -46,38 +51,69 @@ func (p *processor) performPasswordReset(ctx context.Context, newPassword string
 		dbName = envVar.Value
 	}
 
-	// create connection string
-	connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
-		PostgreSQLHost, PostgreSQLPort, dbUser, dbPassword, dbName)
+	cfg := &config.Config{
+		DatabaseURL: fmt.Sprintf(
+			"host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
+			PostgreSQLHost, PostgreSQLPort, dbUser, dbPassword, dbName,
+		),
+	}
 
-	// open database connection
-	db, err := sql.Open("postgres", connStr)
+	if envVar, ok := p.state.GetVar("TENANT_ID"); ok {
+		cfg.TenantID = strings.TrimSpace(envVar.Value)
+	}
+	if err := cfg.ValidateTenantID(); err != nil {
+		return err
+	}
+	if envVar, ok := p.state.GetVar("DATABASE_EXTENSIONS_SCHEMA"); ok {
+		cfg.DatabaseExtensionsSchema = strings.TrimSpace(envVar.Value)
+	}
+	if envVar, ok := p.state.GetVar("DATABASE_SEARCH_PATH_VIA_OPTIONS"); ok && envVar.Value != "" {
+		viaOptions, err := strconv.ParseBool(envVar.Value)
+		if err != nil {
+			return fmt.Errorf("invalid DATABASE_SEARCH_PATH_VIA_OPTIONS %q: %w", envVar.Value, err)
+		}
+		cfg.DatabaseSearchPathViaOptions = viaOptions
+	}
+
+	// Point the DSN at the tenant schema before opening a connection. Without
+	// this, an UPDATE on unqualified "users" would hit public.users while the
+	// running instance owns <tenant>.users — a silent no-op or wrong-tenant write.
+	if err := database.RewriteDatabaseURLForTenant(cfg); err != nil {
+		return fmt.Errorf("failed to apply tenant search_path: %w", err)
+	}
+
+	db, err := sql.Open("postgres", cfg.DatabaseURL)
 	if err != nil {
 		return fmt.Errorf("failed to connect to database: %w", err)
 	}
 	defer db.Close()
 
-	// test connection
+	db.SetMaxOpenConns(1)
+
 	if err := db.PingContext(ctx); err != nil {
 		return fmt.Errorf("failed to ping database: %w", err)
 	}
 
-	p.appendLog(fmt.Sprintf("Connected to PostgreSQL at %s:%s (database: %s)", PostgreSQLHost, PostgreSQLPort, dbName), ProductStackPentagi, state)
+	if err := database.VerifySearchPath(ctx, db, cfg); err != nil {
+		return fmt.Errorf("tenant schema verification failed: %w", err)
+	}
 
-	// hash the new password
+	p.appendLog(fmt.Sprintf(
+		"Connected to PostgreSQL at %s:%s (database: %s, schema: %s)",
+		PostgreSQLHost, PostgreSQLPort, dbName, cfg.SchemaName(),
+	), ProductStackPentagi, state)
+
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
 	if err != nil {
 		return fmt.Errorf("failed to hash password: %w", err)
 	}
 
-	// update the admin user password and status
 	query := `UPDATE users SET password = $1, status = 'active' WHERE mail = $2`
 	result, err := db.ExecContext(ctx, query, string(hashedPassword), AdminEmail)
 	if err != nil {
 		return fmt.Errorf("failed to update password: %w", err)
 	}
 
-	// check if any rows were affected
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
 		return fmt.Errorf("failed to get rows affected: %w", err)

@@ -706,7 +706,7 @@ Set it when several PentAGI installations share external resources: one PostgreS
 
 | Area | Effect when `TENANT_ID=acme` |
 | ---- | ---------------------------- |
-| PostgreSQL | The instance creates and works inside schema `acme` instead of `public`; extensions stay shared in `public` |
+| PostgreSQL | The instance creates and works inside schema `acme` instead of `public`; extensions stay shared in `DATABASE_EXTENSIONS_SCHEMA` (default `public`, `extensions` on Supabase) |
 | Worker containers | `acme-pentagi-terminal-<flow>` instead of `pentagi-terminal-<flow>`; volumes and hostnames follow, and both carry a `pentagi.tenant` label |
 | Knowledge graph | Graphiti/Neo4j group ids become `acme-flow-<id>` |
 | Auth | Cookie and API token keys are derived from `COOKIE_SIGNING_SALT` **plus** the tenant, and the session cookie is renamed |
@@ -3017,6 +3017,22 @@ docker exec pgvector sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c \
    WHERE pid <> pg_backend_pid()
    GROUP BY 1, 2, 3 ORDER BY count DESC;"'
 ```
+
+##### External PostgreSQL and schema handling
+
+`DATABASE_URL` may point at any PostgreSQL instance, not only the bundled `pgvector` container. Two extra knobs apply when — and only when — `TENANT_ID` is set, because that is when PentAGI creates its own schema and rewrites the connection's `search_path`:
+
+| Env var | Default | Purpose |
+|---|---|---|
+| `DATABASE_EXTENSIONS_SCHEMA` | `public` | Schema holding the shared `vector` and `pg_trgm` extensions that every tenant's `search_path` must reach |
+| `DATABASE_SEARCH_PATH_VIA_OPTIONS` | `false` | Send the tenant `search_path` inside the `options` startup parameter instead of as a bare connection parameter |
+
+**Supabase (cloud or self-hosted)** needs both of them considered, and is the reason they exist:
+
+- Supabase installs its bundled extensions into an `extensions` schema instead of `public`, so set `DATABASE_EXTENSIONS_SCHEMA=extensions`. Without it, startup aborts with an error naming the schema where `vector` was actually found — no need to move a provider-managed extension with `ALTER EXTENSION`.
+- Supabase's pooler (Supavisor) does not reliably forward a bare `search_path` connection parameter. Prefer a **direct** PostgreSQL connection: self-hosted, expose the `db` service port and bypass the `supavisor` service; cloud, use the "Direct connection" string (or the IPv4 add-on on IPv4-only networks). If the pooler cannot be bypassed, use its session mode and try `DATABASE_SEARCH_PATH_VIA_OPTIONS=true` — PentAGI verifies the effective schema on boot and refuses to start if it did not take effect, so a silent cross-tenant data mix-up is not possible.
+
+Both settings are managed by the installer under *Server Settings*, next to `TENANT_ID` — see [Running Several Instances](#running-several-instances-tenant_id) for that scenario, and [Multi-Instance Deployment](backend/docs/config.md#multi-instance-deployment-tenant_id) for the full matrix, including the PgBouncer recipe (`pool_mode = session`, `ignore_startup_parameters`, per-tenant `connect_query`).
 
 #### Frontend Configuration
 

@@ -11,9 +11,15 @@ This document serves as a comprehensive guide to the configuration system in Pen
     - [Still Server-Managed](#still-server-managed)
   - [General Settings](#general-settings)
     - [Multi-Instance Deployment (`TENANT_ID`)](#multi-instance-deployment-tenant_id)
+      - [What the application namespaces automatically](#what-the-application-namespaces-automatically)
+      - [What stays the operator's responsibility](#what-stays-the-operators-responsibility)
+      - [Deployment topologies](#deployment-topologies)
+      - [Extensions installed outside `public` (`DATABASE_EXTENSIONS_SCHEMA`)](#extensions-installed-outside-public-database_extensions_schema)
+      - [Multi-tenant PostgreSQL access through PgBouncer](#multi-tenant-postgresql-access-through-pgbouncer)
+      - [Multi-tenant PostgreSQL through Supabase's Supavisor pooler (`DATABASE_SEARCH_PATH_VIA_OPTIONS`)](#multi-tenant-postgresql-through-supabases-supavisor-pooler-database_search_path_via_options)
     - [Usage Details](#usage-details)
   - [Docker Settings](#docker-settings)
-    - [Worker Docker Access (DOCKER_INSIDE_*)](#worker-docker-access-docker_inside_)
+    - [Worker Docker Access (`DOCKER_INSIDE_*`)](#worker-docker-access-docker_inside_)
     - [Usage Details](#usage-details-1)
   - [Server Settings](#server-settings)
     - [Usage Details](#usage-details-2)
@@ -136,6 +142,8 @@ These settings control basic application behavior and are foundational for the s
 | Option           | Environment Variable        | Default Value                                                                | Description                                                              |
 | ---------------- | --------------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
 | DatabaseURL      | `DATABASE_URL`              | `postgres://pentagiuser:pentagipass@pgvector:5432/pentagidb?sslmode=disable` | Connection string for the PostgreSQL database with pgvector extension    |
+| DatabaseExtensionsSchema | `DATABASE_EXTENSIONS_SCHEMA` | `public`                                                              | Schema every tenant's search_path must include for shared extensions (`vector`, `pg_trgm`) to resolve. Only used when `TenantID` is set. Override for databases that install extensions elsewhere by convention, e.g. Supabase uses `extensions`. See [Extensions installed outside `public`](#extensions-installed-outside-public-database_extensions_schema). |
+| DatabaseSearchPathViaOptions | `DATABASE_SEARCH_PATH_VIA_OPTIONS` | `false`                                                          | Sends the tenant search_path as `options=--search_path=<value>` instead of a bare `search_path` parameter. Only used when `TenantID` is set. For poolers that forward `options` but drop an unrecognized bare `search_path` (e.g. some Supabase Supavisor versions). See [Multi-tenant PostgreSQL through Supabase's Supavisor pooler](#multi-tenant-postgresql-through-supabases-supavisor-pooler-database_search_path_via_options). |
 | DBMaxOpenConns   | `DATABASE_MAX_OPEN_CONNS`   | `25`                                                                         | Maximum open connections in the shared `sql.DB` pool (sqlc + GORM combined). See [database.md §Connection Pooling](database.md#connection-pooling). |
 | DBMaxIdleConns   | `DATABASE_MAX_IDLE_CONNS`   | `5`                                                                          | Maximum idle connections kept open between requests                      |
 | DBVectorMaxConns | `DATABASE_VECTOR_MAX_CONNS` | `10`                                                                         | Maximum connections in the shared `pgxpool` for all pgvector stores      |
@@ -171,7 +179,7 @@ Hyphens are excluded deliberately: they separate the tenant from the rest of a g
 
 | Area | Effect |
 | --- | --- |
-| PostgreSQL | A schema named after the tenant is created on boot and `search_path` is set to `<tenant>,public`; the DSN is rewritten once so sqlc, GORM, goose and the pgvector pool all follow. Extensions (`vector`, `pg_trgm`) stay shared in `public`. |
+| PostgreSQL | A schema named after the tenant is created on boot and `search_path` is set to `<tenant>,<DATABASE_EXTENSIONS_SCHEMA>`; the DSN is rewritten once so sqlc, GORM, goose and the pgvector pool all follow. Extensions (`vector`, `pg_trgm`) stay shared in `DATABASE_EXTENSIONS_SCHEMA` (default `public`). |
 | Worker containers | Sandbox container names become `<tenant>-pentagi-terminal-<flow>`; the per-flow volume and the container hostname derive from that name automatically. Both are labelled `pentagi.tenant`, so daemon-wide sweeps can filter by owner. |
 | Host ports | Per-flow sandbox ports are allocated from `DOCKER_PORTS_BASE` (default `28000`), giving each instance the window `[base, base+2000)`. |
 | Knowledge graph | Graphiti/Neo4j group ids become `<tenant>-flow-<id>`. The GraphQL API contract is unchanged — clients still send `flow-<id>` and the server rebuilds the namespaced key internally. |
@@ -188,7 +196,7 @@ Hyphens are excluded deliberately: they separate the tenant from the rest of a g
 | `DOCKER_NETWORK` | Instances may legitimately share one Docker network; the application never renames it. Set it explicitly if you want separate networks. |
 | Published ports | `PENTAGI_LISTEN_PORT`, `PGVECTOR_LISTEN_PORT`, `SCRAPER_LISTEN_PORT`, `PPROF_ADDR` and `DOCKER_PORTS_BASE` are host-level resources, not string namespaces. |
 | `INSTALLATION_ID` | Unique per installation, or left empty to be generated once and cached in `DATA_DIR`. |
-| Database privileges | The configured user needs `CREATE SCHEMA`, and on first boot `CREATE EXTENSION` — unless an administrator pre-installed `vector` and `pg_trgm` into `public`. |
+| Database privileges | The configured user needs `CREATE SCHEMA`, and on first boot `CREATE EXTENSION` — unless an administrator pre-installed `vector` and `pg_trgm` into `DATABASE_EXTENSIONS_SCHEMA` (default `public`). |
 
 The values actually in effect are written to the startup log under `Instance identity` (`tenant_id`, `data_dir`, `schema`, `installation_id`), which is the quickest way to confirm two instances are not sharing something they should not.
 
@@ -204,6 +212,53 @@ The values actually in effect are written to the startup log under `Instance ide
 The installer provisions **one** instance per server; it does not manage several side by side. Note that it does scope the sandbox resources it cleans up — worker containers and volumes are matched by the tenant prefix — so a purge run for one management instance will not remove another's sandboxes from a shared worker node.
 
 **Upgrading an existing deployment.** Leave `TENANT_ID` empty. The instance keeps using `public` and its current data directory; no migration is required. Setting `TENANT_ID` on an existing installation points it at a **new, empty schema** — the data in `public` is not migrated and will appear to be gone. Do not point an existing `public` deployment at a `search_path` that lists another tenant's schema.
+
+#### Extensions installed outside `public` (`DATABASE_EXTENSIONS_SCHEMA`)
+
+`ensureTenantSchema` requires `vector` and `pg_trgm` to already live in (or be creatable in) one schema common to every tenant, because it must be part of every tenant's `search_path`. That schema defaults to `public`, which is where a stock PostgreSQL/`docker-compose.yml` install keeps them.
+
+Managed providers do not always follow that convention. **Supabase** (cloud and self-hosted) installs its bundled extensions into a dedicated `extensions` schema instead, and its default roles get `extensions` added to their `search_path` for exactly that reason. Pointing `DATABASE_URL` at such a database with `TENANT_ID` set fails fast on boot:
+
+```
+Tenant schema initialization failed: extension "vector" is installed in schema "extensions",
+but multi-tenant mode requires it in "public" so every tenant can reach it; either run
+ALTER EXTENSION vector SET SCHEMA public, or set DATABASE_EXTENSIONS_SCHEMA=extensions
+to match where it already lives
+```
+
+Set `DATABASE_EXTENSIONS_SCHEMA=extensions` (or whatever schema the error reports) instead of moving the extension with `ALTER EXTENSION ... SET SCHEMA` — the schema only needs to be part of the `search_path` PentAGI computes (`<tenant>,<DATABASE_EXTENSIONS_SCHEMA>`), moving a provider-managed extension out of its documented location is unnecessary and risks breaking whatever else that provider expects to find it there.
+
+#### Multi-tenant PostgreSQL access through PgBouncer
+
+`DATABASE_URL` can point at a PgBouncer instance instead of PostgreSQL directly, but three things have to be true, independent of each other:
+
+1. **`pool_mode = session` on the PgBouncer side.** PentAGI holds a `pg_advisory_lock`/`pg_advisory_unlock` pair on one dedicated connection across the whole tenant-bootstrap + migration sequence (`backend/pkg/database/tenant.go`), and `pgx` (used by the pgvector pool) caches server-side prepared statements by default. Both break silently under `transaction`/`statement` pooling, because PgBouncer is then free to hand the client a different backend connection between statements. This requirement is unrelated to tenancy — it applies even with `TENANT_ID` empty.
+2. **`ignore_startup_parameters = search_path` in `pgbouncer.ini`.** With a tenant configured, PentAGI's own DSN already carries `?search_path=<tenant>,<DATABASE_EXTENSIONS_SCHEMA>` (see the table above). PgBouncer validates startup parameters from the client against a small built-in allowlist and rejects anything else with `unsupported startup parameter: search_path` unless it is explicitly ignored. Ignoring it does **not** apply the value — it only stops PgBouncer from rejecting the connection — so this step alone is not sufficient; see the next point.
+3. **A `connect_query` per tenant in PgBouncer's `[databases]` section**, since PentAGI's own `search_path` startup parameter is ignored per point 2 above. `connect_query` runs on PgBouncer's own connection to PostgreSQL before any client statement, so it is not subject to the client-facing startup-parameter allowlist and works regardless of pool mode:
+
+   ```ini
+   [databases]
+   pentagi_testing = host=pgvector port=5432 dbname=pentagidb pool_mode=session connect_query='SET search_path TO testing,public'
+   pentagi_acme    = host=pgvector port=5432 dbname=pentagidb pool_mode=session connect_query='SET search_path TO acme,public'
+   ```
+
+   Point each instance's `DATABASE_URL` at its own virtual database name (`pentagi_testing`, `pentagi_acme`, ...) rather than the shared `pentagidb` — PgBouncer pools per `(user, dbname)` pair, so distinct virtual names are what keeps the tenants' pools, and therefore their `connect_query`, apart.
+
+   (`track_extra_parameters = search_path` is PgBouncer's other mechanism for this, but it only works when PostgreSQL reports `search_path` changes back to the client, which requires PostgreSQL 18+ or Citus 12+ — not an option against the PostgreSQL 16/17 that ships in `docker-compose.yml`.)
+
+#### Multi-tenant PostgreSQL through Supabase's Supavisor pooler (`DATABASE_SEARCH_PATH_VIA_OPTIONS`)
+
+Supabase's shared/self-hosted pooler (Supavisor) is not PgBouncer and none of its `[databases]`/`connect_query` configuration exists for it, so the PgBouncer recipe above does not apply. Reports on whether Supavisor forwards a tenant's `search_path` at all are inconsistent — see [supabase/supavisor#206](https://github.com/supabase/supavisor/issues/206) — and depend on the Supavisor version (a parsing fix landed in [PR #768](https://github.com/supabase/supavisor/pull/768)).
+
+If bypassing the pooler entirely (connecting straight to the underlying PostgreSQL, or to a Supabase project's "Direct connection"/IPv4-add-on string) is not an option, set:
+
+```
+DATABASE_SEARCH_PATH_VIA_OPTIONS=true
+```
+
+This sends the tenant's search_path as `options=--search_path=<tenant>,<DATABASE_EXTENSIONS_SCHEMA>` instead of a bare `search_path=` parameter. Some poolers forward the `options` startup parameter through to the real backend while silently dropping an unrecognized bare `search_path` — this is exactly the workaround reported to work against some Supavisor versions. **It is not guaranteed** — verify it actually took effect by checking that the app starts (`verifySearchPath` fails fast with a clear error if it did not) rather than assuming success from the flag alone.
+
+This flag changes nothing for a direct PostgreSQL connection or a PgBouncer setup already following the recipe above; both accept `search_path` and `options` equally, so there is no reason to enable it outside a Supavisor-fronted deployment.
 
 ### Usage Details
 

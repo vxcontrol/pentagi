@@ -83,15 +83,25 @@ func main() {
 		_ = obs.Observer.Drain(drainCtx)
 	}()
 
-	// Initialize database connection
+	// Create this tenant's schema and repoint DATABASE_URL at it before any
+	// consumer reads the DSN. No-op when TENANT_ID is empty.
+	if err := database.EnsureTenantSchema(ctx, cfg); err != nil {
+		log.Fatalf("Tenant schema initialization failed: %v", err)
+	}
+
 	db, err := sql.Open("postgres", cfg.DatabaseURL)
 	if err != nil {
 		log.Fatalf("Unable to open database: %v", err)
 	}
+	defer db.Close()
 
-	db.SetMaxOpenConns(10)
-	db.SetMaxIdleConns(2)
+	db.SetMaxOpenConns(min(cfg.DBMaxOpenConns, 10))
+	db.SetMaxIdleConns(min(cfg.DBMaxIdleConns, 2))
 	db.SetConnMaxLifetime(time.Hour)
+
+	if err := database.VerifySearchPath(ctx, db, cfg); err != nil {
+		log.Fatalf("Tenant schema verification failed: %v", err)
+	}
 
 	queries := database.New(db)
 

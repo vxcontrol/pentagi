@@ -3,6 +3,7 @@ package models
 import (
 	"fmt"
 	"net"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -17,6 +18,11 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/vxcontrol/cloud/sdk"
 )
+
+// schemaNameRegex keeps DATABASE_EXTENSIONS_SCHEMA within PostgreSQL's
+// unquoted-identifier rules and 63-byte limit, so a typo surfaces here rather
+// than as a failed CREATE EXTENSION on first boot.
+var schemaNameRegex = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]{0,62}$`)
 
 // ServerSettingsFormModel represents the PentAGI server settings configuration form
 type ServerSettingsFormModel struct {
@@ -162,6 +168,20 @@ func (m *ServerSettingsFormModel) BuildForm() tea.Cmd {
 		true,
 	))
 
+	fields = append(fields, m.createTextField("database_extensions_schema",
+		locale.ServerSettingsDatabaseExtensionsSchema,
+		locale.ServerSettingsDatabaseExtensionsSchemaDesc,
+		config.DatabaseExtensionsSchema,
+		false,
+	))
+
+	fields = append(fields, m.createTextField("database_search_path_via_options",
+		locale.ServerSettingsDatabaseSearchPathViaOptions,
+		locale.ServerSettingsDatabaseSearchPathViaOptionsDesc,
+		config.DatabaseSearchPathViaOpt,
+		false,
+	))
+
 	m.SetFormFields(fields)
 	return nil
 }
@@ -251,6 +271,26 @@ func (m *ServerSettingsFormModel) GetCurrentConfiguration() string {
 		tenantID = locale.StatusNotConfigured
 		tenantID = m.GetStyles().Muted.Render(tenantID)
 		sections = append(sections, fmt.Sprintf("• %s: %s", locale.ServerSettingsTenantIDHint, tenantID))
+	}
+
+	// both only take effect with a tenant configured, so keep them out of the
+	// overview of a single-instance deployment
+	if cfg.TenantID.Value != "" {
+		if schema := cfg.DatabaseExtensionsSchema.Value; schema != "" {
+			schema = m.GetStyles().Info.Render(schema)
+			sections = append(sections, fmt.Sprintf("• %s: %s", locale.ServerSettingsDatabaseExtensionsSchemaHint, schema))
+		} else if schema := cfg.DatabaseExtensionsSchema.Default; schema != "" {
+			schema = m.GetStyles().Muted.Render(schema)
+			sections = append(sections, fmt.Sprintf("• %s: %s", locale.ServerSettingsDatabaseExtensionsSchemaHint, schema))
+		}
+
+		if viaOptions := cfg.DatabaseSearchPathViaOpt.Value; viaOptions == "true" {
+			viaOptions = m.GetStyles().Info.Render("Enabled")
+			sections = append(sections, fmt.Sprintf("• %s: %s", locale.ServerSettingsDatabaseSearchPathViaOptionsHint, viaOptions))
+		} else {
+			viaOptions = m.GetStyles().Muted.Render("Disabled")
+			sections = append(sections, fmt.Sprintf("• %s: %s", locale.ServerSettingsDatabaseSearchPathViaOptionsHint, viaOptions))
+		}
 	}
 
 	if pprofAddr := cfg.PprofAddr.Value; pprofAddr != "" {
@@ -416,6 +456,10 @@ func (m *ServerSettingsFormModel) GetHelpContent() string {
 			sections = append(sections, locale.ServerSettingsDataDirHelp)
 		case "pentagi_cookie_signing_salt":
 			sections = append(sections, locale.ServerSettingsCookieSigningSaltHelp)
+		case "database_extensions_schema":
+			sections = append(sections, locale.ServerSettingsDatabaseExtensionsSchemaHelp)
+		case "database_search_path_via_options":
+			sections = append(sections, locale.ServerSettingsDatabaseSearchPathViaOptionsHelp)
 		default:
 			sections = append(sections, locale.ServerSettingsFormOverview)
 		}
@@ -429,21 +473,23 @@ func (m *ServerSettingsFormModel) HandleSave() error {
 	fields := m.GetFormFields()
 
 	newCfg := &controller.ServerSettingsConfig{
-		TenantID:            cfg.TenantID,
-		LicenseKey:          cfg.LicenseKey,
-		PprofAddr:           cfg.PprofAddr,
-		ListenIP:            cfg.ListenIP,
-		ListenPort:          cfg.ListenPort,
-		CorsOrigins:         cfg.CorsOrigins,
-		CookieSigningSalt:   cfg.CookieSigningSalt,
-		ProxyURL:            cfg.ProxyURL,
-		HTTPClientTimeout:   cfg.HTTPClientTimeout,
-		TerminalToolTimeout: cfg.TerminalToolTimeout,
-		ExternalSSLCAPath:   cfg.ExternalSSLCAPath,
-		ExternalSSLInsecure: cfg.ExternalSSLInsecure,
-		SSLDir:              cfg.SSLDir,
-		DataDir:             cfg.DataDir,
-		PublicURL:           cfg.PublicURL,
+		TenantID:                 cfg.TenantID,
+		LicenseKey:               cfg.LicenseKey,
+		PprofAddr:                cfg.PprofAddr,
+		ListenIP:                 cfg.ListenIP,
+		ListenPort:               cfg.ListenPort,
+		CorsOrigins:              cfg.CorsOrigins,
+		CookieSigningSalt:        cfg.CookieSigningSalt,
+		ProxyURL:                 cfg.ProxyURL,
+		HTTPClientTimeout:        cfg.HTTPClientTimeout,
+		TerminalToolTimeout:      cfg.TerminalToolTimeout,
+		ExternalSSLCAPath:        cfg.ExternalSSLCAPath,
+		ExternalSSLInsecure:      cfg.ExternalSSLInsecure,
+		SSLDir:                   cfg.SSLDir,
+		DataDir:                  cfg.DataDir,
+		PublicURL:                cfg.PublicURL,
+		DatabaseExtensionsSchema: cfg.DatabaseExtensionsSchema,
+		DatabaseSearchPathViaOpt: cfg.DatabaseSearchPathViaOpt,
 	}
 
 	for _, field := range fields {
@@ -521,6 +567,16 @@ func (m *ServerSettingsFormModel) HandleSave() error {
 			newCfg.DataDir.Value = value
 		case "pentagi_cookie_signing_salt":
 			newCfg.CookieSigningSalt.Value = value
+		case "database_extensions_schema":
+			if value != "" && !schemaNameRegex.MatchString(value) {
+				return fmt.Errorf("invalid extensions schema: must match %s", schemaNameRegex.String())
+			}
+			newCfg.DatabaseExtensionsSchema.Value = value
+		case "database_search_path_via_options":
+			if value != "" && value != "true" && value != "false" {
+				return fmt.Errorf("invalid value for search path via options: must be 'true' or 'false'")
+			}
+			newCfg.DatabaseSearchPathViaOpt.Value = value
 		}
 	}
 

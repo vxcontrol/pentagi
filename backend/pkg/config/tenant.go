@@ -149,6 +149,16 @@ func (c *Config) SchemaName() string {
 	return c.TenantID
 }
 
+// ExtensionSchema returns the schema every tenant's search_path must include for
+// shared extensions to resolve. See DATABASE_EXTENSIONS_SCHEMA in
+// backend/docs/config.md for details; defaults to "public".
+func (c *Config) ExtensionSchema() string {
+	if c == nil || c.DatabaseExtensionsSchema == "" {
+		return "public"
+	}
+	return c.DatabaseExtensionsSchema
+}
+
 // AuthSalt returns the effective salt for cookie and JWT key derivation. Mixing
 // the tenant in makes one instance's session cookies and API tokens
 // cryptographically invalid on another even when COOKIE_SIGNING_SALT is shared
