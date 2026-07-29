@@ -1,0 +1,3 @@
+{
+  "seccomp-profile": "/etc/docker/seccomp.json"
+}

@@ -1,0 +1,10 @@
+[Unit]
+Description=DinD container cleanup (remove stale containers)
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/dind-cleanup
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=dind-cleanup

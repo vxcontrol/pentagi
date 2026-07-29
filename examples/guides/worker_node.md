@@ -1,6 +1,6 @@
 # PentAGI Worker Node Setup
 
-This guide configures a distributed PentAGI deployment where worker node operations are isolated on a separate server for enhanced security. The worker node runs both host Docker and Docker-in-Docker (dind) to provide secure container execution environments.
+This guide configures a distributed PentAGI deployment where worker node operations are isolated on a separate server for enhanced security. The worker node runs both host Docker and a hardened Docker-in-Docker (dind) daemon, which gives agents a sandboxed Docker environment of their own.
 
 ## Architecture Overview
 
@@ -12,19 +12,22 @@ graph TB
 
     subgraph "Worker Node"
         HD[Host Docker<br/>:2376 TLS]
-        DIND[Docker-in-Docker<br/>:3376 TLS]
+        DIND[Docker-in-Docker<br/>:3376 TLS<br/>OPA authz + seccomp]
 
         subgraph "Worker Containers"
             WC1[pentagi-terminal-1]
             WC2[pentagi-terminal-N]
         end
+
+        NC[Nested Containers<br/>agent 'docker run']
     end
 
     PA -.->|"TLS Connection<br/>Create Workers"| HD
     HD --> WC1
     HD --> WC2
-    WC1 -.->|"docker.sock<br/>mapping"| DIND
-    WC2 -.->|"docker.sock<br/>mapping"| DIND
+    WC1 -.->|"TLS :3376<br/>DOCKER_INSIDE_*"| DIND
+    WC2 -.->|"TLS :3376<br/>DOCKER_INSIDE_*"| DIND
+    DIND --> NC
 
     PA -.->|"Alternative:<br/>Direct TLS"| DIND
 
@@ -34,19 +37,49 @@ graph TB
 
     class PA main
     class HD,DIND worker
-    class WC1,WC2 container
+    class WC1,WC2,NC container
 ```
 
 **Connection Modes:**
-- **Standard**: PentAGI → Host Docker (creates workers) → Workers use dind via socket mapping
-- **Direct**: PentAGI → dind (creates workers directly, socket mapping disabled)
+- **Standard** (recommended): PentAGI → Host Docker (creates workers) → Workers reach dind over its **TLS endpoint**, configured through `DOCKER_INSIDE_HOST` / `DOCKER_INSIDE_TLS_VERIFY` / `DOCKER_INSIDE_CERT_PATH`. Agents keep full Docker access, and every container they create is policed by the dind authorization policy.
+- **Direct**: PentAGI → dind (creates workers directly). Worker containers become nested containers, so the policy applies to them too: host bind-mounts are denied, which means **Docker Access must be disabled** and the work directory must be left empty (PentAGI then uses a Docker volume). Agents get no nested Docker in this mode.
+
+### Why workers reach dind over TLS instead of a mounted socket
+
+Earlier revisions of this guide mounted `/var/run/docker-dind/docker.sock` into
+each worker container. That works while everything is already running, but it has
+two failure modes that the TLS endpoint does not.
+
+**Boot-order race.** A bind-mount whose source does not exist is created by Docker
+as a **directory**. Worker containers carry a `on-failure` restart policy, so after
+a worker-node reboot one of them can start before dind has recreated its socket.
+Docker then materialises a *directory* at `/var/run/docker-dind/docker.sock`, and
+dind cannot bind its socket at that path any more — the daemon fails to start until
+someone removes the directory by hand, and every agent in the meantime has a
+useless mount.
+
+**Blast radius.** The race is only reliably avoided when the mounted socket belongs
+to the **host** daemon, because that one exists before anything else starts. But
+that hands an autonomous agent the host daemon: it can launch a privileged
+container, mount `/`, and take over the node — PentAGI, the other flows'
+containers, and the certificates on it included. That is precisely the risk this
+two-node architecture exists to remove.
+
+Pointing workers at `tcp://${PRIVATE_IP}:3376` avoids both: there is no mount to
+race on, and every request the agent makes passes through the dind authorization
+policy. Client certificates are mounted read-only, so an agent can use them but not
+rewrite them.
+
+`DOCKER_SOCKET` remains supported for single-node setups where the host daemon is
+already trusted, but it is not recommended here.
 
 ## Prerequisites
 
-Set the private IP address that will be used throughout this setup:
+Set the private IP address that will be used throughout this setup, and the location of the configuration files shipped with this guide:
 
 ```bash
 export PRIVATE_IP=192.168.10.10  # Replace with your worker node IP
+export GUIDE_URL=https://raw.githubusercontent.com/vxcontrol/pentagi/main/examples/guides/worker_node
 ```
 
 ## Install Docker on Both Nodes
@@ -98,9 +131,8 @@ DNS.1 = localhost
 DNS.2 = docker
 DNS.3 = docker-host
 IP.1 = 127.0.0.1
-IP.2 = 0.0.0.0
-IP.3 = ${PRIVATE_IP}"
-sudo /usr/share/easy-rsa/easyrsa build-server-full server nopass  # Confirm with 'yes'
+IP.2 = ${PRIVATE_IP}"
+sudo -E /usr/share/easy-rsa/easyrsa build-server-full server nopass  # Confirm with 'yes'
 unset EASYRSA_EXTRA_EXTS
 
 # Generate client certificate
@@ -108,16 +140,18 @@ sudo /usr/share/easy-rsa/easyrsa build-client-full client nopass  # Confirm with
 
 # Copy server certificates to Docker directory
 sudo mkdir -p /etc/docker/certs/server
-sudo cp pki/ca.crt /etc/docker/certs/server/ca.pem
-sudo cp pki/issued/server.crt /etc/docker/certs/server/cert.pem
-sudo cp pki/private/server.key /etc/docker/certs/server/key.pem
+sudo install -m 0444 pki/ca.crt             /etc/docker/certs/server/ca.pem
+sudo install -m 0444 pki/issued/server.crt  /etc/docker/certs/server/cert.pem
+sudo install -m 0400 pki/private/server.key /etc/docker/certs/server/key.pem
 
 # Copy client certificates for remote access
 sudo mkdir -p /etc/docker/certs/client
-sudo cp pki/ca.crt /etc/docker/certs/client/ca.pem
-sudo cp pki/issued/client.crt /etc/docker/certs/client/cert.pem
-sudo cp pki/private/client.key /etc/docker/certs/client/key.pem
+sudo install -m 0444 pki/ca.crt             /etc/docker/certs/client/ca.pem
+sudo install -m 0444 pki/issued/client.crt  /etc/docker/certs/client/cert.pem
+sudo install -m 0400 pki/private/client.key /etc/docker/certs/client/key.pem
 ```
+
+> `sudo -E` is required so that `EASYRSA_EXTRA_EXTS` survives into the easy-rsa call; without it the server certificate is issued without SANs and every TLS client rejects it.
 
 ### Configure Docker Daemon with TLS
 
@@ -125,7 +159,7 @@ Enable TLS authentication and remote access for the Docker daemon:
 
 ```bash
 # Configure Docker daemon with TLS settings
-sudo cat > /etc/docker/daemon.json << EOF
+sudo tee /etc/docker/daemon.json > /dev/null << EOF
 {
   "log-driver": "json-file",
   "log-opts": {
@@ -158,7 +192,7 @@ sudo systemctl restart docker
 Create a utility script to test secure Docker API access:
 
 ```bash
-sudo cat > /usr/local/bin/docker-host-tls << EOF
+sudo tee /usr/local/bin/docker-host-tls > /dev/null << EOF
 #!/bin/bash
 # Docker API client wrapper for TLS connections
 # Usage: docker-host-tls [docker-commands]
@@ -192,13 +226,21 @@ sudo chmod +x /usr/local/bin/docker-host-tls
 docker-host-tls ps && docker-host-tls info
 ```
 
-## Configure Docker-in-Docker (dind) on Worker Node
+## Configure Hardened Docker-in-Docker (dind) on Worker Node
 
-Docker-in-Docker provides an isolated environment for worker containers to execute Docker commands securely.
+The dind daemon is the Docker endpoint agents actually talk to, so it is treated as hostile-input-facing and hardened on three independent layers:
+
+| Layer | Control | Purpose |
+|---|---|---|
+| Container | explicit capability set instead of `--privileged` | dind itself runs with the minimum `dockerd` needs |
+| Daemon API | OPA authorization plugin (`authz.rego`), fail-closed | denies escape primitives in every nested `containers/create` and `exec` |
+| Kernel | daemon-wide seccomp profile (`seccomp.json`) | blocks block-device `mknod`, the primary confirmed escape vector |
+
+The files referenced below ship with this guide in [`examples/guides/worker_node/`](https://github.com/vxcontrol/pentagi/tree/main/examples/guides/worker_node).
 
 ### Generate TLS Certificates for dind
 
-Create separate certificates for the dind daemon:
+Create a separate PKI for the dind daemon — it must not share a CA with host Docker:
 
 ```bash
 # Create PKI infrastructure for dind
@@ -212,159 +254,199 @@ export EASYRSA_EXTRA_EXTS="subjectAltName = @alt_names
 
 [alt_names]
 DNS.1 = localhost
-DNS.2 = docker
-DNS.3 = docker-dind
+DNS.2 = docker-dind
 IP.1 = 127.0.0.1
-IP.2 = 0.0.0.0
-IP.3 = ${PRIVATE_IP}"
-sudo /usr/share/easy-rsa/easyrsa build-server-full server nopass  # Confirm with 'yes'
+IP.2 = ${PRIVATE_IP}"
+sudo -E /usr/share/easy-rsa/easyrsa build-server-full server nopass  # Confirm with 'yes'
 unset EASYRSA_EXTRA_EXTS
 
 # Generate client certificate
 sudo /usr/share/easy-rsa/easyrsa build-client-full client nopass  # Confirm with 'yes'
 
-# Create certificate directories
-sudo mkdir -p /etc/docker/certs/dind/{ca,client,server}
+# Create the directory layout dind expects
+sudo mkdir -p /etc/docker/dind/{scripts,authz,certs/{ca,server,client}} \
+              /var/lib/docker-dind /var/run/docker-dind
 
-# Copy CA certificates
-sudo cp pki/ca.crt /etc/docker/certs/dind/ca/cert.pem
-sudo cp pki/private/ca.key /etc/docker/certs/dind/ca/key.pem
-
-# Copy server certificates
-sudo cp pki/ca.crt /etc/docker/certs/dind/server/ca.pem
-sudo cp pki/issued/server.crt /etc/docker/certs/dind/server/cert.pem
-sudo cp pki/private/server.key /etc/docker/certs/dind/server/key.pem
-
-# Copy client certificates
-sudo cp pki/ca.crt /etc/docker/certs/dind/client/ca.pem
-sudo cp pki/issued/client.crt /etc/docker/certs/dind/client/cert.pem
-sudo cp pki/private/client.key /etc/docker/certs/dind/client/key.pem
+# Publish certificates (the CA private key stays in the PKI, never in /certs)
+sudo install -m 0444 pki/ca.crt             /etc/docker/dind/certs/ca/cert.pem
+sudo install -m 0444 pki/ca.crt             /etc/docker/dind/certs/server/ca.pem
+sudo install -m 0444 pki/issued/server.crt  /etc/docker/dind/certs/server/cert.pem
+sudo install -m 0400 pki/private/server.key /etc/docker/dind/certs/server/key.pem
+sudo install -m 0444 pki/ca.crt             /etc/docker/dind/certs/client/ca.pem
+sudo install -m 0444 pki/issued/client.crt  /etc/docker/dind/certs/client/cert.pem
+sudo install -m 0400 pki/private/client.key /etc/docker/dind/certs/client/key.pem
 ```
 
-### Create dind Management Script
+The dind entrypoint detects this complete set and uses it as-is instead of generating self-signed certificates on every start.
 
-Create a script to manage the dind container lifecycle:
+### Deploy Configuration Files
 
 ```bash
-sudo cat > /usr/local/bin/run-dind << EOF
-#!/bin/bash
+cd /tmp
+for f in authz.rego daemon.json seccomp.json dockerd-entrypoint.sh \
+         run-dind.sh docker-dind-tls.sh docker-dind-sock.sh \
+         dind-cleanup.sh dind-cleanup.service dind-cleanup.timer policy-tests.sh; do
+    curl -fsSL -o "$f" "${GUIDE_URL}/${f}"
+done
 
-# Check if dind container exists
-if docker ps -a --format '{{.Names}}' | grep -q "^docker-dind$"; then
-    if ! docker ps --format '{{.Names}}' | grep -q "^docker-dind$"; then
-        echo "Starting existing docker-dind container..."
-        docker start docker-dind
-    else
-        echo "docker-dind container is already running."
-    fi
-else
-    echo "Creating new docker-dind container..."
-    docker run -d \
-        --privileged \
-        -v /etc/docker/certs/dind/server:/certs/server:ro \
-        -v /var/lib/docker-dind:/var/lib/docker \
-        -v /var/run/docker-dind:/var/run/dind \
-        -p ${PRIVATE_IP}:3376:2376 \
-        -p ${PRIVATE_IP}:9324:9324 \
-        --cpus 2 --memory 2G \
-        --name docker-dind \
-        --restart always \
-        --log-opt max-size=50m \
-        --log-opt max-file=7 \
-        docker:dind \
-        --host=unix:///var/run/dind/docker.sock \
-        --host=tcp://0.0.0.0:2376 \
-        --tls=true \
-        --tlscert=/certs/server/cert.pem \
-        --tlskey=/certs/server/key.pem \
-        --tlscacert=/certs/server/ca.pem \
-        --tlsverify=true \
-        --metrics-addr=0.0.0.0:9324
-    echo "docker-dind container created and started."
-fi
-EOF
+# Daemon policy files — mounted read-only as /etc/docker inside dind
+sudo install -m 0644 authz.rego daemon.json seccomp.json /etc/docker/dind/authz/
 
-sudo chmod +x /usr/local/bin/run-dind
+# Custom entrypoint (adds DOCKER_API_HOST and DOCKER_DNS_SERVERS support)
+sudo install -m 0755 dockerd-entrypoint.sh /etc/docker/dind/scripts/
 
-# Start dind container and verify
-run-dind && docker ps
+# Management, wrapper, and maintenance scripts
+sudo install -m 0755 run-dind.sh         /usr/local/bin/run-dind
+sudo install -m 0755 docker-dind-tls.sh  /usr/local/bin/docker-dind-tls
+sudo install -m 0755 docker-dind-sock.sh /usr/local/bin/docker-dind-sock
+sudo install -m 0755 dind-cleanup.sh     /usr/local/bin/dind-cleanup
+sudo install -m 0755 policy-tests.sh     /usr/local/bin/dind-policy-tests
+sudo install -m 0644 dind-cleanup.service dind-cleanup.timer /etc/systemd/system/
 ```
 
-### Create dind Access Test Scripts
-
-Create utilities to test dind access via TLS and Unix socket:
-
-**TLS Access Script:**
+All scripts read their settings from `/etc/docker/dind/dind.env`, which is the only file you need to edit per host:
 
 ```bash
-sudo cat > /usr/local/bin/docker-dind-tls << EOF
-#!/bin/bash
-# Docker API client wrapper for dind TLS connections
-# Usage: docker-dind-tls [docker-commands]
-
-export DOCKER_HOST=tcp://${PRIVATE_IP}:3376
-export DOCKER_TLS_VERIFY=1
-export DOCKER_CERT_PATH=/etc/docker/certs/dind/client
-
-# Show connection info if no arguments provided
-if [ \$# -eq 0 ]; then
-    echo "Docker dind API connection configured:"
-    echo "  Host: ${PRIVATE_IP}:3376"
-    echo "  TLS: enabled"
-    echo "  Certificates: /etc/docker/certs/dind/client/"
-    echo ""
-    echo "Usage: docker-dind-tls [docker-commands]"
-    echo "Examples:"
-    echo "  docker-dind-tls version"
-    echo "  docker-dind-tls ps"
-    echo "  docker-dind-tls images"
-    exit 0
-fi
-
-# Execute docker command with TLS environment
-exec docker "\$@"
+sudo tee /etc/docker/dind/dind.env > /dev/null << EOF
+API_ADDRESS=${PRIVATE_IP}
+DOCKER_PORT=3376
+METRICS_ADDRESS=${PRIVATE_IP}
+METRICS_PORT=9324
+CPU_LIMIT=2
+MEMORY_LIMIT=4G
+MAX_AGE_HOURS=24
 EOF
-
-sudo chmod +x /usr/local/bin/docker-dind-tls
-
-# Test dind TLS connection
-docker-dind-tls ps && docker-dind-tls info
 ```
 
-**Unix Socket Access Script:**
+| Variable | Default | Description |
+|---|---|---|
+| `API_ADDRESS` / `DOCKER_PORT` | `0.0.0.0` / `3376` | dind TLS API bind address and port |
+| `METRICS_ADDRESS` / `METRICS_PORT` | `0.0.0.0` / `9324` | Prometheus metrics endpoint |
+| `NETWORK` | `host` | `host` binds directly on `API_ADDRESS`; `bridge` publishes ports instead |
+| `CPU_LIMIT` / `MEMORY_LIMIT` / `PIDS_LIMIT` | `2` / `4G` / `2048` | dind container resource limits |
+| `DNS_SERVERS` | empty | Comma-separated DNS servers for all nested containers |
+| `MAX_AGE_HOURS` | `24` | Age threshold used by the cleanup timer |
+
+> dind runs with `--network host` by default, so its port **must differ** from the host Docker daemon's `2376`. Keep `3376` unless you also change the host daemon.
+
+### Start dind
 
 ```bash
-sudo cat > /usr/local/bin/docker-dind-sock << EOF
-#!/bin/bash
-# Docker API client wrapper for dind socket connections
-# Usage: docker-dind-sock [docker-commands]
-
-export DOCKER_HOST=unix:///var/run/docker-dind/docker.sock
-export DOCKER_TLS_VERIFY=
-export DOCKER_CERT_PATH=
-
-# Show connection info if no arguments provided
-if [ \$# -eq 0 ]; then
-    echo "Docker dind socket connection configured:"
-    echo "  Host: unix:///var/run/docker-dind/docker.sock"
-    echo ""
-    echo "Usage: docker-dind-sock [docker-commands]"
-    echo "Examples:"
-    echo "  docker-dind-sock version"
-    echo "  docker-dind-sock ps"
-    echo "  docker-dind-sock images"
-    exit 0
-fi
-
-# Execute docker command with socket environment
-exec docker "\$@"
-EOF
-
-sudo chmod +x /usr/local/bin/docker-dind-sock
-
-# Test dind socket connection
-docker-dind-sock ps && docker-dind-sock info
+sudo run-dind
 ```
+
+The first run performs a two-phase bootstrap: dind starts without authorization, the managed OPA plugin is downloaded and installed into the dind daemon, then dind restarts with `--authorization-plugin` enabled (fail-closed). The plugin persists in `/var/lib/docker-dind`, so later starts come up with the policy active immediately.
+
+Verify the daemon, the policy plugin, and both access paths:
+
+```bash
+docker ps | grep docker-dind          # dind container is up
+docker-dind-sock plugin ls            # opa-docker-authz is enabled
+docker-dind-sock run --rm hello-world # nested containers work
+docker-dind-tls version               # TLS endpoint answers
+curl -s http://${PRIVATE_IP}:9324/metrics | head -5
+```
+
+### Security Model
+
+**dind container.** It runs without `--privileged`: every capability is dropped, then only what `dockerd` needs is added back — `SYS_ADMIN`, `NET_ADMIN`, `NET_RAW`, `SETUID`, `SETGID`, `MKNOD`, `FOWNER`, `DAC_OVERRIDE`, `CHOWN`, `AUDIT_WRITE`, `KILL`, `SYS_CHROOT`, `FSETID`, `SETFCAP`, `SETPCAP`, `NET_BIND_SERVICE`.
+
+**Nested containers.** The OPA policy defaults to `allow = false` and inspects `containers/create` and `exec`; other request types are either allowed untouched or denied outright:
+
+| Denied for nested containers | Covers |
+|---|---|
+| `--privileged` | container create and exec |
+| `--cap-add` outside the whitelist | `SYS_ADMIN`, `MKNOD`, `ALL`, etc. |
+| `--device`, `--device-cgroup-rule` | block/char device passthrough and cgroup rule injection |
+| `--security-opt` | seccomp / AppArmor / systempaths overrides |
+| `--pid`, `--ipc`, `--userns`, `--cgroupns`, `--uts` sharing | host and cross-container namespaces |
+| Explicit `MaskedPaths` / `ReadonlyPaths` | removes `/proc/sys` protection → `modprobe_path` host escape |
+| Host bind-mounts | **all** of them, both `-v /host:/dest` and `--mount type=bind` |
+| `--sysctl`, `DeviceRequests`, non-`runc` `--runtime`, `CgroupParent` | remaining escalation fields |
+| `docker cp`, `commit`, `build`, `image load`, `plugin install`, Swarm | endpoints that bypass the create gate |
+| `volume create` with bind emulation, `network create` with macvlan/ipvlan | mount and L2 passthrough emulation |
+
+Allowed, so agent workloads keep working: the default capability set plus `NET_ADMIN`/`NET_RAW`, Docker-managed named and anonymous volumes, tmpfs mounts, `docker pull`, the full container lifecycle, bridge networks, and `--network host`.
+
+**Block-device escape, dual enforcement.** `MKNOD` stays in Docker's default capability set and cannot be removed without recompiling Docker, so it is closed twice: `seccomp.json` blocks `mknod`/`mknodat` with the `S_IFBLK` flag at the kernel level (set daemon-wide via `daemon.json`), and `authz.rego` blocks both explicit `--cap-add MKNOD` and every `--security-opt` override, so the profile cannot be replaced or disabled. Together these deny `mknod /dev/sda b 8 0` + `debugfs` raw host-disk reads.
+
+> **`--network host` is intentionally allowed** — pentest tooling needs raw sockets and host-local targets. A nested container using it reaches every service on the worker node's network stack, including the host Docker daemon's TLS port. Never store outer-daemon client certificates on the worker node, and never expose a plaintext HTTP service there that serves files.
+
+### Update the Policy
+
+`run-dind` records the SHA-256 of `authz.rego` in `/var/lib/docker-dind/.authz-policy-hash`. When the hash changes, it starts dind without authorization, force-removes **all** nested containers, and restarts with the new policy — containers created under the previous policy keep their original `HostConfig` and would otherwise survive a restart with superseded privileges.
+
+```bash
+# After editing /etc/docker/dind/authz/authz.rego
+sudo docker rm -f docker-dind && sudo run-dind
+
+# Force a purge without a policy change
+sudo env PURGE=yes /usr/local/bin/run-dind
+```
+
+### Enable Automatic Cleanup
+
+Worker containers are short-lived; the timer force-removes anything older than `MAX_AGE_HOURS`:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now dind-cleanup.timer
+
+systemctl status dind-cleanup.timer      # check schedule
+journalctl -u dind-cleanup.service -n 50 # review last run
+sudo env MAX_AGE_HOURS=1 /usr/local/bin/dind-cleanup  # run manually with an override
+```
+
+### Verify Isolation
+
+`dind-policy-tests` is a full test suite that exercises the authorization policy and the seccomp profile from inside a container wired exactly like a real PentAGI worker. Run it once after setup and after every policy change:
+
+```bash
+# The suite probes a plaintext HTTP service on the node; start a throwaway one
+docker run -d --name dind-test-http -p 8080:80 nginx:alpine
+
+docker run --rm -it \
+    --name pentagi-terminal-test \
+    --network host \
+    --cap-add NET_ADMIN --cap-add NET_RAW \
+    -e TARGET_IP=${PRIVATE_IP} \
+    -e HTTP_PORT=8080 \
+    -e DIND_TLS_PORT=3376 \
+    -e OUTER_TLS_PORT=2376 \
+    -e DOCKER_HOST=tcp://${PRIVATE_IP}:3376 \
+    -e DOCKER_TLS_VERIFY=1 \
+    -e DOCKER_CERT_PATH=/etc/docker/dind/certs/client \
+    -v /usr/local/bin/dind-policy-tests:/work/policy-tests.sh:ro \
+    -v /etc/docker/dind/certs/client:/etc/docker/dind/certs/client:ro \
+    -w /work \
+    vxcontrol/kali-linux \
+    bash /work/policy-tests.sh
+
+docker rm -f dind-test-http
+```
+
+This invocation mirrors exactly what PentAGI does for a real worker container: the
+dind endpoint and its client certificates are supplied through the environment,
+and no Docker socket is mounted. (If you still run the socket-mapping layout,
+replace the three `DOCKER_*` variables and the certificate mount with
+`-v /var/run/docker-dind/docker.sock:/var/run/docker.sock`.)
+
+Positive tests cover legitimate workloads (nmap, masscan, curl, sqlmap, nginx, volumes, tmpfs, container lifecycle); negative tests cover escape primitives (privileged containers, dangerous capabilities, host namespaces, bind-mounts, block-device `mknod`, `nsenter`). Every test should report `[ PASS ]` or `[ SKIP ]`, and the exit code is `0` when nothing failed. **A failed negative test is an isolation gap; a failed positive test is a false positive that will break agent workloads.**
+
+### Troubleshooting
+
+```bash
+docker logs docker-dind                        # dind daemon output
+docker-dind-sock info | grep -A 20 "Security"  # confirm seccomp profile is active
+docker-dind-sock plugin ls                     # confirm authz plugin is enabled
+
+# Re-bootstrap the plugin from scratch
+sudo rm -f /var/lib/docker-dind/.authz-plugin-installed \
+           /var/lib/docker-dind/.authz-policy-hash
+sudo docker rm -f docker-dind && sudo run-dind
+```
+
+If `run-dind` fails with a missing `/dev/fuse`, load the module first: `sudo modprobe fuse`.
 
 ## Security & Firewall Configuration
 
@@ -389,6 +471,8 @@ Each worker container (`pentagi-terminal-N`) dynamically allocates **2 ports** f
 - **Inbound**: Allow access to ports 2376, 3376, 9323, 9324 on `${PRIVATE_IP}` from the main PentAGI node
 - **Inbound**: Allow access to port range 28000-30000 from target networks being tested
 - Configure perimeter firewall to permit OOB traffic from target networks to worker node
+
+Both Docker APIs must be reachable **only** from the main node — nested containers may use `--network host` and can therefore probe every port on this node.
 
 ## Transfer Certificates to Main Node
 
@@ -418,7 +502,7 @@ Transfer the dind client certificates to the main node:
 
 ```bash
 # On the worker node - create archive with dind certificates
-sudo tar czf docker-dind-ssl.tar.gz -C /etc/docker/certs/dind client/
+sudo tar czf docker-dind-ssl.tar.gz -C /etc/docker/dind/certs client/
 
 # Transfer to main node (replace <MAIN_NODE_IP> with actual IP)
 scp docker-dind-ssl.tar.gz root@<MAIN_NODE_IP>:/opt/pentagi/
@@ -445,7 +529,7 @@ ls -la /opt/pentagi/docker-dind-ssl/
 # key.pem (Client private key)
 ```
 
-These certificate directories will be used by the PentAGI installer to configure secure connections to the worker node Docker services.
+These certificate directories will be used by the PentAGI installer to configure secure connections to the worker node Docker services. Keep them readable by root only, and outside any directory served over HTTP.
 
 ## Install PentAGI on Main Node
 
@@ -482,10 +566,10 @@ The installer requires appropriate privileges to interact with the Docker API fo
   ```bash
   # Add your user to the docker group
   sudo usermod -aG docker $USER
-  
+
   # Log out and log back in, or activate the group immediately
   newgrp docker
-  
+
   # Verify Docker access (should run without sudo)
   docker ps
   ```
@@ -500,23 +584,87 @@ After the installer completes and PentAGI is running, manually configure the Doc
 2. **Navigate to Tools → Docker Environment**
 3. **Fill in the Docker Environment Configuration fields:**
 
-**For Standard Mode (Host Docker):**
-- **Docker Access**: `true` (enable Docker access for workers)
+**For Standard Mode (Host Docker) — recommended:**
+
+*How PentAGI reaches the worker node:*
+- **Docker Host**: `tcp://${PRIVATE_IP}:2376` (TLS connection to host Docker)
+- **TLS Verification**: `1` (enable TLS verification)
+- **TLS Certificates**: `/opt/pentagi/docker-host-ssl` (path on the **main node**)
+
+*How worker containers reach dind:*
+- **Docker Access**: `true` (agents get Docker)
+- **Docker Socket**: leave **empty** — no socket is mounted, see [the rationale above](#why-workers-reach-dind-over-tls-instead-of-a-mounted-socket)
+- **Worker Docker Daemon Host**: `tcp://${PRIVATE_IP}:3376` (dind TLS endpoint)
+- **Worker Docker TLS Verify**: enabled
+- **Worker Docker Certificate Path**: `/etc/docker/dind/certs/client` (path on the **worker node**)
+
+*Everything else:*
 - **Network Admin**: `true` (enable network scanning capabilities)
-- **Docker Socket**: `/var/run/docker-dind/docker.sock` (path inside worker containers)
 - **Docker Network**: `pentagi-network` (custom network name)
-- **Public IP Address**: `${PRIVATE_IP}` (worker node IP a front of tested network for OOB attacks)
+- **Public IP Address**: `${PRIVATE_IP}` (worker node IP in front of the tested network, for OOB attacks)
 - **Work Directory**: Leave empty (use default Docker volumes)
 - **Default Image**: `debian:latest` (or leave empty)
 - **Pentesting Image**: `vxcontrol/kali-linux` (or leave empty)
-- **Docker Host**: `tcp://${PRIVATE_IP}:2376` (TLS connection to host Docker)
-- **TLS Verification**: `1` (enable TLS verification)
-- **TLS Certificates**: `/opt/pentagi/docker-host-ssl` (path to client certificates)
+
+Note the two different certificate locations, and that they are **not**
+interchangeable:
+
+| Setting | Certificates for | Path resolved on |
+|---|---|---|
+| TLS Certificates | host Docker `:2376` | main node — mounted into the PentAGI container |
+| Worker Docker Certificate Path | dind `:3376` | worker node — mounted read-only into each worker container |
+
+The dind client certificates are already in place at
+`/etc/docker/dind/certs/client` from the dind setup above, so nothing needs to be
+copied for this. PentAGI bind-mounts that directory read-only at the identical
+path inside every worker container and injects `DOCKER_HOST`,
+`DOCKER_TLS_VERIFY` and `DOCKER_CERT_PATH` accordingly, so `docker` just works
+inside the sandbox.
+
+> **Never point Worker Docker Certificate Path at `/etc/docker/certs/client`.**
+> Those are the *host* daemon's client certificates. Handing them to an agent
+> grants it the host Docker API on `:2376`, which defeats the entire isolation
+> model — nested containers may use `--network host` and can already reach that
+> port. Only the dind certificates belong in a worker container.
 
 **For Direct Mode (dind only):**
 - Use the same configuration but change:
 - **Docker Host**: `tcp://${PRIVATE_IP}:3376` (TLS connection to dind)
-- **TLS Certificates**: `/opt/pentagi/docker-dind-ssl` (path to dind client certificates)
-- **Docker Socket**: Leave empty (no socket mapping needed)
+- **TLS Certificates**: `/opt/pentagi/docker-dind-ssl` (path to dind client certificates on the main node)
+- **Docker Access**: `false`, **Docker Socket** and all **Worker Docker \*** fields: leave empty — worker containers are nested containers here, and the authorization policy denies both the socket bind-mount and the certificate bind-mount
+- **Work Directory**: must stay empty, so PentAGI uses a Docker volume instead of a denied host bind-mount
 
 The certificate directories `/opt/pentagi/docker-host-ssl/` and `/opt/pentagi/docker-dind-ssl/` will be automatically mounted into the PentAGI container for secure TLS authentication.
+
+### Equivalent `.env` Configuration
+
+If you configure the main node by hand instead of through the installer:
+
+```bash
+## How PentAGI reaches the worker node's host Docker
+DOCKER_HOST=tcp://${PRIVATE_IP}:2376
+DOCKER_TLS_VERIFY=1
+PENTAGI_DOCKER_CERT_PATH=/opt/pentagi/docker-host-ssl   # path on the MAIN node
+
+## How worker containers reach dind
+DOCKER_INSIDE=true
+DOCKER_SOCKET=                                          # empty: mount no socket
+DOCKER_INSIDE_HOST=tcp://${PRIVATE_IP}:3376
+DOCKER_INSIDE_TLS_VERIFY=1
+DOCKER_INSIDE_CERT_PATH=/etc/docker/dind/certs/client   # path on the WORKER node
+
+DOCKER_NET_ADMIN=true
+DOCKER_NETWORK=pentagi-network
+DOCKER_PUBLIC_IP=${PRIVATE_IP}
+```
+
+Verify from inside a running worker container:
+
+```bash
+docker-host-tls exec -it pentagi-terminal-1 docker version   # talks to dind, not the host
+docker-host-tls exec -it pentagi-terminal-1 env | grep DOCKER_
+```
+
+The second command should show `DOCKER_HOST`, `DOCKER_TLS_VERIFY` and
+`DOCKER_CERT_PATH` — with no `_INSIDE_` in the names — and there must be **no**
+`/var/run/docker.sock` inside the container.
