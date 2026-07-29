@@ -12,11 +12,9 @@ const sha = { base: '', merge: '', schema: '', unrelated: '' };
 // -c user.* is passed on every invocation (not just `commit`) because `commit-tree` also refuses
 // to run without an author identity, and CI runners have none configured globally.
 const git = (...args: string[]) =>
-    execFileSync(
-        'git',
-        ['-C', repo, '-c', 'user.email=e2e@example.com', '-c', 'user.name=e2e', ...args],
-        { encoding: 'utf8' },
-    ).trim();
+    execFileSync('git', ['-C', repo, '-c', 'user.email=e2e@example.com', '-c', 'user.name=e2e', ...args], {
+        encoding: 'utf8',
+    }).trim();
 
 const commit = (path: string, body: string, message: string) => {
     mkdirSync(join(repo, path.slice(0, path.lastIndexOf('/'))), { recursive: true });
