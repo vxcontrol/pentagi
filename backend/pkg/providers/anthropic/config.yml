@@ -48,7 +48,7 @@ assistant:
     cache_write: 3.75
 
 generator:
-  model: claude-opus-5
+  model: claude-opus-4-8
   temperature: 1.0
   n: 1
   max_tokens: 32768
@@ -62,7 +62,7 @@ generator:
     cache_write: 6.25
 
 refiner:
-  model: claude-opus-5
+  model: claude-opus-4-8
   temperature: 1.0
   n: 1
   max_tokens: 20480
