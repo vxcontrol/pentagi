@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -102,7 +103,13 @@ func (c *composeOperationsImpl) performStackOperation(
 			if !c.composeFileExists(stack) {
 				return nil
 			}
-			return c.wrapPerformStackCommand(ctx, stack, state, operation, args...)
+			// execute the operation, but if it fails due to missing compose file, treat as success
+			// (this handles race conditions or path calculation issues)
+			err := c.wrapPerformStackCommand(ctx, stack, state, operation, args...)
+			if err != nil && c.isComposeMissingError(err) {
+				return nil
+			}
+			return err
 		// for non-destructive operations (start/update/download) honor embedded mode only
 		default:
 			if c.processor.isEmbeddedDeployment(stack) {
@@ -193,6 +200,15 @@ func (c *composeOperationsImpl) composeFileExists(stack ProductStack) bool {
 	}
 	composePath := filepath.Join(filepath.Dir(c.processor.state.GetEnvPath()), composeFile)
 	return c.processor.isFileExists(composePath) == nil
+}
+
+// isComposeMissingError checks if an error is due to a missing compose file
+func (c *composeOperationsImpl) isComposeMissingError(err error) bool {
+	if err == nil {
+		return false
+	}
+	errMsg := err.Error()
+	return strings.Contains(errMsg, "does not exist") || strings.Contains(errMsg, "no such file")
 }
 
 func (c *composeOperationsImpl) determineComposeFile(stack ProductStack) (string, error) {
