@@ -39,7 +39,7 @@ func listContainerFiles(t *testing.T, fake *fakeDockerClient, query string) (*in
 	t.Helper()
 	db := setupFlowFileServiceTestDB(t)
 	seedFlow(t, db, 1, 1)
-	svc := NewFlowFileService(db, t.TempDir(), fake, nil)
+	svc := NewFlowFileService(db, t.TempDir(), "", fake, nil)
 	c, w := newFlowFileTestContext(http.MethodGet, "/flows/1/files/container?"+query, nil,
 		[]string{"flow_files.view", "containers.view"}, 1, 1)
 	svc.GetFlowContainerFiles(c)
@@ -149,7 +149,7 @@ func TestGetFlowContainerFiles_TooManyPathsRejected(t *testing.T) {
 	// One over the cap → 400 before any docker call.
 	db := setupFlowFileServiceTestDB(t)
 	seedFlow(t, db, 1, 1)
-	svc := NewFlowFileService(db, t.TempDir(), &fakeDockerClient{running: true}, nil)
+	svc := NewFlowFileService(db, t.TempDir(), "", &fakeDockerClient{running: true}, nil)
 	c, w := newFlowFileTestContext(http.MethodGet,
 		"/flows/1/files/container?"+buildQuery(maxContainerListPaths+1), nil,
 		[]string{"flow_files.view", "containers.view"}, 1, 1)

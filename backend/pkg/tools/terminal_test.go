@@ -550,7 +550,7 @@ func TestPrimaryTerminalName(t *testing.T) {
 		t.Run(fmt.Sprintf("flowID=%d", tt.flowID), func(t *testing.T) {
 			t.Parallel()
 
-			if got := PrimaryTerminalName(tt.flowID); got != tt.want {
+			if got := PrimaryTerminalName("", tt.flowID); got != tt.want {
 				t.Errorf("PrimaryTerminalName(%d) = %q, want %q", tt.flowID, got, tt.want)
 			}
 		})

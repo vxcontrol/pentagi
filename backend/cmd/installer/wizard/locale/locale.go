@@ -1209,6 +1209,12 @@ const (
 	ServerSettingsLicenseKey     = "License Key"
 	ServerSettingsLicenseKeyDesc = "PentAGI License Key in format of XXXX-XXXX-XXXX-XXXX"
 
+	ServerSettingsTenantID     = "Tenant ID"
+	ServerSettingsTenantIDDesc = "Optional namespace for multi-instance deployment on one host (e.g., acme, team_alpha)"
+
+	ServerSettingsPprofAddr     = "pprof Listen Address"
+	ServerSettingsPprofAddrDesc = "Optional Go pprof bind address; leave empty to disable (e.g., :7777, 127.0.0.1:7778)"
+
 	ServerSettingsHost     = "Server Host (Listen IP)"
 	ServerSettingsHostDesc = "Bind address used by Docker port mapping (e.g., 0.0.0.0 to expose on all interfaces)"
 
@@ -1251,6 +1257,8 @@ const (
 
 	// Hints for fields overview
 	ServerSettingsLicenseKeyHint          = "License Key"
+	ServerSettingsTenantIDHint            = "Tenant ID"
+	ServerSettingsPprofAddrHint           = "pprof Address"
 	ServerSettingsHostHint                = "Listen IP"
 	ServerSettingsPortHint                = "Listen Port"
 	ServerSettingsPublicURLHint           = "Public URL"
@@ -1273,6 +1281,26 @@ Public URL must reflect how users reach the server. If using a subpath (e.g., /p
 SSL directory allows providing custom certificates. When set, server will use server.crt and server.key from that directory. Data directory stores artifacts and working files for flows.`
 
 	ServerSettingsLicenseKeyHelp = `PentAGI License Key in format of XXXX-XXXX-XXXX-XXXX. It's used to communicate with PentAGI Cloud API.`
+
+	ServerSettingsTenantIDHelp = `Optional identifier that namespaces PostgreSQL schema, data directory, Docker objects, Graphiti group ids, auth cookies and telemetry when several PentAGI instances share one host and the same backing services.
+
+Leave empty for a single-instance deployment (default). When set, the value must match ^[a-z][a-z0-9_]{0,31}$ — lowercase letter first, then lowercase letters, digits or underscores, max 32 characters. Hyphens are not allowed.
+
+Examples:
+• acme
+• team_alpha
+• staging01`
+
+	ServerSettingsPprofAddrHelp = `Optional listen address for the Go pprof HTTP endpoint used for CPU/memory profiling.
+
+Leave empty to keep pprof disabled (default, recommended for production). When set, the value must be a host:port pair such as :7777 or 127.0.0.1:7778.
+
+Instances that share a host network namespace need distinct addresses — a port is not a string namespace and cannot be derived from TENANT_ID.
+
+Examples:
+• :7777
+• 127.0.0.1:7778
+• 0.0.0.0:7780`
 
 	ServerSettingsHostHelp = `Bind address for published port in docker-compose mapping.
 
@@ -2333,7 +2361,9 @@ const (
 	EnvDesc_DOCKER_TLS_VERIFY                = "Docker TLS Verify"
 	EnvDesc_DOCKER_CERT_PATH                 = "Docker Certificate Path"
 
+	EnvDesc_TENANT_ID                         = "PentAGI Tenant ID"
 	EnvDesc_LICENSE_KEY                       = "PentAGI License Key"
+	EnvDesc_PPROF_ADDR                        = "PentAGI pprof Listen Address"
 	EnvDesc_PENTAGI_LISTEN_IP                 = "PentAGI Server Host"
 	EnvDesc_PENTAGI_LISTEN_PORT               = "PentAGI Server Port"
 	EnvDesc_PUBLIC_URL                        = "PentAGI Public URL"

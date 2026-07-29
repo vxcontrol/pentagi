@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"pentagi/pkg/docker"
 	"pentagi/pkg/tools"
 
 	cerrdefs "github.com/containerd/errdefs"
@@ -63,10 +64,19 @@ func (d *dockerOperationsImpl) removeWorkerContainers(ctx context.Context, state
 		return fmt.Errorf("failed to list worker containers: %w", err)
 	}
 
+	// NOTE: docker returns names with a leading slash ("/pentagi-terminal-1"), so
+	// this predicate has never matched anything and the sweep is effectively a
+	// no-op today. It is left that way deliberately — "fixing" the slash would
+	// silently turn a dormant no-op into force-removal of running containers,
+	// which is a behavior change well beyond tenant isolation.
+	//
+	// The prefix is anchored on the tenant regardless, so that if the slash is
+	// ever handled the sweep can only ever reach this instance's own containers.
+	workerPrefix := d.tenantPrefix() + "pentagi-"
 	var containers []container.Summary
 	for _, c := range allContainers {
 		for _, name := range c.Names {
-			if strings.HasPrefix(name, "pentagi-") {
+			if strings.HasPrefix(name, workerPrefix) {
 				containers = append(containers, c)
 				break
 			}
@@ -325,8 +335,14 @@ func (d *dockerOperationsImpl) removeWorkerVolumes(ctx context.Context, state *o
 	if err != nil {
 		return err
 	}
+	// Anchor on this instance's own prefix. Because the tenant segment leads the
+	// name ("acme-pentagi-terminal-1-data"), a default installation's sweep does
+	// not match a tenant's volumes and vice versa — each purge reaches exactly
+	// its own resources. With TENANT_ID unset this is the original predicate.
+	workerPrefix := d.tenantPrefix() + tools.PrimaryTerminalNamePrefix
+	workerSuffix := docker.WorkerVolumeNameSuffix
 	for _, v := range vols.Volumes {
-		if strings.HasPrefix(v.Name, tools.PrimaryTerminalNamePrefix) && strings.HasSuffix(v.Name, "-data") {
+		if strings.HasPrefix(v.Name, workerPrefix) && strings.HasSuffix(v.Name, workerSuffix) {
 			_ = cli.VolumeRemove(ctx, v.Name, true)
 		}
 	}
@@ -407,6 +423,17 @@ func (d *dockerOperationsImpl) getWorkerDockerEnv() []string {
 	}
 
 	return env
+}
+
+// tenantPrefix returns this installation's tenant prefix ("acme-") or "" when
+// TENANT_ID is unset. Every daemon-wide sweep must anchor on it so that a purge
+// run for one instance cannot reach another instance's resources.
+func (d *dockerOperationsImpl) tenantPrefix() string {
+	envVar, exists := d.processor.state.GetVar("TENANT_ID")
+	if !exists || envVar.Value == "" {
+		return ""
+	}
+	return envVar.Value + "-"
 }
 
 func (d *dockerOperationsImpl) getWorkerImageName() string {

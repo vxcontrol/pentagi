@@ -138,7 +138,7 @@ func NewTelemetryClient(ctx context.Context, cfg *config.Config) (TelemetryClien
 			sdklog.WithExportInterval(DefaultLogInterval),
 			sdklog.WithExportTimeout(DefaultLogTimeout),
 		)),
-		sdklog.WithResource(newResource()),
+		sdklog.WithResource(newResource(resourceAttrs(cfg)...)),
 	)
 
 	meterProvider := sdkmetric.NewMeterProvider(
@@ -147,7 +147,7 @@ func NewTelemetryClient(ctx context.Context, cfg *config.Config) (TelemetryClien
 			sdkmetric.WithInterval(DefaultMetricInterval),
 			sdkmetric.WithTimeout(DefaultMetricTimeout),
 		)),
-		sdkmetric.WithResource(newResource()),
+		sdkmetric.WithResource(newResource(resourceAttrs(cfg)...)),
 	)
 
 	tracerProvider := sdktrace.NewTracerProvider(
@@ -156,7 +156,7 @@ func NewTelemetryClient(ctx context.Context, cfg *config.Config) (TelemetryClien
 			sdktrace.WithBatchTimeout(DefaultTraceInterval),
 			sdktrace.WithExportTimeout(DefaultTraceTimeout),
 		)),
-		sdktrace.WithResource(newResource()),
+		sdktrace.WithResource(newResource(resourceAttrs(cfg)...)),
 	)
 
 	return &telemetryClient{
@@ -167,12 +167,33 @@ func NewTelemetryClient(ctx context.Context, cfg *config.Config) (TelemetryClien
 	}, nil
 }
 
-func newResource(opts ...attribute.KeyValue) *resource.Resource {
+func resourceAttrs(cfg *config.Config) []attribute.KeyValue {
 	var env = "production"
 	if version.IsDevelopMode() {
 		env = "development"
 	}
 
+	if cfg == nil {
+		return []attribute.KeyValue{
+			attribute.String("environment", env),
+		}
+	}
+
+	attrs := []attribute.KeyValue{
+		semconv.ServiceInstanceID(cfg.InstallationID),
+	}
+
+	if !cfg.HasTenant() {
+		return append(attrs, attribute.String("environment", env))
+	}
+
+	return append(attrs,
+		attribute.String("environment", cfg.TenantID),
+		attribute.String("tenant_id", cfg.TenantID),
+	)
+}
+
+func newResource(opts ...attribute.KeyValue) *resource.Resource {
 	service := version.GetBinaryName()
 	verRev := strings.Split(version.GetBinaryVersion(), "-")
 	version := strings.TrimPrefix(verRev[0], "v")
@@ -180,7 +201,6 @@ func newResource(opts ...attribute.KeyValue) *resource.Resource {
 	opts = append(opts,
 		semconv.ServiceName(service),
 		semconv.ServiceVersion(version),
-		attribute.String("environment", env),
 	)
 
 	return resource.NewWithAttributes(

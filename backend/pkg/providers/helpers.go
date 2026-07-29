@@ -861,13 +861,13 @@ func (fp *flowProvider) subtasksToMarkdown(subtasks []tools.SubtaskInfo) string 
 }
 
 func (fp *flowProvider) getContainerPortsDescription() string {
-	ports := docker.GetPrimaryContainerPorts(fp.flowID)
+	ports := docker.GetPrimaryContainerPorts(fp.cfg.WorkerPortsBase(), fp.flowID)
 	var buffer strings.Builder
 
 	buffer.WriteString("**OOB Attack Infrastructure:**\n\n")
 
 	// Host network mode: container has direct access to host network interfaces
-	if fp.dockerNetwork == "host" {
+	if fp.cfg.WorkerNetwork() == "host" {
 		buffer.WriteString("This container uses **host network mode** with direct access to host network interfaces.\n\n")
 		buffer.WriteString("**MANDATORY PORTS - YOU MUST USE ONLY THESE:**\n\n")
 
@@ -883,14 +883,14 @@ func (fp *flowProvider) getContainerPortsDescription() string {
 		buffer.WriteString("- All host network interfaces are accessible for binding\n\n")
 
 		buffer.WriteString("**Usage for OOB Attacks:**\n")
-		if fp.publicIP == "0.0.0.0" {
+		if fp.cfg.WorkerPublicIP() == "0.0.0.0" {
 			buffer.WriteString("To determine the public IP for callbacks:\n")
 			buffer.WriteString("1. Discover your public IP: `curl -s https://api.ipify.org` or `curl -s ipinfo.io/ip`\n")
 			buffer.WriteString("2. Use discovered IP in exploit payloads for callbacks\n")
 			buffer.WriteString("3. Listen on allocated ports (shown above) to receive connections\n\n")
 			buffer.WriteString("**Important:** Check Task.Input - user may have specified the public IP to use.\n")
 		} else {
-			buffer.WriteString(fmt.Sprintf("Your external IP is: **%s**\n\n", fp.publicIP))
+			buffer.WriteString(fmt.Sprintf("Your external IP is: **%s**\n\n", fp.cfg.WorkerPublicIP()))
 			buffer.WriteString("Use this IP in exploit payloads requiring callbacks (DNS exfiltration, reverse shells, XXE OOB, SSRF verification, etc.)\n")
 			buffer.WriteString("Listen on the allocated ports above to receive incoming connections.\n")
 		}
@@ -899,7 +899,7 @@ func (fp *flowProvider) getContainerPortsDescription() string {
 		buffer.WriteString("**MANDATORY FORWARDED PORTS - YOU MUST USE ONLY THESE:**\n\n")
 
 		for _, port := range ports {
-			buffer.WriteString(fmt.Sprintf("- Port %d/tcp (container) → %s:%d (external)\n", port, fp.publicIP, port))
+			buffer.WriteString(fmt.Sprintf("- Port %d/tcp (container) → %s:%d (external)\n", port, fp.cfg.WorkerPublicIP(), port))
 		}
 
 		buffer.WriteString("\n**Port Usage Rules:**\n")
@@ -910,14 +910,14 @@ func (fp *flowProvider) getContainerPortsDescription() string {
 
 		buffer.WriteString("**Usage for OOB Attacks:**\n")
 
-		if fp.publicIP == "0.0.0.0" {
+		if fp.cfg.WorkerPublicIP() == "0.0.0.0" {
 			buffer.WriteString("The bind IP is 0.0.0.0 (all interfaces). To receive external callbacks:\n")
 			buffer.WriteString("1. Discover your public IP: `curl -s https://api.ipify.org` or `curl -s ipinfo.io/ip`\n")
 			buffer.WriteString("2. Use discovered IP in exploit payloads for callbacks\n")
 			buffer.WriteString("3. Listen on container ports (shown above) to receive connections\n\n")
 			buffer.WriteString("**Important:** Check Task.Input - user may have specified the public IP to use.\n")
 		} else {
-			buffer.WriteString(fmt.Sprintf("Your external IP is: %s\n", fp.publicIP))
+			buffer.WriteString(fmt.Sprintf("Your external IP is: %s\n", fp.cfg.WorkerPublicIP()))
 			buffer.WriteString("Use this IP in exploit payloads requiring callbacks (DNS exfiltration, reverse shells, XXE OOB, SSRF verification, etc.)\n")
 			buffer.WriteString("Listen on the container ports above to receive incoming connections.\n")
 		}

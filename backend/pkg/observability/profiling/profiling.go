@@ -7,9 +7,16 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-const profilerAddress = ":7777"
+// DefaultProfilerAddress is the historical listen address, used when Start is
+// called with an empty address.
+const DefaultProfilerAddress = ":7777"
 
-func Start() {
+func Start(addr string) {
+	profilerAddress := addr
+	if profilerAddress == "" {
+		profilerAddress = DefaultProfilerAddress
+	}
+
 	router := http.NewServeMux()
 	router.HandleFunc("/profiler/", pprof.Index)
 	router.HandleFunc("/profiler/profile", pprof.Profile)

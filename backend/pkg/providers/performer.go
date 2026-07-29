@@ -83,7 +83,7 @@ func (fp *flowProvider) performAgentChain(
 		return fmt.Errorf("failed to get execution context: %w", err)
 	}
 
-	groupID := fmt.Sprintf("flow-%d", fp.flowID)
+	groupID := fp.cfg.GroupID(fp.flowID)
 	toolTypeMapping := tools.GetToolTypeMapping()
 
 	var maxCallsLimit int

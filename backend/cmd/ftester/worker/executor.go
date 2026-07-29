@@ -183,6 +183,7 @@ func (te *toolExecutor) GetTool(ctx context.Context, funcName string) (tools.Too
 			te.subtaskID,
 			containerID,
 			containerLID,
+			te.cfg.TenantPrefix(),
 			te.dockerClient,
 			te.proxies.GetTermLogProvider(),
 			time.Duration(te.cfg.TerminalToolTimeout)*time.Second,
@@ -196,6 +197,7 @@ func (te *toolExecutor) GetTool(ctx context.Context, funcName string) (tools.Too
 			te.subtaskID,
 			containerID,
 			containerLID,
+			te.cfg.TenantPrefix(),
 			te.dockerClient,
 			te.proxies.GetTermLogProvider(),
 			time.Duration(te.cfg.TerminalToolTimeout)*time.Second,
@@ -319,6 +321,7 @@ func (te *toolExecutor) GetTool(ctx context.Context, funcName string) (tools.Too
 			te.flowID,
 			te.taskID,
 			te.subtaskID,
+			te.cfg.GroupID(te.flowID),
 			te.graphitiClient,
 		), nil
 

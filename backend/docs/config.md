@@ -10,6 +10,7 @@ This document serves as a comprehensive guide to the configuration system in Pen
     - [Current Web Settings Coverage](#current-web-settings-coverage)
     - [Still Server-Managed](#still-server-managed)
   - [General Settings](#general-settings)
+    - [Multi-Instance Deployment (`TENANT_ID`)](#multi-instance-deployment-tenant_id)
     - [Usage Details](#usage-details)
   - [Docker Settings](#docker-settings)
     - [Usage Details](#usage-details-1)
@@ -140,8 +141,93 @@ These settings control basic application behavior and are foundational for the s
 | Debug            | `DEBUG`                     | `false`                                                                      | Enables debug mode with additional logging                               |
 | DataDir          | `DATA_DIR`                  | `./data`                                                                     | Directory for storing persistent data                                    |
 | AskUser          | `ASK_USER`                  | `false`                                                                      | When enabled, requires explicit user confirmation for certain operations |
+| TenantID         | `TENANT_ID`                 | *(empty)*                                                                    | Namespaces every externally-visible artifact this instance creates so several PentAGI instances can share one host and one set of backing services. Empty = single-instance behavior, unchanged. See [Multi-Instance Deployment](#multi-instance-deployment-tenant_id). |
+| DockerPortsBase  | `DOCKER_PORTS_BASE`         | `0` (means `28000`)                                                          | First host port for per-flow sandbox port publishing; each instance owns `[base, base+2000)` |
 | InstallationID   | `INSTALLATION_ID`           | *(none)*                                                                     | Unique installation identifier for PentAGI Cloud API communication       |
 | LicenseKey       | `LICENSE_KEY`               | *(none)*                                                                     | License key for PentAGI Cloud API authentication and feature activation  |
+
+### Multi-Instance Deployment (`TENANT_ID`)
+
+`TENANT_ID` namespaces the artifacts a PentAGI instance creates in **shared external
+services**, so that several independent installations can use one PostgreSQL server,
+one worker node (Docker daemon), one Neo4j/Graphiti and one Langfuse without
+colliding.
+
+**Primary use case: several management instances, shared resources.** The typical
+deployment puts each PentAGI management backend on its own server, while the heavy
+shared resources — the worker node where sandbox containers run, and the database —
+are common. `TENANT_ID` is what keeps those instances from writing over each other.
+
+Running several management instances on **one** server is also possible (for example
+behind an nginx reverse proxy), but that is not what the installer or the stock
+`docker-compose.yml` are built for — see *Deployment topologies* below.
+
+**When empty (the default) nothing changes.** Every helper degrades to an identity
+function: container names stay `pentagi-terminal-<id>`, the database schema stays
+`public`, Graphiti group ids stay `flow-<id>`, and the session cookie stays `auth`.
+This is enforced in one place (`backend/pkg/config/tenant.go`) and covered by tests.
+
+**Validation.** `TENANT_ID` must match `^[a-z][a-z0-9_]{0,31}$` — the intersection of
+the constraints imposed by every consumer:
+
+| Consumer | Constraint |
+| --- | --- |
+| Docker object name | `[a-zA-Z0-9][a-zA-Z0-9_.-]*` |
+| PostgreSQL identifier | ≤ 63 bytes; unquoted-safe as `[a-z_][a-z0-9_]*` |
+| Graphiti / Neo4j group id | parsed on a hyphen boundary, so no hyphens |
+
+Hyphens are excluded deliberately: they separate the tenant from the rest of a group
+id or object name. An invalid value **aborts startup** rather than being normalised,
+because collapsing two distinct tenants onto one namespace is exactly the collision
+tenancy exists to prevent.
+
+#### What the application namespaces automatically
+
+| Area | Effect |
+| --- | --- |
+| PostgreSQL | A schema named after the tenant is created on boot and `search_path` is set to `<tenant>,public`; the DSN is rewritten once so sqlc, GORM, goose and the pgvector pool all follow. Extensions (`vector`, `pg_trgm`) stay shared in `public`. |
+| Worker containers | Sandbox container names become `<tenant>-pentagi-terminal-<flow>`; the per-flow volume and the container hostname derive from that name automatically. Both are labelled `pentagi.tenant`, so daemon-wide sweeps can filter by owner. |
+| Host ports | Per-flow sandbox ports are allocated from `DOCKER_PORTS_BASE` (default `28000`), giving each instance the window `[base, base+2000)`. |
+| Knowledge graph | Graphiti/Neo4j group ids become `<tenant>-flow-<id>`. The GraphQL API contract is unchanged — clients still send `flow-<id>` and the server rebuilds the namespaced key internally. |
+| Auth | Cookie and JWT keys are derived from `COOKIE_SIGNING_SALT` **plus** the tenant, and the session cookie is renamed, so a session or API token minted by one instance is rejected by another. |
+| Telemetry | OTel resources carry `service.instance.id` and, with a tenant set, `tenant_id`; Langfuse traces carry the native `environment` field plus a `tenant:<id>` tag and tenant-prefixed trace/session names. |
+
+#### What stays the operator's responsibility
+
+`TENANT_ID` does **not** rewrite infrastructure-level settings. The following must be
+given distinct values per instance by whoever provisions it:
+
+| Setting | Why it is not derived from `TENANT_ID` |
+| --- | --- |
+| `DATA_DIR` | The data directory is chosen by the operator. Flow file caches, the container `/work` bind mount, screenshots and `installation_id` all live under it, and two instances pointed at the same directory **will overwrite each other's flow data**. Give each instance its own path or its own volume. |
+| `DOCKER_NETWORK` | Instances may legitimately share one Docker network; the application never renames it. Set it explicitly if you want separate networks. |
+| Published ports | `PENTAGI_LISTEN_PORT`, `PGVECTOR_LISTEN_PORT`, `SCRAPER_LISTEN_PORT`, `PPROF_ADDR` and `DOCKER_PORTS_BASE` are host-level resources, not string namespaces. |
+| `INSTALLATION_ID` | Unique per installation, or left empty to be generated once and cached in `DATA_DIR`. |
+| Database privileges | The configured user needs `CREATE SCHEMA`, and on first boot `CREATE EXTENSION` — unless an administrator pre-installed `vector` and `pg_trgm` into `public`. |
+
+The values actually in effect are written to the startup log under
+`Instance identity` (`tenant_id`, `data_dir`, `schema`, `installation_id`), which is
+the quickest way to confirm two instances are not sharing something they should not.
+
+`DOCKER_INSIDE` is orthogonal to tenancy and may be enabled alongside it.
+
+#### Deployment topologies
+
+| Topology | Supported by |
+| --- | --- |
+| One instance per server, shared PostgreSQL and/or worker node | The installer and the stock `docker-compose.yml`, with `TENANT_ID` set per server. This is the intended setup. |
+| Several instances on one server | Manual configuration only. The stock `docker-compose.yml` uses fixed `container_name` and network names, so copying it verbatim will not start a second stack. Adapt it to your network and infrastructure — for example, distinct container names behind a shared nginx — and give each instance its own `DATA_DIR` and ports. |
+
+The installer provisions **one** instance per server; it does not manage several
+side by side. Note that it does scope the sandbox resources it cleans up — worker
+containers and volumes are matched by the tenant prefix — so a purge run for one
+management instance will not remove another's sandboxes from a shared worker node.
+
+**Upgrading an existing deployment.** Leave `TENANT_ID` empty. The instance keeps
+using `public` and its current data directory; no migration is required. Setting
+`TENANT_ID` on an existing installation points it at a **new, empty schema** — the
+data in `public` is not migrated and will appear to be gone. Do not point an existing
+`public` deployment at a `search_path` that lists another tenant's schema.
 
 ### Usage Details
 

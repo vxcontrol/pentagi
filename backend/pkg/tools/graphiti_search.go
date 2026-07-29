@@ -118,6 +118,7 @@ type graphitiSearchTool struct {
 	flowID         int64
 	taskID         *int64
 	subtaskID      *int64
+	groupID        string
 	graphitiClient GraphitiSearcher
 }
 
@@ -125,12 +126,14 @@ type graphitiSearchTool struct {
 func NewGraphitiSearchTool(
 	flowID int64,
 	taskID, subtaskID *int64,
+	groupID string,
 	graphitiClient GraphitiSearcher,
 ) Tool {
 	return &graphitiSearchTool{
 		flowID:         flowID,
 		taskID:         taskID,
 		subtaskID:      subtaskID,
+		groupID:        groupID,
 		graphitiClient: graphitiClient,
 	}
 }
@@ -168,8 +171,6 @@ func (t *graphitiSearchTool) Handle(ctx context.Context, name string, args json.
 		return "", fmt.Errorf("search_type parameter is required")
 	}
 
-	groupID := fmt.Sprintf("flow-%d", t.flowID)
-
 	ctx, observation := obs.Observer.NewObservation(ctx)
 
 	retrieverTitle, ok := graphitiRetrieverTitles[searchArgs.SearchType.String()]
@@ -179,12 +180,12 @@ func (t *graphitiSearchTool) Handle(ctx context.Context, name string, args json.
 
 	retriever := observation.Retriever(
 		langfuse.WithRetrieverName(retrieverTitle),
-		langfuse.WithRetrieverInput(searchArgs.retrieverInput(groupID)),
+		langfuse.WithRetrieverInput(searchArgs.retrieverInput(t.groupID)),
 		langfuse.WithRetrieverMetadata(langfuse.Metadata{
 			"tool_name":   name,
 			"engine":      "graphiti",
 			"search_type": searchArgs.SearchType,
-			"group_id":    groupID,
+			"group_id":    t.groupID,
 			"query":       searchArgs.Query,
 		}),
 	)
@@ -203,19 +204,19 @@ func (t *graphitiSearchTool) Handle(ctx context.Context, name string, args json.
 	)
 	switch searchArgs.SearchType {
 	case "temporal_window":
-		result, err = t.handleTemporalWindowSearch(ctx, groupID, searchArgs, observationObject)
+		result, err = t.handleTemporalWindowSearch(ctx, t.groupID, searchArgs, observationObject)
 	case "entity_relationships":
-		result, err = t.handleEntityRelationshipsSearch(ctx, groupID, searchArgs, observationObject)
+		result, err = t.handleEntityRelationshipsSearch(ctx, t.groupID, searchArgs, observationObject)
 	case "diverse_results":
-		result, err = t.handleDiverseResultsSearch(ctx, groupID, searchArgs, observationObject)
+		result, err = t.handleDiverseResultsSearch(ctx, t.groupID, searchArgs, observationObject)
 	case "episode_context":
-		result, err = t.handleEpisodeContextSearch(ctx, groupID, searchArgs, observationObject)
+		result, err = t.handleEpisodeContextSearch(ctx, t.groupID, searchArgs, observationObject)
 	case "successful_tools":
-		result, err = t.handleSuccessfulToolsSearch(ctx, groupID, searchArgs, observationObject)
+		result, err = t.handleSuccessfulToolsSearch(ctx, t.groupID, searchArgs, observationObject)
 	case "recent_context":
-		result, err = t.handleRecentContextSearch(ctx, groupID, searchArgs, observationObject)
+		result, err = t.handleRecentContextSearch(ctx, t.groupID, searchArgs, observationObject)
 	case "entity_by_label":
-		result, err = t.handleEntityByLabelSearch(ctx, groupID, searchArgs, observationObject)
+		result, err = t.handleEntityByLabelSearch(ctx, t.groupID, searchArgs, observationObject)
 	default:
 		err = fmt.Errorf("unknown search_type: %s", searchArgs.SearchType)
 	}

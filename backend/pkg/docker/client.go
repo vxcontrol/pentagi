@@ -30,9 +30,11 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-const WorkFolderPathInContainer = "/work"
-
-const BaseContainerPortsNumber = 28000
+const (
+	WorkFolderPathInContainer = "/work"
+	WorkerVolumeNameSuffix    = "-data"
+	BaseContainerPortsNumber  = 28000
+)
 
 const (
 	defaultImage                = "debian:latest"
@@ -53,16 +55,18 @@ const (
 )
 
 type dockerClient struct {
-	db       database.Querier
-	logger   *logrus.Logger
-	dataDir  string
-	hostDir  string
-	client   *client.Client
-	inside   bool
-	defImage string
-	socket   string
-	network  string
-	publicIP string
+	db        database.Querier
+	logger    *logrus.Logger
+	dataDir   string
+	hostDir   string
+	client    *client.Client
+	inside    bool
+	defImage  string
+	socket    string
+	network   string
+	publicIP  string
+	portsBase int
+	labels    map[string]string
 }
 
 type DockerClient interface {
@@ -82,11 +86,16 @@ type DockerClient interface {
 	GetDefaultImage() string
 }
 
-func GetPrimaryContainerPorts(flowID int64) []int {
+// GetPrimaryContainerPorts returns the host ports for a flow relative to
+// portsBase. A portsBase of 0 falls back to BaseContainerPortsNumber.
+func GetPrimaryContainerPorts(portsBase int, flowID int64) []int {
+	if portsBase <= 0 || portsBase > (65535-limitContainerPortsNumber) {
+		portsBase = BaseContainerPortsNumber
+	}
 	ports := make([]int, containerPortsNumber)
-	for i := 0; i < containerPortsNumber; i++ {
+	for i := range containerPortsNumber {
 		delta := (int(flowID)*containerPortsNumber + i) % limitContainerPortsNumber
-		ports[i] = BaseContainerPortsNumber + delta
+		ports[i] = portsBase + delta
 	}
 	return ports
 }
@@ -124,12 +133,6 @@ func NewDockerClient(ctx context.Context, db database.Querier, cfg *config.Confi
 		defImage = defaultImage
 	}
 
-	// TODO: if this process running in a docker container, we need to use the host machine's data directory
-	// maybe there need to resolve the data directory path from volume list
-	// or maybe need to sync files from container to host machine
-	// or disable passing data directory to the container
-	// or create temporary volume for each container
-
 	dataDir, err := filepath.Abs(cfg.DataDir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get absolute path: %w", err)
@@ -160,16 +163,18 @@ func NewDockerClient(ctx context.Context, db database.Querier, cfg *config.Confi
 	}).Debug("Docker client initialized")
 
 	return &dockerClient{
-		db:       db,
-		client:   cli,
-		dataDir:  dataDir,
-		hostDir:  hostDir,
-		logger:   logger,
-		inside:   inside,
-		defImage: defImage,
-		socket:   socket,
-		network:  netName,
-		publicIP: publicIP,
+		db:        db,
+		client:    cli,
+		dataDir:   dataDir,
+		hostDir:   hostDir,
+		logger:    logger,
+		inside:    inside,
+		defImage:  defImage,
+		socket:    socket,
+		network:   netName,
+		publicIP:  publicIP,
+		portsBase: cfg.DockerPortsBase,
+		labels:    cfg.TenantLabels(),
 	}, nil
 }
 
@@ -262,6 +267,16 @@ func (dc *dockerClient) RunContainer(
 	config.Hostname = fmt.Sprintf("%08x", crc32.ChecksumIEEE([]byte(containerName)))
 	config.WorkingDir = WorkFolderPathInContainer
 
+	// Tag the container with its owning tenant so daemon-wide sweeps can filter on
+	// ownership rather than matching name prefixes. Absent when no tenant is
+	// configured, keeping the created container byte-identical to before.
+	for k, v := range dc.labels {
+		if config.Labels == nil {
+			config.Labels = make(map[string]string, len(dc.labels))
+		}
+		config.Labels[k] = v
+	}
+
 	if hostConfig == nil {
 		hostConfig = &container.HostConfig{}
 	}
@@ -275,8 +290,9 @@ func (dc *dockerClient) RunContainer(
 
 	if hostDir == "" {
 		volumeName, err := dc.client.VolumeCreate(ctx, volume.CreateOptions{
-			Name:   fmt.Sprintf("%s-data", containerName),
+			Name:   fmt.Sprintf("%s%s", containerName, WorkerVolumeNameSuffix),
 			Driver: "local",
+			Labels: dc.labels,
 		})
 		if err != nil {
 			return database.Container{}, fmt.Errorf("failed to create volume: %w", err)
@@ -333,7 +349,7 @@ func (dc *dockerClient) RunContainer(
 		if config.ExposedPorts == nil {
 			config.ExposedPorts = nat.PortSet{}
 		}
-		for _, port := range GetPrimaryContainerPorts(flowID) {
+		for _, port := range GetPrimaryContainerPorts(dc.portsBase, flowID) {
 			natPort := nat.Port(fmt.Sprintf("%d/tcp", port))
 			hostConfig.PortBindings[natPort] = []nat.PortBinding{
 				{

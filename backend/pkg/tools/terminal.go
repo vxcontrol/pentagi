@@ -47,6 +47,7 @@ type terminal struct {
 	subtaskID          *int64
 	containerID        int64
 	containerLID       string
+	tenantPrefix       string
 	dockerClient       docker.DockerClient
 	tlp                TermLogProvider
 	defaultExecTimeout time.Duration
@@ -56,6 +57,7 @@ func NewTerminalTool(
 	flowID int64,
 	taskID, subtaskID *int64,
 	containerID int64, containerLID string,
+	tenantPrefix string,
 	dockerClient docker.DockerClient,
 	tlp TermLogProvider,
 	defaultExecTimeout time.Duration,
@@ -66,6 +68,7 @@ func NewTerminalTool(
 		subtaskID:          subtaskID,
 		containerID:        containerID,
 		containerLID:       containerLID,
+		tenantPrefix:       tenantPrefix,
 		dockerClient:       dockerClient,
 		tlp:                tlp,
 		defaultExecTimeout: defaultExecTimeout,
@@ -190,7 +193,7 @@ func (t *terminal) ExecCommand(
 	detach bool,
 	timeout time.Duration,
 ) (string, error) {
-	containerName := PrimaryTerminalName(t.flowID)
+	containerName := PrimaryTerminalName(t.tenantPrefix, t.flowID)
 
 	cmd := []string{
 		"sh",
@@ -358,7 +361,7 @@ func (t *terminal) ReadFile(ctx context.Context, flowID int64, path string) (str
 // content only as an intermediate step (e.g. EditFile, before reapplying a
 // diff and writing back) don't echo a spurious "cat" transcript entry.
 func (t *terminal) readFileFromContainer(ctx context.Context, flowID int64, path string) (string, error) {
-	containerName := PrimaryTerminalName(flowID)
+	containerName := PrimaryTerminalName(t.tenantPrefix, flowID)
 
 	isRunning, err := t.dockerClient.IsContainerRunning(ctx, t.containerLID)
 	if err != nil {
@@ -445,7 +448,7 @@ func (t *terminal) WriteFile(ctx context.Context, flowID int64, content string, 
 // overwriting it. It performs no terminal-log writes; WriteFile and EditFile
 // each log their own, differently-worded, success message.
 func (t *terminal) writeFileToContainer(ctx context.Context, flowID int64, path, content string) error {
-	containerName := PrimaryTerminalName(flowID)
+	containerName := PrimaryTerminalName(t.tenantPrefix, flowID)
 
 	isRunning, err := t.dockerClient.IsContainerRunning(ctx, t.containerLID)
 	if err != nil {
@@ -527,8 +530,19 @@ func (t *terminal) EditFile(ctx context.Context, flowID int64, path, diffText st
 	return successMsg, nil
 }
 
-func PrimaryTerminalName(flowID int64) string {
-	return fmt.Sprintf("%s%d", PrimaryTerminalNamePrefix, flowID)
+// PrimaryTerminalName returns the docker container name for a flow's primary
+// terminal, namespaced by the configured tenant.
+//
+//	"pentagi-terminal-1"       (single instance)
+//	"acme-pentagi-terminal-1"  (TENANT_ID=acme)
+//
+// The tenant goes in FRONT of the well-known prefix on purpose: the installer's
+// volume garbage collector force-removes anything matching
+// HasPrefix("pentagi-terminal-") && HasSuffix("-data"), so a leading tenant
+// segment keeps one tenant's objects outside another tenant's sweep. A tenant
+// segment placed after the prefix would stay inside it and be destroyed.
+func PrimaryTerminalName(tenantPrefix string, flowID int64) string {
+	return fmt.Sprintf("%s%s%d", tenantPrefix, PrimaryTerminalNamePrefix, flowID)
 }
 
 func (t *terminal) IsAvailable() bool {

@@ -23,6 +23,10 @@ type Config struct {
 	DataDir     string `env:"DATA_DIR" envDefault:"./data"`
 	AskUser     bool   `env:"ASK_USER" envDefault:"false"`
 
+	// TenantID namespaces every externally-visible artifact this instance creates
+	// (PostgreSQL schema, docker object names, Graphiti group ids, telemetry identity)
+	TenantID string `env:"TENANT_ID" envDefault:""`
+
 	// === PentAGI Cloud Service Integration ===
 	InstallationID string `env:"INSTALLATION_ID"`
 	LicenseKey     string `env:"LICENSE_KEY"`
@@ -34,6 +38,7 @@ type Config struct {
 	DockerNetwork                string `env:"DOCKER_NETWORK"`
 	DockerPublicIP               string `env:"DOCKER_PUBLIC_IP" envDefault:"0.0.0.0"`
 	DockerWorkDir                string `env:"DOCKER_WORK_DIR"`
+	DockerPortsBase              int    `env:"DOCKER_PORTS_BASE" envDefault:"28000"`
 	DockerDefaultImage           string `env:"DOCKER_DEFAULT_IMAGE" envDefault:"debian:latest"`
 	DockerDefaultImageForPentest string `env:"DOCKER_DEFAULT_IMAGE_FOR_PENTEST" envDefault:"vxcontrol/kali-linux"`
 	TerminalToolTimeout          int    `env:"TERMINAL_TOOL_TIMEOUT" envDefault:"1200"`
@@ -223,6 +228,9 @@ type Config struct {
 	// === Observability: OpenTelemetry Collector ===
 	TelemetryEndpoint string `env:"OTEL_HOST"`
 
+	// PprofAddr is the pprof listener address. It is empty by default, which means pprof is disabled.
+	PprofAddr string `env:"PPROF_ADDR" envDefault:""`
+
 	// === Observability: Langfuse LLM Analytics ===
 	LangfuseBaseURL   string `env:"LANGFUSE_BASE_URL"`
 	LangfuseProjectID string `env:"LANGFUSE_PROJECT_ID"`
@@ -274,6 +282,10 @@ func NewConfig() (*Config, error) {
 		return nil, err
 	}
 
+	if err := config.ValidateTenantID(); err != nil {
+		return nil, err
+	}
+
 	ensureInstallationID(&config)
 	ensureLicenseKey(&config)
 
@@ -309,6 +321,30 @@ func ensureLicenseKey(config *Config) {
 	} else if !info.IsValid() {
 		config.LicenseKey = ""
 	}
+}
+
+// WorkerPortsBase returns the base port for the worker container
+func (c *Config) WorkerPortsBase() int {
+	if c == nil {
+		return 28000
+	}
+	return c.DockerPortsBase
+}
+
+// WorkerPublicIP returns the public IP for the worker container
+func (c *Config) WorkerPublicIP() string {
+	if c == nil || c.DockerPublicIP == "" {
+		return "0.0.0.0"
+	}
+	return c.DockerPublicIP
+}
+
+// WorkerNetwork returns the network for the worker container
+func (c *Config) WorkerNetwork() string {
+	if c == nil {
+		return ""
+	}
+	return c.DockerNetwork
 }
 
 // GetSecretPatterns returns a list of patterns for all secrets in the config

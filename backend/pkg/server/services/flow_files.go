@@ -55,6 +55,7 @@ type pendingUpload struct {
 //   - container sync → {dataDir}/flow-{id}-data/container/ (pulled from container, never sent back)
 type FlowFileService struct {
 	dataDir      string
+	tenantPrefix string
 	db           *gorm.DB
 	dockerClient docker.DockerClient
 	ss           subscriptions.SubscriptionsController
@@ -63,11 +64,13 @@ type FlowFileService struct {
 func NewFlowFileService(
 	db *gorm.DB,
 	dataDir string,
+	tenantPrefix string,
 	dockerClient docker.DockerClient,
 	ss subscriptions.SubscriptionsController,
 ) *FlowFileService {
 	return &FlowFileService{
 		dataDir:      dataDir,
+		tenantPrefix: tenantPrefix,
 		db:           db,
 		dockerClient: dockerClient,
 		ss:           ss,
@@ -723,7 +726,7 @@ func (s *FlowFileService) PullFlowFiles(c *gin.Context) {
 		return
 	}
 
-	containerName := primaryContainerName(flowID)
+	containerName := primaryContainerName(s.tenantPrefix, flowID)
 	running, err := s.dockerClient.IsContainerRunning(c.Request.Context(), containerName)
 	if err != nil {
 		logger.FromContext(c).WithError(err).WithFields(map[string]any{
@@ -957,7 +960,7 @@ func (s *FlowFileService) GetFlowContainerFiles(c *gin.Context) {
 		containerPaths = []string{docker.WorkFolderPathInContainer}
 	}
 
-	containerName := primaryContainerName(flowID)
+	containerName := primaryContainerName(s.tenantPrefix, flowID)
 	running, err := s.dockerClient.IsContainerRunning(c.Request.Context(), containerName)
 	if err != nil {
 		logger.FromContext(c).WithError(err).WithFields(map[string]any{
@@ -1234,7 +1237,7 @@ func (s *FlowFileService) copyLocalFilesToPrimaryWork(ctx context.Context, flowI
 		return nil
 	}
 
-	containerName := primaryContainerName(flowID)
+	containerName := primaryContainerName(s.tenantPrefix, flowID)
 	running, err := s.dockerClient.IsContainerRunning(ctx, containerName)
 	if err != nil || !running {
 		return nil
@@ -1313,7 +1316,7 @@ func (s *FlowFileService) deleteUploadsFromContainer(ctx context.Context, flowID
 		return nil
 	}
 
-	containerName := primaryContainerName(flowID)
+	containerName := primaryContainerName(s.tenantPrefix, flowID)
 	running, err := s.dockerClient.IsContainerRunning(ctx, containerName)
 	if err != nil {
 		return nil // container absent or unavailable — cache deletion will be synced on next start
@@ -1521,8 +1524,12 @@ func sortFlowFiles(files []models.FlowFile) {
 }
 
 // primaryContainerName returns the Docker container name for a flow's primary terminal.
-func primaryContainerName(flowID uint64) string {
-	return fmt.Sprintf("%s%d", tools.PrimaryTerminalNamePrefix, flowID)
+//
+// Delegates to tools.PrimaryTerminalName so there is exactly one definition of
+// this name; the two used to be independent implementations that had to be kept
+// in sync by hand.
+func primaryContainerName(tenantPrefix string, flowID uint64) string {
+	return tools.PrimaryTerminalName(tenantPrefix, int64(flowID))
 }
 
 // AddResourcesToFlow copies user-owned resources into the flow resources directory.

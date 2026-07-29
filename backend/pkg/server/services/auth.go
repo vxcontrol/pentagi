@@ -42,6 +42,22 @@ type AuthServiceConfig struct {
 	BaseURL          string
 	LoginCallbackURL string
 	SessionTimeout   int // in seconds
+
+	// CookiePrefix namespaces the OAuth CSRF cookies for this instance. Cookies
+	// are scoped by host and not by port, so two instances on one host would
+	// otherwise clobber each other's in-flight OAuth handshakes. Empty in
+	// single-instance mode, which keeps the cookie names exactly "state"/"nonce".
+	CookiePrefix string
+}
+
+// stateCookieName returns the tenant-scoped name of the OAuth CSRF state cookie.
+func (s *AuthService) stateCookieName() string {
+	return s.cfg.CookiePrefix + authStateCookieName
+}
+
+// nonceCookieName returns the tenant-scoped name of the OIDC nonce cookie.
+func (s *AuthService) nonceCookieName() string {
+	return s.cfg.CookiePrefix + authNonceCookieName
 }
 
 type AuthService struct {
@@ -296,8 +312,8 @@ func (s *AuthService) AuthAuthorize(c *gin.Context) {
 	}
 
 	maxAge := int(authStateRequestTTL / time.Second)
-	s.setCallbackCookie(c.Writer, c.Request, authStateCookieName, state, maxAge, sameSiteMode)
-	s.setCallbackCookie(c.Writer, c.Request, authNonceCookieName, nonce, maxAge, sameSiteMode)
+	s.setCallbackCookie(c.Writer, c.Request, s.stateCookieName(), state, maxAge, sameSiteMode)
+	s.setCallbackCookie(c.Writer, c.Request, s.nonceCookieName(), nonce, maxAge, sameSiteMode)
 
 	authOpts := []oauth2.AuthCodeOption{
 		oauth2.SetAuthURLParam("nonce", nonce),
@@ -328,7 +344,7 @@ func (s *AuthService) AuthLoginGetCallback(c *gin.Context) {
 		return
 	}
 
-	state, err := c.Request.Cookie(authStateCookieName)
+	state, err := c.Request.Cookie(s.stateCookieName())
 	if err != nil {
 		logger.FromContext(c).WithError(err).Errorf("error getting state from cookie")
 		response.Error(c, response.ErrAuthInvalidAuthorizationState, err)
@@ -383,7 +399,7 @@ func (s *AuthService) AuthLoginPostCallback(c *gin.Context) {
 		return
 	}
 
-	state, err := c.Request.Cookie(authStateCookieName)
+	state, err := c.Request.Cookie(s.stateCookieName())
 	if err != nil {
 		logger.FromContext(c).WithError(err).Errorf("error getting state from cookie")
 		response.Error(c, response.ErrAuthInvalidAuthorizationState, err)
@@ -476,7 +492,7 @@ func (s *AuthService) authLoginCallback(c *gin.Context, stateData map[string]str
 		return
 	}
 
-	nonce, err := c.Request.Cookie(authNonceCookieName)
+	nonce, err := c.Request.Cookie(s.nonceCookieName())
 	if err != nil {
 		logger.FromContext(c).WithError(err).Errorf("error getting nonce from cookie")
 		response.Error(c, response.ErrAuthInvalidAuthorizationNonce, err)
@@ -618,8 +634,8 @@ func (s *AuthService) authLoginCallback(c *gin.Context, stateData map[string]str
 	if stateData["provider"] == "google" {
 		sameSiteMode = http.SameSiteNoneMode
 	}
-	s.setCallbackCookie(c.Writer, c.Request, authStateCookieName, "", 0, sameSiteMode)
-	s.setCallbackCookie(c.Writer, c.Request, authNonceCookieName, "", 0, sameSiteMode)
+	s.setCallbackCookie(c.Writer, c.Request, s.stateCookieName(), "", 0, sameSiteMode)
+	s.setCallbackCookie(c.Writer, c.Request, s.nonceCookieName(), "", 0, sameSiteMode)
 
 	logger.FromContext(c).
 		WithFields(logrus.Fields{

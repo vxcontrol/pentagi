@@ -98,7 +98,7 @@ func NewRouter(
 
 	tokenCache := auth.NewTokenCache(orm)
 	userCache := auth.NewUserCache(orm)
-	authMiddleware := auth.NewAuthMiddleware(baseURL, cfg.CookieSigningSalt, tokenCache, userCache)
+	authMiddleware := auth.NewAuthMiddleware(baseURL, cfg.AuthSalt(), tokenCache, userCache)
 	oauthClients := make(map[string]oauth.OAuthClient)
 	oauthLoginCallbackURL := "/auth/login-callback"
 
@@ -172,6 +172,7 @@ func NewRouter(
 			BaseURL:          baseURL,
 			LoginCallbackURL: oauthLoginCallbackURL,
 			SessionTimeout:   4 * 60 * 60, // 4 hours
+			CookiePrefix:     cfg.TenantPrefix(),
 		},
 		orm,
 		oauthClients,
@@ -181,7 +182,7 @@ func NewRouter(
 	providerService := services.NewProviderService(providers)
 	settingsService := services.NewSettingsService(cfg)
 	flowService := services.NewFlowService(orm, providers, controller, subscriptions)
-	flowFileService := services.NewFlowFileService(orm, cfg.DataDir, dockerClient, subscriptions)
+	flowFileService := services.NewFlowFileService(orm, cfg.DataDir, cfg.TenantPrefix(), dockerClient, subscriptions)
 	resourceService := services.NewResourceService(orm, cfg.DataDir, subscriptions)
 	taskService := services.NewTaskService(orm)
 	subtaskService := services.NewSubtaskService(orm)
@@ -197,7 +198,7 @@ func NewRouter(
 	screenshotService := services.NewScreenshotService(orm, cfg.DataDir)
 	promptService := services.NewPromptService(orm)
 	analyticsService := services.NewAnalyticsService(orm)
-	tokenService := services.NewTokenService(orm, cfg.CookieSigningSalt, tokenCache, subscriptions)
+	tokenService := services.NewTokenService(orm, cfg.AuthSalt(), tokenCache, subscriptions)
 	knowledgeService := services.NewKnowledgeService(orm, knowledgeStore)
 	anonymizerService := services.NewAnonymizerService(textReplacer)
 	graphqlService := services.NewGraphqlService(
@@ -238,8 +239,13 @@ func NewRouter(
 	router.Use(gin.Recovery())
 	router.Use(logger.WithGinLogger("pentagi-api"))
 
-	cookieStore := cookie.NewStore(auth.MakeCookieStoreKey(cfg.CookieSigningSalt)...)
-	router.Use(sessions.Sessions("auth", cookieStore))
+	// AuthSalt mixes TENANT_ID into the key derivation so a session minted by one
+	// instance is cryptographically invalid on another even when COOKIE_SIGNING_SALT
+	// is shared. ScopedName separates the cookie itself, because cookies are scoped
+	// by host and NOT by port — two instances on one host would otherwise overwrite
+	// each other's sessions. Both are identity operations when TENANT_ID is empty.
+	cookieStore := cookie.NewStore(auth.MakeCookieStoreKey(cfg.AuthSalt())...)
+	router.Use(sessions.Sessions(cfg.ScopedName("auth"), cookieStore))
 
 	api := router.Group(baseURL)
 	api.Use(noCacheMiddleware())

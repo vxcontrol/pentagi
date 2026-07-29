@@ -35,18 +35,19 @@ type enqueue interface {
 }
 
 type observer struct {
-	mx        *sync.Mutex
-	wg        *sync.WaitGroup
-	ctx       context.Context
-	cancel    context.CancelFunc
-	client    *Client
-	project   string
-	release   string
-	interval  time.Duration
-	timeout   time.Duration
-	queueSize int
-	queue     chan *api.IngestionEvent
-	flusher   chan chan error
+	mx          *sync.Mutex
+	wg          *sync.WaitGroup
+	ctx         context.Context
+	cancel      context.CancelFunc
+	client      *Client
+	project     string
+	release     string
+	environment string
+	interval    time.Duration
+	timeout     time.Duration
+	queueSize   int
+	queue       chan *api.IngestionEvent
+	flusher     chan chan error
 }
 
 func NewObserver(client *Client, opts ...ObserverOption) Observer {
@@ -287,18 +288,19 @@ func (o *observer) putTraceInfo(obsCtx ObservationContext) {
 		Timestamp: getCurrentTimeString(),
 		Type:      api.IngestionEventZeroType(ingestionCreateTrace).Ptr(),
 		Body: &api.TraceBody{
-			ID:        getStringRef(obsCtx.TraceID),
-			Timestamp: obsCtx.TraceCtx.Timestamp,
-			Name:      obsCtx.TraceCtx.Name,
-			UserID:    obsCtx.TraceCtx.UserID,
-			Input:     obsCtx.TraceCtx.Input,
-			Output:    obsCtx.TraceCtx.Output,
-			SessionID: obsCtx.TraceCtx.SessionID,
-			Release:   getStringRef(o.release),
-			Version:   obsCtx.TraceCtx.Version,
-			Metadata:  obsCtx.TraceCtx.Metadata,
-			Tags:      obsCtx.TraceCtx.Tags,
-			Public:    obsCtx.TraceCtx.Public,
+			ID:          getStringRef(obsCtx.TraceID),
+			Timestamp:   obsCtx.TraceCtx.Timestamp,
+			Name:        obsCtx.TraceCtx.Name,
+			UserID:      obsCtx.TraceCtx.UserID,
+			Input:       obsCtx.TraceCtx.Input,
+			Output:      obsCtx.TraceCtx.Output,
+			SessionID:   obsCtx.TraceCtx.SessionID,
+			Release:     getStringRef(o.release),
+			Version:     obsCtx.TraceCtx.Version,
+			Metadata:    obsCtx.TraceCtx.Metadata,
+			Tags:        obsCtx.TraceCtx.Tags,
+			Public:      obsCtx.TraceCtx.Public,
+			Environment: getStringRef(o.environment),
 		},
 	}}
 

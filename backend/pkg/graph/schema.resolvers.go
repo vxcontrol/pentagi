@@ -788,7 +788,7 @@ func (r *mutationResolver) CreateAPIToken(ctx context.Context, input model.Creat
 
 	claims := auth.MakeAPITokenClaims(tokenID, user.Hash, uint64(uid), uint64(user.RoleID), uint64(input.TTL))
 
-	tokenString, err := auth.MakeAPIToken(r.Config.CookieSigningSalt, claims)
+	tokenString, err := auth.MakeAPIToken(r.Config.AuthSalt(), claims)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create token: %w", err)
 	}

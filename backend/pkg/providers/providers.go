@@ -140,14 +140,10 @@ type providerController struct {
 	db             database.Querier
 	cfg            *config.Config
 	docker         docker.DockerClient
-	publicIP       string
-	dockerNetwork  string
 	embedder       embeddings.Embedder
 	graphitiClient *graphiti.Client
 
 	startCallNumber *atomic.Int64
-
-	defaultDockerImageForPentest string
 
 	summarizerAgent     csum.Summarizer
 	summarizerAssistant csum.Summarizer
@@ -256,14 +252,10 @@ func NewProviderController(
 		db:             db,
 		cfg:            cfg,
 		docker:         docker,
-		publicIP:       cfg.DockerPublicIP,
-		dockerNetwork:  cfg.DockerNetwork,
 		embedder:       embedder,
 		graphitiClient: graphitiClient,
 
 		startCallNumber: newAtomicInt64(0), // 0 means to make it random
-
-		defaultDockerImageForPentest: cfg.DockerDefaultImageForPentest,
 
 		summarizerAgent:     summarizerAgent,
 		summarizerAssistant: summarizerAssistant,
@@ -311,7 +303,7 @@ func (pc *providerController) NewFlowProvider(
 
 	imageTmpl, err := prompter.RenderTemplate(templates.PromptTypeImageChooser, map[string]any{
 		"DefaultImage":           pc.docker.GetDefaultImage(),
-		"DefaultImageForPentest": pc.defaultDockerImageForPentest,
+		"DefaultImageForPentest": pc.cfg.DockerDefaultImageForPentest,
 		"Input":                  input,
 	})
 	if err != nil {
@@ -361,12 +353,10 @@ func (pc *providerController) NewFlowProvider(
 	fp := &flowProvider{
 		db:              pc.db,
 		mx:              &sync.RWMutex{},
+		cfg:             pc.cfg,
 		embedder:        pc.embedder,
 		graphitiClient:  pc.graphitiClient,
 		flowID:          flowID,
-		dataDir:         pc.cfg.DataDir,
-		publicIP:        pc.publicIP,
-		dockerNetwork:   pc.dockerNetwork,
 		callCounter:     newAtomicInt64(pc.startCallNumber.Add(deltaCallCounter)),
 		image:           image,
 		title:           title,
@@ -413,12 +403,10 @@ func (pc *providerController) LoadFlowProvider(
 	fp := &flowProvider{
 		db:              pc.db,
 		mx:              &sync.RWMutex{},
+		cfg:             pc.cfg,
 		embedder:        pc.embedder,
 		graphitiClient:  pc.graphitiClient,
 		flowID:          flowID,
-		dataDir:         pc.cfg.DataDir,
-		publicIP:        pc.publicIP,
-		dockerNetwork:   pc.dockerNetwork,
 		callCounter:     newAtomicInt64(pc.startCallNumber.Add(deltaCallCounter)),
 		image:           image,
 		title:           title,
@@ -510,12 +498,10 @@ func (pc *providerController) NewAssistantProvider(
 		fp: flowProvider{
 			db:              pc.db,
 			mx:              &sync.RWMutex{},
+			cfg:             pc.cfg,
 			embedder:        pc.embedder,
 			graphitiClient:  pc.graphitiClient,
 			flowID:          flowID,
-			dataDir:         pc.cfg.DataDir,
-			publicIP:        pc.publicIP,
-			dockerNetwork:   pc.dockerNetwork,
 			callCounter:     newAtomicInt64(pc.startCallNumber.Add(deltaCallCounter)),
 			image:           image,
 			title:           title,
@@ -565,12 +551,10 @@ func (pc *providerController) LoadAssistantProvider(
 		fp: flowProvider{
 			db:              pc.db,
 			mx:              &sync.RWMutex{},
+			cfg:             pc.cfg,
 			embedder:        pc.embedder,
 			graphitiClient:  pc.graphitiClient,
 			flowID:          flowID,
-			dataDir:         pc.cfg.DataDir,
-			publicIP:        pc.publicIP,
-			dockerNetwork:   pc.dockerNetwork,
 			callCounter:     newAtomicInt64(pc.startCallNumber.Add(deltaCallCounter)),
 			image:           image,
 			title:           title,

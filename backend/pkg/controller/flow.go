@@ -55,6 +55,7 @@ type FlowWorker interface {
 type flowWorker struct {
 	tc      TaskController
 	wg      *sync.WaitGroup
+	cfg     *config.Config
 	aws     map[int64]AssistantWorker
 	awsMX   *sync.Mutex
 	ctx     context.Context
@@ -66,7 +67,6 @@ type flowWorker struct {
 	taskCCH chan struct{}
 	input   chan flowInput
 	flowCtx *FlowContext
-	dataDir string
 	docker  docker.DockerClient
 	logger  *logrus.Entry
 }
@@ -179,12 +179,12 @@ func NewFlowWorker(
 
 	ctx, observation := obs.Observer.NewObservation(ctx,
 		langfuse.WithObservationTraceContext(
-			langfuse.WithTraceName(fmt.Sprintf("%d flow worker", flow.ID)),
-			langfuse.WithTraceUserID(user.Mail),
-			langfuse.WithTraceTags([]string{"controller", "flow"}),
+			langfuse.WithTraceName(fmt.Sprintf("%s%d flow worker", fwc.cfg.TenantLabel(), flow.ID)),
+			langfuse.WithTraceUserID(tenantUserID(fwc.cfg, user.Mail)),
+			langfuse.WithTraceTags(tenantTags(fwc.cfg, "controller", "flow")),
 			langfuse.WithTraceInput(fwc.input),
-			langfuse.WithTraceSessionID(fmt.Sprintf("flow-%d", flow.ID)),
-			langfuse.WithTraceMetadata(langfuse.Metadata{
+			langfuse.WithTraceSessionID(fwc.cfg.ScopedName(fmt.Sprintf("flow-%d", flow.ID))),
+			langfuse.WithTraceMetadata(tenantMeta(fwc.cfg, langfuse.Metadata{
 				"flow_id":       flow.ID,
 				"user_id":       fwc.userID,
 				"user_email":    user.Mail,
@@ -193,7 +193,7 @@ func NewFlowWorker(
 				"user_role":     user.RoleName,
 				"provider_name": fwc.prvname.String(),
 				"provider_type": fwc.prvtype.String(),
-			}),
+			})),
 		),
 	)
 	flowSpan := observation.Span(langfuse.WithSpanName("prepare flow worker"))
@@ -272,6 +272,7 @@ func NewFlowWorker(
 		wg:      &sync.WaitGroup{},
 		aws:     make(map[int64]AssistantWorker),
 		awsMX:   &sync.Mutex{},
+		cfg:     fwc.cfg,
 		ctx:     ctx,
 		cancel:  cancel,
 		taskMX:  &sync.Mutex{},
@@ -280,7 +281,6 @@ func NewFlowWorker(
 		taskCCH: make(chan struct{}),
 		input:   make(chan flowInput),
 		flowCtx: flowCtx,
-		dataDir: fwc.cfg.DataDir,
 		docker:  fwc.docker,
 		logger: logrus.WithFields(logrus.Fields{
 			"flow_id":   flow.ID,
@@ -351,11 +351,11 @@ func LoadFlowWorker(ctx context.Context, flow database.Flow, fwc flowWorkerCtx) 
 	ctx, observation := obs.Observer.NewObservation(ctx,
 		langfuse.WithObservationTraceID(flow.TraceID.String),
 		langfuse.WithObservationTraceContext(
-			langfuse.WithTraceName(fmt.Sprintf("%d flow worker", flow.ID)),
-			langfuse.WithTraceUserID(user.Mail),
-			langfuse.WithTraceTags([]string{"controller", "flow"}),
-			langfuse.WithTraceSessionID(fmt.Sprintf("flow-%d", flow.ID)),
-			langfuse.WithTraceMetadata(langfuse.Metadata{
+			langfuse.WithTraceName(fmt.Sprintf("%s%d flow worker", fwc.cfg.TenantLabel(), flow.ID)),
+			langfuse.WithTraceUserID(tenantUserID(fwc.cfg, user.Mail)),
+			langfuse.WithTraceTags(tenantTags(fwc.cfg, "controller", "flow")),
+			langfuse.WithTraceSessionID(fwc.cfg.ScopedName(fmt.Sprintf("flow-%d", flow.ID))),
+			langfuse.WithTraceMetadata(tenantMeta(fwc.cfg, langfuse.Metadata{
 				"flow_id":       flow.ID,
 				"user_id":       flow.UserID,
 				"user_email":    user.Mail,
@@ -364,7 +364,7 @@ func LoadFlowWorker(ctx context.Context, flow database.Flow, fwc flowWorkerCtx) 
 				"user_role":     user.RoleName,
 				"provider_name": flow.ModelProviderName,
 				"provider_type": flow.ModelProviderType,
-			}),
+			})),
 		),
 	)
 	flowSpan := observation.Span(langfuse.WithSpanName("prepare flow worker"))
@@ -432,6 +432,7 @@ func LoadFlowWorker(ctx context.Context, flow database.Flow, fwc flowWorkerCtx) 
 		wg:      &sync.WaitGroup{},
 		aws:     make(map[int64]AssistantWorker),
 		awsMX:   &sync.Mutex{},
+		cfg:     fwc.cfg,
 		ctx:     ctx,
 		cancel:  cancel,
 		taskMX:  &sync.Mutex{},
@@ -440,7 +441,6 @@ func LoadFlowWorker(ctx context.Context, flow database.Flow, fwc flowWorkerCtx) 
 		taskCCH: make(chan struct{}),
 		input:   make(chan flowInput),
 		flowCtx: flowCtx,
-		dataDir: fwc.cfg.DataDir,
 		docker:  fwc.docker,
 		logger: logrus.WithFields(logrus.Fields{
 			"flow_id":   flow.ID,
@@ -696,8 +696,8 @@ func (fw *flowWorker) copyResourcesToFS(dbResources []database.UserResource) ([]
 		})
 	}
 
-	storeDir := resources.ResourcesDir(fw.dataDir)
-	return flowfiles.CopyResourcesToFlow(fw.dataDir, storeDir, uint64(fw.flowCtx.FlowID), refs, false)
+	storeDir := resources.ResourcesDir(fw.cfg.DataDir)
+	return flowfiles.CopyResourcesToFlow(fw.cfg.DataDir, storeDir, uint64(fw.flowCtx.FlowID), refs, false)
 }
 
 // pushResourcesToContainer pushes newly added resource files into the running primary container.
@@ -706,13 +706,13 @@ func (fw *flowWorker) pushResourcesToContainer(ctx context.Context, addedPaths [
 	if fw.docker == nil {
 		return
 	}
-	containerName := tools.PrimaryTerminalName(fw.flowCtx.FlowID)
+	containerName := tools.PrimaryTerminalName(fw.cfg.TenantPrefix(), fw.flowCtx.FlowID)
 	running, _ := fw.docker.IsContainerRunning(ctx, containerName)
 	if !running {
 		return
 	}
 
-	resourcesDir := flowfiles.FlowResourcesDir(fw.dataDir, uint64(fw.flowCtx.FlowID))
+	resourcesDir := flowfiles.FlowResourcesDir(fw.cfg.DataDir, uint64(fw.flowCtx.FlowID))
 	for _, relPath := range addedPaths {
 		fsRelPath := relPath[len(flowfiles.ResourcesDirName)+1:]
 		absPath := resourcesDir + "/" + fsRelPath
@@ -744,7 +744,7 @@ func (fw *flowWorker) publishResourceFileEvents(ctx context.Context, addedPaths 
 		return
 	}
 
-	resourcesDir := flowfiles.FlowResourcesDir(fw.dataDir, uint64(fw.flowCtx.FlowID))
+	resourcesDir := flowfiles.FlowResourcesDir(fw.cfg.DataDir, uint64(fw.flowCtx.FlowID))
 	pub := fw.flowCtx.Publisher
 	for _, relPath := range addedPaths {
 		fsRelPath := relPath[len(flowfiles.ResourcesDirName)+1:]

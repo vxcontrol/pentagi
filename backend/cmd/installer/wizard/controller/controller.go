@@ -1977,7 +1977,9 @@ func (c *controller) ResetDockerConfig() *DockerConfig {
 // ServerSettingsConfig represents PentAGI server settings configuration
 type ServerSettingsConfig struct {
 	// direct form field mappings using loader.EnvVar
+	TenantID            loader.EnvVar // TENANT_ID
 	LicenseKey          loader.EnvVar // LICENSE_KEY
+	PprofAddr           loader.EnvVar // PPROF_ADDR
 	ListenIP            loader.EnvVar // PENTAGI_LISTEN_IP
 	ListenPort          loader.EnvVar // PENTAGI_LISTEN_PORT
 	PublicURL           loader.EnvVar // PUBLIC_URL
@@ -1999,7 +2001,9 @@ type ServerSettingsConfig struct {
 // GetServerSettingsConfig returns current server settings
 func (c *controller) GetServerSettingsConfig() *ServerSettingsConfig {
 	vars, _ := c.GetVars([]string{
+		"TENANT_ID",
 		"LICENSE_KEY",
+		"PPROF_ADDR",
 		"PENTAGI_LISTEN_IP",
 		"PENTAGI_LISTEN_PORT",
 		"PUBLIC_URL",
@@ -2016,6 +2020,7 @@ func (c *controller) GetServerSettingsConfig() *ServerSettingsConfig {
 
 	defaults := map[string]string{
 		"LICENSE_KEY":           "",
+		"PPROF_ADDR":            "",
 		"PENTAGI_LISTEN_IP":     "127.0.0.1",
 		"PENTAGI_LISTEN_PORT":   "8443",
 		"PUBLIC_URL":            "https://localhost:8443",
@@ -2035,7 +2040,9 @@ func (c *controller) GetServerSettingsConfig() *ServerSettingsConfig {
 	}
 
 	cfg := &ServerSettingsConfig{
+		TenantID:            vars["TENANT_ID"],
 		LicenseKey:          vars["LICENSE_KEY"],
+		PprofAddr:           vars["PPROF_ADDR"],
 		ListenIP:            vars["PENTAGI_LISTEN_IP"],
 		ListenPort:          vars["PENTAGI_LISTEN_PORT"],
 		PublicURL:           vars["PUBLIC_URL"],
@@ -2075,7 +2082,9 @@ func (c *controller) UpdateServerSettingsConfig(config *ServerSettingsConfig) er
 	}
 
 	updates := map[string]string{
+		"TENANT_ID":             config.TenantID.Value,
 		"LICENSE_KEY":           config.LicenseKey.Value,
+		"PPROF_ADDR":            config.PprofAddr.Value,
 		"PENTAGI_LISTEN_IP":     config.ListenIP.Value,
 		"PENTAGI_LISTEN_PORT":   config.ListenPort.Value,
 		"PUBLIC_URL":            config.PublicURL.Value,
@@ -2100,7 +2109,9 @@ func (c *controller) UpdateServerSettingsConfig(config *ServerSettingsConfig) er
 // ResetServerSettingsConfig resets server settings to defaults
 func (c *controller) ResetServerSettingsConfig() *ServerSettingsConfig {
 	vars := []string{
+		"TENANT_ID",
 		"LICENSE_KEY",
+		"PPROF_ADDR",
 		"PENTAGI_LISTEN_IP",
 		"PENTAGI_LISTEN_PORT",
 		"PUBLIC_URL",
@@ -2345,7 +2356,9 @@ func (c *controller) getVariableDescription(varName string) string {
 		"DOCKER_TLS_VERIFY":                locale.EnvDesc_DOCKER_TLS_VERIFY,
 		"DOCKER_CERT_PATH":                 locale.EnvDesc_DOCKER_CERT_PATH,
 
+		"TENANT_ID":                         locale.EnvDesc_TENANT_ID,
 		"LICENSE_KEY":                       locale.EnvDesc_LICENSE_KEY,
+		"PPROF_ADDR":                        locale.EnvDesc_PPROF_ADDR,
 		"PENTAGI_LISTEN_IP":                 locale.EnvDesc_PENTAGI_LISTEN_IP,
 		"PENTAGI_LISTEN_PORT":               locale.EnvDesc_PENTAGI_LISTEN_PORT,
 		"PUBLIC_URL":                        locale.EnvDesc_PUBLIC_URL,
@@ -2572,7 +2585,9 @@ var criticalVariables = map[string]bool{
 	"MAX_LIMITED_AGENT_TOOL_CALLS":       true,
 	"AGENT_PLANNING_STEP_ENABLED":        true,
 
+	"TENANT_ID":             true,
 	"LICENSE_KEY":           true,
+	"PPROF_ADDR":            true,
 	"PENTAGI_LISTEN_IP":     true,
 	"PENTAGI_LISTEN_PORT":   true,
 	"PUBLIC_URL":            true,

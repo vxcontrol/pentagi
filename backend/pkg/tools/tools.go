@@ -486,7 +486,8 @@ func (fte *flowToolsExecutor) Prepare(ctx context.Context) error {
 			fte.primaryID = cnt.ID
 			fte.primaryLID = cnt.LocalID.String
 			if err := fte.syncMissingFiles(ctx); err != nil {
-				return fmt.Errorf("failed to sync missing files to container '%s': %w", PrimaryTerminalName(fte.flowID), err)
+				containerName := PrimaryTerminalName(fte.cfg.TenantPrefix(), fte.flowID)
+				return fmt.Errorf("failed to sync missing files to container '%s': %w", containerName, err)
 			}
 			return nil
 		default:
@@ -514,7 +515,7 @@ func (fte *flowToolsExecutor) Prepare(ctx context.Context) error {
 		capAdd = append(capAdd, "NET_ADMIN")
 	}
 
-	containerName := PrimaryTerminalName(fte.flowID)
+	containerName := PrimaryTerminalName(fte.cfg.TenantPrefix(), fte.flowID)
 	cnt, err := fte.docker.RunContainer(
 		ctx,
 		containerName,
@@ -646,7 +647,7 @@ func (fte *flowToolsExecutor) findMissingInContainer(ctx context.Context, entrie
 		cmd = append(cmd, e.containerPath)
 	}
 
-	containerName := PrimaryTerminalName(fte.flowID)
+	containerName := PrimaryTerminalName(fte.cfg.TenantPrefix(), fte.flowID)
 	createResp, err := fte.docker.ContainerExecCreate(ctx, containerName, container.ExecOptions{
 		Cmd:          cmd,
 		AttachStdout: true,
@@ -700,7 +701,7 @@ func (fte *flowToolsExecutor) copyEntriesToContainer(ctx context.Context, entrie
 		errCh <- flowfiles.WriteFilesTar(pw, convertSyncEntriesToTarEntries(entries))
 	}()
 
-	containerName := PrimaryTerminalName(fte.flowID)
+	containerName := PrimaryTerminalName(fte.cfg.TenantPrefix(), fte.flowID)
 	copyErr := fte.docker.CopyToContainer(ctx, containerName, docker.WorkFolderPathInContainer, pr,
 		container.CopyToContainerOptions{AllowOverwriteDirWithFile: true})
 	pr.Close()
@@ -755,7 +756,7 @@ func (fte *flowToolsExecutor) Release(ctx context.Context) error {
 
 	// TODO: here better to get flow containers list and purge all of them
 	if err := fte.docker.RemoveContainer(ctx, fte.primaryLID, fte.primaryID); err != nil {
-		containerName := PrimaryTerminalName(fte.flowID)
+		containerName := PrimaryTerminalName(fte.cfg.TenantPrefix(), fte.flowID)
 		return fmt.Errorf("failed to purge container '%s': %w", containerName, err)
 	}
 
@@ -841,6 +842,7 @@ func (fte *flowToolsExecutor) GetAssistantExecutor(cfg AssistantExecutorConfig) 
 		fte.flowID, nil, nil,
 		container.ID,
 		container.LocalID.String,
+		fte.cfg.TenantPrefix(),
 		fte.docker,
 		fte.tlp,
 		time.Duration(fte.cfg.TerminalToolTimeout)*time.Second,
@@ -1090,6 +1092,7 @@ func (fte *flowToolsExecutor) GetInstallerExecutor(cfg InstallerExecutorConfig) 
 		cfg.SubtaskID,
 		container.ID,
 		container.LocalID.String,
+		fte.cfg.TenantPrefix(),
 		fte.docker,
 		fte.tlp,
 		time.Duration(fte.cfg.TerminalToolTimeout)*time.Second,
@@ -1196,6 +1199,7 @@ func (fte *flowToolsExecutor) GetCoderExecutor(cfg CoderExecutorConfig) (Context
 		cfg.SubtaskID,
 		container.ID,
 		container.LocalID.String,
+		fte.cfg.TenantPrefix(),
 		fte.docker,
 		fte.tlp,
 		time.Duration(fte.cfg.TerminalToolTimeout)*time.Second,
@@ -1273,6 +1277,7 @@ func (fte *flowToolsExecutor) GetCoderExecutor(cfg CoderExecutorConfig) (Context
 		fte.flowID,
 		cfg.TaskID,
 		cfg.SubtaskID,
+		fte.cfg.GroupID(fte.flowID),
 		fte.graphitiClient,
 	)
 	if graphitiSearch.IsAvailable() {
@@ -1319,6 +1324,7 @@ func (fte *flowToolsExecutor) GetPentesterExecutor(cfg PentesterExecutorConfig) 
 		cfg.SubtaskID,
 		container.ID,
 		container.LocalID.String,
+		fte.cfg.TenantPrefix(),
 		fte.docker,
 		fte.tlp,
 		time.Duration(fte.cfg.TerminalToolTimeout)*time.Second,
@@ -1398,6 +1404,7 @@ func (fte *flowToolsExecutor) GetPentesterExecutor(cfg PentesterExecutorConfig) 
 		fte.flowID,
 		cfg.TaskID,
 		cfg.SubtaskID,
+		fte.cfg.GroupID(fte.flowID),
 		fte.graphitiClient,
 	)
 	if graphitiSearch.IsAvailable() {
@@ -1510,6 +1517,7 @@ func (fte *flowToolsExecutor) GetGeneratorExecutor(cfg GeneratorExecutorConfig) 
 		nil,
 		container.ID,
 		container.LocalID.String,
+		fte.cfg.TenantPrefix(),
 		fte.docker,
 		fte.tlp,
 		time.Duration(fte.cfg.TerminalToolTimeout)*time.Second,
@@ -1578,6 +1586,7 @@ func (fte *flowToolsExecutor) GetRefinerExecutor(cfg RefinerExecutorConfig) (Con
 		nil,
 		container.ID,
 		container.LocalID.String,
+		fte.cfg.TenantPrefix(),
 		fte.docker,
 		fte.tlp,
 		time.Duration(fte.cfg.TerminalToolTimeout)*time.Second,
@@ -1642,6 +1651,7 @@ func (fte *flowToolsExecutor) GetMemoristExecutor(cfg MemoristExecutorConfig) (C
 		cfg.SubtaskID,
 		container.ID,
 		container.LocalID.String,
+		fte.cfg.TenantPrefix(),
 		fte.docker,
 		fte.tlp,
 		time.Duration(fte.cfg.TerminalToolTimeout)*time.Second,
@@ -1687,6 +1697,7 @@ func (fte *flowToolsExecutor) GetMemoristExecutor(cfg MemoristExecutorConfig) (C
 		fte.flowID,
 		cfg.TaskID,
 		cfg.SubtaskID,
+		fte.cfg.GroupID(fte.flowID),
 		fte.graphitiClient,
 	)
 	if graphitiSearch.IsAvailable() {
@@ -1713,6 +1724,7 @@ func (fte *flowToolsExecutor) GetEnricherExecutor(cfg EnricherExecutorConfig) (C
 		cfg.SubtaskID,
 		container.ID,
 		container.LocalID.String,
+		fte.cfg.TenantPrefix(),
 		fte.docker,
 		fte.tlp,
 		time.Duration(fte.cfg.TerminalToolTimeout)*time.Second,
@@ -1758,6 +1770,7 @@ func (fte *flowToolsExecutor) GetEnricherExecutor(cfg EnricherExecutorConfig) (C
 		fte.flowID,
 		cfg.TaskID,
 		cfg.SubtaskID,
+		fte.cfg.GroupID(fte.flowID),
 		fte.graphitiClient,
 	)
 	if graphitiSearch.IsAvailable() {

@@ -36,12 +36,16 @@ services:
         condition: service_healthy
     environment:
       - DEBUG=${DEBUG:-false}
+      - DATA_DIR=${DATA_DIR:-}
       - DOCKER_GID=998
       - CORS_ORIGINS=${CORS_ORIGINS:-}
       - COOKIE_SIGNING_SALT=${COOKIE_SIGNING_SALT:-}
       - INSTALLATION_ID=${INSTALLATION_ID:-}
       - LICENSE_KEY=${LICENSE_KEY:-}
       - ASK_USER=${ASK_USER:-false}
+      - TENANT_ID=${TENANT_ID:-}
+      - PPROF_ADDR=${PPROF_ADDR:-}
+      - DOCKER_PORTS_BASE=${DOCKER_PORTS_BASE:-}
       - OPEN_AI_KEY=${OPEN_AI_KEY:-}
       - OPEN_AI_SERVER_URL=${OPEN_AI_SERVER_URL:-}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}

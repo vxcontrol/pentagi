@@ -13,6 +13,8 @@ import (
 	"pentagi/pkg/graphiti"
 )
 
+const testGroupID = "test-group"
+
 // stubGraphitiSearcher is a minimal GraphitiSearcher test double: every method
 // returns whatever error/response was configured for it, so tests can exercise
 // the Handle() error-classification logic without a real Graphiti/Neo4j backend.
@@ -98,7 +100,7 @@ func fakeStatusError(statusCode int, body string) error {
 }
 
 func TestGraphitiSearchTool_Handle_ServerError5xx_DegradesGracefullyWithBody(t *testing.T) {
-	tool := NewGraphitiSearchTool(1, nil, nil, &stubGraphitiSearcher{
+	tool := NewGraphitiSearchTool(1, nil, nil, testGroupID, &stubGraphitiSearcher{
 		enabled: true,
 		err:     fakeStatusError(502, "<html><body>502 Bad Gateway</body></html>"),
 	})
@@ -119,7 +121,7 @@ func TestGraphitiSearchTool_Handle_ServerError5xx_DegradesGracefullyWithBody(t *
 
 func TestGraphitiSearchTool_Handle_ServerError5xx_BodyTruncatedAt512Bytes(t *testing.T) {
 	hugeBody := strings.Repeat("x", 2000)
-	tool := NewGraphitiSearchTool(1, nil, nil, &stubGraphitiSearcher{
+	tool := NewGraphitiSearchTool(1, nil, nil, testGroupID, &stubGraphitiSearcher{
 		enabled: true,
 		err:     fakeStatusError(500, hugeBody),
 	})
@@ -140,7 +142,7 @@ func TestGraphitiSearchTool_Handle_ServerError5xx_BodyTruncatedAt512Bytes(t *tes
 
 func TestGraphitiSearchTool_Handle_ClientError4xx_StaysHardWithTruncatedBody(t *testing.T) {
 	hugeBody := strings.Repeat("y", 2000)
-	tool := NewGraphitiSearchTool(1, nil, nil, &stubGraphitiSearcher{
+	tool := NewGraphitiSearchTool(1, nil, nil, testGroupID, &stubGraphitiSearcher{
 		enabled: true,
 		err:     fakeStatusError(400, hugeBody),
 	})
@@ -160,7 +162,7 @@ func TestGraphitiSearchTool_Handle_ClientError4xx_StaysHardWithTruncatedBody(t *
 }
 
 func TestGraphitiSearchTool_Handle_NetworkFailure_DegradesGracefully(t *testing.T) {
-	tool := NewGraphitiSearchTool(1, nil, nil, &stubGraphitiSearcher{enabled: true, err: fakeNetError()})
+	tool := NewGraphitiSearchTool(1, nil, nil, testGroupID, &stubGraphitiSearcher{enabled: true, err: fakeNetError()})
 
 	args := []byte(`{"search_type":"recent_context","query":"test query","message":"m"}`)
 	result, err := tool.Handle(t.Context(), GraphitiSearchToolName, args)
@@ -174,7 +176,7 @@ func TestGraphitiSearchTool_Handle_NetworkFailure_DegradesGracefully(t *testing.
 }
 
 func TestGraphitiSearchTool_Handle_ValidationError_StaysHard(t *testing.T) {
-	tool := NewGraphitiSearchTool(1, nil, nil, &stubGraphitiSearcher{enabled: true})
+	tool := NewGraphitiSearchTool(1, nil, nil, testGroupID, &stubGraphitiSearcher{enabled: true})
 
 	// Invalid search_type never reaches the graphiti client - it is rejected by
 	// Handle() itself, so this must remain a hard failure regardless of the
@@ -188,7 +190,7 @@ func TestGraphitiSearchTool_Handle_ValidationError_StaysHard(t *testing.T) {
 }
 
 func TestGraphitiSearchTool_Handle_EntityByLabel_MissingNodeLabels_GivesActionableError(t *testing.T) {
-	tool := NewGraphitiSearchTool(1, nil, nil, &stubGraphitiSearcher{enabled: true})
+	tool := NewGraphitiSearchTool(1, nil, nil, testGroupID, &stubGraphitiSearcher{enabled: true})
 
 	args := []byte(`{"search_type":"entity_by_label","query":"test query","message":"m"}`)
 	_, err := tool.Handle(t.Context(), GraphitiSearchToolName, args)
@@ -205,7 +207,7 @@ func TestGraphitiSearchTool_Handle_EntityByLabel_MissingNodeLabels_GivesActionab
 }
 
 func TestGraphitiSearchTool_Handle_EntityByLabel_WithNodeLabels_Succeeds(t *testing.T) {
-	tool := NewGraphitiSearchTool(1, nil, nil, &stubGraphitiSearcher{enabled: true})
+	tool := NewGraphitiSearchTool(1, nil, nil, testGroupID, &stubGraphitiSearcher{enabled: true})
 
 	args := []byte(`{"search_type":"entity_by_label","query":"test query","node_labels":["Vulnerability"],"message":"m"}`)
 	_, err := tool.Handle(t.Context(), GraphitiSearchToolName, args)
@@ -216,7 +218,7 @@ func TestGraphitiSearchTool_Handle_EntityByLabel_WithNodeLabels_Succeeds(t *test
 }
 
 func TestGraphitiSearchTool_Handle_EntityRelationships_MissingCenterNodeUUID_StaysHard(t *testing.T) {
-	tool := NewGraphitiSearchTool(1, nil, nil, &stubGraphitiSearcher{enabled: true})
+	tool := NewGraphitiSearchTool(1, nil, nil, testGroupID, &stubGraphitiSearcher{enabled: true})
 
 	args := []byte(`{"search_type":"entity_relationships","query":"test query","message":"m"}`)
 	_, err := tool.Handle(t.Context(), GraphitiSearchToolName, args)
@@ -227,7 +229,7 @@ func TestGraphitiSearchTool_Handle_EntityRelationships_MissingCenterNodeUUID_Sta
 }
 
 func TestGraphitiSearchTool_Handle_EntityRelationships_MalformedCenterNodeUUID_GivesActionableError(t *testing.T) {
-	tool := NewGraphitiSearchTool(1, nil, nil, &stubGraphitiSearcher{enabled: true})
+	tool := NewGraphitiSearchTool(1, nil, nil, testGroupID, &stubGraphitiSearcher{enabled: true})
 
 	// Simulates a diagnostic string, truncated ID, or otherwise non-UUID value
 	// ending up in center_node_uuid (e.g. a hallucinated or mangled value) -
@@ -247,7 +249,7 @@ func TestGraphitiSearchTool_Handle_EntityRelationships_MalformedCenterNodeUUID_G
 }
 
 func TestGraphitiSearchTool_Handle_EntityRelationships_ValidCenterNodeUUID_Succeeds(t *testing.T) {
-	tool := NewGraphitiSearchTool(1, nil, nil, &stubGraphitiSearcher{enabled: true})
+	tool := NewGraphitiSearchTool(1, nil, nil, testGroupID, &stubGraphitiSearcher{enabled: true})
 
 	args := []byte(`{"search_type":"entity_relationships","query":"test query","center_node_uuid":"f7b95dfc-ee58-4a8b-8d85-582cf117b4df","message":"m"}`)
 	_, err := tool.Handle(t.Context(), GraphitiSearchToolName, args)
@@ -285,7 +287,7 @@ func TestParseGraphitiTime(t *testing.T) {
 }
 
 func TestGraphitiSearchTool_Handle_TemporalWindow_MissingTimezone_Succeeds(t *testing.T) {
-	tool := NewGraphitiSearchTool(1, nil, nil, &stubGraphitiSearcher{enabled: true})
+	tool := NewGraphitiSearchTool(1, nil, nil, testGroupID, &stubGraphitiSearcher{enabled: true})
 
 	// Reproduces the exact production near-miss: an LLM omitted the trailing
 	// 'Z'/offset on an otherwise well-formed timestamp.
@@ -298,7 +300,7 @@ func TestGraphitiSearchTool_Handle_TemporalWindow_MissingTimezone_Succeeds(t *te
 }
 
 func TestGraphitiSearchTool_Handle_TemporalWindow_GarbageTime_StaysHard(t *testing.T) {
-	tool := NewGraphitiSearchTool(1, nil, nil, &stubGraphitiSearcher{enabled: true})
+	tool := NewGraphitiSearchTool(1, nil, nil, testGroupID, &stubGraphitiSearcher{enabled: true})
 
 	args := []byte(`{"search_type":"temporal_window","query":"test query","time_start":"not-a-date","time_end":"2026-07-25T11:53:34Z","message":"m"}`)
 	_, err := tool.Handle(t.Context(), GraphitiSearchToolName, args)
@@ -309,7 +311,7 @@ func TestGraphitiSearchTool_Handle_TemporalWindow_GarbageTime_StaysHard(t *testi
 }
 
 func TestGraphitiSearchTool_Handle_InvalidRecencyWindow_StaysHard(t *testing.T) {
-	tool := NewGraphitiSearchTool(1, nil, nil, &stubGraphitiSearcher{enabled: true})
+	tool := NewGraphitiSearchTool(1, nil, nil, testGroupID, &stubGraphitiSearcher{enabled: true})
 
 	// Argument-validation errors (not network errors) must still be treated as
 	// hard failures so the tool-call arg-fixer can actually help here.

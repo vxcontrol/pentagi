@@ -2,6 +2,7 @@ package models
 
 import (
 	"fmt"
+	"net"
 	"strconv"
 	"strings"
 
@@ -11,6 +12,7 @@ import (
 	"pentagi/cmd/installer/wizard/logger"
 	"pentagi/cmd/installer/wizard/styles"
 	"pentagi/cmd/installer/wizard/window"
+	"pentagi/pkg/config"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/vxcontrol/cloud/sdk"
@@ -41,6 +43,20 @@ func (m *ServerSettingsFormModel) BuildForm() tea.Cmd {
 		locale.ServerSettingsLicenseKeyDesc,
 		config.LicenseKey,
 		true,
+	))
+
+	fields = append(fields, m.createTextField("pentagi_tenant_id",
+		locale.ServerSettingsTenantID,
+		locale.ServerSettingsTenantIDDesc,
+		config.TenantID,
+		false,
+	))
+
+	fields = append(fields, m.createTextField("pentagi_pprof_addr",
+		locale.ServerSettingsPprofAddr,
+		locale.ServerSettingsPprofAddrDesc,
+		config.PprofAddr,
+		false,
 	))
 
 	// host and port
@@ -228,6 +244,24 @@ func (m *ServerSettingsFormModel) GetCurrentConfiguration() string {
 	licenseStatus = m.GetStyles().Muted.Render(licenseStatus)
 	sections = append(sections, fmt.Sprintf("• %s: %s", locale.ServerSettingsLicenseKeyHint, licenseStatus))
 
+	if tenantID := cfg.TenantID.Value; tenantID != "" {
+		tenantID = m.GetStyles().Info.Render(tenantID)
+		sections = append(sections, fmt.Sprintf("• %s: %s", locale.ServerSettingsTenantIDHint, tenantID))
+	} else {
+		tenantID = locale.StatusNotConfigured
+		tenantID = m.GetStyles().Muted.Render(tenantID)
+		sections = append(sections, fmt.Sprintf("• %s: %s", locale.ServerSettingsTenantIDHint, tenantID))
+	}
+
+	if pprofAddr := cfg.PprofAddr.Value; pprofAddr != "" {
+		pprofAddr = m.GetStyles().Info.Render(pprofAddr)
+		sections = append(sections, fmt.Sprintf("• %s: %s", locale.ServerSettingsPprofAddrHint, pprofAddr))
+	} else {
+		pprofAddr = locale.StatusNotConfigured
+		pprofAddr = m.GetStyles().Muted.Render(pprofAddr)
+		sections = append(sections, fmt.Sprintf("• %s: %s", locale.ServerSettingsPprofAddrHint, pprofAddr))
+	}
+
 	if listenIP := cfg.ListenIP.Value; listenIP != "" {
 		listenIP = m.GetStyles().Info.Render(listenIP)
 		sections = append(sections, fmt.Sprintf("• %s: %s", locale.ServerSettingsHostHint, listenIP))
@@ -354,6 +388,10 @@ func (m *ServerSettingsFormModel) GetHelpContent() string {
 		switch field.Key {
 		case "pentagi_license_key":
 			sections = append(sections, locale.ServerSettingsLicenseKeyHelp)
+		case "pentagi_tenant_id":
+			sections = append(sections, locale.ServerSettingsTenantIDHelp)
+		case "pentagi_pprof_addr":
+			sections = append(sections, locale.ServerSettingsPprofAddrHelp)
 		case "pentagi_server_host":
 			sections = append(sections, locale.ServerSettingsHostHelp)
 		case "pentagi_server_port":
@@ -391,7 +429,9 @@ func (m *ServerSettingsFormModel) HandleSave() error {
 	fields := m.GetFormFields()
 
 	newCfg := &controller.ServerSettingsConfig{
+		TenantID:            cfg.TenantID,
 		LicenseKey:          cfg.LicenseKey,
+		PprofAddr:           cfg.PprofAddr,
 		ListenIP:            cfg.ListenIP,
 		ListenPort:          cfg.ListenPort,
 		CorsOrigins:         cfg.CorsOrigins,
@@ -419,6 +459,18 @@ func (m *ServerSettingsFormModel) HandleSave() error {
 				}
 			}
 			newCfg.LicenseKey.Value = value
+		case "pentagi_tenant_id":
+			if err := (&config.Config{TenantID: value}).ValidateTenantID(); err != nil {
+				return err
+			}
+			newCfg.TenantID.Value = value
+		case "pentagi_pprof_addr":
+			if value != "" {
+				if _, _, err := net.SplitHostPort(value); err != nil {
+					return fmt.Errorf("invalid pprof address: must be host:port (e.g., :7777 or 127.0.0.1:7778)")
+				}
+			}
+			newCfg.PprofAddr.Value = value
 		case "pentagi_server_host":
 			newCfg.ListenIP.Value = value
 		case "pentagi_server_port":

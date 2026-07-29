@@ -109,7 +109,7 @@ func TestSanitizeContainerCachePath(t *testing.T) {
 // ── directory helpers ─────────────────────────────────────────────────────────
 
 func TestFlowFileService_Dirs(t *testing.T) {
-	svc := NewFlowFileService(nil, "/data", nil, nil)
+	svc := NewFlowFileService(nil, "/data", "", nil, nil)
 	assert.Equal(t, "/data/flow-42-data", svc.flowDataDir(42))
 	assert.Equal(t, "/data/flow-42-data/uploads", svc.flowUploadsDir(42))
 	assert.Equal(t, "/data/flow-42-data/container", svc.flowContainerDir(42))
@@ -124,7 +124,7 @@ func TestMaxUploadFileSize(t *testing.T) {
 // ── resolveCachedPath ─────────────────────────────────────────────────────────
 
 func TestResolveCachedPath(t *testing.T) {
-	svc := NewFlowFileService(nil, "/data", nil, nil)
+	svc := NewFlowFileService(nil, "/data", "", nil, nil)
 
 	tests := []struct {
 		name    string
@@ -222,7 +222,7 @@ func TestListDirEntriesRecursive_PreservesNestedPaths(t *testing.T) {
 
 func TestFlowFileService_ListFlowFiles_BothSources(t *testing.T) {
 	dataDir := t.TempDir()
-	svc := NewFlowFileService(nil, dataDir, nil, nil)
+	svc := NewFlowFileService(nil, dataDir, "", nil, nil)
 
 	uploadsDir := filepath.Join(dataDir, "flow-7-data", "uploads")
 	containerDir := filepath.Join(dataDir, "flow-7-data", "container")
@@ -251,7 +251,7 @@ func TestFlowFileService_ListFlowFiles_BothSources(t *testing.T) {
 }
 
 func TestFlowFileService_ListFlowFiles_EmptyDirs(t *testing.T) {
-	svc := NewFlowFileService(nil, t.TempDir(), nil, nil)
+	svc := NewFlowFileService(nil, t.TempDir(), "", nil, nil)
 	files, err := svc.listFlowFiles(999)
 	require.NoError(t, err)
 	assert.Empty(t, files)
@@ -496,7 +496,7 @@ func TestZipDirectory_ExcludesSymlinks(t *testing.T) {
 // ── primaryContainerName ─────────────────────────────────────────────────────
 
 func TestPrimaryContainerName(t *testing.T) {
-	assert.Equal(t, "pentagi-terminal-42", primaryContainerName(42))
+	assert.Equal(t, "pentagi-terminal-42", primaryContainerName("", 42))
 }
 
 // ── sorting ───────────────────────────────────────────────────────────────────
@@ -1211,7 +1211,7 @@ func TestFlowFileService_GetFlowFilesScenarios(t *testing.T) {
 			db := setupFlowFileServiceTestDB(t)
 			dataDir := t.TempDir()
 			ss := &flowFileCaptureSubscriptions{}
-			svc := NewFlowFileService(db, dataDir, nil, ss)
+			svc := NewFlowFileService(db, dataDir, "", nil, ss)
 
 			if tt.seedFlow != nil {
 				seedFlow(t, db, tt.seedFlow.id, tt.seedFlow.userID)
@@ -1377,7 +1377,7 @@ func TestFlowFileService_UploadFlowFilesScenarios(t *testing.T) {
 			dataDir := t.TempDir()
 			ss := &flowFileCaptureSubscriptions{}
 			fakeDocker := &fakeDockerClient{running: tt.dockerRunning}
-			svc := NewFlowFileService(db, dataDir, fakeDocker, ss)
+			svc := NewFlowFileService(db, dataDir, "", fakeDocker, ss)
 
 			if tt.flowOwner != 0 {
 				seedFlow(t, db, tt.flowID, tt.flowOwner)
@@ -1570,7 +1570,7 @@ func TestFlowFileService_UploadFlowFilesPathTraversalSecurity(t *testing.T) {
 			db := setupFlowFileServiceTestDB(t)
 			dataDir := t.TempDir()
 			ss := &flowFileCaptureSubscriptions{}
-			svc := NewFlowFileService(db, dataDir, nil, ss)
+			svc := NewFlowFileService(db, dataDir, "", nil, ss)
 			seedFlow(t, db, 1, 1)
 
 			body, contentType := flowFileMultipartBody(t,
@@ -2077,7 +2077,7 @@ func TestFlowFileService_DeleteFlowFileScenarios(t *testing.T) {
 				execCreateErr:   tt.execCreateErr,
 				execInspectCode: tt.execInspectCode,
 			}
-			svc := NewFlowFileService(db, dataDir, fakeDocker, ss)
+			svc := NewFlowFileService(db, dataDir, "", fakeDocker, ss)
 
 			if tt.seedFlow {
 				owner := tt.flowOwner
@@ -2477,7 +2477,7 @@ func TestFlowFileService_DownloadFlowFileScenarios(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			db := setupFlowFileServiceTestDB(t)
 			dataDir := t.TempDir()
-			svc := NewFlowFileService(db, dataDir, nil, nil)
+			svc := NewFlowFileService(db, dataDir, "", nil, nil)
 
 			if tt.flowOwner != 0 {
 				seedFlow(t, db, tt.flowID, tt.flowOwner)
@@ -2937,7 +2937,7 @@ func TestFlowFileService_PullFlowFilesScenarios(t *testing.T) {
 			if !tt.dockerNil {
 				dockerClient = fakeDocker
 			}
-			svc := NewFlowFileService(db, dataDir, dockerClient, ss)
+			svc := NewFlowFileService(db, dataDir, "", dockerClient, ss)
 
 			seedFlow(t, db, tt.flowID, tt.flowOwner)
 
@@ -3389,7 +3389,7 @@ func TestFlowFileService_GetFlowContainerFilesScenarios(t *testing.T) {
 			if !tt.dockerNil {
 				dockerClient = fakeDocker
 			}
-			svc := NewFlowFileService(db, dataDir, dockerClient, nil)
+			svc := NewFlowFileService(db, dataDir, "", dockerClient, nil)
 
 			if tt.flowOwner != 0 {
 				seedFlow(t, db, tt.flowID, tt.flowOwner)
@@ -3583,7 +3583,7 @@ func TestFlowFileService_AddResourcesToFlowScenarios(t *testing.T) {
 			db := setupFlowFileServiceTestDB(t)
 			dataDir := t.TempDir()
 			ss := &flowFileCaptureSubscriptions{}
-			svc := NewFlowFileService(db, dataDir, nil, ss)
+			svc := NewFlowFileService(db, dataDir, "", nil, ss)
 
 			require.NoError(t, resources.EnsureResourcesDir(dataDir))
 			if tt.flowOwner != 0 {
@@ -4127,7 +4127,7 @@ func TestFlowFileService_AddResourceFromFlowScenarios(t *testing.T) {
 			db := setupFlowFileServiceTestDB(t)
 			dataDir := t.TempDir()
 			ss := &flowFileCaptureSubscriptions{}
-			svc := NewFlowFileService(db, dataDir, nil, ss)
+			svc := NewFlowFileService(db, dataDir, "", nil, ss)
 
 			require.NoError(t, resources.EnsureResourcesDir(dataDir))
 			if tt.flowOwner != 0 {

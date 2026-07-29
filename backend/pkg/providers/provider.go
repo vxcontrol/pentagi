@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 
 	"pentagi/pkg/cast"
+	"pentagi/pkg/config"
 	"pentagi/pkg/csum"
 	"pentagi/pkg/database"
 	"pentagi/pkg/docker"
@@ -131,13 +132,12 @@ type flowProvider struct {
 	db database.Querier
 	mx *sync.RWMutex
 
+	cfg *config.Config
+
 	embedder       embeddings.Embedder
 	graphitiClient *graphiti.Client
 
-	flowID        int64
-	dataDir       string
-	publicIP      string
-	dockerNetwork string
+	flowID int64
 
 	callCounter *atomic.Int64
 
@@ -229,10 +229,10 @@ func (fp *flowProvider) Title() string {
 // userFilesListing returns the compact XML listing of user files in uploads/ and resources/
 // for injection into agent system prompts. Returns empty string if no files are present.
 func (fp *flowProvider) userFilesListing() string {
-	if fp.dataDir == "" {
+	if fp.cfg == nil || fp.cfg.DataDir == "" {
 		return ""
 	}
-	return flowfiles.FileListingForPrompt(fp.dataDir, uint64(fp.flowID))
+	return flowfiles.FileListingForPrompt(fp.cfg.DataDir, uint64(fp.flowID))
 }
 
 func (fp *flowProvider) SetTitle(title string) {
