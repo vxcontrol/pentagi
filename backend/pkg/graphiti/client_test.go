@@ -1,6 +1,9 @@
 package graphiti
 
 import (
+	"net/http"
+	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -147,4 +150,43 @@ func TestSearchMethods_Disabled(t *testing.T) {
 			tt.fn(t, client)
 		})
 	}
+}
+
+func TestNewClient_RetriesAFlakyHealthCheck(t *testing.T) {
+	t.Parallel()
+
+	var probes atomic.Int32
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if probes.Add(1) == 1 {
+			w.WriteHeader(http.StatusServiceUnavailable)
+
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"status":"ok"}`))
+	}))
+	defer server.Close()
+
+	client, err := NewClient(server.URL, 5*time.Second, true)
+	require.NoError(t, err)
+	assert.True(t, client.IsEnabled())
+	assert.EqualValues(t, 2, probes.Load(), "the first probe failed, so a second one had to run")
+}
+
+func TestNewClient_GivesUpAfterEveryAttemptFails(t *testing.T) {
+	t.Parallel()
+
+	var probes atomic.Int32
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		probes.Add(1)
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer server.Close()
+
+	_, err := NewClient(server.URL, 5*time.Second, true)
+	require.Error(t, err)
+	assert.EqualValues(t, healthCheckAttempts, probes.Load())
 }

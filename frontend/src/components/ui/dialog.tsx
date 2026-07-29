@@ -34,6 +34,10 @@ function DialogContent({ children, className, ...props }: React.ComponentProps<t
                 data-slot="dialog-content"
                 {...props}
             >
+                {/* Radix returns focus to its own DialogTrigger; these dialogs are opened from state,
+                    and their content is often unmounted before Radix's close sequence runs, so its
+                    `onCloseAutoFocus` never fires. */}
+                <FocusReturn />
                 {children}
                 <DialogPrimitive.Close
                     className="ring-offset-background focus:ring-ring data-[state=open]:bg-accent data-[state=open]:text-muted-foreground absolute top-4 right-4 rounded-sm opacity-70 transition-opacity hover:opacity-100 focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none"
@@ -119,6 +123,46 @@ function DialogTrigger({ ...props }: React.ComponentProps<typeof DialogPrimitive
     );
 }
 
+/**
+ * Rendered inside the content, so it mounts when the overlay opens and unmounts when it closes —
+ * a wrapper-level hook would instead run when the PAGE mounts, because most dialogs and sheets here
+ * render their content unconditionally and let Radix decide whether it is on screen.
+ */
+function FocusReturn() {
+    // Captured during this component's first render: by the time effects run, Radix has already
+    // moved focus inside the content.
+    const [opener] = React.useState(resolveOpener);
+
+    React.useEffect(
+        () => () => {
+            if (opener?.isConnected) {
+                opener.focus();
+            }
+        },
+        [opener],
+    );
+
+    return null;
+}
+
+function resolveOpener(): HTMLElement | null {
+    const active = document.activeElement as HTMLElement | null;
+    const menu = active?.closest('[role="menu"]');
+
+    if (!menu) {
+        return active;
+    }
+
+    // Radix labels dropdown content with its trigger's id; context-menu content carries no such
+    // link, so the still-open trigger has to be found by slot.
+    const triggerId = menu.getAttribute('aria-labelledby');
+    const trigger = triggerId
+        ? document.getElementById(triggerId)
+        : document.querySelector<HTMLElement>('[data-slot="context-menu-trigger"][data-state="open"]');
+
+    return trigger ?? active;
+}
+
 export {
     Dialog,
     DialogClose,
@@ -128,4 +172,5 @@ export {
     DialogHeader,
     DialogTitle,
     DialogTrigger,
+    FocusReturn,
 };

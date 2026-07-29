@@ -204,7 +204,7 @@ function FlowFiles() {
 
             {isDragging && (
                 <div className="bg-primary/10 border-primary pointer-events-none absolute inset-0 z-30 flex items-center justify-center rounded-lg border-2 border-dashed">
-                    <div className="text-primary flex flex-col items-center gap-2">
+                    <div className="text-link flex flex-col items-center gap-2">
                         <FolderUp className="size-8" />
                         <span className="text-sm font-medium">Drop files to upload</span>
                     </div>
@@ -233,6 +233,7 @@ function FlowFiles() {
                                             {field.value && (
                                                 <InputGroupAddon align="inline-end">
                                                     <InputGroupButton
+                                                        aria-label="Clear file search"
                                                         onClick={search.resetSearch}
                                                         type="button"
                                                     >
@@ -250,6 +251,7 @@ function FlowFiles() {
                             <TooltipTrigger asChild>
                                 <span>
                                     <Button
+                                        aria-label="Upload files"
                                         disabled={upload.isUploading || isLoading}
                                         onClick={upload.openFilePicker}
                                         size="icon-sm"
@@ -272,6 +274,7 @@ function FlowFiles() {
                             <TooltipTrigger asChild>
                                 <span>
                                     <Button
+                                        aria-label="Attach resources"
                                         disabled={isAttachResourcesDisabled}
                                         onClick={handleOpenAttachResourcesDialog}
                                         size="icon-sm"
@@ -295,6 +298,7 @@ function FlowFiles() {
                             <TooltipTrigger asChild>
                                 <span>
                                     <Button
+                                        aria-label="Pull from container"
                                         disabled={isPullDisabled}
                                         onClick={handleOpenPullDialog}
                                         size="icon-sm"

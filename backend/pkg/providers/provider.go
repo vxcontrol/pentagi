@@ -187,7 +187,6 @@ func (fp *flowProvider) SetProvider(ctx context.Context, newProvider provider.Pr
 	fp.mx.Lock()
 	defer fp.mx.Unlock()
 
-	// Update provider-specific fields
 	fp.Provider = newProvider
 
 	var err error

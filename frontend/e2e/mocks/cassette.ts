@@ -28,6 +28,14 @@ export const mergeCassettes = (base: Cassette, override: Cassette): Cassette => 
 });
 
 export interface GraphQLCassetteEntry extends GraphQLPayload, WorldFlagged {
+    /**
+     * Served verbatim in place of the `{ data, errors }` envelope. The GraphQL endpoint sits behind
+     * the same auth middleware as the REST ones, so a rejected request answers with the REST error
+     * body and never reaches gqlgen.
+     */
+    body?: unknown;
+    /** A transport-level status the client reads instead of the GraphQL `errors` array. */
+    status?: number;
     variables?: Record<string, unknown>;
 }
 
@@ -51,6 +59,13 @@ export interface RestCassetteEntry extends WorldFlagged {
      * a broken image while the request still counts as matched.
      */
     contentType?: string;
+    /**
+     * Subset match against the request's query string, the counterpart to `bodySubset` for
+     * endpoints that carry their payload there and send no body — a delete addressed by
+     * `?paths[]=…` is otherwise answered success whatever it names. Repeated keys are compared
+     * as the full list of values.
+     */
+    querySubset?: Record<string, string | string[]>;
     status?: number;
 }
 

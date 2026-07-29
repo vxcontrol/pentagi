@@ -137,7 +137,10 @@ createServer(async (request, response) => {
         }
 
         const rule = pickAnswer(payload);
-        const toolNames = (payload.tools ?? []).map((tool) => tool.function?.name ?? tool.type).join(',');
+        // Defensive end to end because this runs outside the try/catch above, where a throw kills
+        // the process: the top-level guard admits {"tools":5} and {"tools":[null]} alike.
+        const toolList = Array.isArray(payload.tools) ? payload.tools : [];
+        const toolNames = toolList.map((tool) => tool?.function?.name ?? tool?.type ?? '?').join(',');
 
         console.log(`[mock-llm] ${rule.label}: ${payload.stream ? 'stream' : 'plain'} tools=[${toolNames}]`);
         respondCompletion(response, payload, rule);

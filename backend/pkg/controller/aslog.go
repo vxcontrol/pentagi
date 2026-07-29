@@ -287,7 +287,7 @@ func (aslw *flowAssistantLogWorker) workerMsgUpdater(
 	contentBuf := bytes.NewBuffer(contentData)
 	thinkingData := make([]byte, 0, defaultMaxMessageLength)
 	thinkingBuf := bytes.NewBuffer(thinkingData)
-	wasUpdated := false // track if we actually updated the record
+	wasUpdated := false
 
 	msgLog, err := aslw.db.GetFlowAssistantLog(ctx, msgID)
 	if err != nil {

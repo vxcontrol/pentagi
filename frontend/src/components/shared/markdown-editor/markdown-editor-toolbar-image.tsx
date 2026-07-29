@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
+import { returnFocusToEditor } from './markdown-editor-focus';
 import { ImageEditForm } from './markdown-editor-image-edit-form';
 
 interface ImagePopoverProps {
@@ -42,10 +43,7 @@ export function ImagePopover({ disabled, editor }: ImagePopoverProps) {
             <PopoverContent
                 align="start"
                 className="w-80"
-                onCloseAutoFocus={(event) => {
-                    event.preventDefault();
-                    editor.commands.focus();
-                }}
+                onCloseAutoFocus={returnFocusToEditor(editor)}
             >
                 <ImageEditForm
                     editor={editor}

@@ -21,10 +21,10 @@ export const normalizeForFilter = (text: string): string =>
  * allocation instead of N.
  *
  * The matcher uses substring matching semantics, with case + diacritic
- * folding (`café` matches `cafe`). It is intentionally close to TanStack
- * Table's default `'includesString'` so a single instance can drive both
- * the list page's column filter and the detail page's Prev/Next subset
- * without the two paths drifting out of sync.
+ * folding (`café` matches `cafe`). It backs both the DataTable global
+ * filter and detail-navigation's Prev/Next subset — the same `?q=` drives
+ * both, so a semantics change here shifts what matches on every list page
+ * and its detail pager at once.
  *
  * - Empty query → every row passes (matcher returns `true`).
  * - `text === null | undefined` with a non-empty query → no match.

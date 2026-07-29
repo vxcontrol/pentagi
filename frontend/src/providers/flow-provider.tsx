@@ -34,9 +34,19 @@ import {
     TerminalLogAddedDocument,
     VectorStoreLogAddedDocument,
 } from '@/graphql/types';
+import { isNotFoundError } from '@/lib/errors';
 import { Log } from '@/lib/log';
 
-const isFlowNotFoundError = (error: Error) => /no rows in result set|not found/i.test(error.message);
+/**
+ * Under `errorPolicy:'all'` a partial not-found error surfaces alongside a flow that loaded fine, so
+ * the not-found disjunct gates on `!flowData?.flow`. Without the gate that partial error redirects
+ * the user off a flow that rendered correctly.
+ */
+export const deriveFlowMissing = (
+    flowData: null | undefined | { flow: unknown },
+    flowError: undefined | { message: string },
+): boolean =>
+    Boolean(flowData && !flowData.flow) || Boolean(flowError && !flowData?.flow && isNotFoundError(flowError));
 
 interface FlowContextValue {
     assistantLogs: Array<AssistantLogFragmentFragment>;
@@ -92,9 +102,9 @@ export function FlowProvider({ children }: FlowProviderProps) {
     // A real load failure that left nothing to show (cold cache + backend error on a
     // deep link), as opposed to a genuine not-found. The detail page renders this as an
     // in-page ErrorState + Retry instead of silently bouncing to the list.
-    const flowLoadError = flowError && !flowData?.flow && !isFlowNotFoundError(flowError) ? flowError : undefined;
+    const flowLoadError = flowError && !flowData?.flow && !isNotFoundError(flowError) ? flowError : undefined;
 
-    const isFlowMissing = Boolean(flowData && !flowData.flow) || Boolean(flowError && isFlowNotFoundError(flowError));
+    const isFlowMissing = deriveFlowMissing(flowData, flowError);
 
     const { data: assistantsData, loading: isAssistantsLoading } = useQuery(AssistantsDocument, {
         fetchPolicy: 'cache-first',
@@ -196,7 +206,7 @@ export function FlowProvider({ children }: FlowProviderProps) {
             return;
         }
 
-        if (isFlowNotFoundError(flowError)) {
+        if (isNotFoundError(flowError)) {
             toast.error('Flow not found', { id: 'flow-load-error' });
         }
 

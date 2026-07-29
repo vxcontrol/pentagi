@@ -15,6 +15,7 @@ import {
     DetailNavigationToolbar,
 } from '@/components/shared/detail-navigation';
 import { DetailSplitLayout } from '@/components/shared/detail-split-layout';
+import { ErrorState } from '@/components/shared/error-state';
 import { InlineEditInput, useInlineEdit } from '@/components/shared/inline-edit';
 import { type EditorViewMode, EditorViewModeToggle, MarkdownEditorField } from '@/components/shared/markdown-editor';
 import { UnsavedChangesDialog, useUnsavedChangesGuard } from '@/components/shared/unsaved-changes';
@@ -39,6 +40,7 @@ import { useTemplateDetailNavigation } from '@/features/templates/use-template-d
 import { FlowTemplateDocument } from '@/graphql/types';
 import { useAppForm } from '@/hooks/use-app-form';
 import { useBreakpoint } from '@/hooks/use-breakpoint';
+import { isNotFoundError } from '@/lib/errors';
 import { routes } from '@/lib/routes';
 import { cn } from '@/lib/utils';
 import { type Template, useTemplates } from '@/providers/templates-provider';
@@ -233,9 +235,23 @@ const renderTemplateItem = (item: Template, isCurrent: boolean): ReactNode => (
     <span className={cn('min-w-0 flex-1 truncate', isCurrent && 'font-medium')}>{item.title}</span>
 );
 
+// One React element serves every `/templates/:templateId`, so without a key the form instance — which sets
+// `keepDirtyValues` so a subscription resync cannot wipe an unsaved body — carried one template's edited text
+// onto the next template and Save wrote it to the wrong row. Keying by id gives each entity its own form, the
+// way knowledge.tsx already keys <KnowledgeForm>. It also stops `/templates/new` inheriting an abandoned draft.
 function Template() {
-    const navigate = useNavigate();
     const { templateId } = useParams<{ templateId?: string }>();
+
+    return (
+        <TemplateForm
+            key={templateId ?? 'new'}
+            templateId={templateId}
+        />
+    );
+}
+
+function TemplateForm({ templateId }: { templateId?: string }) {
+    const navigate = useNavigate();
     const { createTemplate, deleteTemplate, updateTemplate } = useTemplates();
 
     const { isDesktop, isMobile } = useBreakpoint();
@@ -261,10 +277,17 @@ function Template() {
         stopEdit: handleTemplateRenameCancel,
     } = useInlineEdit({ resetKey: templateId });
 
-    const { data: templateData, loading: isLoadingTemplate } = useQuery(
-        FlowTemplateDocument,
-        templateId && !isNew ? { variables: { templateId } } : skipToken,
-    );
+    const {
+        data: templateData,
+        error: templateError,
+        loading: isLoadingTemplate,
+        refetch: refetchTemplate,
+    } = useQuery(FlowTemplateDocument, templateId && !isNew ? { variables: { templateId } } : skipToken);
+
+    const template = templateData?.flowTemplate;
+    // A real load failure that left nothing to show, as opposed to a genuine not-found: the page
+    // renders it as an in-page ErrorState + Retry instead of the "not found" card. Mirrors flow.
+    const templateLoadError = templateError && !template && !isNotFoundError(templateError) ? templateError : undefined;
 
     // `values` re-syncs the form whenever the cache refreshes (an inline rename, a refetch), while
     // `keepDirtyValues` preserves the user's in-flight edits — without it an external re-emit would
@@ -345,7 +368,9 @@ function Template() {
                     await createTemplate(values.title, values.text);
                 } else if (templateId) {
                     await updateTemplate(templateId, { text: values.text, title: values.title });
-                    reset(values, { keepDefaultValues: false });
+                    // See knowledge-form.tsx: the form-level `resetOptions` are merged into every manual
+                    // reset, so a post-save reset inherits `keepDirtyValues` unless it opts out.
+                    reset(values, { keepDefaultValues: false, keepDirtyValues: false });
                 }
 
                 return true;
@@ -413,7 +438,7 @@ function Template() {
     }, [pendingPreset, setValue]);
 
     const hasTemplate = !!templateData?.flowTemplate;
-    const isTemplatePending = !isNew && (isLoadingTemplate || !hasTemplate);
+    const isTemplatePending = !isNew && !hasTemplate;
     const isTemplateMissing = !isNew && !isLoadingTemplate && !hasTemplate;
 
     const pageHeader = (
@@ -456,14 +481,6 @@ function Template() {
                 </AppHeaderContent>
                 {!isTemplateMissing && (
                     <AppHeaderActions>
-                        <AppHeaderAction
-                            disabled={isTemplatePending || (!isNew && !hasUnsavedChanges)}
-                            form="template-form"
-                            icon={<Save />}
-                            label={isNew ? 'Create' : 'Save'}
-                            loading={isSaving}
-                            type="submit"
-                        />
                         {!isNew && !isMobile && (
                             <DetailNavigationToolbar<Template>
                                 controller={templateNav}
@@ -472,6 +489,14 @@ function Template() {
                                 sheetTitle="Templates"
                             />
                         )}
+                        <AppHeaderAction
+                            disabled={isTemplatePending || (!isNew && !hasUnsavedChanges)}
+                            form="template-form"
+                            icon={<Save />}
+                            label={isNew ? 'Create' : 'Save'}
+                            loading={isSaving}
+                            type="submit"
+                        />
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                                 <Button
@@ -725,7 +750,7 @@ function Template() {
         />
     );
 
-    if (!isNew && isLoadingTemplate) {
+    if (!isNew && isLoadingTemplate && !template) {
         return (
             <div className={isDesktop ? 'flex h-[100dvh] min-h-0 flex-col' : 'flex min-h-[100dvh] flex-col'}>
                 {pageHeader}
@@ -736,7 +761,22 @@ function Template() {
         );
     }
 
-    if (!isNew && !isLoadingTemplate && !templateData?.flowTemplate) {
+    if (templateLoadError) {
+        return (
+            <div className={isDesktop ? 'flex h-[100dvh] min-h-0 flex-col' : 'flex min-h-[100dvh] flex-col'}>
+                {pageHeader}
+                <div className="flex flex-1 flex-col gap-4 p-4">
+                    <ErrorState
+                        message={templateLoadError.message}
+                        onRetry={() => refetchTemplate()}
+                        title="Error loading template"
+                    />
+                </div>
+            </div>
+        );
+    }
+
+    if (!isNew && !isLoadingTemplate && !template) {
         return (
             <div className={isDesktop ? 'flex h-[100dvh] min-h-0 flex-col' : 'flex min-h-[100dvh] flex-col'}>
                 {pageHeader}

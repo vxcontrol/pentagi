@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"pentagi/pkg/graph/model"
+	"pentagi/pkg/providers/openai"
 	"pentagi/pkg/providers/pconfig"
 
 	"github.com/stretchr/testify/assert"
@@ -206,4 +207,78 @@ func TestConvertAgentConfigExtraBodyNilStaysNil(t *testing.T) {
 	assert.Nil(t, from.ExtraBody, "absent extra_body must stay nil, not become an empty map")
 
 	assert.Nil(t, ConvertAgentConfigToGqlModel(from).ExtraBody)
+}
+
+func ptr[T any](value T) *T { return &value }
+
+func TestConvertAgentConfigCallOptionFieldsRoundTrip(t *testing.T) {
+	from := ConvertAgentConfigFromGqlModel(&model.AgentConfig{
+		Model:            "m",
+		MinP:             ptr(0.05),
+		N:                ptr(3),
+		JSON:             ptr(true),
+		ResponseMimeType: ptr("application/json"),
+	})
+	require.NotNil(t, from)
+	assert.Equal(t, 0.05, from.MinP)
+	assert.Equal(t, 3, from.N)
+	assert.True(t, from.JSON)
+	assert.Equal(t, "application/json", from.ResponseMIMEType)
+
+	back := ConvertAgentConfigToGqlModel(from)
+	require.NotNil(t, back)
+	require.NotNil(t, back.MinP)
+	require.NotNil(t, back.N)
+	require.NotNil(t, back.JSON)
+	require.NotNil(t, back.ResponseMimeType)
+	assert.Equal(t, 0.05, *back.MinP)
+	assert.Equal(t, 3, *back.N)
+	assert.True(t, *back.JSON)
+	assert.Equal(t, "application/json", *back.ResponseMimeType)
+}
+
+// pconfig gates each emitter on the raw key being PRESENT, not on its value, so a zero written
+// through would switch the option on: `json: false` must not reach the LLM as WithJSONMode().
+func TestConvertAgentConfigZeroCallOptionFieldsStayAbsent(t *testing.T) {
+	from := ConvertAgentConfigFromGqlModel(&model.AgentConfig{
+		Model:            "m",
+		MinP:             ptr(0.0),
+		N:                ptr(0),
+		JSON:             ptr(false),
+		ResponseMimeType: ptr(""),
+	})
+	require.NotNil(t, from)
+
+	options := from.BuildOptions()
+	call := llms.CallOptions{}
+	for _, option := range options {
+		option(&call)
+	}
+
+	assert.False(t, call.JSONMode, "json:false must not enable JSON mode")
+	assert.Nil(t, call.N, "n:0 must not reach the request as an explicit parameter")
+	assert.Empty(t, call.ResponseMIMEType)
+}
+
+// The shipped simple_json default carries `json: true`; saving a provider through the UI used to
+// strip it, so the reloaded config called the LLM without JSON mode while the built-in one did not.
+func TestShippedSimpleJSONKeepsJSONModeThroughTheGraphQLRoundTrip(t *testing.T) {
+	pc, err := openai.DefaultProviderConfig()
+	require.NoError(t, err)
+	require.NotNil(t, pc.SimpleJSON)
+	require.True(t, pc.SimpleJSON.JSON, "the shipped default is what makes this test meaningful")
+
+	gql := ConvertProviderConfigToGqlModel(pc)
+	require.NotNil(t, gql)
+
+	restored := ConvertAgentsConfigFromGqlModel(gql)
+	require.NotNil(t, restored)
+	require.NotNil(t, restored.SimpleJSON)
+
+	call := llms.CallOptions{}
+	for _, option := range restored.SimpleJSON.BuildOptions() {
+		option(&call)
+	}
+
+	assert.True(t, call.JSONMode, "the simple_json agent must still ask for JSON mode after a save")
 }

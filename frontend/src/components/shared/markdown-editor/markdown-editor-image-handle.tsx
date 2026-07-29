@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover';
 
+import { returnFocusToEditor } from './markdown-editor-focus';
 import { ImageEditForm } from './markdown-editor-image-edit-form';
 import { getEditorScrollParent } from './markdown-editor-styles';
 
@@ -45,10 +46,7 @@ export function ImageHandle({ editor }: { editor: Editor }) {
                 align="start"
                 className="w-80"
                 data-image-handle=""
-                onCloseAutoFocus={(event) => {
-                    event.preventDefault();
-                    editor.commands.focus();
-                }}
+                onCloseAutoFocus={returnFocusToEditor(editor)}
                 onOpenAutoFocus={(event) => {
                     // The popover appears when an image is selected — keep focus in the doc so it doesn't steal it;
                     // the user clicks into the URL field only to actually edit.

@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TooltipProvider } from '@/components/ui/tooltip';
 
-import { cycleColumnSort, DataTable } from './data-table';
+import { cycleColumnSort, DataTable, DataTableColumnHeader } from './data-table';
 
 interface Row {
     id: string;
@@ -861,6 +861,32 @@ describe('DataTable — multi-column search', () => {
         expect(screen.getByText('Charlie')).toBeInTheDocument();
     });
 
+    it('folds diacritics so an unaccented query matches an accented cell', async () => {
+        const user = userEvent.setup();
+        const accentedRows: MultiRow[] = [
+            { id: 'a', name: 'Café Runner', role: 'admin' },
+            { id: 'b', name: 'Plain', role: 'user' },
+        ];
+
+        render(
+            <DataTable<MultiRow>
+                columns={MULTI_COLUMNS}
+                data={accentedRows}
+                filterPlaceholder="Filter..."
+            />,
+            { wrapper: Wrapper },
+        );
+
+        await user.type(screen.getByPlaceholderText('Filter...'), 'cafe');
+
+        // The list filter shares matching semantics with detail-navigation's
+        // Prev/Next subset — if this stops matching, the two have diverged.
+        await waitFor(() => {
+            expect(screen.queryByText('Plain')).not.toBeInTheDocument();
+        });
+        expect(screen.getByText('Café Runner')).toBeInTheDocument();
+    });
+
     it('narrows the search when the picker disables a candidate', async () => {
         const user = userEvent.setup();
         render(
@@ -1017,6 +1043,58 @@ describe('DataTable — multi-column search', () => {
         expect(screen.queryByRole('button', { name: /Search in/ })).not.toBeInTheDocument();
         // The "Columns" trigger still renders.
         expect(screen.getByRole('button', { name: /Columns/ })).toBeInTheDocument();
+    });
+});
+
+describe('DataTable — sort state is exposed to assistive technology', () => {
+    const SORTABLE_COLUMNS: ColumnDef<Row>[] = [
+        {
+            accessorKey: 'name',
+            header: ({ column }) => (
+                <DataTableColumnHeader
+                    column={column}
+                    title="Name"
+                />
+            ),
+        },
+        { enableSorting: false, header: 'Actions', id: 'actions' },
+    ];
+
+    const nameHeader = () => screen.getByRole('columnheader', { name: 'Name' });
+
+    it('cycles `aria-sort` on the header cell as the column is sorted', () => {
+        render(
+            <DataTable<Row>
+                columns={SORTABLE_COLUMNS}
+                data={ROWS}
+            />,
+            { wrapper: Wrapper },
+        );
+
+        expect(nameHeader()).toHaveAttribute('aria-sort', 'none');
+
+        const sortButton = screen.getByRole('button', { name: 'Name' });
+
+        fireEvent.click(sortButton);
+        expect(nameHeader()).toHaveAttribute('aria-sort', 'ascending');
+
+        fireEvent.click(sortButton);
+        expect(nameHeader()).toHaveAttribute('aria-sort', 'descending');
+
+        fireEvent.click(sortButton);
+        expect(nameHeader()).toHaveAttribute('aria-sort', 'none');
+    });
+
+    it('omits `aria-sort` on a column that cannot be sorted', () => {
+        render(
+            <DataTable<Row>
+                columns={SORTABLE_COLUMNS}
+                data={ROWS}
+            />,
+            { wrapper: Wrapper },
+        );
+
+        expect(screen.getByRole('columnheader', { name: 'Actions' })).not.toHaveAttribute('aria-sort');
     });
 });
 

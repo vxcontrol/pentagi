@@ -365,7 +365,7 @@ export function FileManager({
         return (
             <Button
                 aria-label={sortHeaderAriaLabel(column, direction)}
-                className="text-muted-foreground hover:text-primary -mx-2 flex h-auto justify-start gap-1.5 px-2 py-1 text-xs font-medium no-underline hover:no-underline"
+                className="text-muted-foreground hover:text-link -mx-2 flex h-auto justify-start gap-1.5 px-2 py-1 text-xs font-medium no-underline hover:no-underline"
                 onClick={() => toggleSort(column)}
                 variant="link"
             >

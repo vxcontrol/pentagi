@@ -44,7 +44,6 @@ import {
     variableUseRegex,
 } from '@/components/shared/markdown-editor';
 
-type AgentPrompt = AgentPrompts;
 type AgentPrompts = { human?: DefaultPrompt; system: DefaultPrompt };
 
 import {
@@ -285,8 +284,22 @@ function FormMarkdownItem<T extends FieldValues>({
     );
 }
 
+// Same class as templates: one element serves every `/settings/prompts/:promptId`, so a POP across prompt
+// URLs kept the previous prompt's dirty template — and the previous `activeTab`, which on a tool prompt renders
+// no TabsContent and left the header Save submitting a form id that no longer exists. A key per prompt gives
+// both a fresh start.
 function SettingsPrompt() {
     const { promptId } = useParams<{ promptId: string }>();
+
+    return (
+        <SettingsPromptEditor
+            key={promptId ?? 'new'}
+            promptId={promptId}
+        />
+    );
+}
+
+function SettingsPromptEditor({ promptId }: { promptId?: string }) {
     const { isDesktop } = useBreakpoint();
 
     const { data, error, loading, refetch } = useQuery(SettingsPromptsDocument);
@@ -364,7 +377,7 @@ function SettingsPrompt() {
 
             if (activeTab === 'system') {
                 if (promptInfo.type === 'agent') {
-                    const agentData = promptInfo.data as AgentPrompt | AgentPrompts;
+                    const agentData = promptInfo.data as AgentPrompts;
                     promptType = agentData.system.type;
                 } else {
                     const toolData = promptInfo.data as DefaultPrompt;
@@ -429,7 +442,7 @@ function SettingsPrompt() {
 
         const { agents, tools } = defaultPrompts;
 
-        const agentData = agents?.[promptId as keyof typeof agents] as AgentPrompt | AgentPrompts | undefined;
+        const agentData = agents?.[promptId as keyof typeof agents] as AgentPrompts | undefined;
 
         if (agentData) {
             const userSystemPrompt = userDefined?.find((p) => p.type === agentData.system.type);
@@ -481,7 +494,7 @@ function SettingsPrompt() {
         if (activeTab === 'system') {
             variables =
                 promptInfo.type === 'agent'
-                    ? (promptInfo.data as AgentPrompt | AgentPrompts)?.system?.variables || []
+                    ? (promptInfo.data as AgentPrompts)?.system?.variables || []
                     : (promptInfo.data as DefaultPrompt)?.variables || [];
         } else if (activeTab === 'human' && promptInfo.type === 'agent' && promptInfo.hasHuman) {
             variables = (promptInfo.data as AgentPrompts)?.human?.variables || [];
@@ -529,7 +542,7 @@ function SettingsPrompt() {
             let promptType: PromptType;
 
             if (promptInfo.type === 'agent') {
-                const agentData = promptInfo.data as AgentPrompt | AgentPrompts;
+                const agentData = promptInfo.data as AgentPrompts;
                 promptType = agentData.system.type;
             } else {
                 const toolData = promptInfo.data as DefaultPrompt;
@@ -727,7 +740,7 @@ function SettingsPrompt() {
         </AppHeader>
     );
 
-    if (loading) {
+    if (loading && !data) {
         return (
             <>
                 {pageHeader}
@@ -741,7 +754,7 @@ function SettingsPrompt() {
         );
     }
 
-    if (error) {
+    if (error && !data) {
         return (
             <>
                 {pageHeader}

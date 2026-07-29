@@ -65,3 +65,46 @@ describe('normalizeLinkUrl — prepend https to scheme-less input, validate prot
         expect(normalizeLinkUrl(input)).toBeNull();
     });
 });
+
+describe('whitespace and unknown schemes are rejected, not laundered into the document', () => {
+    // `new URL()` accepts a space, so the raw candidate persisted as `[hello](https://example.com/my page)` —
+    // which reloads with the link destroyed and the brackets leaking into the text.
+    it.each(['example.com/my page', 'https://example.com/a b', ' https://example.com/a\tb '])(
+        'rejects a URL containing whitespace: %s',
+        (value) => {
+            expect(normalizeLinkUrl(value)).toBeNull();
+            expect(normalizeImageSrc(value)).toBeNull();
+        },
+    );
+
+    // `https://` was prefixed onto anything unrecognised, so `ftp://host/file` became `https://ftp://host/file`
+    // — parsed as host `ftp`, shown as valid, and persisted as a dead link with no error.
+    it.each(['ftp://example.com/a', 'chrome://settings', 'ssh://host/x', 'file:///etc/passwd'])(
+        'rejects the unknown scheme %s instead of prefixing https:// onto it',
+        (value) => {
+            expect(normalizeLinkUrl(value)).toBeNull();
+        },
+    );
+
+    // Values the guard must NOT catch: a scheme-less host:port reads like a scheme but is ordinary input.
+    it.each(['example.com:8080/path', 'localhost:3000', 'localhost:3000/a', 'a.b.c:9200/_search'])(
+        'still accepts the scheme-less host:port %s',
+        (value) => {
+            expect(normalizeLinkUrl(value)).toBe(`https://${value}`);
+        },
+    );
+
+    it('still accepts a protocol-relative URL', () => {
+        expect(normalizeImageSrc('//cdn.example.com/a.png')).toBe('https://cdn.example.com/a.png');
+    });
+
+    // Byte-fidelity: routing the value through `new URL().href` would rewrite all three, which is why the fix
+    // rejects whitespace rather than re-encoding.
+    it.each([
+        ['example.com', 'https://example.com'],
+        ['https://example.com/{{HOST}}/x', 'https://example.com/{{HOST}}/x'],
+        ['https://example.com/путь', 'https://example.com/путь'],
+    ])('keeps %s byte-identical', (input, expected) => {
+        expect(normalizeLinkUrl(input)).toBe(expected);
+    });
+});

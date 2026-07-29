@@ -39,6 +39,17 @@ const isSubsetMatch = (expected?: Record<string, unknown>, actual?: Record<strin
 
 const sleep = (delayMs: number) => new Promise<void>((resolve) => setTimeout(resolve, delayMs));
 
+/** Repeated keys (`paths[]=a&paths[]=b`) collapse to the full list, so a subset match sees both. */
+const queryRecord = (search?: URLSearchParams): Record<string, string | string[]> =>
+    Object.fromEntries(
+        [...(search?.keys() ?? [])]
+            .map((key) => [key, search!.getAll(key)])
+            .map(([key, values]) => [key, (values as string[]).length > 1 ? values : (values as string[])[0]]),
+    );
+
+export const subscriptionStreamKey = (operationName: string, variables?: Record<string, unknown>): string =>
+    `sub:${operationName}:${stableStringify(variables ?? {})}`;
+
 export interface MockSocket {
     close: (options?: { code?: number; reason?: string }) => unknown;
 }
@@ -100,29 +111,46 @@ export class MockWorld {
             const candidates = this.eligible(matching);
 
             if (matching && candidates?.length) {
-                return this.nextEntry(`gql:${operationName}:${stableStringify(variables ?? {})}`, candidates, matching);
+                // Same cursor rule as matchRest below: key on the selected entries' pins, so an
+                // operation whose variables carry a per-call volatile field still advances its
+                // sequence instead of re-serving step one.
+                const signature = matching.map((entry) => stableStringify(entry.variables ?? null)).join('|');
+
+                return this.nextEntry(`gql:${operationName}:${signature}`, candidates, matching);
             }
         }
 
         return undefined;
     }
 
-    matchRest(method: string, pathname: string, body?: Record<string, unknown>): RestCassetteEntry | undefined {
+    matchRest(
+        method: string,
+        pathname: string,
+        body?: Record<string, unknown>,
+        search?: URLSearchParams,
+    ): RestCassetteEntry | undefined {
         const normalized = pathname.replace(/\/+$/, '');
         const key = Object.keys(this.cassette.rest ?? {}).find((candidate) => {
             const [candidateMethod, candidatePath = ''] = candidate.split(' ');
 
             return candidateMethod === method && candidatePath.replace(/\/+$/, '') === normalized;
         });
-        const matching = (key ? this.cassette.rest?.[key] : undefined)?.filter((entry) =>
-            isSubsetMatch(entry.bodySubset, body),
+        const query = queryRecord(search);
+        const matching = (key ? this.cassette.rest?.[key] : undefined)?.filter(
+            (entry) => isSubsetMatch(entry.bodySubset, body) && isSubsetMatch(entry.querySubset, query),
         );
         const candidates = this.eligible(matching);
 
-        // Include the body in the cursor key (as the GraphQL half keys on variables): two
-        // body-differentiated sequences for one path must not reset each other's cursor.
+        // Key the cursor on which entries the request selected — their pins — not the raw body/query.
+        // Two payload-differentiated sequences still get distinct keys (their entries pin different
+        // subsets), but a request carrying a per-call volatile field (an idempotency key, a timestamp)
+        // no longer fragments its own cursor into a fresh sequence on every call.
+        const signature = matching
+            ?.map((entry) => stableStringify([entry.bodySubset ?? null, entry.querySubset ?? null]))
+            .join('|');
+
         return matching && candidates?.length
-            ? this.nextEntry(`rest:${method}:${normalized}:${stableStringify(body ?? {})}`, candidates, matching)
+            ? this.nextEntry(`rest:${method}:${normalized}:${signature}`, candidates, matching)
             : undefined;
     }
 
@@ -136,7 +164,7 @@ export class MockWorld {
 
         // Key on the request's variables, not the entry's: an entry written without variables would
         // otherwise merge every flow's subscribers onto one stream, and the second would join delta-only.
-        return entry ? { entry, streamKey: `sub:${operationName}:${stableStringify(variables ?? {})}` } : undefined;
+        return entry ? { entry, streamKey: subscriptionStreamKey(operationName, variables) } : undefined;
     }
 
     raiseFlag(flag: string): void {
@@ -155,6 +183,10 @@ export class MockWorld {
 
     reportUnmatchedSubscription(description: string): void {
         this.unmatchedSubscriptions.push(description);
+    }
+
+    subscriberCount(streamKey: string): number {
+        return this.streams.get(streamKey)?.subscribers.size ?? 0;
     }
 
     subscribeStream(streamKey: string, entry: SubscriptionCassetteEntry, subscriber: StreamSubscriber): () => void {

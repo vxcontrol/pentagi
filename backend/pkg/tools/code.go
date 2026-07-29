@@ -126,7 +126,6 @@ func (c *code) Handle(ctx context.Context, name string, args json.RawMessage) (s
 			"filters":       filters,
 		})
 
-		// Execute multiple queries and collect all documents
 		var allDocs []schema.Document
 		for i, query := range action.Questions {
 			queryLogger := logger.WithFields(logrus.Fields{
@@ -154,7 +153,6 @@ func (c *code) Handle(ctx context.Context, name string, args json.RawMessage) (s
 			"total_docs_before_dedup": len(allDocs),
 		}).Debug("all queries completed")
 
-		// Merge, deduplicate, sort by score, and limit results
 		docs := MergeAndDeduplicateDocs(allDocs, codeVectorStoreResultLimit)
 
 		logger.WithFields(logrus.Fields{
@@ -202,7 +200,6 @@ func (c *code) Handle(ctx context.Context, name string, args json.RawMessage) (s
 				logger.WithError(err).Error("failed to marshal filters")
 				return "", fmt.Errorf("failed to marshal filters: %w", err)
 			}
-			// Join all queries for logging
 			queriesText := strings.Join(action.Questions, "\n--------------------------------\n")
 			_, _ = c.vslp.PutLog(
 				ctx,
@@ -256,7 +253,6 @@ func (c *code) Handle(ctx context.Context, name string, args json.RawMessage) (s
 			"code":  action.Code[:min(len(action.Code), 1000)],
 		})
 
-		// Build common metadata for the document.
 		metadata := map[string]any{
 			"user_id":     c.userID,
 			"flow_id":     c.flowID,

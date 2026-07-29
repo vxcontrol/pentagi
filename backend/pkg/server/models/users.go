@@ -103,7 +103,7 @@ func (u User) Validate(db *gorm.DB) {
 
 // UserPassword is model to contain user information
 type UserPassword struct {
-	Password string `form:"password" json:"password" validate:"max=100,required" gorm:"column:password;type:TEXT"`
+	Password string `form:"password" json:"password" validate:"passlen,required" gorm:"column:password;type:TEXT"`
 	User     `form:"" json:""`
 }
 
@@ -168,7 +168,7 @@ func (au AuthCallback) Valid() error {
 // nolint:lll
 type Password struct {
 	CurrentPassword string `form:"current_password" json:"current_password" validate:"nefield=Password,min=5,max=100,required" gorm:"-"`
-	Password        string `form:"password" json:"password" validate:"stpass,max=100,required" gorm:"type:TEXT"`
+	Password        string `form:"password" json:"password" validate:"stpass,passlen,required" gorm:"type:TEXT"`
 	ConfirmPassword string `form:"confirm_password" json:"confirm_password" validate:"eqfield=Password" gorm:"-"`
 }
 

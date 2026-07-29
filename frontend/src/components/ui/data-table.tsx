@@ -59,6 +59,7 @@ import { useLatestRef } from '@/hooks/use-latest-ref';
 import { usePageStorageKeys } from '@/hooks/use-page-storage-keys';
 import { useWindowVirtualList } from '@/hooks/use-window-virtual-list';
 import { migrateLegacyTableState, updateTableState } from '@/lib/table-state';
+import { matchesTextFilter } from '@/lib/text-filter';
 import { cn } from '@/lib/utils';
 
 /**
@@ -281,6 +282,26 @@ export function cycleColumnSort<TData, TValue = unknown>(column: Column<TData, T
     }
 
     column.toggleSorting(false);
+}
+
+function columnAriaSort<TData, TValue = unknown>(
+    column: Column<TData, TValue>,
+): 'ascending' | 'descending' | 'none' | undefined {
+    if (!column.getCanSort()) {
+        return undefined;
+    }
+
+    const sorted = column.getIsSorted();
+
+    if (sorted === 'asc') {
+        return 'ascending';
+    }
+
+    if (sorted === 'desc') {
+        return 'descending';
+    }
+
+    return 'none';
 }
 
 function DataTable<TData, TValue = unknown>({
@@ -558,10 +579,9 @@ function DataTable<TData, TValue = unknown>({
         [handlePaginationChange],
     );
 
-    // Case-insensitive substring predicate that consults the composite
-    // filter for both "what to look for" and "where to look". Returning
-    // `true` for the empty query keeps the default "no filter = all rows"
-    // behaviour identical to TanStack's built-in `includesString`.
+    // Matching is delegated to the shared text-filter because the same `?q=`
+    // also drives detail-navigation's Prev/Next subset, and the two must agree
+    // on what matches.
     const globalFilterFn = useCallback<FilterFn<TData>>((row, columnId, filter: DataTableGlobalFilter) => {
         if (!filter.query) {
             return true;
@@ -573,9 +593,7 @@ function DataTable<TData, TValue = unknown>({
 
         const value = row.getValue(columnId);
 
-        return String(value ?? '')
-            .toLowerCase()
-            .includes(filter.query.toLowerCase());
+        return matchesTextFilter(String(value ?? ''), filter.query);
     }, []);
 
     const table = useReactTable({
@@ -764,6 +782,7 @@ function DataTable<TData, TValue = unknown>({
                             >
                                 {headerGroup.headers.map((header) => (
                                     <TableHead
+                                        aria-sort={columnAriaSort(header.column)}
                                         className={cn('truncate', header.column.columnDef.meta?.headerClassName)}
                                         key={header.id}
                                         style={
@@ -939,7 +958,7 @@ function DataTableColumnHeader<TData, TValue = unknown>({ column, title }: DataT
 
     return (
         <Button
-            className="text-muted-foreground hover:text-primary flex items-center gap-2 p-0 no-underline hover:no-underline"
+            className="text-muted-foreground hover:text-link flex items-center gap-2 p-0 no-underline hover:no-underline"
             onClick={() => cycleColumnSort(column)}
             variant="link"
         >
@@ -1043,6 +1062,7 @@ function DataTableFilter({ onQueryChange, placeholder, query }: DataTableFilterP
             {localValue ? (
                 <InputGroupAddon align="inline-end">
                     <InputGroupButton
+                        aria-label="Clear search"
                         onClick={handleClear}
                         type="button"
                     >

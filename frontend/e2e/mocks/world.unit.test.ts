@@ -56,6 +56,66 @@ describe('MockWorld matching', () => {
         expect(world.matchRest('POST', '/api/v1/resources/mkdir/', { path: 'new-folder' })).toBeDefined();
     });
 
+    it('pins a query-carrying request on querySubset, the way bodySubset pins a payload', () => {
+        const world = new MockWorld({
+            rest: {
+                'DELETE /api/v1/resources/': [
+                    { body: { deleted: 'notes' }, querySubset: { 'paths[]': 'notes.txt' } },
+                    { body: { deleted: 'both' }, querySubset: { 'paths[]': ['a.txt', 'b.txt'] } },
+                ],
+            },
+        });
+        const query = (search: string) => new URLSearchParams(search);
+
+        expect(world.matchRest('DELETE', '/api/v1/resources/', undefined, query('paths[]=notes.txt'))?.body).toEqual({
+            deleted: 'notes',
+        });
+        expect(
+            world.matchRest('DELETE', '/api/v1/resources/', undefined, query('paths[]=a.txt&paths[]=b.txt'))?.body,
+        ).toEqual({ deleted: 'both' });
+        // The path alone must not answer for a payload no entry describes.
+        expect(world.matchRest('DELETE', '/api/v1/resources/', undefined, query('paths[]=secret.txt'))).toBeUndefined();
+    });
+
+    it('advances a REST sequence even when each request carries a volatile body field', () => {
+        const world = new MockWorld({
+            rest: {
+                'POST /api/v1/resources/mkdir': [{ body: { step: 1 } }, { body: { step: 2 } }],
+            },
+        });
+        // Each call sends a fresh idempotency key — a field no entry pins. The cursor must key on the
+        // selected entries, not the raw body, or every call re-serves step 1.
+        const first = world.matchRest('POST', '/api/v1/resources/mkdir', { idempotencyKey: 'a1' });
+        const second = world.matchRest('POST', '/api/v1/resources/mkdir', { idempotencyKey: 'b2' });
+
+        expect(first?.body).toEqual({ step: 1 });
+        expect(second?.body).toEqual({ step: 2 });
+    });
+
+    it('advances a GraphQL sequence even when each request carries a volatile variable', () => {
+        const world = new MockWorld({
+            queries: { flows: [{ data: { step: 1 } }, { data: { step: 2 } }] },
+        });
+
+        expect(world.matchGraphQL('flows', { nonce: 'a' })?.data).toEqual({ step: 1 });
+        expect(world.matchGraphQL('flows', { nonce: 'b' })?.data).toEqual({ step: 2 });
+    });
+
+    it('keeps variable-pinned sequences apart from one another', () => {
+        const world = new MockWorld({
+            queries: {
+                stats: [
+                    { data: { period: 'week' }, variables: { period: 'week' } },
+                    { data: { period: 'month' }, variables: { period: 'month' } },
+                ],
+            },
+        });
+
+        expect(world.matchGraphQL('stats', { period: 'week' })?.data).toEqual({ period: 'week' });
+        expect(world.matchGraphQL('stats', { period: 'month' })?.data).toEqual({ period: 'month' });
+        expect(world.matchGraphQL('stats', { period: 'week' })?.data).toEqual({ period: 'week' });
+    });
+
     it('hides a flag-gated entry until the flag is raised, then lets it outrank the unflagged one', () => {
         const world = new MockWorld({
             mutations: { login: [{ data: { ok: true }, setFlag: 'logged-in' }] },
@@ -65,6 +125,26 @@ describe('MockWorld matching', () => {
         expect(world.matchGraphQL('info', {})?.data).toEqual({ role: 'guest' });
         world.matchGraphQL('login', {});
         expect(world.matchGraphQL('info', {})?.data).toEqual({ role: 'user' });
+    });
+
+    it('prefers the newly-enabled entry over the next unserved one, not merely the next in order', () => {
+        // Three candidates, so sequencing and the flag rule disagree: with the rule the raised flag
+        // jumps straight to `flagged`; without it the cursor would just hand out `second`. The
+        // two-entry cases above cannot tell the two apart.
+        const world = new MockWorld({
+            mutations: { go: [{ data: {}, setFlag: 'go' }] },
+            queries: {
+                stage: [
+                    { data: { stage: 'first' } },
+                    { data: { stage: 'second' } },
+                    { data: { stage: 'flagged' }, whenFlag: 'go' },
+                ],
+            },
+        });
+
+        expect(world.matchGraphQL('stage', {})?.data).toEqual({ stage: 'first' });
+        world.matchGraphQL('go', {});
+        expect(world.matchGraphQL('stage', {})?.data).toEqual({ stage: 'flagged' });
     });
 
     it('advances to the newly-enabled entry after a second flag, without replaying the first', () => {

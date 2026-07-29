@@ -17,7 +17,6 @@ import python from 'highlight.js/lib/languages/python';
 import sql from 'highlight.js/lib/languages/sql';
 import xml from 'highlight.js/lib/languages/xml';
 import yaml from 'highlight.js/lib/languages/yaml';
-import 'highlight.js/styles/atom-one-dark.css';
 import { common, createLowlight } from 'lowlight';
 import { isValidElement, type ReactElement, type ReactNode, useCallback, useMemo } from 'react';
 import ReactMarkdown, { type Components } from 'react-markdown';

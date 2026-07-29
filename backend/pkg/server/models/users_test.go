@@ -1,6 +1,7 @@
 package models
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -196,6 +197,24 @@ func TestPasswordValid(t *testing.T) {
 			},
 			wantErr: true,
 		},
+		{
+			name: "new password at the bcrypt limit",
+			pw: Password{
+				CurrentPassword: "OldPass1!abc",
+				Password:        strings.Repeat("a", MaxPasswordBytes),
+				ConfirmPassword: strings.Repeat("a", MaxPasswordBytes),
+			},
+			wantErr: false,
+		},
+		{
+			name: "new password over the bcrypt limit",
+			pw: Password{
+				CurrentPassword: "OldPass1!abc",
+				Password:        strings.Repeat("a", MaxPasswordBytes+1),
+				ConfirmPassword: strings.Repeat("a", MaxPasswordBytes+1),
+			},
+			wantErr: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -305,6 +324,52 @@ func TestUserPasswordValid(t *testing.T) {
 			Password: "somepassword",
 			User: User{
 				Mail: "",
+			},
+		}
+		assert.Error(t, up.Valid())
+	})
+
+	for _, tc := range []struct {
+		name    string
+		length  int
+		wantErr bool
+	}{
+		{name: "password at the bcrypt limit", length: MaxPasswordBytes, wantErr: false},
+		{name: "password over the bcrypt limit", length: MaxPasswordBytes + 1, wantErr: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			up := UserPassword{
+				Password: strings.Repeat("a", tc.length),
+				User: User{
+					ID:     1,
+					Hash:   "abcdef1234567890abcdef1234567890",
+					Type:   UserTypeLocal,
+					Mail:   "test@example.com",
+					Status: UserStatusActive,
+					RoleID: RoleUser,
+				},
+			}
+			if tc.wantErr {
+				assert.Error(t, up.Valid())
+			} else {
+				assert.NoError(t, up.Valid())
+			}
+		})
+	}
+
+	t.Run("multibyte password within the rune count but over the byte limit", func(t *testing.T) {
+		t.Parallel()
+		up := UserPassword{
+			// 40 runes, 80 bytes: a rune-counting `max=72` would let this through.
+			Password: strings.Repeat("é", 40),
+			User: User{
+				ID:     1,
+				Hash:   "abcdef1234567890abcdef1234567890",
+				Type:   UserTypeLocal,
+				Mail:   "test@example.com",
+				Status: UserStatusActive,
+				RoleID: RoleUser,
 			},
 		}
 		assert.Error(t, up.Valid())

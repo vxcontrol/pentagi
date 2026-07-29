@@ -4,9 +4,12 @@ Reusable surface for **list-and-detail** pages: a filterable/sortable table, a
 Prev/Next/Sheet toolbar that walks the _same_ filtered subset on detail pages,
 inline-rename inputs, and the URL-vs-storage state model that keeps them in
 lockstep. Every list page in the app (`/flows`, `/knowledges`, `/templates`,
-`/settings/prompts`, `/settings/providers`, `/settings/api-tokens`) is built
-from these pieces, as is each one's detail page — `/settings/api-tokens` is the
-exception, editing its rows in place with no detail route of its own.
+`/settings/prompts`, `/settings/providers`, `/settings/api-tokens`) renders a
+`<DataTable>`. The detail half applies to `/flows/:id`, `/knowledges/:id` and
+`/templates/:id` only. `/settings/api-tokens` has no detail route at all (it edits
+rows in place, through its own state rather than the inline-edit surface below),
+and `/settings/prompts/:name` and `/settings/providers/:id` are single-entity
+forms with no sibling navigation, so neither has a feature nav hook.
 
 > **Scope / how to trust this doc.** It describes code under `frontend/src`.
 > Signatures below are copied verbatim from source. If a signature and the code
@@ -46,8 +49,9 @@ Two rules make the whole thing predictable:
 
 1. **URL is authoritative** for filter + page, so a shared link reproduces the
    exact view.
-2. **Prev/Next walks the same subset** — the detail toolbar runs the same
-   matcher the list filter uses, so siblings stay in step with the table.
+2. **Prev/Next walks the same subset** — the detail toolbar filters on the same
+   `?q=` the table does, so siblings stay in step with the list. The two
+   matchers are close but not identical; see the caveat below.
 
 ## Mental model
 
@@ -152,11 +156,17 @@ The current page index and the ad-hoc `?q=` filter stay URL-only.
 ### Prev/Next walks the same subset
 
 `useDetailNavigation` subscribes to the URL filter via
-`useTableQueryFilterReader`, runs the same pure matcher the list uses, and
+`useTableQueryFilterReader`, applies a pure matcher over the same `?q=`, and
 resolves the Prev / Next siblings + a `"3/10"` position label over that filtered
-subset — so the toolbar is always in step with what the user saw in the table.
-It also threads the current `?q=` through every prev/next/select destination via
-`mergeHrefWithSearchParams`, so navigating siblings never drops the filter.
+subset. It also threads the current `?q=` through every prev/next/select
+destination via `mergeHrefWithSearchParams`, so navigating siblings never drops
+the filter.
+
+The two matchers are not the same function, and they disagree on diacritics:
+the toolbar folds them (`createTextMatcher` normalizes NFKD and strips combining
+marks), while `DataTable`'s `globalFilterFn` only lowercases. Searching `cafe`
+therefore hides a `café` row from the table while Prev/Next still steps onto it.
+Align the two before relying on the subsets being identical.
 
 ## Hooks
 
@@ -343,7 +353,7 @@ function DetailNavigationToolbar<T extends { id: string }>(props: {
     renderItem?: (item: T, isCurrent: boolean) => ReactNode;
     hasSearch?: boolean; // default true — in-sheet search input
     searchPlaceholder?: string;
-}): JSX.Element | null; // null when controller.itemsEmpty
+}): JSX.Element;
 ```
 
 The toolbar composes `<DetailNavigationButtons>` (Prev / position / Next) and
@@ -466,8 +476,13 @@ export function EntitiesPage() {
 
     const pageHeader = <AppHeader title="Entities" /* ...actions */ />;
 
-    // Canonical 4-branch render gate — pageHeader renders in ALL branches:
-    if (isLoading) {
+    // Canonical 4-branch render gate — pageHeader renders in ALL branches.
+    // Both loading and error gate on "nothing to show yet": the query is
+    // cache-and-network, so a background revalidation reports loading (and, on
+    // failure, error) with cached data still present. Without `&& !data` that
+    // refetch blanks a working list — or an edit form with unsaved changes —
+    // with the spinner/error for the round-trip.
+    if (isLoading && entities.length === 0) {
         return (
             <>
                 {pageHeader}
@@ -475,8 +490,6 @@ export function EntitiesPage() {
             </>
         );
     }
-    // Show the error surface only when there's no data — a failed background
-    // refetch must not blank a working list.
     if (error && entities.length === 0) {
         return (
             <>
@@ -619,9 +632,10 @@ legacy keys in on first mount and deletes them.
   filter (`?q=`, via `useTableState`) and a server-side semantic search (`?qs=`,
   via page-local `useSearchParams`) are independent — don't conflate them. A
   copied list recipe only needs the `?q=` one.
-- **`DetailNavigationToolbar` renders `null` when `controller.itemsEmpty`** (raw
-  items empty, pre-filter), so it can mount before the provider's list arrives
-  without flashing "–/0".
+- **`DetailNavigationToolbar` always renders.** It has no empty-list branch, so
+  it mounts before the provider's list arrives and shows the buttons' own
+  disabled/"–/0" state until items land. `controller.itemsEmpty` exists for a
+  caller that wants to skip rendering it, but nothing reads it today.
 
 ## Testing
 
@@ -661,3 +675,5 @@ not reintroduce them:
 | `toolbarProps` spread into `<DetailNavigationToolbar>` | No such object. Pass `controller={nav}` + discrete `renderItem`/`sheetIcon`/`sheetTitle`.                                               |
 | `hooks/use-inline-edit`                                | Wrong path. It lives at `components/shared/inline-edit/use-inline-edit.ts`.                                                             |
 | `components/shared/data-table`                         | Wrong path. It lives at `components/ui/data-table.tsx`.                                                                                 |
+| `features/providers/use-provider-detail-navigation.ts` | Never existed. `/settings/providers/:id` is a form with no sibling nav — only `flows`, `knowledges` and `templates` have nav hooks.     |
+| `features/prompts/use-prompt-detail-navigation.ts`     | Never existed. Same for `/settings/prompts/:name`.                                                                                      |

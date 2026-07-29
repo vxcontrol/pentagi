@@ -13,6 +13,8 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
+import { returnFocusToEditor } from './markdown-editor-focus';
+
 export type ListType = 'bullet' | 'ordered' | 'task';
 
 interface ListOption {
@@ -31,25 +33,14 @@ interface ListMenuProps {
     activeType: ListType | null;
     disabled?: boolean;
     editor: Editor;
+    isInTableCell: boolean;
 }
 
-export function ListMenu({ activeType, disabled, editor }: ListMenuProps) {
+export function ListMenu({ activeType, disabled, editor, isInTableCell }: ListMenuProps) {
     const active = OPTIONS.find((option) => option.value === activeType);
     // The bullet-list icon doubles as the resting affordance, so the active background — not the glyph — is what
     // distinguishes "in a bullet list" from "no list".
     const TriggerIcon = active?.icon ?? List;
-
-    const applyOption = (value: ListType) => {
-        const chain = editor.chain().focus();
-
-        if (value === 'bullet') {
-            chain.toggleBulletList().run();
-        } else if (value === 'ordered') {
-            chain.toggleOrderedList().run();
-        } else {
-            chain.toggleTaskList().run();
-        }
-    };
 
     return (
         <DropdownMenu>
@@ -75,24 +66,50 @@ export function ListMenu({ activeType, disabled, editor }: ListMenuProps) {
             <DropdownMenuContent
                 align="start"
                 className="min-w-[160px]"
-                onCloseAutoFocus={(event) => {
-                    event.preventDefault();
-                    editor.commands.focus();
-                }}
+                onCloseAutoFocus={returnFocusToEditor(editor)}
             >
-                {OPTIONS.map((option) => (
-                    <DropdownMenuItem
-                        aria-checked={activeType === option.value}
-                        key={option.value}
-                        onSelect={() => applyOption(option.value)}
-                        role="menuitemradio"
-                    >
-                        <option.icon className="text-muted-foreground size-4 shrink-0" />
-                        <span>{option.label}</span>
-                        {activeType === option.value ? <Check className="ml-auto size-4 shrink-0" /> : null}
-                    </DropdownMenuItem>
-                ))}
+                <ListMenuItems
+                    activeType={activeType}
+                    editor={editor}
+                    isInTableCell={isInTableCell}
+                />
             </DropdownMenuContent>
         </DropdownMenu>
     );
+}
+
+function ListMenuItems({
+    activeType,
+    editor,
+    isInTableCell,
+}: {
+    activeType: ListType | null;
+    editor: Editor;
+    isInTableCell: boolean;
+}) {
+    const applyOption = (value: ListType) => {
+        const chain = editor.chain().focus();
+
+        if (value === 'bullet') {
+            chain.toggleBulletList().run();
+        } else if (value === 'ordered') {
+            chain.toggleOrderedList().run();
+        } else {
+            chain.toggleTaskList().run();
+        }
+    };
+
+    return OPTIONS.map((option) => (
+        <DropdownMenuItem
+            aria-checked={activeType === option.value}
+            disabled={isInTableCell}
+            key={option.value}
+            onSelect={() => applyOption(option.value)}
+            role="menuitemradio"
+        >
+            <option.icon className="text-muted-foreground size-4 shrink-0" />
+            <span>{option.label}</span>
+            {activeType === option.value ? <Check className="ml-auto size-4 shrink-0" /> : null}
+        </DropdownMenuItem>
+    ));
 }

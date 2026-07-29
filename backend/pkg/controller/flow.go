@@ -124,7 +124,7 @@ type flowInput struct {
 func NewFlowWorker(
 	ctx context.Context,
 	fwc newFlowWorkerCtx,
-) (FlowWorker, error) {
+) (_ FlowWorker, err error) {
 	ctx, span := obs.Observer.NewSpan(ctx, obs.SpanKindInternal, "controller.NewFlowWorker")
 	defer span.End()
 
@@ -151,6 +151,25 @@ func NewFlowWorker(
 		"provider_type": fwc.prvtype.String(),
 	})
 	logger.Info("flow created in DB")
+
+	// Held separately because `flow` is reassigned below by UpdateFlow, which — like every sqlc query —
+	// returns a zero-valued row alongside an error, and a cleanup aimed at id 0 deletes nothing.
+	flowID := flow.ID
+
+	// DeleteFlow is a soft delete and the listings filter on deleted_at, so this is what keeps a flow
+	// the caller was told it never got out of the UI. Disarmed once the worker goroutine owns the flow —
+	// from there a failure is the worker's to unwind, not ours.
+	cleanupFlow := true
+	defer func() {
+		if err == nil || !cleanupFlow {
+			return
+		}
+
+		// The caller's context is usually already cancelled by whatever failed.
+		if _, cerr := fwc.db.DeleteFlow(context.WithoutCancel(ctx), flowID); cerr != nil {
+			logger.WithError(cerr).Error("failed to drop the flow left behind by a failed start")
+		}
+	}()
 
 	user, err := fwc.db.GetUser(ctx, fwc.userID)
 	if err != nil {
@@ -281,6 +300,8 @@ func NewFlowWorker(
 	}
 
 	fw.flowCtx.Publisher.FlowCreated(ctx, flow, containers)
+
+	cleanupFlow = false
 
 	fw.wg.Add(1)
 	go fw.worker()
@@ -630,7 +651,7 @@ func (fw *flowWorker) PutInput(
 
 		select {
 		case err := <-flin.done:
-			return err // nil or error
+			return err
 		case <-timer.C:
 			return nil // no early error
 		case <-fw.ctx.Done():

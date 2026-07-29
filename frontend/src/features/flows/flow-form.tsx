@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRef } from 'react';
-import { useWatch } from 'react-hook-form';
+import { useController } from 'react-hook-form';
 import { z } from 'zod';
 
 import type { UserResourceFragmentFragment } from '@/graphql/types';
@@ -164,7 +164,10 @@ export function FlowForm({
         setValue,
     } = form;
 
-    const resourceIds = useWatch({ control, name: 'resourceIds' });
+    // useController registers the field; with useWatch alone `resetField('resourceIds')` is a no-op.
+    const {
+        field: { value: resourceIds },
+    } = useController({ control, name: 'resourceIds' });
 
     const updateResourceIds = useCallback(
         (updater: ((current: string[]) => string[]) | Array<number | string>) => {
@@ -234,9 +237,12 @@ export function FlowForm({
             })
             .forEach(([fieldName, defaultValue]) => {
                 const typedFieldName = fieldName as keyof FlowFormValues;
-                setValue(typedFieldName, defaultValue as never, { shouldDirty: false });
+                // resetField, not setValue: it moves react-hook-form's own baseline too, so a later
+                // pick that happens to equal the mount-time default still counts as dirty and this
+                // effect leaves it alone.
+                resetField(typedFieldName, { defaultValue: defaultValue as never });
             });
-    }, [defaultValues, dirtyFields, setValue, getValues]);
+    }, [defaultValues, dirtyFields, resetField, getValues]);
 
     const isFormDisabled = isDisabled || isLoading || isSubmitting || isCanceling;
 
@@ -336,6 +342,7 @@ export function FlowForm({
                     {templateSearch && (
                         <InputGroupAddon align="inline-end">
                             <InputGroupButton
+                                aria-label="Clear template search"
                                 onClick={(event) => {
                                     event.stopPropagation();
                                     setTemplateSearch('');
@@ -390,6 +397,7 @@ export function FlowForm({
                     {resourceSearch && (
                         <InputGroupAddon align="inline-end">
                             <InputGroupButton
+                                aria-label="Clear resource search"
                                 onClick={(event) => {
                                     event.stopPropagation();
                                     setResourceSearch('');
@@ -574,6 +582,7 @@ export function FlowForm({
                                                                 {providerSearch && (
                                                                     <InputGroupAddon align="inline-end">
                                                                         <InputGroupButton
+                                                                            aria-label="Clear provider search"
                                                                             onClick={(event) => {
                                                                                 event.stopPropagation();
                                                                                 setProviderSearch('');

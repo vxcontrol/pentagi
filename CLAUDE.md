@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 1. **Always use English** for all interactions, responses, explanations, and questions with users.
 2. **Password Complexity Requirements**: For all password-related development (registration, password reset, API token generation, etc.), enforce the same policy in **both** backend and frontend — never rely on frontend validation alone. Source of truth, keep the two in sync: `backend/pkg/server/models/init.go` → `strongPasswordValidatorString` and `frontend/src/features/authentication/password-change-form.tsx` (zod schema). The policy:
-   - Length 8–100 characters.
+   - Length 8–72 characters (72 **bytes**, the most bcrypt will hash — a longer value fails inside `bcrypt.GenerateFromPassword`, after validation).
    - A password is valid if it is **either** 16+ characters (any composition), **or** 8–15 characters containing at least 1 lowercase letter, 1 uppercase letter, 1 number, and 1 special character from `!@#$&*`.
 
 ## Project Overview

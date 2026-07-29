@@ -1,4 +1,4 @@
-import type { Page } from '@playwright/test';
+import type { BrowserContext } from '@playwright/test';
 
 import type { MockWorld } from './world.ts';
 
@@ -54,7 +54,7 @@ export const handleWsConnection = (
 
                 case 'connection_init': {
                     // Ack immediately; a frame sent before the ack is a graphql-ws protocol
-                    // violation that closes the socket. Ack-first ordering is pinned by the unit test.
+                    // violation that closes the socket.
                     send({ type: 'connection_ack' });
                     break;
                 }
@@ -98,8 +98,8 @@ export const handleWsConnection = (
     };
 };
 
-export const installWsMock = async (page: Page, world: MockWorld): Promise<void> => {
-    await page.routeWebSocket('**/api/v1/graphql', (ws) => {
+export const installWsMock = async (context: BrowserContext, world: MockWorld): Promise<void> => {
+    await context.routeWebSocket('**/api/v1/graphql', (ws) => {
         const connection = handleWsConnection(world, ws);
 
         ws.onMessage((raw) => connection.onMessage(String(raw)));

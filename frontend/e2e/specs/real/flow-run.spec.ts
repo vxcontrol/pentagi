@@ -1,10 +1,13 @@
 import { expect, test } from '@playwright/test';
 
+import { MESSAGE_ID_SELECTOR } from '../../helpers/subscriptions.ts';
 import { readTerminalBuffer } from '../../helpers/terminal.ts';
 
 test.describe('real backend flow run', { tag: '@real' }, () => {
     test('runs a flow end-to-end through the mock LLM', async ({ page }) => {
-        test.setTimeout(240_000);
+        // Above the sum of the step timeouts below (60+30+90+90+90+60 = 420s), so a slow-but-passing
+        // run is not killed mid-step with a generic timeout that masks the real state.
+        test.setTimeout(450_000);
 
         const pageErrors: string[] = [];
 
@@ -12,7 +15,13 @@ test.describe('real backend flow run', { tag: '@real' }, () => {
 
         await page.goto('/flows/new');
         await page.getByPlaceholder(/Describe what you would like PentAGI to test/).fill('Say hello');
-        await page.getByRole('button', { name: 'Submit' }).click();
+
+        // The form is invalid until the providers query lands, so a cold stack keeps Submit
+        // disabled for a while — clicking straight away spends the whole test timeout on it.
+        const submit = page.getByRole('button', { name: 'Submit' });
+
+        await expect(submit).toBeEnabled({ timeout: 60_000 });
+        await submit.click();
 
         await expect(page).toHaveURL(/\/flows\/\d+/, { timeout: 30_000 });
         // Scope the list assertion to this attempt's flow id: a retry runs
@@ -21,7 +30,7 @@ test.describe('real backend flow run', { tag: '@real' }, () => {
         // violation.
         const flowId = new URL(page.url()).pathname.match(/\d+/)?.[0] ?? '';
 
-        await expect(page.getByTestId('flow-message-id').first()).toBeVisible({ timeout: 90_000 });
+        await expect(page.locator(MESSAGE_ID_SELECTOR).first()).toBeVisible({ timeout: 90_000 });
         await expect(page.getByText('Hello from the e2e mock LLM!').first()).toBeVisible({ timeout: 90_000 });
 
         // The scenario's `uname -a` exec must stream its sandbox output back

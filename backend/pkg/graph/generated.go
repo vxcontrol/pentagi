@@ -78,14 +78,18 @@ type ComplexityRoot struct {
 	AgentConfig struct {
 		ExtraBody         func(childComplexity int) int
 		FrequencyPenalty  func(childComplexity int) int
+		JSON              func(childComplexity int) int
 		MaxLength         func(childComplexity int) int
 		MaxTokens         func(childComplexity int) int
 		MinLength         func(childComplexity int) int
+		MinP              func(childComplexity int) int
 		Model             func(childComplexity int) int
+		N                 func(childComplexity int) int
 		PresencePenalty   func(childComplexity int) int
 		Price             func(childComplexity int) int
 		Reasoning         func(childComplexity int) int
 		RepetitionPenalty func(childComplexity int) int
+		ResponseMimeType  func(childComplexity int) int
 		Temperature       func(childComplexity int) int
 		TopK              func(childComplexity int) int
 		TopP              func(childComplexity int) int
@@ -1035,6 +1039,13 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.AgentConfig.FrequencyPenalty(childComplexity), true
 
+	case "AgentConfig.json":
+		if e.complexity.AgentConfig.JSON == nil {
+			break
+		}
+
+		return e.complexity.AgentConfig.JSON(childComplexity), true
+
 	case "AgentConfig.maxLength":
 		if e.complexity.AgentConfig.MaxLength == nil {
 			break
@@ -1056,12 +1067,26 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.AgentConfig.MinLength(childComplexity), true
 
+	case "AgentConfig.minP":
+		if e.complexity.AgentConfig.MinP == nil {
+			break
+		}
+
+		return e.complexity.AgentConfig.MinP(childComplexity), true
+
 	case "AgentConfig.model":
 		if e.complexity.AgentConfig.Model == nil {
 			break
 		}
 
 		return e.complexity.AgentConfig.Model(childComplexity), true
+
+	case "AgentConfig.n":
+		if e.complexity.AgentConfig.N == nil {
+			break
+		}
+
+		return e.complexity.AgentConfig.N(childComplexity), true
 
 	case "AgentConfig.presencePenalty":
 		if e.complexity.AgentConfig.PresencePenalty == nil {
@@ -1090,6 +1115,13 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.AgentConfig.RepetitionPenalty(childComplexity), true
+
+	case "AgentConfig.responseMimeType":
+		if e.complexity.AgentConfig.ResponseMimeType == nil {
+			break
+		}
+
+		return e.complexity.AgentConfig.ResponseMimeType(childComplexity), true
 
 	case "AgentConfig.temperature":
 		if e.complexity.AgentConfig.Temperature == nil {
@@ -9776,6 +9808,170 @@ func (ec *executionContext) fieldContext_AgentConfig_presencePenalty(_ context.C
 	return fc, nil
 }
 
+func (ec *executionContext) _AgentConfig_minP(ctx context.Context, field graphql.CollectedField, obj *model.AgentConfig) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_AgentConfig_minP(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.MinP, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*float64)
+	fc.Result = res
+	return ec.marshalOFloat2ᚖfloat64(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_AgentConfig_minP(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AgentConfig",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Float does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AgentConfig_n(ctx context.Context, field graphql.CollectedField, obj *model.AgentConfig) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_AgentConfig_n(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.N, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*int)
+	fc.Result = res
+	return ec.marshalOInt2ᚖint(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_AgentConfig_n(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AgentConfig",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AgentConfig_json(ctx context.Context, field graphql.CollectedField, obj *model.AgentConfig) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_AgentConfig_json(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.JSON, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*bool)
+	fc.Result = res
+	return ec.marshalOBoolean2ᚖbool(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_AgentConfig_json(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AgentConfig",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AgentConfig_responseMimeType(ctx context.Context, field graphql.CollectedField, obj *model.AgentConfig) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_AgentConfig_responseMimeType(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.ResponseMimeType, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*string)
+	fc.Result = res
+	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_AgentConfig_responseMimeType(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AgentConfig",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _AgentConfig_reasoning(ctx context.Context, field graphql.CollectedField, obj *model.AgentConfig) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_AgentConfig_reasoning(ctx, field)
 	if err != nil {
@@ -10684,6 +10880,14 @@ func (ec *executionContext) fieldContext_AgentsConfig_simple(_ context.Context, 
 				return ec.fieldContext_AgentConfig_frequencyPenalty(ctx, field)
 			case "presencePenalty":
 				return ec.fieldContext_AgentConfig_presencePenalty(ctx, field)
+			case "minP":
+				return ec.fieldContext_AgentConfig_minP(ctx, field)
+			case "n":
+				return ec.fieldContext_AgentConfig_n(ctx, field)
+			case "json":
+				return ec.fieldContext_AgentConfig_json(ctx, field)
+			case "responseMimeType":
+				return ec.fieldContext_AgentConfig_responseMimeType(ctx, field)
 			case "reasoning":
 				return ec.fieldContext_AgentConfig_reasoning(ctx, field)
 			case "price":
@@ -10756,6 +10960,14 @@ func (ec *executionContext) fieldContext_AgentsConfig_simpleJson(_ context.Conte
 				return ec.fieldContext_AgentConfig_frequencyPenalty(ctx, field)
 			case "presencePenalty":
 				return ec.fieldContext_AgentConfig_presencePenalty(ctx, field)
+			case "minP":
+				return ec.fieldContext_AgentConfig_minP(ctx, field)
+			case "n":
+				return ec.fieldContext_AgentConfig_n(ctx, field)
+			case "json":
+				return ec.fieldContext_AgentConfig_json(ctx, field)
+			case "responseMimeType":
+				return ec.fieldContext_AgentConfig_responseMimeType(ctx, field)
 			case "reasoning":
 				return ec.fieldContext_AgentConfig_reasoning(ctx, field)
 			case "price":
@@ -10828,6 +11040,14 @@ func (ec *executionContext) fieldContext_AgentsConfig_primaryAgent(_ context.Con
 				return ec.fieldContext_AgentConfig_frequencyPenalty(ctx, field)
 			case "presencePenalty":
 				return ec.fieldContext_AgentConfig_presencePenalty(ctx, field)
+			case "minP":
+				return ec.fieldContext_AgentConfig_minP(ctx, field)
+			case "n":
+				return ec.fieldContext_AgentConfig_n(ctx, field)
+			case "json":
+				return ec.fieldContext_AgentConfig_json(ctx, field)
+			case "responseMimeType":
+				return ec.fieldContext_AgentConfig_responseMimeType(ctx, field)
 			case "reasoning":
 				return ec.fieldContext_AgentConfig_reasoning(ctx, field)
 			case "price":
@@ -10900,6 +11120,14 @@ func (ec *executionContext) fieldContext_AgentsConfig_assistant(_ context.Contex
 				return ec.fieldContext_AgentConfig_frequencyPenalty(ctx, field)
 			case "presencePenalty":
 				return ec.fieldContext_AgentConfig_presencePenalty(ctx, field)
+			case "minP":
+				return ec.fieldContext_AgentConfig_minP(ctx, field)
+			case "n":
+				return ec.fieldContext_AgentConfig_n(ctx, field)
+			case "json":
+				return ec.fieldContext_AgentConfig_json(ctx, field)
+			case "responseMimeType":
+				return ec.fieldContext_AgentConfig_responseMimeType(ctx, field)
 			case "reasoning":
 				return ec.fieldContext_AgentConfig_reasoning(ctx, field)
 			case "price":
@@ -10972,6 +11200,14 @@ func (ec *executionContext) fieldContext_AgentsConfig_generator(_ context.Contex
 				return ec.fieldContext_AgentConfig_frequencyPenalty(ctx, field)
 			case "presencePenalty":
 				return ec.fieldContext_AgentConfig_presencePenalty(ctx, field)
+			case "minP":
+				return ec.fieldContext_AgentConfig_minP(ctx, field)
+			case "n":
+				return ec.fieldContext_AgentConfig_n(ctx, field)
+			case "json":
+				return ec.fieldContext_AgentConfig_json(ctx, field)
+			case "responseMimeType":
+				return ec.fieldContext_AgentConfig_responseMimeType(ctx, field)
 			case "reasoning":
 				return ec.fieldContext_AgentConfig_reasoning(ctx, field)
 			case "price":
@@ -11044,6 +11280,14 @@ func (ec *executionContext) fieldContext_AgentsConfig_refiner(_ context.Context,
 				return ec.fieldContext_AgentConfig_frequencyPenalty(ctx, field)
 			case "presencePenalty":
 				return ec.fieldContext_AgentConfig_presencePenalty(ctx, field)
+			case "minP":
+				return ec.fieldContext_AgentConfig_minP(ctx, field)
+			case "n":
+				return ec.fieldContext_AgentConfig_n(ctx, field)
+			case "json":
+				return ec.fieldContext_AgentConfig_json(ctx, field)
+			case "responseMimeType":
+				return ec.fieldContext_AgentConfig_responseMimeType(ctx, field)
 			case "reasoning":
 				return ec.fieldContext_AgentConfig_reasoning(ctx, field)
 			case "price":
@@ -11116,6 +11360,14 @@ func (ec *executionContext) fieldContext_AgentsConfig_adviser(_ context.Context,
 				return ec.fieldContext_AgentConfig_frequencyPenalty(ctx, field)
 			case "presencePenalty":
 				return ec.fieldContext_AgentConfig_presencePenalty(ctx, field)
+			case "minP":
+				return ec.fieldContext_AgentConfig_minP(ctx, field)
+			case "n":
+				return ec.fieldContext_AgentConfig_n(ctx, field)
+			case "json":
+				return ec.fieldContext_AgentConfig_json(ctx, field)
+			case "responseMimeType":
+				return ec.fieldContext_AgentConfig_responseMimeType(ctx, field)
 			case "reasoning":
 				return ec.fieldContext_AgentConfig_reasoning(ctx, field)
 			case "price":
@@ -11188,6 +11440,14 @@ func (ec *executionContext) fieldContext_AgentsConfig_reflector(_ context.Contex
 				return ec.fieldContext_AgentConfig_frequencyPenalty(ctx, field)
 			case "presencePenalty":
 				return ec.fieldContext_AgentConfig_presencePenalty(ctx, field)
+			case "minP":
+				return ec.fieldContext_AgentConfig_minP(ctx, field)
+			case "n":
+				return ec.fieldContext_AgentConfig_n(ctx, field)
+			case "json":
+				return ec.fieldContext_AgentConfig_json(ctx, field)
+			case "responseMimeType":
+				return ec.fieldContext_AgentConfig_responseMimeType(ctx, field)
 			case "reasoning":
 				return ec.fieldContext_AgentConfig_reasoning(ctx, field)
 			case "price":
@@ -11260,6 +11520,14 @@ func (ec *executionContext) fieldContext_AgentsConfig_searcher(_ context.Context
 				return ec.fieldContext_AgentConfig_frequencyPenalty(ctx, field)
 			case "presencePenalty":
 				return ec.fieldContext_AgentConfig_presencePenalty(ctx, field)
+			case "minP":
+				return ec.fieldContext_AgentConfig_minP(ctx, field)
+			case "n":
+				return ec.fieldContext_AgentConfig_n(ctx, field)
+			case "json":
+				return ec.fieldContext_AgentConfig_json(ctx, field)
+			case "responseMimeType":
+				return ec.fieldContext_AgentConfig_responseMimeType(ctx, field)
 			case "reasoning":
 				return ec.fieldContext_AgentConfig_reasoning(ctx, field)
 			case "price":
@@ -11332,6 +11600,14 @@ func (ec *executionContext) fieldContext_AgentsConfig_enricher(_ context.Context
 				return ec.fieldContext_AgentConfig_frequencyPenalty(ctx, field)
 			case "presencePenalty":
 				return ec.fieldContext_AgentConfig_presencePenalty(ctx, field)
+			case "minP":
+				return ec.fieldContext_AgentConfig_minP(ctx, field)
+			case "n":
+				return ec.fieldContext_AgentConfig_n(ctx, field)
+			case "json":
+				return ec.fieldContext_AgentConfig_json(ctx, field)
+			case "responseMimeType":
+				return ec.fieldContext_AgentConfig_responseMimeType(ctx, field)
 			case "reasoning":
 				return ec.fieldContext_AgentConfig_reasoning(ctx, field)
 			case "price":
@@ -11404,6 +11680,14 @@ func (ec *executionContext) fieldContext_AgentsConfig_coder(_ context.Context, f
 				return ec.fieldContext_AgentConfig_frequencyPenalty(ctx, field)
 			case "presencePenalty":
 				return ec.fieldContext_AgentConfig_presencePenalty(ctx, field)
+			case "minP":
+				return ec.fieldContext_AgentConfig_minP(ctx, field)
+			case "n":
+				return ec.fieldContext_AgentConfig_n(ctx, field)
+			case "json":
+				return ec.fieldContext_AgentConfig_json(ctx, field)
+			case "responseMimeType":
+				return ec.fieldContext_AgentConfig_responseMimeType(ctx, field)
 			case "reasoning":
 				return ec.fieldContext_AgentConfig_reasoning(ctx, field)
 			case "price":
@@ -11476,6 +11760,14 @@ func (ec *executionContext) fieldContext_AgentsConfig_installer(_ context.Contex
 				return ec.fieldContext_AgentConfig_frequencyPenalty(ctx, field)
 			case "presencePenalty":
 				return ec.fieldContext_AgentConfig_presencePenalty(ctx, field)
+			case "minP":
+				return ec.fieldContext_AgentConfig_minP(ctx, field)
+			case "n":
+				return ec.fieldContext_AgentConfig_n(ctx, field)
+			case "json":
+				return ec.fieldContext_AgentConfig_json(ctx, field)
+			case "responseMimeType":
+				return ec.fieldContext_AgentConfig_responseMimeType(ctx, field)
 			case "reasoning":
 				return ec.fieldContext_AgentConfig_reasoning(ctx, field)
 			case "price":
@@ -11548,6 +11840,14 @@ func (ec *executionContext) fieldContext_AgentsConfig_pentester(_ context.Contex
 				return ec.fieldContext_AgentConfig_frequencyPenalty(ctx, field)
 			case "presencePenalty":
 				return ec.fieldContext_AgentConfig_presencePenalty(ctx, field)
+			case "minP":
+				return ec.fieldContext_AgentConfig_minP(ctx, field)
+			case "n":
+				return ec.fieldContext_AgentConfig_n(ctx, field)
+			case "json":
+				return ec.fieldContext_AgentConfig_json(ctx, field)
+			case "responseMimeType":
+				return ec.fieldContext_AgentConfig_responseMimeType(ctx, field)
 			case "reasoning":
 				return ec.fieldContext_AgentConfig_reasoning(ctx, field)
 			case "price":
@@ -36725,7 +37025,7 @@ func (ec *executionContext) unmarshalInputAgentConfigInput(ctx context.Context, 
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"model", "maxTokens", "temperature", "topK", "topP", "minLength", "maxLength", "repetitionPenalty", "frequencyPenalty", "presencePenalty", "reasoning", "price", "extraBody"}
+	fieldsInOrder := [...]string{"model", "maxTokens", "temperature", "topK", "topP", "minLength", "maxLength", "repetitionPenalty", "frequencyPenalty", "presencePenalty", "minP", "n", "json", "responseMimeType", "reasoning", "price", "extraBody"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -36802,6 +37102,34 @@ func (ec *executionContext) unmarshalInputAgentConfigInput(ctx context.Context, 
 				return it, err
 			}
 			it.PresencePenalty = data
+		case "minP":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("minP"))
+			data, err := ec.unmarshalOFloat2ᚖfloat64(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.MinP = data
+		case "n":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("n"))
+			data, err := ec.unmarshalOInt2ᚖint(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.N = data
+		case "json":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("json"))
+			data, err := ec.unmarshalOBoolean2ᚖbool(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.JSON = data
+		case "responseMimeType":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("responseMimeType"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ResponseMimeType = data
 		case "reasoning":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("reasoning"))
 			data, err := ec.unmarshalOReasoningConfigInput2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐReasoningConfig(ctx, v)
@@ -37564,6 +37892,14 @@ func (ec *executionContext) _AgentConfig(ctx context.Context, sel ast.SelectionS
 			out.Values[i] = ec._AgentConfig_frequencyPenalty(ctx, field, obj)
 		case "presencePenalty":
 			out.Values[i] = ec._AgentConfig_presencePenalty(ctx, field, obj)
+		case "minP":
+			out.Values[i] = ec._AgentConfig_minP(ctx, field, obj)
+		case "n":
+			out.Values[i] = ec._AgentConfig_n(ctx, field, obj)
+		case "json":
+			out.Values[i] = ec._AgentConfig_json(ctx, field, obj)
+		case "responseMimeType":
+			out.Values[i] = ec._AgentConfig_responseMimeType(ctx, field, obj)
 		case "reasoning":
 			out.Values[i] = ec._AgentConfig_reasoning(ctx, field, obj)
 		case "price":

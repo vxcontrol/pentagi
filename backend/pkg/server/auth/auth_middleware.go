@@ -123,7 +123,6 @@ func (p *AuthMiddleware) tryUserCookieAuthentication(c *gin.Context) (authResult
 		return authResultFail, errors.New("no permissions granted")
 	}
 
-	// Verify session expiration
 	expVal, ok := exp.(int64)
 	if !ok {
 		return authResultFail, errors.New("token claim invalid")

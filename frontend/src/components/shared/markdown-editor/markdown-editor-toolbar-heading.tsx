@@ -13,6 +13,8 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
+import { returnFocusToEditor } from './markdown-editor-focus';
+
 export type HeadingLevel = 1 | 2 | 3 | 4 | 5 | 6;
 
 interface HeadingOption {
@@ -40,23 +42,15 @@ interface HeadingMenuProps {
     activeLevel: 0 | HeadingLevel;
     disabled?: boolean;
     editor: Editor;
+    isInTableCell: boolean;
 }
 
-export function HeadingMenu({ activeLevel, disabled, editor }: HeadingMenuProps) {
-    const isSelected = (value: HeadingOption['value']) =>
-        value === 'paragraph' ? activeLevel === 0 : value === activeLevel;
-    const active = OPTIONS.find((option) => isSelected(option.value)) ?? OPTIONS[0];
+const isSelectedIn = (activeLevel: 0 | HeadingLevel, value: HeadingOption['value']) =>
+    value === 'paragraph' ? activeLevel === 0 : value === activeLevel;
+
+export function HeadingMenu({ activeLevel, disabled, editor, isInTableCell }: HeadingMenuProps) {
+    const active = OPTIONS.find((option) => isSelectedIn(activeLevel, option.value)) ?? OPTIONS[0];
     const ActiveIcon = active?.icon ?? Type;
-
-    const applyOption = (value: HeadingOption['value']) => {
-        if (value === 'paragraph') {
-            editor.chain().focus().setParagraph().run();
-
-            return;
-        }
-
-        editor.chain().focus().toggleHeading({ level: value }).run();
-    };
 
     return (
         <DropdownMenu>
@@ -82,25 +76,48 @@ export function HeadingMenu({ activeLevel, disabled, editor }: HeadingMenuProps)
             <DropdownMenuContent
                 align="start"
                 className="min-w-[140px]"
-                onCloseAutoFocus={(event) => {
-                    // Return focus to the editor caret (not the trigger button) so the user keeps typing.
-                    event.preventDefault();
-                    editor.commands.focus();
-                }}
+                onCloseAutoFocus={returnFocusToEditor(editor)}
             >
-                {OPTIONS.map((option) => (
-                    <DropdownMenuItem
-                        aria-checked={isSelected(option.value)}
-                        key={option.value}
-                        onSelect={() => applyOption(option.value)}
-                        role="menuitemradio"
-                    >
-                        <option.icon className={cn('text-muted-foreground size-4 shrink-0', option.iconClassName)} />
-                        <span>{option.label}</span>
-                        {isSelected(option.value) ? <Check className="ml-auto size-4 shrink-0" /> : null}
-                    </DropdownMenuItem>
-                ))}
+                <HeadingMenuItems
+                    activeLevel={activeLevel}
+                    editor={editor}
+                    isInTableCell={isInTableCell}
+                />
             </DropdownMenuContent>
         </DropdownMenu>
     );
+}
+
+function HeadingMenuItems({
+    activeLevel,
+    editor,
+    isInTableCell,
+}: {
+    activeLevel: 0 | HeadingLevel;
+    editor: Editor;
+    isInTableCell: boolean;
+}) {
+    const applyOption = (value: HeadingOption['value']) => {
+        if (value === 'paragraph') {
+            editor.chain().focus().setParagraph().run();
+
+            return;
+        }
+
+        editor.chain().focus().toggleHeading({ level: value }).run();
+    };
+
+    return OPTIONS.map((option) => (
+        <DropdownMenuItem
+            aria-checked={isSelectedIn(activeLevel, option.value)}
+            disabled={isInTableCell && option.value !== 'paragraph'}
+            key={option.value}
+            onSelect={() => applyOption(option.value)}
+            role="menuitemradio"
+        >
+            <option.icon className={cn('text-muted-foreground size-4 shrink-0', option.iconClassName)} />
+            <span>{option.label}</span>
+            {isSelectedIn(activeLevel, option.value) ? <Check className="ml-auto size-4 shrink-0" /> : null}
+        </DropdownMenuItem>
+    ));
 }

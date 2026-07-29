@@ -10,9 +10,19 @@ const KNOWN_LINK_SCHEME = /^(?:https?:\/\/|mailto:|tel:)/i;
 // Make a scheme-less value absolute so the URL constructor reads it as one, without laundering a root-relative
 // path into a bogus host. `//host/x` (protocol-relative) just needs a scheme; a single leading slash is a
 // root-relative path this field never supports (`/settings` must NOT become `https://settings`) → reject it.
+// A scheme this field does not allow must be REJECTED, not prefixed: `https://` + `ftp://host/file` parses as
+// host `ftp`, so the popover showed no error and persisted a dead link. Matched on `scheme://` rather than a
+// bare `scheme:` so a scheme-less `localhost:3000` or `example.com:8080/path` still reads as host:port, and so
+// the protocol-relative `//cdn…` form below is untouched.
+const FOREIGN_SCHEME = /^[a-z][a-z0-9+.-]*:\/\//i;
+
 const toAbsoluteCandidate = (value: string, hasScheme: RegExp): null | string => {
     if (hasScheme.test(value)) {
         return value;
+    }
+
+    if (FOREIGN_SCHEME.test(value)) {
+        return null;
     }
 
     if (/^\/\/[^/]/.test(value)) {
@@ -33,7 +43,11 @@ const toAbsoluteCandidate = (value: string, hasScheme: RegExp): null | string =>
 export const normalizeLinkUrl = (raw: string): null | string => {
     const url = raw.trim();
 
-    if (!url) {
+    // `new URL()` accepts an inner space, so a raw candidate reached the document as
+    // `[hello](https://example.com/my page)` — which reloads with the link gone and the brackets as text.
+    // Rejected rather than percent-encoded: routing the value through `.href` would also rewrite a trailing
+    // slash, a `{{VAR}}` placeholder and a non-ASCII path, all of which this editor must keep byte-identical.
+    if (!url || /\s/.test(url)) {
         return null;
     }
 
@@ -59,7 +73,7 @@ const KNOWN_IMAGE_SCHEME = /^(?:https?:\/\/|data:)/i;
 export const normalizeImageSrc = (raw: string): null | string => {
     const src = raw.trim();
 
-    if (!src) {
+    if (!src || /\s/.test(src)) {
         return null;
     }
 

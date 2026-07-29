@@ -40,9 +40,13 @@ test.describe('smoke', { tag: '@smoke' }, () => {
 
             await expect(page.getByText('Login failed. Please try again.').first()).toBeVisible();
             await expect(page).toHaveURL(/\/login/);
-            // react-hook-form leaves Submit disabled after a failed submit until
-            // an input changes.
+            // Disabled by FormSubmitButton's `requireValid` gate (`isSubmitted && !isValid`), not by
+            // the 401: the typed values are still schema-valid, and only a change recomputes validity.
             await expect(page.getByRole('button', { name: 'Sign in' })).toBeDisabled();
+
+            await page.getByRole('textbox', { name: 'Password' }).fill('another-password');
+
+            await expect(page.getByRole('button', { name: 'Sign in' })).toBeEnabled();
             // The 401 logs an expected browser console error, but the path must raise no
             // uncaught JS exception / unhandled rejection.
             expect(pageErrorLog.pageErrors).toEqual([]);

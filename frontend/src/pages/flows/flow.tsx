@@ -86,10 +86,6 @@ function Flow() {
 
     const flow = flowData?.flow;
     const actualFlowTitle = flow?.title ?? '';
-    // Surface an optimistic title while the rename mutation is in flight so the
-    // breadcrumb, document title and edit affordance flip immediately on Save.
-    // If the mutation rejects, React rolls back to `actualFlowTitle` on its own
-    // and we surface the toast below — no manual reconciliation needed.
     const [flowTitle, setOptimisticFlowTitle] = useOptimistic(actualFlowTitle, (_current, next: string) => next);
     const isFlowRunning = flow ? ![StatusType.Failed, StatusType.Finished].includes(flow.status) : false;
 
@@ -121,12 +117,6 @@ function Flow() {
             return;
         }
 
-        // Drop the new title into the optimistic state immediately so the
-        // breadcrumb and document title flip before the network round-trip. The
-        // optimistic value lives only inside this transition — once the
-        // mutation settles, useOptimistic falls back to the Apollo cache
-        // (which the mutation response has already updated on success, or
-        // left untouched on error).
         startTransition(async () => {
             setOptimisticFlowTitle(newTitle);
 
@@ -277,6 +267,14 @@ function Flow() {
                 </AppHeaderContent>
                 <AppHeaderActions>
                     {!!(flowData?.tasks ?? [])?.length && <FlowReportDropdown />}
+                    {!isMobile && (
+                        <DetailNavigationToolbar<FlowItem>
+                            controller={flowNav}
+                            renderItem={renderFlowItem}
+                            sheetIcon={<GitFork className="size-4" />}
+                            sheetTitle="Flows"
+                        />
+                    )}
                     {flowId && !isMobile && (
                         <Button
                             aria-label="Toggle favorite"
@@ -289,14 +287,6 @@ function Flow() {
                         >
                             <Star className={isFavoriteFlow(flowId) ? 'fill-yellow-500 stroke-yellow-500' : ''} />
                         </Button>
-                    )}
-                    {!isMobile && (
-                        <DetailNavigationToolbar<FlowItem>
-                            controller={flowNav}
-                            renderItem={renderFlowItem}
-                            sheetIcon={<GitFork className="size-4" />}
-                            sheetTitle="Flows"
-                        />
                     )}
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>

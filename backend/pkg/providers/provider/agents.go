@@ -57,30 +57,23 @@ func testTemplate(
 	prompter templates.Prompter,
 	template string,
 ) bool {
-	// If no template provided, skip validation
 	if template == "" {
 		return false
 	}
 
-	// Collect one sample to validate the template
 	samples, err := runToolCallIDCollector(ctx, provider, opt, prompter)
 	if err != nil {
-		// Any error means validation failed
 		return false
 	}
 
-	// If no samples collected, validation failed
 	if len(samples) == 0 {
 		return false
 	}
 
-	// Validate the template against collected samples
 	if err := templates.ValidatePattern(template, samples); err != nil {
-		// Template doesn't match
 		return false
 	}
 
-	// Template validated successfully
 	return true
 }
 

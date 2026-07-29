@@ -159,7 +159,6 @@ func (t *graphitiSearchTool) Handle(ctx context.Context, name string, args json.
 
 	searchArgs.Query = strings.TrimSpace(searchArgs.Query)
 
-	// Validate required parameters
 	if searchArgs.Query == "" {
 		logger.Error("query parameter is required")
 		return "", fmt.Errorf("query parameter is required")
@@ -169,7 +168,6 @@ func (t *graphitiSearchTool) Handle(ctx context.Context, name string, args json.
 		return "", fmt.Errorf("search_type parameter is required")
 	}
 
-	// Get group ID from flow context
 	groupID := fmt.Sprintf("flow-%d", t.flowID)
 
 	ctx, observation := obs.Observer.NewObservation(ctx)
@@ -199,7 +197,6 @@ func (t *graphitiSearchTool) Handle(ctx context.Context, name string, args json.
 		Time:    time.Now().UTC(),
 	}
 
-	// Route to appropriate search method
 	var (
 		err    error
 		result string

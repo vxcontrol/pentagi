@@ -157,6 +157,7 @@ function FlowAgents() {
                                         {field.value && (
                                             <InputGroupAddon align="inline-end">
                                                 <InputGroupButton
+                                                    aria-label="Clear agent search"
                                                     onClick={() => {
                                                         form.reset({ search: '' });
                                                         setDebouncedSearchValue('');
@@ -206,6 +207,7 @@ function FlowAgents() {
 
                     {!isScrolledToBottom && (
                         <Button
+                            aria-label="Scroll to latest agent log"
                             className="absolute right-4 bottom-4 z-10 shadow-md hover:shadow-lg"
                             onClick={() => scrollToEnd()}
                             size="icon-sm"

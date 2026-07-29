@@ -33,11 +33,49 @@ export const CREATED_FOLDER: UserResourceFragmentFragment = entity('UserResource
     userId: '1',
 });
 
+export const UPLOADED_RESOURCE = makeRestResource(4, 'uploaded-notes.txt', 42, false);
+
+/** What the server broadcasts once the upload lands — the list only grows through this frame. */
+export const UPLOADED_FRAGMENT: UserResourceFragmentFragment = entity('UserResource', {
+    createdAt: '2026-01-15T12:00:00Z',
+    id: '4',
+    isDir: false,
+    name: UPLOADED_RESOURCE.name,
+    path: UPLOADED_RESOURCE.path,
+    size: UPLOADED_RESOURCE.size,
+    updatedAt: '2026-01-15T12:00:00Z',
+    userId: '1',
+});
+
 const seededList: RestResourceList = { items: [FOLDER_RESOURCE, FILE_RESOURCE], total: 2 };
 
 export const emptyResourcesCassette = (): Cassette => ({
     queries: baseQueries(),
     rest: baseRest(),
+});
+
+export const RENAMED_PATH = 'renamed-notes.txt';
+export const COPY_DESTINATION = 'archive/notes.txt';
+
+/** The write verbs differ per action — move is a PUT, copy a POST, delete a DELETE with the paths in
+ *  the query string. A method mismatch does not 404 here: it falls through to the SPA and answers 200
+ *  with HTML, so each entry pins the method as well as the payload. */
+export const resourceWrites = (): Cassette['rest'] => ({
+    'DELETE /api/v1/resources/': [
+        { body: { data: {}, status: 'success' }, querySubset: { 'paths[]': FILE_RESOURCE.path } },
+    ],
+    'POST /api/v1/resources/copy': [
+        {
+            body: { data: {}, status: 'success' },
+            bodySubset: { destination: COPY_DESTINATION, sources: [FILE_RESOURCE.path] },
+        },
+    ],
+    'PUT /api/v1/resources/move': [
+        {
+            body: { data: {}, status: 'success' },
+            bodySubset: { destination: RENAMED_PATH, sources: [FILE_RESOURCE.path] },
+        },
+    ],
 });
 
 export const resourcesCassette = (override: Cassette = {}): Cassette =>

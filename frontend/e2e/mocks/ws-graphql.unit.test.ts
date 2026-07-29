@@ -155,8 +155,12 @@ describe('graphql-ws mock protocol contract', () => {
 
         world.dropSockets();
 
-        // graphql-ws resubscribes active sinks after the retry connect.
+        // graphql-ws resubscribes active sinks in a microtask AFTER the retry connect, so gating on
+        // the reconnect alone races the resubscribe: raising the flag before the sink re-registers
+        // delivers seq:2 to an empty subscriber set and the no-replay contract loses it. Gate on the
+        // server-side resubscription instead.
         await vi.waitFor(() => expect(retries).toEqual([false, true]));
+        await vi.waitFor(() => expect(world.subscriberCount('sub:stream:{}')).toBe(1));
 
         world.matchGraphQL('raise');
 

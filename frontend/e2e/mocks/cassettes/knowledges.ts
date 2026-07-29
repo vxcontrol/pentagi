@@ -1,6 +1,10 @@
 import type { ResultOf } from '@graphql-typed-document-node/core';
 
-import type { KnowledgeDocumentFragmentFragment, KnowledgeDocumentsDocument } from '@/graphql/types';
+import type {
+    KnowledgeDocumentDocument,
+    KnowledgeDocumentFragmentFragment,
+    KnowledgeDocumentsDocument,
+} from '@/graphql/types';
 
 import { KnowledgeAnswerType, KnowledgeDocType } from '@/graphql/types';
 
@@ -45,4 +49,19 @@ export const knowledgesCassette = (override: Cassette = {}): Cassette =>
             rest: baseRest(),
         },
         override,
+    );
+
+const knowledgeDocument: ResultOf<typeof KnowledgeDocumentDocument> = { knowledgeDocument: KNOWLEDGE_DOC };
+
+/** Adds the single-document query the detail route issues for KNOWLEDGE_DOC. */
+export const knowledgeDetailCassette = (override: Cassette = {}): Cassette =>
+    knowledgesCassette(
+        mergeCassettes(
+            {
+                queries: {
+                    knowledgeDocument: [{ data: knowledgeDocument, variables: { id: KNOWLEDGE_DOC.id } }],
+                },
+            },
+            override,
+        ),
     );

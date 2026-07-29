@@ -5,8 +5,6 @@ import { history } from '@tiptap/pm/history';
 import { EditorState, TextSelection } from '@tiptap/pm/state';
 import { EditorContent, useEditor } from '@tiptap/react';
 import { useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
-// Code-block syntax highlighting theme for TunedCodeBlock (lowlight), matching the viewer.
-import 'highlight.js/styles/atom-one-dark.css';
 
 import { Spinner } from '@/components/ui/spinner';
 import { cn } from '@/lib/utils';

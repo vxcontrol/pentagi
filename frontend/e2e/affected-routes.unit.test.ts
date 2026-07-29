@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { RouteSource } from './affected-routes.ts';
 
 import { affectedRoutes } from './affected-routes.ts';
+import { ROUTE_MANIFEST } from './routes.ts';
 
 const MANIFEST: RouteSource[] = [
     {
@@ -57,5 +58,13 @@ describe('affectedRoutes', () => {
         );
 
         expect(result.map((route) => route.path)).toEqual(['/flows']);
+    });
+
+    // The fake manifest above cannot catch ownership drift in the real one: a shared provider claimed
+    // by a single route silently scopes a run away from the other routes that mount its consumers.
+    it('scopes a shared provider to every route that mounts a consumer', () => {
+        const result = affectedRoutes(['frontend/src/providers/templates-provider.tsx'], ROUTE_MANIFEST);
+
+        expect(result.map((route) => route.path).sort()).toEqual(['/flows/5', '/templates']);
     });
 });

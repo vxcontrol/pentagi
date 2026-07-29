@@ -12,9 +12,10 @@ import {
     Trash2,
     XCircle,
 } from 'lucide-react';
-import { type ComponentProps, useEffect, useMemo, useState } from 'react';
+import { type ComponentProps, type FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import {
     type Control,
+    type FieldErrors,
     type FieldPath,
     type FieldValues,
     useController,
@@ -611,10 +612,13 @@ const agentConfigSchema = z
     .object({
         extraBody: optionalJsonObject,
         frequencyPenalty: optionalNumber,
+        json: z.boolean().nullable().optional(),
         maxLength: optionalNumber,
         maxTokens: optionalNumber,
         minLength: optionalNumber,
+        minP: optionalNumber,
         model: requiredString('Model is required'),
+        n: optionalNumber,
         presencePenalty: optionalNumber,
         price: z
             .object({
@@ -634,6 +638,7 @@ const agentConfigSchema = z
             .nullable()
             .optional(),
         repetitionPenalty: optionalNumber,
+        responseMimeType: z.string().nullable().optional(),
         temperature: optionalNumber,
         topK: optionalNumber,
         topP: optionalNumber,
@@ -886,10 +891,15 @@ export const transformFormToGraphQL = (
             const config: AgentConfigInput = {
                 extraBody: data?.extraBody?.trim() ? (JSON.parse(data.extraBody) as Record<string, unknown>) : null,
                 frequencyPenalty: data?.frequencyPenalty ?? null,
+                // Not user-editable: carried through so saving a provider does not strip what the
+                // shipped defaults set (json drives WithJSONMode on the simple_json agent).
+                json: data?.json ?? null,
                 maxLength: data?.maxLength ?? null,
                 maxTokens: data?.maxTokens ?? null,
                 minLength: data?.minLength ?? null,
+                minP: data?.minP ?? null,
                 model: data?.model ?? '',
+                n: data?.n ?? null,
                 presencePenalty: data?.presencePenalty ?? null,
                 price:
                     data?.price &&
@@ -912,6 +922,7 @@ export const transformFormToGraphQL = (
                       }
                     : null,
                 repetitionPenalty: data?.repetitionPenalty ?? null,
+                responseMimeType: data?.responseMimeType ?? null,
                 temperature: data?.temperature ?? null,
                 topK: data?.topK ?? null,
                 topP: data?.topP ?? null,
@@ -1203,12 +1214,17 @@ function SettingsProvider() {
             name: undefined,
             type: undefined,
         },
+        // The seeding effect re-runs on every settingsProviders refetch (cache-and-network +
+        // replaceWithIncoming gives a fresh `data`); without this a background refetch landing
+        // mid-edit silently wipes the unsaved form.
+        resetOptions: { keepDirtyValues: true },
         schema: formSchema,
     });
 
     const { control, formState, handleSubmit: handleFormSubmit, reset, setValue, trigger, watch } = form;
 
     const { isDirty } = useFormState({ control });
+    const seededTypeRef = useRef<null | string>(null);
 
     useEffect(() => {
         if (submitError) {
@@ -1276,6 +1292,17 @@ function SettingsProvider() {
 
     useEffect(() => {
         if (!isNew || !selectedType || !data?.settingsProviders?.default || availableModels.length === 0) {
+            return;
+        }
+
+        // setValue is outside the form's keepDirtyValues, so a background refetch re-runs this effect
+        // with a fresh `data` identity and overwrites agent edits the user has not saved. Re-seed only
+        // when the type actually changed — that is the case where the previous type's agents are wrong.
+        const isSameType = seededTypeRef.current === selectedType;
+
+        seededTypeRef.current = selectedType;
+
+        if (isSameType && form.getFieldState('agents').isDirty) {
             return;
         }
 
@@ -1509,6 +1536,18 @@ function SettingsProvider() {
         }
     };
 
+    const handleInvalidSubmit = (errors: FieldErrors<FormInput>) => {
+        setSubmitError(
+            `Please fix the following validation errors:\n\n${formatFormErrors(errors as Record<string, unknown>)}`,
+        );
+    };
+
+    const handleFormEvent = async (event: FormEvent<HTMLFormElement>) => {
+        setSubmitError(null);
+
+        await handleFormSubmit(handleSubmit, handleInvalidSubmit)(event);
+    };
+
     const handleDelete = () => {
         if (isNew || !providerId) {
             return;
@@ -1605,7 +1644,7 @@ function SettingsProvider() {
         }
     };
 
-    if (loading) {
+    if (loading && !data) {
         return (
             <>
                 <AppHeader>
@@ -1625,7 +1664,7 @@ function SettingsProvider() {
         );
     }
 
-    if (error) {
+    if (error && !data) {
         return (
             <>
                 <AppHeader>
@@ -2002,7 +2041,7 @@ function SettingsProvider() {
                     className="flex min-h-0 flex-1 flex-col"
                     id="provider-form"
                     noValidate
-                    onSubmit={handleFormSubmit(handleSubmit)}
+                    onSubmit={handleFormEvent}
                 >
                     {isDesktop ? (
                         <DetailSplitLayout

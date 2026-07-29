@@ -695,6 +695,18 @@ func ConvertAgentConfigToGqlModel(ac *pconfig.AgentConfig) *model.AgentConfig {
 	if ac.PresencePenalty != 0 {
 		result.PresencePenalty = &ac.PresencePenalty
 	}
+	if ac.MinP != 0 {
+		result.MinP = &ac.MinP
+	}
+	if ac.N != 0 {
+		result.N = &ac.N
+	}
+	if ac.JSON {
+		result.JSON = &ac.JSON
+	}
+	if ac.ResponseMIMEType != "" {
+		result.ResponseMimeType = &ac.ResponseMIMEType
+	}
 
 	if !ac.Reasoning.IsZero() {
 		reasoning := &model.ReasoningConfig{}
@@ -795,6 +807,21 @@ func ConvertAgentConfigFromGqlModel(ac *model.AgentConfig) *pconfig.AgentConfig 
 	}
 	if ac.PresencePenalty != nil {
 		rawConfig["presence_penalty"] = *ac.PresencePenalty
+	}
+	// BuildOptions gates these on the key being present, not on its value, so a zero has to be
+	// written as an absent key — otherwise `json: false` would switch JSON mode on and `n: 0`
+	// would emit an invalid request parameter.
+	if ac.MinP != nil && *ac.MinP != 0 {
+		rawConfig["min_p"] = *ac.MinP
+	}
+	if ac.N != nil && *ac.N != 0 {
+		rawConfig["n"] = *ac.N
+	}
+	if ac.JSON != nil && *ac.JSON {
+		rawConfig["json"] = *ac.JSON
+	}
+	if ac.ResponseMimeType != nil && *ac.ResponseMimeType != "" {
+		rawConfig["response_mime_type"] = *ac.ResponseMimeType
 	}
 
 	if ac.Reasoning != nil {
@@ -932,7 +959,6 @@ func ConvertUsageStats[T UsageStatsRow](stats T) *model.UsageStats {
 	var in, out, cacheIn, cacheOut int64
 	var costIn, costOut float64
 
-	// Extract fields based on type
 	switch v := any(stats).(type) {
 	case database.GetFlowUsageStatsRow:
 		in, out = v.TotalUsageIn, v.TotalUsageOut
@@ -1107,7 +1133,6 @@ func ConvertToolcallsStats[T ToolcallsStatsRow](stats T) *model.ToolcallsStats {
 	var count int64
 	var duration float64
 
-	// Extract fields based on type
 	switch v := any(stats).(type) {
 	case database.GetFlowToolcallsStatsRow:
 		count, duration = v.TotalCount, v.TotalDurationSeconds
@@ -1177,7 +1202,6 @@ func isAgentTool(functionName string) bool {
 	if !exists {
 		return false
 	}
-	// Agent tools include AgentToolType and StoreAgentResultToolType
 	return toolType == tools.AgentToolType || toolType == tools.StoreAgentResultToolType
 }
 
@@ -1217,7 +1241,6 @@ func ConvertFunctionToolcallsStatsForFlow(stats []database.GetToolcallsStatsByFu
 func ConvertFlowsStats[T FlowsStatsRow](stats T) *model.FlowsStats {
 	var flowsCount, tasksCount, subtasksCount, assistantsCount int64
 
-	// Extract fields based on type
 	switch v := any(stats).(type) {
 	case database.GetUserTotalFlowsStatsRow:
 		flowsCount, tasksCount, subtasksCount, assistantsCount = v.TotalFlowsCount, v.TotalTasksCount, v.TotalSubtasksCount, v.TotalAssistantsCount
@@ -1235,7 +1258,6 @@ func ConvertFlowsStats[T FlowsStatsRow](stats T) *model.FlowsStats {
 func ConvertFlowStats[T FlowStatsRow](stats T) *model.FlowStats {
 	var tasksCount, subtasksCount, assistantsCount int64
 
-	// Extract fields based on type
 	switch v := any(stats).(type) {
 	case database.GetFlowStatsRow:
 		tasksCount, subtasksCount, assistantsCount = v.TotalTasksCount, v.TotalSubtasksCount, v.TotalAssistantsCount

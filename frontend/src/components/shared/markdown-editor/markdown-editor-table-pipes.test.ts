@@ -1,5 +1,7 @@
+import { Editor } from '@tiptap/core';
 import { describe, expect, it } from 'vitest';
 
+import { createMarkdownExtensions } from './markdown-editor-extensions';
 import { escapeTablePipes } from './markdown-editor-table-pipes';
 import { roundTrip, setupEditorJsdom } from './markdown-editor-test-setup';
 
@@ -70,11 +72,23 @@ describe('table cell with a piped code span — content survives load and conver
         expect(roundTrip(out)).toBe(out);
     });
 
+    // This used to pin `{{.X \| upper}}` — the escaped form, which Go text/template rejects outright
+    // (`unexpected "\" in operand`), so the prompt could not be saved at all. The pipe is the template's
+    // pipeline operator and stays raw; the cell count survives because the loader masks action pipes.
     it('keeps a Go-template action with a pipe inside a cell', () => {
         const out = roundTrip('| Var | Out |\n| --- | --- |\n| {{.X | upper}} | done |');
 
         expect(out).toContain('done');
-        expect(out).toContain('{{.X \\| upper}}');
+        expect(out).toContain('{{.X | upper}}');
+        expect(out).not.toContain('\\|');
+        expect(roundTrip(out)).toBe(out);
+    });
+
+    it('keeps a code span with a backtick and a pipe inside a cell', () => {
+        const out = roundTrip('| Op | Meaning |\n| --- | --- |\n| `` `x` | y `` | kept |');
+
+        expect(out).toContain('kept');
+        expect(out).toContain('`` `x` \\| y ``');
         expect(roundTrip(out)).toBe(out);
     });
 });
@@ -98,7 +112,7 @@ describe('pipe-less GFM tables (no outer pipe) — cells survive too', () => {
         const out = roundTrip('Var | Out\n--- | ---\n{{.Host | lower}} | done');
 
         expect(out).toContain('done');
-        expect(out).toContain('{{.Host \\| lower}}');
+        expect(out).toContain('{{.Host | lower}}');
     });
 
     it('protects rows whether or not each has a leading pipe (mixed)', () => {
@@ -235,5 +249,277 @@ describe('TABLE_DELIMITER_LINE is linear (ReDoS guard)', () => {
         escapeTablePipes(evil);
 
         expect(performance.now() - started).toBeLessThan(100);
+    });
+});
+
+describe('a backtick in a backtick fence info string is not a fence opener', () => {
+    const cellsOf = (markdown: string) => {
+        const editor = new Editor({
+            content: markdown,
+            contentType: 'markdown',
+            extensions: createMarkdownExtensions(),
+        });
+        const cells: string[] = [];
+
+        editor.state.doc.descendants((node) => {
+            if (node.type.name === 'tableCell' || node.type.name === 'tableHeader') {
+                cells.push(node.textContent);
+            }
+
+            return true;
+        });
+        editor.destroy();
+
+        return cells;
+    };
+
+    const TABLE = ['| Op | Meaning |', '| --- | --- |', '| `x | y` | KEEP |'].join('\n');
+
+    // marked's fence rule is /^ {0,3}(`{3,}(?=[^`\n]*(?:\n|$))|~{3,})…/ — the no-backtick lookahead applies to
+    // the BACKTICK branch only. A prose line holding an inline triple-backtick span is not a fence for marked,
+    // so treating it as one desynchronises the scanner from the parser.
+    it('keeps pipe protection for a table that follows an inline triple-backtick span', () => {
+        expect(cellsOf(['```pnpm run dev``` starts it', '', TABLE].join('\n'))).toEqual([
+            'Op',
+            'Meaning',
+            'x | y',
+            'KEEP',
+        ]);
+    });
+
+    it('protects a table that follows no fence at all, unchanged', () => {
+        expect(cellsOf(TABLE)).toEqual(['Op', 'Meaning', 'x | y', 'KEEP']);
+    });
+
+    // The opposite direction of the same desynchronisation: once the phantom fence closes, the scanner's parity
+    // is inverted and it escapes pipes INSIDE a real code block, injecting a backslash into code content.
+    it('leaves a real code block byte-identical, injecting no escape into its content', () => {
+        const source = ['```a`b', '```', '', TABLE].join('\n');
+        const editor = new Editor({ content: source, contentType: 'markdown', extensions: createMarkdownExtensions() });
+        const codeBlocks: string[] = [];
+
+        editor.state.doc.descendants((node) => {
+            if (node.type.name === 'codeBlock') {
+                codeBlocks.push(node.textContent);
+            }
+
+            return true;
+        });
+        editor.destroy();
+
+        expect(codeBlocks.join('')).not.toContain('\\|');
+    });
+
+    it('still treats a genuine fence as a fence', () => {
+        expect(escapeTablePipes(['```js', '| a | b |', '```'].join('\n'))).toBe(
+            ['```js', '| a | b |', '```'].join('\n'),
+        );
+    });
+});
+
+describe('tables nested inside list items keep their pipe protection', () => {
+    const cellsOf = (markdown: string) => {
+        const editor = new Editor({
+            content: markdown,
+            contentType: 'markdown',
+            extensions: createMarkdownExtensions(),
+        });
+        const cells: string[] = [];
+
+        editor.state.doc.descendants((node) => {
+            if (node.type.name === 'tableCell' || node.type.name === 'tableHeader') {
+                cells.push(node.textContent);
+            }
+
+            return true;
+        });
+        editor.destroy();
+
+        return cells;
+    };
+
+    const table = (indent: string) =>
+        [`${indent}| Op | Meaning |`, `${indent}| --- | --- |`, `${indent}| \`x | y\` | KEEP |`].join('\n');
+
+    const EXPECTED = ['Op', 'Meaning', 'x | y', 'KEEP'];
+
+    it('protects a table under a bullet at its natural content column', () => {
+        expect(cellsOf(['- item', '', table('  ')].join('\n'))).toEqual(EXPECTED);
+    });
+
+    // The ordinary way anyone writes a table under a sub-bullet: the content column is 4, which the top-level
+    // scanner reads as indented code and skips.
+    it('protects a table under a nested bullet', () => {
+        expect(cellsOf(['- outer', '  - inner', '', table('    ')].join('\n'))).toEqual(EXPECTED);
+    });
+
+    it('protects a table under an ordered item', () => {
+        expect(cellsOf(['1. item', '', table('   ')].join('\n'))).toEqual(EXPECTED);
+    });
+
+    it('protects a table under a bullet inside a blockquote', () => {
+        expect(cellsOf(['> - item', '>', `> ${table('  ').split('\n').join('\n> ')}`].join('\n'))).toEqual(EXPECTED);
+    });
+
+    // Relative to the item's content column, four more spaces is still indented code — marked does not make a
+    // table there, so escaping it would write a backslash into code content.
+    it('leaves a table indented four columns past the item content alone', () => {
+        const source = ['- item', '', table('      ')].join('\n');
+
+        expect(escapeTablePipes(source)).toBe(source);
+    });
+
+    // The same rule at top level, which is what a blanket relaxation of the leading-space cap would break.
+    it('leaves a four-space-indented table at top level alone', () => {
+        const source = table('    ');
+
+        expect(escapeTablePipes(source)).toBe(source);
+    });
+
+    it('does not swallow the next item at the same level', () => {
+        const source = ['- first', '', table('  '), '', '- second | not a table'].join('\n');
+
+        expect(escapeTablePipes(source)).toContain('- second | not a table');
+    });
+});
+
+describe('a Go template pipeline in a table cell keeps its own pipe', () => {
+    const cellsOf = (markdown: string) => {
+        const editor = new Editor({
+            content: markdown,
+            contentType: 'markdown',
+            extensions: createMarkdownExtensions(),
+        });
+        const cells: string[] = [];
+
+        editor.state.doc.descendants((node) => {
+            if (node.type.name === 'tableCell' || node.type.name === 'tableHeader') {
+                cells.push(node.textContent);
+            }
+
+            return true;
+        });
+        editor.destroy();
+
+        return cells;
+    };
+
+    // `{{.Host | urlquery}}` is a Go text/template pipeline. Escaping its pipe makes text/template reject the
+    // whole file with `unexpected "\" in operand`, so the prompt cannot be saved at all.
+    it('does not escape a pipeline in a body cell on save', () => {
+        expect(roundTrip('| host | value |\n| --- | --- |\n| a | {{.Host | urlquery}} |')).not.toContain('\\|');
+    });
+
+    it('keeps every cell of a table whose body holds a pipeline', () => {
+        expect(cellsOf('| host | value |\n| --- | --- |\n| a | {{.Host | urlquery}} |')).toEqual([
+            'host',
+            'value',
+            'a',
+            '{{.Host | urlquery}}',
+        ]);
+    });
+
+    // The header row is where dropping the escape without an action-aware cell count destroys the table: the
+    // raw pipe makes the header count 3 against the delimiter's 2, detection bails, and marked degrades the
+    // whole table to a paragraph.
+    it('keeps every cell of a table whose HEADER holds a pipeline', () => {
+        expect(cellsOf('| {{.A | urlquery}} | note |\n| --- | --- |\n| x | y |')).toEqual([
+            '{{.A | urlquery}}',
+            'note',
+            'x',
+            'y',
+        ]);
+    });
+
+    it('round-trips a pipeline-bearing table byte-identically on the second save', () => {
+        const source = '| host | value |\n| --- | --- |\n| a | {{.Host | urlquery}} |';
+        const once = roundTrip(source);
+
+        expect(roundTrip(once)).toBe(once);
+    });
+
+    // A structural pipe still has to be escaped when it is real content, not a template operator.
+    it('still escapes a pipe inside a code span', () => {
+        expect(roundTrip('| a | b |\n| --- | --- |\n| `x | y` | z |')).toContain('\\|');
+    });
+});
+
+describe('a table with no header row keeps its row count across a save', () => {
+    const rowsOf = (markdown: string) => {
+        const editor = new Editor({
+            content: markdown,
+            contentType: 'markdown',
+            extensions: createMarkdownExtensions(),
+        });
+        let rows = 0;
+
+        editor.state.doc.descendants((node) => {
+            if (node.type.name === 'tableRow') {
+                rows += 1;
+            }
+
+            return true;
+        });
+
+        const saved = editor.getMarkdown();
+
+        editor.destroy();
+
+        return { rows, saved };
+    };
+
+    // GFM has no headerless table, so the serializer used to emit an EMPTY header row above the demoted rows:
+    // every header-off + save + reload cycle grew the table by one blank row (2 → 3 → 4) and the switch
+    // silently flipped back on. Promoting the first row keeps the row count and every cell.
+    it('does not grow when the header row is toggled off', () => {
+        const editor = new Editor({
+            content: ['| a | b |', '| --- | --- |', '| 1 | 2 |'].join('\n'),
+            contentType: 'markdown',
+            extensions: createMarkdownExtensions(),
+        });
+
+        editor.commands.setTextSelection(3);
+        editor.commands.toggleHeaderRow();
+
+        const saved = editor.getMarkdown();
+
+        editor.destroy();
+
+        const first = rowsOf(saved);
+
+        expect(first.rows).toBe(2);
+        expect(saved).toContain('a');
+        expect(saved).toContain('1');
+        expect(rowsOf(first.saved).rows).toBe(2);
+    });
+});
+
+describe('adjacent tables do not accumulate blank paragraphs', () => {
+    const kindsOf = (markdown: string) => {
+        const editor = new Editor({
+            content: markdown,
+            contentType: 'markdown',
+            extensions: createMarkdownExtensions(),
+        });
+        const kinds: string[] = [];
+
+        editor.state.doc.forEach((node) => kinds.push(node.type.name));
+        editor.destroy();
+
+        return kinds.join(',');
+    };
+
+    // The table renderer emits a newline of its own on top of the block separator, so between two adjacent
+    // tables that extra line reloaded as an empty paragraph — which serialised to another blank line on the
+    // next save. Measured before the fix: 68 → 88 → 90 → 92 → 94 bytes, one paragraph per cycle, no fixed point.
+    it('keeps two tables adjacent across repeated saves', () => {
+        const source = ['| a | b |', '| --- | --- |', '| 1 | 2 |', '', '| c | d |', '| --- | --- |', '| 3 | 4 |'].join(
+            '\n',
+        );
+        const once = roundTrip(source);
+
+        expect(kindsOf(source)).toBe('table,table');
+        expect(kindsOf(once)).toBe('table,table');
+        expect(roundTrip(once)).toBe(once);
     });
 });

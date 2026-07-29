@@ -838,7 +838,6 @@ func (t *patchFlowSubtasksTool) Handle(ctx context.Context, name string, args js
 		}
 	}
 
-	// Verify task_id belongs to this flow.
 	taskBelongsToFlow := false
 	for _, task := range tasks {
 		if task.ID == action.TaskID {
@@ -853,7 +852,6 @@ func (t *patchFlowSubtasksTool) Handle(ctx context.Context, name string, args js
 			action.TaskID, GetFlowStatusToolName)
 	}
 
-	// Verify there are planned subtasks to patch.
 	planned, err := t.db.GetTaskPlannedSubtasks(ctx, action.TaskID)
 	if err != nil {
 		return "", fmt.Errorf("failed to get planned subtasks for task %d: %w", action.TaskID, err)

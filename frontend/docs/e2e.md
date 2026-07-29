@@ -100,8 +100,19 @@ Key conventions:
   types — schema or operation drift fails `pnpm typescript`, not the runtime.
 - **The clock is pinned** (UTC, fixed epoch) on the mock tier: keep cassette
   timestamps on the `CASSETTE_EPOCH` day or date renders change under you.
-- **Unmatched calls fail the test** — the mock tier is hermetic by design;
-  nothing ever leaks to a real backend.
+- **Unmatched HTTP calls fail the test** — every GraphQL POST and REST call needs
+  a cassette entry or teardown fails. An unmatched _subscription_ is legal (a flow
+  page opens ~15 and a cassette mocks only the ones it cares about): it gets ack'd
+  silence, so a typo'd subscription key surfaces as a UI timeout, with the missed
+  operations in the `unmatched-subscriptions` report attachment. Either way nothing
+  reaches a real backend: the WebSocket is routed too, and the HTTP route is re-armed
+  on every page the context opens, so a popup (the report tabs) is mocked like the
+  page that opened it — Playwright does not inherit a page's routes into its popups.
+- **Downloads are the one hole in that.** The browser performs an `<a download>`
+  transfer outside the page, so no route — page- or context-scoped — is ever offered
+  it: it goes to the `vite preview` proxy and out to whatever `VITE_API_URL` names. A
+  mock-tier spec must therefore never start one — assert the anchor's `href`/`download`
+  (see `specs/crud/resources.spec.ts`) and leave the bytes to `specs/real/**`.
 - Assert errors via `pageerror`/`unhandledrejection` (`expectCleanPage`): the
   production bundle strips app console output, so console-based asserts are
   meaningless on the mock tier.
@@ -133,14 +144,15 @@ Two conventions the gate reserves:
 ## Stand tier (Tier 3)
 
 Runs the LLM-independent `@stand` smoke against a real deployment. It lives in its
-own workflow (`e2e-stand.yml`) so the PR gate never subscribes to `labeled`. Label a
-PR `e2e:stand` (or dispatch the workflow with `tier: stand`); the job runs in a
-protected `e2e-stand` Environment whose required reviewers approve before any secret
-is exposed. That Environment gate — not the job's label condition — is what protects
-the secrets, so even a mislabeled or fork-PR run blocks on a human before it can reach
-them. The stand's URL and login come from the `E2E_STAND_URL` / `E2E_STAND_USER` /
-`E2E_STAND_PASSWORD` secrets (exposed to the tools as `E2E_BASE_URL` / `E2E_USER` /
-`E2E_PASSWORD`).
+own workflow (`e2e-stand.yml`) so the PR gate never subscribes to `labeled`. Trigger
+it by labelling a PR `e2e:stand`, or from **Actions → E2E Stand → Run workflow**
+(`workflow_dispatch` takes no inputs). The job's `if` is the first gate: it runs only
+for a `workflow_dispatch`, or a labelled PR whose head is **not** a fork — a
+mislabeled or fork-PR run skips the job entirely and never reaches the secrets. For a
+run that clears that gate, the protected `e2e-stand` Environment is the second gate:
+its required reviewers approve before any secret is exposed. The stand's URL and login
+come from the `E2E_STAND_URL` / `E2E_STAND_USER` / `E2E_STAND_PASSWORD` secrets
+(exposed to the tools as `E2E_BASE_URL` / `E2E_USER` / `E2E_PASSWORD`).
 
 Before the browser specs, a **schema-compat pre-flight**
 (`e2e/tools/schema-compat.mjs`) introspects the stand's live GraphQL schema and
@@ -162,6 +174,33 @@ prefix `NODE_TLS_REJECT_UNAUTHORIZED=0`; a real stand has a valid cert).
   `e2e/routes.ts`). Empty output = no frontend route changed. This is the
   substrate for scoping runs and the exploratory agent to the changed surface;
   the mapping logic is unit-tested (`e2e/affected-routes.unit.test.ts`).
+
+## Reviewing with agents
+
+Verifying a claim about a gate usually means breaking something on purpose — deleting a
+guard, injecting the regression it should catch, patching a fixture. Do that in a sandbox,
+never in your checkout:
+
+```bash
+SANDBOX=$(./e2e/tools/review-sandbox.sh create --dirty --with-deps)
+# …mutate and run anything inside $SANDBOX…
+./e2e/tools/review-sandbox.sh clean "$SANDBOX"
+```
+
+`--dirty` carries uncommitted work across (usually what you are reviewing); `--with-deps`
+hardlinks `node_modules` so pnpm, vitest and playwright run there — skip it for read-only
+work, it costs ~30s. `clean` takes a path under the sandbox root and refuses anything else,
+including the root itself; `clean --all` sweeps sandboxes untouched for two hours, so it
+cannot take out a concurrent agent's live one. A bare `clean` is an error, not a sweep.
+
+The sandbox is a `git worktree` under `$TMPDIR`, so a deleted file or an edited spec inside
+it cannot reach your tree. `--with-deps` needs the root to be on the repo's own filesystem —
+hardlinks cannot cross mounts — so where `$TMPDIR` is its own mount (tmpfs `/tmp`, a separate
+`/home`) the tool says so and falls back to `.pentagi-review-sandboxes` beside the repo;
+`PENTAGI_SANDBOX_ROOT` overrides both. Two caveats: an absolute path still escapes it, and a tool that
+rewrites a dependency **in place** would reach the shared inode — don't hand `--with-deps`
+to an agent whose job is patching libraries. Check `git status` in your own tree when a run
+finishes; that is the only proof nothing leaked.
 
 ## LLM advisory layer (Phase 3, opt-in)
 

@@ -147,9 +147,16 @@ export const guestInfoEntry = (): RestCassetteEntry => ({
 
 export const seedAuthenticated = async (page: Page): Promise<void> => {
     await page.addInitScript(
-        ([key, value]) => {
+        ([key, value, sentinel]) => {
+            // Init scripts run on every document, so an unguarded seed would resurrect the session
+            // the app just cleared and no logout/expiry spec could observe the signed-out state.
+            if (window.sessionStorage.getItem(String(sentinel))) {
+                return;
+            }
+
+            window.sessionStorage.setItem(String(sentinel), '1');
             window.localStorage.setItem(String(key), String(value));
         },
-        [AUTH_STORAGE_KEY, JSON.stringify(seededAuthInfo())] as const,
+        [AUTH_STORAGE_KEY, JSON.stringify(seededAuthInfo()), 'e2e-auth-seeded'] as const,
     );
 };

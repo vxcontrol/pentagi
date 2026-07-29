@@ -117,11 +117,14 @@ jobs:
 
       # Compare the container's own Playwright build to @playwright/test rather than a
       # hardcoded literal, so bumping the package without re-tagging the image (or vice
-      # versa) fails here instead of drifting the pixel baselines.
+      # versa) fails here instead of drifting the pixel baselines. Read the version from
+      # the image's own /ms-playwright/.docker-info: this image ships no global
+      # playwright, so `npx playwright --version` (before pnpm install) would fetch the
+      # registry latest and compare the package against that, not against the container.
       - name: Verify container image matches @playwright/test
         run: |
           pkg="$(node -p "require('./frontend/package.json').devDependencies['@playwright/test'].replace(/[^0-9.]/g, '')")"
-          container="$(npx playwright --version | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
+          container="$(node -p "JSON.parse(require('fs').readFileSync('/ms-playwright/.docker-info','utf8')).driverVersion")"
           if [ "$pkg" != "$container" ]; then
             echo "::error::e2e-visual container ships Playwright $container but @playwright/test is $pkg — bump the container tag to v$pkg-noble and regenerate baselines"
             exit 1
@@ -153,10 +156,25 @@ jobs:
         working-directory: frontend
         run: E2E_VISUAL=1 E2E_VISUAL_CONTAINER=1 npx playwright test -c e2e/playwright.config.ts
 
-      # Only on a real snapshot diff (not a tag-guard/install/build failure), so its
-      # presence is the precise "snapshots differ" signal the report keys the advisory on.
-      - name: Upload diffs
+      # The step failing is not the same signal as a snapshot differing: a webServer or build
+      # failure inside it also exits non-zero and still leaves results.json behind, which would
+      # publish the artifact and make the report say "snapshots differ". Look for the diff images.
+      - name: Detect snapshot diffs
+        id: diffs
         if: failure() && steps.snapshots.outcome == 'failure'
+        working-directory: frontend
+        run: |
+          # -actual.png too: a missing baseline fails the test but writes no diff image, and only the
+          # snapshot matcher writes either name — a non-snapshot failure leaves test-failed-N.png.
+          if find e2e/test-results \( -name '*-diff.png' -o -name '*-actual.png' \) -print -quit | grep -q .; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Its presence is the precise "snapshots differ" signal the report keys the advisory on.
+      - name: Upload diffs
+        if: always() && steps.diffs.outputs.found == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: e2e-visual-diffs
@@ -169,8 +187,7 @@ jobs:
   e2e-local:
     if: >
       github.event_name == 'schedule' ||
-      (github.event_name == 'workflow_dispatch' &&
-       contains(fromJSON('["local", "all"]'), inputs.tier))
+      (github.event_name == 'workflow_dispatch' && inputs.tier == 'local')
     runs-on: ubuntu-latest
     timeout-minutes: 40
     steps:

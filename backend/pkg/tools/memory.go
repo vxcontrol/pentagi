@@ -111,7 +111,6 @@ func (m *memory) Handle(ctx context.Context, name string, args json.RawMessage) 
 
 		logger = logger.WithFields(fields)
 
-		// Execute multiple queries and collect all documents
 		var allDocs []schema.Document
 		for i, query := range action.Questions {
 			queryLogger := logger.WithFields(logrus.Fields{
@@ -168,7 +167,6 @@ func (m *memory) Handle(ctx context.Context, name string, args json.RawMessage) 
 			"total_docs_before_dedup": len(allDocs),
 		}).Debug("all queries completed")
 
-		// Merge, deduplicate, sort by score, and limit results
 		docs := MergeAndDeduplicateDocs(allDocs, memoryVectorStoreResultLimit)
 
 		logger.WithFields(logrus.Fields{
@@ -224,7 +222,6 @@ func (m *memory) Handle(ctx context.Context, name string, args json.RawMessage) 
 				logger.WithError(err).Error("failed to marshal filters")
 				return "", fmt.Errorf("failed to marshal filters: %w", err)
 			}
-			// Join all queries for logging
 			queriesText := strings.Join(action.Questions, "\n--------------------------------\n")
 			_, _ = m.vslp.PutLog(
 				ctx,

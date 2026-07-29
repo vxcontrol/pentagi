@@ -469,7 +469,7 @@ function Resources() {
 
                 {isDragging && hasResources && (
                     <div className="bg-primary/10 border-primary pointer-events-none absolute inset-2 z-30 flex items-center justify-center rounded-lg border-2 border-dashed">
-                        <div className="text-primary flex flex-col items-center gap-2">
+                        <div className="text-link flex flex-col items-center gap-2">
                             <FolderUp className="size-8" />
                             <span className="text-sm font-medium">Drop files to upload</span>
                         </div>
@@ -489,6 +489,7 @@ function Resources() {
                         {search.rawQuery ? (
                             <InputGroupAddon align="inline-end">
                                 <InputGroupButton
+                                    aria-label="Clear resource search"
                                     onClick={search.resetSearch}
                                     type="button"
                                 >

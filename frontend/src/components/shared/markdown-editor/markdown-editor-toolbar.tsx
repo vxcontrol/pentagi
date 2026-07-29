@@ -18,11 +18,13 @@ import { memo, useEffect, useRef } from 'react';
 import { Separator } from '@/components/ui/separator';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
+import { isMac } from '@/lib/utils/platform';
 
 import type { HeadingLevel } from './markdown-editor-toolbar-heading';
 import type { ListType } from './markdown-editor-toolbar-list';
 import type { ColumnAlign } from './markdown-editor-toolbar-table';
 
+import { isBlockApplied } from './markdown-editor-extensions';
 import { hasHeaderRow } from './markdown-editor-table-commands';
 import { ToolbarButton, ToolbarToggle } from './markdown-editor-toolbar-button';
 import { HeadingMenu } from './markdown-editor-toolbar-heading';
@@ -37,6 +39,29 @@ interface MarkdownEditorToolbarProps {
 }
 
 const HEADING_LEVELS: HeadingLevel[] = [1, 2, 3, 4, 5, 6];
+
+// prosemirror-keymap resolves `Mod` per platform, so advertising ⌘ on Windows and Linux names a key the
+// binding does not use. Same shape as input-search.tsx's `modifier`. Redo is `Shift+Ctrl+Z` rather than
+// `Ctrl+Y` because both are registered and the shifted form matches the Mac label the user sees elsewhere.
+const shortcutFor = (key: string) => (isMac() ? `⌘${key}` : `Ctrl+${key}`);
+const shiftShortcutFor = (key: string) => (isMac() ? `⇧⌘${key}` : `Ctrl+Shift+${key}`);
+
+// Only commands whose dry run is FAITHFUL belong here. tiptap runs `can()` with dispatch undefined, so
+// `toggleList`'s `clearNodes()` fallback does nothing and the following `wrapInList` fails — the three list
+// kinds, `toggleCodeBlock` and `toggleHeading` all report false for conversions that work. Disabling on that
+// answer takes a working action away from the user, which is worse than a no-op click.
+const blockAvailability = (editor: Editor) => {
+    const can = editor.can();
+
+    return {
+        canBlockquote: can.toggleBlockquote(),
+        canBold: can.toggleBold(),
+        canCode: can.toggleCode(),
+        canItalic: can.toggleItalic(),
+        canLink: can.setLink({ href: 'https://example.com' }),
+        canStrike: can.toggleStrike(),
+    };
+};
 
 // A mouse wheel emits deltaY, which the browser applies to the nearest VERTICAL scroller — never to this
 // overflow-x strip, so a wheel-mouse user can't reach overflowed controls (trackpads emit deltaX and already
@@ -163,13 +188,18 @@ export const MarkdownEditorToolbar = memo(function MarkdownEditorToolbar({
     const state = useEditorState({
         editor,
         selector: ({ editor }) => ({
-            activeListType: (editor.isActive('bulletList')
+            activeListType: (isBlockApplied(editor, 'bulletList')
                 ? 'bullet'
-                : editor.isActive('orderedList')
+                : isBlockApplied(editor, 'orderedList')
                   ? 'ordered'
-                  : editor.isActive('taskList')
+                  : isBlockApplied(editor, 'taskList')
                     ? 'task'
                     : null) as ListType | null,
+            // A control whose command reports unavailable is disabled, because these commands return false
+            // without dispatching and the click would be a silent no-op. Only the always-visible strip is
+            // answered here — the menus ask for their own items on open, since `can()` rebuilds the whole
+            // command map per call (~40µs measured, flat in document size) and this selector runs per keystroke.
+            ...blockAvailability(editor),
             canRedo: editor.can().redo(),
             canUndo: editor.can().undo(),
             columnAlign: (editor.getAttributes('tableHeader').align ??
@@ -178,11 +208,16 @@ export const MarkdownEditorToolbar = memo(function MarkdownEditorToolbar({
             headingLevel: (HEADING_LEVELS.find((level) => editor.isActive('heading', { level })) ?? 0) as
                 | 0
                 | HeadingLevel,
-            isBlockquote: editor.isActive('blockquote'),
+            isBlockquote: isBlockApplied(editor, 'blockquote'),
             isBold: editor.isActive('bold'),
             isCode: editor.isActive('code'),
-            isCodeBlock: editor.isActive('codeBlock'),
+            isCodeBlock: isBlockApplied(editor, 'codeBlock'),
             isHeaderRow: hasHeaderRow(editor),
+            // A cell serialises inline, so these controls silently degrade the document from a caret inside
+            // one: a code block becomes an inline span on reload, a horizontal rule applied mid-word splits
+            // the word permanently, a list marker and a quote marker survive only as literal text. `can()`
+            // reports true for all of them, so the guard is structural rather than command-driven.
+            isInTableCell: editor.isActive('tableCell') || editor.isActive('tableHeader'),
             isItalic: editor.isActive('italic'),
             isLink: editor.isActive('link'),
             isStrike: editor.isActive('strike'),
@@ -220,6 +255,7 @@ export const MarkdownEditorToolbar = memo(function MarkdownEditorToolbar({
                         activeLevel={state.headingLevel}
                         disabled={disabled}
                         editor={editor}
+                        isInTableCell={state.isInTableCell}
                     />
 
                     <Separator
@@ -232,25 +268,25 @@ export const MarkdownEditorToolbar = memo(function MarkdownEditorToolbar({
                         role="group"
                     >
                         <ToolbarToggle
-                            disabled={disabled}
+                            disabled={disabled || !state.canBold}
                             label="Bold"
                             onPressedChange={() => editor.chain().focus().toggleBold().run()}
                             pressed={state.isBold}
-                            shortcut="⌘B"
+                            shortcut={shortcutFor('B')}
                         >
                             <Bold />
                         </ToolbarToggle>
                         <ToolbarToggle
-                            disabled={disabled}
+                            disabled={disabled || !state.canItalic}
                             label="Italic"
                             onPressedChange={() => editor.chain().focus().toggleItalic().run()}
                             pressed={state.isItalic}
-                            shortcut="⌘I"
+                            shortcut={shortcutFor('I')}
                         >
                             <Italic />
                         </ToolbarToggle>
                         <ToolbarToggle
-                            disabled={disabled}
+                            disabled={disabled || !state.canStrike}
                             label="Strikethrough"
                             onPressedChange={() => editor.chain().focus().toggleStrike().run()}
                             pressed={state.isStrike}
@@ -258,7 +294,7 @@ export const MarkdownEditorToolbar = memo(function MarkdownEditorToolbar({
                             <Strikethrough />
                         </ToolbarToggle>
                         <ToolbarToggle
-                            disabled={disabled}
+                            disabled={disabled || !state.canCode}
                             label="Inline code"
                             onPressedChange={() => editor.chain().focus().toggleCode().run()}
                             pressed={state.isCode}
@@ -266,7 +302,7 @@ export const MarkdownEditorToolbar = memo(function MarkdownEditorToolbar({
                             <Code />
                         </ToolbarToggle>
                         <LinkPopover
-                            disabled={disabled}
+                            disabled={disabled || !state.canLink}
                             editor={editor}
                             isActive={state.isLink}
                         />
@@ -281,6 +317,7 @@ export const MarkdownEditorToolbar = memo(function MarkdownEditorToolbar({
                         activeType={state.activeListType}
                         disabled={disabled}
                         editor={editor}
+                        isInTableCell={state.isInTableCell}
                     />
 
                     <Separator
@@ -306,7 +343,7 @@ export const MarkdownEditorToolbar = memo(function MarkdownEditorToolbar({
                         role="group"
                     >
                         <ToolbarToggle
-                            disabled={disabled}
+                            disabled={disabled || !state.canBlockquote}
                             label="Blockquote"
                             onPressedChange={() => editor.chain().focus().toggleBlockquote().run()}
                             pressed={state.isBlockquote}
@@ -314,7 +351,7 @@ export const MarkdownEditorToolbar = memo(function MarkdownEditorToolbar({
                             <Quote />
                         </ToolbarToggle>
                         <ToolbarToggle
-                            disabled={disabled}
+                            disabled={disabled || state.isInTableCell}
                             label="Code block"
                             onPressedChange={() => editor.chain().focus().toggleCodeBlock().run()}
                             pressed={state.isCodeBlock}
@@ -326,7 +363,7 @@ export const MarkdownEditorToolbar = memo(function MarkdownEditorToolbar({
                             editor={editor}
                         />
                         <ToolbarButton
-                            disabled={disabled}
+                            disabled={disabled || state.isInTableCell}
                             label="Horizontal rule"
                             onClick={() => editor.chain().focus().setHorizontalRule().run()}
                         >
@@ -361,7 +398,7 @@ export const MarkdownEditorToolbar = memo(function MarkdownEditorToolbar({
                         disabled={disabled || !state.canUndo}
                         label="Undo"
                         onClick={() => editor.chain().focus().undo().run()}
-                        shortcut="⌘Z"
+                        shortcut={shortcutFor('Z')}
                     >
                         <Undo />
                     </ToolbarButton>
@@ -369,7 +406,7 @@ export const MarkdownEditorToolbar = memo(function MarkdownEditorToolbar({
                         disabled={disabled || !state.canRedo}
                         label="Redo"
                         onClick={() => editor.chain().focus().redo().run()}
-                        shortcut="⇧⌘Z"
+                        shortcut={shiftShortcutFor('Z')}
                     >
                         <Redo />
                     </ToolbarButton>

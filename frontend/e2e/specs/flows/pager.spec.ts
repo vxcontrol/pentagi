@@ -8,7 +8,7 @@ test.describe('flow pager', { tag: ['@flows', '@smoke'] }, () => {
     test.describe('with a report to show', () => {
         test.use({ cassette: flowTabsCassette() });
 
-        test('keeps the variable action left of the fixed ones', async ({ page }) => {
+        test('keeps the variable Report action left of the pager and fixed actions', async ({ page }) => {
             await page.goto('/flows/5');
             await expect(page.locator('header').getByRole('button', { name: 'Report' })).toBeVisible();
 
@@ -17,52 +17,59 @@ test.describe('flow pager', { tag: ['@flows', '@smoke'] }, () => {
                 .evaluateAll((buttons) => buttons.map((button) => button.getAttribute('aria-label') ?? ''));
             const positionOf = (label: string) => labels.findIndex((candidate) => candidate.startsWith(label));
 
-            expect(positionOf('Report')).toBeLessThan(positionOf('Toggle favorite'));
-            expect(positionOf('Toggle favorite')).toBeLessThan(positionOf('Previous'));
-            expect(positionOf('Next')).toBeLessThan(positionOf('Flow actions'));
+            // findIndex returns -1 for an absent label, and -1 < any real index, so the ordering below
+            // passes vacuously when a button is missing. Require presence first.
+            for (const label of ['Report', 'Toggle favorite', 'Previous', 'Next', 'Flow actions']) {
+                expect(positionOf(label), `header is missing the "${label}" button`).toBeGreaterThanOrEqual(0);
+            }
+
+            expect(positionOf('Report')).toBeLessThan(positionOf('Previous'));
+            expect(positionOf('Previous')).toBeLessThan(positionOf('Next'));
+            expect(positionOf('Next')).toBeLessThan(positionOf('Toggle favorite'));
+            expect(positionOf('Toggle favorite')).toBeLessThan(positionOf('Flow actions'));
         });
     });
 
     test('steps to the sibling flow and back without passing through the list', async ({ page, pageErrorLog }) => {
         const header = page.locator('header');
 
+        await page.addInitScript(() => {
+            const trail: string[] = [];
+
+            (window as unknown as { __routeTrail: string[] }).__routeTrail = trail;
+
+            for (const method of ['pushState', 'replaceState'] as const) {
+                const original = history[method].bind(history);
+
+                history[method] = (state: unknown, unused: string, url?: null | string | URL) => {
+                    original(state, unused, url);
+                    trail.push(window.location.pathname);
+                };
+            }
+        });
+
         await page.goto('/flows/5');
         await expect(header.getByText('E2E Alpha')).toBeVisible();
 
-        await page.route('**/graphql', async (route) => {
-            await new Promise((resolve) => setTimeout(resolve, 300));
-            await route.fallback();
+        // Drop the router's own normalising replaceState from the initial load.
+        await page.evaluate(() => {
+            (window as unknown as { __routeTrail: string[] }).__routeTrail.length = 0;
         });
 
         await header.getByRole('button', { name: 'Next' }).click();
 
-        const samples = await page.evaluate(async () => {
-            const taken = [];
-
-            for (let index = 0; index < 10; index += 1) {
-                taken.push({
-                    hasPager: !!document.querySelector('header button[aria-label="Next"]'),
-                    isSiblingShown: document.querySelector('header')?.textContent?.includes('E2E Beta') ?? false,
-                    path: window.location.pathname,
-                });
-                await new Promise((resolve) => setTimeout(resolve, 30));
-            }
-
-            return taken;
-        });
-
         await expect(page).toHaveURL(/\/flows\/6$/);
         await expect(header.getByText('E2E Beta')).toBeVisible();
-
-        // Guards the delay above as much as the pager: without it the sibling lands inside the
-        // first sample and the loop measures nothing.
-        expect(samples.filter((sample) => !sample.isSiblingShown).length).toBeGreaterThan(2);
-        expect(samples.every((sample) => sample.hasPager)).toBe(true);
-        expect(samples.map((sample) => sample.path)).not.toContain('/flows');
+        await expect(header.getByRole('button', { name: 'Next' })).toBeVisible();
 
         await header.getByRole('button', { name: 'Previous' }).click();
 
         await expect(page).toHaveURL(/\/flows\/5$/);
+        await expect(header.getByText('E2E Alpha')).toBeVisible();
+
+        const trail = await page.evaluate(() => (window as unknown as { __routeTrail: string[] }).__routeTrail);
+
+        expect(trail, 'the pager must step straight between siblings').toEqual(['/flows/6', '/flows/5']);
         expectCleanPage(pageErrorLog);
     });
 });

@@ -284,3 +284,52 @@ describe('streaming assistant-log link (createStreamingLink)', () => {
         expect(emitted).toEqual([{ somethingElse: { id: '1' } }]);
     });
 });
+
+describe('ProviderConfig cache identity', () => {
+    const PROVIDERS = gql`
+        query P {
+            settingsProviders {
+                default {
+                    anthropic {
+                        id
+                        name
+                        type
+                    }
+                    openai {
+                        id
+                        name
+                        type
+                    }
+                }
+            }
+        }
+    `;
+
+    // The resolver builds default providers without an ID, so every one of them arrives as id 0.
+    // Normalising on that shared id would collapse them onto a single cache entry and the last
+    // write would win — the create form then seeds one provider type from another's defaults.
+    it('keeps two defaults apart even though both carry id 0', () => {
+        const cache = createCache();
+
+        cache.writeQuery({
+            data: {
+                settingsProviders: {
+                    __typename: 'ProvidersConfig',
+                    default: {
+                        __typename: 'DefaultProvidersConfig',
+                        anthropic: { __typename: 'ProviderConfig', id: 0, name: 'anthropic', type: 'anthropic' },
+                        openai: { __typename: 'ProviderConfig', id: 0, name: 'openai', type: 'openai' },
+                    },
+                },
+            },
+            query: PROVIDERS,
+        });
+
+        const read = cache.readQuery<{
+            settingsProviders: { default: { anthropic: { name: string }; openai: { name: string } } };
+        }>({ query: PROVIDERS });
+
+        expect(read?.settingsProviders.default.anthropic.name).toBe('anthropic');
+        expect(read?.settingsProviders.default.openai.name).toBe('openai');
+    });
+});

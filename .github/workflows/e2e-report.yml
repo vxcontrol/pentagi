@@ -28,6 +28,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Download results
+        id: results
         continue-on-error: true
         uses: actions/download-artifact@v4
         with:
@@ -55,15 +56,25 @@ jobs:
             const fs = require('fs');
             const run = context.payload.workflow_run;
 
-            // workflow_run.pull_requests is empty for fork PRs — resolve by head SHA.
-            let prNumber = run.pull_requests[0]?.number;
+            // Match the PR whose head is still this run's — one commit can belong to several PRs, so
+            // taking the first association (either source) could hand the report to a stale or
+            // foreign one. Same filter on both paths: workflow_run.pull_requests (empty for forks)
+            // and the head-SHA lookup that covers them.
+            // workflow_run.pull_requests carries head.repo.name but no full_name, unlike the API
+            // lookup — enforce the repo only when it is present, so the primary path still matches.
+            const isThisRun = (pr) =>
+              pr.head?.sha === run.head_sha &&
+              pr.head?.ref === run.head_branch &&
+              (pr.head?.repo?.full_name == null || pr.head.repo.full_name === run.head_repository?.full_name);
+
+            let prNumber = run.pull_requests.find(isThisRun)?.number;
             if (!prNumber) {
               const { data: prs } = await github.rest.repos.listPullRequestsAssociatedWithCommit({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 commit_sha: run.head_sha,
               });
-              prNumber = prs[0]?.number;
+              prNumber = prs.find(isThisRun)?.number;
             }
             if (!prNumber) {
               core.info(`No PR found for ${run.head_sha}; skipping comment.`);
@@ -94,7 +105,15 @@ jobs:
               return;
             }
 
-            let statsLine = 'The run produced no results file (it likely failed before the tests started).';
+            // e2e.yml uploads results.json with `if-no-files-found: ignore`, so a run that never
+            // wrote one publishes no artifact at all: a failed download means the file is absent,
+            // a successful download with unreadable stats means it is corrupt.
+            const resultsDownloaded = '${{ steps.results.outcome }}' === 'success';
+
+            let statsLine = resultsDownloaded
+              ? 'The results file could not be parsed, so no test counts are available.'
+              : 'No results artifact was produced for this run.';
+            let statsRead = false;
             let noFailures = false;
             try {
               const report = JSON.parse(fs.readFileSync('results/results.json', 'utf8'));
@@ -102,24 +121,39 @@ jobs:
               const { expected, unexpected, flaky, skipped } = report.stats ?? {};
               statsLine = `**${n(expected)} passed**, ${n(unexpected)} failed, ${n(flaky)} flaky, ${n(skipped)} skipped.`;
               noFailures = n(unexpected) === 0;
+              statsRead = true;
             } catch (error) {
               core.info(`results.json unavailable: ${error}`);
             }
 
-            // Both halves are required: results.json is written before an abort can be
-            // observed, so a run killed by the global timeout still reports zero failures.
-            // When the jobs API was unreachable, fall back to results.json alone.
-            const mockPassed = noFailures && (jobsFetched ? mockJob?.conclusion === 'success' : true);
+            // The job conclusion is load-bearing, not a nicety: results.json is written before a
+            // global-timeout abort can be observed (its un-run tests land in `skipped`, so
+            // `unexpected` stays 0), and only the job's own conclusion reflects the abort. So a
+            // green needs BOTH zero failures AND a successful job; whenever either source is
+            // unreadable the verdict is unknown — never a green, and never a red.
+            const jobFailed = jobsFetched && mockJob?.conclusion !== 'success';
+            const mockStatus = jobFailed || (statsRead && !noFailures)
+              ? 'fail'
+              : statsRead && jobsFetched
+                ? 'pass'
+                : 'unknown';
 
             // Key the advisory on the e2e-visual-diffs artifact (uploaded only when the snapshot
             // step itself failed), not on the visual job's conclusion — a tag-guard, install or
             // build failure would otherwise read as "snapshots differ".
             const visualDiffers = '${{ steps.visualdiffs.outcome }}' === 'success';
 
-            const conclusion = !mockPassed ? '❌' : visualDiffers ? '⚠️' : '✅';
+            const conclusion = mockStatus === 'fail' ? '❌' : mockStatus === 'unknown' || visualDiffers ? '⚠️' : '✅';
             const marker = '<!-- e2e-report -->';
-            const advisoryLine = visualDiffers
-              ? '⚠️ **Visual snapshots differ** — advisory only, does not block merge. Download the `e2e-visual-diffs` artifact to compare expected / actual / diff.'
+            const unconfirmedReason = !jobsFetched && !statsRead
+              ? 'neither the workflow jobs API nor `results.json` could be read'
+              : !jobsFetched
+              ? 'the workflow jobs API was unreachable, so this reflects `results.json` alone, which cannot distinguish a clean pass from a run killed mid-flight'
+              : '`results.json` could not be read, so this reflects the job conclusion alone and no test counts were checked';
+            const advisoryLine = mockStatus === 'unknown'
+              ? `⚠️ **Result unconfirmed** — ${unconfirmedReason}. Check the run before merging.`
+              : visualDiffers
+              ? '⚠️ **Visual snapshots differ** — advisory only, does not block merge. Download the `e2e-visual-diffs` artifact to compare expected / actual / diff (a missing baseline uploads actual only).'
               : null;
             const body = [
               marker,

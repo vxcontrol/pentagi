@@ -237,7 +237,12 @@ export function KnowledgeForm({ initialValues, isNew, knowledge, onSubmit }: Kno
                 // Reset BEFORE the caller navigates so `isDirty` is false by the
                 // time the blocker re-evaluates (the caller also calls
                 // `skipNextBlock` to cover reset's async state propagation).
-                reset(resetValues, { keepDefaultValues: false });
+                //
+                // `keepDirtyValues: false` is not the default here: RHF merges the form-level `resetOptions`
+                // into every manual reset, and this form sets `keepDirtyValues` there to protect unsaved edits
+                // during a subscription resync. Inherited by a POST-save reset it keeps the pre-save values and
+                // their dirty flags, so a later save can send a stale field back and silently revert it.
+                reset(resetValues, { keepDefaultValues: false, keepDirtyValues: false });
 
                 return result;
             } catch (error) {

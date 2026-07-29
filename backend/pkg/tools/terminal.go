@@ -192,14 +192,12 @@ func (t *terminal) ExecCommand(
 ) (string, error) {
 	containerName := PrimaryTerminalName(t.flowID)
 
-	// create options for starting the exec process
 	cmd := []string{
 		"sh",
 		"-c",
 		command,
 	}
 
-	// verify container runtime status
 	isRunning, err := t.dockerClient.IsContainerRunning(ctx, t.containerLID)
 	if err != nil {
 		return "", fmt.Errorf("runtime verification failed: %w", err)
@@ -265,7 +263,6 @@ func (t *terminal) getExecResult(ctx context.Context, id string, timeout time.Du
 		defer cancel()
 	}
 
-	// attach to the exec process
 	resp, err := t.dockerClient.ContainerExecAttach(ctx, id, container.ExecAttachOptions{
 		Tty: true,
 	})

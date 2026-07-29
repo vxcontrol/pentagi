@@ -25,7 +25,29 @@ describe('code-block fence lengthening — a block documenting a ``` fence stays
     });
 
     it('leaves an ordinary code block on a 3-backtick fence', () => {
-        expect(roundTrip('```js\nconst x = 1;\n```')).toContain('```js');
+        expect(roundTrip('```js\nconst x = 1;\n```')).toBe('```js\nconst x = 1;\n```');
+    });
+});
+
+// A tilde fence's info string may hold a backtick; a backtick fence's may not — re-emitting such a block on a
+// backtick fence produces an opening line that is no longer a fence at all, and the code block is destroyed.
+describe('code-block fence character — a language containing a backtick keeps its tilde fence', () => {
+    it('re-emits a tilde fence so the block survives reload', () => {
+        const src = '~~~`js`\nconst x = 1;\n~~~';
+        const out = roundTrip(src);
+
+        expect(out).toBe(src);
+        expect(nodeCount(out, 'codeBlock')).toBe(1);
+        expect(roundTrip(out)).toBe(out);
+    });
+
+    it('widens the tilde fence past an inner ~~~ run', () => {
+        const src = '~~~~`js`\ninner\n~~~\nafter\n~~~~';
+        const out = roundTrip(src);
+
+        expect(out).toBe(src);
+        expect(nodeCount(out, 'codeBlock')).toBe(1);
+        expect(roundTrip(out)).toBe(out);
     });
 });
 
@@ -47,23 +69,93 @@ describe('code-block language attribute', () => {
 
     it('round-trips the language on the fence for several languages', () => {
         for (const lang of ['ts', 'python', 'bash', 'json', 'go']) {
-            expect(roundTrip(`\`\`\`${lang}\ncode\n\`\`\``)).toContain(`\`\`\`${lang}`);
+            expect(roundTrip(`\`\`\`${lang}\ncode\n\`\`\``)).toBe(`\`\`\`${lang}\ncode\n\`\`\``);
         }
     });
 });
 
-// KNOWN UPSTREAM LIMITATION — not fixable in this layer. @tiptap/markdown derives a MARK's opening/closing
-// delimiter by rendering it around a fixed placeholder (getMarkOpening/getMarkClosing), so the `code` mark's
-// real content is never seen at delimiter time and it always emits a SINGLE backtick. A code span whose
-// content contains a backtick therefore collapses on save and never converges. A NODE (codeBlock, above) DOES
-// receive its real content and is content-aware — hence the fence widening is fixable but this is not. Pinned so
-// the gap stays visible: this test turns RED (the canary to revisit it) if a future @tiptap/markdown makes mark
-// delimiters content-aware and the span starts round-tripping.
-describe('inline code containing a backtick — known lossy on save (upstream mark-delimiter limitation)', () => {
-    it('collapses a backtick-containing code span (does not round-trip)', () => {
+describe('code-block highlighting', () => {
+    const highlightClasses = (md: string): string[] => {
+        const element = document.createElement('div');
+        const editor = new Editor({
+            content: md,
+            contentType: 'markdown',
+            element,
+            extensions: createMarkdownExtensions(),
+        });
+        const classes = [...editor.view.dom.querySelectorAll('pre code span')].flatMap((span) => [...span.classList]);
+        editor.destroy();
+
+        return [...new Set(classes)];
+    };
+
+    const SNIPPET = 'const total = items.map((item) => item.price).reduce((a, b) => a + b, 0);';
+
+    it('highlights a fence that declares its language', () => {
+        expect(highlightClasses(`\`\`\`javascript\n${SNIPPET}\n\`\`\``)).toContain('hljs-keyword');
+    });
+
+    // An undeclared fence must resolve to the plaintext grammar, not to highlightAuto: auto-detection re-runs
+    // over every code block in the document on each keystroke inside one, and it is quadratic in document size.
+    it('leaves a fence with no language unhighlighted rather than guessing', () => {
+        expect(highlightClasses(`\`\`\`\n${SNIPPET}\n\`\`\``)).toEqual([]);
+    });
+});
+
+// Guards the two paired seams of the code-span fix: serializeCodeSpan (markdown-editor-marked.ts) and the
+// code-mark renderMarkdown override that zeroes the placeholder fence. A regression in either turns these red.
+describe('inline code containing a backtick round-trips exactly', () => {
+    it('preserves and converges a backtick-containing code span', () => {
         const out = roundTrip('x ``a `b` c`` y');
 
-        expect(out).not.toContain('``a `b` c``');
-        expect(roundTrip(out)).not.toBe(out);
+        expect(out).toContain('``a `b` c``');
+        expect(roundTrip(out)).toBe(out);
+    });
+
+    it.each([
+        'a ``` `XSS` ``` b',
+        'x ``` `key` = value ``` y',
+        'run ``` echo `whoami` ``` now',
+        'p ```` a```b ```` q',
+        'a `simple` b',
+        'use `{{.Host}}` here',
+    ])('reaches a stable fixed point for %j', (src) => {
+        const once = roundTrip(src);
+
+        expect(roundTrip(once)).toBe(once);
+    });
+});
+
+// A block created in the editor carries no author-chosen language, so it must serialize as a bare fence.
+// `defaultLanguage` exists for the highlight plugin (`attrs.language || defaultLanguage`); leaking it into
+// the attribute default writes ```plaintext into every prompt, template and knowledge document saved.
+describe('a code block created in the editor', () => {
+    const created = (): { language: null | string; markdown: string } => {
+        const editor = new Editor({
+            content: 'hello',
+            contentType: 'markdown',
+            extensions: createMarkdownExtensions(),
+        });
+
+        editor.commands.selectAll();
+        editor.commands.toggleCodeBlock();
+
+        const node = (editor.getJSON().content ?? []).find((candidate) => candidate.type === 'codeBlock');
+        const result = {
+            language: (node?.attrs?.language as null | string) ?? null,
+            markdown: editor.getMarkdown(),
+        };
+
+        editor.destroy();
+
+        return result;
+    };
+
+    it('serializes as a bare fence, not as ```plaintext', () => {
+        const { language, markdown } = created();
+
+        expect(language).toBeNull();
+        expect(markdown).toContain('```\nhello\n```');
+        expect(markdown).not.toContain('plaintext');
     });
 });

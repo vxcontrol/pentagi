@@ -37,6 +37,22 @@ test.describe('responsive', { tag: '@cross' }, () => {
         });
     });
 
+    test.describe('sidebar boundary', () => {
+        test('768 keeps the sidebar inline, 767 collapses it to the mobile sheet', async ({ page, pageErrorLog }) => {
+            await page.setViewportSize({ height: 800, width: 768 });
+            await page.goto('/flows');
+            await expect(page.getByRole('link', { name: 'Dashboard' })).toBeVisible();
+
+            await page.setViewportSize({ height: 800, width: 767 });
+            // `hidden md:block` hides the desktop tree either way, so its absence — the closed mobile
+            // sheet renders nothing — is the only reading that tells the hook's answer from the CSS.
+            await expect(page.locator('[data-sidebar="sidebar"]')).toHaveCount(0);
+            await expect(page.getByRole('link', { name: 'Dashboard' })).toBeHidden();
+            expect(await page.evaluate(hasHorizontalOverflow)).toBe(false);
+            expectCleanPage(pageErrorLog);
+        });
+    });
+
     test.describe('split boundary', () => {
         test('1280 shows the resizable split, 1279 merges into one tab row', async ({ page, pageErrorLog }) => {
             await page.setViewportSize({ height: 800, width: 1280 });

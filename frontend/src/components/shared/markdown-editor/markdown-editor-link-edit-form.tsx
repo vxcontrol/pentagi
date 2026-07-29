@@ -39,10 +39,20 @@ export function LinkEditForm({ autoFocus = true, editor, initialUrl, isActive, o
         if (empty && !isActive) {
             // No selection to wrap → insert the URL as its own linked text: the visible text is what the user
             // typed, but the href is the normalized value.
+            //
+            // A `]` in that text would close the markdown label early — `[https://x/a]b](…)` — and the whole
+            // construct leaks into literal text, growing on every load+save cycle. The label is serialized by
+            // the text path, which has no mark context, so the escape cannot live in the link's renderMarkdown
+            // (@tiptap/markdown hands that renderer a placeholder, not the text). Keep the brackets out of the
+            // label here instead; the href itself still carries them verbatim.
             editor
                 .chain()
                 .focus()
-                .insertContent({ marks: [{ attrs: { href }, type: 'link' }], text: url.trim(), type: 'text' })
+                .insertContent({
+                    marks: [{ attrs: { href }, type: 'link' }],
+                    text: url.trim().replace(/[[\]]/g, ''),
+                    type: 'text',
+                })
                 .run();
         } else {
             editor.chain().focus().extendMarkRange('link').setLink({ href }).run();

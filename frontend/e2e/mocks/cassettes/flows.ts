@@ -5,6 +5,7 @@ import type {
     FlowDocument,
     FlowFilesDocument,
     FlowFragmentFragment,
+    FlowReportDocument,
     FlowStatsByFlowDocument,
     MessageLogFragmentFragment,
     TerminalLogFragmentFragment,
@@ -85,11 +86,13 @@ export const VARIED_MESSAGES = [
         resultFormat: ResultFormat.Markdown,
         type: MessageLogType.Report,
     }),
+    // Terminal, not Report: `getMessageType` pairs the terminal tool's output with the terminal
+    // type, so a Report carrying a Terminal body is a state the backend cannot emit.
     makeMessage('503', '5', {
         message: '',
         result: 'e2e-terminal-marker\nexit 0',
         resultFormat: ResultFormat.Terminal,
-        type: MessageLogType.Report,
+        type: MessageLogType.Terminal,
     }),
     makeMessage('504', '5', { message: 'run the smoke command', type: MessageLogType.Input }),
 ];
@@ -179,8 +182,8 @@ export const flowsCassette = (override: Cassette = {}): Cassette =>
                     {
                         frames: [
                             ...FLOW_A_STREAMED_IDS.map((id) => addedFrame(makeMessage(id, '5'), 80)),
-                            // Not a copy-paste: a resubscribe replays what the refetch already
-                            // delivered, and the sentinel after it proves the replay was received.
+                            // A resubscribe replays what the refetch already delivered; the sentinel
+                            // after it proves the replay was received.
                             {
                                 ...addedFrame(makeMessage(FLOW_A_RECONNECT_ID, '5'), 0),
                                 whenFlag: REPLAY_FLAG,
@@ -199,11 +202,37 @@ export const flowsCassette = (override: Cassette = {}): Cassette =>
         override,
     );
 
-export const variedMessagesCassette = (): Cassette =>
+export const FLOW_B_SENTINEL_ID = '205';
+export const PAGER_SWITCH_FLAG = 'pager-switched';
+
+/** Holds flow B a frame back so the spec can prove the new stream still delivers after the switch. */
+export const pagerStreamsCassette = (): Cassette =>
     flowsCassette({
-        queries: { flow: [{ data: flowQueryData(FLOW_A, VARIED_MESSAGES), variables: { id: '5' } }] },
-        subscriptions: { messageLogAdded: [{ frames: [], variables: { flowId: '5' } }] },
+        subscriptions: {
+            messageLogAdded: [
+                {
+                    frames: FLOW_A_STREAMED_IDS.map((id) => addedFrame(makeMessage(id, '5'), 80)),
+                    variables: { flowId: '5' },
+                },
+                {
+                    frames: [
+                        ...FLOW_B_STREAMED_IDS.map((id) => addedFrame(makeMessage(id, '6'), 80)),
+                        { ...addedFrame(makeMessage(FLOW_B_SENTINEL_ID, '6'), 0), whenFlag: PAGER_SWITCH_FLAG },
+                    ],
+                    variables: { flowId: '6' },
+                },
+            ],
+        },
     });
+
+export const variedMessagesCassette = (override: Cassette = {}): Cassette =>
+    mergeCassettes(
+        flowsCassette({
+            queries: { flow: [{ data: flowQueryData(FLOW_A, VARIED_MESSAGES), variables: { id: '5' } }] },
+            subscriptions: { messageLogAdded: [{ frames: [], variables: { flowId: '5' } }] },
+        }),
+        override,
+    );
 
 const TABS_TASK = entity('Task', {
     createdAt: T,
@@ -370,6 +399,139 @@ const toolcallsStatsByFunctionForFlow: ResultOf<typeof ToolcallsStatsByFunctionF
 const flowStatsByFlow: ResultOf<typeof FlowStatsByFlowDocument> = {
     flowStatsByFlow: entity('FlowStats', { totalAssistantsCount: 1, totalSubtasksCount: 3, totalTasksCount: 1 }),
 };
+
+/** Text that exists only in a streamed frame, so a panel that ignores its subscription stays blank. */
+export const STREAMED = {
+    agent: 'E2E streamed agent step',
+    search: 'E2E streamed search',
+    task: 'E2E Streamed Task',
+    taskRetitled: 'E2E Task Alpha (revised)',
+    terminal: 'e2e-streamed-terminal-line',
+    vector: 'E2E streamed recall',
+};
+
+const streamedFrame = (payload: Record<string, unknown>) => ({ delayMs: 60, payload: { data: payload } });
+
+export const livePanelsCassette = (): Cassette =>
+    mergeCassettes(flowTabsCassette(), {
+        subscriptions: {
+            agentLogAdded: [
+                {
+                    frames: [
+                        streamedFrame({
+                            agentLogAdded: entity('AgentLog', {
+                                createdAt: T,
+                                executor: AgentType.Pentester,
+                                flowId: '5',
+                                id: '42',
+                                initiator: AgentType.Adviser,
+                                result: 'Streamed step complete',
+                                subtaskId: null,
+                                task: STREAMED.agent,
+                                taskId: '11',
+                            }),
+                        }),
+                    ],
+                    variables: { flowId: '5' },
+                },
+            ],
+            searchLogAdded: [
+                {
+                    frames: [
+                        streamedFrame({
+                            searchLogAdded: entity('SearchLog', {
+                                createdAt: T,
+                                engine: 'duckduckgo',
+                                executor: AgentType.Searcher,
+                                flowId: '5',
+                                id: '52',
+                                initiator: AgentType.Pentester,
+                                query: STREAMED.search,
+                                result: 'Streamed advisories',
+                                subtaskId: null,
+                                taskId: '11',
+                            }),
+                        }),
+                    ],
+                    variables: { flowId: '5' },
+                },
+            ],
+            taskCreated: [
+                {
+                    frames: [
+                        streamedFrame({
+                            taskCreated: entity('Task', {
+                                createdAt: T,
+                                flowId: '5',
+                                id: '12',
+                                input: 'Exploit the open port',
+                                result: '',
+                                status: StatusType.Running,
+                                subtasks: [],
+                                title: STREAMED.task,
+                                updatedAt: T,
+                            }),
+                        }),
+                    ],
+                    variables: { flowId: '5' },
+                },
+            ],
+            taskUpdated: [
+                {
+                    frames: [
+                        streamedFrame({
+                            taskUpdated: { ...TABS_TASK, status: StatusType.Running, title: STREAMED.taskRetitled },
+                        }),
+                    ],
+                    variables: { flowId: '5' },
+                },
+            ],
+            terminalLogAdded: [
+                {
+                    frames: [
+                        streamedFrame({
+                            terminalLogAdded: terminalLog('303', TerminalLogType.Stdout, STREAMED.terminal),
+                        }),
+                    ],
+                    variables: { flowId: '5' },
+                },
+            ],
+            vectorStoreLogAdded: [
+                {
+                    frames: [
+                        streamedFrame({
+                            vectorStoreLogAdded: entity('VectorStoreLog', {
+                                action: VectorStoreAction.Retrieve,
+                                createdAt: T,
+                                executor: AgentType.Memorist,
+                                filter: '{}',
+                                flowId: '5',
+                                id: '62',
+                                initiator: AgentType.Pentester,
+                                query: STREAMED.vector,
+                                result: 'Streamed recall complete',
+                                subtaskId: null,
+                                taskId: '11',
+                            }),
+                        }),
+                    ],
+                    variables: { flowId: '5' },
+                },
+            ],
+        },
+    });
+
+const flowReportData: ResultOf<typeof FlowReportDocument> = { flow: FLOW_A, tasks: [TABS_TASK] };
+
+/** The Report menu only appears when the flow query returns tasks, so this overrides `flow` too. */
+export const flowReportCassette = (): Cassette =>
+    flowsCassette({
+        queries: {
+            flow: [{ data: flowTabsData, variables: { id: '5' } }],
+            flowReport: [{ data: flowReportData, variables: { id: '5' } }],
+        },
+        subscriptions: { messageLogAdded: [{ frames: [], variables: { flowId: '5' } }] },
+    });
 
 export const flowTabsCassette = (): Cassette =>
     flowsCassette({
