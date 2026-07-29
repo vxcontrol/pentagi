@@ -38,7 +38,7 @@ services:
 	// to simulate the bug scenario
 
 	// Initialize state
-	appState, err := state.New(envPath)
+	appState, err := state.NewState(envPath)
 	if err != nil {
 		t.Fatalf("Failed to initialize state: %v", err)
 	}
@@ -109,7 +109,7 @@ func TestPerformStackOperationSkipsMissingFiles(t *testing.T) {
 	}
 
 	// Initialize state
-	appState, err := state.New(envPath)
+	appState, err := state.NewState(envPath)
 	if err != nil {
 		t.Fatalf("Failed to initialize state: %v", err)
 	}
