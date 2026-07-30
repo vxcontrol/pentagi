@@ -74,10 +74,12 @@ func (p *AuthMiddleware) tryAuth(
 	}
 
 	if withFail && result != authResultOk {
-		if errors.Is(authErr, errCookieClaimInvalid) {
-			// An expired/absent session cookie hitting a protected endpoint is
-			// routine (e.g. a stale browser tab polling after logout/expiry),
-			// not an application error - log it quietly instead of at Error.
+		if isRoutineAuthFailure(authErr) {
+			// An expired/absent/invalidated session or token hitting a protected
+			// endpoint is routine (e.g. a stale browser tab polling after
+			// logout/expiry, or a password change/DB reseed invalidating the
+			// stored hash), not an application error - log it quietly instead
+			// of at Error.
 			response.ErrorWithLevel(c, response.ErrAuthRequired, authErr, logrus.WarnLevel)
 		} else {
 			response.Error(c, response.ErrAuthRequired, authErr)
@@ -87,10 +89,28 @@ func (p *AuthMiddleware) tryAuth(
 	c.Next()
 }
 
+// isRoutineAuthFailure reports whether authErr represents an expected,
+// non-malicious session/token invalidation rather than a genuine application
+// error, so callers can log it at a quieter level.
+func isRoutineAuthFailure(authErr error) bool {
+	return errors.Is(authErr, errCookieClaimInvalid) ||
+		errors.Is(authErr, errSessionExpired) ||
+		errors.Is(authErr, errUserHashMismatch)
+}
+
 // errCookieClaimInvalid is returned by tryUserCookieAuthentication when the
 // session cookie is present but missing one or more required claims (expired
 // or otherwise invalid session) - a routine, expected condition.
-var errCookieClaimInvalid = errors.New("cookie claim invalid")
+//
+// errSessionExpired and errUserHashMismatch mark the same category of routine
+// session/token invalidation, just detected a bit later during validation: a
+// session past its TTL, or a stored hash that no longer matches the user
+// record (e.g. after a password change or a test database reseed).
+var (
+	errCookieClaimInvalid = errors.New("cookie claim invalid")
+	errSessionExpired     = errors.New("session expired")
+	errUserHashMismatch   = errors.New("user hash mismatch")
+)
 
 func (p *AuthMiddleware) tryUserCookieAuthentication(c *gin.Context) (authResult, error) {
 	sessionObject, exists := c.Get(sessions.DefaultKey)
@@ -128,7 +148,7 @@ func (p *AuthMiddleware) tryUserCookieAuthentication(c *gin.Context) (authResult
 		return authResultFail, errors.New("token claim invalid")
 	}
 	if time.Now().Unix() > expVal {
-		return authResultFail, errors.New("session expired")
+		return authResultFail, errSessionExpired
 	}
 
 	// Verify user hash matches database
@@ -152,7 +172,7 @@ func (p *AuthMiddleware) tryUserCookieAuthentication(c *gin.Context) (authResult
 	}
 
 	if dbHash != sessionHash {
-		return authResultFail, errors.New("user hash mismatch - session invalid for this installation")
+		return authResultFail, fmt.Errorf("%w - session invalid for this installation", errUserHashMismatch)
 	}
 
 	c.Set("prm", prms)
@@ -224,7 +244,7 @@ func (p *AuthMiddleware) tryProtoTokenAuthentication(c *gin.Context) (authResult
 	}
 
 	if dbHash != apiClaims.UHASH {
-		return authResultFail, errors.New("user hash mismatch - token invalid for this installation")
+		return authResultFail, fmt.Errorf("%w - token invalid for this installation", errUserHashMismatch)
 	}
 
 	// generate UUID from user hash (fallback to empty string if hash is invalid)

@@ -319,7 +319,7 @@ func (fp *flowProvider) performSubtasksRefiner(
 		DurationSeconds: time.Since(startTime).Seconds(),
 	})
 	if err != nil {
-		logger.WithError(err).Error("failed to create msg chain")
+		obs.LogErrorOrCancel(logger, err, "failed to create msg chain")
 		return nil, fmt.Errorf("failed to create msg chain: %w", err)
 	}
 
@@ -327,7 +327,7 @@ func (fp *flowProvider) performSubtasksRefiner(
 
 	err = fp.performAgentChain(ctx, optAgentType, msgChain.ID, &taskID, nil, chain, executor, fp.summarizer)
 	if err != nil {
-		logger.WithError(err).Error("failed to perform subtasks refiner agent chain")
+		obs.LogErrorOrCancel(logger, err, "failed to perform subtasks refiner agent chain")
 		return nil, fmt.Errorf("failed to get subtasks refiner result: %w", err)
 	}
 

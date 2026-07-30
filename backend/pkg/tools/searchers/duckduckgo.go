@@ -119,7 +119,7 @@ func (d *duckduckgo) Handle(ctx context.Context, req Request) (string, error) {
 			}),
 		)
 
-		logger.WithError(err).Error("failed to search in DuckDuckGo")
+		obs.LogErrorOrCancel(logger, err, "failed to search in DuckDuckGo")
 		// DuckDuckGo already retries transient failures internally (see search);
 		// by the time an error surfaces here, moving to the next engine is the
 		// right call rather than burning another round-trip on the same one.

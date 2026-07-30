@@ -50,6 +50,7 @@ type FlowWorker interface {
 	Stop(ctx context.Context) error
 	Rename(ctx context.Context, title string) error
 	WaitTaskCompletion(ctx context.Context) error
+	InvalidateTaskSubtasks(ctx context.Context, taskID int64, subtaskIDs []int64)
 }
 
 type assistantProvider struct {
@@ -650,6 +651,10 @@ func (ap *assistantProvider) patchAssistantFlowSubtasks(
 		if err := db.DeleteSubtasks(ctx, idsToDelete); err != nil {
 			return fmt.Errorf("failed to delete subtasks for task %d: %w", taskID, err)
 		}
+		// The task worker for taskID (if currently loaded in memory) still holds
+		// SubtaskWorker objects for idsToDelete; without this it would later try
+		// to operate on rows that no longer exist (e.g. on flow Finish/Stop).
+		ap.flowWorker.InvalidateTaskSubtasks(ctx, taskID, idsToDelete)
 	}
 
 	// result contains only entries that were in patchableSubs (minus removed ones)

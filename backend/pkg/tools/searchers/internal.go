@@ -103,7 +103,7 @@ func (e *internalEngine) Handle(ctx context.Context, req Request) (string, error
 				"error":  err.Error(),
 			}),
 		)
-		logger.WithError(err).Error("internal analytics engine failed")
+		obs.LogErrorOrCancel(logger, err, "internal analytics engine failed")
 		return "", err
 	}
 

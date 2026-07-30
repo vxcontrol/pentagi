@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"sync"
@@ -33,6 +34,7 @@ type TaskWorker interface {
 	PutInput(ctx context.Context, input string) error
 	Run(ctx context.Context) error
 	Finish(ctx context.Context) error
+	InvalidateSubtasks(subtaskIDs []int64)
 }
 
 type taskWorker struct {
@@ -204,6 +206,22 @@ func (tw *taskWorker) SetStatus(ctx context.Context, status database.TaskStatus)
 		ID:     tw.taskCtx.TaskID,
 	})
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			// Replacement can leave this worker behind after deleting its row.
+			// Treat it as complete so flow shutdown remains idempotent.
+			logrus.WithContext(ctx).WithFields(logrus.Fields{
+				"task_id":          tw.taskCtx.TaskID,
+				"requested_status": status,
+			}).Warn("task no longer exists in the database, treating as already finished")
+
+			tw.mx.Lock()
+			tw.completed = true
+			tw.waiting = false
+			tw.mx.Unlock()
+
+			return nil
+		}
+
 		return fmt.Errorf("failed to set task %d status: %w", tw.taskCtx.TaskID, err)
 	}
 
@@ -396,4 +414,10 @@ func (tw *taskWorker) Finish(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// InvalidateSubtasks evicts subtaskIDs from this task's in-memory subtask
+// controller. See flowWorker.InvalidateTaskSubtasks for why this is needed.
+func (tw *taskWorker) InvalidateSubtasks(subtaskIDs []int64) {
+	tw.stc.InvalidateSubtasks(subtaskIDs)
 }

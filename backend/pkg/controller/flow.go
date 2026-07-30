@@ -50,6 +50,7 @@ type FlowWorker interface {
 	Stop(ctx context.Context) error
 	Rename(ctx context.Context, title string) error
 	WaitTaskCompletion(ctx context.Context) error
+	InvalidateTaskSubtasks(ctx context.Context, taskID int64, subtaskIDs []int64)
 }
 
 type flowWorker struct {
@@ -140,7 +141,7 @@ func NewFlowWorker(
 		UserID:             fwc.userID,
 	})
 	if err != nil {
-		logrus.WithError(err).Error("failed to create flow in DB")
+		obs.LogErrorOrCancel(logrus.WithContext(ctx), err, "failed to create flow in DB")
 		return nil, fmt.Errorf("failed to create flow in DB: %w", err)
 	}
 
@@ -546,6 +547,17 @@ func (fw *flowWorker) SetStatus(ctx context.Context, status database.FlowStatus)
 	fw.flowCtx.Publisher.FlowUpdated(ctx, flow, containers)
 
 	return nil
+}
+
+// InvalidateTaskSubtasks drops stale workers after direct DB deletion,
+// preventing delayed ErrNoRows failures.
+func (fw *flowWorker) InvalidateTaskSubtasks(ctx context.Context, taskID int64, subtaskIDs []int64) {
+	task, err := fw.tc.GetTask(ctx, taskID)
+	if err != nil {
+		return
+	}
+
+	task.InvalidateSubtasks(subtaskIDs)
 }
 
 func (fw *flowWorker) AddAssistant(ctx context.Context, aw AssistantWorker) error {

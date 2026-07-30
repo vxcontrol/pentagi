@@ -147,6 +147,13 @@ func (b *browser) Handle(ctx context.Context, name string, args json.RawMessage)
 		return "", fmt.Errorf("failed to unmarshal browser action: %w", err)
 	}
 
+	// LLMs occasionally wrap the URL with an incidental leading/trailing
+	// newline, carriage return, or space (e.g. copy-pasted from command
+	// output); net/url.Parse rejects control characters outright, failing the
+	// whole call over whitespace that carries no meaning. Strip it here so it
+	// never reaches resolveUrl.
+	action.Url = strings.TrimSpace(action.Url)
+
 	if action.Action == "" {
 		// The LLM occasionally omits the required 'action' field even though the
 		// tool schema marks it required. 'markdown' is the safest default: it is

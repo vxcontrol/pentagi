@@ -618,19 +618,19 @@ func (fp *flowProvider) processChain(
 ) error {
 	msgChain, err := fp.db.GetMsgChain(ctx, msgChainID)
 	if err != nil {
-		logger.WithError(err).Error("failed to get message chain")
+		obs.LogErrorOrCancel(logger, err, "failed to get message chain")
 		return fmt.Errorf("failed to get message chain %d: %w", msgChainID, err)
 	}
 
 	var chain []llms.MessageContent
 	if err := json.Unmarshal(msgChain.Chain, &chain); err != nil {
-		logger.WithError(err).Error("failed to unmarshal message chain")
+		obs.LogErrorOrCancel(logger, err, "failed to unmarshal message chain")
 		return fmt.Errorf("failed to unmarshal message chain %d: %w", msgChainID, err)
 	}
 
 	updatedChain, err := transform(chain)
 	if err != nil {
-		logger.WithError(err).Error("failed to transform chain")
+		obs.LogErrorOrCancel(logger, err, "failed to transform chain")
 		return fmt.Errorf("failed to transform chain: %w", err)
 	}
 
@@ -680,7 +680,7 @@ func (fp *flowProvider) processChain(
 
 	chainBlob, err := json.Marshal(updatedChain)
 	if err != nil {
-		logger.WithError(err).Error("failed to marshal updated chain")
+		obs.LogErrorOrCancel(logger, err, "failed to marshal updated chain")
 		return fmt.Errorf("failed to marshal updated chain %d: %w", msgChainID, err)
 	}
 
@@ -692,7 +692,7 @@ func (fp *flowProvider) processChain(
 		ID:              msgChainID,
 	})
 	if err != nil {
-		logger.WithError(err).Error("failed to update message chain")
+		obs.LogErrorOrCancel(logger, err, "failed to update message chain")
 		return fmt.Errorf("failed to update message chain %d: %w", msgChainID, err)
 	}
 

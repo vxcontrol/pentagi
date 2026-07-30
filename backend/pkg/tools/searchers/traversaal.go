@@ -61,7 +61,7 @@ func (t *traversaal) Handle(ctx context.Context, req Request) (string, error) {
 			}),
 		)
 
-		logger.WithError(err).Error("failed to search in traversaal")
+		obs.LogErrorOrCancel(logger, err, "failed to search in traversaal")
 		return "", err
 	}
 

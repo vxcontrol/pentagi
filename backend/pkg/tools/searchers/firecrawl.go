@@ -124,7 +124,7 @@ func (f *firecrawl) Handle(ctx context.Context, req Request) (string, error) {
 			}),
 		)
 
-		logger.WithError(err).Error("failed to search in firecrawl")
+		obs.LogErrorOrCancel(logger, err, "failed to search in firecrawl")
 		return "", err
 	}
 

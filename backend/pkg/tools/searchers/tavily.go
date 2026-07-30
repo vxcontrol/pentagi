@@ -93,7 +93,7 @@ func (t *tavily) Handle(ctx context.Context, req Request) (string, error) {
 			}),
 		)
 
-		logger.WithError(err).Error("failed to search in tavily")
+		obs.LogErrorOrCancel(logger, err, "failed to search in tavily")
 		return "", err
 	}
 

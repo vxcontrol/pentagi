@@ -11,6 +11,28 @@ import (
 	"pentagi/pkg/database"
 )
 
+// ErrFlowStateGuard is a sentinel wrapped into flow_manager tool errors that stem
+// from the flow/task/subtask being in a state that makes the requested operation
+// currently impossible (a task already running, no plan yet, an unknown task ID,
+// a subtask that no longer exists after a database-level change, etc.) rather
+// than from malformed call arguments. Callers can check errors.Is(err,
+// ErrFlowStateGuard) to skip argument-fixing retries for these: no amount of
+// "corrected" arguments changes the underlying flow state, so retrying only
+// wastes LLM round-trips before the same guard fires again.
+var ErrFlowStateGuard = errors.New("flow state guard")
+
+// stateGuardError marks err so errors.Is(_, ErrFlowStateGuard) reports true,
+// without altering err's displayed message - callers, and the LLM, only ever
+// see the original err.Error() text.
+type stateGuardError struct{ error }
+
+func (e stateGuardError) Is(target error) bool { return target == ErrFlowStateGuard }
+func (e stateGuardError) Unwrap() error        { return e.error }
+
+// stateGuard wraps a flow_manager guard-rail error so it can be recognized via
+// errors.Is(err, ErrFlowStateGuard) further up the call stack.
+func stateGuard(err error) error { return stateGuardError{err} }
+
 // flowStatusTool implements get_flow_status — reads flow/task/subtask state from DB.
 type flowStatusTool struct {
 	flowID     int64
@@ -735,7 +757,7 @@ func (t *submitFlowInputTool) Handle(ctx context.Context, name string, args json
 		// (most likely after a system restart or database cleanup while the subtask was at an ask checkpoint).
 		// The subtask can no longer be resumed; the flow must be stopped and restarted.
 		if strings.Contains(err.Error(), "no rows in result set") {
-			return "", fmt.Errorf(
+			return "", stateGuard(fmt.Errorf(
 				"the waiting subtask's execution context is no longer available in the database — "+
 					"this typically happens after a system restart when the subtask was paused at an ask checkpoint. "+
 					"Recovery: (1) call %s to cancel the stale task; "+
@@ -743,7 +765,7 @@ func (t *submitFlowInputTool) Handle(ctx context.Context, name string, args json
 					"if the flow already has planned subtasks that should still run, "+
 					"use %s to inspect the remaining plan and %s to patch it before resuming",
 				StopFlowToolName, SubmitFlowInputToolName,
-				GetFlowStatusToolName, PatchFlowSubtasksToolName)
+				GetFlowStatusToolName, PatchFlowSubtasksToolName))
 		}
 		return "", fmt.Errorf("failed to submit flow input: %w", err)
 	}
@@ -830,11 +852,11 @@ func (t *patchFlowSubtasksTool) Handle(ctx context.Context, name string, args js
 
 	for _, task := range tasks {
 		if task.Status == database.TaskStatusRunning {
-			return "", fmt.Errorf(
+			return "", stateGuard(fmt.Errorf(
 				"task %q (ID: %d) is currently running; "+
 					"patching is not allowed while a task is executing. "+
 					"Call %s first, then retry %s",
-				task.Title, task.ID, StopFlowToolName, PatchFlowSubtasksToolName)
+				task.Title, task.ID, StopFlowToolName, PatchFlowSubtasksToolName))
 		}
 	}
 
@@ -846,10 +868,10 @@ func (t *patchFlowSubtasksTool) Handle(ctx context.Context, name string, args js
 		}
 	}
 	if !taskBelongsToFlow {
-		return "", fmt.Errorf(
+		return "", stateGuard(fmt.Errorf(
 			"task ID %d was not found in this flow; "+
 				"obtain a valid task ID from %s with detail='tasks'",
-			action.TaskID, GetFlowStatusToolName)
+			action.TaskID, GetFlowStatusToolName))
 	}
 
 	planned, err := t.db.GetTaskPlannedSubtasks(ctx, action.TaskID)
@@ -869,24 +891,24 @@ func (t *patchFlowSubtasksTool) Handle(ctx context.Context, name string, args js
 			}
 			switch st.Status {
 			case database.SubtaskStatusWaiting:
-				return "", fmt.Errorf(
+				return "", stateGuard(fmt.Errorf(
 					"task %d has a subtask (ID: %d, %q) waiting for user input. "+
 						"Only 'created' subtasks can be patched, but you can include the waiting subtask's ID in your operations to modify or remove it. "+
 						"Alternatively, answer it via %s first",
-					action.TaskID, st.ID, st.Title, SubmitFlowInputToolName)
+					action.TaskID, st.ID, st.Title, SubmitFlowInputToolName))
 			case database.SubtaskStatusRunning:
-				return "", fmt.Errorf(
+				return "", stateGuard(fmt.Errorf(
 					"task %d has a subtask (ID: %d, %q) currently running. "+
 						"Call %s first, then retry",
-					action.TaskID, st.ID, st.Title, StopFlowToolName)
+					action.TaskID, st.ID, st.Title, StopFlowToolName))
 			}
 		}
 
-		return "", fmt.Errorf(
+		return "", stateGuard(fmt.Errorf(
 			"no 'created' subtasks found for task %d; "+
 				"all subtasks have been executed or the task has no plan yet. "+
 				"Use %s to create a new task instead",
-			action.TaskID, SubmitFlowInputToolName)
+			action.TaskID, SubmitFlowInputToolName))
 	}
 
 	patch := SubtaskPatch{

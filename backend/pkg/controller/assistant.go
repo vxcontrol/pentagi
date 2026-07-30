@@ -446,12 +446,12 @@ func (aw *assistantWorker) worker() {
 		}
 
 		if err := aw.SetStatus(ctx, database.AssistantStatusRunning); err != nil {
-			aw.logger.WithError(err).Error("failed to set assistant status to waiting")
+			obs.LogErrorOrCancel(aw.logger, err, "failed to set assistant status to waiting")
 		}
 
 		defer func() {
 			if err := aw.SetStatus(ctx, database.AssistantStatusWaiting); err != nil {
-				aw.logger.WithError(err).Error("failed to set assistant status to waiting")
+				obs.LogErrorOrCancel(aw.logger, err, "failed to set assistant status to waiting")
 			}
 		}()
 
@@ -489,7 +489,7 @@ func (aw *assistantWorker) worker() {
 		case ain := <-aw.input:
 			err := perform(aw.ctx, ain.input, ain.useAgents)
 			if err != nil {
-				aw.logger.WithError(err).Error("failed to perform assistant chain")
+				obs.LogErrorOrCancel(aw.logger, err, "failed to perform assistant chain")
 			}
 			ain.done <- err
 		}

@@ -70,7 +70,7 @@ func (s *searxng) Handle(ctx context.Context, req Request) (string, error) {
 			}),
 		)
 
-		logger.WithError(err).Error("failed to search in searxng")
+		obs.LogErrorOrCancel(logger, err, "failed to search in searxng")
 		return "", err
 	}
 

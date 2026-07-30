@@ -72,7 +72,7 @@ func (g *google) Handle(ctx context.Context, req Request) (string, error) {
 			}),
 		)
 
-		logger.WithError(err).Error("failed to search in google")
+		obs.LogErrorOrCancel(logger, err, "failed to search in google")
 		return "", classifyGoogleError(err)
 	}
 

@@ -136,7 +136,7 @@ func (s *search) Handle(ctx context.Context, name string, args json.RawMessage) 
 				vectorstores.WithFilters(filters),
 			)
 			if err != nil {
-				queryLogger.WithError(err).Error("failed to search answer for query")
+				obs.LogErrorOrCancel(queryLogger, err, "failed to search answer for query")
 				continue // Continue with other queries even if one fails
 			}
 

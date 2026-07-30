@@ -786,3 +786,21 @@ func getPackageName(f string) string {
 
 	return f
 }
+
+// LogErrorOrCancel logs err on entry at Error level, unless err is (or wraps)
+// context.Canceled, in which case it logs at Warn level instead.
+//
+// In this codebase context.Canceled almost always propagates from an explicit
+// user action (stopping/pausing a flow or task, closing an assistant chat),
+// not from a genuine failure. Logging it at Error level pollutes error-rate
+// monitoring and alerting with expected, benign events. This helper keeps
+// that single decision in one place so every call site treats cancellation
+// consistently.
+func LogErrorOrCancel(entry *logrus.Entry, err error, msg string) {
+	if errors.Is(err, context.Canceled) {
+		entry.WithError(err).Warn(msg)
+		return
+	}
+
+	entry.WithError(err).Error(msg)
+}

@@ -98,7 +98,7 @@ func (s *sploitus) Handle(ctx context.Context, req Request) (string, error) {
 			}),
 		)
 
-		logger.WithError(err).Error("failed to search in Sploitus")
+		obs.LogErrorOrCancel(logger, err, "failed to search in Sploitus")
 		return "", err
 	}
 

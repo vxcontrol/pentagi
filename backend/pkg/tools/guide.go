@@ -138,7 +138,7 @@ func (g *guide) Handle(ctx context.Context, name string, args json.RawMessage) (
 				vectorstores.WithFilters(filters),
 			)
 			if err != nil {
-				queryLogger.WithError(err).Error("failed to search for similar documents")
+				obs.LogErrorOrCancel(queryLogger, err, "failed to search for similar documents")
 				continue // Continue with other queries even if one fails
 			}
 
