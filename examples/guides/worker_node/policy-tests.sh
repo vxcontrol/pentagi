@@ -122,24 +122,39 @@ expect_cmd_deny(){ local name="$1"; shift
 }
 
 # Direct HTTP call to the DinD API for endpoints not exposed by the Docker CLI.
-# Automatically picks unix-socket or TCP transport based on DOCKER[@] config.
-# Direct HTTP call to the DinD API for endpoints not exposed by the Docker CLI.
-# Handles both unix-socket mode and TLS/TCP mode (extracts certs from DOCKER[@]).
+# Transport resolution order:
+#   1. DOCKER=(docker -H tcp://… --tlscacert …) CLI flags
+#   2. DOCKER_HOST / DOCKER_CERT_PATH env (PentAGI worker / guide layout)
+#   3. unix socket /var/run/docker.sock
+# Always prefixes the Docker API version (required by Engine 29+).
 dind_api_post(){ # path json
     local path="$1" body="$2" d="${DOCKER[*]}"
+    local endpoint="" curl_args=() api_ver
+
     if [[ "$d" =~ -H[[:space:]]+tcp://([^[:space:]]+) ]]; then
-        local endpoint="https://${BASH_REMATCH[1]}"
-        local curl_tls=()
-        [[ "$d" =~ --tlscacert[[:space:]]+([^[:space:]]+) ]] && curl_tls+=(--cacert "${BASH_REMATCH[1]}")
-        [[ "$d" =~ --tlscert[[:space:]]+([^[:space:]]+) ]]   && curl_tls+=(--cert  "${BASH_REMATCH[1]}")
-        [[ "$d" =~ --tlskey[[:space:]]+([^[:space:]]+) ]]    && curl_tls+=(--key   "${BASH_REMATCH[1]}")
-        LAST_OUT=$(curl -s "${curl_tls[@]}" -X POST "${endpoint}${path}" \
-            -H 'Content-Type: application/json' -d "$body" 2>&1)
+        endpoint="https://${BASH_REMATCH[1]}"
+        [[ "$d" =~ --tlscacert[[:space:]]+([^[:space:]]+) ]] && curl_args+=(--cacert "${BASH_REMATCH[1]}")
+        [[ "$d" =~ --tlscert[[:space:]]+([^[:space:]]+) ]]   && curl_args+=(--cert  "${BASH_REMATCH[1]}")
+        [[ "$d" =~ --tlskey[[:space:]]+([^[:space:]]+) ]]    && curl_args+=(--key   "${BASH_REMATCH[1]}")
+    elif [[ "${DOCKER_HOST:-}" =~ ^tcp://([^[:space:]]+)$ ]]; then
+        endpoint="https://${BASH_REMATCH[1]}"
+        local cert_path="${DOCKER_CERT_PATH:-}"
+        if [ -n "$cert_path" ]; then
+            [ -f "$cert_path/ca.pem" ]   && curl_args+=(--cacert "$cert_path/ca.pem")
+            [ -f "$cert_path/cert.pem" ] && curl_args+=(--cert  "$cert_path/cert.pem")
+            [ -f "$cert_path/key.pem" ]  && curl_args+=(--key   "$cert_path/key.pem")
+        fi
     else
-        LAST_OUT=$(curl -s --unix-socket /var/run/docker.sock \
-            -X POST "http://localhost${path}" \
-            -H 'Content-Type: application/json' -d "$body" 2>&1)
+        curl_args+=(--unix-socket /var/run/docker.sock)
+        endpoint="http://localhost"
     fi
+
+    api_ver=$("${DOCKER[@]}" version --format '{{.Server.APIVersion}}' 2>/dev/null || true)
+    api_ver="${api_ver:-1.44}"
+    [[ "$path" != /v* ]] && path="/v${api_ver}${path}"
+
+    LAST_OUT=$(curl -sS "${curl_args[@]}" -X POST "${endpoint}${path}" \
+        -H 'Content-Type: application/json' -d "$body" 2>&1)
     LAST_RC=$?
 }
 

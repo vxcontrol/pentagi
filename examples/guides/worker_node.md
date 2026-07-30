@@ -46,41 +46,27 @@ graph TB
 
 ### Why workers reach dind over TLS instead of a mounted socket
 
-Earlier revisions of this guide mounted `/var/run/docker-dind/docker.sock` into
-each worker container. That works while everything is already running, but it has
-two failure modes that the TLS endpoint does not.
+Earlier revisions of this guide mounted `/var/run/docker-dind/docker.sock` into each worker container. That works while everything is already running, but it has two failure modes that the TLS endpoint does not.
 
-**Boot-order race.** A bind-mount whose source does not exist is created by Docker
-as a **directory**. Worker containers carry a `on-failure` restart policy, so after
-a worker-node reboot one of them can start before dind has recreated its socket.
-Docker then materialises a *directory* at `/var/run/docker-dind/docker.sock`, and
-dind cannot bind its socket at that path any more — the daemon fails to start until
-someone removes the directory by hand, and every agent in the meantime has a
-useless mount.
+**Boot-order race.** A bind-mount whose source does not exist is created by Docker as a **directory**. Worker containers carry a `on-failure` restart policy, so after a worker-node reboot one of them can start before dind has recreated its socket. Docker then materialises a *directory* at `/var/run/docker-dind/docker.sock`, and dind cannot bind its socket at that path any more — the daemon fails to start until someone removes the directory by hand, and every agent in the meantime has a useless mount.
 
-**Blast radius.** The race is only reliably avoided when the mounted socket belongs
-to the **host** daemon, because that one exists before anything else starts. But
-that hands an autonomous agent the host daemon: it can launch a privileged
-container, mount `/`, and take over the node — PentAGI, the other flows'
-containers, and the certificates on it included. That is precisely the risk this
-two-node architecture exists to remove.
+**Blast radius.** The race is only reliably avoided when the mounted socket belongs to the **host** daemon, because that one exists before anything else starts. But that hands an autonomous agent the host daemon: it can launch a privileged container, mount `/`, and take over the node — PentAGI, the other flows' containers, and the certificates on it included. That is precisely the risk this two-node architecture exists to remove.
 
-Pointing workers at `tcp://${PRIVATE_IP}:3376` avoids both: there is no mount to
-race on, and every request the agent makes passes through the dind authorization
-policy. Client certificates are mounted read-only, so an agent can use them but not
-rewrite them.
+Pointing workers at `tcp://${PRIVATE_IP}:3376` avoids both: there is no mount to race on, and every request the agent makes passes through the dind authorization policy. Client certificates are mounted read-only, so an agent can use them but not rewrite them.
 
-`DOCKER_SOCKET` remains supported for single-node setups where the host daemon is
-already trusted, but it is not recommended here.
+`DOCKER_SOCKET` remains supported for single-node setups where the host daemon is already trusted, but it is not recommended here.
 
 ## Prerequisites
 
-Set the private IP address that will be used throughout this setup, and the location of the configuration files shipped with this guide:
+Set the private IP address that will be used throughout this setup, the metrics bind address, and the location of the configuration files shipped with this guide:
 
 ```bash
 export PRIVATE_IP=192.168.10.10  # Replace with your worker node IP
+export METRICS_IP=127.0.0.1     # Bind address for Docker metrics ports 9323 / 9324
 export GUIDE_URL=https://raw.githubusercontent.com/vxcontrol/pentagi/main/examples/guides/worker_node
 ```
+
+`METRICS_IP` defaults to `127.0.0.1` so Prometheus metrics stay local to the worker node. Set it to `${PRIVATE_IP}` only if a remote scraper must reach ports `9323` / `9324`.
 
 ## Install Docker on Both Nodes
 
@@ -170,7 +156,7 @@ sudo tee /etc/docker/daemon.json > /dev/null << EOF
   "dns-opts": [
     "ndots:1"
   ],
-  "metrics-addr": "${PRIVATE_IP}:9323",
+  "metrics-addr": "${METRICS_IP}:9323",
   "tls": true,
   "tlscacert": "/etc/docker/certs/server/ca.pem",
   "tlscert": "/etc/docker/certs/server/cert.pem",
@@ -310,7 +296,7 @@ All scripts read their settings from `/etc/docker/dind/dind.env`, which is the o
 sudo tee /etc/docker/dind/dind.env > /dev/null << EOF
 API_ADDRESS=${PRIVATE_IP}
 DOCKER_PORT=3376
-METRICS_ADDRESS=${PRIVATE_IP}
+METRICS_ADDRESS=${METRICS_IP}
 METRICS_PORT=9324
 CPU_LIMIT=2
 MEMORY_LIMIT=4G
@@ -321,7 +307,7 @@ EOF
 | Variable | Default | Description |
 |---|---|---|
 | `API_ADDRESS` / `DOCKER_PORT` | `0.0.0.0` / `3376` | dind TLS API bind address and port |
-| `METRICS_ADDRESS` / `METRICS_PORT` | `0.0.0.0` / `9324` | Prometheus metrics endpoint |
+| `METRICS_ADDRESS` / `METRICS_PORT` | `127.0.0.1` / `9324` | Prometheus metrics endpoint (use `${METRICS_IP}`) |
 | `NETWORK` | `host` | `host` binds directly on `API_ADDRESS`; `bridge` publishes ports instead |
 | `CPU_LIMIT` / `MEMORY_LIMIT` / `PIDS_LIMIT` | `2` / `4G` / `2048` | dind container resource limits |
 | `DNS_SERVERS` | empty | Comma-separated DNS servers for all nested containers |
@@ -344,7 +330,7 @@ docker ps | grep docker-dind          # dind container is up
 docker-dind-sock plugin ls            # opa-docker-authz is enabled
 docker-dind-sock run --rm hello-world # nested containers work
 docker-dind-tls version               # TLS endpoint answers
-curl -s http://${PRIVATE_IP}:9324/metrics | head -5
+curl -s http://${METRICS_IP}:9324/metrics | head -5
 ```
 
 ### Security Model
@@ -399,11 +385,15 @@ sudo env MAX_AGE_HOURS=1 /usr/local/bin/dind-cleanup  # run manually with an ove
 
 ### Verify Isolation
 
-`dind-policy-tests` is a full test suite that exercises the authorization policy and the seccomp profile from inside a container wired exactly like a real PentAGI worker. Run it once after setup and after every policy change:
+`dind-policy-tests` is a full test suite that exercises the authorization policy and the seccomp profile from inside a container wired exactly like a real PentAGI worker. Run it once after setup and after every policy change.
+
+The suite probes a plaintext HTTP service on the node. Install Python on the host first if it is not already present, then start a throwaway server bound to `${PRIVATE_IP}:8080`:
 
 ```bash
-# The suite probes a plaintext HTTP service on the node; start a throwaway one
-docker run -d --name dind-test-http -p 8080:80 nginx:alpine
+sudo apt-get install -y python3
+
+python3 -m http.server 8080 --bind "${PRIVATE_IP}" >/tmp/dind-test-http.log 2>&1 &
+HTTP_PID=$!
 
 docker run --rm -it \
     --name pentagi-terminal-test \
@@ -422,14 +412,10 @@ docker run --rm -it \
     vxcontrol/kali-linux \
     bash /work/policy-tests.sh
 
-docker rm -f dind-test-http
+kill "${HTTP_PID}" 2>/dev/null || true
 ```
 
-This invocation mirrors exactly what PentAGI does for a real worker container: the
-dind endpoint and its client certificates are supplied through the environment,
-and no Docker socket is mounted. (If you still run the socket-mapping layout,
-replace the three `DOCKER_*` variables and the certificate mount with
-`-v /var/run/docker-dind/docker.sock:/var/run/docker.sock`.)
+This invocation mirrors exactly what PentAGI does for a real worker container: the dind endpoint and its client certificates are supplied through the environment, and no Docker socket is mounted. (If you still run the socket-mapping layout, replace the three `DOCKER_*` variables and the certificate mount with `-v /var/run/docker-dind/docker.sock:/var/run/docker.sock`.)
 
 Positive tests cover legitimate workloads (nmap, masscan, curl, sqlmap, nginx, volumes, tmpfs, container lifecycle); negative tests cover escape primitives (privileged containers, dangerous capabilities, host namespaces, bind-mounts, block-device `mknod`, `nsenter`). Every test should report `[ PASS ]` or `[ SKIP ]`, and the exit code is `0` when nothing failed. **A failed negative test is an isolation gap; a failed positive test is a false positive that will break agent workloads.**
 
@@ -452,14 +438,16 @@ If `run-dind` fails with a missing `/dev/fuse`, load the module first: `sudo mod
 
 ### Required Port Access
 
-The worker node exposes the following services on the private IP address:
+The worker node exposes the following services:
 
-| Port | Service | Description |
-|------|---------|-------------|
-| 2376 | Host Docker API | TLS-secured Docker daemon for worker container management |
-| 3376 | dind API | TLS-secured Docker-in-Docker daemon |
-| 9323 | Host Docker Metrics | Prometheus metrics endpoint for host Docker |
-| 9324 | dind Metrics | Prometheus metrics endpoint for dind |
+| Port | Bind address | Service | Description |
+|------|--------------|---------|-------------|
+| 2376 | `${PRIVATE_IP}` | Host Docker API | TLS-secured Docker daemon for worker container management |
+| 3376 | `${PRIVATE_IP}` | dind API | TLS-secured Docker-in-Docker daemon |
+| 9323 | `${METRICS_IP}` | Host Docker Metrics | Prometheus metrics endpoint for host Docker |
+| 9324 | `${METRICS_IP}` | dind Metrics | Prometheus metrics endpoint for dind |
+
+With the default `METRICS_IP=127.0.0.1`, metrics are reachable only from the worker node itself. Set `METRICS_IP=${PRIVATE_IP}` if a remote scraper must scrape them.
 
 **Metrics Integration:** The metrics ports (9323, 9324) can be configured in PentAGI's `observability/otel/config.yml` under the `docker-engine-collector` job name for monitoring integration.
 
@@ -468,7 +456,8 @@ The worker node exposes the following services on the private IP address:
 Each worker container (`pentagi-terminal-N`) dynamically allocates **2 ports** from the range `28000-30000` on all network interfaces to facilitate Out-of-Band (OOB) attack techniques during penetration testing.
 
 **Firewall Requirements:**
-- **Inbound**: Allow access to ports 2376, 3376, 9323, 9324 on `${PRIVATE_IP}` from the main PentAGI node
+- **Inbound**: Allow access to ports 2376, 3376 on `${PRIVATE_IP}` from the main PentAGI node
+- **Inbound**: If `METRICS_IP=${PRIVATE_IP}`, also allow 9323, 9324 on `${PRIVATE_IP}` from the scraper host; with the default `127.0.0.1` no remote metrics access is needed
 - **Inbound**: Allow access to port range 28000-30000 from target networks being tested
 - Configure perimeter firewall to permit OOB traffic from target networks to worker node
 
@@ -606,26 +595,16 @@ After the installer completes and PentAGI is running, manually configure the Doc
 - **Default Image**: `debian:latest` (or leave empty)
 - **Pentesting Image**: `vxcontrol/kali-linux` (or leave empty)
 
-Note the two different certificate locations, and that they are **not**
-interchangeable:
+Note the two different certificate locations, and that they are **not** interchangeable:
 
 | Setting | Certificates for | Path resolved on |
 |---|---|---|
 | TLS Certificates | host Docker `:2376` | main node — mounted into the PentAGI container |
 | Worker Docker Certificate Path | dind `:3376` | worker node — mounted read-only into each worker container |
 
-The dind client certificates are already in place at
-`/etc/docker/dind/certs/client` from the dind setup above, so nothing needs to be
-copied for this. PentAGI bind-mounts that directory read-only at the identical
-path inside every worker container and injects `DOCKER_HOST`,
-`DOCKER_TLS_VERIFY` and `DOCKER_CERT_PATH` accordingly, so `docker` just works
-inside the sandbox.
+The dind client certificates are already in place at `/etc/docker/dind/certs/client` from the dind setup above, so nothing needs to be copied for this. PentAGI bind-mounts that directory read-only at the identical path inside every worker container and injects `DOCKER_HOST`, `DOCKER_TLS_VERIFY` and `DOCKER_CERT_PATH` accordingly, so `docker` just works inside the sandbox.
 
-> **Never point Worker Docker Certificate Path at `/etc/docker/certs/client`.**
-> Those are the *host* daemon's client certificates. Handing them to an agent
-> grants it the host Docker API on `:2376`, which defeats the entire isolation
-> model — nested containers may use `--network host` and can already reach that
-> port. Only the dind certificates belong in a worker container.
+> **Never point Worker Docker Certificate Path at `/etc/docker/certs/client`.** Those are the *host* daemon's client certificates. Handing them to an agent grants it the host Docker API on `:2376`, which defeats the entire isolation model — nested containers may use `--network host` and can already reach that port. Only the dind certificates belong in a worker container.
 
 **For Direct Mode (dind only):**
 - Use the same configuration but change:
@@ -665,6 +644,4 @@ docker-host-tls exec -it pentagi-terminal-1 docker version   # talks to dind, no
 docker-host-tls exec -it pentagi-terminal-1 env | grep DOCKER_
 ```
 
-The second command should show `DOCKER_HOST`, `DOCKER_TLS_VERIFY` and
-`DOCKER_CERT_PATH` — with no `_INSIDE_` in the names — and there must be **no**
-`/var/run/docker.sock` inside the container.
+The second command should show `DOCKER_HOST`, `DOCKER_TLS_VERIFY` and `DOCKER_CERT_PATH` — with no `_INSIDE_` in the names — and there must be **no** `/var/run/docker.sock` inside the container.
