@@ -63,7 +63,7 @@ You can watch the video **PentAGI overview**:
 - Fully Autonomous. AI-powered agent that automatically determines and executes penetration testing steps with optional execution monitoring and intelligent task planning for enhanced reliability.
 - Professional Pentesting Tools. Built-in suite of 20+ professional security tools including nmap, metasploit, sqlmap, and more.
 - Smart Memory System. Long-term storage of research results and successful approaches for future use.
-- Knowledge Graph Integration. Graphiti-powered knowledge graph using Neo4j for semantic relationship tracking and advanced context understanding.
+- Optional Knowledge Graph Integration. Graphiti-powered knowledge graph using Neo4j for semantic relationship tracking and advanced context understanding.
 - Web Intelligence. Built-in browser via [scraper](https://hub.docker.com/r/vxcontrol/scraper) for gathering latest information from web sources.
 - External Search Systems. Integration with advanced search APIs including [Tavily](https://tavily.com), [Firecrawl](https://www.firecrawl.dev), [Traversaal](https://traversaal.ai), [Perplexity](https://www.perplexity.ai), [DuckDuckGo](https://duckduckgo.com/), [Google Custom Search](https://programmablesearchengine.google.com/), [Sploitus Search](https://sploitus.com) and [Searxng](https://searxng.org) for comprehensive information gathering.
 - Team of Specialists. Delegation system with specialized AI agents for research, development, and infrastructure tasks, enhanced with optional execution monitoring and intelligent task planning for optimal performance with smaller models.
@@ -538,10 +538,10 @@ The architecture of PentAGI is designed to be modular, scalable, and secure. Her
    - Task Queue: Async task processing system for reliable operation
    - AI Agent: Multi-agent system with specialized roles for efficient testing
 
-2. **Knowledge Graph**
+2. **Optional Knowledge Graph**
    - Graphiti: Knowledge graph API for semantic relationship tracking and contextual understanding
    - Neo4j: Graph database for storing and querying relationships between entities, actions, and outcomes
-   - Automatic capturing of agent responses and tool executions for building comprehensive knowledge base
+   - When enabled, automatically captures agent responses and tool executions for a flow-scoped knowledge base
 
 3. **Monitoring Stack**
    - OpenTelemetry: Unified observability data collection and correlation
@@ -804,10 +804,9 @@ WEB_SEARCH_INTERNAL_MAX_SITES=5
 WEB_SEARCH_INTERNAL_MAX_SITE_BYTES=10240
 
 ## Graphiti knowledge graph settings
-GRAPHITI_ENABLED=true
+GRAPHITI_ENABLED=false
 GRAPHITI_TIMEOUT=30
-GRAPHITI_URL=http://graphiti:8000
-GRAPHITI_MODEL_NAME=gpt-5-mini
+GRAPHITI_URL=
 
 # Neo4j settings (used by Graphiti stack)
 NEO4J_USER=neo4j
@@ -2676,89 +2675,194 @@ Visit [localhost:3000](http://localhost:3000) to access Grafana Web UI.
 ### Knowledge Graph Integration (Graphiti)
 
 > [!IMPORTANT]
-> The Graphiti integration is currently a **beta** feature and has notable provider limitations. See [Current Limitations](#current-limitations) below before enabling it in production.
+> Graphiti is an optional **beta** integration and is disabled by default. Review [Limitations and Security](#limitations-and-security) before enabling it in production.
 
 PentAGI integrates with [Graphiti](https://github.com/vxcontrol/pentagi-graphiti), a temporal knowledge graph system powered by Neo4j, to provide advanced semantic understanding and relationship tracking for AI agent operations. The vxcontrol fork provides custom entity and edge types that are specific to pentesting purposes.
 
 #### What is Graphiti?
 
-Graphiti automatically extracts and stores structured knowledge from agent interactions, building a graph of entities, relationships, and temporal context. This enables:
+Graphiti asynchronously extracts structured knowledge from agent interactions and builds a graph of entities, relationships, evidence, and temporal context. PentAGI sends agent responses and tool executions to Graphiti and exposes the `graphiti_search` tool to enabled agents. Graphiti complements the primary pgvector memory; it does not replace it.
 
 - **Semantic Memory**: Store and recall relationships between tools, targets, vulnerabilities, and techniques
 - **Contextual Understanding**: Track how different pentesting actions relate to each other over time
-- **Knowledge Reuse**: Learn from past penetration tests and apply insights to new assessments
-- **Advanced Querying**: Search for complex patterns like "What tools were effective against similar targets?"
+- **Flow-Scoped Recall**: Reuse knowledge within the active flow without exposing data from other engagements by default
+- **Advanced Querying**: Search temporal context, relationships, successful tools, recent episodes, and entities by type
 
-#### Enabling Graphiti
+When enabled, PentAGI captures agent responses, tool execution details, and flow/task/subtask context. Ingestion is asynchronous, so newly submitted events can take time to become searchable.
 
-The Graphiti knowledge graph is **optional** and disabled by default. To enable it:
+#### Deployment Modes and Enabling
 
-1. Configure Graphiti environment variables in `.env` file:
+Graphiti can run as the bundled Neo4j + Graphiti stack, as an external service, or remain disabled.
+
+For the bundled stack, configure `.env`:
 
 ```bash
-## Graphiti knowledge graph settings
 GRAPHITI_ENABLED=true
 GRAPHITI_TIMEOUT=30
 GRAPHITI_URL=http://graphiti:8000
-GRAPHITI_MODEL_NAME=gpt-5-mini
+GRAPHITI_LLM_CLIENT_TYPE=openai
 
-# Neo4j settings (used by Graphiti stack)
+# Reused by the Graphiti OpenAI preset
+OPEN_AI_KEY=your_openai_api_key
+OPEN_AI_SERVER_URL=https://api.openai.com/v1
+
+# Bundled Neo4j
 NEO4J_USER=neo4j
 NEO4J_DATABASE=neo4j
-NEO4J_PASSWORD=devpassword
+NEO4J_PASSWORD=replace_with_a_strong_password
 NEO4J_URI=bolt://neo4j:7687
-
-# OpenAI API key (required by Graphiti for entity extraction)
-OPEN_AI_KEY=your_openai_api_key
 ```
 
-2. Run the Graphiti stack along with the main PentAGI services:
+Download the optional compose file when installing manually, then start both stacks:
 
 ```bash
-# Download the Graphiti compose file if needed
 curl -O https://raw.githubusercontent.com/vxcontrol/pentagi/master/docker-compose-graphiti.yml
-
-# Start PentAGI with Graphiti
 docker compose -f docker-compose.yml -f docker-compose-graphiti.yml up -d
 ```
 
-3. Verify Graphiti is running:
+The base stack must create the external `pentagi-network` before the Graphiti stack can start. The installer handles stack ordering automatically.
+
+For an external Graphiti deployment, set `GRAPHITI_ENABLED=true` and point `GRAPHITI_URL` to its API. Do not start `docker-compose-graphiti.yml`; configure providers, embeddings, the graph database, and ingest tuning on the external service itself.
+
+PentAGI enables its client only when both `GRAPHITI_ENABLED=true` and `GRAPHITI_URL` is non-empty. At startup it performs three health-check attempts with a two-second backoff. If they all fail, PentAGI logs a warning and continues with Graphiti disabled.
+
+#### LLM Provider and Model Presets
+
+`GRAPHITI_LLM_CLIENT_TYPE` selects one deployment-wide preset. Model names and call parameters are not environment variables; they live in `graphiti/<provider>.yaml`.
+
+| Preset | Credentials and endpoint | Shipped main model |
+| --- | --- | --- |
+| `openai` | `OPEN_AI_KEY`, `OPEN_AI_SERVER_URL` | `openai/gpt-5-mini` |
+| `gemini` | `GEMINI_API_KEY`, `GEMINI_SERVER_URL` | `gemini/gemini-2.5-flash-lite` |
+| `custom` | `LLM_SERVER_KEY`, `LLM_SERVER_URL` | `Qwen/Qwen3.6-27B-FP8` |
+| `litellm` | `GRAPHITI_LITELLM_API_KEY`, `GRAPHITI_LITELLM_BASE_URL` | `openrouter/openai/gpt-oss-20b` |
+
+The Gemini preset uses Graphiti's LiteLLM/OpenAI-compatible client path. Point `GEMINI_SERVER_URL` at a compatible gateway if the native Gemini endpoint does not provide the required OpenAI-compatible API.
+
+Each preset file must contain a matching `provider` plus `MODEL_NAME` and `SMALL_MODEL_NAME` mappings. The small model is used for reranking and lighter calls. Supported call settings include temperature, token limits, sampling and penalty parameters, JSON mode, reasoning effort, verbosity, pricing metadata, and provider-specific `extra_body`.
+
+The installer copies [`examples/graphiti`](examples/graphiti) beside the installation as `./graphiti`. The compose mount is controlled by:
 
 ```bash
-# Check service health
-docker compose -f docker-compose.yml -f docker-compose-graphiti.yml ps graphiti neo4j
-
-# View Graphiti logs
-docker compose -f docker-compose.yml -f docker-compose-graphiti.yml logs -f graphiti
-
-# Access Neo4j Browser (optional)
-# Visit http://localhost:7474 and login with NEO4J_USER/NEO4J_PASSWORD
-
-# Access Graphiti API (optional, for debugging)
-# Visit http://localhost:8000/docs for Swagger API documentation
+GRAPHITI_CONFIG_PATH=./graphiti
+GRAPHITI_CONFIG_DIR=llm_configs
 ```
 
+`GRAPHITI_CONFIG_PATH` may point directly to `./examples/graphiti` for development. `GRAPHITI_CONFIG_DIR=llm_configs` activates the mounted presets. If an older `.env` omits that variable, a newer compose file mounts an empty host directory at the unused `configs` path instead of hiding the presets built into the image.
+
 > [!NOTE]
-> The Graphiti service is defined in `docker-compose-graphiti.yml` as a separate stack. You must run both compose files together to enable the knowledge graph functionality. The pre-built Docker image `vxcontrol/graphiti:latest` is used by default.
+> `GRAPHITI_MODEL_NAME` is obsolete and ignored. Edit the active YAML preset instead, then restart the Graphiti container.
 
-#### What Gets Stored
+#### Graphiti Embedding Configuration
 
-When enabled, PentAGI automatically captures:
+By default, Graphiti uses the active LLM preset's credentials and its default OpenAI embedding model. To use PentAGI's shared embedding endpoint explicitly:
 
-- **Agent Responses**: All agent reasoning, analysis, and decisions
-- **Tool Executions**: Commands executed, tools used, and their results
-- **Context Information**: Flow, task, and subtask hierarchy
+```bash
+GRAPHITI_SEPARATE_EMBEDDING=true
+EMBEDDING_URL=https://embedding.example.com/v1
+EMBEDDING_KEY=your_embedding_api_key
+EMBEDDING_MODEL=openai/text-embedding-3-large
+```
 
-#### Current Limitations
+Graphiti's embedder is OpenAI-compatible. `EMBEDDING_PROVIDER` is used by PentAGI but is not passed to Graphiti, so a non-OpenAI-compatible embedding provider cannot be shared directly.
 
-The Graphiti integration is currently a beta feature. Operators should plan around the following constraints before enabling it in production:
+#### Ingestion and Extraction Tuning
 
-- **OpenAI-compatible LLM only.** The bundled `vxcontrol/graphiti` image authenticates against a single OpenAI-compatible endpoint configured through PentAGI's `.env` variables `OPEN_AI_KEY` and `OPEN_AI_SERVER_URL` (default `https://api.openai.com/v1`). `docker-compose-graphiti.yml` maps these into the container as `OPENAI_API_KEY` and `OPENAI_BASE_URL`, so operators do not set the container variables directly. Provider credentials configured elsewhere in PentAGI for Anthropic, Google AI (Gemini), AWS Bedrock, DeepSeek, GLM, Kimi, or Qwen are **not** used by Graphiti for entity extraction. If your deployment cannot reach an OpenAI-compatible endpoint, leave `GRAPHITI_ENABLED=false`.
-- **Single fixed model per deployment.** Graphiti uses one model name (`GRAPHITI_MODEL_NAME`, default `gpt-5-mini`) for all extractions. The model cannot be selected per agent or per flow.
-- **Independent billing.** Even when a flow runs against a non-OpenAI provider, Graphiti still incurs cost on the configured OpenAI-compatible endpoint.
-- **No in-app graph explorer yet.** Browsing the captured graph relies on the Neo4j Browser at `http://localhost:7474` and the Graphiti Swagger UI at `http://localhost:8000/docs`. There is no PentAGI UI surface for the graph today.
+The supplied defaults prioritize flow isolation and limit expensive extraction to useful events.
 
-When `GRAPHITI_ENABLED=false`, PentAGI continues to operate with its primary memory and vector store; only the additional knowledge graph features are skipped.
+Ingest policy actions:
+
+- `REJECT`: do not store the episode.
+- `SKIP_LLM`: store the episode for retrieval but do not extract nodes or edges.
+- `PROCESS`: store the episode and run full LLM extraction.
+
+| Variable | Default | When to change it |
+| --- | --- | --- |
+| `GRAPHITI_INGEST_POLICY_RULES` | `{"graphiti_search":"REJECT","tool_execution_terminal":"PROCESS","tool_execution_file":"PROCESS"}` | Add narrow, case-insensitive name/source patterns when specific events need different handling |
+| `GRAPHITI_INGEST_POLICY_FIELD` | `both` | Restrict matching to `name` or `source_description` only when event naming is controlled |
+| `GRAPHITI_INGEST_POLICY_DEFAULT_ACTION` | `SKIP_LLM` | Use `PROCESS` only when every unmatched event justifies extraction cost |
+| `GRAPHITI_INGEST_USE_GROUP_ACTORS` | `true` | Keep enabled to preserve FIFO ordering independently for each flow |
+| `GRAPHITI_INGEST_WORKER_COUNT` | `16` | Raise for more concurrent flows when the LLM and database have capacity; lower to control load |
+| `GRAPHITI_INGEST_LOCK_BY_GROUP_ID` | `true` | Used only in shared-pool mode; ignored when group actors are enabled |
+| `GRAPHITI_INGEST_TASK_MAX_RETRIES` | `1` (`0`-`5`) | Increase for transient LLM/network failures |
+| `GRAPHITI_INGEST_TASK_RETRY_DELAY_SEC` | `2.0` (`0.5`-`60`) | Increase when an upstream service needs more recovery time |
+| `GRAPHITI_INGEST_TASK_TIMEOUT_SEC` | `0` (`0`-`3600`) | Set a finite value to prevent one stalled request from blocking a flow; `0` disables the timeout |
+| `GRAPHITI_INGEST_QUEUE_MAX_SIZE` | `0` | Set a bound to return HTTP 429 instead of allowing an unlimited backlog |
+| `GRAPHITI_INGEST_DEAD_LETTER_ENABLED` | `false` | Enable when failed episodes must be retained for operational review |
+
+Extraction uses the following fallback order: full combined extraction (nodes, attributes, summaries, and edges in one call), regular combined extraction (nodes and edges), then separate node/edge extraction. Empty or failed combined results automatically fall back; these log messages are expected during normal operation.
+
+| Variable | Default | Effect |
+| --- | --- | --- |
+| `GRAPHITI_TAXONOMY_LAYER_PROFILE` | `STRUCTURAL,EVIDENCE,PROGRESS,ATTEMPT` | Controls which edge classes appear in prompts and pass validation; `full`/`all` enables every class and `minimal` selects the core attack graph |
+| `GRAPHITI_USE_COMBINED_FULL_EXTRACTION` | `true` | Enables the most compact single-call extraction path |
+| `GRAPHITI_USE_COMBINED_EXTRACTION` | `true` | Enables the regular combined fallback |
+| `GRAPHITI_COMBINED_FULL_GATING_ENABLED` | `true` | Skips expensive full extraction for low-signal administrative/search events |
+| `GRAPHITI_COMBINED_DIAGNOSTIC_SAMPLES` | `false` | Includes content samples in diagnostics; keep disabled because pentest output can contain credentials |
+| `GRAPHITI_ANCHOR_NODE_MODE` | `smart` | `smart` loads all key entities plus limited high-volume types; `limit` applies one total cap |
+| `GRAPHITI_ANCHOR_NODE_LIMIT` | `25` (`1`-`500`) | Total anchor cap in `limit` mode |
+| `GRAPHITI_ANCHOR_MASS_TYPE_LIMIT` | `10` (`1`-`100`) | Per-type cap in `smart` mode; `0` is invalid |
+| `GRAPHITI_ANCHOR_QUERY_TIMEOUT` | `10` (`1`-`60`) | Bounds anchor lookup; timeout degrades gracefully to no anchors |
+
+Anchors connect entities across episodes and are used by the separate extraction path. Combined extraction has already produced its edges and does not perform this anchor lookup.
+
+These flags are passed as process environment variables by the bundled compose file. This is important for combined extraction because Graphiti reads those flags when Python modules are imported.
+
+#### Runtime, Logging, and Neo4j
+
+The values below are PentAGI's recommended `.env.example`/compose defaults, not the raw Graphiti image fallbacks. Running a freshly pulled image behind an old compose file can instead enable telemetry and global search, use one shared-pool worker with `PROCESS` as the unmatched ingest action, enable the full taxonomy, and disable combined extraction. Keep the image, compose file, `.env`, and presets in sync.
+
+| Variable | Default | Guidance |
+| --- | --- | --- |
+| `GRAPHITI_CPUS`, `GRAPHITI_MEMORY` | `2.0`, `2G` | Container limits; raise together with concurrency only after observing CPU and memory pressure |
+| `GRAPHITI_SEMAPHORE_LIMIT` | `20` | Limits parallel Graphiti coroutines; it is separate from ingest worker concurrency |
+| `GRAPHITI_TELEMETRY_ENABLED` | `false` | Enables anonymous Graphiti telemetry when set to `true` |
+| `GRAPHITI_LOG_LEVEL` | `INFO` | Use `DEBUG` temporarily; it can produce sensitive and high-volume output |
+| `GRAPHITI_LOG_STDOUT` | `events` | `off`, `events`, or `full`; `events` is recommended for containers |
+| `GRAPHITI_FLOW_LOGGER_WARN_COUNT` | `256` | Warns about growth of cached per-flow loggers; `0` disables the warning |
+| `GRAPHITI_DEBUG_RUNTIME_RESOURCES` | `false` | Enables `/debug/runtime-resources`; expose only to trusted operators |
+| `GRAPHITI_SEARCH_SCOPE` | `flowid` | Keep for flow/tenant isolation; `all` enables global searches and can expose other engagements |
+| `GRAPHITI_LOG_FORMAT` | `json` | Reserved by the current deployment contract; the Graphiti logger does not yet apply it |
+| `NEO4J_CPUS`, `NEO4J_MEMORY` | `4.0`, `4G` | Neo4j container limits; use `neo4j-admin server memory-recommendation --docker` for production sizing |
+| `NEO4J_SHM_SIZE` | `4g` | `/dev/shm` limit; actual use counts toward the container memory limit |
+| `NEO4J_NOFILE` | `65536` | Open-file soft/hard limit, suitable for many indexes and concurrent connections |
+
+`NEO4J_USER`, `NEO4J_PASSWORD`, `NEO4J_URI`, and `NEO4J_DATABASE` configure the bundled connection. Neo4j Community Edition supports only its default database; do not configure a separate database name that requires Enterprise multi-database support.
+
+The bundled stack currently wires Neo4j only. The Graphiti image contains FalkorDB support, but using it requires a separately configured deployment because the stock compose file does not expose `GRAPHITI_GRAPH_BACKEND` or `FALKORDB_*`.
+
+#### Verification and Troubleshooting
+
+Check service health, queue state, and logs:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose-graphiti.yml ps graphiti neo4j
+docker compose -f docker-compose.yml -f docker-compose-graphiti.yml logs -f graphiti
+curl -fsS http://localhost:8000/healthcheck
+curl -fsS http://localhost:8000/queue-size
+```
+
+Neo4j Browser is available at `http://localhost:7474`; the Graphiti OpenAPI UI is at `http://localhost:8000/docs`. Both are bound to localhost by the stock compose file.
+
+Common failures:
+
+- A missing API key or base URL for the selected preset, a missing YAML file, or a YAML `provider` mismatch causes the Graphiti container to fail startup validation.
+- `LLM_CLIENT_TYPE=openai` rejects local/custom model prefixes; use the `custom` preset for an OpenAI-compatible local server.
+- In `flowid` search mode, requests without a group ID are rejected. PentAGI supplies the flow-derived group ID automatically.
+- A bounded full queue returns HTTP 429. `/queue-size` reports waiting, processing, active-group, and dropped counters.
+- Invalid retry, timeout, or anchor ranges fail startup rather than being silently normalized.
+
+Update `.env`, `docker-compose-graphiti.yml`, the Graphiti image, and the `graphiti` preset directory together. Pulling only a new image can retain older compose defaults and silently change extraction behavior.
+
+#### Limitations and Security
+
+- Graphiti is beta and has no in-app graph explorer.
+- One provider preset is active for the entire Graphiti deployment; it is not selected per PentAGI agent or flow.
+- Graphiti extraction, reranking, and embeddings incur billing independently of the model used by the main PentAGI flow.
+- Search is flow-scoped by default. Cross-flow reuse requires an explicit global-search design and must not be enabled on shared or multi-tenant deployments without additional isolation.
+- The Graphiti HTTP API has no authentication layer in the bundled service. The stock compose binds it and Neo4j to `127.0.0.1`; secure external deployments with network controls and authentication at a trusted reverse proxy.
+- Agent and tool output may contain credentials and exploitation evidence. Protect Neo4j data, logs, dead letters, diagnostics, and backups accordingly.
+- If Graphiti is unavailable, PentAGI continues with its primary memory and vector store after logging the failed startup health check. Set `GRAPHITI_ENABLED=false` to disable the integration explicitly.
 
 ### GitHub and Google OAuth Integration
 

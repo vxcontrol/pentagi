@@ -771,13 +771,30 @@ type GraphitiConfig struct {
 	// integration settings (always)
 	GraphitiURL loader.EnvVar // GRAPHITI_URL
 	Timeout     loader.EnvVar // GRAPHITI_TIMEOUT
-	ModelName   loader.EnvVar // GRAPHITI_MODEL_NAME
+
+	// graphiti sidecar settings (embedded only)
+	LLMClientType             loader.EnvVar // GRAPHITI_LLM_CLIENT_TYPE
+	SeparateEmbedding         loader.EnvVar // GRAPHITI_SEPARATE_EMBEDDING
+	SemaphoreLimit            loader.EnvVar // GRAPHITI_SEMAPHORE_LIMIT
+	LogLevel                  loader.EnvVar // GRAPHITI_LOG_LEVEL
+	SearchScope               loader.EnvVar // GRAPHITI_SEARCH_SCOPE
+	IngestPolicyRules         loader.EnvVar // GRAPHITI_INGEST_POLICY_RULES
+	IngestPolicyField         loader.EnvVar // GRAPHITI_INGEST_POLICY_FIELD
+	IngestPolicyDefaultAction loader.EnvVar // GRAPHITI_INGEST_POLICY_DEFAULT_ACTION
+	IngestWorkerCount         loader.EnvVar // GRAPHITI_INGEST_WORKER_COUNT
+	IngestQueueMaxSize        loader.EnvVar // GRAPHITI_INGEST_QUEUE_MAX_SIZE
+	TaxonomyLayerProfile      loader.EnvVar // GRAPHITI_TAXONOMY_LAYER_PROFILE
+	GraphitiCPUs              loader.EnvVar // GRAPHITI_CPUS
+	GraphitiMemory            loader.EnvVar // GRAPHITI_MEMORY
 
 	// neo4j settings (embedded only)
 	Neo4jUser     loader.EnvVar // NEO4J_USER
 	Neo4jPassword loader.EnvVar // NEO4J_PASSWORD
 	Neo4jDatabase loader.EnvVar // NEO4J_DATABASE
 	Neo4jURI      loader.EnvVar // NEO4J_URI
+	Neo4jCPUs     loader.EnvVar // NEO4J_CPUS
+	Neo4jMemory   loader.EnvVar // NEO4J_MEMORY
+	Neo4jShmSize  loader.EnvVar // NEO4J_SHM_SIZE
 
 	// computed fields (not directly mapped to env vars)
 	Installed bool
@@ -788,37 +805,57 @@ func (c *controller) GetGraphitiConfig() *GraphitiConfig {
 	vars, _ := c.GetVars([]string{
 		"GRAPHITI_URL",
 		"GRAPHITI_TIMEOUT",
-		"GRAPHITI_MODEL_NAME",
+		"GRAPHITI_LLM_CLIENT_TYPE",
+		"GRAPHITI_SEPARATE_EMBEDDING",
+		"GRAPHITI_SEMAPHORE_LIMIT",
+		"GRAPHITI_LOG_LEVEL",
+		"GRAPHITI_SEARCH_SCOPE",
+		"GRAPHITI_INGEST_POLICY_RULES",
+		"GRAPHITI_INGEST_POLICY_FIELD",
+		"GRAPHITI_INGEST_POLICY_DEFAULT_ACTION",
+		"GRAPHITI_INGEST_WORKER_COUNT",
+		"GRAPHITI_INGEST_QUEUE_MAX_SIZE",
+		"GRAPHITI_TAXONOMY_LAYER_PROFILE",
+		"GRAPHITI_CPUS",
+		"GRAPHITI_MEMORY",
 		"NEO4J_USER",
 		"NEO4J_PASSWORD",
 		"NEO4J_DATABASE",
 		"NEO4J_URI",
+		"NEO4J_CPUS",
+		"NEO4J_MEMORY",
+		"NEO4J_SHM_SIZE",
 	})
 
 	// set defaults if missing
-	if v := vars["GRAPHITI_TIMEOUT"]; v.Default == "" {
-		v.Default = "30"
-		vars["GRAPHITI_TIMEOUT"] = v
+	defaults := map[string]string{
+		"GRAPHITI_TIMEOUT":                      "30",
+		"GRAPHITI_LLM_CLIENT_TYPE":              "openai",
+		"GRAPHITI_SEPARATE_EMBEDDING":           "false",
+		"GRAPHITI_SEMAPHORE_LIMIT":              "20",
+		"GRAPHITI_LOG_LEVEL":                    "INFO",
+		"GRAPHITI_SEARCH_SCOPE":                 "flowid",
+		"GRAPHITI_INGEST_POLICY_RULES":          `{"graphiti_search":"REJECT","tool_execution_terminal":"PROCESS","tool_execution_file":"PROCESS"}`,
+		"GRAPHITI_INGEST_POLICY_FIELD":          "both",
+		"GRAPHITI_INGEST_POLICY_DEFAULT_ACTION": "SKIP_LLM",
+		"GRAPHITI_INGEST_WORKER_COUNT":          "16",
+		"GRAPHITI_INGEST_QUEUE_MAX_SIZE":        "0",
+		"GRAPHITI_TAXONOMY_LAYER_PROFILE":       "STRUCTURAL,EVIDENCE,PROGRESS,ATTEMPT",
+		"GRAPHITI_CPUS":                         "2.0",
+		"GRAPHITI_MEMORY":                       "2G",
+		"NEO4J_USER":                            "neo4j",
+		"NEO4J_PASSWORD":                        "devpassword",
+		"NEO4J_DATABASE":                        "neo4j",
+		"NEO4J_URI":                             "bolt://neo4j:7687",
+		"NEO4J_CPUS":                            "4.0",
+		"NEO4J_MEMORY":                          "4G",
+		"NEO4J_SHM_SIZE":                        "4g",
 	}
-	if v := vars["GRAPHITI_MODEL_NAME"]; v.Default == "" {
-		v.Default = "gpt-5-mini"
-		vars["GRAPHITI_MODEL_NAME"] = v
-	}
-	if v := vars["NEO4J_USER"]; v.Default == "" {
-		v.Default = "neo4j"
-		vars["NEO4J_USER"] = v
-	}
-	if v := vars["NEO4J_PASSWORD"]; v.Default == "" {
-		v.Default = "devpassword"
-		vars["NEO4J_PASSWORD"] = v
-	}
-	if v := vars["NEO4J_DATABASE"]; v.Default == "" {
-		v.Default = "neo4j"
-		vars["NEO4J_DATABASE"] = v
-	}
-	if v := vars["NEO4J_URI"]; v.Default == "" {
-		v.Default = "bolt://neo4j:7687"
-		vars["NEO4J_URI"] = v
+	for name, defaultValue := range defaults {
+		if v := vars[name]; v.Default == "" {
+			v.Default = defaultValue
+			vars[name] = v
+		}
 	}
 
 	graphitiURL := vars["GRAPHITI_URL"]
@@ -836,15 +873,30 @@ func (c *controller) GetGraphitiConfig() *GraphitiConfig {
 	}
 
 	return &GraphitiConfig{
-		DeploymentType: deploymentType,
-		GraphitiURL:    graphitiURL,
-		Timeout:        vars["GRAPHITI_TIMEOUT"],
-		ModelName:      vars["GRAPHITI_MODEL_NAME"],
-		Neo4jUser:      vars["NEO4J_USER"],
-		Neo4jPassword:  vars["NEO4J_PASSWORD"],
-		Neo4jDatabase:  vars["NEO4J_DATABASE"],
-		Neo4jURI:       vars["NEO4J_URI"],
-		Installed:      c.checker.GraphitiInstalled,
+		DeploymentType:            deploymentType,
+		GraphitiURL:               graphitiURL,
+		Timeout:                   vars["GRAPHITI_TIMEOUT"],
+		LLMClientType:             vars["GRAPHITI_LLM_CLIENT_TYPE"],
+		SeparateEmbedding:         vars["GRAPHITI_SEPARATE_EMBEDDING"],
+		SemaphoreLimit:            vars["GRAPHITI_SEMAPHORE_LIMIT"],
+		LogLevel:                  vars["GRAPHITI_LOG_LEVEL"],
+		SearchScope:               vars["GRAPHITI_SEARCH_SCOPE"],
+		IngestPolicyRules:         vars["GRAPHITI_INGEST_POLICY_RULES"],
+		IngestPolicyField:         vars["GRAPHITI_INGEST_POLICY_FIELD"],
+		IngestPolicyDefaultAction: vars["GRAPHITI_INGEST_POLICY_DEFAULT_ACTION"],
+		IngestWorkerCount:         vars["GRAPHITI_INGEST_WORKER_COUNT"],
+		IngestQueueMaxSize:        vars["GRAPHITI_INGEST_QUEUE_MAX_SIZE"],
+		TaxonomyLayerProfile:      vars["GRAPHITI_TAXONOMY_LAYER_PROFILE"],
+		GraphitiCPUs:              vars["GRAPHITI_CPUS"],
+		GraphitiMemory:            vars["GRAPHITI_MEMORY"],
+		Neo4jUser:                 vars["NEO4J_USER"],
+		Neo4jPassword:             vars["NEO4J_PASSWORD"],
+		Neo4jDatabase:             vars["NEO4J_DATABASE"],
+		Neo4jURI:                  vars["NEO4J_URI"],
+		Neo4jCPUs:                 vars["NEO4J_CPUS"],
+		Neo4jMemory:               vars["NEO4J_MEMORY"],
+		Neo4jShmSize:              vars["NEO4J_SHM_SIZE"],
+		Installed:                 c.checker.GraphitiInstalled,
 	}
 }
 
@@ -855,56 +907,58 @@ func (c *controller) UpdateGraphitiConfig(config *GraphitiConfig) error {
 	}
 
 	// set deployment type based configuration
+	vars := map[string]string{}
 	switch config.DeploymentType {
 	case "embedded":
 		// for embedded mode, use default endpoint
 		config.GraphitiURL.Value = checker.DefaultGraphitiEndpoint
-
-		// enable Graphiti
-		if err := c.SetVar("GRAPHITI_ENABLED", "true"); err != nil {
-			return fmt.Errorf("failed to set GRAPHITI_ENABLED: %w", err)
-		}
-
-		// update timeout, model, and neo4j settings
-		if err := c.SetVar("GRAPHITI_TIMEOUT", config.Timeout.Value); err != nil {
-			return fmt.Errorf("failed to set GRAPHITI_TIMEOUT: %w", err)
-		}
-		if err := c.SetVar("GRAPHITI_MODEL_NAME", config.ModelName.Value); err != nil {
-			return fmt.Errorf("failed to set GRAPHITI_MODEL_NAME: %w", err)
-		}
-		if err := c.SetVar("NEO4J_USER", config.Neo4jUser.Value); err != nil {
-			return fmt.Errorf("failed to set NEO4J_USER: %w", err)
-		}
-		if err := c.SetVar("NEO4J_PASSWORD", config.Neo4jPassword.Value); err != nil {
-			return fmt.Errorf("failed to set NEO4J_PASSWORD: %w", err)
-		}
-		if err := c.SetVar("NEO4J_DATABASE", config.Neo4jDatabase.Value); err != nil {
-			return fmt.Errorf("failed to set NEO4J_DATABASE: %w", err)
+		vars = map[string]string{
+			"GRAPHITI_ENABLED":                      "true",
+			"GRAPHITI_URL":                          config.GraphitiURL.Value,
+			"GRAPHITI_TIMEOUT":                      config.Timeout.Value,
+			"GRAPHITI_LLM_CLIENT_TYPE":              config.LLMClientType.Value,
+			"GRAPHITI_SEPARATE_EMBEDDING":           config.SeparateEmbedding.Value,
+			"GRAPHITI_SEMAPHORE_LIMIT":              config.SemaphoreLimit.Value,
+			"GRAPHITI_LOG_LEVEL":                    config.LogLevel.Value,
+			"GRAPHITI_SEARCH_SCOPE":                 config.SearchScope.Value,
+			"GRAPHITI_INGEST_POLICY_RULES":          config.IngestPolicyRules.Value,
+			"GRAPHITI_INGEST_POLICY_FIELD":          config.IngestPolicyField.Value,
+			"GRAPHITI_INGEST_POLICY_DEFAULT_ACTION": config.IngestPolicyDefaultAction.Value,
+			"GRAPHITI_INGEST_WORKER_COUNT":          config.IngestWorkerCount.Value,
+			"GRAPHITI_INGEST_QUEUE_MAX_SIZE":        config.IngestQueueMaxSize.Value,
+			"GRAPHITI_TAXONOMY_LAYER_PROFILE":       config.TaxonomyLayerProfile.Value,
+			"GRAPHITI_CPUS":                         config.GraphitiCPUs.Value,
+			"GRAPHITI_MEMORY":                       config.GraphitiMemory.Value,
+			"NEO4J_USER":                            config.Neo4jUser.Value,
+			"NEO4J_PASSWORD":                        config.Neo4jPassword.Value,
+			"NEO4J_DATABASE":                        config.Neo4jDatabase.Value,
+			"NEO4J_CPUS":                            config.Neo4jCPUs.Value,
+			"NEO4J_MEMORY":                          config.Neo4jMemory.Value,
+			"NEO4J_SHM_SIZE":                        config.Neo4jShmSize.Value,
 		}
 
 	case "external":
 		// for external mode, use provided endpoint
-		// enable Graphiti
-		if err := c.SetVar("GRAPHITI_ENABLED", "true"); err != nil {
-			return fmt.Errorf("failed to set GRAPHITI_ENABLED: %w", err)
-		}
-
-		// update timeout only (model is configured on external server)
-		if err := c.SetVar("GRAPHITI_TIMEOUT", config.Timeout.Value); err != nil {
-			return fmt.Errorf("failed to set GRAPHITI_TIMEOUT: %w", err)
+		vars = map[string]string{
+			"GRAPHITI_ENABLED": "true",
+			"GRAPHITI_URL":     config.GraphitiURL.Value,
+			"GRAPHITI_TIMEOUT": config.Timeout.Value,
 		}
 
 	case "disabled":
 		// for disabled mode, disable Graphiti
-		if err := c.SetVar("GRAPHITI_ENABLED", "false"); err != nil {
-			return fmt.Errorf("failed to set GRAPHITI_ENABLED: %w", err)
-		}
 		config.GraphitiURL.Value = ""
+		vars = map[string]string{
+			"GRAPHITI_ENABLED": "false",
+			"GRAPHITI_URL":     "",
+		}
+
+	default:
+		return fmt.Errorf("unsupported Graphiti deployment type: %s", config.DeploymentType)
 	}
 
-	// update integration environment variables
-	if err := c.SetVar("GRAPHITI_URL", config.GraphitiURL.Value); err != nil {
-		return fmt.Errorf("failed to set GRAPHITI_URL: %w", err)
+	if err := c.SetVars(vars); err != nil {
+		return fmt.Errorf("failed to update Graphiti configuration: %w", err)
 	}
 
 	return nil
@@ -915,11 +969,27 @@ func (c *controller) ResetGraphitiConfig() *GraphitiConfig {
 		"GRAPHITI_ENABLED",
 		"GRAPHITI_URL",
 		"GRAPHITI_TIMEOUT",
-		"GRAPHITI_MODEL_NAME",
+		"GRAPHITI_LLM_CLIENT_TYPE",
+		"GRAPHITI_SEPARATE_EMBEDDING",
+		"GRAPHITI_SEMAPHORE_LIMIT",
+		"GRAPHITI_LOG_LEVEL",
+		"GRAPHITI_SEARCH_SCOPE",
+		"GRAPHITI_INGEST_POLICY_RULES",
+		"GRAPHITI_INGEST_POLICY_FIELD",
+		"GRAPHITI_INGEST_POLICY_DEFAULT_ACTION",
+		"GRAPHITI_INGEST_WORKER_COUNT",
+		"GRAPHITI_INGEST_QUEUE_MAX_SIZE",
+		"GRAPHITI_TAXONOMY_LAYER_PROFILE",
+		"GRAPHITI_CPUS",
+		"GRAPHITI_MEMORY",
 		"NEO4J_USER",
 		"NEO4J_PASSWORD",
 		"NEO4J_DATABASE",
 		"NEO4J_URI",
+		"NEO4J_CPUS",
+		"NEO4J_MEMORY",
+		"NEO4J_SHM_SIZE",
+		"GRAPHITI_MODEL_NAME", // remove obsolete values written by older installers
 	}
 
 	if err := c.ResetVars(vars); err != nil {
@@ -2425,11 +2495,27 @@ func (c *controller) getVariableDescription(varName string) string {
 
 		"LANGFUSE_EE_LICENSE_KEY": locale.EnvDesc_LANGFUSE_EE_LICENSE_KEY,
 
-		"GRAPHITI_URL":        locale.EnvDesc_GRAPHITI_URL,
-		"GRAPHITI_TIMEOUT":    locale.EnvDesc_GRAPHITI_TIMEOUT,
-		"GRAPHITI_MODEL_NAME": locale.EnvDesc_GRAPHITI_MODEL_NAME,
-		"NEO4J_USER":          locale.EnvDesc_NEO4J_USER,
-		"NEO4J_DATABASE":      locale.EnvDesc_NEO4J_DATABASE,
+		"GRAPHITI_ENABLED":                      locale.EnvDesc_GRAPHITI_ENABLED,
+		"GRAPHITI_URL":                          locale.EnvDesc_GRAPHITI_URL,
+		"GRAPHITI_TIMEOUT":                      locale.EnvDesc_GRAPHITI_TIMEOUT,
+		"GRAPHITI_LLM_CLIENT_TYPE":              locale.EnvDesc_GRAPHITI_LLM_CLIENT_TYPE,
+		"GRAPHITI_SEPARATE_EMBEDDING":           locale.EnvDesc_GRAPHITI_SEPARATE_EMBEDDING,
+		"GRAPHITI_SEMAPHORE_LIMIT":              locale.EnvDesc_GRAPHITI_SEMAPHORE_LIMIT,
+		"GRAPHITI_LOG_LEVEL":                    locale.EnvDesc_GRAPHITI_LOG_LEVEL,
+		"GRAPHITI_SEARCH_SCOPE":                 locale.EnvDesc_GRAPHITI_SEARCH_SCOPE,
+		"GRAPHITI_INGEST_POLICY_RULES":          locale.EnvDesc_GRAPHITI_INGEST_POLICY_RULES,
+		"GRAPHITI_INGEST_POLICY_FIELD":          locale.EnvDesc_GRAPHITI_INGEST_POLICY_FIELD,
+		"GRAPHITI_INGEST_POLICY_DEFAULT_ACTION": locale.EnvDesc_GRAPHITI_INGEST_POLICY_DEFAULT_ACTION,
+		"GRAPHITI_INGEST_WORKER_COUNT":          locale.EnvDesc_GRAPHITI_INGEST_WORKER_COUNT,
+		"GRAPHITI_INGEST_QUEUE_MAX_SIZE":        locale.EnvDesc_GRAPHITI_INGEST_QUEUE_MAX_SIZE,
+		"GRAPHITI_TAXONOMY_LAYER_PROFILE":       locale.EnvDesc_GRAPHITI_TAXONOMY_LAYER_PROFILE,
+		"GRAPHITI_CPUS":                         locale.EnvDesc_GRAPHITI_CPUS,
+		"GRAPHITI_MEMORY":                       locale.EnvDesc_GRAPHITI_MEMORY,
+		"NEO4J_USER":                            locale.EnvDesc_NEO4J_USER,
+		"NEO4J_DATABASE":                        locale.EnvDesc_NEO4J_DATABASE,
+		"NEO4J_CPUS":                            locale.EnvDesc_NEO4J_CPUS,
+		"NEO4J_MEMORY":                          locale.EnvDesc_NEO4J_MEMORY,
+		"NEO4J_SHM_SIZE":                        locale.EnvDesc_NEO4J_SHM_SIZE,
 
 		"PENTAGI_POSTGRES_PASSWORD": locale.EnvDesc_PENTAGI_POSTGRES_PASSWORD,
 		"NEO4J_PASSWORD":            locale.EnvDesc_NEO4J_PASSWORD,
@@ -2611,9 +2697,28 @@ var criticalVariables = map[string]bool{
 	"OTEL_HOST": true,
 
 	// graphiti changes
-	"GRAPHITI_URL":        true,
-	"GRAPHITI_TIMEOUT":    true,
-	"GRAPHITI_MODEL_NAME": true,
+	"GRAPHITI_ENABLED":                      true,
+	"GRAPHITI_URL":                          true,
+	"GRAPHITI_TIMEOUT":                      true,
+	"GRAPHITI_LLM_CLIENT_TYPE":              true,
+	"GRAPHITI_SEPARATE_EMBEDDING":           true,
+	"GRAPHITI_SEMAPHORE_LIMIT":              true,
+	"GRAPHITI_LOG_LEVEL":                    true,
+	"GRAPHITI_SEARCH_SCOPE":                 true,
+	"GRAPHITI_INGEST_POLICY_RULES":          true,
+	"GRAPHITI_INGEST_POLICY_FIELD":          true,
+	"GRAPHITI_INGEST_POLICY_DEFAULT_ACTION": true,
+	"GRAPHITI_INGEST_WORKER_COUNT":          true,
+	"GRAPHITI_INGEST_QUEUE_MAX_SIZE":        true,
+	"GRAPHITI_TAXONOMY_LAYER_PROFILE":       true,
+	"GRAPHITI_CPUS":                         true,
+	"GRAPHITI_MEMORY":                       true,
+	"NEO4J_USER":                            true,
+	"NEO4J_PASSWORD":                        true,
+	"NEO4J_DATABASE":                        true,
+	"NEO4J_CPUS":                            true,
+	"NEO4J_MEMORY":                          true,
+	"NEO4J_SHM_SIZE":                        true,
 
 	// server settings changes
 	"ASK_USER":                           true,

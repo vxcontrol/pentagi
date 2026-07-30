@@ -75,8 +75,10 @@ This document serves as a comprehensive guide to the configuration system in Pen
   - [Network and Proxy Settings](#network-and-proxy-settings)
     - [Usage Details](#usage-details-11)
   - [Graphiti Knowledge Graph Settings](#graphiti-knowledge-graph-settings)
-    - [Usage Details](#usage-details-12)
-    - [Current Limitations (Beta)](#current-limitations-beta)
+    - [PentAGI Configuration Boundary](#pentagi-configuration-boundary)
+    - [Client Lifecycle and Failure Behavior](#client-lifecycle-and-failure-behavior)
+    - [Data Flow, Search, and Tenancy](#data-flow-search-and-tenancy)
+    - [Deployment Ownership](#deployment-ownership)
   - [Agent Supervision Settings](#agent-supervision-settings)
     - [Usage Details](#usage-details-13)
     - [Supervision System Integration](#supervision-system-integration)
@@ -1827,64 +1829,64 @@ The SSL settings provide additional security configuration:
 
 ## Graphiti Knowledge Graph Settings
 
-> The Graphiti integration is currently a **beta** feature with notable provider limitations. See [Current Limitations (Beta)](#current-limitations-beta) at the end of this section before enabling it in production.
+Graphiti is an optional beta integration. This section documents the PentAGI-side configuration boundary and lifecycle; the operator-facing deployment, provider, ingestion, extraction, and Neo4j settings are maintained in [README.md — Knowledge Graph Integration](../../README.md#knowledge-graph-integration-graphiti).
 
-These settings control the integration with Graphiti, a temporal knowledge graph system powered by Neo4j, for advanced semantic understanding and relationship tracking of AI agent operations.
+### PentAGI Configuration Boundary
 
-| Option          | Environment Variable | Default Value           | Description                                            |
-| --------------- | -------------------- | ----------------------- | ------------------------------------------------------ |
-| GraphitiEnabled | `GRAPHITI_ENABLED`   | `false`                 | Enable or disable Graphiti knowledge graph integration |
-| GraphitiURL     | `GRAPHITI_URL`       | `http://localhost:8001` | Base URL for Graphiti API service                      |
-| GraphitiTimeout | `GRAPHITI_TIMEOUT`   | `30`                    | Timeout in seconds for Graphiti operations             |
+`pkg/config.Config` intentionally owns only the settings required by the PentAGI process:
 
-### Usage Details
+| Field | Environment Variable | Default | Responsibility |
+| --- | --- | --- | --- |
+| `GraphitiEnabled` | `GRAPHITI_ENABLED` | `false` | Operator intent to enable the integration |
+| `GraphitiURL` | `GRAPHITI_URL` | *(empty)* | Graphiti API base URL; embedded deployments use `http://graphiti:8000` |
+| `GraphitiTimeout` | `GRAPHITI_TIMEOUT` | `30` seconds | Timeout used for Graphiti client requests and storage contexts |
 
-The Graphiti settings are used in `pkg/graphiti/client.go` and integrated throughout the provider system to automatically capture agent interactions and tool executions:
+All other variables with `GRAPHITI_*`, `NEO4J_*`, provider, embedding, ingest, extraction, anchor, or logging names configure `docker-compose-graphiti.yml` or the Graphiti process. They are not parsed into the Go `Config` struct. Keep that boundary explicit when adding settings: a value needed by PentAGI belongs in `pkg/config/config.go`; a value consumed only by the sidecar belongs in `.env.example` plus the compose mapping.
 
-- **GraphitiEnabled**: Controls whether the knowledge graph integration is active:
-  ```go
-  // Check if Graphiti is enabled
-  if !cfg.GraphitiEnabled {
-      return &Client{enabled: false}, nil
-  }
-  ```
+The provider controller applies an additional URL guard:
 
-- **GraphitiURL**: Specifies the Graphiti API endpoint:
-  ```go
-  client := graphiti.NewClient(cfg.GraphitiURL, timeout, cfg.GraphitiEnabled)
-  ```
+```go
+graphitiClient, err := graphiti.NewClient(
+    cfg.GraphitiURL,
+    time.Duration(cfg.GraphitiTimeout)*time.Second,
+    cfg.GraphitiEnabled && cfg.GraphitiURL != "",
+)
+```
 
-- **GraphitiTimeout**: Sets the maximum time for knowledge graph operations:
-  ```go
-  timeout := time.Duration(cfg.GraphitiTimeout) * time.Second
-  storeCtx, cancel := context.WithTimeout(ctx, timeout)
-  defer cancel()
-  ```
+Consequently, `GRAPHITI_ENABLED=true` with an empty URL still creates a disabled wrapper.
 
-The Graphiti integration captures:
-- Agent responses and reasoning for all agent types (pentester, researcher, coder, etc.)
-- Tool execution details including function name, arguments, results, and execution status
-- Context information including flow, task, and subtask IDs for hierarchical organization
-- Temporal relationships between entities, actions, and outcomes
+### Client Lifecycle and Failure Behavior
 
-These settings enable:
-- Building a comprehensive knowledge base from agent interactions
-- Semantic memory across multiple penetration tests
-- Advanced querying of relationships between tools, targets, and techniques
-- Learning from past successful approaches and strategies
+`pkg/graphiti/client.go` wraps `graphiti-go-client` and performs a synchronous health check during provider initialization. It makes three attempts with a two-second backoff. A final failure is returned to `pkg/providers/providers.go`, which logs a warning and substitutes a disabled client so the rest of PentAGI can start.
 
-The integration is designed to be non-blocking - if Graphiti operations fail, they are logged but don't interrupt the agent workflow.
+The disabled wrapper has deliberate asymmetric behavior:
 
-### Current Limitations (Beta)
+- `AddMessages` is a no-op, allowing normal flow execution to continue.
+- Search methods return `graphiti is not enabled`; disabled clients are normally excluded from agent tool registration and prompts through `IsEnabled`.
+- Storage calls use `GraphitiTimeout`, log failures with their group ID, and return the error to the caller without making Graphiti a required persistence layer.
 
-The Graphiti integration is currently a beta feature. Operators should plan around the following constraints before enabling it in production:
+Do not change initialization failures into fatal PentAGI startup errors without treating that as a deployment-contract change.
 
-- **OpenAI-compatible LLM only.** Operators configure the endpoint through PentAGI's `.env` variables `OPEN_AI_KEY` and `OPEN_AI_SERVER_URL` (default `https://api.openai.com/v1`); `docker-compose-graphiti.yml` maps these into the bundled `vxcontrol/graphiti` container as `OPENAI_API_KEY` and `OPENAI_BASE_URL`, which it uses to drive entity extraction. Provider credentials configured elsewhere in PentAGI for Anthropic, Google AI (Gemini), AWS Bedrock, DeepSeek, GLM, Kimi, or Qwen are not consumed by Graphiti.
-- **Single fixed model per deployment.** Graphiti uses one model name (`GRAPHITI_MODEL_NAME`, default `gpt-5-mini`) for all extractions; per-agent or per-flow selection is not supported.
-- **Independent billing.** Graphiti billing is tied to the configured OpenAI-compatible endpoint, even when the main flow runs against a non-OpenAI provider.
-- **No in-app graph explorer yet.** The captured graph is inspected through the Neo4j Browser at `http://localhost:7474` and the Graphiti Swagger UI at `http://localhost:8000/docs`; there is no PentAGI UI surface for it today.
+### Data Flow, Search, and Tenancy
 
-If your deployment cannot reach an OpenAI-compatible endpoint, set `GRAPHITI_ENABLED=false`. The rest of PentAGI continues to function without the knowledge graph.
+Provider performers render `backend/pkg/templates/graphiti/*.tmpl` and enqueue agent responses and tool executions with observation metadata. The sidecar applies ingest policy and performs asynchronous extraction; successful submission does not imply that the graph is immediately searchable.
+
+Enabled agents receive the `graphiti_search` tool. Its seven modes map to temporal-window, entity-relationship, diverse-result, episode-context, successful-tool, recent-context, and entity-by-label client methods. Transport and server failures are handled as degradable tool failures where possible, while malformed arguments and validation errors remain hard errors so the LLM can repair its call.
+
+Every request is partitioned by `Config.GroupID(flowID)`:
+
+- without `TENANT_ID`: `flow-<id>`;
+- with `TENANT_ID`: `<tenant>-flow-<id>`.
+
+`Config.ParseGroupID` rejects identifiers belonging to another tenant. Keep `GroupID` and `ParseGroupID` exact inverses, and never accept a client-supplied namespace in place of a server-derived group ID. The stock deployment also sets `GRAPHITI_SEARCH_SCOPE=flowid`; changing it to global search bypasses this retrieval boundary inside Graphiti and is unsafe for shared deployments.
+
+### Deployment Ownership
+
+The bundled stack is separate from `docker-compose.yml`. The installer distinguishes disabled, external, and embedded deployments using `GRAPHITI_ENABLED` and `GRAPHITI_URL`; `http://graphiti:8000` is the embedded endpoint. It starts the Graphiti stack before PentAGI so the startup health check can succeed.
+
+Installer assets include `docker-compose-graphiti.yml` and the `graphiti` preset directory sourced from `examples/graphiti`. The target directory is checked, repaired, and removed with the Graphiti stack. Compose mounts it through `GRAPHITI_CONFIG_PATH` and `GRAPHITI_CONFIG_DIR`; the fallback target `configs` prevents a newer compose file paired with an older `.env` from masking the image's built-in `llm_configs` with an empty host directory.
+
+Models and call parameters belong to the provider YAML presets, selected by `GRAPHITI_LLM_CLIENT_TYPE`; they are not fields in the PentAGI Go configuration. `GRAPHITI_MODEL_NAME` is obsolete. Refer operators to the README instead of duplicating the sidecar's tuning reference here.
 
 ## Agent Supervision Settings
 

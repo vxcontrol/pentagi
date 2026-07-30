@@ -15,6 +15,7 @@ import (
 
 const (
 	observabilityDirectory        = "observability"
+	graphitiConfigsDirectory      = "graphiti"
 	pentagiExampleCustomConfigLLM = "example.custom.provider.yml"
 	pentagiExampleOllamaConfigLLM = "example.ollama.provider.yml"
 )
@@ -53,7 +54,9 @@ func (fs *fileSystemOperationsImpl) ensureStackIntegrity(ctx context.Context, st
 		return errors.Join(errCompose, errCustom, errOllama)
 
 	case ProductStackGraphiti:
-		return fs.ensureFileFromEmbed(composeFileGraphiti, state)
+		errCompose := fs.ensureFileFromEmbed(composeFileGraphiti, state)
+		errConfigs := fs.ensureDirectoryFromEmbed(graphitiConfigsDirectory, state)
+		return errors.Join(errCompose, errConfigs)
 
 	case ProductStackLangfuse:
 		return fs.ensureFileFromEmbed(composeFileLangfuse, state)
@@ -86,7 +89,10 @@ func (fs *fileSystemOperationsImpl) verifyStackIntegrity(ctx context.Context, st
 		return fs.verifyFileIntegrity(composeFilePentagi, state)
 
 	case ProductStackGraphiti:
-		return fs.verifyFileIntegrity(composeFileGraphiti, state)
+		if err := fs.verifyFileIntegrity(composeFileGraphiti, state); err != nil {
+			return err
+		}
+		return fs.verifyDirectoryIntegrity(graphitiConfigsDirectory, state)
 
 	case ProductStackLangfuse:
 		return fs.verifyFileIntegrity(composeFileLangfuse, state)
@@ -121,6 +127,11 @@ func (fs *fileSystemOperationsImpl) checkStackIntegrity(ctx context.Context, sta
 
 	case ProductStackGraphiti:
 		result[composeFileGraphiti] = fs.checkFileIntegrity(composeFileGraphiti)
+		if r, err := fs.checkDirectoryIntegrity(graphitiConfigsDirectory); err != nil {
+			return result, err
+		} else {
+			maps.Copy(result, r)
+		}
 
 	case ProductStackLangfuse:
 		result[composeFileLangfuse] = fs.checkFileIntegrity(composeFileLangfuse)
@@ -165,6 +176,7 @@ func (fs *fileSystemOperationsImpl) cleanupStackFiles(ctx context.Context, stack
 
 	case ProductStackGraphiti:
 		filesToRemove = append(filesToRemove, filepath.Join(workingDir, composeFileGraphiti))
+		filesToRemove = append(filesToRemove, filepath.Join(workingDir, graphitiConfigsDirectory))
 
 	case ProductStackLangfuse:
 		filesToRemove = append(filesToRemove, filepath.Join(workingDir, composeFileLangfuse))

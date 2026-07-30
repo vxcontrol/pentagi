@@ -838,9 +838,9 @@ Graphiti provides temporal knowledge graph capabilities:
 • Entity and relationship extraction
 • Semantic memory for AI agents
 • Temporal context tracking
-• Knowledge reuse across flows
+• Flow-scoped contextual search
 
-⚠️  REQUIREMENT: Graphiti requires configured OpenAI provider (LLM Providers → OpenAI) for entity extraction.
+Graphiti reuses credentials configured in the LLM Providers and Embeddings screens. LiteLLM credentials remain in .env. Select the provider preset here; configure its models in ./graphiti/<provider>.yaml.
 
 Choose between embedded instance or external connection.`
 
@@ -850,20 +850,50 @@ Choose between embedded instance or external connection.`
 	MonitoringGraphitiDisabled = "Disabled"
 
 	// Form fields
-	MonitoringGraphitiDeploymentType     = "Deployment Type"
-	MonitoringGraphitiDeploymentTypeDesc = "Select the deployment type for Graphiti"
-	MonitoringGraphitiURL                = "Graphiti Server URL"
-	MonitoringGraphitiURLDesc            = "Address of the Graphiti API server"
-	MonitoringGraphitiTimeout            = "Request Timeout"
-	MonitoringGraphitiTimeoutDesc        = "Timeout in seconds for Graphiti operations"
-	MonitoringGraphitiModelName          = "Extraction Model"
-	MonitoringGraphitiModelNameDesc      = "LLM model for entity extraction (uses OpenAI provider from LLM Providers configuration)"
-	MonitoringGraphitiNeo4jUser          = "Neo4j Username"
-	MonitoringGraphitiNeo4jUserDesc      = "Username for Neo4j database access"
-	MonitoringGraphitiNeo4jPassword      = "Neo4j Password"
-	MonitoringGraphitiNeo4jPasswordDesc  = "Password for Neo4j database access"
-	MonitoringGraphitiNeo4jDatabase      = "Neo4j Database"
-	MonitoringGraphitiNeo4jDatabaseDesc  = "Neo4j database name"
+	MonitoringGraphitiDeploymentType           = "Deployment Type"
+	MonitoringGraphitiDeploymentTypeDesc       = "Select the deployment type for Graphiti"
+	MonitoringGraphitiURL                      = "Graphiti Server URL"
+	MonitoringGraphitiURLDesc                  = "Address of the Graphiti API server"
+	MonitoringGraphitiTimeout                  = "Request Timeout"
+	MonitoringGraphitiTimeoutDesc              = "Timeout in seconds for Graphiti operations"
+	MonitoringGraphitiLLMClientType            = "LLM Provider Preset"
+	MonitoringGraphitiLLMClientTypeDesc        = "Provider preset; credentials come from LLM Providers (LiteLLM from .env) and models from ./graphiti/<provider>.yaml"
+	MonitoringGraphitiSeparateEmbedding        = "Use Separate Embedding Endpoint"
+	MonitoringGraphitiSeparateEmbeddingDesc    = "Use the shared Embeddings configuration instead of the selected LLM credentials"
+	MonitoringGraphitiSemaphoreLimit           = "Coroutine Limit"
+	MonitoringGraphitiSemaphoreLimitDesc       = "Maximum concurrent Graphiti helper coroutines"
+	MonitoringGraphitiLogLevel                 = "Log Level"
+	MonitoringGraphitiLogLevelDesc             = "Graphiti log verbosity"
+	MonitoringGraphitiSearchScope              = "Search Scope"
+	MonitoringGraphitiSearchScopeDesc          = "Use flowid for isolation or all for trusted global-search testing"
+	MonitoringGraphitiIngestPolicyRules        = "Ingest Policy Rules"
+	MonitoringGraphitiIngestPolicyRulesDesc    = "JSON mapping of message patterns to REJECT, SKIP_LLM, or PROCESS"
+	MonitoringGraphitiIngestPolicyField        = "Ingest Policy Match Field"
+	MonitoringGraphitiIngestPolicyFieldDesc    = "Message field used for policy matching"
+	MonitoringGraphitiIngestDefaultAction      = "Default Ingest Action"
+	MonitoringGraphitiIngestDefaultActionDesc  = "Action applied when no ingest policy rule matches"
+	MonitoringGraphitiIngestWorkerCount        = "Ingest Worker Count"
+	MonitoringGraphitiIngestWorkerCountDesc    = "Maximum concurrent heavy ingest jobs across flows"
+	MonitoringGraphitiIngestQueueMaxSize       = "Ingest Queue Limit"
+	MonitoringGraphitiIngestQueueMaxSizeDesc   = "Maximum queued messages; 0 keeps the queue unlimited"
+	MonitoringGraphitiTaxonomyLayerProfile     = "Taxonomy Layer Profile"
+	MonitoringGraphitiTaxonomyLayerProfileDesc = "Enabled relationship classes or the full/minimal alias"
+	MonitoringGraphitiCPUs                     = "Graphiti CPU Limit"
+	MonitoringGraphitiCPUsDesc                 = "CPU limit for the Graphiti container"
+	MonitoringGraphitiMemory                   = "Graphiti Memory Limit"
+	MonitoringGraphitiMemoryDesc               = "Memory limit for the Graphiti container"
+	MonitoringGraphitiNeo4jUser                = "Neo4j Username"
+	MonitoringGraphitiNeo4jUserDesc            = "Username for Neo4j database access"
+	MonitoringGraphitiNeo4jPassword            = "Neo4j Password"
+	MonitoringGraphitiNeo4jPasswordDesc        = "Password for Neo4j database access"
+	MonitoringGraphitiNeo4jDatabase            = "Neo4j Database"
+	MonitoringGraphitiNeo4jDatabaseDesc        = "Neo4j database name"
+	MonitoringGraphitiNeo4jCPUs                = "Neo4j CPU Limit"
+	MonitoringGraphitiNeo4jCPUsDesc            = "CPU limit for the Neo4j container"
+	MonitoringGraphitiNeo4jMemory              = "Neo4j Memory Limit"
+	MonitoringGraphitiNeo4jMemoryDesc          = "Memory limit for the Neo4j container"
+	MonitoringGraphitiNeo4jShmSize             = "Neo4j Shared Memory Limit"
+	MonitoringGraphitiNeo4jShmSizeDesc         = "/dev/shm limit; actual usage counts toward Neo4j memory"
 
 	// Help text
 	MonitoringGraphitiModeGuide    = "Choose deployment: Embedded (local Neo4j), External (existing Graphiti), Disabled (no knowledge graph)"
@@ -877,15 +907,19 @@ Embedded deploys complete Graphiti stack:
 • Private knowledge graph on your server
 
 Prerequisites:
-• OpenAI provider must be configured (LLM Providers → OpenAI)
-• OpenAI API key is used for entity extraction
-• Configured model will be used for knowledge graph operations
+• Configure provider credentials in LLM Providers (or .env for LiteLLM)
+• Configure shared embeddings before enabling separate embeddings
+• Edit models and call parameters in ./graphiti/<provider>.yaml
 
 Resource requirements:
-• ~1.5GB RAM, 3GB disk space minimum
+• Defaults reserve up to 2GB for Graphiti and 4GB for Neo4j
 • Neo4j UI: http://localhost:7474
 • Graphiti API: http://localhost:8000
 • Automatic setup and maintenance
+
+Keep flowid search scope for isolation. Use a bounded ingest queue on memory-constrained hosts. Semaphore/workers control throughput; Graphiti and Neo4j CPU/memory limits must grow with concurrent flows.
+
+Fine tuning for retries, combined extraction, anchors, telemetry, and diagnostics remains available in .env.
 
 Best for: Teams wanting knowledge graph capabilities with full data control and privacy.`
 	MonitoringGraphitiExternalHelp = `⚠️  BETA: This feature is under active development. Monitor updates for improvements.
@@ -900,8 +934,7 @@ External connects to your existing Graphiti server:
 Setup requirements:
 • Graphiti server URL and access
 • Network connectivity required
-• External server must be configured with OpenAI API key
-• Model and extraction settings configured on external server
+• Provider, model, embedding, extraction, and graph settings are configured on the external server
 
 Best for: Teams using existing Graphiti deployments or cloud services.`
 	MonitoringGraphitiDisabledHelp = `Graphiti is disabled. You will not have:
@@ -909,13 +942,10 @@ Best for: Teams using existing Graphiti deployments or cloud services.`
 • Temporal knowledge graph
 • Entity and relationship extraction
 • Semantic memory for AI agents
-• Knowledge reuse across flows
+• Flow-scoped graph recall
 • Advanced contextual search
 
-Note: Graphiti is currently in beta.
-Consider enabling for production use
-to build a knowledge base from
-penetration testing results.`
+PentAGI continues using its primary vector memory when Graphiti is disabled.`
 )
 
 // Observability Integration constants
@@ -2472,12 +2502,28 @@ const (
 	EnvDesc_LANGFUSE_EE_LICENSE_KEY   = "Langfuse Enterprise License Key"
 	EnvDesc_PENTAGI_POSTGRES_PASSWORD = "PentAGI PostgreSQL Password"
 
-	EnvDesc_GRAPHITI_URL        = "Graphiti Server URL"
-	EnvDesc_GRAPHITI_TIMEOUT    = "Graphiti Request Timeout"
-	EnvDesc_GRAPHITI_MODEL_NAME = "Graphiti Extraction Model"
-	EnvDesc_NEO4J_USER          = "Neo4j Username"
-	EnvDesc_NEO4J_DATABASE      = "Neo4j Database Name"
-	EnvDesc_NEO4J_PASSWORD      = "Neo4j Database Password"
+	EnvDesc_GRAPHITI_ENABLED                      = "Enable Graphiti Integration"
+	EnvDesc_GRAPHITI_URL                          = "Graphiti Server URL"
+	EnvDesc_GRAPHITI_TIMEOUT                      = "Graphiti Request Timeout"
+	EnvDesc_GRAPHITI_LLM_CLIENT_TYPE              = "Graphiti LLM Provider Preset"
+	EnvDesc_GRAPHITI_SEPARATE_EMBEDDING           = "Graphiti Separate Embedding Endpoint"
+	EnvDesc_GRAPHITI_SEMAPHORE_LIMIT              = "Graphiti Coroutine Limit"
+	EnvDesc_GRAPHITI_LOG_LEVEL                    = "Graphiti Log Level"
+	EnvDesc_GRAPHITI_SEARCH_SCOPE                 = "Graphiti Search Scope"
+	EnvDesc_GRAPHITI_INGEST_POLICY_RULES          = "Graphiti Ingest Policy Rules"
+	EnvDesc_GRAPHITI_INGEST_POLICY_FIELD          = "Graphiti Ingest Policy Match Field"
+	EnvDesc_GRAPHITI_INGEST_POLICY_DEFAULT_ACTION = "Graphiti Default Ingest Action"
+	EnvDesc_GRAPHITI_INGEST_WORKER_COUNT          = "Graphiti Ingest Worker Count"
+	EnvDesc_GRAPHITI_INGEST_QUEUE_MAX_SIZE        = "Graphiti Ingest Queue Limit"
+	EnvDesc_GRAPHITI_TAXONOMY_LAYER_PROFILE       = "Graphiti Taxonomy Layer Profile"
+	EnvDesc_GRAPHITI_CPUS                         = "Graphiti CPU Limit"
+	EnvDesc_GRAPHITI_MEMORY                       = "Graphiti Memory Limit"
+	EnvDesc_NEO4J_USER                            = "Neo4j Username"
+	EnvDesc_NEO4J_DATABASE                        = "Neo4j Database Name"
+	EnvDesc_NEO4J_PASSWORD                        = "Neo4j Database Password"
+	EnvDesc_NEO4J_CPUS                            = "Neo4j CPU Limit"
+	EnvDesc_NEO4J_MEMORY                          = "Neo4j Memory Limit"
+	EnvDesc_NEO4J_SHM_SIZE                        = "Neo4j Shared Memory Limit"
 )
 
 // dynamic, contextual sections used in processor operation forms

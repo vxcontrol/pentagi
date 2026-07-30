@@ -516,6 +516,10 @@ func TestCheckStackIntegrity(t *testing.T) {
 				m.statuses[composeFilePentagi] = files.FileStatusOK
 				// graphiti
 				m.statuses[composeFileGraphiti] = files.FileStatusOK
+				m.lists[graphitiConfigsDirectory] = []string{
+					"graphiti/openai.yaml",
+				}
+				m.statuses["graphiti/openai.yaml"] = files.FileStatusOK
 				// langfuse
 				m.statuses[composeFileLangfuse] = files.FileStatusModified
 				// observability
@@ -528,6 +532,7 @@ func TestCheckStackIntegrity(t *testing.T) {
 			expected: map[string]files.FileStatus{
 				composeFilePentagi:         files.FileStatusOK,
 				composeFileGraphiti:        files.FileStatusOK,
+				"graphiti/openai.yaml":     files.FileStatusOK,
 				composeFileLangfuse:        files.FileStatusModified,
 				composeFileObservability:   files.FileStatusMissing,
 				"observability/config.yml": files.FileStatusOK,
@@ -541,6 +546,10 @@ func TestCheckStackIntegrity(t *testing.T) {
 				m.statuses[composeFilePentagi] = files.FileStatusOK
 				// graphiti
 				m.statuses[composeFileGraphiti] = files.FileStatusOK
+				m.lists[graphitiConfigsDirectory] = []string{
+					"graphiti/openai.yaml",
+				}
+				m.statuses["graphiti/openai.yaml"] = files.FileStatusOK
 				// langfuse
 				m.statuses[composeFileLangfuse] = files.FileStatusModified
 				// observability
@@ -553,6 +562,7 @@ func TestCheckStackIntegrity(t *testing.T) {
 			expected: map[string]files.FileStatus{
 				composeFilePentagi:         files.FileStatusOK,
 				composeFileGraphiti:        files.FileStatusOK,
+				"graphiti/openai.yaml":     files.FileStatusOK,
 				composeFileLangfuse:        files.FileStatusModified,
 				composeFileObservability:   files.FileStatusMissing,
 				"observability/config.yml": files.FileStatusOK,
@@ -615,6 +625,10 @@ func TestCheckStackIntegrity_RealFiles(t *testing.T) {
 		// Setup comprehensive test scenario
 		mockFiles.statuses[composeFilePentagi] = files.FileStatusOK
 		mockFiles.statuses[composeFileGraphiti] = files.FileStatusOK
+		mockFiles.lists[graphitiConfigsDirectory] = []string{
+			"graphiti/openai.yaml",
+		}
+		mockFiles.statuses["graphiti/openai.yaml"] = files.FileStatusOK
 		mockFiles.statuses[composeFileLangfuse] = files.FileStatusModified
 		mockFiles.statuses[composeFileObservability] = files.FileStatusMissing
 		mockFiles.lists[observabilityDirectory] = []string{
@@ -637,7 +651,7 @@ func TestCheckStackIntegrity_RealFiles(t *testing.T) {
 			}
 
 			// Verify all files are captured
-			expectedCount := 6 // 4 compose files + 2 observability directory files
+			expectedCount := 7 // 4 compose files + 1 Graphiti config + 2 observability files
 			if len(result) != expectedCount {
 				t.Errorf("expected %d files, got %d", expectedCount, len(result))
 			}

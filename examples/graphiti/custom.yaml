@@ -1,0 +1,17 @@
+provider: custom
+MODEL_NAME:
+  model: Qwen/Qwen3.6-27B-FP8
+  temperature: 1.0
+  max_tokens: 32768
+  json: true
+  extra_body:
+    chat_template_kwargs:
+      enable_thinking: false
+SMALL_MODEL_NAME:
+  model: Qwen/Qwen3.6-27B-FP8
+  temperature: 1.0
+  max_tokens: 32768
+  json: true
+  extra_body:
+    chat_template_kwargs:
+      enable_thinking: false

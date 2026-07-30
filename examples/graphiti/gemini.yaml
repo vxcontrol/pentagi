@@ -1,0 +1,11 @@
+provider: gemini
+MODEL_NAME:
+  model: gemini/gemini-2.5-flash-lite
+  temperature: 1.0
+  max_tokens: 64000
+  json: true
+SMALL_MODEL_NAME:
+  model: gemini/gemini-2.5-flash-lite
+  temperature: 1.0
+  max_tokens: 64000
+  json: true
