@@ -8428,7 +8428,6 @@
                 "status",
                 "title",
                 "tool_call_id_template",
-                "trace_id",
                 "user_id"
             ],
             "properties": {
@@ -8582,7 +8581,6 @@
                 "tasks",
                 "title",
                 "tool_call_id_template",
-                "trace_id",
                 "user_id"
             ],
             "properties": {

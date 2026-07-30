@@ -8436,7 +8436,6 @@ const docTemplate = `{
                 "status",
                 "title",
                 "tool_call_id_template",
-                "trace_id",
                 "user_id"
             ],
             "properties": {
@@ -8590,7 +8589,6 @@ const docTemplate = `{
                 "tasks",
                 "title",
                 "tool_call_id_template",
-                "trace_id",
                 "user_id"
             ],
             "properties": {
