@@ -229,8 +229,14 @@ function Markdown({ children, className, searchValue }: MarkdownProps) {
             };
         }
 
+        components.table = ({ children: nodeChildren, ...props }) => (
+            <div className="overflow-x-auto">
+                <table {...props}>{processedSearch ? processTextNode(nodeChildren) : nodeChildren}</table>
+            </div>
+        );
+
         return components;
-    }, [processedSearch, createComponentRenderer]);
+    }, [processedSearch, createComponentRenderer, processTextNode]);
 
     return (
         <div className={`prose prose-sm dark:prose-invert max-w-none ${className || ''}`}>
