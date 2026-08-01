@@ -1,6 +1,6 @@
 simple:
   model: gemini-3.1-flash-lite
-  temperature: 0.7
+  temperature: 1.0
   top_p: 0.95
   n: 1
   max_tokens: 8192
@@ -11,7 +11,7 @@ simple:
 
 simple_json:
   model: gemini-3.1-flash-lite
-  temperature: 0.7
+  temperature: 1.0
   top_p: 0.95
   n: 1
   max_tokens: 4096
@@ -54,7 +54,7 @@ generator:
   n: 1
   max_tokens: 32768
   reasoning:
-    effort: high
+    effort: medium
   price:
     input: 2.0
     output: 12.0
@@ -87,40 +87,40 @@ adviser:
     cache_read: 0.2
 
 reflector:
-  model: gemini-3.5-flash
-  temperature: 1.0
-  top_p: 0.95
-  n: 1
-  max_tokens: 4096
-  price:
-    input: 1.5
-    output: 9.0
-    cache_read: 0.15
-
-searcher:
-  model: gemini-3.5-flash
+  model: gemini-3.5-flash-lite
   temperature: 1.0
   top_p: 0.95
   n: 1
   max_tokens: 8192
   price:
-    input: 1.5
-    output: 9.0
-    cache_read: 0.15
+    input: 0.3
+    output: 2.5
+    cache_read: 0.03
 
-enricher:
-  model: gemini-3.5-flash
+searcher:
+  model: gemini-3.5-flash-lite
   temperature: 1.0
   top_p: 0.95
   n: 1
-  max_tokens: 4096
+  max_tokens: 8192
   price:
-    input: 1.5
-    output: 9.0
-    cache_read: 0.15
+    input: 0.3
+    output: 2.5
+    cache_read: 0.03
+
+enricher:
+  model: gemini-3.5-flash-lite
+  temperature: 1.0
+  top_p: 0.95
+  n: 1
+  max_tokens: 8192
+  price:
+    input: 0.3
+    output: 2.5
+    cache_read: 0.03
 
 coder:
-  model: gemini-3.1-pro-preview
+  model: gemini-3.6-flash
   temperature: 1.0
   top_p: 0.95
   n: 1
@@ -128,12 +128,12 @@ coder:
   reasoning:
     effort: low
   price:
-    input: 2.0
-    output: 12.0
-    cache_read: 0.2
+    input: 1.5
+    output: 7.5
+    cache_read: 0.15
 
 installer:
-  model: gemini-3.5-flash
+  model: gemini-3.6-flash
   temperature: 1.0
   top_p: 0.95
   n: 1
@@ -142,11 +142,11 @@ installer:
     effort: low
   price:
     input: 1.5
-    output: 9.0
+    output: 7.5
     cache_read: 0.15
 
 pentester:
-  model: gemini-3.1-pro-preview
+  model: gemini-3.6-flash
   temperature: 1.0
   top_p: 0.95
   n: 1
@@ -154,6 +154,6 @@ pentester:
   reasoning:
     effort: low
   price:
-    input: 2.0
-    output: 12.0
-    cache_read: 0.2
+    input: 1.5
+    output: 7.5
+    cache_read: 0.15

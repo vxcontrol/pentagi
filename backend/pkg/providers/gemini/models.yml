@@ -1,4 +1,14 @@
-# Gemini 3.5 Series - Latest Stable Flash (May 2026)
+# Gemini 3.6 Series - Latest Stable Flash (July 2026)
+- name: gemini-3.6-flash
+  description: Gemini 3.6 Flash - Newest sustained frontier-level Flash model with higher speed and lower cost than prior generations, excelling at code generation, agentic execution, and spatial reasoning. Ideal for rapid agentic loops through complex coding cycles, making it well suited for iterative exploit development and continuous large-scale penetration testing pipelines with 1M token context
+  thinking: true
+  release_date: 2026-07-23
+  price:
+    input: 1.5
+    output: 7.5
+    cache_read: 0.15
+
+# Gemini 3.5 Series - Stable Flash + Flash-Lite (May-July 2026)
 - name: gemini-3.5-flash
   description: Gemini 3.5 Flash - Most intelligent Flash model with sustained frontier performance on agentic and coding tasks, superior search and grounding. Optimal for large-scale autonomous penetration testing, high-throughput security scanning, and continuous vulnerability analysis with hybrid reasoning and 1M token context
   thinking: true
@@ -7,6 +17,15 @@
     input: 1.5
     output: 9.0
     cache_read: 0.15
+
+- name: gemini-3.5-flash-lite
+  description: Gemini 3.5 Flash-Lite - Low-latency, cost-effective multimodal model optimized for high-throughput, low-cost execution of subagent tasks and document parsing. Well suited for high-volume agentic subagent orchestration, lightweight extraction of structured data from scan output, and latency-sensitive security monitoring where API cost is the primary constraint. 1M input / 65K output tokens
+  thinking: true
+  release_date: 2026-07-09
+  price:
+    input: 0.3
+    output: 2.5
+    cache_read: 0.03
 
 # Gemini 3.1 Series - Stable Flash-Lite + Pro Preview (Feb-May 2026)
 - name: gemini-3.1-pro-preview
@@ -28,13 +47,23 @@
     cache_read: 0.2
 
 - name: gemini-3.1-flash-lite
-  description: Gemini 3.1 Flash-Lite - Most cost-efficient stable multimodal model with frontier-class performance rivaling larger models at a fraction of the cost. Perfect for high-volume agentic tasks, simple data extraction, high-frequency lightweight pentesting checks, and extremely low-latency security monitoring
+  description: Gemini 3.1 Flash-Lite - Cost-efficient multimodal model with frontier-class performance rivaling larger models at a fraction of the cost. Suitable for high-volume agentic tasks, simple data extraction, high-frequency lightweight pentesting checks, and low-latency security monitoring (superseded by gemini-3.5-flash-lite)
   thinking: true
   release_date: 2026-05-07
   price:
     input: 0.25
     output: 1.5
     cache_read: 0.025
+
+# Gemini 3 Series - Preview Flash (December 2025)
+- name: gemini-3-flash-preview
+  description: Gemini 3 Flash Preview - Early preview of the Gemini 3.x Flash line offering state-of-the-art multimodal understanding, richer visuals, and deep interactivity for agentic and vibe-coding workloads. Useful for experimental multimodal threat analysis and early access to next-generation agentic pentesting workflows ahead of general availability (preview endpoint, superseded by stable gemini-3.5-flash)
+  thinking: true
+  release_date: 2025-12-08
+  price:
+    input: 0.5
+    output: 3.0
+    cache_read: 0.05
 
 # Gemini 2.5 Series - Advanced thinking models with enhanced reasoning capabilities
 - name: gemini-2.5-pro
@@ -56,7 +85,7 @@
     cache_read: 0.03
 
 - name: gemini-2.5-flash-lite
-  description: Gemini 2.5 Flash-Lite - Smallest and most cost-effective 2.5 model built for at-scale usage, high-throughput security scanning, and rapid vulnerability classification (shutdown October 16, 2026, recommended replacement gemini-3.1-flash-lite)
+  description: Gemini 2.5 Flash-Lite - Smallest and most cost-effective 2.5 model built for at-scale usage, high-throughput security scanning, and rapid vulnerability classification (shutdown October 16, 2026, recommended replacement gemini-3.5-flash-lite)
   thinking: true
   release_date: 2025-07-22
   price:
