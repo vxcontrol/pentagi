@@ -15,7 +15,7 @@ services:
     container_name: neo4j
     hostname: neo4j
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:7474 || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:7474 || exit 1"]
       interval: 1s
       timeout: 10s
       retries: 10
@@ -38,8 +38,21 @@ services:
         max-file: "7"
     volumes:
       - neo4j_data:/data
+      - ${NEO4J_DIR:-./neo4j}/conf:/conf:ro
+      - ${NEO4J_DIR:-./neo4j}/plugins:/plugins:ro
+      - ${NEO4J_DIR:-./neo4j}/logs:/logs
+      - ${NEO4J_DIR:-./neo4j}/import:/import
+      - ${NEO4J_DIR:-./neo4j}/metrics:/metrics
+      - ${NEO4J_DIR:-./neo4j}/ssl:/ssl:ro
+      - ${NEO4J_DIR:-./neo4j}/backups:/backups
     environment:
       - NEO4J_AUTH=${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:-devpassword}
+      - NEO4J_server_bolt_advertised__address=${NEO4J_BOLT_ADVERTISED_ADDRESS:-}
+      - NEO4J_server_http_advertised__address=${NEO4J_HTTP_ADVERTISED_ADDRESS:-}
+      - NEO4J_server_memory_heap_initial__size=${NEO4J_HEAP_INITIAL_SIZE:-2G}
+      - NEO4J_server_memory_heap_max__size=${NEO4J_HEAP_MAX_SIZE:-2G}
+      - NEO4J_server_memory_pagecache_size=${NEO4J_PAGECACHE_SIZE:-1G}
+      - NEO4J_db_memory_transaction_max=${NEO4J_TRANSACTION_MAX:-1G}
     networks:
       - pentagi-network
     shm_size: ${NEO4J_SHM_SIZE:-4g}

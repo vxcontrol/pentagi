@@ -16,6 +16,7 @@ import (
 const (
 	observabilityDirectory        = "observability"
 	graphitiConfigsDirectory      = "graphiti"
+	neo4jDirectory                = "neo4j"
 	pentagiExampleCustomConfigLLM = "example.custom.provider.yml"
 	pentagiExampleOllamaConfigLLM = "example.ollama.provider.yml"
 )
@@ -25,6 +26,15 @@ var filesToExcludeFromVerification = []string{
 	"observability/grafana/config/grafana.ini",
 	pentagiExampleCustomConfigLLM,
 	pentagiExampleOllamaConfigLLM,
+	// user-editable Neo4j/APOC static settings: created once if missing, never
+	// overwritten afterwards, even when the user forces a files update
+	"neo4j/conf/neo4j.conf",
+	"neo4j/conf/apoc.conf",
+	// user-editable Graphiti LLM provider presets: same "create once" policy
+	"graphiti/custom.yaml",
+	"graphiti/gemini.yaml",
+	"graphiti/litellm.yaml",
+	"graphiti/openai.yaml",
 }
 
 var allStacks = []ProductStack{
@@ -56,7 +66,8 @@ func (fs *fileSystemOperationsImpl) ensureStackIntegrity(ctx context.Context, st
 	case ProductStackGraphiti:
 		errCompose := fs.ensureFileFromEmbed(composeFileGraphiti, state)
 		errConfigs := fs.ensureDirectoryFromEmbed(graphitiConfigsDirectory, state)
-		return errors.Join(errCompose, errConfigs)
+		errNeo4j := fs.ensureDirectoryFromEmbed(neo4jDirectory, state)
+		return errors.Join(errCompose, errConfigs, errNeo4j)
 
 	case ProductStackLangfuse:
 		return fs.ensureFileFromEmbed(composeFileLangfuse, state)
@@ -92,7 +103,10 @@ func (fs *fileSystemOperationsImpl) verifyStackIntegrity(ctx context.Context, st
 		if err := fs.verifyFileIntegrity(composeFileGraphiti, state); err != nil {
 			return err
 		}
-		return fs.verifyDirectoryIntegrity(graphitiConfigsDirectory, state)
+		if err := fs.verifyDirectoryIntegrity(graphitiConfigsDirectory, state); err != nil {
+			return err
+		}
+		return fs.verifyDirectoryIntegrity(neo4jDirectory, state)
 
 	case ProductStackLangfuse:
 		return fs.verifyFileIntegrity(composeFileLangfuse, state)
@@ -128,6 +142,11 @@ func (fs *fileSystemOperationsImpl) checkStackIntegrity(ctx context.Context, sta
 	case ProductStackGraphiti:
 		result[composeFileGraphiti] = fs.checkFileIntegrity(composeFileGraphiti)
 		if r, err := fs.checkDirectoryIntegrity(graphitiConfigsDirectory); err != nil {
+			return result, err
+		} else {
+			maps.Copy(result, r)
+		}
+		if r, err := fs.checkDirectoryIntegrity(neo4jDirectory); err != nil {
 			return result, err
 		} else {
 			maps.Copy(result, r)
@@ -177,6 +196,7 @@ func (fs *fileSystemOperationsImpl) cleanupStackFiles(ctx context.Context, stack
 	case ProductStackGraphiti:
 		filesToRemove = append(filesToRemove, filepath.Join(workingDir, composeFileGraphiti))
 		filesToRemove = append(filesToRemove, filepath.Join(workingDir, graphitiConfigsDirectory))
+		filesToRemove = append(filesToRemove, filepath.Join(workingDir, neo4jDirectory))
 
 	case ProductStackLangfuse:
 		filesToRemove = append(filesToRemove, filepath.Join(workingDir, composeFileLangfuse))

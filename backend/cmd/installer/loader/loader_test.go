@@ -544,6 +544,60 @@ func TestLoadVarsEdgeCases(t *testing.T) {
 	}
 }
 
+// TestLoadVarsCommentProseWithEquals ensures that descriptive comment lines
+// containing a stray '=' character (e.g. "<=" comparisons, or "empty = disabled"
+// phrasing used throughout .env.example) are not mistaken for commented-out
+// variable assignments. Regression test for a bug where such comments produced
+// bogus pseudo-variables that were permanently reported as "changed", causing
+// "Apply Changes" to show pending changes that could never be resolved.
+func TestLoadVarsCommentProseWithEquals(t *testing.T) {
+	content := strings.Join([]string{
+		"## Default: 1200 (20 minutes). Range: 1-10800 (up to 3 hours). Values <= 0 or above 10800 are clamped to 10800.",
+		"TERMINAL_TOOL_TIMEOUT=1200",
+		"",
+		"## Go pprof HTTP listener (empty = disabled). Use host:port, e.g. :7777.",
+		"PPROF_ADDR=",
+		"",
+		"## one worker node, one Neo4j/Graphiti, one Langfuse (empty = standalone instance).",
+		"TENANT_ID=",
+		"",
+		"#REAL_COMMENTED_VAR=commented_value",
+	}, "\n")
+
+	vars := loadVars(content)
+
+	for name, envVar := range vars {
+		if envVar.IsComment {
+			continue
+		}
+		if strings.ContainsAny(name, " #<>().,:") {
+			t.Errorf("found bogus pseudo-variable parsed from comment prose: %q (value=%q)", name, envVar.Value)
+		}
+	}
+
+	// a genuine commented-out assignment must still be recognized
+	commented, ok := vars["REAL_COMMENTED_VAR"]
+	if !ok {
+		t.Fatal("expected REAL_COMMENTED_VAR to be parsed from a real commented-out assignment")
+	}
+	if !commented.IsComment || commented.Value != "commented_value" {
+		t.Errorf("REAL_COMMENTED_VAR parsed incorrectly: %+v", commented)
+	}
+
+	// real variables following prose comments must still parse correctly and
+	// must never be permanently marked as changed
+	for _, name := range []string{"TERMINAL_TOOL_TIMEOUT", "PPROF_ADDR", "TENANT_ID"} {
+		envVar, ok := vars[name]
+		if !ok {
+			t.Errorf("expected %s to be parsed", name)
+			continue
+		}
+		if envVar.IsChanged {
+			t.Errorf("%s should not be marked as changed, got IsChanged=true", name)
+		}
+	}
+}
+
 func TestPatchRaw(t *testing.T) {
 	envFile := &envFile{
 		vars: map[string]*EnvVar{

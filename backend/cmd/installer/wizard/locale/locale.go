@@ -841,6 +841,7 @@ Graphiti provides temporal knowledge graph capabilities:
 • Flow-scoped contextual search
 
 Graphiti reuses credentials configured in the LLM Providers and Embeddings screens. LiteLLM credentials remain in .env. Select the provider preset here; configure its models in ./graphiti/<provider>.yaml.
+Supports openai, gemini, litellm, custom.
 
 Choose between embedded instance or external connection.`
 
@@ -857,7 +858,7 @@ Choose between embedded instance or external connection.`
 	MonitoringGraphitiTimeout                  = "Request Timeout"
 	MonitoringGraphitiTimeoutDesc              = "Timeout in seconds for Graphiti operations"
 	MonitoringGraphitiLLMClientType            = "LLM Provider Preset"
-	MonitoringGraphitiLLMClientTypeDesc        = "Provider preset; credentials come from LLM Providers (LiteLLM from .env) and models from ./graphiti/<provider>.yaml"
+	MonitoringGraphitiLLMClientTypeDesc        = "Provider preset; credentials come from LLM Providers (openai, gemini, litellm, custom) and models from ./graphiti/<provider>.yaml"
 	MonitoringGraphitiSeparateEmbedding        = "Use Separate Embedding Endpoint"
 	MonitoringGraphitiSeparateEmbeddingDesc    = "Use the shared Embeddings configuration instead of the selected LLM credentials"
 	MonitoringGraphitiSemaphoreLimit           = "Coroutine Limit"

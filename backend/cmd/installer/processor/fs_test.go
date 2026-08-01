@@ -229,6 +229,69 @@ func TestFileSystemOperationsImpl_VerifyDirectoryContentIntegrity(t *testing.T) 
 	}
 }
 
+// TestFileSystemOperationsImpl_UserEditableFilesExcluded ensures the specific
+// user-editable static config files (Neo4j/APOC settings and Graphiti LLM
+// provider presets) are registered in the exclusion policy: created once if
+// missing, but never overwritten afterwards even when force=true is used.
+func TestFileSystemOperationsImpl_UserEditableFilesExcluded(t *testing.T) {
+	processor := createTestProcessor()
+	fsOps := newFileSystemOperations(processor).(*fileSystemOperationsImpl)
+
+	mustBeExcluded := []string{
+		"neo4j/conf/neo4j.conf",
+		"neo4j/conf/apoc.conf",
+		"graphiti/custom.yaml",
+		"graphiti/gemini.yaml",
+		"graphiti/litellm.yaml",
+		"graphiti/openai.yaml",
+	}
+
+	for _, path := range mustBeExcluded {
+		if !fsOps.isExcludedFromVerification(path) {
+			t.Errorf("expected %s to be excluded from verification (user-editable), but it is not", path)
+		}
+	}
+}
+
+// TestFileSystemOperationsImpl_UserEditableFilesNeverOverwritten verifies the
+// end-to-end behavior via verifyDirectoryContentIntegrity: a modified
+// user-editable file is left untouched even when force=true is set, unlike a
+// regular (non-excluded) modified file in the same directory.
+func TestFileSystemOperationsImpl_UserEditableFilesNeverOverwritten(t *testing.T) {
+	tmpDir := t.TempDir()
+	targetPath := filepath.Join(tmpDir, neo4jDirectory)
+
+	processor := createTestProcessor()
+	mockState := processor.state.(*mockState)
+	mockState.envPath = filepath.Join(tmpDir, ".env")
+
+	mockFiles := processor.files.(*mockFiles)
+	regularFile := "neo4j/plugins/apoc-core.jar"
+	mockFiles.lists[neo4jDirectory] = []string{
+		"neo4j/conf/neo4j.conf",
+		regularFile,
+	}
+	mockFiles.statuses["neo4j/conf/neo4j.conf"] = files.FileStatusModified
+	mockFiles.statuses[regularFile] = files.FileStatusModified
+	mockFiles.AddFile(neo4jDirectory, []byte{})
+
+	_ = os.MkdirAll(targetPath, 0o755)
+
+	fsOps := newFileSystemOperations(processor).(*fileSystemOperationsImpl)
+	state := &operationState{force: true, mx: &sync.Mutex{}, ctx: t.Context()}
+
+	err := fsOps.verifyDirectoryIntegrity(neo4jDirectory, state)
+	assertNoError(t, err)
+
+	if len(mockFiles.copies) != 1 {
+		t.Fatalf("expected exactly 1 copy (only the non-excluded modified file), got %d: %+v",
+			len(mockFiles.copies), mockFiles.copies)
+	}
+	if mockFiles.copies[0].Src != regularFile {
+		t.Errorf("expected only %s to be updated, got copy of %s instead", regularFile, mockFiles.copies[0].Src)
+	}
+}
+
 func TestFileSystemOperationsImpl_ExcludedFilesHandling(t *testing.T) {
 	if len(filesToExcludeFromVerification) == 0 {
 		t.Skip("no excluded files configured; skipping excluded files tests")
@@ -520,6 +583,14 @@ func TestCheckStackIntegrity(t *testing.T) {
 					"graphiti/openai.yaml",
 				}
 				m.statuses["graphiti/openai.yaml"] = files.FileStatusOK
+				m.lists[neo4jDirectory] = []string{
+					"neo4j/conf/neo4j.conf",
+					"neo4j/conf/apoc.conf",
+					"neo4j/plugins/apoc-core.jar",
+				}
+				m.statuses["neo4j/conf/neo4j.conf"] = files.FileStatusOK
+				m.statuses["neo4j/conf/apoc.conf"] = files.FileStatusOK
+				m.statuses["neo4j/plugins/apoc-core.jar"] = files.FileStatusOK
 				// langfuse
 				m.statuses[composeFileLangfuse] = files.FileStatusModified
 				// observability
@@ -530,12 +601,15 @@ func TestCheckStackIntegrity(t *testing.T) {
 				m.statuses["observability/config.yml"] = files.FileStatusOK
 			},
 			expected: map[string]files.FileStatus{
-				composeFilePentagi:         files.FileStatusOK,
-				composeFileGraphiti:        files.FileStatusOK,
-				"graphiti/openai.yaml":     files.FileStatusOK,
-				composeFileLangfuse:        files.FileStatusModified,
-				composeFileObservability:   files.FileStatusMissing,
-				"observability/config.yml": files.FileStatusOK,
+				composeFilePentagi:            files.FileStatusOK,
+				composeFileGraphiti:           files.FileStatusOK,
+				"graphiti/openai.yaml":        files.FileStatusOK,
+				"neo4j/conf/neo4j.conf":       files.FileStatusOK,
+				"neo4j/conf/apoc.conf":        files.FileStatusOK,
+				"neo4j/plugins/apoc-core.jar": files.FileStatusOK,
+				composeFileLangfuse:           files.FileStatusModified,
+				composeFileObservability:      files.FileStatusMissing,
+				"observability/config.yml":    files.FileStatusOK,
 			},
 		},
 		{
@@ -550,6 +624,14 @@ func TestCheckStackIntegrity(t *testing.T) {
 					"graphiti/openai.yaml",
 				}
 				m.statuses["graphiti/openai.yaml"] = files.FileStatusOK
+				m.lists[neo4jDirectory] = []string{
+					"neo4j/conf/neo4j.conf",
+					"neo4j/conf/apoc.conf",
+					"neo4j/plugins/apoc-core.jar",
+				}
+				m.statuses["neo4j/conf/neo4j.conf"] = files.FileStatusOK
+				m.statuses["neo4j/conf/apoc.conf"] = files.FileStatusOK
+				m.statuses["neo4j/plugins/apoc-core.jar"] = files.FileStatusOK
 				// langfuse
 				m.statuses[composeFileLangfuse] = files.FileStatusModified
 				// observability
@@ -560,12 +642,15 @@ func TestCheckStackIntegrity(t *testing.T) {
 				m.statuses["observability/config.yml"] = files.FileStatusOK
 			},
 			expected: map[string]files.FileStatus{
-				composeFilePentagi:         files.FileStatusOK,
-				composeFileGraphiti:        files.FileStatusOK,
-				"graphiti/openai.yaml":     files.FileStatusOK,
-				composeFileLangfuse:        files.FileStatusModified,
-				composeFileObservability:   files.FileStatusMissing,
-				"observability/config.yml": files.FileStatusOK,
+				composeFilePentagi:            files.FileStatusOK,
+				composeFileGraphiti:           files.FileStatusOK,
+				"graphiti/openai.yaml":        files.FileStatusOK,
+				"neo4j/conf/neo4j.conf":       files.FileStatusOK,
+				"neo4j/conf/apoc.conf":        files.FileStatusOK,
+				"neo4j/plugins/apoc-core.jar": files.FileStatusOK,
+				composeFileLangfuse:           files.FileStatusModified,
+				composeFileObservability:      files.FileStatusMissing,
+				"observability/config.yml":    files.FileStatusOK,
 			},
 		},
 		{
@@ -629,6 +714,14 @@ func TestCheckStackIntegrity_RealFiles(t *testing.T) {
 			"graphiti/openai.yaml",
 		}
 		mockFiles.statuses["graphiti/openai.yaml"] = files.FileStatusOK
+		mockFiles.lists[neo4jDirectory] = []string{
+			"neo4j/conf/neo4j.conf",
+			"neo4j/conf/apoc.conf",
+			"neo4j/plugins/apoc-core.jar",
+		}
+		mockFiles.statuses["neo4j/conf/neo4j.conf"] = files.FileStatusOK
+		mockFiles.statuses["neo4j/conf/apoc.conf"] = files.FileStatusOK
+		mockFiles.statuses["neo4j/plugins/apoc-core.jar"] = files.FileStatusOK
 		mockFiles.statuses[composeFileLangfuse] = files.FileStatusModified
 		mockFiles.statuses[composeFileObservability] = files.FileStatusMissing
 		mockFiles.lists[observabilityDirectory] = []string{
@@ -651,7 +744,7 @@ func TestCheckStackIntegrity_RealFiles(t *testing.T) {
 			}
 
 			// Verify all files are captured
-			expectedCount := 7 // 4 compose files + 1 Graphiti config + 2 observability files
+			expectedCount := 10 // 4 compose files + 1 Graphiti config + 3 Neo4j files + 2 observability files
 			if len(result) != expectedCount {
 				t.Errorf("expected %d files, got %d", expectedCount, len(result))
 			}

@@ -2826,8 +2826,20 @@ The values below are PentAGI's recommended `.env.example`/compose defaults, not 
 | `NEO4J_CPUS`, `NEO4J_MEMORY` | `4.0`, `4G` | Neo4j container limits; use `neo4j-admin server memory-recommendation --docker` for production sizing |
 | `NEO4J_SHM_SIZE` | `4g` | `/dev/shm` limit; actual use counts toward the container memory limit |
 | `NEO4J_NOFILE` | `65536` | Open-file soft/hard limit, suitable for many indexes and concurrent connections |
+| `NEO4J_HEAP_INITIAL_SIZE`, `NEO4J_HEAP_MAX_SIZE`, `NEO4J_PAGECACHE_SIZE` | `2G`, `2G`, `1G` | JVM heap/page cache sizing; `NEO4J_CPUS`/`NEO4J_MEMORY` only cap the container, the JVM does not reliably size itself to fit inside that cap on its own. Defaults favor heap over page cache — suited to a low write-throughput deployment with occasional wide reads, since query execution/result materialization lives in heap while a small dataset is already comfortably held by 1G of page cache; re-run `neo4j-admin server memory-recommendation --docker` once real data volume is known |
+| `NEO4J_TRANSACTION_MAX` | `1G` | Caps a single transaction's memory (`db.memory.transaction.max`) so one runaway/unbounded query (e.g. a Cartesian product or an unbounded variable-length path before a `LIMIT`) fails cleanly with an out-of-memory Cypher error instead of exhausting the whole heap and taking down every other query on the server |
+| `NEO4J_BOLT_ADVERTISED_ADDRESS` | empty | Set only when Neo4j Browser and the Bolt connector are reverse-proxied on different public domains (e.g. behind Guarder with CORS/cookie-group support for cross-origin bolt access); format `host:port`. Left empty, Neo4j's discovery endpoint advertises whatever `Host` header the request arrived with, which is correct only when both share one domain |
+| `NEO4J_HTTP_ADVERTISED_ADDRESS` | empty | Set only when a reverse proxy in front of Neo4j Browser strips or rewrites the `Host` header, making the dynamic Host-header-based advertised address incorrect; format `host:port`. Leave empty in the common case (proxy forwards `Host` unchanged) |
 
 `NEO4J_USER`, `NEO4J_PASSWORD`, `NEO4J_URI`, and `NEO4J_DATABASE` configure the bundled connection. Neo4j Community Edition supports only its default database; do not configure a separate database name that requires Enterprise multi-database support.
+
+The installer copies [`examples/neo4j`](examples/neo4j) beside the installation as `./neo4j`. It contains static, non-`.env`-tunable settings that don't have a `NEO4J_*` variable: `conf/neo4j.conf` and `conf/apoc.conf`, plus a version-pinned `plugins/apoc-*-core.jar`. The compose mount is controlled by:
+
+```bash
+NEO4J_DIR=./neo4j
+```
+
+`NEO4J_DIR` may point directly to `./examples/neo4j` for development. Both `conf/` and `plugins/` are mounted read-only; the stack still starts on Neo4j's built-in defaults (without APOC) if the directory is absent, since Docker creates an empty one automatically. Do not duplicate any `NEO4J_*` variable from the table above inside `conf/neo4j.conf` — the Neo4j Docker entrypoint always strips a matching line from the mounted file and re-appends the environment variable's value, so a duplicated setting in the file would be silently ignored.
 
 The bundled stack currently wires Neo4j only. The Graphiti image contains FalkorDB support, but using it requires a separately configured deployment because the stock compose file does not expose `GRAPHITI_GRAPH_BACKEND` or `FALKORDB_*`.
 
