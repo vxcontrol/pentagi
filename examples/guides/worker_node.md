@@ -434,6 +434,126 @@ sudo docker rm -f docker-dind && sudo run-dind
 
 If `run-dind` fails with a missing `/dev/fuse`, load the module first: `sudo modprobe fuse`.
 
+## Deploy Scraper on Worker Node (Host Docker)
+
+Run the browser scraper on the **worker node's host Docker** (outside dind), bound to `${PRIVATE_IP}:9443`. PentAGI on the main node will call it the same way as the local compose `scraper` service: HTTPS with Basic Auth embedded in the URL, TLS verification skipped for the scraper's self-signed certificate (`backend/pkg/tools/browser.go`).
+
+Under the hood this is Browserless + Chrome, so the container needs a large `/dev/shm` (`--shm-size 2g`). Keep it off `--network host`, do not mount the Docker socket, and apply light hardening — enough to raise the escape bar without breaking Chrome.
+
+### Set Scraper Credentials
+
+Pick a strong username/password and export them before creating the launcher (they are baked into the script at create time). Avoid shell-special characters (`'`, `"`, `$`, `` ` ``, `\`, `@`, `:`) so the URL form stays unambiguous:
+
+```bash
+export SCRAPER_USERNAME=pentagi
+export SCRAPER_PASSWORD="$(openssl rand -base64 24 | tr -dc 'A-Za-z0-9' | head -c 32)"
+echo "SCRAPER_USERNAME=${SCRAPER_USERNAME}"
+echo "SCRAPER_PASSWORD=${SCRAPER_PASSWORD}"   # save this; needed on the main node later
+```
+
+### Create and Install `run-scraper`
+
+```bash
+sudo tee /usr/local/bin/run-scraper > /dev/null << EOF
+#!/bin/bash
+# Launch the hardened browser scraper on the worker host Docker daemon.
+# Credentials and listen address are baked in at install time.
+# Usage: run-scraper
+
+set -e
+
+CONTAINER_NAME=scraper
+IMAGE=vxcontrol/scraper:latest
+LISTEN_IP=${PRIVATE_IP}
+LISTEN_PORT=9443
+USERNAME=${SCRAPER_USERNAME}
+PASSWORD=${SCRAPER_PASSWORD}
+MAX_CONCURRENT_SESSIONS=10
+CPU_LIMIT=2
+MEMORY_LIMIT=4G
+PIDS_LIMIT=2048
+SHM_SIZE=2g
+RESTART_POLICY=always
+LOG_MAX_SIZE=50m
+LOG_MAX_FILE=7
+SSL_VOLUME=scraper-ssl
+
+if docker ps --format '{{.Names}}' | grep -q "^\${CONTAINER_NAME}\$"; then
+    echo "container \${CONTAINER_NAME} is already running"
+    echo "to recreate, first remove: docker rm -f \${CONTAINER_NAME}"
+    exit 0
+fi
+
+docker rm "\${CONTAINER_NAME}" >/dev/null 2>&1 || true
+docker volume create "\${SSL_VOLUME}" >/dev/null
+
+docker run -d \\
+    --name "\${CONTAINER_NAME}" \\
+    --hostname scraper \\
+    --restart "\${RESTART_POLICY}" \\
+    --shm-size "\${SHM_SIZE}" \\
+    --pids-limit "\${PIDS_LIMIT}" \\
+    --cpus "\${CPU_LIMIT}" \\
+    --memory "\${MEMORY_LIMIT}" \\
+    --cap-drop ALL \\
+    --cap-add CHOWN \\
+    --cap-add SETUID \\
+    --cap-add SETGID \\
+    --cap-add DAC_OVERRIDE \\
+    --cap-add FOWNER \\
+    --cap-add SYS_CHROOT \\
+    --cap-add KILL \\
+    --cap-add AUDIT_WRITE \\
+    --cap-add NET_BIND_SERVICE \\
+    --security-opt no-new-privileges:true \\
+    -p "\${LISTEN_IP}:\${LISTEN_PORT}:443" \\
+    -e "USERNAME=\${USERNAME}" \\
+    -e "PASSWORD=\${PASSWORD}" \\
+    -e "MAX_CONCURRENT_SESSIONS=\${MAX_CONCURRENT_SESSIONS}" \\
+    -v "\${SSL_VOLUME}:/usr/src/app/ssl" \\
+    --log-opt "max-size=\${LOG_MAX_SIZE}" \\
+    --log-opt "max-file=\${LOG_MAX_FILE}" \\
+    "\${IMAGE}"
+
+echo "scraper listening on https://\${LISTEN_IP}:\${LISTEN_PORT}"
+EOF
+
+sudo chmod +x /usr/local/bin/run-scraper
+```
+
+### Start and Verify
+
+```bash
+sudo run-scraper
+
+# Same request shape PentAGI uses (browser.go): GET /markdown?url=…
+# Auth is HTTP Basic (-u); TLS cert is self-signed → -k
+# First pull + cold start can take a minute — retry until HTTP 200
+for i in $(seq 1 60); do
+    code=$(curl -k -sS -o /tmp/scraper-md.txt -w '%{http_code}' \
+        -u "${SCRAPER_USERNAME}:${SCRAPER_PASSWORD}" \
+        "https://${PRIVATE_IP}:9443/markdown?url=https://example.com" || true)
+    if [ "$code" = "200" ]; then
+        echo "scraper OK (HTTP 200)"
+        head -c 400 /tmp/scraper-md.txt; echo
+        break
+    fi
+    echo "waiting for scraper... attempt ${i}/60 (HTTP ${code:-000})"
+    sleep 2
+done
+[ "${code:-}" = "200" ] && echo "scraper is ready" || echo "scraper failed to become ready"
+```
+
+A HTTP 200 with markdown body means the scraper is ready. On the main node, point PentAGI at this endpoint (see [Equivalent `.env` Configuration](#equivalent-env-configuration)):
+
+```bash
+# On the main node — credentials must match what you baked into run-scraper
+SCRAPER_PUBLIC_URL=https://${SCRAPER_USERNAME}:${SCRAPER_PASSWORD}@${PRIVATE_IP}:9443
+SCRAPER_PRIVATE_URL=https://${SCRAPER_USERNAME}:${SCRAPER_PASSWORD}@${PRIVATE_IP}:9443
+```
+
+> Nested containers may use `--network host` and can therefore reach `${PRIVATE_IP}:9443`. Basic Auth is the gate — keep the password strong and do not expose 9443 beyond the main PentAGI node.
+
 ## Security & Firewall Configuration
 
 ### Required Port Access
@@ -444,10 +564,11 @@ The worker node exposes the following services:
 |------|--------------|---------|-------------|
 | 2376 | `${PRIVATE_IP}` | Host Docker API | TLS-secured Docker daemon for worker container management |
 | 3376 | `${PRIVATE_IP}` | dind API | TLS-secured Docker-in-Docker daemon |
+| 9443 | `${PRIVATE_IP}` | Scraper (Browserless) | HTTPS browser scraper for PentAGI browser tool |
 | 9323 | `${METRICS_IP}` | Host Docker Metrics | Prometheus metrics endpoint for host Docker |
 | 9324 | `${METRICS_IP}` | dind Metrics | Prometheus metrics endpoint for dind |
 
-With the default `METRICS_IP=127.0.0.1`, metrics are reachable only from the worker node itself. Set `METRICS_IP=${PRIVATE_IP}` if a remote scraper must scrape them.
+With the default `METRICS_IP=127.0.0.1`, metrics are reachable only from the worker node itself. Set `METRICS_IP=${PRIVATE_IP}` if a remote metrics scraper must reach them.
 
 **Metrics Integration:** The metrics ports (9323, 9324) can be configured in PentAGI's `observability/otel/config.yml` under the `docker-engine-collector` job name for monitoring integration.
 
@@ -456,12 +577,12 @@ With the default `METRICS_IP=127.0.0.1`, metrics are reachable only from the wor
 Each worker container (`pentagi-terminal-N`) dynamically allocates **2 ports** from the range `28000-30000` on all network interfaces to facilitate Out-of-Band (OOB) attack techniques during penetration testing.
 
 **Firewall Requirements:**
-- **Inbound**: Allow access to ports 2376, 3376 on `${PRIVATE_IP}` from the main PentAGI node
-- **Inbound**: If `METRICS_IP=${PRIVATE_IP}`, also allow 9323, 9324 on `${PRIVATE_IP}` from the scraper host; with the default `127.0.0.1` no remote metrics access is needed
+- **Inbound**: Allow access to ports 2376, 3376, 9443 on `${PRIVATE_IP}` from the main PentAGI node
+- **Inbound**: If `METRICS_IP=${PRIVATE_IP}`, also allow 9323, 9324 on `${PRIVATE_IP}` from the metrics scraper host; with the default `127.0.0.1` no remote metrics access is needed
 - **Inbound**: Allow access to port range 28000-30000 from target networks being tested
 - Configure perimeter firewall to permit OOB traffic from target networks to worker node
 
-Both Docker APIs must be reachable **only** from the main node — nested containers may use `--network host` and can therefore probe every port on this node.
+Both Docker APIs and the scraper must be reachable **only** from the main node — nested containers may use `--network host` and can therefore probe every port on this node.
 
 ## Transfer Certificates to Main Node
 
@@ -631,6 +752,10 @@ DOCKER_SOCKET=                                          # empty: mount no socket
 DOCKER_INSIDE_HOST=tcp://${PRIVATE_IP}:3376
 DOCKER_INSIDE_TLS_VERIFY=1
 DOCKER_INSIDE_CERT_PATH=/etc/docker/dind/certs/client   # path on the WORKER node
+
+## Browser scraper on the worker node (Basic Auth in the URL; TLS is self-signed)
+SCRAPER_PUBLIC_URL=https://${SCRAPER_USERNAME}:${SCRAPER_PASSWORD}@${PRIVATE_IP}:9443/
+SCRAPER_PRIVATE_URL=https://${SCRAPER_USERNAME}:${SCRAPER_PASSWORD}@${PRIVATE_IP}:9443/
 
 DOCKER_NET_ADMIN=true
 DOCKER_NETWORK=pentagi-network
