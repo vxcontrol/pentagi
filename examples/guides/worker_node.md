@@ -62,11 +62,11 @@ Set the private IP address that will be used throughout this setup, the metrics 
 
 ```bash
 export PRIVATE_IP=192.168.10.10  # Replace with your worker node IP
-export METRICS_IP=127.0.0.1     # Bind address for Docker metrics ports 9323 / 9324
+export METRICS_IP=127.0.0.1     # Bind address for metrics ports 8080 / 9100 / 9323 / 9324
 export GUIDE_URL=https://raw.githubusercontent.com/vxcontrol/pentagi/main/examples/guides/worker_node
 ```
 
-`METRICS_IP` defaults to `127.0.0.1` so Prometheus metrics stay local to the worker node. Set it to `${PRIVATE_IP}` only if a remote scraper must reach ports `9323` / `9324`.
+`METRICS_IP` defaults to `127.0.0.1` so Prometheus metrics (Docker daemon, dind, cAdvisor, node-exporter) stay local to the worker node. Set it to `${PRIVATE_IP}` only if a remote scraper must reach ports `8080`, `9100`, `9323` / `9324`.
 
 ## Install Docker on Both Nodes
 
@@ -554,6 +554,131 @@ SCRAPER_PRIVATE_URL=https://${SCRAPER_USERNAME}:${SCRAPER_PASSWORD}@${PRIVATE_IP
 
 > Nested containers may use `--network host` and can therefore reach `${PRIVATE_IP}:9443`. Basic Auth is the gate — keep the password strong and do not expose 9443 beyond the main PentAGI node.
 
+## Deploy Monitoring Exporters on Worker Node (Host Docker)
+
+Run cAdvisor (per-container metrics) and node-exporter (host-level metrics) on the **worker node's host Docker** (outside dind), bound to `${METRICS_IP}` — the same bind address already used for the Docker daemon and dind metrics endpoints (`9323`/`9324`). PentAGI's bundled [observability stack](mdc:observability/otel/config.yml) scrapes both under the `docker-container-collector` and `otel-collector` job names; on a distributed setup point those Prometheus targets at `${METRICS_IP}:8080` and `${METRICS_IP}:9100` instead of the in-network container names.
+
+Both exporters are read-only introspection tools with no PentAGI-specific credentials, so — unlike the scraper — they need no secrets step.
+
+### Create and Install `run-cadvisor`
+
+```bash
+sudo tee /usr/local/bin/run-cadvisor > /dev/null << EOF
+#!/bin/bash
+# Launch the cAdvisor container-metrics exporter on the worker host Docker daemon.
+# Usage: run-cadvisor
+
+set -e
+
+CONTAINER_NAME=cadvisor
+IMAGE=ghcr.io/google/cadvisor:0.56.2
+LISTEN_IP=${METRICS_IP}
+LISTEN_PORT=8080
+RESTART_POLICY=unless-stopped
+LOG_MAX_SIZE=50m
+LOG_MAX_FILE=7
+
+if docker ps --format '{{.Names}}' | grep -q "^\${CONTAINER_NAME}\$"; then
+    echo "container \${CONTAINER_NAME} is already running"
+    echo "to recreate, first remove: docker rm -f \${CONTAINER_NAME}"
+    exit 0
+fi
+
+docker rm "\${CONTAINER_NAME}" >/dev/null 2>&1 || true
+
+docker run -d \\
+    --name "\${CONTAINER_NAME}" \\
+    --hostname cadvisor \\
+    --restart "\${RESTART_POLICY}" \\
+    -p "\${LISTEN_IP}:\${LISTEN_PORT}:8080" \\
+    -v /:/rootfs:ro \\
+    -v /var/run:/var/run:rw \\
+    -v /sys:/sys:ro \\
+    -v /var/lib/docker/:/var/lib/docker:ro \\
+    --log-opt "max-size=\${LOG_MAX_SIZE}" \\
+    --log-opt "max-file=\${LOG_MAX_FILE}" \\
+    "\${IMAGE}" \\
+    --store_container_labels=false \\
+    --docker_only=true \\
+    --disable_root_cgroup_stats=true
+
+echo "cadvisor metrics listening on http://\${LISTEN_IP}:\${LISTEN_PORT}/metrics"
+EOF
+
+sudo chmod +x /usr/local/bin/run-cadvisor
+```
+
+> cAdvisor needs read-write access to `/var/run` to reach `docker.sock` for container metadata — the same trust level the host Docker daemon itself already extends to anything on this node. Keep `${METRICS_IP}` at the default `127.0.0.1` unless a remote scraper needs it.
+
+### Create and Install `run-node-exporter`
+
+```bash
+sudo tee /usr/local/bin/run-node-exporter > /dev/null << EOF
+#!/bin/bash
+# Launch the Prometheus node-exporter host-metrics exporter on the worker host Docker daemon.
+# Usage: run-node-exporter
+
+set -e
+
+CONTAINER_NAME=node_exporter
+IMAGE=prom/node-exporter:v1.5.0
+LISTEN_IP=${METRICS_IP}
+LISTEN_PORT=9100
+TEXTFILE_DIR=/var/lib/node_exporter/textfile_collector
+RESTART_POLICY=unless-stopped
+LOG_MAX_SIZE=50m
+LOG_MAX_FILE=7
+
+if docker ps --format '{{.Names}}' | grep -q "^\${CONTAINER_NAME}\$"; then
+    echo "container \${CONTAINER_NAME} is already running"
+    echo "to recreate, first remove: docker rm -f \${CONTAINER_NAME}"
+    exit 0
+fi
+
+sudo mkdir -p "\${TEXTFILE_DIR}"
+docker rm "\${CONTAINER_NAME}" >/dev/null 2>&1 || true
+
+docker run -d \\
+    --name "\${CONTAINER_NAME}" \\
+    --hostname node-exporter \\
+    --restart "\${RESTART_POLICY}" \\
+    -p "\${LISTEN_IP}:\${LISTEN_PORT}:9100" \\
+    -v /proc:/host/proc:ro \\
+    -v /sys:/host/sys:ro \\
+    -v /:/rootfs:ro \\
+    -v "\${TEXTFILE_DIR}:/textfile_collector:ro" \\
+    --log-opt "max-size=\${LOG_MAX_SIZE}" \\
+    --log-opt "max-file=\${LOG_MAX_FILE}" \\
+    "\${IMAGE}" \\
+    --path.procfs=/host/proc \\
+    --path.sysfs=/host/sys \\
+    --path.rootfs=/rootfs \\
+    --collector.filesystem.mount-points-exclude \\
+    '^/(dev|proc|sys|run|var/lib/docker/.+|var/lib/containers/storage/.+)($|/)' \\
+    --collector.filesystem.fs-types-exclude \\
+    '^(autofs|binfmt_misc|bpf|cgroup2?|configfs|debugfs|devpts|devtmpfs|efivarfs|fusectl|hugetlbfs|mqueue|nsfs|overlay|proc|pstore|ramfs|rpc_pipefs|securityfs|squashfs|sysfs|tmpfs|tracefs)$' \\
+    --collector.textfile.directory=/textfile_collector
+
+echo "node-exporter metrics listening on http://\${LISTEN_IP}:\${LISTEN_PORT}/metrics"
+EOF
+
+sudo chmod +x /usr/local/bin/run-node-exporter
+```
+
+> The compose reference this is derived from sets `deploy: mode: global`, a Swarm-only directive with no equivalent for a plain `docker run` container — one instance per worker node is already what this script produces.
+
+### Start and Verify
+
+```bash
+sudo run-cadvisor
+sudo run-node-exporter
+
+curl -s "http://${METRICS_IP}:8080/metrics" | head -5
+curl -s "http://${METRICS_IP}:9100/metrics" | head -5
+```
+
+Both endpoints should return Prometheus-formatted `# HELP` / `# TYPE` lines immediately — neither exporter has the cold-start delay the scraper's browser backend has.
+
 ## Security & Firewall Configuration
 
 ### Required Port Access
@@ -567,10 +692,12 @@ The worker node exposes the following services:
 | 9443 | `${PRIVATE_IP}` | Scraper (Browserless) | HTTPS browser scraper for PentAGI browser tool |
 | 9323 | `${METRICS_IP}` | Host Docker Metrics | Prometheus metrics endpoint for host Docker |
 | 9324 | `${METRICS_IP}` | dind Metrics | Prometheus metrics endpoint for dind |
+| 8080 | `${METRICS_IP}` | cAdvisor Metrics | Prometheus per-container metrics (`run-cadvisor`) |
+| 9100 | `${METRICS_IP}` | node-exporter Metrics | Prometheus host-level metrics (`run-node-exporter`) |
 
 With the default `METRICS_IP=127.0.0.1`, metrics are reachable only from the worker node itself. Set `METRICS_IP=${PRIVATE_IP}` if a remote metrics scraper must reach them.
 
-**Metrics Integration:** The metrics ports (9323, 9324) can be configured in PentAGI's `observability/otel/config.yml` under the `docker-engine-collector` job name for monitoring integration.
+**Metrics Integration:** The metrics ports (9323, 9324, 8080, 9100) can be configured in PentAGI's `observability/otel/config.yml` under the `docker-engine-collector`, `docker-container-collector` and `otel-collector` job names for monitoring integration — point their `targets` at `${METRICS_IP}:<port>` instead of the in-network container names when the worker node is remote.
 
 ### OOB Attack Port Range
 
@@ -578,11 +705,11 @@ Each worker container (`pentagi-terminal-N`) dynamically allocates **2 ports** f
 
 **Firewall Requirements:**
 - **Inbound**: Allow access to ports 2376, 3376, 9443 on `${PRIVATE_IP}` from the main PentAGI node
-- **Inbound**: If `METRICS_IP=${PRIVATE_IP}`, also allow 9323, 9324 on `${PRIVATE_IP}` from the metrics scraper host; with the default `127.0.0.1` no remote metrics access is needed
+- **Inbound**: If `METRICS_IP=${PRIVATE_IP}`, also allow 9323, 9324, 8080, 9100 on `${PRIVATE_IP}` from the metrics scraper host; with the default `127.0.0.1` no remote metrics access is needed
 - **Inbound**: Allow access to port range 28000-30000 from target networks being tested
 - Configure perimeter firewall to permit OOB traffic from target networks to worker node
 
-Both Docker APIs and the scraper must be reachable **only** from the main node — nested containers may use `--network host` and can therefore probe every port on this node.
+Both Docker APIs and the scraper must be reachable **only** from the main node — nested containers may use `--network host` and can therefore probe every port on this node. The same applies to cAdvisor and node-exporter: cAdvisor mounts `docker.sock`, so exposing `8080` beyond the metrics scraper host would hand any reachable client the same access level as the host Docker daemon.
 
 ## Transfer Certificates to Main Node
 
