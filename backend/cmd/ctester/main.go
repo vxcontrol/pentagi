@@ -356,10 +356,9 @@ func convertToAgentResults(results tester.ProviderTestResults, prv provider.Prov
 			}
 
 			// an unsupported optional capability doesn't count against the
-			// overall success rate — it's not attempted-and-failed, it's
-			// attempted-and-not-available on this model.
+			// overall success rate or average latency — it's not
+			// attempted-and-failed, it's attempted-and-not-available on this model.
 			if testResult.Unsupported {
-				totalLatency += testResult.Latency
 				continue
 			}
 

@@ -76,7 +76,10 @@ func PrintAgentResults(result AgentTestResult) {
 	}
 
 	// Summary
-	successRate := float64(result.TotalSuccess) / float64(result.TotalTests) * 100
+	var successRate float64
+	if result.TotalTests > 0 {
+		successRate = float64(result.TotalSuccess) / float64(result.TotalTests) * 100
+	}
 	fmt.Printf("\nSummary: %d/%d (%.2f%%) successful tests\n",
 		result.TotalSuccess, result.TotalTests, successRate)
 	fmt.Printf("Average latency: %.3fs\n", result.AverageLatency.Seconds())
@@ -98,7 +101,10 @@ func PrintSummaryReport(results []AgentTestResult) {
 	for _, result := range results {
 		success := result.TotalSuccess
 		total := result.TotalTests
-		successRate := float64(success) / float64(total) * 100
+		var successRate float64
+		if total > 0 {
+			successRate = float64(success) / float64(total) * 100
+		}
 		fmt.Fprintf(w, "%s\t%s\t%t\t%d/%d (%.2f%%)\t%.3fs\t\n",
 			result.AgentType,
 			result.ModelName,
@@ -146,7 +152,10 @@ func WriteReportToFile(results []AgentTestResult, filePath string) error {
 	for _, result := range results {
 		success := result.TotalSuccess
 		total := result.TotalTests
-		successRate := float64(success) / float64(total) * 100
+		var successRate float64
+		if total > 0 {
+			successRate = float64(success) / float64(total) * 100
+		}
 		file.WriteString(fmt.Sprintf("| %s | %s | %t | %d/%d (%.2f%%) | %.3fs |\n",
 			result.AgentType,
 			result.ModelName,
@@ -273,7 +282,10 @@ func WriteReportToFile(results []AgentTestResult, filePath string) error {
 		}
 
 		// Summary
-		successRate := float64(result.TotalSuccess) / float64(result.TotalTests) * 100
+		var successRate float64
+		if result.TotalTests > 0 {
+			successRate = float64(result.TotalSuccess) / float64(result.TotalTests) * 100
+		}
 		file.WriteString(fmt.Sprintf("**Summary**: %d/%d (%.2f%%) successful tests\n\n",
 			result.TotalSuccess, result.TotalTests, successRate))
 		file.WriteString(fmt.Sprintf("**Average latency**: %.3fs\n\n", result.AverageLatency.Seconds()))
