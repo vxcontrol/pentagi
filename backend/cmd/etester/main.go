@@ -90,7 +90,7 @@ func main() {
 	}
 
 	poolConfig.MaxConns = min(int32(cfg.DBVectorMaxConns), 10)
-	poolConfig.MinConns = min(int32(cfg.DBMaxIdleConns), 2)
+	poolConfig.MinConns = min(int32(cfg.DBMaxIdleConns), 2, poolConfig.MaxConns)
 	poolConfig.MaxConnLifetime = time.Hour
 	poolConfig.MaxConnIdleTime = 30 * time.Minute
 
