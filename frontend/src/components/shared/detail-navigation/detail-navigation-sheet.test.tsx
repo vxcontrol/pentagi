@@ -3,12 +3,31 @@ import type { ReactNode } from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { TooltipProvider } from '@/components/ui/tooltip';
 
 import { DetailNavigationSheet } from './detail-navigation-sheet';
 import { useDetailNavigation } from './use-detail-navigation';
+
+// The virtualized branch (>100 items) needs a measured scroll viewport jsdom
+// can't provide (the setup's ResizeObserver is a no-op, so the real window
+// stays empty). Mock the virtualizer to a fixed window so the component's
+// virtualized path is exercised; the windowing math is @tanstack's own concern.
+vi.mock('@/hooks/use-element-virtual-list', () => ({
+    useElementVirtualList: ({ count }: { count: number }) => ({
+        scrollToIndex: () => {},
+        totalSize: count * 38,
+        virtualItems: Array.from({ length: Math.min(count, 20) }, (_, index) => ({
+            end: index * 38 + 36,
+            index,
+            key: index,
+            lane: 0,
+            size: 36,
+            start: index * 38,
+        })),
+    }),
+}));
 
 interface Item {
     id: string;
@@ -424,5 +443,124 @@ describe('DetailNavigationSheet — search input', () => {
         // `role="option"` button when the list shrinks. With the fix it
         // never lands there until the user explicitly arrows into the list.
         expect(document.activeElement?.getAttribute('role')).not.toBe('option');
+    });
+});
+
+describe('DetailNavigationSheet — virtualization (>100 items)', () => {
+    const MANY: readonly Item[] = Array.from({ length: 150 }, (_, index) => ({
+        id: `i${index}`,
+        title: `Item ${index}`,
+    }));
+
+    it('windows the options — renders a subset, not all 150', async () => {
+        renderSheet({ currentId: 'i2', items: MANY });
+
+        const listbox = await screen.findByRole('listbox');
+
+        await waitFor(() => {
+            const options = within(listbox).getAllByRole('option');
+            expect(options.length).toBeGreaterThan(0);
+            expect(options.length).toBeLessThan(MANY.length);
+        });
+
+        // The virtualized branch sizes the <ul> to the full virtual height; the
+        // plain branch leaves it unset — so a height proves we took the
+        // virtualized path, not just a short filtered list.
+        expect(listbox.style.height).not.toBe('');
+    });
+
+    it('keeps roving tabIndex on the current option inside the window', async () => {
+        renderSheet({ currentId: 'i2', items: MANY });
+
+        const listbox = await screen.findByRole('listbox');
+
+        await waitFor(() => {
+            const focusable = within(listbox)
+                .getAllByRole('option')
+                .filter((option) => option.getAttribute('tabindex') === '0');
+            expect(focusable).toHaveLength(1);
+            expect(focusable[0]).toHaveAttribute('data-item-id', 'i2');
+        });
+    });
+
+    it('ArrowDown moves roving focus to the next windowed option', async () => {
+        renderSheet({ currentId: 'i2', items: MANY });
+
+        const listbox = await screen.findByRole('listbox');
+
+        await waitFor(() => {
+            const focused = within(listbox)
+                .getAllByRole('option')
+                .find((option) => option.getAttribute('tabindex') === '0');
+            expect(focused).toHaveAttribute('data-item-id', 'i2');
+        });
+
+        fireEvent.keyDown(listbox, { key: 'ArrowDown' });
+
+        await waitFor(() => {
+            const focused = within(listbox)
+                .getAllByRole('option')
+                .find((option) => option.getAttribute('tabindex') === '0');
+            expect(focused).toHaveAttribute('data-item-id', 'i3');
+        });
+    });
+});
+
+const ControlledSheet = ({ open, query }: { open: boolean; query: string }) => {
+    const nav = useDetailNavigation<Item>({
+        currentId: 'c',
+        getHref,
+        getLabel,
+        getSearchableText,
+        items: ITEMS,
+        onOpenChange: () => {},
+        onSearchQueryChange: () => {},
+        open,
+        searchDebounceMs: 0,
+        searchQuery: query,
+    });
+
+    return (
+        <DetailNavigationSheet<Item>
+            controller={nav}
+            sheetTitle="Items"
+        />
+    );
+};
+
+const renderControlled = (props: { open: boolean; query: string }) =>
+    render(<ControlledSheet {...props} />, {
+        wrapper: ({ children }: { children: ReactNode }) => (
+            <MemoryRouter initialEntries={['/items/c']}>
+                <TooltipProvider>
+                    <Routes>
+                        <Route
+                            element={<>{children}</>}
+                            path="/items/:id"
+                        />
+                    </Routes>
+                </TooltipProvider>
+            </MemoryRouter>
+        ),
+    });
+
+describe('DetailNavigationSheet — controlled search resync', () => {
+    it('reflects an external searchQuery change made while the sheet was closed', () => {
+        const { rerender } = renderControlled({ open: false, query: '' });
+
+        rerender(
+            <ControlledSheet
+                open={false}
+                query="Bravo"
+            />,
+        );
+        rerender(
+            <ControlledSheet
+                open
+                query="Bravo"
+            />,
+        );
+
+        expect(screen.getByRole<HTMLInputElement>('textbox').value).toBe('Bravo');
     });
 });

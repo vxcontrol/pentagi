@@ -1,0 +1,11 @@
+provider: litellm
+MODEL_NAME:
+  model: openrouter/openai/gpt-oss-20b
+  temperature: 1.0
+  max_tokens: 32768
+  json: true
+SMALL_MODEL_NAME:
+  model: openrouter/openai/gpt-oss-20b
+  temperature: 1.0
+  max_tokens: 32768
+  json: true

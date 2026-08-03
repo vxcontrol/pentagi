@@ -39,8 +39,6 @@ interface UseFileManagerSelection {
      */
     onToggleSelection: (path: string, subtreePaths?: readonly string[]) => void;
     selectedPaths: Set<string>;
-    /** Replace entire selection. */
-    setSelection: (paths: Set<string>) => void;
     /** Toggle "select all": clears if everything was selected, otherwise picks every file. */
     toggleSelectAll: () => void;
 }
@@ -65,12 +63,6 @@ interface UseFileManagerSelectionArgs {
  * after files change; we derive a pruned `selectedPaths` during render. The pruned
  * Set keeps reference identity when nothing was stripped, so memoized consumers
  * downstream don't re-render needlessly.
- *
- * All real selection logic lives in pure reducers inside `file-manager-utils`
- * (`computeRowClickSelection`, `computeToggleSelection`, `computeToggleSelectAll`).
- * The hook is a thin wrapper that owns the state Set, the anchor ref, and a few
- * latest-ref pointers needed to keep the callbacks reference-stable across
- * expand/collapse and tree-shape changes.
  */
 export function useFileManagerSelection({
     allSelectablePaths,
@@ -85,8 +77,7 @@ export function useFileManagerSelection({
     // expand/collapse and tree-shape changes. Without this, `onRowClick` would
     // be re-created on every expansion (its deps include `flatVisible`) and
     // invalidate the `onClick` prop on every memoized row — kicking the entire
-    // tree into a re-render on the most common user gesture. Same pattern is
-    // already used in `use-file-manager-dnd` for `selectionRef`.
+    // tree into a re-render on the most common user gesture.
     const flatVisibleRef = useRef(flatVisible);
     const allSelectablePathsRef = useRef(allSelectablePaths);
     const dirSubtreePathsRef = useRef(dirSubtreePaths);
@@ -161,9 +152,6 @@ export function useFileManagerSelection({
     const isAllSelected = allSelectablePaths.length > 0 && selectedPaths.size === allSelectablePaths.length;
     const isSomeSelected = selectedPaths.size > 0 && !isAllSelected;
 
-    // Functional setState reads the current selectable universe through the ref
-    // declared above, so the callback identity stays stable regardless of how
-    // many times the file list or selection changes.
     const toggleSelectAll = useCallback(() => {
         setRawSelectedPaths((prev) =>
             computeToggleSelectAll({ allSelectablePaths: allSelectablePathsRef.current, prev }),
@@ -174,10 +162,6 @@ export function useFileManagerSelection({
         setRawSelectedPaths((prev) => (prev.size === 0 ? prev : new Set()));
     }, []);
 
-    const setSelection = useCallback((paths: Set<string>) => {
-        setRawSelectedPaths(paths);
-    }, []);
-
     return {
         clearSelection,
         isAllSelected,
@@ -185,7 +169,6 @@ export function useFileManagerSelection({
         onRowClick,
         onToggleSelection,
         selectedPaths,
-        setSelection,
         toggleSelectAll,
     };
 }

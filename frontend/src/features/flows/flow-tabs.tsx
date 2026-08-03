@@ -56,7 +56,6 @@ function FlowTabs({ activeTab, onTabChange }: FlowTabsProps) {
                 </ScrollArea>
             </div>
 
-            {/* Mobile Tabs only */}
             {!isDesktop && (
                 <TabsContent
                     className="mt-1 flex-1 overflow-auto"
@@ -82,7 +81,6 @@ function FlowTabs({ activeTab, onTabChange }: FlowTabsProps) {
                 </TabsContent>
             )}
 
-            {/* Desktop and Mobile Tabs */}
             <TabsContent
                 className="mt-1 flex-1 overflow-auto"
                 value="terminal"

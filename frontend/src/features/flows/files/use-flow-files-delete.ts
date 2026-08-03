@@ -78,8 +78,8 @@ export function useFlowFilesDelete({ flowId, onAfterDelete }: UseFlowFilesDelete
                 );
 
                 if (filesToDelete.length === 1) {
-                    const single = filesToDelete[0];
-                    toast.success(single.isDir ? 'Directory deleted' : 'File deleted');
+                    const [single] = filesToDelete;
+                    toast.success(single?.isDir ? 'Directory deleted' : 'File deleted');
                 } else {
                     toast.success(`${filesToDelete.length} ${pluralizeItems(filesToDelete.length)} deleted`);
                 }

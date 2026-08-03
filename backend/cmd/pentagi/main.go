@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"log"
 	"net"
 	"os"
 	"os/signal"
@@ -46,7 +45,10 @@ func main() {
 
 	cfg, err := config.NewConfig()
 	if err != nil {
-		log.Fatalf("Unable to load config: %v\n", err)
+		// Fatal rather than Error: cfg is nil on failure, so continuing would
+		// panic anyway, and an invalid TENANT_ID must never boot into a namespace
+		// it did not intend to own.
+		logrus.WithError(err).Fatal("Unable to load config")
 	}
 
 	// Configure logrus log level based on DEBUG env variable
@@ -57,14 +59,29 @@ func main() {
 		logrus.SetLevel(logrus.InfoLevel)
 	}
 
+	// Record the identity of this instance for the record: which tenant namespace
+	// it owns and which data directory it writes to. Both are operator-supplied
+	// and must differ between instances that share a host; having them in the
+	// startup log makes an accidental overlap obvious after the fact.
+	logrus.WithFields(logrus.Fields{
+		"tenant_id":       cfg.TenantID,
+		"data_dir":        cfg.DataDir,
+		"schema":          cfg.SchemaName(),
+		"installation_id": cfg.InstallationID,
+	}).Info("Instance identity")
+
+	// Telemetry is optional — degrade to a no-op observer on init failure so an
+	// unreachable collector can't take the app down.
 	lfclient, err := obs.NewLangfuseClient(ctx, cfg)
 	if err != nil && !errors.Is(err, obs.ErrNotConfigured) {
-		log.Fatalf("Unable to create langfuse client: %v\n", err)
+		logrus.WithError(err).Warn("langfuse telemetry disabled: client init failed")
+		lfclient = nil
 	}
 
 	otelclient, err := obs.NewTelemetryClient(ctx, cfg)
 	if err != nil && !errors.Is(err, obs.ErrNotConfigured) {
-		log.Fatalf("Unable to create telemetry client: %v\n", err)
+		logrus.WithError(err).Warn("opentelemetry disabled: client init failed")
+		otelclient = nil
 	}
 
 	obs.InitObserver(ctx, lfclient, otelclient, []logrus.Level{
@@ -77,14 +94,24 @@ func main() {
 	obs.Observer.StartProcessMetricCollect(attribute.String("component", "server"))
 	obs.Observer.StartGoRuntimeMetricCollect(attribute.String("component", "server"))
 
+	// Create this tenant's schema and repoint DATABASE_URL at it before any
+	// consumer reads the DSN. No-op when TENANT_ID is empty.
+	if err := database.EnsureTenantSchema(ctx, cfg); err != nil {
+		logrus.WithError(err).Fatal("Tenant schema initialization failed")
+	}
+
 	db, err := sql.Open("postgres", cfg.DatabaseURL)
 	if err != nil {
-		log.Fatalf("Unable to open database: %v\n", err)
+		logrus.WithError(err).Fatal("Unable to open database")
 	}
 
 	db.SetMaxOpenConns(cfg.DBMaxOpenConns)
 	db.SetMaxIdleConns(cfg.DBMaxIdleConns)
 	db.SetConnMaxLifetime(time.Hour)
+
+	if err := database.VerifySearchPath(ctx, db, cfg); err != nil {
+		logrus.WithError(err).Fatal("Tenant schema verification failed")
+	}
 
 	queries := database.New(db)
 
@@ -93,19 +120,19 @@ func main() {
 	// Postgres connections. Now together they consume at most DBMaxOpenConns.
 	orm, err := database.NewGorm(db, cfg.Debug)
 	if err != nil {
-		log.Fatalf("Unable to open database with gorm: %v\n", err)
+		logrus.WithError(err).Fatal("Unable to open database with gorm")
 	}
 
 	// Create a shared pgxpool for all pgvector stores so that each executor
 	// reuses pooled connections instead of opening a dedicated pgx.Connect.
 	pgPoolConfig, err := pgxpool.ParseConfig(cfg.DatabaseURL)
 	if err != nil {
-		log.Fatalf("Failed to parse pgxpool config: %v\n", err)
+		logrus.WithError(err).Fatal("Failed to parse pgxpool config")
 	}
 	pgPoolConfig.MaxConns = int32(cfg.DBVectorMaxConns)
 	pgPool, err := pgxpool.NewWithConfig(ctx, pgPoolConfig)
 	if err != nil {
-		log.Fatalf("Failed to create pgxpool: %v\n", err)
+		logrus.WithError(err).Fatal("Failed to create pgxpool")
 	}
 	defer pgPool.Close()
 
@@ -116,31 +143,46 @@ func main() {
 	goose.SetBaseFS(migrations.EmbedMigrations)
 
 	if err := goose.SetDialect("postgres"); err != nil {
-		log.Fatalf("Database dialect configuration failed: %v\n", err)
+		logrus.WithError(err).Fatal("Database dialect configuration failed")
 	}
 
-	if err := goose.Up(db, "sql"); err != nil {
-		log.Fatalf("Schema migration execution failed: %v\n", err)
+	// goose's own queries are unqualified, so without this a fresh tenant
+	// schema silently inherits public's version table via search_path and
+	// skips its migrations. See pkg/database/tenant.go for the
+	// schema/search_path setup.
+	goose.SetTableName(cfg.SchemaName() + ".goose_db_version")
+
+	// Hold an advisory lock so simultaneous boots cannot execute the same
+	// migration set concurrently; the initial migration uses bare CREATE TABLE,
+	// so the loser would otherwise abort on "relation already exists".
+	if err := database.RunMigrations(ctx, db, cfg, func(db *sql.DB) error {
+		return goose.Up(db, "sql")
+	}); err != nil {
+		// Fatal: continuing on a half-migrated schema and then serving traffic is
+		// strictly worse than refusing to start.
+		logrus.WithError(err).Fatal("Schema migration execution failed")
 	}
 
-	log.Println("Database schema updated successfully")
+	logrus.Info("Database schema updated successfully")
 
-	go profiling.Start()
+	if cfg.PprofAddr != "" {
+		go profiling.Start(cfg.PprofAddr)
+	}
 
 	client, err := docker.NewDockerClient(ctx, queries, cfg)
 	if err != nil {
-		log.Fatalf("Docker runtime client initialization failed: %v", err)
+		logrus.WithError(err).Fatal("Docker runtime client initialization failed")
 	}
 
 	providers, err := providers.NewProviderController(cfg, queries, client)
 	if err != nil {
-		log.Fatalf("LLM provider controller initialization failed: %v", err)
+		logrus.WithError(err).Fatal("LLM provider controller initialization failed")
 	}
 	subscriptions := subscriptions.NewSubscriptionsController()
 	controller := controller.NewFlowController(queries, cfg, client, providers, subscriptions)
 
 	if err := controller.LoadFlows(ctx); err != nil {
-		log.Fatalf("Active flows restoration failed: %v", err)
+		logrus.WithError(err).Fatal("Active flows restoration failed")
 	}
 
 	r := router.NewRouter(queries, orm, cfg, providers, controller, subscriptions, client)
@@ -169,6 +211,13 @@ func main() {
 	select {
 	case <-ctx.Done():
 		logrus.Warn("Shutdown signal received, cleaning up resources...")
+		// ctx is already cancelled here — drain telemetry on a fresh deadline so the
+		// final batch still reaches the collector before the process exits.
+		drainCtx, cancelDrain := context.WithTimeout(context.Background(), 5*time.Second)
+		if err := obs.Observer.Drain(drainCtx); err != nil {
+			logrus.WithError(err).Warn("Telemetry drain incomplete")
+		}
+		cancelDrain()
 	case err := <-serverErrChan:
 		logrus.Fatalf("Server terminated unexpectedly: %v", err)
 	}

@@ -5,7 +5,7 @@ export interface User {
     mail: string;
     name: string;
     password_change_required: boolean;
-    provide: string;
+    provider?: string;
     role_id: number;
     status: 'active' | 'blocked' | 'created';
     type: 'local' | 'oauth';

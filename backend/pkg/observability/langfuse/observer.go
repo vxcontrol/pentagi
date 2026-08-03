@@ -2,11 +2,15 @@ package langfuse
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
+	"net/http"
 	"sync"
 	"time"
 
 	"pentagi/pkg/observability/langfuse/api"
+	"pentagi/pkg/observability/langfuse/api/core"
 
 	"github.com/sirupsen/logrus"
 )
@@ -31,18 +35,19 @@ type enqueue interface {
 }
 
 type observer struct {
-	mx        *sync.Mutex
-	wg        *sync.WaitGroup
-	ctx       context.Context
-	cancel    context.CancelFunc
-	client    *Client
-	project   string
-	release   string
-	interval  time.Duration
-	timeout   time.Duration
-	queueSize int
-	queue     chan *api.IngestionEvent
-	flusher   chan chan error
+	mx          *sync.Mutex
+	wg          *sync.WaitGroup
+	ctx         context.Context
+	cancel      context.CancelFunc
+	client      *Client
+	project     string
+	release     string
+	environment string
+	interval    time.Duration
+	timeout     time.Duration
+	queueSize   int
+	queue       chan *api.IngestionEvent
+	flusher     chan chan error
 }
 
 func NewObserver(client *Client, opts ...ObserverOption) Observer {
@@ -197,6 +202,54 @@ func (o *observer) flush(ctx context.Context, batch []*api.IngestionEvent) error
 	return nil
 }
 
+// flushWithSplit flushes the batch and, if the request fails only because
+// the serialized payload exceeded Langfuse's body-size limit (413), splits
+// the batch in half and retries each half recursively instead of discarding
+// every event in the batch on a single oversized flush. Only an event that
+// still doesn't fit the limit on its own is ever dropped, and that is logged
+// with its approximate size so the loss is visible instead of silent.
+func (o *observer) flushWithSplit(ctx context.Context, batch []*api.IngestionEvent) error {
+	if len(batch) == 0 {
+		return nil
+	}
+
+	err := o.flush(ctx, batch)
+	if err == nil {
+		return nil
+	}
+
+	var apiErr *core.APIError
+	if !errors.As(err, &apiErr) || apiErr.StatusCode != http.StatusRequestEntityTooLarge {
+		// Not a body-size problem (network error, auth failure, a 5xx from
+		// Langfuse itself, ...) - splitting would not help here and would
+		// just multiply requests, so surface the error as-is.
+		return err
+	}
+
+	if len(batch) == 1 {
+		logrus.WithContext(ctx).WithFields(logrus.Fields{
+			"event_size_bytes": approxIngestionEventSize(batch[0]),
+		}).Error("dropping a single telemetry event that exceeds Langfuse's body size limit even alone")
+		return nil
+	}
+
+	mid := len(batch) / 2
+	errFirst := o.flushWithSplit(ctx, batch[:mid])
+	errSecond := o.flushWithSplit(ctx, batch[mid:])
+	return errors.Join(errFirst, errSecond)
+}
+
+// approxIngestionEventSize returns the serialized size of a single event, or
+// -1 if it can't be marshaled - used only for the drop-log message above, so
+// a marshal failure there must not itself fail or panic.
+func approxIngestionEventSize(event *api.IngestionEvent) int {
+	data, err := json.Marshal(event)
+	if err != nil {
+		return -1
+	}
+	return len(data)
+}
+
 func (o *observer) sender() {
 	batch := make([]*api.IngestionEvent, 0, o.queueSize)
 	ticker := time.NewTicker(o.interval)
@@ -207,11 +260,11 @@ func (o *observer) sender() {
 		case <-o.ctx.Done():
 			return
 		case ch := <-o.flusher:
-			ch <- o.flush(o.ctx, batch)
+			ch <- o.flushWithSplit(o.ctx, batch)
 			batch = batch[:0]
 			ticker.Reset(o.interval)
 		case <-ticker.C:
-			if err := o.flush(o.ctx, batch); err != nil {
+			if err := o.flushWithSplit(o.ctx, batch); err != nil {
 				logrus.WithContext(o.ctx).WithError(err).Error("failed to flush events by interval")
 			}
 			batch = batch[:0]
@@ -219,7 +272,7 @@ func (o *observer) sender() {
 		case event := <-o.queue:
 			batch = append(batch, event)
 			if len(batch) >= o.queueSize {
-				if err := o.flush(o.ctx, batch); err != nil {
+				if err := o.flushWithSplit(o.ctx, batch); err != nil {
 					logrus.WithContext(o.ctx).WithError(err).Error("failed to flush events by queue size")
 				}
 				batch = batch[:0]
@@ -235,18 +288,19 @@ func (o *observer) putTraceInfo(obsCtx ObservationContext) {
 		Timestamp: getCurrentTimeString(),
 		Type:      api.IngestionEventZeroType(ingestionCreateTrace).Ptr(),
 		Body: &api.TraceBody{
-			ID:        getStringRef(obsCtx.TraceID),
-			Timestamp: obsCtx.TraceCtx.Timestamp,
-			Name:      obsCtx.TraceCtx.Name,
-			UserID:    obsCtx.TraceCtx.UserID,
-			Input:     obsCtx.TraceCtx.Input,
-			Output:    obsCtx.TraceCtx.Output,
-			SessionID: obsCtx.TraceCtx.SessionID,
-			Release:   getStringRef(o.release),
-			Version:   obsCtx.TraceCtx.Version,
-			Metadata:  obsCtx.TraceCtx.Metadata,
-			Tags:      obsCtx.TraceCtx.Tags,
-			Public:    obsCtx.TraceCtx.Public,
+			ID:          getStringRef(obsCtx.TraceID),
+			Timestamp:   obsCtx.TraceCtx.Timestamp,
+			Name:        obsCtx.TraceCtx.Name,
+			UserID:      obsCtx.TraceCtx.UserID,
+			Input:       obsCtx.TraceCtx.Input,
+			Output:      obsCtx.TraceCtx.Output,
+			SessionID:   obsCtx.TraceCtx.SessionID,
+			Release:     getStringRef(o.release),
+			Version:     obsCtx.TraceCtx.Version,
+			Metadata:    obsCtx.TraceCtx.Metadata,
+			Tags:        obsCtx.TraceCtx.Tags,
+			Public:      obsCtx.TraceCtx.Public,
+			Environment: getStringRef(o.environment),
 		},
 	}}
 

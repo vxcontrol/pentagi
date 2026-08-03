@@ -163,18 +163,20 @@ messages = append(messages, llms.MessageContent{
 - `Content`: Human-readable thinking text
 - `Signature`: Binary cryptographic signature (REQUIRED for roundtrip)
 
-#### 1.2 Temperature Requirement
+#### 1.2 Temperature Requirement (budget thinking)
 
-**Rule**: Set `Temperature = 1.0` for extended thinking.
+**Rule**: Set `Temperature = 1.0` for **budget** extended thinking (`WithReasoning(effort, maxTokens)`).
 
-**Why**: Anthropic's thinking mode requires temperature=1.0 to function correctly. Lower values degrade reasoning quality or cause API errors.
+**Why**: Anthropic's budget thinking mode requires temperature=1.0 to function correctly. Lower values degrade reasoning quality or cause API errors.
 
 ```go
 llm.GenerateContent(ctx, messages,
     llms.WithReasoning(llms.ReasoningMedium, 2048),
-    llms.WithTemperature(1.0), // REQUIRED
+    llms.WithTemperature(1.0), // REQUIRED for budget thinking
 )
 ```
+
+> **Adaptive thinking is the exception — do NOT set temperature for it.** Claude Opus 4.7/4.8 (and the 4.6 series when run in adaptive mode) use `thinking.type=adaptive` + `output_config.effort` and **reject every sampling parameter** (`temperature`/`top_p`/`top_k`) with HTTP 400. The forked langchaingo handles this natively: `llms.WithAdaptiveReasoning(effort)` makes the anthropic and bedrock clients emit the adaptive request shape and omit those sampling params. A model's capability is declared in its provider `models.yml` via `reasoning.mode` (`adaptive` = budget or adaptive; `adaptive-only` = adaptive required, budget returns 400); the per-agent `ReasoningConfig.Mode`/`Effort` then selects the mode at call time (PentAGI's `PrepareAdaptiveCallOptions` appends `WithAdaptiveReasoning`).
 
 #### 1.3 Interleaved Thinking with Tools
 

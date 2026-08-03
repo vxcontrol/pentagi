@@ -1,0 +1,25 @@
+- name: MiniMax-M3
+  description: MiniMax-M3 - Latest flagship M-series model with ~1M token context for agentic reasoning, tool use, code generation, and long-context tasks.
+  thinking: false
+  price:
+    input: 0.30
+    output: 1.20
+    cache_read: 0.06
+
+- name: MiniMax-M2.7
+  description: MiniMax-M2.7 - Previous flagship model with enhanced reasoning and coding capabilities. Supports tool calling, JSON output, and streaming.
+  thinking: false
+  price:
+    input: 0.30
+    output: 1.20
+    cache_read: 0.06
+    cache_write: 0.375
+
+- name: MiniMax-M2.7-highspeed
+  description: MiniMax-M2.7-highspeed - High-speed version of M2.7 for low-latency scenarios. Same capabilities as M2.7; priced higher for improved response latency.
+  thinking: false
+  price:
+    input: 0.60
+    output: 2.40
+    cache_read: 0.06
+    cache_write: 0.375

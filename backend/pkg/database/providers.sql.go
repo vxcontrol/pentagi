@@ -76,7 +76,7 @@ func (q *Queries) DeleteProvider(ctx context.Context, id int64) (Provider, error
 const deleteUserProvider = `-- name: DeleteUserProvider :one
 UPDATE providers
 SET deleted_at = CURRENT_TIMESTAMP
-WHERE id = $1 AND user_id = $2
+WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL
 RETURNING id, user_id, type, name, config, created_at, updated_at, deleted_at
 `
 
@@ -85,6 +85,12 @@ type DeleteUserProviderParams struct {
 	UserID int64 `json:"user_id"`
 }
 
+// deleted_at IS NULL is load-bearing, not just hygiene: without it a replayed
+// delete of an already-deleted id still succeeds and still returns the row, and
+// the caller then resets every flow/assistant matching that name — which by
+// then may belong to a *different*, live provider reusing the freed name
+// (providers_name_user_id_unique is partial on deleted_at IS NULL). Mirrors the
+// guard GetUserProvider already applies on the rename path.
 func (q *Queries) DeleteUserProvider(ctx context.Context, arg DeleteUserProviderParams) (Provider, error) {
 	row := q.db.QueryRowContext(ctx, deleteUserProvider, arg.ID, arg.UserID)
 	var i Provider

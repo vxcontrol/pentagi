@@ -1,3 +1,5 @@
+import { ApolloClient, ApolloLink, gql, InMemoryCache, type TypedDocumentNode } from '@apollo/client';
+import { ApolloProvider } from '@apollo/client/react';
 import { render, waitFor } from '@testing-library/react';
 import { createMemoryRouter, Outlet, RouterProvider } from 'react-router-dom';
 import { describe, expect, it } from 'vitest';
@@ -16,7 +18,6 @@ describe('DocumentTitle', () => {
     it('renders APP_NAME when no matched route exposes a title handle', async () => {
         renderAt('/anywhere', [
             {
-                // No child route handle — DocumentTitle should fall back to APP_NAME only.
                 children: [{ element: <span>page</span>, path: 'anywhere' }],
                 element: (
                     <>
@@ -103,35 +104,46 @@ describe('DocumentTitle', () => {
     });
 
     it('renders a title component produced by apolloTitle()', async () => {
-        // End-to-end check that the public factory wires the marker correctly
-        // and `DocumentTitle` recognizes it. A stubbed `useQuery` returns
-        // canned data so the test is hermetic.
+        // Cache is pre-populated so the `cache-only` read stays hermetic (no network).
+        const customQuery = gql`
+            query Custom {
+                name
+            }
+        ` as TypedDocumentNode<{ name: string }, Record<string, never>>;
+        const client = new ApolloClient({ cache: new InMemoryCache(), link: ApolloLink.empty() });
+        client.writeQuery({ data: { name: 'thing' }, query: customQuery });
+
         const CustomTitle = apolloTitle<{ name: string }, Record<string, never>>({
+            document: customQuery,
             select: (data, { id }) => `Custom #${id} ${data?.name ?? ''}`.trim(),
-            // Minimal stub — only `data` is read downstream.
-            useQuery: (() => ({ data: { name: 'thing' } })) as never,
             variables: () => ({}),
         });
 
-        renderAt('/items/42', [
-            {
-                children: [{ element: <span>page</span>, handle: { title: CustomTitle }, path: 'items/:id' }],
-                element: (
-                    <>
-                        <DocumentTitle />
-                        <Outlet />
-                    </>
-                ),
-                path: '/',
-            },
-        ]);
+        const router = createMemoryRouter(
+            [
+                {
+                    children: [{ element: <span>page</span>, handle: { title: CustomTitle }, path: 'items/:id' }],
+                    element: (
+                        <>
+                            <DocumentTitle />
+                            <Outlet />
+                        </>
+                    ),
+                    path: '/',
+                },
+            ],
+            { initialEntries: ['/items/42'] },
+        );
+        render(
+            <ApolloProvider client={client}>
+                <RouterProvider router={router} />
+            </ApolloProvider>,
+        );
 
         await waitFor(() => expect(document.title).toBe('Custom #42 thing — PentAGI'));
     });
 
     it('treats an unmarked function as a plain resolver, not a component', async () => {
-        // Without the marker, DocumentTitle calls the function with params and
-        // wraps the returned string with the standard "X — PentAGI" template.
         const resolveTitle = (params: Record<string, string | undefined>) => `Item ${params.id}`;
 
         renderAt('/items/7', [
@@ -164,9 +176,8 @@ describe('DocumentTitle', () => {
             },
         ]);
 
-        // An empty string from the resolver is treated as "no title" — fall back
-        // to APP_NAME alone. This guards the route-level convention: pages that
-        // do not want a prefix can return '' instead of omitting the handle.
+        // Route-level convention: pages that don't want a title prefix return ''
+        // intentionally, rather than omitting the handle.
         await waitFor(() => expect(document.title).toBe('PentAGI'));
     });
 });

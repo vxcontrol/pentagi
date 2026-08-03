@@ -71,10 +71,7 @@ export function getTopLevelPath(pathname: string): string {
 
 /**
  * View options for `FileManager`-style screens (currently `/resources`).
- * Not part of the unified `table` slot because the payload (folder-first
- * toggle, expanded directory ids) has nothing in common with TanStack
- * Table state — sharing the key would force a union schema and waste
- * a Zod validation round-trip on every save.
+ * Lives outside the unified `table` slot.
  */
 export function getViewOptionsStorageKey(urlPath: string): string {
     return getStorageKey('viewOptions', urlPath);

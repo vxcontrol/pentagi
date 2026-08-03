@@ -430,9 +430,13 @@ func ExtractTar(r io.Reader, destDir string) error {
 	return nil
 }
 
-func ZipDirectory(w io.Writer, dirPath string) error {
+func ZipDirectory(w io.Writer, dirPath string) (err error) {
 	zw := zip.NewWriter(w)
-	defer zw.Close()
+	defer func() {
+		if cerr := zw.Close(); err == nil {
+			err = cerr
+		}
+	}()
 
 	return filepath.WalkDir(dirPath, func(entryPath string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -469,9 +473,13 @@ func ZipDirectory(w io.Writer, dirPath string) error {
 //
 // The caller is responsible for deduplicating relPaths before calling this
 // function; no internal deduplication of ZIP entry names is performed.
-func ZipRelativePaths(w io.Writer, baseDir string, relPaths []string) error {
+func ZipRelativePaths(w io.Writer, baseDir string, relPaths []string) (err error) {
 	zw := zip.NewWriter(w)
-	defer zw.Close()
+	defer func() {
+		if cerr := zw.Close(); err == nil {
+			err = cerr
+		}
+	}()
 
 	for _, relPath := range relPaths {
 		localPath := filepath.Join(baseDir, filepath.FromSlash(relPath))

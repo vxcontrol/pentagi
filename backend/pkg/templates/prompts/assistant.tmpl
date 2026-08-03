@@ -23,9 +23,9 @@ You are the user-facing voice of the engagement — the only agent in this syste
 {{- if .UseAgents}}
    - delegation `question` you send to `{{.SearchToolName}}`, `{{.PentesterToolName}}`, `{{.CoderToolName}}`, `{{.MaintenanceToolName}}`, `{{.MemoristToolName}}`, and the `question`/`code`/`output` you send with `{{.AdviceToolName}}` to the mentor
 {{- else}}
-   - external search-engine queries you send to whichever providers are available in this engagement (`{{.GoogleToolName}}`, `{{.DuckDuckGoToolName}}`, `{{.TavilyToolName}}`, `{{.TraversaalToolName}}`, `{{.PerplexityToolName}}`)
    - vector-store search queries: `{{.SearchInMemoryToolName}}`, `{{.SearchGuideToolName}}`, `{{.SearchAnswerToolName}}`, `{{.SearchCodeToolName}}` (the `questions` arrays)
 {{- end}}
+   - the `query` you send to `{{.WebSearchToolName}}` (the unified web search tool that selects the underlying engine for you)
    - runtime payloads inside the Docker container: `{{.TerminalToolName}}` `input`/`cwd`, `{{.FileToolName}}` `path`/`content`, `{{.BrowserToolName}}` `url`
 
 External search engines and the vector store are indexed in English and shared across all engagements regardless of their working language: any non-English query retrieves nothing. Never translate or localise an outgoing technical-channel field — delegation/search queries and runtime commands stay strictly in English even when the engagement language is not English.
@@ -162,7 +162,7 @@ External search engines and the vector store are indexed in English and shared a
 {{- if .UseAgents}}
 - Web research and memory: delegated to specialists (see TEAM COLLABORATION & DELEGATION above) — you do NOT invoke search engines or vector-store searches directly in this mode
 {{- else}}
-- Web search engines: `{{.GoogleToolName}}`, `{{.DuckDuckGoToolName}}`, `{{.TavilyToolName}}`, `{{.TraversaalToolName}}`, `{{.PerplexityToolName}}` (and Searxng/Sploitus when configured) — pick the engine matching the query complexity
+- Web search: `{{.WebSearchToolName}}` — one unified tool. Provide a `query` and a `mode` (`links`, `answer`, `research`, or `exploit`); it selects the best available engine, retries transient failures, and falls back automatically, so you never name a specific engine
 - Memory search (read-only): `{{.SearchInMemoryToolName}}`, `{{.SearchGuideToolName}}`, `{{.SearchAnswerToolName}}`, `{{.SearchCodeToolName}}` for retrieving stored knowledge from past engagements
 {{- end}}
 </available_tools>

@@ -1,30 +1,61 @@
-import { Activity, CircleDollarSign, Cpu, GitFork, Loader2 } from 'lucide-react';
+import { useQuery } from '@apollo/client/react';
+import { Activity, CircleDollarSign, Cpu, GitFork } from 'lucide-react';
 
 import type { UsageStatsFragmentFragment } from '@/graphql/types';
 
 import { MetricCard } from '@/components/dashboard';
+import { DashboardError } from '@/components/dashboard/dashboard-error';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Spinner } from '@/components/ui/spinner';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
-    useFlowsStatsTotalQuery,
-    useToolcallsStatsByFunctionQuery,
-    useToolcallsStatsTotalQuery,
-    useUsageStatsByAgentTypeQuery,
-    useUsageStatsByModelQuery,
-    useUsageStatsByProviderQuery,
-    useUsageStatsTotalQuery,
+    FlowsStatsTotalDocument,
+    ToolcallsStatsByFunctionDocument,
+    ToolcallsStatsTotalDocument,
+    UsageStatsByAgentTypeDocument,
+    UsageStatsByModelDocument,
+    UsageStatsByProviderDocument,
+    UsageStatsTotalDocument,
 } from '@/graphql/types';
 import { formatCost, formatDuration, formatNumber, formatTokenCount } from '@/lib/utils/format';
 
 export function DashboardOverview() {
-    const { data: usageTotalData, loading: usageTotalLoading } = useUsageStatsTotalQuery();
-    const { data: usageByProviderData, loading: usageByProviderLoading } = useUsageStatsByProviderQuery();
-    const { data: usageByModelData, loading: usageByModelLoading } = useUsageStatsByModelQuery();
-    const { data: usageByAgentTypeData, loading: usageByAgentTypeLoading } = useUsageStatsByAgentTypeQuery();
-    const { data: toolcallsTotalData, loading: toolcallsTotalLoading } = useToolcallsStatsTotalQuery();
-    const { data: toolcallsByFunctionData, loading: toolcallsByFunctionLoading } = useToolcallsStatsByFunctionQuery();
-    const { data: flowsTotalData, loading: flowsTotalLoading } = useFlowsStatsTotalQuery();
+    const {
+        data: usageTotalData,
+        error: usageTotalError,
+        loading: usageTotalLoading,
+    } = useQuery(UsageStatsTotalDocument);
+    const {
+        data: usageByProviderData,
+        error: usageByProviderError,
+        loading: usageByProviderLoading,
+    } = useQuery(UsageStatsByProviderDocument);
+    const {
+        data: usageByModelData,
+        error: usageByModelError,
+        loading: usageByModelLoading,
+    } = useQuery(UsageStatsByModelDocument);
+    const {
+        data: usageByAgentTypeData,
+        error: usageByAgentTypeError,
+        loading: usageByAgentTypeLoading,
+    } = useQuery(UsageStatsByAgentTypeDocument);
+    const {
+        data: toolcallsTotalData,
+        error: toolcallsTotalError,
+        loading: toolcallsTotalLoading,
+    } = useQuery(ToolcallsStatsTotalDocument);
+    const {
+        data: toolcallsByFunctionData,
+        error: toolcallsByFunctionError,
+        loading: toolcallsByFunctionLoading,
+    } = useQuery(ToolcallsStatsByFunctionDocument);
+    const {
+        data: flowsTotalData,
+        error: flowsTotalError,
+        loading: flowsTotalLoading,
+    } = useQuery(FlowsStatsTotalDocument);
 
     const usageTotal = usageTotalData?.usageStatsTotal;
     const toolcallsTotal = toolcallsTotalData?.toolcallsStatsTotal;
@@ -55,6 +86,7 @@ export function DashboardOverview() {
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                 <MetricCard
                     description={`Tasks: ${flowsTotal?.totalTasksCount ?? 0} · Subtasks: ${flowsTotal?.totalSubtasksCount ?? 0} · Assistants: ${flowsTotal?.totalAssistantsCount ?? 0}`}
+                    error={!!flowsTotalError}
                     icon={<GitFork className="text-muted-foreground size-4" />}
                     loading={flowsTotalLoading}
                     title="Total Flows"
@@ -62,6 +94,7 @@ export function DashboardOverview() {
                 />
                 <MetricCard
                     description={`Total duration: ${toolcallsTotal ? formatDuration(toolcallsTotal.totalDurationSeconds) : '—'}`}
+                    error={!!toolcallsTotalError}
                     icon={<Activity className="text-muted-foreground size-4" />}
                     loading={toolcallsTotalLoading}
                     title="Tool Calls"
@@ -69,6 +102,7 @@ export function DashboardOverview() {
                 />
                 <MetricCard
                     description="Input + Output tokens processed"
+                    error={!!usageTotalError}
                     icon={<Cpu className="text-muted-foreground size-4" />}
                     loading={usageTotalLoading}
                     title="Total Tokens"
@@ -76,6 +110,7 @@ export function DashboardOverview() {
                 />
                 <MetricCard
                     description="Total LLM spending across all providers"
+                    error={!!usageTotalError}
                     icon={<CircleDollarSign className="text-muted-foreground size-4" />}
                     loading={usageTotalLoading}
                     title="Total Cost"
@@ -89,7 +124,13 @@ export function DashboardOverview() {
                     <CardDescription>LLM token usage and costs grouped by provider</CardDescription>
                 </CardHeader>
                 <CardContent>
-                    {usageByProviderLoading ? <LoadingTable /> : <UsageStatsTable rows={providerRows} />}
+                    {usageByProviderLoading ? (
+                        <LoadingTable />
+                    ) : usageByProviderError ? (
+                        <ErrorTable />
+                    ) : (
+                        <UsageStatsTable rows={providerRows} />
+                    )}
                 </CardContent>
             </Card>
 
@@ -99,7 +140,13 @@ export function DashboardOverview() {
                     <CardDescription>LLM token usage and costs grouped by model</CardDescription>
                 </CardHeader>
                 <CardContent>
-                    {usageByModelLoading ? <LoadingTable /> : <UsageStatsTable rows={modelRows} />}
+                    {usageByModelLoading ? (
+                        <LoadingTable />
+                    ) : usageByModelError ? (
+                        <ErrorTable />
+                    ) : (
+                        <UsageStatsTable rows={modelRows} />
+                    )}
                 </CardContent>
             </Card>
 
@@ -109,7 +156,13 @@ export function DashboardOverview() {
                     <CardDescription>LLM token usage and costs grouped by agent type</CardDescription>
                 </CardHeader>
                 <CardContent>
-                    {usageByAgentTypeLoading ? <LoadingTable /> : <UsageStatsTable rows={agentTypeRows} />}
+                    {usageByAgentTypeLoading ? (
+                        <LoadingTable />
+                    ) : usageByAgentTypeError ? (
+                        <ErrorTable />
+                    ) : (
+                        <UsageStatsTable rows={agentTypeRows} />
+                    )}
                 </CardContent>
             </Card>
 
@@ -121,6 +174,8 @@ export function DashboardOverview() {
                 <CardContent>
                     {toolcallsByFunctionLoading ? (
                         <LoadingTable />
+                    ) : toolcallsByFunctionError ? (
+                        <ErrorTable />
                     ) : (
                         <Table>
                             <TableHeader>
@@ -159,10 +214,17 @@ export function DashboardOverview() {
     );
 }
 
+function ErrorTable() {
+    return <DashboardError className="py-8" />;
+}
+
 function LoadingTable() {
     return (
         <div className="flex items-center justify-center py-8">
-            <Loader2 className="text-muted-foreground size-6 animate-spin" />
+            <Spinner
+                className="text-muted-foreground size-6"
+                variant="circle"
+            />
         </div>
     );
 }

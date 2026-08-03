@@ -15,11 +15,20 @@ services:
     container_name: neo4j
     hostname: neo4j
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:7474 || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:7474 || exit 1"]
       interval: 1s
       timeout: 10s
       retries: 10
       start_period: 3s
+    deploy:
+      resources:
+        limits:
+          cpus: ${NEO4J_CPUS:-4.0}
+          memory: ${NEO4J_MEMORY:-4G}
+    ulimits:
+      nofile:
+        soft: ${NEO4J_NOFILE:-65536}
+        hard: ${NEO4J_NOFILE:-65536}
     ports:
       - "127.0.0.1:7474:7474" # HTTP
       - "127.0.0.1:7687:7687" # Bolt
@@ -29,11 +38,24 @@ services:
         max-file: "7"
     volumes:
       - neo4j_data:/data
+      - ${NEO4J_DIR:-./neo4j}/conf:/conf:ro
+      - ${NEO4J_DIR:-./neo4j}/plugins:/plugins:ro
+      - ${NEO4J_DIR:-./neo4j}/logs:/logs
+      - ${NEO4J_DIR:-./neo4j}/import:/import
+      - ${NEO4J_DIR:-./neo4j}/metrics:/metrics
+      - ${NEO4J_DIR:-./neo4j}/ssl:/ssl:ro
+      - ${NEO4J_DIR:-./neo4j}/backups:/backups
     environment:
       - NEO4J_AUTH=${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:-devpassword}
+      - NEO4J_server_bolt_advertised__address=${NEO4J_BOLT_ADVERTISED_ADDRESS:-}
+      - NEO4J_server_http_advertised__address=${NEO4J_HTTP_ADVERTISED_ADDRESS:-}
+      - NEO4J_server_memory_heap_initial__size=${NEO4J_HEAP_INITIAL_SIZE:-2G}
+      - NEO4J_server_memory_heap_max__size=${NEO4J_HEAP_MAX_SIZE:-2G}
+      - NEO4J_server_memory_pagecache_size=${NEO4J_PAGECACHE_SIZE:-1G}
+      - NEO4J_db_memory_transaction_max=${NEO4J_TRANSACTION_MAX:-1G}
     networks:
       - pentagi-network
-    shm_size: 4g
+    shm_size: ${NEO4J_SHM_SIZE:-4g}
 
   graphiti:
     image: vxcontrol/graphiti:latest
@@ -41,16 +63,20 @@ services:
     container_name: graphiti
     hostname: graphiti
     healthcheck:
-      test:
-        [
-          "CMD",
-          "python",
-          "-c",
-          "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthcheck')",
-        ]
-      interval: 10s
+      test: ["CMD-SHELL", "curl -f http://127.0.0.1:8000/healthcheck || exit 1"]
+      interval: 30s
       timeout: 5s
       retries: 3
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          cpus: ${GRAPHITI_CPUS:-2.0}
+          memory: ${GRAPHITI_MEMORY:-2G}
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
     depends_on:
       neo4j:
         condition: service_healthy
@@ -60,14 +86,54 @@ services:
       options:
         max-size: 50m
         max-file: "7"
+    volumes:
+      - ${GRAPHITI_CONFIG_PATH:-./graphiti}:/app/pentagi-graphiti/server/${GRAPHITI_CONFIG_DIR:-configs}:ro
     environment:
       - NEO4J_URI=${NEO4J_URI:-bolt://neo4j:7687}
       - NEO4J_USER=${NEO4J_USER:-neo4j}
       - NEO4J_DATABASE=${NEO4J_DATABASE:-neo4j}
       - NEO4J_PASSWORD=${NEO4J_PASSWORD:-devpassword}
-      - MODEL_NAME=${GRAPHITI_MODEL_NAME:-gpt-5-mini}
+      - LLM_CLIENT_TYPE=${GRAPHITI_LLM_CLIENT_TYPE:-openai}
       - OPENAI_BASE_URL=${OPEN_AI_SERVER_URL:-https://api.openai.com/v1}
       - OPENAI_API_KEY=${OPEN_AI_KEY:-}
+      - GEMINI_BASE_URL=${GEMINI_SERVER_URL:-https://generativelanguage.googleapis.com}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - LLM_SERVER_BASE_URL=${LLM_SERVER_URL:-}
+      - LLM_SERVER_API_KEY=${LLM_SERVER_KEY:-}
+      - LITELLM_BASE_URL=${GRAPHITI_LITELLM_BASE_URL:-}
+      - LITELLM_API_KEY=${GRAPHITI_LITELLM_API_KEY:-}
+      - SEPARATE_EMBEDDING=${GRAPHITI_SEPARATE_EMBEDDING:-false}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-}
+      - EMBEDDING_URL=${EMBEDDING_URL:-}
+      - EMBEDDING_KEY=${EMBEDDING_KEY:-}
+      - SEMAPHORE_LIMIT=${GRAPHITI_SEMAPHORE_LIMIT:-20}
+      - GRAPHITI_TELEMETRY_ENABLED=${GRAPHITI_TELEMETRY_ENABLED:-false}
+      - LOG_FORMAT=${GRAPHITI_LOG_FORMAT:-json}
+      - LOG_LEVEL=${GRAPHITI_LOG_LEVEL:-INFO}
+      - LOG_STDOUT=${GRAPHITI_LOG_STDOUT:-events}
+      - FLOW_LOGGER_WARN_COUNT=${GRAPHITI_FLOW_LOGGER_WARN_COUNT:-256}
+      - DEBUG_RUNTIME_RESOURCES=${GRAPHITI_DEBUG_RUNTIME_RESOURCES:-false}
+      - GRAPHITI_SEARCH_SCOPE=${GRAPHITI_SEARCH_SCOPE:-flowid}
+      - INGEST_POLICY_RULES=${GRAPHITI_INGEST_POLICY_RULES:-}
+      - INGEST_POLICY_FIELD=${GRAPHITI_INGEST_POLICY_FIELD:-both}
+      - INGEST_POLICY_DEFAULT_ACTION=${GRAPHITI_INGEST_POLICY_DEFAULT_ACTION:-SKIP_LLM}
+      - INGEST_USE_GROUP_ACTORS=${GRAPHITI_INGEST_USE_GROUP_ACTORS:-true}
+      - INGEST_WORKER_COUNT=${GRAPHITI_INGEST_WORKER_COUNT:-16}
+      - INGEST_LOCK_BY_GROUP_ID=${GRAPHITI_INGEST_LOCK_BY_GROUP_ID:-true}
+      - INGEST_TASK_MAX_RETRIES=${GRAPHITI_INGEST_TASK_MAX_RETRIES:-1}
+      - INGEST_TASK_RETRY_DELAY_SEC=${GRAPHITI_INGEST_TASK_RETRY_DELAY_SEC:-2.0}
+      - INGEST_TASK_TIMEOUT_SEC=${GRAPHITI_INGEST_TASK_TIMEOUT_SEC:-0}
+      - INGEST_QUEUE_MAX_SIZE=${GRAPHITI_INGEST_QUEUE_MAX_SIZE:-0}
+      - INGEST_DEAD_LETTER_ENABLED=${GRAPHITI_INGEST_DEAD_LETTER_ENABLED:-false}
+      - TAXONOMY_LAYER_PROFILE=${GRAPHITI_TAXONOMY_LAYER_PROFILE:-STRUCTURAL,EVIDENCE,PROGRESS,ATTEMPT}
+      - USE_COMBINED_FULL_EXTRACTION=${GRAPHITI_USE_COMBINED_FULL_EXTRACTION:-true}
+      - USE_COMBINED_EXTRACTION=${GRAPHITI_USE_COMBINED_EXTRACTION:-true}
+      - COMBINED_FULL_GATING_ENABLED=${GRAPHITI_COMBINED_FULL_GATING_ENABLED:-true}
+      - COMBINED_DIAGNOSTIC_SAMPLES=${GRAPHITI_COMBINED_DIAGNOSTIC_SAMPLES:-false}
+      - ANCHOR_NODE_MODE=${GRAPHITI_ANCHOR_NODE_MODE:-smart}
+      - ANCHOR_NODE_LIMIT=${GRAPHITI_ANCHOR_NODE_LIMIT:-25}
+      - ANCHOR_MASS_TYPE_LIMIT=${GRAPHITI_ANCHOR_MASS_TYPE_LIMIT:-10}
+      - ANCHOR_QUERY_TIMEOUT=${GRAPHITI_ANCHOR_QUERY_TIMEOUT:-10}
       - PORT=8000
     networks:
       - pentagi-network

@@ -137,12 +137,12 @@ func NewAssistantWorker(ctx context.Context, awc newAssistantWorkerCtx) (Assista
 
 	ctx, observation := obs.Observer.NewObservation(ctx,
 		langfuse.WithObservationTraceContext(
-			langfuse.WithTraceName(fmt.Sprintf("%d flow %d assistant worker", awc.flowID, assistant.ID)),
-			langfuse.WithTraceUserID(user.Mail),
-			langfuse.WithTraceTags([]string{"controller", "assistant"}),
+			langfuse.WithTraceName(fmt.Sprintf("%s%d flow %d assistant worker", awc.cfg.TenantLabel(), awc.flowID, assistant.ID)),
+			langfuse.WithTraceUserID(tenantUserID(awc.cfg, user.Mail)),
+			langfuse.WithTraceTags(tenantTags(awc.cfg, "controller", "assistant")),
 			langfuse.WithTraceInput(awc.input),
-			langfuse.WithTraceSessionID(fmt.Sprintf("assistant-%d-flow-%d", assistant.ID, awc.flowID)),
-			langfuse.WithTraceMetadata(langfuse.Metadata{
+			langfuse.WithTraceSessionID(awc.cfg.ScopedName(fmt.Sprintf("assistant-%d-flow-%d", assistant.ID, awc.flowID))),
+			langfuse.WithTraceMetadata(tenantMeta(awc.cfg, langfuse.Metadata{
 				"assistant_id":  assistant.ID,
 				"flow_id":       awc.flowID,
 				"user_id":       awc.userID,
@@ -152,7 +152,7 @@ func NewAssistantWorker(ctx context.Context, awc newAssistantWorkerCtx) (Assista
 				"user_role":     user.RoleName,
 				"provider_name": awc.prvname.String(),
 				"provider_type": awc.prvtype.String(),
-			}),
+			})),
 		),
 	)
 	assistantSpan := observation.Span(langfuse.WithSpanName("prepare assistant worker"))
@@ -305,11 +305,11 @@ func LoadAssistantWorker(
 
 	ctx, observation := obs.Observer.NewObservation(ctx,
 		langfuse.WithObservationTraceContext(
-			langfuse.WithTraceName(fmt.Sprintf("%d flow %d assistant worker", awc.flowID, assistant.ID)),
-			langfuse.WithTraceUserID(user.Mail),
-			langfuse.WithTraceTags([]string{"controller", "assistant"}),
-			langfuse.WithTraceSessionID(fmt.Sprintf("assistant-%d-flow-%d", assistant.ID, awc.flowID)),
-			langfuse.WithTraceMetadata(langfuse.Metadata{
+			langfuse.WithTraceName(fmt.Sprintf("%s%d flow %d assistant worker", awc.cfg.TenantLabel(), awc.flowID, assistant.ID)),
+			langfuse.WithTraceUserID(tenantUserID(awc.cfg, user.Mail)),
+			langfuse.WithTraceTags(tenantTags(awc.cfg, "controller", "assistant")),
+			langfuse.WithTraceSessionID(awc.cfg.ScopedName(fmt.Sprintf("assistant-%d-flow-%d", assistant.ID, awc.flowID))),
+			langfuse.WithTraceMetadata(tenantMeta(awc.cfg, langfuse.Metadata{
 				"assistant_id":  assistant.ID,
 				"flow_id":       awc.flowID,
 				"user_id":       awc.userID,
@@ -319,7 +319,7 @@ func LoadAssistantWorker(
 				"user_role":     user.RoleName,
 				"provider_name": assistant.ModelProviderName,
 				"provider_type": assistant.ModelProviderType,
-			}),
+			})),
 		),
 	)
 	assistantSpan := observation.Span(langfuse.WithSpanName("prepare assistant worker"))
@@ -446,12 +446,12 @@ func (aw *assistantWorker) worker() {
 		}
 
 		if err := aw.SetStatus(ctx, database.AssistantStatusRunning); err != nil {
-			aw.logger.WithError(err).Error("failed to set assistant status to waiting")
+			obs.LogErrorOrCancel(aw.logger, err, "failed to set assistant status to waiting")
 		}
 
 		defer func() {
 			if err := aw.SetStatus(ctx, database.AssistantStatusWaiting); err != nil {
-				aw.logger.WithError(err).Error("failed to set assistant status to waiting")
+				obs.LogErrorOrCancel(aw.logger, err, "failed to set assistant status to waiting")
 			}
 		}()
 
@@ -489,7 +489,7 @@ func (aw *assistantWorker) worker() {
 		case ain := <-aw.input:
 			err := perform(aw.ctx, ain.input, ain.useAgents)
 			if err != nil {
-				aw.logger.WithError(err).Error("failed to perform assistant chain")
+				obs.LogErrorOrCancel(aw.logger, err, "failed to perform assistant chain")
 			}
 			ain.done <- err
 		}
@@ -559,7 +559,7 @@ func (aw *assistantWorker) PutInput(ctx context.Context, input string, useAgents
 
 		select {
 		case err := <-ain.done:
-			return err // nil or error
+			return err
 		case <-timer.C:
 			return nil // no early error
 		case <-aw.ctx.Done():

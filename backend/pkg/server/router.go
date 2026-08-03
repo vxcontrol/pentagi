@@ -98,7 +98,7 @@ func NewRouter(
 
 	tokenCache := auth.NewTokenCache(orm)
 	userCache := auth.NewUserCache(orm)
-	authMiddleware := auth.NewAuthMiddleware(baseURL, cfg.CookieSigningSalt, tokenCache, userCache)
+	authMiddleware := auth.NewAuthMiddleware(baseURL, cfg.AuthSalt(), tokenCache, userCache)
 	oauthClients := make(map[string]oauth.OAuthClient)
 	oauthLoginCallbackURL := "/auth/login-callback"
 
@@ -172,6 +172,7 @@ func NewRouter(
 			BaseURL:          baseURL,
 			LoginCallbackURL: oauthLoginCallbackURL,
 			SessionTimeout:   4 * 60 * 60, // 4 hours
+			CookiePrefix:     cfg.TenantPrefix(),
 		},
 		orm,
 		oauthClients,
@@ -181,7 +182,7 @@ func NewRouter(
 	providerService := services.NewProviderService(providers)
 	settingsService := services.NewSettingsService(cfg)
 	flowService := services.NewFlowService(orm, providers, controller, subscriptions)
-	flowFileService := services.NewFlowFileService(orm, cfg.DataDir, dockerClient, subscriptions)
+	flowFileService := services.NewFlowFileService(orm, cfg.DataDir, cfg.TenantPrefix(), dockerClient, subscriptions)
 	resourceService := services.NewResourceService(orm, cfg.DataDir, subscriptions)
 	taskService := services.NewTaskService(orm)
 	subtaskService := services.NewSubtaskService(orm)
@@ -197,7 +198,7 @@ func NewRouter(
 	screenshotService := services.NewScreenshotService(orm, cfg.DataDir)
 	promptService := services.NewPromptService(orm)
 	analyticsService := services.NewAnalyticsService(orm)
-	tokenService := services.NewTokenService(orm, cfg.CookieSigningSalt, tokenCache, subscriptions)
+	tokenService := services.NewTokenService(orm, cfg.AuthSalt(), tokenCache, subscriptions)
 	knowledgeService := services.NewKnowledgeService(orm, knowledgeStore)
 	anonymizerService := services.NewAnonymizerService(textReplacer)
 	graphqlService := services.NewGraphqlService(
@@ -238,8 +239,13 @@ func NewRouter(
 	router.Use(gin.Recovery())
 	router.Use(logger.WithGinLogger("pentagi-api"))
 
-	cookieStore := cookie.NewStore(auth.MakeCookieStoreKey(cfg.CookieSigningSalt)...)
-	router.Use(sessions.Sessions("auth", cookieStore))
+	// AuthSalt mixes TENANT_ID into the key derivation so a session minted by one
+	// instance is cryptographically invalid on another even when COOKIE_SIGNING_SALT
+	// is shared. ScopedName separates the cookie itself, because cookies are scoped
+	// by host and NOT by port — two instances on one host would otherwise overwrite
+	// each other's sessions. Both are identity operations when TENANT_ID is empty.
+	cookieStore := cookie.NewStore(auth.MakeCookieStoreKey(cfg.AuthSalt())...)
+	router.Use(sessions.Sessions(cfg.ScopedName("auth"), cookieStore))
 
 	api := router.Group(baseURL)
 	api.Use(noCacheMiddleware())
@@ -249,6 +255,12 @@ func NewRouter(
 	changePasswordGroup.Use(authMiddleware.AuthUserRequired)
 	changePasswordGroup.Use(localUserRequired())
 	changePasswordGroup.PUT("/password", userService.ChangePasswordCurrentUser)
+	changePasswordGroup.PUT("/email", userService.ChangeEmailCurrentUser)
+
+	// Unlike password/email, the display name is editable by OAuth users too — no localUserRequired.
+	changeNameGroup := api.Group("/user")
+	changeNameGroup.Use(authMiddleware.AuthUserRequired)
+	changeNameGroup.PUT("/name", userService.ChangeNameCurrentUser)
 
 	publicGroup := api.Group("/")
 	publicGroup.Use(authMiddleware.TryAuth)
@@ -337,36 +349,55 @@ func NewRouter(
 			}
 		}())
 	} else {
-		router.Use(static.Serve("/", static.LocalFile(cfg.StaticDir, true)))
-
-		indexExists := true
-		indexPath := filepath.Join(cfg.StaticDir, "index.html")
-		if _, err := os.Stat(indexPath); err != nil {
-			indexExists = false
-		}
-
-		router.NoRoute(func(c *gin.Context) {
-			if c.Request.Method == "GET" && !strings.HasPrefix(c.Request.URL.Path, baseURL) {
-				isFrontendRoute := false
-				path := c.Request.URL.Path
-				for _, prefix := range frontendRoutes {
-					if path == prefix || strings.HasPrefix(path, prefix+"/") {
-						isFrontendRoute = true
-						break
-					}
-				}
-
-				if isFrontendRoute && indexExists {
-					c.File(indexPath)
-					return
-				}
-			}
-
-			c.Redirect(http.StatusMovedPermanently, "/")
-		})
+		registerStaticFileServer(router, cfg.StaticDir)
 	}
 
 	return router
+}
+
+// registerStaticFileServer serves the locally-built SPA (used when no STATIC_URL
+// upstream is set): cache headers, hashed assets via static.Serve, and an SPA
+// fallback that serves index.html for client routes but returns 404 for a missing
+// /assets/* — so the module loader fails cleanly and the app can reload to recover
+// instead of getting index.html and a MIME error. Split out to be unit-testable.
+func registerStaticFileServer(router *gin.Engine, staticDir string) {
+	router.Use(staticCacheMiddleware())
+	router.Use(static.Serve("/", static.LocalFile(staticDir, true)))
+
+	indexExists := true
+	indexPath := filepath.Join(staticDir, "index.html")
+	if _, err := os.Stat(indexPath); err != nil {
+		indexExists = false
+	}
+
+	router.NoRoute(func(c *gin.Context) {
+		if c.Request.Method == http.MethodGet && !strings.HasPrefix(c.Request.URL.Path, baseURL) {
+			isFrontendRoute := false
+			path := c.Request.URL.Path
+			for _, prefix := range frontendRoutes {
+				if path == prefix || strings.HasPrefix(path, prefix+"/") {
+					isFrontendRoute = true
+					break
+				}
+			}
+
+			if isFrontendRoute && indexExists {
+				c.File(indexPath)
+				return
+			}
+
+			if strings.HasPrefix(path, "/assets/") {
+				// A missing hashed asset may be a transient rolling-deploy
+				// race, so override the immutable directive set above —
+				// never cache this 404 as a permanent negative.
+				c.Header("Cache-Control", "no-store")
+				c.Status(http.StatusNotFound)
+				return
+			}
+		}
+
+		c.Redirect(http.StatusMovedPermanently, "/")
+	})
 }
 
 func setKnowledgeGroup(parent *gin.RouterGroup, svc *services.KnowledgeService) {

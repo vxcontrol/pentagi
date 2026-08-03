@@ -337,6 +337,28 @@ These benchmarks demonstrate that Qwen3.5-27B-FP8 provides excellent throughput 
 
 ## Troubleshooting
 
+### Issue: Automation Flow Runs for Hours or Repeats Commands
+
+**Cause**: Broad penetration testing prompts can leave smaller local or custom models exploring too much state, especially when the task has no stopping criteria. Repeated commands may indicate model weakness, target complexity, tool-call/provider issues, or a flow that needs additional supervision.
+
+**Solution**: First check the existing PentAGI execution controls before changing runtime behavior or assuming the target is broken:
+
+- Enable execution monitoring with `EXECUTION_MONITOR_ENABLED=true` so the Adviser can review repeated or inefficient tool-call patterns.
+- Tune `EXECUTION_MONITOR_SAME_TOOL_LIMIT` and `EXECUTION_MONITOR_TOTAL_TOOL_LIMIT` if Adviser reviews happen too late or too often for your model and target.
+- Enable planning with `AGENT_PLANNING_STEP_ENABLED=true` for complex pentest flows so specialist agents receive a bounded execution plan.
+- Review hard tool-call limits with `MAX_GENERAL_AGENT_TOOL_CALLS` and `MAX_LIMITED_AGENT_TOOL_CALLS`; these remain the final guardrails for runaway executions.
+
+Also narrow the task prompt. Instead of only `Perform penetration testing on the host 192.168.136.136`, include the authorized target, scope, expected output, and stopping criteria, for example: enumerate exposed services, try likely public exploits, avoid repeating failed commands more than twice, and stop with a concise findings report if no path is found.
+
+Use PentAGI flow logs, Docker logs, and provider or vLLM logs together when diagnosing a long run:
+
+- Repeated identical shell/browser actions point toward tool-loop behavior.
+- Long gaps between actions point toward slow model generation or provider latency.
+- Frequent malformed tool calls point toward provider/tool-call parser compatibility.
+- Varied but slow exploration can simply mean the target is complex or the prompt is too broad.
+
+Qwen3.5-27B-FP8 can run useful local flows, but complex autonomous pentests may still need execution monitoring, task planning, tighter prompts, and careful log review.
+
 ### Issue: "Unknown architecture 'qwen3_5'"
 
 **Cause**: Using stable vLLM release instead of nightly.

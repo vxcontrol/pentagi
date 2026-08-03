@@ -1,18 +1,16 @@
-import { useApolloClient } from '@apollo/client/react';
+import { useApolloClient, useQuery } from '@apollo/client/react';
 import { createContext, type ReactNode, useContext, useEffect, useMemo, useState } from 'react';
-import { toast } from 'sonner';
 
 import type { UserResourceFragmentFragment } from '@/graphql/types';
 
 import { RESOURCES_API_PATH } from '@/features/resources/resources-constants';
 import { restResourceEntryToFragment, type RestResourceList } from '@/features/resources/resources-rest';
 import { useResourcesRealtime } from '@/features/resources/use-resources-realtime';
-import { ResourcesDocument, useResourcesQuery } from '@/graphql/types';
+import { ResourcesDocument } from '@/graphql/types';
 import { api, getApiErrorMessage, unwrapApiResponse } from '@/lib/axios';
 import { useUser } from '@/providers/user-provider';
 
 interface ResourcesContextValue {
-    /** Recursive list of every entry in the user's library (files + directories). */
     error: Error | null | undefined;
     /** Lookup helper: returns `undefined` when the resource is unknown. */
     getResource: (id: string) => undefined | UserResourceFragmentFragment;
@@ -20,6 +18,7 @@ interface ResourcesContextValue {
     isLoading: boolean;
     /** Force a network re-read of the resources list. */
     refetch: () => Promise<unknown>;
+    /** Recursive list of every entry in the user's library (files + directories). */
     resources: UserResourceFragmentFragment[];
 }
 
@@ -29,22 +28,20 @@ interface ResourcesProviderProps {
 
 const ResourcesContext = createContext<ResourcesContextValue | undefined>(undefined);
 
-const RESOURCES_ERROR_TOAST_ID = 'resources-error';
-
 /**
  * Loads the user's full resource library and keeps it in sync via three GraphQL
  * subscriptions (added / updated / deleted).
  *
  * The initial library is fetched via REST `GET /resources/?recursive=true` and
- * the result is written into the same Apollo cache slot that `useResourcesQuery`
- * reads (via `cache-only` fetch policy). Subscriptions continue to update the
+ * the result is written into the same Apollo cache slot the `resources(recursive: true)`
+ * query reads (via `cache-only` fetch policy). Subscriptions continue to update the
  * cache through `lib/apollo.ts`, so consumers see one unified store.
  *
  * NOTE: the equivalent GraphQL `resources(recursive: true)` query now works
  * correctly for the root path. Switching this provider to a plain
- * `useResourcesQuery({ variables: { recursive: true } })` is a viable follow-up
- * once we no longer need the snake_case → camelCase conversion that REST
- * requires (see `restResourceEntryToFragment`).
+ * `useQuery(ResourcesDocument, { variables: { recursive: true } })` is a viable
+ * follow-up once we no longer need the snake_case → camelCase conversion that
+ * REST requires (see `restResourceEntryToFragment`).
  */
 export function ResourcesProvider({ children }: ResourcesProviderProps) {
     const { authInfo, isAuthenticated } = useUser();
@@ -58,7 +55,7 @@ export function ResourcesProvider({ children }: ResourcesProviderProps) {
     const [refreshTick, setRefreshTick] = useState(0);
 
     // Hydrate the Apollo cache from REST. We write to the same `resources(recursive: true)`
-    // cache slot that `useResourcesQuery` reads, so subscription delta updates plumbed
+    // cache slot the GraphQL query reads, so subscription delta updates plumbed
     // through `lib/apollo.ts` keep working without any extra wiring.
     useEffect(() => {
         if (!shouldFetchResources) {
@@ -118,7 +115,16 @@ export function ResourcesProvider({ children }: ResourcesProviderProps) {
         };
     }, [apolloClient, refreshTick, shouldFetchResources]);
 
-    const { data, error: graphqlError } = useResourcesQuery({
+    // Subscriptions are delta-only and the reconnect sweep skips this cache-only slot,
+    // so re-hydrate from REST when the socket reconnects after an outage.
+    useEffect(() => {
+        const reconcile = () => setRefreshTick((tick) => tick + 1);
+        window.addEventListener('ws:reconnected', reconcile);
+
+        return () => window.removeEventListener('ws:reconnected', reconcile);
+    }, []);
+
+    const { data, error: graphqlError } = useQuery(ResourcesDocument, {
         fetchPolicy: 'cache-only',
         skip: !shouldFetchResources,
         variables: { recursive: true },
@@ -128,15 +134,6 @@ export function ResourcesProvider({ children }: ResourcesProviderProps) {
     const isInitialLoading = restLoading && data === undefined;
 
     useResourcesRealtime({ isPaused: !shouldFetchResources || isInitialLoading });
-
-    useEffect(() => {
-        if (error) {
-            toast.error('Failed to load resources', {
-                description: error.message,
-                id: RESOURCES_ERROR_TOAST_ID,
-            });
-        }
-    }, [error]);
 
     const resources = useMemo<UserResourceFragmentFragment[]>(() => data?.resources ?? [], [data?.resources]);
 

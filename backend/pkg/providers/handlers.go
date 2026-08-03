@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -22,26 +23,36 @@ import (
 )
 
 func wrapError(ctx context.Context, msg string, err error) error {
-	logrus.WithContext(ctx).WithError(err).Error(msg)
+	obs.LogErrorOrCancel(logrus.WithContext(ctx), err, msg)
 	return fmt.Errorf("%s: %w", msg, err)
 }
 
 func wrapErrorEndAgentSpan(ctx context.Context, span langfuse.Agent, msg string, err error) error {
-	logrus.WithContext(ctx).WithError(err).Error(msg)
+	obs.LogErrorOrCancel(logrus.WithContext(ctx), err, msg)
 	err = fmt.Errorf("%s: %w", msg, err)
+
+	level := langfuse.ObservationLevelError
+	if errors.Is(err, context.Canceled) {
+		level = langfuse.ObservationLevelWarning
+	}
 	span.End(
 		langfuse.WithAgentStatus(err.Error()),
-		langfuse.WithAgentLevel(langfuse.ObservationLevelError),
+		langfuse.WithAgentLevel(level),
 	)
 	return err
 }
 
 func wrapErrorEndEvaluatorSpan(ctx context.Context, span langfuse.Evaluator, msg string, err error) error {
-	logrus.WithContext(ctx).WithError(err).Error(msg)
+	obs.LogErrorOrCancel(logrus.WithContext(ctx), err, msg)
 	err = fmt.Errorf("%s: %w", msg, err)
+
+	level := langfuse.ObservationLevelError
+	if errors.Is(err, context.Canceled) {
+		level = langfuse.ObservationLevelWarning
+	}
 	span.End(
 		langfuse.WithEvaluatorStatus(err.Error()),
-		langfuse.WithEvaluatorLevel(langfuse.ObservationLevelError),
+		langfuse.WithEvaluatorLevel(level),
 	)
 	return err
 }
@@ -601,6 +612,7 @@ func (fp *flowProvider) GetPentesterHandler(ctx context.Context, taskID, subtask
 			},
 			"system": {
 				"HackResultToolName":      tools.HackResultToolName,
+				"WebSearchToolName":       tools.WebSearchToolName,
 				"SearchGuideToolName":     tools.SearchGuideToolName,
 				"StoreGuideToolName":      tools.StoreGuideToolName,
 				"GraphitiEnabled":         fp.graphitiClient != nil && fp.graphitiClient.IsEnabled(),

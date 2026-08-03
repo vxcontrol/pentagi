@@ -92,10 +92,8 @@ func New(
 		return nil, err
 	}
 
-	// Use centralized model loading with prefix filtering
 	models, err := provider.LoadModelsFromHTTP(baseURL, baseKey, httpClient, cfg.LLMServerProvider)
 	if err != nil {
-		// If loading fails, fallback to empty models list
 		models = pconfig.ModelsConfig{}
 	}
 
@@ -186,6 +184,25 @@ func (p *customProvider) CallWithTools(
 			llms.WithStreamingFunc(streamCb),
 		}, p.providerConfig.GetOptionsForType(opt)...)...,
 	)
+}
+
+// CallWithExtraOptions: extra is appended last, so it overrides the config.
+func (p *customProvider) CallWithExtraOptions(
+	ctx context.Context,
+	opt pconfig.ProviderOptionsType,
+	chain []llms.MessageContent,
+	tools []llms.Tool,
+	streamCb streaming.Callback,
+	extra ...llms.CallOption,
+) (*llms.ContentResponse, error) {
+	options := []llms.CallOption{llms.WithStreamingFunc(streamCb)}
+	if len(tools) > 0 {
+		options = append(options, llms.WithTools(tools))
+	}
+	options = append(options, p.providerConfig.GetOptionsForType(opt)...)
+	options = append(options, extra...)
+
+	return provider.WrapGenerateContent(ctx, p, opt, p.llm.GenerateContent, chain, options...)
 }
 
 func (p *customProvider) GetUsage(info map[string]any) pconfig.CallUsage {

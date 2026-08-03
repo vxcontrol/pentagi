@@ -22,6 +22,7 @@ type SubtaskController interface {
 	PopSubtask(ctx context.Context, updater TaskUpdater) (SubtaskWorker, error)
 	ListSubtasks(ctx context.Context) []SubtaskWorker
 	GetSubtask(ctx context.Context, subtaskID int64) (SubtaskWorker, error)
+	InvalidateSubtasks(subtaskIDs []int64)
 }
 
 type subtaskController struct {
@@ -119,6 +120,7 @@ func (stc *subtaskController) RefineSubtasks(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to delete subtasks for task %d: %w", stc.taskCtx.TaskID, err)
 	}
+	stc.InvalidateSubtasks(subtaskIDs)
 
 	// TODO: change it to insert subtasks in transaction and union it with delete ones
 	for _, info := range plan {
@@ -190,4 +192,19 @@ func (stc *subtaskController) GetSubtask(ctx context.Context, subtaskID int64) (
 	}
 
 	return subtask, nil
+}
+
+// InvalidateSubtasks drops workers deleted outside this controller,
+// preventing stale cache lookups.
+func (stc *subtaskController) InvalidateSubtasks(subtaskIDs []int64) {
+	if len(subtaskIDs) == 0 {
+		return
+	}
+
+	stc.mx.Lock()
+	defer stc.mx.Unlock()
+
+	for _, id := range subtaskIDs {
+		delete(stc.subtasks, id)
+	}
 }

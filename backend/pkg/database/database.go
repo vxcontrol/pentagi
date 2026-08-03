@@ -70,15 +70,13 @@ func SanitizeUTF8(msg string) string {
 	}
 
 	var builder strings.Builder
-	builder.Grow(len(msg)) // Pre-allocate for efficiency
+	builder.Grow(len(msg))
 
 	for i := 0; i < len(msg); {
-		// Explicitly skip null bytes
 		if msg[i] == '\x00' {
 			i++
 			continue
 		}
-		// Decode rune and check for errors
 		r, size := utf8.DecodeRuneInString(msg[i:])
 		if r == utf8.RuneError && size == 1 {
 			// Invalid UTF-8 byte, replace with Unicode replacement character

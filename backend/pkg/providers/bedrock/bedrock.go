@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"os"
 	"reflect"
 	"sync"
 
@@ -28,7 +29,7 @@ import (
 //go:embed config.yml models.yml
 var configFS embed.FS
 
-const BedrockAgentModel = bedrock.ModelAnthropicClaudeSonnet4
+const BedrockAgentModel = bedrock.ModelAnthropicClaudeSonnet46
 
 const BedrockToolCallIDTemplate = "tooluse_{r:22:x}"
 
@@ -48,8 +49,17 @@ func BuildProviderConfig(configData []byte) (*pconfig.ProviderConfig, error) {
 	return providerConfig, nil
 }
 
-func DefaultProviderConfig() (*pconfig.ProviderConfig, error) {
-	configData, err := configFS.ReadFile("config.yml")
+func DefaultProviderConfig(cfg *config.Config) (*pconfig.ProviderConfig, error) {
+	var (
+		configData []byte
+		err        error
+	)
+
+	if cfg.BedrockConfig == "" {
+		configData, err = configFS.ReadFile("config.yml")
+	} else {
+		configData, err = os.ReadFile(cfg.BedrockConfig)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -63,7 +73,12 @@ func DefaultModels() (pconfig.ModelsConfig, error) {
 		return nil, err
 	}
 
-	return pconfig.LoadModelsConfigData(configData)
+	models, err := pconfig.LoadModelsConfigData(configData)
+	if err != nil {
+		return nil, err
+	}
+
+	return models, nil
 }
 
 type bedrockProvider struct {
@@ -195,9 +210,12 @@ func (p *bedrockProvider) Call(
 	opt pconfig.ProviderOptionsType,
 	prompt string,
 ) (string, error) {
+	ctx, options := p.providerConfig.PrepareAdaptiveCallOptions(
+		ctx, p.models, opt, p.providerConfig.GetOptionsForType(opt),
+	)
+
 	return provider.WrapGenerateFromSinglePrompt(
-		ctx, p, opt, p.llm, prompt,
-		p.providerConfig.GetOptionsForType(opt)...,
+		ctx, p, opt, p.llm, prompt, options...,
 	)
 }
 
@@ -223,10 +241,11 @@ func (p *bedrockProvider) CallEx(
 	// Clean tools from $schema field
 	tools = cleanToolSchemas(tools)
 
-	// Build final options: streaming + config + cleaned tools LAST (to override any dirty tools from config)
+	// Put cleaned tools after config to override any dirty tools restored from config.
 	options := []llms.CallOption{llms.WithStreamingFunc(streamCb)}
 	options = append(options, configOptions...)
 	options = append(options, llms.WithTools(tools))
+	ctx, options = p.providerConfig.PrepareAdaptiveCallOptions(ctx, p.models, opt, options)
 
 	return provider.WrapGenerateContent(ctx, p, opt, p.llm.GenerateContent, chain, options...)
 }
@@ -249,8 +268,36 @@ func (p *bedrockProvider) CallWithTools(
 
 	configOptions := p.providerConfig.GetOptionsForType(opt)
 
-	// Build final options: config + streaming + cleaned tools LAST (to override any dirty tools from config)
+	// Put cleaned tools after config to override any dirty tools restored from config.
 	options := append(configOptions, llms.WithStreamingFunc(streamCb), llms.WithTools(tools))
+	ctx, options = p.providerConfig.PrepareAdaptiveCallOptions(ctx, p.models, opt, options)
+
+	return provider.WrapGenerateContent(ctx, p, opt, p.llm.GenerateContent, chain, options...)
+}
+
+// CallWithExtraOptions: extra wins over both the config and the auto-adaptive
+// append below, since it's appended last.
+func (p *bedrockProvider) CallWithExtraOptions(
+	ctx context.Context,
+	opt pconfig.ProviderOptionsType,
+	chain []llms.MessageContent,
+	tools []llms.Tool,
+	streamCb streaming.Callback,
+	extra ...llms.CallOption,
+) (*llms.ContentResponse, error) {
+	tools = restoreMissedToolsFromChain(chain, tools)
+	tools = cleanToolSchemas(tools)
+
+	configOptions := p.providerConfig.GetOptionsForType(opt)
+
+	base := []llms.CallOption{llms.WithStreamingFunc(streamCb)}
+	base = append(base, configOptions...)
+	if len(tools) > 0 {
+		base = append(base, llms.WithTools(tools))
+	}
+
+	ctx, options := p.providerConfig.PrepareAdaptiveCallOptions(ctx, p.models, opt, base)
+	options = append(options, extra...)
 
 	return provider.WrapGenerateContent(ctx, p, opt, p.llm.GenerateContent, chain, options...)
 }

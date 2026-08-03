@@ -1,15 +1,18 @@
 import type { ReactNode } from 'react';
 
-import { BarChart2, Loader2 } from 'lucide-react';
+import { BarChart2 } from 'lucide-react';
 import { ResponsiveContainer } from 'recharts';
 
+import { DashboardError } from '@/components/dashboard/dashboard-error';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Spinner } from '@/components/ui/spinner';
 
 export function ChartCard({
     children,
     className,
     description,
     empty,
+    error,
     height = 300,
     loading,
     title,
@@ -18,6 +21,7 @@ export function ChartCard({
     className?: string;
     description?: ReactNode;
     empty?: boolean;
+    error?: boolean;
     height?: number;
     loading?: boolean;
     title: ReactNode;
@@ -34,8 +38,16 @@ export function ChartCard({
                         className="flex items-center justify-center"
                         style={{ height }}
                     >
-                        <Loader2 className="text-muted-foreground size-6 animate-spin" />
+                        <Spinner
+                            className="text-muted-foreground size-6"
+                            variant="circle"
+                        />
                     </div>
+                ) : error ? (
+                    <DashboardError
+                        iconClassName="size-10"
+                        style={{ height }}
+                    />
                 ) : empty ? (
                     <div
                         className="flex flex-col items-center justify-center gap-2"

@@ -1,9 +1,9 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import '@xterm/xterm/css/xterm.css';
-import debounce from 'lodash/debounce';
 import { ChevronDown, ChevronUp, ListFilter, Search, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
+import { useDebouncedCallback } from 'use-debounce';
 import { z } from 'zod';
 
 import Terminal from '@/components/shared/terminal';
@@ -47,13 +47,9 @@ function FlowTerminal() {
     const searchValue = form.watch('search');
     const filter = form.watch('filter');
 
-    const debouncedUpdateSearch = useMemo(
-        () =>
-            debounce((value: string) => {
-                setDebouncedSearchValue(value);
-            }, 500),
-        [],
-    );
+    const debouncedUpdateSearch = useDebouncedCallback((value: string) => {
+        setDebouncedSearchValue(value);
+    }, 500);
 
     useEffect(() => {
         debouncedUpdateSearch(searchValue);
@@ -132,7 +128,8 @@ function FlowTerminal() {
     };
 
     const handleClearSearch = () => {
-        form.reset({ search: '' });
+        // Clear only the search — form.reset would drop the task/subtask filter too.
+        form.setValue('search', '');
         setDebouncedSearchValue('');
         debouncedUpdateSearch.cancel();
     };
@@ -181,7 +178,7 @@ function FlowTerminal() {
                                                         title="Previous match"
                                                         type="button"
                                                     >
-                                                        <ChevronUp className="size-4" />
+                                                        <ChevronUp />
                                                     </InputGroupButton>
                                                     <InputGroupButton
                                                         onClick={handleFindNext}
@@ -189,18 +186,19 @@ function FlowTerminal() {
                                                         title="Next match"
                                                         type="button"
                                                     >
-                                                        <ChevronDown className="size-4" />
+                                                        <ChevronDown />
                                                     </InputGroupButton>
                                                 </>
                                             )}
                                             {field.value && (
                                                 <InputGroupButton
+                                                    aria-label="Clear terminal search"
                                                     onClick={handleClearSearch}
                                                     size="icon-xs"
                                                     title="Clear search"
                                                     type="button"
                                                 >
-                                                    <X className="size-4" />
+                                                    <X />
                                                 </InputGroupButton>
                                             )}
                                         </InputGroupAddon>

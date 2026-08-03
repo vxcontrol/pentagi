@@ -5,7 +5,7 @@ import Axios from 'axios';
 import { AUTH_STORAGE_KEY } from '@/providers/user-provider';
 
 import { Log } from './log';
-import { getReturnUrlParam } from './utils/auth';
+import { routes } from './routes';
 
 // ── shared API protocol types ────────────────────────────────────────────────
 //
@@ -106,9 +106,8 @@ axios.interceptors.response.use(
 
                     const currentPath = window.location.pathname;
 
-                    if (currentPath !== '/login') {
-                        const returnParam = getReturnUrlParam(currentPath);
-                        window.location.href = `/login${returnParam}`;
+                    if (currentPath !== routes.login()) {
+                        window.location.href = routes.login(currentPath);
                     }
 
                     break;
@@ -129,9 +128,8 @@ axios.interceptors.response.use(
 
                         const currentPath = window.location.pathname;
 
-                        if (currentPath !== '/login') {
-                            const returnParam = getReturnUrlParam(currentPath);
-                            window.location.href = `/login${returnParam}`;
+                        if (currentPath !== routes.login()) {
+                            window.location.href = routes.login(currentPath);
                         }
                     } else {
                         Log.warn(err.response?.data);
@@ -230,10 +228,6 @@ export const getApiErrorMessage = (
 /**
  * Extract the HTTP status code from an unknown error thrown by axios. Returns
  * `undefined` for non-axios errors or when the request never reached a server.
- *
- * Used across hooks that need to branch on a specific status (most commonly
- * 409 conflict) without re-implementing the same `error.statusCode ??
- * error.response?.status` shape every time.
  */
 export const getApiErrorStatusCode = (error: unknown): number | undefined => {
     if (!error || typeof error !== 'object') {
@@ -243,6 +237,26 @@ export const getApiErrorStatusCode = (error: unknown): number | undefined => {
     const httpError = error as ApiHttpError;
 
     return httpError.statusCode ?? httpError.response?.status;
+};
+
+export const getApiErrorCode = (error: unknown): string | undefined => {
+    if (!error || typeof error !== 'object') {
+        return undefined;
+    }
+
+    const responseData = (error as ApiHttpError).response?.data;
+
+    return responseData && typeof responseData === 'object' ? (responseData as ApiErrorResponse).code : undefined;
+};
+
+export const resolveApiErrorMessage = (
+    error: unknown,
+    messagesByCode: Record<string, string>,
+    fallback: string,
+): string => {
+    const code = getApiErrorCode(error);
+
+    return (code && messagesByCode[code]) ?? getApiErrorMessage(error, fallback);
 };
 
 export default axios;

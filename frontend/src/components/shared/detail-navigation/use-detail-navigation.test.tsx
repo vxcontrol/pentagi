@@ -11,11 +11,11 @@ interface Item {
     title: string;
 }
 
-const ITEMS: readonly Item[] = [
+const ITEMS = [
     { id: 'a', title: 'Alpha' },
     { id: 'b', title: 'Bravo' },
     { id: 'c', title: 'Charlie' },
-] as const;
+] as const satisfies readonly Item[];
 
 const getHref = (item: Item) => `/items/${item.id}`;
 const getLabel = (item: Item) => item.title;

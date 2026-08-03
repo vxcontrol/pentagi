@@ -24,10 +24,12 @@ const (
 	GoogleToolName             = "google"
 	DuckDuckGoToolName         = "duckduckgo"
 	TavilyToolName             = "tavily"
+	FirecrawlToolName          = "firecrawl"
 	TraversaalToolName         = "traversaal"
 	PerplexityToolName         = "perplexity"
 	SearxngToolName            = "searxng"
 	SploitusToolName           = "sploitus"
+	WebSearchToolName          = "web_search"
 	SearchToolName             = "search"
 	SearchResultToolName       = "search_result"
 	EnricherResultToolName     = "enricher_result"
@@ -109,10 +111,12 @@ var toolsTypeMapping = map[string]ToolType{
 	GoogleToolName:             SearchNetworkToolType,
 	DuckDuckGoToolName:         SearchNetworkToolType,
 	TavilyToolName:             SearchNetworkToolType,
+	FirecrawlToolName:          SearchNetworkToolType,
 	TraversaalToolName:         SearchNetworkToolType,
 	PerplexityToolName:         SearchNetworkToolType,
 	SearxngToolName:            SearchNetworkToolType,
 	SploitusToolName:           SearchNetworkToolType,
+	WebSearchToolName:          SearchNetworkToolType,
 	SearchToolName:             AgentToolType,
 	SearchResultToolName:       StoreAgentResultToolType,
 	EnricherResultToolName:     StoreAgentResultToolType,
@@ -153,10 +157,12 @@ var allowedStoringInMemoryTools = []string{
 	GoogleToolName,
 	DuckDuckGoToolName,
 	TavilyToolName,
+	FirecrawlToolName,
 	TraversaalToolName,
 	PerplexityToolName,
 	SearxngToolName,
 	SploitusToolName,
+	WebSearchToolName,
 	MaintenanceToolName,
 	CoderToolName,
 	PentesterToolName,
@@ -173,9 +179,10 @@ var registryDefinitions = map[string]llms.FunctionDefinition{
 		Parameters: reflector.Reflect(&TerminalAction{}),
 	},
 	FileToolName: {
-		Name:        FileToolName,
-		Description: "Modifies or reads local files",
-		Parameters:  reflector.Reflect(&FileAction{}),
+		Name: FileToolName,
+		Description: "Reads, writes, or edits local files (see 'action'). " +
+			"Prefer edit_file for targeted changes to an existing file; use write_file only for a new file or a full rewrite.",
+		Parameters: reflector.Reflect(&FileAction{}),
 	},
 	ReportResultToolName: {
 		Name:        ReportResultToolName,
@@ -230,6 +237,13 @@ var registryDefinitions = map[string]llms.FunctionDefinition{
 			"with answer by query and detailed information from the web sites",
 		Parameters: reflector.Reflect(&SearchAction{}),
 	},
+	FirecrawlToolName: {
+		Name: FirecrawlToolName,
+		Description: "Search in the firecrawl search engine, it combines web search with page scraping to return " +
+			"the main-content markdown for each result, ideal for deep research on complex technical topics " +
+			"and reading documentation directly from the discovered web sites",
+		Parameters: reflector.Reflect(&SearchAction{}),
+	},
 	TraversaalToolName: {
 		Name: TraversaalToolName,
 		Description: "Search in the traversaal search engine, presents you answer and web-links " +
@@ -257,6 +271,16 @@ var registryDefinitions = map[string]llms.FunctionDefinition{
 			"for specific software, services, CVEs, or vulnerability classes (e.g. 'ssh', 'apache log4j', " +
 			"'CVE-2021-44228'). Returns exploit URLs, CVSS scores, CVE references, and publication dates.",
 		Parameters: reflector.Reflect(&SploitusAction{}),
+	},
+	WebSearchToolName: {
+		Name: WebSearchToolName,
+		Description: "Search the web through a unified engine. Provide a `query` and a `mode`: " +
+			"`links` for a quick list of source links with snippets, `answer` for a synthesized answer over " +
+			"live sources (default), `research` for deep multi-source analysis with reasoning, or `exploit` for " +
+			"exploit code, PoCs, and offensive tooling. The tool selects the best available search provider for " +
+			"that mode, retries transient failures, and automatically falls back to alternative providers, so you " +
+			"do NOT choose or name a specific engine. Queries must be short, keyword-focused, and in English.",
+		Parameters: reflector.Reflect(&WebSearchAction{}),
 	},
 	EnricherResultToolName: {
 		Name:        EnricherResultToolName,
@@ -439,8 +463,8 @@ func getMessageType(name string) database.MsglogType {
 		return database.MsglogTypeFile
 	case BrowserToolName:
 		return database.MsglogTypeBrowser
-	case MemoristToolName, SearchToolName, GoogleToolName, DuckDuckGoToolName, TavilyToolName, TraversaalToolName,
-		PerplexityToolName, SearxngToolName, SploitusToolName,
+	case MemoristToolName, SearchToolName, GoogleToolName, DuckDuckGoToolName, TavilyToolName, FirecrawlToolName,
+		TraversaalToolName, PerplexityToolName, SearxngToolName, SploitusToolName, WebSearchToolName,
 		SearchGuideToolName, SearchAnswerToolName, SearchCodeToolName, SearchInMemoryToolName, GraphitiSearchToolName:
 		return database.MsglogTypeSearch
 	case AdviceToolName:

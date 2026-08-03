@@ -366,6 +366,7 @@ const (
 	LLMProviderGLM           = "GLM Zhipu AI"
 	LLMProviderKimi          = "Kimi Moonshot AI"
 	LLMProviderQwen          = "Qwen Alibaba Cloud"
+	LLMProviderMiniMax       = "MiniMax"
 	LLMProviderCustom        = "Custom"
 	LLMProviderOpenAIDesc    = "Industry-leading GPT models with excellent general performance"
 	LLMProviderAnthropicDesc = "Claude models with superior reasoning and safety features"
@@ -376,6 +377,7 @@ const (
 	LLMProviderGLMDesc       = "Zhipu AI's GLM models for Chinese and English tasks"
 	LLMProviderKimiDesc      = "Moonshot AI's long-context models for document analysis"
 	LLMProviderQwenDesc      = "Alibaba Cloud's Qwen models for multilingual tasks"
+	LLMProviderMiniMaxDesc   = "MiniMax's M-series models for agentic reasoning and long-context tasks"
 	LLMProviderCustomDesc    = "Custom OpenAI-compatible endpoint for maximum flexibility"
 )
 
@@ -600,6 +602,31 @@ Cost: Competitive pricing with flexible tiers for different use cases
 
 Setup: Get your API key from https://dashscope.console.aliyun.com/`
 
+	LLMFormMiniMaxHelp = `MiniMax provides the M-series of agentic models with very large context windows, accessible through an OpenAI-compatible API.
+
+Default PentAGI Models:
+• MiniMax-M3: Latest flagship model (~1M token context) for agentic reasoning, tool use, coding, and long-context tasks
+• MiniMax-M2.7: Previous-generation model with strong reasoning and coding capabilities
+• MiniMax-M2.7-highspeed: Low-latency variant of M2.7 for fast response scenarios
+
+Key Advantages:
+• Very large context window on M3 (~1M tokens) for long codebases and reports
+• Strong agentic tool-calling, JSON output, and streaming support
+• OpenAI- and Anthropic-compatible endpoints for drop-in integration
+
+API Endpoint:
+• Global: https://api.minimax.io/v1 (default)
+
+LiteLLM Integration:
+• Set Provider Name to 'minimax' when using a LiteLLM proxy
+• Enables model prefix (e.g., minimax/MiniMax-M3) without modifying config.yml
+• Optional for direct MiniMax API usage
+
+Best for: Agentic security workflows that benefit from very large context and reliable tool calling
+Cost: Competitive per-token pricing across the M-series
+
+Setup: Get your API key from https://platform.minimax.io/`
+
 	LLMFormCustomHelp = `Configure any OpenAI-compatible API endpoint for maximum flexibility and integration with existing infrastructure.
 
 Ready-to-use Configurations:
@@ -811,9 +838,10 @@ Graphiti provides temporal knowledge graph capabilities:
 • Entity and relationship extraction
 • Semantic memory for AI agents
 • Temporal context tracking
-• Knowledge reuse across flows
+• Flow-scoped contextual search
 
-⚠️  REQUIREMENT: Graphiti requires configured OpenAI provider (LLM Providers → OpenAI) for entity extraction.
+Graphiti reuses credentials configured in the LLM Providers and Embeddings screens. LiteLLM credentials remain in .env. Select the provider preset here; configure its models in ./graphiti/<provider>.yaml.
+Supports openai, gemini, litellm, custom.
 
 Choose between embedded instance or external connection.`
 
@@ -823,20 +851,50 @@ Choose between embedded instance or external connection.`
 	MonitoringGraphitiDisabled = "Disabled"
 
 	// Form fields
-	MonitoringGraphitiDeploymentType     = "Deployment Type"
-	MonitoringGraphitiDeploymentTypeDesc = "Select the deployment type for Graphiti"
-	MonitoringGraphitiURL                = "Graphiti Server URL"
-	MonitoringGraphitiURLDesc            = "Address of the Graphiti API server"
-	MonitoringGraphitiTimeout            = "Request Timeout"
-	MonitoringGraphitiTimeoutDesc        = "Timeout in seconds for Graphiti operations"
-	MonitoringGraphitiModelName          = "Extraction Model"
-	MonitoringGraphitiModelNameDesc      = "LLM model for entity extraction (uses OpenAI provider from LLM Providers configuration)"
-	MonitoringGraphitiNeo4jUser          = "Neo4j Username"
-	MonitoringGraphitiNeo4jUserDesc      = "Username for Neo4j database access"
-	MonitoringGraphitiNeo4jPassword      = "Neo4j Password"
-	MonitoringGraphitiNeo4jPasswordDesc  = "Password for Neo4j database access"
-	MonitoringGraphitiNeo4jDatabase      = "Neo4j Database"
-	MonitoringGraphitiNeo4jDatabaseDesc  = "Neo4j database name"
+	MonitoringGraphitiDeploymentType           = "Deployment Type"
+	MonitoringGraphitiDeploymentTypeDesc       = "Select the deployment type for Graphiti"
+	MonitoringGraphitiURL                      = "Graphiti Server URL"
+	MonitoringGraphitiURLDesc                  = "Address of the Graphiti API server"
+	MonitoringGraphitiTimeout                  = "Request Timeout"
+	MonitoringGraphitiTimeoutDesc              = "Timeout in seconds for Graphiti operations"
+	MonitoringGraphitiLLMClientType            = "LLM Provider Preset"
+	MonitoringGraphitiLLMClientTypeDesc        = "Provider preset; credentials come from LLM Providers (openai, gemini, litellm, custom) and models from ./graphiti/<provider>.yaml"
+	MonitoringGraphitiSeparateEmbedding        = "Use Separate Embedding Endpoint"
+	MonitoringGraphitiSeparateEmbeddingDesc    = "Use the shared Embeddings configuration instead of the selected LLM credentials"
+	MonitoringGraphitiSemaphoreLimit           = "Coroutine Limit"
+	MonitoringGraphitiSemaphoreLimitDesc       = "Maximum concurrent Graphiti helper coroutines"
+	MonitoringGraphitiLogLevel                 = "Log Level"
+	MonitoringGraphitiLogLevelDesc             = "Graphiti log verbosity"
+	MonitoringGraphitiSearchScope              = "Search Scope"
+	MonitoringGraphitiSearchScopeDesc          = "Use flowid for isolation or all for trusted global-search testing"
+	MonitoringGraphitiIngestPolicyRules        = "Ingest Policy Rules"
+	MonitoringGraphitiIngestPolicyRulesDesc    = "JSON mapping of message patterns to REJECT, SKIP_LLM, or PROCESS"
+	MonitoringGraphitiIngestPolicyField        = "Ingest Policy Match Field"
+	MonitoringGraphitiIngestPolicyFieldDesc    = "Message field used for policy matching"
+	MonitoringGraphitiIngestDefaultAction      = "Default Ingest Action"
+	MonitoringGraphitiIngestDefaultActionDesc  = "Action applied when no ingest policy rule matches"
+	MonitoringGraphitiIngestWorkerCount        = "Ingest Worker Count"
+	MonitoringGraphitiIngestWorkerCountDesc    = "Maximum concurrent heavy ingest jobs across flows"
+	MonitoringGraphitiIngestQueueMaxSize       = "Ingest Queue Limit"
+	MonitoringGraphitiIngestQueueMaxSizeDesc   = "Maximum queued messages; 0 keeps the queue unlimited"
+	MonitoringGraphitiTaxonomyLayerProfile     = "Taxonomy Layer Profile"
+	MonitoringGraphitiTaxonomyLayerProfileDesc = "Enabled relationship classes or the full/minimal alias"
+	MonitoringGraphitiCPUs                     = "Graphiti CPU Limit"
+	MonitoringGraphitiCPUsDesc                 = "CPU limit for the Graphiti container"
+	MonitoringGraphitiMemory                   = "Graphiti Memory Limit"
+	MonitoringGraphitiMemoryDesc               = "Memory limit for the Graphiti container"
+	MonitoringGraphitiNeo4jUser                = "Neo4j Username"
+	MonitoringGraphitiNeo4jUserDesc            = "Username for Neo4j database access"
+	MonitoringGraphitiNeo4jPassword            = "Neo4j Password"
+	MonitoringGraphitiNeo4jPasswordDesc        = "Password for Neo4j database access"
+	MonitoringGraphitiNeo4jDatabase            = "Neo4j Database"
+	MonitoringGraphitiNeo4jDatabaseDesc        = "Neo4j database name"
+	MonitoringGraphitiNeo4jCPUs                = "Neo4j CPU Limit"
+	MonitoringGraphitiNeo4jCPUsDesc            = "CPU limit for the Neo4j container"
+	MonitoringGraphitiNeo4jMemory              = "Neo4j Memory Limit"
+	MonitoringGraphitiNeo4jMemoryDesc          = "Memory limit for the Neo4j container"
+	MonitoringGraphitiNeo4jShmSize             = "Neo4j Shared Memory Limit"
+	MonitoringGraphitiNeo4jShmSizeDesc         = "/dev/shm limit; actual usage counts toward Neo4j memory"
 
 	// Help text
 	MonitoringGraphitiModeGuide    = "Choose deployment: Embedded (local Neo4j), External (existing Graphiti), Disabled (no knowledge graph)"
@@ -850,15 +908,19 @@ Embedded deploys complete Graphiti stack:
 • Private knowledge graph on your server
 
 Prerequisites:
-• OpenAI provider must be configured (LLM Providers → OpenAI)
-• OpenAI API key is used for entity extraction
-• Configured model will be used for knowledge graph operations
+• Configure provider credentials in LLM Providers (or .env for LiteLLM)
+• Configure shared embeddings before enabling separate embeddings
+• Edit models and call parameters in ./graphiti/<provider>.yaml
 
 Resource requirements:
-• ~1.5GB RAM, 3GB disk space minimum
+• Defaults reserve up to 2GB for Graphiti and 4GB for Neo4j
 • Neo4j UI: http://localhost:7474
 • Graphiti API: http://localhost:8000
 • Automatic setup and maintenance
+
+Keep flowid search scope for isolation. Use a bounded ingest queue on memory-constrained hosts. Semaphore/workers control throughput; Graphiti and Neo4j CPU/memory limits must grow with concurrent flows.
+
+Fine tuning for retries, combined extraction, anchors, telemetry, and diagnostics remains available in .env.
 
 Best for: Teams wanting knowledge graph capabilities with full data control and privacy.`
 	MonitoringGraphitiExternalHelp = `⚠️  BETA: This feature is under active development. Monitor updates for improvements.
@@ -873,8 +935,7 @@ External connects to your existing Graphiti server:
 Setup requirements:
 • Graphiti server URL and access
 • Network connectivity required
-• External server must be configured with OpenAI API key
-• Model and extraction settings configured on external server
+• Provider, model, embedding, extraction, and graph settings are configured on the external server
 
 Best for: Teams using existing Graphiti deployments or cloud services.`
 	MonitoringGraphitiDisabledHelp = `Graphiti is disabled. You will not have:
@@ -882,13 +943,10 @@ Best for: Teams using existing Graphiti deployments or cloud services.`
 • Temporal knowledge graph
 • Entity and relationship extraction
 • Semantic memory for AI agents
-• Knowledge reuse across flows
+• Flow-scoped graph recall
 • Advanced contextual search
 
-Note: Graphiti is currently in beta.
-Consider enabling for production use
-to build a knowledge base from
-penetration testing results.`
+PentAGI continues using its primary vector memory when Graphiti is disabled.`
 )
 
 // Observability Integration constants
@@ -1182,6 +1240,50 @@ const (
 	ServerSettingsLicenseKey     = "License Key"
 	ServerSettingsLicenseKeyDesc = "PentAGI License Key in format of XXXX-XXXX-XXXX-XXXX"
 
+	ToolsDockerInsideHost     = "Worker Docker Daemon Host"
+	ToolsDockerInsideHostDesc = "Daemon endpoint given to worker containers (e.g., tcp://dind:2376); empty keeps socket mounting"
+
+	ToolsDockerInsideTLSVerify     = "Worker Docker TLS Verify"
+	ToolsDockerInsideTLSVerifyDesc = "Enable TLS verification for the worker container's Docker connection"
+
+	ToolsDockerInsideCertPath     = "Worker Docker Certificate Path"
+	ToolsDockerInsideCertPathDesc = "TLS certificate directory on the WORKER NODE, mounted read-only into worker containers"
+
+	ToolsDockerInsideHostHelp = `Docker daemon endpoint handed to worker containers when Docker Access is enabled.
+
+It is injected into each sandbox as DOCKER_HOST, so the Docker CLI inside the container talks to this daemon.
+
+Setting it also STOPS the host socket from being auto-detected and bind-mounted into sandboxes: an agent then reaches only the daemon you designated, not the one running PentAGI itself. An explicitly configured Docker Socket still takes precedence and is mounted as before.
+
+Leave empty to keep the historical behaviour (auto-detected socket mount).
+
+Examples:
+• tcp://dind:2376
+• tcp://10.0.0.5:2375
+• unix:///var/run/docker.sock`
+
+	ToolsDockerInsideTLSVerifyHelp = `Enables TLS verification for the worker container's connection to the Docker daemon.
+
+Injected into each sandbox as DOCKER_TLS_VERIFY. Use it together with Worker Docker Daemon Host and Worker Docker Certificate Path when the daemon requires mutual TLS.
+
+Leave disabled for a plain (non-TLS) endpoint.`
+
+	ToolsDockerInsideCertPathHelp = `Directory holding the TLS client material (ca.pem, cert.pem, key.pem) used by worker containers.
+
+Injected into each sandbox as DOCKER_CERT_PATH and bind-mounted read-only at the SAME path, so the value resolves identically inside the container.
+
+IMPORTANT: this path is resolved on the WORKER NODE — the machine whose Docker daemon creates sandbox containers — not on the machine running this installer. It is therefore not validated here; make sure it exists on the worker node.
+
+Examples:
+• /etc/docker/certs
+• /opt/pentagi/docker/ssl`
+
+	ServerSettingsTenantID     = "Tenant ID"
+	ServerSettingsTenantIDDesc = "Optional namespace for multi-instance deployment on one host (e.g., acme, team_alpha)"
+
+	ServerSettingsPprofAddr     = "pprof Listen Address"
+	ServerSettingsPprofAddrDesc = "Optional Go pprof bind address; leave empty to disable (e.g., :7777, 127.0.0.1:7778)"
+
 	ServerSettingsHost     = "Server Host (Listen IP)"
 	ServerSettingsHostDesc = "Bind address used by Docker port mapping (e.g., 0.0.0.0 to expose on all interfaces)"
 
@@ -1222,21 +1324,31 @@ const (
 	ServerSettingsCookieSigningSalt     = "Cookie Signing Salt"
 	ServerSettingsCookieSigningSaltDesc = "Secret used to sign cookies (keep private)"
 
+	ServerSettingsDatabaseExtensionsSchema     = "Database Extensions Schema"
+	ServerSettingsDatabaseExtensionsSchemaDesc = "Schema holding shared extensions when Tenant ID is set (e.g., public, extensions for Supabase)"
+
+	ServerSettingsDatabaseSearchPathViaOptions     = "Search Path via Options"
+	ServerSettingsDatabaseSearchPathViaOptionsDesc = "Send the tenant search_path inside the options startup parameter (needed by some poolers)"
+
 	// Hints for fields overview
-	ServerSettingsLicenseKeyHint          = "License Key"
-	ServerSettingsHostHint                = "Listen IP"
-	ServerSettingsPortHint                = "Listen Port"
-	ServerSettingsPublicURLHint           = "Public URL"
-	ServerSettingsCORSOriginsHint         = "CORS Origins"
-	ServerSettingsProxyURLHint            = "Proxy URL"
-	ServerSettingsProxyUsernameHint       = "Proxy Username"
-	ServerSettingsProxyPasswordHint       = "Proxy Password"
-	ServerSettingsHTTPClientTimeoutHint   = "HTTP Timeout"
-	ServerSettingsTerminalToolTimeoutHint = "Terminal Timeout"
-	ServerSettingsExternalSSLCAPathHint   = "Custom CA Path"
-	ServerSettingsExternalSSLInsecureHint = "Skip SSL Verification"
-	ServerSettingsSSLDirHint              = "SSL Directory"
-	ServerSettingsDataDirHint             = "Data Directory"
+	ServerSettingsLicenseKeyHint                   = "License Key"
+	ServerSettingsTenantIDHint                     = "Tenant ID"
+	ServerSettingsPprofAddrHint                    = "pprof Address"
+	ServerSettingsHostHint                         = "Listen IP"
+	ServerSettingsPortHint                         = "Listen Port"
+	ServerSettingsPublicURLHint                    = "Public URL"
+	ServerSettingsCORSOriginsHint                  = "CORS Origins"
+	ServerSettingsProxyURLHint                     = "Proxy URL"
+	ServerSettingsProxyUsernameHint                = "Proxy Username"
+	ServerSettingsProxyPasswordHint                = "Proxy Password"
+	ServerSettingsHTTPClientTimeoutHint            = "HTTP Timeout"
+	ServerSettingsTerminalToolTimeoutHint          = "Terminal Timeout"
+	ServerSettingsExternalSSLCAPathHint            = "Custom CA Path"
+	ServerSettingsExternalSSLInsecureHint          = "Skip SSL Verification"
+	ServerSettingsSSLDirHint                       = "SSL Directory"
+	ServerSettingsDataDirHint                      = "Data Directory"
+	ServerSettingsDatabaseExtensionsSchemaHint     = "Extensions Schema"
+	ServerSettingsDatabaseSearchPathViaOptionsHint = "Search Path via Options"
 
 	// Help texts per-field
 	ServerSettingsGeneralHelp = `PentAGI exposes its web UI via Docker with configurable host and port.
@@ -1246,6 +1358,26 @@ Public URL must reflect how users reach the server. If using a subpath (e.g., /p
 SSL directory allows providing custom certificates. When set, server will use server.crt and server.key from that directory. Data directory stores artifacts and working files for flows.`
 
 	ServerSettingsLicenseKeyHelp = `PentAGI License Key in format of XXXX-XXXX-XXXX-XXXX. It's used to communicate with PentAGI Cloud API.`
+
+	ServerSettingsTenantIDHelp = `Optional identifier that namespaces PostgreSQL schema, data directory, Docker objects, Graphiti group ids, auth cookies and telemetry when several PentAGI instances share one host and the same backing services.
+
+Leave empty for a single-instance deployment (default). When set, the value must match ^[a-z][a-z0-9_]{0,31}$ — lowercase letter first, then lowercase letters, digits or underscores, max 32 characters. Hyphens are not allowed.
+
+Examples:
+• acme
+• team_alpha
+• staging01`
+
+	ServerSettingsPprofAddrHelp = `Optional listen address for the Go pprof HTTP endpoint used for CPU/memory profiling.
+
+Leave empty to keep pprof disabled (default, recommended for production). When set, the value must be a host:port pair such as :7777 or 127.0.0.1:7778.
+
+Instances that share a host network namespace need distinct addresses — a port is not a string namespace and cannot be derived from TENANT_ID.
+
+Examples:
+• :7777
+• 127.0.0.1:7778
+• 0.0.0.0:7780`
 
 	ServerSettingsHostHelp = `Bind address for published port in docker-compose mapping.
 
@@ -1306,6 +1438,20 @@ When enabled, all certificate validation is bypassed, making connections vulnera
 	ServerSettingsDataDirHelp = `Host directory for persistent data. PentAGI stores agent artifacts under flow-N subdirectories, which map to /work inside worker containers.`
 
 	ServerSettingsCookieSigningSaltHelp = `Secret salt used to sign cookies. Keep it private.`
+
+	ServerSettingsDatabaseExtensionsSchemaHelp = `PostgreSQL schema that holds the shared extensions (vector, pg_trgm) every tenant must reach through its search_path.
+
+Only used when Tenant ID is set; leave empty for the default "public", which is where a stock PostgreSQL install keeps them. Set it when your database follows another convention — Supabase installs its extensions into "extensions", and startup aborts with a message naming the schema it found if this does not match.
+
+Examples:
+• public
+• extensions`
+
+	ServerSettingsDatabaseSearchPathViaOptionsHelp = `Sends the tenant search_path as options=--search_path=<value> instead of a bare search_path connection parameter.
+
+Only used when Tenant ID is set. Keep it false for a direct PostgreSQL connection. Enable it when connecting through a pooler that forwards the "options" startup parameter but drops an unrecognized bare search_path — reported to be the case for some versions of Supabase's Supavisor. It is not guaranteed to work: startup fails with a clear schema-mismatch error if the value never reaches the backend.
+
+Values: true, false`
 )
 
 // Human-in-the-loop screen strings
@@ -1391,13 +1537,16 @@ const (
 • Sploitus - Security exploits and vulnerabilities database (no API key required)
 • Perplexity - AI-powered search with reasoning
 • Tavily - Search API for AI applications
+• Firecrawl - Web search with full-page scraping (self-hosting supported)
 • Traversaal - Web scraping and search
 • Google Search - Requires API key and Custom Search Engine ID
 • Searxng - Internet metasearch engine
+• Internal Analytics Engine - Optional browser-based fallback (scrape + summarize, off by default, no API key required)
 
 Get API keys from:
 • Perplexity: https://www.perplexity.ai/
 • Tavily: https://tavily.com/
+• Firecrawl: https://www.firecrawl.dev/
 • Traversaal: https://traversaal.ai/
 • Google: https://developers.google.com/custom-search/v1/introduction`
 
@@ -1415,6 +1564,10 @@ Get API keys from:
 	ToolsSearchEnginesPerplexityKeyDesc        = "API key for Perplexity AI search"
 	ToolsSearchEnginesTavilyKey                = "Tavily API Key"
 	ToolsSearchEnginesTavilyKeyDesc            = "API key for Tavily search service"
+	ToolsSearchEnginesFirecrawlKey             = "Firecrawl API Key"
+	ToolsSearchEnginesFirecrawlKeyDesc         = "API key for Firecrawl search service"
+	ToolsSearchEnginesFirecrawlURL             = "Firecrawl API URL"
+	ToolsSearchEnginesFirecrawlURLDesc         = "Firecrawl API base URL (leave empty for cloud; set for self-hosted)"
 	ToolsSearchEnginesTraversaalKey            = "Traversaal API Key"
 	ToolsSearchEnginesTraversaalKeyDesc        = "API key for Traversaal web scraping"
 	ToolsSearchEnginesGoogleKey                = "Google Search API Key"
@@ -1435,6 +1588,12 @@ Get API keys from:
 	ToolsSearchEnginesSearxngTimeRangeDesc     = "Searxng search engine time range (day, month, year)"
 	ToolsSearchEnginesSearxngTimeout           = "Searxng Timeout"
 	ToolsSearchEnginesSearxngTimeoutDesc       = "Searxng request timeout in seconds"
+	ToolsSearchEnginesInternalEnabled          = "Internal Analytics Engine"
+	ToolsSearchEnginesInternalEnabledDesc      = "Enable the built-in browser-analytics fallback for answer/research queries (no API key required; scrapes and summarizes pages, so it requires a configured scraper and at least one available link engine, e.g. DuckDuckGo or Google)"
+	ToolsSearchEnginesInternalMaxSites         = "Internal Engine Max Sites"
+	ToolsSearchEnginesInternalMaxSitesDesc     = "Maximum number of pages to fetch and summarize per query"
+	ToolsSearchEnginesInternalMaxSiteBytes     = "Internal Engine Max Site Bytes"
+	ToolsSearchEnginesInternalMaxSiteBytesDesc = "Maximum markdown bytes read from each page before truncation"
 )
 
 // Scraper screen strings
@@ -2190,6 +2349,9 @@ const (
 	EnvDesc_QWEN_API_KEY                      = "Qwen API Key"
 	EnvDesc_QWEN_SERVER_URL                   = "Qwen Server URL"
 	EnvDesc_QWEN_PROVIDER                     = "Qwen Provider Name Prefix (for LiteLLM, e.g., 'dashscope')"
+	EnvDesc_MINIMAX_API_KEY                   = "MiniMax API Key"
+	EnvDesc_MINIMAX_SERVER_URL                = "MiniMax Server URL"
+	EnvDesc_MINIMAX_PROVIDER                  = "MiniMax Provider Name Prefix (for LiteLLM, e.g., 'minimax')"
 	EnvDesc_LLM_SERVER_URL                    = "Custom LLM Server URL"
 	EnvDesc_LLM_SERVER_KEY                    = "Custom LLM API Key"
 	EnvDesc_LLM_SERVER_MODEL                  = "Custom LLM Model"
@@ -2271,6 +2433,8 @@ const (
 	EnvDesc_SPLOITUS_ENABLED      = "Sploitus Search"
 	EnvDesc_PERPLEXITY_API_KEY    = "Perplexity API Key"
 	EnvDesc_TAVILY_API_KEY        = "Tavily API Key"
+	EnvDesc_FIRECRAWL_API_KEY     = "Firecrawl API Key"
+	EnvDesc_FIRECRAWL_API_URL     = "Firecrawl API URL"
 	EnvDesc_TRAVERSAAL_API_KEY    = "Traversaal API Key"
 	EnvDesc_GOOGLE_API_KEY        = "Google Search API Key"
 	EnvDesc_GOOGLE_CX_KEY         = "Google Search CX Key"
@@ -2287,13 +2451,20 @@ const (
 	EnvDesc_DOCKER_HOST                      = "Docker Host"
 	EnvDesc_DOCKER_TLS_VERIFY                = "Docker TLS Verify"
 	EnvDesc_DOCKER_CERT_PATH                 = "Docker Certificate Path"
+	EnvDesc_DOCKER_INSIDE_HOST               = "Worker Docker Daemon Host"
+	EnvDesc_DOCKER_INSIDE_TLS_VERIFY         = "Worker Docker TLS Verify"
+	EnvDesc_DOCKER_INSIDE_CERT_PATH          = "Worker Docker Certificate Path"
 
+	EnvDesc_TENANT_ID                         = "PentAGI Tenant ID"
 	EnvDesc_LICENSE_KEY                       = "PentAGI License Key"
+	EnvDesc_PPROF_ADDR                        = "PentAGI pprof Listen Address"
 	EnvDesc_PENTAGI_LISTEN_IP                 = "PentAGI Server Host"
 	EnvDesc_PENTAGI_LISTEN_PORT               = "PentAGI Server Port"
 	EnvDesc_PUBLIC_URL                        = "PentAGI Public URL"
 	EnvDesc_CORS_ORIGINS                      = "PentAGI CORS Origins"
 	EnvDesc_COOKIE_SIGNING_SALT               = "PentAGI Cookie Signing Salt"
+	EnvDesc_DATABASE_EXTENSIONS_SCHEMA        = "PostgreSQL Extensions Schema"
+	EnvDesc_DATABASE_SEARCH_PATH_VIA_OPTIONS  = "PostgreSQL Search Path via Options"
 	EnvDesc_PROXY_URL                         = "HTTP/HTTPS Proxy URL"
 	EnvDesc_HTTP_CLIENT_TIMEOUT               = "HTTP Client Timeout (seconds)"
 	EnvDesc_TERMINAL_TOOL_TIMEOUT             = "Terminal Tool Timeout (seconds)"
@@ -2332,12 +2503,28 @@ const (
 	EnvDesc_LANGFUSE_EE_LICENSE_KEY   = "Langfuse Enterprise License Key"
 	EnvDesc_PENTAGI_POSTGRES_PASSWORD = "PentAGI PostgreSQL Password"
 
-	EnvDesc_GRAPHITI_URL        = "Graphiti Server URL"
-	EnvDesc_GRAPHITI_TIMEOUT    = "Graphiti Request Timeout"
-	EnvDesc_GRAPHITI_MODEL_NAME = "Graphiti Extraction Model"
-	EnvDesc_NEO4J_USER          = "Neo4j Username"
-	EnvDesc_NEO4J_DATABASE      = "Neo4j Database Name"
-	EnvDesc_NEO4J_PASSWORD      = "Neo4j Database Password"
+	EnvDesc_GRAPHITI_ENABLED                      = "Enable Graphiti Integration"
+	EnvDesc_GRAPHITI_URL                          = "Graphiti Server URL"
+	EnvDesc_GRAPHITI_TIMEOUT                      = "Graphiti Request Timeout"
+	EnvDesc_GRAPHITI_LLM_CLIENT_TYPE              = "Graphiti LLM Provider Preset"
+	EnvDesc_GRAPHITI_SEPARATE_EMBEDDING           = "Graphiti Separate Embedding Endpoint"
+	EnvDesc_GRAPHITI_SEMAPHORE_LIMIT              = "Graphiti Coroutine Limit"
+	EnvDesc_GRAPHITI_LOG_LEVEL                    = "Graphiti Log Level"
+	EnvDesc_GRAPHITI_SEARCH_SCOPE                 = "Graphiti Search Scope"
+	EnvDesc_GRAPHITI_INGEST_POLICY_RULES          = "Graphiti Ingest Policy Rules"
+	EnvDesc_GRAPHITI_INGEST_POLICY_FIELD          = "Graphiti Ingest Policy Match Field"
+	EnvDesc_GRAPHITI_INGEST_POLICY_DEFAULT_ACTION = "Graphiti Default Ingest Action"
+	EnvDesc_GRAPHITI_INGEST_WORKER_COUNT          = "Graphiti Ingest Worker Count"
+	EnvDesc_GRAPHITI_INGEST_QUEUE_MAX_SIZE        = "Graphiti Ingest Queue Limit"
+	EnvDesc_GRAPHITI_TAXONOMY_LAYER_PROFILE       = "Graphiti Taxonomy Layer Profile"
+	EnvDesc_GRAPHITI_CPUS                         = "Graphiti CPU Limit"
+	EnvDesc_GRAPHITI_MEMORY                       = "Graphiti Memory Limit"
+	EnvDesc_NEO4J_USER                            = "Neo4j Username"
+	EnvDesc_NEO4J_DATABASE                        = "Neo4j Database Name"
+	EnvDesc_NEO4J_PASSWORD                        = "Neo4j Database Password"
+	EnvDesc_NEO4J_CPUS                            = "Neo4j CPU Limit"
+	EnvDesc_NEO4J_MEMORY                          = "Neo4j Memory Limit"
+	EnvDesc_NEO4J_SHM_SIZE                        = "Neo4j Shared Memory Limit"
 )
 
 // dynamic, contextual sections used in processor operation forms

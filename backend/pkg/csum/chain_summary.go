@@ -110,7 +110,6 @@ func (s *summarizer) SummarizeChain(
 	chain []llms.MessageContent,
 	tcIDTemplate string,
 ) ([]llms.MessageContent, error) {
-	// Skip summarization for empty chains
 	if len(chain) == 0 {
 		return chain, nil
 	}
@@ -191,7 +190,6 @@ func summarizeSections(
 			continue
 		}
 
-		// Add human message if it exists
 		var humanMessages []llms.MessageContent
 		if section.Header.HumanMessage != nil {
 			humanMessages = append(humanMessages, *section.Header.HumanMessage)
@@ -201,7 +199,6 @@ func summarizeSections(
 		go func(section *cast.ChainSection, i int) {
 			defer wg.Done()
 
-			// Generate summary
 			summaryText, err := GenerateSummary(ctx, handler, humanMessages, messagesToSummarize)
 			if err != nil {
 				ch <- fmt.Errorf("section %d summary generation failed: %w", i, err)
@@ -286,13 +283,11 @@ func summarizeLastSection(
 			messagesToSummarize = append(messagesToSummarize, pair.Messages()...)
 		}
 
-		// Add human message if it exists
 		var humanMessages []llms.MessageContent
 		if lastSection.Header.HumanMessage != nil {
 			humanMessages = append(humanMessages, *lastSection.Header.HumanMessage)
 		}
 
-		// Generate summary
 		summaryText, err := GenerateSummary(ctx, handler, humanMessages, messagesToSummarize)
 		if err != nil {
 			// If summary generation fails, just keep the most recent messages
@@ -405,7 +400,6 @@ func summarizeOversizedBodyPairs(
 			continue
 		}
 
-		// Add human message if it exists
 		var humanMessages []llms.MessageContent
 		if section.Header.HumanMessage != nil {
 			humanMessages = append(humanMessages, *section.Header.HumanMessage)
@@ -415,7 +409,6 @@ func summarizeOversizedBodyPairs(
 		go func(pair *cast.BodyPair, i int) {
 			defer wg.Done()
 
-			// Generate summary
 			summaryText, err := GenerateSummary(ctx, handler, humanMessages, pairMessages)
 			if err != nil {
 				return // It's should collected next step in summarizeLastSection function
@@ -549,7 +542,6 @@ func summarizeQAPairs(
 		}
 	}
 
-	// Generate summary
 	var (
 		err       error
 		aiSummary string
@@ -697,7 +689,6 @@ func convertSectionsHeadersToMessages(sections []*cast.ChainSection) []llms.Mess
 	var messages []llms.MessageContent
 
 	for _, section := range sections {
-		// Add human message if it exists
 		if section.Header.HumanMessage != nil {
 			messages = append(messages, *section.Header.HumanMessage)
 		}
@@ -715,7 +706,6 @@ func convertSectionsPairsToMessages(sections []*cast.ChainSection) []llms.Messag
 	var messages []llms.MessageContent
 
 	for _, section := range sections {
-		// Get all messages from each body pair using the Messages() method
 		for _, pair := range section.Body {
 			pairMessages := pair.Messages()
 			messages = append(messages, pairMessages...)

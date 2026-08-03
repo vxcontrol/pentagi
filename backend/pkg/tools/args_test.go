@@ -2,6 +2,7 @@ package tools
 
 import (
 	"encoding/json"
+	"fmt"
 	"testing"
 )
 
@@ -168,7 +169,7 @@ func TestInt64UnmarshalJSON(t *testing.T) {
 		{name: "underflow int64", input: `"-9223372036854775809"`, wantErr: true},
 		{name: "invalid string", input: `"abc"`, wantErr: true},
 		{name: "invalid float", input: `"1.5"`, wantErr: true},
-		{name: "empty string", input: `""`, wantErr: true},
+		{name: "empty string treated as 0 (production near-miss: LLM sends timeout: \"\")", input: `""`, want: 0},
 		{name: "bool string", input: `"true"`, wantErr: true},
 	}
 
@@ -421,6 +422,20 @@ func TestInt64JSONRoundTrip(t *testing.T) {
 	}
 }
 
+func TestTerminalAction_EmptyTimeout_ProductionBugReproduction(t *testing.T) {
+	t.Parallel()
+
+	data := []byte(`{"input": "curl -s http://example.com/", "cwd": "/", "detach": false, "message": "test", "timeout": ""}`)
+
+	var action TerminalAction
+	if err := json.Unmarshal(data, &action); err != nil {
+		t.Fatalf("Unmarshal() unexpected error for timeout: \"\": %v", err)
+	}
+	if action.Timeout != 0 {
+		t.Errorf("Timeout = %v, want 0 (empty string treated as unset/default)", action.Timeout)
+	}
+}
+
 func TestSearchInMemoryAction_QuestionsUnmarshal(t *testing.T) {
 	t.Parallel()
 
@@ -590,5 +605,351 @@ func TestSearchCodeAction_QuestionsUnmarshal(t *testing.T) {
 				t.Errorf("Questions length = %d, want %d", len(action.Questions), tt.wantLen)
 			}
 		})
+	}
+}
+
+func TestStringsUnmarshalJSON(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		input   string
+		want    []string
+		wantErr bool
+	}{
+		{
+			name:  "real array of strings",
+			input: `["query1", "query2"]`,
+			want:  []string{"query1", "query2"},
+		},
+		{
+			name:  "real array single element",
+			input: `["only one"]`,
+			want:  []string{"only one"},
+		},
+		{
+			name:  "empty array",
+			input: `[]`,
+			want:  []string{},
+		},
+		{
+			name:  "double-encoded array (production bug case)",
+			input: `"[\"SCCM MECM CM_P01\", \"ClientKeyData RSA private keys\"]"`,
+			want:  []string{"SCCM MECM CM_P01", "ClientKeyData RSA private keys"},
+		},
+		{
+			name:  "double-encoded single-element array",
+			input: `"[\"only one\"]"`,
+			want:  []string{"only one"},
+		},
+		{
+			name:  "bare string falls back to single-element slice",
+			input: `"just a plain question, not JSON at all"`,
+			want:  []string{"just a plain question, not JSON at all"},
+		},
+		{
+			name:    "empty bare string is an error",
+			input:   `""`,
+			wantErr: true,
+		},
+		{
+			name:    "null literal is an error",
+			input:   `null`,
+			wantErr: true,
+		},
+		{
+			name:    "array of non-strings is an error",
+			input:   `[1, 2, 3]`,
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var s Strings
+			err := s.UnmarshalJSON([]byte(tt.input))
+			if (err != nil) != tt.wantErr {
+				t.Errorf("UnmarshalJSON(%s) error = %v, wantErr %v", tt.input, err, tt.wantErr)
+				return
+			}
+			if tt.wantErr {
+				return
+			}
+			if len(s) != len(tt.want) {
+				t.Fatalf("UnmarshalJSON(%s) = %v, want %v", tt.input, []string(s), tt.want)
+			}
+			for i := range tt.want {
+				if s[i] != tt.want[i] {
+					t.Errorf("UnmarshalJSON(%s)[%d] = %q, want %q", tt.input, i, s[i], tt.want[i])
+				}
+			}
+		})
+	}
+}
+
+func TestStringsMarshalJSON(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		s    Strings
+		want string
+	}{
+		{name: "multiple elements", s: Strings{"a", "b"}, want: `["a","b"]`},
+		{name: "single element", s: Strings{"only"}, want: `["only"]`},
+		{name: "empty slice", s: Strings{}, want: "[]"},
+		{name: "nil slice", s: nil, want: "[]"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := tt.s.MarshalJSON()
+			if err != nil {
+				t.Fatalf("MarshalJSON() unexpected error: %v", err)
+			}
+			if string(got) != tt.want {
+				t.Errorf("MarshalJSON() = %s, want %s", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestStringsJSONRoundTrip(t *testing.T) {
+	t.Parallel()
+
+	type container struct {
+		Questions Strings `json:"questions"`
+	}
+
+	data, err := json.Marshal(container{Questions: Strings{"q1", "q2"}})
+	if err != nil {
+		t.Fatalf("Marshal() error = %v", err)
+	}
+
+	var c2 container
+	if err := json.Unmarshal(data, &c2); err != nil {
+		t.Fatalf("round-trip Unmarshal() error = %v", err)
+	}
+	if len(c2.Questions) != 2 || c2.Questions[0] != "q1" || c2.Questions[1] != "q2" {
+		t.Errorf("round-trip Questions = %v, want [q1 q2]", []string(c2.Questions))
+	}
+}
+
+// TestSearchInMemoryAction_QuestionsDoubleEncoded reproduces the exact production
+// failure from the error log: the LLM sent "questions" as a JSON string containing
+// an escaped array literal instead of a real JSON array, which used to fail with
+// "json: cannot unmarshal string into ... []string". It must now recover gracefully.
+func TestSearchInMemoryAction_QuestionsDoubleEncoded(t *testing.T) {
+	t.Parallel()
+
+	raw := `{"max_results": 10, "message": "m", "questions": "[\"SCCM MECM CM_P01 database SC_NAA Network Access Account credentials extraction\", \"SCCM ClientKeyData RSA private keys mTLS bypass MECM\"]"}`
+
+	var action SearchInMemoryAction
+	if err := json.Unmarshal([]byte(raw), &action); err != nil {
+		t.Fatalf("Unmarshal() unexpected error: %v", err)
+	}
+	if len(action.Questions) != 2 {
+		t.Fatalf("Questions length = %d, want 2 (got: %v)", len(action.Questions), []string(action.Questions))
+	}
+	if action.Questions[0] != "SCCM MECM CM_P01 database SC_NAA Network Access Account credentials extraction" {
+		t.Errorf("Questions[0] = %q, unexpected value", action.Questions[0])
+	}
+}
+
+func TestStringUnmarshalJSON(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		input   string
+		want    string
+		wantErr bool
+	}{
+		{name: "plain string", input: `"write_file"`, want: "write_file"},
+		{name: "empty string", input: `""`, want: ""},
+		{
+			name:  "single extra-quoted (production bug case)",
+			input: `"\"write_file\""`,
+			want:  "write_file",
+		},
+		{
+			name:  "single extra-quoted with whitespace",
+			input: `"  \"read_file\"  "`,
+			want:  "read_file",
+		},
+		{name: "number is an error", input: `42`, wantErr: true},
+		{name: "null is an error", input: `null`, wantErr: true},
+		{name: "bool is an error", input: `true`, wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var s String
+			err := s.UnmarshalJSON([]byte(tt.input))
+			if (err != nil) != tt.wantErr {
+				t.Errorf("UnmarshalJSON(%s) error = %v, wantErr %v", tt.input, err, tt.wantErr)
+				return
+			}
+			if !tt.wantErr && string(s) != tt.want {
+				t.Errorf("UnmarshalJSON(%s) = %q, want %q", tt.input, string(s), tt.want)
+			}
+		})
+	}
+}
+
+// TestStringUnmarshalJSON_DoubleWrapped checks a value wrapped in two extra
+// bare quote pairs (the JSON text `"\"\"markdown\"\""` decodes, via a single
+// json.Unmarshal into a plain string, to the 12-character Go string
+// `""markdown""`). The observed production bug is a single extra layer;
+// unwrapRedundantQuotes is bounded to a few iterations defensively, so this
+// checks it also handles two.
+func TestStringUnmarshalJSON_DoubleWrapped(t *testing.T) {
+	t.Parallel()
+
+	// Backtick (raw) string literal: no Go escape processing, so this is
+	// exactly the 18 literal JSON bytes intended, with no risk of the source
+	// escaping and the intended JSON escaping being conflated.
+	input := `"\"\"markdown\"\""`
+
+	var s String
+	if err := s.UnmarshalJSON([]byte(input)); err != nil {
+		t.Fatalf("UnmarshalJSON(%s) unexpected error: %v", input, err)
+	}
+	if string(s) != "markdown" {
+		t.Errorf("UnmarshalJSON(%s) = %q, want %q", input, string(s), "markdown")
+	}
+}
+
+func TestStringMarshalJSON(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		s    String
+		want string
+	}{
+		{name: "plain value", s: String("write_file"), want: `"write_file"`},
+		{name: "empty value", s: String(""), want: `""`},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := tt.s.MarshalJSON()
+			if err != nil {
+				t.Fatalf("MarshalJSON() unexpected error: %v", err)
+			}
+			if string(got) != tt.want {
+				t.Errorf("MarshalJSON() = %s, want %s", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestStringStringerMethod(t *testing.T) {
+	t.Parallel()
+
+	var s fmt.Stringer = String("write_file")
+	if s.String() != "write_file" {
+		t.Errorf("String() = %q, want %q", s.String(), "write_file")
+	}
+}
+
+func TestStringJSONRoundTrip(t *testing.T) {
+	t.Parallel()
+
+	type container struct {
+		Action String `json:"action"`
+	}
+
+	data, err := json.Marshal(container{Action: String("write_file")})
+	if err != nil {
+		t.Fatalf("Marshal() error = %v", err)
+	}
+
+	var c2 container
+	if err := json.Unmarshal(data, &c2); err != nil {
+		t.Fatalf("round-trip Unmarshal() error = %v", err)
+	}
+	if c2.Action != "write_file" {
+		t.Errorf("round-trip Action = %q, want %q", c2.Action, "write_file")
+	}
+}
+
+// TestFileAction_ActionAndPathExtraQuoted reproduces the exact production
+// failure: the LLM sent both "action" and "path" wrapped in an extra literal
+// pair of quotes (action="\"write_file\"", path="\"/some/path\""), which used
+// to fail with "unknown file action" because the corrupted value matched no
+// enum case. Both fields must now unmarshal cleanly via the String type.
+func TestFileAction_ActionAndPathExtraQuoted(t *testing.T) {
+	t.Parallel()
+
+	raw := `{"action": "\"write_file\"", "path": "\"/home/evidence/inject.py\"", "content": "print(1)", "message": "m"}`
+
+	var action FileAction
+	if err := json.Unmarshal([]byte(raw), &action); err != nil {
+		t.Fatalf("Unmarshal() unexpected error: %v", err)
+	}
+	if action.Action != WriteFile {
+		t.Errorf("Action = %q, want %q", action.Action, WriteFile)
+	}
+	if action.Path.String() != "/home/evidence/inject.py" {
+		t.Errorf("Path = %q, want %q", action.Path.String(), "/home/evidence/inject.py")
+	}
+}
+
+// TestFileAction_ReadActionExtraQuoted mirrors the read_file variant of the
+// same production bug.
+func TestFileAction_ReadActionExtraQuoted(t *testing.T) {
+	t.Parallel()
+
+	raw := `{"action": "\"read_file\"", "path": "/home/evidence/inject.py", "message": "m"}`
+
+	var action FileAction
+	if err := json.Unmarshal([]byte(raw), &action); err != nil {
+		t.Fatalf("Unmarshal() unexpected error: %v", err)
+	}
+	if action.Action != ReadFile {
+		t.Errorf("Action = %q, want %q", action.Action, ReadFile)
+	}
+}
+
+// TestSubtaskOperation_OpExtraQuoted checks the same leniency for
+// SubtaskOperationType (a String alias), confirming the fix generalizes to
+// enum fields beyond the file/browser tools where it was first observed.
+func TestSubtaskOperation_OpExtraQuoted(t *testing.T) {
+	t.Parallel()
+
+	raw := `{"op": "\"add\"", "title": "t", "description": "d"}`
+
+	var op SubtaskOperation
+	if err := json.Unmarshal([]byte(raw), &op); err != nil {
+		t.Fatalf("Unmarshal() unexpected error: %v", err)
+	}
+	if op.Op != SubtaskOpAdd {
+		t.Errorf("Op = %q, want %q", op.Op, SubtaskOpAdd)
+	}
+}
+
+// TestGetFlowStatusAction_DetailExtraQuoted checks the same leniency for
+// FlowStatusDetail (a String alias).
+func TestGetFlowStatusAction_DetailExtraQuoted(t *testing.T) {
+	t.Parallel()
+
+	raw := `{"detail": "\"summary\"", "message": "m"}`
+
+	var action GetFlowStatusAction
+	if err := json.Unmarshal([]byte(raw), &action); err != nil {
+		t.Fatalf("Unmarshal() unexpected error: %v", err)
+	}
+	if action.Detail != FlowStatusDetailSummary {
+		t.Errorf("Detail = %q, want %q", action.Detail, FlowStatusDetailSummary)
 	}
 }

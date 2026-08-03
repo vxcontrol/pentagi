@@ -1,0 +1,199 @@
+# Posts the sticky E2E PR comment. Runs in base-repo context (writable token)
+# after the fork-safe E2E workflow completes. Never checks out or executes PR
+# code; the only artifact-derived values rendered are numeric counts.
+name: E2E report
+
+on:
+  workflow_run:
+    workflows: ["E2E"]
+    types:
+      - completed
+
+permissions:
+  actions: read
+  pull-requests: write
+
+# A cancelled superseded run must not race the report of the run that
+# replaced it and become the sticky comment's last writer.
+concurrency:
+  group: e2e-report-${{ github.event.workflow_run.head_repository.full_name }}-${{ github.event.workflow_run.head_branch }}
+  cancel-in-progress: true
+
+jobs:
+  comment:
+    if: >
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.conclusion != 'cancelled'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Download results
+        id: results
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: e2e-results
+          path: results
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+
+      # Present only when the visual snapshot step itself failed (a real pixel diff),
+      # so its download outcome is the precise advisory signal — see visualDiffers below.
+      - name: Download visual diffs
+        id: visualdiffs
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: e2e-visual-diffs
+          path: visual-diffs
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+
+      - name: Post sticky comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const run = context.payload.workflow_run;
+
+            // Match the PR whose head is still this run's — one commit can belong to several PRs, so
+            // taking the first association (either source) could hand the report to a stale or
+            // foreign one. Same filter on both paths: workflow_run.pull_requests (empty for forks)
+            // and the head-SHA lookup that covers them.
+            // workflow_run.pull_requests carries head.repo.name but no full_name, unlike the API
+            // lookup — enforce the repo only when it is present, so the primary path still matches.
+            const isThisRun = (pr) =>
+              pr.head?.sha === run.head_sha &&
+              pr.head?.ref === run.head_branch &&
+              (pr.head?.repo?.full_name == null || pr.head.repo.full_name === run.head_repository?.full_name);
+
+            let prNumber = run.pull_requests.find(isThisRun)?.number;
+            if (!prNumber) {
+              const { data: prs } = await github.rest.repos.listPullRequestsAssociatedWithCommit({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                commit_sha: run.head_sha,
+              });
+              prNumber = prs.find(isThisRun)?.number;
+            }
+            if (!prNumber) {
+              core.info(`No PR found for ${run.head_sha}; skipping comment.`);
+              return;
+            }
+
+            let runJobs = [];
+            let jobsFetched = false;
+            try {
+              const { data: jobs } = await github.rest.actions.listJobsForWorkflowRun({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                run_id: run.id,
+                per_page: 100,
+              });
+              runJobs = jobs.jobs;
+              jobsFetched = true;
+            } catch (error) {
+              core.info(`run jobs unavailable: ${error}`);
+            }
+
+            // Only skip when we actually fetched the jobs and this run has no completed mock
+            // job (e.g. it failed before e2e-mock). A transient jobs-API failure must not be
+            // mistaken for that and silently leave a stale comment; fall through to results.json.
+            const mockJob = runJobs.find((job) => /mock/.test(job.name));
+            if (jobsFetched && (!mockJob || mockJob.conclusion === 'skipped')) {
+              core.info('No completed mock job in this run; leaving the sticky comment as it is.');
+              return;
+            }
+
+            // e2e.yml uploads results.json with `if-no-files-found: ignore`, so a run that never
+            // wrote one publishes no artifact at all: a failed download means the file is absent,
+            // a successful download with unreadable stats means it is corrupt.
+            const resultsDownloaded = '${{ steps.results.outcome }}' === 'success';
+
+            let statsLine = resultsDownloaded
+              ? 'The results file could not be parsed, so no test counts are available.'
+              : 'No results artifact was produced for this run.';
+            let statsRead = false;
+            let noFailures = false;
+            try {
+              const report = JSON.parse(fs.readFileSync('results/results.json', 'utf8'));
+              const n = (value) => Number(value) || 0;
+              const { expected, unexpected, flaky, skipped } = report.stats ?? {};
+              statsLine = `**${n(expected)} passed**, ${n(unexpected)} failed, ${n(flaky)} flaky, ${n(skipped)} skipped.`;
+              noFailures = n(unexpected) === 0;
+              statsRead = true;
+            } catch (error) {
+              core.info(`results.json unavailable: ${error}`);
+            }
+
+            // The job conclusion is load-bearing, not a nicety: results.json is written before a
+            // global-timeout abort can be observed (its un-run tests land in `skipped`, so
+            // `unexpected` stays 0), and only the job's own conclusion reflects the abort. So a
+            // green needs BOTH zero failures AND a successful job; whenever either source is
+            // unreadable the verdict is unknown — never a green, and never a red.
+            const jobFailed = jobsFetched && mockJob?.conclusion !== 'success';
+            const mockStatus = jobFailed || (statsRead && !noFailures)
+              ? 'fail'
+              : statsRead && jobsFetched
+                ? 'pass'
+                : 'unknown';
+
+            // Key the advisory on the e2e-visual-diffs artifact (uploaded only when the snapshot
+            // step itself failed), not on the visual job's conclusion — a tag-guard, install or
+            // build failure would otherwise read as "snapshots differ".
+            const visualDiffers = '${{ steps.visualdiffs.outcome }}' === 'success';
+
+            const conclusion = mockStatus === 'fail' ? '❌' : mockStatus === 'unknown' || visualDiffers ? '⚠️' : '✅';
+            const marker = '<!-- e2e-report -->';
+            const unconfirmedReason = !jobsFetched && !statsRead
+              ? 'neither the workflow jobs API nor `results.json` could be read'
+              : !jobsFetched
+              ? 'the workflow jobs API was unreachable, so this reflects `results.json` alone, which cannot distinguish a clean pass from a run killed mid-flight'
+              : '`results.json` could not be read, so this reflects the job conclusion alone and no test counts were checked';
+            const advisoryLine = mockStatus === 'unknown'
+              ? `⚠️ **Result unconfirmed** — ${unconfirmedReason}. Check the run before merging.`
+              : visualDiffers
+              ? '⚠️ **Visual snapshots differ** — advisory only, does not block merge. Download the `e2e-visual-diffs` artifact to compare expected / actual / diff (a missing baseline uploads actual only).'
+              : null;
+            const body = [
+              marker,
+              `### ${conclusion} E2E (mock tier)`,
+              '',
+              statsLine,
+              ...(advisoryLine ? ['', advisoryLine] : []),
+              '',
+              `[Run + report/trace artifacts](${run.html_url}) · commit ${run.head_sha.slice(0, 7)}`,
+              '',
+              'Debug a red run locally: download the `e2e-report` artifact and open the trace with `pnpm exec playwright show-trace <trace.zip>`.',
+            ].join('\n');
+
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              per_page: 100,
+            });
+            // Author check: anyone can pre-post the marker; only the bot's own
+            // comment may claim the sticky slot.
+            const existing = comments.find(
+              (comment) =>
+                comment.body?.startsWith(marker) &&
+                comment.user?.type === 'Bot' &&
+                comment.user?.login === 'github-actions[bot]',
+            );
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+                body,
+              });
+            }

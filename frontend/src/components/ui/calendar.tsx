@@ -19,7 +19,6 @@ function Calendar({ className, classNames, showOutsideDays = true, ...props }: C
                     buttonVariants({ variant: 'outline' }),
                     'absolute top-3 left-3 z-10 h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100',
                 ),
-                caption: 'flex justify-center pt-1 pb-2 relative items-center select-none',
                 caption_label: 'text-sm font-medium select-none',
                 day: cn(
                     buttonVariants({ variant: 'ghost' }),
@@ -28,10 +27,10 @@ function Calendar({ className, classNames, showOutsideDays = true, ...props }: C
                 day_button: 'h-9 w-9 p-0 font-normal',
                 disabled: 'text-muted-foreground opacity-50',
                 hidden: 'invisible',
-                month: 'space-y-4',
+                month: 'flex flex-col gap-4',
                 month_caption: 'flex justify-center pt-1 pb-2 relative items-center',
-                month_grid: 'w-full border-collapse mt-4',
-                months: 'flex flex-col sm:flex-row space-y-4 sm:space-x-4 sm:space-y-0',
+                month_grid: 'w-full border-collapse',
+                months: 'flex flex-col sm:flex-row',
                 nav: 'flex items-center m-0',
                 outside:
                     'day-outside text-muted-foreground aria-selected:bg-accent/50 aria-selected:text-muted-foreground aria-selected:opacity-30',

@@ -89,16 +89,8 @@ export function FileManagerSkeleton({
                                 />
                             )}
 
-                            <div className="flex min-w-0 items-center gap-1.5 pl-[calc(var(--fm-depth)*16px)]">
-                                {row.isDir ? (
-                                    <Skeleton className="-mx-0.5 size-4 shrink-0 rounded-sm" />
-                                ) : (
-                                    <span
-                                        aria-hidden="true"
-                                        className="-mx-0.5 size-4 shrink-0"
-                                    />
-                                )}
-                                <Skeleton className="size-4 shrink-0 rounded-sm" />
+                            <div className="flex min-w-0 items-center gap-1.5 pl-[calc(var(--fm-depth)*22px)]">
+                                <Skeleton className="-mx-0.5 size-4 shrink-0 rounded-sm" />
                                 <Skeleton className={cn('h-4', row.nameWidth)} />
                             </div>
 

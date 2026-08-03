@@ -59,6 +59,7 @@ func (r *registry) initScreens() {
 	r.screens[models.LLMProviderGLMScreen] = models.NewLLMProviderFormModel(r.controller, r.styles, r.window, models.LLMProviderGLM)
 	r.screens[models.LLMProviderKimiScreen] = models.NewLLMProviderFormModel(r.controller, r.styles, r.window, models.LLMProviderKimi)
 	r.screens[models.LLMProviderQwenScreen] = models.NewLLMProviderFormModel(r.controller, r.styles, r.window, models.LLMProviderQwen)
+	r.screens[models.LLMProviderMiniMaxScreen] = models.NewLLMProviderFormModel(r.controller, r.styles, r.window, models.LLMProviderMiniMax)
 	r.screens[models.LLMProviderOllamaScreen] = models.NewLLMProviderFormModel(r.controller, r.styles, r.window, models.LLMProviderOllama)
 	r.screens[models.LLMProviderCustomScreen] = models.NewLLMProviderFormModel(r.controller, r.styles, r.window, models.LLMProviderCustom)
 

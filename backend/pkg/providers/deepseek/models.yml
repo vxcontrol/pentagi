@@ -10,6 +10,6 @@
   description: DeepSeek V4 Pro - Higher-tier reasoning model with hybrid thinking/non-thinking modes (default thinking, switchable via extra_body). Suitable for complex logic, mathematical reasoning, and security analysis. Supports JSON output, tool calls, chat prefix completion (beta), and FIM completion (non-thinking only). 1M context, up to 384K output tokens.
   thinking: true
   price:
-    input: 1.74
-    output: 3.48
-    cache_read: 0.0145
+    input: 0.435
+    output: 0.87
+    cache_read: 0.003625

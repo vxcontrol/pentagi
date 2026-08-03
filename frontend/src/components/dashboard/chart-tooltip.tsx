@@ -33,12 +33,10 @@ export function ChartTooltip({
 
     const shownInSessionRef = useRef(false);
 
-    // New mouse-entry session: reset "already shown" tracking
     useEffect(() => {
         shownInSessionRef.current = false;
     }, [sessionKey]);
 
-    // Notify parent the moment the tooltip first becomes visible in this session
     useEffect(() => {
         if (active && !shownInSessionRef.current) {
             shownInSessionRef.current = true;

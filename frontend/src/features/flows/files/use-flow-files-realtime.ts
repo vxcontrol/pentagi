@@ -1,10 +1,7 @@
+import { useSubscription } from '@apollo/client/react';
 import { useMemo } from 'react';
 
-import {
-    useFlowFileAddedSubscription,
-    useFlowFileDeletedSubscription,
-    useFlowFileUpdatedSubscription,
-} from '@/graphql/types';
+import { FlowFileAddedDocument, FlowFileDeletedDocument, FlowFileUpdatedDocument } from '@/graphql/types';
 
 interface UseFlowFilesRealtimeParams {
     flowId: null | string;
@@ -25,7 +22,7 @@ export function useFlowFilesRealtime({ flowId, isPaused }: UseFlowFilesRealtimeP
     const variables = useMemo(() => ({ flowId: flowId ?? '' }), [flowId]);
     const isSkipped = isPaused || !flowId;
 
-    useFlowFileAddedSubscription({ skip: isSkipped, variables });
-    useFlowFileUpdatedSubscription({ skip: isSkipped, variables });
-    useFlowFileDeletedSubscription({ skip: isSkipped, variables });
+    useSubscription(FlowFileAddedDocument, { skip: isSkipped, variables });
+    useSubscription(FlowFileUpdatedDocument, { skip: isSkipped, variables });
+    useSubscription(FlowFileDeletedDocument, { skip: isSkipped, variables });
 }

@@ -10,10 +10,19 @@ import { CONTAINER_PATH_PREFIX, RESOURCES_PATH_PREFIX, UPLOADS_PATH_PREFIX } fro
  * Wire shape of `models.ContainerFiles`. `path` echoes back the queried path
  * when exactly one was requested — empty string for multi-path queries.
  */
+export interface ContainerFileFailure {
+    message: string;
+    name: string;
+    path: string;
+}
+
 export interface ContainerFilesResponse {
+    failures?: ContainerFileFailure[];
     files: RestContainerFile[];
     path: string;
     total: number;
+    /** True when the directory held more entries than the cap and only the first page was returned. */
+    truncated?: boolean;
 }
 
 export type FlowFile = FlowFileFragmentFragment;
@@ -21,8 +30,7 @@ export type FlowFile = FlowFileFragmentFragment;
 /**
  * Wire shape of `models.FlowFile` (REST JSON, snake_case). The internal
  * `FlowFile` alias mirrors the GraphQL camelCase fragment for use in the
- * FileManager UI. Current consumers of `FlowFilesResponse` only read
- * `files.length` and `files[0].name`, so no conversion helper is needed yet.
+ * FileManager UI.
  */
 export interface FlowFilesResponse {
     files: RestFlowFile[];

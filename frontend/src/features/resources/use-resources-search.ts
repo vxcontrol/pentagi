@@ -17,10 +17,6 @@ interface UseResourcesSearchResult {
  * back to `/resources` starts clean. The debounce delay is preserved
  * (`SEARCH_DEBOUNCE_MS`) so the existing client-side tree filter still gets
  * the throttled value it expects.
- *
- * `clearPageOnFilterChange: false` because Resources has no `?page=` to
- * reset — leaving the default would also work (deleting a non-existent
- * param is a no-op), but the explicit setting documents intent.
  */
 export function useResourcesSearch(): UseResourcesSearchResult {
     const { debouncedFilter, filter, resetFilter, setFilter } = useTableState({

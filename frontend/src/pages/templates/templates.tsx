@@ -1,14 +1,21 @@
 import type { ColumnDef } from '@tanstack/react-table';
 
-import { Ellipsis, FileText, Loader2, Pencil, PencilLine, Plus, Trash } from 'lucide-react';
+import { Ellipsis, FileText, Pencil, PencilLine, Plus, Trash } from 'lucide-react';
 import { useCallback, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
+import {
+    AppHeader,
+    AppHeaderAction,
+    AppHeaderActions,
+    AppHeaderContent,
+    AppHeaderTitle,
+} from '@/components/layouts/app/app-header';
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
-import { HeaderButton } from '@/components/shared/header-button';
+import { ErrorState } from '@/components/shared/error-state';
 import { InlineEditInput } from '@/components/shared/inline-edit';
-import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage } from '@/components/ui/breadcrumb';
+import { LoadingState } from '@/components/shared/loading-state';
 import { Button } from '@/components/ui/button';
 import { ContextMenuItem, ContextMenuSeparator } from '@/components/ui/context-menu';
 import { DataTable, DataTableColumnHeader } from '@/components/ui/data-table';
@@ -19,17 +26,17 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Separator } from '@/components/ui/separator';
-import { SidebarTrigger } from '@/components/ui/sidebar';
-import { StatusCard } from '@/components/ui/status-card';
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
+import { Spinner } from '@/components/ui/spinner';
 import { useTableState } from '@/hooks/use-table-state';
+import { routes } from '@/lib/routes';
 import { mergeHrefWithSearchParams } from '@/lib/url-params';
 import { type Template, useTemplates } from '@/providers/templates-provider';
 
 function Templates() {
     const navigate = useNavigate();
     const location = useLocation();
-    const { deleteTemplate, templates, updateTemplate } = useTemplates();
+    const { deleteTemplate, error, isLoading, refetch, templates, updateTemplate } = useTemplates();
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
     const [deletingTemplate, setDeletingTemplate] = useState<null | Template>(null);
     const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
@@ -41,7 +48,7 @@ function Templates() {
 
     const handleTemplateOpen = useCallback(
         (templateId: string) => {
-            navigate(mergeHrefWithSearchParams(`/templates/${templateId}`, new URLSearchParams(location.search)));
+            navigate(mergeHrefWithSearchParams(routes.template(templateId), new URLSearchParams(location.search)));
         },
         [navigate, location.search],
     );
@@ -199,12 +206,12 @@ function Templates() {
                                 >
                                     {deletingIds.has(template.id) ? (
                                         <>
-                                            <Loader2 className="size-4 animate-spin" />
+                                            <Spinner variant="circle" />
                                             Deleting...
                                         </>
                                     ) : (
                                         <>
-                                            <Trash className="size-4" />
+                                            <Trash />
                                             Delete
                                         </>
                                     )}
@@ -244,52 +251,74 @@ function Templates() {
     );
 
     const pageHeader = (
-        <header className="bg-background sticky top-0 z-10 flex h-12 w-full shrink-0 items-center gap-2 border-b transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
-            <div className="flex min-w-0 flex-1 items-center gap-2 px-4">
-                <SidebarTrigger className="-ml-1 shrink-0" />
-                <Separator
-                    className="h-4 shrink-0"
-                    orientation="vertical"
-                />
-                <Breadcrumb className="min-w-0 flex-1">
-                    <BreadcrumbList className="min-w-0 flex-nowrap">
-                        <BreadcrumbItem className="min-w-0">
-                            <FileText className="size-4 shrink-0" />
-                            <BreadcrumbPage className="min-w-0 truncate">Templates</BreadcrumbPage>
-                        </BreadcrumbItem>
-                    </BreadcrumbList>
-                </Breadcrumb>
-            </div>
-            <div className="flex shrink-0 items-center gap-2 px-4">
-                <HeaderButton
+        <AppHeader>
+            <AppHeaderContent>
+                <AppHeaderTitle icon={<FileText className="size-4 shrink-0" />}>Templates</AppHeaderTitle>
+            </AppHeaderContent>
+            <AppHeaderActions>
+                <AppHeaderAction
                     icon={<Plus />}
                     label="New Template"
-                    onClick={() => navigate('/templates/new')}
+                    onClick={() => navigate(routes.newTemplate)}
                     variant="secondary"
                 />
-            </div>
-        </header>
+            </AppHeaderActions>
+        </AppHeader>
     );
+
+    if (isLoading && !templates.length) {
+        return (
+            <>
+                {pageHeader}
+                <div className="flex flex-1 flex-col gap-4 p-4">
+                    <LoadingState
+                        description="Please wait while we fetch your flow templates"
+                        title="Loading templates..."
+                    />
+                </div>
+            </>
+        );
+    }
+
+    // Error surface only when there's no data — a failed background refetch must not blank a working list.
+    if (error && !templates.length) {
+        return (
+            <>
+                {pageHeader}
+                <div className="flex flex-1 flex-col gap-4 p-4">
+                    <ErrorState
+                        message={error.message}
+                        onRetry={refetch}
+                        title="Error loading templates"
+                    />
+                </div>
+            </>
+        );
+    }
 
     if (!templates.length) {
         return (
             <>
                 {pageHeader}
-                <div className="flex flex-col gap-4 p-4">
-                    <StatusCard
-                        action={
+                <div className="flex flex-1 flex-col gap-4 p-4">
+                    <Empty>
+                        <EmptyHeader>
+                            <EmptyMedia variant="icon">
+                                <FileText />
+                            </EmptyMedia>
+                            <EmptyTitle>No templates yet</EmptyTitle>
+                            <EmptyDescription>Create your first template to get started</EmptyDescription>
+                        </EmptyHeader>
+                        <EmptyContent>
                             <Button
-                                onClick={() => navigate('/templates/new')}
+                                onClick={() => navigate(routes.newTemplate)}
                                 variant="secondary"
                             >
-                                <Plus className="size-4" />
+                                <Plus />
                                 New Template
                             </Button>
-                        }
-                        description="Create your first template to get started"
-                        icon={<FileText className="text-muted-foreground size-8" />}
-                        title="No templates yet"
-                    />
+                        </EmptyContent>
+                    </Empty>
                 </div>
             </>
         );

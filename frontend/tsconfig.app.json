@@ -20,13 +20,13 @@
         "noEmit": true,
 
         /* If your code runs in the DOM: */
-        "lib": ["es2022", "dom", "dom.iterable"],
+        "lib": ["es2023", "dom", "dom.iterable"],
         "jsx": "react-jsx",
 
-        "baseUrl": ".",
         "paths": {
             "@/*": ["./src/*"]
         }
     },
-    "include": ["src", "types/**/*.d.ts"]
+    "include": ["src", "types/**/*.d.ts"],
+    "exclude": ["src/**/*-corpus.test.ts"]
 }

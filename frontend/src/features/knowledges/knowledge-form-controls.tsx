@@ -5,7 +5,7 @@ import type {
     KnowledgeGuideType as KnowledgeGuideTypeT,
 } from '@/graphql/types';
 
-import { MarkdownEditor } from '@/components/shared/markdown-editor';
+import { type EditorViewMode, MarkdownEditorField } from '@/components/shared/markdown-editor';
 import {
     Autocomplete,
     AutocompleteContent,
@@ -23,8 +23,6 @@ import type { FormValues } from './knowledge-form';
 
 import { KNOWLEDGE_LIMITS } from './knowledge-form';
 
-// `<Select>` option lists. Co-located with the controls they feed because no
-// other module needs them.
 const docTypeValues = [KnowledgeDocType.Answer, KnowledgeDocType.Guide, KnowledgeDocType.Code] as const;
 const guideTypeValues = Object.values(KnowledgeGuideType) as KnowledgeGuideTypeT[];
 const answerTypeValues = Object.values(KnowledgeAnswerType) as KnowledgeAnswerTypeT[];
@@ -70,10 +68,10 @@ const LANGUAGES = [
 
 interface KnowledgeContentFieldProps {
     control: Control<FormValues>;
-    /** When `true`, the editor stretches to fill its parent (desktop split view). */
     fillParent?: boolean;
+    hasLabel?: boolean;
     isSaving: boolean;
-    showLabel?: boolean;
+    viewMode?: EditorViewMode;
 }
 
 interface KnowledgeMetaFieldsProps {
@@ -85,8 +83,9 @@ interface KnowledgeMetaFieldsProps {
 export function KnowledgeContentField({
     control,
     fillParent = false,
+    hasLabel = false,
     isSaving,
-    showLabel = false,
+    viewMode = 'rich',
 }: KnowledgeContentFieldProps) {
     return (
         <FormField
@@ -94,19 +93,23 @@ export function KnowledgeContentField({
             name="content"
             render={({ field }) => (
                 <FormItem className={fillParent ? 'flex min-h-0 flex-1 flex-col' : undefined}>
-                    {showLabel ? <FormLabel>Content</FormLabel> : null}
+                    {hasLabel ? <FormLabel>Content</FormLabel> : null}
                     <FormControl>
-                        <MarkdownEditor
-                            className={fillParent ? 'min-h-0 flex-1' : 'min-h-[280px]'}
-                            contentClassName={fillParent ? undefined : 'min-h-[240px]'}
+                        <MarkdownEditorField
+                            aria-label="Content"
                             disabled={isSaving}
+                            mode={viewMode}
                             onBlur={field.onBlur}
                             onChange={field.onChange}
                             placeholder="Knowledge content (will be embedded into the vector store)"
+                            ref={field.ref}
                             value={field.value}
                         />
                     </FormControl>
-                    <FormMessage />
+                    {/* Full-height field: the invalid state shows as a red editor border (via aria-invalid), not
+                        text below it — a message here would eat a line the flex layout has no room for. Kept as
+                        sr-only so screen readers still announce it via aria-describedby. */}
+                    <FormMessage className="sr-only" />
                 </FormItem>
             )}
         />
@@ -115,18 +118,16 @@ export function KnowledgeContentField({
 
 export function KnowledgeMetaFields({ control, isNew, isSaving }: KnowledgeMetaFieldsProps) {
     // Targeted subscription: only this component re-renders when docType changes,
-    // not the whole form. The full-form `useWatch` from the original code
-    // re-rendered on every keystroke in the markdown editor.
+    // not the whole form. A full-form `useWatch` re-renders on every editor keystroke.
     const docType = useWatch({ control, name: 'docType' });
-    // `setValue` is used to clear subtype fields that no longer apply when the
-    // user switches docType. We do this synchronously inside `onValueChange`
-    // (rather than via `useEffect`) so that a fresh load of an existing
-    // document doesn't wipe its persisted subtype on first render.
+    // Clear no-longer-applicable subtype fields synchronously in `onValueChange`,
+    // not via `useEffect` — an effect keyed on docType would wipe an existing
+    // document's persisted subtype on first render.
     const { setValue } = useFormContext<FormValues>();
 
     const handleDocTypeChange = (next: KnowledgeDocType, fieldOnChange: (value: KnowledgeDocType) => void) => {
         fieldOnChange(next);
-        const opts = { shouldDirty: true, shouldValidate: true };
+        const opts = { shouldDirty: true };
 
         if (next !== KnowledgeDocType.Answer) {
             setValue('answerType', undefined, opts);
@@ -253,12 +254,7 @@ export function KnowledgeMetaFields({ control, isNew, isSaving }: KnowledgeMetaF
                         render={({ field }) => (
                             <FormItem>
                                 <FormLabel>Code language</FormLabel>
-                                {/*
-                                 * `Autocomplete` is a free-text input with a
-                                 * suggestion popover — the backend accepts any
-                                 * string here, so the dropdown is a UX hint
-                                 * rather than a closed enum.
-                                 */}
+                                {/* Backend accepts any string — the dropdown is a UX hint, not a closed enum. */}
                                 <Autocomplete
                                     onValueChange={field.onChange}
                                     value={field.value ?? ''}

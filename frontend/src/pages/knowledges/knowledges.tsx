@@ -1,17 +1,24 @@
 import type { ColumnDef } from '@tanstack/react-table';
 
-import { Ellipsis, LibraryBig, Loader2, Pencil, PencilLine, Plus, Trash } from 'lucide-react';
+import { Ellipsis, LibraryBig, Pencil, PencilLine, Plus, Trash } from 'lucide-react';
 import { useCallback, useRef, useState } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 
 import type { BadgeVariant } from '@/components/ui/badge';
 
+import {
+    AppHeader,
+    AppHeaderAction,
+    AppHeaderActions,
+    AppHeaderContent,
+    AppHeaderTitle,
+} from '@/components/layouts/app/app-header';
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
-import { HeaderButton } from '@/components/shared/header-button';
+import { ErrorState } from '@/components/shared/error-state';
 import { InlineEditInput } from '@/components/shared/inline-edit';
+import { LoadingState } from '@/components/shared/loading-state';
 import { Badge } from '@/components/ui/badge';
-import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage } from '@/components/ui/breadcrumb';
 import { Button } from '@/components/ui/button';
 import { ContextMenuItem, ContextMenuSeparator } from '@/components/ui/context-menu';
 import { DataTable, DataTableColumnHeader } from '@/components/ui/data-table';
@@ -22,12 +29,12 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { InputSearch } from '@/components/ui/input-search';
-import { Separator } from '@/components/ui/separator';
-import { SidebarTrigger } from '@/components/ui/sidebar';
-import { StatusCard } from '@/components/ui/status-card';
+import { Spinner } from '@/components/ui/spinner';
 import { KnowledgeDocType } from '@/graphql/types';
 import { useTableState } from '@/hooks/use-table-state';
+import { routes } from '@/lib/routes';
 import { mergeHrefWithSearchParams, URL_PARAMS } from '@/lib/url-params';
 import { type Knowledge, useKnowledges } from '@/providers/knowledges-provider';
 
@@ -56,7 +63,7 @@ const docTypeSubtype = (k: Knowledge): null | string => {
 function Knowledges() {
     const navigate = useNavigate();
     const location = useLocation();
-    const { deleteKnowledge, isLoading, knowledges, updateKnowledge } = useKnowledges();
+    const { deleteKnowledge, error, isLoading, knowledges, refetch, renameKnowledge } = useKnowledges();
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
     const [deletingKnowledge, setDeletingKnowledge] = useState<Knowledge | null>(null);
     const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
@@ -101,7 +108,7 @@ function Knowledges() {
 
     const handleOpen = useCallback(
         (id: string) => {
-            navigate(mergeHrefWithSearchParams(`/knowledges/${id}`, new URLSearchParams(location.search)));
+            navigate(mergeHrefWithSearchParams(routes.knowledge(id), new URLSearchParams(location.search)));
         },
         [navigate, location.search],
     );
@@ -141,12 +148,7 @@ function Knowledges() {
         setIsRenameLoading(true);
 
         try {
-            // Backend requires `content` on update (it always re-embeds), so we
-            // pass it through unchanged from the cached document.
-            await updateKnowledge(editingKnowledgeId, {
-                content: knowledge.content,
-                question: newQuestion,
-            });
+            await renameKnowledge(editingKnowledgeId, newQuestion);
             toast.success('Knowledge renamed successfully');
             setEditingKnowledgeId(null);
         } catch {
@@ -154,7 +156,7 @@ function Knowledges() {
         } finally {
             setIsRenameLoading(false);
         }
-    }, [editingKnowledgeId, knowledges, updateKnowledge]);
+    }, [editingKnowledgeId, knowledges, renameKnowledge]);
 
     const handleDelete = async () => {
         if (!deletingKnowledge) {
@@ -258,29 +260,6 @@ function Knowledges() {
             size: 280,
         },
         {
-            accessorKey: 'content',
-            cell: ({ row }) => {
-                const content = (row.getValue('content') as string) ?? '';
-
-                return (
-                    <div
-                        className="text-muted-foreground truncate text-sm"
-                        title={content}
-                    >
-                        {content}
-                    </div>
-                );
-            },
-            enableSorting: false,
-            header: () => (
-                <span className="text-muted-foreground inline-flex items-center text-sm font-medium">Preview</span>
-            ),
-            maxSize: 800,
-            meta: { columnMenuLabel: 'Preview', searchable: true },
-            minSize: 160,
-            size: 380,
-        },
-        {
             cell: ({ row }) => {
                 const k = row.original;
 
@@ -352,12 +331,12 @@ function Knowledges() {
                                 >
                                     {deletingIds.has(k.id) ? (
                                         <>
-                                            <Loader2 className="size-4 animate-spin" />
+                                            <Spinner variant="circle" />
                                             Deleting...
                                         </>
                                     ) : (
                                         <>
-                                            <Trash className="size-4" />
+                                            <Trash />
                                             Delete
                                         </>
                                     )}
@@ -399,54 +378,54 @@ function Knowledges() {
     );
 
     const pageHeader = (
-        <header className="bg-background sticky top-0 z-10 flex h-12 w-full shrink-0 items-center gap-2 border-b transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
-            <div className="flex min-w-0 flex-1 items-center gap-2 px-4">
-                <SidebarTrigger className="-ml-1 shrink-0" />
-                <Separator
-                    className="h-4 shrink-0"
-                    orientation="vertical"
-                />
-                <Breadcrumb className="min-w-0 flex-1">
-                    <BreadcrumbList className="min-w-0 flex-nowrap">
-                        <BreadcrumbItem className="min-w-0">
-                            <LibraryBig className="size-4 shrink-0" />
-                            <BreadcrumbPage className="min-w-0 truncate">Knowledges</BreadcrumbPage>
-                        </BreadcrumbItem>
-                    </BreadcrumbList>
-                </Breadcrumb>
-            </div>
-            <div className="flex shrink-0 items-center gap-2 px-4">
+        <AppHeader>
+            <AppHeaderContent>
+                <AppHeaderTitle icon={<LibraryBig className="size-4 shrink-0" />}>Knowledges</AppHeaderTitle>
+            </AppHeaderContent>
+            <AppHeaderActions>
                 <InputSearch
                     ariaLabel="Search knowledge documents"
-                    // Use Mod+K — Mod+F is reserved as the page-wide default
-                    // because we don't want to conflict with the browser's
-                    // own find-in-page on every screen, but this list is one
-                    // of the few that benefits from a dedicated shortcut.
+                    // Mod+K, not Mod+F — Mod+F collides with the browser's native find-in-page.
                     hotkey="k"
                     maxWidth={220}
                     onSearchChange={handleSemanticQueryChange}
                     placeholder="Semantic search..."
                     searchQuery={semanticQuery}
                 />
-                <HeaderButton
+                <AppHeaderAction
                     icon={<Plus />}
                     label="New Knowledge"
-                    onClick={() => navigate('/knowledges/new')}
+                    onClick={() => navigate(routes.newKnowledge)}
                     variant="secondary"
                 />
-            </div>
-        </header>
+            </AppHeaderActions>
+        </AppHeader>
     );
 
     if (isLoading && !knowledges.length) {
         return (
             <>
                 {pageHeader}
-                <div className="flex flex-col gap-4 p-4">
-                    <StatusCard
+                <div className="flex flex-1 flex-col gap-4 p-4">
+                    <LoadingState
                         description="Please wait while we fetch your knowledge documents"
-                        icon={<Loader2 className="text-muted-foreground size-16 animate-spin" />}
                         title="Loading knowledges..."
+                    />
+                </div>
+            </>
+        );
+    }
+
+    // Error surface only when there's no data — a failed background refetch must not blank a working list.
+    if (error && !knowledges.length) {
+        return (
+            <>
+                {pageHeader}
+                <div className="flex flex-1 flex-col gap-4 p-4">
+                    <ErrorState
+                        message={error.message}
+                        onRetry={refetch}
+                        title="Error loading knowledge documents"
                     />
                 </div>
             </>
@@ -457,21 +436,27 @@ function Knowledges() {
         return (
             <>
                 {pageHeader}
-                <div className="flex flex-col gap-4 p-4">
-                    <StatusCard
-                        action={
+                <div className="flex flex-1 flex-col gap-4 p-4">
+                    <Empty>
+                        <EmptyHeader>
+                            <EmptyMedia variant="icon">
+                                <LibraryBig />
+                            </EmptyMedia>
+                            <EmptyTitle>No knowledge documents yet</EmptyTitle>
+                            <EmptyDescription>
+                                Create your first knowledge document to enrich the vector store
+                            </EmptyDescription>
+                        </EmptyHeader>
+                        <EmptyContent>
                             <Button
-                                onClick={() => navigate('/knowledges/new')}
+                                onClick={() => navigate(routes.newKnowledge)}
                                 variant="secondary"
                             >
                                 <Plus />
                                 New Knowledge
                             </Button>
-                        }
-                        description="Create your first knowledge document to enrich the vector store"
-                        icon={<LibraryBig className="text-muted-foreground size-8" />}
-                        title="No knowledge documents yet"
-                    />
+                        </EmptyContent>
+                    </Empty>
                 </div>
             </>
         );

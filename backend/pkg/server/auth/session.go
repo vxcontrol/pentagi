@@ -22,7 +22,6 @@ const (
 
 // MakeCookieStoreKey is function to generate auth and encryption keys for cookie store
 func MakeCookieStoreKey(globalSalt string) [][]byte {
-	// Check cache for existing keys
 	if cached, ok := cookieStoreKeys.Load(globalSalt); ok {
 		return cached.([][]byte)
 	}
@@ -51,7 +50,6 @@ func MakeCookieStoreKey(globalSalt string) [][]byte {
 
 // MakeJWTSigningKey is function to generate signing key for JWT tokens
 func MakeJWTSigningKey(globalSalt string) []byte {
-	// Check cache for existing key
 	if cached, ok := jwtSigningKeys.Load(globalSalt); ok {
 		return cached.([]byte)
 	}

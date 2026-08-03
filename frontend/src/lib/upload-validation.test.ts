@@ -34,6 +34,48 @@ describe('validateUploadBatch', () => {
         expect(validateUploadBatch(files, DEFAULT_LIMITS)).toBeNull();
     });
 
+    // Every rule below is also exercised one unit UNDER its cap: a limit tested only from the
+    // rejecting side cannot tell an off-by-one from a correct boundary.
+    it('accepts a batch sitting exactly on every cap', () => {
+        const limits = { maxFiles: 3, maxFileSizeMb: 10, maxTotalSizeMb: 30 };
+        const files = Array.from({ length: 3 }, (_, i) => makeFile(`f-${i}.bin`, 10 * MB));
+
+        expect(validateUploadBatch(files, limits)).toBeNull();
+    });
+
+    it('rejects one file past the per-file cap and accepts the file exactly on it', () => {
+        expect(validateUploadBatch([makeFile('at.bin', 300 * MB)], DEFAULT_LIMITS)).toBeNull();
+        expect(validateUploadBatch([makeFile('over.bin', 300 * MB + 1)], DEFAULT_LIMITS)).toBe(
+            'File "over.bin" is larger than 300 MB',
+        );
+    });
+
+    it('rejects one file past the count cap and accepts the batch exactly on it', () => {
+        const limits = { ...DEFAULT_LIMITS, maxFiles: 4 };
+
+        expect(
+            validateUploadBatch(
+                Array.from({ length: 4 }, (_, i) => makeFile(`f-${i}.txt`, 1)),
+                limits,
+            ),
+        ).toBeNull();
+        expect(
+            validateUploadBatch(
+                Array.from({ length: 5 }, (_, i) => makeFile(`f-${i}.txt`, 1)),
+                limits,
+            ),
+        ).toBe('Too many files: max 4 per upload');
+    });
+
+    it('rejects one byte past the total cap and accepts the batch exactly on it', () => {
+        const limits = { ...DEFAULT_LIMITS, maxTotalSizeMb: 20 };
+
+        expect(validateUploadBatch([makeFile('a.bin', 10 * MB), makeFile('b.bin', 10 * MB)], limits)).toBeNull();
+        expect(validateUploadBatch([makeFile('a.bin', 10 * MB), makeFile('b.bin', 10 * MB + 1)], limits)).toBe(
+            'Total upload size exceeds the 20 MB limit',
+        );
+    });
+
     it('rejects batches exceeding the file count cap', () => {
         const files = Array.from({ length: 5 }, (_, i) => makeFile(`f-${i}.txt`, 1));
 
@@ -55,16 +97,16 @@ describe('validateUploadBatch', () => {
         );
     });
 
-    it('rejects 0-byte files by default', () => {
-        const files = [makeFile('ok.txt', 1 * MB), makeFile('empty.txt', 0)];
+    it('accepts 0-byte files alongside other files', () => {
+        const files = [makeFile('ok.txt', 1 * MB), makeFile('.gitkeep', 0)];
 
-        expect(validateUploadBatch(files, DEFAULT_LIMITS)).toBe('File "empty.txt" is empty');
+        expect(validateUploadBatch(files, DEFAULT_LIMITS)).toBeNull();
     });
 
-    it('lets 0-byte files through when rejectEmpty is disabled', () => {
-        const files = [makeFile('ok.txt', 1 * MB), makeFile('empty.txt', 0)];
+    it('accepts a batch made only of 0-byte files', () => {
+        const files = [makeFile('.gitkeep', 0), makeFile('__init__.py', 0)];
 
-        expect(validateUploadBatch(files, { ...DEFAULT_LIMITS, rejectEmpty: false })).toBeNull();
+        expect(validateUploadBatch(files, DEFAULT_LIMITS)).toBeNull();
     });
 
     it('reports the first violation when multiple rules would fail', () => {

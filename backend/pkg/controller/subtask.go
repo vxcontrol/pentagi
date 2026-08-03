@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"sync"
@@ -189,6 +190,22 @@ func (stw *subtaskWorker) SetStatus(ctx context.Context, status database.Subtask
 		ID:     stw.subtaskCtx.SubtaskID,
 	})
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			// Replacement can delete the row before this stale worker finishes.
+			// Treat it as complete to keep task shutdown idempotent.
+			logrus.WithContext(ctx).WithFields(logrus.Fields{
+				"subtask_id":       stw.subtaskCtx.SubtaskID,
+				"requested_status": status,
+			}).Warn("subtask no longer exists in the database, treating as already finished")
+
+			stw.mx.Lock()
+			stw.completed = true
+			stw.waiting = false
+			stw.mx.Unlock()
+
+			return nil
+		}
+
 		return fmt.Errorf("failed to set subtask %d status: %w", stw.subtaskCtx.SubtaskID, err)
 	}
 

@@ -1,12 +1,17 @@
 import { Search, X } from 'lucide-react';
-import { type KeyboardEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type ReactNode, startTransition, useCallback, useMemo, useRef, useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { useElementVirtualList } from '@/hooks/use-element-virtual-list';
 import { cn } from '@/lib/utils';
 
 import type { DetailNavigationController } from './use-detail-navigation';
+
+const VIRTUALIZE_THRESHOLD = 100;
+const ROW_HEIGHT = 36;
+const estimateRowSize = () => ROW_HEIGHT;
 
 interface DetailNavigationSheetProps<T extends { id: string }> {
     controller: DetailNavigationController<T>;
@@ -42,9 +47,6 @@ export function DetailNavigationSheet<T extends { id: string }>({
     sheetIcon,
     sheetTitle,
 }: DetailNavigationSheetProps<T>) {
-    // Destructure at the top so existing `useMemo` / `useEffect` deps below
-    // read individual fields rather than the controller object — keeps the
-    // identity story the same as before the refactor.
     const {
         clearSearchQuery,
         currentId,
@@ -62,20 +64,33 @@ export function DetailNavigationSheet<T extends { id: string }>({
 
     const listRef = useRef<HTMLUListElement>(null);
     const searchInputRef = useRef<HTMLInputElement>(null);
+    const [scrollEl, setScrollEl] = useState<HTMLDivElement | null>(null);
     const buttonRefs = useRef(new Map<string, HTMLButtonElement>());
+    const pendingFocusIdRef = useRef<null | string>(null);
     const [focusedId, setFocusedId] = useState<null | string>(null);
 
-    const hasEntries = items.length > 0;
-    const trimmedQuery = searchQuery.trim();
-    const hasClearButton = hasSearch && trimmedQuery.length > 0;
+    const [localQuery, setLocalQuery] = useState(searchQuery);
 
-    // Build an `id → index` map once per `items`/`getId` change so both the
-    // per-render membership check below and the keyboard handler's lookup
-    // stay O(1) instead of O(n). The IIFE that adjusts focus during render
-    // previously called `items.some(...)` on every commit; the keyboard
-    // handler ran `items.findIndex(...)` on every keystroke. Sharing one
-    // structure between the two also makes the contract explicit: an entry
-    // is "in the filtered subset" iff `indexById.has(id)`.
+    const hasEntries = items.length > 0;
+    const trimmedQuery = localQuery.trim();
+    const hasClearButton = hasSearch && trimmedQuery.length > 0;
+    const shouldVirtualize = items.length > VIRTUALIZE_THRESHOLD;
+
+    const { scrollToIndex, totalSize, virtualItems } = useElementVirtualList({
+        count: items.length,
+        enabled: shouldVirtualize,
+        estimateSize: estimateRowSize,
+        gap: 2,
+        getItemKey: (index) => {
+            const item = items[index];
+
+            return item ? String(getId(item)) : index;
+        },
+        getScrollElement: () => scrollEl,
+        overscan: 10,
+        padding: 8,
+    });
+
     const indexById = useMemo(() => {
         const map = new Map<string, number>();
 
@@ -89,21 +104,14 @@ export function DetailNavigationSheet<T extends { id: string }>({
     // Single render-phase focus reconciliation. React's "adjust state when a
     // prop changes" idiom — see https://react.dev/reference/react/useState#storing-information-from-previous-renders
     // — collapsed into one comparison so the next desired focus is decided
-    // once per render and committed in the same pass that prompted it (no
-    // flash of stale focus, no double-setState ping-pong on edge cases like
-    // "items change while the sheet was reopening with no current item").
+    // once per render and committed in the same pass that prompted it.
     //
     // Priorities, top-down:
     //   1. open→close / close→open transition: re-pin to `currentId` (or the
     //      first entry when no current exists) on open, and clear on close.
-    //   2. While the sheet stays open, if the focused entry left the
-    //      filtered subset (list page narrowed the filter behind it), fall
-    //      back to the first survivor — otherwise the keyboard model would
-    //      stall on a row that's no longer rendered.
+    //   2. While the sheet stays open, if the focused entry left the filtered
+    //      subset, fall back to the first survivor.
     //   3. Otherwise hold whatever focus the user chose via arrow keys.
-    //
-    // `lastOpen` starts at `false` so an initial `open=true` still trips
-    // the open transition on the very first render.
     const [lastOpen, setLastOpen] = useState(false);
 
     const desiredFocusId = (() => {
@@ -118,9 +126,6 @@ export function DetailNavigationSheet<T extends { id: string }>({
                 return null;
             }
 
-            // `currentId != null` narrows to `string`; the controller has
-            // already verified `currentId` belongs to the filtered subset
-            // when it computed `currentIndex`, so no re-scan needed.
             return currentId != null && currentIndex >= 0 ? String(currentId) : String(getId(firstItem));
         }
 
@@ -135,67 +140,59 @@ export function DetailNavigationSheet<T extends { id: string }>({
 
     if (lastOpen !== open) {
         setLastOpen(open);
+
+        // Re-sync the mirror on open only: the sheet is modal, so a controlled
+        // searchQuery can change externally only while closed. A searchQuery-watching
+        // effect would instead clobber in-progress typing.
+        if (open) {
+            setLocalQuery(searchQuery);
+        }
     }
 
     if (desiredFocusId !== focusedId) {
         setFocusedId(desiredFocusId);
     }
 
-    // After roving focus moves, push the focus into the DOM. `rAF` defers past
-    // Radix's own focus management so we don't fight its open-time focus trap.
-    //
-    // Gate: only auto-focus an option when the user's focus is already
-    // somewhere that *expects* roving (a list option) or has not yet landed
-    // (`document.activeElement === document.body` right after open, before
-    // Radix moves focus into the dialog). Crucially, we must NOT steal focus
-    // when the user is typing in the search input: every keystroke that
-    // flushes the debounce can re-target `focusedId` (when `currentId` falls
-    // out of the filtered subset, render-phase reconciliation snaps focus to
-    // the first survivor). Without this gate, focus jumps out of the input
-    // mid-type and the user can only enter a few characters before losing
-    // their place — exact repro: type "aes" with current flow 837 visible,
-    // focus moves to button 836 at the 150 ms debounce boundary.
-    //
-    // The fix is at the cause, not the symptom: a local input mirror (the
-    // `InputSearch` / `DataTableFilter` pattern) would keep keystrokes from
-    // being dropped during a state round-trip, but it would not stop this
-    // effect from yanking focus away. The two patterns solve different bugs.
-    useEffect(() => {
-        if (!open || focusedId === null) {
-            return;
-        }
+    const focusOption = useCallback(
+        (id: string, index: number) => {
+            setFocusedId(id);
 
-        const activeEl = document.activeElement;
-        const focusIsOnSearchInput = activeEl !== null && activeEl === searchInputRef.current;
+            if (shouldVirtualize) {
+                scrollToIndex(index, { align: 'auto' });
+            }
 
-        if (focusIsOnSearchInput) {
-            return;
-        }
+            const node = buttonRefs.current.get(id);
 
-        const id = requestAnimationFrame(() => {
-            const node = buttonRefs.current.get(focusedId);
+            if (node) {
+                node.focus();
+            } else {
+                pendingFocusIdRef.current = id;
+            }
+        },
+        [scrollToIndex, shouldVirtualize],
+    );
 
-            if (!node) {
+    const handleOpenAutoFocus = useCallback(
+        (event: Event) => {
+            const index = focusedId === null ? undefined : indexById.get(focusedId);
+
+            if (focusedId === null || index === undefined) {
+                if (searchInputRef.current) {
+                    event.preventDefault();
+                    searchInputRef.current.focus();
+                }
+
                 return;
             }
 
-            node.focus();
+            event.preventDefault();
+            focusOption(focusedId, index);
+        },
+        [focusedId, focusOption, indexById],
+    );
 
-            if (focusedId === String(currentId ?? '')) {
-                node.scrollIntoView({ block: 'center' });
-            }
-        });
-
-        return () => cancelAnimationFrame(id);
-    }, [open, focusedId, currentId]);
-
-    // Translate arrow / Home / End into roving moves over `items`. Using the
-    // array index instead of `querySelectorAll` keeps the keyboard model in
-    // step with the React tree even if the sheet ever virtualises the list.
-    // O(1) lookup via the shared `indexById` map — `findIndex` would scan on
-    // every keystroke for nothing.
     const handleListKeyDown = useCallback(
-        (event: KeyboardEvent<HTMLUListElement>) => {
+        (event: React.KeyboardEvent<HTMLUListElement>) => {
             if (!hasEntries || focusedId === null) {
                 return;
             }
@@ -211,7 +208,7 @@ export function DetailNavigationSheet<T extends { id: string }>({
                 const target = items[index];
 
                 if (target) {
-                    setFocusedId(String(getId(target)));
+                    focusOption(String(getId(target)), index);
                 }
             };
 
@@ -237,7 +234,7 @@ export function DetailNavigationSheet<T extends { id: string }>({
                 moveTo(items.length - 1);
             }
         },
-        [focusedId, getId, hasEntries, indexById, items],
+        [focusedId, focusOption, getId, hasEntries, indexById, items],
     );
 
     const handleItemClick = useCallback(
@@ -247,67 +244,52 @@ export function DetailNavigationSheet<T extends { id: string }>({
         [onItemSelect],
     );
 
-    // ArrowDown from the input jumps focus into the listbox so keyboard
-    // users can flow `type → arrow down → enter` without hunting for the
-    // list. We move focus *here* synchronously (not in the auto-focus
-    // effect) because that effect now skips when focus is on the search
-    // input — otherwise it would yank focus mid-type. Escape is *not*
-    // handled here — Radix listens for it on a native document handler
-    // that React-level `stopPropagation` cannot reach. See
-    // `handleEscapeKeyDown` below, wired through `onEscapeKeyDown`.
     const handleSearchKeyDown = useCallback(
         (event: React.KeyboardEvent<HTMLInputElement>) => {
             if (event.key === 'ArrowDown' && hasEntries) {
                 event.preventDefault();
                 const first = items[0];
 
-                if (!first) {
-                    return;
+                if (first) {
+                    focusOption(String(getId(first)), 0);
                 }
-
-                const firstId = String(getId(first));
-                setFocusedId(firstId);
-                // Button refs for the current items are already mounted —
-                // this handler fires during a real user keystroke, so the
-                // listbox commit that wired them up has already happened.
-                buttonRefs.current.get(firstId)?.focus();
             }
         },
-        [getId, hasEntries, items],
+        [focusOption, getId, hasEntries, items],
     );
 
+    const clearSearch = useCallback(() => {
+        setLocalQuery('');
+        startTransition(() => clearSearchQuery());
+    }, [clearSearchQuery]);
+
     // Intercept Esc at the Radix-Content level so we can clear a non-empty
-    // search before the dialog's built-in "close on Esc" fires. Once the
-    // query is empty, we let Radix close as usual — matches the two-step
-    // Esc affordance of `InputSearch` (clear, then dismiss).
+    // search before the dialog's built-in "close on Esc" fires. Once the query
+    // is empty, we let Radix close as usual — the two-step Esc affordance.
     const handleEscapeKeyDown = useCallback(
         (event: KeyboardEvent) => {
             if (hasSearch && trimmedQuery.length > 0) {
                 event.preventDefault();
-                clearSearchQuery();
+                clearSearch();
             }
         },
-        [clearSearchQuery, hasSearch, trimmedQuery.length],
+        [clearSearch, hasSearch, trimmedQuery.length],
     );
 
     const handleSearchChange = useCallback(
         (event: React.ChangeEvent<HTMLInputElement>) => {
-            setSearchQuery(event.target.value);
+            const { value } = event.target;
+            setLocalQuery(value);
+            startTransition(() => setSearchQuery(value));
         },
         [setSearchQuery],
     );
 
     const handleSearchClear = useCallback(() => {
-        clearSearchQuery();
+        clearSearch();
         searchInputRef.current?.focus();
-    }, [clearSearchQuery]);
+    }, [clearSearch]);
 
-    // One stable callback ref reused for every button. The previous shape —
-    // `setButtonRef(id) => (node) => …` — manufactured a new closure per id
-    // on every render, which made React re-attach refs (a `delete` + `set`
-    // round-trip on the `Map`) on every list re-render. Reading the id from
-    // `data-item-id` keeps the closure identity-stable and the React-19
-    // cleanup return value handles unmount without leaks.
     const setButtonRef = useCallback((node: HTMLButtonElement | null) => {
         if (!node) {
             return;
@@ -321,10 +303,62 @@ export function DetailNavigationSheet<T extends { id: string }>({
 
         buttonRefs.current.set(id, node);
 
+        if (pendingFocusIdRef.current === id) {
+            node.focus();
+            pendingFocusIdRef.current = null;
+        }
+
         return () => {
             buttonRefs.current.delete(id);
         };
     }, []);
+
+    const renderOptionButton = useCallback(
+        (item: T, index: number) => {
+            const id = String(getId(item));
+            const isCurrent = currentId != null && id === String(currentId);
+
+            return (
+                <button
+                    aria-posinset={index + 1}
+                    aria-selected={isCurrent}
+                    aria-setsize={total}
+                    className={cn(
+                        'hover:bg-muted/50 focus-visible:ring-ring flex w-full min-w-0 items-center gap-2 rounded-md px-3 py-2 text-left text-sm focus-visible:ring-2 focus-visible:outline-hidden',
+                        isCurrent && 'bg-muted text-foreground font-medium',
+                    )}
+                    data-item-id={id}
+                    onClick={() => handleItemClick(item)}
+                    onFocus={() => setFocusedId(id)}
+                    ref={setButtonRef}
+                    role="option"
+                    tabIndex={id === focusedId ? 0 : -1}
+                    type="button"
+                >
+                    {renderItem ? (
+                        renderItem(item, isCurrent)
+                    ) : (
+                        <span className="min-w-0 flex-1 truncate">{getLabel(item)}</span>
+                    )}
+                </button>
+            );
+        },
+        [currentId, focusedId, getId, getLabel, handleItemClick, renderItem, setButtonRef, total],
+    );
+
+    const listItems = useMemo(
+        () =>
+            items.map((item, index) => (
+                <li
+                    className="min-w-0"
+                    key={String(getId(item))}
+                    role="presentation"
+                >
+                    {renderOptionButton(item, index)}
+                </li>
+            )),
+        [getId, items, renderOptionButton],
+    );
 
     return (
         <Sheet
@@ -338,6 +372,7 @@ export function DetailNavigationSheet<T extends { id: string }>({
                 aria-describedby={undefined}
                 className="flex w-full max-w-sm flex-col gap-0 p-0 sm:max-w-sm"
                 onEscapeKeyDown={handleEscapeKeyDown}
+                onOpenAutoFocus={handleOpenAutoFocus}
                 side="right"
             >
                 <SheetHeader className="gap-3 border-b p-4">
@@ -367,7 +402,7 @@ export function DetailNavigationSheet<T extends { id: string }>({
                                 placeholder={searchPlaceholder}
                                 ref={searchInputRef}
                                 type="text"
-                                value={searchQuery}
+                                value={localQuery}
                             />
                             {hasClearButton ? (
                                 <InputGroupAddon align="inline-end">
@@ -386,49 +421,52 @@ export function DetailNavigationSheet<T extends { id: string }>({
                     ) : null}
                 </SheetHeader>
                 {hasEntries ? (
-                    <div className="min-w-0 flex-1 overflow-y-auto">
-                        <ul
-                            aria-label={sheetTitle}
-                            className="flex flex-col gap-0.5 p-2"
-                            onKeyDown={handleListKeyDown}
-                            ref={listRef}
-                            role="listbox"
-                        >
-                            {items.map((item) => {
-                                const id = String(getId(item));
-                                const isCurrent = currentId != null && id === String(currentId);
-                                const isFocused = id === focusedId;
+                    <div
+                        className="min-w-0 flex-1 overflow-y-auto"
+                        ref={setScrollEl}
+                    >
+                        {shouldVirtualize ? (
+                            <ul
+                                aria-label={sheetTitle}
+                                className="relative"
+                                onKeyDown={handleListKeyDown}
+                                ref={listRef}
+                                role="listbox"
+                                style={{ height: totalSize }}
+                            >
+                                {virtualItems.map((virtualRow) => {
+                                    const item = items[virtualRow.index];
 
-                                return (
-                                    <li
-                                        className="min-w-0"
-                                        key={id}
-                                        role="presentation"
-                                    >
-                                        <button
-                                            aria-selected={isCurrent}
-                                            className={cn(
-                                                'hover:bg-muted/50 focus-visible:ring-ring flex w-full min-w-0 items-center gap-2 rounded-md px-3 py-2 text-left text-sm focus-visible:ring-2 focus-visible:outline-hidden',
-                                                isCurrent && 'bg-muted text-foreground font-medium',
-                                            )}
-                                            data-item-id={id}
-                                            onClick={() => handleItemClick(item)}
-                                            onFocus={() => setFocusedId(id)}
-                                            ref={setButtonRef}
-                                            role="option"
-                                            tabIndex={isFocused ? 0 : -1}
-                                            type="button"
+                                    if (!item) {
+                                        return null;
+                                    }
+
+                                    return (
+                                        <li
+                                            className="absolute inset-x-0 min-w-0 px-2"
+                                            key={String(getId(item))}
+                                            role="presentation"
+                                            style={{
+                                                height: ROW_HEIGHT,
+                                                transform: `translateY(${virtualRow.start}px)`,
+                                            }}
                                         >
-                                            {renderItem ? (
-                                                renderItem(item, isCurrent)
-                                            ) : (
-                                                <span className="min-w-0 flex-1 truncate">{getLabel(item)}</span>
-                                            )}
-                                        </button>
-                                    </li>
-                                );
-                            })}
-                        </ul>
+                                            {renderOptionButton(item, virtualRow.index)}
+                                        </li>
+                                    );
+                                })}
+                            </ul>
+                        ) : (
+                            <ul
+                                aria-label={sheetTitle}
+                                className="flex flex-col gap-0.5 p-2"
+                                onKeyDown={handleListKeyDown}
+                                ref={listRef}
+                                role="listbox"
+                            >
+                                {listItems}
+                            </ul>
+                        )}
                     </div>
                 ) : (
                     <div className="text-muted-foreground flex flex-1 items-center justify-center px-4 text-center text-sm">

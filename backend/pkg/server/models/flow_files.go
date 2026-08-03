@@ -28,11 +28,24 @@ type ContainerFile struct {
 	ModifiedAt time.Time `json:"modified_at"`
 }
 
+// ContainerFileError is a directory entry that could not be read during a
+// listing; the readable entries are still returned so one bad entry never
+// blanks the whole listing.
+type ContainerFileError struct {
+	Name    string `json:"name"`
+	Path    string `json:"path"`
+	Message string `json:"message"`
+}
+
 // ContainerFiles is the list response for container directory listing.
 type ContainerFiles struct {
-	Path  string          `json:"path"`
-	Files []ContainerFile `json:"files"`
-	Total uint64          `json:"total"`
+	Path     string               `json:"path"`
+	Files    []ContainerFile      `json:"files"`
+	Failures []ContainerFileError `json:"failures,omitempty"`
+	Total    uint64               `json:"total"`
+	// Truncated is true when the directory held more entries than the listing cap
+	// and only the first page was returned.
+	Truncated bool `json:"truncated,omitempty"`
 }
 
 // PullFlowFilesRequest is the request body for pulling files from a container.

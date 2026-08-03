@@ -7087,6 +7087,120 @@ const docTemplate = `{
                 }
             }
         },
+        "/user/email": {
+            "put": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Users"
+                ],
+                "summary": "Update email for current user (account)",
+                "parameters": [
+                    {
+                        "description": "container to validate and update account email",
+                        "name": "json",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.EmailChange"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "account email updated successful",
+                        "schema": {
+                            "$ref": "#/definitions/SuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "invalid account email form data",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "updating account email not permitted",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "current user not found",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "email already exists",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "internal error on updating account email",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/user/name": {
+            "put": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "User"
+                ],
+                "summary": "Change current account display name",
+                "parameters": [
+                    {
+                        "description": "new display name",
+                        "name": "json",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.NameChange"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "account name updated successful",
+                        "schema": {
+                            "$ref": "#/definitions/SuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "invalid account name form data",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "current user not found",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "internal error on updating account name",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/user/password": {
             "put": {
                 "consumes": [
@@ -8226,9 +8340,29 @@ const docTemplate = `{
                 }
             }
         },
+        "models.ContainerFileError": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "path": {
+                    "type": "string"
+                }
+            }
+        },
         "models.ContainerFiles": {
             "type": "object",
             "properties": {
+                "failures": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.ContainerFileError"
+                    }
+                },
                 "files": {
                     "type": "array",
                     "items": {
@@ -8240,6 +8374,10 @@ const docTemplate = `{
                 },
                 "total": {
                     "type": "integer"
+                },
+                "truncated": {
+                    "description": "Truncated is true when the directory held more entries than the listing cap\nand only the first page was returned.",
+                    "type": "boolean"
                 }
             }
         },
@@ -8426,6 +8564,24 @@ const docTemplate = `{
                 }
             }
         },
+        "models.EmailChange": {
+            "type": "object",
+            "required": [
+                "current_password",
+                "mail"
+            ],
+            "properties": {
+                "current_password": {
+                    "type": "string",
+                    "maxLength": 100,
+                    "minLength": 5
+                },
+                "mail": {
+                    "type": "string",
+                    "maxLength": 50
+                }
+            }
+        },
         "models.Flow": {
             "type": "object",
             "required": [
@@ -8436,7 +8592,6 @@ const docTemplate = `{
                 "status",
                 "title",
                 "tool_call_id_template",
-                "trace_id",
                 "user_id"
             ],
             "properties": {
@@ -8590,7 +8745,6 @@ const docTemplate = `{
                 "tasks",
                 "title",
                 "tool_call_id_template",
-                "trace_id",
                 "user_id"
             ],
             "properties": {
@@ -9034,6 +9188,19 @@ const docTemplate = `{
                 }
             }
         },
+        "models.NameChange": {
+            "type": "object",
+            "required": [
+                "name"
+            ],
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "maxLength": 70,
+                    "minLength": 1
+                }
+            }
+        },
         "models.Password": {
             "type": "object",
             "required": [
@@ -9050,8 +9217,7 @@ const docTemplate = `{
                     "minLength": 5
                 },
                 "password": {
-                    "type": "string",
-                    "maxLength": 100
+                    "type": "string"
                 }
             }
         },
@@ -9940,8 +10106,7 @@ const docTemplate = `{
                     "maxLength": 70
                 },
                 "password": {
-                    "type": "string",
-                    "maxLength": 100
+                    "type": "string"
                 },
                 "password_change_required": {
                     "type": "boolean"

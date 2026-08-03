@@ -7,9 +7,13 @@ function ScrollArea({ children, className, ...props }: React.ComponentProps<type
     return (
         <ScrollAreaPrimitive.Root
             className={cn('relative overflow-hidden', className)}
+            data-slot="scroll-area"
             {...props}
         >
-            <ScrollAreaPrimitive.Viewport className="size-full rounded-[inherit]">
+            <ScrollAreaPrimitive.Viewport
+                className="size-full rounded-[inherit]"
+                data-slot="scroll-area-viewport"
+            >
                 {children}
             </ScrollAreaPrimitive.Viewport>
             <ScrollBar />
@@ -31,10 +35,14 @@ function ScrollBar({
                 orientation === 'horizontal' && 'h-2.5 flex-col border-t border-t-transparent p-px',
                 className,
             )}
+            data-slot="scroll-area-scrollbar"
             orientation={orientation}
             {...props}
         >
-            <ScrollAreaPrimitive.ScrollAreaThumb className="bg-border relative flex-1 rounded-full" />
+            <ScrollAreaPrimitive.ScrollAreaThumb
+                className="bg-border relative flex-1 rounded-full"
+                data-slot="scroll-area-thumb"
+            />
         </ScrollAreaPrimitive.ScrollAreaScrollbar>
     );
 }

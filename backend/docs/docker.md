@@ -5,6 +5,7 @@
 - [Overview](#overview)
 - [Architecture](#architecture)
 - [Configuration](#configuration)
+  - [Worker Docker Access](#worker-docker-access)
 - [Core Interfaces](#core-interfaces)
 - [Container Lifecycle Management](#container-lifecycle-management)
 - [Security and Isolation](#security-and-isolation)
@@ -53,12 +54,15 @@ backend/pkg/docker/
 ### Key Constants and Configuration
 
 ```go
-const WorkFolderPathInContainer = "/work"              // Standard working directory in containers
-const BaseContainerPortsNumber = 28000                // Starting port number for dynamic allocation
-const defaultImage = "debian:latest"                  // Fallback image if custom image fails
-const containerPortsNumber = 2                        // Number of ports allocated per container
-const limitContainerPortsNumber = 2000                // Maximum port range for allocation
-const containerListWorkers = 20                       // Parallel stat workers for directory listing
+const WorkFolderPathInContainer = "/work"   // Standard working directory in containers
+const WorkerVolumeNameSuffix   = "-data"    // Suffix of the per-flow named volume
+const BaseContainerPortsNumber = 28000      // Default base for dynamic port allocation
+
+const defaultImage              = "debian:latest"          // Fallback image if custom image fails
+const defaultDockerSocketPath   = "/var/run/docker.sock"   // Mount point of a bound socket
+const containerPortsNumber      = 2                        // Number of ports allocated per container
+const limitContainerPortsNumber = 2000                     // Port window size per instance
+const containerListWorkers      = 20                       // Parallel stat workers for directory listing
 ```
 
 ### Port Allocation Strategy
@@ -66,11 +70,14 @@ const containerListWorkers = 20                       // Parallel stat workers f
 PentAGI uses a deterministic port allocation algorithm to ensure each flow gets unique, predictable ports:
 
 ```go
-func GetPrimaryContainerPorts(flowID int64) []int {
+func GetPrimaryContainerPorts(portsBase int, flowID int64) []int {
+    if portsBase <= 0 || portsBase > (65535-limitContainerPortsNumber) {
+        portsBase = BaseContainerPortsNumber
+    }
     ports := make([]int, containerPortsNumber)
-    for i := 0; i < containerPortsNumber; i++ {
+    for i := range containerPortsNumber {
         delta := (int(flowID)*containerPortsNumber + i) % limitContainerPortsNumber
-        ports[i] = BaseContainerPortsNumber + delta
+        ports[i] = portsBase + delta
     }
     return ports
 }
@@ -79,7 +86,9 @@ func GetPrimaryContainerPorts(flowID int64) []int {
 This ensures that:
 - Each flow gets consistent port numbers across restarts
 - Port conflicts are avoided between different flows
-- Ports are within a controlled range (28000-30000)
+- Ports stay inside a 2000-wide window starting at `DOCKER_PORTS_BASE` (default `28000`, so `28000-30000`)
+
+The base is configurable because flow ids restart at `1` in every PentAGI instance: two instances sharing one worker node would otherwise request identical host ports for their respective flow `1`. Give each instance a disjoint window (`28000`, `30000`, …). An out-of-range base silently falls back to `28000` rather than producing unbindable ports.
 
 ## Configuration
 
@@ -92,7 +101,11 @@ The Docker client is configured through several environment variables defined in
 | `DOCKER_HOST` | `unix:///var/run/docker.sock` | Docker daemon connection |
 | `DOCKER_INSIDE` | `false` | Whether PentAGI communicates with host Docker daemon from containers |
 | `DOCKER_NET_ADMIN` | `false` | Whether PentAGI grants the primary container NET_ADMIN capability for advanced networking. |
-| `DOCKER_SOCKET` | `/var/run/docker.sock` | Path to Docker socket on host |
+| `DOCKER_SOCKET` | | Explicit socket path on the worker node to bind into worker containers. Empty enables autodetection — see [Worker Docker Access](#worker-docker-access) |
+| `DOCKER_INSIDE_HOST` | | Docker daemon endpoint given **to worker containers**; also disables socket autodetection |
+| `DOCKER_INSIDE_TLS_VERIFY` | | TLS verification for the worker container's Docker connection |
+| `DOCKER_INSIDE_CERT_PATH` | | TLS certificate directory **on the worker node**, mounted read-only into worker containers |
+| `DOCKER_PORTS_BASE` | `28000` | First host port of this instance's per-flow allocation window |
 | `DOCKER_NETWORK` | | Docker network for container communication (bridge mode) or `host` for host network mode |
 | `DOCKER_PUBLIC_IP` | `0.0.0.0` | Public IP for port binding (bridge mode only) |
 | `DOCKER_WORK_DIR` | | Custom work directory path on host |
@@ -105,17 +118,26 @@ The Docker client is configured through several environment variables defined in
 ```go
 type Config struct {
     // Docker (terminal) settings
-    DockerInside                 bool   `env:"DOCKER_INSIDE" envDefault:"false"`
-    DockerNetAdmin               bool   `env:"DOCKER_NET_ADMIN" envDefault:"false"`
-    DockerSocket                 string `env:"DOCKER_SOCKET"`
+    DockerInside   bool   `env:"DOCKER_INSIDE" envDefault:"false"`
+    DockerNetAdmin bool   `env:"DOCKER_NET_ADMIN" envDefault:"false"`
+    DockerSocket   string `env:"DOCKER_SOCKET"`
+
+    // How a worker container reaches a Docker daemon (see Worker Docker Access)
+    DockerInsideHost      string `env:"DOCKER_INSIDE_HOST"`
+    DockerInsideTLSVerify string `env:"DOCKER_INSIDE_TLS_VERIFY"`
+    DockerInsideCertPath  string `env:"DOCKER_INSIDE_CERT_PATH"`
+
     DockerNetwork                string `env:"DOCKER_NETWORK"`
     DockerPublicIP               string `env:"DOCKER_PUBLIC_IP" envDefault:"0.0.0.0"`
     DockerWorkDir                string `env:"DOCKER_WORK_DIR"`
+    DockerPortsBase              int    `env:"DOCKER_PORTS_BASE" envDefault:"28000"`
     DockerDefaultImage           string `env:"DOCKER_DEFAULT_IMAGE" envDefault:"debian:latest"`
     DockerDefaultImageForPentest string `env:"DOCKER_DEFAULT_IMAGE_FOR_PENTEST" envDefault:"vxcontrol/kali-linux"`
     DataDir                      string `env:"DATA_DIR" envDefault:"./data"`
 }
 ```
+
+The three `DOCKER_INSIDE_*` values are consumed through helpers on `*config.Config` (`WorkerDockerSocket`, `WorkerDockerEnv`, `WorkerDockerCertPath`) so the decision logic lives in one place and the Docker client stays a thin consumer.
 
 ### NET_ADMIN Capability Configuration
 
@@ -149,28 +171,94 @@ When `DOCKER_NET_ADMIN=true`, containers receive the following networking capabi
 
 #### Container Capability Assignment
 
-The NET_ADMIN capability is applied differently based on container type and configuration:
+The primary container does not rely on Docker's implicit default capability set. `tools.go` (`flowToolsExecutor.Prepare`) sets `CapDrop: ["ALL"]` and then adds back an explicit allow-list — Docker's own default 14-capability set minus `MKNOD`, plus `NET_ADMIN` when `DOCKER_NET_ADMIN=true`:
 
 ```go
-// Primary containers (when DOCKER_NET_ADMIN=true)
-hostConfig := &container.HostConfig{
-    CapAdd: []string{"NET_RAW", "NET_ADMIN"},  // Full networking capabilities
-    // ... other configurations
-}
-
 // Primary containers (when DOCKER_NET_ADMIN=false)
 hostConfig := &container.HostConfig{
-    CapAdd: []string{"NET_RAW"},  // Basic raw socket access only
-    // ... other configurations
+    CapDrop: []string{"ALL"},
+    CapAdd: []string{
+        "CHOWN", "DAC_OVERRIDE", "FSETID", "FOWNER",
+        "NET_RAW", "SETGID", "SETUID", "SETFCAP", "SETPCAP",
+        "NET_BIND_SERVICE", "SYS_CHROOT", "KILL", "AUDIT_WRITE", "SYS_PTRACE",
+    },
+}
+
+// Primary containers (when DOCKER_NET_ADMIN=true) — same list, plus NET_ADMIN
+hostConfig := &container.HostConfig{
+    CapDrop: []string{"ALL"},
+    CapAdd: []string{
+        "CHOWN", "DAC_OVERRIDE", "FSETID", "FOWNER",
+        "NET_RAW", "SETGID", "SETUID", "SETFCAP", "SETPCAP",
+        "NET_BIND_SERVICE", "SYS_CHROOT", "KILL", "AUDIT_WRITE", "SYS_PTRACE",
+        "NET_ADMIN",
+    },
 }
 ```
 
-### Docker-in-Docker Support
+Why the full default set (minus one) instead of just `NET_RAW`/`NET_ADMIN`: pentest workflows routinely install new tools at runtime via `apt`/`dpkg` (the Installer Agent's core job), and several common network tools' `postinst` maintainer scripts call `setcap` on their binaries instead of relying on setuid (`ping`, `traceroute`, `nmap`, `dumpcap`, `hping3`, …). That needs `SETFCAP`; `SETPCAP`/`FSETID`/`AUDIT_WRITE` round out the rest of Docker's default set that ordinary package management and privilege-dropping daemons expect. See [Capability Management](#capability-management) below for the full rationale, including the one deliberate omission (`MKNOD`).
 
-PentAGI supports running inside Docker containers while still managing other containers. This is controlled by the `DOCKER_INSIDE` setting:
+### Worker Docker Access
 
-- **`DOCKER_INSIDE=false`**: PentAGI runs on host, manages containers directly
-- **`DOCKER_INSIDE=true`**: PentAGI runs in container, mounts Docker socket to manage sibling containers
+Two independent questions are often confused, and PentAGI answers them with two separate sets of variables:
+
+| Question | Variables | Consumer |
+|---|---|---|
+| Which daemon does **PentAGI** create worker containers on? | `DOCKER_HOST`, `DOCKER_TLS_VERIFY`, `DOCKER_CERT_PATH` | Docker SDK inside the PentAGI process |
+| Which daemon may a **worker container** talk to? | `DOCKER_INSIDE`, `DOCKER_SOCKET`, `DOCKER_INSIDE_HOST`, `DOCKER_INSIDE_TLS_VERIFY`, `DOCKER_INSIDE_CERT_PATH` | The agent's sandbox |
+
+`DOCKER_INSIDE` is the master switch for the second row. With it disabled a sandbox gets no Docker access and no Docker configuration at all.
+
+#### Socket selection algorithm
+
+With `DOCKER_INSIDE=true`, `NewDockerClient` resolves the socket once at startup:
+
+```go
+socket, autodetectSocket := cfg.WorkerDockerSocket()
+if autodetectSocket {
+    socket = getHostDockerSocket(ctx, cli)
+}
+```
+
+| `DOCKER_SOCKET` | `DOCKER_INSIDE_HOST` | Result |
+|---|---|---|
+| set | any | That socket is bind-mounted at `/var/run/docker.sock` inside every worker |
+| empty | set | **Nothing is mounted**; autodetection is skipped entirely |
+| empty | empty | Host socket is autodetected and mounted (historical behaviour) |
+
+#### Environment injection
+
+Every non-empty `DOCKER_INSIDE_*` value is injected into the worker container with the `_INSIDE_` segment removed, so the Docker CLI inside picks it up unmodified:
+
+| Configured on PentAGI | Seen inside the worker container |
+|---|---|
+| `DOCKER_INSIDE_HOST=tcp://10.0.0.5:3376` | `DOCKER_HOST=tcp://10.0.0.5:3376` |
+| `DOCKER_INSIDE_TLS_VERIFY=1` | `DOCKER_TLS_VERIFY=1` |
+| `DOCKER_INSIDE_CERT_PATH=/etc/docker/dind-client` | `DOCKER_CERT_PATH=/etc/docker/dind-client` |
+
+Empty values are omitted rather than injected blank. When `DOCKER_INSIDE_CERT_PATH` is set, that directory is additionally bind-mounted **read-only at the identical path**, so the injected `DOCKER_CERT_PATH` resolves unchanged inside the container. The path is resolved on the **worker node** — the machine whose daemon creates sandboxes — which is frequently not the machine running PentAGI.
+
+```go
+if dc.inside {
+    if dc.socket != "" {
+        hostConfig.Binds = append(hostConfig.Binds, dc.socket+":"+defaultDockerSocketPath)
+    }
+    config.Env = append(config.Env, dc.insideEnv...)
+    if dc.insideCertPath != "" {
+        hostConfig.Binds = append(hostConfig.Binds, dc.insideCertPath+":"+dc.insideCertPath+":ro")
+    }
+}
+```
+
+#### Why the TCP endpoint is preferred over a bound socket
+
+Bind-mounting a socket into worker containers has two distinct problems.
+
+**Ordering fragility.** A bind-mount source that does not exist yet is created by Docker as a **directory**. If the worker node reboots and a worker container with `restart: on-failure` starts before the dind daemon has recreated its socket, Docker materialises a directory at `/var/run/docker-dind/docker.sock` — and dind then cannot bind its own socket at that path. The sandbox gets a useless mount and dind fails to start until the directory is removed by hand.
+
+**Blast radius.** A socket bind-mount only avoids that race reliably when it is the **host** daemon's socket, since that one exists before anything else starts. But handing an autonomous agent the host daemon means handing it the host: it can start a privileged container, mount `/`, and take over the node — including PentAGI itself and every other flow's containers.
+
+Pointing sandboxes at a hardened dind daemon over TLS avoids both. There is no mount to race on, and the authorization policy on that daemon constrains what the agent may create. See [Worker Node Setup](../../examples/guides/worker_node.md) for a complete configuration.
 
 ### Network Configuration
 
@@ -216,7 +304,7 @@ type DockerClient interface {
 
     // File operations
     ContainerStatPath(ctx context.Context, containerID string, path string) (container.PathStat, error)
-    ListContainerDir(ctx context.Context, containerID string, dirPath string) ([]container.PathStat, error)
+    ListContainerDir(ctx context.Context, containerID string, dirPath string) (ContainerDirListing, error)
     CopyToContainer(ctx context.Context, containerID string, dstPath string, content io.Reader, options container.CopyToContainerOptions) error
     CopyFromContainer(ctx context.Context, containerID string, srcPath string) (io.ReadCloser, container.PathStat, error)
 
@@ -230,16 +318,21 @@ type DockerClient interface {
 
 ```go
 type dockerClient struct {
-    db       database.Querier     // Database for container state management
-    logger   *logrus.Logger       // Structured logging
-    dataDir  string               // Local data directory
-    hostDir  string               // Host-mapped data directory
-    client   *client.Client       // Docker SDK client
-    inside   bool                 // Running inside Docker
-    defImage string               // Default fallback image
-    socket   string               // Docker socket path
-    network  string               // Docker network name
-    publicIP string               // Public IP for port binding
+    db        database.Querier    // Database for container state management
+    logger    *logrus.Logger      // Structured logging
+    dataDir   string              // Local data directory
+    hostDir   string              // Host-mapped data directory
+    client    *client.Client      // Docker SDK client
+    inside    bool                // Worker containers may reach a Docker daemon
+    defImage  string              // Default fallback image
+    socket    string              // Socket to bind into workers ("" = none)
+    network   string              // Docker network name
+    publicIP  string              // Public IP for port binding
+    portsBase int                 // First host port of this instance's window
+    labels    map[string]string   // Tenant ownership labels (nil without a tenant)
+
+    insideEnv      []string       // DOCKER_* injected into worker containers
+    insideCertPath string         // TLS dir mounted read-only into workers
 }
 ```
 
@@ -268,7 +361,7 @@ The `RunContainer` method handles the complete container creation workflow:
 4. **Storage Setup**:
    - Creates dedicated volume or bind mount
    - Mounts work directory to `/work` in container
-   - Optionally mounts Docker socket for Docker-in-Docker
+   - When `DOCKER_INSIDE=true`: optionally mounts a Docker socket, injects the `DOCKER_*` environment derived from `DOCKER_INSIDE_*`, and mounts the TLS certificate directory read-only — see [Worker Docker Access](#worker-docker-access)
 
 5. **Network and Ports**:
    - **Bridge Mode**: Assigns flow-specific ports using deterministic algorithm, binds to public IP
@@ -294,15 +387,25 @@ containerConfig := &container.Config{
     },
 }
 
+pidsLimit := int64(2048) // fork-bomb guard, default when the caller does not set one
+
 hostConfig := &container.HostConfig{
-    CapAdd: []string{"NET_RAW"},                 // Required capabilities for network tools
+    CapDrop: []string{"ALL"},                    // Explicit allow-list below, see Capability Management
+    CapAdd: []string{
+        "CHOWN", "DAC_OVERRIDE", "FSETID", "FOWNER",
+        "NET_RAW", "SETGID", "SETUID", "SETFCAP", "SETPCAP",
+        "NET_BIND_SERVICE", "SYS_CHROOT", "KILL", "AUDIT_WRITE", "SYS_PTRACE",
+    },
+    PidsLimit: &pidsLimit,
     RestartPolicy: container.RestartPolicy{
         Name:              "on-failure",         // Restart failed containers only
         MaximumRetryCount: 5,
     },
     Binds: []string{
         "/host/data/flow-123:/work",            // Work directory mount
-        "/var/run/docker.sock:/var/run/docker.sock", // Docker socket (if inside Docker)
+        // Only when DOCKER_INSIDE=true and a socket was selected; with
+        // DOCKER_INSIDE_HOST set instead, no socket is mounted at all.
+        "/var/run/docker.sock:/var/run/docker.sock",
     },
     PortBindings: nat.PortMap{
         "28000/tcp": []nat.PortBinding{{HostIP: "0.0.0.0", HostPort: "28000"}},
@@ -326,8 +429,8 @@ PentAGI tracks container states in the database:
 Containers follow a specific naming pattern for easy identification:
 
 ```go
-func PrimaryTerminalName(flowID int64) string {
-    return fmt.Sprintf("pentagi-terminal-%d", flowID)
+func PrimaryTerminalName(tenantPrefix string, flowID int64) string {
+    return fmt.Sprintf("%s%s%d", tenantPrefix, PrimaryTerminalNamePrefix, flowID)
 }
 ```
 
@@ -335,6 +438,8 @@ This creates names like `pentagi-terminal-123` for flow ID 123, making it easy t
 - Identify containers belonging to specific flows
 - Perform flow-based cleanup operations
 - Debug container-related issues
+
+When `TENANT_ID` is set the tenant leads the name — `acme-pentagi-terminal-123` — so that several PentAGI instances can share one worker node. The prefix goes in front deliberately: sweeps that match `pentagi-terminal-*` then reach only their own instance's containers. The per-flow volume (`<container name>-data`) and the container hostname derive from this name, so both inherit the scoping. Containers and volumes additionally carry a `pentagi.tenant` label for filter-based cleanup.
 
 ### Cleanup Operations
 
@@ -371,12 +476,46 @@ PentAGI implements a multi-layered security approach for container isolation:
 - **Volume Separation**: Each flow gets isolated storage space
 
 #### Capability Management
+
+The primary container uses an explicit allow-list instead of Docker's implicit defaults: `CapDrop: ["ALL"]`, then `CapAdd` back Docker's own default 14-capability set minus `MKNOD`, plus `NET_ADMIN` when `DOCKER_NET_ADMIN=true` and `SYS_PTRACE` (one deliberate addition beyond Docker's defaults, see below):
+
 ```go
 hostConfig := &container.HostConfig{
-    CapAdd: []string{"NET_RAW"},  // Required for network scanning tools
-    // Other dangerous capabilities are not granted
+    CapDrop: []string{"ALL"},
+    CapAdd: []string{
+        "CHOWN", "DAC_OVERRIDE", "FSETID", "FOWNER",
+        "NET_RAW", "SETGID", "SETUID", "SETFCAP", "SETPCAP",
+        "NET_BIND_SERVICE", "SYS_CHROOT", "KILL", "AUDIT_WRITE", "SYS_PTRACE",
+        // + "NET_ADMIN" when DOCKER_NET_ADMIN=true
+    },
 }
 ```
+
+Why this exact set, rather than a minimal `NET_RAW`-only list:
+
+| Capability | Why it is needed |
+|---|---|
+| `NET_RAW` | Raw sockets — nmap, ping, packet crafting |
+| `NET_BIND_SERVICE` | Bind ports below 1024 — reverse shells, Responder, rogue DNS |
+| `SETUID` / `SETGID` | Daemons and tools that drop privileges after starting as root |
+| `SETFCAP` / `SETPCAP` | `apt`/`dpkg` `postinst` scripts that `setcap` network tools instead of relying on setuid (`ping`, `traceroute`, `nmap`, `dumpcap`, `hping3`, …) — without these, on-the-fly package installs (the Installer Agent's core job) fail |
+| `FSETID` | Preserves set-id bits when dpkg installs/modifies files as a non-owner |
+| `CHOWN` / `DAC_OVERRIDE` / `FOWNER` | Root file-permission overrides needed during package installs and builds |
+| `KILL` | Signal other processes inside the container |
+| `SYS_CHROOT` | chroot-based isolation within the sandbox |
+| `AUDIT_WRITE` | Lets `sudo`/`sshd` write audit-log entries instead of warning |
+| `SYS_PTRACE` | Not a Docker default — added so `gdb`/`strace`/`ltrace`/dynamic binary analysis (`pwndbg`, `radare2`) work for the Coder Agent's exploit-development role. Without it, `ptrace()` and friends (`process_vm_readv`/`writev`, `kcmp`) stay blocked by Docker's *default seccomp profile*, which independently gates them behind `CAP_SYS_PTRACE` — no custom seccomp profile is needed to unblock them, since moby/containerd auto-extend the default profile's syscall allow-list to match added capabilities. Scope stays contained to the sandbox: `ptrace` only works within the container's own PID namespace, never against host or sibling-container processes. |
+| `NET_ADMIN` (opt-in via `DOCKER_NET_ADMIN`) | Interface/routing/firewall control for advanced network pentesting |
+
+**`MKNOD` is the one deliberate omission** from Docker's default set: creating device nodes has no legitimate use for pentest tooling or package management, and this repository's own dind-hardening research (see [Worker Node Setup](../../examples/guides/worker_node.md) and its [`authz.rego`](../../examples/guides/worker_node/authz.rego)) identifies block-device `mknod` combined with `debugfs` as "the primary confirmed escape vector" for a hostile-code container. `SYS_ADMIN`, `SYS_MODULE`, `SYS_RAWIO`, and `SYS_BOOT` are never granted — none are part of Docker's default set and none are required by any supported workflow.
+
+Docker's default set minus `MKNOD`, plus `NET_ADMIN`, is exactly the `allowed_caps` whitelist already vetted in `authz.rego` for nested dind containers running the same kind of pentest workload — the two are kept intentionally consistent at that shared baseline. `SYS_PTRACE` is the one place the primary container's allow-list goes further than `authz.rego`'s: it is not offered to nested dind containers (an agent there can request arbitrary `containers/create` calls, and the dind threat model does not special-case debugging), but the primary worker container is created solely by PentAGI itself with a fixed capability list, so granting it here does not expand what an agent can ask for.
+
+An earlier revision of this container also forced `no-new-privileges:true` via `SecurityOpt`, intended as defense-in-depth against setuid/file-capability escalation. It was removed: the capability bounding set above already caps what any process can ever gain regardless of setuid, so the flag added no protection beyond the allow-list while unconditionally breaking SUID/SGID privilege-escalation testing and `sudo`/`su` from a non-root shell — both routine penetration-testing workflows.
+
+#### Resource Limits
+- **PidsLimit**: Defaults to 2048 when the caller does not set one — a cheap fork-bomb / resource-exhaustion guard, generous enough for parallel scans (nmap, hydra). Mirrors the same default used for the dind daemon in the [Worker Node Setup](../../examples/guides/worker_node.md) guide.
+- **Memory/CPU**: Controlled via standard `HostConfig` resource fields when set by the caller.
 
 #### Process Isolation
 - **User Namespaces**: Containers run with isolated user space
@@ -496,7 +635,7 @@ if err != nil {
 }
 
 // Create container for a flow
-containerName := docker.PrimaryTerminalName(flowID)
+containerName := tools.PrimaryTerminalName(cfg.TenantPrefix(), flowID)
 container, err := dockerClient.RunContainer(
     ctx,
     containerName,
@@ -507,7 +646,15 @@ container, err := dockerClient.RunContainer(
         Entrypoint: []string{"tail", "-f", "/dev/null"},
     },
     &container.HostConfig{
-        CapAdd: []string{"NET_RAW", "NET_ADMIN"},
+        // See Container Capability Assignment above for the full allow-list
+        // that flowToolsExecutor.Prepare actually passes in production.
+        CapDrop: []string{"ALL"},
+        CapAdd: []string{
+            "CHOWN", "DAC_OVERRIDE", "FSETID", "FOWNER",
+            "NET_RAW", "SETGID", "SETUID", "SETFCAP", "SETPCAP",
+            "NET_BIND_SERVICE", "SYS_CHROOT", "KILL", "AUDIT_WRITE", "SYS_PTRACE",
+            "NET_ADMIN",
+        },
     },
 )
 ```
@@ -560,11 +707,10 @@ entries, err := dockerClient.ListContainerDir(ctx, containerID, "/work")
 `ListContainerDir` performs a non-recursive directory listing inside a running container:
 
 1. Uses `ContainerStatPath` to verify that `dirPath` exists and is a directory.
-2. Executes `ls -1 -- <dirPath>` inside the container to get direct entry names.
-3. Calls `ContainerStatPath` for every entry to return Docker `container.PathStat` metadata.
-4. Runs entry stat calls through `pkg/queue` with `containerListWorkers = 20` workers to reduce latency for large directories.
+2. Executes `find <dirPath> -maxdepth 1 -mindepth 1 ! -name '.*' -print0` (no TTY) inside the container. `find -print0` emits literal, NUL-delimited entry paths, so names with spaces, newlines, or non-UTF8 bytes survive intact — the old `ls -1` parse mangled them.
+3. Stats every entry concurrently through an `errgroup` bounded to `containerListWorkers = 20`, preserving input order.
 
-The method returns `[]container.PathStat`. The caller is responsible for joining the returned entry name with the requested base path when it needs full paths.
+The method returns a `ContainerDirListing`: `Files` are the readable entries' `container.PathStat` metadata, `Failures` carries any per-entry stat errors so a live directory degrades to a partial listing instead of failing outright, and `Truncated` is set when the directory held more than the entry cap and only the first page was listed.
 
 If `dirPath` is empty, it defaults to `WorkFolderPathInContainer` (`/work`).
 

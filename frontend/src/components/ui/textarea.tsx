@@ -3,18 +3,21 @@ import { useImperativeHandle } from 'react';
 
 import { cn } from '@/lib/utils';
 
-type TextareaProps = React.ComponentProps<'textarea'> & {
-    maxHeight?: number;
-    minHeight?: number;
-};
-
-type TextareaRef = {
+export type TextareaRef = {
+    focus: () => void;
     maxHeight: number;
     minHeight: number;
     textarea: HTMLTextAreaElement;
 };
 
+type TextareaProps = React.ComponentProps<'textarea'> & {
+    autoSize?: boolean;
+    maxHeight?: number;
+    minHeight?: number;
+};
+
 interface UseTextareaProps {
+    enabled?: boolean;
     maxHeight?: number;
     minHeight?: number;
     textareaRef: React.MutableRefObject<HTMLTextAreaElement | null>;
@@ -22,6 +25,7 @@ interface UseTextareaProps {
 }
 
 function Textarea({
+    autoSize = true,
     className,
     maxHeight = 118,
     minHeight = 38,
@@ -29,11 +33,12 @@ function Textarea({
     ref,
     value,
     ...props
-}: TextareaProps & { ref?: React.Ref<TextareaRef> }) {
+}: Omit<TextareaProps, 'ref'> & { ref?: React.Ref<TextareaRef> }) {
     const textareaRef = React.useRef<HTMLTextAreaElement | null>(null);
     const [triggerAutoSize, setTriggerAutoSize] = React.useState('');
 
     useTextarea({
+        enabled: autoSize,
         maxHeight,
         minHeight,
         textareaRef,
@@ -55,9 +60,10 @@ function Textarea({
     return (
         <textarea
             className={cn(
-                'border-input placeholder:text-muted-foreground focus-visible:ring-ring flex w-full resize-none rounded-md border bg-transparent px-3 py-2 text-sm shadow-xs focus-visible:ring-1 focus-visible:outline-hidden disabled:cursor-not-allowed disabled:opacity-50',
+                'aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive border-input dark:bg-input/30 placeholder:text-muted-foreground focus-visible:ring-ring flex w-full min-w-0 resize-none rounded-md border bg-transparent px-3 py-2 text-base shadow-xs focus-visible:ring-1 focus-visible:outline-hidden disabled:cursor-not-allowed disabled:opacity-50 md:text-sm',
                 className,
             )}
+            data-slot="textarea"
             ref={textareaRef}
             {...props}
             onChange={(e) => {
@@ -70,6 +76,7 @@ function Textarea({
 }
 
 function useTextarea({
+    enabled = true,
     maxHeight = Number.MAX_SAFE_INTEGER,
     minHeight = 0,
     textareaRef,
@@ -81,7 +88,7 @@ function useTextarea({
         const offsetBorder = 0;
         const textareaElement = textareaRef.current;
 
-        if (!textareaElement) {
+        if (!enabled || !textareaElement) {
             return;
         }
 
@@ -98,7 +105,7 @@ function useTextarea({
         textareaElement.style.height = `${minHeight + offsetBorder}px`;
         const scrollHeight = textareaElement.scrollHeight;
         textareaElement.style.height = scrollHeight > maxHeight ? `${maxHeight}px` : `${scrollHeight + offsetBorder}px`;
-    }, [triggerAutoSize, maxHeight, minHeight, textareaRef]);
+    }, [enabled, triggerAutoSize, maxHeight, minHeight, textareaRef]);
 }
 
 export { Textarea };

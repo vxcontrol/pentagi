@@ -1,8 +1,6 @@
-import {
-    useResourceAddedSubscription,
-    useResourceDeletedSubscription,
-    useResourceUpdatedSubscription,
-} from '@/graphql/types';
+import { useSubscription } from '@apollo/client/react';
+
+import { ResourceAddedDocument, ResourceDeletedDocument, ResourceUpdatedDocument } from '@/graphql/types';
 
 interface UseResourcesRealtimeParams {
     /**
@@ -19,7 +17,7 @@ interface UseResourcesRealtimeParams {
  * straight into the `resources` query cache, so callers don't need extra refetch.
  */
 export function useResourcesRealtime({ isPaused }: UseResourcesRealtimeParams): void {
-    useResourceAddedSubscription({ skip: isPaused });
-    useResourceUpdatedSubscription({ skip: isPaused });
-    useResourceDeletedSubscription({ skip: isPaused });
+    useSubscription(ResourceAddedDocument, { skip: isPaused });
+    useSubscription(ResourceUpdatedDocument, { skip: isPaused });
+    useSubscription(ResourceDeletedDocument, { skip: isPaused });
 }

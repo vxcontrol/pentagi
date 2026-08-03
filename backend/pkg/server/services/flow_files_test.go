@@ -109,7 +109,7 @@ func TestSanitizeContainerCachePath(t *testing.T) {
 // ── directory helpers ─────────────────────────────────────────────────────────
 
 func TestFlowFileService_Dirs(t *testing.T) {
-	svc := NewFlowFileService(nil, "/data", nil, nil)
+	svc := NewFlowFileService(nil, "/data", "", nil, nil)
 	assert.Equal(t, "/data/flow-42-data", svc.flowDataDir(42))
 	assert.Equal(t, "/data/flow-42-data/uploads", svc.flowUploadsDir(42))
 	assert.Equal(t, "/data/flow-42-data/container", svc.flowContainerDir(42))
@@ -124,7 +124,7 @@ func TestMaxUploadFileSize(t *testing.T) {
 // ── resolveCachedPath ─────────────────────────────────────────────────────────
 
 func TestResolveCachedPath(t *testing.T) {
-	svc := NewFlowFileService(nil, "/data", nil, nil)
+	svc := NewFlowFileService(nil, "/data", "", nil, nil)
 
 	tests := []struct {
 		name    string
@@ -222,7 +222,7 @@ func TestListDirEntriesRecursive_PreservesNestedPaths(t *testing.T) {
 
 func TestFlowFileService_ListFlowFiles_BothSources(t *testing.T) {
 	dataDir := t.TempDir()
-	svc := NewFlowFileService(nil, dataDir, nil, nil)
+	svc := NewFlowFileService(nil, dataDir, "", nil, nil)
 
 	uploadsDir := filepath.Join(dataDir, "flow-7-data", "uploads")
 	containerDir := filepath.Join(dataDir, "flow-7-data", "container")
@@ -251,7 +251,7 @@ func TestFlowFileService_ListFlowFiles_BothSources(t *testing.T) {
 }
 
 func TestFlowFileService_ListFlowFiles_EmptyDirs(t *testing.T) {
-	svc := NewFlowFileService(nil, t.TempDir(), nil, nil)
+	svc := NewFlowFileService(nil, t.TempDir(), "", nil, nil)
 	files, err := svc.listFlowFiles(999)
 	require.NoError(t, err)
 	assert.Empty(t, files)
@@ -496,7 +496,7 @@ func TestZipDirectory_ExcludesSymlinks(t *testing.T) {
 // ── primaryContainerName ─────────────────────────────────────────────────────
 
 func TestPrimaryContainerName(t *testing.T) {
-	assert.Equal(t, "pentagi-terminal-42", primaryContainerName(42))
+	assert.Equal(t, "pentagi-terminal-42", primaryContainerName("", 42))
 }
 
 // ── sorting ───────────────────────────────────────────────────────────────────
@@ -968,10 +968,12 @@ type fakeDockerClient struct {
 
 	// Per-path overrides for multi-path tests; take precedence over the
 	// single-value fields above when the queried path has an entry here.
-	statPathMap    map[string]container.PathStat
-	statPathErrMap map[string]error
-	listDirMap     map[string][]container.PathStat
-	listDirErrMap  map[string]error
+	statPathMap      map[string]container.PathStat
+	statPathErrMap   map[string]error
+	listDirMap       map[string][]container.PathStat
+	listDirFailMap   map[string][]docker.ContainerEntryError
+	listDirErrMap    map[string]error
+	listDirTruncated map[string]bool
 
 	// CopyFromContainer behaviour.
 	copyFromBody    []byte
@@ -1049,18 +1051,23 @@ func (f *fakeDockerClient) ContainerStatPath(_ context.Context, _ string, p stri
 	}
 	return f.statPath, f.statPathErr
 }
-func (f *fakeDockerClient) ListContainerDir(_ context.Context, _ string, p string) ([]container.PathStat, error) {
+func (f *fakeDockerClient) ListContainerDir(_ context.Context, _ string, p string) (docker.ContainerDirListing, error) {
 	if f.listDirErrMap != nil {
 		if err, ok := f.listDirErrMap[p]; ok {
-			return nil, err
+			return docker.ContainerDirListing{}, err
+		}
+	}
+	if f.listDirFailMap != nil {
+		if fails, ok := f.listDirFailMap[p]; ok {
+			return docker.ContainerDirListing{Files: f.listDirMap[p], Failures: fails, Truncated: f.listDirTruncated[p]}, nil
 		}
 	}
 	if f.listDirMap != nil {
 		if dir, ok := f.listDirMap[p]; ok {
-			return dir, nil
+			return docker.ContainerDirListing{Files: dir, Truncated: f.listDirTruncated[p]}, nil
 		}
 	}
-	return f.listDir, f.listDirErr
+	return docker.ContainerDirListing{Files: f.listDir}, f.listDirErr
 }
 func (f *fakeDockerClient) CopyToContainer(_ context.Context, containerID string, dstPath string, content io.Reader, options container.CopyToContainerOptions) error {
 	body, _ := io.ReadAll(content)
@@ -1204,7 +1211,7 @@ func TestFlowFileService_GetFlowFilesScenarios(t *testing.T) {
 			db := setupFlowFileServiceTestDB(t)
 			dataDir := t.TempDir()
 			ss := &flowFileCaptureSubscriptions{}
-			svc := NewFlowFileService(db, dataDir, nil, ss)
+			svc := NewFlowFileService(db, dataDir, "", nil, ss)
 
 			if tt.seedFlow != nil {
 				seedFlow(t, db, tt.seedFlow.id, tt.seedFlow.userID)
@@ -1370,7 +1377,7 @@ func TestFlowFileService_UploadFlowFilesScenarios(t *testing.T) {
 			dataDir := t.TempDir()
 			ss := &flowFileCaptureSubscriptions{}
 			fakeDocker := &fakeDockerClient{running: tt.dockerRunning}
-			svc := NewFlowFileService(db, dataDir, fakeDocker, ss)
+			svc := NewFlowFileService(db, dataDir, "", fakeDocker, ss)
 
 			if tt.flowOwner != 0 {
 				seedFlow(t, db, tt.flowID, tt.flowOwner)
@@ -1563,7 +1570,7 @@ func TestFlowFileService_UploadFlowFilesPathTraversalSecurity(t *testing.T) {
 			db := setupFlowFileServiceTestDB(t)
 			dataDir := t.TempDir()
 			ss := &flowFileCaptureSubscriptions{}
-			svc := NewFlowFileService(db, dataDir, nil, ss)
+			svc := NewFlowFileService(db, dataDir, "", nil, ss)
 			seedFlow(t, db, 1, 1)
 
 			body, contentType := flowFileMultipartBody(t,
@@ -2070,7 +2077,7 @@ func TestFlowFileService_DeleteFlowFileScenarios(t *testing.T) {
 				execCreateErr:   tt.execCreateErr,
 				execInspectCode: tt.execInspectCode,
 			}
-			svc := NewFlowFileService(db, dataDir, fakeDocker, ss)
+			svc := NewFlowFileService(db, dataDir, "", fakeDocker, ss)
 
 			if tt.seedFlow {
 				owner := tt.flowOwner
@@ -2470,7 +2477,7 @@ func TestFlowFileService_DownloadFlowFileScenarios(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			db := setupFlowFileServiceTestDB(t)
 			dataDir := t.TempDir()
-			svc := NewFlowFileService(db, dataDir, nil, nil)
+			svc := NewFlowFileService(db, dataDir, "", nil, nil)
 
 			if tt.flowOwner != 0 {
 				seedFlow(t, db, tt.flowID, tt.flowOwner)
@@ -2501,6 +2508,9 @@ func TestFlowFileService_DownloadFlowFileScenarios(t *testing.T) {
 				assert.Contains(t, w.Header().Get("Content-Disposition"), tt.wantDispContains)
 			}
 			if tt.wantZipEntries != nil {
+				// A streamed ZIP download must not buffer the whole archive, so it
+				// must not carry a Content-Length computed from a full buffer.
+				assert.Empty(t, w.Header().Get("Content-Length"))
 				zr, err := zip.NewReader(bytes.NewReader(w.Body.Bytes()), int64(w.Body.Len()))
 				require.NoError(t, err)
 				got := map[string]string{}
@@ -2927,7 +2937,7 @@ func TestFlowFileService_PullFlowFilesScenarios(t *testing.T) {
 			if !tt.dockerNil {
 				dockerClient = fakeDocker
 			}
-			svc := NewFlowFileService(db, dataDir, dockerClient, ss)
+			svc := NewFlowFileService(db, dataDir, "", dockerClient, ss)
 
 			seedFlow(t, db, tt.flowID, tt.flowOwner)
 
@@ -3009,19 +3019,20 @@ func TestFlowFileService_PullFlowFilesScenarios(t *testing.T) {
 
 func TestFlowFileService_GetFlowContainerFilesScenarios(t *testing.T) {
 	tests := []struct {
-		name           string
-		flowOwner      uint64
-		uid            uint64
-		flowID         uint64
-		privs          []string
-		queryPath      string // builds ?path=<value>
-		rawQuery       string // when set, used verbatim as query string (overrides queryPath)
-		dockerSetup    func(*fakeDockerClient)
-		dockerNil      bool
-		wantStatus     int
-		wantPathInResp string
-		wantFileNames  []string // expected file names in sorted order (nil = don't check)
-		wantTotal      uint64   // > 0: verify response Total
+		name             string
+		flowOwner        uint64
+		uid              uint64
+		flowID           uint64
+		privs            []string
+		queryPath        string // builds ?path=<value>
+		rawQuery         string // when set, used verbatim as query string (overrides queryPath)
+		dockerSetup      func(*fakeDockerClient)
+		dockerNil        bool
+		wantStatus       int
+		wantPathInResp   string
+		wantFileNames    []string // expected file names in sorted order (nil = don't check)
+		wantTotal        uint64   // > 0: verify response Total
+		wantFailureNames []string // expected Failures[].Name (nil = don't check)
 	}{
 		// ── single-path: existing behaviour (backward compatibility) ──────────
 		{
@@ -3164,6 +3175,36 @@ func TestFlowFileService_GetFlowContainerFilesScenarios(t *testing.T) {
 			wantFileNames:  []string{"passwd"},
 		},
 		{
+			// A per-entry stat failure (dangling symlink, a file removed
+			// mid-listing, a transient /proc pid) must degrade to a partial
+			// listing — HTTP 200 with the readable files plus the failure
+			// surfaced in Failures — not a 500 that blanks the whole directory.
+			name:      "per-entry stat failure returns partial listing not 500",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs:     []string{"flow_files.view", "containers.view"},
+			queryPath: "/work",
+			dockerSetup: func(d *fakeDockerClient) {
+				d.running = true
+				d.statPathMap = map[string]container.PathStat{
+					"/work": {Mode: os.ModeDir | 0755},
+				}
+				d.listDirMap = map[string][]container.PathStat{
+					"/work": {{Name: "good.txt", Size: 3, Mode: 0644}},
+				}
+				d.listDirFailMap = map[string][]docker.ContainerEntryError{
+					"/work": {{
+						Name: "dangling",
+						Path: "/work/dangling",
+						Err:  fmt.Errorf("no such file or directory"),
+					}},
+				}
+			},
+			wantStatus:       http.StatusOK,
+			wantPathInResp:   "/work",
+			wantFileNames:    []string{"good.txt"},
+			wantFailureNames: []string{"dangling"},
+		},
+		{
 			// Two directories are queried; results are merged and sorted by name.
 			// The response Path must be empty because there is no single "current dir".
 			name:      "two directories via paths[] returns combined sorted listing",
@@ -3285,9 +3326,10 @@ func TestFlowFileService_GetFlowContainerFilesScenarios(t *testing.T) {
 			wantTotal:      1,
 		},
 		{
-			// First path succeeds; second path's stat call fails.
-			// The handler must return 500 (fail-fast).
-			name:      "second path stat error in batch returns internal error",
+			// First path succeeds; second path's stat call fails. The readable path
+			// is still served (HTTP 200) and the bad path is surfaced as a failure —
+			// one bad path no longer blanks the whole multi-path request.
+			name:      "second path stat error in batch: good path served, bad path a failure",
 			flowOwner: 1, uid: 1, flowID: 1,
 			privs:    []string{"flow_files.view", "containers.view"},
 			rawQuery: "paths[]=/work&paths[]=/etc",
@@ -3303,12 +3345,15 @@ func TestFlowFileService_GetFlowContainerFilesScenarios(t *testing.T) {
 					"/work": {{Name: "uploads", Mode: os.ModeDir | 0755}},
 				}
 			},
-			wantStatus: http.StatusInternalServerError,
+			wantStatus:       http.StatusOK,
+			wantFileNames:    []string{"uploads"},
+			wantFailureNames: []string{"etc"},
 		},
 		{
-			// First path directory listing succeeds; second path's listing fails.
-			// The handler must return 500 (fail-fast).
-			name:      "second path list dir error in batch returns internal error",
+			// First path directory listing succeeds; second path's listing fails at
+			// the directory level. The readable path is still served (HTTP 200) and
+			// the failed path is surfaced as a failure, not a 500.
+			name:      "second path list dir error in batch: good path served, bad path a failure",
 			flowOwner: 1, uid: 1, flowID: 1,
 			privs:    []string{"flow_files.view", "containers.view"},
 			rawQuery: "paths[]=/work&paths[]=/etc",
@@ -3325,7 +3370,9 @@ func TestFlowFileService_GetFlowContainerFilesScenarios(t *testing.T) {
 					"/etc": fmt.Errorf("permission denied"),
 				}
 			},
-			wantStatus: http.StatusInternalServerError,
+			wantStatus:       http.StatusOK,
+			wantFileNames:    []string{"uploads"},
+			wantFailureNames: []string{"etc"},
 		},
 	}
 
@@ -3342,7 +3389,7 @@ func TestFlowFileService_GetFlowContainerFilesScenarios(t *testing.T) {
 			if !tt.dockerNil {
 				dockerClient = fakeDocker
 			}
-			svc := NewFlowFileService(db, dataDir, dockerClient, nil)
+			svc := NewFlowFileService(db, dataDir, "", dockerClient, nil)
 
 			if tt.flowOwner != 0 {
 				seedFlow(t, db, tt.flowID, tt.flowOwner)
@@ -3376,6 +3423,13 @@ func TestFlowFileService_GetFlowContainerFilesScenarios(t *testing.T) {
 			if tt.wantTotal > 0 {
 				assert.Equal(t, tt.wantTotal, resp.Total, "response Total mismatch")
 				assert.Len(t, resp.Files, int(tt.wantTotal), "response Files length mismatch")
+			}
+			if tt.wantFailureNames != nil {
+				names := make([]string, len(resp.Failures))
+				for i, f := range resp.Failures {
+					names[i] = f.Name
+				}
+				assert.ElementsMatch(t, tt.wantFailureNames, names)
 			}
 		})
 	}
@@ -3529,7 +3583,7 @@ func TestFlowFileService_AddResourcesToFlowScenarios(t *testing.T) {
 			db := setupFlowFileServiceTestDB(t)
 			dataDir := t.TempDir()
 			ss := &flowFileCaptureSubscriptions{}
-			svc := NewFlowFileService(db, dataDir, nil, ss)
+			svc := NewFlowFileService(db, dataDir, "", nil, ss)
 
 			require.NoError(t, resources.EnsureResourcesDir(dataDir))
 			if tt.flowOwner != 0 {
@@ -4073,7 +4127,7 @@ func TestFlowFileService_AddResourceFromFlowScenarios(t *testing.T) {
 			db := setupFlowFileServiceTestDB(t)
 			dataDir := t.TempDir()
 			ss := &flowFileCaptureSubscriptions{}
-			svc := NewFlowFileService(db, dataDir, nil, ss)
+			svc := NewFlowFileService(db, dataDir, "", nil, ss)
 
 			require.NoError(t, resources.EnsureResourcesDir(dataDir))
 			if tt.flowOwner != 0 {

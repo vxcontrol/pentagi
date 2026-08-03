@@ -1,19 +1,15 @@
 package glm
 
 import (
-	"context"
 	"embed"
-	"fmt"
 
 	"pentagi/pkg/config"
+	"pentagi/pkg/providers/openaicompat"
 	"pentagi/pkg/providers/pconfig"
 	"pentagi/pkg/providers/provider"
 	"pentagi/pkg/system"
-	"pentagi/pkg/templates"
 
 	"github.com/vxcontrol/langchaingo/llms"
-	"github.com/vxcontrol/langchaingo/llms/openai"
-	"github.com/vxcontrol/langchaingo/llms/streaming"
 )
 
 //go:embed config.yml models.yml
@@ -55,23 +51,11 @@ func DefaultModels() (pconfig.ModelsConfig, error) {
 	return pconfig.LoadModelsConfigData(configData)
 }
 
-type glmProvider struct {
-	llm            *openai.LLM
-	models         pconfig.ModelsConfig
-	providerName   provider.ProviderName
-	providerConfig *pconfig.ProviderConfig
-	providerPrefix string
-}
-
 func New(
 	cfg *config.Config,
 	providerName provider.ProviderName,
 	providerConfig *pconfig.ProviderConfig,
 ) (provider.Provider, error) {
-	if cfg.GLMAPIKey == "" {
-		return nil, fmt.Errorf("missing GLM_API_KEY environment variable")
-	}
-
 	httpClient, err := system.GetHTTPClient(cfg)
 	if err != nil {
 		return nil, err
@@ -82,120 +66,13 @@ func New(
 		return nil, err
 	}
 
-	// Z.AI GLM OpenAI-compatible API. Thinking mode is controlled via extra_body.thinking.type
-	// ("enabled"/"disabled") in the per-agent config. Unlike Kimi/DeepSeek, GLM does not use
-	// reasoning_effort and is permissive about temperature (accepts both 1.0 and 0.6 in
-	// thinking mode per Z.AI docs), so no WithModernReasoningFormat is needed.
-	// Note: langchaingo's reasoning.IsReasoningModel matches glm-4.5/4.6/4.7 prefixes and
-	// force-overrides temperature to 1.0, but GLM accepts any temperature so this is harmless.
-	// WithPreserveReasoningContent() is required for Preserved Thinking (clear_thinking=false
-	// in per-agent extra_body): on the standard API endpoint Z.AI defaults to clearing
-	// reasoning_content across turns, so we must both enable preservation server-side
-	// AND have langchaingo serialize reasoning_content back into assistant messages with
-	// tool calls. Without it the API will reject the request or silently drop history.
-	client, err := openai.New(
-		openai.WithToken(cfg.GLMAPIKey),
-		openai.WithModel(GLMAgentModel),
-		openai.WithBaseURL(cfg.GLMServerURL),
-		openai.WithHTTPClient(httpClient),
-		openai.WithPreserveReasoningContent(),
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	return &glmProvider{
-		llm:            client,
-		models:         models,
-		providerName:   providerName,
-		providerConfig: providerConfig,
-		providerPrefix: cfg.GLMProvider,
-	}, nil
-}
-
-func (p *glmProvider) Type() provider.ProviderType {
-	return provider.ProviderGLM
-}
-
-func (p *glmProvider) Name() provider.ProviderName {
-	return p.providerName
-}
-
-func (p *glmProvider) GetRawConfig() []byte {
-	return p.providerConfig.GetRawConfig()
-}
-
-func (p *glmProvider) GetProviderConfig() *pconfig.ProviderConfig {
-	return p.providerConfig
-}
-
-func (p *glmProvider) GetPriceInfo(opt pconfig.ProviderOptionsType) *pconfig.PriceInfo {
-	return p.providerConfig.GetPriceInfoForType(opt)
-}
-
-func (p *glmProvider) GetModels() pconfig.ModelsConfig {
-	return p.models
-}
-
-func (p *glmProvider) Model(opt pconfig.ProviderOptionsType) string {
-	model := GLMAgentModel
-	opts := llms.CallOptions{Model: &model}
-	for _, option := range p.providerConfig.GetOptionsForType(opt) {
-		option(&opts)
-	}
-
-	return opts.GetModel()
-}
-
-func (p *glmProvider) ModelWithPrefix(opt pconfig.ProviderOptionsType) string {
-	return provider.ApplyModelPrefix(p.Model(opt), p.providerPrefix)
-}
-
-func (p *glmProvider) Call(
-	ctx context.Context,
-	opt pconfig.ProviderOptionsType,
-	prompt string,
-) (string, error) {
-	return provider.WrapGenerateFromSinglePrompt(
-		ctx, p, opt, p.llm, prompt,
-		p.providerConfig.GetOptionsForType(opt)...,
-	)
-}
-
-func (p *glmProvider) CallEx(
-	ctx context.Context,
-	opt pconfig.ProviderOptionsType,
-	chain []llms.MessageContent,
-	streamCb streaming.Callback,
-) (*llms.ContentResponse, error) {
-	return provider.WrapGenerateContent(
-		ctx, p, opt, p.llm.GenerateContent, chain,
-		append([]llms.CallOption{
-			llms.WithStreamingFunc(streamCb),
-		}, p.providerConfig.GetOptionsForType(opt)...)...,
-	)
-}
-
-func (p *glmProvider) CallWithTools(
-	ctx context.Context,
-	opt pconfig.ProviderOptionsType,
-	chain []llms.MessageContent,
-	tools []llms.Tool,
-	streamCb streaming.Callback,
-) (*llms.ContentResponse, error) {
-	return provider.WrapGenerateContent(
-		ctx, p, opt, p.llm.GenerateContent, chain,
-		append([]llms.CallOption{
-			llms.WithTools(tools),
-			llms.WithStreamingFunc(streamCb),
-		}, p.providerConfig.GetOptionsForType(opt)...)...,
-	)
-}
-
-func (p *glmProvider) GetUsage(info map[string]any) pconfig.CallUsage {
-	return pconfig.NewCallUsage(info)
-}
-
-func (p *glmProvider) GetToolCallIDTemplate(ctx context.Context, prompter templates.Prompter) (string, error) {
-	return provider.DetermineToolCallIDTemplate(ctx, p, pconfig.OptionsTypeSimple, prompter, GLMToolCallIDTemplate)
+	return openaicompat.New(openaicompat.Spec{
+		Type:               provider.ProviderGLM,
+		Model:              GLMAgentModel,
+		ToolCallIDTemplate: GLMToolCallIDTemplate,
+		APIKey:             cfg.GLMAPIKey,
+		ServerURL:          cfg.GLMServerURL,
+		Prefix:             cfg.GLMProvider,
+		PreserveReasoning:  true,
+	}, httpClient, models, providerName, providerConfig)
 }

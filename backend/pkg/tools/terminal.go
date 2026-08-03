@@ -47,6 +47,7 @@ type terminal struct {
 	subtaskID          *int64
 	containerID        int64
 	containerLID       string
+	tenantPrefix       string
 	dockerClient       docker.DockerClient
 	tlp                TermLogProvider
 	defaultExecTimeout time.Duration
@@ -56,6 +57,7 @@ func NewTerminalTool(
 	flowID int64,
 	taskID, subtaskID *int64,
 	containerID int64, containerLID string,
+	tenantPrefix string,
 	dockerClient docker.DockerClient,
 	tlp TermLogProvider,
 	defaultExecTimeout time.Duration,
@@ -66,6 +68,7 @@ func NewTerminalTool(
 		subtaskID:          subtaskID,
 		containerID:        containerID,
 		containerLID:       containerLID,
+		tenantPrefix:       tenantPrefix,
 		dockerClient:       dockerClient,
 		tlp:                tlp,
 		defaultExecTimeout: defaultExecTimeout,
@@ -144,6 +147,22 @@ func (t *terminal) Handle(ctx context.Context, name string, args json.RawMessage
 			return "", fmt.Errorf("failed to unmarshal file action: %w", err)
 		}
 
+		if action.Action == "" {
+			// The LLM occasionally omits the required 'action' field even though the
+			// tool schema marks it required. The intent is almost always unambiguous
+			// from the other fields present, so infer it instead of failing the call
+			// outright and burning a tool-call-fixer round-trip on something that
+			// doesn't need one.
+			switch {
+			case action.Diff != "":
+				action.Action = EditFile
+			case action.Content != "":
+				action.Action = WriteFile
+			default:
+				action.Action = ReadFile
+			}
+		}
+
 		logger = logger.WithFields(logrus.Fields{
 			"action": action.Action,
 			"path":   action.Path,
@@ -151,10 +170,13 @@ func (t *terminal) Handle(ctx context.Context, name string, args json.RawMessage
 
 		switch action.Action {
 		case ReadFile:
-			result, err := t.ReadFile(ctx, t.flowID, action.Path)
+			result, err := t.ReadFile(ctx, t.flowID, action.Path.String())
 			return t.wrapCommandResult(ctx, args, name, result, err)
 		case WriteFile:
-			result, err := t.WriteFile(ctx, t.flowID, action.Content, action.Path)
+			result, err := t.WriteFile(ctx, t.flowID, action.Content, action.Path.String())
+			return t.wrapCommandResult(ctx, args, name, result, err)
+		case EditFile:
+			result, err := t.EditFile(ctx, t.flowID, action.Path.String(), action.Diff.String())
 			return t.wrapCommandResult(ctx, args, name, result, err)
 		default:
 			logger.Error("unknown file action")
@@ -171,16 +193,14 @@ func (t *terminal) ExecCommand(
 	detach bool,
 	timeout time.Duration,
 ) (string, error) {
-	containerName := PrimaryTerminalName(t.flowID)
+	containerName := PrimaryTerminalName(t.tenantPrefix, t.flowID)
 
-	// create options for starting the exec process
 	cmd := []string{
 		"sh",
 		"-c",
 		command,
 	}
 
-	// verify container runtime status
 	isRunning, err := t.dockerClient.IsContainerRunning(ctx, t.containerLID)
 	if err != nil {
 		return "", fmt.Errorf("runtime verification failed: %w", err)
@@ -246,7 +266,6 @@ func (t *terminal) getExecResult(ctx context.Context, id string, timeout time.Du
 		defer cancel()
 	}
 
-	// attach to the exec process
 	resp, err := t.dockerClient.ContainerExecAttach(ctx, id, container.ExecAttachOptions{
 		Tty: true,
 	})
@@ -308,14 +327,8 @@ func (t *terminal) getExecResult(ctx context.Context, id string, timeout time.Du
 }
 
 func (t *terminal) ReadFile(ctx context.Context, flowID int64, path string) (string, error) {
-	containerName := PrimaryTerminalName(flowID)
-
-	isRunning, err := t.dockerClient.IsContainerRunning(ctx, t.containerLID)
-	if err != nil {
-		return "", fmt.Errorf("runtime verification failed: %w", err)
-	}
-	if !isRunning {
-		return "", fmt.Errorf("container runtime is not operational")
+	if path == "" {
+		return "", fmt.Errorf("path is required and cannot be empty")
 	}
 
 	cwd := docker.WorkFolderPathInContainer
@@ -323,9 +336,39 @@ func (t *terminal) ReadFile(ctx context.Context, flowID int64, path string) (str
 	catCommand := fmt.Sprintf("cat '%s'", escapedPath)
 	// Format read file command with styling
 	styledCommand := fmt.Sprintf("%s $ %s%s%s%s", cwd, ansiColorInputCmd, catCommand, ansiColorReset, ansiLineTerminator)
-	_, err = t.tlp.PutMsg(ctx, database.TermlogTypeStdin, styledCommand, t.containerID, t.taskID, t.subtaskID)
+	_, err := t.tlp.PutMsg(ctx, database.TermlogTypeStdin, styledCommand, t.containerID, t.taskID, t.subtaskID)
 	if err != nil {
 		return "", fmt.Errorf("failed to put terminal log (read file cmd): %w", err)
+	}
+
+	content, err := t.readFileFromContainer(ctx, flowID, path)
+	if err != nil {
+		return "", err
+	}
+
+	// Style file content output
+	styledContent := fmt.Sprintf("%s%s%s%s", ansiColorSystemMsg, content, ansiColorReset, ansiLineTerminator)
+	_, err = t.tlp.PutMsg(ctx, database.TermlogTypeStdout, styledContent, t.containerID, t.taskID, t.subtaskID)
+	if err != nil {
+		return "", fmt.Errorf("failed to put terminal log (read file content): %w", err)
+	}
+
+	return content, nil
+}
+
+// readFileFromContainer copies path out of the flow's container and returns
+// its content. It performs no terminal-log writes, so callers that need the
+// content only as an intermediate step (e.g. EditFile, before reapplying a
+// diff and writing back) don't echo a spurious "cat" transcript entry.
+func (t *terminal) readFileFromContainer(ctx context.Context, flowID int64, path string) (string, error) {
+	containerName := PrimaryTerminalName(t.tenantPrefix, flowID)
+
+	isRunning, err := t.dockerClient.IsContainerRunning(ctx, t.containerLID)
+	if err != nil {
+		return "", fmt.Errorf("runtime verification failed: %w", err)
+	}
+	if !isRunning {
+		return "", fmt.Errorf("container runtime is not operational")
 	}
 
 	reader, stats, err := t.dockerClient.CopyFromContainer(ctx, containerName, path)
@@ -378,26 +421,41 @@ func (t *terminal) ReadFile(ctx context.Context, flowID int64, path string) (str
 		}
 	}
 
-	content := buffer.String()
-	// Style file content output
-	styledContent := fmt.Sprintf("%s%s%s%s", ansiColorSystemMsg, content, ansiColorReset, ansiLineTerminator)
-	_, err = t.tlp.PutMsg(ctx, database.TermlogTypeStdout, styledContent, t.containerID, t.taskID, t.subtaskID)
-	if err != nil {
-		return "", fmt.Errorf("failed to put terminal log (read file content): %w", err)
-	}
-
-	return content, nil
+	return buffer.String(), nil
 }
 
 func (t *terminal) WriteFile(ctx context.Context, flowID int64, content string, path string) (string, error) {
-	containerName := PrimaryTerminalName(flowID)
+	if path == "" {
+		return "", fmt.Errorf("path is required and cannot be empty")
+	}
+
+	if err := t.writeFileToContainer(ctx, flowID, path, content); err != nil {
+		return "", err
+	}
+
+	// Format success message with styling
+	successMsg := fmt.Sprintf("File successfully saved to %s", path)
+	styledMsg := fmt.Sprintf("%s%s%s%s", ansiColorSystemMsg, successMsg, ansiColorReset, ansiLineTerminator)
+	_, err := t.tlp.PutMsg(ctx, database.TermlogTypeStdin, styledMsg, t.containerID, t.taskID, t.subtaskID)
+	if err != nil {
+		return "", fmt.Errorf("failed to put terminal log (write file cmd): %w", err)
+	}
+
+	return fmt.Sprintf("Successfully wrote %d bytes to %s", len(content), path), nil
+}
+
+// writeFileToContainer copies content into the flow's container at path,
+// overwriting it. It performs no terminal-log writes; WriteFile and EditFile
+// each log their own, differently-worded, success message.
+func (t *terminal) writeFileToContainer(ctx context.Context, flowID int64, path, content string) error {
+	containerName := PrimaryTerminalName(t.tenantPrefix, flowID)
 
 	isRunning, err := t.dockerClient.IsContainerRunning(ctx, t.containerLID)
 	if err != nil {
-		return "", fmt.Errorf("container runtime check failed: %w", err)
+		return fmt.Errorf("container runtime check failed: %w", err)
 	}
 	if !isRunning {
-		return "", fmt.Errorf("target container is not operational")
+		return fmt.Errorf("target container is not operational")
 	}
 
 	// Docker SDK requires TAR format for file transfer
@@ -413,17 +471,17 @@ func (t *terminal) WriteFile(ctx context.Context, flowID int64, content string, 
 	}
 	err = archiveWriter.WriteHeader(fileDescriptor)
 	if err != nil {
-		return "", fmt.Errorf("tar archive header generation failed: %w", err)
+		return fmt.Errorf("tar archive header generation failed: %w", err)
 	}
 
 	_, err = archiveWriter.Write([]byte(content))
 	if err != nil {
-		return "", fmt.Errorf("tar archive content serialization failed: %w", err)
+		return fmt.Errorf("tar archive content serialization failed: %w", err)
 	}
 
 	err = archiveWriter.Close()
 	if err != nil {
-		return "", fmt.Errorf("failed to close tar writer: %w", err)
+		return fmt.Errorf("failed to close tar writer: %w", err)
 	}
 
 	dir := filepath.Dir(path)
@@ -431,22 +489,60 @@ func (t *terminal) WriteFile(ctx context.Context, flowID int64, content string, 
 		AllowOverwriteDirWithFile: true,
 	})
 	if err != nil {
-		return "", fmt.Errorf("container file transfer failed: %w", err)
+		return fmt.Errorf("container file transfer failed: %w", err)
 	}
 
-	// Format success message with styling
-	successMsg := fmt.Sprintf("File successfully saved to %s", path)
-	styledMsg := fmt.Sprintf("%s%s%s%s", ansiColorSystemMsg, successMsg, ansiColorReset, ansiLineTerminator)
-	_, err = t.tlp.PutMsg(ctx, database.TermlogTypeStdin, styledMsg, t.containerID, t.taskID, t.subtaskID)
-	if err != nil {
-		return "", fmt.Errorf("failed to put terminal log (write file cmd): %w", err)
-	}
-
-	return fmt.Sprintf("Successfully wrote %d bytes to %s", len(content), path), nil
+	return nil
 }
 
-func PrimaryTerminalName(flowID int64) string {
-	return fmt.Sprintf("%s%d", PrimaryTerminalNamePrefix, flowID)
+// EditFile applies a unified diff to the file at path: it reads the current
+// content, applies the diff to it entirely in memory (see applyUnifiedDiff),
+// and only if every hunk applied cleanly writes the result back - a diff
+// that doesn't fully apply leaves the file untouched.
+func (t *terminal) EditFile(ctx context.Context, flowID int64, path, diffText string) (string, error) {
+	if path == "" {
+		return "", fmt.Errorf("path is required and cannot be empty")
+	}
+	if strings.TrimSpace(diffText) == "" {
+		return "", fmt.Errorf("diff is required and cannot be empty")
+	}
+
+	current, err := t.readFileFromContainer(ctx, flowID, path)
+	if err != nil {
+		return "", fmt.Errorf("failed to read current content of %s before editing: %w", path, err)
+	}
+
+	newContent, hunksApplied, err := ApplyUnifiedDiff(current, diffText)
+	if err != nil {
+		return "", fmt.Errorf("failed to apply diff to %s: %w", path, err)
+	}
+
+	if err := t.writeFileToContainer(ctx, flowID, path, newContent); err != nil {
+		return "", fmt.Errorf("failed to write edited content of %s: %w", path, err)
+	}
+
+	successMsg := fmt.Sprintf("Applied %d diff hunk(s) to %s (%d -> %d bytes)", hunksApplied, path, len(current), len(newContent))
+	styledMsg := fmt.Sprintf("%s%s%s%s", ansiColorSystemMsg, successMsg, ansiColorReset, ansiLineTerminator)
+	if _, err := t.tlp.PutMsg(ctx, database.TermlogTypeStdin, styledMsg, t.containerID, t.taskID, t.subtaskID); err != nil {
+		return "", fmt.Errorf("failed to put terminal log (edit file cmd): %w", err)
+	}
+
+	return successMsg, nil
+}
+
+// PrimaryTerminalName returns the docker container name for a flow's primary
+// terminal, namespaced by the configured tenant.
+//
+//	"pentagi-terminal-1"       (single instance)
+//	"acme-pentagi-terminal-1"  (TENANT_ID=acme)
+//
+// The tenant goes in FRONT of the well-known prefix on purpose: the installer's
+// volume garbage collector force-removes anything matching
+// HasPrefix("pentagi-terminal-") && HasSuffix("-data"), so a leading tenant
+// segment keeps one tenant's objects outside another tenant's sweep. A tenant
+// segment placed after the prefix would stay inside it and be destroyed.
+func PrimaryTerminalName(tenantPrefix string, flowID int64) string {
+	return fmt.Sprintf("%s%s%d", tenantPrefix, PrimaryTerminalNamePrefix, flowID)
 }
 
 func (t *terminal) IsAvailable() bool {

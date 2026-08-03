@@ -27,8 +27,7 @@ func MergeAndDeduplicateDocs(docs []schema.Document, maxDocs int) []schema.Docum
 
 	for _, doc := range docs {
 		hash := hashContent(doc.PageContent)
-		
-		// If document with this hash already exists, keep the one with higher score
+
 		if existing, found := docMap[hash]; found {
 			if doc.Score > existing.Score {
 				docMap[hash] = doc
@@ -38,18 +37,15 @@ func MergeAndDeduplicateDocs(docs []schema.Document, maxDocs int) []schema.Docum
 		}
 	}
 
-	// Convert map to slice
 	result := make([]schema.Document, 0, len(docMap))
 	for _, doc := range docMap {
 		result = append(result, doc)
 	}
 
-	// Sort by score in descending order (highest score first)
 	sort.Slice(result, func(i, j int) bool {
 		return result[i].Score > result[j].Score
 	})
 
-	// Limit to maxDocs
 	if len(result) > maxDocs {
 		result = result[:maxDocs]
 	}

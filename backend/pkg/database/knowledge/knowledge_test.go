@@ -34,6 +34,7 @@ type mockDB struct {
 	listFlow            func(ctx context.Context, flowID sql.NullString) ([]database.ListFlowKnowledgeDocumentsRow, error)
 	listUser            func(ctx context.Context, userID sql.NullString) ([]database.ListUserKnowledgeDocumentsRow, error)
 	updateKnowledge     func(ctx context.Context, arg database.UpdateKnowledgeDocumentParams) (database.UpdateKnowledgeDocumentRow, error)
+	updateKnowledgeMeta func(ctx context.Context, arg database.UpdateKnowledgeDocumentMetadataParams) (database.UpdateKnowledgeDocumentMetadataRow, error)
 	deleteKnowledge     func(ctx context.Context, uuid sql.NullString) error
 	deleteUserKnowledge func(ctx context.Context, arg database.DeleteUserKnowledgeDocumentParams) error
 	searchKnowledge     func(ctx context.Context, arg database.SearchKnowledgeDocumentsParams) ([]database.SearchKnowledgeDocumentsRow, error)
@@ -60,6 +61,9 @@ func (m *mockDB) ListUserKnowledgeDocuments(ctx context.Context, cmetadata sql.N
 }
 func (m *mockDB) UpdateKnowledgeDocument(ctx context.Context, arg database.UpdateKnowledgeDocumentParams) (database.UpdateKnowledgeDocumentRow, error) {
 	return m.updateKnowledge(ctx, arg)
+}
+func (m *mockDB) UpdateKnowledgeDocumentMetadata(ctx context.Context, arg database.UpdateKnowledgeDocumentMetadataParams) (database.UpdateKnowledgeDocumentMetadataRow, error) {
+	return m.updateKnowledgeMeta(ctx, arg)
 }
 func (m *mockDB) DeleteKnowledgeDocument(ctx context.Context, uuid sql.NullString) error {
 	return m.deleteKnowledge(ctx, uuid)
@@ -2255,6 +2259,138 @@ func TestUpdateUserDocument(t *testing.T) {
 		_, err := ks.UpdateUserDocument(ctx, userID, "not-my-doc", model.UpdateKnowledgeDocumentInput{Content: "evil update"})
 		if err == nil {
 			t.Fatal("SECURITY: update of another user's document must be rejected")
+		}
+	})
+}
+
+func TestRenameDocument(t *testing.T) {
+	ctx := context.Background()
+	const userID = int64(7)
+
+	t.Run("metadata-only: question updated, content preserved, no embedder needed", func(t *testing.T) {
+		pub := &mockPublisher{}
+		var gotMeta database.UpdateKnowledgeDocumentMetadataParams
+
+		db := &mockDB{
+			getKnowledge: func(_ context.Context, uuid string) (database.GetKnowledgeDocumentRow, error) {
+				return makeRow(uuid, "PRESERVED CONTENT", `{"doc_type":"answer","answer_type":"vulnerability","question":"original","user_id":"7","manual":true}`), nil
+			},
+			updateKnowledgeMeta: func(_ context.Context, arg database.UpdateKnowledgeDocumentMetadataParams) (database.UpdateKnowledgeDocumentMetadataRow, error) {
+				gotMeta = arg
+				return database.UpdateKnowledgeDocumentMetadataRow{
+					ID:        arg.Uuid.String,
+					Document:  "PRESERVED CONTENT", // text untouched, not re-embedded
+					Cmetadata: sql.NullString{String: string(arg.Cmetadata.RawMessage), Valid: true},
+				}, nil
+			},
+			// updateKnowledge intentionally nil — the re-embed path must NOT run.
+		}
+		ks := &knowledgeStore{
+			db:       db,
+			embedder: nil, // rename must not require a configured embedder
+			newKnp:   newPublisherFactory(pub),
+		}
+
+		doc, err := ks.RenameDocument(ctx, userID, "doc-id", "  RENAMED  ")
+		if err != nil {
+			t.Fatalf("rename must not need an embedder: %v", err)
+		}
+		if doc.Content != "PRESERVED CONTENT" {
+			t.Fatalf("content must be preserved, got %q", doc.Content)
+		}
+		if doc.Question != "RENAMED" {
+			t.Fatalf("question: want RENAMED (trimmed), got %q", doc.Question)
+		}
+		meta := parseMeta(string(gotMeta.Cmetadata.RawMessage))
+		if meta.Question != "RENAMED" {
+			t.Fatalf("stored question: want RENAMED, got %q", meta.Question)
+		}
+		if meta.DocType != "answer" || meta.AnswerType != "vulnerability" {
+			t.Fatalf("other metadata not preserved: %+v", meta)
+		}
+		if len(pub.updatedDocs) != 1 {
+			t.Fatal("KnowledgeDocumentUpdated event not published")
+		}
+	})
+
+	t.Run("admin: get error propagates (missing document)", func(t *testing.T) {
+		db := &mockDB{
+			getKnowledge: func(_ context.Context, _ string) (database.GetKnowledgeDocumentRow, error) {
+				return database.GetKnowledgeDocumentRow{}, errors.New("not found")
+			},
+			// updateKnowledgeMeta intentionally nil — must not be reached.
+		}
+		ks := &knowledgeStore{db: db, embedder: nil}
+		if _, err := ks.RenameDocument(ctx, userID, "missing", "x"); err == nil {
+			t.Fatal("expected error when document does not exist")
+		}
+	})
+}
+
+func TestRenameUserDocument(t *testing.T) {
+	ctx := context.Background()
+	const userID = int64(30)
+
+	t.Run("uses GetUserDocument for ownership, then metadata-only update", func(t *testing.T) {
+		pub := &mockPublisher{}
+		var fetchedUserID string
+		var metaUpdated bool
+
+		db := &mockDB{
+			getUserKnowledge: func(_ context.Context, arg database.GetUserKnowledgeDocumentParams) (database.GetUserKnowledgeDocumentRow, error) {
+				fetchedUserID = arg.UserID.String
+				return database.GetUserKnowledgeDocumentRow{
+					ID:        arg.Uuid,
+					Document:  "kept",
+					Cmetadata: sql.NullString{String: `{"doc_type":"answer","question":"old","user_id":"30"}`, Valid: true},
+				}, nil
+			},
+			updateKnowledgeMeta: func(_ context.Context, arg database.UpdateKnowledgeDocumentMetadataParams) (database.UpdateKnowledgeDocumentMetadataRow, error) {
+				metaUpdated = true
+				return database.UpdateKnowledgeDocumentMetadataRow{
+					ID:        arg.Uuid.String,
+					Document:  "kept",
+					Cmetadata: sql.NullString{String: string(arg.Cmetadata.RawMessage), Valid: true},
+				}, nil
+			},
+			// re-embed path (updateKnowledge) intentionally nil — must not run.
+		}
+		ks := &knowledgeStore{db: db, embedder: nil, newKnp: newPublisherFactory(pub)}
+
+		doc, err := ks.RenameUserDocument(ctx, userID, "my-doc", "new title")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if fetchedUserID != "30" {
+			t.Fatalf("ownership: GetUserDocument must receive userID 30, got %q", fetchedUserID)
+		}
+		if !metaUpdated {
+			t.Fatal("metadata update not called")
+		}
+		if doc.Content != "kept" || doc.Question != "new title" {
+			t.Fatalf("unexpected doc: content=%q question=%q", doc.Content, doc.Question)
+		}
+	})
+
+	// SECURITY: a non-owner's rename is blocked at GetUserDocument — no write happens.
+	t.Run("SECURITY: wrong owner blocks rename, no metadata write", func(t *testing.T) {
+		var metaCalled bool
+		db := &mockDB{
+			getUserKnowledge: func(_ context.Context, _ database.GetUserKnowledgeDocumentParams) (database.GetUserKnowledgeDocumentRow, error) {
+				return database.GetUserKnowledgeDocumentRow{}, errors.New("not found")
+			},
+			updateKnowledgeMeta: func(_ context.Context, _ database.UpdateKnowledgeDocumentMetadataParams) (database.UpdateKnowledgeDocumentMetadataRow, error) {
+				metaCalled = true
+				return database.UpdateKnowledgeDocumentMetadataRow{}, nil
+			},
+		}
+		ks := &knowledgeStore{db: db, embedder: nil}
+
+		if _, err := ks.RenameUserDocument(ctx, userID, "not-my-doc", "evil rename"); err == nil {
+			t.Fatal("SECURITY: rename of another user's document must be rejected")
+		}
+		if metaCalled {
+			t.Fatal("SECURITY: metadata must NOT be written when the ownership check fails")
 		}
 	})
 }

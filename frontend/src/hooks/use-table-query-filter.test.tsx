@@ -22,10 +22,9 @@ describe('useTableQueryFilterReader', () => {
         const Wrapper = ({ children }: { children: ReactNode }) => (
             <MemoryRouter initialEntries={['/flows/abc?q=alpha']}>{children}</MemoryRouter>
         );
-        const { result } = renderHook(
-            () => useTableQueryFilterReader({ debounceMs: SHORT_DEBOUNCE_MS, storageKey: STORAGE_KEY }),
-            { wrapper: Wrapper },
-        );
+        const { result } = renderHook(() => useTableQueryFilterReader({ debounceMs: SHORT_DEBOUNCE_MS }), {
+            wrapper: Wrapper,
+        });
 
         expect(result.current.filter).toBe('alpha');
         expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
@@ -40,7 +39,6 @@ describe('useTableQueryFilterReader', () => {
             () => {
                 const reader = useTableQueryFilterReader({
                     debounceMs: SHORT_DEBOUNCE_MS,
-                    storageKey: STORAGE_KEY,
                 });
                 const { search } = useLocation();
 

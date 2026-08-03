@@ -166,6 +166,7 @@
     --color-popover-foreground: var(--popover-foreground);
     --color-primary: var(--primary);
     --color-primary-foreground: var(--primary-foreground);
+    --color-link: var(--link);
     --color-secondary: var(--secondary);
     --color-secondary-foreground: var(--secondary-foreground);
     --color-muted: var(--muted);
@@ -306,6 +307,30 @@
         --sidebar-accent-foreground: oklch(0.32 0 0);
         --sidebar-border: oklch(0.93 0.01 240);
         --sidebar-ring: oklch(0.25 0.14 245);
+        /* Link TEXT. --primary is a fill (paired with white --primary-foreground) and cannot double as
+           text: on dark it measures 3.12:1 on --card, and no lightness clears AA in both roles at once. */
+        --link: oklch(0.25 0.14 245);
+        /* Editor highlight TEXT, tuned for readable contrast on the editor surface (unlike --primary, a fill
+           color that fails WCAG AA as text on dark). Four distinct hues so adjacent tokens don't blur:
+           link = theme blue 245; variable = green 155 (matches the panel's "used" badge); tag = violet 300;
+           inline code = red 25 on a visible chip.
+           --editor-code-bg is the opaque inline-code + code-block chip. Don't fold these back into --primary. */
+        --editor-accent: oklch(0.25 0.12 245);
+        --editor-variable: oklch(0.4 0.18 155);
+        --editor-tag: oklch(0.25 0.12 300);
+        --editor-code: oklch(0.5 0.16 25);
+        --editor-code-bg: oklch(0.94 0.006 245);
+        /* Stock atom-one-light is NOT usable as-is: on this surface it fails AA on 6 of its 8 token colours.
+           These hold its hues and chroma but lower lightness until each clears it. */
+        --editor-syntax-fg: oklch(0.35 0.014 274.5);
+        --editor-syntax-comment: oklch(0.52 0.009 278.6);
+        --editor-syntax-keyword: oklch(0.524 0.211 328.8);
+        --editor-syntax-entity: oklch(0.539 0.179 28.3);
+        --editor-syntax-literal: oklch(0.511 0.126 236.7);
+        --editor-syntax-string: oklch(0.503 0.142 143.5);
+        --editor-syntax-attr: oklch(0.524 0.116 76.9);
+        --editor-syntax-symbol: oklch(0.527 0.193 263.2);
+        --editor-syntax-class: oklch(0.523 0.138 76.2);
         --font-sans: Inter, 'Inter Fallback', sans-serif;
         --font-serif: Inter, 'Inter Fallback', serif;
         --font-mono: 'Roboto Mono', monospace;
@@ -361,6 +386,23 @@
         --sidebar-accent-foreground: oklch(0.92 0.02 245);
         --sidebar-border: oklch(0.3 0.04 245);
         --sidebar-ring: oklch(0.5 0.16 245);
+        --link: oklch(0.68 0.13 245);
+        --editor-accent: oklch(0.68 0.13 245);
+        --editor-variable: oklch(0.72 0.12 155);
+        --editor-tag: oklch(0.68 0.13 300);
+        --editor-code: oklch(0.7 0.15 25);
+        --editor-code-bg: oklch(0.27 0.03 245);
+        /* atom-one-dark's hues, which already clear AA here — except comment and entity, tuned because
+           stock measures 2.49 and 4.70. */
+        --editor-syntax-fg: oklch(0.762 0.02 263);
+        --editor-syntax-comment: oklch(0.688 0.019 261.3);
+        --editor-syntax-keyword: oklch(0.694 0.164 318.2);
+        --editor-syntax-entity: oklch(0.694 0.131 16.3);
+        --editor-syntax-literal: oklch(0.723 0.092 206.3);
+        --editor-syntax-string: oklch(0.768 0.11 133);
+        --editor-syntax-attr: oklch(0.727 0.095 63.8);
+        --editor-syntax-symbol: oklch(0.728 0.121 245.6);
+        --editor-syntax-class: oklch(0.826 0.097 81.6);
         --font-sans: Inter, 'Inter Fallback', sans-serif;
         --font-serif: Inter, 'Inter Fallback', serif;
         --font-mono: 'Roboto Mono', monospace;
@@ -417,6 +459,23 @@
     [role='button']:not(:disabled) {
         cursor: pointer;
     }
+}
+
+/* Tailwind Typography wraps inline <code> in literal `backticks` via ::before/::after — that is markdown SOURCE,
+   not how rendered inline code should look. Drop them so it reads as styled code, matching tiptap's demos. */
+.prose code::before,
+.prose code::after {
+    content: none;
+}
+
+/* Inline code in the read-only viewer mirrors the editor (red text on a visible chip) so a document reads
+   the same whether it is being edited or viewed. Code blocks keep hljs syntax highlighting (see below). */
+.prose code:not(pre code) {
+    color: var(--editor-code);
+    background-color: var(--editor-code-bg);
+    padding: 0.125rem 0.25rem;
+    border-radius: calc(var(--radius) - 4px);
+    font-weight: inherit;
 }
 
 .prose-xs {
@@ -531,11 +590,17 @@
 .prose pre code.hljs {
     color: inherit;
     background: transparent;
-}
-
-.prose pre code.hljs {
     padding: 0;
     overflow: visible;
+}
+
+/* Without these the viewer falls back to Tailwind Typography's own pre colours, which are dark in BOTH
+   themes (gray-800 light / `rgb(0 0 0 / 50%)` dark) and are plugin internals, not project tokens. */
+.prose {
+    --tw-prose-pre-bg: var(--editor-code-bg);
+    --tw-prose-pre-code: var(--editor-syntax-fg);
+    --tw-prose-invert-pre-bg: var(--editor-code-bg);
+    --tw-prose-invert-pre-code: var(--editor-syntax-fg);
 }
 
 /* Sonner */
@@ -595,24 +660,119 @@
 }
 
 .tiptap-content .ProseMirror code:not(pre code) {
-    background-color: var(--muted);
+    color: var(--editor-code);
+    background-color: var(--editor-code-bg);
     padding: 0.125rem 0.25rem;
     border-radius: calc(var(--radius) - 4px);
     font-size: 0.875em;
 }
 
 .tiptap-content .ProseMirror pre {
-    background-color: var(--muted);
-    color: var(--foreground);
+    position: relative;
     padding: 0.75rem 1rem;
     border-radius: calc(var(--radius) - 2px);
     overflow-x: auto;
+}
+
+.tiptap-content .ProseMirror pre,
+.prose pre {
+    background: var(--editor-code-bg);
+    color: var(--editor-syntax-fg);
+}
+
+.dark .tiptap-content .ProseMirror pre {
+    --editor-variable: oklch(0.76 0.12 155);
+    --editor-tag: oklch(0.76 0.13 300);
+}
+
+/* data-language is a DOM-only attribute (stamped by renderHTML); it never enters the serialized markdown. */
+.tiptap-content .ProseMirror pre[data-language]::before {
+    content: attr(data-language);
+    display: block;
+    margin: -0.75rem -1rem 0.75rem;
+    padding: 0.25rem 1rem;
+    border-bottom: 1px solid color-mix(in oklab, var(--editor-syntax-fg) 14%, transparent);
+    border-radius: calc(var(--radius) - 2px) calc(var(--radius) - 2px) 0 0;
+    background-color: color-mix(in oklab, var(--editor-syntax-fg) 7%, transparent);
+    color: color-mix(in oklab, var(--editor-syntax-fg) 85%, transparent);
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
 }
 
 .tiptap-content .ProseMirror pre code {
     background: transparent;
     padding: 0;
     font-size: 0.875em;
+}
+
+/* Do not go back to importing a highlight.js stylesheet: a side-effect CSS import cannot be scoped to a
+   theme, so the fence could not follow light/dark at all. Groups mirror atom-one's. */
+:is(.tiptap-content .ProseMirror, .prose) pre .hljs-comment,
+:is(.tiptap-content .ProseMirror, .prose) pre .hljs-quote {
+    color: var(--editor-syntax-comment);
+    font-style: italic;
+}
+
+:is(.tiptap-content .ProseMirror, .prose) pre .hljs-doctag,
+:is(.tiptap-content .ProseMirror, .prose) pre .hljs-keyword,
+:is(.tiptap-content .ProseMirror, .prose) pre .hljs-formula {
+    color: var(--editor-syntax-keyword);
+}
+
+:is(.tiptap-content .ProseMirror, .prose) pre .hljs-section,
+:is(.tiptap-content .ProseMirror, .prose) pre .hljs-name,
+:is(.tiptap-content .ProseMirror, .prose) pre .hljs-selector-tag,
+:is(.tiptap-content .ProseMirror, .prose) pre .hljs-deletion,
+:is(.tiptap-content .ProseMirror, .prose) pre .hljs-subst {
+    color: var(--editor-syntax-entity);
+}
+
+:is(.tiptap-content .ProseMirror, .prose) pre .hljs-literal {
+    color: var(--editor-syntax-literal);
+}
+
+:is(.tiptap-content .ProseMirror, .prose) pre .hljs-string,
+:is(.tiptap-content .ProseMirror, .prose) pre .hljs-regexp,
+:is(.tiptap-content .ProseMirror, .prose) pre .hljs-addition,
+:is(.tiptap-content .ProseMirror, .prose) pre .hljs-attribute,
+:is(.tiptap-content .ProseMirror, .prose) pre .hljs-meta .hljs-string {
+    color: var(--editor-syntax-string);
+}
+
+:is(.tiptap-content .ProseMirror, .prose) pre .hljs-attr,
+:is(.tiptap-content .ProseMirror, .prose) pre .hljs-variable,
+:is(.tiptap-content .ProseMirror, .prose) pre .hljs-template-variable,
+:is(.tiptap-content .ProseMirror, .prose) pre .hljs-type,
+:is(.tiptap-content .ProseMirror, .prose) pre .hljs-selector-class,
+:is(.tiptap-content .ProseMirror, .prose) pre .hljs-selector-attr,
+:is(.tiptap-content .ProseMirror, .prose) pre .hljs-selector-pseudo,
+:is(.tiptap-content .ProseMirror, .prose) pre .hljs-number {
+    color: var(--editor-syntax-attr);
+}
+
+:is(.tiptap-content .ProseMirror, .prose) pre .hljs-symbol,
+:is(.tiptap-content .ProseMirror, .prose) pre .hljs-bullet,
+:is(.tiptap-content .ProseMirror, .prose) pre .hljs-link,
+:is(.tiptap-content .ProseMirror, .prose) pre .hljs-meta,
+:is(.tiptap-content .ProseMirror, .prose) pre .hljs-selector-id,
+:is(.tiptap-content .ProseMirror, .prose) pre .hljs-title {
+    color: var(--editor-syntax-symbol);
+}
+
+:is(.tiptap-content .ProseMirror, .prose) pre .hljs-built_in,
+:is(.tiptap-content .ProseMirror, .prose) pre .hljs-title.class_,
+:is(.tiptap-content .ProseMirror, .prose) pre .hljs-class .hljs-title {
+    color: var(--editor-syntax-class);
+}
+
+:is(.tiptap-content .ProseMirror, .prose) pre .hljs-emphasis {
+    font-style: italic;
+}
+
+:is(.tiptap-content .ProseMirror, .prose) pre .hljs-strong {
+    font-weight: 700;
 }
 
 .tiptap-content .ProseMirror blockquote {
@@ -622,7 +782,7 @@
 }
 
 .tiptap-content .ProseMirror a {
-    color: var(--primary);
+    color: var(--editor-accent);
     text-decoration: underline;
     text-underline-offset: 2px;
 }
@@ -631,4 +791,122 @@
     border: 0;
     border-top: 1px solid var(--border);
     margin: 1.5rem 0;
+}
+
+.tiptap-content .ProseMirror table {
+    border-collapse: collapse;
+    table-layout: fixed;
+    width: 100%;
+    margin: 0.75rem 0;
+    overflow: hidden;
+}
+
+.tiptap-content .ProseMirror th,
+.tiptap-content .ProseMirror td {
+    position: relative;
+    min-width: 4rem;
+    border: 1px solid var(--border);
+    padding: 0.375rem 0.5rem;
+    vertical-align: top;
+}
+
+.tiptap-content .ProseMirror th {
+    background-color: var(--muted);
+    font-weight: 600;
+    text-align: left;
+}
+
+.tiptap-content .ProseMirror th > *,
+.tiptap-content .ProseMirror td > * {
+    margin: 0;
+}
+
+/* Selected-cell overlay + column resize handle (prosemirror-tables) */
+.tiptap-content .ProseMirror .selectedCell::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: color-mix(in oklab, var(--primary) 15%, transparent);
+    pointer-events: none;
+}
+
+.tiptap-content .ProseMirror .column-resize-handle {
+    position: absolute;
+    top: 0;
+    bottom: -2px;
+    right: -2px;
+    width: 4px;
+    background-color: var(--primary);
+    pointer-events: none;
+}
+
+.tiptap-content .ProseMirror.resize-cursor {
+    cursor: col-resize;
+}
+
+.tiptap-content .ProseMirror ul[data-type='taskList'] {
+    list-style: none;
+    padding-left: 0;
+}
+
+.tiptap-content .ProseMirror ul[data-type='taskList'] li {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+}
+
+.tiptap-content .ProseMirror ul[data-type='taskList'] li > label {
+    margin-top: 0.2rem;
+    user-select: none;
+}
+
+.tiptap-content .ProseMirror ul[data-type='taskList'] li > div {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.tiptap-content .ProseMirror ul[data-type='taskList'] li > div > p {
+    margin: 0;
+}
+
+.tiptap-content .ProseMirror img {
+    max-width: 100%;
+    height: auto;
+    border-radius: calc(var(--radius) - 4px);
+}
+
+/* Every selectable node, not just images: a NodeSelection on an `hr` had no visual at all, and since
+   `.ProseMirror-hideselection` blanks the native highlight at the same time, the next keystroke replaced a
+   node the user could not see was selected. prosemirror-view ships an outline rule for this, but its
+   stylesheet is imported nowhere and tiptap's injected CSS carries no equivalent. */
+.tiptap-content .ProseMirror .ProseMirror-selectednode {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+
+.tiptap-content .ProseMirror img.ProseMirror-selectednode {
+    outline-offset: 0;
+}
+
+/* tiptap injects `border-top: 1px solid black` for the gap cursor, so on the dark theme the caret you get
+   between two block nodes (pressing left/up at the start of a leading table or fence) is a black line on a
+   near-black background — a caret position with no visible caret. */
+.tiptap-content .ProseMirror-gapcursor::after {
+    border-top-color: var(--foreground);
+}
+
+/* `{{ ... }}` Go-template actions, highlighted via view-only decorations (document bytes untouched). */
+.tiptap-content .ProseMirror .template-variable {
+    color: var(--editor-variable);
+    background-color: color-mix(in oklab, var(--editor-variable) 9%, transparent);
+    border-radius: calc(var(--radius) - 4px);
+    padding: 0 1px;
+}
+
+/* `<xml-tags>`, highlighted view-only. */
+.tiptap-content .ProseMirror .template-tag {
+    color: var(--editor-tag);
+    background-color: color-mix(in oklab, var(--editor-tag) 9%, transparent);
+    border-radius: calc(var(--radius) - 4px);
+    padding: 0 1px;
 }

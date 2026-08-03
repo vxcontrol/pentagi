@@ -30,7 +30,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-const stopTaskTimeout = 5 * time.Second
+const stopTaskTimeout = 60 * time.Second
 
 type FlowWorker interface {
 	GetFlowID() int64
@@ -50,11 +50,13 @@ type FlowWorker interface {
 	Stop(ctx context.Context) error
 	Rename(ctx context.Context, title string) error
 	WaitTaskCompletion(ctx context.Context) error
+	InvalidateTaskSubtasks(ctx context.Context, taskID int64, subtaskIDs []int64)
 }
 
 type flowWorker struct {
 	tc      TaskController
 	wg      *sync.WaitGroup
+	cfg     *config.Config
 	aws     map[int64]AssistantWorker
 	awsMX   *sync.Mutex
 	ctx     context.Context
@@ -66,7 +68,6 @@ type flowWorker struct {
 	taskCCH chan struct{}
 	input   chan flowInput
 	flowCtx *FlowContext
-	dataDir string
 	docker  docker.DockerClient
 	logger  *logrus.Entry
 }
@@ -124,7 +125,7 @@ type flowInput struct {
 func NewFlowWorker(
 	ctx context.Context,
 	fwc newFlowWorkerCtx,
-) (FlowWorker, error) {
+) (_ FlowWorker, err error) {
 	ctx, span := obs.Observer.NewSpan(ctx, obs.SpanKindInternal, "controller.NewFlowWorker")
 	defer span.End()
 
@@ -140,7 +141,7 @@ func NewFlowWorker(
 		UserID:             fwc.userID,
 	})
 	if err != nil {
-		logrus.WithError(err).Error("failed to create flow in DB")
+		obs.LogErrorOrCancel(logrus.WithContext(ctx), err, "failed to create flow in DB")
 		return nil, fmt.Errorf("failed to create flow in DB: %w", err)
 	}
 
@@ -152,6 +153,25 @@ func NewFlowWorker(
 	})
 	logger.Info("flow created in DB")
 
+	// Held separately because `flow` is reassigned below by UpdateFlow, which — like every sqlc query —
+	// returns a zero-valued row alongside an error, and a cleanup aimed at id 0 deletes nothing.
+	flowID := flow.ID
+
+	// DeleteFlow is a soft delete and the listings filter on deleted_at, so this is what keeps a flow
+	// the caller was told it never got out of the UI. Disarmed once the worker goroutine owns the flow —
+	// from there a failure is the worker's to unwind, not ours.
+	cleanupFlow := true
+	defer func() {
+		if err == nil || !cleanupFlow {
+			return
+		}
+
+		// The caller's context is usually already cancelled by whatever failed.
+		if _, cerr := fwc.db.DeleteFlow(context.WithoutCancel(ctx), flowID); cerr != nil {
+			logger.WithError(cerr).Error("failed to drop the flow left behind by a failed start")
+		}
+	}()
+
 	user, err := fwc.db.GetUser(ctx, fwc.userID)
 	if err != nil {
 		logger.WithError(err).Error("failed to get user")
@@ -160,12 +180,12 @@ func NewFlowWorker(
 
 	ctx, observation := obs.Observer.NewObservation(ctx,
 		langfuse.WithObservationTraceContext(
-			langfuse.WithTraceName(fmt.Sprintf("%d flow worker", flow.ID)),
-			langfuse.WithTraceUserID(user.Mail),
-			langfuse.WithTraceTags([]string{"controller", "flow"}),
+			langfuse.WithTraceName(fmt.Sprintf("%s%d flow worker", fwc.cfg.TenantLabel(), flow.ID)),
+			langfuse.WithTraceUserID(tenantUserID(fwc.cfg, user.Mail)),
+			langfuse.WithTraceTags(tenantTags(fwc.cfg, "controller", "flow")),
 			langfuse.WithTraceInput(fwc.input),
-			langfuse.WithTraceSessionID(fmt.Sprintf("flow-%d", flow.ID)),
-			langfuse.WithTraceMetadata(langfuse.Metadata{
+			langfuse.WithTraceSessionID(fwc.cfg.ScopedName(fmt.Sprintf("flow-%d", flow.ID))),
+			langfuse.WithTraceMetadata(tenantMeta(fwc.cfg, langfuse.Metadata{
 				"flow_id":       flow.ID,
 				"user_id":       fwc.userID,
 				"user_email":    user.Mail,
@@ -174,7 +194,7 @@ func NewFlowWorker(
 				"user_role":     user.RoleName,
 				"provider_name": fwc.prvname.String(),
 				"provider_type": fwc.prvtype.String(),
-			}),
+			})),
 		),
 	)
 	flowSpan := observation.Span(langfuse.WithSpanName("prepare flow worker"))
@@ -253,6 +273,7 @@ func NewFlowWorker(
 		wg:      &sync.WaitGroup{},
 		aws:     make(map[int64]AssistantWorker),
 		awsMX:   &sync.Mutex{},
+		cfg:     fwc.cfg,
 		ctx:     ctx,
 		cancel:  cancel,
 		taskMX:  &sync.Mutex{},
@@ -261,7 +282,6 @@ func NewFlowWorker(
 		taskCCH: make(chan struct{}),
 		input:   make(chan flowInput),
 		flowCtx: flowCtx,
-		dataDir: fwc.cfg.DataDir,
 		docker:  fwc.docker,
 		logger: logrus.WithFields(logrus.Fields{
 			"flow_id":   flow.ID,
@@ -281,6 +301,8 @@ func NewFlowWorker(
 	}
 
 	fw.flowCtx.Publisher.FlowCreated(ctx, flow, containers)
+
+	cleanupFlow = false
 
 	fw.wg.Add(1)
 	go fw.worker()
@@ -330,11 +352,11 @@ func LoadFlowWorker(ctx context.Context, flow database.Flow, fwc flowWorkerCtx) 
 	ctx, observation := obs.Observer.NewObservation(ctx,
 		langfuse.WithObservationTraceID(flow.TraceID.String),
 		langfuse.WithObservationTraceContext(
-			langfuse.WithTraceName(fmt.Sprintf("%d flow worker", flow.ID)),
-			langfuse.WithTraceUserID(user.Mail),
-			langfuse.WithTraceTags([]string{"controller", "flow"}),
-			langfuse.WithTraceSessionID(fmt.Sprintf("flow-%d", flow.ID)),
-			langfuse.WithTraceMetadata(langfuse.Metadata{
+			langfuse.WithTraceName(fmt.Sprintf("%s%d flow worker", fwc.cfg.TenantLabel(), flow.ID)),
+			langfuse.WithTraceUserID(tenantUserID(fwc.cfg, user.Mail)),
+			langfuse.WithTraceTags(tenantTags(fwc.cfg, "controller", "flow")),
+			langfuse.WithTraceSessionID(fwc.cfg.ScopedName(fmt.Sprintf("flow-%d", flow.ID))),
+			langfuse.WithTraceMetadata(tenantMeta(fwc.cfg, langfuse.Metadata{
 				"flow_id":       flow.ID,
 				"user_id":       flow.UserID,
 				"user_email":    user.Mail,
@@ -343,7 +365,7 @@ func LoadFlowWorker(ctx context.Context, flow database.Flow, fwc flowWorkerCtx) 
 				"user_role":     user.RoleName,
 				"provider_name": flow.ModelProviderName,
 				"provider_type": flow.ModelProviderType,
-			}),
+			})),
 		),
 	)
 	flowSpan := observation.Span(langfuse.WithSpanName("prepare flow worker"))
@@ -411,6 +433,7 @@ func LoadFlowWorker(ctx context.Context, flow database.Flow, fwc flowWorkerCtx) 
 		wg:      &sync.WaitGroup{},
 		aws:     make(map[int64]AssistantWorker),
 		awsMX:   &sync.Mutex{},
+		cfg:     fwc.cfg,
 		ctx:     ctx,
 		cancel:  cancel,
 		taskMX:  &sync.Mutex{},
@@ -419,7 +442,6 @@ func LoadFlowWorker(ctx context.Context, flow database.Flow, fwc flowWorkerCtx) 
 		taskCCH: make(chan struct{}),
 		input:   make(chan flowInput),
 		flowCtx: flowCtx,
-		dataDir: fwc.cfg.DataDir,
 		docker:  fwc.docker,
 		logger: logrus.WithFields(logrus.Fields{
 			"flow_id":   flow.ID,
@@ -460,7 +482,15 @@ func LoadFlowWorker(ctx context.Context, flow database.Flow, fwc flowWorkerCtx) 
 			if errors.Is(err, ErrNothingToLoad) {
 				continue
 			}
-			return nil, wrapErrorEndSpan(ctx, flowSpan, "failed to load assistant worker", err)
+			// One unloadable assistant must not take its flow down with it.
+			// Aborting here would leave the flow absent from the controller's
+			// map while its row stays alive in the DB, which makes the whole
+			// flow permanently unreachable ("flow not found" on every action) —
+			// the exact failure this used to produce when an assistant pointed
+			// at a renamed or deleted provider. The assistant simply stays
+			// unloaded and returns on the next start once its cause is fixed.
+			logger.WithError(err).Errorf("failed to load assistant %d, skipping it", assistant.ID)
+			continue
 		}
 		if err := fw.AddAssistant(ctx, aw); err != nil {
 			return nil, wrapErrorEndSpan(ctx, flowSpan, "failed to add assistant worker", err)
@@ -525,6 +555,17 @@ func (fw *flowWorker) SetStatus(ctx context.Context, status database.FlowStatus)
 	fw.flowCtx.Publisher.FlowUpdated(ctx, flow, containers)
 
 	return nil
+}
+
+// InvalidateTaskSubtasks drops stale workers after direct DB deletion,
+// preventing delayed ErrNoRows failures.
+func (fw *flowWorker) InvalidateTaskSubtasks(ctx context.Context, taskID int64, subtaskIDs []int64) {
+	task, err := fw.tc.GetTask(ctx, taskID)
+	if err != nil {
+		return
+	}
+
+	task.InvalidateSubtasks(subtaskIDs)
 }
 
 func (fw *flowWorker) AddAssistant(ctx context.Context, aw AssistantWorker) error {
@@ -630,7 +671,7 @@ func (fw *flowWorker) PutInput(
 
 		select {
 		case err := <-flin.done:
-			return err // nil or error
+			return err
 		case <-timer.C:
 			return nil // no early error
 		case <-fw.ctx.Done():
@@ -675,8 +716,8 @@ func (fw *flowWorker) copyResourcesToFS(dbResources []database.UserResource) ([]
 		})
 	}
 
-	storeDir := resources.ResourcesDir(fw.dataDir)
-	return flowfiles.CopyResourcesToFlow(fw.dataDir, storeDir, uint64(fw.flowCtx.FlowID), refs, false)
+	storeDir := resources.ResourcesDir(fw.cfg.DataDir)
+	return flowfiles.CopyResourcesToFlow(fw.cfg.DataDir, storeDir, uint64(fw.flowCtx.FlowID), refs, false)
 }
 
 // pushResourcesToContainer pushes newly added resource files into the running primary container.
@@ -685,13 +726,13 @@ func (fw *flowWorker) pushResourcesToContainer(ctx context.Context, addedPaths [
 	if fw.docker == nil {
 		return
 	}
-	containerName := tools.PrimaryTerminalName(fw.flowCtx.FlowID)
+	containerName := tools.PrimaryTerminalName(fw.cfg.TenantPrefix(), fw.flowCtx.FlowID)
 	running, _ := fw.docker.IsContainerRunning(ctx, containerName)
 	if !running {
 		return
 	}
 
-	resourcesDir := flowfiles.FlowResourcesDir(fw.dataDir, uint64(fw.flowCtx.FlowID))
+	resourcesDir := flowfiles.FlowResourcesDir(fw.cfg.DataDir, uint64(fw.flowCtx.FlowID))
 	for _, relPath := range addedPaths {
 		fsRelPath := relPath[len(flowfiles.ResourcesDirName)+1:]
 		absPath := resourcesDir + "/" + fsRelPath
@@ -723,7 +764,7 @@ func (fw *flowWorker) publishResourceFileEvents(ctx context.Context, addedPaths 
 		return
 	}
 
-	resourcesDir := flowfiles.FlowResourcesDir(fw.dataDir, uint64(fw.flowCtx.FlowID))
+	resourcesDir := flowfiles.FlowResourcesDir(fw.cfg.DataDir, uint64(fw.flowCtx.FlowID))
 	pub := fw.flowCtx.Publisher
 	for _, relPath := range addedPaths {
 		fsRelPath := relPath[len(flowfiles.ResourcesDirName)+1:]
@@ -827,7 +868,24 @@ func (fw *flowWorker) Rename(ctx context.Context, title string) error {
 	return nil
 }
 
-// switchProvider performs runtime provider switch for the flow
+// switchProvider performs runtime provider switch for the flow.
+//
+// This is the single place where a running flow picks up a provider change. A
+// rename or deletion of a user provider only rewrites the DB reference (see
+// flowController.reassignFlowsProvider); the in-memory instance is refreshed
+// here, on the next user input, or rebuilt from the DB row on the next start.
+//
+// Deciding whether anything changed is delegated to SetProvider, which compares
+// the raw configuration and not just the provider name — a user provider may be
+// named exactly like a built-in one, so the name alone cannot tell an override
+// apart from the default it shadows.
+//
+// Note on tool_call_id_template: it is resolved once, for a single model of the
+// provider configuration. A provider that routes different models to different
+// upstream backends (an OpenRouter-style gateway) may therefore need different
+// templates per agent, and this single value can be wrong for some of them.
+// Fixing that properly means keeping a per-model template registry, which is out
+// of scope here; if real users hit it, this is the place to start.
 func (fw *flowWorker) switchProvider(ctx context.Context, prv provider.Provider) error {
 	ctx, span := obs.Observer.NewSpan(ctx, obs.SpanKindInternal, "controller.flowWorker.switchProvider")
 	defer span.End()
@@ -837,29 +895,31 @@ func (fw *flowWorker) switchProvider(ctx context.Context, prv provider.Provider)
 	}
 
 	logger := fw.logger.WithFields(logrus.Fields{
-		"old_provider_name": fw.flowCtx.Provider.Name().String(),
-		"old_provider_type": fw.flowCtx.Provider.Type().String(),
 		"new_provider_name": prv.Name().String(),
 		"new_provider_type": prv.Type().String(),
 	})
 
-	if fw.flowCtx.Provider.Name() == prv.Name() {
+	changed, tcIDTemplate, err := fw.flowCtx.Provider.SetProvider(ctx, prv)
+	if err != nil {
+		logger.WithError(err).Error("failed to set provider")
+		return fmt.Errorf("failed to set provider: %w", err)
+	}
+
+	if !changed {
 		logger.Debug("provider is the same, skipping switch")
 		return nil
 	}
 
 	logger.Info("switching flow provider")
 
-	if err := fw.flowCtx.Provider.SetProvider(ctx, prv); err != nil {
-		logger.WithError(err).Error("failed to set provider")
-		return fmt.Errorf("failed to set provider: %w", err)
-	}
-
+	// Every persisted value is taken from prv (and the template SetProvider
+	// resolved for it) rather than re-read from the shared flow provider, so a
+	// concurrent switch cannot interleave into a mixed-provider row.
 	flow, err := fw.flowCtx.DB.UpdateFlowProvider(ctx, database.UpdateFlowProviderParams{
 		ModelProviderName:  prv.Name().String(),
 		ModelProviderType:  database.ProviderType(prv.Type()),
-		ToolCallIDTemplate: fw.flowCtx.Provider.ToolCallIDTemplate(),
-		Model:              fw.flowCtx.Provider.Model(pconfig.OptionsTypePrimaryAgent),
+		ToolCallIDTemplate: tcIDTemplate,
+		Model:              prv.Model(pconfig.OptionsTypePrimaryAgent),
 		ID:                 fw.flowCtx.FlowID,
 	})
 	if err != nil {
@@ -868,8 +928,8 @@ func (fw *flowWorker) switchProvider(ctx context.Context, prv provider.Provider)
 	}
 
 	logger.WithFields(logrus.Fields{
-		"new_tool_call_id_template": fw.flowCtx.Provider.ToolCallIDTemplate(),
-		"new_model":                 fw.flowCtx.Provider.Model(pconfig.OptionsTypePrimaryAgent),
+		"new_tool_call_id_template": tcIDTemplate,
+		"new_model":                 prv.Model(pconfig.OptionsTypePrimaryAgent),
 	}).Info("provider switched successfully")
 
 	if containers, err := fw.flowCtx.DB.GetFlowContainers(ctx, fw.flowCtx.FlowID); err == nil {

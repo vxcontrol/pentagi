@@ -1,6 +1,7 @@
 package providers
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -9,6 +10,7 @@ import (
 	"sync/atomic"
 
 	"pentagi/pkg/cast"
+	"pentagi/pkg/config"
 	"pentagi/pkg/csum"
 	"pentagi/pkg/database"
 	"pentagi/pkg/docker"
@@ -22,7 +24,7 @@ import (
 	"pentagi/pkg/templates"
 	"pentagi/pkg/tools"
 
-	lru "github.com/hashicorp/golang-lru/v2/expirable"
+	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/sirupsen/logrus"
 	"github.com/vxcontrol/langchaingo/llms"
 	"github.com/vxcontrol/langchaingo/llms/reasoning"
@@ -89,7 +91,11 @@ type FlowProvider interface {
 	SetTitle(title string)
 	SetAgentLogProvider(agentLog tools.AgentLogProvider)
 	SetMsgLogProvider(msgLog tools.MsgLogProvider)
-	SetProvider(ctx context.Context, newProvider provider.Provider) error
+	// SetProvider swaps the provider instance backing this flow. It reports
+	// whether anything actually changed and, when it did, the tool call ID
+	// template resolved for the new provider — so the caller can persist a
+	// consistent (provider, template) pair without re-reading shared state.
+	SetProvider(ctx context.Context, newProvider provider.Provider) (bool, string, error)
 
 	GetTaskTitle(ctx context.Context, input string) (string, error)
 	GenerateSubtasks(ctx context.Context, taskID int64) ([]tools.SubtaskInfo, error)
@@ -131,13 +137,12 @@ type flowProvider struct {
 	db database.Querier
 	mx *sync.RWMutex
 
+	cfg *config.Config
+
 	embedder       embeddings.Embedder
 	graphitiClient *graphiti.Client
 
-	flowID        int64
-	dataDir       string
-	publicIP      string
-	dockerNetwork string
+	flowID int64
 
 	callCounter *atomic.Int64
 
@@ -157,7 +162,7 @@ type flowProvider struct {
 
 	summarizer csum.Summarizer
 
-	summarizerCache *lru.LRU[[32]byte, string]
+	summarizerCache *lru.Cache[[32]byte, string]
 
 	maxGACallsLimit int
 	maxLACallsLimit int
@@ -180,23 +185,50 @@ func (fp *flowProvider) SetMsgLogProvider(msgLog tools.MsgLogProvider) {
 	fp.msgLog = msgLog
 }
 
-func (fp *flowProvider) SetProvider(ctx context.Context, newProvider provider.Provider) error {
+// SetProvider installs newProvider as the one backing this flow and returns
+// (changed, toolCallIDTemplate, error).
+//
+// It is a no-op — changed=false — when newProvider is effectively the one
+// already in use. "Effectively" means same name *and* same raw configuration:
+// comparing names alone is not enough, because a user provider may be named
+// exactly like a built-in one (an intentional feature: it lets a user override
+// the product's default configuration for a provider type from the UI). When
+// such an override is deleted or renamed away, the name a flow refers to stays
+// valid but now resolves to a different configuration, and that switch must go
+// through.
+func (fp *flowProvider) SetProvider(ctx context.Context, newProvider provider.Provider) (bool, string, error) {
 	ctx, span := obs.Observer.NewSpan(ctx, obs.SpanKindInternal, "providers.flowProvider.SetProvider")
 	defer span.End()
+
+	if newProvider == nil {
+		return false, "", fmt.Errorf("new provider is nil")
+	}
+
+	fp.mx.RLock()
+	current, prompter := fp.Provider, fp.prompter
+	fp.mx.RUnlock()
+
+	if current != nil && current.Name() == newProvider.Name() &&
+		bytes.Equal(current.GetRawConfig(), newProvider.GetRawConfig()) {
+		return false, fp.ToolCallIDTemplate(), nil
+	}
+
+	// Resolved outside the lock on purpose: on a cold cache this probes the
+	// provider with live LLM calls, and holding the write lock across it would
+	// stall every agent chain reading through this flowProvider. Doing it first
+	// also keeps the swap atomic — a failure here leaves the flow untouched.
+	tcIDTemplate, err := newProvider.GetToolCallIDTemplate(ctx, prompter)
+	if err != nil {
+		return false, "", fmt.Errorf("failed to get tool call ID template: %w", err)
+	}
 
 	fp.mx.Lock()
 	defer fp.mx.Unlock()
 
-	// Update provider-specific fields
 	fp.Provider = newProvider
+	fp.tcIDTemplate = tcIDTemplate
 
-	var err error
-	fp.tcIDTemplate, err = newProvider.GetToolCallIDTemplate(ctx, fp.prompter)
-	if err != nil {
-		return fmt.Errorf("failed to get tool call ID template: %w", err)
-	}
-
-	return nil
+	return true, tcIDTemplate, nil
 }
 
 func (fp *flowProvider) ID() int64 {
@@ -230,10 +262,10 @@ func (fp *flowProvider) Title() string {
 // userFilesListing returns the compact XML listing of user files in uploads/ and resources/
 // for injection into agent system prompts. Returns empty string if no files are present.
 func (fp *flowProvider) userFilesListing() string {
-	if fp.dataDir == "" {
+	if fp.cfg == nil || fp.cfg.DataDir == "" {
 		return ""
 	}
-	return flowfiles.FileListingForPrompt(fp.dataDir, uint64(fp.flowID))
+	return flowfiles.FileListingForPrompt(fp.cfg.DataDir, uint64(fp.flowID))
 }
 
 func (fp *flowProvider) SetTitle(title string) {

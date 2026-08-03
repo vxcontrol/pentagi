@@ -42,6 +42,22 @@ type AuthServiceConfig struct {
 	BaseURL          string
 	LoginCallbackURL string
 	SessionTimeout   int // in seconds
+
+	// CookiePrefix namespaces the OAuth CSRF cookies for this instance. Cookies
+	// are scoped by host and not by port, so two instances on one host would
+	// otherwise clobber each other's in-flight OAuth handshakes. Empty in
+	// single-instance mode, which keeps the cookie names exactly "state"/"nonce".
+	CookiePrefix string
+}
+
+// stateCookieName returns the tenant-scoped name of the OAuth CSRF state cookie.
+func (s *AuthService) stateCookieName() string {
+	return s.cfg.CookiePrefix + authStateCookieName
+}
+
+// nonceCookieName returns the tenant-scoped name of the OIDC nonce cookie.
+func (s *AuthService) nonceCookieName() string {
+	return s.cfg.CookiePrefix + authNonceCookieName
 }
 
 type AuthService struct {
@@ -296,8 +312,8 @@ func (s *AuthService) AuthAuthorize(c *gin.Context) {
 	}
 
 	maxAge := int(authStateRequestTTL / time.Second)
-	s.setCallbackCookie(c.Writer, c.Request, authStateCookieName, state, maxAge, sameSiteMode)
-	s.setCallbackCookie(c.Writer, c.Request, authNonceCookieName, nonce, maxAge, sameSiteMode)
+	s.setCallbackCookie(c.Writer, c.Request, s.stateCookieName(), state, maxAge, sameSiteMode)
+	s.setCallbackCookie(c.Writer, c.Request, s.nonceCookieName(), nonce, maxAge, sameSiteMode)
 
 	authOpts := []oauth2.AuthCodeOption{
 		oauth2.SetAuthURLParam("nonce", nonce),
@@ -328,7 +344,7 @@ func (s *AuthService) AuthLoginGetCallback(c *gin.Context) {
 		return
 	}
 
-	state, err := c.Request.Cookie(authStateCookieName)
+	state, err := c.Request.Cookie(s.stateCookieName())
 	if err != nil {
 		logger.FromContext(c).WithError(err).Errorf("error getting state from cookie")
 		response.Error(c, response.ErrAuthInvalidAuthorizationState, err)
@@ -383,7 +399,7 @@ func (s *AuthService) AuthLoginPostCallback(c *gin.Context) {
 		return
 	}
 
-	state, err := c.Request.Cookie(authStateCookieName)
+	state, err := c.Request.Cookie(s.stateCookieName())
 	if err != nil {
 		logger.FromContext(c).WithError(err).Errorf("error getting state from cookie")
 		response.Error(c, response.ErrAuthInvalidAuthorizationState, err)
@@ -450,7 +466,6 @@ func (s *AuthService) AuthLogout(c *gin.Context) {
 func (s *AuthService) authLoginCallback(c *gin.Context, stateData map[string]string, code string) {
 	var (
 		privs []string
-		role  models.Role
 		user  models.User
 	)
 
@@ -477,17 +492,23 @@ func (s *AuthService) authLoginCallback(c *gin.Context, stateData map[string]str
 		return
 	}
 
-	nonce, err := c.Request.Cookie(authNonceCookieName)
+	nonce, err := c.Request.Cookie(s.nonceCookieName())
 	if err != nil {
 		logger.FromContext(c).WithError(err).Errorf("error getting nonce from cookie")
 		response.Error(c, response.ErrAuthInvalidAuthorizationNonce, err)
 		return
 	}
 
-	email, err := oauthClient.ResolveEmail(ctx, nonce.Value, oauth2Token)
+	email, verified, err := oauthClient.ResolveEmail(ctx, nonce.Value, oauth2Token)
 	if err != nil {
 		logger.FromContext(c).WithError(err).Errorf("failed to resolve email")
 		response.Error(c, response.ErrAuthInvalidUserData, err)
+		return
+	}
+
+	if !verified {
+		logger.FromContext(c).Errorf("provider returned an unverified email '%s'", email)
+		response.Error(c, response.ErrAuthInvalidUserData, fmt.Errorf("email not verified by provider"))
 		return
 	}
 
@@ -504,32 +525,16 @@ func (s *AuthService) authLoginCallback(c *gin.Context, stateData map[string]str
 		return
 	}
 
-	err = s.db.Take(&role, "id = ?", models.RoleUser).Error
-	if err != nil {
-		logger.FromContext(c).WithError(err).Errorf("error getting user role '%d'", models.RoleUser)
-		response.Error(c, response.ErrAuthInvalidServiceData, err)
-		return
-	}
-
-	err = s.db.Table("privileges").
-		Where("role_id = ?", models.RoleUser).
-		Pluck("name", &privs).Error
-	if err != nil {
-		logger.FromContext(c).WithError(err).Errorf("error getting user privileges list '%s'", user.Hash)
-		response.Error(c, response.ErrAuthInvalidServiceData, err)
-		return
-	}
-
-	filterQuery := "mail = ? AND type = ?"
-	if err = s.db.Take(&user, filterQuery, email, models.UserTypeOAuth).Error; err != nil {
+	if err = s.db.Take(&user, "mail = ?", email).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			user = models.User{
-				Hash:   rdb.MakeUserHash(email),
-				Mail:   email,
-				Name:   username,
-				RoleID: models.RoleUser,
-				Status: "active",
-				Type:   models.UserTypeOAuth,
+				Hash:     rdb.MakeUserHash(email),
+				Mail:     email,
+				Name:     username,
+				RoleID:   models.RoleUser,
+				Status:   "active",
+				Type:     models.UserTypeOAuth,
+				Provider: &provider,
 			}
 
 			tx := s.db.Begin()
@@ -541,23 +546,30 @@ func (s *AuthService) authLoginCallback(c *gin.Context, stateData map[string]str
 
 			if err = tx.Create(&user).Error; err != nil {
 				tx.Rollback()
-				logger.FromContext(c).WithError(err).Errorf("error creating user")
-				response.Error(c, response.ErrInternal, err)
-				return
-			}
+				if !isUniqueViolation(err) {
+					logger.FromContext(c).WithError(err).Errorf("error creating user")
+					response.Error(c, response.ErrInternal, err)
+					return
+				}
+				if err = s.db.Take(&user, "mail = ?", email).Error; err != nil {
+					logger.FromContext(c).WithError(err).Errorf("error loading concurrently created user '%s'", email)
+					response.Error(c, response.ErrInternal, err)
+					return
+				}
+			} else {
+				preferences := models.NewUserPreferences(user.ID)
+				if err = tx.Create(preferences).Error; err != nil {
+					tx.Rollback()
+					logger.FromContext(c).WithError(err).Errorf("error creating user preferences")
+					response.Error(c, response.ErrInternal, err)
+					return
+				}
 
-			preferences := models.NewUserPreferences(user.ID)
-			if err = tx.Create(preferences).Error; err != nil {
-				tx.Rollback()
-				logger.FromContext(c).WithError(err).Errorf("error creating user preferences")
-				response.Error(c, response.ErrInternal, err)
-				return
-			}
-
-			if err = tx.Commit().Error; err != nil {
-				logger.FromContext(c).WithError(err).Errorf("error committing transaction")
-				response.Error(c, response.ErrInternal, err)
-				return
+				if err = tx.Commit().Error; err != nil {
+					logger.FromContext(c).WithError(err).Errorf("error committing transaction")
+					response.Error(c, response.ErrInternal, err)
+					return
+				}
 			}
 		} else {
 			logger.FromContext(c).WithError(err).Errorf("error searching user by email '%s'", email)
@@ -568,11 +580,24 @@ func (s *AuthService) authLoginCallback(c *gin.Context, stateData map[string]str
 		logger.FromContext(c).WithError(err).Errorf("error validating user data '%s'", user.Hash)
 		response.Error(c, response.ErrAuthInvalidUserData, err)
 		return
+	} else if user.Provider == nil || *user.Provider != provider {
+		if err = s.db.Model(&user).Update("provider", provider).Error; err != nil {
+			logger.FromContext(c).WithError(err).Errorf("error updating user provider '%s'", user.Hash)
+		}
 	}
 
 	if user.Status != "active" {
 		logger.FromContext(c).Errorf("error checking active state for user '%s'", user.Status)
 		response.Error(c, response.ErrAuthInactiveUser, fmt.Errorf("user is inactive"))
+		return
+	}
+
+	err = s.db.Table("privileges").
+		Where("role_id = ?", user.RoleID).
+		Pluck("name", &privs).Error
+	if err != nil {
+		logger.FromContext(c).WithError(err).Errorf("error getting user privileges list '%s'", user.Hash)
+		response.Error(c, response.ErrAuthInvalidServiceData, err)
 		return
 	}
 
@@ -609,8 +634,8 @@ func (s *AuthService) authLoginCallback(c *gin.Context, stateData map[string]str
 	if stateData["provider"] == "google" {
 		sameSiteMode = http.SameSiteNoneMode
 	}
-	s.setCallbackCookie(c.Writer, c.Request, authStateCookieName, "", 0, sameSiteMode)
-	s.setCallbackCookie(c.Writer, c.Request, authNonceCookieName, "", 0, sameSiteMode)
+	s.setCallbackCookie(c.Writer, c.Request, s.stateCookieName(), "", 0, sameSiteMode)
+	s.setCallbackCookie(c.Writer, c.Request, s.nonceCookieName(), "", 0, sameSiteMode)
 
 	logger.FromContext(c).
 		WithFields(logrus.Fields{

@@ -11,6 +11,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"pentagi/pkg/config"
@@ -347,6 +348,16 @@ type FlowToolsExecutor interface {
 	GetReporterExecutor(cfg ReporterExecutorConfig) (ContextToolsExecutor, error)
 }
 
+// sharedReplacer is a process-level singleton for the anonymizer replacer.
+// The replacer is built from immutable sources (embedded patterns + startup
+// config), so it is safe to share across all flow executor instances.
+// ReplaceString is a pure read operation and is goroutine-safe.
+var (
+	sharedReplacer     anonymizer.Replacer
+	sharedReplacerOnce sync.Once
+	sharedReplacerErr  error
+)
+
 func NewFlowToolsExecutor(
 	db database.Querier,
 	cfg *config.Config,
@@ -354,24 +365,28 @@ func NewFlowToolsExecutor(
 	functions *Functions,
 	userID, flowID int64,
 ) (FlowToolsExecutor, error) {
-	allPatterns, err := patterns.LoadPatterns(patterns.PatternListTypeAll)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load all patterns: %v", err)
-	}
+	// Build the replacer exactly once for the lifetime of the process.
+	// cfg.GetSecretPatterns() reads environment variables that are fixed at
+	// startup, so the first caller's config is representative for all callers.
+	sharedReplacerOnce.Do(func() {
+		allPatterns, err := patterns.LoadPatterns(patterns.PatternListTypeAll)
+		if err != nil {
+			sharedReplacerErr = fmt.Errorf("failed to load all patterns: %v", err)
+			return
+		}
+		allPatterns.Patterns = append(allPatterns.Patterns, cfg.GetSecretPatterns()...)
+		sharedReplacer, sharedReplacerErr = anonymizer.NewReplacer(allPatterns.Regexes(), allPatterns.Names())
+	})
 
-	// combine with config secret patterns
-	allPatterns.Patterns = append(allPatterns.Patterns, cfg.GetSecretPatterns()...)
-
-	replacer, err := anonymizer.NewReplacer(allPatterns.Regexes(), allPatterns.Names())
-	if err != nil {
-		return nil, fmt.Errorf("failed to create replacer: %v", err)
+	if sharedReplacerErr != nil {
+		return nil, fmt.Errorf("failed to create replacer: %v", sharedReplacerErr)
 	}
 
 	return &flowToolsExecutor{
 		db:          db,
 		docker:      docker,
 		functions:   functions,
-		replacer:    replacer,
+		replacer:    sharedReplacer,
 		cfg:         cfg,
 		flowID:      flowID,
 		userID:      userID,
@@ -471,7 +486,8 @@ func (fte *flowToolsExecutor) Prepare(ctx context.Context) error {
 			fte.primaryID = cnt.ID
 			fte.primaryLID = cnt.LocalID.String
 			if err := fte.syncMissingFiles(ctx); err != nil {
-				return fmt.Errorf("failed to sync missing files to container '%s': %w", PrimaryTerminalName(fte.flowID), err)
+				containerName := PrimaryTerminalName(fte.cfg.TenantPrefix(), fte.flowID)
+				return fmt.Errorf("failed to sync missing files to container '%s': %w", containerName, err)
 			}
 			return nil
 		default:
@@ -479,12 +495,21 @@ func (fte *flowToolsExecutor) Prepare(ctx context.Context) error {
 		}
 	}
 
-	capAdd := []string{"NET_RAW"}
+	// Explicit capability allow-list (CapDrop: ALL below): Docker's default 14
+	// caps minus MKNOD (block-device escape vector), plus SYS_PTRACE (debugging,
+	// not a Docker default) and NET_ADMIN when configured. Never add SYS_ADMIN,
+	// SYS_MODULE, SYS_RAWIO, SYS_BOOT. See "Capability Management" in docker.md
+	// for the full per-capability rationale.
+	capAdd := []string{
+		"CHOWN", "DAC_OVERRIDE", "FSETID", "FOWNER",
+		"NET_RAW", "SETGID", "SETUID", "SETFCAP", "SETPCAP",
+		"NET_BIND_SERVICE", "SYS_CHROOT", "KILL", "AUDIT_WRITE", "SYS_PTRACE",
+	}
 	if fte.cfg.DockerNetAdmin {
 		capAdd = append(capAdd, "NET_ADMIN")
 	}
 
-	containerName := PrimaryTerminalName(fte.flowID)
+	containerName := PrimaryTerminalName(fte.cfg.TenantPrefix(), fte.flowID)
 	cnt, err := fte.docker.RunContainer(
 		ctx,
 		containerName,
@@ -495,7 +520,8 @@ func (fte *flowToolsExecutor) Prepare(ctx context.Context) error {
 			Entrypoint: []string{"tail", "-f", "/dev/null"},
 		},
 		&container.HostConfig{
-			CapAdd: capAdd,
+			CapDrop: []string{"ALL"},
+			CapAdd:  capAdd,
 		},
 	)
 	if err != nil {
@@ -615,7 +641,7 @@ func (fte *flowToolsExecutor) findMissingInContainer(ctx context.Context, entrie
 		cmd = append(cmd, e.containerPath)
 	}
 
-	containerName := PrimaryTerminalName(fte.flowID)
+	containerName := PrimaryTerminalName(fte.cfg.TenantPrefix(), fte.flowID)
 	createResp, err := fte.docker.ContainerExecCreate(ctx, containerName, container.ExecOptions{
 		Cmd:          cmd,
 		AttachStdout: true,
@@ -642,7 +668,6 @@ func (fte *flowToolsExecutor) findMissingInContainer(ctx context.Context, entrie
 		return nil, fmt.Errorf("file-check exec failed with exit code %d: %s", inspect.ExitCode, strings.TrimSpace(string(output)))
 	}
 
-	// Build a lookup map for O(1) access.
 	byContainerPath := make(map[string]fileSyncEntry, len(entries))
 	for _, e := range entries {
 		byContainerPath[e.containerPath] = e
@@ -670,7 +695,7 @@ func (fte *flowToolsExecutor) copyEntriesToContainer(ctx context.Context, entrie
 		errCh <- flowfiles.WriteFilesTar(pw, convertSyncEntriesToTarEntries(entries))
 	}()
 
-	containerName := PrimaryTerminalName(fte.flowID)
+	containerName := PrimaryTerminalName(fte.cfg.TenantPrefix(), fte.flowID)
 	copyErr := fte.docker.CopyToContainer(ctx, containerName, docker.WorkFolderPathInContainer, pr,
 		container.CopyToContainerOptions{AllowOverwriteDirWithFile: true})
 	pr.Close()
@@ -725,7 +750,7 @@ func (fte *flowToolsExecutor) Release(ctx context.Context) error {
 
 	// TODO: here better to get flow containers list and purge all of them
 	if err := fte.docker.RemoveContainer(ctx, fte.primaryLID, fte.primaryID); err != nil {
-		containerName := PrimaryTerminalName(fte.flowID)
+		containerName := PrimaryTerminalName(fte.cfg.TenantPrefix(), fte.flowID)
 		return fmt.Errorf("failed to purge container '%s': %w", containerName, err)
 	}
 
@@ -811,6 +836,7 @@ func (fte *flowToolsExecutor) GetAssistantExecutor(cfg AssistantExecutorConfig) 
 		fte.flowID, nil, nil,
 		container.ID,
 		container.LocalID.String,
+		fte.cfg.TenantPrefix(),
 		fte.docker,
 		fte.tlp,
 		time.Duration(fte.cfg.TerminalToolTimeout)*time.Second,
@@ -907,79 +933,12 @@ func (fte *flowToolsExecutor) GetAssistantExecutor(cfg AssistantExecutorConfig) 
 			definitions = append(definitions, registryDefinitions[SearchCodeToolName])
 			handlers[SearchCodeToolName] = code.Handle
 		}
+	}
 
-		google := NewGoogleTool(
-			fte.cfg,
-			fte.flowID, nil, nil,
-			fte.slp,
-		)
-		if google.IsAvailable() {
-			definitions = append(definitions, registryDefinitions[GoogleToolName])
-			handlers[GoogleToolName] = google.Handle
-		}
-
-		duckduckgo := NewDuckDuckGoTool(
-			fte.cfg,
-			fte.flowID, nil, nil,
-			fte.slp,
-		)
-		if duckduckgo.IsAvailable() {
-			definitions = append(definitions, registryDefinitions[DuckDuckGoToolName])
-			handlers[DuckDuckGoToolName] = duckduckgo.Handle
-		}
-
-		tavily := NewTavilyTool(
-			fte.cfg,
-			fte.flowID, nil, nil,
-			fte.slp,
-			cfg.Summarizer,
-		)
-		if tavily.IsAvailable() {
-			definitions = append(definitions, registryDefinitions[TavilyToolName])
-			handlers[TavilyToolName] = tavily.Handle
-		}
-
-		traversaal := NewTraversaalTool(
-			fte.cfg,
-			fte.flowID, nil, nil,
-			fte.slp,
-		)
-		if traversaal.IsAvailable() {
-			definitions = append(definitions, registryDefinitions[TraversaalToolName])
-			handlers[TraversaalToolName] = traversaal.Handle
-		}
-
-		perplexity := NewPerplexityTool(
-			fte.cfg,
-			fte.flowID, nil, nil,
-			fte.slp,
-			cfg.Summarizer,
-		)
-		if perplexity.IsAvailable() {
-			definitions = append(definitions, registryDefinitions[PerplexityToolName])
-			handlers[PerplexityToolName] = perplexity.Handle
-		}
-
-		searxng := NewSearxngTool(
-			fte.cfg,
-			fte.flowID, nil, nil,
-			fte.slp,
-			cfg.Summarizer,
-		)
-		if searxng.IsAvailable() {
-			definitions = append(definitions, registryDefinitions[SearxngToolName])
-			handlers[SearxngToolName] = searxng.Handle
-		}
-
-		sploitus := NewSploitusTool(
-			fte.cfg,
-			fte.flowID, nil, nil,
-			fte.slp,
-		)
-		if sploitus.IsAvailable() {
-			definitions = append(definitions, registryDefinitions[SploitusToolName])
-			handlers[SploitusToolName] = sploitus.Handle
-		}
+	webSearch := buildWebSearch(fte, nil, nil, cfg.Summarizer)
+	if webSearch.IsAvailable() {
+		definitions = append(definitions, registryDefinitions[WebSearchToolName])
+		handlers[WebSearchToolName] = webSearch.Handle
 	}
 
 	flowStatus := NewFlowStatusTool(fte.flowID, fte.db, cfg.Summarizer)
@@ -1127,6 +1086,7 @@ func (fte *flowToolsExecutor) GetInstallerExecutor(cfg InstallerExecutorConfig) 
 		cfg.SubtaskID,
 		container.ID,
 		container.LocalID.String,
+		fte.cfg.TenantPrefix(),
 		fte.docker,
 		fte.tlp,
 		time.Duration(fte.cfg.TerminalToolTimeout)*time.Second,
@@ -1233,6 +1193,7 @@ func (fte *flowToolsExecutor) GetCoderExecutor(cfg CoderExecutorConfig) (Context
 		cfg.SubtaskID,
 		container.ID,
 		container.LocalID.String,
+		fte.cfg.TenantPrefix(),
 		fte.docker,
 		fte.tlp,
 		time.Duration(fte.cfg.TerminalToolTimeout)*time.Second,
@@ -1310,6 +1271,7 @@ func (fte *flowToolsExecutor) GetCoderExecutor(cfg CoderExecutorConfig) (Context
 		fte.flowID,
 		cfg.TaskID,
 		cfg.SubtaskID,
+		fte.cfg.GroupID(fte.flowID),
 		fte.graphitiClient,
 	)
 	if graphitiSearch.IsAvailable() {
@@ -1356,6 +1318,7 @@ func (fte *flowToolsExecutor) GetPentesterExecutor(cfg PentesterExecutorConfig) 
 		cfg.SubtaskID,
 		container.ID,
 		container.LocalID.String,
+		fte.cfg.TenantPrefix(),
 		fte.docker,
 		fte.tlp,
 		time.Duration(fte.cfg.TerminalToolTimeout)*time.Second,
@@ -1435,6 +1398,7 @@ func (fte *flowToolsExecutor) GetPentesterExecutor(cfg PentesterExecutorConfig) 
 		fte.flowID,
 		cfg.TaskID,
 		cfg.SubtaskID,
+		fte.cfg.GroupID(fte.flowID),
 		fte.graphitiClient,
 	)
 	if graphitiSearch.IsAvailable() {
@@ -1442,16 +1406,10 @@ func (fte *flowToolsExecutor) GetPentesterExecutor(cfg PentesterExecutorConfig) 
 		ce.handlers[GraphitiSearchToolName] = graphitiSearch.Handle
 	}
 
-	sploitus := NewSploitusTool(
-		fte.cfg,
-		fte.flowID,
-		cfg.TaskID,
-		cfg.SubtaskID,
-		fte.slp,
-	)
-	if sploitus.IsAvailable() {
-		ce.definitions = append(ce.definitions, registryDefinitions[SploitusToolName])
-		ce.handlers[SploitusToolName] = sploitus.Handle
+	webSearch := buildWebSearch(fte, cfg.TaskID, cfg.SubtaskID, cfg.Summarizer)
+	if webSearch.IsAvailable() {
+		ce.definitions = append(ce.definitions, registryDefinitions[WebSearchToolName])
+		ce.handlers[WebSearchToolName] = webSearch.Handle
 	}
 
 	return ce, nil
@@ -1504,91 +1462,10 @@ func (fte *flowToolsExecutor) GetSearcherExecutor(cfg SearcherExecutorConfig) (C
 		ce.handlers[BrowserToolName] = browser.Handle
 	}
 
-	google := NewGoogleTool(
-		fte.cfg,
-		fte.flowID,
-		cfg.TaskID,
-		cfg.SubtaskID,
-		fte.slp,
-	)
-	if google.IsAvailable() {
-		ce.definitions = append(ce.definitions, registryDefinitions[GoogleToolName])
-		ce.handlers[GoogleToolName] = google.Handle
-	}
-
-	duckduckgo := NewDuckDuckGoTool(
-		fte.cfg,
-		fte.flowID,
-		cfg.TaskID,
-		cfg.SubtaskID,
-		fte.slp,
-	)
-	if duckduckgo.IsAvailable() {
-		ce.definitions = append(ce.definitions, registryDefinitions[DuckDuckGoToolName])
-		ce.handlers[DuckDuckGoToolName] = duckduckgo.Handle
-	}
-
-	tavily := NewTavilyTool(
-		fte.cfg,
-		fte.flowID,
-		cfg.TaskID,
-		cfg.SubtaskID,
-		fte.slp,
-		cfg.Summarizer,
-	)
-	if tavily.IsAvailable() {
-		ce.definitions = append(ce.definitions, registryDefinitions[TavilyToolName])
-		ce.handlers[TavilyToolName] = tavily.Handle
-	}
-
-	traversaal := NewTraversaalTool(
-		fte.cfg,
-		fte.flowID,
-		cfg.TaskID,
-		cfg.SubtaskID,
-		fte.slp,
-	)
-	if traversaal.IsAvailable() {
-		ce.definitions = append(ce.definitions, registryDefinitions[TraversaalToolName])
-		ce.handlers[TraversaalToolName] = traversaal.Handle
-	}
-
-	perplexity := NewPerplexityTool(
-		fte.cfg,
-		fte.flowID,
-		cfg.TaskID,
-		cfg.SubtaskID,
-		fte.slp,
-		cfg.Summarizer,
-	)
-	if perplexity.IsAvailable() {
-		ce.definitions = append(ce.definitions, registryDefinitions[PerplexityToolName])
-		ce.handlers[PerplexityToolName] = perplexity.Handle
-	}
-
-	searxng := NewSearxngTool(
-		fte.cfg,
-		fte.flowID,
-		cfg.TaskID,
-		cfg.SubtaskID,
-		fte.slp,
-		cfg.Summarizer,
-	)
-	if searxng.IsAvailable() {
-		ce.definitions = append(ce.definitions, registryDefinitions[SearxngToolName])
-		ce.handlers[SearxngToolName] = searxng.Handle
-	}
-
-	sploitus := NewSploitusTool(
-		fte.cfg,
-		fte.flowID,
-		cfg.TaskID,
-		cfg.SubtaskID,
-		fte.slp,
-	)
-	if sploitus.IsAvailable() {
-		ce.definitions = append(ce.definitions, registryDefinitions[SploitusToolName])
-		ce.handlers[SploitusToolName] = sploitus.Handle
+	webSearch := buildWebSearch(fte, cfg.TaskID, cfg.SubtaskID, cfg.Summarizer)
+	if webSearch.IsAvailable() {
+		ce.definitions = append(ce.definitions, registryDefinitions[WebSearchToolName])
+		ce.handlers[WebSearchToolName] = webSearch.Handle
 	}
 
 	search := NewSearchTool(
@@ -1634,6 +1511,7 @@ func (fte *flowToolsExecutor) GetGeneratorExecutor(cfg GeneratorExecutorConfig) 
 		nil,
 		container.ID,
 		container.LocalID.String,
+		fte.cfg.TenantPrefix(),
 		fte.docker,
 		fte.tlp,
 		time.Duration(fte.cfg.TerminalToolTimeout)*time.Second,
@@ -1702,6 +1580,7 @@ func (fte *flowToolsExecutor) GetRefinerExecutor(cfg RefinerExecutorConfig) (Con
 		nil,
 		container.ID,
 		container.LocalID.String,
+		fte.cfg.TenantPrefix(),
 		fte.docker,
 		fte.tlp,
 		time.Duration(fte.cfg.TerminalToolTimeout)*time.Second,
@@ -1766,6 +1645,7 @@ func (fte *flowToolsExecutor) GetMemoristExecutor(cfg MemoristExecutorConfig) (C
 		cfg.SubtaskID,
 		container.ID,
 		container.LocalID.String,
+		fte.cfg.TenantPrefix(),
 		fte.docker,
 		fte.tlp,
 		time.Duration(fte.cfg.TerminalToolTimeout)*time.Second,
@@ -1811,6 +1691,7 @@ func (fte *flowToolsExecutor) GetMemoristExecutor(cfg MemoristExecutorConfig) (C
 		fte.flowID,
 		cfg.TaskID,
 		cfg.SubtaskID,
+		fte.cfg.GroupID(fte.flowID),
 		fte.graphitiClient,
 	)
 	if graphitiSearch.IsAvailable() {
@@ -1837,6 +1718,7 @@ func (fte *flowToolsExecutor) GetEnricherExecutor(cfg EnricherExecutorConfig) (C
 		cfg.SubtaskID,
 		container.ID,
 		container.LocalID.String,
+		fte.cfg.TenantPrefix(),
 		fte.docker,
 		fte.tlp,
 		time.Duration(fte.cfg.TerminalToolTimeout)*time.Second,
@@ -1882,6 +1764,7 @@ func (fte *flowToolsExecutor) GetEnricherExecutor(cfg EnricherExecutorConfig) (C
 		fte.flowID,
 		cfg.TaskID,
 		cfg.SubtaskID,
+		fte.cfg.GroupID(fte.flowID),
 		fte.graphitiClient,
 	)
 	if graphitiSearch.IsAvailable() {

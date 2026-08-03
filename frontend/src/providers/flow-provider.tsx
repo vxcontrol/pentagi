@@ -1,3 +1,4 @@
+import { useMutation, useQuery, useSubscription } from '@apollo/client/react';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -6,34 +7,46 @@ import type { FlowFormValues } from '@/features/flows/flow-form';
 import type { AssistantFragmentFragment, AssistantLogFragmentFragment, FlowQuery } from '@/graphql/types';
 
 import {
+    AgentLogAddedDocument,
+    AssistantCreatedDocument,
+    AssistantDeletedDocument,
+    AssistantLogAddedDocument,
+    AssistantLogsDocument,
+    AssistantLogUpdatedDocument,
+    AssistantsDocument,
+    AssistantUpdatedDocument,
+    CallAssistantDocument,
+    CreateAssistantDocument,
+    DeleteAssistantDocument,
+    FlowDocument,
+    FlowUpdatedDocument,
+    MessageLogAddedDocument,
+    MessageLogUpdatedDocument,
+    PutUserInputDocument,
     ResultType,
+    ScreenshotAddedDocument,
+    SearchLogAddedDocument,
     StatusType,
-    useAgentLogAddedSubscription,
-    useAssistantCreatedSubscription,
-    useAssistantDeletedSubscription,
-    useAssistantLogAddedSubscription,
-    useAssistantLogsQuery,
-    useAssistantLogUpdatedSubscription,
-    useAssistantsQuery,
-    useAssistantUpdatedSubscription,
-    useCallAssistantMutation,
-    useCreateAssistantMutation,
-    useDeleteAssistantMutation,
-    useFlowQuery,
-    useFlowUpdatedSubscription,
-    useMessageLogAddedSubscription,
-    useMessageLogUpdatedSubscription,
-    usePutUserInputMutation,
-    useScreenshotAddedSubscription,
-    useSearchLogAddedSubscription,
-    useStopAssistantMutation,
-    useStopFlowMutation,
-    useTaskCreatedSubscription,
-    useTaskUpdatedSubscription,
-    useTerminalLogAddedSubscription,
-    useVectorStoreLogAddedSubscription,
+    StopAssistantDocument,
+    StopFlowDocument,
+    TaskCreatedDocument,
+    TaskUpdatedDocument,
+    TerminalLogAddedDocument,
+    VectorStoreLogAddedDocument,
 } from '@/graphql/types';
+import { isNotFoundError } from '@/lib/errors';
 import { Log } from '@/lib/log';
+
+/**
+ * Under `errorPolicy:'all'` a partial not-found error surfaces alongside a flow that loaded fine, so
+ * the not-found disjunct gates on `!flowData?.flow`. Without the gate that partial error redirects
+ * the user off a flow that rendered correctly.
+ */
+export const deriveFlowMissing = (
+    flowData: null | undefined | { flow: unknown },
+    flowError: undefined | { message: string },
+): boolean =>
+    Boolean(flowData && !flowData.flow) || Boolean(flowError && !flowData?.flow && isNotFoundError(flowError));
 
 interface FlowContextValue {
     assistantLogs: Array<AssistantLogFragmentFragment>;
@@ -41,12 +54,14 @@ interface FlowContextValue {
     createAssistant: (values: FlowFormValues) => Promise<void>;
     deleteAssistant: (assistantId: string) => Promise<void>;
     flowData: FlowQuery | undefined;
-    flowError: Error | undefined;
     flowId: null | string;
+    flowLoadError: Error | undefined;
     flowStatus: StatusType | undefined;
     initiateAssistantCreation: () => void;
     isAssistantsLoading: boolean;
+    isFlowMissing: boolean;
     isLoading: boolean;
+    refetchFlow: () => void;
     selectAssistant: (assistantId: null | string) => void;
     selectedAssistantId: null | string;
     stopAssistant: (assistantId: string) => Promise<void>;
@@ -69,8 +84,9 @@ export function FlowProvider({ children }: FlowProviderProps) {
     const {
         data: flowData,
         error: flowError,
-        loading: isLoading,
-    } = useFlowQuery({
+        loading,
+        refetch: refetchFlow,
+    } = useQuery(FlowDocument, {
         errorPolicy: 'all',
         fetchPolicy: 'cache-first',
         nextFetchPolicy: 'cache-first',
@@ -79,7 +95,18 @@ export function FlowProvider({ children }: FlowProviderProps) {
         variables: { id: flowId ?? '' },
     });
 
-    const { data: assistantsData, loading: isAssistantsLoading } = useAssistantsQuery({
+    // Also gates `subscriptionSkip` below: raising it on a refetch that still holds the flow
+    // would tear down 14 live subscriptions mid-flight.
+    const isLoading = loading && !flowData?.flow;
+
+    // A real load failure that left nothing to show (cold cache + backend error on a
+    // deep link), as opposed to a genuine not-found. The detail page renders this as an
+    // in-page ErrorState + Retry instead of silently bouncing to the list.
+    const flowLoadError = flowError && !flowData?.flow && !isNotFoundError(flowError) ? flowError : undefined;
+
+    const isFlowMissing = deriveFlowMissing(flowData, flowError);
+
+    const { data: assistantsData, loading: isAssistantsLoading } = useQuery(AssistantsDocument, {
         fetchPolicy: 'cache-first',
         nextFetchPolicy: 'cache-first',
         skip: !flowId,
@@ -108,7 +135,7 @@ export function FlowProvider({ children }: FlowProviderProps) {
         return assistants?.[0]?.id ?? null;
     }, [flowId, selectedAssistantIds, assistants]);
 
-    const { data: assistantLogsData } = useAssistantLogsQuery({
+    const { data: assistantLogsData } = useQuery(AssistantLogsDocument, {
         fetchPolicy: 'cache-first',
         nextFetchPolicy: 'cache-first',
         skip: !flowId || !selectedAssistantId || selectedAssistantId === '',
@@ -120,23 +147,23 @@ export function FlowProvider({ children }: FlowProviderProps) {
     const subscriptionVariables = useMemo(() => ({ flowId: flowId || '' }), [flowId]);
     const subscriptionSkip = !flowId || isLoading;
 
-    useFlowUpdatedSubscription();
+    useSubscription(FlowUpdatedDocument);
 
-    useTaskCreatedSubscription({ skip: subscriptionSkip, variables: subscriptionVariables });
-    useTaskUpdatedSubscription({ skip: subscriptionSkip, variables: subscriptionVariables });
-    useScreenshotAddedSubscription({ skip: subscriptionSkip, variables: subscriptionVariables });
-    useTerminalLogAddedSubscription({ skip: subscriptionSkip, variables: subscriptionVariables });
-    useMessageLogUpdatedSubscription({ skip: subscriptionSkip, variables: subscriptionVariables });
-    useMessageLogAddedSubscription({ skip: subscriptionSkip, variables: subscriptionVariables });
-    useAgentLogAddedSubscription({ skip: subscriptionSkip, variables: subscriptionVariables });
-    useSearchLogAddedSubscription({ skip: subscriptionSkip, variables: subscriptionVariables });
-    useVectorStoreLogAddedSubscription({ skip: subscriptionSkip, variables: subscriptionVariables });
+    useSubscription(TaskCreatedDocument, { skip: subscriptionSkip, variables: subscriptionVariables });
+    useSubscription(TaskUpdatedDocument, { skip: subscriptionSkip, variables: subscriptionVariables });
+    useSubscription(ScreenshotAddedDocument, { skip: subscriptionSkip, variables: subscriptionVariables });
+    useSubscription(TerminalLogAddedDocument, { skip: subscriptionSkip, variables: subscriptionVariables });
+    useSubscription(MessageLogUpdatedDocument, { skip: subscriptionSkip, variables: subscriptionVariables });
+    useSubscription(MessageLogAddedDocument, { skip: subscriptionSkip, variables: subscriptionVariables });
+    useSubscription(AgentLogAddedDocument, { skip: subscriptionSkip, variables: subscriptionVariables });
+    useSubscription(SearchLogAddedDocument, { skip: subscriptionSkip, variables: subscriptionVariables });
+    useSubscription(VectorStoreLogAddedDocument, { skip: subscriptionSkip, variables: subscriptionVariables });
 
-    useAssistantCreatedSubscription({ skip: subscriptionSkip, variables: subscriptionVariables });
-    useAssistantUpdatedSubscription({ skip: subscriptionSkip, variables: subscriptionVariables });
-    useAssistantDeletedSubscription({ skip: subscriptionSkip, variables: subscriptionVariables });
-    useAssistantLogAddedSubscription({ skip: subscriptionSkip, variables: subscriptionVariables });
-    useAssistantLogUpdatedSubscription({ skip: subscriptionSkip, variables: subscriptionVariables });
+    useSubscription(AssistantCreatedDocument, { skip: subscriptionSkip, variables: subscriptionVariables });
+    useSubscription(AssistantUpdatedDocument, { skip: subscriptionSkip, variables: subscriptionVariables });
+    useSubscription(AssistantDeletedDocument, { skip: subscriptionSkip, variables: subscriptionVariables });
+    useSubscription(AssistantLogAddedDocument, { skip: subscriptionSkip, variables: subscriptionVariables });
+    useSubscription(AssistantLogUpdatedDocument, { skip: subscriptionSkip, variables: subscriptionVariables });
 
     const selectAssistant = useCallback(
         (assistantId: null | string) => {
@@ -160,30 +187,31 @@ export function FlowProvider({ children }: FlowProviderProps) {
         selectAssistant(null);
     }, [flowId, selectAssistant]);
 
-    const [putUserInput] = usePutUserInputMutation();
-    const [stopFlowMutation] = useStopFlowMutation();
-    const [createAssistantMutation] = useCreateAssistantMutation();
-    const [submitAssistantMessageMutation] = useCallAssistantMutation();
-    const [stopAssistantMutation] = useStopAssistantMutation();
-    const [deleteAssistantMutation] = useDeleteAssistantMutation();
+    const [putUserInput] = useMutation(PutUserInputDocument);
+    const [stopFlowMutation] = useMutation(StopFlowDocument);
+    const [createAssistantMutation] = useMutation(CreateAssistantDocument);
+    const [submitAssistantMessageMutation] = useMutation(CallAssistantDocument);
+    const [stopAssistantMutation] = useMutation(StopAssistantDocument);
+    const [deleteAssistantMutation] = useMutation(DeleteAssistantDocument);
 
     const flowStatus = useMemo(() => flowData?.flow?.status, [flowData?.flow?.status]);
 
-    // A single Postgres "no rows in result set" surfaces here every time a sibling
-    // query/subscription retries against an invalid flow id; without a stable
-    // toast id Sonner would stack 8 copies of the same message before the page
-    // redirects. Surface a friendly message and drop the raw SQL detail entirely.
+    // errorPolicy:'all' surfaces a partial error while the flow loaded, so gate on
+    // `!flow` or a partial failure toasts over a flow that rendered fine. A real load
+    // failure is surfaced in-page (ErrorState via flowLoadError); only the not-found
+    // redirect needs a toast to explain the bounce to the list. The stable id keeps the
+    // invalid-id "no rows" retries from stacking.
     useEffect(() => {
-        if (flowError) {
-            const raw = flowError.message ?? '';
-            const isNotFound = /no rows in result set|not found/i.test(raw);
-            toast.error(isNotFound ? 'Flow not found' : 'Failed to load flow', {
-                description: isNotFound ? undefined : raw || undefined,
-                id: 'flow-load-error',
-            });
-            Log.error('Error loading flow:', flowError);
+        if (!flowError || flowData?.flow) {
+            return;
         }
-    }, [flowError]);
+
+        if (isNotFoundError(flowError)) {
+            toast.error('Flow not found', { id: 'flow-load-error' });
+        }
+
+        Log.error('Error loading flow:', flowError);
+    }, [flowError, flowData]);
 
     const submitAutomationMessage = useCallback(
         async (values: FlowFormValues) => {
@@ -373,12 +401,14 @@ export function FlowProvider({ children }: FlowProviderProps) {
             createAssistant,
             deleteAssistant,
             flowData,
-            flowError,
             flowId: flowId ?? null,
+            flowLoadError,
             flowStatus,
             initiateAssistantCreation,
             isAssistantsLoading,
+            isFlowMissing,
             isLoading,
+            refetchFlow,
             selectAssistant,
             selectedAssistantId,
             stopAssistant,
@@ -392,12 +422,14 @@ export function FlowProvider({ children }: FlowProviderProps) {
             createAssistant,
             deleteAssistant,
             flowData,
-            flowError,
             flowId,
+            flowLoadError,
             flowStatus,
             initiateAssistantCreation,
             isAssistantsLoading,
+            isFlowMissing,
             isLoading,
+            refetchFlow,
             selectAssistant,
             selectedAssistantId,
             stopAssistant,

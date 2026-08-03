@@ -5,7 +5,7 @@ import * as React from 'react';
 import { cn } from '@/lib/utils';
 
 const buttonVariants = cva(
-    'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0',
+    'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0',
     {
         defaultVariants: {
             size: 'default',
@@ -24,9 +24,10 @@ const buttonVariants = cva(
             },
             variant: {
                 default: 'bg-primary text-primary-foreground shadow-sm hover:bg-primary/90',
-                destructive: 'bg-destructive text-destructive-foreground shadow-xs hover:bg-destructive/90',
+                destructive:
+                    'bg-destructive text-destructive-foreground shadow-xs hover:bg-destructive/90 dark:bg-destructive/80 dark:hover:bg-destructive/70',
                 ghost: 'hover:bg-accent hover:text-accent-foreground',
-                link: 'text-primary underline-offset-4 hover:underline',
+                link: 'text-link underline-offset-4 hover:underline',
                 outline: 'border border-input bg-background shadow-xs hover:bg-accent hover:text-accent-foreground',
                 secondary: 'bg-secondary text-secondary-foreground shadow-xs hover:bg-secondary/80',
             },
@@ -38,12 +39,15 @@ export interface ButtonProps extends React.ComponentProps<'button'>, VariantProp
     asChild?: boolean;
 }
 
+export type ButtonVariant = NonNullable<VariantProps<typeof buttonVariants>['variant']>;
+
 function Button({ asChild = false, className, size, type, variant, ...props }: ButtonProps) {
     const Comp = asChild ? Slot : 'button';
 
     return (
         <Comp
             className={cn(buttonVariants({ className, size, variant }))}
+            data-slot="button"
             // HTML's default `type` for a `<button>` inside a `<form>` is `submit`,
             // which silently submits the form on every click — every nav cluster,
             // toggle, or dropdown trigger placed inside a form would post the

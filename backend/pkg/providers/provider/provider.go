@@ -10,6 +10,7 @@ import (
 	"pentagi/pkg/templates"
 
 	"github.com/vxcontrol/langchaingo/llms"
+	"github.com/vxcontrol/langchaingo/llms/reasoning"
 	"github.com/vxcontrol/langchaingo/llms/streaming"
 )
 
@@ -17,6 +18,34 @@ type ProviderType string
 
 func (p ProviderType) String() string {
 	return string(p)
+}
+
+// ReasoningProvider maps the provider type to the langchaingo reasoning.Provider
+// consumed ONLY by capability introspection for the settings UI (CannotDisable /
+// Supported hints via llms.ReasoningSupportFor / reasoning.ResolveOff) — it has no
+// effect on the actual wire call, which each provider builds independently.
+//
+// DeepSeek/GLM/Kimi/Qwen/MiniMax/Custom are folded into reasoning.ProviderOpenAI
+// as a best-effort approximation, not because they share OpenAI's real disable
+// semantics: GLM/Kimi/DeepSeek's actual thinking on/off switch is their own
+// extra_body toggle (see BuildOptions' reasoning-block comment), and Custom can
+// front literally any backend behind LLM_SERVER_URL. So the resulting hint may
+// say "reasoning can be disabled via effort=none" for a model whose real API
+// ignores that field entirely and only obeys extra_body. Treat this mapping as
+// a rough default for the UI, not a guarantee of correct wire behavior.
+func (p ProviderType) ReasoningProvider() reasoning.Provider {
+	switch p {
+	case ProviderAnthropic:
+		return reasoning.ProviderAnthropic
+	case ProviderBedrock:
+		return reasoning.ProviderBedrock
+	case ProviderGemini:
+		return reasoning.ProviderGoogleAI
+	case ProviderOpenAI, ProviderDeepSeek, ProviderGLM, ProviderKimi, ProviderQwen, ProviderMiniMax, ProviderCustom:
+		return reasoning.ProviderOpenAI
+	default: // ProviderOllama and anything unrecognized
+		return reasoning.ProviderUnknown
+	}
 }
 
 const (
@@ -30,7 +59,24 @@ const (
 	ProviderGLM       ProviderType = "glm"
 	ProviderKimi      ProviderType = "kimi"
 	ProviderQwen      ProviderType = "qwen"
+	ProviderMiniMax   ProviderType = "minimax"
 )
+
+// AllProviderTypes enumerates every supported provider type; keep it in sync with
+// the consts above. The API-layer type whitelist validates against it.
+var AllProviderTypes = ProvidersListTypes{
+	ProviderOpenAI,
+	ProviderAnthropic,
+	ProviderGemini,
+	ProviderBedrock,
+	ProviderOllama,
+	ProviderCustom,
+	ProviderDeepSeek,
+	ProviderGLM,
+	ProviderKimi,
+	ProviderQwen,
+	ProviderMiniMax,
+}
 
 type ProviderName string
 
@@ -49,6 +95,7 @@ const (
 	DefaultProviderNameGLM       ProviderName = ProviderName(ProviderGLM)
 	DefaultProviderNameKimi      ProviderName = ProviderName(ProviderKimi)
 	DefaultProviderNameQwen      ProviderName = ProviderName(ProviderQwen)
+	DefaultProviderNameMiniMax   ProviderName = ProviderName(ProviderMiniMax)
 )
 
 type Provider interface {
@@ -72,6 +119,19 @@ type Provider interface {
 		chain []llms.MessageContent,
 		tools []llms.Tool,
 		streamCb streaming.Callback,
+	) (*llms.ContentResponse, error)
+	// CallWithExtraOptions is CallWithTools with extra appended after the
+	// agent's own configured options, so it always wins. Lets a caller force a
+	// wire behavior (e.g. adaptive thinking, reasoning off, structured output)
+	// the agent's static config doesn't already request — used by the
+	// provider tester, but not limited to it.
+	CallWithExtraOptions(
+		ctx context.Context,
+		opt pconfig.ProviderOptionsType,
+		chain []llms.MessageContent,
+		tools []llms.Tool,
+		streamCb streaming.Callback,
+		extra ...llms.CallOption,
 	) (*llms.ContentResponse, error)
 
 	// Configuration access methods

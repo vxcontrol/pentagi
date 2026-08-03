@@ -1,13 +1,9 @@
-import type { ComponentType } from 'react';
-
 import { useMatches } from 'react-router-dom';
 
-import { isApolloTitle } from '@/lib/route-titles/apollo-title';
+import { type ApolloTitleComponent, isApolloTitle } from '@/lib/route-titles/apollo-title';
 import { renderTitle, type RouteParams } from '@/lib/route-titles/render-title';
 
-type TitleComponent = ComponentType<{ params: RouteParams }>;
-
-type TitleResolver = ((params: RouteParams) => string) | string | TitleComponent;
+type TitleResolver = ((params: RouteParams) => string) | ApolloTitleComponent | string;
 
 const hasTitle = (handle: unknown): handle is { title: TitleResolver } => {
     if (typeof handle !== 'object' || handle === null || !('title' in handle)) {

@@ -1,14 +1,15 @@
+import { skipToken, useMutation, useQuery, useSubscription } from '@apollo/client/react';
 import { createContext, type ReactNode, useCallback, useContext, useMemo } from 'react';
 import { toast } from 'sonner';
 
 import {
-    useCreateFlowTemplateMutation,
-    useDeleteFlowTemplateMutation,
-    useFlowTemplateCreatedSubscription,
-    useFlowTemplateDeletedSubscription,
-    useFlowTemplatesQuery,
-    useFlowTemplateUpdatedSubscription,
-    useUpdateFlowTemplateMutation,
+    CreateFlowTemplateDocument,
+    DeleteFlowTemplateDocument,
+    FlowTemplateCreatedDocument,
+    FlowTemplateDeletedDocument,
+    FlowTemplatesDocument,
+    FlowTemplateUpdatedDocument,
+    UpdateFlowTemplateDocument,
 } from '@/graphql/types';
 import { Log } from '@/lib/log';
 import { useUser } from '@/providers/user-provider';
@@ -25,8 +26,10 @@ export interface Template {
 interface TemplatesContextValue {
     createTemplate: (title: string, text: string) => Promise<void>;
     deleteTemplate: (id: string) => Promise<void>;
+    error?: Error;
     getTemplate: (id: string) => Template | undefined;
     isLoading: boolean;
+    refetch: () => unknown;
     templates: Template[];
     updateTemplate: (id: string, payload: { text: string; title: string }) => Promise<void>;
 }
@@ -42,24 +45,26 @@ export function TemplatesProvider({ children }: TemplatesProviderProps) {
 
     const shouldFetchTemplates = Boolean(authInfo && authInfo.type !== 'guest' && isAuthenticated());
 
-    const { data: templatesData, loading: isLoadingTemplates } = useFlowTemplatesQuery({
-        fetchPolicy: 'cache-and-network',
+    const {
+        data: templatesData,
+        error: templatesError,
+        loading: isLoadingTemplates,
+        refetch,
+    } = useQuery(FlowTemplatesDocument, shouldFetchTemplates ? { fetchPolicy: 'cache-and-network' } : skipToken);
+
+    const [createTemplateMutation] = useMutation(CreateFlowTemplateDocument);
+    const [updateTemplateMutation] = useMutation(UpdateFlowTemplateDocument);
+    const [deleteTemplateMutation] = useMutation(DeleteFlowTemplateDocument);
+
+    useSubscription(FlowTemplateCreatedDocument, {
         skip: !shouldFetchTemplates,
     });
 
-    const [createTemplateMutation] = useCreateFlowTemplateMutation();
-    const [updateTemplateMutation] = useUpdateFlowTemplateMutation();
-    const [deleteTemplateMutation] = useDeleteFlowTemplateMutation();
-
-    useFlowTemplateCreatedSubscription({
+    useSubscription(FlowTemplateUpdatedDocument, {
         skip: !shouldFetchTemplates,
     });
 
-    useFlowTemplateUpdatedSubscription({
-        skip: !shouldFetchTemplates,
-    });
-
-    useFlowTemplateDeletedSubscription({
+    useSubscription(FlowTemplateDeletedDocument, {
         skip: !shouldFetchTemplates,
     });
 
@@ -154,12 +159,23 @@ export function TemplatesProvider({ children }: TemplatesProviderProps) {
         () => ({
             createTemplate,
             deleteTemplate,
+            error: templatesError,
             getTemplate,
             isLoading: isLoadingTemplates,
+            refetch,
             templates,
             updateTemplate,
         }),
-        [createTemplate, deleteTemplate, getTemplate, isLoadingTemplates, templates, updateTemplate],
+        [
+            createTemplate,
+            deleteTemplate,
+            templatesError,
+            getTemplate,
+            isLoadingTemplates,
+            refetch,
+            templates,
+            updateTemplate,
+        ],
     );
 
     return <TemplatesContext.Provider value={value}>{children}</TemplatesContext.Provider>;

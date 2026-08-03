@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 
-import { getReturnUrlParam } from '@/lib/utils/auth';
+import { routes } from '@/lib/routes';
 import { useUser } from '@/providers/user-provider';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -13,12 +13,10 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
     }
 
     if (!isAuthenticated()) {
-        const returnParam = getReturnUrlParam(location.pathname);
-
         return (
             <Navigate
                 replace
-                to={`/login${returnParam}`}
+                to={routes.login(location.pathname)}
             />
         );
     }

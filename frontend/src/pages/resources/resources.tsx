@@ -1,21 +1,18 @@
-import {
-    ColumnsSettings,
-    Copy,
-    FileSymlink,
-    Folder,
-    FolderPlus,
-    FolderUp,
-    Loader2,
-    Search,
-    Upload,
-    X,
-} from 'lucide-react';
+import { ColumnsSettings, Copy, FileSymlink, Folder, FolderPlus, FolderUp, Search, Upload, X } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
 import type { OverwriteConflict } from '@/components/shared/overwrite';
 
+import {
+    AppHeader,
+    AppHeaderAction,
+    AppHeaderActions,
+    AppHeaderContent,
+    AppHeaderTitle,
+} from '@/components/layouts/app/app-header';
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
+import { ErrorState } from '@/components/shared/error-state';
 import {
     bulkCopyAction,
     bulkCopyPathsAction,
@@ -34,9 +31,7 @@ import {
     formatModifiedAbsolute,
     formatModifiedRelative,
 } from '@/components/shared/file-manager';
-import { HeaderButton } from '@/components/shared/header-button';
 import { OverwriteDialog, useOverwrite } from '@/components/shared/overwrite';
-import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage } from '@/components/ui/breadcrumb';
 import { Button } from '@/components/ui/button';
 import {
     DropdownMenu,
@@ -48,8 +43,7 @@ import {
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { FileDropZone } from '@/components/ui/file-drop-zone';
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group';
-import { Separator } from '@/components/ui/separator';
-import { SidebarTrigger } from '@/components/ui/sidebar';
+import { Spinner } from '@/components/ui/spinner';
 import { ResourcesCopyDialog } from '@/features/resources/resources-copy-dialog';
 import { ResourcesMkdirDialog } from '@/features/resources/resources-mkdir-dialog';
 import { ResourcesMoveDialog } from '@/features/resources/resources-move-dialog';
@@ -109,7 +103,7 @@ const seedViewOptions = (storageKey: string): ResourcesViewOptions => {
 };
 
 function Resources() {
-    const { isInitialLoading, resources } = useResources();
+    const { error, isInitialLoading, refetch, resources } = useResources();
     const search = useResourcesSearch();
 
     const [isMkdirOpen, setIsMkdirOpen] = useState(false);
@@ -180,8 +174,6 @@ function Resources() {
 
     const fileNodes = useMemo<FileNode[]>(() => resources.map(toFileNode), [resources]);
 
-    // Snapshot of every existing path in the library — drives the local
-    // preflight for the drag-and-drop move workflow.
     const resourcePaths = useMemo(() => new Set(resources.map((resource) => resource.path)), [resources]);
 
     /**
@@ -240,12 +232,8 @@ function Resources() {
         toast.error('Failed to copy path');
     }, []);
 
-    /**
-     * Bulk "copy paths" handler: join every selected file's path with `\n` so the
-     * user can paste a clean newline-separated list straight into the agent chat,
-     * a shell command, or notes. Reports the count for clarity — silent failures
-     * confuse users when the clipboard happens to already contain the same text.
-     */
+    // Join the selected paths with `\n` so the result pastes as a clean
+    // newline-separated list into the agent chat, a shell command, or notes.
     const handleBulkCopyPaths = useCallback(async (paths: string[]) => {
         if (paths.length === 0) {
             return;
@@ -393,40 +381,28 @@ function Resources() {
     );
 
     const pageHeader = (
-        <header className="bg-background sticky top-0 z-10 flex h-12 w-full shrink-0 items-center gap-2 border-b transition-[width,height] ease-linear">
-            <div className="flex min-w-0 flex-1 items-center gap-2 px-4">
-                <SidebarTrigger className="-ml-1 shrink-0" />
-                <Separator
-                    className="h-4 shrink-0"
-                    orientation="vertical"
-                />
-                <Breadcrumb className="min-w-0 flex-1">
-                    <BreadcrumbList className="min-w-0 flex-nowrap">
-                        <BreadcrumbItem className="min-w-0">
-                            <Folder className="size-4 shrink-0" />
-                            <BreadcrumbPage className="min-w-0 truncate">Resources</BreadcrumbPage>
-                        </BreadcrumbItem>
-                    </BreadcrumbList>
-                </Breadcrumb>
-            </div>
-            <div className="flex shrink-0 items-center gap-2 px-4">
-                <HeaderButton
+        <AppHeader>
+            <AppHeaderContent>
+                <AppHeaderTitle icon={<Folder className="size-4 shrink-0" />}>Resources</AppHeaderTitle>
+            </AppHeaderContent>
+            <AppHeaderActions>
+                <AppHeaderAction
                     disabled={upload.isUploading}
                     icon={<FolderPlus />}
                     label="New folder"
                     onClick={() => setIsMkdirOpen(true)}
                     variant="outline"
                 />
-                <HeaderButton
+                <AppHeaderAction
                     aria-label={upload.isUploading ? 'Uploading...' : 'Upload files'}
                     disabled={upload.isUploading}
-                    icon={upload.isUploading ? <Loader2 className="animate-spin" /> : <Upload />}
+                    icon={upload.isUploading ? <Spinner variant="circle" /> : <Upload />}
                     label={upload.isUploading ? 'Uploading...' : 'Upload files'}
                     onClick={upload.openFilePicker}
                     variant="secondary"
                 />
-            </div>
-        </header>
+            </AppHeaderActions>
+        </AppHeader>
     );
 
     const hasResources = resources.length > 0;
@@ -457,6 +433,22 @@ function Resources() {
         </Empty>
     );
 
+    // Error surface only when there's no data — a failed background refetch must not blank a working list.
+    if (error && !hasResources) {
+        return (
+            <>
+                {pageHeader}
+                <div className="flex flex-1 flex-col gap-4 p-4">
+                    <ErrorState
+                        message={error.message}
+                        onRetry={refetch}
+                        title="Error loading resources"
+                    />
+                </div>
+            </>
+        );
+    }
+
     return (
         <>
             {pageHeader}
@@ -477,7 +469,7 @@ function Resources() {
 
                 {isDragging && hasResources && (
                     <div className="bg-primary/10 border-primary pointer-events-none absolute inset-2 z-30 flex items-center justify-center rounded-lg border-2 border-dashed">
-                        <div className="text-primary flex flex-col items-center gap-2">
+                        <div className="text-link flex flex-col items-center gap-2">
                             <FolderUp className="size-8" />
                             <span className="text-sm font-medium">Drop files to upload</span>
                         </div>
@@ -497,6 +489,7 @@ function Resources() {
                         {search.rawQuery ? (
                             <InputGroupAddon align="inline-end">
                                 <InputGroupButton
+                                    aria-label="Clear resource search"
                                     onClick={search.resetSearch}
                                     type="button"
                                 >

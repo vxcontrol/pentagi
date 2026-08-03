@@ -413,6 +413,73 @@ func TestGetHTML_EmptyContent_ReturnsError(t *testing.T) {
 	}
 }
 
+func TestCallScraper_ServerError5xx_IncludesBodyPreview(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadGateway)
+		fmt.Fprint(w, "<html><body>502 Bad Gateway</body></html>")
+	}))
+	defer ts.Close()
+
+	b := &browser{flowID: 1}
+
+	_, err := b.callScraper(ts.URL)
+	if err == nil {
+		t.Fatal("callScraper() should error on 5xx response")
+	}
+	if !strings.Contains(err.Error(), "502") {
+		t.Errorf("callScraper() error should mention the status code, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "502 Bad Gateway") {
+		t.Errorf("callScraper() error should include the response body, got: %v", err)
+	}
+}
+
+func TestCallScraper_ServerError5xx_BodyTruncatedAt1024Bytes(t *testing.T) {
+	hugeBody := strings.Repeat("x", 2000)
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprint(w, hugeBody)
+	}))
+	defer ts.Close()
+
+	b := &browser{flowID: 1}
+
+	_, err := b.callScraper(ts.URL)
+	if err == nil {
+		t.Fatal("callScraper() should error on 5xx response")
+	}
+	if strings.Count(err.Error(), "x") >= 2000 {
+		t.Fatalf("expected the 2000-byte body to be truncated to the 1024-byte cap, got error of length %d", len(err.Error()))
+	}
+	if !strings.Contains(err.Error(), "truncated") {
+		t.Errorf("callScraper() error should indicate truncation, got: %v", err)
+	}
+}
+
+func TestCallScraper_ClientError4xx_NoBodyPreview(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		fmt.Fprint(w, "not found body")
+	}))
+	defer ts.Close()
+
+	b := &browser{flowID: 1}
+
+	_, err := b.callScraper(ts.URL)
+	if err == nil {
+		t.Fatal("callScraper() should error on 4xx response")
+	}
+	if !strings.Contains(err.Error(), "404") {
+		t.Errorf("callScraper() error should mention the status code, got: %v", err)
+	}
+	// 4xx means our own request was malformed, not the scraper backend failing,
+	// so the body preview (only meaningful for 5xx) must not be included.
+	if strings.Contains(err.Error(), "not found body") {
+		t.Errorf("callScraper() error should not include the response body for 4xx, got: %v", err)
+	}
+}
+
 func TestGetHTML_BinaryURL_ReturnsError(t *testing.T) {
 	b := &browser{flowID: 1, scPubURL: "http://127.0.0.1:1"}
 
@@ -547,10 +614,32 @@ func TestBrowserHandle_ValidationErrors(t *testing.T) {
 
 	t.Run("unknown action", func(t *testing.T) {
 		_, err := b.Handle(t.Context(), "browser", json.RawMessage(`{"url":"https://example.com","action":"unknown","message":"m"}`))
-		if err == nil || !strings.Contains(err.Error(), "unknown file action") {
+		if err == nil || !strings.Contains(err.Error(), "unknown browser action") {
 			t.Fatalf("expected unknown action error, got: %v", err)
 		}
 	})
+}
+
+func TestBrowserHandle_MissingAction_DefaultsToMarkdown(t *testing.T) {
+	ts := newTestScraper(t, "ok")
+	defer ts.Close()
+
+	b := &browser{
+		flowID:   1,
+		dataDir:  t.TempDir(),
+		scPubURL: ts.URL,
+		scp:      &screenshotProviderMock{},
+	}
+
+	// Mirrors production tool calls observed in the logs where the LLM omits
+	// the required 'action' field entirely.
+	result, err := b.Handle(t.Context(), "browser", json.RawMessage(`{"url":"https://example.com/page","message":"m"}`))
+	if err != nil {
+		t.Fatalf("expected inferred markdown action to succeed, got error: %v", err)
+	}
+	if result == "" {
+		t.Fatal("Handle() returned empty result for inferred markdown action")
+	}
 }
 
 func TestBrowserHandle_MarkdownSuccess_StoresScreenshot(t *testing.T) {

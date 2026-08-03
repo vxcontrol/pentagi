@@ -16,6 +16,9 @@ const (
 	TestTypeCompletion TestType = "completion"
 	TestTypeJSON       TestType = "json"
 	TestTypeTool       TestType = "tool"
+	// TestTypeFileEdit is a MultiTurnTestCase: it isn't built from tests.yml
+	// (see tester.newFileEditTestCase), only used to label its TestResult.
+	TestTypeFileEdit TestType = "file_edit"
 )
 
 type TestGroup string
@@ -25,6 +28,38 @@ const (
 	TestGroupAdvanced  TestGroup = "advanced"
 	TestGroupJSON      TestGroup = "json"
 	TestGroupKnowledge TestGroup = "knowledge"
+)
+
+// TestCapability names a wire capability a test case exercises. A test with a
+// non-empty Capability only runs against an agent whose ACTUAL loaded config
+// would make this exact call in a real PentAGI flow (see
+// tester.capabilitySupported, which mirrors pconfig.AgentConfig.BuildOptions /
+// ProviderConfig.UsesAdaptiveThinking exactly) — ctester answers "will this
+// configuration work inside PentAGI", so testing a CallOption combination the
+// app's runtime would never actually send for this config would produce a
+// pass or fail that says nothing about a flow that will ever really happen.
+type TestCapability string
+
+const (
+	// CapabilityNone is the default: the test runs unconditionally for every
+	// agent/model, exactly like the pre-existing basic/advanced/knowledge tests.
+	CapabilityNone TestCapability = ""
+	// CapabilityAdaptiveThinking exercises llms.WithAdaptiveReasoning, gated to
+	// agents whose config actually triggers it in production: explicit
+	// `reasoning: {mode: adaptive}`, or an adaptive-only model (Claude Opus
+	// 4.7/4.8), which PrepareAdaptiveCallOptions forces on regardless of config.
+	CapabilityAdaptiveThinking TestCapability = "adaptive_thinking"
+	// CapabilityReasoningOff exercises llms.WithReasoningDisabled, gated to
+	// agents whose config explicitly sets `reasoning: {mode: off}` — the only
+	// case where AgentConfig.BuildOptions actually emits it.
+	CapabilityReasoningOff TestCapability = "reasoning_off"
+	// CapabilityStructuredOutput exercises llms.WithStructuredOutput with the
+	// test's Schema. Deliberately run ahead of AgentConfig.BuildOptions
+	// actually wiring it in: that integration is landing soon for the
+	// simple_json agent, so this validates the LLM/backend can honor
+	// schema-constrained output before the real call path depends on it. Only
+	// ever scheduled for OptionsTypeSimpleJSON (see isTestCompatibleWithAgent).
+	CapabilityStructuredOutput TestCapability = "structured_output"
 )
 
 // MessagesData represents a collection of message data with conversion capabilities
@@ -99,15 +134,30 @@ func (md MessagesData) ToMessageContent() ([]llms.MessageContent, error) {
 
 // TestDefinition represents immutable test configuration from YAML
 type TestDefinition struct {
-	ID        string       `yaml:"id"`
-	Name      string       `yaml:"name"`
-	Type      TestType     `yaml:"type"`
-	Group     TestGroup    `yaml:"group"`
-	Prompt    string       `yaml:"prompt,omitempty"`
-	Messages  MessagesData `yaml:"messages,omitempty"`
-	Tools     []ToolData   `yaml:"tools,omitempty"`
-	Expected  any          `yaml:"expected"`
-	Streaming bool         `yaml:"streaming"`
+	ID         string         `yaml:"id"`
+	Name       string         `yaml:"name"`
+	Type       TestType       `yaml:"type"`
+	Group      TestGroup      `yaml:"group"`
+	Prompt     string         `yaml:"prompt,omitempty"`
+	Messages   MessagesData   `yaml:"messages,omitempty"`
+	Tools      []ToolData     `yaml:"tools,omitempty"`
+	Expected   any            `yaml:"expected"`
+	Streaming  bool           `yaml:"streaming"`
+	Capability TestCapability `yaml:"capability,omitempty"`
+
+	// RequireReasoning, when non-nil, asserts the presence (true) or absence
+	// (false) of reasoning content in the response — used by
+	// CapabilityAdaptiveThinking (must reason) and CapabilityReasoningOff
+	// (must NOT reason) tests to verify the capability actually took effect on
+	// the wire, not just that the call happened not to error.
+	RequireReasoning *bool `yaml:"require_reasoning,omitempty"`
+
+	// Schema and SchemaName configure a CapabilityStructuredOutput json test:
+	// Schema is the raw JSON Schema document (any YAML-decoded value, marshaled
+	// to JSON when building the test case) passed verbatim to
+	// llms.WithStructuredOutput.
+	Schema     any    `yaml:"schema,omitempty"`
+	SchemaName string `yaml:"schema_name,omitempty"`
 }
 
 type MessageData struct {
@@ -154,8 +204,44 @@ type TestCase interface {
 	Tools() []llms.Tool
 	StreamingCallback() streaming.Callback
 
+	// Capability reports the wire behavior this test is meant to exercise
+	// (CapabilityNone for every pre-existing test type). The runner uses it
+	// to gate whether this agent's ACTUAL config would make this exact call
+	// in production before spending a request on it (see
+	// tester.capabilitySupported): Capability is informational/gating only,
+	// it does not by itself force anything onto the wire.
+	Capability() TestCapability
+	// ExtraOptions returns extra llms.CallOption values to layer on top of
+	// the agent's configured options. Nil for CapabilityAdaptiveThinking/
+	// CapabilityReasoningOff: those are gated to configs that already produce
+	// that behavior via the plain CallWithTools/CallEx path, so forcing it
+	// here would be redundant at best and, for a config that doesn't
+	// naturally produce it, would test a call PentAGI's runtime never makes.
+	// Non-nil only for CapabilityStructuredOutput, which forces
+	// llms.WithStructuredOutput ahead of AgentConfig.BuildOptions wiring it in
+	// for real — see CapabilityStructuredOutput's doc comment.
+	ExtraOptions() []llms.CallOption
+
 	// result validation and state management
 	Execute(response any, latency time.Duration) TestResult
+}
+
+// MultiTurnTestCase is an optional extension of TestCase for scenarios that
+// need more than one round-trip to the provider before Execute can judge the
+// outcome - e.g. a tool call whose result must be answered before the model
+// makes its next call. The runner (tester.executeTest) detects it via a type
+// assertion; every TestCase that doesn't implement it keeps going through
+// the plain single-call path unmodified.
+type MultiTurnTestCase interface {
+	TestCase
+
+	// HandleToolResponse receives the latest provider response. If it
+	// recognizes something it needs to answer, it records the exchange
+	// internally (so the next Messages() call reflects it) and returns
+	// true, asking the runner for another round. Returning false ends the
+	// exchange: the runner calls Execute with this same response, exactly
+	// as it would for a plain TestCase.
+	HandleToolResponse(resp *llms.ContentResponse) bool
 }
 
 // TestSuite contains stateful test cases for execution

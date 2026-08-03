@@ -181,6 +181,136 @@ func (s *UserService) ChangePasswordCurrentUser(c *gin.Context) {
 	response.Success(c, http.StatusOK, struct{}{})
 }
 
+// ChangeEmailCurrentUser is a function to update account email
+// @Summary Update email for current user (account)
+// @Tags Users
+// @Accept json
+// @Produce json
+// @Param json body models.EmailChange true "container to validate and update account email"
+// @Success 200 {object} response.successResp "account email updated successful"
+// @Failure 400 {object} response.errorResp "invalid account email form data"
+// @Failure 403 {object} response.errorResp "updating account email not permitted"
+// @Failure 404 {object} response.errorResp "current user not found"
+// @Failure 409 {object} response.errorResp "email already exists"
+// @Failure 500 {object} response.errorResp "internal error on updating account email"
+// @Router /user/email [put]
+func (s *UserService) ChangeEmailCurrentUser(c *gin.Context) {
+	var (
+		err  error
+		form models.EmailChange
+		user models.UserPassword
+	)
+
+	if err = c.ShouldBindJSON(&form); err != nil || form.Valid() != nil {
+		if err == nil {
+			err = form.Valid()
+		}
+		logger.FromContext(c).WithError(err).Errorf("error binding JSON")
+		response.Error(c, response.ErrChangeEmailCurrentUserInvalidEmail, err)
+		return
+	}
+
+	uid := c.GetUint64("uid")
+	scope := func(db *gorm.DB) *gorm.DB {
+		return db.Where("id = ?", uid)
+	}
+
+	if err = s.db.Scopes(scope).Take(&user).Error; err != nil {
+		logger.FromContext(c).WithError(err).Errorf("error finding current user")
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			response.Error(c, response.ErrUsersNotFound, err)
+		} else {
+			response.Error(c, response.ErrInternal, err)
+		}
+		return
+	} else if err = user.Valid(); err != nil {
+		logger.FromContext(c).WithError(err).Errorf("error validating user data '%s'", user.Hash)
+		response.Error(c, response.ErrUsersInvalidData, err)
+		return
+	}
+
+	if err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(form.CurrentPassword)); err != nil {
+		logger.FromContext(c).WithError(err).Errorf("error checking password for current user")
+		response.Error(c, response.ErrChangeEmailCurrentUserInvalidCurrentPassword, err)
+		return
+	}
+
+	// Check if another user already has the new email
+	var count int
+	if err = s.db.Model(&models.User{}).Where("mail = ? AND id != ?", form.Mail, uid).Count(&count).Error; err != nil {
+		logger.FromContext(c).WithError(err).Errorf("error checking email duplicate")
+		response.Error(c, response.ErrInternal, err)
+		return
+	}
+	if count > 0 {
+		logger.FromContext(c).Errorf("email already exists: %s", form.Mail)
+		response.Error(c, response.ErrChangeEmailCurrentUserEmailAlreadyExists, errors.New("email already exists"))
+		return
+	}
+
+	// OAuth logins match accounts by email (authLoginCallback), so a new address unlinks the provider.
+	updates := map[string]any{
+		"mail":     form.Mail,
+		"provider": nil,
+	}
+
+	if err = s.db.Model(&user).Scopes(scope).Updates(updates).Error; err != nil {
+		if isUniqueViolation(err) {
+			logger.FromContext(c).Warnf("email change rejected: address claimed concurrently")
+			response.Error(c, response.ErrChangeEmailCurrentUserEmailAlreadyExists, errors.New("email already exists"))
+			return
+		}
+		logger.FromContext(c).WithError(err).Errorf("error updating email for current user")
+		response.Error(c, response.ErrInternal, err)
+		return
+	}
+
+	s.userCache.Invalidate(uid)
+
+	response.Success(c, http.StatusOK, struct{}{})
+}
+
+// ChangeNameCurrentUser updates the display name of the current authenticated user
+// @Summary Change current account display name
+// @Tags User
+// @Accept json
+// @Produce json
+// @Param json body models.NameChange true "new display name"
+// @Success 200 {object} response.successResp "account name updated successful"
+// @Failure 400 {object} response.errorResp "invalid account name form data"
+// @Failure 404 {object} response.errorResp "current user not found"
+// @Failure 500 {object} response.errorResp "internal error on updating account name"
+// @Router /user/name [put]
+func (s *UserService) ChangeNameCurrentUser(c *gin.Context) {
+	var form models.NameChange
+
+	if err := c.ShouldBindJSON(&form); err != nil || form.Valid() != nil {
+		if err == nil {
+			err = form.Valid()
+		}
+		logger.FromContext(c).WithError(err).Errorf("error binding JSON")
+		response.Error(c, response.ErrChangeNameCurrentUserInvalidName, err)
+		return
+	}
+
+	uid := c.GetUint64("uid")
+	result := s.db.Model(&models.User{}).Where("id = ?", uid).Update("name", form.Name)
+	if result.Error != nil {
+		logger.FromContext(c).WithError(result.Error).Errorf("error updating name for current user")
+		response.Error(c, response.ErrInternal, result.Error)
+		return
+	}
+	if result.RowsAffected == 0 {
+		logger.FromContext(c).Errorf("current user not found for name change")
+		response.Error(c, response.ErrUsersNotFound, gorm.ErrRecordNotFound)
+		return
+	}
+
+	s.userCache.Invalidate(uid)
+
+	response.Success(c, http.StatusOK, struct{}{})
+}
+
 // GetUsers returns users list
 // @Summary Retrieve users list by filters
 // @Tags Users

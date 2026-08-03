@@ -1,6 +1,4 @@
-import { zodResolver } from '@hookform/resolvers/zod';
 import { useState } from 'react';
-import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import { z } from 'zod';
 
@@ -12,6 +10,9 @@ import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { FormSubmitButton } from '@/components/ui/form-submit-button';
 import { Input } from '@/components/ui/input';
+import { InputPassword } from '@/components/ui/input-password';
+import { useAppForm } from '@/hooks/use-app-form';
+import { routes } from '@/lib/routes';
 import { useUser } from '@/providers/user-provider';
 
 import { PasswordChangeForm } from './password-change-form';
@@ -56,17 +57,17 @@ const providerActions: AuthProviderAction[] = [
 ];
 
 interface LoginFormProps {
-    providers: string[]; // OAuth providers: ['google', 'github']
+    providers: string[];
     returnUrl?: string;
 }
 
-function LoginForm({ providers, returnUrl = '/flows/new' }: LoginFormProps) {
-    const form = useForm<z.infer<typeof formSchema>>({
+function LoginForm({ providers, returnUrl = routes.newFlow }: LoginFormProps) {
+    const form = useAppForm<z.infer<typeof formSchema>>({
         defaultValues: {
             mail: '',
             password: '',
         },
-        resolver: zodResolver(formSchema),
+        schema: formSchema,
     });
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<null | string>(null);
@@ -138,8 +139,6 @@ function LoginForm({ providers, returnUrl = '/flows/new' }: LoginFormProps) {
         }
     };
 
-    // If password change is required, show password change form.
-    // Also check isAuthenticated() to ensure the user has a valid session.
     // If the session expired and user refreshed the page, the old authInfo may still
     // be in memory (race condition between clearAuth() and navigate()), but we must
     // NOT show the password change form because:
@@ -160,10 +159,9 @@ function LoginForm({ providers, returnUrl = '/flows/new' }: LoginFormProps) {
                     You need to change your password before continuing.
                 </p>
                 <PasswordChangeForm
-                    isModal={false}
+                    layout="vertical"
                     onSkip={handleSkipPasswordChange}
                     onSuccess={handlePasswordChangeSuccess}
-                    showSkip={true}
                 />
             </div>
         );
@@ -173,6 +171,7 @@ function LoginForm({ providers, returnUrl = '/flows/new' }: LoginFormProps) {
         <Form {...form}>
             <form
                 className="mx-auto grid w-[350px] gap-8"
+                noValidate
                 onSubmit={form.handleSubmit(handleSubmit)}
             >
                 <h1 className="text-center text-3xl font-bold">PentAGI</h1>
@@ -233,10 +232,9 @@ function LoginForm({ providers, returnUrl = '/flows/new' }: LoginFormProps) {
                             <FormItem>
                                 <FormLabel>Password</FormLabel>
                                 <FormControl>
-                                    <Input
+                                    <InputPassword
                                         {...field}
                                         placeholder="Enter your password"
-                                        type="password"
                                     />
                                 </FormControl>
                                 <FormMessage />

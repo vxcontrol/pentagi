@@ -36,7 +36,7 @@ When adding new dependencies, ensure they use compatible licenses:
    ./scripts/generate-licenses.sh
    ```
    
-   This script automatically collects license information from all dependencies and saves them to the `licenses/` directory. See [licenses/README.md](../licenses/README.md) for details.
+   This script automatically collects license information from all dependencies and saves them to the `licenses/` directory. See [licenses/README.md](licenses/README.md) for details.
 
 3. Scan for issues:
    ```bash
@@ -61,6 +61,13 @@ License reports are automatically generated during Docker builds:
   - `dependencies.json` - Complete npm dependency tree
   - `licenses.json` - Detailed license data
   - `licenses.csv` - License summary
+
+## Testing Your Changes
+
+Frontend changes are covered by unit tests (`cd frontend && pnpm test`) and
+end-to-end tests that run fully offline — no backend, keys, or secrets needed,
+including on fork PRs. See [frontend/docs/e2e.md](frontend/docs/e2e.md) for the
+one-time bootstrap, running locally, and debugging a red CI run.
 
 ## Questions?
 

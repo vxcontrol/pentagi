@@ -12,6 +12,7 @@ import (
 	"pentagi/pkg/tools"
 
 	"github.com/vxcontrol/langchaingo/llms"
+	"github.com/vxcontrol/langchaingo/llms/reasoning"
 )
 
 func ConvertFlows(flows []database.Flow, containers []database.Container) []*model.Flow {
@@ -537,7 +538,7 @@ func ConvertFlowTemplates(templates []database.FlowTemplate) []*model.FlowTempla
 	return result
 }
 
-func ConvertModels(models pconfig.ModelsConfig) []*model.ModelConfig {
+func ConvertModels(models pconfig.ModelsConfig, rp reasoning.Provider) []*model.ModelConfig {
 	gmodels := make([]*model.ModelConfig, 0, len(models))
 	for _, m := range models {
 		modelConfig := &model.ModelConfig{
@@ -562,11 +563,67 @@ func ConvertModels(models pconfig.ModelsConfig) []*model.ModelConfig {
 		if m.Thinking != nil {
 			modelConfig.Thinking = m.Thinking
 		}
+		// Surface reasoning capability for any thinking-capable model, not only
+		// those with an explicit reasoning block: models like Gemini declare
+		// thinking:true with no reasoning section, yet Off (thinkingBudget:0) is
+		// meaningful and supported.
+		if m.Reasoning != nil || (m.Thinking != nil && *m.Thinking) {
+			reasoningInfo := &model.ModelReasoningInfo{}
+			if m.Reasoning != nil {
+				if m.Reasoning.Mode != pconfig.ModelReasoningNone {
+					mode := convertModelReasoningMode(m.Reasoning.Mode)
+					reasoningInfo.Mode = &mode
+				}
+				for _, effort := range m.Reasoning.Efforts {
+					reasoningInfo.Efforts = append(reasoningInfo.Efforts, model.ReasoningEffort(effort))
+				}
+			}
+			// Capability is derived from the langchaingo reasoning tables (single
+			// source of truth). cannotDisable reports whether Off would take no
+			// effect — either the API rejects it, or the disable wire is omitted on
+			// a model that is NOT off by default (an unclassified default-on model
+			// where Off is a silent no-op) — so the UI only offers Off when it works.
+			support := llms.ReasoningSupportFor(m.Name, rp)
+			supported := support.Supported
+			cannotDisable := !offEffective(reasoning.ResolveOff(m.Name, rp), support.DefaultOn)
+			reasoningInfo.Supported = &supported
+			reasoningInfo.CannotDisable = &cannotDisable
+			reasoningInfo.DefaultOn = support.DefaultOn
+			modelConfig.Reasoning = reasoningInfo
+		}
 
 		gmodels = append(gmodels, modelConfig)
 	}
 
 	return gmodels
+}
+
+// offEffective reports whether turning reasoning Off actually disables thinking:
+// a real disable wire always does; an omitted wire only does when the model is
+// known to be off by default. A silent no-op (unclassified default-on model) or an
+// API rejection (OffUnsupported) does not, so the UI must not offer Off there.
+func offEffective(off reasoning.OffWire, defaultOn *bool) bool {
+	switch off {
+	case reasoning.OffDisableClaude, reasoning.OffZeroBudget, reasoning.OffEffortNone:
+		return true
+	case reasoning.OffOmit:
+		return defaultOn != nil && !*defaultOn
+	default: // OffUnsupported
+		return false
+	}
+}
+
+// Bridges the one spelling difference between the pconfig and GraphQL reasoning
+// enums: adaptive-only (hyphen) vs adaptive_only (underscore).
+func convertModelReasoningMode(m pconfig.ModelReasoningMode) model.ModelReasoningMode {
+	switch m {
+	case pconfig.ModelReasoningAdaptiveOnly:
+		return model.ModelReasoningModeAdaptiveOnly
+	case pconfig.ModelReasoningAdaptive:
+		return model.ModelReasoningModeAdaptive
+	default:
+		return model.ModelReasoningModeBudget
+	}
 }
 
 func ConvertProvider(prv database.Provider, cfg *pconfig.ProviderConfig) *model.ProviderConfig {
@@ -638,10 +695,26 @@ func ConvertAgentConfigToGqlModel(ac *pconfig.AgentConfig) *model.AgentConfig {
 	if ac.PresencePenalty != 0 {
 		result.PresencePenalty = &ac.PresencePenalty
 	}
+	if ac.MinP != 0 {
+		result.MinP = &ac.MinP
+	}
+	if ac.N != 0 {
+		result.N = &ac.N
+	}
+	if ac.JSON {
+		result.JSON = &ac.JSON
+	}
+	if ac.ResponseMIMEType != "" {
+		result.ResponseMimeType = &ac.ResponseMIMEType
+	}
 
-	if ac.Reasoning.Effort != llms.ReasoningNone || ac.Reasoning.MaxTokens != 0 {
+	if !ac.Reasoning.IsZero() {
 		reasoning := &model.ReasoningConfig{}
 
+		if ac.Reasoning.Mode != pconfig.ReasoningModeDefault {
+			mode := model.ReasoningMode(ac.Reasoning.Mode)
+			reasoning.Mode = &mode
+		}
 		if ac.Reasoning.Effort != llms.ReasoningNone {
 			effort := model.ReasoningEffort(ac.Reasoning.Effort)
 			reasoning.Effort = &effort
@@ -660,6 +733,10 @@ func ConvertAgentConfigToGqlModel(ac *pconfig.AgentConfig) *model.AgentConfig {
 			CacheRead:  ac.Price.CacheRead,
 			CacheWrite: ac.Price.CacheWrite,
 		}
+	}
+
+	if ac.ExtraBody != nil {
+		result.ExtraBody = ac.ExtraBody
 	}
 
 	return result
@@ -731,9 +808,27 @@ func ConvertAgentConfigFromGqlModel(ac *model.AgentConfig) *pconfig.AgentConfig 
 	if ac.PresencePenalty != nil {
 		rawConfig["presence_penalty"] = *ac.PresencePenalty
 	}
+	// BuildOptions gates these on the key being present, not on its value, so a zero has to be
+	// written as an absent key — otherwise `json: false` would switch JSON mode on and `n: 0`
+	// would emit an invalid request parameter.
+	if ac.MinP != nil && *ac.MinP != 0 {
+		rawConfig["min_p"] = *ac.MinP
+	}
+	if ac.N != nil && *ac.N != 0 {
+		rawConfig["n"] = *ac.N
+	}
+	if ac.JSON != nil && *ac.JSON {
+		rawConfig["json"] = *ac.JSON
+	}
+	if ac.ResponseMimeType != nil && *ac.ResponseMimeType != "" {
+		rawConfig["response_mime_type"] = *ac.ResponseMimeType
+	}
 
 	if ac.Reasoning != nil {
 		reasoning := map[string]any{}
+		if ac.Reasoning.Mode != nil {
+			reasoning["mode"] = pconfig.ReasoningMode(*ac.Reasoning.Mode)
+		}
 		if ac.Reasoning.Effort != nil {
 			reasoning["effort"] = llms.ReasoningEffort(*ac.Reasoning.Effort)
 		}
@@ -750,6 +845,10 @@ func ConvertAgentConfigFromGqlModel(ac *model.AgentConfig) *pconfig.AgentConfig 
 			"cache_read":  ac.Price.CacheRead,
 			"cache_write": ac.Price.CacheWrite,
 		}
+	}
+
+	if ac.ExtraBody != nil {
+		rawConfig["extra_body"] = ac.ExtraBody
 	}
 
 	jsonConfig, err := json.Marshal(rawConfig)
@@ -860,7 +959,6 @@ func ConvertUsageStats[T UsageStatsRow](stats T) *model.UsageStats {
 	var in, out, cacheIn, cacheOut int64
 	var costIn, costOut float64
 
-	// Extract fields based on type
 	switch v := any(stats).(type) {
 	case database.GetFlowUsageStatsRow:
 		in, out = v.TotalUsageIn, v.TotalUsageOut
@@ -1035,7 +1133,6 @@ func ConvertToolcallsStats[T ToolcallsStatsRow](stats T) *model.ToolcallsStats {
 	var count int64
 	var duration float64
 
-	// Extract fields based on type
 	switch v := any(stats).(type) {
 	case database.GetFlowToolcallsStatsRow:
 		count, duration = v.TotalCount, v.TotalDurationSeconds
@@ -1105,7 +1202,6 @@ func isAgentTool(functionName string) bool {
 	if !exists {
 		return false
 	}
-	// Agent tools include AgentToolType and StoreAgentResultToolType
 	return toolType == tools.AgentToolType || toolType == tools.StoreAgentResultToolType
 }
 
@@ -1145,7 +1241,6 @@ func ConvertFunctionToolcallsStatsForFlow(stats []database.GetToolcallsStatsByFu
 func ConvertFlowsStats[T FlowsStatsRow](stats T) *model.FlowsStats {
 	var flowsCount, tasksCount, subtasksCount, assistantsCount int64
 
-	// Extract fields based on type
 	switch v := any(stats).(type) {
 	case database.GetUserTotalFlowsStatsRow:
 		flowsCount, tasksCount, subtasksCount, assistantsCount = v.TotalFlowsCount, v.TotalTasksCount, v.TotalSubtasksCount, v.TotalAssistantsCount
@@ -1163,7 +1258,6 @@ func ConvertFlowsStats[T FlowsStatsRow](stats T) *model.FlowsStats {
 func ConvertFlowStats[T FlowStatsRow](stats T) *model.FlowStats {
 	var tasksCount, subtasksCount, assistantsCount int64
 
-	// Extract fields based on type
 	switch v := any(stats).(type) {
 	case database.GetFlowStatsRow:
 		tasksCount, subtasksCount, assistantsCount = v.TotalTasksCount, v.TotalSubtasksCount, v.TotalAssistantsCount

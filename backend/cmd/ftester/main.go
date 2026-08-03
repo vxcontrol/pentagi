@@ -29,7 +29,7 @@ import (
 
 func main() {
 	envFile := flag.String("env", ".env", "Path to environment file")
-	providerName := flag.String("provider", "custom", "Provider name (openai, anthropic, gemini, bedrock, ollama, deepseek, glm, kimi, qwen, custom)")
+	providerName := flag.String("provider", "custom", "Provider name (openai, anthropic, gemini, bedrock, ollama, deepseek, glm, kimi, qwen, minimax, custom)")
 	flowID := flag.Int64("flow", 0, "Flow ID for testing functions that require it (0 means using mocks)")
 	userID := flag.Int64("user", 0, "User ID for testing functions that require it (1 is default admin user)")
 	taskID := flag.Int64("task", 0, "Task ID for testing functions with default unset")
@@ -63,21 +63,11 @@ func main() {
 	if err != nil && !errors.Is(err, obs.ErrNotConfigured) {
 		log.Fatalf("Unable to create langfuse client: %v\n", err)
 	}
-	defer func() {
-		if lfclient != nil {
-			lfclient.ForceFlush(context.Background())
-		}
-	}()
 
 	otelclient, err := obs.NewTelemetryClient(ctx, cfg)
 	if err != nil && !errors.Is(err, obs.ErrNotConfigured) {
 		log.Fatalf("Unable to create telemetry client: %v\n", err)
 	}
-	defer func() {
-		if otelclient != nil {
-			otelclient.ForceFlush(context.Background())
-		}
-	}()
 
 	obs.InitObserver(ctx, lfclient, otelclient, []logrus.Level{
 		logrus.DebugLevel,
@@ -85,16 +75,33 @@ func main() {
 		logrus.WarnLevel,
 		logrus.ErrorLevel,
 	})
+	// Drain telemetry on exit, bounded — an unreachable collector must not hang
+	// the tester on the SDK's per-provider timeouts.
+	defer func() {
+		drainCtx, cancelDrain := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancelDrain()
+		_ = obs.Observer.Drain(drainCtx)
+	}()
 
-	// Initialize database connection
+	// Create this tenant's schema and repoint DATABASE_URL at it before any
+	// consumer reads the DSN. No-op when TENANT_ID is empty.
+	if err := database.EnsureTenantSchema(ctx, cfg); err != nil {
+		log.Fatalf("Tenant schema initialization failed: %v", err)
+	}
+
 	db, err := sql.Open("postgres", cfg.DatabaseURL)
 	if err != nil {
 		log.Fatalf("Unable to open database: %v", err)
 	}
+	defer db.Close()
 
-	db.SetMaxOpenConns(10)
-	db.SetMaxIdleConns(2)
+	db.SetMaxOpenConns(min(cfg.DBMaxOpenConns, 10))
+	db.SetMaxIdleConns(min(cfg.DBMaxIdleConns, 2))
 	db.SetConnMaxLifetime(time.Hour)
+
+	if err := database.VerifySearchPath(ctx, db, cfg); err != nil {
+		log.Fatalf("Tenant schema verification failed: %v", err)
+	}
 
 	queries := database.New(db)
 

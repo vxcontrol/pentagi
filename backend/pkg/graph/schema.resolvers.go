@@ -21,6 +21,7 @@ import (
 	"pentagi/pkg/providers/gemini"
 	"pentagi/pkg/providers/glm"
 	"pentagi/pkg/providers/kimi"
+	"pentagi/pkg/providers/minimax"
 	"pentagi/pkg/providers/openai"
 	"pentagi/pkg/providers/pconfig"
 	"pentagi/pkg/providers/provider"
@@ -98,6 +99,10 @@ func (r *mutationResolver) PutUserInput(ctx context.Context, flowID int64, input
 	uid, err := validatePermissionWithFlowID(ctx, "flows.edit", flowID, r.DB)
 	if err != nil {
 		return model.ResultTypeError, err
+	}
+
+	if input == "" {
+		return model.ResultTypeError, fmt.Errorf("user input is required")
 	}
 
 	fields := logrus.Fields{
@@ -196,11 +201,12 @@ func (r *mutationResolver) DeleteFlow(ctx context.Context, flowID int64) (model.
 		"flow": flowID,
 	}).Debug("delete flow")
 
-	if fw, err := r.Controller.GetFlow(ctx, flowID); err == nil {
-		if err := fw.Finish(ctx); err != nil {
-			return model.ResultTypeError, err
-		}
-	} else if !errors.Is(err, controller.ErrFlowNotFound) {
+	// Goes through the controller rather than GetFlow + worker.Finish: only
+	// FinishFlow evicts the worker from the in-memory map. A worker left behind
+	// for a soft-deleted flow leaks for the process lifetime, still shows up in
+	// ListFlows, and can be finished a second time by a concurrent caller.
+	if err := r.Controller.FinishFlow(ctx, flowID); err != nil &&
+		!errors.Is(err, controller.ErrFlowNotFound) {
 		return model.ResultTypeError, err
 	}
 
@@ -240,6 +246,10 @@ func (r *mutationResolver) RenameFlow(ctx context.Context, flowID int64, title s
 		return model.ResultTypeError, err
 	}
 
+	if title == "" {
+		return model.ResultTypeError, fmt.Errorf("flow title is required")
+	}
+
 	r.Logger.WithFields(logrus.Fields{
 		"uid":   uid,
 		"flow":  flowID,
@@ -248,7 +258,6 @@ func (r *mutationResolver) RenameFlow(ctx context.Context, flowID int64, title s
 
 	err = r.Controller.RenameFlow(ctx, flowID, title)
 	if errors.Is(err, controller.ErrFlowNotFound) {
-		// if flow worker not found, update flow title in DB and notify about it
 		flow, err := r.DB.UpdateFlowTitle(ctx, database.UpdateFlowTitleParams{
 			ID:    flowID,
 			Title: title,
@@ -352,6 +361,10 @@ func (r *mutationResolver) CallAssistant(ctx context.Context, flowID int64, assi
 	uid, err := validatePermissionWithFlowID(ctx, "assistants.edit", flowID, r.DB)
 	if err != nil {
 		return model.ResultTypeError, err
+	}
+
+	if input == "" {
+		return model.ResultTypeError, fmt.Errorf("user input is required")
 	}
 
 	r.Logger.WithFields(logrus.Fields{
@@ -543,6 +556,15 @@ func (r *mutationResolver) UpdateProvider(ctx context.Context, providerID int64,
 		"name":     name,
 	}).Debug("update provider")
 
+	// Fetch the current name before the rename so the flow/assistant cascade
+	// below knows which old name to look for; UpdateProvider itself only
+	// returns the row *after* the rename.
+	existing, err := r.DB.GetUserProvider(ctx, database.GetUserProviderParams{ID: providerID, UserID: uid})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get provider %d: %w", providerID, err)
+	}
+	oldName := provider.ProviderName(existing.Name)
+
 	cfg := converter.ConvertAgentsConfigFromGqlModel(&agents)
 	prvname := provider.ProviderName(name)
 	prv, err := r.ProvidersCtrl.UpdateProvider(ctx, uid, providerID, prvname, cfg)
@@ -551,6 +573,15 @@ func (r *mutationResolver) UpdateProvider(ctx context.Context, providerID int64,
 	}
 
 	r.Subscriptions.NewProviderPublisher(uid).ProviderUpdated(ctx, prv, cfg)
+
+	// Repoint every flow/assistant that referred to the old name so they keep
+	// resolving to a valid provider. This must not fail the mutation: the
+	// provider itself is already renamed, and the sweep is idempotent.
+	if oldName != prvname {
+		if err := r.Controller.RenameFlowsProvider(ctx, uid, oldName, prvname); err != nil {
+			r.Logger.WithError(err).Error("failed to cascade provider rename to flows/assistants")
+		}
+	}
 
 	return converter.ConvertProvider(prv, cfg), nil
 }
@@ -570,6 +601,17 @@ func (r *mutationResolver) DeleteProvider(ctx context.Context, providerID int64)
 	prv, err := r.ProvidersCtrl.DeleteProvider(ctx, uid, providerID)
 	if err != nil {
 		return model.ResultTypeError, err
+	}
+
+	// Runs before anything else that can fail: the provider row is already
+	// soft-deleted, so bailing out earlier would leave the references dangling.
+	// Rows whose stored name still resolves (an override of a built-in) are left
+	// alone — running flows drop the deleted configuration on their next input or
+	// on the next start. Never fails the mutation: the provider is gone either way.
+	deletedName := provider.ProviderName(prv.Name)
+	deletedType := provider.ProviderType(prv.Type)
+	if err := r.Controller.ResetFlowsProviderToDefault(ctx, uid, deletedName, deletedType); err != nil {
+		r.Logger.WithError(err).Error("failed to cascade provider deletion to flows/assistants")
 	}
 
 	var cfg pconfig.ProviderConfig
@@ -754,6 +796,10 @@ func (r *mutationResolver) CreateAPIToken(ctx context.Context, input model.Creat
 		return nil, fmt.Errorf("invalid TTL: must be between 60 and 94608000 seconds")
 	}
 
+	if input.Name != nil && len(*input.Name) > maxAPITokenNameLen {
+		return nil, fmt.Errorf("token name must not exceed %d characters", maxAPITokenNameLen)
+	}
+
 	r.Logger.WithFields(logrus.Fields{
 		"uid":  uid,
 		"name": input.Name,
@@ -772,7 +818,7 @@ func (r *mutationResolver) CreateAPIToken(ctx context.Context, input model.Creat
 
 	claims := auth.MakeAPITokenClaims(tokenID, user.Hash, uint64(uid), uint64(user.RoleID), uint64(input.TTL))
 
-	tokenString, err := auth.MakeAPIToken(r.Config.CookieSigningSalt, claims)
+	tokenString, err := auth.MakeAPIToken(r.Config.AuthSalt(), claims)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create token: %w", err)
 	}
@@ -821,6 +867,10 @@ func (r *mutationResolver) UpdateAPIToken(ctx context.Context, tokenID string, i
 
 	if !isUserSession {
 		return nil, fmt.Errorf("unauthorized: non-user session is not allowed to update API tokens")
+	}
+
+	if input.Name != nil && len(*input.Name) > maxAPITokenNameLen {
+		return nil, fmt.Errorf("token name must not exceed %d characters", maxAPITokenNameLen)
 	}
 
 	r.Logger.WithFields(logrus.Fields{
@@ -1129,6 +1179,13 @@ func (r *mutationResolver) CreateKnowledgeDocument(ctx context.Context, input mo
 		return nil, err
 	}
 
+	if input.Content == "" || input.Question == "" {
+		return nil, fmt.Errorf("content and question are required")
+	}
+	if err := validateKnowledgeFieldLengths(input.Content, &input.Question, input.Description, input.CodeLang); err != nil {
+		return nil, err
+	}
+
 	r.Logger.WithFields(logrus.Fields{
 		"uid":      uid,
 		"doc_type": input.DocType,
@@ -1144,6 +1201,13 @@ func (r *mutationResolver) UpdateKnowledgeDocument(ctx context.Context, id strin
 		return nil, err
 	}
 
+	if input.Content == "" {
+		return nil, fmt.Errorf("content is required")
+	}
+	if err := validateKnowledgeFieldLengths(input.Content, input.Question, input.Description, input.CodeLang); err != nil {
+		return nil, err
+	}
+
 	r.Logger.WithFields(logrus.Fields{
 		"uid":   uid,
 		"admin": admin,
@@ -1154,6 +1218,25 @@ func (r *mutationResolver) UpdateKnowledgeDocument(ctx context.Context, id strin
 		return r.Knowledge.UpdateDocument(ctx, uid, id, input)
 	}
 	return r.Knowledge.UpdateUserDocument(ctx, uid, id, input)
+}
+
+// RenameKnowledgeDocument is the resolver for the renameKnowledgeDocument field.
+func (r *mutationResolver) RenameKnowledgeDocument(ctx context.Context, id string, question string) (*model.KnowledgeDocument, error) {
+	uid, admin, err := validatePermission(ctx, "knowledge.edit")
+	if err != nil {
+		return nil, err
+	}
+
+	r.Logger.WithFields(logrus.Fields{
+		"uid":   uid,
+		"admin": admin,
+		"id":    id,
+	}).Debug("rename knowledge document")
+
+	if admin {
+		return r.Knowledge.RenameDocument(ctx, uid, id, question)
+	}
+	return r.Knowledge.RenameUserDocument(ctx, uid, id, question)
 }
 
 // DeleteKnowledgeDocument is the resolver for the deleteKnowledgeDocument field.
@@ -1902,7 +1985,6 @@ func (r *queryResolver) FlowsExecutionStatsByPeriod(ctx context.Context, period 
 		"period": period,
 	}).Debug("get flows execution stats by period")
 
-	// Step 1: Get flows for the period
 	type flowInfo struct {
 		ID    int64
 		Title string
@@ -1938,23 +2020,19 @@ func (r *queryResolver) FlowsExecutionStatsByPeriod(ctx context.Context, period 
 		return nil, fmt.Errorf("unsupported period: %s", period)
 	}
 
-	// Step 2: Build stats for each flow using analytics functions
 	result := make([]*model.FlowExecutionStats, 0, len(flows))
 
 	for _, flow := range flows {
-		// Get raw data for this flow
 		tasks, err := r.DB.GetTasksForFlow(ctx, flow.ID)
 		if err != nil {
 			return nil, err
 		}
 
-		// Collect task IDs
 		taskIDs := make([]int64, len(tasks))
 		for i, task := range tasks {
 			taskIDs[i] = task.ID
 		}
 
-		// Get subtasks for all tasks
 		var subtasks []database.GetSubtasksForTasksRow
 		if len(taskIDs) > 0 {
 			subtasks, err = r.DB.GetSubtasksForTasks(ctx, taskIDs)
@@ -1963,25 +2041,21 @@ func (r *queryResolver) FlowsExecutionStatsByPeriod(ctx context.Context, period 
 			}
 		}
 
-		// Get msgchains for the flow
 		msgchains, err := r.DB.GetMsgchainsForFlow(ctx, flow.ID)
 		if err != nil {
 			return nil, err
 		}
 
-		// Get toolcalls for the flow
 		toolcalls, err := r.DB.GetToolcallsForFlow(ctx, flow.ID)
 		if err != nil {
 			return nil, err
 		}
 
-		// Get assistants count for the flow
 		assistantsCount, err := r.DB.GetAssistantsCountForFlow(ctx, flow.ID)
 		if err != nil {
 			return nil, err
 		}
 
-		// Build execution stats using analytics functions
 		flowStats := converter.BuildFlowExecutionStats(flow.ID, flow.Title, tasks, subtasks, msgchains, toolcalls, int(assistantsCount))
 		result = append(result, flowStats)
 	}
@@ -2019,6 +2093,10 @@ func (r *queryResolver) SettingsProviders(ctx context.Context) (*model.Providers
 		"uid": uid,
 	}).Debug("get providers")
 
+	if err := r.ProvidersCtrl.SeedDefaultProviders(ctx, uid); err != nil {
+		r.Logger.WithError(err).Warn("failed to seed default providers")
+	}
+
 	config := model.ProvidersConfig{
 		Enabled:     &model.ProvidersReadinessStatus{},
 		Default:     &model.DefaultProvidersConfig{},
@@ -2041,22 +2119,22 @@ func (r *queryResolver) SettingsProviders(ctx context.Context) (*model.Providers
 		case provider.ProviderOpenAI:
 			config.Default.Openai = mpcfg
 			if models, err := openai.DefaultModels(); err == nil {
-				config.Models.Openai = converter.ConvertModels(models)
+				config.Models.Openai = converter.ConvertModels(models, prvtype.ReasoningProvider())
 			}
 		case provider.ProviderAnthropic:
 			config.Default.Anthropic = mpcfg
 			if models, err := anthropic.DefaultModels(); err == nil {
-				config.Models.Anthropic = converter.ConvertModels(models)
+				config.Models.Anthropic = converter.ConvertModels(models, prvtype.ReasoningProvider())
 			}
 		case provider.ProviderGemini:
 			config.Default.Gemini = mpcfg
 			if models, err := gemini.DefaultModels(); err == nil {
-				config.Models.Gemini = converter.ConvertModels(models)
+				config.Models.Gemini = converter.ConvertModels(models, prvtype.ReasoningProvider())
 			}
 		case provider.ProviderBedrock:
 			config.Default.Bedrock = mpcfg
 			if models, err := bedrock.DefaultModels(); err == nil {
-				config.Models.Bedrock = converter.ConvertModels(models)
+				config.Models.Bedrock = converter.ConvertModels(models, prvtype.ReasoningProvider())
 			}
 		case provider.ProviderOllama:
 			config.Default.Ollama = mpcfg
@@ -2065,22 +2143,27 @@ func (r *queryResolver) SettingsProviders(ctx context.Context) (*model.Providers
 		case provider.ProviderDeepSeek:
 			config.Default.Deepseek = mpcfg
 			if models, err := deepseek.DefaultModels(); err == nil {
-				config.Models.Deepseek = converter.ConvertModels(models)
+				config.Models.Deepseek = converter.ConvertModels(models, prvtype.ReasoningProvider())
 			}
 		case provider.ProviderGLM:
 			config.Default.Glm = mpcfg
 			if models, err := glm.DefaultModels(); err == nil {
-				config.Models.Glm = converter.ConvertModels(models)
+				config.Models.Glm = converter.ConvertModels(models, prvtype.ReasoningProvider())
 			}
 		case provider.ProviderKimi:
 			config.Default.Kimi = mpcfg
 			if models, err := kimi.DefaultModels(); err == nil {
-				config.Models.Kimi = converter.ConvertModels(models)
+				config.Models.Kimi = converter.ConvertModels(models, prvtype.ReasoningProvider())
 			}
 		case provider.ProviderQwen:
 			config.Default.Qwen = mpcfg
 			if models, err := qwen.DefaultModels(); err == nil {
-				config.Models.Qwen = converter.ConvertModels(models)
+				config.Models.Qwen = converter.ConvertModels(models, prvtype.ReasoningProvider())
+			}
+		case provider.ProviderMiniMax:
+			config.Default.Minimax = mpcfg
+			if models, err := minimax.DefaultModels(); err == nil {
+				config.Models.Minimax = converter.ConvertModels(models, prvtype.ReasoningProvider())
 			}
 		}
 	}
@@ -2096,15 +2179,18 @@ func (r *queryResolver) SettingsProviders(ctx context.Context) (*model.Providers
 			config.Enabled.Gemini = true
 		case provider.ProviderBedrock:
 			config.Enabled.Bedrock = true
+			if p, ok := defaultProviders[provider.DefaultProviderNameBedrock]; ok {
+				config.Models.Bedrock = converter.ConvertModels(p.GetModels(), prvtype.ReasoningProvider())
+			}
 		case provider.ProviderOllama:
 			config.Enabled.Ollama = true
 			if p, ok := defaultProviders[provider.DefaultProviderNameOllama]; ok {
-				config.Models.Ollama = converter.ConvertModels(p.GetModels())
+				config.Models.Ollama = converter.ConvertModels(p.GetModels(), prvtype.ReasoningProvider())
 			}
 		case provider.ProviderCustom:
 			config.Enabled.Custom = true
 			if p, ok := defaultProviders[provider.DefaultProviderNameCustom]; ok {
-				config.Models.Custom = converter.ConvertModels(p.GetModels())
+				config.Models.Custom = converter.ConvertModels(p.GetModels(), prvtype.ReasoningProvider())
 			}
 		case provider.ProviderDeepSeek:
 			config.Enabled.Deepseek = true
@@ -2114,6 +2200,8 @@ func (r *queryResolver) SettingsProviders(ctx context.Context) (*model.Providers
 			config.Enabled.Kimi = true
 		case provider.ProviderQwen:
 			config.Enabled.Qwen = true
+		case provider.ProviderMiniMax:
+			config.Enabled.Minimax = true
 		}
 	}
 

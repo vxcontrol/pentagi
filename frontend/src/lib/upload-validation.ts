@@ -6,23 +6,14 @@
  * Mirrors the per-file / per-batch limits enforced by the backend
  * (`pkg/resources/resources.go` for the resources library and
  * `pkg/flowfiles/files.go` for the flow files cache). Both backends do not
- * whitelist file extensions, so neither does this validator — it only checks
- * size, count and emptiness.
+ * whitelist file extensions and both accept 0-byte files, so neither does this
+ * validator — it only checks size and count.
  */
 
 export interface UploadValidationLimits {
-    /** Maximum number of files allowed per request. */
     maxFiles: number;
-    /** Maximum size of a single file in megabytes. */
     maxFileSizeMb: number;
-    /** Maximum combined size of the batch in megabytes. */
     maxTotalSizeMb: number;
-    /**
-     * Reject 0-byte files. Defaults to `true` because both servers stream the
-     * upload body and surface a confusing `EOF on read` error mid-request when
-     * an empty file lands in the multipart payload.
-     */
-    rejectEmpty?: boolean;
 }
 
 const MEGABYTE = 1024 * 1024;
@@ -43,14 +34,9 @@ export const validateUploadBatch = (files: readonly File[], limits: UploadValida
 
     const maxBytesPerFile = limits.maxFileSizeMb * MEGABYTE;
     const maxTotalBytes = limits.maxTotalSizeMb * MEGABYTE;
-    const rejectEmpty = limits.rejectEmpty ?? true;
     let totalBytes = 0;
 
     for (const file of files) {
-        if (rejectEmpty && file.size === 0) {
-            return `File "${file.name}" is empty`;
-        }
-
         if (file.size > maxBytesPerFile) {
             return `File "${file.name}" is larger than ${limits.maxFileSizeMb} MB`;
         }

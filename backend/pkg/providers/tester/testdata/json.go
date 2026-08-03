@@ -16,11 +16,12 @@ type testCaseJSON struct {
 	def TestDefinition
 
 	// state for streaming and response collection
-	mu        sync.Mutex
-	content   strings.Builder
-	reasoning strings.Builder
-	messages  []llms.MessageContent
-	expected  map[string]any
+	mu               sync.Mutex
+	content          strings.Builder
+	reasoning        strings.Builder
+	messages         []llms.MessageContent
+	expected         map[string]any
+	structuredOutput *llms.StructuredOutputConfig
 }
 
 func newJSONTestCase(def TestDefinition) (TestCase, error) {
@@ -40,10 +41,26 @@ func newJSONTestCase(def TestDefinition) (TestCase, error) {
 		return nil, fmt.Errorf("failed to convert messages: %v", err)
 	}
 
+	var structuredOutput *llms.StructuredOutputConfig
+	if def.Capability == CapabilityStructuredOutput {
+		if def.Schema == nil {
+			return nil, fmt.Errorf("structured_output test %q requires a schema", def.ID)
+		}
+		schemaBytes, err := json.Marshal(def.Schema)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal schema for test %q: %v", def.ID, err)
+		}
+		structuredOutput = &llms.StructuredOutputConfig{
+			Name:   def.SchemaName,
+			Schema: schemaBytes,
+		}
+	}
+
 	return &testCaseJSON{
-		def:      def,
-		expected: expected,
-		messages: messages,
+		def:              def,
+		expected:         expected,
+		messages:         messages,
+		structuredOutput: structuredOutput,
 	}, nil
 }
 
@@ -55,6 +72,21 @@ func (t *testCaseJSON) Streaming() bool                 { return t.def.Streaming
 func (t *testCaseJSON) Prompt() string                  { return "" }
 func (t *testCaseJSON) Messages() []llms.MessageContent { return t.messages }
 func (t *testCaseJSON) Tools() []llms.Tool              { return nil }
+func (t *testCaseJSON) Capability() TestCapability      { return t.def.Capability }
+
+// ExtraOptions attaches the per-call JSON Schema for a CapabilityStructuredOutput
+// test. AgentConfig.BuildOptions doesn't wire llms.WithStructuredOutput into
+// simple_json yet, but that's landing soon, so this call is forced here ahead
+// of time to confirm the LLM/backend can actually honor schema-constrained
+// output before the real integration depends on it. llms.WithStructuredOutput
+// also implies JSONMode, so the agent's own `json: true` config setting (if
+// present) is redundant but harmless.
+func (t *testCaseJSON) ExtraOptions() []llms.CallOption {
+	if t.structuredOutput == nil {
+		return nil
+	}
+	return []llms.CallOption{llms.WithStructuredOutput(*t.structuredOutput)}
+}
 
 func (t *testCaseJSON) StreamingCallback() streaming.Callback {
 	if !t.def.Streaming {

@@ -1,4 +1,3 @@
-import { zodResolver } from '@hookform/resolvers/zod';
 import {
     ArrowUp,
     Check,
@@ -7,7 +6,6 @@ import {
     FileSymlink,
     FileText,
     Folder,
-    Loader2,
     Paperclip,
     Plus,
     Square,
@@ -15,13 +13,14 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRef } from 'react';
-import { useForm, useWatch } from 'react-hook-form';
+import { useController } from 'react-hook-form';
 import { z } from 'zod';
 
 import type { UserResourceFragmentFragment } from '@/graphql/types';
 
 import { ProviderIcon } from '@/components/icons/provider-icon';
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
+import { Button } from '@/components/ui/button';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -43,6 +42,7 @@ import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useResourcesUpload } from '@/features/resources/use-resources-upload';
+import { useAppForm } from '@/hooks/use-app-form';
 import { getProviderDisplayName } from '@/models/provider';
 import { useProviders } from '@/providers/providers-provider';
 import { useResources } from '@/providers/resources-provider';
@@ -90,19 +90,14 @@ export function FlowForm({
     const [providerSearch, setProviderSearch] = useState('');
     const [templateSearch, setTemplateSearch] = useState('');
     const [resourceSearch, setResourceSearch] = useState('');
-    // Tracks which picker the combined dropdown is showing. Lifted to form
-    // state (instead of internal to the menu) so the tab choice survives
-    // re-renders triggered by `setTemplateSearch` / `setResourceSearch`
-    // inside the inner pickers.
+    // Lifted to form state so the tab choice survives re-renders triggered by
+    // `setTemplateSearch` / `setResourceSearch` inside the inner pickers.
     const [pickerTab, setPickerTab] = useState<'resources' | 'templates'>('templates');
 
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    // Resources are rendered as a hierarchy: alphabetical sort by full path
-    // produces the right ordering for siblings at every depth (parents before
-    // their descendants, peers in alphabetical order). Each row's nesting level
-    // is then derived from the slash count and rendered as a left indent so the
-    // user can visually trace files into their parent directories.
+    // Alphabetical sort by full path yields hierarchical order: parents before
+    // their descendants, peers alphabetically at every depth.
     const sortedResources = useMemo(
         () => [...resources].sort((a, b) => a.path.localeCompare(b.path, undefined, { sensitivity: 'base' })),
         [resources],
@@ -150,15 +145,14 @@ export function FlowForm({
         });
     }, [providers, providerSearch]);
 
-    const form = useForm<FlowFormValues>({
+    const form = useAppForm<FlowFormValues>({
         defaultValues: {
             message: defaultValues?.message ?? '',
             providerName: defaultValues?.providerName ?? '',
             resourceIds: defaultValues?.resourceIds ?? [],
             useAgents: defaultValues?.useAgents ?? false,
         },
-        mode: 'onChange',
-        resolver: zodResolver(formSchema),
+        schema: formSchema,
     });
 
     const {
@@ -170,7 +164,10 @@ export function FlowForm({
         setValue,
     } = form;
 
-    const resourceIds = useWatch({ control, name: 'resourceIds' });
+    // useController registers the field; with useWatch alone `resetField('resourceIds')` is a no-op.
+    const {
+        field: { value: resourceIds },
+    } = useController({ control, name: 'resourceIds' });
 
     const updateResourceIds = useCallback(
         (updater: ((current: string[]) => string[]) | Array<number | string>) => {
@@ -217,7 +214,6 @@ export function FlowForm({
 
         const currentValues = getValues();
 
-        // Update only fields that user hasn't manually changed and that differ from current values.
         // Arrays are compared shallowly so a new-but-identical `resourceIds` reference doesn't
         // trigger an unnecessary setValue (and the re-render it causes).
         Object.entries(defaultValues)
@@ -241,9 +237,12 @@ export function FlowForm({
             })
             .forEach(([fieldName, defaultValue]) => {
                 const typedFieldName = fieldName as keyof FlowFormValues;
-                setValue(typedFieldName, defaultValue as never, { shouldDirty: false });
+                // resetField, not setValue: it moves react-hook-form's own baseline too, so a later
+                // pick that happens to equal the mount-time default still counts as dirty and this
+                // effect leaves it alone.
+                resetField(typedFieldName, { defaultValue: defaultValue as never });
             });
-    }, [defaultValues, dirtyFields, setValue, getValues]);
+    }, [defaultValues, dirtyFields, resetField, getValues]);
 
     const isFormDisabled = isDisabled || isLoading || isSubmitting || isCanceling;
 
@@ -329,10 +328,6 @@ export function FlowForm({
         }
     }, [pendingTemplate, setValue]);
 
-    // Templates and resources share the same dropdown via tabs — both picker
-    // bodies are kept as render functions so each can be mounted directly
-    // inside its `<TabsContent>` without duplicating the search-input +
-    // scrolled-list layout.
     const renderTemplatePickerInner = () => (
         <>
             <DropdownMenuGroup className="-m-1 rounded-none p-0">
@@ -347,6 +342,7 @@ export function FlowForm({
                     {templateSearch && (
                         <InputGroupAddon align="inline-end">
                             <InputGroupButton
+                                aria-label="Clear template search"
                                 onClick={(event) => {
                                     event.stopPropagation();
                                     setTemplateSearch('');
@@ -401,6 +397,7 @@ export function FlowForm({
                     {resourceSearch && (
                         <InputGroupAddon align="inline-end">
                             <InputGroupButton
+                                aria-label="Clear resource search"
                                 onClick={(event) => {
                                     event.stopPropagation();
                                     setResourceSearch('');
@@ -426,9 +423,8 @@ export function FlowForm({
                         const resourceId = String(resource.id);
                         const isSelected = resourceIds.includes(resourceId);
                         const Icon = resource.isDir ? Folder : FileText;
-                        // Depth derived from the path's slash count; ignored while a
-                        // search query is active so matches don't appear orphaned
-                        // beneath hidden ancestors.
+                        // Zeroed while a search query is active so matches don't appear
+                        // orphaned beneath hidden ancestors.
                         const depth = isResourceSearchActive ? 0 : resource.path.split('/').length - 1;
 
                         return (
@@ -475,7 +471,7 @@ export function FlowForm({
                     handleAttachClick();
                 }}
             >
-                {upload.isUploading ? <Loader2 className="animate-spin" /> : <Plus />}
+                {upload.isUploading ? <Spinner variant="circle" /> : <Plus />}
                 {upload.isUploading ? 'Uploading…' : 'Upload files'}
             </DropdownMenuItem>
         </>
@@ -483,7 +479,10 @@ export function FlowForm({
 
     return (
         <Form {...form}>
-            <form onSubmit={handleFormSubmit(handleSubmit)}>
+            <form
+                noValidate
+                onSubmit={handleFormSubmit(handleSubmit)}
+            >
                 <FormField
                     control={control}
                     name="message"
@@ -509,15 +508,16 @@ export function FlowForm({
                                                     <span className="text-foreground max-w-40 truncate">
                                                         {resource.name}
                                                     </span>
-                                                    <button
+                                                    <Button
                                                         aria-label={`Remove ${resource.name}`}
-                                                        className="text-muted-foreground hover:text-destructive ml-0.5 flex shrink-0 items-center justify-center"
+                                                        className="text-muted-foreground hover:text-destructive -my-[5px] -mr-1.5 -ml-1 size-[26px] shrink-0 [&_svg]:size-3.5"
                                                         disabled={isFormDisabled}
                                                         onClick={() => handleRemoveAttachment(resourceId)}
-                                                        type="button"
+                                                        size="icon-xs"
+                                                        variant="ghost"
                                                     >
-                                                        <X className="size-3.5" />
-                                                    </button>
+                                                        <X />
+                                                    </Button>
                                                 </div>
                                             );
                                         })}
@@ -582,6 +582,7 @@ export function FlowForm({
                                                                 {providerSearch && (
                                                                     <InputGroupAddon align="inline-end">
                                                                         <InputGroupButton
+                                                                            aria-label="Clear provider search"
                                                                             onClick={(event) => {
                                                                                 event.stopPropagation();
                                                                                 setProviderSearch('');
@@ -697,11 +698,9 @@ export function FlowForm({
                                                 <Ellipsis className="shrink-0" />
                                             </InputGroupButton>
                                         </DropdownMenuTrigger>
-                                        {/* Single upward-opening dropdown for both Templates and Resources
-                                            on every viewport. Sub-menus would get clipped on the narrowest
-                                            screens (~390px), and a unified UI keeps the form simpler than
-                                            branching on `isMobile`. The tab strip is rendered last so it
-                                            lands closest to the trigger button. */}
+                                        {/* Sub-menus would get clipped on the narrowest screens (~390px), so
+                                            Templates and Resources share one upward-opening dropdown. The tab
+                                            strip is rendered last so it lands closest to the trigger button. */}
                                         <DropdownMenuContent
                                             align="end"
                                             className="w-72"

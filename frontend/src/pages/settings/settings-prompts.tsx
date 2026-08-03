@@ -1,13 +1,13 @@
 import type { ColumnDef, Row } from '@tanstack/react-table';
 
+import { useMutation, useQuery } from '@apollo/client/react';
 import {
-    AlertCircle,
     ArrowDown,
     ArrowUp,
     Bot,
     Code,
     Ellipsis,
-    Loader2,
+    FileText,
     Pencil,
     RotateCcw,
     Settings,
@@ -15,13 +15,18 @@ import {
     User,
     Wrench,
 } from 'lucide-react';
-import { Fragment, useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 
-import type { AgentPrompt, AgentPrompts, DefaultPrompt, PromptType } from '@/graphql/types';
+import type { DefaultPromptFragmentFragment as DefaultPrompt, PromptType } from '@/graphql/types';
 
+type AgentPrompts = { human?: DefaultPrompt; system: DefaultPrompt };
+
+import { AppHeader, AppHeaderContent, AppHeaderTitle } from '@/components/layouts/app/app-header';
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { ErrorState } from '@/components/shared/error-state';
+import { LoadingState } from '@/components/shared/loading-state';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ContextMenuItem, ContextMenuSeparator } from '@/components/ui/context-menu';
@@ -33,9 +38,13 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { StatusCard } from '@/components/ui/status-card';
-import { useDeletePromptMutation, useSettingsPromptsQuery } from '@/graphql/types';
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
+import { Spinner } from '@/components/ui/spinner';
+import { DeletePromptDocument, SettingsPromptsDocument } from '@/graphql/types';
 import { usePageStorageKeys } from '@/hooks/use-page-storage-keys';
+import { routes } from '@/lib/routes';
+
+const formatName = (key: string): string => key.replaceAll(/([A-Z])/g, ' $1').replace(/^./, (str) => str.toUpperCase());
 
 type AgentPromptTableData = {
     displayName: string;
@@ -59,8 +68,8 @@ type ToolPromptTableData = {
 };
 
 function SettingsPrompts() {
-    const { data, error, loading: isLoading } = useSettingsPromptsQuery();
-    const [deletePrompt, { loading: isDeleteLoading }] = useDeletePromptMutation();
+    const { data, error, loading: isLoading, refetch } = useQuery(SettingsPromptsDocument);
+    const [deletePrompt, { loading: isDeleteLoading }] = useMutation(DeletePromptDocument);
     const navigate = useNavigate();
     // Shared base key for the route; each DataTable appends its own suffix so
     // sorting / column visibility / search-column narrowing live in distinct
@@ -92,7 +101,7 @@ function SettingsPrompts() {
     };
 
     const handlePromptEdit = (promptName: string) => {
-        navigate(`/settings/prompts/${promptName}`);
+        navigate(routes.settings.prompt(promptName));
     };
 
     const handleResetDialogOpen = (
@@ -181,7 +190,9 @@ function SettingsPrompts() {
 
             setResetOperation(null);
         } catch (error) {
-            console.error('Failed to reset prompt:', error);
+            toast.error('Failed to reset prompt', {
+                description: error instanceof Error ? error.message : undefined,
+            });
         }
     };
 
@@ -223,11 +234,8 @@ function SettingsPrompts() {
                 case 'system': {
                     return systemType ? userDefined.some((p) => p.type === systemType) : false;
                 }
-                // No default
             }
         }
-
-        return false;
     };
 
     const getAgentPromptsData = (): AgentPromptTableData[] => {
@@ -239,16 +247,12 @@ function SettingsPrompts() {
         const userDefined = data.settingsPrompts.userDefined || [];
         const agentEntries: AgentPromptTableData[] = [];
 
-        const formatName = (key: string): string => {
-            return key.replaceAll(/([A-Z])/g, ' $1').replace(/^./, (str) => str.toUpperCase());
-        };
-
         Object.entries(agents).forEach(([key, prompts]) => {
             if (key === '__typename') {
                 return;
             }
 
-            const systemType = (prompts as AgentPrompt | AgentPrompts)?.system?.type;
+            const systemType = (prompts as AgentPrompts)?.system?.type;
             const humanType = (prompts as AgentPrompts)?.human?.type;
 
             const hasCustomSystem = userDefined.some((p) => p.type === systemType);
@@ -257,17 +261,13 @@ function SettingsPrompts() {
             const agentData: AgentPromptTableData = {
                 displayName: formatName(key),
                 hasHuman: !!(prompts as AgentPrompts)?.human,
-                hasSystem: !!(prompts as AgentPrompt | AgentPrompts)?.system,
+                hasSystem: !!(prompts as AgentPrompts)?.system,
                 humanStatus: (prompts as AgentPrompts)?.human ? (hasCustomHuman ? 'Custom' : 'Default') : 'N/A',
                 humanTemplate: (prompts as AgentPrompts)?.human?.template,
                 humanType,
                 name: key,
-                systemStatus: (prompts as AgentPrompt | AgentPrompts)?.system
-                    ? hasCustomSystem
-                        ? 'Custom'
-                        : 'Default'
-                    : 'N/A',
-                systemTemplate: (prompts as AgentPrompt | AgentPrompts)?.system?.template || '',
+                systemStatus: (prompts as AgentPrompts)?.system ? (hasCustomSystem ? 'Custom' : 'Default') : 'N/A',
+                systemTemplate: (prompts as AgentPrompts)?.system?.template || '',
                 systemType,
             };
 
@@ -285,10 +285,6 @@ function SettingsPrompts() {
         const { tools } = data.settingsPrompts.default;
         const userDefined = data.settingsPrompts.userDefined || [];
         const toolEntries: ToolPromptTableData[] = [];
-
-        const formatName = (key: string): string => {
-            return key.replaceAll(/([A-Z])/g, ' $1').replace(/^./, (str) => str.toUpperCase());
-        };
 
         Object.entries(tools).forEach(([key, prompt]) => {
             if (key === '__typename') {
@@ -316,8 +312,8 @@ function SettingsPrompts() {
         {
             accessorKey: 'displayName',
             cell: ({ row }) => (
-                <div className="flex items-center gap-2">
-                    <span className="font-medium">{row.original.displayName}</span>
+                <div className="flex min-w-0 items-center gap-2">
+                    <span className="truncate font-medium">{row.original.displayName}</span>
                 </div>
             ),
             enableHiding: false,
@@ -326,21 +322,16 @@ function SettingsPrompts() {
 
                 return (
                     <Button
-                        className="text-muted-foreground hover:text-primary flex items-center gap-2 p-0 no-underline hover:no-underline"
+                        className="text-muted-foreground hover:text-link flex items-center gap-2 p-0 no-underline hover:no-underline"
                         onClick={() => handleColumnSort(column)}
                         variant="link"
                     >
                         Agent Name
-                        {sorted === 'asc' ? (
-                            <ArrowDown className="size-4" />
-                        ) : sorted === 'desc' ? (
-                            <ArrowUp className="size-4" />
-                        ) : null}
+                        {sorted === 'asc' ? <ArrowDown /> : sorted === 'desc' ? <ArrowUp /> : null}
                     </Button>
                 );
             },
             meta: { columnMenuLabel: 'Agent Name', searchable: true },
-            size: 200,
         },
         {
             accessorKey: 'systemStatus',
@@ -412,7 +403,10 @@ function SettingsPrompts() {
                                         resetOperation?.promptName === agent.name &&
                                         resetOperation?.type === 'system' ? (
                                             <>
-                                                <Loader2 className="size-3 animate-spin" />
+                                                <Spinner
+                                                    className="size-3"
+                                                    variant="circle"
+                                                />
                                                 Resetting...
                                             </>
                                         ) : (
@@ -436,7 +430,10 @@ function SettingsPrompts() {
                                         resetOperation?.promptName === agent.name &&
                                         resetOperation?.type === 'human' ? (
                                             <>
-                                                <Loader2 className="size-3 animate-spin" />
+                                                <Spinner
+                                                    className="size-3"
+                                                    variant="circle"
+                                                />
                                                 Resetting...
                                             </>
                                         ) : (
@@ -460,7 +457,10 @@ function SettingsPrompts() {
                                         resetOperation?.promptName === agent.name &&
                                         resetOperation?.type === 'all' ? (
                                             <>
-                                                <Loader2 className="size-3 animate-spin" />
+                                                <Spinner
+                                                    className="size-3"
+                                                    variant="circle"
+                                                />
                                                 Resetting...
                                             </>
                                         ) : (
@@ -488,8 +488,8 @@ function SettingsPrompts() {
         {
             accessorKey: 'displayName',
             cell: ({ row }) => (
-                <div className="flex items-center gap-2">
-                    <span className="font-medium">{row.original.displayName}</span>
+                <div className="flex min-w-0 items-center gap-2">
+                    <span className="truncate font-medium">{row.original.displayName}</span>
                 </div>
             ),
             enableHiding: false,
@@ -498,21 +498,16 @@ function SettingsPrompts() {
 
                 return (
                     <Button
-                        className="text-muted-foreground hover:text-primary flex items-center gap-2 p-0 hover:no-underline"
+                        className="text-muted-foreground hover:text-link flex items-center gap-2 p-0 hover:no-underline"
                         onClick={() => handleColumnSort(column)}
                         variant="link"
                     >
                         Tool Name
-                        {sorted === 'asc' ? (
-                            <ArrowDown className="size-4" />
-                        ) : sorted === 'desc' ? (
-                            <ArrowUp className="size-4" />
-                        ) : null}
+                        {sorted === 'asc' ? <ArrowDown /> : sorted === 'desc' ? <ArrowUp /> : null}
                     </Button>
                 );
             },
             meta: { columnMenuLabel: 'Tool Name', searchable: true },
-            size: 300,
         },
         {
             accessorKey: 'status',
@@ -568,7 +563,10 @@ function SettingsPrompts() {
                                             resetOperation?.promptName === tool.name &&
                                             resetOperation?.type === 'tool' ? (
                                                 <>
-                                                    <Loader2 className="size-3 animate-spin" />
+                                                    <Spinner
+                                                        className="size-3"
+                                                        variant="circle"
+                                                    />
                                                     Resetting...
                                                 </>
                                             ) : (
@@ -772,29 +770,43 @@ function SettingsPrompts() {
         </>
     );
 
-    if (isLoading) {
+    const pageHeader = (
+        <AppHeader>
+            <AppHeaderContent>
+                <AppHeaderTitle icon={<FileText className="size-4 shrink-0" />}>Prompts</AppHeaderTitle>
+            </AppHeaderContent>
+        </AppHeader>
+    );
+
+    if (isLoading && !data) {
         return (
-            <div className="flex flex-col gap-4">
-                <SettingsPromptsHeader />
-                <StatusCard
-                    description="Please wait while we fetch your prompt templates"
-                    icon={<Loader2 className="text-muted-foreground size-16 animate-spin" />}
-                    title="Loading prompts..."
-                />
-            </div>
+            <>
+                {pageHeader}
+                <div className="flex flex-1 flex-col gap-6 p-4">
+                    <SettingsPromptsHeader />
+                    <LoadingState
+                        description="Please wait while we fetch your prompt templates"
+                        title="Loading prompts..."
+                    />
+                </div>
+            </>
         );
     }
 
-    if (error) {
+    // Error surface only when there's no data — a failed background refetch must not blank a working list.
+    if (error && !data) {
         return (
-            <div className="flex flex-col gap-4">
-                <SettingsPromptsHeader />
-                <Alert variant="destructive">
-                    <AlertCircle className="size-4" />
-                    <AlertTitle>Error loading prompts</AlertTitle>
-                    <AlertDescription>{error.message}</AlertDescription>
-                </Alert>
-            </div>
+            <>
+                {pageHeader}
+                <div className="flex flex-1 flex-col gap-6 p-4">
+                    <SettingsPromptsHeader />
+                    <ErrorState
+                        message={error.message}
+                        onRetry={refetch}
+                        title="Error loading prompts"
+                    />
+                </div>
+            </>
         );
     }
 
@@ -803,20 +815,28 @@ function SettingsPrompts() {
 
     if (agentPrompts.length === 0 && toolPrompts.length === 0) {
         return (
-            <div className="flex flex-col gap-4">
-                <SettingsPromptsHeader />
-                <StatusCard
-                    description="Prompt templates could not be loaded"
-                    icon={<Settings className="text-muted-foreground size-8" />}
-                    title="No prompts available"
-                />
-            </div>
+            <>
+                {pageHeader}
+                <div className="flex flex-1 flex-col gap-6 p-4">
+                    <SettingsPromptsHeader />
+                    <Empty>
+                        <EmptyHeader>
+                            <EmptyMedia variant="icon">
+                                <Settings />
+                            </EmptyMedia>
+                            <EmptyTitle>No prompts available</EmptyTitle>
+                            <EmptyDescription>Prompt templates could not be loaded</EmptyDescription>
+                        </EmptyHeader>
+                    </Empty>
+                </div>
+            </>
         );
     }
 
     return (
-        <Fragment>
-            <div className="flex flex-col gap-6">
+        <>
+            {pageHeader}
+            <div className="flex flex-1 flex-col gap-6 p-4">
                 <SettingsPromptsHeader />
 
                 {agentPrompts.length > 0 && (
@@ -882,7 +902,7 @@ function SettingsPrompts() {
                 isOpen={resetDialogOpen}
                 title={`Reset ${resetOperation?.displayName || 'Prompt'}`}
             />
-        </Fragment>
+        </>
     );
 }
 

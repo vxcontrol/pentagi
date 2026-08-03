@@ -2,6 +2,7 @@
 import { FlatCompat } from '@eslint/eslintrc';
 import js from '@eslint/js';
 import perfectionist from 'eslint-plugin-perfectionist';
+import playwright from 'eslint-plugin-playwright';
 
 const compat = new FlatCompat({
     baseDirectory: import.meta.dirname,
@@ -36,6 +37,15 @@ const eslintConfig = [
             ],
             curly: ['error', 'all'],
             'no-fallthrough': 'off',
+            'no-restricted-syntax': [
+                'error',
+                {
+                    message:
+                        'Do not set mode/reValidateMode on useForm — use useAppForm, which owns the silent-until-submit form timing.',
+                    selector:
+                        'CallExpression[callee.name="useForm"] > ObjectExpression > Property[key.name="mode"], CallExpression[callee.name="useForm"] > ObjectExpression > Property[key.name="reValidateMode"]',
+                },
+            ],
             'padding-line-between-statements': [
                 'error',
                 {
@@ -69,13 +79,57 @@ const eslintConfig = [
                     prev: 'do',
                 },
             ],
+            // Off until React Compiler lands: its compatibility lint flags every RHF
+            // watch() / useReactTable as unactionable noise (see OPEN-ISSUES §3).
+            'react-hooks/incompatible-library': 'off',
             'react/no-unescaped-entities': 'off', // Allow quotes in JSX
             'react/prop-types': 'off', // TypeScript provides type checking
         },
     },
+    {
+        // useAppForm is the single owner of the form timing — the one place
+        // allowed to set mode/reValidateMode on useForm.
+        files: ['src/hooks/use-app-form.ts'],
+        rules: { 'no-restricted-syntax': 'off' },
+    },
     perfectionist.configs['recommended-natural'],
     {
-        ignores: ['node_modules/**', 'dist/**', 'build/**', 'public/mockServiceWorker.js', 'src/graphql/types.ts'],
+        ...playwright.configs['flat/recommended'],
+        // *.unit.test.ts are vitest, not Playwright — the plugin's rules
+        // (no-standalone-expect) misfire on vitest's `it`.
+        files: ['e2e/**/*.ts'],
+        ignores: ['e2e/**/*.unit.test.ts'],
+    },
+    {
+        // Playwright fixtures take a `use` callback that the React hooks rule
+        // mistakes for a hook call; there is no React under e2e/.
+        files: ['e2e/**/*.ts'],
+        rules: { 'react-hooks/rules-of-hooks': 'off' },
+    },
+    {
+        // The dependency-free .mjs tools run under plain Node — declare its
+        // globals so no-undef doesn't misfire.
+        files: ['e2e/**/*.mjs'],
+        languageOptions: {
+            globals: {
+                console: 'readonly',
+                fetch: 'readonly',
+                process: 'readonly',
+                setTimeout: 'readonly',
+                URL: 'readonly',
+            },
+        },
+    },
+    {
+        ignores: [
+            'node_modules/**',
+            'dist/**',
+            'build/**',
+            'public/mockServiceWorker.js',
+            'src/graphql/types.ts',
+            'e2e/test-results/**',
+            'e2e/playwright-report/**',
+        ],
     },
 ];
 

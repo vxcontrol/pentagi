@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sort"
 	"sync"
+	"time"
 
 	"pentagi/pkg/config"
 	"pentagi/pkg/database"
@@ -50,7 +51,19 @@ type FlowController interface {
 	StopFlow(ctx context.Context, flowID int64) error
 	FinishFlow(ctx context.Context, flowID int64) error
 	RenameFlow(ctx context.Context, flowID int64, title string) error
+	RenameFlowsProvider(ctx context.Context, userID int64, oldName, newName provider.ProviderName) error
+	ResetFlowsProviderToDefault(
+		ctx context.Context,
+		userID int64,
+		oldName provider.ProviderName,
+		prvtype provider.ProviderType,
+	) error
 }
+
+// reassignProviderTimeout bounds the provider reference sweep. It is generous
+// for two indexed UPDATEs and only exists so a stuck database cannot pin the
+// goroutine forever once the sweep is detached from the request context.
+const reassignProviderTimeout = 30 * time.Second
 
 type flowController struct {
 	db     database.Querier
@@ -388,4 +401,132 @@ func (fc *flowController) RenameFlow(ctx context.Context, flowID int64, title st
 	}
 
 	return flow.Rename(ctx, title)
+}
+
+// RenameFlowsProvider repoints every flow and assistant of userID that still
+// refers to oldName at newName, after the user renamed a custom LLM provider.
+func (fc *flowController) RenameFlowsProvider(
+	ctx context.Context,
+	userID int64,
+	oldName, newName provider.ProviderName,
+) error {
+	return fc.reassignFlowsProvider(ctx, userID, oldName, newName)
+}
+
+// ResetFlowsProviderToDefault repoints every flow and assistant of userID that
+// referred to a just-deleted custom LLM provider at the built-in name for its
+// type, which is literally the type string ("qwen", "openai", ...) — see
+// provider.DefaultProviderName*. That name always resolves, so the flow stays
+// loadable instead of failing with "provider not found by name".
+func (fc *flowController) ResetFlowsProviderToDefault(
+	ctx context.Context,
+	userID int64,
+	oldName provider.ProviderName,
+	prvtype provider.ProviderType,
+) error {
+	return fc.reassignFlowsProvider(ctx, userID, oldName, provider.ProviderName(prvtype))
+}
+
+// reassignFlowsProvider rewrites the provider reference stored on a user's flow
+// and assistant rows. It deliberately does *not* touch loaded workers:
+//
+//   - Nothing here blocks on an LLM. Building a provider instance probes the
+//     upstream API to resolve a tool call ID template, so switching loaded
+//     workers inline would tie a "rename provider" click to LLM latency and give
+//     the caller time to cancel the request mid-cascade.
+//   - Nothing here takes fc.mx or reaches into a worker, so the cascade cannot
+//     deadlock against, or stall, any other flow operation.
+//
+// A running flow picks the change up on the user's next input (which already
+// re-resolves the provider by name and calls flowWorker.switchProvider) or on
+// the next backend start (which rebuilds the provider from the DB row). Both
+// paths compare the provider's raw configuration, so they also catch the case
+// where the name did not change but the configuration behind it did.
+//
+// The two sweeps only match rows still bearing oldName, which makes the whole
+// operation idempotent and safe to retry. They are issued independently and
+// their errors are joined, so a failure on one table never silently skips the
+// other.
+func (fc *flowController) reassignFlowsProvider(
+	ctx context.Context,
+	userID int64,
+	oldName, newName provider.ProviderName,
+) error {
+	logger := logrus.WithContext(ctx).WithFields(logrus.Fields{
+		"user_id":  userID,
+		"old_name": oldName.String(),
+		"new_name": newName.String(),
+	})
+
+	if oldName == newName {
+		logger.Debug("provider name unchanged, nothing to reassign")
+		return nil
+	}
+
+	// Only references that would otherwise dangle get rewritten. oldName can
+	// still resolve after the provider is gone when it named an override of a
+	// built-in — an intentional feature — in which case the built-in answers to
+	// that name again and the stored value is already correct. Rewriting it
+	// anyway would repoint rows that predate the override, and (when the
+	// override's type differed from the built-in it was named after) would send
+	// them to the wrong default entirely.
+	if _, err := fc.provs.GetProvider(ctx, oldName, userID); err == nil {
+		logger.Debug("old provider name still resolves, nothing to reassign")
+		return nil
+	}
+
+	// Detached from the caller's request context: these are two short statements
+	// and the reference must not be left half-rewritten because a browser tab
+	// was closed. The timeout keeps a stuck DB from pinning the goroutine.
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), reassignProviderTimeout)
+	defer cancel()
+
+	flows, flowsErr := fc.db.UpdateFlowsProviderNameByOldName(ctx, database.UpdateFlowsProviderNameByOldNameParams{
+		NewName: newName.String(),
+		UserID:  userID,
+		OldName: oldName.String(),
+	})
+	if flowsErr != nil {
+		logger.WithError(flowsErr).Error("failed to bulk-update flows provider name")
+		flowsErr = fmt.Errorf("failed to bulk-update flows provider name: %w", flowsErr)
+	}
+
+	assistants, asstErr := fc.db.UpdateAssistantsProviderNameByOldName(
+		ctx, database.UpdateAssistantsProviderNameByOldNameParams{
+			NewName: newName.String(),
+			UserID:  userID,
+			OldName: oldName.String(),
+		})
+	if asstErr != nil {
+		logger.WithError(asstErr).Error("failed to bulk-update assistants provider name")
+		asstErr = fmt.Errorf("failed to bulk-update assistants provider name: %w", asstErr)
+	}
+
+	// Publishing happens only after both writes are done. A subscriber that is
+	// not draining its channel makes each publish cost up to the subscription
+	// send timeout, so doing it in between would let a wedged websocket client
+	// eat the deadline and starve the second UPDATE.
+	for _, flow := range flows {
+		// Skipped rather than published with no containers: FlowUpdated carries
+		// the full terminal list and the client replaces its cached value with
+		// whatever arrives, so an empty list would wipe the flow's terminals in
+		// the UI. Same handling as flowWorker.switchProvider.
+		containers, err := fc.db.GetFlowContainers(ctx, flow.ID)
+		if err != nil {
+			logger.WithError(err).Warnf("failed to get containers for flow %d, skipping its update event", flow.ID)
+			continue
+		}
+		fc.subs.NewFlowPublisher(userID, flow.ID).FlowUpdated(ctx, flow, containers)
+	}
+
+	for _, assistant := range assistants {
+		fc.subs.NewFlowPublisher(userID, assistant.FlowID).AssistantUpdated(ctx, assistant)
+	}
+
+	logger.WithFields(logrus.Fields{
+		"flows_updated":      len(flows),
+		"assistants_updated": len(assistants),
+	}).Info("provider reference reassigned")
+
+	return errors.Join(flowsErr, asstErr)
 }

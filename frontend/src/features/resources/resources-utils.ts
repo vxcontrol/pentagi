@@ -5,7 +5,6 @@ import { baseUrl } from '@/models/api';
 
 import { RESOURCES_DOWNLOAD_API_PATH } from './resources-constants';
 
-/** Convert a GraphQL `UserResource` into a `FileNode` consumed by the FileManager. */
 export const toFileNode = (resource: UserResourceFragmentFragment): FileNode => ({
     id: resource.id,
     isDir: resource.isDir,

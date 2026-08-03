@@ -1,8 +1,8 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import debounce from 'lodash/debounce';
-import { Check, ChevronDown, ListFilter, Loader2, Plus, Search, Trash2, X } from 'lucide-react';
+import { Check, ChevronDown, ListFilter, Plus, Search, Trash2, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
+import { useDebouncedCallback } from 'use-debounce';
 import { z } from 'zod';
 
 import type { AssistantFragmentFragment, ProviderFragmentFragment } from '@/graphql/types';
@@ -16,6 +16,7 @@ import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTi
 import { Form, FormControl, FormField } from '@/components/ui/form';
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Spinner } from '@/components/ui/spinner';
 import { StatusType } from '@/graphql/types';
 import { useAutoScroll } from '@/hooks/use-auto-scroll';
 import { Log } from '@/lib/log';
@@ -158,6 +159,7 @@ function AssistantsDropdown({
 
                 {!isDisabled && (
                     <Button
+                        aria-label={`Delete ${assistant.title}`}
                         className="text-muted-foreground hover:text-destructive absolute top-1/2 right-0.5 shrink-0 -translate-y-1/2 opacity-0 transition-opacity group-hover:opacity-100"
                         onClick={(event) => {
                             event.stopPropagation();
@@ -181,6 +183,7 @@ function AssistantsDropdown({
             >
                 <PopoverTrigger asChild>
                     <Button
+                        aria-label="Select assistant"
                         className="px-2"
                         disabled={isAssistantCreating}
                         variant="outline"
@@ -322,13 +325,9 @@ function FlowAssistantMessages({ className }: FlowAssistantMessagesProps) {
 
     const searchValue = form.watch('search');
 
-    const debouncedUpdateSearch = useMemo(
-        () =>
-            debounce((value: string) => {
-                setDebouncedSearchValue(value);
-            }, 500),
-        [],
-    );
+    const debouncedUpdateSearch = useDebouncedCallback((value: string) => {
+        setDebouncedSearchValue(value);
+    }, 500);
 
     useEffect(() => {
         debouncedUpdateSearch(searchValue);
@@ -495,7 +494,6 @@ function FlowAssistantMessages({ className }: FlowAssistantMessagesProps) {
         <div className={cn('flex h-full flex-col', className)}>
             <div className="bg-background sticky top-0 z-10 pb-4">
                 <div className="flex gap-2 p-px">
-                    {/* Assistant Dropdown */}
                     {flowId && (
                         <AssistantsDropdown
                             assistants={assistants}
@@ -508,7 +506,6 @@ function FlowAssistantMessages({ className }: FlowAssistantMessagesProps) {
                             selectedAssistantId={selectedAssistantId}
                         />
                     )}
-                    {/* Search Input */}
                     <div className="flex-1">
                         <Form {...form}>
                             <FormField
@@ -530,6 +527,7 @@ function FlowAssistantMessages({ className }: FlowAssistantMessagesProps) {
                                             {field.value && (
                                                 <InputGroupAddon align="inline-end">
                                                     <InputGroupButton
+                                                        aria-label="Clear message search"
                                                         disabled={isAssistantCreating}
                                                         onClick={() => {
                                                             form.reset({ search: '' });
@@ -555,7 +553,7 @@ function FlowAssistantMessages({ className }: FlowAssistantMessagesProps) {
                 <Empty>
                     <EmptyHeader>
                         <EmptyMedia variant="icon">
-                            <Loader2 className="animate-spin" />
+                            <Spinner variant="circle" />
                         </EmptyMedia>
                         <EmptyTitle>Creating assistant...</EmptyTitle>
                         <EmptyDescription>Please wait while we set up your new assistant</EmptyDescription>
@@ -580,6 +578,7 @@ function FlowAssistantMessages({ className }: FlowAssistantMessagesProps) {
 
                         {!isScrolledToBottom && (
                             <Button
+                                aria-label="Scroll to latest message"
                                 className="absolute right-4 bottom-4 z-10 shadow-md hover:shadow-lg"
                                 onClick={() => scrollToEnd()}
                                 size="icon-sm"

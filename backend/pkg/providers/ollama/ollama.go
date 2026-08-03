@@ -300,6 +300,25 @@ func (p *ollamaProvider) CallWithTools(
 	)
 }
 
+// CallWithExtraOptions: extra is appended last, so it overrides the config.
+func (p *ollamaProvider) CallWithExtraOptions(
+	ctx context.Context,
+	opt pconfig.ProviderOptionsType,
+	chain []llms.MessageContent,
+	tools []llms.Tool,
+	streamCb streaming.Callback,
+	extra ...llms.CallOption,
+) (*llms.ContentResponse, error) {
+	options := []llms.CallOption{llms.WithStreamingFunc(streamCb)}
+	if len(tools) > 0 {
+		options = append(options, llms.WithTools(tools))
+	}
+	options = append(options, p.providerConfig.GetOptionsForType(opt)...)
+	options = append(options, extra...)
+
+	return provider.WrapGenerateContent(ctx, p, opt, p.llm.GenerateContent, chain, options...)
+}
+
 func (p *ollamaProvider) GetUsage(info map[string]any) pconfig.CallUsage {
 	return pconfig.NewCallUsage(info)
 }

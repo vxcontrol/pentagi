@@ -1013,6 +1013,60 @@ func TestQuestionTaskPlannerPrompt(t *testing.T) {
 	}
 }
 
+// TestPentesterPromptCLIArgumentGuidance keeps the pentester prompt's CLI
+// argument guidance generic (tool-agnostic) rather than hardcoding advice for
+// a single utility, while still covering the common AI-agent mistake classes:
+// hallucinated flags, cross-tool flag assumptions, output redirection,
+// machine-readable output, and shell-metacharacter quoting.
+func TestPentesterPromptCLIArgumentGuidance(t *testing.T) {
+	defaultPrompts, err := templates.GetDefaultPrompts()
+	if err != nil {
+		t.Fatalf("Failed to load default prompts: %v", err)
+	}
+
+	dummyData := validator.CreateDummyTemplateData()
+	template := defaultPrompts.AgentsPrompts.Pentester.System.Template
+
+	rendered, err := templates.RenderPrompt(
+		string(templates.PromptTypePentester),
+		template,
+		dummyData,
+	)
+	if err != nil {
+		t.Fatalf("Failed to render pentester template: %v", err)
+	}
+
+	requiredGuidance := []string{
+		"cli_argument_protocol",
+		"Hallucinated flags",
+		"--help",
+		"Cross-tool flag assumptions",
+		"Never copy a flag from one tool to another",
+		"shell redirection",
+		"Machine-readable output",
+		"Argument quoting",
+	}
+
+	for _, guidance := range requiredGuidance {
+		if !strings.Contains(rendered, guidance) {
+			t.Errorf("Rendered pentester template missing CLI argument guidance: %s", guidance)
+		}
+	}
+
+	// The guidance must stay tool-agnostic: no single utility should be
+	// singled out by name, or the section would drift back into wasting
+	// context tokens on one tool instead of generalizing across Kali tools.
+	forbiddenGuidance := []string{
+		"XSStrike",
+		"xsstrike",
+	}
+	for _, forbidden := range forbiddenGuidance {
+		if strings.Contains(rendered, forbidden) {
+			t.Errorf("Rendered pentester template should not single out a specific tool by name: %s", forbidden)
+		}
+	}
+}
+
 // TestTaskAssignmentWrapperPrompt tests the task_assignment_wrapper template
 func TestTaskAssignmentWrapperPrompt(t *testing.T) {
 	defaultPrompts, err := templates.GetDefaultPrompts()

@@ -1,10 +1,11 @@
 import { useDetailNavigation } from '@/components/shared/detail-navigation';
+import { routes } from '@/lib/routes';
 import { type Flow, useFlows } from '@/providers/flows-provider';
 
 const getLabel = (item: Flow) => item.title || `Flow #${item.id}`;
 const getSearchableText = (item: Flow) => item.title;
 const getId = (item: Flow) => String(item.id);
-const getHref = (item: Flow) => `/flows/${item.id}`;
+const getHref = (item: Flow) => routes.flow(item.id);
 
 /**
  * Detail-page navigation wired up for flows. Encapsulates the getter

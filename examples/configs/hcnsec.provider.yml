@@ -1,0 +1,212 @@
+# HCNSec (新疆幻城网安科技有限责任公司) provider configuration. OpenAI-compatible relay
+# at https://api.hcnsec.cn/v1 (NewAPI-based aggregator).
+#
+# Qwen3.6-35B-A3B -> simple/simple_json (thinking OFF) and reflector/searcher/enricher/
+# pentester (thinking ON). Thinking is toggled via extra_body.chat_template_kwargs.
+# enable_thinking (vLLM wire format). Sampling per Qwen's model card: temp=1.0 (thinking)
+# or 0.7 (non-thinking), top_p=0.95/0.80, top_k=20, min_p=0.0, presence_penalty=1.5,
+# repetition_penalty=1.0.
+#
+# MiniMax-M2.7 -> every other role (primary_agent/assistant/generator/refiner/adviser/
+# coder/installer). Reasoning is always on for the M2.x line and cannot be disabled, and
+# `reasoning_effort` isn't supported either, so no thinking toggle or reasoning block is
+# set. Sampling per MiniMax's model card: temperature=1.0, top_p=0.95, top_k=40.
+#
+# Prices from the hcnsec.cn model catalog (CNY/1M tokens), converted to USD at a fixed
+# 6.6 CNY = 1 USD rate: $/1M = CNY_price / 6.6.
+
+simple:
+  model: "Qwen3.6-35B-A3B"
+  temperature: 0.7
+  top_k: 20
+  top_p: 0.8
+  min_p: 0.0
+  presence_penalty: 1.5
+  repetition_penalty: 1.0
+  n: 1
+  max_tokens: 8192
+  extra_body:
+    chat_template_kwargs:
+      enable_thinking: false
+  price:
+    input: 0.17
+    output: 1.11
+    cache_read: 0.02
+
+simple_json:
+  model: "Qwen3.6-35B-A3B"
+  temperature: 0.7
+  top_k: 20
+  top_p: 0.8
+  min_p: 0.0
+  presence_penalty: 1.5
+  repetition_penalty: 1.0
+  n: 1
+  max_tokens: 4096
+  json: true
+  extra_body:
+    chat_template_kwargs:
+      enable_thinking: false
+  price:
+    input: 0.17
+    output: 1.11
+    cache_read: 0.02
+
+primary_agent:
+  model: "MiniMax-M2.7"
+  temperature: 1.0
+  top_p: 0.95
+  top_k: 40
+  n: 1
+  max_tokens: 16384
+  price:
+    input: 0.33
+    output: 1.33
+    cache_read: 0.07
+
+assistant:
+  model: "MiniMax-M2.7"
+  temperature: 1.0
+  top_p: 0.95
+  top_k: 40
+  n: 1
+  max_tokens: 16384
+  price:
+    input: 0.33
+    output: 1.33
+    cache_read: 0.07
+
+generator:
+  model: "MiniMax-M2.7"
+  temperature: 1.0
+  top_p: 0.95
+  top_k: 40
+  n: 1
+  max_tokens: 32768
+  price:
+    input: 0.33
+    output: 1.33
+    cache_read: 0.07
+
+refiner:
+  model: "MiniMax-M2.7"
+  temperature: 1.0
+  top_p: 0.95
+  top_k: 40
+  n: 1
+  max_tokens: 32768
+  price:
+    input: 0.33
+    output: 1.33
+    cache_read: 0.07
+
+adviser:
+  model: "MiniMax-M2.7"
+  temperature: 1.0
+  top_p: 0.95
+  top_k: 40
+  n: 1
+  max_tokens: 16384
+  price:
+    input: 0.33
+    output: 1.33
+    cache_read: 0.07
+
+reflector:
+  model: "Qwen3.6-35B-A3B"
+  temperature: 1.0
+  top_k: 20
+  top_p: 0.95
+  min_p: 0.0
+  presence_penalty: 1.5
+  repetition_penalty: 1.0
+  n: 1
+  max_tokens: 4096
+  price:
+    input: 0.17
+    output: 1.11
+    cache_read: 0.02
+
+searcher:
+  model: "Qwen3.6-35B-A3B"
+  temperature: 1.0
+  top_k: 20
+  top_p: 0.95
+  min_p: 0.0
+  presence_penalty: 1.5
+  repetition_penalty: 1.0
+  n: 1
+  max_tokens: 4096
+  extra_body:
+    chat_template_kwargs:
+      enable_thinking: true
+  reasoning:
+    effort: high
+  price:
+    input: 0.17
+    output: 1.11
+    cache_read: 0.02
+
+enricher:
+  model: "Qwen3.6-35B-A3B"
+  temperature: 1.0
+  top_k: 20
+  top_p: 0.95
+  min_p: 0.0
+  presence_penalty: 1.5
+  repetition_penalty: 1.0
+  n: 1
+  max_tokens: 8192
+  extra_body:
+    chat_template_kwargs:
+      enable_thinking: true
+  reasoning:
+    effort: high
+  price:
+    input: 0.17
+    output: 1.11
+    cache_read: 0.02
+
+coder:
+  model: "MiniMax-M2.7"
+  temperature: 1.0
+  top_p: 0.95
+  top_k: 40
+  n: 1
+  max_tokens: 20480
+  price:
+    input: 0.33
+    output: 1.33
+    cache_read: 0.07
+
+installer:
+  model: "MiniMax-M2.7"
+  temperature: 1.0
+  top_p: 0.95
+  top_k: 40
+  n: 1
+  max_tokens: 16384
+  price:
+    input: 0.33
+    output: 1.33
+    cache_read: 0.07
+
+pentester:
+  model: "Qwen3.6-35B-A3B"
+  temperature: 1.0
+  top_k: 20
+  top_p: 0.95
+  min_p: 0.0
+  presence_penalty: 1.5
+  repetition_penalty: 1.0
+  n: 1
+  max_tokens: 16384
+  extra_body:
+    chat_template_kwargs:
+      enable_thinking: true
+  reasoning:
+    effort: high
+  price:
+    input: 0.17
+    output: 1.11
+    cache_read: 0.02

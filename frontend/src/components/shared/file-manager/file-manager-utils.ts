@@ -55,10 +55,6 @@ export const formatModifiedRelative = (modifiedAt?: Date | string): string => {
     }
 
     const now = Date.now();
-    // All `differenceIn*` helpers are computed up-front so each branch's
-    // fallback (`!minutes`, `!hours`, …) can guard against the upper unit
-    // rounding down to zero — without it, an edge case like 59 minutes 30s
-    // could fall through to the next branch and render as `0h ago`.
     const seconds = differenceInSeconds(now, date);
     const minutes = differenceInMinutes(now, date);
     const hours = differenceInHours(now, date);
@@ -191,7 +187,6 @@ export const buildFileManagerTree = (
     const groups = normalizeRootGroups(rootGroups);
     const roots: FileManagerInternalNode[] = groups?.length ? groups.map(buildSyntheticGroupRoot) : [];
 
-    // O(1) folder lookup by absolute path; replaces O(n) `siblings.find(...)`.
     const folderByPath = new Map<string, FileManagerInternalNode>();
 
     for (const file of sorted) {
@@ -275,8 +270,7 @@ const ALWAYS = (): true => true;
 
 /**
  * Single DFS walker that powers all `collect*` helpers. Pure: returns a freshly
- * allocated array. Internally uses a private accumulator to avoid `concat`
- * allocations on deep trees, but the buffer is never exposed to callers.
+ * allocated array.
  */
 export const walkTree = (
     nodes: FileManagerInternalNode[],
@@ -300,10 +294,6 @@ export const walkTree = (
 
     return result;
 };
-
-/** Collect paths of *file* nodes only (no synthetic group roots, no directories). */
-export const collectAllFilePaths = (nodes: FileManagerInternalNode[]): string[] =>
-    walkTree(nodes, { include: (node) => !node.isGroupRoot && !node.isDir });
 
 /**
  * Collect paths of every selectable node (files + real directories), excluding
@@ -370,7 +360,6 @@ export const collectDirectoryPaths = (nodes: FileManagerInternalNode[]): string[
         include: (node) => node.isDir,
     });
 
-/** Locale-aware case-insensitive name comparator. */
 const compareNames = (a: FileManagerInternalNode, b: FileManagerInternalNode): number =>
     a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
 
@@ -455,9 +444,6 @@ export const sortFileManagerTree = (
         }
 
         const reordered = [...recursed].sort((a, b) => {
-            // `isFoldersFirst` is treated as a primary partition before any
-            // other criterion so directories always stay above files
-            // regardless of the active comparator (or its absence).
             if (isFoldersFirst) {
                 const aIsDir = a.isDir || a.isGroupRoot;
                 const bIsDir = b.isDir || b.isGroupRoot;
@@ -530,7 +516,6 @@ export const buildFileManagerGridTemplate = (showSize: boolean, showModified: bo
     return cols.join(' ');
 };
 
-/** Recursively locate a node by its absolute path. Returns `undefined` when missing. */
 export const findNodeByPath = (
     nodes: readonly FileManagerInternalNode[],
     path: string,
@@ -573,10 +558,8 @@ export const dedupeOverlappingPaths = (paths: Iterable<string>): string[] => {
     return result;
 };
 
-/** Clamp `value` into the inclusive `[min, max]` range. */
 export const clamp = (min: number, value: number, max: number): number => Math.max(min, Math.min(value, max));
 
-/** Translate `(isAllSelected, isSomeSelected)` into the tri-state value the Checkbox understands. */
 export const getCheckboxState = (isAllSelected: boolean, isSomeSelected: boolean): 'indeterminate' | boolean => {
     if (isAllSelected) {
         return true;
@@ -781,7 +764,6 @@ interface ComputeRowClickSelectionArgs {
     /** Visible nodes in DFS order; range modifier resolves anchor/target indices against this list. */
     flatVisible: readonly string[];
     modifier: 'range' | 'single' | 'toggle';
-    /** Path of the row that was clicked. */
     path: string;
     /** Current selection. Pure reducer — never mutated. */
     prev: ReadonlySet<string>;
@@ -938,7 +920,6 @@ export const computeToggleSelection = ({ path, prev, subtreePaths }: ComputeTogg
 };
 
 interface ComputeToggleSelectAllArgs {
-    /** Universe of every selectable path in the current visible tree. */
     allSelectablePaths: readonly string[];
     prev: ReadonlySet<string>;
 }

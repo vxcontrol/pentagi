@@ -1,7 +1,9 @@
 package docker
 
 import (
+	"bytes"
 	"context"
+	"encoding/binary"
 	"fmt"
 	"hash/crc32"
 	"io"
@@ -14,7 +16,6 @@ import (
 
 	"pentagi/pkg/config"
 	"pentagi/pkg/database"
-	"pentagi/pkg/queue"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
@@ -26,11 +27,14 @@ import (
 	"github.com/docker/docker/client"
 	"github.com/docker/go-connections/nat"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/sync/errgroup"
 )
 
-const WorkFolderPathInContainer = "/work"
-
-const BaseContainerPortsNumber = 28000
+const (
+	WorkFolderPathInContainer = "/work"
+	WorkerVolumeNameSuffix    = "-data"
+	BaseContainerPortsNumber  = 28000
+)
 
 const (
 	defaultImage                = "debian:latest"
@@ -40,30 +44,31 @@ const (
 	containerPortsNumber        = 2
 	limitContainerPortsNumber   = 2000
 	containerListWorkers        = 20
+	// maxListEntries caps how many directory children a single listing will stat,
+	// so a hostile /work with hundreds of thousands of files can't fan out into
+	// that many Docker API calls per request.
+	maxListEntries = 10000
+	// maxListStdoutBytes bounds the exec stdout buffered before parsing so a
+	// compromised sandbox can't stream unbounded output into memory; sized as the
+	// entry cap × a generous per-path length (PATH_MAX).
+	maxListStdoutBytes = maxListEntries * 4096
 )
 
-type containerPathStatRequest struct {
-	name string
-	path string
-}
-
-type containerPathStatResult struct {
-	name string
-	stat container.PathStat
-	err  error
-}
-
 type dockerClient struct {
-	db       database.Querier
-	logger   *logrus.Logger
-	dataDir  string
-	hostDir  string
-	client   *client.Client
-	inside   bool
-	defImage string
-	socket   string
-	network  string
-	publicIP string
+	db             database.Querier
+	logger         *logrus.Logger
+	dataDir        string
+	hostDir        string
+	client         *client.Client
+	inside         bool
+	defImage       string
+	socket         string
+	network        string
+	publicIP       string
+	portsBase      int
+	labels         map[string]string
+	insideEnv      []string
+	insideCertPath string
 }
 
 type DockerClient interface {
@@ -76,18 +81,23 @@ type DockerClient interface {
 	ContainerExecAttach(ctx context.Context, execID string, config container.ExecAttachOptions) (types.HijackedResponse, error)
 	ContainerExecInspect(ctx context.Context, execID string) (container.ExecInspect, error)
 	ContainerStatPath(ctx context.Context, containerID string, path string) (container.PathStat, error)
-	ListContainerDir(ctx context.Context, containerID string, dirPath string) ([]container.PathStat, error)
+	ListContainerDir(ctx context.Context, containerID string, dirPath string) (ContainerDirListing, error)
 	CopyToContainer(ctx context.Context, containerID string, dstPath string, content io.Reader, options container.CopyToContainerOptions) error
 	CopyFromContainer(ctx context.Context, containerID string, srcPath string) (io.ReadCloser, container.PathStat, error)
 	Cleanup(ctx context.Context) error
 	GetDefaultImage() string
 }
 
-func GetPrimaryContainerPorts(flowID int64) []int {
+// GetPrimaryContainerPorts returns the host ports for a flow relative to
+// portsBase. A portsBase of 0 falls back to BaseContainerPortsNumber.
+func GetPrimaryContainerPorts(portsBase int, flowID int64) []int {
+	if portsBase <= 0 || portsBase > (65535-limitContainerPortsNumber) {
+		portsBase = BaseContainerPortsNumber
+	}
 	ports := make([]int, containerPortsNumber)
-	for i := 0; i < containerPortsNumber; i++ {
+	for i := range containerPortsNumber {
 		delta := (int(flowID)*containerPortsNumber + i) % limitContainerPortsNumber
-		ports[i] = BaseContainerPortsNumber + delta
+		ports[i] = portsBase + delta
 	}
 	return ports
 }
@@ -104,25 +114,37 @@ func NewDockerClient(ctx context.Context, db database.Querier, cfg *config.Confi
 		return nil, fmt.Errorf("failed to get docker info: %w", err)
 	}
 
-	var socket string
-	if cfg.DockerSocket != "" {
-		socket = cfg.DockerSocket
-	} else {
+	// Resolve which host socket (if any) gets bind-mounted into worker containers.
+	// Autodetection is skipped when DOCKER_INSIDE_HOST designates a daemon
+	// endpoint for sandboxes: mounting the host socket alongside it would grant an
+	// agent control of the daemon running PentAGI itself.
+	socket, autodetectSocket := cfg.WorkerDockerSocket()
+	if autodetectSocket {
 		socket = getHostDockerSocket(ctx, cli)
 	}
 	inside := cfg.DockerInside
+	if inside {
+		switch {
+		case cfg.DockerSocket != "":
+			logrus.Infof("DOCKER_INSIDE=true: worker containers will be given Docker access "+
+				"via the configured socket %q.", cfg.DockerSocket)
+		case cfg.DockerInsideHost != "":
+			logrus.Infof("DOCKER_INSIDE=true: worker containers will be given Docker access "+
+				"to the configured external daemon at %q.", cfg.DockerInsideHost)
+		default:
+			logrus.Warn("DOCKER_INSIDE=true with neither DOCKER_SOCKET nor DOCKER_INSIDE_HOST set: " +
+				"the host Docker socket will be autodetected and bind-mounted into every worker " +
+				"container, so any process inside it gets control of the same daemon that runs " +
+				"PentAGI. Set DOCKER_SOCKET or DOCKER_INSIDE_HOST explicitly, or front the socket " +
+				"with a least-privilege proxy (e.g. Tecnativa/docker-socket-proxy), if that is not intended.")
+		}
+	}
 	netName := cfg.DockerNetwork
 	publicIP := cfg.DockerPublicIP
 	defImage := strings.ToLower(cfg.DockerDefaultImage)
 	if defImage == "" {
 		defImage = defaultImage
 	}
-
-	// TODO: if this process running in a docker container, we need to use the host machine's data directory
-	// maybe there need to resolve the data directory path from volume list
-	// or maybe need to sync files from container to host machine
-	// or disable passing data directory to the container
-	// or create temporary volume for each container
 
 	dataDir, err := filepath.Abs(cfg.DataDir)
 	if err != nil {
@@ -142,28 +164,33 @@ func NewDockerClient(ctx context.Context, db database.Querier, cfg *config.Confi
 
 	logger := logrus.StandardLogger()
 	logger.WithFields(logrus.Fields{
-		"docker_name":    info.Name,
-		"docker_arch":    info.Architecture,
-		"docker_version": info.ServerVersion,
-		"client_version": cli.ClientVersion(),
-		"data_dir":       dataDir,
-		"host_dir":       hostDir,
-		"docker_inside":  inside,
-		"docker_socket":  socket,
-		"public_ip":      publicIP,
+		"docker_name":        info.Name,
+		"docker_arch":        info.Architecture,
+		"docker_version":     info.ServerVersion,
+		"client_version":     cli.ClientVersion(),
+		"data_dir":           dataDir,
+		"host_dir":           hostDir,
+		"docker_inside":      inside,
+		"docker_socket":      socket,
+		"docker_inside_host": cfg.DockerInsideHost,
+		"public_ip":          publicIP,
 	}).Debug("Docker client initialized")
 
 	return &dockerClient{
-		db:       db,
-		client:   cli,
-		dataDir:  dataDir,
-		hostDir:  hostDir,
-		logger:   logger,
-		inside:   inside,
-		defImage: defImage,
-		socket:   socket,
-		network:  netName,
-		publicIP: publicIP,
+		db:             db,
+		client:         cli,
+		dataDir:        dataDir,
+		hostDir:        hostDir,
+		logger:         logger,
+		inside:         inside,
+		defImage:       defImage,
+		socket:         socket,
+		network:        netName,
+		publicIP:       publicIP,
+		portsBase:      cfg.DockerPortsBase,
+		labels:         cfg.TenantLabels(),
+		insideEnv:      cfg.WorkerDockerEnv(),
+		insideCertPath: cfg.WorkerDockerCertPath(),
 	}, nil
 }
 
@@ -256,6 +283,16 @@ func (dc *dockerClient) RunContainer(
 	config.Hostname = fmt.Sprintf("%08x", crc32.ChecksumIEEE([]byte(containerName)))
 	config.WorkingDir = WorkFolderPathInContainer
 
+	// Tag the container with its owning tenant so daemon-wide sweeps can filter on
+	// ownership rather than matching name prefixes. Absent when no tenant is
+	// configured, keeping the created container byte-identical to before.
+	for k, v := range dc.labels {
+		if config.Labels == nil {
+			config.Labels = make(map[string]string, len(dc.labels))
+		}
+		config.Labels[k] = v
+	}
+
 	if hostConfig == nil {
 		hostConfig = &container.HostConfig{}
 	}
@@ -269,8 +306,9 @@ func (dc *dockerClient) RunContainer(
 
 	if hostDir == "" {
 		volumeName, err := dc.client.VolumeCreate(ctx, volume.CreateOptions{
-			Name:   fmt.Sprintf("%s-data", containerName),
+			Name:   fmt.Sprintf("%s%s", containerName, WorkerVolumeNameSuffix),
 			Driver: "local",
+			Labels: dc.labels,
 		})
 		if err != nil {
 			return database.Container{}, fmt.Errorf("failed to create volume: %w", err)
@@ -280,7 +318,35 @@ func (dc *dockerClient) RunContainer(
 	hostConfig.Binds = append(hostConfig.Binds, fmt.Sprintf("%s:%s", hostDir, WorkFolderPathInContainer))
 
 	if dc.inside {
-		hostConfig.Binds = append(hostConfig.Binds, fmt.Sprintf("%s:%s", dc.socket, defaultDockerSocketPath))
+		// The socket is empty when DOCKER_INSIDE_HOST designates a daemon endpoint
+		// instead; binding "" would produce a malformed mount spec.
+		if dc.socket != "" {
+			hostConfig.Binds = append(hostConfig.Binds, fmt.Sprintf("%s:%s", dc.socket, defaultDockerSocketPath))
+		}
+
+		// Point the sandbox's Docker CLI at the designated daemon.
+		config.Env = append(config.Env, dc.insideEnv...)
+
+		// TLS material is mounted read-only at the same path on both sides so the
+		// injected DOCKER_CERT_PATH resolves unchanged inside the container.
+		if dc.insideCertPath != "" {
+			hostConfig.Binds = append(hostConfig.Binds,
+				fmt.Sprintf("%s:%s:ro", dc.insideCertPath, dc.insideCertPath))
+		}
+	}
+
+	// no-new-privileges was evaluated and deliberately not applied: the capability
+	// bounding set in tools.go Prepare already caps what any process can gain, so
+	// it added no protection beyond that (and none against issue #337) while
+	// breaking SUID/SGID privesc testing and sudo/su. See "Capability Management"
+	// in docker.md for the full rationale.
+
+	// Cap fork-bomb / resource-exhaustion risk at a bounded limit.
+	// 2048 pids is generous for most pentest workloads (nmap, hydra, parallel scans).
+	// Callers can override by setting hostConfig.PidsLimit before calling RunContainer.
+	if hostConfig.PidsLimit == nil {
+		pidsLimit := int64(2048)
+		hostConfig.PidsLimit = &pidsLimit
 	}
 
 	hostConfig.LogConfig = container.LogConfig{
@@ -306,7 +372,7 @@ func (dc *dockerClient) RunContainer(
 		if config.ExposedPorts == nil {
 			config.ExposedPorts = nat.PortSet{}
 		}
-		for _, port := range GetPrimaryContainerPorts(flowID) {
+		for _, port := range GetPrimaryContainerPorts(dc.portsBase, flowID) {
 			natPort := nat.Port(fmt.Sprintf("%d/tcp", port))
 			hostConfig.PortBindings[natPort] = []nat.PortBinding{
 				{
@@ -581,97 +647,214 @@ func (dc *dockerClient) ContainerStatPath(
 	return dc.client.ContainerStatPath(ctx, containerID, path)
 }
 
+// ContainerEntryError is a directory entry that could not be stat'd during a
+// listing; the rest of the listing is still returned.
+type ContainerEntryError struct {
+	Name string
+	Path string
+	Err  error
+}
+
+// ContainerDirListing is the result of ListContainerDir: the entries that
+// stat'd successfully, plus per-entry failures for entries that individually
+// couldn't be read. A directory-level fault — path not a directory, the list
+// command failed, the request was cancelled, or every entry failed (which
+// signals the container is gone) — is returned as an error instead, so a
+// partial listing never silently hides a systemic failure.
+type ContainerDirListing struct {
+	Files    []container.PathStat
+	Failures []ContainerEntryError
+	// Truncated is set when the directory held more than maxListEntries children
+	// and only the first maxListEntries were listed.
+	Truncated bool
+}
+
 func (dc *dockerClient) ListContainerDir(
 	ctx context.Context,
 	containerID string,
 	dirPath string,
-) ([]container.PathStat, error) {
+) (ContainerDirListing, error) {
 	if strings.TrimSpace(dirPath) == "" {
 		dirPath = WorkFolderPathInContainer
 	}
 
 	dirStat, err := dc.ContainerStatPath(ctx, containerID, dirPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to stat container path '%s': %w", dirPath, err)
+		return ContainerDirListing{}, fmt.Errorf("failed to stat container path '%s': %w", dirPath, err)
 	}
 	if !dirStat.Mode.IsDir() {
-		return nil, fmt.Errorf("container path '%s' is not a directory", dirPath)
+		return ContainerDirListing{}, fmt.Errorf("container path '%s' is not a directory", dirPath)
 	}
 
+	// List direct children NUL-delimited. Parsing `ls` output is unsafe: under a
+	// TTY GNU coreutils shell-quotes names and busybox wraps them in ANSI escapes,
+	// so a readable file with a space / quote / non-ASCII byte would be mis-stat'd
+	// and reported unreadable. `find -print0` emits literal bytes and is portable
+	// (GNU + busybox); the NUL delimiter also survives names containing newlines.
+	// No TTY: a TTY's onlcr would rewrite every \n in the stream to \r\n —
+	// including a \n that is part of a filename — corrupting the name. Without a
+	// TTY the exec stream is multiplexed and demuxed below.
 	createResp, err := dc.ContainerExecCreate(ctx, containerID, container.ExecOptions{
-		Cmd:          []string{"ls", "-1", "--", dirPath},
+		Cmd:          []string{"find", dirPath, "-maxdepth", "1", "-mindepth", "1", "!", "-name", ".*", "-print0"},
 		AttachStdout: true,
 		AttachStderr: true,
-		Tty:          true,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to create ls exec for '%s': %w", dirPath, err)
+		return ContainerDirListing{}, fmt.Errorf("failed to create list exec for '%s': %w", dirPath, err)
 	}
 
-	resp, err := dc.ContainerExecAttach(ctx, createResp.ID, container.ExecAttachOptions{
-		Tty: true,
-	})
+	resp, err := dc.ContainerExecAttach(ctx, createResp.ID, container.ExecAttachOptions{})
 	if err != nil {
-		return nil, fmt.Errorf("failed to attach ls exec for '%s': %w", dirPath, err)
+		return ContainerDirListing{}, fmt.Errorf("failed to attach list exec for '%s': %w", dirPath, err)
 	}
-	output, readErr := io.ReadAll(resp.Reader)
+	output, readErr := demuxExecStdout(resp.Reader, maxListStdoutBytes)
 	resp.Close()
 	if readErr != nil {
-		return nil, fmt.Errorf("failed to read ls output for '%s': %w", dirPath, readErr)
+		return ContainerDirListing{}, fmt.Errorf("failed to read list output for '%s': %w", dirPath, readErr)
 	}
 
 	inspect, err := dc.ContainerExecInspect(ctx, createResp.ID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to inspect ls exec for '%s': %w", dirPath, err)
+		return ContainerDirListing{}, fmt.Errorf("failed to inspect list exec for '%s': %w", dirPath, err)
 	}
 	if inspect.ExitCode != 0 {
-		return nil, fmt.Errorf("ls command failed for '%s' with exit code %d: %s", dirPath, inspect.ExitCode, string(output))
+		return ContainerDirListing{}, fmt.Errorf("list command failed for '%s' with exit code %d: %s", dirPath, inspect.ExitCode, string(output))
 	}
 
-	names := make([]string, 0)
-	for _, line := range strings.Split(string(output), "\n") {
-		name := strings.TrimSpace(line)
-		if name == "" {
+	entryPaths, truncated := parseFindEntries(output)
+
+	stats, failures := statContainerEntries(ctx, entryPaths, containerListWorkers, func(ctx context.Context, entryPath string) (container.PathStat, error) {
+		return dc.ContainerStatPath(ctx, containerID, entryPath)
+	})
+
+	// A cancelled context is a directory-level fault (the client is gone), not a
+	// partial listing, so surface it as an error. Entries that individually failed
+	// to stat are carried in Failures — the find exec already proved the container
+	// alive, so a live directory degrades rather than 500s even if every entry failed.
+	if err := ctx.Err(); err != nil {
+		return ContainerDirListing{}, fmt.Errorf("listing container directory '%s': %w", dirPath, err)
+	}
+
+	listing := ContainerDirListing{Files: stats, Truncated: truncated}
+	for _, f := range failures {
+		listing.Failures = append(listing.Failures, ContainerEntryError{
+			Name: path.Base(f.name),
+			Path: f.name,
+			Err:  f.err,
+		})
+	}
+
+	return listing, nil
+}
+
+// parseFindEntries splits `find -print0` output (NUL-delimited absolute paths),
+// dropping empties, and caps the result at maxListEntries — returning truncated=true
+// so the caller reports the partiality instead of failing or silently dropping.
+func parseFindEntries(output []byte) (entries []string, truncated bool) {
+	for _, tok := range strings.Split(string(output), "\x00") {
+		if tok == "" {
 			continue
 		}
-		names = append(names, name)
+		entries = append(entries, tok)
 	}
+	if len(entries) > maxListEntries {
+		return entries[:maxListEntries], true
+	}
+	return entries, false
+}
 
-	input := make(chan containerPathStatRequest, len(names))
-	outputStats := make(chan containerPathStatResult)
-	for _, name := range names {
-		input <- containerPathStatRequest{
-			name: name,
-			path: path.Join(dirPath, name),
+// demuxExecStdout reads a non-TTY Docker exec stream — stdout and stderr
+// interleaved as frames with an 8-byte header (stream id + big-endian size) —
+// and returns only the stdout bytes, erroring if stdout exceeds maxStdout so a
+// compromised sandbox can't stream unbounded output into memory.
+func demuxExecStdout(r io.Reader, maxStdout int) ([]byte, error) {
+	var stdout bytes.Buffer
+	header := make([]byte, 8)
+	for {
+		if _, err := io.ReadFull(r, header); err != nil {
+			if err == io.EOF {
+				break // clean end at a frame boundary
+			}
+			// A header cut short (ErrUnexpectedEOF) means the stream was truncated
+			// mid-frame — the listing is incomplete, so fail rather than silently
+			// dropping the tail.
+			return nil, fmt.Errorf("truncated exec stream: %w", err)
+		}
+		size := int64(binary.BigEndian.Uint32(header[4:8]))
+		if size == 0 {
+			continue
+		}
+		switch header[0] {
+		case 1: // stdout
+			if _, err := io.CopyN(&stdout, r, size); err != nil {
+				return nil, err
+			}
+			if stdout.Len() > maxStdout {
+				return nil, fmt.Errorf("listing output exceeded %d bytes", maxStdout)
+			}
+		case 3: // systemerr — a daemon-level error injected mid-stream; surface it
+			var msg bytes.Buffer
+			_, _ = io.CopyN(&msg, r, size)
+			return nil, fmt.Errorf("docker exec systemerr: %s", strings.TrimSpace(msg.String()))
+		default: // stderr and anything else — discard
+			if _, err := io.CopyN(io.Discard, r, size); err != nil {
+				return nil, err
+			}
 		}
 	}
-	close(input)
+	return stdout.Bytes(), nil
+}
 
-	statQueue := queue.NewQueue(input, outputStats, containerListWorkers, func(req containerPathStatRequest) (containerPathStatResult, error) {
-		stat, err := dc.ContainerStatPath(ctx, containerID, req.path)
+type statFailure struct {
+	name string
+	err  error
+}
 
-		return containerPathStatResult{
-			name: req.name,
-			stat: stat,
-			err:  err,
-		}, nil
-	})
-	if err := statQueue.Start(); err != nil {
-		return nil, fmt.Errorf("failed to start container stat queue: %w", err)
+// statContainerEntries stats every name concurrently, bounded to `workers`
+// in-flight calls. A per-entry stat error never aborts the batch: the successful
+// stats and the failures are both returned (in input order) so the caller can
+// serve a partial listing rather than discarding everything on one bad entry.
+func statContainerEntries(
+	ctx context.Context,
+	names []string,
+	workers int,
+	statFn func(context.Context, string) (container.PathStat, error),
+) ([]container.PathStat, []statFailure) {
+	// errgroup.SetLimit(0) blocks the first Go() forever and SetLimit(<0) runs
+	// unbounded; clamp a non-positive count to the standard bound so the pool
+	// never deadlocks or floods the Docker daemon.
+	if workers <= 0 {
+		workers = containerListWorkers
 	}
 
-	stats := make([]container.PathStat, 0, len(names))
-	for range names {
-		result := <-outputStats
-		if result.err != nil {
-			_ = statQueue.Stop()
-			return nil, fmt.Errorf("failed to stat container entry '%s': %w", result.name, result.err)
+	stats := make([]container.PathStat, len(names))
+	errs := make([]error, len(names))
+
+	var g errgroup.Group
+	g.SetLimit(workers)
+	for i, name := range names {
+		g.Go(func() error {
+			if stat, err := statFn(ctx, name); err != nil {
+				errs[i] = err
+			} else {
+				stats[i] = stat
+			}
+			return nil
+		})
+	}
+	_ = g.Wait()
+
+	oks := make([]container.PathStat, 0, len(names))
+	var failures []statFailure
+	for i, name := range names {
+		if errs[i] != nil {
+			failures = append(failures, statFailure{name: name, err: errs[i]})
+		} else {
+			oks = append(oks, stats[i])
 		}
-		stats = append(stats, result.stat)
 	}
-	_ = statQueue.Stop()
 
-	return stats, nil
+	return oks, failures
 }
 
 func (dc *dockerClient) CopyToContainer(

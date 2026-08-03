@@ -10,6 +10,8 @@ import (
 	"pentagi/pkg/version"
 
 	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus/hooks/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -91,6 +93,9 @@ func TestPredefinedErrors(t *testing.T) {
 		{"ErrChangePasswordCurrentUserInvalidPassword", ErrChangePasswordCurrentUserInvalidPassword, 400, "Users.ChangePasswordCurrentUser.InvalidPassword"},
 		{"ErrChangePasswordCurrentUserInvalidCurrentPassword", ErrChangePasswordCurrentUserInvalidCurrentPassword, 403, "Users.ChangePasswordCurrentUser.InvalidCurrentPassword"},
 		{"ErrChangePasswordCurrentUserInvalidNewPassword", ErrChangePasswordCurrentUserInvalidNewPassword, 400, "Users.ChangePasswordCurrentUser.InvalidNewPassword"},
+		{"ErrChangeEmailCurrentUserInvalidEmail", ErrChangeEmailCurrentUserInvalidEmail, 400, "Users.ChangeEmailCurrentUser.InvalidEmail"},
+		{"ErrChangeEmailCurrentUserInvalidCurrentPassword", ErrChangeEmailCurrentUserInvalidCurrentPassword, 403, "Users.ChangeEmailCurrentUser.InvalidCurrentPassword"},
+		{"ErrChangeEmailCurrentUserEmailAlreadyExists", ErrChangeEmailCurrentUserEmailAlreadyExists, 409, "Users.ChangeEmailCurrentUser.EmailAlreadyExists"},
 		{"ErrGetUserModelsNotFound", ErrGetUserModelsNotFound, 404, "Users.GetUser.ModelsNotFound"},
 		{"ErrCreateUserInvalidUser", ErrCreateUserInvalidUser, 400, "Users.CreateUser.InvalidUser"},
 		{"ErrPatchUserModelsNotFound", ErrPatchUserModelsNotFound, 404, "Users.PatchUser.ModelsNotFound"},
@@ -289,6 +294,42 @@ func TestErrorResponse_NilOriginalError(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &body)
 	require.NoError(t, err)
 	assert.Equal(t, "NotPermitted", body["code"])
+}
+
+func TestErrorWithLevel_LogsAtGivenLevel(t *testing.T) {
+	hook := test.NewGlobal()
+	defer hook.Reset()
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/test", nil)
+
+	ErrorWithLevel(c, ErrAuthRequired, errors.New("cookie claim invalid"), logrus.WarnLevel)
+
+	require.NotEmpty(t, hook.Entries)
+	entry := hook.LastEntry()
+	assert.Equal(t, logrus.WarnLevel, entry.Level)
+	assert.Equal(t, "api error", entry.Message)
+
+	// The HTTP response itself must be identical to what Error() would produce -
+	// only the log level differs.
+	assert.Equal(t, http.StatusForbidden, w.Code)
+}
+
+func TestError_StillLogsAtErrorLevel(t *testing.T) {
+	hook := test.NewGlobal()
+	defer hook.Reset()
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/test", nil)
+
+	Error(c, ErrInternal, errors.New("db connection failed"))
+
+	require.NotEmpty(t, hook.Entries)
+	entry := hook.LastEntry()
+	assert.Equal(t, logrus.ErrorLevel, entry.Level)
+	assert.Equal(t, "api error", entry.Message)
 }
 
 func TestHttpError_MultipleInstancesIndependent(t *testing.T) {

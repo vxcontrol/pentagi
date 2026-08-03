@@ -1,9 +1,10 @@
+import { skipToken, useQuery } from '@apollo/client/react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 
 import Logo from '@/components/icons/logo';
 import Markdown from '@/components/shared/markdown';
-import { useFlowReportQuery } from '@/graphql/types';
+import { FlowReportDocument } from '@/graphql/types';
 import { Log } from '@/lib/log';
 import { generateFileName, generatePDFFromMarkdown, generateReport } from '@/lib/report';
 
@@ -28,17 +29,13 @@ function FlowReport() {
         setPdfError(null);
     }
 
-    const {
-        data,
-        error: queryError,
-        loading,
-    } = useFlowReportQuery({
-        errorPolicy: 'all',
-        skip: !flowId,
-        variables: { id: flowId! },
-    });
+    const { data, loading } = useQuery(
+        FlowReportDocument,
+        flowId ? { errorPolicy: 'all', variables: { id: flowId } } : skipToken,
+    );
 
-    const dataReady = !loading && !queryError && !!data?.flow;
+    // Under `errorPolicy:'all'` a partial error arrives alongside a flow that loaded fine.
+    const dataReady = !loading && !!data?.flow;
 
     const reportContent = useMemo(
         () => (dataReady ? generateReport(data.tasks || [], data.flow!) : ''),
@@ -56,7 +53,8 @@ function FlowReport() {
 
         pdfTriggered.current = true;
 
-        const fileName = `${generateFileName(data.flow)}.pdf`;
+        // The generator appends the extension itself.
+        const fileName = generateFileName(data.flow);
 
         generatePDFFromMarkdown(reportContent, fileName)
             .then(() => {
@@ -78,7 +76,7 @@ function FlowReport() {
 
     if (loading) {
         state = 'loading';
-    } else if (queryError || !data?.flow) {
+    } else if (!data?.flow) {
         state = 'error';
         errorMessage = 'Failed to load flow data';
     } else if (pdfPhase === 'error') {

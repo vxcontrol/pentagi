@@ -70,7 +70,6 @@ func (fp *flowProvider) performAgentChain(
 		"msg_chain_id": chainID,
 	}))
 
-	// Track execution time for duration calculation
 	lastUpdateTime := time.Now()
 	rollLastUpdateTime := func() float64 {
 		durationDelta := time.Since(lastUpdateTime).Seconds()
@@ -84,7 +83,7 @@ func (fp *flowProvider) performAgentChain(
 		return fmt.Errorf("failed to get execution context: %w", err)
 	}
 
-	groupID := fmt.Sprintf("flow-%d", fp.flowID)
+	groupID := fp.cfg.GroupID(fp.flowID)
 	toolTypeMapping := tools.GetToolTypeMapping()
 
 	var maxCallsLimit int
@@ -128,12 +127,12 @@ func (fp *flowProvider) performAgentChain(
 		} else {
 			result, err = fp.callWithRetries(ctx, optAgentType, chainID, taskID, subtaskID, chain, executor, executionContext)
 			if err != nil {
-				logger.WithError(err).Error("failed to call agent chain")
+				obs.LogErrorOrCancel(logger, err, "failed to call agent chain")
 				return err
 			}
 
 			if err := fp.updateMsgChainUsage(ctx, chainID, optAgentType, result.info, rollLastUpdateTime()); err != nil {
-				logger.WithError(err).Error("failed to update msg chain usage")
+				obs.LogErrorOrCancel(logger, err, "failed to update msg chain usage")
 				return err
 			}
 		}
@@ -161,7 +160,7 @@ func (fp *flowProvider) performAgentChain(
 						}
 						fields["execution"] = executionContext[:min(1000, len(executionContext))]
 					}
-					logger.WithError(err).WithFields(fields).Error("failed to perform reflector")
+					obs.LogErrorOrCancel(logger.WithFields(fields), err, "failed to perform reflector")
 					return err
 				}
 			}
@@ -180,7 +179,7 @@ func (fp *flowProvider) performAgentChain(
 		chain = append(chain, msg)
 
 		if err := fp.updateMsgChain(ctx, optAgentType, chainID, chain, rollLastUpdateTime()); err != nil {
-			logger.WithError(err).Error("failed to update msg chain")
+			obs.LogErrorOrCancel(logger, err, "failed to update msg chain")
 			return err
 		}
 
@@ -201,10 +200,10 @@ func (fp *flowProvider) performAgentChain(
 			}
 
 			if err != nil {
-				logger.WithError(err).WithFields(logrus.Fields{
+				obs.LogErrorOrCancel(logger.WithFields(logrus.Fields{
 					"func_name": funcName,
 					"func_args": toolCall.FunctionCall.Arguments,
-				}).Error("failed to exec tool call")
+				}), err, "failed to exec tool call")
 				return err
 			}
 
@@ -219,7 +218,7 @@ func (fp *flowProvider) performAgentChain(
 				},
 			})
 			if err := fp.updateMsgChain(ctx, optAgentType, chainID, chain, rollLastUpdateTime()); err != nil {
-				logger.WithError(err).Error("failed to update msg chain")
+				obs.LogErrorOrCancel(logger, err, "failed to update msg chain")
 				return err
 			}
 
@@ -251,7 +250,7 @@ func (fp *flowProvider) performAgentChain(
 				)
 				logger.WithError(err).Warn("failed to summarize chain")
 			} else if err := fp.updateMsgChain(ctx, optAgentType, chainID, chain, rollLastUpdateTime()); err != nil {
-				logger.WithError(err).Error("failed to update msg chain")
+				obs.LogErrorOrCancel(logger, err, "failed to update msg chain")
 				return err
 			}
 		}
@@ -334,13 +333,22 @@ func (fp *flowProvider) execToolCall(
 	for idx := 0; idx <= maxRetriesToCallFunction; idx++ {
 		if idx == maxRetriesToCallFunction {
 			err = fmt.Errorf("reached max retries to call function: %w", err)
-			logger.WithError(err).Error("failed to exec function")
+			obs.LogErrorOrCancel(logger, err, "failed to exec function")
 			return "", fmt.Errorf("failed to exec function '%s': %w", funcName, err)
 		}
 
 		response, err = executor.Execute(ctx, streamID, toolCall.ID, funcName, funcName, thinking, funcArgs)
 		if err != nil {
 			if errors.Is(err, context.Canceled) {
+				return "", err
+			}
+
+			if errors.Is(err, tools.ErrFlowStateGuard) {
+				// Not an argument-format problem: the flow/task/subtask is in a state
+				// that makes this call impossible right now (task running, no plan
+				// yet, stale subtask, ...). Retrying fixToolCallArgs can't change
+				// that, so surface it to the agent immediately instead of burning
+				// retries on "corrected" arguments that won't help.
 				return "", err
 			}
 
@@ -355,7 +363,7 @@ func (fp *flowProvider) execToolCall(
 
 			funcArgs, err = fp.fixToolCallArgs(ctx, funcName, funcArgs, funcSchema, funcExecErr)
 			if err != nil {
-				logger.WithError(err).Error("failed to fix tool call args")
+				obs.LogErrorOrCancel(logger, err, "failed to fix tool call args")
 				return "", fmt.Errorf("failed to fix tool call args: %w", err)
 			}
 		} else {
@@ -675,10 +683,14 @@ func (fp *flowProvider) performReflector(
 	chain = append(chain, llms.TextParts(llms.ChatMessageTypeHuman, advice))
 	result, err := fp.callWithRetries(ctx, optOriginType, chainID, taskID, subtaskID, chain, executor, executionContext)
 	if err != nil {
-		logger.WithError(err).Error("failed to call agent chain by reflector")
+		obs.LogErrorOrCancel(logger, err, "failed to call agent chain by reflector")
+		level := langfuse.ObservationLevelError
+		if errors.Is(err, context.Canceled) {
+			level = langfuse.ObservationLevelWarning
+		}
 		opts = append(opts,
 			langfuse.WithAgentStatus(err.Error()),
-			langfuse.WithAgentLevel(langfuse.ObservationLevelError),
+			langfuse.WithAgentLevel(level),
 		)
 		return nil, err
 	}

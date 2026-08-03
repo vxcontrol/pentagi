@@ -2,6 +2,8 @@ package bedrock
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"sort"
 	"testing"
 
@@ -21,7 +23,7 @@ func TestConfigLoading(t *testing.T) {
 		BedrockSecretKey: "test-key",
 	}
 
-	providerConfig, err := DefaultProviderConfig()
+	providerConfig, err := DefaultProviderConfig(&config.Config{})
 	if err != nil {
 		t.Fatalf("Failed to create provider config: %v", err)
 	}
@@ -68,7 +70,7 @@ func TestProviderType(t *testing.T) {
 		BedrockSecretKey: "test-key",
 	}
 
-	providerConfig, err := DefaultProviderConfig()
+	providerConfig, err := DefaultProviderConfig(&config.Config{})
 	if err != nil {
 		t.Fatalf("Failed to create provider config: %v", err)
 	}
@@ -113,19 +115,55 @@ func TestModelsLoading(t *testing.T) {
 	}
 }
 
+func TestBedrockProviderConfigPathOverride(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "bedrock.provider.yml")
+	external := "simple:\n  model: zai.glm-4.7-flash\n  temperature: 0.5\n  n: 1\n  max_tokens: 1000\n  price:\n    input: 0.15\n    output: 0.6\n"
+	if err := os.WriteFile(path, []byte(external), 0o600); err != nil {
+		t.Fatalf("Failed to write external config: %v", err)
+	}
+
+	cfg := &config.Config{
+		BedrockRegion:    "us-east-1",
+		BedrockAccessKey: "test-key",
+		BedrockSecretKey: "test-key",
+		BedrockConfig:    path,
+	}
+
+	providerConfig, err := DefaultProviderConfig(cfg)
+	if err != nil {
+		t.Fatalf("Failed to load external provider config: %v", err)
+	}
+
+	prov, err := New(cfg, provider.DefaultProviderNameBedrock, providerConfig)
+	if err != nil {
+		t.Fatalf("Failed to create provider: %v", err)
+	}
+
+	if got := prov.Model(pconfig.OptionsTypeSimple); got != "zai.glm-4.7-flash" {
+		t.Errorf("simple agent model = %q, want zai.glm-4.7-flash (external override)", got)
+	}
+}
+
 func TestBedrockSpecificFeatures(t *testing.T) {
 	models, err := DefaultModels()
 	if err != nil {
 		t.Fatalf("Failed to load models: %v", err)
 	}
 
-	// Test that we have current Bedrock models
+	// Models present in langchaingo/llms/bedrock models_list (and this catalog)
 	expectedModels := []string{
-		"us.anthropic.claude-sonnet-4-20250514-v1:0",
-		"us.anthropic.claude-3-5-haiku-20241022-v1:0",
-		"us.amazon.nova-premier-v1:0",
+		"us.amazon.nova-2-lite-v1:0",
 		"us.amazon.nova-pro-v1:0",
-		"us.amazon.nova-lite-v1:0",
+		"us.anthropic.claude-fable-5",
+		"us.anthropic.claude-sonnet-5",
+		"us.anthropic.claude-opus-4-8",
+		"us.anthropic.claude-opus-4-6-v1",
+		"us.meta.llama4-maverick-17b-instruct-v1:0",
+		"deepseek.v3.2",
+		"zai.glm-4.7-flash",
+		"minimax.minimax-m2.5",
+		"nvidia.nemotron-super-3-120b",
 	}
 	for _, expectedModel := range expectedModels {
 		found := false
@@ -141,9 +179,9 @@ func TestBedrockSpecificFeatures(t *testing.T) {
 	}
 
 	// Test default agent model
-	if BedrockAgentModel != bedrock.ModelAnthropicClaudeSonnet4 {
+	if BedrockAgentModel != bedrock.ModelAnthropicClaudeSonnet46 {
 		t.Errorf("Expected default agent model to be %s, got %s",
-			bedrock.ModelAnthropicClaudeSonnet4, BedrockAgentModel)
+			bedrock.ModelAnthropicClaudeSonnet46, BedrockAgentModel)
 	}
 }
 
@@ -154,7 +192,7 @@ func TestGetUsage(t *testing.T) {
 		BedrockSecretKey: "test-key",
 	}
 
-	providerConfig, err := DefaultProviderConfig()
+	providerConfig, err := DefaultProviderConfig(&config.Config{})
 	if err != nil {
 		t.Fatalf("Failed to create provider config: %v", err)
 	}
@@ -877,7 +915,7 @@ func TestExtractToolsFromOptions(t *testing.T) {
 
 // TestAuthenticationStrategies verifies all supported authentication methods.
 func TestAuthenticationStrategies(t *testing.T) {
-	providerConfig, err := DefaultProviderConfig()
+	providerConfig, err := DefaultProviderConfig(&config.Config{})
 	if err != nil {
 		t.Fatalf("Failed to create provider config: %v", err)
 	}
@@ -1020,7 +1058,7 @@ func TestAuthenticationStrategies(t *testing.T) {
 
 // TestAuthenticationErrors verifies error handling for invalid configurations.
 func TestAuthenticationErrors(t *testing.T) {
-	providerConfig, err := DefaultProviderConfig()
+	providerConfig, err := DefaultProviderConfig(&config.Config{})
 	if err != nil {
 		t.Fatalf("Failed to create provider config: %v", err)
 	}

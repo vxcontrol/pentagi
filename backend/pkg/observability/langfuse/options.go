@@ -16,6 +16,12 @@ func WithRelease(release string) ObserverOption {
 	}
 }
 
+func WithEnvironment(environment string) ObserverOption {
+	return func(o *observer) {
+		o.environment = environment
+	}
+}
+
 func WithSendInterval(interval time.Duration) ObserverOption {
 	return func(o *observer) {
 		o.interval = interval

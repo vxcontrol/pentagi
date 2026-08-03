@@ -1,33 +1,25 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import Logo from '@/components/icons/logo';
+import { routes } from '@/lib/routes';
 
 function OAuthResult() {
     const [statusMessage, setStatusMessage] = useState('Authentication in progress...');
-    const messageRef = useRef(statusMessage);
-    const prevMessageRef = useRef(statusMessage);
 
     const successDelay = 2000;
     const errorDelay = 5000;
-
-    useLayoutEffect(() => {
-        if (prevMessageRef.current !== messageRef.current) {
-            setStatusMessage(messageRef.current);
-            prevMessageRef.current = messageRef.current;
-        }
-    }, []);
 
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
         const status = params.get('status');
         const error = params.get('error');
 
-        let redirectTimer: NodeJS.Timeout | null = null;
-        let cleanupTimer: NodeJS.Timeout | null = null;
-        let closeTimer: NodeJS.Timeout | null = null;
+        let redirectTimer: null | ReturnType<typeof setTimeout> = null;
+        let cleanupTimer: null | ReturnType<typeof setTimeout> = null;
+        let closeTimer: null | ReturnType<typeof setTimeout> = null;
 
         const updateMessage = (message: string) => {
-            messageRef.current = message;
+            setStatusMessage(message);
         };
 
         const handleClose = (delay: number) => {
@@ -79,7 +71,7 @@ function OAuthResult() {
             }
         } else {
             updateMessage('Authentication window opened directly. Redirecting to login page...');
-            handleRedirect('/login', errorDelay / 2);
+            handleRedirect(routes.login(), errorDelay / 2);
             handleClose(errorDelay);
         }
 

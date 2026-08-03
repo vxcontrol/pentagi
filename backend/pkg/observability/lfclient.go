@@ -102,6 +102,7 @@ func NewLangfuseClient(ctx context.Context, cfg *config.Config) (LangfuseClient,
 		langfuse.WithQueueSize(DefaultQueueSize),
 		langfuse.WithProject(cfg.LangfuseProjectID),
 		langfuse.WithRelease(version.GetBinaryVersion()),
+		langfuse.WithEnvironment(cfg.TenantID),
 	)
 
 	return &langfuseClient{

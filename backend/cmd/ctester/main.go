@@ -17,6 +17,7 @@ import (
 	"pentagi/pkg/providers/gemini"
 	"pentagi/pkg/providers/glm"
 	"pentagi/pkg/providers/kimi"
+	"pentagi/pkg/providers/minimax"
 	"pentagi/pkg/providers/ollama"
 	"pentagi/pkg/providers/openai"
 	"pentagi/pkg/providers/pconfig"
@@ -32,7 +33,7 @@ import (
 
 func main() {
 	envFile := flag.String("env", ".env", "Path to environment file")
-	providerType := flag.String("type", "custom", "Provider type [custom, openai, anthropic, gemini, bedrock, ollama, deepseek, glm, kimi, qwen]")
+	providerType := flag.String("type", "custom", "Provider type [custom, openai, anthropic, gemini, bedrock, ollama, deepseek, glm, kimi, qwen, minimax]")
 	providerName := flag.String("name", "", "Provider name using as PROVDER_NAME/MODEL_NAME while building provider config")
 	configPath := flag.String("config", "", "Path to provider config file")
 	testsPath := flag.String("tests", "", "Path to custom tests YAML file")
@@ -168,7 +169,7 @@ func createProvider(providerType string, cfg *config.Config) (provider.Provider,
 				"BEDROCK_DEFAULT_AUTH=true, BEDROCK_BEARER_TOKEN, or " +
 				"BEDROCK_ACCESS_KEY_ID+BEDROCK_SECRET_ACCESS_KEY")
 		}
-		providerConfig, err := bedrock.DefaultProviderConfig()
+		providerConfig, err := bedrock.DefaultProviderConfig(cfg)
 		if err != nil {
 			return nil, fmt.Errorf("error creating bedrock provider config: %w", err)
 		}
@@ -223,6 +224,16 @@ func createProvider(providerType string, cfg *config.Config) (provider.Provider,
 			return nil, fmt.Errorf("error creating qwen provider config: %w", err)
 		}
 		return qwen.New(cfg, provider.DefaultProviderNameQwen, providerConfig)
+
+	case "minimax":
+		if cfg.MiniMaxAPIKey == "" {
+			return nil, fmt.Errorf("MiniMax API key is not set")
+		}
+		providerConfig, err := minimax.DefaultProviderConfig()
+		if err != nil {
+			return nil, fmt.Errorf("error creating minimax provider config: %w", err)
+		}
+		return minimax.New(cfg, provider.DefaultProviderNameMiniMax, providerConfig)
 
 	default:
 		return nil, fmt.Errorf("unsupported provider type: %s", providerType)
@@ -324,19 +335,31 @@ func convertToAgentResults(results tester.ProviderTestResults, prv provider.Prov
 		var totalLatency time.Duration
 		for _, testResult := range agentTestResults {
 			oldResult := TestResult{
-				Name:      testResult.Name,
-				Type:      string(testResult.Type),
-				Success:   testResult.Success,
-				Error:     testResult.Error,
-				Streaming: testResult.Streaming,
-				Reasoning: testResult.Reasoning,
-				LatencyMs: testResult.Latency.Milliseconds(),
+				Name:        testResult.Name,
+				Type:        string(testResult.Type),
+				Capability:  string(testResult.Capability),
+				Success:     testResult.Success,
+				Unsupported: testResult.Unsupported,
+				Error:       testResult.Error,
+				Streaming:   testResult.Streaming,
+				Reasoning:   testResult.Reasoning,
+				LatencyMs:   testResult.Latency.Milliseconds(),
 			}
 
-			if testResult.Group == testdata.TestGroupBasic {
+			switch {
+			case testResult.Capability != "":
+				result.CapabilityTests = append(result.CapabilityTests, oldResult)
+			case testResult.Group == testdata.TestGroupBasic:
 				result.BasicTests = append(result.BasicTests, oldResult)
-			} else {
+			default:
 				result.AdvancedTests = append(result.AdvancedTests, oldResult)
+			}
+
+			// an unsupported optional capability doesn't count against the
+			// overall success rate or average latency — it's not
+			// attempted-and-failed, it's attempted-and-not-available on this model.
+			if testResult.Unsupported {
+				continue
 			}
 
 			result.TotalTests++

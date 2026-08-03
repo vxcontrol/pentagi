@@ -148,8 +148,8 @@ type LLMProviderConfig struct {
 
 	// direct form field mappings using loader.EnvVar
 	// these fields directly correspond to environment variables and form inputs (not computed)
-	BaseURL loader.EnvVar // OPEN_AI_SERVER_URL | ANTHROPIC_SERVER_URL | GEMINI_SERVER_URL | BEDROCK_SERVER_URL | OLLAMA_SERVER_URL | DEEPSEEK_SERVER_URL | GLM_SERVER_URL | KIMI_SERVER_URL | QWEN_SERVER_URL | LLM_SERVER_URL
-	APIKey  loader.EnvVar // OPEN_AI_KEY | ANTHROPIC_API_KEY | GEMINI_API_KEY | LLM_SERVER_KEY | DEEPSEEK_API_KEY | GLM_API_KEY | KIMI_API_KEY | QWEN_API_KEY | OLLAMA_SERVER_API_KEY
+	BaseURL loader.EnvVar // OPEN_AI_SERVER_URL | ANTHROPIC_SERVER_URL | GEMINI_SERVER_URL | BEDROCK_SERVER_URL | OLLAMA_SERVER_URL | DEEPSEEK_SERVER_URL | GLM_SERVER_URL | KIMI_SERVER_URL | QWEN_SERVER_URL | MINIMAX_SERVER_URL | LLM_SERVER_URL
+	APIKey  loader.EnvVar // OPEN_AI_KEY | ANTHROPIC_API_KEY | GEMINI_API_KEY | LLM_SERVER_KEY | DEEPSEEK_API_KEY | GLM_API_KEY | KIMI_API_KEY | QWEN_API_KEY | MINIMAX_API_KEY | OLLAMA_SERVER_API_KEY
 	Model   loader.EnvVar // LLM_SERVER_MODEL
 	// AWS Bedrock specific fields
 	DefaultAuth  loader.EnvVar // BEDROCK_DEFAULT_AUTH
@@ -164,7 +164,7 @@ type LLMProviderConfig struct {
 	LegacyReasoning   loader.EnvVar // LLM_SERVER_LEGACY_REASONING
 	PreserveReasoning loader.EnvVar // LLM_SERVER_PRESERVE_REASONING
 	// Custom specific fields
-	ProviderName loader.EnvVar // LLM_SERVER_PROVIDER | DEEPSEEK_PROVIDER | GLM_PROVIDER | KIMI_PROVIDER | QWEN_PROVIDER
+	ProviderName loader.EnvVar // LLM_SERVER_PROVIDER | DEEPSEEK_PROVIDER | GLM_PROVIDER | KIMI_PROVIDER | QWEN_PROVIDER | MINIMAX_PROVIDER
 	// Ollama specific fields
 	PullTimeout       loader.EnvVar // OLLAMA_SERVER_PULL_MODELS_TIMEOUT
 	PullEnabled       loader.EnvVar // OLLAMA_SERVER_PULL_MODELS_ENABLED
@@ -202,6 +202,7 @@ func (c *controller) GetLLMProviders() map[string]*LLMProviderConfig {
 		"glm":       c.GetLLMProviderConfig("glm"),
 		"kimi":      c.GetLLMProviderConfig("kimi"),
 		"qwen":      c.GetLLMProviderConfig("qwen"),
+		"minimax":   c.GetLLMProviderConfig("minimax"),
 		"custom":    c.GetLLMProviderConfig("custom"),
 	}
 }
@@ -288,6 +289,13 @@ func (c *controller) GetLLMProviderConfig(providerID string) *LLMProviderConfig 
 		providerConfig.APIKey, _ = c.GetVar("QWEN_API_KEY")
 		providerConfig.BaseURL, _ = c.GetVar("QWEN_SERVER_URL")
 		providerConfig.ProviderName, _ = c.GetVar("QWEN_PROVIDER")
+		providerConfig.Configured = providerConfig.APIKey.Value != ""
+
+	case "minimax":
+		providerConfig.Name = "MiniMax"
+		providerConfig.APIKey, _ = c.GetVar("MINIMAX_API_KEY")
+		providerConfig.BaseURL, _ = c.GetVar("MINIMAX_SERVER_URL")
+		providerConfig.ProviderName, _ = c.GetVar("MINIMAX_PROVIDER")
 		providerConfig.Configured = providerConfig.APIKey.Value != ""
 
 	case "custom":
@@ -442,6 +450,17 @@ func (c *controller) UpdateLLMProviderConfig(providerID string, config *LLMProvi
 			return fmt.Errorf("failed to set %s: %w", config.ProviderName.Name, err)
 		}
 
+	case "minimax":
+		if err := c.SetVar(config.APIKey.Name, config.APIKey.Value); err != nil {
+			return fmt.Errorf("failed to set %s: %w", config.APIKey.Name, err)
+		}
+		if err := c.SetVar(config.BaseURL.Name, config.BaseURL.Value); err != nil {
+			return fmt.Errorf("failed to set %s: %w", config.BaseURL.Name, err)
+		}
+		if err := c.SetVar(config.ProviderName.Name, config.ProviderName.Value); err != nil {
+			return fmt.Errorf("failed to set %s: %w", config.ProviderName.Name, err)
+		}
+
 	case "custom":
 		if err := c.SetVar(config.BaseURL.Name, config.BaseURL.Value); err != nil {
 			return fmt.Errorf("failed to set %s: %w", config.BaseURL.Name, err)
@@ -519,6 +538,8 @@ func (c *controller) ResetLLMProviderConfig(providerID string) map[string]*LLMPr
 		vars = []string{"KIMI_API_KEY", "KIMI_SERVER_URL", "KIMI_PROVIDER"}
 	case "qwen":
 		vars = []string{"QWEN_API_KEY", "QWEN_SERVER_URL", "QWEN_PROVIDER"}
+	case "minimax":
+		vars = []string{"MINIMAX_API_KEY", "MINIMAX_SERVER_URL", "MINIMAX_PROVIDER"}
 	case "custom":
 		vars = []string{
 			"LLM_SERVER_URL", "LLM_SERVER_KEY", "LLM_SERVER_MODEL",
@@ -750,13 +771,30 @@ type GraphitiConfig struct {
 	// integration settings (always)
 	GraphitiURL loader.EnvVar // GRAPHITI_URL
 	Timeout     loader.EnvVar // GRAPHITI_TIMEOUT
-	ModelName   loader.EnvVar // GRAPHITI_MODEL_NAME
+
+	// graphiti sidecar settings (embedded only)
+	LLMClientType             loader.EnvVar // GRAPHITI_LLM_CLIENT_TYPE
+	SeparateEmbedding         loader.EnvVar // GRAPHITI_SEPARATE_EMBEDDING
+	SemaphoreLimit            loader.EnvVar // GRAPHITI_SEMAPHORE_LIMIT
+	LogLevel                  loader.EnvVar // GRAPHITI_LOG_LEVEL
+	SearchScope               loader.EnvVar // GRAPHITI_SEARCH_SCOPE
+	IngestPolicyRules         loader.EnvVar // GRAPHITI_INGEST_POLICY_RULES
+	IngestPolicyField         loader.EnvVar // GRAPHITI_INGEST_POLICY_FIELD
+	IngestPolicyDefaultAction loader.EnvVar // GRAPHITI_INGEST_POLICY_DEFAULT_ACTION
+	IngestWorkerCount         loader.EnvVar // GRAPHITI_INGEST_WORKER_COUNT
+	IngestQueueMaxSize        loader.EnvVar // GRAPHITI_INGEST_QUEUE_MAX_SIZE
+	TaxonomyLayerProfile      loader.EnvVar // GRAPHITI_TAXONOMY_LAYER_PROFILE
+	GraphitiCPUs              loader.EnvVar // GRAPHITI_CPUS
+	GraphitiMemory            loader.EnvVar // GRAPHITI_MEMORY
 
 	// neo4j settings (embedded only)
 	Neo4jUser     loader.EnvVar // NEO4J_USER
 	Neo4jPassword loader.EnvVar // NEO4J_PASSWORD
 	Neo4jDatabase loader.EnvVar // NEO4J_DATABASE
 	Neo4jURI      loader.EnvVar // NEO4J_URI
+	Neo4jCPUs     loader.EnvVar // NEO4J_CPUS
+	Neo4jMemory   loader.EnvVar // NEO4J_MEMORY
+	Neo4jShmSize  loader.EnvVar // NEO4J_SHM_SIZE
 
 	// computed fields (not directly mapped to env vars)
 	Installed bool
@@ -767,37 +805,57 @@ func (c *controller) GetGraphitiConfig() *GraphitiConfig {
 	vars, _ := c.GetVars([]string{
 		"GRAPHITI_URL",
 		"GRAPHITI_TIMEOUT",
-		"GRAPHITI_MODEL_NAME",
+		"GRAPHITI_LLM_CLIENT_TYPE",
+		"GRAPHITI_SEPARATE_EMBEDDING",
+		"GRAPHITI_SEMAPHORE_LIMIT",
+		"GRAPHITI_LOG_LEVEL",
+		"GRAPHITI_SEARCH_SCOPE",
+		"GRAPHITI_INGEST_POLICY_RULES",
+		"GRAPHITI_INGEST_POLICY_FIELD",
+		"GRAPHITI_INGEST_POLICY_DEFAULT_ACTION",
+		"GRAPHITI_INGEST_WORKER_COUNT",
+		"GRAPHITI_INGEST_QUEUE_MAX_SIZE",
+		"GRAPHITI_TAXONOMY_LAYER_PROFILE",
+		"GRAPHITI_CPUS",
+		"GRAPHITI_MEMORY",
 		"NEO4J_USER",
 		"NEO4J_PASSWORD",
 		"NEO4J_DATABASE",
 		"NEO4J_URI",
+		"NEO4J_CPUS",
+		"NEO4J_MEMORY",
+		"NEO4J_SHM_SIZE",
 	})
 
 	// set defaults if missing
-	if v := vars["GRAPHITI_TIMEOUT"]; v.Default == "" {
-		v.Default = "30"
-		vars["GRAPHITI_TIMEOUT"] = v
+	defaults := map[string]string{
+		"GRAPHITI_TIMEOUT":                      "30",
+		"GRAPHITI_LLM_CLIENT_TYPE":              "openai",
+		"GRAPHITI_SEPARATE_EMBEDDING":           "false",
+		"GRAPHITI_SEMAPHORE_LIMIT":              "20",
+		"GRAPHITI_LOG_LEVEL":                    "INFO",
+		"GRAPHITI_SEARCH_SCOPE":                 "flowid",
+		"GRAPHITI_INGEST_POLICY_RULES":          `{"graphiti_search":"REJECT","tool_execution_terminal":"PROCESS","tool_execution_file":"PROCESS"}`,
+		"GRAPHITI_INGEST_POLICY_FIELD":          "both",
+		"GRAPHITI_INGEST_POLICY_DEFAULT_ACTION": "SKIP_LLM",
+		"GRAPHITI_INGEST_WORKER_COUNT":          "16",
+		"GRAPHITI_INGEST_QUEUE_MAX_SIZE":        "0",
+		"GRAPHITI_TAXONOMY_LAYER_PROFILE":       "STRUCTURAL,EVIDENCE,PROGRESS,ATTEMPT",
+		"GRAPHITI_CPUS":                         "2.0",
+		"GRAPHITI_MEMORY":                       "2G",
+		"NEO4J_USER":                            "neo4j",
+		"NEO4J_PASSWORD":                        "devpassword",
+		"NEO4J_DATABASE":                        "neo4j",
+		"NEO4J_URI":                             "bolt://neo4j:7687",
+		"NEO4J_CPUS":                            "4.0",
+		"NEO4J_MEMORY":                          "4G",
+		"NEO4J_SHM_SIZE":                        "4g",
 	}
-	if v := vars["GRAPHITI_MODEL_NAME"]; v.Default == "" {
-		v.Default = "gpt-5-mini"
-		vars["GRAPHITI_MODEL_NAME"] = v
-	}
-	if v := vars["NEO4J_USER"]; v.Default == "" {
-		v.Default = "neo4j"
-		vars["NEO4J_USER"] = v
-	}
-	if v := vars["NEO4J_PASSWORD"]; v.Default == "" {
-		v.Default = "devpassword"
-		vars["NEO4J_PASSWORD"] = v
-	}
-	if v := vars["NEO4J_DATABASE"]; v.Default == "" {
-		v.Default = "neo4j"
-		vars["NEO4J_DATABASE"] = v
-	}
-	if v := vars["NEO4J_URI"]; v.Default == "" {
-		v.Default = "bolt://neo4j:7687"
-		vars["NEO4J_URI"] = v
+	for name, defaultValue := range defaults {
+		if v := vars[name]; v.Default == "" {
+			v.Default = defaultValue
+			vars[name] = v
+		}
 	}
 
 	graphitiURL := vars["GRAPHITI_URL"]
@@ -815,15 +873,30 @@ func (c *controller) GetGraphitiConfig() *GraphitiConfig {
 	}
 
 	return &GraphitiConfig{
-		DeploymentType: deploymentType,
-		GraphitiURL:    graphitiURL,
-		Timeout:        vars["GRAPHITI_TIMEOUT"],
-		ModelName:      vars["GRAPHITI_MODEL_NAME"],
-		Neo4jUser:      vars["NEO4J_USER"],
-		Neo4jPassword:  vars["NEO4J_PASSWORD"],
-		Neo4jDatabase:  vars["NEO4J_DATABASE"],
-		Neo4jURI:       vars["NEO4J_URI"],
-		Installed:      c.checker.GraphitiInstalled,
+		DeploymentType:            deploymentType,
+		GraphitiURL:               graphitiURL,
+		Timeout:                   vars["GRAPHITI_TIMEOUT"],
+		LLMClientType:             vars["GRAPHITI_LLM_CLIENT_TYPE"],
+		SeparateEmbedding:         vars["GRAPHITI_SEPARATE_EMBEDDING"],
+		SemaphoreLimit:            vars["GRAPHITI_SEMAPHORE_LIMIT"],
+		LogLevel:                  vars["GRAPHITI_LOG_LEVEL"],
+		SearchScope:               vars["GRAPHITI_SEARCH_SCOPE"],
+		IngestPolicyRules:         vars["GRAPHITI_INGEST_POLICY_RULES"],
+		IngestPolicyField:         vars["GRAPHITI_INGEST_POLICY_FIELD"],
+		IngestPolicyDefaultAction: vars["GRAPHITI_INGEST_POLICY_DEFAULT_ACTION"],
+		IngestWorkerCount:         vars["GRAPHITI_INGEST_WORKER_COUNT"],
+		IngestQueueMaxSize:        vars["GRAPHITI_INGEST_QUEUE_MAX_SIZE"],
+		TaxonomyLayerProfile:      vars["GRAPHITI_TAXONOMY_LAYER_PROFILE"],
+		GraphitiCPUs:              vars["GRAPHITI_CPUS"],
+		GraphitiMemory:            vars["GRAPHITI_MEMORY"],
+		Neo4jUser:                 vars["NEO4J_USER"],
+		Neo4jPassword:             vars["NEO4J_PASSWORD"],
+		Neo4jDatabase:             vars["NEO4J_DATABASE"],
+		Neo4jURI:                  vars["NEO4J_URI"],
+		Neo4jCPUs:                 vars["NEO4J_CPUS"],
+		Neo4jMemory:               vars["NEO4J_MEMORY"],
+		Neo4jShmSize:              vars["NEO4J_SHM_SIZE"],
+		Installed:                 c.checker.GraphitiInstalled,
 	}
 }
 
@@ -834,56 +907,58 @@ func (c *controller) UpdateGraphitiConfig(config *GraphitiConfig) error {
 	}
 
 	// set deployment type based configuration
+	vars := map[string]string{}
 	switch config.DeploymentType {
 	case "embedded":
 		// for embedded mode, use default endpoint
 		config.GraphitiURL.Value = checker.DefaultGraphitiEndpoint
-
-		// enable Graphiti
-		if err := c.SetVar("GRAPHITI_ENABLED", "true"); err != nil {
-			return fmt.Errorf("failed to set GRAPHITI_ENABLED: %w", err)
-		}
-
-		// update timeout, model, and neo4j settings
-		if err := c.SetVar("GRAPHITI_TIMEOUT", config.Timeout.Value); err != nil {
-			return fmt.Errorf("failed to set GRAPHITI_TIMEOUT: %w", err)
-		}
-		if err := c.SetVar("GRAPHITI_MODEL_NAME", config.ModelName.Value); err != nil {
-			return fmt.Errorf("failed to set GRAPHITI_MODEL_NAME: %w", err)
-		}
-		if err := c.SetVar("NEO4J_USER", config.Neo4jUser.Value); err != nil {
-			return fmt.Errorf("failed to set NEO4J_USER: %w", err)
-		}
-		if err := c.SetVar("NEO4J_PASSWORD", config.Neo4jPassword.Value); err != nil {
-			return fmt.Errorf("failed to set NEO4J_PASSWORD: %w", err)
-		}
-		if err := c.SetVar("NEO4J_DATABASE", config.Neo4jDatabase.Value); err != nil {
-			return fmt.Errorf("failed to set NEO4J_DATABASE: %w", err)
+		vars = map[string]string{
+			"GRAPHITI_ENABLED":                      "true",
+			"GRAPHITI_URL":                          config.GraphitiURL.Value,
+			"GRAPHITI_TIMEOUT":                      config.Timeout.Value,
+			"GRAPHITI_LLM_CLIENT_TYPE":              config.LLMClientType.Value,
+			"GRAPHITI_SEPARATE_EMBEDDING":           config.SeparateEmbedding.Value,
+			"GRAPHITI_SEMAPHORE_LIMIT":              config.SemaphoreLimit.Value,
+			"GRAPHITI_LOG_LEVEL":                    config.LogLevel.Value,
+			"GRAPHITI_SEARCH_SCOPE":                 config.SearchScope.Value,
+			"GRAPHITI_INGEST_POLICY_RULES":          config.IngestPolicyRules.Value,
+			"GRAPHITI_INGEST_POLICY_FIELD":          config.IngestPolicyField.Value,
+			"GRAPHITI_INGEST_POLICY_DEFAULT_ACTION": config.IngestPolicyDefaultAction.Value,
+			"GRAPHITI_INGEST_WORKER_COUNT":          config.IngestWorkerCount.Value,
+			"GRAPHITI_INGEST_QUEUE_MAX_SIZE":        config.IngestQueueMaxSize.Value,
+			"GRAPHITI_TAXONOMY_LAYER_PROFILE":       config.TaxonomyLayerProfile.Value,
+			"GRAPHITI_CPUS":                         config.GraphitiCPUs.Value,
+			"GRAPHITI_MEMORY":                       config.GraphitiMemory.Value,
+			"NEO4J_USER":                            config.Neo4jUser.Value,
+			"NEO4J_PASSWORD":                        config.Neo4jPassword.Value,
+			"NEO4J_DATABASE":                        config.Neo4jDatabase.Value,
+			"NEO4J_CPUS":                            config.Neo4jCPUs.Value,
+			"NEO4J_MEMORY":                          config.Neo4jMemory.Value,
+			"NEO4J_SHM_SIZE":                        config.Neo4jShmSize.Value,
 		}
 
 	case "external":
 		// for external mode, use provided endpoint
-		// enable Graphiti
-		if err := c.SetVar("GRAPHITI_ENABLED", "true"); err != nil {
-			return fmt.Errorf("failed to set GRAPHITI_ENABLED: %w", err)
-		}
-
-		// update timeout only (model is configured on external server)
-		if err := c.SetVar("GRAPHITI_TIMEOUT", config.Timeout.Value); err != nil {
-			return fmt.Errorf("failed to set GRAPHITI_TIMEOUT: %w", err)
+		vars = map[string]string{
+			"GRAPHITI_ENABLED": "true",
+			"GRAPHITI_URL":     config.GraphitiURL.Value,
+			"GRAPHITI_TIMEOUT": config.Timeout.Value,
 		}
 
 	case "disabled":
 		// for disabled mode, disable Graphiti
-		if err := c.SetVar("GRAPHITI_ENABLED", "false"); err != nil {
-			return fmt.Errorf("failed to set GRAPHITI_ENABLED: %w", err)
-		}
 		config.GraphitiURL.Value = ""
+		vars = map[string]string{
+			"GRAPHITI_ENABLED": "false",
+			"GRAPHITI_URL":     "",
+		}
+
+	default:
+		return fmt.Errorf("unsupported Graphiti deployment type: %s", config.DeploymentType)
 	}
 
-	// update integration environment variables
-	if err := c.SetVar("GRAPHITI_URL", config.GraphitiURL.Value); err != nil {
-		return fmt.Errorf("failed to set GRAPHITI_URL: %w", err)
+	if err := c.SetVars(vars); err != nil {
+		return fmt.Errorf("failed to update Graphiti configuration: %w", err)
 	}
 
 	return nil
@@ -894,11 +969,27 @@ func (c *controller) ResetGraphitiConfig() *GraphitiConfig {
 		"GRAPHITI_ENABLED",
 		"GRAPHITI_URL",
 		"GRAPHITI_TIMEOUT",
-		"GRAPHITI_MODEL_NAME",
+		"GRAPHITI_LLM_CLIENT_TYPE",
+		"GRAPHITI_SEPARATE_EMBEDDING",
+		"GRAPHITI_SEMAPHORE_LIMIT",
+		"GRAPHITI_LOG_LEVEL",
+		"GRAPHITI_SEARCH_SCOPE",
+		"GRAPHITI_INGEST_POLICY_RULES",
+		"GRAPHITI_INGEST_POLICY_FIELD",
+		"GRAPHITI_INGEST_POLICY_DEFAULT_ACTION",
+		"GRAPHITI_INGEST_WORKER_COUNT",
+		"GRAPHITI_INGEST_QUEUE_MAX_SIZE",
+		"GRAPHITI_TAXONOMY_LAYER_PROFILE",
+		"GRAPHITI_CPUS",
+		"GRAPHITI_MEMORY",
 		"NEO4J_USER",
 		"NEO4J_PASSWORD",
 		"NEO4J_DATABASE",
 		"NEO4J_URI",
+		"NEO4J_CPUS",
+		"NEO4J_MEMORY",
+		"NEO4J_SHM_SIZE",
+		"GRAPHITI_MODEL_NAME", // remove obsolete values written by older installers
 	}
 
 	if err := c.ResetVars(vars); err != nil {
@@ -1575,6 +1666,8 @@ type SearchEnginesConfig struct {
 	SploitusEnabled   loader.EnvVar // SPLOITUS_ENABLED
 	PerplexityAPIKey  loader.EnvVar // PERPLEXITY_API_KEY
 	TavilyAPIKey      loader.EnvVar // TAVILY_API_KEY
+	FirecrawlAPIKey   loader.EnvVar // FIRECRAWL_API_KEY
+	FirecrawlAPIURL   loader.EnvVar // FIRECRAWL_API_URL
 	TraversaalAPIKey  loader.EnvVar // TRAVERSAAL_API_KEY
 	GoogleAPIKey      loader.EnvVar // GOOGLE_API_KEY
 	GoogleCXKey       loader.EnvVar // GOOGLE_CX_KEY
@@ -1597,6 +1690,11 @@ type SearchEnginesConfig struct {
 	SearxngTimeRange  loader.EnvVar // SEARXNG_TIME_RANGE
 	SearxngTimeout    loader.EnvVar // SEARXNG_TIMEOUT
 
+	// internal analytics engine settings (opt-in browser-based fallback for web_search)
+	WebSearchInternalEnabled      loader.EnvVar // WEB_SEARCH_INTERNAL_ENABLED
+	WebSearchInternalMaxSites     loader.EnvVar // WEB_SEARCH_INTERNAL_MAX_SITES
+	WebSearchInternalMaxSiteBytes loader.EnvVar // WEB_SEARCH_INTERNAL_MAX_SITE_BYTES
+
 	// computed fields (not directly mapped to env vars)
 	ConfiguredCount int // number of configured engines
 }
@@ -1611,6 +1709,8 @@ func (c *controller) GetSearchEnginesConfig() *SearchEnginesConfig {
 	sploitusEnabled, _ := c.GetVar("SPLOITUS_ENABLED")
 	perplexityAPIKey, _ := c.GetVar("PERPLEXITY_API_KEY")
 	tavilyAPIKey, _ := c.GetVar("TAVILY_API_KEY")
+	firecrawlAPIKey, _ := c.GetVar("FIRECRAWL_API_KEY")
+	firecrawlAPIURL, _ := c.GetVar("FIRECRAWL_API_URL")
 	traversaalAPIKey, _ := c.GetVar("TRAVERSAAL_API_KEY")
 	googleAPIKey, _ := c.GetVar("GOOGLE_API_KEY")
 	googleCXKey, _ := c.GetVar("GOOGLE_CX_KEY")
@@ -1623,27 +1723,35 @@ func (c *controller) GetSearchEnginesConfig() *SearchEnginesConfig {
 	searxngSafeSearch, _ := c.GetVar("SEARXNG_SAFESEARCH")
 	searxngTimeRange, _ := c.GetVar("SEARXNG_TIME_RANGE")
 	searxngTimeout, _ := c.GetVar("SEARXNG_TIMEOUT")
+	webSearchInternalEnabled, _ := c.GetVar("WEB_SEARCH_INTERNAL_ENABLED")
+	webSearchInternalMaxSites, _ := c.GetVar("WEB_SEARCH_INTERNAL_MAX_SITES")
+	webSearchInternalMaxSiteBytes, _ := c.GetVar("WEB_SEARCH_INTERNAL_MAX_SITE_BYTES")
 
 	config := &SearchEnginesConfig{
-		DuckDuckGoEnabled:     duckduckgoEnabled,
-		DuckDuckGoRegion:      duckduckgoRegion,
-		DuckDuckGoSafeSearch:  duckduckgoSafeSearch,
-		DuckDuckGoTimeRange:   duckduckgoTimeRange,
-		SploitusEnabled:       sploitusEnabled,
-		PerplexityAPIKey:      perplexityAPIKey,
-		PerplexityModel:       perplexityModel,
-		PerplexityContextSize: perplexityContextSize,
-		TavilyAPIKey:          tavilyAPIKey,
-		TraversaalAPIKey:      traversaalAPIKey,
-		GoogleAPIKey:          googleAPIKey,
-		GoogleCXKey:           googleCXKey,
-		GoogleLRKey:           googleLRKey,
-		SearxngURL:            searxngURL,
-		SearxngCategories:     searxngCategories,
-		SearxngLanguage:       searxngLanguage,
-		SearxngSafeSearch:     searxngSafeSearch,
-		SearxngTimeRange:      searxngTimeRange,
-		SearxngTimeout:        searxngTimeout,
+		DuckDuckGoEnabled:             duckduckgoEnabled,
+		DuckDuckGoRegion:              duckduckgoRegion,
+		DuckDuckGoSafeSearch:          duckduckgoSafeSearch,
+		DuckDuckGoTimeRange:           duckduckgoTimeRange,
+		SploitusEnabled:               sploitusEnabled,
+		PerplexityAPIKey:              perplexityAPIKey,
+		PerplexityModel:               perplexityModel,
+		PerplexityContextSize:         perplexityContextSize,
+		TavilyAPIKey:                  tavilyAPIKey,
+		FirecrawlAPIKey:               firecrawlAPIKey,
+		FirecrawlAPIURL:               firecrawlAPIURL,
+		TraversaalAPIKey:              traversaalAPIKey,
+		GoogleAPIKey:                  googleAPIKey,
+		GoogleCXKey:                   googleCXKey,
+		GoogleLRKey:                   googleLRKey,
+		SearxngURL:                    searxngURL,
+		SearxngCategories:             searxngCategories,
+		SearxngLanguage:               searxngLanguage,
+		SearxngSafeSearch:             searxngSafeSearch,
+		SearxngTimeRange:              searxngTimeRange,
+		SearxngTimeout:                searxngTimeout,
+		WebSearchInternalEnabled:      webSearchInternalEnabled,
+		WebSearchInternalMaxSites:     webSearchInternalMaxSites,
+		WebSearchInternalMaxSiteBytes: webSearchInternalMaxSiteBytes,
 	}
 
 	// compute configured count
@@ -1664,6 +1772,9 @@ func (c *controller) GetSearchEnginesConfig() *SearchEnginesConfig {
 	if tavilyAPIKey.Value != "" {
 		configuredCount++
 	}
+	if firecrawlAPIKey.Value != "" {
+		configuredCount++
+	}
 	if traversaalAPIKey.Value != "" {
 		configuredCount++
 	}
@@ -1671,6 +1782,11 @@ func (c *controller) GetSearchEnginesConfig() *SearchEnginesConfig {
 		configuredCount++
 	}
 	if searxngURL.Value != "" {
+		configuredCount++
+	}
+	if webSearchInternalEnabled.Value == "true" {
+		configuredCount++
+	} else if webSearchInternalEnabled.Value == "" && webSearchInternalEnabled.Default == "true" {
 		configuredCount++
 	}
 	config.ConfiguredCount = configuredCount
@@ -1712,6 +1828,12 @@ func (c *controller) UpdateSearchEnginesConfig(config *SearchEnginesConfig) erro
 	if err := c.SetVar("TAVILY_API_KEY", config.TavilyAPIKey.Value); err != nil {
 		return fmt.Errorf("failed to set TAVILY_API_KEY: %w", err)
 	}
+	if err := c.SetVar("FIRECRAWL_API_KEY", config.FirecrawlAPIKey.Value); err != nil {
+		return fmt.Errorf("failed to set FIRECRAWL_API_KEY: %w", err)
+	}
+	if err := c.SetVar("FIRECRAWL_API_URL", config.FirecrawlAPIURL.Value); err != nil {
+		return fmt.Errorf("failed to set FIRECRAWL_API_URL: %w", err)
+	}
 	if err := c.SetVar("TRAVERSAAL_API_KEY", config.TraversaalAPIKey.Value); err != nil {
 		return fmt.Errorf("failed to set TRAVERSAAL_API_KEY: %w", err)
 	}
@@ -1742,6 +1864,15 @@ func (c *controller) UpdateSearchEnginesConfig(config *SearchEnginesConfig) erro
 	if err := c.SetVar("SEARXNG_TIMEOUT", config.SearxngTimeout.Value); err != nil {
 		return fmt.Errorf("failed to set SEARXNG_TIMEOUT: %w", err)
 	}
+	if err := c.SetVar("WEB_SEARCH_INTERNAL_ENABLED", config.WebSearchInternalEnabled.Value); err != nil {
+		return fmt.Errorf("failed to set WEB_SEARCH_INTERNAL_ENABLED: %w", err)
+	}
+	if err := c.SetVar("WEB_SEARCH_INTERNAL_MAX_SITES", config.WebSearchInternalMaxSites.Value); err != nil {
+		return fmt.Errorf("failed to set WEB_SEARCH_INTERNAL_MAX_SITES: %w", err)
+	}
+	if err := c.SetVar("WEB_SEARCH_INTERNAL_MAX_SITE_BYTES", config.WebSearchInternalMaxSiteBytes.Value); err != nil {
+		return fmt.Errorf("failed to set WEB_SEARCH_INTERNAL_MAX_SITE_BYTES: %w", err)
+	}
 
 	return nil
 }
@@ -1759,6 +1890,8 @@ func (c *controller) ResetSearchEnginesConfig() *SearchEnginesConfig {
 		"PERPLEXITY_MODEL",
 		"PERPLEXITY_CONTEXT_SIZE",
 		"TAVILY_API_KEY",
+		"FIRECRAWL_API_KEY",
+		"FIRECRAWL_API_URL",
 		"TRAVERSAAL_API_KEY",
 		"GOOGLE_API_KEY",
 		"GOOGLE_CX_KEY",
@@ -1769,6 +1902,9 @@ func (c *controller) ResetSearchEnginesConfig() *SearchEnginesConfig {
 		"SEARXNG_SAFESEARCH",
 		"SEARXNG_TIME_RANGE",
 		"SEARXNG_TIMEOUT",
+		"WEB_SEARCH_INTERNAL_ENABLED",
+		"WEB_SEARCH_INTERNAL_MAX_SITES",
+		"WEB_SEARCH_INTERNAL_MAX_SITE_BYTES",
 	}
 
 	if err := c.ResetVars(vars); err != nil {
@@ -1796,6 +1932,13 @@ type DockerConfig struct {
 	DockerTLSVerify    loader.EnvVar // DOCKER_TLS_VERIFY
 	HostDockerCertPath loader.EnvVar // PENTAGI_DOCKER_CERT_PATH
 
+	// Daemon endpoint exposed to worker containers when DOCKER_INSIDE is enabled.
+	// These mirror the trio above but describe the sandbox's view, and their paths
+	// resolve on the worker node rather than on the machine running the installer.
+	DockerInsideHost      loader.EnvVar // DOCKER_INSIDE_HOST
+	DockerInsideTLSVerify loader.EnvVar // DOCKER_INSIDE_TLS_VERIFY
+	DockerInsideCertPath  loader.EnvVar // DOCKER_INSIDE_CERT_PATH
+
 	// computed fields (not directly mapped to env vars)
 	Configured bool
 }
@@ -1814,6 +1957,9 @@ func (c *controller) GetDockerConfig() *DockerConfig {
 		"DOCKER_HOST",
 		"DOCKER_TLS_VERIFY",
 		"PENTAGI_DOCKER_CERT_PATH",
+		"DOCKER_INSIDE_HOST",
+		"DOCKER_INSIDE_TLS_VERIFY",
+		"DOCKER_INSIDE_CERT_PATH",
 	})
 
 	config := &DockerConfig{
@@ -1828,6 +1974,9 @@ func (c *controller) GetDockerConfig() *DockerConfig {
 		DockerHost:                   vars["DOCKER_HOST"],
 		DockerTLSVerify:              vars["DOCKER_TLS_VERIFY"],
 		HostDockerCertPath:           vars["PENTAGI_DOCKER_CERT_PATH"],
+		DockerInsideHost:             vars["DOCKER_INSIDE_HOST"],
+		DockerInsideTLSVerify:        vars["DOCKER_INSIDE_TLS_VERIFY"],
+		DockerInsideCertPath:         vars["DOCKER_INSIDE_CERT_PATH"],
 	}
 
 	// patch docker host default value
@@ -1858,6 +2007,9 @@ func (c *controller) UpdateDockerConfig(config *DockerConfig) error {
 		"DOCKER_HOST":                      config.DockerHost.Value,
 		"DOCKER_TLS_VERIFY":                config.DockerTLSVerify.Value,
 		"PENTAGI_DOCKER_CERT_PATH":         config.HostDockerCertPath.Value,
+		"DOCKER_INSIDE_HOST":               config.DockerInsideHost.Value,
+		"DOCKER_INSIDE_TLS_VERIFY":         config.DockerInsideTLSVerify.Value,
+		"DOCKER_INSIDE_CERT_PATH":          config.DockerInsideCertPath.Value,
 	}
 
 	dockerHost := config.DockerHost.Value
@@ -1896,6 +2048,9 @@ func (c *controller) ResetDockerConfig() *DockerConfig {
 		"DOCKER_HOST",
 		"DOCKER_TLS_VERIFY",
 		"DOCKER_CERT_PATH",
+		"DOCKER_INSIDE_HOST",
+		"DOCKER_INSIDE_TLS_VERIFY",
+		"DOCKER_INSIDE_CERT_PATH",
 		// Volume mapping for docker socket
 		"PENTAGI_DOCKER_SOCKET",
 		"PENTAGI_DOCKER_CERT_PATH",
@@ -1911,19 +2066,23 @@ func (c *controller) ResetDockerConfig() *DockerConfig {
 // ServerSettingsConfig represents PentAGI server settings configuration
 type ServerSettingsConfig struct {
 	// direct form field mappings using loader.EnvVar
-	LicenseKey          loader.EnvVar // LICENSE_KEY
-	ListenIP            loader.EnvVar // PENTAGI_LISTEN_IP
-	ListenPort          loader.EnvVar // PENTAGI_LISTEN_PORT
-	PublicURL           loader.EnvVar // PUBLIC_URL
-	CorsOrigins         loader.EnvVar // CORS_ORIGINS
-	CookieSigningSalt   loader.EnvVar // COOKIE_SIGNING_SALT
-	ProxyURL            loader.EnvVar // PROXY_URL
-	HTTPClientTimeout   loader.EnvVar // HTTP_CLIENT_TIMEOUT
-	TerminalToolTimeout loader.EnvVar // TERMINAL_TOOL_TIMEOUT
-	ExternalSSLCAPath   loader.EnvVar // EXTERNAL_SSL_CA_PATH
-	ExternalSSLInsecure loader.EnvVar // EXTERNAL_SSL_INSECURE
-	SSLDir              loader.EnvVar // PENTAGI_SSL_DIR
-	DataDir             loader.EnvVar // PENTAGI_DATA_DIR
+	TenantID                 loader.EnvVar // TENANT_ID
+	LicenseKey               loader.EnvVar // LICENSE_KEY
+	PprofAddr                loader.EnvVar // PPROF_ADDR
+	ListenIP                 loader.EnvVar // PENTAGI_LISTEN_IP
+	ListenPort               loader.EnvVar // PENTAGI_LISTEN_PORT
+	PublicURL                loader.EnvVar // PUBLIC_URL
+	CorsOrigins              loader.EnvVar // CORS_ORIGINS
+	CookieSigningSalt        loader.EnvVar // COOKIE_SIGNING_SALT
+	ProxyURL                 loader.EnvVar // PROXY_URL
+	HTTPClientTimeout        loader.EnvVar // HTTP_CLIENT_TIMEOUT
+	TerminalToolTimeout      loader.EnvVar // TERMINAL_TOOL_TIMEOUT
+	ExternalSSLCAPath        loader.EnvVar // EXTERNAL_SSL_CA_PATH
+	ExternalSSLInsecure      loader.EnvVar // EXTERNAL_SSL_INSECURE
+	SSLDir                   loader.EnvVar // PENTAGI_SSL_DIR
+	DataDir                  loader.EnvVar // PENTAGI_DATA_DIR
+	DatabaseExtensionsSchema loader.EnvVar // DATABASE_EXTENSIONS_SCHEMA
+	DatabaseSearchPathViaOpt loader.EnvVar // DATABASE_SEARCH_PATH_VIA_OPTIONS
 
 	// parsed credentials for proxy server (extracted from URLs)
 	ProxyUsername string
@@ -1933,7 +2092,9 @@ type ServerSettingsConfig struct {
 // GetServerSettingsConfig returns current server settings
 func (c *controller) GetServerSettingsConfig() *ServerSettingsConfig {
 	vars, _ := c.GetVars([]string{
+		"TENANT_ID",
 		"LICENSE_KEY",
+		"PPROF_ADDR",
 		"PENTAGI_LISTEN_IP",
 		"PENTAGI_LISTEN_PORT",
 		"PUBLIC_URL",
@@ -1946,19 +2107,24 @@ func (c *controller) GetServerSettingsConfig() *ServerSettingsConfig {
 		"EXTERNAL_SSL_INSECURE",
 		"PENTAGI_SSL_DIR",
 		"PENTAGI_DATA_DIR",
+		"DATABASE_EXTENSIONS_SCHEMA",
+		"DATABASE_SEARCH_PATH_VIA_OPTIONS",
 	})
 
 	defaults := map[string]string{
-		"LICENSE_KEY":           "",
-		"PENTAGI_LISTEN_IP":     "127.0.0.1",
-		"PENTAGI_LISTEN_PORT":   "8443",
-		"PUBLIC_URL":            "https://localhost:8443",
-		"CORS_ORIGINS":          "https://localhost:8443",
-		"PENTAGI_DATA_DIR":      "pentagi-data",
-		"PENTAGI_SSL_DIR":       "pentagi-ssl",
-		"HTTP_CLIENT_TIMEOUT":   "600",
-		"TERMINAL_TOOL_TIMEOUT": "600",
-		"EXTERNAL_SSL_INSECURE": "false",
+		"LICENSE_KEY":                      "",
+		"PPROF_ADDR":                       "",
+		"PENTAGI_LISTEN_IP":                "127.0.0.1",
+		"PENTAGI_LISTEN_PORT":              "8443",
+		"PUBLIC_URL":                       "https://localhost:8443",
+		"CORS_ORIGINS":                     "https://localhost:8443",
+		"PENTAGI_DATA_DIR":                 "pentagi-data",
+		"PENTAGI_SSL_DIR":                  "pentagi-ssl",
+		"HTTP_CLIENT_TIMEOUT":              "600",
+		"TERMINAL_TOOL_TIMEOUT":            "600",
+		"EXTERNAL_SSL_INSECURE":            "false",
+		"DATABASE_EXTENSIONS_SCHEMA":       "public",
+		"DATABASE_SEARCH_PATH_VIA_OPTIONS": "false",
 	}
 
 	for varName, defaultValue := range defaults {
@@ -1969,19 +2135,23 @@ func (c *controller) GetServerSettingsConfig() *ServerSettingsConfig {
 	}
 
 	cfg := &ServerSettingsConfig{
-		LicenseKey:          vars["LICENSE_KEY"],
-		ListenIP:            vars["PENTAGI_LISTEN_IP"],
-		ListenPort:          vars["PENTAGI_LISTEN_PORT"],
-		PublicURL:           vars["PUBLIC_URL"],
-		CorsOrigins:         vars["CORS_ORIGINS"],
-		CookieSigningSalt:   vars["COOKIE_SIGNING_SALT"],
-		ProxyURL:            vars["PROXY_URL"],
-		HTTPClientTimeout:   vars["HTTP_CLIENT_TIMEOUT"],
-		TerminalToolTimeout: vars["TERMINAL_TOOL_TIMEOUT"],
-		ExternalSSLCAPath:   vars["EXTERNAL_SSL_CA_PATH"],
-		ExternalSSLInsecure: vars["EXTERNAL_SSL_INSECURE"],
-		SSLDir:              vars["PENTAGI_SSL_DIR"],
-		DataDir:             vars["PENTAGI_DATA_DIR"],
+		TenantID:                 vars["TENANT_ID"],
+		LicenseKey:               vars["LICENSE_KEY"],
+		PprofAddr:                vars["PPROF_ADDR"],
+		ListenIP:                 vars["PENTAGI_LISTEN_IP"],
+		ListenPort:               vars["PENTAGI_LISTEN_PORT"],
+		PublicURL:                vars["PUBLIC_URL"],
+		CorsOrigins:              vars["CORS_ORIGINS"],
+		CookieSigningSalt:        vars["COOKIE_SIGNING_SALT"],
+		ProxyURL:                 vars["PROXY_URL"],
+		HTTPClientTimeout:        vars["HTTP_CLIENT_TIMEOUT"],
+		TerminalToolTimeout:      vars["TERMINAL_TOOL_TIMEOUT"],
+		ExternalSSLCAPath:        vars["EXTERNAL_SSL_CA_PATH"],
+		ExternalSSLInsecure:      vars["EXTERNAL_SSL_INSECURE"],
+		SSLDir:                   vars["PENTAGI_SSL_DIR"],
+		DataDir:                  vars["PENTAGI_DATA_DIR"],
+		DatabaseExtensionsSchema: vars["DATABASE_EXTENSIONS_SCHEMA"],
+		DatabaseSearchPathViaOpt: vars["DATABASE_SEARCH_PATH_VIA_OPTIONS"],
 	}
 
 	// split proxy URL into credentials + naked URL for UI
@@ -2009,19 +2179,23 @@ func (c *controller) UpdateServerSettingsConfig(config *ServerSettingsConfig) er
 	}
 
 	updates := map[string]string{
-		"LICENSE_KEY":           config.LicenseKey.Value,
-		"PENTAGI_LISTEN_IP":     config.ListenIP.Value,
-		"PENTAGI_LISTEN_PORT":   config.ListenPort.Value,
-		"PUBLIC_URL":            config.PublicURL.Value,
-		"CORS_ORIGINS":          config.CorsOrigins.Value,
-		"COOKIE_SIGNING_SALT":   config.CookieSigningSalt.Value,
-		"PROXY_URL":             proxyURL,
-		"HTTP_CLIENT_TIMEOUT":   config.HTTPClientTimeout.Value,
-		"TERMINAL_TOOL_TIMEOUT": config.TerminalToolTimeout.Value,
-		"EXTERNAL_SSL_CA_PATH":  config.ExternalSSLCAPath.Value,
-		"EXTERNAL_SSL_INSECURE": config.ExternalSSLInsecure.Value,
-		"PENTAGI_SSL_DIR":       config.SSLDir.Value,
-		"PENTAGI_DATA_DIR":      config.DataDir.Value,
+		"TENANT_ID":                        config.TenantID.Value,
+		"LICENSE_KEY":                      config.LicenseKey.Value,
+		"PPROF_ADDR":                       config.PprofAddr.Value,
+		"PENTAGI_LISTEN_IP":                config.ListenIP.Value,
+		"PENTAGI_LISTEN_PORT":              config.ListenPort.Value,
+		"PUBLIC_URL":                       config.PublicURL.Value,
+		"CORS_ORIGINS":                     config.CorsOrigins.Value,
+		"COOKIE_SIGNING_SALT":              config.CookieSigningSalt.Value,
+		"PROXY_URL":                        proxyURL,
+		"HTTP_CLIENT_TIMEOUT":              config.HTTPClientTimeout.Value,
+		"TERMINAL_TOOL_TIMEOUT":            config.TerminalToolTimeout.Value,
+		"EXTERNAL_SSL_CA_PATH":             config.ExternalSSLCAPath.Value,
+		"EXTERNAL_SSL_INSECURE":            config.ExternalSSLInsecure.Value,
+		"PENTAGI_SSL_DIR":                  config.SSLDir.Value,
+		"PENTAGI_DATA_DIR":                 config.DataDir.Value,
+		"DATABASE_EXTENSIONS_SCHEMA":       config.DatabaseExtensionsSchema.Value,
+		"DATABASE_SEARCH_PATH_VIA_OPTIONS": config.DatabaseSearchPathViaOpt.Value,
 	}
 
 	if err := c.SetVars(updates); err != nil {
@@ -2034,7 +2208,9 @@ func (c *controller) UpdateServerSettingsConfig(config *ServerSettingsConfig) er
 // ResetServerSettingsConfig resets server settings to defaults
 func (c *controller) ResetServerSettingsConfig() *ServerSettingsConfig {
 	vars := []string{
+		"TENANT_ID",
 		"LICENSE_KEY",
+		"PPROF_ADDR",
 		"PENTAGI_LISTEN_IP",
 		"PENTAGI_LISTEN_PORT",
 		"PUBLIC_URL",
@@ -2047,6 +2223,8 @@ func (c *controller) ResetServerSettingsConfig() *ServerSettingsConfig {
 		"EXTERNAL_SSL_INSECURE",
 		"PENTAGI_SSL_DIR",
 		"PENTAGI_DATA_DIR",
+		"DATABASE_EXTENSIONS_SCHEMA",
+		"DATABASE_SEARCH_PATH_VIA_OPTIONS",
 	}
 
 	if err := c.ResetVars(vars); err != nil {
@@ -2166,6 +2344,9 @@ func (c *controller) getVariableDescription(varName string) string {
 		"QWEN_API_KEY":                      locale.EnvDesc_QWEN_API_KEY,
 		"QWEN_SERVER_URL":                   locale.EnvDesc_QWEN_SERVER_URL,
 		"QWEN_PROVIDER":                     locale.EnvDesc_QWEN_PROVIDER,
+		"MINIMAX_API_KEY":                   locale.EnvDesc_MINIMAX_API_KEY,
+		"MINIMAX_SERVER_URL":                locale.EnvDesc_MINIMAX_SERVER_URL,
+		"MINIMAX_PROVIDER":                  locale.EnvDesc_MINIMAX_PROVIDER,
 		"LLM_SERVER_URL":                    locale.EnvDesc_LLM_SERVER_URL,
 		"LLM_SERVER_KEY":                    locale.EnvDesc_LLM_SERVER_KEY,
 		"LLM_SERVER_MODEL":                  locale.EnvDesc_LLM_SERVER_MODEL,
@@ -2247,6 +2428,8 @@ func (c *controller) getVariableDescription(varName string) string {
 		"SPLOITUS_ENABLED":      locale.EnvDesc_SPLOITUS_ENABLED,
 		"PERPLEXITY_API_KEY":    locale.EnvDesc_PERPLEXITY_API_KEY,
 		"TAVILY_API_KEY":        locale.EnvDesc_TAVILY_API_KEY,
+		"FIRECRAWL_API_KEY":     locale.EnvDesc_FIRECRAWL_API_KEY,
+		"FIRECRAWL_API_URL":     locale.EnvDesc_FIRECRAWL_API_URL,
 		"TRAVERSAAL_API_KEY":    locale.EnvDesc_TRAVERSAAL_API_KEY,
 		"GOOGLE_API_KEY":        locale.EnvDesc_GOOGLE_API_KEY,
 		"GOOGLE_CX_KEY":         locale.EnvDesc_GOOGLE_CX_KEY,
@@ -2273,8 +2456,13 @@ func (c *controller) getVariableDescription(varName string) string {
 		"DOCKER_HOST":                      locale.EnvDesc_DOCKER_HOST,
 		"DOCKER_TLS_VERIFY":                locale.EnvDesc_DOCKER_TLS_VERIFY,
 		"DOCKER_CERT_PATH":                 locale.EnvDesc_DOCKER_CERT_PATH,
+		"DOCKER_INSIDE_HOST":               locale.EnvDesc_DOCKER_INSIDE_HOST,
+		"DOCKER_INSIDE_TLS_VERIFY":         locale.EnvDesc_DOCKER_INSIDE_TLS_VERIFY,
+		"DOCKER_INSIDE_CERT_PATH":          locale.EnvDesc_DOCKER_INSIDE_CERT_PATH,
 
+		"TENANT_ID":                         locale.EnvDesc_TENANT_ID,
 		"LICENSE_KEY":                       locale.EnvDesc_LICENSE_KEY,
+		"PPROF_ADDR":                        locale.EnvDesc_PPROF_ADDR,
 		"PENTAGI_LISTEN_IP":                 locale.EnvDesc_PENTAGI_LISTEN_IP,
 		"PENTAGI_LISTEN_PORT":               locale.EnvDesc_PENTAGI_LISTEN_PORT,
 		"PUBLIC_URL":                        locale.EnvDesc_PUBLIC_URL,
@@ -2289,6 +2477,8 @@ func (c *controller) getVariableDescription(varName string) string {
 		"PENTAGI_DOCKER_CERT_PATH":          locale.EnvDesc_PENTAGI_DOCKER_CERT_PATH,
 		"PENTAGI_LLM_SERVER_CONFIG_PATH":    locale.EnvDesc_PENTAGI_LLM_SERVER_CONFIG_PATH,
 		"PENTAGI_OLLAMA_SERVER_CONFIG_PATH": locale.EnvDesc_PENTAGI_OLLAMA_SERVER_CONFIG_PATH,
+		"DATABASE_EXTENSIONS_SCHEMA":        locale.EnvDesc_DATABASE_EXTENSIONS_SCHEMA,
+		"DATABASE_SEARCH_PATH_VIA_OPTIONS":  locale.EnvDesc_DATABASE_SEARCH_PATH_VIA_OPTIONS,
 
 		"STATIC_DIR":     locale.EnvDesc_STATIC_DIR,
 		"STATIC_URL":     locale.EnvDesc_STATIC_URL,
@@ -2305,11 +2495,27 @@ func (c *controller) getVariableDescription(varName string) string {
 
 		"LANGFUSE_EE_LICENSE_KEY": locale.EnvDesc_LANGFUSE_EE_LICENSE_KEY,
 
-		"GRAPHITI_URL":        locale.EnvDesc_GRAPHITI_URL,
-		"GRAPHITI_TIMEOUT":    locale.EnvDesc_GRAPHITI_TIMEOUT,
-		"GRAPHITI_MODEL_NAME": locale.EnvDesc_GRAPHITI_MODEL_NAME,
-		"NEO4J_USER":          locale.EnvDesc_NEO4J_USER,
-		"NEO4J_DATABASE":      locale.EnvDesc_NEO4J_DATABASE,
+		"GRAPHITI_ENABLED":                      locale.EnvDesc_GRAPHITI_ENABLED,
+		"GRAPHITI_URL":                          locale.EnvDesc_GRAPHITI_URL,
+		"GRAPHITI_TIMEOUT":                      locale.EnvDesc_GRAPHITI_TIMEOUT,
+		"GRAPHITI_LLM_CLIENT_TYPE":              locale.EnvDesc_GRAPHITI_LLM_CLIENT_TYPE,
+		"GRAPHITI_SEPARATE_EMBEDDING":           locale.EnvDesc_GRAPHITI_SEPARATE_EMBEDDING,
+		"GRAPHITI_SEMAPHORE_LIMIT":              locale.EnvDesc_GRAPHITI_SEMAPHORE_LIMIT,
+		"GRAPHITI_LOG_LEVEL":                    locale.EnvDesc_GRAPHITI_LOG_LEVEL,
+		"GRAPHITI_SEARCH_SCOPE":                 locale.EnvDesc_GRAPHITI_SEARCH_SCOPE,
+		"GRAPHITI_INGEST_POLICY_RULES":          locale.EnvDesc_GRAPHITI_INGEST_POLICY_RULES,
+		"GRAPHITI_INGEST_POLICY_FIELD":          locale.EnvDesc_GRAPHITI_INGEST_POLICY_FIELD,
+		"GRAPHITI_INGEST_POLICY_DEFAULT_ACTION": locale.EnvDesc_GRAPHITI_INGEST_POLICY_DEFAULT_ACTION,
+		"GRAPHITI_INGEST_WORKER_COUNT":          locale.EnvDesc_GRAPHITI_INGEST_WORKER_COUNT,
+		"GRAPHITI_INGEST_QUEUE_MAX_SIZE":        locale.EnvDesc_GRAPHITI_INGEST_QUEUE_MAX_SIZE,
+		"GRAPHITI_TAXONOMY_LAYER_PROFILE":       locale.EnvDesc_GRAPHITI_TAXONOMY_LAYER_PROFILE,
+		"GRAPHITI_CPUS":                         locale.EnvDesc_GRAPHITI_CPUS,
+		"GRAPHITI_MEMORY":                       locale.EnvDesc_GRAPHITI_MEMORY,
+		"NEO4J_USER":                            locale.EnvDesc_NEO4J_USER,
+		"NEO4J_DATABASE":                        locale.EnvDesc_NEO4J_DATABASE,
+		"NEO4J_CPUS":                            locale.EnvDesc_NEO4J_CPUS,
+		"NEO4J_MEMORY":                          locale.EnvDesc_NEO4J_MEMORY,
+		"NEO4J_SHM_SIZE":                        locale.EnvDesc_NEO4J_SHM_SIZE,
 
 		"PENTAGI_POSTGRES_PASSWORD": locale.EnvDesc_PENTAGI_POSTGRES_PASSWORD,
 		"NEO4J_PASSWORD":            locale.EnvDesc_NEO4J_PASSWORD,
@@ -2335,6 +2541,7 @@ var maskedVariables = map[string]bool{
 	"GLM_API_KEY":               true,
 	"KIMI_API_KEY":              true,
 	"QWEN_API_KEY":              true,
+	"MINIMAX_API_KEY":           true,
 	"LLM_SERVER_KEY":            true,
 	"LANGFUSE_PUBLIC_KEY":       true,
 	"LANGFUSE_SECRET_KEY":       true,
@@ -2342,6 +2549,7 @@ var maskedVariables = map[string]bool{
 	"LOCAL_SCRAPER_PASSWORD":    true,
 	"PERPLEXITY_API_KEY":        true,
 	"TAVILY_API_KEY":            true,
+	"FIRECRAWL_API_KEY":         true,
 	"TRAVERSAAL_API_KEY":        true,
 	"GOOGLE_API_KEY":            true,
 	"GOOGLE_CX_KEY":             true,
@@ -2422,6 +2630,9 @@ var criticalVariables = map[string]bool{
 	"QWEN_API_KEY":                      true,
 	"QWEN_SERVER_URL":                   true,
 	"QWEN_PROVIDER":                     true,
+	"MINIMAX_API_KEY":                   true,
+	"MINIMAX_SERVER_URL":                true,
+	"MINIMAX_PROVIDER":                  true,
 	"LLM_SERVER_URL":                    true,
 	"LLM_SERVER_KEY":                    true,
 	"LLM_SERVER_MODEL":                  true,
@@ -2440,6 +2651,8 @@ var criticalVariables = map[string]bool{
 	"PERPLEXITY_MODEL":        true,
 	"PERPLEXITY_CONTEXT_SIZE": true,
 	"TAVILY_API_KEY":          true,
+	"FIRECRAWL_API_KEY":       true,
+	"FIRECRAWL_API_URL":       true,
 	"TRAVERSAAL_API_KEY":      true,
 	"GOOGLE_API_KEY":          true,
 	"GOOGLE_CX_KEY":           true,
@@ -2475,15 +2688,37 @@ var criticalVariables = map[string]bool{
 	"DOCKER_HOST":                      true,
 	"DOCKER_TLS_VERIFY":                true,
 	"DOCKER_CERT_PATH":                 true,
+	"DOCKER_INSIDE_HOST":               true,
+	"DOCKER_INSIDE_TLS_VERIFY":         true,
+	"DOCKER_INSIDE_CERT_PATH":          true,
 	"PENTAGI_DOCKER_SOCKET":            true,
 
 	// observability changes
 	"OTEL_HOST": true,
 
 	// graphiti changes
-	"GRAPHITI_URL":        true,
-	"GRAPHITI_TIMEOUT":    true,
-	"GRAPHITI_MODEL_NAME": true,
+	"GRAPHITI_ENABLED":                      true,
+	"GRAPHITI_URL":                          true,
+	"GRAPHITI_TIMEOUT":                      true,
+	"GRAPHITI_LLM_CLIENT_TYPE":              true,
+	"GRAPHITI_SEPARATE_EMBEDDING":           true,
+	"GRAPHITI_SEMAPHORE_LIMIT":              true,
+	"GRAPHITI_LOG_LEVEL":                    true,
+	"GRAPHITI_SEARCH_SCOPE":                 true,
+	"GRAPHITI_INGEST_POLICY_RULES":          true,
+	"GRAPHITI_INGEST_POLICY_FIELD":          true,
+	"GRAPHITI_INGEST_POLICY_DEFAULT_ACTION": true,
+	"GRAPHITI_INGEST_WORKER_COUNT":          true,
+	"GRAPHITI_INGEST_QUEUE_MAX_SIZE":        true,
+	"GRAPHITI_TAXONOMY_LAYER_PROFILE":       true,
+	"GRAPHITI_CPUS":                         true,
+	"GRAPHITI_MEMORY":                       true,
+	"NEO4J_USER":                            true,
+	"NEO4J_PASSWORD":                        true,
+	"NEO4J_DATABASE":                        true,
+	"NEO4J_CPUS":                            true,
+	"NEO4J_MEMORY":                          true,
+	"NEO4J_SHM_SIZE":                        true,
 
 	// server settings changes
 	"ASK_USER":                           true,
@@ -2494,24 +2729,28 @@ var criticalVariables = map[string]bool{
 	"MAX_LIMITED_AGENT_TOOL_CALLS":       true,
 	"AGENT_PLANNING_STEP_ENABLED":        true,
 
-	"LICENSE_KEY":           true,
-	"PENTAGI_LISTEN_IP":     true,
-	"PENTAGI_LISTEN_PORT":   true,
-	"PUBLIC_URL":            true,
-	"CORS_ORIGINS":          true,
-	"COOKIE_SIGNING_SALT":   true,
-	"PROXY_URL":             true,
-	"EXTERNAL_SSL_CA_PATH":  true,
-	"EXTERNAL_SSL_INSECURE": true,
-	"STATIC_DIR":            true,
-	"STATIC_URL":            true,
-	"SERVER_PORT":           true,
-	"SERVER_HOST":           true,
-	"SERVER_SSL_CRT":        true,
-	"SERVER_SSL_KEY":        true,
-	"SERVER_USE_SSL":        true,
-	"PENTAGI_SSL_DIR":       true,
-	"PENTAGI_DATA_DIR":      true,
+	"TENANT_ID":                        true,
+	"LICENSE_KEY":                      true,
+	"PPROF_ADDR":                       true,
+	"PENTAGI_LISTEN_IP":                true,
+	"PENTAGI_LISTEN_PORT":              true,
+	"PUBLIC_URL":                       true,
+	"CORS_ORIGINS":                     true,
+	"COOKIE_SIGNING_SALT":              true,
+	"PROXY_URL":                        true,
+	"EXTERNAL_SSL_CA_PATH":             true,
+	"EXTERNAL_SSL_INSECURE":            true,
+	"STATIC_DIR":                       true,
+	"STATIC_URL":                       true,
+	"SERVER_PORT":                      true,
+	"SERVER_HOST":                      true,
+	"SERVER_SSL_CRT":                   true,
+	"SERVER_SSL_KEY":                   true,
+	"SERVER_USE_SSL":                   true,
+	"PENTAGI_SSL_DIR":                  true,
+	"PENTAGI_DATA_DIR":                 true,
+	"DATABASE_EXTENSIONS_SCHEMA":       true,
+	"DATABASE_SEARCH_PATH_VIA_OPTIONS": true,
 
 	// scraper settings
 	"SCRAPER_PUBLIC_URL":  true,

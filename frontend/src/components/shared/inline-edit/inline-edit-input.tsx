@@ -1,7 +1,8 @@
-import { Check, Loader2, X } from 'lucide-react';
+import { Check, X } from 'lucide-react';
 import { type KeyboardEvent, type Ref } from 'react';
 
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group';
+import { Spinner } from '@/components/ui/spinner';
 import { cn } from '@/lib/utils';
 
 interface InlineEditInputProps {
@@ -12,7 +13,10 @@ interface InlineEditInputProps {
      * so focus must be requested explicitly.
      */
     autoFocus?: boolean;
-    /** Disable input + Save button while a mutation is in flight. */
+    /**
+     * Inert Save + Cancel while a mutation is in flight — both the buttons and
+     * the `Enter`/`Escape` shortcuts. The input itself stays editable.
+     */
     busy?: boolean;
     /** Optional className passed through to the outer `<InputGroup>`. */
     className?: string;
@@ -65,6 +69,10 @@ export function InlineEditInput({
     placeholder,
 }: InlineEditInputProps) {
     const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+        if (busy) {
+            return;
+        }
+
         if (event.key === 'Enter') {
             event.preventDefault();
             onSave();
@@ -98,7 +106,7 @@ export function InlineEditInput({
                     disabled={busy}
                     onClick={onSave}
                 >
-                    {busy ? <Loader2 className="animate-spin" /> : <Check />}
+                    {busy ? <Spinner variant="circle" /> : <Check />}
                 </InputGroupButton>
                 <InputGroupButton
                     aria-label="Cancel"

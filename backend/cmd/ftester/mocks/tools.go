@@ -40,11 +40,15 @@ func MockResponse(funcName string, args json.RawMessage) (string, error) {
 
 		terminal.PrintMock("File operation:")
 		terminal.PrintKeyValue("Operation", string(fileArgs.Action))
-		terminal.PrintKeyValue("Path", fileArgs.Path)
+		terminal.PrintKeyValue("Path", fileArgs.Path.String())
 
-		if fileArgs.Action == tools.ReadFile {
+		switch fileArgs.Action {
+		case tools.ReadFile:
 			resultObj = fmt.Sprintf("Mock content of file: %s\nThis is a sample content that would be read from the file.\nIt contains multiple lines to simulate a real file.", fileArgs.Path)
-		} else {
+		case tools.EditFile:
+			terminal.PrintKeyValue("Diff", fileArgs.Diff.String())
+			resultObj = fmt.Sprintf("Applied 1 diff hunk(s) to %s (mock)", fileArgs.Path)
+		default:
 			resultObj = fmt.Sprintf("file %s written successfully", fileArgs.Path)
 		}
 
@@ -132,6 +136,64 @@ func MockResponse(funcName string, args json.RawMessage) (string, error) {
 
 		resultObj = builder.String()
 
+	case tools.WebSearchToolName:
+		var searchArgs tools.WebSearchAction
+		if err := json.Unmarshal(args, &searchArgs); err != nil {
+			return "", fmt.Errorf("error unmarshaling web_search arguments: %w", err)
+		}
+
+		mode := strings.ToLower(strings.TrimSpace(searchArgs.Mode.String()))
+		if mode == "" {
+			mode = "answer"
+		}
+		n := searchArgs.MaxResults.Int()
+		if n < 1 || n > 3 {
+			n = 3
+		}
+
+		terminal.PrintMock("web_search:")
+		terminal.PrintKeyValue("Query", searchArgs.Query)
+		terminal.PrintKeyValue("Mode", mode)
+
+		var builder strings.Builder
+		builder.WriteString(fmt.Sprintf("# Mock web_search result (mode=%s)\n\n", mode))
+		builder.WriteString(fmt.Sprintf("The web_search orchestrator would pick the best available engine for mode '%s', retry transient failures, and fall back across providers automatically.\n\n", mode))
+		switch mode {
+		case "links":
+			builder.WriteString("# Links\n\n")
+			for i := 1; i <= n; i++ {
+				builder.WriteString(fmt.Sprintf("## %d. Mock result %d\n\n* URL https://example.com/web_search/result%d\n\n### Snippet\n\nBrief snippet about '%s'.\n\n", i, i, i, searchArgs.Query))
+			}
+		case "exploit":
+			builder.WriteString(fmt.Sprintf("# Exploits\n\n## 1. Mock exploit for '%s'\n\n* URL https://sploitus.com/exploit/mock\n* CVSS 9.8\n\n", searchArgs.Query))
+		default: // answer / research
+			builder.WriteString(fmt.Sprintf("# Answer\n\nThis is a synthesized mock answer to '%s' that web_search would return in mode '%s', combining multiple sources.\n", searchArgs.Query, mode))
+		}
+
+		resultObj = builder.String()
+
+	case tools.FirecrawlToolName:
+		var searchArgs tools.SearchAction
+		if err := json.Unmarshal(args, &searchArgs); err != nil {
+			return "", fmt.Errorf("error unmarshaling search arguments: %w", err)
+		}
+
+		terminal.PrintMock("Firecrawl search:")
+		terminal.PrintKeyValue("Query", searchArgs.Query)
+		terminal.PrintKeyValueFormat("Max results", "%d", searchArgs.MaxResults.Int())
+
+		var builder strings.Builder
+		builder.WriteString("# Links\n\n")
+
+		for i := 1; i <= min(searchArgs.MaxResults.Int(), 3); i++ {
+			builder.WriteString(fmt.Sprintf("## %d. Mock Firecrawl Result %d\n\n", i, i))
+			builder.WriteString(fmt.Sprintf("* URL https://example.com/firecrawl/result%d\n\n", i))
+			builder.WriteString(fmt.Sprintf("### Short content\n\nHere is a brief description of the content from this search result related to '%s'.\n\n", searchArgs.Query))
+			builder.WriteString(fmt.Sprintf("### Raw content for %d. Mock Firecrawl Result %d\n\nThis is the full scraped markdown content that Firecrawl would retrieve from the URL. It contains comprehensive information about '%s' that helps answer your query with specific facts and data points relevant to your search.\n\n", i, i, searchArgs.Query))
+		}
+
+		resultObj = builder.String()
+
 	case tools.TraversaalToolName:
 		var searchArgs tools.SearchAction
 		if err := json.Unmarshal(args, &searchArgs); err != nil {
@@ -189,8 +251,8 @@ func MockResponse(funcName string, args json.RawMessage) (string, error) {
 
 		terminal.PrintMock("Sploitus search:")
 		terminal.PrintKeyValue("Query", sploitusArgs.Query)
-		terminal.PrintKeyValue("Exploit type", exploitType)
-		terminal.PrintKeyValue("Sort", sploitusArgs.Sort)
+		terminal.PrintKeyValue("Exploit type", exploitType.String())
+		terminal.PrintKeyValue("Sort", sploitusArgs.Sort.String())
 		terminal.PrintKeyValueFormat("Max results", "%d", sploitusArgs.MaxResults.Int())
 
 		var builder strings.Builder
@@ -392,7 +454,7 @@ func MockResponse(funcName string, args json.RawMessage) (string, error) {
 		for i, q := range searchGuideArgs.Questions {
 			terminal.PrintKeyValueFormat(fmt.Sprintf("Question %d", i+1), "%s", q)
 		}
-		terminal.PrintKeyValue("Guide type", searchGuideArgs.Type)
+		terminal.PrintKeyValue("Guide type", searchGuideArgs.Type.String())
 
 		questionsText := strings.Join(searchGuideArgs.Questions, " | ")
 
@@ -411,7 +473,7 @@ func MockResponse(funcName string, args json.RawMessage) (string, error) {
 		}
 
 		terminal.PrintMock("Store guide:")
-		terminal.PrintKeyValue("Type", storeGuideArgs.Type)
+		terminal.PrintKeyValue("Type", storeGuideArgs.Type.String())
 		terminal.PrintKeyValueFormat("Guide length", "%d chars", len(storeGuideArgs.Guide))
 		terminal.PrintKeyValue("Guide question", storeGuideArgs.Question)
 
@@ -428,7 +490,7 @@ func MockResponse(funcName string, args json.RawMessage) (string, error) {
 		for i, q := range searchAnswerArgs.Questions {
 			terminal.PrintKeyValueFormat(fmt.Sprintf("Question %d", i+1), "%s", q)
 		}
-		terminal.PrintKeyValue("Answer type", searchAnswerArgs.Type)
+		terminal.PrintKeyValue("Answer type", searchAnswerArgs.Type.String())
 
 		questionsText := strings.Join(searchAnswerArgs.Questions, " | ")
 
@@ -445,7 +507,7 @@ func MockResponse(funcName string, args json.RawMessage) (string, error) {
 		}
 
 		terminal.PrintMock("Store answer:")
-		terminal.PrintKeyValue("Type", storeAnswerArgs.Type)
+		terminal.PrintKeyValue("Type", storeAnswerArgs.Type.String())
 		terminal.PrintKeyValueFormat("Answer length", "%d chars", len(storeAnswerArgs.Answer))
 		terminal.PrintKeyValue("Question", storeAnswerArgs.Question)
 
@@ -498,7 +560,7 @@ func MockResponse(funcName string, args json.RawMessage) (string, error) {
 		}
 
 		terminal.PrintMock("Graphiti Search:")
-		terminal.PrintKeyValue("Search Type", searchArgs.SearchType)
+		terminal.PrintKeyValue("Search Type", searchArgs.SearchType.String())
 		terminal.PrintKeyValue("Query", searchArgs.Query)
 
 		var builder strings.Builder

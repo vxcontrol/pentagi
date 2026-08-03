@@ -3,40 +3,67 @@ import { marked } from 'marked';
 
 import { Log } from '@/lib/log';
 
-// Register Noto Sans (covers Latin + Cyrillic + Greek + many other scripts)
-Font.register({
-    family: 'NotoSans',
-    fonts: [
-        { fontStyle: 'normal', fontWeight: 'normal', src: '/fonts/NotoSans-Regular.ttf' },
-        { fontStyle: 'normal', fontWeight: 'bold', src: '/fonts/NotoSans-Bold.ttf' },
-        { fontStyle: 'italic', fontWeight: 'normal', src: '/fonts/NotoSans-Italic.ttf' },
-        { fontStyle: 'italic', fontWeight: 'bold', src: '/fonts/NotoSans-BoldItalic.ttf' },
-    ],
-});
+const CJK_RE =
+    /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\p{Script=Bopomofo}\u3000-\u303f\uff00-\uffef]+/gu;
+const HAS_CJK_RE =
+    /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\p{Script=Bopomofo}\u3000-\u303f\uff00-\uffef]/u;
 
-// Register Noto Sans Mono (covers Latin + Cyrillic for code blocks)
-Font.register({
-    family: 'NotoSansMono',
-    fonts: [
-        { fontStyle: 'normal', fontWeight: 'normal', src: '/fonts/NotoSansMono-Regular.ttf' },
-        { fontStyle: 'normal', fontWeight: 'bold', src: '/fonts/NotoSansMono-Bold.ttf' },
-    ],
-});
+let hasBaseFonts = false;
+let hasCJKFonts = false;
 
-// Register Noto Sans SC (Simplified Chinese, covers CJK + Latin)
-Font.register({
-    family: 'NotoSansSC',
-    fonts: [
-        { fontStyle: 'normal', fontWeight: 'normal', src: '/fonts/NotoSansSC-Regular.otf' },
-        { fontStyle: 'normal', fontWeight: 'bold', src: '/fonts/NotoSansSC-Bold.otf' },
-    ],
-});
+const registerBaseFonts = (): void => {
+    if (hasBaseFonts) {
+        return;
+    }
 
-// Disable word hyphenation (breaks CJK and Cyrillic incorrectly)
-Font.registerHyphenationCallback((word) => [word]);
+    Font.register({
+        family: 'NotoSans',
+        fonts: [
+            { fontStyle: 'normal', fontWeight: 'normal', src: '/fonts/NotoSans-Regular.ttf' },
+            { fontStyle: 'normal', fontWeight: 'bold', src: '/fonts/NotoSans-Bold.ttf' },
+            { fontStyle: 'italic', fontWeight: 'normal', src: '/fonts/NotoSans-Italic.ttf' },
+            { fontStyle: 'italic', fontWeight: 'bold', src: '/fonts/NotoSans-BoldItalic.ttf' },
+        ],
+    });
 
-// Regex that matches any CJK unified ideographs or CJK punctuation/fullwidth chars
-const CJK_RE = /[\u4E00-\u9FFF\u3400-\u4DBF\uF900-\uFAFF\u3000-\u303F\uFF01-\uFF60\uFFE0-\uFFE6]+/g;
+    Font.register({
+        family: 'NotoSansMono',
+        fonts: [
+            { fontStyle: 'normal', fontWeight: 'normal', src: '/fonts/NotoSansMono-Regular.ttf' },
+            { fontStyle: 'normal', fontWeight: 'bold', src: '/fonts/NotoSansMono-Bold.ttf' },
+        ],
+    });
+
+    Font.registerHyphenationCallback((word) => [word]);
+
+    hasBaseFonts = true;
+};
+
+const registerCJKFonts = (): void => {
+    if (hasCJKFonts) {
+        return;
+    }
+
+    // NotoSansSC covers Han, kana and Bopomofo but NOT Hangul, so Korean text
+    // renders as missing-glyph boxes. TODO: register NotoSansKR and route Hangul segments to it.
+    Font.register({
+        family: 'NotoSansSC',
+        fonts: [
+            { fontStyle: 'normal', fontWeight: 'normal', src: '/fonts/NotoSansSC-Regular.otf' },
+            { fontStyle: 'normal', fontWeight: 'bold', src: '/fonts/NotoSansSC-Bold.otf' },
+        ],
+    });
+
+    hasCJKFonts = true;
+};
+
+const ensureFonts = (content: string): void => {
+    registerBaseFonts();
+
+    if (HAS_CJK_RE.test(content)) {
+        registerCJKFonts();
+    }
+};
 
 interface TextSegment {
     isCJK: boolean;
@@ -47,7 +74,7 @@ interface TextSegment {
  * Splits a string into alternating non-CJK and CJK segments so each segment
  * can be rendered with the appropriate font family.
  */
-const splitByCJK = (text: string): TextSegment[] => {
+export const splitByCJK = (text: string): TextSegment[] => {
     const segments: TextSegment[] = [];
     let lastIndex = 0;
 
@@ -392,7 +419,7 @@ const parseMarkdownTokens = (markdown: string): ParsedContent[] => {
  * Noto Sans for Latin/Cyrillic, Noto Sans SC for CJK. CJK fonts have no true italic
  * variant, so italic is dropped for those segments.
  */
-const renderTextWithCJK = (
+export const renderTextWithCJK = (
     text: string,
     baseFamily: string,
     boldFamily: string,
@@ -407,7 +434,7 @@ const renderTextWithCJK = (
     }
 
     return segments.map((seg, idx) => {
-        const family = seg.isCJK ? (bold ? 'NotoSansSC' : 'NotoSansSC') : bold ? boldFamily : baseFamily;
+        const family = seg.isCJK ? 'NotoSansSC' : bold ? boldFamily : baseFamily;
         const style: Record<string, string> = { fontFamily: family };
 
         if (bold && !seg.isCJK) {
@@ -610,6 +637,8 @@ function PDFReportDocument({ content }: { content: string }) {
 
 export const generatePDFFromMarkdownNew = async (content: string, fileName: string): Promise<void> => {
     try {
+        ensureFonts(content);
+
         const doc = <PDFReportDocument content={content} />;
         const blob = await pdf(doc).toBlob();
 
@@ -630,6 +659,8 @@ export const generatePDFFromMarkdownNew = async (content: string, fileName: stri
 
 export const generatePDFBlobNew = async (content: string): Promise<Blob> => {
     try {
+        ensureFonts(content);
+
         const doc = <PDFReportDocument content={content} />;
 
         return await pdf(doc).toBlob();

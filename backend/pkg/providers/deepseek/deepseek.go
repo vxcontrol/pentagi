@@ -1,19 +1,15 @@
 package deepseek
 
 import (
-	"context"
 	"embed"
-	"fmt"
 
 	"pentagi/pkg/config"
+	"pentagi/pkg/providers/openaicompat"
 	"pentagi/pkg/providers/pconfig"
 	"pentagi/pkg/providers/provider"
 	"pentagi/pkg/system"
-	"pentagi/pkg/templates"
 
 	"github.com/vxcontrol/langchaingo/llms"
-	"github.com/vxcontrol/langchaingo/llms/openai"
-	"github.com/vxcontrol/langchaingo/llms/streaming"
 )
 
 //go:embed config.yml models.yml
@@ -56,23 +52,11 @@ func DefaultModels() (pconfig.ModelsConfig, error) {
 	return pconfig.LoadModelsConfigData(configData)
 }
 
-type deepseekProvider struct {
-	llm            *openai.LLM
-	models         pconfig.ModelsConfig
-	providerName   provider.ProviderName
-	providerConfig *pconfig.ProviderConfig
-	providerPrefix string
-}
-
 func New(
 	cfg *config.Config,
 	providerName provider.ProviderName,
 	providerConfig *pconfig.ProviderConfig,
 ) (provider.Provider, error) {
-	if cfg.DeepSeekAPIKey == "" {
-		return nil, fmt.Errorf("missing DEEPSEEK_API_KEY environment variable")
-	}
-
 	httpClient, err := system.GetHTTPClient(cfg)
 	if err != nil {
 		return nil, err
@@ -83,115 +67,13 @@ func New(
 		return nil, err
 	}
 
-	// DeepSeek V4 OpenAI-compatible API expects the legacy string form
-	// "reasoning_effort": "high|medium|low" rather than the modern object form
-	// "reasoning": {"effort": "..."}. The absence of WithModernReasoningFormat()
-	// ensures langchaingo serializes reasoning_effort as a top-level string.
-	// WithPreserveReasoningContent() keeps reasoning_content in multi-turn
-	// assistant messages with tool calls (required for DeepSeek thinking mode).
-	client, err := openai.New(
-		openai.WithToken(cfg.DeepSeekAPIKey),
-		openai.WithModel(DeepSeekAgentModel),
-		openai.WithBaseURL(cfg.DeepSeekServerURL),
-		openai.WithHTTPClient(httpClient),
-		openai.WithPreserveReasoningContent(),
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	return &deepseekProvider{
-		llm:            client,
-		models:         models,
-		providerName:   providerName,
-		providerConfig: providerConfig,
-		providerPrefix: cfg.DeepSeekProvider,
-	}, nil
-}
-
-func (p *deepseekProvider) Type() provider.ProviderType {
-	return provider.ProviderDeepSeek
-}
-
-func (p *deepseekProvider) Name() provider.ProviderName {
-	return p.providerName
-}
-
-func (p *deepseekProvider) GetRawConfig() []byte {
-	return p.providerConfig.GetRawConfig()
-}
-
-func (p *deepseekProvider) GetProviderConfig() *pconfig.ProviderConfig {
-	return p.providerConfig
-}
-
-func (p *deepseekProvider) GetPriceInfo(opt pconfig.ProviderOptionsType) *pconfig.PriceInfo {
-	return p.providerConfig.GetPriceInfoForType(opt)
-}
-
-func (p *deepseekProvider) GetModels() pconfig.ModelsConfig {
-	return p.models
-}
-
-func (p *deepseekProvider) Model(opt pconfig.ProviderOptionsType) string {
-	model := DeepSeekAgentModel
-	opts := llms.CallOptions{Model: &model}
-	for _, option := range p.providerConfig.GetOptionsForType(opt) {
-		option(&opts)
-	}
-
-	return opts.GetModel()
-}
-
-func (p *deepseekProvider) ModelWithPrefix(opt pconfig.ProviderOptionsType) string {
-	return provider.ApplyModelPrefix(p.Model(opt), p.providerPrefix)
-}
-
-func (p *deepseekProvider) Call(
-	ctx context.Context,
-	opt pconfig.ProviderOptionsType,
-	prompt string,
-) (string, error) {
-	return provider.WrapGenerateFromSinglePrompt(
-		ctx, p, opt, p.llm, prompt,
-		p.providerConfig.GetOptionsForType(opt)...,
-	)
-}
-
-func (p *deepseekProvider) CallEx(
-	ctx context.Context,
-	opt pconfig.ProviderOptionsType,
-	chain []llms.MessageContent,
-	streamCb streaming.Callback,
-) (*llms.ContentResponse, error) {
-	return provider.WrapGenerateContent(
-		ctx, p, opt, p.llm.GenerateContent, chain,
-		append([]llms.CallOption{
-			llms.WithStreamingFunc(streamCb),
-		}, p.providerConfig.GetOptionsForType(opt)...)...,
-	)
-}
-
-func (p *deepseekProvider) CallWithTools(
-	ctx context.Context,
-	opt pconfig.ProviderOptionsType,
-	chain []llms.MessageContent,
-	tools []llms.Tool,
-	streamCb streaming.Callback,
-) (*llms.ContentResponse, error) {
-	return provider.WrapGenerateContent(
-		ctx, p, opt, p.llm.GenerateContent, chain,
-		append([]llms.CallOption{
-			llms.WithTools(tools),
-			llms.WithStreamingFunc(streamCb),
-		}, p.providerConfig.GetOptionsForType(opt)...)...,
-	)
-}
-
-func (p *deepseekProvider) GetUsage(info map[string]any) pconfig.CallUsage {
-	return pconfig.NewCallUsage(info)
-}
-
-func (p *deepseekProvider) GetToolCallIDTemplate(ctx context.Context, prompter templates.Prompter) (string, error) {
-	return provider.DetermineToolCallIDTemplate(ctx, p, pconfig.OptionsTypeSimple, prompter, DeepSeekToolCallIDTemplate)
+	return openaicompat.New(openaicompat.Spec{
+		Type:               provider.ProviderDeepSeek,
+		Model:              DeepSeekAgentModel,
+		ToolCallIDTemplate: DeepSeekToolCallIDTemplate,
+		APIKey:             cfg.DeepSeekAPIKey,
+		ServerURL:          cfg.DeepSeekServerURL,
+		Prefix:             cfg.DeepSeekProvider,
+		PreserveReasoning:  true,
+	}, httpClient, models, providerName, providerConfig)
 }

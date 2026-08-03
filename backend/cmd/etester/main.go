@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"flag"
 	"log"
 	"os"
@@ -10,12 +11,14 @@ import (
 	"time"
 
 	"pentagi/pkg/config"
+	"pentagi/pkg/database"
 	"pentagi/pkg/providers/embeddings"
 	"pentagi/pkg/terminal"
 	"pentagi/pkg/version"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
+	_ "github.com/lib/pq"
 	"github.com/sirupsen/logrus"
 )
 
@@ -62,14 +65,32 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Initialize database connection pool
+	// Create this tenant's schema and repoint DATABASE_URL at it before any
+	// consumer reads the DSN. No-op when TENANT_ID is empty.
+	if err := database.EnsureTenantSchema(ctx, cfg); err != nil {
+		log.Fatalf("Tenant schema initialization failed: %v", err)
+	}
+
+	// Verify search_path on a short-lived database/sql connection before the
+	// long-lived pgxpool is opened — same guard the main server uses.
+	verifyDB, err := sql.Open("postgres", cfg.DatabaseURL)
+	if err != nil {
+		log.Fatalf("Unable to open database for schema verification: %v", err)
+	}
+	verifyDB.SetMaxOpenConns(1)
+	if err := database.VerifySearchPath(ctx, verifyDB, cfg); err != nil {
+		verifyDB.Close()
+		log.Fatalf("Tenant schema verification failed: %v", err)
+	}
+	verifyDB.Close()
+
 	poolConfig, err := pgxpool.ParseConfig(cfg.DatabaseURL)
 	if err != nil {
 		log.Fatalf("Unable to parse database URL: %v", err)
 	}
 
-	poolConfig.MaxConns = 10
-	poolConfig.MinConns = 2
+	poolConfig.MaxConns = min(int32(cfg.DBVectorMaxConns), 10)
+	poolConfig.MinConns = min(int32(cfg.DBMaxIdleConns), 2, poolConfig.MaxConns)
 	poolConfig.MaxConnLifetime = time.Hour
 	poolConfig.MaxConnIdleTime = 30 * time.Minute
 

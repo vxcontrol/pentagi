@@ -7,6 +7,7 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -1287,6 +1288,19 @@ func TestResourceService_DownloadResourceScenarios(t *testing.T) {
 			privs:      []string{"resources.download"},
 			wantStatus: http.StatusNotFound,
 		},
+		{
+			// DB row present but the blob file is gone, inside a multi-file ZIP: must
+			// fail with an error, not stream a truncated archive under 200. Present
+			// blob first so the pre-flight, not write order, is what prevents output.
+			name: "blob missing on disk in a zip batch fails cleanly, no truncated 200",
+			seeds: []seed{
+				{path: "a.txt", content: "alpha"},
+				{path: "b.txt", content: "beta", skipBlobWrite: true},
+			},
+			paths:      []string{"a.txt", "b.txt"},
+			privs:      []string{"resources.download"},
+			wantStatus: http.StatusInternalServerError,
+		},
 	}
 
 	for _, tt := range tests {
@@ -1351,6 +1365,9 @@ func TestResourceService_DownloadResourceScenarios(t *testing.T) {
 				assert.Contains(t, w.Header().Get("Content-Disposition"), tt.wantDispContains)
 			}
 			if tt.wantZipEntries != nil {
+				// A streamed ZIP download must not buffer the whole archive, so it
+				// must not carry a Content-Length computed from a full buffer.
+				assert.Empty(t, w.Header().Get("Content-Length"))
 				zr, err := zip.NewReader(bytes.NewReader(w.Body.Bytes()), int64(w.Body.Len()))
 				require.NoError(t, err)
 				got := map[string]string{}
@@ -1368,6 +1385,91 @@ func TestResourceService_DownloadResourceScenarios(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestStreamZipArchive verifies the shared streaming helper writes a valid ZIP
+// straight to the response writer without buffering the whole archive (no
+// Content-Length is emitted) and that a build error mid-stream propagates to the
+// caller and aborts the request.
+func TestStreamZipArchive(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	t.Run("streams archive without content-length", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodGet, "/download", nil)
+
+		err := streamZipArchive(c, "out.zip", func(zw io.Writer) error {
+			z := zip.NewWriter(zw)
+			f, createErr := z.Create("hello.txt")
+			require.NoError(t, createErr)
+			if _, writeErr := f.Write([]byte("hello world")); writeErr != nil {
+				return writeErr
+			}
+			return z.Close()
+		})
+
+		require.NoError(t, err)
+		assert.False(t, c.IsAborted())
+		assert.Equal(t, "application/zip", w.Header().Get("Content-Type"))
+		assert.Contains(t, w.Header().Get("Content-Disposition"), "out.zip")
+		// The whole archive was never buffered, so no buffer-derived length exists.
+		assert.Empty(t, w.Header().Get("Content-Length"))
+
+		zr, err := zip.NewReader(bytes.NewReader(w.Body.Bytes()), int64(w.Body.Len()))
+		require.NoError(t, err)
+		require.Len(t, zr.File, 1)
+		assert.Equal(t, "hello.txt", zr.File[0].Name)
+		rc, err := zr.File[0].Open()
+		require.NoError(t, err)
+		data, err := io.ReadAll(rc)
+		require.NoError(t, err)
+		require.NoError(t, rc.Close())
+		assert.Equal(t, "hello world", string(data))
+	})
+
+	t.Run("propagates build error after partial stream and aborts", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodGet, "/download", nil)
+
+		sentinel := errors.New("source reader failed mid-stream")
+		err := streamZipArchive(c, "out.zip", func(zw io.Writer) error {
+			z := zip.NewWriter(zw)
+			f, createErr := z.Create("partial.txt")
+			require.NoError(t, createErr)
+			if _, writeErr := f.Write([]byte("partial data")); writeErr != nil {
+				return writeErr
+			}
+			// Flush bytes to the response, then fail as a slow/erroring source would.
+			if flushErr := z.Flush(); flushErr != nil {
+				return flushErr
+			}
+			return sentinel
+		})
+
+		require.ErrorIs(t, err, sentinel)
+		assert.True(t, c.IsAborted())
+	})
+
+	t.Run("returns structured error when build fails before writing", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodGet, "/download", nil)
+
+		sentinel := errors.New("blob open failed before any write")
+		err := streamZipArchive(c, "out.zip", func(zw io.Writer) error {
+			// Fail immediately, before writing any archive bytes.
+			return sentinel
+		})
+
+		require.ErrorIs(t, err, sentinel)
+		// Nothing was streamed, so a normal (non-200, non-zip) error response is
+		// sent instead of a truncated 200.
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		assert.NotEqual(t, "application/zip", w.Header().Get("Content-Type"))
+		assert.True(t, c.IsAborted())
+	})
 }
 
 func TestResourceService_DeleteResourceScenarios(t *testing.T) {

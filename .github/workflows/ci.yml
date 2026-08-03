@@ -1,12 +1,25 @@
 name: Docker build and push
 
 on:
+  # pull_request so the lint/codegen/test gate runs on fork PRs too: a fork's commits never push to
+  # this repo, so a push-only trigger let a fork edit the schema without regenerating types.ts (or
+  # ship a lint/test failure) and merge green, since e2e.yml's tsc build cannot see stale codegen.
+  # lint-and-test uses no secrets and is fork-safe; docker-build stays gated to main/tags below.
+  pull_request:
+    types: [opened, synchronize, reopened]
   push:
     branches:
-      - "**"
+      - main
     tags:
       - "v[0-9]+.[0-9]+.[0-9]+"
   workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
 
 jobs:
   lint-and-test:
@@ -17,24 +30,21 @@ jobs:
         with:
           fetch-depth: 0
 
-      # Go setup and cache
+      - name: Verify Node version pins match .nvmrc
+        run: |
+          NVMRC="$(tr -dc '0-9.' < frontend/.nvmrc)"
+          echo "Expected Node: $NVMRC"
+          grep -q "node:${NVMRC}-slim" Dockerfile || { echo "::error::Dockerfile node tag != .nvmrc ($NVMRC)"; exit 1; }
+
+      # Go setup and cache (setup-go's cache:true already covers the build cache
+      # and the module cache; a second actions/cache restore over the read-only
+      # ~/go/pkg/mod collides with "File exists" whenever both caches hit)
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.24'
+          go-version: "1.24"
           cache: true
           cache-dependency-path: backend/go.sum
-
-      # Cache Go dependencies
-      - name: Go Mod Cache
-        uses: actions/cache@v5
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('backend/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
 
       # pnpm setup
       - name: Install pnpm
@@ -46,30 +56,55 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: '23'
-          cache: 'pnpm'
-          cache-dependency-path: 'frontend/pnpm-lock.yaml'
+          node-version-file: frontend/.nvmrc
+          cache: "pnpm"
+          cache-dependency-path: "frontend/pnpm-lock.yaml"
 
       # Frontend lint and test
       - name: Frontend - Install dependencies
         working-directory: frontend
         run: pnpm install --frozen-lockfile
-        continue-on-error: true
 
       - name: Frontend - Prettier
         working-directory: frontend
         run: pnpm run prettier
-        continue-on-error: true
 
       - name: Frontend - Lint
         working-directory: frontend
         run: pnpm run lint
-        continue-on-error: true
+
+      - name: Frontend - Type check
+        working-directory: frontend
+        run: pnpm run typescript
+
+      # Only when a codegen input moved. The lockfile is included on purpose: a codegen
+      # version bump can change the output, and skipping it there would let types.ts go
+      # stale and fail the next schema push for something its author did not do.
+      - name: Frontend - Detect GraphQL codegen input changes
+        id: codegen-inputs
+        run: |
+          .github/scripts/codegen-inputs-changed.sh \
+            '${{ github.event_name }}' \
+            '${{ github.event.before }}' \
+            '${{ github.event.pull_request.base.sha }}' \
+            '${{ github.sha }}' >> "$GITHUB_OUTPUT"
+
+      # The app ships the operations compiled into src/graphql/types.ts; regenerate and
+      # diff so it can't drift from graphql-schema.graphql (the codegen input the stand's
+      # schema-compat pre-flight validates against).
+      - name: Frontend - GraphQL codegen is fresh
+        if: steps.codegen-inputs.outputs.changed == 'true'
+        working-directory: frontend
+        run: |
+          pnpm run graphql:generate
+          git diff --exit-code src/graphql/types.ts || {
+            echo "::error file=frontend/src/graphql/types.ts::src/graphql/types.ts is stale — run 'pnpm run graphql:generate' in frontend/ and commit the result"
+            exit 1
+          }
 
       - name: Frontend - Test
         working-directory: frontend
         run: pnpm run test
-        continue-on-error: true
 
       # Backend lint and test
       - name: Backend - Download dependencies
@@ -101,17 +136,17 @@ jobs:
           PACKAGE_VER=${LATEST_TAG#v}
           CURRENT_COMMIT=$(git rev-parse HEAD)
           TAG_COMMIT=$(git rev-list -n 1 "$LATEST_TAG" 2>/dev/null || echo "")
-          
+
           if [ "$CURRENT_COMMIT" != "$TAG_COMMIT" ]; then
             PACKAGE_REV=$(git rev-parse --short HEAD)
           else
             PACKAGE_REV=""
           fi
-          
+
           LDFLAGS="-X pentagi/pkg/version.PackageName=pentagi -X pentagi/pkg/version.PackageVer=${PACKAGE_VER} -X pentagi/pkg/version.PackageRev=${PACKAGE_REV}"
-          
+
           echo "Building with version: ${PACKAGE_VER}${PACKAGE_REV:+-$PACKAGE_REV}"
-          
+
           # Build for AMD64
           GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "$LDFLAGS" -o /tmp/pentagi-amd64 ./cmd/pentagi
           echo "✓ Successfully built for linux/amd64"
@@ -147,13 +182,13 @@ jobs:
           # Get latest tag version (without 'v' prefix)
           LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
           VERSION=${LATEST_TAG#v}
-          
+
           # Get current commit hash
           CURRENT_COMMIT=$(git rev-parse HEAD)
-          
+
           # Get commit hash of the latest tag
           TAG_COMMIT=$(git rev-list -n 1 "$LATEST_TAG" 2>/dev/null || echo "")
-          
+
           # Set revision only if current commit differs from tag commit
           if [ "$CURRENT_COMMIT" != "$TAG_COMMIT" ]; then
             PACKAGE_REV=$(git rev-parse --short HEAD)
@@ -173,7 +208,7 @@ jobs:
             echo "patch=${VERSION}" >> $GITHUB_OUTPUT
             echo "  Docker tags: latest, ${major}, ${major}.${minor}, ${VERSION}"
           fi
-          
+
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
 
       - name: Generate Docker metadata

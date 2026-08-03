@@ -374,6 +374,21 @@ func TestFlowValid(t *testing.T) {
 		assert.NoError(t, validFlow.Valid())
 	})
 
+	t.Run("valid flow while trace id is pending", func(t *testing.T) {
+		t.Parallel()
+		f := validFlow
+		f.TraceID = nil
+		assert.NoError(t, f.Valid())
+	})
+
+	t.Run("trace id exceeds maximum length", func(t *testing.T) {
+		t.Parallel()
+		traceID := "trace-id-that-is-longer-than-the-supported-seventy-character-validation-limit-123"
+		f := validFlow
+		f.TraceID = &traceID
+		assert.Error(t, f.Valid())
+	})
+
 	t.Run("missing title", func(t *testing.T) {
 		t.Parallel()
 		f := validFlow

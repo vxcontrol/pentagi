@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"archive/zip"
 	"bytes"
+	"errors"
 	"io"
 	"mime/multipart"
 	"net/http/httptest"
@@ -16,6 +17,21 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+type errWriter struct{}
+
+func (errWriter) Write([]byte) (int, error) { return 0, errors.New("write failed") }
+
+// Empty inputs route every write through zip.Writer.Close()'s central-directory
+// flush, so a failing writer here exercises exactly the Close() error path that
+// must surface instead of being dropped as a success.
+func TestZipDirectoryPropagatesCloseError(t *testing.T) {
+	require.Error(t, ZipDirectory(errWriter{}, t.TempDir()))
+}
+
+func TestZipRelativePathsPropagatesCloseError(t *testing.T) {
+	require.Error(t, ZipRelativePaths(errWriter{}, t.TempDir(), nil))
+}
 
 type tarTestEntry struct {
 	name     string

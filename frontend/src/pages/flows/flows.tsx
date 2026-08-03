@@ -1,6 +1,7 @@
 import type { ColumnDef } from '@tanstack/react-table';
 
-import { Ellipsis, Eye, GitFork, Loader2, Pause, Pencil, PencilLine, Plus, Star, Trash } from 'lucide-react';
+import { useMutation } from '@apollo/client/react';
+import { Ellipsis, Eye, GitFork, Pause, Pencil, PencilLine, Plus, Star, Trash } from 'lucide-react';
 import { CheckCircle2, XCircle } from 'lucide-react';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -8,11 +9,18 @@ import { toast } from 'sonner';
 
 import { FlowStatusIcon } from '@/components/icons/flow-status-icon';
 import { ProviderIcon } from '@/components/icons/provider-icon';
+import {
+    AppHeader,
+    AppHeaderAction,
+    AppHeaderActions,
+    AppHeaderContent,
+    AppHeaderTitle,
+} from '@/components/layouts/app/app-header';
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
-import { HeaderButton } from '@/components/shared/header-button';
+import { ErrorState } from '@/components/shared/error-state';
 import { InlineEditInput } from '@/components/shared/inline-edit';
+import { LoadingState } from '@/components/shared/loading-state';
 import { Badge } from '@/components/ui/badge';
-import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage } from '@/components/ui/breadcrumb';
 import { Button } from '@/components/ui/button';
 import { ContextMenuItem, ContextMenuSeparator } from '@/components/ui/context-menu';
 import { DataTable, DataTableColumnHeader } from '@/components/ui/data-table';
@@ -23,13 +31,13 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Separator } from '@/components/ui/separator';
-import { SidebarTrigger } from '@/components/ui/sidebar';
-import { StatusCard } from '@/components/ui/status-card';
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
+import { Spinner } from '@/components/ui/spinner';
 import { Toggle } from '@/components/ui/toggle';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { ResultType, StatusType, type TerminalFragmentFragment, useRenameFlowMutation } from '@/graphql/types';
+import { RenameFlowDocument, ResultType, StatusType, type TerminalFragmentFragment } from '@/graphql/types';
 import { useTableState } from '@/hooks/use-table-state';
+import { routes } from '@/lib/routes';
 import { mergeHrefWithSearchParams } from '@/lib/url-params';
 import { formatDate } from '@/lib/utils/format';
 import { useFavorites } from '@/providers/favorites-provider';
@@ -64,7 +72,7 @@ const statusConfig: Record<
 function Flows() {
     const navigate = useNavigate();
     const location = useLocation();
-    const { deleteFlow, finishFlow, flows, isLoading } = useFlows();
+    const { deleteFlow, finishFlow, flows, flowsError, isLoading, refetch } = useFlows();
     const { isFavoriteFlow, toggleFavoriteFlow } = useFavorites();
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
     const [deletingFlow, setDeletingFlow] = useState<Flow | null>(null);
@@ -72,13 +80,13 @@ function Flows() {
     const [deletingFlowIds, setDeletingFlowIds] = useState<Set<string>>(new Set());
     const [editingFlowId, setEditingFlowId] = useState<null | string>(null);
     const editingInputRef = useRef<HTMLInputElement>(null);
-    const [renameFlowMutation, { loading: isRenameLoading }] = useRenameFlowMutation();
+    const [renameFlowMutation, { loading: isRenameLoading }] = useMutation(RenameFlowDocument);
 
     const { filter, pageIndex: currentPage, setFilter, setPage: handlePageChange } = useTableState();
 
     const handleFlowOpen = useCallback(
         (flowId: string) => {
-            navigate(mergeHrefWithSearchParams(`/flows/${flowId}`, new URLSearchParams(location.search)));
+            navigate(mergeHrefWithSearchParams(routes.flow(flowId), new URLSearchParams(location.search)));
         },
         [navigate, location.search],
     );
@@ -411,7 +419,7 @@ function Flows() {
                                 size="sm"
                                 variant="outline"
                             >
-                                <Star className="size-4" />
+                                <Star />
                             </Toggle>
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
@@ -444,7 +452,7 @@ function Flows() {
                                         >
                                             {finishingFlowIds.has(flow.id) ? (
                                                 <>
-                                                    <Loader2 className="animate-spin" />
+                                                    <Spinner variant="circle" />
                                                     Finishing...
                                                 </>
                                             ) : (
@@ -462,12 +470,12 @@ function Flows() {
                                     >
                                         {deletingFlowIds.has(flow.id) ? (
                                             <>
-                                                <Loader2 className="size-4 animate-spin" />
+                                                <Spinner variant="circle" />
                                                 Deleting...
                                             </>
                                         ) : (
                                             <>
-                                                <Trash className="size-4" />
+                                                <Trash />
                                                 Delete
                                             </>
                                         )}
@@ -564,42 +572,45 @@ function Flows() {
     );
 
     const pageHeader = (
-        <header className="bg-background sticky top-0 z-10 flex h-12 w-full shrink-0 items-center gap-2 border-b transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
-            <div className="flex min-w-0 flex-1 items-center gap-2 px-4">
-                <SidebarTrigger className="-ml-1 shrink-0" />
-                <Separator
-                    className="h-4 shrink-0"
-                    orientation="vertical"
-                />
-                <Breadcrumb className="min-w-0 flex-1">
-                    <BreadcrumbList className="min-w-0 flex-nowrap">
-                        <BreadcrumbItem className="min-w-0">
-                            <GitFork className="size-4 shrink-0" />
-                            <BreadcrumbPage className="min-w-0 truncate">Flows</BreadcrumbPage>
-                        </BreadcrumbItem>
-                    </BreadcrumbList>
-                </Breadcrumb>
-            </div>
-            <div className="flex shrink-0 items-center gap-2 px-4">
-                <HeaderButton
+        <AppHeader>
+            <AppHeaderContent>
+                <AppHeaderTitle icon={<GitFork className="size-4 shrink-0" />}>Flows</AppHeaderTitle>
+            </AppHeaderContent>
+            <AppHeaderActions>
+                <AppHeaderAction
                     icon={<Plus />}
                     label="New Flow"
-                    onClick={() => navigate('/flows/new')}
+                    onClick={() => navigate(routes.newFlow)}
                     variant="secondary"
                 />
-            </div>
-        </header>
+            </AppHeaderActions>
+        </AppHeader>
     );
 
     if (isLoading) {
         return (
             <>
                 {pageHeader}
-                <div className="flex flex-col gap-4 p-4">
-                    <StatusCard
+                <div className="flex flex-1 flex-col gap-4 p-4">
+                    <LoadingState
                         description="Please wait while we fetch your conversation flows"
-                        icon={<Loader2 className="text-muted-foreground size-16 animate-spin" />}
                         title="Loading flows..."
+                    />
+                </div>
+            </>
+        );
+    }
+
+    // Error surface only when there's no data — a failed background refetch must not blank a working list.
+    if (flowsError && flows.length === 0) {
+        return (
+            <>
+                {pageHeader}
+                <div className="flex flex-1 flex-col gap-4 p-4">
+                    <ErrorState
+                        message={flowsError.message}
+                        onRetry={refetch}
+                        title="Error loading flows"
                     />
                 </div>
             </>
@@ -610,21 +621,25 @@ function Flows() {
         return (
             <>
                 {pageHeader}
-                <div className="flex flex-col gap-4 p-4">
-                    <StatusCard
-                        action={
+                <div className="flex flex-1 flex-col gap-4 p-4">
+                    <Empty>
+                        <EmptyHeader>
+                            <EmptyMedia variant="icon">
+                                <GitFork />
+                            </EmptyMedia>
+                            <EmptyTitle>No flows found</EmptyTitle>
+                            <EmptyDescription>Get started by creating your first conversation flow</EmptyDescription>
+                        </EmptyHeader>
+                        <EmptyContent>
                             <Button
-                                onClick={() => navigate('/flows/new')}
+                                onClick={() => navigate(routes.newFlow)}
                                 variant="secondary"
                             >
                                 <Plus />
                                 New Flow
                             </Button>
-                        }
-                        description="Get started by creating your first conversation flow"
-                        icon={<GitFork className="text-muted-foreground size-8" />}
-                        title="No flows found"
-                    />
+                        </EmptyContent>
+                    </Empty>
                 </div>
             </>
         );
@@ -640,6 +655,7 @@ function Flows() {
                     empty={{ entityName: 'flows' }}
                     filterPlaceholder="Filter flows..."
                     filterValue={filter}
+                    isVirtualized
                     onFilterChange={setFilter}
                     onPageChange={handlePageChange}
                     onRowClick={handleRowClick}

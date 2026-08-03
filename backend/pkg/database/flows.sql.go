@@ -700,3 +700,59 @@ func (q *Queries) UpdateFlowToolCallIDTemplate(ctx context.Context, arg UpdateFl
 	)
 	return i, err
 }
+
+const updateFlowsProviderNameByOldName = `-- name: UpdateFlowsProviderNameByOldName :many
+UPDATE flows
+SET model_provider_name = $1
+WHERE user_id = $2 AND model_provider_name = $3 AND deleted_at IS NULL
+RETURNING id, status, title, model, model_provider_name, language, functions, user_id, created_at, updated_at, deleted_at, trace_id, model_provider_type, tool_call_id_template
+`
+
+type UpdateFlowsProviderNameByOldNameParams struct {
+	NewName string `json:"new_name"`
+	UserID  int64  `json:"user_id"`
+	OldName string `json:"old_name"`
+}
+
+// Bulk-renames every flow row of a user still pointing at a provider's old name
+// (the user renamed a custom LLM provider, or deleted one and the reference is
+// reset to the built-in name of its type). Matching on old_name makes the
+// statement idempotent: once rewritten, a row no longer matches, so it is safe
+// to call unconditionally and to retry.
+func (q *Queries) UpdateFlowsProviderNameByOldName(ctx context.Context, arg UpdateFlowsProviderNameByOldNameParams) ([]Flow, error) {
+	rows, err := q.db.QueryContext(ctx, updateFlowsProviderNameByOldName, arg.NewName, arg.UserID, arg.OldName)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Flow
+	for rows.Next() {
+		var i Flow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Status,
+			&i.Title,
+			&i.Model,
+			&i.ModelProviderName,
+			&i.Language,
+			&i.Functions,
+			&i.UserID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeletedAt,
+			&i.TraceID,
+			&i.ModelProviderType,
+			&i.ToolCallIDTemplate,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

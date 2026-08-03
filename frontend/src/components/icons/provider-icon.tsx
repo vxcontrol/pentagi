@@ -13,6 +13,7 @@ import DeepSeek from './deepseek';
 import Gemini from './gemini';
 import GLM from './glm';
 import Kimi from './kimi';
+import MiniMax from './minimax';
 import Ollama from './ollama';
 import OpenAi from './open-ai';
 import Qwen from './qwen';
@@ -28,7 +29,7 @@ interface ProviderIconProps {
     tooltip?: string;
 }
 
-const providerIcons: Record<ProviderType, ProviderIconConfig> = {
+export const providerIcons: Record<ProviderType, ProviderIconConfig> = {
     [ProviderType.Anthropic]: { className: 'text-purple-500', icon: Anthropic },
     [ProviderType.Bedrock]: { className: 'text-blue-500', icon: Bedrock },
     [ProviderType.Custom]: { className: 'text-blue-500', icon: Custom },
@@ -36,6 +37,7 @@ const providerIcons: Record<ProviderType, ProviderIconConfig> = {
     [ProviderType.Gemini]: { className: 'text-blue-500', icon: Gemini },
     [ProviderType.Glm]: { className: 'text-violet-500', icon: GLM },
     [ProviderType.Kimi]: { className: 'text-sky-500', icon: Kimi },
+    [ProviderType.Minimax]: { className: 'text-red-500', icon: MiniMax },
     [ProviderType.Ollama]: { className: 'text-blue-500', icon: Ollama },
     [ProviderType.Openai]: { className: 'text-blue-500', icon: OpenAi },
     [ProviderType.Qwen]: { className: 'text-orange-500', icon: Qwen },

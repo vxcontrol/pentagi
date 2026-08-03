@@ -11,8 +11,8 @@ import (
 	"testing"
 
 	"pentagi/pkg/cast"
+	"pentagi/pkg/config"
 
-	lru "github.com/hashicorp/golang-lru/v2/expirable"
 	"github.com/stretchr/testify/assert"
 	"github.com/vxcontrol/langchaingo/llms"
 )
@@ -202,8 +202,8 @@ func cloneChain(chain []llms.MessageContent) []llms.MessageContent {
 func newFlowProvider() *flowProvider {
 	return &flowProvider{
 		mx:              &sync.RWMutex{},
-		dataDir:         "testdata",
-		summarizerCache: lru.NewLRU[[32]byte, string](summarizerCacheMaxSize, nil, summarizerCacheTTL),
+		cfg:             &config.Config{DataDir: "testdata"},
+		summarizerCache: newSummarizerCache(),
 		callCounter:     &atomic.Int64{},
 		maxGACallsLimit: maxGeneralAgentChainIterations,
 		maxLACallsLimit: maxLimitedAgentChainIterations,

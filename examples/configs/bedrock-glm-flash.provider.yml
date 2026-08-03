@@ -1,0 +1,119 @@
+simple:
+  model: zai.glm-4.7-flash
+  temperature: 0.5
+  top_p: 0.5
+  n: 1
+  max_tokens: 4000
+  price:
+    input: 0.15
+    output: 0.6
+
+simple_json:
+  model: zai.glm-4.7-flash
+  temperature: 0.5
+  top_p: 0.5
+  n: 1
+  max_tokens: 4000
+  json: true
+  price:
+    input: 0.15
+    output: 0.6
+
+primary_agent:
+  model: zai.glm-4.7-flash
+  temperature: 1.0
+  n: 1
+  max_tokens: 4000
+  price:
+    input: 0.15
+    output: 0.6
+
+assistant:
+  model: zai.glm-4.7-flash
+  temperature: 1.0
+  n: 1
+  max_tokens: 4000
+  price:
+    input: 0.15
+    output: 0.6
+
+generator:
+  model: zai.glm-4.7-flash
+  temperature: 1.0
+  n: 1
+  max_tokens: 4000
+  price:
+    input: 0.15
+    output: 0.6
+
+refiner:
+  model: zai.glm-4.7-flash
+  temperature: 1.0
+  n: 1
+  max_tokens: 4000
+  price:
+    input: 0.15
+    output: 0.6
+
+adviser:
+  model: zai.glm-4.7-flash
+  temperature: 1.0
+  n: 1
+  max_tokens: 4000
+  price:
+    input: 0.15
+    output: 0.6
+
+reflector:
+  model: zai.glm-4.7-flash
+  temperature: 1.0
+  n: 1
+  max_tokens: 4000
+  price:
+    input: 0.15
+    output: 0.6
+
+searcher:
+  model: zai.glm-4.7-flash
+  temperature: 1.0
+  n: 1
+  max_tokens: 4000
+  price:
+    input: 0.15
+    output: 0.6
+
+enricher:
+  model: zai.glm-4.7-flash
+  temperature: 1.0
+  n: 1
+  max_tokens: 4000
+  price:
+    input: 0.15
+    output: 0.6
+
+coder:
+  model: zai.glm-4.7-flash
+  temperature: 1.0
+  n: 1
+  max_tokens: 4000
+  price:
+    input: 0.15
+    output: 0.6
+
+installer:
+  model: zai.glm-4.7-flash
+  temperature: 1.0
+  n: 1
+  max_tokens: 4000
+  price:
+    input: 0.15
+    output: 0.6
+
+pentester:
+  model: zai.glm-4.7-flash
+  temperature: 1.0
+  n: 1
+  max_tokens: 4000
+  price:
+    input: 0.15
+    output: 0.6

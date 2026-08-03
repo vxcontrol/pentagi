@@ -24,7 +24,6 @@ func applySubtaskOperations(
 		"message":          patch.Message,
 	}).Debug("applying subtask operations")
 
-	// Fix the patch to ensure it is valid
 	patch = fixSubtaskPatch(planned, patch)
 
 	// Convert database.Subtask to tools.SubtaskInfo with IDs

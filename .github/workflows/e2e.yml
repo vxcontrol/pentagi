@@ -1,0 +1,227 @@
+# The fork-safe gate: read-only permissions, no secrets, no write steps.
+# PR comments are posted by e2e-report.yml (workflow_run) which runs in
+# base-repo context — a fork PR's GITHUB_TOKEN cannot write comments.
+name: E2E
+
+on:
+  pull_request:
+    # Never subscribe to `labeled`: on a label event the gate jobs would skip,
+    # and GitHub counts a skipped required check as satisfied — a label could
+    # supersede a red e2e-mock. The stand tier lives in e2e-stand.yml, which owns
+    # the `labeled` trigger.
+    types: [opened, synchronize, reopened]
+  push:
+    branches:
+      - main
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+    inputs:
+      tier:
+        description: "Extra tier to run on top of mock + visual (stand tier: dispatch E2E Stand)"
+        type: choice
+        options:
+          - none
+          - local
+        default: local
+
+permissions:
+  contents: read
+
+# Keyed on the PR number (not the branch name — two fork PRs named identically
+# would cancel each other) so successive pushes to the same PR supersede each other.
+concurrency:
+  group: e2e-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  e2e-mock:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          package_json_file: frontend/package.json
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: frontend/.nvmrc
+          cache: "pnpm"
+          cache-dependency-path: "frontend/pnpm-lock.yaml"
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        working-directory: frontend
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run E2E (mock tier, production bundle)
+        working-directory: frontend
+        run: pnpm e2e
+
+      - name: Upload results.json
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-results
+          path: frontend/e2e/test-results/results.json
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Upload report and traces
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-report
+          path: frontend/e2e/test-results
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Append trend record
+        if: always()
+        continue-on-error: true
+        working-directory: frontend
+        run: node e2e/tools/trend.mjs
+        env:
+          E2E_TREND_SHA: ${{ github.sha }}
+          E2E_TREND_REF: ${{ github.head_ref || github.ref_name }}
+
+      - name: Upload trend
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-trend
+          path: frontend/e2e/test-results/trend.jsonl
+          retention-days: 90
+          if-no-files-found: ignore
+
+  # Visual snapshots: pinned container = pixel-stable baselines. Advisory —
+  # never a required check.
+  e2e-visual:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    container:
+      image: mcr.microsoft.com/playwright:v1.61.1-noble
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      # Compare the container's own Playwright build to @playwright/test rather than a
+      # hardcoded literal, so bumping the package without re-tagging the image (or vice
+      # versa) fails here instead of drifting the pixel baselines. Read the version from
+      # the image's own /ms-playwright/.docker-info: this image ships no global
+      # playwright, so `npx playwright --version` (before pnpm install) would fetch the
+      # registry latest and compare the package against that, not against the container.
+      - name: Verify container image matches @playwright/test
+        run: |
+          pkg="$(node -p "require('./frontend/package.json').devDependencies['@playwright/test'].replace(/[^0-9.]/g, '')")"
+          container="$(node -p "JSON.parse(require('fs').readFileSync('/ms-playwright/.docker-info','utf8')).driverVersion")"
+          if [ "$pkg" != "$container" ]; then
+            echo "::error::e2e-visual container ships Playwright $container but @playwright/test is $pkg — bump the container tag to v$pkg-noble and regenerate baselines"
+            exit 1
+          fi
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          package_json_file: frontend/package.json
+
+      # The dist must be built with the pinned Node, not whatever the
+      # Playwright container ships — local baselines are built under .nvmrc
+      # and pixel-stability assumes identically built bundles.
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: frontend/.nvmrc
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        working-directory: frontend
+        run: pnpm run build
+
+      - name: Run visual snapshots
+        id: snapshots
+        working-directory: frontend
+        run: E2E_VISUAL=1 E2E_VISUAL_CONTAINER=1 npx playwright test -c e2e/playwright.config.ts
+
+      # The step failing is not the same signal as a snapshot differing: a webServer or build
+      # failure inside it also exits non-zero and still leaves results.json behind, which would
+      # publish the artifact and make the report say "snapshots differ". Look for the diff images.
+      - name: Detect snapshot diffs
+        id: diffs
+        if: failure() && steps.snapshots.outcome == 'failure'
+        working-directory: frontend
+        run: |
+          # -actual.png too: a missing baseline fails the test but writes no diff image, and only the
+          # snapshot matcher writes either name — a non-snapshot failure leaves test-failed-N.png.
+          if find e2e/test-results \( -name '*-diff.png' -o -name '*-actual.png' \) -print -quit | grep -q .; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Its presence is the precise "snapshots differ" signal the report keys the advisory on.
+      - name: Upload diffs
+        if: always() && steps.diffs.outputs.found == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-visual-diffs
+          path: frontend/e2e/test-results
+          retention-days: 7
+          if-no-files-found: ignore
+
+  # Tier 2: branch-built image + isolated compose stack + the mock-LLM agent
+  # loop. Not part of the PR gate — nightly and on-demand only.
+  e2e-local:
+    if: >
+      github.event_name == 'schedule' ||
+      (github.event_name == 'workflow_dispatch' && inputs.tier == 'local')
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          package_json_file: frontend/package.json
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: frontend/.nvmrc
+          cache: "pnpm"
+          cache-dependency-path: "frontend/pnpm-lock.yaml"
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        working-directory: frontend
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run Tier 2 (branch image + mock LLM)
+        run: ./frontend/e2e/tools/run-local-tier.sh
+
+      - name: Upload report and traces
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-local-report
+          path: frontend/e2e/test-results
+          retention-days: 7
+          if-no-files-found: ignore

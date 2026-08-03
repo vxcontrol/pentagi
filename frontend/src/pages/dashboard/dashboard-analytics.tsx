@@ -1,21 +1,24 @@
+import { useQuery } from '@apollo/client/react';
 import { format } from 'date-fns';
-import { ChevronRight, Clock, Loader2, Wrench } from 'lucide-react';
+import { ChevronRight, Clock, Wrench } from 'lucide-react';
 import { memo, useDeferredValue, useMemo, useRef, useState } from 'react';
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Tooltip, XAxis, YAxis } from 'recharts';
 
 import type { FlowFragmentFragment, UsageStatsPeriod } from '@/graphql/types';
 
 import { ChartCard, ChartTooltip } from '@/components/dashboard';
+import { DashboardError } from '@/components/dashboard/dashboard-error';
 import { FlowStatusBadge } from '@/components/icons/flow-status-badge';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Spinner } from '@/components/ui/spinner';
 import {
-    useFlowsExecutionStatsByPeriodQuery,
-    useFlowsQuery,
-    useFlowsStatsByPeriodQuery,
-    useToolcallsStatsByPeriodQuery,
-    useUsageStatsByPeriodQuery,
+    FlowsDocument,
+    FlowsExecutionStatsByPeriodDocument,
+    FlowsStatsByPeriodDocument,
+    ToolcallsStatsByPeriodDocument,
+    UsageStatsByPeriodDocument,
 } from '@/graphql/types';
 import { cn } from '@/lib/utils';
 import { formatCost, formatDuration, formatNumber, formatTokenCount } from '@/lib/utils/format';
@@ -59,19 +62,35 @@ type FlowExecution = {
 };
 
 export function DashboardAnalytics({ period }: { period: UsageStatsPeriod }) {
-    const { data: usageByPeriodData, loading: usageByPeriodLoading } = useUsageStatsByPeriodQuery({
+    const {
+        data: usageByPeriodData,
+        error: usageByPeriodError,
+        loading: usageByPeriodLoading,
+    } = useQuery(UsageStatsByPeriodDocument, {
         variables: { period },
     });
-    const { data: toolcallsByPeriodData, loading: toolcallsByPeriodLoading } = useToolcallsStatsByPeriodQuery({
+    const {
+        data: toolcallsByPeriodData,
+        error: toolcallsByPeriodError,
+        loading: toolcallsByPeriodLoading,
+    } = useQuery(ToolcallsStatsByPeriodDocument, {
         variables: { period },
     });
-    const { data: flowsByPeriodData, loading: flowsByPeriodLoading } = useFlowsStatsByPeriodQuery({
+    const {
+        data: flowsByPeriodData,
+        error: flowsByPeriodError,
+        loading: flowsByPeriodLoading,
+    } = useQuery(FlowsStatsByPeriodDocument, {
         variables: { period },
     });
-    const { data: executionStatsData, loading: executionStatsLoading } = useFlowsExecutionStatsByPeriodQuery({
+    const {
+        data: executionStatsData,
+        error: executionStatsError,
+        loading: executionStatsLoading,
+    } = useQuery(FlowsExecutionStatsByPeriodDocument, {
         variables: { period },
     });
-    const { data: flowsData } = useFlowsQuery();
+    const { data: flowsData } = useQuery(FlowsDocument);
 
     const flowsTooltip = useChartTooltipAnimation();
     const toolcallsTooltip = useChartTooltipAnimation();
@@ -135,6 +154,7 @@ export function DashboardAnalytics({ period }: { period: UsageStatsPeriod }) {
             <ChartCard
                 description="Flows, tasks, and subtasks created per day"
                 empty={!flowsByPeriodLoading && flowsChartData.length === 0}
+                error={!!flowsByPeriodError}
                 height={320}
                 loading={flowsByPeriodLoading}
                 title="Flows Activity Over Time"
@@ -194,6 +214,7 @@ export function DashboardAnalytics({ period }: { period: UsageStatsPeriod }) {
                 <ChartCard
                     description="Number of tool executions per day"
                     empty={!toolcallsByPeriodLoading && toolcallsChartData.length === 0}
+                    error={!!toolcallsByPeriodError}
                     loading={toolcallsByPeriodLoading}
                     title="Tool Calls Over Time"
                 >
@@ -239,6 +260,7 @@ export function DashboardAnalytics({ period }: { period: UsageStatsPeriod }) {
                 <ChartCard
                     description="Input and output tokens processed daily"
                     empty={!usageByPeriodLoading && usageChartData.length === 0}
+                    error={!!usageByPeriodError}
                     loading={usageByPeriodLoading}
                     title="Token Usage Over Time"
                 >
@@ -296,6 +318,7 @@ export function DashboardAnalytics({ period }: { period: UsageStatsPeriod }) {
             <ChartCard
                 description="LLM spending per day. May stay near zero when using local engines — this is expected."
                 empty={!usageByPeriodLoading && usageChartData.length === 0}
+                error={!!usageByPeriodError}
                 height={240}
                 loading={usageByPeriodLoading}
                 title="Cost Over Time"
@@ -358,8 +381,13 @@ export function DashboardAnalytics({ period }: { period: UsageStatsPeriod }) {
                 <CardContent>
                     {executionStatsLoading ? (
                         <div className="flex items-center justify-center py-8">
-                            <Loader2 className="text-muted-foreground size-6 animate-spin" />
+                            <Spinner
+                                className="text-muted-foreground size-6"
+                                variant="circle"
+                            />
                         </div>
+                    ) : executionStatsError ? (
+                        <DashboardError className="py-8" />
                     ) : !deferredExecutionStats.length ? (
                         <p className="text-muted-foreground py-8 text-center text-sm">
                             No flow executions in this period
@@ -367,7 +395,7 @@ export function DashboardAnalytics({ period }: { period: UsageStatsPeriod }) {
                     ) : (
                         <div
                             className={cn(
-                                'space-y-1 transition-opacity',
+                                'flex flex-col gap-1 transition-opacity',
                                 deferredExecutionStats !== executionStats && 'opacity-60',
                             )}
                         >
@@ -433,7 +461,7 @@ const FlowExecutionItem = memo(function FlowExecutionItem({
                 </div>
             </CollapsibleTrigger>
             <CollapsibleContent>
-                <div className="ml-7 space-y-1 border-l pl-3">
+                <div className="ml-7 flex flex-col gap-1 border-l pl-3">
                     {flow.tasks.map((task) => (
                         <TaskExecutionItem
                             key={task.taskId}
@@ -478,7 +506,7 @@ const TaskExecutionItem = memo(function TaskExecutionItem({ task }: { task: Flow
             </CollapsibleTrigger>
             {hasSubtasks && (
                 <CollapsibleContent>
-                    <div className="ml-6 space-y-0.5 border-l pl-3">
+                    <div className="ml-6 flex flex-col gap-0.5 border-l pl-3">
                         {task.subtasks.map((subtask) => (
                             <div
                                 className="text-muted-foreground flex items-center gap-3 px-3 py-1 text-xs"

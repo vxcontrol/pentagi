@@ -1,8 +1,9 @@
 import type { ComponentType } from 'react';
 
-import { Loader2, Replace } from 'lucide-react';
+import { Replace } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import { Spinner } from '@/components/ui/spinner';
 
 interface OverwriteButtonsProps {
     /**
@@ -66,7 +67,7 @@ export function OverwriteButtons({
                 onClick={primaryType === 'submit' ? undefined : onPrimary}
                 type={primaryType}
             >
-                {isProcessing ? <Loader2 className="animate-spin" /> : <PrimaryIcon />}
+                {isProcessing ? <Spinner variant="circle" /> : <PrimaryIcon />}
                 {primaryLabel}
             </Button>
             <Button

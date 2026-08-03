@@ -26,12 +26,6 @@ interface FileManagerTreeNodeProps {
     setSize: number;
 }
 
-/**
- * Recursive tree node renderer. The component itself is not memoized — `FileManagerRow`
- * is, which is where per-row reconciliation savings actually matter. Extracting the
- * recursion into a component (instead of an inline `renderNode` function) keeps
- * `FileManager` lean and gives React DevTools a real boundary to inspect.
- */
 export function FileManagerTreeNode({
     actions,
     activeRowPath,
@@ -51,11 +45,6 @@ export function FileManagerTreeNode({
     const renderChildren = node.isDir && isExpanded && node.children.length > 0;
     const dnd = bindNodeDnd(node);
 
-    // Pre-resolve tri-state + subtree paths per row: keeping the lookup outside
-    // the memoized `FileManagerRow` lets each row receive primitive/stable props
-    // (`'indeterminate' | true | false | undefined` plus a `Map`-stored array
-    // reference) so a selection change only re-renders the rows whose computed
-    // state actually flipped.
     const dirCheckboxState = node.isDir ? (dirSelectionStates.get(node.path) ?? false) : undefined;
     const subtreePaths = node.isDir ? dirSubtreePaths.get(node.path) : undefined;
 

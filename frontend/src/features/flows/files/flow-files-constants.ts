@@ -29,10 +29,6 @@ export const RESOURCES_TARGET_DIRECTORY = '/work/resources';
 export const CONTAINER_DEFAULT_PATH = '/work';
 
 // ── Upload limits (mirror backend's `pkg/flowfiles/files.go`) ──────────────
-//
-// Symmetric with the resources library limits (`features/resources/resources-constants.ts`)
-// today, but kept as a separate set so they can diverge from resources without
-// touching the resources call sites.
 
 /** Mirrors `flowfiles.MaxUploadFileSize` (300 MB). */
 export const FLOW_FILES_MAX_FILE_SIZE_MB = 300;

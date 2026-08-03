@@ -13,6 +13,7 @@ const (
 	SearchEngineTypeGoogle     SearchEngineType = "google"
 	SearchEngineTypeDuckduckgo SearchEngineType = "duckduckgo"
 	SearchEngineTypeTavily     SearchEngineType = "tavily"
+	SearchEngineTypeFirecrawl  SearchEngineType = "firecrawl"
 	SearchEngineTypeTraversaal SearchEngineType = "traversaal"
 	SearchEngineTypePerplexity SearchEngineType = "perplexity"
 	SearchEngineTypeBrowser    SearchEngineType = "browser"
@@ -29,6 +30,7 @@ func (s SearchEngineType) Valid() error {
 	case SearchEngineTypeGoogle,
 		SearchEngineTypeDuckduckgo,
 		SearchEngineTypeTavily,
+		SearchEngineTypeFirecrawl,
 		SearchEngineTypeTraversaal,
 		SearchEngineTypePerplexity,
 		SearchEngineTypeBrowser,

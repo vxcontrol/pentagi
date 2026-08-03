@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"os"
 	"reflect"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -13,6 +14,12 @@ import (
 
 	"github.com/caarlos0/env/v10"
 )
+
+// envVarNameRe matches valid environment variable identifiers (e.g. OPEN_AI_KEY).
+// Used to distinguish a real commented-out assignment (e.g. "#SOME_VAR=value")
+// from a plain human-readable comment that merely contains a stray '=' character
+// (e.g. "<=" comparisons or "empty = disabled" phrasing in descriptive text).
+var envVarNameRe = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
 func LoadEnvFile(path string) (EnvFile, error) {
 	info, err := os.Stat(path)
@@ -51,8 +58,9 @@ func loadVars(raw string) map[string]*EnvVar {
 		if line == "" {
 			continue
 		}
+		isComment := false
 		if strings.HasPrefix(line, "#") {
-			envVar.IsComment = true
+			isComment = true
 			line = trim(strings.TrimPrefix(line, "#"))
 		}
 
@@ -60,7 +68,17 @@ func loadVars(raw string) map[string]*EnvVar {
 		if len(parts) != 2 {
 			continue
 		}
-		envVar.Name = trim(parts[0])
+		name := trim(parts[0])
+		// a commented line only represents a disabled variable assignment
+		// (e.g. "#SOME_VAR=value") if what precedes '=' is a valid identifier;
+		// otherwise it's just descriptive text that happens to contain '='
+		// (e.g. "<=" comparisons or "empty = disabled" phrasing) and must not
+		// be treated as a pseudo-variable that never resolves as "unchanged"
+		if isComment && !envVarNameRe.MatchString(name) {
+			continue
+		}
+		envVar.IsComment = isComment
+		envVar.Name = name
 		envVar.Value = trim(stripComments(parts[1]))
 		envVar.IsChanged = envVar.Value != parts[1] || envVar.Name != parts[0]
 		if envVar.Name != "" {

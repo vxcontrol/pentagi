@@ -56,9 +56,7 @@ describe('saveViewOptions', () => {
     });
 
     it('replaces (does not merge) the existing payload', () => {
-        // The function is deliberately a setter, not a patcher — the caller
-        // is expected to merge if they want partial updates. This test pins
-        // that contract.
+        // Deliberately a setter, not a patcher — the caller must merge for partial updates.
         saveViewOptions(UNIFIED_KEY, { foldersFirst: true, relativeTimestamp: true });
         saveViewOptions(UNIFIED_KEY, { foldersFirst: false });
 

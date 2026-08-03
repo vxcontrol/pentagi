@@ -4,7 +4,8 @@
     ],
     "go.testTimeout": "300s",
     "go.testEnvVars": {
-      "INSTALLER_LOG_FILE": "${workspaceFolder}/build/log.json"
+      "INSTALLER_LOG_FILE": "${workspaceFolder}/build/log.json",
+      "DEBUG": "false"
     },
     "go.testExplorer.enable": true,
     "search.useIgnoreFiles": true,

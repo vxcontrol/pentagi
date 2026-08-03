@@ -1,0 +1,143 @@
+simple:
+  model: grok-4.20-0309-non-reasoning
+  temperature: 0.3
+  top_p: 0.9
+  n: 1
+  max_tokens: 8192
+  price:
+    input: 1.25
+    output: 2.50
+    cache_read: 0.20
+
+simple_json:
+  model: grok-4.20-0309-non-reasoning
+  temperature: 0.3
+  top_p: 0.9
+  n: 1
+  max_tokens: 4096
+  json: true
+  price:
+    input: 1.25
+    output: 2.50
+    cache_read: 0.20
+
+primary_agent:
+  model: grok-4.5
+  n: 1
+  max_tokens: 16384
+  reasoning:
+    effort: high
+  price:
+    input: 2.00
+    output: 6.00
+    cache_read: 0.30
+
+assistant:
+  model: grok-4.5
+  n: 1
+  max_tokens: 16384
+  reasoning:
+    effort: high
+  price:
+    input: 2.00
+    output: 6.00
+    cache_read: 0.30
+
+generator:
+  model: grok-4.5
+  n: 1
+  max_tokens: 32768
+  reasoning:
+    effort: high
+  price:
+    input: 2.00
+    output: 6.00
+    cache_read: 0.30
+
+refiner:
+  model: grok-4.5
+  n: 1
+  max_tokens: 32768
+  reasoning:
+    effort: high
+  price:
+    input: 2.00
+    output: 6.00
+    cache_read: 0.30
+
+adviser:
+  model: grok-4.5
+  n: 1
+  max_tokens: 16384
+  reasoning:
+    effort: high
+  price:
+    input: 2.00
+    output: 6.00
+    cache_read: 0.30
+
+reflector:
+  model: grok-4.20-0309-non-reasoning
+  temperature: 0.5
+  top_p: 0.9
+  n: 1
+  max_tokens: 8192
+  price:
+    input: 1.25
+    output: 2.50
+    cache_read: 0.20
+
+searcher:
+  model: grok-4.20-0309-non-reasoning
+  temperature: 0.5
+  top_p: 0.9
+  n: 1
+  max_tokens: 4096
+  price:
+    input: 1.25
+    output: 2.50
+    cache_read: 0.20
+
+enricher:
+  model: grok-4.20-0309-non-reasoning
+  temperature: 0.5
+  top_p: 0.9
+  n: 1
+  max_tokens: 4096
+  price:
+    input: 1.25
+    output: 2.50
+    cache_read: 0.20
+
+coder:
+  model: grok-build-0.1
+  n: 1
+  max_tokens: 20480
+  reasoning:
+    effort: high
+  price:
+    input: 1.00
+    output: 2.00
+    cache_read: 0.20
+
+installer:
+  model: grok-4.20-0309-reasoning
+  n: 1
+  max_tokens: 12288
+  reasoning:
+    effort: high
+  price:
+    input: 1.25
+    output: 2.50
+    cache_read: 0.20
+
+pentester:
+  model: grok-4.5
+  n: 1
+  max_tokens: 16384
+  reasoning:
+    effort: high
+  price:
+    input: 2.00
+    output: 6.00
+    cache_read: 0.30

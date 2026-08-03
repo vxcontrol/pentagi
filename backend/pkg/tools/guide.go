@@ -123,7 +123,6 @@ func (g *guide) Handle(ctx context.Context, name string, args json.RawMessage) (
 			"type":          action.Type,
 		})
 
-		// Execute multiple queries and collect all documents
 		var allDocs []schema.Document
 		for i, query := range action.Questions {
 			queryLogger := logger.WithFields(logrus.Fields{
@@ -139,7 +138,7 @@ func (g *guide) Handle(ctx context.Context, name string, args json.RawMessage) (
 				vectorstores.WithFilters(filters),
 			)
 			if err != nil {
-				queryLogger.WithError(err).Error("failed to search for similar documents")
+				obs.LogErrorOrCancel(queryLogger, err, "failed to search for similar documents")
 				continue // Continue with other queries even if one fails
 			}
 
@@ -151,7 +150,6 @@ func (g *guide) Handle(ctx context.Context, name string, args json.RawMessage) (
 			"total_docs_before_dedup": len(allDocs),
 		}).Debug("all queries completed")
 
-		// Merge, deduplicate, sort by score, and limit results
 		docs := MergeAndDeduplicateDocs(allDocs, guideVectorStoreResultLimit)
 
 		logger.WithFields(logrus.Fields{
@@ -199,7 +197,6 @@ func (g *guide) Handle(ctx context.Context, name string, args json.RawMessage) (
 				logger.WithError(err).Error("failed to marshal filters")
 				return "", fmt.Errorf("failed to marshal filters: %w", err)
 			}
-			// Join all queries for logging
 			queriesText := strings.Join(action.Questions, "\n--------------------------------\n")
 			_, _ = g.vslp.PutLog(
 				ctx,
@@ -252,7 +249,6 @@ func (g *guide) Handle(ctx context.Context, name string, args json.RawMessage) (
 			"guide": action.Guide[:min(len(action.Guide), 1000)],
 		})
 
-		// Build common metadata for the document.
 		metadata := map[string]any{
 			"user_id":    g.userID,
 			"flow_id":    g.flowID,

@@ -3,15 +3,33 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"net/url"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
 	"pentagi/pkg/graphiti"
 	obs "pentagi/pkg/observability"
+	"pentagi/pkg/observability/langfuse"
 
+	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 )
+
+// maxGraphitiResponsePreviewBytes bounds how much of a non-2xx Graphiti
+// response body is ever shown to the LLM (via truncateString), so a verbose
+// error page or stack trace from the Graphiti backend can't blow up the
+// agent's context window.
+const maxGraphitiResponsePreviewBytes = 512
+
+// graphitiAPIStatusErrorRe matches the one fixed error shape the vendored
+// graphiti-go-client emits for a non-2xx HTTP response: a plain fmt.Errorf
+// (see client.go's `do`) with no typed status code, so this is the only way
+// to recover the status and body without forking the dependency.
+var graphitiAPIStatusErrorRe = regexp.MustCompile(`(?s)API request failed with status (\d+): (.*)`)
 
 type GraphitiSearcher interface {
 	IsEnabled() bool
@@ -40,6 +58,35 @@ const (
 	DefaultRecencyWindow  = "24h"
 )
 
+// graphitiTimeFormats are the layouts accepted for temporal_window's
+// time_start/time_end, tried in order. RFC3339 is the documented format;
+// the remaining layouts tolerate a common LLM near-miss - a timestamp
+// missing the timezone designator (e.g. "2026-07-24T11:53:34") - which
+// would otherwise fail with a confusing parse error even though the value
+// is unambiguous. Layouts without a zone parse as UTC, matching the
+// graph's own UTC timestamps.
+var graphitiTimeFormats = []string{
+	time.RFC3339,
+	"2006-01-02T15:04:05",
+	"2006-01-02 15:04:05",
+}
+
+// parseGraphitiTime parses a temporal_window time_start/time_end value,
+// trying each of graphitiTimeFormats in order and returning the error from
+// the strict RFC3339 attempt if none match (the most informative for the LLM
+// tool-call fixer, since it's the documented/expected format).
+func parseGraphitiTime(value string) (time.Time, error) {
+	rfc3339Err := error(nil)
+	for i, format := range graphitiTimeFormats {
+		if t, err := time.Parse(format, value); err == nil {
+			return t, nil
+		} else if i == 0 {
+			rfc3339Err = err
+		}
+	}
+	return time.Time{}, rfc3339Err
+}
+
 var (
 	allowedRecencyWindows = map[string]struct{}{
 		"1h":  {},
@@ -52,6 +99,18 @@ var (
 		"medium": {},
 		"high":   {},
 	}
+
+	// graphitiRetrieverTitles maps each search_type to a human-readable
+	// langfuse observation title so the retrieval intent is clear in traces.
+	graphitiRetrieverTitles = map[string]string{
+		"temporal_window":      "retrieve temporal window context from graphiti knowledge graph",
+		"entity_relationships": "retrieve entity relationships from graphiti knowledge graph",
+		"diverse_results":      "retrieve diverse results from graphiti knowledge graph",
+		"episode_context":      "retrieve episode context from graphiti knowledge graph",
+		"successful_tools":     "retrieve successful tools from graphiti knowledge graph",
+		"recent_context":       "retrieve recent context from graphiti knowledge graph",
+		"entity_by_label":      "retrieve entities by label from graphiti knowledge graph",
+	}
 )
 
 // graphitiSearchTool provides search access to Graphiti knowledge graph
@@ -59,6 +118,7 @@ type graphitiSearchTool struct {
 	flowID         int64
 	taskID         *int64
 	subtaskID      *int64
+	groupID        string
 	graphitiClient GraphitiSearcher
 }
 
@@ -66,12 +126,14 @@ type graphitiSearchTool struct {
 func NewGraphitiSearchTool(
 	flowID int64,
 	taskID, subtaskID *int64,
+	groupID string,
 	graphitiClient GraphitiSearcher,
 ) Tool {
 	return &graphitiSearchTool{
 		flowID:         flowID,
 		taskID:         taskID,
 		subtaskID:      subtaskID,
+		groupID:        groupID,
 		graphitiClient: graphitiClient,
 	}
 }
@@ -100,7 +162,6 @@ func (t *graphitiSearchTool) Handle(ctx context.Context, name string, args json.
 
 	searchArgs.Query = strings.TrimSpace(searchArgs.Query)
 
-	// Validate required parameters
 	if searchArgs.Query == "" {
 		logger.Error("query parameter is required")
 		return "", fmt.Errorf("query parameter is required")
@@ -111,45 +172,163 @@ func (t *graphitiSearchTool) Handle(ctx context.Context, name string, args json.
 	}
 
 	ctx, observation := obs.Observer.NewObservation(ctx)
+
+	retrieverTitle, ok := graphitiRetrieverTitles[searchArgs.SearchType.String()]
+	if !ok {
+		retrieverTitle = "retrieve context from graphiti knowledge graph"
+	}
+
+	retriever := observation.Retriever(
+		langfuse.WithRetrieverName(retrieverTitle),
+		langfuse.WithRetrieverInput(searchArgs.retrieverInput(t.groupID)),
+		langfuse.WithRetrieverMetadata(langfuse.Metadata{
+			"tool_name":   name,
+			"engine":      "graphiti",
+			"search_type": searchArgs.SearchType,
+			"group_id":    t.groupID,
+			"query":       searchArgs.Query,
+		}),
+	)
+	ctx, observation = retriever.Observation(ctx)
+
+	// Nest Graphiti server-side observations under the retriever observation
 	observationObject := &graphiti.Observation{
 		ID:      observation.ID(),
 		TraceID: observation.TraceID(),
 		Time:    time.Now().UTC(),
 	}
 
-	// Get group ID from flow context
-	groupID := fmt.Sprintf("flow-%d", t.flowID)
-
-	// Route to appropriate search method
 	var (
 		err    error
 		result string
 	)
 	switch searchArgs.SearchType {
 	case "temporal_window":
-		result, err = t.handleTemporalWindowSearch(ctx, groupID, searchArgs, observationObject)
+		result, err = t.handleTemporalWindowSearch(ctx, t.groupID, searchArgs, observationObject)
 	case "entity_relationships":
-		result, err = t.handleEntityRelationshipsSearch(ctx, groupID, searchArgs, observationObject)
+		result, err = t.handleEntityRelationshipsSearch(ctx, t.groupID, searchArgs, observationObject)
 	case "diverse_results":
-		result, err = t.handleDiverseResultsSearch(ctx, groupID, searchArgs, observationObject)
+		result, err = t.handleDiverseResultsSearch(ctx, t.groupID, searchArgs, observationObject)
 	case "episode_context":
-		result, err = t.handleEpisodeContextSearch(ctx, groupID, searchArgs, observationObject)
+		result, err = t.handleEpisodeContextSearch(ctx, t.groupID, searchArgs, observationObject)
 	case "successful_tools":
-		result, err = t.handleSuccessfulToolsSearch(ctx, groupID, searchArgs, observationObject)
+		result, err = t.handleSuccessfulToolsSearch(ctx, t.groupID, searchArgs, observationObject)
 	case "recent_context":
-		result, err = t.handleRecentContextSearch(ctx, groupID, searchArgs, observationObject)
+		result, err = t.handleRecentContextSearch(ctx, t.groupID, searchArgs, observationObject)
 	case "entity_by_label":
-		result, err = t.handleEntityByLabelSearch(ctx, groupID, searchArgs, observationObject)
+		result, err = t.handleEntityByLabelSearch(ctx, t.groupID, searchArgs, observationObject)
 	default:
 		err = fmt.Errorf("unknown search_type: %s", searchArgs.SearchType)
 	}
 
 	if err != nil {
+		// Transport-level failures (connection refused, DNS, timeout, TLS handshake
+		// timeout, context deadline exceeded) surface from the underlying http.Client
+		// as *url.Error. This is not a malformed-arguments problem, so it must not be
+		// routed through the tool-call arg-fixer (which cannot fix a network outage
+		// and would burn 3 retries doing so) — degrade gracefully instead, matching
+		// the terminal/browser tools' handling of the same class of failure.
+		var urlErr *url.Error
+		if errors.As(err, &urlErr) {
+			softMsg := fmt.Sprintf(
+				"Graphiti knowledge graph is temporarily unavailable (%s); continuing without historical context.",
+				truncateString(err.Error(), maxGraphitiResponsePreviewBytes),
+			)
+			retriever.End(
+				langfuse.WithRetrieverStatus(softMsg),
+				langfuse.WithRetrieverLevel(langfuse.ObservationLevelWarning),
+			)
+			logger.WithError(err).Warnf("graphiti search '%s' unavailable, degrading gracefully", searchArgs.SearchType)
+			return softMsg, nil
+		}
+
+		// The Graphiti server responded (connection succeeded), but with a
+		// non-2xx status. graphiti-go-client has no typed error for this - it
+		// embeds the raw, unbounded response body in a plain fmt.Errorf - so
+		// recover the status/body via the one fixed message shape it emits.
+		if m := graphitiAPIStatusErrorRe.FindStringSubmatch(err.Error()); m != nil {
+			statusCode, convErr := strconv.Atoi(m[1])
+			body := truncateString(strings.TrimSpace(m[2]), maxGraphitiResponsePreviewBytes)
+
+			if convErr == nil && statusCode >= 500 {
+				// A 5xx from Graphiti's own backend is the same class of
+				// problem as a transport failure: not fixable by editing
+				// arguments, so degrade gracefully and show the LLM whatever
+				// of the response body we could read.
+				softMsg := fmt.Sprintf(
+					"Graphiti knowledge graph returned HTTP %d and is likely temporarily unavailable; continuing without historical context. Response: %s",
+					statusCode, body,
+				)
+				retriever.End(
+					langfuse.WithRetrieverStatus(softMsg),
+					langfuse.WithRetrieverLevel(langfuse.ObservationLevelWarning),
+				)
+				logger.WithError(err).Warnf("graphiti search '%s' returned HTTP %d, degrading gracefully", searchArgs.SearchType, statusCode)
+				return softMsg, nil
+			}
+
+			// 4xx (or an unparseable status) likely means our own request was
+			// malformed - stays a hard failure so the tool-call fixer can act
+			// on it, but capped so a verbose error page can't blow up its context.
+			err = fmt.Errorf("graphiti API request failed with status %s: %s", m[1], body)
+		}
+
+		retriever.End(
+			langfuse.WithRetrieverStatus(err.Error()),
+			langfuse.WithRetrieverLevel(langfuse.ObservationLevelError),
+		)
 		logger.WithError(err).Errorf("failed to perform graphiti search '%s'", searchArgs.SearchType)
 		return "", err
 	}
 
+	retriever.End(
+		langfuse.WithRetrieverStatus("success"),
+		langfuse.WithRetrieverLevel(langfuse.ObservationLevelDebug),
+		langfuse.WithRetrieverOutput(result),
+	)
+
 	return result, nil
+}
+
+// retrieverInput builds the langfuse retriever input payload, including only
+// the search parameters relevant to the requested search_type.
+func (args GraphitiSearchAction) retrieverInput(groupID string) map[string]any {
+	input := map[string]any{
+		"query":       args.Query,
+		"search_type": args.SearchType,
+		"group_id":    groupID,
+	}
+	if args.MaxResults != nil {
+		input["max_results"] = args.MaxResults.Int()
+	}
+	if args.TimeStart != "" {
+		input["time_start"] = args.TimeStart
+	}
+	if args.TimeEnd != "" {
+		input["time_end"] = args.TimeEnd
+	}
+	if args.CenterNodeUUID != "" {
+		input["center_node_uuid"] = args.CenterNodeUUID
+	}
+	if args.MaxDepth != nil {
+		input["max_depth"] = args.MaxDepth.Int()
+	}
+	if len(args.NodeLabels) > 0 {
+		input["node_labels"] = args.NodeLabels
+	}
+	if len(args.EdgeTypes) > 0 {
+		input["edge_types"] = args.EdgeTypes
+	}
+	if args.DiversityLevel != "" {
+		input["diversity_level"] = args.DiversityLevel
+	}
+	if args.MinMentions != nil {
+		input["min_mentions"] = args.MinMentions.Int()
+	}
+	if args.RecencyWindow != "" {
+		input["recency_window"] = args.RecencyWindow
+	}
+	return input
 }
 
 // handleTemporalWindowSearch performs time-bounded search
@@ -164,14 +343,14 @@ func (t *graphitiSearchTool) handleTemporalWindowSearch(
 		return "", fmt.Errorf("time_start and time_end are required for temporal_window search")
 	}
 
-	timeStart, err := time.Parse(time.RFC3339, args.TimeStart)
+	timeStart, err := parseGraphitiTime(args.TimeStart)
 	if err != nil {
-		return "", fmt.Errorf("invalid time_start format (use ISO 8601): %w", err)
+		return "", fmt.Errorf("invalid time_start format (use ISO 8601, e.g. 2026-01-02T15:04:05Z): %w", err)
 	}
 
-	timeEnd, err := time.Parse(time.RFC3339, args.TimeEnd)
+	timeEnd, err := parseGraphitiTime(args.TimeEnd)
 	if err != nil {
-		return "", fmt.Errorf("invalid time_end format (use ISO 8601): %w", err)
+		return "", fmt.Errorf("invalid time_end format (use ISO 8601, e.g. 2026-01-02T15:04:05Z): %w", err)
 	}
 
 	if timeEnd.Before(timeStart) {
@@ -209,6 +388,12 @@ func (t *graphitiSearchTool) handleEntityRelationshipsSearch(
 ) (string, error) {
 	if args.CenterNodeUUID == "" {
 		return "", fmt.Errorf("center_node_uuid is required for entity_relationships search")
+	}
+	if _, err := uuid.Parse(args.CenterNodeUUID); err != nil {
+		return "", fmt.Errorf(
+			"center_node_uuid must be a valid UUID copied verbatim from the 'UUID:' field of a prior "+
+				"graphiti_search result, got %q", args.CenterNodeUUID,
+		)
 	}
 
 	maxResults := args.MaxResults.Int()
@@ -265,7 +450,7 @@ func (t *graphitiSearchTool) handleDiverseResultsSearch(
 		maxResults = DefaultDiverseMaxResults
 	}
 
-	diversityLevel := args.DiversityLevel
+	diversityLevel := args.DiversityLevel.String()
 	if diversityLevel == "" {
 		diversityLevel = DefaultDiversityLevel
 	}
@@ -361,7 +546,7 @@ func (t *graphitiSearchTool) handleRecentContextSearch(
 		maxResults = DefaultRecentMaxResults
 	}
 
-	recencyWindow := args.RecencyWindow
+	recencyWindow := args.RecencyWindow.String()
 	if recencyWindow == "" {
 		recencyWindow = DefaultRecencyWindow
 	}
@@ -393,7 +578,10 @@ func (t *graphitiSearchTool) handleEntityByLabelSearch(
 	observationObject *graphiti.Observation,
 ) (string, error) {
 	if len(args.NodeLabels) == 0 {
-		return "", fmt.Errorf("node_labels is required for entity_by_label search")
+		return "", fmt.Errorf(
+			"node_labels is required for entity_by_label search: pass one or more EXACT taxonomy node names " +
+				`(PascalCase singular), e.g. node_labels: ["Host", "Service", "Vulnerability"]`,
+		)
 	}
 
 	maxResults := args.MaxResults.Int()
@@ -567,6 +755,7 @@ func FormatGraphitiDiverseResults(
 				score = fmt.Sprintf(" (MMR score: %.3f)", resp.CommunityMMRScores[i])
 			}
 			builder.WriteString(fmt.Sprintf("%d. **%s**%s\n", i+1, comm.Name, score))
+			builder.WriteString(fmt.Sprintf("   - UUID: %s\n", comm.UUID))
 			builder.WriteString(fmt.Sprintf("   - Summary: %s\n\n", comm.Summary))
 		}
 	}
@@ -630,7 +819,7 @@ func FormatGraphitiEpisodeContextResults(
 			if i < len(resp.MentionedNodeScores) {
 				score = fmt.Sprintf(" (relevance: %.3f)", resp.MentionedNodeScores[i])
 			}
-			builder.WriteString(fmt.Sprintf("- **%s**%s: %s\n", node.Name, score, node.Summary))
+			builder.WriteString(fmt.Sprintf("- **%s**%s (UUID: %s): %s\n", node.Name, score, node.UUID, node.Summary))
 		}
 	}
 
@@ -703,6 +892,7 @@ func FormatGraphitiRecentContextResults(
 				score = fmt.Sprintf(" (score: %.3f)", resp.NodeScores[i])
 			}
 			builder.WriteString(fmt.Sprintf("%d. **%s**%s\n", i+1, node.Name, score))
+			builder.WriteString(fmt.Sprintf("   - UUID: %s\n", node.UUID))
 			builder.WriteString(fmt.Sprintf("   - Labels: %v\n", node.Labels))
 			builder.WriteString(fmt.Sprintf("   - Summary: %s\n\n", node.Summary))
 		}

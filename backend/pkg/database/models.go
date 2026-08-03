@@ -432,6 +432,7 @@ const (
 	ProviderTypeGlm       ProviderType = "glm"
 	ProviderTypeKimi      ProviderType = "kimi"
 	ProviderTypeQwen      ProviderType = "qwen"
+	ProviderTypeMinimax   ProviderType = "minimax"
 )
 
 func (e *ProviderType) Scan(src interface{}) error {
@@ -474,6 +475,7 @@ type SearchengineType string
 const (
 	SearchengineTypeGoogle     SearchengineType = "google"
 	SearchengineTypeTavily     SearchengineType = "tavily"
+	SearchengineTypeFirecrawl  SearchengineType = "firecrawl"
 	SearchengineTypeTraversaal SearchengineType = "traversaal"
 	SearchengineTypeBrowser    SearchengineType = "browser"
 	SearchengineTypeDuckduckgo SearchengineType = "duckduckgo"

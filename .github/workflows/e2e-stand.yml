@@ -1,0 +1,120 @@
+# Tier 3: real feature stand. Split into its own workflow so the PR gate
+# (e2e.yml) never subscribes to `labeled` events — a label must not be able to
+# publish a skipped `e2e-mock` check that branch protection would count as
+# satisfied. Label-gated + a protected Environment whose required reviewers
+# approve before any secret is exposed; even a mislabeled run blocks on a human.
+# Fork PRs get Tier 1 only.
+name: E2E Stand
+
+on:
+  pull_request:
+    types: [labeled]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Keyed on the label too: concurrency is evaluated for the whole run before the job's `if`, so a run
+# started by an unrelated label would share this group and cancel an approved stand run mid-flight.
+concurrency:
+  group: e2e-stand-${{ github.event.pull_request.number || github.run_id }}-${{ github.event.label.name }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  e2e-stand:
+    # GitHub withholds secrets from fork `pull_request` runs: without the fork check a labelled fork
+    # PR holds reviewers for an environment approval and then fails on empty credentials. Assert repo
+    # identity rather than negating `head.repo.fork`: a deleted fork sends `head.repo: null`, and
+    # GitHub coerces null and false alike to 0, so the negation lets that PR through.
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.label.name == 'e2e:stand' &&
+       github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: e2e-stand
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          package_json_file: frontend/package.json
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: frontend/.nvmrc
+          cache: "pnpm"
+          cache-dependency-path: "frontend/pnpm-lock.yaml"
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      # Deploy-skew pre-flight: one readable failure instead of dozens of red
+      # specs when the stand's schema no longer satisfies the frontend contract.
+      - name: Schema-compat pre-flight
+        working-directory: frontend
+        run: node e2e/tools/schema-compat.mjs
+        env:
+          E2E_BASE_URL: ${{ secrets.E2E_STAND_URL }}
+          E2E_USER: ${{ secrets.E2E_STAND_USER }}
+          E2E_PASSWORD: ${{ secrets.E2E_STAND_PASSWORD }}
+
+      - name: Install Playwright browsers
+        working-directory: frontend
+        run: pnpm exec playwright install --with-deps chromium
+
+      # The config scopes the stand tier to @stand specs — no CLI grep to
+      # drift out of sync with the tags.
+      - name: Run stand smoke
+        working-directory: frontend
+        run: E2E_TIER=stand npx playwright test -c e2e/playwright.config.ts
+        env:
+          E2E_BASE_URL: ${{ secrets.E2E_STAND_URL }}
+          E2E_USER: ${{ secrets.E2E_STAND_USER }}
+          E2E_PASSWORD: ${{ secrets.E2E_STAND_PASSWORD }}
+
+      # Traces, videos and screenshots are disabled on this tier. results.json still
+      # embeds the stand URL (baseURL in navigation/locator error messages) and the
+      # user (in locator text) on a failing run, so redact the secrets before the
+      # public-repo upload — GitHub masks secrets in logs, never in artifacts.
+      - name: Redact secrets from report
+        id: redact
+        if: always()
+        working-directory: frontend
+        run: |
+          node -e '
+            const fs = require("fs");
+            const f = "e2e/test-results/results.json";
+            if (!fs.existsSync(f)) process.exit(0);
+            let s = fs.readFileSync(f, "utf8");
+            // Derived forms too, not just the raw value: auth.setup.ts builds a locator name from
+            // the regex-escaped user, so a failed login writes `user@host\.com` into the error —
+            // and since this redacts the JSON text, that backslash is itself encoded as `\\`.
+            const regexEscaped = (v) => v.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+            const jsonEncoded = (v) => JSON.stringify(v).slice(1, -1);
+            for (const v of [process.env.E2E_BASE_URL, process.env.E2E_USER, process.env.E2E_PASSWORD]) {
+              if (!v) continue;
+              const forms = [v, regexEscaped(v), encodeURIComponent(v)];
+              for (const form of new Set([...forms, ...forms.map(jsonEncoded)])) {
+                s = s.split(form).join("<redacted>");
+              }
+            }
+            fs.writeFileSync(f, s);
+          '
+        env:
+          E2E_BASE_URL: ${{ secrets.E2E_STAND_URL }}
+          E2E_USER: ${{ secrets.E2E_STAND_USER }}
+          E2E_PASSWORD: ${{ secrets.E2E_STAND_PASSWORD }}
+
+      - name: Upload report
+        if: always() && steps.redact.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-stand-report
+          path: frontend/e2e/test-results/results.json
+          retention-days: 3
+          if-no-files-found: ignore

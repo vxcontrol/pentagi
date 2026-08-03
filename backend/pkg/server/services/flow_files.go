@@ -1,7 +1,6 @@
 package services
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -26,6 +25,7 @@ import (
 	"pentagi/pkg/server/models"
 	"pentagi/pkg/server/response"
 	"pentagi/pkg/tools"
+	"pentagi/pkg/version"
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/gin-gonic/gin"
@@ -37,6 +37,11 @@ import (
 //	uploads/    ← user-uploaded files; also pushed to container /work/uploads/
 //	resources/  ← user resources copied from user_resources table; also pushed to container /work/resources/
 //	container/  ← files synced from the container via pull; never sent back to container
+
+// maxContainerListPaths bounds how many directory paths one container-files
+// request may list, so the per-path entry cap can't be multiplied into an
+// unbounded fan-out or response.
+const maxContainerListPaths = 128
 
 type pendingUpload struct {
 	fileName string
@@ -50,6 +55,7 @@ type pendingUpload struct {
 //   - container sync → {dataDir}/flow-{id}-data/container/ (pulled from container, never sent back)
 type FlowFileService struct {
 	dataDir      string
+	tenantPrefix string
 	db           *gorm.DB
 	dockerClient docker.DockerClient
 	ss           subscriptions.SubscriptionsController
@@ -58,11 +64,13 @@ type FlowFileService struct {
 func NewFlowFileService(
 	db *gorm.DB,
 	dataDir string,
+	tenantPrefix string,
 	dockerClient docker.DockerClient,
 	ss subscriptions.SubscriptionsController,
 ) *FlowFileService {
 	return &FlowFileService{
 		dataDir:      dataDir,
+		tenantPrefix: tenantPrefix,
 		db:           db,
 		dockerClient: dockerClient,
 		ss:           ss,
@@ -547,43 +555,29 @@ func (s *FlowFileService) DownloadFlowFile(c *gin.Context) {
 	}
 
 	// Single directory → ZIP with paths relative to that directory (backward-compat).
-	// The archive is buffered so an explicit Content-Length can be set; this allows
-	// clients (including Swagger UI) to recognise and download the file correctly.
+	// The archive is streamed directly to the response writer so the whole ZIP is
+	// never held in memory; the response uses chunked transfer encoding.
 	if len(entries) == 1 && entries[0].info.IsDir() {
 		name := filepath.Base(entries[0].localPath)
-		var buf bytes.Buffer
-		if err := flowfiles.ZipDirectory(&buf, entries[0].localPath); err != nil {
-			logger.FromContext(c).WithError(err).WithField("flow_id", flowID).Error("error creating ZIP archive")
-			response.Error(c, response.ErrInternal, err)
-			return
+		if err := streamZipArchive(c, name+".zip", func(w io.Writer) error {
+			return flowfiles.ZipDirectory(w, entries[0].localPath)
+		}); err != nil {
+			logger.FromContext(c).WithError(err).WithField("flow_id", flowID).Error("error streaming ZIP archive")
 		}
-		c.DataFromReader(http.StatusOK, int64(buf.Len()), "application/zip", &buf,
-			map[string]string{
-				"Content-Disposition": mime.FormatMediaType("attachment", map[string]string{
-					"filename": name + ".zip",
-				}),
-			})
 		return
 	}
 
 	// Multiple paths (any mix of files and directories) → ZIP with cache-relative paths.
-	// Buffered for the same reason as above.
+	// Streamed directly to the response writer for the same reason as above.
 	relPaths := make([]string, 0, len(entries))
 	for _, e := range entries {
 		relPaths = append(relPaths, filepath.ToSlash(e.reqPath))
 	}
-	var buf bytes.Buffer
-	if err := flowfiles.ZipRelativePaths(&buf, s.flowDataDir(flowID), relPaths); err != nil {
-		logger.FromContext(c).WithError(err).WithField("flow_id", flowID).Error("error creating ZIP archive")
-		response.Error(c, response.ErrInternal, err)
-		return
+	if err := streamZipArchive(c, "download.zip", func(w io.Writer) error {
+		return flowfiles.ZipRelativePaths(w, s.flowDataDir(flowID), relPaths)
+	}); err != nil {
+		logger.FromContext(c).WithError(err).WithField("flow_id", flowID).Error("error streaming ZIP archive")
 	}
-	c.DataFromReader(http.StatusOK, int64(buf.Len()), "application/zip", &buf,
-		map[string]string{
-			"Content-Disposition": mime.FormatMediaType("attachment", map[string]string{
-				"filename": "download.zip",
-			}),
-		})
 }
 
 // PullFlowFiles is a function to sync one or more paths from the container into the local cache
@@ -732,7 +726,7 @@ func (s *FlowFileService) PullFlowFiles(c *gin.Context) {
 		return
 	}
 
-	containerName := primaryContainerName(flowID)
+	containerName := primaryContainerName(s.tenantPrefix, flowID)
 	running, err := s.dockerClient.IsContainerRunning(c.Request.Context(), containerName)
 	if err != nil {
 		logger.FromContext(c).WithError(err).WithFields(map[string]any{
@@ -954,11 +948,19 @@ func (s *FlowFileService) GetFlowContainerFiles(c *gin.Context) {
 		response.Error(c, response.ErrFlowFilesInvalidRequest, err)
 		return
 	}
+	// Bound the number of paths per request so the per-path entry cap can't be
+	// multiplied by an attacker-chosen path count into a huge fan-out / response.
+	if len(containerPaths) > maxContainerListPaths {
+		err = fmt.Errorf("too many paths requested (%d, limit %d)", len(containerPaths), maxContainerListPaths)
+		logger.FromContext(c).WithError(err).WithField("flow_id", flowID).Error("too many container paths")
+		response.Error(c, response.ErrFlowFilesInvalidRequest, err)
+		return
+	}
 	if len(containerPaths) == 0 {
 		containerPaths = []string{docker.WorkFolderPathInContainer}
 	}
 
-	containerName := primaryContainerName(flowID)
+	containerName := primaryContainerName(s.tenantPrefix, flowID)
 	running, err := s.dockerClient.IsContainerRunning(c.Request.Context(), containerName)
 	if err != nil {
 		logger.FromContext(c).WithError(err).WithFields(map[string]any{
@@ -979,19 +981,59 @@ func (s *FlowFileService) GetFlowContainerFiles(c *gin.Context) {
 	// resolved file.Path so that overlapping queries never return the same
 	// entry twice.
 	seenPaths := make(map[string]struct{})
+	seenFailPaths := make(map[string]struct{})
 	allFiles := make([]models.ContainerFile, 0)
+	allFailures := make([]models.ContainerFileError, 0)
+
+	// The client-facing failure Message is generic unless running in develop mode:
+	// the raw error carries docker-layer detail (container ids, the daemon address)
+	// that must not leave in an API body. rawFailureMessages keeps the unredacted
+	// text keyed by path for the server-side log only.
+	rawFailureMessages := make(map[string]string)
+	failureMessage := func(err error) string {
+		if version.IsDevelopMode() {
+			return err.Error()
+		}
+		return "entry could not be read"
+	}
+
+	// A directory-level failure on ONE path (nonexistent, not a directory, list
+	// command failed) records that path as a failure and keeps serving the paths
+	// that worked — only a cancelled request (client gone) aborts the response. If
+	// EVERY path fails at the directory level, nothing could be listed and the
+	// request is failed as a whole (checked after the loop).
+	pathsListed := 0
+	truncated := false
+	var firstPathErr error
+	recordPathFailure := func(p string, err error) {
+		if firstPathErr == nil {
+			firstPathErr = err
+		}
+		if _, seen := seenFailPaths[p]; seen {
+			return
+		}
+		seenFailPaths[p] = struct{}{}
+		rawFailureMessages[p] = err.Error()
+		allFailures = append(allFailures, models.ContainerFileError{
+			Name:    path.Base(p),
+			Path:    p,
+			Message: failureMessage(err),
+		})
+	}
+
 	for _, containerPath := range containerPaths {
 		pathStat, err := s.dockerClient.ContainerStatPath(c.Request.Context(), containerName, containerPath)
 		if err != nil {
-			logger.FromContext(c).WithError(err).WithFields(map[string]any{
-				"flow_id":        flowID,
-				"container_path": containerPath,
-			}).Error("error stating container path")
-			response.Error(c, response.ErrInternal, err)
-			return
+			if cerr := c.Request.Context().Err(); cerr != nil {
+				response.Error(c, response.ErrInternal, cerr)
+				return
+			}
+			recordPathFailure(containerPath, err)
+			continue
 		}
 
 		if !pathStat.Mode.IsDir() {
+			pathsListed++
 			file := convertContainerFile(path.Dir(containerPath), pathStat)
 			if _, seen := seenPaths[file.Path]; !seen {
 				seenPaths[file.Path] = struct{}{}
@@ -1000,22 +1042,59 @@ func (s *FlowFileService) GetFlowContainerFiles(c *gin.Context) {
 			continue
 		}
 
-		stats, err := s.dockerClient.ListContainerDir(c.Request.Context(), containerName, containerPath)
+		listing, err := s.dockerClient.ListContainerDir(c.Request.Context(), containerName, containerPath)
 		if err != nil {
-			logger.FromContext(c).WithError(err).WithFields(map[string]any{
-				"flow_id":        flowID,
-				"container_path": containerPath,
-			}).Error("error listing container directory")
-			response.Error(c, response.ErrInternal, err)
-			return
+			if cerr := c.Request.Context().Err(); cerr != nil {
+				response.Error(c, response.ErrInternal, cerr)
+				return
+			}
+			recordPathFailure(containerPath, err)
+			continue
 		}
-		for _, stat := range stats {
+		pathsListed++
+		if listing.Truncated {
+			truncated = true
+		}
+		for _, stat := range listing.Files {
 			file := convertContainerFile(containerPath, stat)
 			if _, seen := seenPaths[file.Path]; !seen {
 				seenPaths[file.Path] = struct{}{}
 				allFiles = append(allFiles, file)
 			}
 		}
+		for _, fe := range listing.Failures {
+			if _, seen := seenFailPaths[fe.Path]; seen {
+				continue
+			}
+			seenFailPaths[fe.Path] = struct{}{}
+			rawFailureMessages[fe.Path] = fe.Err.Error()
+			allFailures = append(allFailures, models.ContainerFileError{
+				Name:    fe.Name,
+				Path:    fe.Path,
+				Message: failureMessage(fe.Err),
+			})
+		}
+	}
+
+	// Every requested path failed at the directory level — nothing could be
+	// listed, so fail the request instead of returning an empty 200.
+	if pathsListed == 0 && len(containerPaths) > 0 {
+		logger.FromContext(c).WithError(firstPathErr).WithField("flow_id", flowID).Error("error listing container directory")
+		response.Error(c, response.ErrInternal, firstPathErr)
+		return
+	}
+
+	// A path read successfully by any query wins over a contradictory failure for
+	// the same path, regardless of the order the paths were processed, so the same
+	// path can never appear in both Files and Failures.
+	if len(allFailures) > 0 && len(seenPaths) > 0 {
+		kept := allFailures[:0]
+		for _, fe := range allFailures {
+			if _, ok := seenPaths[fe.Path]; !ok {
+				kept = append(kept, fe)
+			}
+		}
+		allFailures = kept
 	}
 
 	// Sort by name for deterministic output across all paths.
@@ -1032,6 +1111,15 @@ func (s *FlowFileService) GetFlowContainerFiles(c *gin.Context) {
 		return allFiles[i].ModifiedAt.Before(allFiles[j].ModifiedAt)
 	})
 
+	// Failures are sorted too so the dialog's first-N skipped-entries preview is
+	// deterministic rather than in raw find/readdir order.
+	sort.Slice(allFailures, func(i, j int) bool {
+		if allFailures[i].Path != allFailures[j].Path {
+			return allFailures[i].Path < allFailures[j].Path
+		}
+		return allFailures[i].Name < allFailures[j].Name
+	})
+
 	// Backward-compat: when exactly one container path was queried, echo it back
 	// as Path so existing callers receive the same field value as before.
 	responsePath := ""
@@ -1039,10 +1127,36 @@ func (s *FlowFileService) GetFlowContainerFiles(c *gin.Context) {
 		responsePath = containerPaths[0]
 	}
 
+	// A per-entry stat failure (a file removed mid-listing, a transient /proc pid,
+	// a symlink loop) degrades the listing but must not blank it: the readable
+	// files are returned and each skipped entry is carried back in Failures so the
+	// caller can tell what and how much was skipped.
+	if len(allFailures) > 0 {
+		log := logger.FromContext(c)
+		for _, fe := range allFailures {
+			// Detail is already in the Failures response, so log per-entry at Debug,
+			// not Warn — this endpoint is hit on every navigation. Quote the names so
+			// control bytes in a hostile filename can't inject into the log line.
+			log.WithFields(map[string]any{
+				"flow_id":    flowID,
+				"entry":      strconv.Quote(fe.Name),
+				"entry_path": strconv.Quote(fe.Path),
+				"error":      rawFailureMessages[fe.Path],
+			}).Debug("container entry skipped: could not stat")
+		}
+		log.WithFields(map[string]any{
+			"flow_id": flowID,
+			"listed":  len(allFiles),
+			"failed":  len(allFailures),
+		}).Warn("container listing degraded: some entries could not be read")
+	}
+
 	response.Success(c, http.StatusOK, models.ContainerFiles{
-		Path:  responsePath,
-		Files: allFiles,
-		Total: uint64(len(allFiles)),
+		Path:      responsePath,
+		Files:     allFiles,
+		Failures:  allFailures,
+		Total:     uint64(len(allFiles)),
+		Truncated: truncated,
 	})
 }
 
@@ -1123,7 +1237,7 @@ func (s *FlowFileService) copyLocalFilesToPrimaryWork(ctx context.Context, flowI
 		return nil
 	}
 
-	containerName := primaryContainerName(flowID)
+	containerName := primaryContainerName(s.tenantPrefix, flowID)
 	running, err := s.dockerClient.IsContainerRunning(ctx, containerName)
 	if err != nil || !running {
 		return nil
@@ -1202,7 +1316,7 @@ func (s *FlowFileService) deleteUploadsFromContainer(ctx context.Context, flowID
 		return nil
 	}
 
-	containerName := primaryContainerName(flowID)
+	containerName := primaryContainerName(s.tenantPrefix, flowID)
 	running, err := s.dockerClient.IsContainerRunning(ctx, containerName)
 	if err != nil {
 		return nil // container absent or unavailable — cache deletion will be synced on next start
@@ -1410,8 +1524,12 @@ func sortFlowFiles(files []models.FlowFile) {
 }
 
 // primaryContainerName returns the Docker container name for a flow's primary terminal.
-func primaryContainerName(flowID uint64) string {
-	return fmt.Sprintf("%s%d", tools.PrimaryTerminalNamePrefix, flowID)
+//
+// Delegates to tools.PrimaryTerminalName so there is exactly one definition of
+// this name; the two used to be independent implementations that had to be kept
+// in sync by hand.
+func primaryContainerName(tenantPrefix string, flowID uint64) string {
+	return tools.PrimaryTerminalName(tenantPrefix, int64(flowID))
 }
 
 // AddResourcesToFlow copies user-owned resources into the flow resources directory.

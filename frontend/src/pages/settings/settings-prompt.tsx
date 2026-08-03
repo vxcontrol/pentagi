@@ -1,43 +1,92 @@
-import { zodResolver } from '@hookform/resolvers/zod';
+import { useMutation, useQuery } from '@apollo/client/react';
 import {
     AlertCircle,
     Bot,
+    Braces,
+    Check,
     CheckCircle,
     Code,
+    Ellipsis,
     FileDiff,
-    Loader2,
+    FileText,
     RotateCcw,
     Save,
     User,
     Wrench,
     XCircle,
 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type ComponentProps, type Ref, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ReactDiffViewer from 'react-diff-viewer-continued';
-import { type Control, type ControllerRenderProps, type FieldValues, useController, useForm, useFormState } from 'react-hook-form';
-import { useNavigate, useParams } from 'react-router-dom';
+import {
+    type Control,
+    type FieldPathByValue,
+    type FieldValues,
+    useController,
+    useFormState,
+    useWatch,
+} from 'react-hook-form';
+import { useParams } from 'react-router-dom';
+import { toast } from 'sonner';
 import { z } from 'zod';
 
-import type { AgentPrompt, AgentPrompts, DefaultPrompt, PromptType, ValidatePromptMutation } from '@/graphql/types';
+import type {
+    DefaultPromptFragmentFragment as DefaultPrompt,
+    PromptType,
+    ValidatePromptMutation,
+} from '@/graphql/types';
 
+import {
+    type EditorViewMode,
+    EditorViewModeToggle,
+    MarkdownEditorField,
+    type MarkdownEditorFieldHandle,
+    VARIABLE_RE,
+    variableUseRegex,
+} from '@/components/shared/markdown-editor';
+
+type AgentPrompts = { human?: DefaultPrompt; system: DefaultPrompt };
+
+import {
+    AppHeader,
+    AppHeaderAction,
+    AppHeaderActions,
+    AppHeaderContent,
+    AppHeaderTitle,
+} from '@/components/layouts/app/app-header';
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
+import { DetailSplitLayout } from '@/components/shared/detail-split-layout';
+import { ErrorState } from '@/components/shared/error-state';
+import { LoadingState } from '@/components/shared/loading-state';
+import { UnsavedChangesDialog, useUnsavedChangesGuard } from '@/components/shared/unsaved-changes';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Form, FormControl, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { FormSubmitButton } from '@/components/ui/form-submit-button';
-import { StatusCard } from '@/components/ui/status-card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Textarea } from '@/components/ui/textarea';
 import {
-    useCreatePromptMutation,
-    useDeletePromptMutation,
-    useSettingsPromptsQuery,
-    useUpdatePromptMutation,
-    useValidatePromptMutation,
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
+import { Form, FormControl, FormItem, FormMessage } from '@/components/ui/form';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Spinner } from '@/components/ui/spinner';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+    CreatePromptDocument,
+    DeletePromptDocument,
+    SettingsPromptsDocument,
+    UpdatePromptDocument,
+    ValidatePromptDocument,
 } from '@/graphql/types';
+import { useAppForm } from '@/hooks/use-app-form';
+import { useBreakpoint } from '@/hooks/use-breakpoint';
+import { composeRefs } from '@/lib/compose-refs';
 import { formatPromptId } from '@/lib/route-titles/format-prompt-id';
-import { cn } from '@/lib/utils';
+
+const VARIABLES_TITLE = 'Available variables';
 
 const systemFormSchema = z.object({
     template: z.string().min(1, 'System template is required'),
@@ -47,72 +96,133 @@ const humanFormSchema = z.object({
     template: z.string().min(1, 'Human template is required'),
 });
 
-interface BaseFieldProps extends ControllerProps {
-    label?: string;
-}
-interface BaseTextareaProps {
-    className?: string;
-    placeholder?: string;
-}
-
-interface ControllerProps {
-    control: Control<FieldValues>;
+interface FormMarkdownItemProps<T extends FieldValues> {
+    'aria-label'?: string;
+    control: Control<T>;
     disabled?: boolean;
-    name: string;
-}
-
-interface FormTextareaItemProps extends BaseFieldProps, BaseTextareaProps {
-    description?: string;
+    editorRef?: Ref<MarkdownEditorFieldHandle>;
+    mode: EditorViewMode;
+    name: FieldPathByValue<T, string>;
+    placeholder?: string;
 }
 
 type HumanFormData = z.infer<typeof humanFormSchema>;
 
 type SystemFormData = z.infer<typeof systemFormSchema>;
 
-function FormTextareaItem({ className, control, disabled, label, name, placeholder }: FormTextareaItemProps) {
-    const { field, fieldState } = useController({
-        control,
-        defaultValue: '',
-        disabled,
-        name,
-    });
+// One pass over the `{{ … }}` blocks — the naive per-variable `.match` over the whole template is
+// O(variables × length) on every keystroke.
+function countVariableUses(template: string, variables: string[]): Record<string, number> {
+    const probes = variables.map((variable) => [variable, variableUseRegex(variable)] as const);
+    const counts: Record<string, number> = {};
 
-    return (
-        <FormItem>
-            {label && <FormLabel>{label}</FormLabel>}
-            <FormControl>
-                <Textarea
-                    {...field}
-                    className={cn('min-h-[640px]! font-mono text-sm', className)}
-                    disabled={disabled}
-                    placeholder={placeholder}
-                />
-            </FormControl>
-            {fieldState.error && <FormMessage>{fieldState.error.message}</FormMessage>}
-        </FormItem>
-    );
-}
-
-const getUsedVariables = (template: string | undefined): Set<string> => {
-    const usedVariables = new Set<string>();
-
-    if (!template) {
-        return usedVariables;
-    }
-
-    const variableRegex = /\{\{\.(\w+)\}\}/g;
-    let match;
-
-    while ((match = variableRegex.exec(template)) !== null) {
-        const variable = match[1];
-
-        if (variable) {
-            usedVariables.add(variable);
+    for (const block of template.match(VARIABLE_RE) ?? []) {
+        for (const [variable, probe] of probes) {
+            if (probe.test(block)) {
+                counts[variable] = (counts[variable] ?? 0) + 1;
+            }
         }
     }
 
-    return usedVariables;
-};
+    return counts;
+}
+
+const diffStyles = {
+    content: {
+        fontFamily:
+            'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+        fontSize: '0.875rem',
+        width: '50%',
+    },
+    diffContainer: {
+        border: '1px solid var(--border)',
+        borderRadius: '0.5rem',
+    },
+    gutter: {
+        borderRight: '1px solid var(--border)',
+    },
+    line: {
+        borderBottom: '1px solid oklch(from var(--border) l c h / 0.50)',
+    },
+    lineNumber: {
+        color: 'var(--muted-foreground)',
+    },
+    splitView: {
+        gap: '0',
+    },
+    variables: {
+        dark: {
+            addedBackground: 'hsl(142 70% 45% / 0.50)',
+            addedColor: 'var(--foreground)',
+            addedGutterBackground: 'hsl(142 70% 45% / 0.40)',
+            addedGutterColor: 'var(--muted-foreground)',
+            codeFoldBackground: 'var(--muted)',
+            codeFoldContentColor: 'var(--muted-foreground)',
+            codeFoldGutterBackground: 'var(--muted)',
+            diffViewerBackground: 'var(--background)',
+            diffViewerColor: 'var(--foreground)',
+            diffViewerTitleBackground: 'var(--card)',
+            diffViewerTitleBorderColor: 'var(--border)',
+            diffViewerTitleColor: 'var(--card-foreground)',
+            emptyLineBackground: 'var(--background)',
+            gutterBackground: 'var(--muted)',
+            gutterBackgroundDark: 'var(--muted)',
+            gutterColor: 'var(--muted-foreground)',
+            highlightBackground: 'oklch(from var(--primary) l c h / 0.20)',
+            highlightGutterBackground: 'oklch(from var(--primary) l c h / 0.30)',
+            removedBackground: 'oklch(from var(--destructive) l c h / 0.50)',
+            removedColor: 'var(--foreground)',
+            removedGutterBackground: 'oklch(from var(--destructive) l c h / 0.40)',
+            removedGutterColor: 'var(--muted-foreground)',
+            wordAddedBackground: 'hsl(142 70% 45% / 0.70)',
+            wordRemovedBackground: 'oklch(from var(--destructive) l c h / 0.70)',
+        },
+        light: {
+            addedBackground: 'hsl(142 70% 45% / 0.50)',
+            addedColor: 'var(--foreground)',
+            addedGutterBackground: 'hsl(142 70% 45% / 0.40)',
+            addedGutterColor: 'var(--muted-foreground)',
+            codeFoldBackground: 'var(--muted)',
+            codeFoldContentColor: 'var(--muted-foreground)',
+            codeFoldGutterBackground: 'var(--muted)',
+            diffViewerBackground: 'var(--background)',
+            diffViewerColor: 'var(--foreground)',
+            diffViewerTitleBackground: 'var(--card)',
+            diffViewerTitleBorderColor: 'var(--border)',
+            diffViewerTitleColor: 'var(--card-foreground)',
+            emptyLineBackground: 'var(--background)',
+            gutterBackground: 'var(--muted)',
+            gutterBackgroundDark: 'var(--muted)',
+            gutterColor: 'var(--muted-foreground)',
+            highlightBackground: 'oklch(from var(--primary) l c h / 0.20)',
+            highlightGutterBackground: 'oklch(from var(--primary) l c h / 0.30)',
+            removedBackground: 'oklch(from var(--destructive) l c h / 0.50)',
+            removedColor: 'var(--foreground)',
+            removedGutterBackground: 'oklch(from var(--destructive) l c h / 0.40)',
+            removedGutterColor: 'var(--muted-foreground)',
+            wordAddedBackground: 'hsl(142 70% 45% / 0.70)',
+            wordRemovedBackground: 'oklch(from var(--destructive) l c h / 0.70)',
+        },
+    },
+} satisfies ComponentProps<typeof ReactDiffViewer>['styles'];
+
+interface DiffContentProps {
+    control: Control<HumanFormData> | Control<SystemFormData>;
+    oldValue: string;
+    styles: ComponentProps<typeof ReactDiffViewer>['styles'];
+}
+
+interface VariablesContentProps {
+    currentTemplate: string;
+    onVariableClick: (variable: string) => void;
+    variables: string[];
+}
+
+interface VariablesPanelContainerProps {
+    control: Control<HumanFormData> | Control<SystemFormData>;
+    onVariableClick: (variable: string) => void;
+    variables: string[];
+}
 
 interface VariablesProps {
     currentTemplate: string;
@@ -120,15 +230,83 @@ interface VariablesProps {
     variables: string[];
 }
 
+// Don't hoist this useWatch to the parent — it would re-subscribe the whole page per keystroke.
+function DiffContent({ control, oldValue, styles }: DiffContentProps) {
+    const newValue = useWatch({ control, name: 'template' });
+
+    return (
+        <ReactDiffViewer
+            newValue={newValue}
+            oldValue={oldValue}
+            splitView
+            styles={styles}
+            useDarkTheme
+        />
+    );
+}
+
+function FormMarkdownItem<T extends FieldValues>({
+    'aria-label': ariaLabel,
+    control,
+    disabled,
+    editorRef,
+    mode,
+    name,
+    placeholder,
+}: FormMarkdownItemProps<T>) {
+    const { field, fieldState } = useController({
+        control,
+        disabled,
+        name,
+    });
+    // `field.ref` lets RHF focus this field on a failed submit; `editorRef` drives the variable panel. One
+    // element, two owners → compose so both are honored.
+    const composedRef = useMemo(() => composeRefs(field.ref, editorRef), [field.ref, editorRef]);
+
+    return (
+        <FormItem className="flex min-h-0 flex-1 flex-col">
+            <FormControl>
+                <MarkdownEditorField
+                    aria-label={ariaLabel}
+                    disabled={disabled}
+                    mode={mode}
+                    onBlur={field.onBlur}
+                    onChange={field.onChange}
+                    placeholder={placeholder}
+                    ref={composedRef}
+                    value={field.value}
+                />
+            </FormControl>
+            {/* Full-height field: the invalid state shows as the editor's red border (via aria-invalid), not
+                text below it (no room in the flex layout). Kept sr-only so screen readers still announce it. */}
+            {fieldState.error && <FormMessage className="sr-only">{fieldState.error.message}</FormMessage>}
+        </FormItem>
+    );
+}
+
+// Same class as templates: one element serves every `/settings/prompts/:promptId`, so a POP across prompt
+// URLs kept the previous prompt's dirty template — and the previous `activeTab`, which on a tool prompt renders
+// no TabsContent and left the header Save submitting a form id that no longer exists. A key per prompt gives
+// both a fresh start.
 function SettingsPrompt() {
     const { promptId } = useParams<{ promptId: string }>();
-    const navigate = useNavigate();
 
-    const { data, error, loading } = useSettingsPromptsQuery();
-    const [createPrompt, { error: createError, loading: isCreateLoading }] = useCreatePromptMutation();
-    const [updatePrompt, { error: updateError, loading: isUpdateLoading }] = useUpdatePromptMutation();
-    const [deletePrompt, { error: deleteError, loading: isDeleteLoading }] = useDeletePromptMutation();
-    const [validatePrompt, { error: validateError, loading: isValidateLoading }] = useValidatePromptMutation();
+    return (
+        <SettingsPromptEditor
+            key={promptId ?? 'new'}
+            promptId={promptId}
+        />
+    );
+}
+
+function SettingsPromptEditor({ promptId }: { promptId?: string }) {
+    const { isDesktop } = useBreakpoint();
+
+    const { data, error, loading, refetch } = useQuery(SettingsPromptsDocument);
+    const [createPrompt, { loading: isCreateLoading }] = useMutation(CreatePromptDocument);
+    const [updatePrompt, { loading: isUpdateLoading }] = useMutation(UpdatePromptDocument);
+    const [deletePrompt, { loading: isDeleteLoading }] = useMutation(DeletePromptDocument);
+    const [validatePrompt, { loading: isValidateLoading }] = useMutation(ValidatePromptDocument);
 
     const [submitError, setSubmitError] = useState<null | string>(null);
     const [activeTab, setActiveTab] = useState<'human' | 'system'>('system');
@@ -136,49 +314,20 @@ function SettingsPrompt() {
     const [validationResult, setValidationResult] = useState<null | ValidatePromptMutation['validatePrompt']>(null);
     const [validationDialogOpen, setValidationDialogOpen] = useState(false);
     const [isDiffDialogOpen, setIsDiffDialogOpen] = useState(false);
-    const [isLeaveDialogOpen, setIsLeaveDialogOpen] = useState(false);
-    const [pendingBrowserBack, setPendingBrowserBack] = useState(false);
-    const allowBrowserLeaveRef = useRef(false);
-    const hasPushedBlockerStateRef = useRef(false);
+    const [viewMode, setViewMode] = useState<EditorViewMode>('rich');
+    // One ref shared by both tab editors (System + Human): safe only because Radix TabsContent unmounts the
+    // inactive tab (no forceMount here), so exactly one MarkdownEditor is ever mounted and the ref is
+    // unambiguous. If a forceMount / exit-animation is ever added, both mount and selectNextUse would race —
+    // switch to one ref per tab.
+    const editorRef = useRef<MarkdownEditorFieldHandle>(null);
 
     const isLoading = isCreateLoading || isUpdateLoading || isDeleteLoading || isValidateLoading;
 
-    const handleVariableClick = (variable: string, field: ControllerRenderProps<FieldValues, string>, formId: string) => {
-        const textarea = document.querySelector(`#${formId} textarea`) as HTMLTextAreaElement;
-
-        if (textarea) {
-            const currentValue = field.value || '';
-            const variablePattern = `{{.${variable}}}`;
-
-            const variableIndex = currentValue.indexOf(variablePattern);
-
-            if (variableIndex !== -1) {
-                textarea.focus();
-                textarea.setSelectionRange(variableIndex, variableIndex + variablePattern.length);
-
-                const lineHeight = 20;
-                const textBeforeSelection = currentValue.slice(0, Math.max(0, variableIndex));
-                const linesBeforeSelection = textBeforeSelection.split('\n').length - 1;
-                const selectionTop = linesBeforeSelection * lineHeight;
-                const textareaHeight = textarea.clientHeight;
-                const scrollTop = Math.max(0, selectionTop - textareaHeight / 2);
-
-                textarea.scrollTop = scrollTop;
-            } else {
-                const start = textarea.selectionStart;
-                const end = textarea.selectionEnd;
-                const newValue =
-                    currentValue.slice(0, Math.max(0, start)) + variablePattern + currentValue.slice(Math.max(0, end));
-                field.onChange(newValue);
-
-                // preventScroll: avoid yanking the user away from where they were typing.
-                setTimeout(() => {
-                    textarea.focus({ preventScroll: true });
-                    textarea.setSelectionRange(start + variablePattern.length, start + variablePattern.length);
-                }, 0);
-            }
+    const handleVariableClick = useCallback((variable: string) => {
+        if (!editorRef.current?.selectNextUse(variable)) {
+            editorRef.current?.insertAtCursor(`{{.${variable}}}`);
         }
-    };
+    }, []);
 
     const handleReset = () => {
         setResetDialogOpen(true);
@@ -228,18 +377,18 @@ function SettingsPrompt() {
 
             if (activeTab === 'system') {
                 if (promptInfo.type === 'agent') {
-                    const agentData = promptInfo.data as AgentPrompt | AgentPrompts;
+                    const agentData = promptInfo.data as AgentPrompts;
                     promptType = agentData.system.type;
                 } else {
                     const toolData = promptInfo.data as DefaultPrompt;
                     promptType = toolData.type;
                 }
 
-                currentTemplate = systemTemplate;
+                currentTemplate = systemForm.getValues('template');
             } else {
                 const agentData = promptInfo.data as AgentPrompts;
                 promptType = agentData.human!.type;
-                currentTemplate = humanTemplate;
+                currentTemplate = humanForm.getValues('template');
             }
 
             const result = await validatePrompt({
@@ -249,7 +398,7 @@ function SettingsPrompt() {
                 },
             });
 
-            setValidationResult(result.data?.validatePrompt);
+            setValidationResult(result.data?.validatePrompt ?? null);
             setValidationDialogOpen(true);
         } catch (error) {
             console.error('Validation error:', error);
@@ -257,26 +406,27 @@ function SettingsPrompt() {
         }
     };
 
-    const systemForm = useForm<SystemFormData>({
+    const systemForm = useAppForm<SystemFormData>({
         defaultValues: {
             template: '',
         },
-        resolver: zodResolver(systemFormSchema),
+        resetOptions: { keepDirtyValues: true },
+        schema: systemFormSchema,
     });
 
-    const humanForm = useForm<HumanFormData>({
+    const humanForm = useAppForm<HumanFormData>({
         defaultValues: {
             template: '',
         },
-        resolver: zodResolver(humanFormSchema),
+        resetOptions: { keepDirtyValues: true },
+        schema: humanFormSchema,
     });
 
-    const { isDirty: isSystemDirty } = useFormState({ control: systemForm.control });
-    const { isDirty: isHumanDirty } = useFormState({ control: humanForm.control });
+    const { isDirty: isSystemDirty, isValid: isSystemValid } = useFormState({ control: systemForm.control });
+    const { isDirty: isHumanDirty, isValid: isHumanValid } = useFormState({ control: humanForm.control });
     const isDirty = isSystemDirty || isHumanDirty;
 
-    const systemTemplate = systemForm.watch('template');
-    const humanTemplate = humanForm.watch('template');
+    const activeControl = activeTab === 'system' ? systemForm.control : humanForm.control;
 
     // eslint-disable-next-line react-hooks/preserve-manual-memoization -- branching reads from data.settingsPrompts that the compiler can't statically prove stable
     const promptInfo = useMemo(() => {
@@ -292,7 +442,7 @@ function SettingsPrompt() {
 
         const { agents, tools } = defaultPrompts;
 
-        const agentData = agents?.[promptId as keyof typeof agents] as AgentPrompt | AgentPrompts | undefined;
+        const agentData = agents?.[promptId as keyof typeof agents] as AgentPrompts | undefined;
 
         if (agentData) {
             const userSystemPrompt = userDefined?.find((p) => p.type === agentData.system.type);
@@ -340,46 +490,22 @@ function SettingsPrompt() {
         }
 
         let variables: string[] = [];
-        let formId = '';
-        let currentTemplate = '';
 
         if (activeTab === 'system') {
             variables =
                 promptInfo.type === 'agent'
-                    ? (promptInfo.data as AgentPrompt | AgentPrompts)?.system?.variables || []
+                    ? (promptInfo.data as AgentPrompts)?.system?.variables || []
                     : (promptInfo.data as DefaultPrompt)?.variables || [];
-            formId = 'system-prompt-form';
-            currentTemplate = systemTemplate;
         } else if (activeTab === 'human' && promptInfo.type === 'agent' && promptInfo.hasHuman) {
             variables = (promptInfo.data as AgentPrompts)?.human?.variables || [];
-            formId = 'human-prompt-form';
-            currentTemplate = humanTemplate;
         }
 
-        return { currentTemplate, formId, variables };
-    }, [promptInfo, activeTab, systemTemplate, humanTemplate]);
+        return { variables };
+    }, [promptInfo, activeTab]);
 
-    const handleVariableClickCallback = useCallback(
-        (variable: string) => {
-            if (!variablesData) {
-                return;
-            }
-
-            const field =
-                activeTab === 'system'
-                    ? {
-                          onChange: (value: string) => systemForm.setValue('template', value),
-                          value: systemTemplate,
-                      }
-                    : {
-                          onChange: (value: string) => humanForm.setValue('template', value),
-                          value: humanTemplate,
-                      };
-            handleVariableClick(variable, field, variablesData.formId);
-        },
-        [activeTab, systemTemplate, humanTemplate, variablesData, systemForm, humanForm],
-    );
-
+    // Re-sync both tabs to the server prompt. A Save refetches settingsPrompts → promptInfo gets a new
+    // identity → this fires; keepDirtyValues (on both form configs) preserves the OTHER tab's unsaved edits,
+    // which an unguarded reset would silently wipe.
     useEffect(() => {
         if (promptInfo) {
             systemForm.reset({
@@ -392,79 +518,22 @@ function SettingsPrompt() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [promptInfo]);
 
-    // Push a synthetic history entry while the form is dirty so a browser-back can be intercepted
-    // by popstate below — react-router's blocker doesn't cover the native back gesture.
     useEffect(() => {
-        if (isDirty && !hasPushedBlockerStateRef.current) {
-            window.history.pushState({ __pentagiBlock__: true }, '');
-            hasPushedBlockerStateRef.current = true;
+        if (submitError) {
+            toast.error(submitError);
         }
-    }, [isDirty]);
+    }, [submitError]);
 
-    useEffect(() => {
-        const handlePopState = () => {
-            if (!isDirty) {
-                return;
-            }
-
-            if (allowBrowserLeaveRef.current) {
-                allowBrowserLeaveRef.current = false;
-
-                return;
-            }
-
-            setPendingBrowserBack(true);
-            setIsLeaveDialogOpen(true);
-            window.history.forward();
-        };
-
-        window.addEventListener('popstate', handlePopState, { capture: true });
-
-        return () => {
-            window.removeEventListener('popstate', handlePopState, { capture: true });
-        };
-    }, [isDirty]);
-
-    const handleBack = () => {
-        if (isDirty) {
-            setIsLeaveDialogOpen(true);
-
-            return;
-        }
-
-        navigate('/settings/prompts');
-    };
-
-    const handleConfirmLeave = () => {
-        if (pendingBrowserBack) {
-            allowBrowserLeaveRef.current = true;
-            setPendingBrowserBack(false);
-            window.history.go(-2);
-
-            return;
-        }
-
-        navigate('/settings/prompts');
-    };
-
-    const handleLeaveDialogOpenChange = (open: boolean) => {
-        if (!open && pendingBrowserBack) {
-            setPendingBrowserBack(false);
-        }
-
-        setIsLeaveDialogOpen(open);
-    };
-
-    const handleSystemSubmit = async (formData: SystemFormData) => {
+    const handleSystemSubmit = async (formData: SystemFormData): Promise<boolean> => {
         if (!promptInfo) {
-            return;
+            return false;
         }
 
         const isUpdate = !!promptInfo.userSystemPrompt;
 
         // Submitting an unchanged template would create a no-op userDefined row that masks the default.
         if (!isUpdate && formData.template === promptInfo.defaultSystemTemplate) {
-            return;
+            return true;
         }
 
         try {
@@ -473,7 +542,7 @@ function SettingsPrompt() {
             let promptType: PromptType;
 
             if (promptInfo.type === 'agent') {
-                const agentData = promptInfo.data as AgentPrompt | AgentPrompts;
+                const agentData = promptInfo.data as AgentPrompts;
                 promptType = agentData.system.type;
             } else {
                 const toolData = promptInfo.data as DefaultPrompt;
@@ -497,22 +566,26 @@ function SettingsPrompt() {
                     },
                 });
             }
+
+            return true;
         } catch (error) {
             console.error('Submit error:', error);
             setSubmitError(error instanceof Error ? error.message : 'An error occurred while saving');
+
+            return false;
         }
     };
 
-    const handleHumanSubmit = async (formData: HumanFormData) => {
+    const handleHumanSubmit = async (formData: HumanFormData): Promise<boolean> => {
         if (!promptInfo) {
-            return;
+            return false;
         }
 
         const isUpdate = !!promptInfo.userHumanPrompt;
 
         // Submitting an unchanged template would create a no-op userDefined row that masks the default.
         if (!isUpdate && formData.template === promptInfo.defaultHumanTemplate) {
-            return;
+            return true;
         }
 
         try {
@@ -524,7 +597,7 @@ function SettingsPrompt() {
             if (!humanPromptType) {
                 setSubmitError('Human prompt type not found');
 
-                return;
+                return false;
             }
 
             if (isUpdate) {
@@ -544,32 +617,154 @@ function SettingsPrompt() {
                     },
                 });
             }
+
+            return true;
         } catch (error) {
             console.error('Submit error:', error);
             setSubmitError(error instanceof Error ? error.message : 'An error occurred while saving');
+
+            return false;
         }
     };
 
-    if (loading) {
+    const isFormValid = (!isSystemDirty || isSystemValid) && (!isHumanDirty || isHumanValid);
+
+    const onSaveAndLeave = async (): Promise<boolean> => {
+        const systemDirty = isSystemDirty;
+        const humanDirty = isHumanDirty;
+
+        if (systemDirty && !(await systemForm.trigger())) {
+            return false;
+        }
+
+        if (humanDirty && !(await humanForm.trigger())) {
+            return false;
+        }
+
+        // Snapshot both tabs before awaiting: a save refetch resets the forms, which would
+        // otherwise clobber the still-unsaved other tab's value mid-flight.
+        const systemValues = systemForm.getValues();
+        const humanValues = humanForm.getValues();
+        let saved = true;
+
+        if (systemDirty) {
+            saved = (await handleSystemSubmit(systemValues)) && saved;
+        }
+
+        if (humanDirty) {
+            saved = (await handleHumanSubmit(humanValues)) && saved;
+        }
+
+        return saved;
+    };
+
+    const unsavedGuard = useUnsavedChangesGuard({
+        isDirty,
+        isFormValid,
+        onSave: onSaveAndLeave,
+    });
+
+    const hasOverride =
+        (activeTab === 'system' && !!promptInfo?.userSystemPrompt) ||
+        (activeTab === 'human' && !!promptInfo?.userHumanPrompt);
+    const activeFormId = activeTab === 'system' ? 'system-prompt-form' : 'human-prompt-form';
+    const pageHeader = (
+        <AppHeader>
+            <AppHeaderContent>
+                <AppHeaderTitle icon={<FileText className="size-4 shrink-0" />}>Edit Prompt</AppHeaderTitle>
+            </AppHeaderContent>
+            {promptInfo && (
+                <AppHeaderActions>
+                    <AppHeaderAction
+                        disabled={isLoading}
+                        icon={isValidateLoading ? <Spinner variant="circle" /> : <CheckCircle />}
+                        label={isValidateLoading ? 'Validating...' : 'Validate'}
+                        onClick={handleValidate}
+                        type="button"
+                        variant="outline"
+                    />
+                    <AppHeaderAction
+                        form={activeFormId}
+                        icon={<Save />}
+                        label="Save"
+                        loading={isLoading}
+                        type="submit"
+                    />
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button
+                                aria-label="Prompt actions"
+                                className="size-8 p-0"
+                                type="button"
+                                variant="ghost"
+                            >
+                                <Ellipsis />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent
+                            align="end"
+                            className="min-w-24"
+                        >
+                            {hasOverride && (
+                                <>
+                                    <DropdownMenuItem onClick={() => setIsDiffDialogOpen(true)}>
+                                        <FileDiff />
+                                        Diff
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                        disabled={isLoading}
+                                        onClick={handleReset}
+                                    >
+                                        {isDeleteLoading ? <Spinner variant="circle" /> : <RotateCcw />}
+                                        {isDeleteLoading ? 'Resetting...' : 'Reset'}
+                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+                                </>
+                            )}
+                            <DropdownMenuItem
+                                className="cursor-default gap-4 hover:bg-transparent focus:bg-transparent"
+                                onSelect={(event) => event.preventDefault()}
+                            >
+                                View
+                                <EditorViewModeToggle
+                                    className="-my-1.5 -mr-2 ml-auto"
+                                    mode={viewMode}
+                                    onModeChange={setViewMode}
+                                    rawTooltip="Edit the raw prompt template"
+                                />
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                </AppHeaderActions>
+            )}
+        </AppHeader>
+    );
+
+    if (loading && !data) {
         return (
             <>
-                <StatusCard
-                    description="Please wait while we fetch prompt information"
-                    icon={<Loader2 className="text-muted-foreground size-16 animate-spin" />}
-                    title="Loading prompt data..."
-                />
+                {pageHeader}
+                <div className="flex flex-1 items-center justify-center p-4">
+                    <LoadingState
+                        description="Please wait while we fetch prompt information"
+                        title="Loading prompt data..."
+                    />
+                </div>
             </>
         );
     }
 
-    if (error) {
+    if (error && !data) {
         return (
             <>
-                <Alert variant="destructive">
-                    <AlertCircle className="size-4" />
-                    <AlertTitle>Error loading prompt data</AlertTitle>
-                    <AlertDescription>{error.message}</AlertDescription>
-                </Alert>
+                {pageHeader}
+                <div className="flex flex-1 items-center justify-center p-4">
+                    <ErrorState
+                        message={error.message}
+                        onRetry={refetch}
+                        title="Error loading prompt data"
+                    />
+                </div>
             </>
         );
     }
@@ -577,310 +772,158 @@ function SettingsPrompt() {
     if (!promptInfo) {
         return (
             <>
-                <Alert variant="destructive">
-                    <AlertCircle className="size-4" />
-                    <AlertTitle>Prompt not found</AlertTitle>
-                    <AlertDescription>
-                        The prompt "{promptId}" could not be found or is not supported for editing.
-                    </AlertDescription>
-                </Alert>
+                {pageHeader}
+                <div className="flex flex-1 items-center justify-center p-4">
+                    <Empty>
+                        <EmptyHeader>
+                            <EmptyMedia>
+                                <AlertCircle className="text-destructive size-12" />
+                            </EmptyMedia>
+                            <EmptyTitle>Prompt not found</EmptyTitle>
+                            <EmptyDescription>{`The prompt "${promptId}" could not be found or is not supported for editing.`}</EmptyDescription>
+                        </EmptyHeader>
+                    </Empty>
+                </div>
             </>
         );
     }
 
-    const currentTemplate = activeTab === 'system' ? systemTemplate : humanTemplate;
     const defaultTemplate = activeTab === 'system' ? promptInfo.defaultSystemTemplate : promptInfo.defaultHumanTemplate;
+    const hasHumanPrompt = promptInfo.type === 'agent' && promptInfo.hasHuman;
 
-    // ReactDiffViewer styles aligned with shadcn — uses Tailwind CSS vars rather than hard-coded colors.
-    const diffStyles = {
-        content: {
-            fontFamily:
-                'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
-            fontSize: '0.875rem',
-            width: '50%',
-        },
-        diffContainer: {
-            border: '1px solid var(--border)',
-            borderRadius: '0.5rem',
-        },
-        gutter: {
-            borderRight: '1px solid var(--border)',
-        },
-        line: {
-            borderBottom: '1px solid oklch(from var(--border) l c h / 0.50)',
-        },
-        lineNumber: {
-            color: 'var(--muted-foreground)',
-        },
-        splitView: {
-            gap: '0',
-        },
-        variables: {
-            dark: {
-                addedBackground: 'hsl(142 70% 45% / 0.50)',
-                addedColor: 'var(--foreground)',
-                addedGutterBackground: 'hsl(142 70% 45% / 0.40)',
-                addedGutterColor: 'var(--muted-foreground)',
-                codeFoldBackground: 'var(--muted)',
-                codeFoldContentColor: 'var(--muted-foreground)',
-                codeFoldGutterBackground: 'var(--muted)',
-                diffViewerBackground: 'var(--background)',
-                diffViewerColor: 'var(--foreground)',
-                diffViewerTitleBackground: 'var(--card)',
-                diffViewerTitleBorderColor: 'var(--border)',
-                diffViewerTitleColor: 'var(--card-foreground)',
-                emptyLineBackground: 'var(--background)',
-                gutterBackground: 'var(--muted)',
-                gutterBackgroundDark: 'var(--muted)',
-                gutterColor: 'var(--muted-foreground)',
-                highlightBackground: 'oklch(from var(--primary) l c h / 0.20)',
-                highlightGutterBackground: 'oklch(from var(--primary) l c h / 0.30)',
-                removedBackground: 'oklch(from var(--destructive) l c h / 0.50)',
-                removedColor: 'var(--foreground)',
-                removedGutterBackground: 'oklch(from var(--destructive) l c h / 0.40)',
-                removedGutterColor: 'var(--muted-foreground)',
-                wordAddedBackground: 'hsl(142 70% 45% / 0.70)',
-                wordRemovedBackground: 'oklch(from var(--destructive) l c h / 0.70)',
-            },
-            light: {
-                addedBackground: 'hsl(142 70% 45% / 0.50)',
-                addedColor: 'var(--foreground)',
-                addedGutterBackground: 'hsl(142 70% 45% / 0.40)',
-                addedGutterColor: 'var(--muted-foreground)',
-                codeFoldBackground: 'var(--muted)',
-                codeFoldContentColor: 'var(--muted-foreground)',
-                codeFoldGutterBackground: 'var(--muted)',
-                diffViewerBackground: 'var(--background)',
-                diffViewerColor: 'var(--foreground)',
-                diffViewerTitleBackground: 'var(--card)',
-                diffViewerTitleBorderColor: 'var(--border)',
-                diffViewerTitleColor: 'var(--card-foreground)',
-                emptyLineBackground: 'var(--background)',
-                gutterBackground: 'var(--muted)',
-                gutterBackgroundDark: 'var(--muted)',
-                gutterColor: 'var(--muted-foreground)',
-                highlightBackground: 'oklch(from var(--primary) l c h / 0.20)',
-                highlightGutterBackground: 'oklch(from var(--primary) l c h / 0.30)',
-                removedBackground: 'oklch(from var(--destructive) l c h / 0.50)',
-                removedColor: 'var(--foreground)',
-                removedGutterBackground: 'oklch(from var(--destructive) l c h / 0.40)',
-                removedGutterColor: 'var(--muted-foreground)',
-                wordAddedBackground: 'hsl(142 70% 45% / 0.70)',
-                wordRemovedBackground: 'oklch(from var(--destructive) l c h / 0.70)',
-            },
-        },
-    };
+    const promptPanel = (
+        <>
+            <div className="flex flex-col gap-2 text-center">
+                <h2 className="text-2xl font-semibold">Edit prompt</h2>
+                <p className="text-muted-foreground">
+                    {promptInfo.type === 'agent'
+                        ? 'Customize the templates this agent uses'
+                        : 'Customize the template this tool uses'}
+                </p>
+            </div>
 
-    const mutationError = createError || updateError || deleteError || validateError || submitError;
-
-    return (
-        <div className="flex flex-col gap-4">
-            <div className="flex flex-col gap-2">
-                <h2 className="flex items-center gap-2 text-lg font-semibold">
+            <div className="flex flex-col gap-1">
+                <h3 className="flex items-center gap-2 text-base font-semibold">
                     {promptInfo.type === 'agent' ? (
                         <Bot className="text-muted-foreground size-5" />
                     ) : (
                         <Wrench className="text-muted-foreground size-5" />
                     )}
                     {promptInfo.displayName}
-                </h2>
-
-                <div className="text-muted-foreground">
+                </h3>
+                <p className="text-muted-foreground text-sm">
                     {promptInfo.type === 'agent'
                         ? 'Configure prompts for this AI agent'
                         : 'Configure the prompt for this tool'}
-                </div>
+                </p>
             </div>
 
-            <Tabs
-                className="w-full"
-                defaultValue="system"
-                onValueChange={(value) => setActiveTab(value as 'human' | 'system')}
-            >
-                <TabsList>
-                    <TabsTrigger value="system">
-                        <div className="flex items-center gap-2">
-                            <Code className="size-4" />
-                            System Prompt
-                        </div>
-                    </TabsTrigger>
-                    {promptInfo.type === 'agent' && promptInfo.hasHuman && (
-                        <TabsTrigger value="human">
-                            <div className="flex items-center gap-2">
-                                <User className="size-4" />
-                                Human Prompt
-                            </div>
-                        </TabsTrigger>
-                    )}
-                </TabsList>
-
-                <TabsContent
-                    className="mt-4"
+            <TabsList className="xl:dark:bg-background w-full">
+                <TabsTrigger
+                    className="xl:dark:data-[state=active]:bg-card flex-1"
                     value="system"
                 >
-                    <Form {...systemForm}>
-                        <form
-                            className="flex flex-col gap-6"
-                            id="system-prompt-form"
-                            onSubmit={systemForm.handleSubmit(handleSystemSubmit)}
-                        >
-                            {/* Error Alert */}
-                            {mutationError && (
-                                <Alert variant="destructive">
-                                    <AlertCircle className="size-4" />
-                                    <AlertTitle>Error</AlertTitle>
-                                    <AlertDescription>
-                                        {mutationError instanceof Error ? (
-                                            mutationError.message
-                                        ) : (
-                                            <div className="whitespace-pre-line">{mutationError}</div>
-                                        )}
-                                    </AlertDescription>
-                                </Alert>
-                            )}
+                    <Code className="size-4" />
+                    System Prompt
+                </TabsTrigger>
+                <TabsTrigger
+                    className="xl:dark:data-[state=active]:bg-card flex-1"
+                    disabled={!hasHumanPrompt}
+                    value="human"
+                >
+                    <User className="size-4" />
+                    Human Prompt
+                </TabsTrigger>
+            </TabsList>
 
-                            {/* System Template Field */}
-                            <FormTextareaItem
-                                control={systemForm.control}
+            {variablesData ? (
+                <VariablesPanelContainer
+                    control={activeControl}
+                    onVariableClick={handleVariableClick}
+                    variables={variablesData.variables}
+                />
+            ) : null}
+        </>
+    );
+
+    const systemPlaceholder =
+        promptInfo.type === 'tool' ? 'Enter the tool template...' : 'Enter the system prompt template...';
+
+    const promptEditor = (
+        <>
+            <TabsContent
+                className="mt-0 flex min-h-0 flex-1 flex-col"
+                value="system"
+            >
+                <Form {...systemForm}>
+                    <form
+                        className="flex min-h-0 flex-1 flex-col"
+                        id="system-prompt-form"
+                        noValidate
+                        onSubmit={systemForm.handleSubmit(handleSystemSubmit)}
+                    >
+                        <FormMarkdownItem
+                            aria-label="System prompt template"
+                            control={systemForm.control}
+                            disabled={isLoading}
+                            editorRef={editorRef}
+                            mode={viewMode}
+                            name="template"
+                            placeholder={systemPlaceholder}
+                        />
+                    </form>
+                </Form>
+            </TabsContent>
+
+            {hasHumanPrompt && (
+                <TabsContent
+                    className="mt-0 flex min-h-0 flex-1 flex-col"
+                    value="human"
+                >
+                    <Form {...humanForm}>
+                        <form
+                            className="flex min-h-0 flex-1 flex-col"
+                            id="human-prompt-form"
+                            noValidate
+                            onSubmit={humanForm.handleSubmit(handleHumanSubmit)}
+                        >
+                            <FormMarkdownItem
+                                aria-label="Human prompt template"
+                                control={humanForm.control}
                                 disabled={isLoading}
+                                editorRef={editorRef}
+                                mode={viewMode}
                                 name="template"
-                                placeholder={
-                                    promptInfo.type === 'tool'
-                                        ? 'Enter the tool template...'
-                                        : 'Enter the system prompt template...'
-                                }
+                                placeholder="Enter the human prompt template..."
                             />
                         </form>
                     </Form>
                 </TabsContent>
+            )}
+        </>
+    );
 
-                {promptInfo.type === 'agent' && promptInfo.hasHuman && (
-                    <TabsContent
-                        className="mt-6"
-                        value="human"
-                    >
-                        <Form {...humanForm}>
-                            <form
-                                className="flex flex-col gap-6"
-                                id="human-prompt-form"
-                                onSubmit={humanForm.handleSubmit(handleHumanSubmit)}
-                            >
-                                {/* Error Alert */}
-                                {mutationError && (
-                                    <Alert variant="destructive">
-                                        <AlertCircle className="size-4" />
-                                        <AlertTitle>Error</AlertTitle>
-                                        <AlertDescription>
-                                            {mutationError instanceof Error ? (
-                                                mutationError.message
-                                            ) : (
-                                                <div className="whitespace-pre-line">{mutationError}</div>
-                                            )}
-                                        </AlertDescription>
-                                    </Alert>
-                                )}
-
-                                {/* Human Template Field */}
-                                <FormTextareaItem
-                                    control={humanForm.control}
-                                    disabled={isLoading}
-                                    name="template"
-                                    placeholder="Enter the human prompt template..."
-                                />
-                            </form>
-                        </Form>
-                    </TabsContent>
+    return (
+        <div className={isDesktop ? 'flex h-[100dvh] min-h-0 flex-col' : 'flex min-h-[100dvh] flex-col'}>
+            {pageHeader}
+            <Tabs
+                className="flex min-h-0 flex-1 flex-col"
+                onValueChange={(value) => setActiveTab(value as 'human' | 'system')}
+                value={activeTab}
+            >
+                {isDesktop ? (
+                    <DetailSplitLayout
+                        content={promptEditor}
+                        panel={promptPanel}
+                    />
+                ) : (
+                    <div className="flex min-h-0 flex-1 flex-col gap-4 p-4">
+                        {promptPanel}
+                        {promptEditor}
+                    </div>
                 )}
             </Tabs>
 
-            {/* Sticky footer with variables and buttons */}
-            <div className="bg-background sticky -bottom-4 -mx-4 mt-4 -mb-4 border-t p-4 shadow-lg">
-                {/* Variables */}
-                {variablesData && (
-                    <Variables
-                        currentTemplate={variablesData.currentTemplate}
-                        onVariableClick={handleVariableClickCallback}
-                        variables={variablesData.variables}
-                    />
-                )}
-
-                {/* Action buttons */}
-                <div className="flex items-center">
-                    <div className="flex gap-2">
-                        {/* Reset button - only show when user has custom prompt */}
-                        {((activeTab === 'system' && promptInfo?.userSystemPrompt) ||
-                            (activeTab === 'human' && promptInfo?.userHumanPrompt)) && (
-                            <>
-                                <Button
-                                    disabled={isLoading}
-                                    onClick={handleReset}
-                                    type="button"
-                                    variant="destructive"
-                                >
-                                    {isDeleteLoading ? <Loader2 className="size-4 animate-spin" /> : <RotateCcw />}
-                                    {isDeleteLoading ? 'Resetting...' : 'Reset'}
-                                </Button>
-
-                                <Button
-                                    disabled={isLoading}
-                                    onClick={() => setIsDiffDialogOpen(true)}
-                                    type="button"
-                                    variant="outline"
-                                >
-                                    <FileDiff className="size-4" />
-                                    Diff
-                                </Button>
-                            </>
-                        )}
-                        <Button
-                            disabled={isLoading}
-                            onClick={handleValidate}
-                            type="button"
-                            variant="outline"
-                        >
-                            {isValidateLoading ? (
-                                <Loader2 className="size-4 animate-spin" />
-                            ) : (
-                                <CheckCircle className="size-4" />
-                            )}
-                            {isValidateLoading ? 'Validating...' : 'Validate'}
-                        </Button>
-                    </div>
-
-                    <div className="ml-auto flex gap-2">
-                        <Button
-                            disabled={isLoading}
-                            onClick={handleBack}
-                            type="button"
-                            variant="outline"
-                        >
-                            Cancel
-                        </Button>
-                        {activeTab === 'system' && (
-                            <FormSubmitButton
-                                form="system-prompt-form"
-                                icon={<Save className="size-4" />}
-                                loading={isLoading}
-                                variant="secondary"
-                            >
-                                {isLoading ? 'Saving...' : 'Save Changes'}
-                            </FormSubmitButton>
-                        )}
-                        {activeTab === 'human' && promptInfo?.type === 'agent' && promptInfo?.hasHuman && (
-                            <FormSubmitButton
-                                form="human-prompt-form"
-                                icon={<Save className="size-4" />}
-                                loading={isLoading}
-                                variant="secondary"
-                            >
-                                {isLoading ? 'Saving...' : 'Save Changes'}
-                            </FormSubmitButton>
-                        )}
-                    </div>
-                </div>
-            </div>
-
-            {/* Reset Confirmation Dialog */}
             <ConfirmationDialog
                 cancelText="Cancel"
                 cancelVariant="outline"
@@ -896,25 +939,21 @@ function SettingsPrompt() {
                 title="Reset Prompt"
             />
 
-            {/* Leave Confirmation Dialog */}
-            <ConfirmationDialog
-                cancelText="Stay"
-                confirmIcon={undefined}
-                confirmText="Leave"
-                confirmVariant="destructive"
-                description="You have unsaved changes. Are you sure you want to leave without saving?"
-                handleConfirm={handleConfirmLeave}
-                handleOpenChange={handleLeaveDialogOpenChange}
-                isOpen={isLeaveDialogOpen}
-                title="Discard changes?"
+            <UnsavedChangesDialog
+                canSave={isFormValid}
+                handleCancel={unsavedGuard.handleCancel}
+                handleDiscard={unsavedGuard.handleDiscard}
+                handleOpenChange={unsavedGuard.handleOpenChange}
+                handleSaveAndLeave={unsavedGuard.handleSaveAndLeave}
+                isOpen={unsavedGuard.isOpen}
+                isSavingFromDialog={unsavedGuard.isSavingFromDialog}
             />
 
-            {/* Validation Results Dialog */}
             <Dialog
                 onOpenChange={setValidationDialogOpen}
                 open={validationDialogOpen}
             >
-                <DialogContent className="max-w-2xl">
+                <DialogContent className="sm:max-w-2xl">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
                             <AlertCircle className="size-5" />
@@ -927,7 +966,7 @@ function SettingsPrompt() {
 
                     {validationResult && (
                         <div className="flex flex-col gap-4">
-                            <Alert variant={validationResult.result ? 'default' : 'destructive'}>
+                            <Alert variant={validationResult.result === 'success' ? 'default' : 'destructive'}>
                                 {validationResult.result === 'success' ? (
                                     <CheckCircle className="size-4 text-green-500!" />
                                 ) : (
@@ -961,12 +1000,11 @@ function SettingsPrompt() {
                 </DialogContent>
             </Dialog>
 
-            {/* Diff Dialog */}
             <Dialog
                 onOpenChange={setIsDiffDialogOpen}
                 open={isDiffDialogOpen}
             >
-                <DialogContent className="max-w-7xl">
+                <DialogContent className="sm:max-w-7xl">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
                             <FileDiff className="size-5" />
@@ -975,12 +1013,10 @@ function SettingsPrompt() {
                         <DialogDescription>Changes between current value and default template.</DialogDescription>
                     </DialogHeader>
                     <div className="max-h-[70vh] overflow-auto">
-                        <ReactDiffViewer
-                            newValue={currentTemplate}
+                        <DiffContent
+                            control={activeControl}
                             oldValue={defaultTemplate}
-                            splitView
                             styles={diffStyles}
-                            useDarkTheme
                         />
                     </div>
                 </DialogContent>
@@ -990,35 +1026,122 @@ function SettingsPrompt() {
 }
 
 function Variables({ currentTemplate, onVariableClick, variables }: VariablesProps) {
+    const { isDesktop } = useBreakpoint();
+
     if (variables.length === 0) {
         return null;
     }
 
-    const usedVariables = getUsedVariables(currentTemplate);
+    const content = (
+        <VariablesContent
+            currentTemplate={currentTemplate}
+            onVariableClick={onVariableClick}
+            variables={variables}
+        />
+    );
+
+    if (isDesktop) {
+        return (
+            <div className="bg-card overflow-hidden rounded-lg border">
+                <div className="border-b px-4 py-3">
+                    <h4 className="flex items-center gap-2 text-sm font-medium">
+                        {VARIABLES_TITLE}
+                        <Badge
+                            className="ml-auto font-normal tabular-nums"
+                            variant="secondary"
+                        >
+                            {variables.length}
+                        </Badge>
+                    </h4>
+                    <p className="text-muted-foreground mt-1 text-xs">
+                        Click to insert at the cursor, or cycle through existing uses.
+                    </p>
+                </div>
+                <div className="bg-background">{content}</div>
+            </div>
+        );
+    }
 
     return (
-        <div className="bg-muted/50 mb-4 rounded-md border p-3">
-            <h4 className="text-muted-foreground mb-2 text-sm font-medium">Available Variables:</h4>
-            <div className="flex flex-wrap gap-1">
-                {variables.map((variable) => {
-                    const isUsed = usedVariables.has(variable);
+        <Popover>
+            <PopoverTrigger asChild>
+                <Button
+                    className="w-full justify-start"
+                    size="sm"
+                    variant="secondary"
+                >
+                    <Braces />
+                    {VARIABLES_TITLE}
+                    <Badge
+                        className="ml-auto h-5 font-normal tabular-nums"
+                        variant="outline"
+                    >
+                        {variables.length}
+                    </Badge>
+                </Button>
+            </PopoverTrigger>
+            <PopoverContent
+                align="start"
+                className="max-h-(--radix-popover-content-available-height) w-(--radix-popover-trigger-width) overflow-y-auto overscroll-contain p-0"
+            >
+                {content}
+            </PopoverContent>
+        </Popover>
+    );
+}
 
-                    return (
-                        <code
-                            className={`cursor-pointer rounded border px-2 py-1 font-mono text-xs transition-colors ${
-                                isUsed
-                                    ? 'border-green-300 bg-green-100 text-green-800 hover:bg-green-200'
-                                    : 'bg-background text-foreground hover:bg-accent'
-                            }`}
-                            key={variable}
+function VariablesContent({ currentTemplate, onVariableClick, variables }: VariablesContentProps) {
+    // Computed here, not in the parent, so the narrow-width popover only runs the
+    // per-variable RegExp sweep while it's open and mounted.
+    const counts = useMemo(() => countVariableUses(currentTemplate, variables), [currentTemplate, variables]);
+
+    return (
+        <div className="flex flex-wrap gap-1.5 px-4 py-3">
+            {variables.map((variable) => {
+                const count = counts[variable] ?? 0;
+                const isUsed = count > 0;
+                const action = isUsed
+                    ? `Go to next {{.${variable}}} in the template${count > 1 ? ` (${count} uses)` : ''}`
+                    : `Insert {{.${variable}}} at the cursor`;
+
+                return (
+                    // className stays on Badge: Slot only concatenates, so `font-normal` would race
+                    // badgeVariants' `font-semibold` unless cn() merges them here first.
+                    <Badge
+                        asChild
+                        className="cursor-pointer font-mono font-normal"
+                        key={variable}
+                        variant={isUsed ? 'green' : 'secondary'}
+                    >
+                        <button
+                            aria-label={action}
                             onClick={() => onVariableClick(variable)}
+                            title={action}
+                            type="button"
                         >
+                            {isUsed ? <Check className="size-3" /> : null}
                             {`{{.${variable}}}`}
-                        </code>
-                    );
-                })}
-            </div>
+                            {count > 1 ? (
+                                <span className="ml-0.5 text-[10px] tabular-nums opacity-70">×{count}</span>
+                            ) : null}
+                        </button>
+                    </Badge>
+                );
+            })}
         </div>
+    );
+}
+
+// Don't hoist this useWatch to the parent — it would re-subscribe the whole page per keystroke.
+function VariablesPanelContainer({ control, onVariableClick, variables }: VariablesPanelContainerProps) {
+    const currentTemplate = useWatch({ control, name: 'template' });
+
+    return (
+        <Variables
+            currentTemplate={currentTemplate}
+            onVariableClick={onVariableClick}
+            variables={variables}
+        />
     );
 }
 
