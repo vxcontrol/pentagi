@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/client"
 )
 
 func TestStatContainerEntries_AllSucceed(t *testing.T) {
@@ -259,4 +260,80 @@ func failNames(failures []statFailure) map[string]bool {
 		m[f.name] = true
 	}
 	return m
+}
+
+const probeImage = "alpine:3.20"
+
+// newDaemonClient binds a client to the local daemon, skipping the test when
+// none is reachable.
+func newDaemonClient(t *testing.T) *dockerClient {
+	t.Helper()
+
+	cli, err := client.NewClientWithOpts(client.FromEnv)
+	if err != nil {
+		t.Skipf("docker daemon unavailable: %v", err)
+	}
+
+	ctx := context.Background()
+	cli.NegotiateAPIVersion(ctx)
+	if _, err := cli.Ping(ctx); err != nil {
+		t.Skipf("docker daemon unavailable: %v", err)
+	}
+
+	return &dockerClient{client: cli}
+}
+
+// A flow keeps the id of its primary container in the database. When that
+// container is removed behind pentagi's back the id has to read as not running,
+// otherwise the flow can never rebuild it.
+func TestIsContainerRunningRemovedContainer(t *testing.T) {
+	dc := newDaemonClient(t)
+	ctx := context.Background()
+
+	created, err := dc.client.ContainerCreate(ctx, &container.Config{
+		Image:      probeImage,
+		Entrypoint: []string{"tail", "-f", "/dev/null"},
+	}, nil, nil, nil, "")
+	if client.IsErrNotFound(err) {
+		t.Skipf("%s is not present locally", probeImage)
+	}
+	if err != nil {
+		t.Fatalf("create probe container: %v", err)
+	}
+	t.Cleanup(func() {
+		dc.client.ContainerRemove(context.Background(), created.ID, container.RemoveOptions{Force: true})
+	})
+
+	if err := dc.client.ContainerStart(ctx, created.ID, container.StartOptions{}); err != nil {
+		t.Fatalf("start probe container: %v", err)
+	}
+
+	running, err := dc.IsContainerRunning(ctx, created.ID)
+	if err != nil || !running {
+		t.Fatalf("got running=%v err=%v, want true and no error", running, err)
+	}
+
+	if err := dc.client.ContainerRemove(ctx, created.ID, container.RemoveOptions{Force: true}); err != nil {
+		t.Fatalf("remove probe container: %v", err)
+	}
+
+	running, err = dc.IsContainerRunning(ctx, created.ID)
+	if err != nil {
+		t.Fatalf("removed container: got error %v, want none", err)
+	}
+	if running {
+		t.Fatal("removed container reported as running")
+	}
+}
+
+func TestIsContainerRunningUnknownContainer(t *testing.T) {
+	dc := newDaemonClient(t)
+
+	running, err := dc.IsContainerRunning(context.Background(), "pentagi-container-that-does-not-exist")
+	if err != nil {
+		t.Fatalf("unknown container: got error %v, want none", err)
+	}
+	if running {
+		t.Fatal("unknown container reported as running")
+	}
 }
