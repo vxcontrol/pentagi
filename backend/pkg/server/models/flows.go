@@ -56,7 +56,7 @@ type Flow struct {
 	Language           string           `form:"language" json:"language" validate:"max=70,required" gorm:"type:TEXT;NOT NULL"`
 	Functions          *tools.Functions `form:"functions,omitempty" json:"functions,omitempty" validate:"omitempty,valid" gorm:"type:JSON;NOT NULL;default:'{}'"`
 	ToolCallIDTemplate string           `form:"tool_call_id_template" json:"tool_call_id_template" validate:"max=70,required" gorm:"type:TEXT;NOT NULL"`
-	TraceID            *string          `form:"trace_id" json:"trace_id" validate:"max=70,required" gorm:"type:TEXT;NOT NULL"`
+	TraceID            *string          `form:"trace_id" json:"trace_id" validate:"omitempty,max=70" gorm:"type:TEXT"`
 	UserID             uint64           `form:"user_id" json:"user_id" validate:"min=0,numeric,required" gorm:"type:BIGINT;NOT NULL"`
 	CreatedAt          time.Time        `form:"created_at,omitempty" json:"created_at,omitempty" validate:"omitempty" gorm:"type:TIMESTAMPTZ;default:CURRENT_TIMESTAMP"`
 	UpdatedAt          time.Time        `form:"updated_at,omitempty" json:"updated_at,omitempty" validate:"omitempty" gorm:"type:TIMESTAMPTZ;default:CURRENT_TIMESTAMP"`

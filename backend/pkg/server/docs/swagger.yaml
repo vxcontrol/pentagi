@@ -664,7 +664,6 @@ definitions:
     - status
     - title
     - tool_call_id_template
-    - trace_id
     - user_id
     type: object
   models.FlowExecutionStats:
@@ -777,7 +776,6 @@ definitions:
     - tasks
     - title
     - tool_call_id_template
-    - trace_id
     - user_id
     type: object
   models.FlowUsageResponse:
