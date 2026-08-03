@@ -481,18 +481,24 @@ func (fte *flowToolsExecutor) SetGraphitiClient(client *graphiti.Client) {
 
 func (fte *flowToolsExecutor) Prepare(ctx context.Context) error {
 	if cnt, err := fte.db.GetFlowPrimaryContainer(ctx, fte.flowID); err == nil {
-		switch cnt.Status {
-		case database.ContainerStatusRunning:
-			fte.primaryID = cnt.ID
-			fte.primaryLID = cnt.LocalID.String
-			if err := fte.syncMissingFiles(ctx); err != nil {
-				containerName := PrimaryTerminalName(fte.cfg.TenantPrefix(), fte.flowID)
-				return fmt.Errorf("failed to sync missing files to container '%s': %w", containerName, err)
+		// the stored status goes stale when the container is removed outside pentagi
+		if cnt.Status == database.ContainerStatusRunning {
+			containerName := PrimaryTerminalName(fte.cfg.TenantPrefix(), fte.flowID)
+			running, err := fte.docker.IsContainerRunning(ctx, cnt.LocalID.String)
+			if err != nil {
+				return fmt.Errorf("failed to inspect container '%s': %w", containerName, err)
 			}
-			return nil
-		default:
-			fte.docker.RemoveContainer(ctx, cnt.LocalID.String, cnt.ID)
+			if running {
+				fte.primaryID = cnt.ID
+				fte.primaryLID = cnt.LocalID.String
+				if err := fte.syncMissingFiles(ctx); err != nil {
+					return fmt.Errorf("failed to sync missing files to container '%s': %w", containerName, err)
+				}
+				return nil
+			}
 		}
+
+		fte.docker.RemoveContainer(ctx, cnt.LocalID.String, cnt.ID)
 	}
 
 	// Explicit capability allow-list (CapDrop: ALL below): Docker's default 14
