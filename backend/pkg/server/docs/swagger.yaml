@@ -1067,7 +1067,6 @@ definitions:
         minLength: 5
         type: string
       password:
-        maxLength: 100
         type: string
     required:
     - current_password
@@ -1691,7 +1690,6 @@ definitions:
         maxLength: 70
         type: string
       password:
-        maxLength: 100
         type: string
       password_change_required:
         type: boolean

@@ -9217,8 +9217,7 @@ const docTemplate = `{
                     "minLength": 5
                 },
                 "password": {
-                    "type": "string",
-                    "maxLength": 100
+                    "type": "string"
                 }
             }
         },
@@ -10107,8 +10106,7 @@ const docTemplate = `{
                     "maxLength": 70
                 },
                 "password": {
-                    "type": "string",
-                    "maxLength": 100
+                    "type": "string"
                 },
                 "password_change_required": {
                     "type": "boolean"

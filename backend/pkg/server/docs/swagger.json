@@ -9209,8 +9209,7 @@
                     "minLength": 5
                 },
                 "password": {
-                    "type": "string",
-                    "maxLength": 100
+                    "type": "string"
                 }
             }
         },
@@ -10099,8 +10098,7 @@
                     "maxLength": 70
                 },
                 "password": {
-                    "type": "string",
-                    "maxLength": 100
+                    "type": "string"
                 },
                 "password_change_required": {
                     "type": "boolean"
