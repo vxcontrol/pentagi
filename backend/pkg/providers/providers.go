@@ -697,6 +697,9 @@ func (pc *providerController) SeedDefaultProviders(ctx context.Context, userID i
 		Name:   prvname,
 		UserID: userID,
 	})
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return fmt.Errorf("failed to get provider '%s' from database: %w", prvname, err)
+	}
 	if err != nil {
 		_, err = pc.db.CreateProvider(ctx, database.CreateProviderParams{
 			UserID: userID,
