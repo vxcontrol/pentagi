@@ -91,6 +91,22 @@ SET tool_call_id_template = $1
 WHERE id = $2
 RETURNING *;
 
+-- name: UpdateAssistantsProviderNameByOldName :many
+-- The assistants counterpart of UpdateFlowsProviderNameByOldName. Assistants
+-- carry their own provider reference, independent of their flow's, and the
+-- table has no user_id — ownership is derived by joining through flows, so the
+-- statement can never cross a tenant boundary. Idempotent for the same reason:
+-- a rewritten row no longer matches old_name.
+UPDATE assistants a
+SET model_provider_name = sqlc.arg(new_name)
+FROM flows f
+WHERE a.flow_id = f.id
+  AND f.user_id = sqlc.arg(user_id)
+  AND a.model_provider_name = sqlc.arg(old_name)
+  AND a.deleted_at IS NULL
+  AND f.deleted_at IS NULL
+RETURNING a.id, a.status, a.title, a.model, a.model_provider_name, a.language, a.functions, a.trace_id, a.flow_id, a.use_agents, a.msgchain_id, a.created_at, a.updated_at, a.deleted_at, a.model_provider_type, a.tool_call_id_template;
+
 -- name: DeleteAssistant :one
 UPDATE assistants
 SET deleted_at = CURRENT_TIMESTAMP

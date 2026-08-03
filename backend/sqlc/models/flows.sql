@@ -71,6 +71,17 @@ SET model_provider_name = $1, model_provider_type = $2, tool_call_id_template = 
 WHERE id = $5
 RETURNING *;
 
+-- name: UpdateFlowsProviderNameByOldName :many
+-- Bulk-renames every flow row of a user still pointing at a provider's old name
+-- (the user renamed a custom LLM provider, or deleted one and the reference is
+-- reset to the built-in name of its type). Matching on old_name makes the
+-- statement idempotent: once rewritten, a row no longer matches, so it is safe
+-- to call unconditionally and to retry.
+UPDATE flows
+SET model_provider_name = sqlc.arg(new_name)
+WHERE user_id = sqlc.arg(user_id) AND model_provider_name = sqlc.arg(old_name) AND deleted_at IS NULL
+RETURNING *;
+
 -- name: DeleteFlow :one
 UPDATE flows
 SET deleted_at = CURRENT_TIMESTAMP

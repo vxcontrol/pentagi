@@ -201,11 +201,12 @@ func (r *mutationResolver) DeleteFlow(ctx context.Context, flowID int64) (model.
 		"flow": flowID,
 	}).Debug("delete flow")
 
-	if fw, err := r.Controller.GetFlow(ctx, flowID); err == nil {
-		if err := fw.Finish(ctx); err != nil {
-			return model.ResultTypeError, err
-		}
-	} else if !errors.Is(err, controller.ErrFlowNotFound) {
+	// Goes through the controller rather than GetFlow + worker.Finish: only
+	// FinishFlow evicts the worker from the in-memory map. A worker left behind
+	// for a soft-deleted flow leaks for the process lifetime, still shows up in
+	// ListFlows, and can be finished a second time by a concurrent caller.
+	if err := r.Controller.FinishFlow(ctx, flowID); err != nil &&
+		!errors.Is(err, controller.ErrFlowNotFound) {
 		return model.ResultTypeError, err
 	}
 
@@ -555,6 +556,15 @@ func (r *mutationResolver) UpdateProvider(ctx context.Context, providerID int64,
 		"name":     name,
 	}).Debug("update provider")
 
+	// Fetch the current name before the rename so the flow/assistant cascade
+	// below knows which old name to look for; UpdateProvider itself only
+	// returns the row *after* the rename.
+	existing, err := r.DB.GetUserProvider(ctx, database.GetUserProviderParams{ID: providerID, UserID: uid})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get provider %d: %w", providerID, err)
+	}
+	oldName := provider.ProviderName(existing.Name)
+
 	cfg := converter.ConvertAgentsConfigFromGqlModel(&agents)
 	prvname := provider.ProviderName(name)
 	prv, err := r.ProvidersCtrl.UpdateProvider(ctx, uid, providerID, prvname, cfg)
@@ -563,6 +573,15 @@ func (r *mutationResolver) UpdateProvider(ctx context.Context, providerID int64,
 	}
 
 	r.Subscriptions.NewProviderPublisher(uid).ProviderUpdated(ctx, prv, cfg)
+
+	// Repoint every flow/assistant that referred to the old name so they keep
+	// resolving to a valid provider. This must not fail the mutation: the
+	// provider itself is already renamed, and the sweep is idempotent.
+	if oldName != prvname {
+		if err := r.Controller.RenameFlowsProvider(ctx, uid, oldName, prvname); err != nil {
+			r.Logger.WithError(err).Error("failed to cascade provider rename to flows/assistants")
+		}
+	}
 
 	return converter.ConvertProvider(prv, cfg), nil
 }
@@ -582,6 +601,17 @@ func (r *mutationResolver) DeleteProvider(ctx context.Context, providerID int64)
 	prv, err := r.ProvidersCtrl.DeleteProvider(ctx, uid, providerID)
 	if err != nil {
 		return model.ResultTypeError, err
+	}
+
+	// Runs before anything else that can fail: the provider row is already
+	// soft-deleted, so bailing out earlier would leave the references dangling.
+	// Rows whose stored name still resolves (an override of a built-in) are left
+	// alone — running flows drop the deleted configuration on their next input or
+	// on the next start. Never fails the mutation: the provider is gone either way.
+	deletedName := provider.ProviderName(prv.Name)
+	deletedType := provider.ProviderType(prv.Type)
+	if err := r.Controller.ResetFlowsProviderToDefault(ctx, uid, deletedName, deletedType); err != nil {
+		r.Logger.WithError(err).Error("failed to cascade provider deletion to flows/assistants")
 	}
 
 	var cfg pconfig.ProviderConfig

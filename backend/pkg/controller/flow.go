@@ -482,7 +482,15 @@ func LoadFlowWorker(ctx context.Context, flow database.Flow, fwc flowWorkerCtx) 
 			if errors.Is(err, ErrNothingToLoad) {
 				continue
 			}
-			return nil, wrapErrorEndSpan(ctx, flowSpan, "failed to load assistant worker", err)
+			// One unloadable assistant must not take its flow down with it.
+			// Aborting here would leave the flow absent from the controller's
+			// map while its row stays alive in the DB, which makes the whole
+			// flow permanently unreachable ("flow not found" on every action) —
+			// the exact failure this used to produce when an assistant pointed
+			// at a renamed or deleted provider. The assistant simply stays
+			// unloaded and returns on the next start once its cause is fixed.
+			logger.WithError(err).Errorf("failed to load assistant %d, skipping it", assistant.ID)
+			continue
 		}
 		if err := fw.AddAssistant(ctx, aw); err != nil {
 			return nil, wrapErrorEndSpan(ctx, flowSpan, "failed to add assistant worker", err)
@@ -860,7 +868,24 @@ func (fw *flowWorker) Rename(ctx context.Context, title string) error {
 	return nil
 }
 
-// switchProvider performs runtime provider switch for the flow
+// switchProvider performs runtime provider switch for the flow.
+//
+// This is the single place where a running flow picks up a provider change. A
+// rename or deletion of a user provider only rewrites the DB reference (see
+// flowController.reassignFlowsProvider); the in-memory instance is refreshed
+// here, on the next user input, or rebuilt from the DB row on the next start.
+//
+// Deciding whether anything changed is delegated to SetProvider, which compares
+// the raw configuration and not just the provider name — a user provider may be
+// named exactly like a built-in one, so the name alone cannot tell an override
+// apart from the default it shadows.
+//
+// Note on tool_call_id_template: it is resolved once, for a single model of the
+// provider configuration. A provider that routes different models to different
+// upstream backends (an OpenRouter-style gateway) may therefore need different
+// templates per agent, and this single value can be wrong for some of them.
+// Fixing that properly means keeping a per-model template registry, which is out
+// of scope here; if real users hit it, this is the place to start.
 func (fw *flowWorker) switchProvider(ctx context.Context, prv provider.Provider) error {
 	ctx, span := obs.Observer.NewSpan(ctx, obs.SpanKindInternal, "controller.flowWorker.switchProvider")
 	defer span.End()
@@ -870,29 +895,31 @@ func (fw *flowWorker) switchProvider(ctx context.Context, prv provider.Provider)
 	}
 
 	logger := fw.logger.WithFields(logrus.Fields{
-		"old_provider_name": fw.flowCtx.Provider.Name().String(),
-		"old_provider_type": fw.flowCtx.Provider.Type().String(),
 		"new_provider_name": prv.Name().String(),
 		"new_provider_type": prv.Type().String(),
 	})
 
-	if fw.flowCtx.Provider.Name() == prv.Name() {
+	changed, tcIDTemplate, err := fw.flowCtx.Provider.SetProvider(ctx, prv)
+	if err != nil {
+		logger.WithError(err).Error("failed to set provider")
+		return fmt.Errorf("failed to set provider: %w", err)
+	}
+
+	if !changed {
 		logger.Debug("provider is the same, skipping switch")
 		return nil
 	}
 
 	logger.Info("switching flow provider")
 
-	if err := fw.flowCtx.Provider.SetProvider(ctx, prv); err != nil {
-		logger.WithError(err).Error("failed to set provider")
-		return fmt.Errorf("failed to set provider: %w", err)
-	}
-
+	// Every persisted value is taken from prv (and the template SetProvider
+	// resolved for it) rather than re-read from the shared flow provider, so a
+	// concurrent switch cannot interleave into a mixed-provider row.
 	flow, err := fw.flowCtx.DB.UpdateFlowProvider(ctx, database.UpdateFlowProviderParams{
 		ModelProviderName:  prv.Name().String(),
 		ModelProviderType:  database.ProviderType(prv.Type()),
-		ToolCallIDTemplate: fw.flowCtx.Provider.ToolCallIDTemplate(),
-		Model:              fw.flowCtx.Provider.Model(pconfig.OptionsTypePrimaryAgent),
+		ToolCallIDTemplate: tcIDTemplate,
+		Model:              prv.Model(pconfig.OptionsTypePrimaryAgent),
 		ID:                 fw.flowCtx.FlowID,
 	})
 	if err != nil {
@@ -901,8 +928,8 @@ func (fw *flowWorker) switchProvider(ctx context.Context, prv provider.Provider)
 	}
 
 	logger.WithFields(logrus.Fields{
-		"new_tool_call_id_template": fw.flowCtx.Provider.ToolCallIDTemplate(),
-		"new_model":                 fw.flowCtx.Provider.Model(pconfig.OptionsTypePrimaryAgent),
+		"new_tool_call_id_template": tcIDTemplate,
+		"new_model":                 prv.Model(pconfig.OptionsTypePrimaryAgent),
 	}).Info("provider switched successfully")
 
 	if containers, err := fw.flowCtx.DB.GetFlowContainers(ctx, fw.flowCtx.FlowID); err == nil {

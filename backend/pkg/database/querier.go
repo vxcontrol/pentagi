@@ -57,6 +57,12 @@ type Querier interface {
 	DeleteUserKnowledgeDocument(ctx context.Context, arg DeleteUserKnowledgeDocumentParams) error
 	DeleteUserPreferences(ctx context.Context, userID int64) error
 	DeleteUserPrompt(ctx context.Context, arg DeleteUserPromptParams) error
+	// deleted_at IS NULL is load-bearing, not just hygiene: without it a replayed
+	// delete of an already-deleted id still succeeds and still returns the row, and
+	// the caller then resets every flow/assistant matching that name — which by
+	// then may belong to a *different*, live provider reusing the freed name
+	// (providers_name_user_id_unique is partial on deleted_at IS NULL). Mirrors the
+	// guard GetUserProvider already applies on the rename path.
 	DeleteUserProvider(ctx context.Context, arg DeleteUserProviderParams) (Provider, error)
 	GetAPIToken(ctx context.Context, id int64) (ApiToken, error)
 	GetAPITokenByTokenID(ctx context.Context, tokenID string) (ApiToken, error)
@@ -272,6 +278,12 @@ type Querier interface {
 	UpdateAssistantTitle(ctx context.Context, arg UpdateAssistantTitleParams) (Assistant, error)
 	UpdateAssistantToolCallIDTemplate(ctx context.Context, arg UpdateAssistantToolCallIDTemplateParams) (Assistant, error)
 	UpdateAssistantUseAgents(ctx context.Context, arg UpdateAssistantUseAgentsParams) (Assistant, error)
+	// The assistants counterpart of UpdateFlowsProviderNameByOldName. Assistants
+	// carry their own provider reference, independent of their flow's, and the
+	// table has no user_id — ownership is derived by joining through flows, so the
+	// statement can never cross a tenant boundary. Idempotent for the same reason:
+	// a rewritten row no longer matches old_name.
+	UpdateAssistantsProviderNameByOldName(ctx context.Context, arg UpdateAssistantsProviderNameByOldNameParams) ([]Assistant, error)
 	UpdateContainerImage(ctx context.Context, arg UpdateContainerImageParams) (Container, error)
 	UpdateContainerStatus(ctx context.Context, arg UpdateContainerStatusParams) (Container, error)
 	UpdateContainerStatusLocalID(ctx context.Context, arg UpdateContainerStatusLocalIDParams) (Container, error)
@@ -282,6 +294,12 @@ type Querier interface {
 	UpdateFlowTemplate(ctx context.Context, arg UpdateFlowTemplateParams) (FlowTemplate, error)
 	UpdateFlowTitle(ctx context.Context, arg UpdateFlowTitleParams) (Flow, error)
 	UpdateFlowToolCallIDTemplate(ctx context.Context, arg UpdateFlowToolCallIDTemplateParams) (Flow, error)
+	// Bulk-renames every flow row of a user still pointing at a provider's old name
+	// (the user renamed a custom LLM provider, or deleted one and the reference is
+	// reset to the built-in name of its type). Matching on old_name makes the
+	// statement idempotent: once rewritten, a row no longer matches, so it is safe
+	// to call unconditionally and to retry.
+	UpdateFlowsProviderNameByOldName(ctx context.Context, arg UpdateFlowsProviderNameByOldNameParams) ([]Flow, error)
 	// Update an existing document's embedding, text and metadata atomically.
 	// embedding must be formatted as a PostgreSQL vector literal: '[f1,f2,...]'
 	// cmetadata must be valid JSON text.

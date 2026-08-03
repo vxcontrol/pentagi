@@ -26,6 +26,7 @@ type Provider struct {
 	streamingDelay time.Duration
 	providerConfig *pconfig.ProviderConfig
 	models         pconfig.ModelsConfig
+	rawConfig      []byte
 
 	// sequence, when set via SetSequentialResponses, makes CallWithTools
 	// ignore content-based matching and return each response strictly in
@@ -338,7 +339,17 @@ func (p *Provider) CallWithExtraOptions(
 
 // GetRawConfig implements provider.Provider
 func (p *Provider) GetRawConfig() []byte {
+	if p.rawConfig != nil {
+		return p.rawConfig
+	}
 	return []byte(`{"mock": true}`)
+}
+
+// SetRawConfig overrides what GetRawConfig returns, so a test can build two
+// providers that share a name but not a configuration — exactly what a user
+// provider named like a built-in one produces once it is deleted or renamed.
+func (p *Provider) SetRawConfig(raw []byte) {
+	p.rawConfig = raw
 }
 
 // GetProviderConfig implements provider.Provider
