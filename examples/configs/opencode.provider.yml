@@ -1,0 +1,130 @@
+simple:
+  model: mimo-v2.5
+  temperature: 0.3
+  top_p: 0.9
+  n: 1
+  max_tokens: 8192
+  extra_body:
+    thinking:
+      type: disabled
+
+simple_json:
+  model: mimo-v2.5
+  temperature: 0.3
+  top_p: 0.9
+  n: 1
+  max_tokens: 4096
+  json: true
+  extra_body:
+    thinking:
+      type: disabled
+
+primary_agent:
+  model: deepseek-v4-pro
+  n: 1
+  max_tokens: 16384
+  reasoning:
+    effort: high
+  extra_body:
+    thinking:
+      type: enabled
+
+assistant:
+  model: deepseek-v4-pro
+  n: 1
+  max_tokens: 16384
+  reasoning:
+    effort: high
+  extra_body:
+    thinking:
+      type: enabled
+
+generator:
+  model: deepseek-v4-pro
+  n: 1
+  max_tokens: 32768
+  reasoning:
+    effort: high
+  extra_body:
+    thinking:
+      type: enabled
+
+refiner:
+  model: deepseek-v4-pro
+  n: 1
+  max_tokens: 32768
+  reasoning:
+    effort: high
+  extra_body:
+    thinking:
+      type: enabled
+
+adviser:
+  model: deepseek-v4-pro
+  n: 1
+  max_tokens: 16384
+  reasoning:
+    effort: high
+  extra_body:
+    thinking:
+      type: enabled
+
+reflector:
+  model: deepseek-v4-flash
+  temperature: 0.5
+  top_p: 0.9
+  n: 1
+  max_tokens: 8192
+  extra_body:
+    thinking:
+      type: disabled
+
+searcher:
+  model: deepseek-v4-flash
+  temperature: 0.5
+  top_p: 0.9
+  n: 1
+  max_tokens: 4096
+  extra_body:
+    thinking:
+      type: disabled
+
+enricher:
+  model: deepseek-v4-flash
+  temperature: 0.5
+  top_p: 0.9
+  n: 1
+  max_tokens: 4096
+  extra_body:
+    thinking:
+      type: disabled
+
+coder:
+  model: deepseek-v4-pro
+  n: 1
+  max_tokens: 20480
+  reasoning:
+    effort: high
+  extra_body:
+    thinking:
+      type: enabled
+
+installer:
+  model: deepseek-v4-flash
+  n: 1
+  max_tokens: 12288
+  reasoning:
+    effort: high
+  extra_body:
+    thinking:
+      type: enabled
+
+pentester:
+  model: deepseek-v4-pro
+  n: 1
+  max_tokens: 16384
+  reasoning:
+    effort: high
+  extra_body:
+    thinking:
+      type: enabled
