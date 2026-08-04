@@ -600,7 +600,11 @@ func (dc *dockerClient) Cleanup(ctx context.Context) error {
 func (dc *dockerClient) IsContainerRunning(ctx context.Context, containerID string) (bool, error) {
 	inspection, err := dc.client.ContainerInspect(ctx, containerID)
 	if err != nil {
-		return false, fmt.Errorf("container inspection failed: %w", err)
+		if !client.IsErrNotFound(err) {
+			return false, fmt.Errorf("container inspection failed: %w", err)
+		}
+		// a removed container is missing, not an inspection failure
+		return false, nil
 	}
 
 	// Check both Running state and health status if available
