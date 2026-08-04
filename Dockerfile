@@ -124,7 +124,7 @@ RUN go build -trimpath \
 # ========================================
 # Stage 3: Production Runtime Environment
 # ========================================
-FROM alpine:3.23.3
+FROM alpine:3.23.5
 
 # Establish non-privileged execution context with docker socket access
 RUN addgroup -g 998 docker && \
