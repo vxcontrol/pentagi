@@ -17,7 +17,7 @@ import (
 	obs "pentagi/pkg/observability"
 	"pentagi/pkg/observability/langfuse"
 
-	"github.com/docker/docker/api/types/container"
+	"github.com/moby/moby/client"
 	"github.com/sirupsen/logrus"
 )
 
@@ -222,12 +222,12 @@ func (t *terminal) ExecCommand(
 
 	timeout = t.normalizeExecTimeout(timeout)
 
-	createResp, err := t.dockerClient.ContainerExecCreate(ctx, containerName, container.ExecOptions{
+	createResp, err := t.dockerClient.ContainerExecCreate(ctx, containerName, client.ExecCreateOptions{
 		Cmd:          cmd,
 		AttachStdout: true,
 		AttachStderr: true,
 		WorkingDir:   cwd,
-		Tty:          true,
+		TTY:          true,
 	})
 	if err != nil {
 		return "", fmt.Errorf("failed to create exec process: %w", err)
@@ -266,8 +266,8 @@ func (t *terminal) getExecResult(ctx context.Context, id string, timeout time.Du
 		defer cancel()
 	}
 
-	resp, err := t.dockerClient.ContainerExecAttach(ctx, id, container.ExecAttachOptions{
-		Tty: true,
+	resp, err := t.dockerClient.ContainerExecAttach(ctx, id, client.ExecAttachOptions{
+		TTY: true,
 	})
 	if err != nil {
 		return "", fmt.Errorf("failed to attach to exec process: %w", err)
@@ -485,7 +485,7 @@ func (t *terminal) writeFileToContainer(ctx context.Context, flowID int64, path,
 	}
 
 	dir := filepath.Dir(path)
-	err = t.dockerClient.CopyToContainer(ctx, containerName, dir, tarBuffer, container.CopyToContainerOptions{
+	err = t.dockerClient.CopyToContainer(ctx, containerName, dir, tarBuffer, client.CopyToContainerOptions{
 		AllowOverwriteDirWithFile: true,
 	})
 	if err != nil {

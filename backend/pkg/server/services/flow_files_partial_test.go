@@ -12,7 +12,7 @@ import (
 	"pentagi/pkg/server/models"
 	"pentagi/pkg/version"
 
-	"github.com/docker/docker/api/types/container"
+	"github.com/moby/moby/api/types/container"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

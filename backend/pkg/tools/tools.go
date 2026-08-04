@@ -23,7 +23,8 @@ import (
 	"pentagi/pkg/providers/embeddings"
 	"pentagi/pkg/schema"
 
-	"github.com/docker/docker/api/types/container"
+	"github.com/moby/moby/api/types/container"
+	"github.com/moby/moby/client"
 	"github.com/sirupsen/logrus"
 	"github.com/vxcontrol/cloud/anonymizer"
 	"github.com/vxcontrol/cloud/anonymizer/patterns"
@@ -652,7 +653,7 @@ func (fte *flowToolsExecutor) findMissingInContainer(ctx context.Context, entrie
 	}
 
 	containerName := PrimaryTerminalName(fte.cfg.TenantPrefix(), fte.flowID)
-	createResp, err := fte.docker.ContainerExecCreate(ctx, containerName, container.ExecOptions{
+	createResp, err := fte.docker.ContainerExecCreate(ctx, containerName, client.ExecCreateOptions{
 		Cmd:          cmd,
 		AttachStdout: true,
 		AttachStderr: true,
@@ -661,7 +662,7 @@ func (fte *flowToolsExecutor) findMissingInContainer(ctx context.Context, entrie
 		return nil, fmt.Errorf("failed to create file-check exec: %w", err)
 	}
 
-	resp, err := fte.docker.ContainerExecAttach(ctx, createResp.ID, container.ExecAttachOptions{})
+	resp, err := fte.docker.ContainerExecAttach(ctx, createResp.ID, client.ExecAttachOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to attach file-check exec: %w", err)
 	}
@@ -707,7 +708,7 @@ func (fte *flowToolsExecutor) copyEntriesToContainer(ctx context.Context, entrie
 
 	containerName := PrimaryTerminalName(fte.cfg.TenantPrefix(), fte.flowID)
 	copyErr := fte.docker.CopyToContainer(ctx, containerName, docker.WorkFolderPathInContainer, pr,
-		container.CopyToContainerOptions{AllowOverwriteDirWithFile: true})
+		client.CopyToContainerOptions{AllowOverwriteDirWithFile: true})
 	pr.Close()
 	writeErr := <-errCh
 

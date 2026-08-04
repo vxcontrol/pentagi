@@ -32,11 +32,11 @@ import (
 	"pentagi/pkg/resources"
 	"pentagi/pkg/server/models"
 
-	"github.com/docker/docker/api/types"
-	"github.com/docker/docker/api/types/container"
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/sqlite"
+	"github.com/moby/moby/api/types/container"
+	"github.com/moby/moby/client"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -790,6 +790,23 @@ func flowFileMultipartBody(t *testing.T, files []flowFileUploadFile, fieldName s
 	return &body, writer.FormDataContentType()
 }
 
+// rawFlowFileMultipartBody writes the multipart wire format byte for byte, the
+// way a hostile client would. multipart.Writer percent-encodes CR and LF in a
+// filename, so a body built with it can never carry those bytes to the handler;
+// only a hand-written body actually exercises the defence against them.
+func rawFlowFileMultipartBody(fileName, content string) (*bytes.Buffer, string) {
+	const boundary = "pentagitestboundary"
+
+	var body bytes.Buffer
+	fmt.Fprintf(&body, "--%s\r\n", boundary)
+	fmt.Fprintf(&body, "Content-Disposition: form-data; name=\"files\"; filename=\"%s\"\r\n", fileName)
+	body.WriteString("Content-Type: application/octet-stream\r\n\r\n")
+	body.WriteString(content)
+	fmt.Fprintf(&body, "\r\n--%s--\r\n", boundary)
+
+	return &body, "multipart/form-data; boundary=" + boundary
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Subscription capture for handler tests.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -948,7 +965,7 @@ type copyToCall struct {
 	containerID string
 	dstPath     string
 	body        []byte
-	options     container.CopyToContainerOptions
+	options     client.CopyToContainerOptions
 }
 
 type fakeDockerClient struct {
@@ -1006,37 +1023,37 @@ func (f *fakeDockerClient) RemoveContainer(_ context.Context, _ string, _ int64)
 func (f *fakeDockerClient) IsContainerRunning(_ context.Context, _ string) (bool, error) {
 	return f.running, f.runningErr
 }
-func (f *fakeDockerClient) ContainerExecCreate(_ context.Context, _ string, opts container.ExecOptions) (container.ExecCreateResponse, error) {
+func (f *fakeDockerClient) ContainerExecCreate(_ context.Context, _ string, opts client.ExecCreateOptions) (client.ExecCreateResult, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if len(opts.Cmd) > 0 {
 		f.execCommands = append(f.execCommands, strings.Join(opts.Cmd, " "))
 	}
 	if f.execCreateErr != nil {
-		return container.ExecCreateResponse{}, f.execCreateErr
+		return client.ExecCreateResult{}, f.execCreateErr
 	}
 	id := f.execCreateID
 	if id == "" {
 		id = "exec-id"
 	}
-	return container.ExecCreateResponse{ID: id}, nil
+	return client.ExecCreateResult{ID: id}, nil
 }
-func (f *fakeDockerClient) ContainerExecAttach(_ context.Context, _ string, _ container.ExecAttachOptions) (types.HijackedResponse, error) {
+func (f *fakeDockerClient) ContainerExecAttach(_ context.Context, _ string, _ client.ExecAttachOptions) (client.HijackedResponse, error) {
 	if f.execAttachErr != nil {
-		return types.HijackedResponse{}, f.execAttachErr
+		return client.HijackedResponse{}, f.execAttachErr
 	}
 	pr, pw := net.Pipe()
 	go func() {
 		_, _ = pw.Write([]byte(f.execAttachOut))
 		_ = pw.Close()
 	}()
-	return types.HijackedResponse{Conn: pr, Reader: bufio.NewReader(pr)}, nil
+	return client.HijackedResponse{Conn: pr, Reader: bufio.NewReader(pr)}, nil
 }
-func (f *fakeDockerClient) ContainerExecInspect(_ context.Context, _ string) (container.ExecInspect, error) {
+func (f *fakeDockerClient) ContainerExecInspect(_ context.Context, _ string) (client.ExecInspectResult, error) {
 	if f.execInspectErr != nil {
-		return container.ExecInspect{}, f.execInspectErr
+		return client.ExecInspectResult{}, f.execInspectErr
 	}
-	return container.ExecInspect{ExitCode: f.execInspectCode}, nil
+	return client.ExecInspectResult{ExitCode: f.execInspectCode}, nil
 }
 func (f *fakeDockerClient) ContainerStatPath(_ context.Context, _ string, p string) (container.PathStat, error) {
 	if f.statPathErrMap != nil {
@@ -1069,7 +1086,7 @@ func (f *fakeDockerClient) ListContainerDir(_ context.Context, _ string, p strin
 	}
 	return docker.ContainerDirListing{Files: f.listDir}, f.listDirErr
 }
-func (f *fakeDockerClient) CopyToContainer(_ context.Context, containerID string, dstPath string, content io.Reader, options container.CopyToContainerOptions) error {
+func (f *fakeDockerClient) CopyToContainer(_ context.Context, containerID string, dstPath string, content io.Reader, options client.CopyToContainerOptions) error {
 	body, _ := io.ReadAll(content)
 	f.mu.Lock()
 	f.copyToCalls = append(f.copyToCalls, copyToCall{
@@ -1331,12 +1348,15 @@ func TestFlowFileService_UploadFlowFilesScenarios(t *testing.T) {
 			wantStatus: http.StatusBadRequest,
 		},
 		{
+			// a name that survives multipart encoding intact, so the rejection
+			// comes from the handler's own validation rather than from the MIME
+			// parser choking on the header
 			name:       "invalid filename returns bad request",
 			flowOwner:  1,
 			uid:        1,
 			flowID:     1,
 			privs:      []string{"flow_files.upload"},
-			files:      []flowFileUploadFile{{name: "bad\nname.txt", content: "x"}},
+			files:      []flowFileUploadFile{{name: "bad*name.txt", content: "x"}},
 			wantStatus: http.StatusBadRequest,
 		},
 		{
@@ -1450,6 +1470,10 @@ func TestFlowFileService_UploadFlowFilesScenarios(t *testing.T) {
 //     filename embeds traversal segments, absolute paths, NUL bytes, or
 //     Windows-style separators.
 //
+// Control characters are sent through a hand-written multipart body: an
+// attacker writes the wire format directly, and multipart.Writer would
+// percent-encode CR and LF instead of transmitting them.
+//
 // The directory tree of the entire dataDir is enumerated after each request
 // and any unexpected entry fails the test, ensuring the protection chain
 // (SanitizeFileName + filepath.Join + LocalEntryExists) is intact.
@@ -1457,6 +1481,7 @@ func TestFlowFileService_UploadFlowFilesPathTraversalSecurity(t *testing.T) {
 	tests := []struct {
 		name              string
 		uploadName        string
+		rawHeader         bool // write the filename to the wire verbatim
 		wantStatus        int
 		wantStoredAs      string // basename expected on disk under uploads/, empty if rejected
 		wantContentInFile string
@@ -1519,23 +1544,37 @@ func TestFlowFileService_UploadFlowFilesPathTraversalSecurity(t *testing.T) {
 			wantStatus: http.StatusBadRequest,
 		},
 		{
+			// what multipart.Writer transmits for a filename containing a
+			// newline: the encoding must be stored as the literal text it is,
+			// never decoded back into a control character
+			name:              "percent-encoded newline is stored verbatim",
+			uploadName:        "evil%0Aname.txt",
+			wantStatus:        http.StatusOK,
+			wantStoredAs:      "evil%0Aname.txt",
+			wantContentInFile: "payload",
+		},
+		{
 			name:       "embedded NUL byte is rejected",
 			uploadName: "evil\x00.txt",
+			rawHeader:  true,
 			wantStatus: http.StatusBadRequest,
 		},
 		{
 			name:       "newline in filename is rejected",
 			uploadName: "evil\nname.txt",
+			rawHeader:  true,
 			wantStatus: http.StatusBadRequest,
 		},
 		{
 			name:       "carriage return in filename is rejected",
 			uploadName: "evil\rname.txt",
+			rawHeader:  true,
 			wantStatus: http.StatusBadRequest,
 		},
 		{
 			name:       "DEL control character is rejected",
 			uploadName: "evil\x7fname.txt",
+			rawHeader:  true,
 			wantStatus: http.StatusBadRequest,
 		},
 		{
@@ -1573,10 +1612,17 @@ func TestFlowFileService_UploadFlowFilesPathTraversalSecurity(t *testing.T) {
 			svc := NewFlowFileService(db, dataDir, "", nil, ss)
 			seedFlow(t, db, 1, 1)
 
-			body, contentType := flowFileMultipartBody(t,
-				[]flowFileUploadFile{{name: tt.uploadName, content: "payload"}},
-				"files",
-			)
+			var body io.Reader
+			var contentType string
+			if tt.rawHeader {
+				body, contentType = rawFlowFileMultipartBody(tt.uploadName, "payload")
+			} else {
+				body, contentType = flowFileMultipartBody(t,
+					[]flowFileUploadFile{{name: tt.uploadName, content: "payload"}},
+					"files",
+				)
+			}
+
 			c, w := newFlowFileTestContext(http.MethodPost, "/flows/1/files/", body,
 				[]string{"flow_files.upload"}, 1, 1)
 			c.Request.Header.Set("Content-Type", contentType)

@@ -26,7 +26,7 @@ import (
 	"pentagi/pkg/resources"
 	"pentagi/pkg/tools"
 
-	dockercontainer "github.com/docker/docker/api/types/container"
+	"github.com/moby/moby/client"
 	"github.com/sirupsen/logrus"
 )
 
@@ -744,7 +744,7 @@ func (fw *flowWorker) pushResourcesToContainer(ctx context.Context, addedPaths [
 		}()
 
 		copyErr := fw.docker.CopyToContainer(ctx, containerName, docker.WorkFolderPathInContainer, pr,
-			dockercontainer.CopyToContainerOptions{AllowOverwriteDirWithFile: true})
+			client.CopyToContainerOptions{AllowOverwriteDirWithFile: true})
 		pr.Close()
 		writeErr := <-errCh
 

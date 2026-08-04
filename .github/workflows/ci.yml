@@ -42,7 +42,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
-          go-version: "1.24"
+          go-version: "1.26.5"
           cache: true
           cache-dependency-path: backend/go.sum
 
@@ -115,7 +115,7 @@ jobs:
       - name: Backend - Lint
         uses: golangci/golangci-lint-action@v9
         with:
-          version: latest
+          version: v2.12.2
           working-directory: backend
           args: --timeout=5m --issues-exit-code=0
         continue-on-error: true

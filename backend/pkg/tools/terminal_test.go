@@ -19,8 +19,8 @@ import (
 	"pentagi/pkg/docker"
 	"pentagi/pkg/flowfiles"
 
-	"github.com/docker/docker/api/types"
-	"github.com/docker/docker/api/types/container"
+	"github.com/moby/moby/api/types/container"
+	"github.com/moby/moby/client"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -41,10 +41,10 @@ var _ TermLogProvider = (*contextTestTermLogProvider)(nil)
 // inferred/validated action.
 type contextAwareMockDockerClient struct {
 	isRunning      bool
-	execCreateResp container.ExecCreateResponse
+	execCreateResp client.ExecCreateResult
 	attachOutput   []byte
 	attachDelay    time.Duration
-	inspectResp    container.ExecInspect
+	inspectResp    client.ExecInspectResult
 
 	// Set by ContainerExecAttach to track if ctx was canceled during attach
 	ctxWasCanceled bool
@@ -76,10 +76,10 @@ func (m *contextAwareMockDockerClient) RemoveContainer(_ context.Context, _ stri
 func (m *contextAwareMockDockerClient) IsContainerRunning(_ context.Context, _ string) (bool, error) {
 	return m.isRunning, nil
 }
-func (m *contextAwareMockDockerClient) ContainerExecCreate(_ context.Context, _ string, _ container.ExecOptions) (container.ExecCreateResponse, error) {
+func (m *contextAwareMockDockerClient) ContainerExecCreate(_ context.Context, _ string, _ client.ExecCreateOptions) (client.ExecCreateResult, error) {
 	return m.execCreateResp, nil
 }
-func (m *contextAwareMockDockerClient) ContainerExecAttach(ctx context.Context, _ string, _ container.ExecAttachOptions) (types.HijackedResponse, error) {
+func (m *contextAwareMockDockerClient) ContainerExecAttach(ctx context.Context, _ string, _ client.ExecAttachOptions) (client.HijackedResponse, error) {
 	// Wait for the configured delay, simulating a long-running command
 	if m.attachDelay > 0 {
 		select {
@@ -88,7 +88,7 @@ func (m *contextAwareMockDockerClient) ContainerExecAttach(ctx context.Context, 
 		case <-ctx.Done():
 			// Context was canceled -- this is the bug behavior (without WithoutCancel)
 			m.ctxWasCanceled = true
-			return types.HijackedResponse{}, ctx.Err()
+			return client.HijackedResponse{}, ctx.Err()
 		}
 	}
 
@@ -96,7 +96,7 @@ func (m *contextAwareMockDockerClient) ContainerExecAttach(ctx context.Context, 
 	select {
 	case <-ctx.Done():
 		m.ctxWasCanceled = true
-		return types.HijackedResponse{}, ctx.Err()
+		return client.HijackedResponse{}, ctx.Err()
 	default:
 	}
 
@@ -106,7 +106,7 @@ func (m *contextAwareMockDockerClient) ContainerExecAttach(ctx context.Context, 
 		pw.Close()
 	}()
 
-	return types.HijackedResponse{
+	return client.HijackedResponse{
 		Conn:   pr,
 		Reader: bufio.NewReader(pr),
 	}, nil
@@ -117,10 +117,10 @@ func (m *contextAwareMockDockerClient) ContainerStatPath(_ context.Context, _ st
 func (m *contextAwareMockDockerClient) ListContainerDir(_ context.Context, _ string, _ string) (docker.ContainerDirListing, error) {
 	return docker.ContainerDirListing{}, nil
 }
-func (m *contextAwareMockDockerClient) ContainerExecInspect(_ context.Context, _ string) (container.ExecInspect, error) {
+func (m *contextAwareMockDockerClient) ContainerExecInspect(_ context.Context, _ string) (client.ExecInspectResult, error) {
 	return m.inspectResp, nil
 }
-func (m *contextAwareMockDockerClient) CopyToContainer(_ context.Context, _ string, _ string, src io.Reader, _ container.CopyToContainerOptions) error {
+func (m *contextAwareMockDockerClient) CopyToContainer(_ context.Context, _ string, _ string, src io.Reader, _ client.CopyToContainerOptions) error {
 	m.copyToCalled = true
 
 	tarReader := tar.NewReader(src)
@@ -169,10 +169,10 @@ func TestExecCommandDetachSurvivesParentCancel(t *testing.T) {
 
 	mock := &contextAwareMockDockerClient{
 		isRunning:      true,
-		execCreateResp: container.ExecCreateResponse{ID: "exec-cancel-test"},
+		execCreateResp: client.ExecCreateResult{ID: "exec-cancel-test"},
 		attachOutput:   []byte("background result"),
 		attachDelay:    2 * time.Second, // simulates a long-running command
-		inspectResp:    container.ExecInspect{ExitCode: 0},
+		inspectResp:    client.ExecInspectResult{ExitCode: 0},
 	}
 
 	term := &terminal{
@@ -210,10 +210,10 @@ func TestExecCommandNonDetachRespectsParentCancel(t *testing.T) {
 
 	mock := &contextAwareMockDockerClient{
 		isRunning:      true,
-		execCreateResp: container.ExecCreateResponse{ID: "exec-nondetach-cancel"},
+		execCreateResp: client.ExecCreateResult{ID: "exec-nondetach-cancel"},
 		attachOutput:   []byte("should not complete"),
 		attachDelay:    5 * time.Second, // longer than cancel delay
-		inspectResp:    container.ExecInspect{ExitCode: 0},
+		inspectResp:    client.ExecInspectResult{ExitCode: 0},
 	}
 
 	term := &terminal{
@@ -654,13 +654,13 @@ func TestConvertSyncEntriesToTarEntries(t *testing.T) {
 
 func TestFindMissingInContainer(t *testing.T) {
 	mock := &contextAwareMockDockerClient{
-		execCreateResp: container.ExecCreateResponse{ID: "exec-file-check"},
+		execCreateResp: client.ExecCreateResult{ID: "exec-file-check"},
 		attachOutput: []byte(
 			docker.WorkFolderPathInContainer + "/uploads/a.txt\n" +
 				docker.WorkFolderPathInContainer + "/resources/b.txt\n" +
 				docker.WorkFolderPathInContainer + "/unknown.txt\n",
 		),
-		inspectResp: container.ExecInspect{ExitCode: 0},
+		inspectResp: client.ExecInspectResult{ExitCode: 0},
 	}
 	fte := &flowToolsExecutor{flowID: 7, docker: mock}
 	entries := []fileSyncEntry{
@@ -676,9 +676,9 @@ func TestFindMissingInContainer(t *testing.T) {
 
 func TestFindMissingInContainerChecksExitCode(t *testing.T) {
 	mock := &contextAwareMockDockerClient{
-		execCreateResp: container.ExecCreateResponse{ID: "exec-file-check"},
+		execCreateResp: client.ExecCreateResult{ID: "exec-file-check"},
 		attachOutput:   []byte("shell failed"),
-		inspectResp:    container.ExecInspect{ExitCode: 2},
+		inspectResp:    client.ExecInspectResult{ExitCode: 2},
 	}
 	fte := &flowToolsExecutor{flowID: 7, docker: mock}
 

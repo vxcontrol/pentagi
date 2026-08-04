@@ -22,10 +22,7 @@ import (
 
 	"pentagi/cmd/installer/state"
 
-	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/api/types/image"
-	"github.com/docker/docker/api/types/volume"
-	"github.com/docker/docker/client"
+	"github.com/moby/moby/client"
 )
 
 type DockerVersion struct {
@@ -138,9 +135,7 @@ func getProxyURL(appState state.State) string {
 }
 
 func createDockerClient(host, certPath string, tlsVerify bool) (*client.Client, error) {
-	opts := []client.Opt{
-		client.WithAPIVersionNegotiation(),
-	}
+	var opts []client.Opt
 
 	if host != "" {
 		opts = append(opts, client.WithHost(host))
@@ -154,7 +149,7 @@ func createDockerClient(host, certPath string, tlsVerify bool) (*client.Client, 
 		))
 	}
 
-	return client.NewClientWithOpts(opts...)
+	return client.New(opts...)
 }
 
 // createDockerClientFromEnv creates a docker client and returns the error type
@@ -165,13 +160,13 @@ func createDockerClientFromEnv(ctx context.Context) (*client.Client, DockerError
 		return nil, DockerErrorNotInstalled
 	}
 
-	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	cli, err := client.New(client.FromEnv)
 	if err != nil {
 		return nil, DockerErrorAPIError
 	}
 
 	// try to ping the daemon
-	_, err = cli.Ping(ctx)
+	_, err = cli.Ping(ctx, client.PingOptions{NegotiateAPIVersion: true})
 	if err != nil {
 		cli.Close() // close client on error
 		// check if it's a connection error (daemon not running)
@@ -206,7 +201,7 @@ const (
 )
 
 func checkDockerVersion(ctx context.Context, cli *client.Client) DockerVersion {
-	version, err := cli.ServerVersion(ctx)
+	version, err := cli.ServerVersion(ctx, client.ServerVersionOptions{})
 	if err != nil {
 		return DockerVersion{Version: "", Valid: false}
 	}
@@ -290,12 +285,12 @@ func checkVersionCompatibility(version, minVersion string) bool {
 }
 
 func checkContainerExists(ctx context.Context, cli *client.Client, name string) (exists, running bool) {
-	containers, err := cli.ContainerList(ctx, container.ListOptions{All: true})
+	containers, err := cli.ContainerList(ctx, client.ContainerListOptions{All: true})
 	if err != nil {
 		return false, false
 	}
 
-	for _, cont := range containers {
+	for _, cont := range containers.Items {
 		for _, containerName := range cont.Names {
 			if strings.TrimPrefix(containerName, "/") == name {
 				return true, cont.State == "running"
@@ -313,14 +308,14 @@ func checkVolumesExist(ctx context.Context, cli *client.Client, volumeNames []st
 		return false
 	}
 
-	volumes, err := cli.VolumeList(ctx, volume.ListOptions{})
+	volumes, err := cli.VolumeList(ctx, client.VolumeListOptions{})
 	if err != nil {
 		return false
 	}
 
 	// collect all volume names from Docker
-	existingVolumes := make([]string, 0, len(volumes.Volumes))
-	for _, vol := range volumes.Volumes {
+	existingVolumes := make([]string, 0, len(volumes.Items))
+	for _, vol := range volumes.Items {
 		existingVolumes = append(existingVolumes, vol.Name)
 	}
 
@@ -783,12 +778,12 @@ func getNetworkFailures(ctx context.Context, proxyURL string, dockerClient, work
 }
 
 func getContainerImageInfo(ctx context.Context, cli *client.Client, containerName string) *ImageInfo {
-	containers, err := cli.ContainerList(ctx, container.ListOptions{All: true})
+	containers, err := cli.ContainerList(ctx, client.ContainerListOptions{All: true})
 	if err != nil {
 		return nil
 	}
 
-	for _, cont := range containers {
+	for _, cont := range containers.Items {
 		for _, name := range cont.Names {
 			if strings.TrimPrefix(name, "/") == containerName {
 				return parseImageRef(cont.Image, cont.ImageID)
@@ -809,7 +804,7 @@ func getImageInfo(ctx context.Context, cli *client.Client, imageName string) *Im
 		return nil
 	}
 
-	images, err := cli.ImageList(ctx, image.ListOptions{})
+	images, err := cli.ImageList(ctx, client.ImageListOptions{})
 	if err != nil {
 		return nil
 	}
@@ -820,7 +815,7 @@ func getImageInfo(ctx context.Context, cli *client.Client, imageName string) *Im
 	}
 
 	fullImageName := imageInfo.Name + ":" + imageInfo.Tag
-	for _, img := range images {
+	for _, img := range images.Items {
 		for _, tag := range img.RepoTags {
 			if tag == imageName || tag == fullImageName {
 				imageInfo.Hash = img.ID
@@ -1011,7 +1006,7 @@ func checkDockerPullConnectivity(ctx context.Context, dockerClient, workerClient
 
 func checkSingleDockerPull(ctx context.Context, cli *client.Client, imageName string) bool {
 	// try to pull the image
-	reader, err := cli.ImagePull(ctx, imageName, image.PullOptions{})
+	reader, err := cli.ImagePull(ctx, imageName, client.ImagePullOptions{})
 	if err != nil {
 		return false
 	}

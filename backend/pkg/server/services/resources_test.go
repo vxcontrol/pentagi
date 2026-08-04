@@ -882,8 +882,11 @@ func TestResourceService_UploadResourcesScenarios(t *testing.T) {
 			wantMissingBlobs: []string{"payload"},
 		},
 		{
+			// a name that survives multipart encoding intact, so the rejection
+			// comes from the handler's own validation rather than from the MIME
+			// parser choking on the header
 			name:             "upload invalid filename rejected",
-			files:            []uploadTestFile{{name: "bad\nname.txt", content: "payload"}},
+			files:            []uploadTestFile{{name: "bad*name.txt", content: "payload"}},
 			privs:            []string{"resources.upload"},
 			wantStatus:       http.StatusBadRequest,
 			wantMissingBlobs: []string{"payload"},

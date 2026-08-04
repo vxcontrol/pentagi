@@ -12,11 +12,8 @@ import (
 	"pentagi/pkg/tools"
 
 	cerrdefs "github.com/containerd/errdefs"
-	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/api/types/image"
-	"github.com/docker/docker/api/types/network"
-	"github.com/docker/docker/api/types/volume"
-	"github.com/docker/docker/client"
+	"github.com/moby/moby/api/types/container"
+	"github.com/moby/moby/client"
 )
 
 type dockerOperationsImpl struct {
@@ -59,7 +56,7 @@ func (d *dockerOperationsImpl) removeWorkerContainers(ctx context.Context, state
 
 	d.processor.appendLog(MsgRemovingWorkerContainers, ProductStackWorker, state)
 
-	allContainers, err := cli.ContainerList(ctx, container.ListOptions{All: true})
+	allContainers, err := cli.ContainerList(ctx, client.ContainerListOptions{All: true})
 	if err != nil {
 		return fmt.Errorf("failed to list worker containers: %w", err)
 	}
@@ -74,7 +71,7 @@ func (d *dockerOperationsImpl) removeWorkerContainers(ctx context.Context, state
 	// ever handled the sweep can only ever reach this instance's own containers.
 	workerPrefix := d.tenantPrefix() + "pentagi-"
 	var containers []container.Summary
-	for _, c := range allContainers {
+	for _, c := range allContainers.Items {
 		for _, name := range c.Names {
 			if strings.HasPrefix(name, workerPrefix) {
 				containers = append(containers, c)
@@ -92,13 +89,13 @@ func (d *dockerOperationsImpl) removeWorkerContainers(ctx context.Context, state
 	for _, cont := range containers {
 		if cont.State == "running" {
 			d.processor.appendLog(fmt.Sprintf(MsgStoppingContainer, cont.ID[:12]), ProductStackWorker, state)
-			if err := cli.ContainerStop(ctx, cont.ID, container.StopOptions{}); err != nil {
+			if _, err := cli.ContainerStop(ctx, cont.ID, client.ContainerStopOptions{}); err != nil {
 				return fmt.Errorf("failed to stop worker container %s: %w", cont.ID, err)
 			}
 		}
 
 		d.processor.appendLog(fmt.Sprintf(MsgRemovingContainer, cont.ID[:12]), ProductStackWorker, state)
-		if err := cli.ContainerRemove(ctx, cont.ID, container.RemoveOptions{
+		if _, err := cli.ContainerRemove(ctx, cont.ID, client.ContainerRemoveOptions{
 			Force: true,
 		}); err != nil {
 			return fmt.Errorf("failed to remove worker container %s: %w", cont.ID, err)
@@ -112,21 +109,21 @@ func (d *dockerOperationsImpl) removeWorkerContainers(ctx context.Context, state
 }
 
 func (d *dockerOperationsImpl) removeWorkerImages(ctx context.Context, state *operationState) error {
-	return d.removeImages(ctx, state, image.RemoveOptions{
+	return d.removeImages(ctx, state, client.ImageRemoveOptions{
 		Force:         false,
 		PruneChildren: false,
 	})
 }
 
 func (d *dockerOperationsImpl) purgeWorkerImages(ctx context.Context, state *operationState) error {
-	return d.removeImages(ctx, state, image.RemoveOptions{
+	return d.removeImages(ctx, state, client.ImageRemoveOptions{
 		Force:         true,
 		PruneChildren: true,
 	})
 }
 
 func (d *dockerOperationsImpl) removeImages(
-	ctx context.Context, state *operationState, options image.RemoveOptions,
+	ctx context.Context, state *operationState, options client.ImageRemoveOptions,
 ) error {
 	if err := d.removeWorkerContainers(ctx, state); err != nil {
 		return err
@@ -158,19 +155,16 @@ func (d *dockerOperationsImpl) removeImages(
 
 // createMainDockerClient creates docker client for the main stack (non-worker) using current process env
 func (d *dockerOperationsImpl) createMainDockerClient() (*client.Client, error) {
-	return client.NewClientWithOpts(
-		client.FromEnv,
-		client.WithAPIVersionNegotiation(),
-	)
+	return client.New(client.FromEnv)
 }
 
 // checkMainDockerNetwork returns true if a docker network with given name exists
 func (d *dockerOperationsImpl) checkMainDockerNetwork(ctx context.Context, cli *client.Client, name string) (bool, error) {
-	nets, err := cli.NetworkList(ctx, network.ListOptions{})
+	nets, err := cli.NetworkList(ctx, client.NetworkListOptions{})
 	if err != nil {
 		return false, fmt.Errorf("failed to list docker networks: %w", err)
 	}
-	for _, n := range nets {
+	for _, n := range nets.Items {
 		if n.Name == name {
 			return true, nil
 		}
@@ -186,8 +180,9 @@ func (d *dockerOperationsImpl) createMainDockerNetwork(ctx context.Context, cli 
 	}
 	if exists {
 		// inspect to validate labels
-		nw, err := cli.NetworkInspect(ctx, name, network.InspectOptions{})
+		inspectResult, err := cli.NetworkInspect(ctx, name, client.NetworkInspectOptions{})
 		if err == nil {
+			nw := inspectResult.Network
 			wantProject := ""
 			if envPath := d.processor.state.GetEnvPath(); envPath != "" {
 				wantProject = filepath.Base(filepath.Dir(envPath))
@@ -204,7 +199,7 @@ func (d *dockerOperationsImpl) createMainDockerNetwork(ctx context.Context, cli 
 				return nil
 			}
 			d.processor.appendLog(fmt.Sprintf(MsgRecreatingDockerNetwork, name), ProductStackInstaller, state)
-			if err := cli.NetworkRemove(ctx, nw.ID); err != nil {
+			if _, err := cli.NetworkRemove(ctx, nw.ID, client.NetworkRemoveOptions{}); err != nil {
 				d.processor.appendLog(fmt.Sprintf(MsgDockerNetworkRemoveFailed, name, err), ProductStackInstaller, state)
 				return fmt.Errorf("failed to remove network %s: %w", name, err)
 			}
@@ -225,7 +220,7 @@ func (d *dockerOperationsImpl) createMainDockerNetwork(ctx context.Context, cli 
 		labels["com.docker.compose.project"] = projectName
 	}
 	// driver: bridge (compose default for local networks)
-	_, err = cli.NetworkCreate(ctx, name, network.CreateOptions{
+	_, err = cli.NetworkCreate(ctx, name, client.NetworkCreateOptions{
 		Driver: "bridge",
 		Labels: labels,
 	})
@@ -279,17 +274,21 @@ func (d *dockerOperationsImpl) removeMainDockerNetwork(ctx context.Context, stat
 	defer cli.Close()
 
 	// try inspect; if not found just return
-	nw, err := cli.NetworkInspect(ctx, name, network.InspectOptions{})
+	inspectResult, err := cli.NetworkInspect(ctx, name, client.NetworkInspectOptions{})
 	if err != nil {
 		return nil
 	}
 
 	// attempt to disconnect all containers first (best effort)
+	nw := inspectResult.Network
 	for id := range nw.Containers {
-		_ = cli.NetworkDisconnect(ctx, nw.ID, id, true)
+		_, _ = cli.NetworkDisconnect(ctx, nw.ID, client.NetworkDisconnectOptions{
+			Container: id,
+			Force:     true,
+		})
 	}
 
-	if err := cli.NetworkRemove(ctx, nw.ID); err != nil {
+	if _, err := cli.NetworkRemove(ctx, nw.ID, client.NetworkRemoveOptions{}); err != nil {
 		return err
 	}
 	d.processor.appendLog(fmt.Sprintf(MsgDockerNetworkRemoved, name), ProductStackInstaller, state)
@@ -308,7 +307,7 @@ func (d *dockerOperationsImpl) removeMainImages(ctx context.Context, state *oper
 	}
 	defer cli.Close()
 
-	opts := image.RemoveOptions{Force: state.force, PruneChildren: state.force}
+	opts := client.ImageRemoveOptions{Force: state.force, PruneChildren: state.force}
 	for _, img := range images {
 		if img == "" {
 			continue
@@ -331,7 +330,7 @@ func (d *dockerOperationsImpl) removeWorkerVolumes(ctx context.Context, state *o
 	}
 	defer cli.Close()
 
-	vols, err := cli.VolumeList(ctx, volume.ListOptions{})
+	vols, err := cli.VolumeList(ctx, client.VolumeListOptions{})
 	if err != nil {
 		return err
 	}
@@ -341,18 +340,16 @@ func (d *dockerOperationsImpl) removeWorkerVolumes(ctx context.Context, state *o
 	// its own resources. With TENANT_ID unset this is the original predicate.
 	workerPrefix := d.tenantPrefix() + tools.PrimaryTerminalNamePrefix
 	workerSuffix := docker.WorkerVolumeNameSuffix
-	for _, v := range vols.Volumes {
+	for _, v := range vols.Items {
 		if strings.HasPrefix(v.Name, workerPrefix) && strings.HasSuffix(v.Name, workerSuffix) {
-			_ = cli.VolumeRemove(ctx, v.Name, true)
+			_, _ = cli.VolumeRemove(ctx, v.Name, client.VolumeRemoveOptions{Force: true})
 		}
 	}
 	return nil
 }
 
 func (d *dockerOperationsImpl) createWorkerDockerClient() (*client.Client, error) {
-	opts := []client.Opt{
-		client.WithAPIVersionNegotiation(),
-	}
+	var opts []client.Opt
 
 	envVar, exists := d.processor.state.GetVar(client.EnvOverrideHost)
 	if exists && (envVar.Value != "" || envVar.IsChanged) {
@@ -381,15 +378,15 @@ func (d *dockerOperationsImpl) createWorkerDockerClient() (*client.Client, error
 	envVar, exists = d.processor.state.GetVar("PENTAGI_" + client.EnvOverrideCertPath)
 	if exists && (envVar.Value != "" || envVar.IsChanged) {
 		cfg := getTLSConfig(envVar.Value)
-		opts = append(opts, client.WithTLSClientConfig(cfg.certPath, cfg.keyPath, cfg.caPath))
+		opts = append(opts, client.WithTLSClientConfig(cfg.caPath, cfg.certPath, cfg.keyPath))
 	} else if envVar.Default != "" {
 		cfg := getTLSConfig(envVar.Default)
-		opts = append(opts, client.WithTLSClientConfig(cfg.certPath, cfg.keyPath, cfg.caPath))
+		opts = append(opts, client.WithTLSClientConfig(cfg.caPath, cfg.certPath, cfg.keyPath))
 	} else {
 		opts = append(opts, client.WithTLSClientConfigFromEnv())
 	}
 
-	return client.NewClientWithOpts(opts...)
+	return client.New(opts...)
 }
 
 func (d *dockerOperationsImpl) getWorkerDockerEnv() []string {

@@ -52,7 +52,7 @@ RUN pnpm run build -- \
 # ========================================
 # Stage 2: Backend Services Compilation
 # ========================================
-FROM golang:1.24-bookworm AS api-builder
+FROM golang:1.26-bookworm AS api-builder
 
 # Version injection arguments
 ARG PACKAGE_VER=develop

@@ -27,9 +27,10 @@ import (
 	"pentagi/pkg/tools"
 	"pentagi/pkg/version"
 
-	"github.com/docker/docker/api/types/container"
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/gorm"
+	"github.com/moby/moby/api/types/container"
+	"github.com/moby/moby/client"
 )
 
 // Local storage layout under {dataDir}/flow-{id}-data/:
@@ -1250,7 +1251,7 @@ func (s *FlowFileService) copyLocalFilesToPrimaryWork(ctx context.Context, flowI
 	}()
 
 	copyErr := s.dockerClient.CopyToContainer(ctx, containerName, docker.WorkFolderPathInContainer, pr,
-		container.CopyToContainerOptions{AllowOverwriteDirWithFile: true})
+		client.CopyToContainerOptions{AllowOverwriteDirWithFile: true})
 	pr.Close()
 	writeErr := <-errCh
 	if copyErr != nil {
@@ -1332,7 +1333,7 @@ func (s *FlowFileService) deleteUploadsFromContainer(ctx context.Context, flowID
 	}
 	cmd := "rm -rf -- " + strings.Join(quotedPaths, " ")
 
-	createResp, err := s.dockerClient.ContainerExecCreate(ctx, containerName, container.ExecOptions{
+	createResp, err := s.dockerClient.ContainerExecCreate(ctx, containerName, client.ExecCreateOptions{
 		Cmd:          []string{"sh", "-c", cmd},
 		AttachStdout: true,
 		AttachStderr: true,
@@ -1341,7 +1342,7 @@ func (s *FlowFileService) deleteUploadsFromContainer(ctx context.Context, flowID
 		return fmt.Errorf("failed to create container delete exec: %w", err)
 	}
 
-	resp, err := s.dockerClient.ContainerExecAttach(ctx, createResp.ID, container.ExecAttachOptions{})
+	resp, err := s.dockerClient.ContainerExecAttach(ctx, createResp.ID, client.ExecAttachOptions{})
 	if err != nil {
 		return fmt.Errorf("failed to attach container delete exec: %w", err)
 	}

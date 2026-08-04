@@ -11,7 +11,7 @@ import (
 	"pentagi/cmd/installer/state"
 	"pentagi/pkg/version"
 
-	"github.com/docker/docker/client"
+	"github.com/moby/moby/client"
 )
 
 var (
