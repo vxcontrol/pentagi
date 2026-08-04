@@ -6,14 +6,18 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"io"
 	"math/rand"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	cerrdefs "github.com/containerd/errdefs"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
+	"github.com/sirupsen/logrus"
+	"github.com/stretchr/testify/require"
 )
 
 func TestStatContainerEntries_AllSucceed(t *testing.T) {
@@ -262,7 +266,7 @@ func failNames(failures []statFailure) map[string]bool {
 	return m
 }
 
-const probeImage = "alpine:3.20"
+const probeImage = "alpine:3.23.5"
 
 // newDaemonClient binds a client to the local daemon, skipping the test when
 // none is reachable.
@@ -274,66 +278,58 @@ func newDaemonClient(t *testing.T) *dockerClient {
 		t.Skipf("docker daemon unavailable: %v", err)
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 	cli.NegotiateAPIVersion(ctx)
 	if _, err := cli.Ping(ctx); err != nil {
 		t.Skipf("docker daemon unavailable: %v", err)
 	}
 
-	return &dockerClient{client: cli}
+	logger := logrus.New()
+	logger.SetOutput(io.Discard)
+
+	return &dockerClient{client: cli, logger: logger}
 }
 
-// A flow keeps the id of its primary container in the database. When that
-// container is removed behind pentagi's back the id has to read as not running,
-// otherwise the flow can never rebuild it.
 func TestIsContainerRunningRemovedContainer(t *testing.T) {
 	dc := newDaemonClient(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	created, err := dc.client.ContainerCreate(ctx, &container.Config{
 		Image:      probeImage,
 		Entrypoint: []string{"tail", "-f", "/dev/null"},
 	}, nil, nil, nil, "")
-	if client.IsErrNotFound(err) {
+	if cerrdefs.IsNotFound(err) {
 		t.Skipf("%s is not present locally", probeImage)
 	}
-	if err != nil {
-		t.Fatalf("create probe container: %v", err)
-	}
+	require.NoError(t, err)
+
 	t.Cleanup(func() {
-		dc.client.ContainerRemove(context.Background(), created.ID, container.RemoveOptions{Force: true})
+		ctx := context.WithoutCancel(ctx)
+		// the happy path already removes the container below; only report a
+		// cleanup failure if it is still there for some other reason.
+		if err := dc.client.ContainerRemove(ctx, created.ID, container.RemoveOptions{Force: true}); err != nil && !cerrdefs.IsNotFound(err) {
+			t.Errorf("cleanup: failed to remove container %q: %v", created.ID, err)
+		}
 	})
 
-	if err := dc.client.ContainerStart(ctx, created.ID, container.StartOptions{}); err != nil {
-		t.Fatalf("start probe container: %v", err)
-	}
+	require.NoError(t, dc.client.ContainerStart(ctx, created.ID, container.StartOptions{}))
 
 	running, err := dc.IsContainerRunning(ctx, created.ID)
-	if err != nil || !running {
-		t.Fatalf("got running=%v err=%v, want true and no error", running, err)
-	}
+	require.NoError(t, err)
+	require.True(t, running)
 
-	if err := dc.client.ContainerRemove(ctx, created.ID, container.RemoveOptions{Force: true}); err != nil {
-		t.Fatalf("remove probe container: %v", err)
-	}
+	require.NoError(t, dc.client.ContainerRemove(ctx, created.ID, container.RemoveOptions{Force: true}))
 
 	running, err = dc.IsContainerRunning(ctx, created.ID)
-	if err != nil {
-		t.Fatalf("removed container: got error %v, want none", err)
-	}
-	if running {
-		t.Fatal("removed container reported as running")
-	}
+	require.NoError(t, err)
+	require.False(t, running)
 }
 
 func TestIsContainerRunningUnknownContainer(t *testing.T) {
 	dc := newDaemonClient(t)
 
-	running, err := dc.IsContainerRunning(context.Background(), "pentagi-container-that-does-not-exist")
-	if err != nil {
-		t.Fatalf("unknown container: got error %v, want none", err)
-	}
-	if running {
-		t.Fatal("unknown container reported as running")
-	}
+	running, err := dc.IsContainerRunning(t.Context(), "pentagi-container-that-does-not-exist")
+
+	require.NoError(t, err)
+	require.False(t, running)
 }

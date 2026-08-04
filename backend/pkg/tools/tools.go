@@ -481,9 +481,9 @@ func (fte *flowToolsExecutor) SetGraphitiClient(client *graphiti.Client) {
 
 func (fte *flowToolsExecutor) Prepare(ctx context.Context) error {
 	if cnt, err := fte.db.GetFlowPrimaryContainer(ctx, fte.flowID); err == nil {
+		containerName := PrimaryTerminalName(fte.cfg.TenantPrefix(), fte.flowID)
 		// the stored status goes stale when the container is removed outside pentagi
 		if cnt.Status == database.ContainerStatusRunning {
-			containerName := PrimaryTerminalName(fte.cfg.TenantPrefix(), fte.flowID)
 			running, err := fte.docker.IsContainerRunning(ctx, cnt.LocalID.String)
 			if err != nil {
 				return fmt.Errorf("failed to inspect container '%s': %w", containerName, err)
@@ -498,7 +498,11 @@ func (fte *flowToolsExecutor) Prepare(ctx context.Context) error {
 			}
 		}
 
-		fte.docker.RemoveContainer(ctx, cnt.LocalID.String, cnt.ID)
+		if err := fte.docker.RemoveContainer(ctx, cnt.LocalID.String, cnt.ID); err != nil {
+			logrus.WithContext(ctx).WithError(err).WithFields(enrichLogrusFields(fte.flowID, nil, nil, logrus.Fields{
+				"container_name": containerName,
+			})).Warn("failed to remove stale primary container before rebuild")
+		}
 	}
 
 	// Explicit capability allow-list (CapDrop: ALL below): Docker's default 14

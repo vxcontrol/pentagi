@@ -17,6 +17,7 @@ import (
 	"pentagi/pkg/config"
 	"pentagi/pkg/database"
 
+	cerrdefs "github.com/containerd/errdefs"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
@@ -453,7 +454,7 @@ func (dc *dockerClient) StopContainer(ctx context.Context, containerID string, d
 
 	stopErr := dc.client.ContainerStop(ctx, containerID, container.StopOptions{})
 	if stopErr != nil {
-		if client.IsErrNotFound(stopErr) {
+		if cerrdefs.IsNotFound(stopErr) {
 			logger.Warn("target container already removed or never existed")
 		} else {
 			return fmt.Errorf("container shutdown failed: %w", stopErr)
@@ -486,10 +487,11 @@ func (dc *dockerClient) RemoveContainer(ctx context.Context, containerID string,
 		Force:         true,
 	}
 	if err := dc.client.ContainerRemove(ctx, containerID, options); err != nil {
-		if !client.IsErrNotFound(err) {
+		if !cerrdefs.IsNotFound(err) {
 			return fmt.Errorf("failed to remove container: %w", err)
 		}
-		// TODO: fix this case
+		// already gone (removed manually, or a prior call already succeeded);
+		// still mark it deleted below so the database row does not go stale.
 		logger.WithError(err).Warn("container not found")
 	}
 
@@ -600,16 +602,23 @@ func (dc *dockerClient) Cleanup(ctx context.Context) error {
 func (dc *dockerClient) IsContainerRunning(ctx context.Context, containerID string) (bool, error) {
 	inspection, err := dc.client.ContainerInspect(ctx, containerID)
 	if err != nil {
-		if !client.IsErrNotFound(err) {
+		if !cerrdefs.IsNotFound(err) {
 			return false, fmt.Errorf("container inspection failed: %w", err)
 		}
 		// a removed container is missing, not an inspection failure
 		return false, nil
 	}
 
+	if inspection.State == nil {
+		// the daemon always populates State for a successfully inspected
+		// container; treat the unexpected absence as "not running" rather
+		// than panicking on the field access below.
+		return false, nil
+	}
+
 	// Check both Running state and health status if available
 	isOperational := inspection.State.Running
-	if inspection.State != nil && inspection.State.Health != nil && inspection.State.Health.Status != "" {
+	if inspection.State.Health != nil && inspection.State.Health.Status != "" {
 		isOperational = isOperational && inspection.State.Health.Status != "unhealthy"
 	}
 
@@ -974,7 +983,7 @@ func getHostDataDir(ctx context.Context, cli *client.Client, dataDir, workDir st
 		return "" // unexpected error
 	}
 
-	mounts := []types.MountPoint{}
+	mounts := []container.MountPoint{}
 	for _, container := range containers {
 		inspect, err := cli.ContainerInspect(ctx, container.ID)
 		if err != nil {
@@ -1001,7 +1010,7 @@ func getHostDataDir(ctx context.Context, cli *client.Client, dataDir, workDir st
 	}
 
 	// sort mounts by destination length to get the most accurate mount point
-	slices.SortFunc(mounts, func(a, b types.MountPoint) int {
+	slices.SortFunc(mounts, func(a, b container.MountPoint) int {
 		return len(b.Destination) - len(a.Destination)
 	})
 
