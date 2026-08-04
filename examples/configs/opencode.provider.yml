@@ -1,3 +1,20 @@
+# OpenCode Go prices ($/1M tokens) from https://opencode.ai/docs/go/
+# Qwen3.7 Plus / GPT 5.6 Luna use the lower (≤256K / ≤272K) tier.
+#
+# Model              | input  | output | cache_read | cache_write
+# -------------------|--------|--------|------------|------------
+# Grok 4.5           | 2.00   | 6.00   | 0.30       | -
+# Kimi K3            | 3.00   | 15.00  | 0.30       | -
+# Qwen3.8 Max        | 2.00   | 6.00   | 0.25       | 2.50
+# GLM-5.2            | 1.40   | 4.40   | 0.26       | -
+# MiniMax M3         | 0.30   | 1.20   | 0.06       | -
+# DeepSeek V4 Pro    | 0.435  | 0.87   | 0.003625   | -
+# GPT 5.6 Luna       | 0.20   | 1.20   | 0.02       | 0.25
+# Qwen3.7 Plus       | 0.40   | 1.60   | 0.04       | 0.50
+# Hy3                | 0.14   | 0.58   | 0.035      | -
+# MiMo-V2.5          | 0.14   | 0.28   | 0.0028     | -
+# DeepSeek V4 Flash  | 0.14   | 0.28   | 0.0028     | -
+
 simple:
   model: mimo-v2.5
   temperature: 0.3
@@ -7,6 +24,10 @@ simple:
   extra_body:
     thinking:
       type: disabled
+  price:
+    input: 0.14
+    output: 0.28
+    cache_read: 0.0028
 
 simple_json:
   model: mimo-v2.5
@@ -18,6 +39,10 @@ simple_json:
   extra_body:
     thinking:
       type: disabled
+  price:
+    input: 0.14
+    output: 0.28
+    cache_read: 0.0028
 
 primary_agent:
   model: deepseek-v4-pro
@@ -28,6 +53,10 @@ primary_agent:
   extra_body:
     thinking:
       type: enabled
+  price:
+    input: 0.435
+    output: 0.87
+    cache_read: 0.003625
 
 assistant:
   model: deepseek-v4-pro
@@ -38,6 +67,10 @@ assistant:
   extra_body:
     thinking:
       type: enabled
+  price:
+    input: 0.435
+    output: 0.87
+    cache_read: 0.003625
 
 generator:
   model: deepseek-v4-pro
@@ -48,6 +81,10 @@ generator:
   extra_body:
     thinking:
       type: enabled
+  price:
+    input: 0.435
+    output: 0.87
+    cache_read: 0.003625
 
 refiner:
   model: deepseek-v4-pro
@@ -58,9 +95,13 @@ refiner:
   extra_body:
     thinking:
       type: enabled
+  price:
+    input: 0.435
+    output: 0.87
+    cache_read: 0.003625
 
 adviser:
-  model: deepseek-v4-pro
+  model: qwen3.7-plus
   n: 1
   max_tokens: 16384
   reasoning:
@@ -68,6 +109,11 @@ adviser:
   extra_body:
     thinking:
       type: enabled
+  price:
+    input: 0.40
+    output: 1.60
+    cache_read: 0.04
+    cache_write: 0.50
 
 reflector:
   model: deepseek-v4-flash
@@ -78,6 +124,10 @@ reflector:
   extra_body:
     thinking:
       type: disabled
+  price:
+    input: 0.14
+    output: 0.28
+    cache_read: 0.0028
 
 searcher:
   model: deepseek-v4-flash
@@ -88,6 +138,10 @@ searcher:
   extra_body:
     thinking:
       type: disabled
+  price:
+    input: 0.14
+    output: 0.28
+    cache_read: 0.0028
 
 enricher:
   model: deepseek-v4-flash
@@ -98,16 +152,24 @@ enricher:
   extra_body:
     thinking:
       type: disabled
+  price:
+    input: 0.14
+    output: 0.28
+    cache_read: 0.0028
 
 coder:
-  model: deepseek-v4-pro
+  model: minimax-m3
   n: 1
   max_tokens: 20480
   reasoning:
     effort: high
   extra_body:
     thinking:
-      type: enabled
+      type: adaptive
+  price:
+    input: 0.30
+    output: 1.20
+    cache_read: 0.06
 
 installer:
   model: deepseek-v4-flash
@@ -118,9 +180,13 @@ installer:
   extra_body:
     thinking:
       type: enabled
+  price:
+    input: 0.14
+    output: 0.28
+    cache_read: 0.0028
 
 pentester:
-  model: deepseek-v4-pro
+  model: deepseek-v4-flash
   n: 1
   max_tokens: 16384
   reasoning:
@@ -128,3 +194,7 @@ pentester:
   extra_body:
     thinking:
       type: enabled
+  price:
+    input: 0.14
+    output: 0.28
+    cache_read: 0.0028
