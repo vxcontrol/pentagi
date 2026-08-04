@@ -51,6 +51,83 @@ interface MarkdownProps {
     searchValue?: string;
 }
 
+/**
+ * Scan `content` line-by-line for fenced code blocks opened with backtick
+ * fences (```). When the body of a block contains a line whose leading
+ * backtick run is long enough to close the current fence, the outer fence is
+ * extended by one backtick beyond the longest such inner run so the parser
+ * treats the body as literal content instead of closing the block early.
+ *
+ * Only backtick fences are normalised; tilde fences (~) are left untouched
+ * because remark-gfm already handles them correctly.
+ */
+function preprocessMarkdownFences(content: string): string {
+    const lines = content.split('\n');
+    const result: string[] = [];
+    let i = 0;
+
+    while (i < lines.length) {
+        const line = lines[i];
+        // Match an opening backtick fence: optional indent (≤3 spaces), then 3+ backticks, then optional info string.
+        const openMatch = /^( {0,3})(```+)([ \t].*)?$/.exec(line);
+
+        if (!openMatch) {
+            result.push(line);
+            i++;
+            continue;
+        }
+
+        const indent = openMatch[1] ?? '';
+        const fence = openMatch[2];
+        const info = openMatch[3] ?? '';
+        const fenceLen = fence.length;
+
+        // Scan ahead: find the closing fence and track the longest backtick
+        // run on any single line inside the block body.
+        let closeIdx = -1;
+        let maxInnerLen = 0;
+
+        for (let j = i + 1; j < lines.length; j++) {
+            // A closing fence must consist solely of backticks (≥ fenceLen) with
+            // optional trailing whitespace and optional leading indent (≤3 spaces).
+            const closeMatch = /^( {0,3})(```+)\s*$/.exec(lines[j]);
+            if (closeMatch && closeMatch[2].length >= fenceLen) {
+                closeIdx = j;
+                break;
+            }
+            // Track the longest leading backtick run inside the block body.
+            const innerMatch = /^( {0,3})(```+)/.exec(lines[j]);
+            if (innerMatch) {
+                maxInnerLen = Math.max(maxInnerLen, innerMatch[2].length);
+            }
+        }
+
+        if (closeIdx === -1) {
+            // No closing fence found — emit as-is and move on.
+            result.push(line);
+            i++;
+            continue;
+        }
+
+        // If any inner run is long enough to act as a closing fence, extend
+        // the outer fence to one backtick beyond the longest inner run.
+        const effectiveFenceLen = maxInnerLen >= fenceLen ? maxInnerLen + 1 : fenceLen;
+        const effectiveFence = '`'.repeat(effectiveFenceLen);
+
+        result.push(`${indent}${effectiveFence}${info}`);
+        for (let j = i + 1; j < closeIdx; j++) {
+            result.push(lines[j]);
+        }
+        // Preserve the original closing fence indent.
+        const closeIndent = /^( {0,3})/.exec(lines[closeIdx])?.[1] ?? '';
+        result.push(`${closeIndent}${effectiveFence}`);
+
+        i = closeIdx + 1;
+    }
+
+    return result.join('\n');
+}
+
 const textElements = [
     'p',
     'span',
@@ -238,6 +315,8 @@ function Markdown({ children, className, searchValue }: MarkdownProps) {
         return components;
     }, [processedSearch, createComponentRenderer, processTextNode]);
 
+    const processedChildren = useMemo(() => preprocessMarkdownFences(children), [children]);
+
     return (
         <div className={`prose prose-sm dark:prose-invert max-w-none ${className || ''}`}>
             <ReactMarkdown
@@ -275,7 +354,7 @@ function Markdown({ children, className, searchValue }: MarkdownProps) {
                 ]}
                 remarkPlugins={[remarkGfm]}
             >
-                {children}
+                {processedChildren}
             </ReactMarkdown>
         </div>
     );
