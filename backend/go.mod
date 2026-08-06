@@ -54,7 +54,7 @@ require (
 	github.com/vektah/gqlparser/v2 v2.5.19
 	github.com/vxcontrol/cloud v0.9.0
 	github.com/vxcontrol/graphiti-go-client v0.9.0
-	github.com/vxcontrol/langchaingo v0.1.15-0.20260804113937-da7016e399b0
+	github.com/vxcontrol/langchaingo v0.1.14-update.7
 	github.com/wasilibs/go-re2 v1.10.0
 	github.com/xeipuuv/gojsonschema v1.2.0
 	go.opentelemetry.io/otel v1.43.0
