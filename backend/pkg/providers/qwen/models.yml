@@ -1,3 +1,12 @@
+# Qwen3.8 Series - Latest flagship generation
+- name: qwen3.8-max
+  description: Qwen3.8 Max - Newest flagship model succeeding Qwen3.7-Max with further improvements in reasoning, coding, and long-horizon agentic execution. Best choice for the most demanding penetration testing orchestration and complex exploit reasoning
+  thinking: true
+  price:
+    input: 2.0
+    output: 6.0
+    cache_read: 0.25
+
 # Qwen3.7 Series - Latest generation (May 2026)
 - name: qwen3.7-plus
   description: Qwen3.7 Plus - Cost-efficient tier of the Qwen3.7 generation for the agent-centric era. Better cost-to-intelligence ratio than qwen3.7-max; supports hybrid thinking, long-horizon autonomous execution, and complex security reasoning workflows
@@ -17,6 +26,15 @@
     output: 7.5
     cache_read: 0.5
 
+- name: qwen3.7-flash
+  description: Qwen3.7 Flash - Lightweight, ultra-low-latency tier of the Qwen3.7 generation. Optimized for high-throughput utility tasks, rapid classification, and cost-sensitive continuous security scanning (32k<Input<=256k tier pricing)
+  thinking: true
+  release_date: 2026-07-15
+  price:
+    input: 0.1
+    output: 0.4
+    cache_read: 0.02
+
 # Qwen3.6 Series - Native vision-language models with enhanced agentic coding (April 2026)
 - name: qwen3.6-max-preview
   description: Qwen3.6 Max Preview - Builds on Qwen3-Max and Qwen3.6-Plus with enhanced vibe coding, more efficient coding agent execution, significantly improved front-end skills, and upgraded long-tail knowledge retention. Ideal for advanced security code analysis and complex multi-step penetration testing tasks (lowest <=128k tier pricing)
@@ -34,7 +52,6 @@
   price:
     input: 0.5
     output: 3.0
-    cache_read: 0.10
 
 - name: qwen3.6-flash
   description: Qwen3.6 Flash - Native vision-language Flash model with significant performance boost over 3.5-Flash, excels in agentic coding, math/code reasoning, spatial intelligence, and object detection. Optimal for high-throughput security scanning with multimodal awareness
@@ -71,7 +88,6 @@
   price:
     input: 0.4
     output: 2.4
-    cache_read: 0.08
 
 - name: qwen3.5-flash
   description: Qwen3.5 Flash - Native vision-language Flash with outstanding performance and pure-text capabilities. Ultra-fast lightweight model optimized for high-throughput security scanning and rapid vulnerability classification
@@ -80,7 +96,6 @@
   price:
     input: 0.1
     output: 0.4
-    cache_read: 0.02
 
 - name: qwen3.5-397b-a17b
   description: Qwen3.5 397B Open-Source - Largest open-source model in 3.5 series with hybrid architecture (397B params, ~17B active) and exceptional reasoning capabilities. Suitable for deep on-premises security research and sophisticated threat modeling
@@ -89,7 +104,6 @@
   price:
     input: 0.6
     output: 3.6
-    cache_read: 0.12
 
 - name: qwen3.5-122b-a10b
   description: Qwen3.5 122B Open-Source - Large open-source MoE model (122B params, ~10B active) with strong performance balance for complex on-premises security analysis
@@ -98,7 +112,6 @@
   price:
     input: 0.4
     output: 3.2
-    cache_read: 0.08
 
 - name: qwen3.5-35b-a3b
   description: Qwen3.5 35B Open-Source - Efficient open-source MoE model (35B params, ~3B active) optimized for cost-effective inference in continuous security monitoring
@@ -107,7 +120,6 @@
   price:
     input: 0.25
     output: 2.0
-    cache_read: 0.05
 
 - name: qwen3.5-27b
   description: Qwen3.5 27B Open-Source - Native vision-language model with hybrid linear attention and sparse MoE architecture for higher inference efficiency. Ideal for on-premises security analysis with multimodal capabilities
@@ -116,17 +128,16 @@
   price:
     input: 0.3
     output: 2.4
-    cache_read: 0.06
 
 # Qwen3 Series - Flagship hybrid thinking models
 - name: qwen3-max
-  description: Qwen3 Max - Flagship reasoning model with specialized upgrades in agent programming and tool invocation, SOTA performance in its field. Optimized for complex agent scenarios requiring sophisticated multi-step pentesting workflows (lowest <=32k tier pricing)
+  description: Qwen3 Max - Flagship reasoning model with specialized upgrades in agent programming and tool invocation, SOTA performance in its field. Optimized for complex agent scenarios requiring sophisticated multi-step pentesting workflows (32k<Input<=128k tier pricing)
   thinking: true
   release_date: 2026-01-23
   price:
-    input: 1.2
-    output: 6.0
-    cache_read: 0.24
+    input: 2.4
+    output: 12.0
+    cache_read: 0.48
 
 - name: qwen-plus
   description: Qwen Plus - Enhanced super-large-scale language model with Qwen3 backbone, integrated thinking/non-thinking modes switchable mid-conversation. Versatile choice for general pentesting dialogue, code generation, and balanced security analysis (thinking-mode output pricing shown)
@@ -148,22 +159,22 @@
 
 # Qwen3 Coder Series - Code-specialized models with agentic capabilities
 - name: qwen3-coder-plus
-  description: Qwen3 Coder Plus - Qwen3-based code generation model with strong coding agent capability, excels at tool invocation and environment interaction, enables autonomous programming. Ideal for exploit development, security code review, and CVE research workflows (lowest <=32k tier pricing)
+  description: Qwen3 Coder Plus - Qwen3-based code generation model with strong coding agent capability, excels at tool invocation and environment interaction, enables autonomous programming. Ideal for exploit development, security code review, and CVE research workflows (32k<Input<=128k tier pricing)
   thinking: false
   release_date: 2025-09-23
   price:
-    input: 1.0
-    output: 5.0
-    cache_read: 0.2
+    input: 1.8
+    output: 9.0
+    cache_read: 0.36
 
 - name: qwen3-coder-flash
-  description: Qwen3 Coder Flash - Fast code generation model inheriting Qwen3-Coder-Plus capabilities with multi-turn tool interaction, repository-level understanding, and enhanced tool-calling stability. Cost-effective for systematic security code analysis and automated vulnerability triage
+  description: Qwen3 Coder Flash - Fast code generation model inheriting Qwen3-Coder-Plus capabilities with multi-turn tool interaction, repository-level understanding, and enhanced tool-calling stability. Cost-effective for systematic security code analysis and automated vulnerability triage (32k<Input<=128k tier pricing)
   thinking: false
   release_date: 2025-07-29
   price:
-    input: 0.3
-    output: 1.5
-    cache_read: 0.06
+    input: 0.5
+    output: 2.5
+    cache_read: 0.1
 
 - name: qwen3-coder-next
   description: Qwen3 Coder Next - Open-source code generation model from Qwen3 series with hybrid/thinking/non-thinking variants achieving SOTA capabilities at the same scale. Suitable for on-premises security code analysis and air-gapped offensive research
@@ -175,39 +186,101 @@
     cache_read: 0.06
 
 - name: qwen3-coder-30b-a3b-instruct
-  description: Qwen3 Coder 30B Open-Source - MoE code model (30B params, ~3B active) optimized for efficient repository-scale code understanding. Good for cost-effective on-premises security code review and exploit generation
+  description: Qwen3 Coder 30B Open-Source - MoE code model (30B params, ~3B active) optimized for efficient repository-scale code understanding. Good for cost-effective on-premises security code review and exploit generation (32k<Input<=128k tier pricing)
   thinking: false
   price:
-    input: 0.45
-    output: 2.25
-    cache_read: 0.09
+    input: 0.75
+    output: 3.75
 
 - name: qwen3-coder-480b-a35b-instruct
-  description: Qwen3 Coder 480B Open-Source - Largest open-source coder MoE (480B params, ~35B active) with maximum coding capability for advanced exploit development, complex vulnerability discovery, and large-scale code refactoring in security research
+  description: Qwen3 Coder 480B Open-Source - Largest open-source coder MoE (480B params, ~35B active) with maximum coding capability for advanced exploit development, complex vulnerability discovery, and large-scale code refactoring in security research (32k<Input<=128k tier pricing)
   thinking: false
   price:
-    input: 1.5
-    output: 7.5
-    cache_read: 0.3
+    input: 2.7
+    output: 13.5
 
 # Qwen3-VL Series - Vision-language models for browser screenshot analysis and visual reconnaissance
 - name: qwen3-vl-plus
-  description: Qwen3-VL Plus - Vision-language model integrating thinking and non-thinking modes with world-leading visual agent capabilities. Features upgrades in visual coding, spatial perception, multimodal reasoning, and ultra-long video understanding. Ideal for Searcher agent browser screenshot analysis and visual reconnaissance (lowest <=32k tier pricing)
+  description: Qwen3-VL Plus - Vision-language model integrating thinking and non-thinking modes with world-leading visual agent capabilities. Features upgrades in visual coding, spatial perception, multimodal reasoning, and ultra-long video understanding. Ideal for Searcher agent browser screenshot analysis and visual reconnaissance (32k<Input<=128k tier pricing)
   thinking: true
-  release_date: 2025-12-18
+  release_date: 2025-09-23
   price:
-    input: 0.2
-    output: 1.6
-    cache_read: 0.04
+    input: 0.3
+    output: 2.4
 
 - name: qwen3-vl-flash
-  description: Qwen3-VL Flash - Small-scale vision understanding model with thinking/non-thinking modes, outperforms open-source Qwen3-VL-30B-A3B at faster response speeds. Equipped with 2D/3D visual localization for complex real-world tasks like browser automation and screenshot triage (lowest <=32k tier pricing)
+  description: Qwen3-VL Flash - Small-scale vision understanding model with thinking/non-thinking modes, outperforms open-source Qwen3-VL-30B-A3B at faster response speeds. Equipped with 2D/3D visual localization for complex real-world tasks like browser automation and screenshot triage (32k<Input<=128k tier pricing)
   thinking: true
   release_date: 2026-01-22
   price:
-    input: 0.05
-    output: 0.4
-    cache_read: 0.01
+    input: 0.075
+    output: 0.6
+    cache_read: 0.015
+
+- name: qwen3-vl-32b-instruct
+  description: Qwen3-VL 32B Instruct Open-Source - Dense vision-language model tuned for direct instruction following without extended reasoning. Suitable for fast on-premises analysis of screenshots, diagrams, and recon artifacts
+  thinking: false
+  price:
+    input: 0.16
+    output: 0.64
+
+- name: qwen3-vl-32b-thinking
+  description: Qwen3-VL 32B Thinking Open-Source - Dense vision-language model with chain-of-thought reasoning over visual input. Suitable for deeper on-premises visual security analysis requiring step-by-step interpretation
+  thinking: true
+  price:
+    input: 0.16
+    output: 0.64
+
+- name: qwen3-vl-30b-a3b-instruct
+  description: Qwen3-VL 30B-A3B Instruct Open-Source - MoE vision-language model (30B params, ~3B active) for efficient instruction-following visual tasks in continuous security monitoring
+  thinking: false
+  price:
+    input: 0.2
+    output: 0.8
+
+- name: qwen3-vl-30b-a3b-thinking
+  description: Qwen3-VL 30B-A3B Thinking Open-Source - MoE vision-language model (30B params, ~3B active) with chain-of-thought reasoning for cost-effective on-premises visual security analysis
+  thinking: true
+  price:
+    input: 0.2
+    output: 2.4
+
+- name: qwen3-vl-235b-a22b-instruct
+  description: Qwen3-VL 235B-A22B Instruct Open-Source - Large MoE vision-language model (235B params, ~22B active) for high-capability instruction-following visual reconnaissance and screenshot analysis
+  thinking: false
+  price:
+    input: 0.4
+    output: 1.6
+
+- name: qwen3-vl-235b-a22b-thinking
+  description: Qwen3-VL 235B-A22B Thinking Open-Source - Large MoE vision-language model (235B params, ~22B active) with chain-of-thought reasoning for the most demanding on-premises visual security analysis
+  thinking: true
+  price:
+    input: 0.4
+    output: 4.0
+
+# Qwen-VL OCR & Machine Translation Series - Specialized document/text utility models
+- name: qwen-vl-ocr
+  description: Qwen VL OCR - Vision-language model specialized in text extraction and recognition (OCR) from documents, screenshots, and images. Useful for parsing scanned reports, terminal screenshots, and recon artifacts into structured text
+  thinking: false
+  release_date: 2025-11-20
+  price:
+    input: 0.07
+    output: 0.16
+
+- name: qwen-mt-flash
+  description: Qwen MT Flash - Fast, cost-efficient machine translation model. Useful for translating multilingual recon data, foreign-language documentation, and target-locale artifacts during pentesting engagements
+  thinking: false
+  price:
+    input: 0.16
+    output: 0.49
+
+- name: qwen-mt-plus
+  description: Qwen MT Plus - High-quality machine translation model with improved fluency and accuracy over qwen-mt-flash. Suitable for precise translation of critical security documentation and legal/compliance artifacts
+  thinking: false
+  price:
+    input: 2.46
+    output: 7.37
 
 # QVQ Series - Visual reasoning models with chain-of-thought
 - name: qvq-max
@@ -226,7 +299,6 @@
   price:
     input: 0.15
     output: 1.2
-    cache_read: 0.03
 
 - name: qwen3-next-80b-a3b-instruct
   description: Qwen3-Next 80B Instruct Open-Source - Non-thinking variant for efficient instruction-following, ideal for high-throughput security automation tasks
@@ -234,65 +306,64 @@
   price:
     input: 0.15
     output: 1.2
-    cache_read: 0.03
 
-- name: qwen3-235b-a22b
-  description: Qwen3 235B Open-Source - Dual-mode MoE model (235B params, ~22B active) supporting both thinking and non-thinking modes for versatile security workloads (thinking-mode output pricing shown)
+- name: qwen3-235b-a22b-instruct-2507
+  description: Qwen3 235B Instruct Open-Source - Non-thinking variant of the 235B MoE model (235B params, ~22B active) for efficient high-throughput instruction-following in security automation tasks
+  thinking: false
+  price:
+    input: 0.23
+    output: 0.92
+
+- name: qwen3-235b-a22b-thinking-2507
+  description: Qwen3 235B Thinking Open-Source - Thinking-mode variant of the 235B MoE model (235B params, ~22B active) with chain-of-thought reasoning for versatile, methodical security workloads
   thinking: true
   price:
-    input: 0.7
-    output: 8.4
-    cache_read: 0.14
+    input: 0.23
+    output: 2.3
 
-- name: qwen3-32b
-  description: Qwen3 32B Open-Source - Versatile dense model with dual-mode capabilities, suitable for balanced on-premises pentesting workflows
-  thinking: true
+- name: qwen3-30b-a3b-instruct-2507
+  description: Qwen3 30B-A3B Instruct Open-Source - Non-thinking variant of the efficient MoE model (30B params, ~3B active) for cost-effective, high-throughput continuous security monitoring
+  thinking: false
   price:
-    input: 0.16
-    output: 0.64
-    cache_read: 0.032
+    input: 0.2
+    output: 0.8
 
-- name: qwen3-30b-a3b
-  description: Qwen3 30B Open-Source - Efficient MoE model (30B params, ~3B active) for cost-effective continuous security monitoring (thinking-mode output pricing shown)
+- name: qwen3-30b-a3b-thinking-2507
+  description: Qwen3 30B-A3B Thinking Open-Source - Thinking-mode variant of the efficient MoE model (30B params, ~3B active) for cost-effective continuous security monitoring requiring deeper reasoning
   thinking: true
   price:
     input: 0.2
     output: 2.4
+
+# Third-Party Models Resold on Alibaba Cloud Model Studio (DashScope)
+# These are NOT Qwen-brand models, but are hosted and billed through the SAME
+# DashScope OpenAI-compatible endpoint as the Qwen models above, using the SAME
+# normalized `enable_thinking`/`reasoning_effort` wire convention (confirmed via
+# help.aliyun.com/en/model-studio/{glm,deepseek-api}) rather than each vendor's
+# own native API convention (see backend/pkg/providers/glm, .../deepseek for
+# that). Pricing below is the DashScope resale price, which differs from the
+# vendor's native API pricing (e.g. deepseek-v4-pro is $2.4/$4.8 here vs
+# $0.435/$0.87 on DeepSeek's own API).
+- name: glm-5.2
+  description: GLM-5.2 (Zhipu AI, via DashScope) - Newest GLM flagship, 1M context, hybrid thinking with reasoning_effort (none..max). Resold on Alibaba Cloud Model Studio; suitable for targeted high-effort strategic advice
+  thinking: true
+  price:
+    input: 1.4
+    output: 4.4
+    cache_read: 0.28
+
+- name: deepseek-v4-pro
+  description: DeepSeek V4 Pro (via DashScope) - Higher-tier DeepSeek reasoning model with hybrid thinking (enabled by default, reasoning_effort low..max). Resold on Alibaba Cloud Model Studio at a premium over DeepSeek's native API pricing
+  thinking: true
+  price:
+    input: 2.4
+    output: 4.8
+    cache_read: 0.2
+
+- name: deepseek-v4-flash-0731
+  description: DeepSeek V4 Flash (2026-07-31 snapshot, via DashScope) - Cost-efficient DeepSeek model with hybrid thinking (enabled by default, reasoning_effort low..max). Resold on Alibaba Cloud Model Studio; suitable for high-throughput utility tasks
+  thinking: true
+  price:
+    input: 0.2
+    output: 0.4
     cache_read: 0.04
-
-- name: qwen3-14b
-  description: Qwen3 14B Open-Source - Medium-sized dense model with good performance-cost balance for routine security assessments (thinking-mode output pricing shown)
-  thinking: true
-  price:
-    input: 0.35
-    output: 4.2
-    cache_read: 0.07
-
-- name: qwen3-8b
-  description: Qwen3 8B Open-Source - Compact dense model optimized for efficient inference in lightweight security tasks (thinking-mode output pricing shown)
-  thinking: true
-  price:
-    input: 0.18
-    output: 2.1
-    cache_read: 0.036
-
-- name: qwen3-4b
-  description: Qwen3 4B Open-Source - Lightweight model for simple security tasks and high-frequency scanning (thinking-mode output pricing shown)
-  thinking: true
-  price:
-    input: 0.11
-    output: 1.26
-
-- name: qwen3-1.7b
-  description: Qwen3 1.7B Open-Source - Ultra-compact model for basic security checks at minimal resource cost (thinking-mode output pricing shown)
-  thinking: true
-  price:
-    input: 0.11
-    output: 1.26
-
-- name: qwen3-0.6b
-  description: Qwen3 0.6B Open-Source - Smallest Qwen3 model for minimal resource usage in edge security monitoring scenarios (thinking-mode output pricing shown)
-  thinking: true
-  price:
-    input: 0.11
-    output: 1.26
