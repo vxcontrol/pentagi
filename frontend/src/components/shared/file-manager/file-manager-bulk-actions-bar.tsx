@@ -3,6 +3,7 @@ import { type ComponentType, useCallback, useMemo, useState } from 'react';
 
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
 import { Button } from '@/components/ui/button';
+import { useI18n } from '@/hooks/use-i18n';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -58,6 +59,7 @@ export function FileManagerBulkActionsBar({
     selectedPaths,
     selectionTotalBytes,
 }: FileManagerBulkActionsBarProps) {
+    const { t } = useI18n();
     const [pendingAction, setPendingAction] = useState<FileManagerBulkAction | null>(null);
 
     const dedupedFiles = useMemo(() => {
@@ -128,11 +130,12 @@ export function FileManagerBulkActionsBar({
 
     const pluralize = labels.pluralizeItems ?? pluralizeItemsEnglish;
     const countLabel = pluralize(selectedPaths.size);
-    const baseSelectedText = labels.selectedLabel?.(selectedPaths.size) ?? `${selectedPaths.size} selected`;
+    const baseSelectedText =
+        labels.selectedLabel?.(selectedPaths.size) ?? t('fileManager.selectedCount', { count: selectedPaths.size });
     const sizeSuffix = (labels.formatSelectionSize ?? formatFileSize)(selectionTotalBytes);
     const selectedText = sizeSuffix ? `${baseSelectedText} · ${sizeSuffix}` : baseSelectedText;
-    const cancelText = labels.bulkCancel ?? 'Cancel';
-    const moreActionsText = labels.bulkMoreActions ?? 'More actions';
+    const cancelText = labels.bulkCancel ?? t('fileManager.cancel');
+    const moreActionsText = labels.bulkMoreActions ?? t('fileManager.moreActions');
 
     return (
         <>

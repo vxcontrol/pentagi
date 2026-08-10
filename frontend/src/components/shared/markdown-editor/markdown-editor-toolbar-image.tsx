@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useI18n } from '@/hooks/use-i18n';
 
 import { returnFocusToEditor } from './markdown-editor-focus';
 import { ImageEditForm } from './markdown-editor-image-edit-form';
@@ -16,6 +17,7 @@ interface ImagePopoverProps {
 }
 
 export function ImagePopover({ disabled, editor }: ImagePopoverProps) {
+    const { t } = useI18n();
     const [open, setOpen] = useState(false);
 
     return (
@@ -27,7 +29,7 @@ export function ImagePopover({ disabled, editor }: ImagePopoverProps) {
                 <TooltipTrigger asChild>
                     <PopoverTrigger asChild>
                         <Button
-                            aria-label="Insert image"
+                            aria-label={t('markdownEditor.insertImage')}
                             data-toolbar-item=""
                             disabled={disabled}
                             size="icon-sm"
@@ -38,7 +40,7 @@ export function ImagePopover({ disabled, editor }: ImagePopoverProps) {
                         </Button>
                     </PopoverTrigger>
                 </TooltipTrigger>
-                <TooltipContent>Insert image</TooltipContent>
+                <TooltipContent>{t('markdownEditor.insertImage')}</TooltipContent>
             </Tooltip>
             <PopoverContent
                 align="start"

@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Toggle } from '@/components/ui/toggle';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useI18n } from '@/hooks/use-i18n';
 
 import { returnFocusToEditor } from './markdown-editor-focus';
 import { LinkEditForm } from './markdown-editor-link-edit-form';
@@ -17,6 +18,7 @@ interface LinkPopoverProps {
 }
 
 export function LinkPopover({ disabled, editor, isActive }: LinkPopoverProps) {
+    const { t } = useI18n();
     const [open, setOpen] = useState(false);
 
     return (
@@ -28,7 +30,7 @@ export function LinkPopover({ disabled, editor, isActive }: LinkPopoverProps) {
                 <TooltipTrigger asChild>
                     <PopoverTrigger asChild>
                         <Toggle
-                            aria-label="Link"
+                            aria-label={t('markdownEditor.link')}
                             data-toolbar-item=""
                             disabled={disabled}
                             pressed={isActive}
@@ -38,7 +40,7 @@ export function LinkPopover({ disabled, editor, isActive }: LinkPopoverProps) {
                         </Toggle>
                     </PopoverTrigger>
                 </TooltipTrigger>
-                <TooltipContent>Link</TooltipContent>
+                <TooltipContent>{t('markdownEditor.link')}</TooltipContent>
             </Tooltip>
             <PopoverContent
                 align="start"

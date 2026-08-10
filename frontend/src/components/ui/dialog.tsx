@@ -2,6 +2,7 @@ import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
 import * as React from 'react';
 
+import { useI18n } from '@/hooks/use-i18n';
 import { cn } from '@/lib/utils';
 
 function Dialog({ ...props }: React.ComponentProps<typeof DialogPrimitive.Root>) {
@@ -23,6 +24,8 @@ function DialogClose({ ...props }: React.ComponentProps<typeof DialogPrimitive.C
 }
 
 function DialogContent({ children, className, ...props }: React.ComponentProps<typeof DialogPrimitive.Content>) {
+    const { t } = useI18n();
+
     return (
         <DialogPortal>
             <DialogOverlay />
@@ -45,7 +48,7 @@ function DialogContent({ children, className, ...props }: React.ComponentProps<t
                 >
                     <X className="h-4 w-4" />
                     {/* not "Close": pages render visible Close buttons, and duplicate accessible names break role-based locators */}
-                    <span className="sr-only">Dismiss dialog</span>
+                    <span className="sr-only">{t('common.dismissDialog')}</span>
                 </DialogPrimitive.Close>
             </DialogPrimitive.Content>
         </DialogPortal>

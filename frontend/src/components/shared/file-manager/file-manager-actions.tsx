@@ -1,5 +1,7 @@
 import { ClipboardCopy, Copy, Download, FileSymlink, FolderOutput, Trash2 } from 'lucide-react';
 
+import i18n from '@/i18n/config';
+
 import type { FileManagerAction, FileManagerBulkAction, FileNode } from './file-manager-types';
 
 /**
@@ -21,7 +23,7 @@ export const downloadAction = (
         getHrefDownloadAttr: (file) => (file.isDir ? `${file.name}.${archiveExtension}` : file.name),
         icon: Download,
         id: '__builtin_download',
-        label: 'Download',
+        label: i18n.t('fileManager.download'),
         onSelect: () => {},
     };
 };
@@ -30,7 +32,7 @@ export const copyPathAction = (onCopyPath: (file: FileNode) => void): FileManage
     appliesToDirs: true,
     icon: ClipboardCopy,
     id: '__builtin_copy_path',
-    label: 'Copy path',
+    label: i18n.t('fileManager.copyPath'),
     onSelect: onCopyPath,
 });
 
@@ -42,7 +44,7 @@ export const deleteAction = (onDelete: (file: FileNode) => void): FileManagerAct
     appliesToDirs: true,
     icon: Trash2,
     id: '__builtin_delete',
-    label: 'Delete',
+    label: i18n.t('fileManager.delete'),
     onSelect: onDelete,
     separatorBefore: true,
     variant: 'destructive',
@@ -68,15 +70,15 @@ export const bulkDeleteAction = (
     onDelete: (files: FileNode[]) => Promise<void> | void,
     options: BulkDeleteOptions = {},
 ): FileManagerBulkAction => {
-    const label = options.label ?? 'Delete';
+    const label = options.label ?? i18n.t('fileManager.delete');
 
     return {
         confirm: {
             confirmText: options.confirmText ?? label,
             description:
                 options.confirmDescription ??
-                ((countLabel) => `This will delete ${countLabel}. This action cannot be undone.`),
-            title: options.confirmTitle ?? ((countLabel) => `Delete ${countLabel}`),
+                ((countLabel) => i18n.t('fileManager.deleteConfirmDescription', { count: countLabel })),
+            title: options.confirmTitle ?? ((countLabel) => i18n.t('fileManager.deleteConfirmTitle', { count: countLabel })),
         },
         icon: Trash2,
         id: '__builtin_bulk_delete',
@@ -97,7 +99,7 @@ export const bulkCopyPathsAction = (
 ): FileManagerBulkAction => ({
     icon: ClipboardCopy,
     id: '__builtin_bulk_copy_paths',
-    label: options.label ?? 'Copy paths',
+    label: options.label ?? i18n.t('fileManager.copyPaths'),
     onSelect: (files) => onCopy(files.map((file) => file.path)),
     overflow: options.overflow ?? true,
 });
@@ -112,7 +114,7 @@ export const bulkMoveAction = (
 ): FileManagerBulkAction => ({
     icon: FileSymlink,
     id: '__builtin_bulk_move',
-    label: options.label ?? 'Move to…',
+    label: options.label ?? i18n.t('fileManager.moveTo'),
     onSelect: onMove,
     overflow: options.overflow,
 });
@@ -127,7 +129,7 @@ export const bulkCopyAction = (
 ): FileManagerBulkAction => ({
     icon: Copy,
     id: '__builtin_bulk_copy',
-    label: options.label ?? 'Copy to…',
+    label: options.label ?? i18n.t('fileManager.copyTo'),
     onSelect: onCopy,
     overflow: options.overflow,
 });
@@ -142,7 +144,7 @@ export const bulkPromoteAction = (
 ): FileManagerBulkAction => ({
     icon: FolderOutput,
     id: '__builtin_bulk_promote',
-    label: options.label ?? 'Save as resources',
+    label: options.label ?? i18n.t('fileManager.saveAsResources'),
     onSelect: onPromote,
     overflow: options.overflow,
 });
@@ -186,7 +188,7 @@ export const bulkDownloadAction = (
 ): FileManagerBulkAction => ({
     icon: Download,
     id: '__builtin_bulk_download',
-    label: options.label ?? 'Download',
+    label: options.label ?? i18n.t('fileManager.download'),
     onSelect: (files) => {
         if (files.length === 0) {
             return;

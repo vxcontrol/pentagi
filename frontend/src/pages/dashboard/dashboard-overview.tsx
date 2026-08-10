@@ -18,9 +18,11 @@ import {
     UsageStatsByProviderDocument,
     UsageStatsTotalDocument,
 } from '@/graphql/types';
+import { useI18n } from '@/hooks/use-i18n';
 import { formatCost, formatDuration, formatNumber, formatTokenCount } from '@/lib/utils/format';
 
 export function DashboardOverview() {
+    const { t } = useI18n();
     const {
         data: usageTotalData,
         error: usageTotalError,
@@ -85,43 +87,49 @@ export function DashboardOverview() {
         <div className="flex flex-col gap-6">
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                 <MetricCard
-                    description={`Tasks: ${flowsTotal?.totalTasksCount ?? 0} · Subtasks: ${flowsTotal?.totalSubtasksCount ?? 0} · Assistants: ${flowsTotal?.totalAssistantsCount ?? 0}`}
+                    description={t('dashboard.flowsSummary', {
+                        assistants: flowsTotal?.totalAssistantsCount ?? 0,
+                        subtasks: flowsTotal?.totalSubtasksCount ?? 0,
+                        tasks: flowsTotal?.totalTasksCount ?? 0,
+                    })}
                     error={!!flowsTotalError}
                     icon={<GitFork className="text-muted-foreground size-4" />}
                     loading={flowsTotalLoading}
-                    title="Total Flows"
+                    title={t('dashboard.totalFlows')}
                     value={flowsTotal ? formatNumber(flowsTotal.totalFlowsCount) : '0'}
                 />
                 <MetricCard
-                    description={`Total duration: ${toolcallsTotal ? formatDuration(toolcallsTotal.totalDurationSeconds) : '—'}`}
+                    description={t('dashboard.totalDuration', {
+                        duration: toolcallsTotal ? formatDuration(toolcallsTotal.totalDurationSeconds) : '—',
+                    })}
                     error={!!toolcallsTotalError}
                     icon={<Activity className="text-muted-foreground size-4" />}
                     loading={toolcallsTotalLoading}
-                    title="Tool Calls"
+                    title={t('dashboard.toolCalls')}
                     value={toolcallsTotal ? formatNumber(toolcallsTotal.totalCount) : '0'}
                 />
                 <MetricCard
-                    description="Input + Output tokens processed"
+                    description={t('dashboard.inputOutputTokens')}
                     error={!!usageTotalError}
                     icon={<Cpu className="text-muted-foreground size-4" />}
                     loading={usageTotalLoading}
-                    title="Total Tokens"
+                    title={t('dashboard.totalTokens')}
                     value={formatTokenCount(totalTokens)}
                 />
                 <MetricCard
-                    description="Total LLM spending across all providers"
+                    description={t('dashboard.totalLlmSpending')}
                     error={!!usageTotalError}
                     icon={<CircleDollarSign className="text-muted-foreground size-4" />}
                     loading={usageTotalLoading}
-                    title="Total Cost"
+                    title={t('dashboard.totalCost')}
                     value={formatCost(totalCost)}
                 />
             </div>
 
             <Card>
                 <CardHeader>
-                    <CardTitle>Usage by Provider</CardTitle>
-                    <CardDescription>LLM token usage and costs grouped by provider</CardDescription>
+                    <CardTitle>{t('dashboard.usageByProvider')}</CardTitle>
+                    <CardDescription>{t('dashboard.usageByProviderDesc')}</CardDescription>
                 </CardHeader>
                 <CardContent>
                     {usageByProviderLoading ? (
@@ -136,8 +144,8 @@ export function DashboardOverview() {
 
             <Card>
                 <CardHeader>
-                    <CardTitle>Usage by Model</CardTitle>
-                    <CardDescription>LLM token usage and costs grouped by model</CardDescription>
+                    <CardTitle>{t('dashboard.usageByModel')}</CardTitle>
+                    <CardDescription>{t('dashboard.usageByModelDesc')}</CardDescription>
                 </CardHeader>
                 <CardContent>
                     {usageByModelLoading ? (
@@ -152,8 +160,8 @@ export function DashboardOverview() {
 
             <Card>
                 <CardHeader>
-                    <CardTitle>Usage by Agent Type</CardTitle>
-                    <CardDescription>LLM token usage and costs grouped by agent type</CardDescription>
+                    <CardTitle>{t('dashboard.usageByAgentType')}</CardTitle>
+                    <CardDescription>{t('dashboard.usageByAgentTypeDesc')}</CardDescription>
                 </CardHeader>
                 <CardContent>
                     {usageByAgentTypeLoading ? (
@@ -168,8 +176,8 @@ export function DashboardOverview() {
 
             <Card>
                 <CardHeader>
-                    <CardTitle>Tool Calls by Function</CardTitle>
-                    <CardDescription>Execution statistics for each tool function</CardDescription>
+                    <CardTitle>{t('dashboard.toolCallsByFunction')}</CardTitle>
+                    <CardDescription>{t('dashboard.toolCallsByFunctionDesc')}</CardDescription>
                 </CardHeader>
                 <CardContent>
                     {toolcallsByFunctionLoading ? (
@@ -180,11 +188,17 @@ export function DashboardOverview() {
                         <Table>
                             <TableHeader>
                                 <TableRow>
-                                    <TableHead className="whitespace-nowrap">Function</TableHead>
-                                    <TableHead className="whitespace-nowrap">Type</TableHead>
-                                    <TableHead className="text-right whitespace-nowrap">Count</TableHead>
-                                    <TableHead className="text-right whitespace-nowrap">Total Duration</TableHead>
-                                    <TableHead className="text-right whitespace-nowrap">Avg Duration</TableHead>
+                                    <TableHead className="whitespace-nowrap">{t('dashboard.function')}</TableHead>
+                                    <TableHead className="whitespace-nowrap">{t('dashboard.type')}</TableHead>
+                                    <TableHead className="text-right whitespace-nowrap">
+                                        {t('dashboard.count')}
+                                    </TableHead>
+                                    <TableHead className="text-right whitespace-nowrap">
+                                        {t('dashboard.totalDurationCol')}
+                                    </TableHead>
+                                    <TableHead className="text-right whitespace-nowrap">
+                                        {t('dashboard.avgDuration')}
+                                    </TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -193,7 +207,7 @@ export function DashboardOverview() {
                                         <TableCell className="font-medium">{item.functionName}</TableCell>
                                         <TableCell>
                                             <Badge variant={item.isAgent ? 'secondary' : 'outline'}>
-                                                {item.isAgent ? 'Agent' : 'Tool'}
+                                                {item.isAgent ? t('dashboard.agentBadge') : t('dashboard.toolBadge')}
                                             </Badge>
                                         </TableCell>
                                         <TableCell className="text-right">{formatNumber(item.totalCount)}</TableCell>
@@ -247,18 +261,20 @@ function UsageStatsRow({ label, stats }: { label: string; stats: UsageStatsFragm
 }
 
 function UsageStatsTable({ rows }: { rows: Array<{ label: string; stats: UsageStatsFragmentFragment }> }) {
+    const { t } = useI18n();
+
     return (
         <Table>
             <TableHeader>
                 <TableRow>
-                    <TableHead className="whitespace-nowrap">Name</TableHead>
-                    <TableHead className="text-right whitespace-nowrap">Tokens In</TableHead>
-                    <TableHead className="text-right whitespace-nowrap">Tokens Out</TableHead>
-                    <TableHead className="text-right whitespace-nowrap">Cache In</TableHead>
-                    <TableHead className="text-right whitespace-nowrap">Cache Out</TableHead>
-                    <TableHead className="text-right whitespace-nowrap">Cost In</TableHead>
-                    <TableHead className="text-right whitespace-nowrap">Cost Out</TableHead>
-                    <TableHead className="text-right whitespace-nowrap">Total Cost</TableHead>
+                    <TableHead className="whitespace-nowrap">{t('dashboard.name')}</TableHead>
+                    <TableHead className="text-right whitespace-nowrap">{t('dashboard.tokensIn')}</TableHead>
+                    <TableHead className="text-right whitespace-nowrap">{t('dashboard.tokensOut')}</TableHead>
+                    <TableHead className="text-right whitespace-nowrap">{t('dashboard.cacheIn')}</TableHead>
+                    <TableHead className="text-right whitespace-nowrap">{t('dashboard.cacheOut')}</TableHead>
+                    <TableHead className="text-right whitespace-nowrap">{t('dashboard.costIn')}</TableHead>
+                    <TableHead className="text-right whitespace-nowrap">{t('dashboard.costOut')}</TableHead>
+                    <TableHead className="text-right whitespace-nowrap">{t('dashboard.totalCostCol')}</TableHead>
                 </TableRow>
             </TableHeader>
             <TableBody>

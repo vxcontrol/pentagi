@@ -4,16 +4,11 @@ import { useState, useTransition } from 'react';
 import { AppHeader, AppHeaderContent, AppHeaderTitle } from '@/components/layouts/app/app-header';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { UsageStatsPeriod } from '@/graphql/types';
+import { useI18n } from '@/hooks/use-i18n';
 import { usePageStorageKeys } from '@/hooks/use-page-storage-keys';
 import { cn } from '@/lib/utils';
 import { DashboardAnalytics } from '@/pages/dashboard/dashboard-analytics';
 import { DashboardOverview } from '@/pages/dashboard/dashboard-overview';
-
-const periodOptions: { label: string; value: UsageStatsPeriod }[] = [
-    { label: 'Week', value: UsageStatsPeriod.Week },
-    { label: 'Month', value: UsageStatsPeriod.Month },
-    { label: 'Quarter', value: UsageStatsPeriod.Quarter },
-];
 
 const VALID_PERIODS = new Set<string>(Object.values(UsageStatsPeriod));
 
@@ -40,6 +35,12 @@ const savePeriod = (storageKey: string, value: UsageStatsPeriod): void => {
 };
 
 function Dashboard() {
+    const { t } = useI18n();
+    const periodOptions: { label: string; value: UsageStatsPeriod }[] = [
+        { label: t('dashboard.week'), value: UsageStatsPeriod.Week },
+        { label: t('dashboard.month'), value: UsageStatsPeriod.Month },
+        { label: t('dashboard.quarter'), value: UsageStatsPeriod.Quarter },
+    ];
     const { period: periodStorageKey } = usePageStorageKeys();
     const [activeTab, setActiveTab] = useState('analytics');
     const [period, setPeriod] = useState<UsageStatsPeriod>(() => loadPeriod(periodStorageKey));
@@ -74,7 +75,9 @@ function Dashboard() {
         <>
             <AppHeader>
                 <AppHeaderContent>
-                    <AppHeaderTitle icon={<LayoutDashboard className="size-4 shrink-0" />}>Dashboard</AppHeaderTitle>
+                    <AppHeaderTitle icon={<LayoutDashboard className="size-4 shrink-0" />}>
+                        {t('common.dashboard')}
+                    </AppHeaderTitle>
                 </AppHeaderContent>
             </AppHeader>
 
@@ -86,8 +89,8 @@ function Dashboard() {
                 >
                     <div className="flex items-center justify-between">
                         <TabsList>
-                            <TabsTrigger value="analytics">Analytics</TabsTrigger>
-                            <TabsTrigger value="overview">Overview</TabsTrigger>
+                            <TabsTrigger value="analytics">{t('dashboard.analytics')}</TabsTrigger>
+                            <TabsTrigger value="overview">{t('dashboard.overview')}</TabsTrigger>
                         </TabsList>
 
                         {activeTab === 'analytics' && (

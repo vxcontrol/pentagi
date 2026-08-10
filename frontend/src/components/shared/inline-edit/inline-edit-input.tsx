@@ -3,6 +3,7 @@ import { type KeyboardEvent, type Ref } from 'react';
 
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group';
 import { Spinner } from '@/components/ui/spinner';
+import { useI18n } from '@/hooks/use-i18n';
 import { cn } from '@/lib/utils';
 
 interface InlineEditInputProps {
@@ -68,6 +69,8 @@ export function InlineEditInput({
     onSave,
     placeholder,
 }: InlineEditInputProps) {
+    const { t } = useI18n();
+
     const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
         if (busy) {
             return;
@@ -102,14 +105,14 @@ export function InlineEditInput({
                 className="gap-0 pr-2"
             >
                 <InputGroupButton
-                    aria-label="Save"
+                    aria-label={t('common.save')}
                     disabled={busy}
                     onClick={onSave}
                 >
                     {busy ? <Spinner variant="circle" /> : <Check />}
                 </InputGroupButton>
                 <InputGroupButton
-                    aria-label="Cancel"
+                    aria-label={t('common.cancel')}
                     disabled={busy}
                     onClick={onCancel}
                 >

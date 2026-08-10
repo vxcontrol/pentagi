@@ -17,11 +17,13 @@ import {
 } from '@/features/knowledges/knowledge-form';
 import { KnowledgeLayout } from '@/features/knowledges/knowledge-layout';
 import { KnowledgeDocumentDocument } from '@/graphql/types';
+import { useI18n } from '@/hooks/use-i18n';
 import { isNotFoundError } from '@/lib/errors';
 import { routes } from '@/lib/routes';
 import { useKnowledges } from '@/providers/knowledges-provider';
 
 function Knowledge() {
+    const { t } = useI18n();
     const navigate = useNavigate();
     const { knowledgeId } = useParams<{ knowledgeId?: string }>();
     const { createKnowledge, updateKnowledge } = useKnowledges();
@@ -52,10 +54,10 @@ function Knowledge() {
         }
 
         if (!knowledge) {
-            toast.error('Knowledge document not found');
+            toast.error(t('knowledges.notFound'));
             navigate(routes.knowledges, { replace: true });
         }
-    }, [isNew, isLoadingKnowledge, knowledge, loadError, navigate]);
+    }, [isNew, isLoadingKnowledge, knowledge, loadError, navigate, t]);
 
     const initialValues = useMemo<FormValues>(
         () => (knowledge ? documentToFormValues(knowledge) : newDocumentDefaults),
@@ -99,7 +101,7 @@ function Knowledge() {
                     <ErrorState
                         message={loadError.message}
                         onRetry={() => refetch()}
-                        title="Error loading knowledge document"
+                        title={t('knowledges.errorLoadingKnowledgeDoc')}
                     />
                 </div>
             </KnowledgeLayout>

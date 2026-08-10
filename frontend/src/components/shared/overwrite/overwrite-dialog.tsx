@@ -1,6 +1,8 @@
 import { Replace } from 'lucide-react';
 
 import ConfirmationDialog from '@/components/shared/confirmation-dialog';
+import { useI18n } from '@/hooks/use-i18n';
+import i18n from '@/i18n/config';
 
 export interface OverwriteConflict {
     destination: string;
@@ -36,17 +38,21 @@ const buildDefaultDescription = (conflicts: OverwriteConflict[]): string | undef
     const single = conflicts.length === 1 ? conflicts[0] : undefined;
 
     if (single) {
-        return `An item named "${single.destinationName}" already exists at /${single.destination}. Do you want to replace it?`;
+        return i18n.t('overwrite.singleConflictDescription', {
+            destination: single.destination,
+            name: single.destinationName,
+        });
     }
 
     if (conflicts.length > 1) {
-        return `${conflicts.length} items already exist at the destination. Do you want to replace all of them?`;
+        return i18n.t('overwrite.batchConflictDescription', { count: conflicts.length });
     }
 
     return undefined;
 };
 
-const buildDefaultConfirmText = (count: number): string => (count > 1 ? 'Replace all' : 'Replace');
+const buildDefaultConfirmText = (count: number): string =>
+    count > 1 ? i18n.t('overwrite.replaceAll') : i18n.t('overwrite.replace');
 
 /**
  * Shared "Replace or cancel" confirmation for destructive overwrite flows
@@ -63,11 +69,13 @@ export function OverwriteDialog({
     description,
     onCancel,
     onReplaceAll,
-    title = 'Replace existing item?',
+    title,
 }: OverwriteDialogProps) {
+    const { t } = useI18n();
+
     return (
         <ConfirmationDialog
-            cancelText="Cancel"
+            cancelText={t('common.cancel')}
             confirmIcon={<Replace />}
             confirmText={confirmText ?? buildDefaultConfirmText(conflicts.length)}
             confirmVariant="destructive"
@@ -81,7 +89,7 @@ export function OverwriteDialog({
                 }
             }}
             isOpen={conflicts.length > 0}
-            title={title}
+            title={title ?? t('overwrite.replaceTitle')}
         />
     );
 }

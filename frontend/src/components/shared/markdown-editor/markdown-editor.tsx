@@ -7,6 +7,7 @@ import { EditorContent, useEditor } from '@tiptap/react';
 import { useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 
 import { Spinner } from '@/components/ui/spinner';
+import { useI18n } from '@/hooks/use-i18n';
 import { cn } from '@/lib/utils';
 
 import { createMarkdownExtensions } from './markdown-editor-extensions';
@@ -166,9 +167,11 @@ function useMarkdownEditor({
     id,
     onBlur,
     onChange,
-    placeholder = 'Write something…',
+    placeholder,
     value,
 }: UseMarkdownEditorOptions): Editor | null {
+    const { t } = useI18n();
+    const resolvedPlaceholder = placeholder ?? t('markdownEditor.writeSomething');
     // Suppress echoes of our own output: the markdown round-trip re-serializes slightly (whitespace/list
     // markers/blank lines), and those normalizations must not flip RHF's isDirty as if the user had edited.
     const lastEmittedRef = useRef<string>(value);
@@ -189,7 +192,7 @@ function useMarkdownEditor({
     // plugin regardless; keeping it out of the deps makes that explicit and stops rebuilding the whole
     // extension array on every placeholder change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    const extensions = useMemo(() => createMarkdownExtensions(placeholder), []);
+    const extensions = useMemo(() => createMarkdownExtensions(resolvedPlaceholder), []);
 
     const editor = useEditor({
         content: initialContent,

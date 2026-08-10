@@ -5,6 +5,7 @@ import { useParams, useSearchParams } from 'react-router-dom';
 import Logo from '@/components/icons/logo';
 import Markdown from '@/components/shared/markdown';
 import { FlowReportDocument } from '@/graphql/types';
+import { useI18n } from '@/hooks/use-i18n';
 import { Log } from '@/lib/log';
 import { generateFileName, generatePDFFromMarkdown, generateReport } from '@/lib/report';
 
@@ -12,6 +13,7 @@ type PdfPhase = 'done' | 'error' | 'idle';
 type ReportState = 'content' | 'error' | 'generating' | 'loading';
 
 function FlowReport() {
+    const { t } = useI18n();
     const { flowId } = useParams<{ flowId: string }>();
     const [searchParams] = useSearchParams();
     const download = searchParams.has('download');
@@ -66,10 +68,10 @@ function FlowReport() {
             })
             .catch((err) => {
                 Log.error('PDF generation failed:', err);
-                setPdfError('Failed to generate PDF');
+                setPdfError(t('flow.failedToGeneratePdf'));
                 setPdfPhase('error');
             });
-    }, [dataReady, download, silent, reportContent, data]);
+    }, [dataReady, download, silent, reportContent, data, t]);
 
     let state: ReportState;
     let errorMessage: null | string = null;
@@ -78,7 +80,7 @@ function FlowReport() {
         state = 'loading';
     } else if (!data?.flow) {
         state = 'error';
-        errorMessage = 'Failed to load flow data';
+        errorMessage = t('flow.failedToLoadFlowData');
     } else if (pdfPhase === 'error') {
         state = 'error';
         errorMessage = pdfError;
@@ -95,13 +97,11 @@ function FlowReport() {
                     <Logo className="animate-logo-spin mb-8 size-16 text-white" />
                     <div className="flex flex-col gap-4 text-center">
                         <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">
-                            {state === 'loading' ? 'Loading Report...' : 'Generating PDF...'}
+                            {state === 'loading' ? t('flow.loadingReport') : t('flow.generatingPdf')}
                         </h1>
                         <div className="mx-auto size-8 animate-spin rounded-full border-b-2 border-blue-600" />
                         <p className="max-w-md text-gray-600 dark:text-gray-400">
-                            {state === 'loading'
-                                ? 'Please wait while we prepare your penetration testing report.'
-                                : 'Creating your PDF document. This may take a few moments.'}
+                            {state === 'loading' ? t('flow.preparingReportDesc') : t('flow.creatingPdfDesc')}
                         </p>
                     </div>
                 </div>
@@ -115,15 +115,17 @@ function FlowReport() {
                 <div className="flex min-h-screen flex-col items-center justify-center p-8">
                     <Logo className="mb-8 size-16" />
                     <div className="flex flex-col gap-4 text-center">
-                        <h1 className="text-2xl font-semibold text-red-600 dark:text-red-400">Error Loading Report</h1>
+                        <h1 className="text-2xl font-semibold text-red-600 dark:text-red-400">
+                            {t('flow.errorLoadingReport')}
+                        </h1>
                         <p className="max-w-md text-gray-600 dark:text-gray-400">
-                            {errorMessage || 'An unexpected error occurred while loading the report.'}
+                            {errorMessage || t('flow.unexpectedReportError')}
                         </p>
                         <button
                             className="mt-4 rounded-md bg-red-600 px-4 py-2 text-white transition-colors hover:bg-red-700"
                             onClick={() => window.close()}
                         >
-                            Close
+                            {t('common.close')}
                         </button>
                     </div>
                 </div>

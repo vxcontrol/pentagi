@@ -5,6 +5,7 @@ import { useId, useState } from 'react';
 
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group';
 import { Label } from '@/components/ui/label';
+import { useI18n } from '@/hooks/use-i18n';
 
 import { normalizeLinkUrl } from './markdown-editor-toolbar-url';
 
@@ -22,6 +23,7 @@ interface LinkEditFormProps {
 // popover AND the on-link popover (markdown-editor-link-handle.tsx). Seeds its own `url` from `initialUrl` on
 // mount, so consumers give it a fresh `key` per editing session.
 export function LinkEditForm({ autoFocus = true, editor, initialUrl, isActive, onDone }: LinkEditFormProps) {
+    const { t } = useI18n();
     const [url, setUrl] = useState(initialUrl);
     const urlId = useId();
     const errorId = useId();
@@ -74,7 +76,7 @@ export function LinkEditForm({ autoFocus = true, editor, initialUrl, isActive, o
 
     return (
         <div className="flex flex-col gap-2">
-            <Label htmlFor={urlId}>Link URL</Label>
+            <Label htmlFor={urlId}>{t('markdownEditor.linkUrl')}</Label>
             <InputGroup>
                 <InputGroupInput
                     aria-describedby={isInvalid ? errorId : undefined}
@@ -88,7 +90,7 @@ export function LinkEditForm({ autoFocus = true, editor, initialUrl, isActive, o
                             applyLink();
                         }
                     }}
-                    placeholder="https://example.com"
+                    placeholder={t('markdownEditor.linkUrlPlaceholder')}
                     type="url"
                     value={url}
                 />
@@ -97,7 +99,7 @@ export function LinkEditForm({ autoFocus = true, editor, initialUrl, isActive, o
                     className="gap-0"
                 >
                     <InputGroupButton
-                        aria-label="Apply link"
+                        aria-label={t('markdownEditor.applyLink')}
                         disabled={url === '' || isInvalid}
                         onClick={applyLink}
                         size="icon-xs"
@@ -105,7 +107,7 @@ export function LinkEditForm({ autoFocus = true, editor, initialUrl, isActive, o
                         <Check />
                     </InputGroupButton>
                     <InputGroupButton
-                        aria-label="Open link in new tab"
+                        aria-label={t('markdownEditor.openLinkInNewTab')}
                         disabled={url === '' || isInvalid}
                         onClick={openInNewTab}
                         size="icon-xs"
@@ -114,7 +116,7 @@ export function LinkEditForm({ autoFocus = true, editor, initialUrl, isActive, o
                     </InputGroupButton>
                     {isActive ? (
                         <InputGroupButton
-                            aria-label="Remove link"
+                            aria-label={t('markdownEditor.removeLink')}
                             onClick={removeLink}
                             size="icon-xs"
                         >
@@ -129,7 +131,7 @@ export function LinkEditForm({ autoFocus = true, editor, initialUrl, isActive, o
                     id={errorId}
                     role="alert"
                 >
-                    Only http, https, mailto and tel links are allowed.
+                    {t('markdownEditor.linkUrlInvalid')}
                 </p>
             ) : null}
         </div>

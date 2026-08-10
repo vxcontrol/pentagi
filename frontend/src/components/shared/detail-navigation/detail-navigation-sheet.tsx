@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { useElementVirtualList } from '@/hooks/use-element-virtual-list';
+import { useI18n } from '@/hooks/use-i18n';
 import { cn } from '@/lib/utils';
 
 import type { DetailNavigationController } from './use-detail-navigation';
@@ -43,10 +44,12 @@ export function DetailNavigationSheet<T extends { id: string }>({
     controller,
     hasSearch = true,
     renderItem,
-    searchPlaceholder = 'Search…',
+    searchPlaceholder,
     sheetIcon,
     sheetTitle,
 }: DetailNavigationSheetProps<T>) {
+    const { t } = useI18n();
+    const resolvedSearchPlaceholder = searchPlaceholder ?? t('detailNavigation.searchPlaceholder');
     const {
         clearSearchQuery,
         currentId,
@@ -395,11 +398,11 @@ export function DetailNavigationSheet<T extends { id: string }>({
                                 />
                             </InputGroupAddon>
                             <InputGroupInput
-                                aria-label={searchPlaceholder}
+                                aria-label={resolvedSearchPlaceholder}
                                 className="h-9 py-0"
                                 onChange={handleSearchChange}
                                 onKeyDown={handleSearchKeyDown}
-                                placeholder={searchPlaceholder}
+                                placeholder={resolvedSearchPlaceholder}
                                 ref={searchInputRef}
                                 type="text"
                                 value={localQuery}
@@ -407,7 +410,7 @@ export function DetailNavigationSheet<T extends { id: string }>({
                             {hasClearButton ? (
                                 <InputGroupAddon align="inline-end">
                                     <InputGroupButton
-                                        aria-label="Clear search"
+                                        aria-label={t('detailNavigation.clearSearch')}
                                         onClick={handleSearchClear}
                                         size="icon-sm"
                                         type="button"
@@ -471,8 +474,8 @@ export function DetailNavigationSheet<T extends { id: string }>({
                 ) : (
                     <div className="text-muted-foreground flex flex-1 items-center justify-center px-4 text-center text-sm">
                         {trimmedQuery.length > 0
-                            ? `No items match "${trimmedQuery}".`
-                            : 'No items match the current filter.'}
+                            ? t('detailNavigation.noItemsMatchQuery', { query: trimmedQuery })
+                            : t('detailNavigation.noItemsMatchFilter')}
                     </div>
                 )}
             </SheetContent>

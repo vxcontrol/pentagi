@@ -28,6 +28,7 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { useI18n } from '@/hooks/use-i18n';
 import { cn } from '@/lib/utils';
 
 import type { FileManagerAction, FileManagerInternalNode, FileNode } from './file-manager-types';
@@ -187,6 +188,7 @@ function FileManagerRowImpl({
     posInSet,
     setSize,
 }: FileManagerRowProps) {
+    const { t } = useI18n();
     const {
         formatModified = defaultFormatModified,
         gridTemplate,
@@ -439,7 +441,7 @@ function FileManagerRowImpl({
                     {...skipRowClickProps}
                 >
                     <Checkbox
-                        aria-label={`Select ${file.name}`}
+                        aria-label={t('fileManager.selectRow', { name: file.name })}
                         // Directories surface a tri-state value derived from their
                         // descendants; files (and edge cases without a precomputed
                         // value) fall back to the row's own selection flag.
@@ -529,7 +531,7 @@ function FileManagerRowImpl({
                         <DropdownMenu onOpenChange={setIsDropdownMenuOpen}>
                             <DropdownMenuTrigger asChild>
                                 <Button
-                                    aria-label="Row actions"
+                                    aria-label={t('fileManager.rowActions')}
                                     className="opacity-0 group-hover:opacity-100 data-[state=open]:opacity-100"
                                     size="icon-xs"
                                     variant="ghost"

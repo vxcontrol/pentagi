@@ -2,6 +2,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useI18n } from '@/hooks/use-i18n';
 import { cn } from '@/lib/utils';
 
 import type { DetailNavigationController } from './use-detail-navigation';
@@ -32,6 +33,7 @@ export function DetailNavigationButtons<T extends { id: string }>({
     sheetTitle,
     size = 'default',
 }: DetailNavigationButtonsProps<T>) {
+    const { t } = useI18n();
     const lowerTitle = sheetTitle.toLowerCase();
     const isSm = size === 'sm';
     const sideButtonSize = isSm ? 'size-7' : 'size-8';
@@ -43,7 +45,7 @@ export function DetailNavigationButtons<T extends { id: string }>({
             <Tooltip>
                 <TooltipTrigger asChild>
                     <Button
-                        aria-label="Previous"
+                        aria-label={t('detailNavigation.previous')}
                         className={cn(sideButtonSize, 'rounded-r-none border-r-0 p-0')}
                         disabled={!controller.prevId}
                         onClick={controller.goToPrev}
@@ -54,12 +56,15 @@ export function DetailNavigationButtons<T extends { id: string }>({
                         <ChevronLeft />
                     </Button>
                 </TooltipTrigger>
-                <TooltipContent>Previous</TooltipContent>
+                <TooltipContent>{t('detailNavigation.previous')}</TooltipContent>
             </Tooltip>
             <Tooltip>
                 <TooltipTrigger asChild>
                     <Button
-                        aria-label={`Open ${lowerTitle} list (${controller.positionLabel})`}
+                        aria-label={t('detailNavigation.openList', {
+                            position: controller.positionLabel,
+                            title: lowerTitle,
+                        })}
                         className={cn(
                             middleHeight,
                             'min-w-12 rounded-none border-x px-2 font-mono text-xs tabular-nums',
@@ -72,12 +77,12 @@ export function DetailNavigationButtons<T extends { id: string }>({
                         <span style={{ minWidth: `${widestLabel.length}ch` }}>{controller.positionLabel}</span>
                     </Button>
                 </TooltipTrigger>
-                <TooltipContent>Show all matching {lowerTitle}</TooltipContent>
+                <TooltipContent>{t('detailNavigation.showAllMatching', { title: lowerTitle })}</TooltipContent>
             </Tooltip>
             <Tooltip>
                 <TooltipTrigger asChild>
                     <Button
-                        aria-label="Next"
+                        aria-label={t('detailNavigation.next')}
                         className={cn(sideButtonSize, 'rounded-l-none border-l-0 p-0')}
                         disabled={!controller.nextId}
                         onClick={controller.goToNext}
@@ -88,7 +93,7 @@ export function DetailNavigationButtons<T extends { id: string }>({
                         <ChevronRight />
                     </Button>
                 </TooltipTrigger>
-                <TooltipContent>Next</TooltipContent>
+                <TooltipContent>{t('detailNavigation.next')}</TooltipContent>
             </Tooltip>
         </div>
     );

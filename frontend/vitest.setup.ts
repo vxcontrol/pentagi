@@ -3,6 +3,12 @@ import '@testing-library/jest-dom/vitest';
 import { cleanup } from '@testing-library/react';
 import { afterEach } from 'vitest';
 
+import i18n from '@/i18n/config';
+
+// Tests assert against the original English copy; force English regardless of
+// the app's Turkish default so existing assertions keep matching rendered text.
+void i18n.changeLanguage('en');
+
 // jsdom doesn't implement `Element.prototype.scrollIntoView` — components
 // that call it from effects (e.g. roving-focus + scroll into view) crash in
 // tests without this no-op polyfill.

@@ -6,6 +6,7 @@ import { ResponsiveContainer } from 'recharts';
 import { DashboardError } from '@/components/dashboard/dashboard-error';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Spinner } from '@/components/ui/spinner';
+import { useI18n } from '@/hooks/use-i18n';
 
 export function ChartCard({
     children,
@@ -26,6 +27,8 @@ export function ChartCard({
     loading?: boolean;
     title: ReactNode;
 }) {
+    const { t } = useI18n();
+
     return (
         <Card className={className}>
             <CardHeader>
@@ -54,7 +57,7 @@ export function ChartCard({
                         style={{ height }}
                     >
                         <BarChart2 className="text-muted-foreground/30 size-10" />
-                        <p className="text-muted-foreground text-sm">No data for this period</p>
+                        <p className="text-muted-foreground text-sm">{t('dashboard.noDataForPeriod')}</p>
                     </div>
                 ) : (
                     <ResponsiveContainer

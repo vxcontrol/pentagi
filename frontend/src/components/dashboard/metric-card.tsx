@@ -4,6 +4,7 @@ import { AlertCircle } from 'lucide-react';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useI18n } from '@/hooks/use-i18n';
 
 export function MetricCard({
     className,
@@ -22,6 +23,8 @@ export function MetricCard({
     title: ReactNode;
     value: ReactNode;
 }) {
+    const { t } = useI18n();
+
     return (
         <Card className={className}>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -48,7 +51,9 @@ export function MetricCard({
                     (loading ? (
                         <Skeleton className="mt-1 h-3 w-32" />
                     ) : (
-                        <p className="text-muted-foreground text-xs">{error ? "Couldn't load" : description}</p>
+                        <p className="text-muted-foreground text-xs">
+                            {error ? t('errors.couldntLoad') : description}
+                        </p>
                     ))}
             </CardContent>
         </Card>
