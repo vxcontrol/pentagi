@@ -10,7 +10,7 @@ networks:
 
 services:
   neo4j:
-    image: neo4j:5.26.2
+    image: ${NEO4J_IMAGE:-neo4j:5.26.2}
     restart: unless-stopped
     container_name: neo4j
     hostname: neo4j
@@ -58,7 +58,7 @@ services:
     shm_size: ${NEO4J_SHM_SIZE:-4g}
 
   graphiti:
-    image: vxcontrol/graphiti:latest
+    image: ${GRAPHITI_IMAGE:-vxcontrol/graphiti:latest}
     restart: unless-stopped
     container_name: graphiti
     hostname: graphiti

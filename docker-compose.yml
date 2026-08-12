@@ -215,7 +215,7 @@ services:
       - langfuse-network
 
   pgvector:
-    image: vxcontrol/pgvector:latest
+    image: ${PGVECTOR_IMAGE:-vxcontrol/pgvector:latest}
     restart: unless-stopped
     container_name: pgvector
     hostname: pgvector
@@ -243,7 +243,7 @@ services:
       - pentagi-network
 
   pgexporter:
-    image: quay.io/prometheuscommunity/postgres-exporter:v0.16.0
+    image: ${PGEXPORTER_IMAGE:-quay.io/prometheuscommunity/postgres-exporter:v0.16.0}
     restart: unless-stopped
     depends_on:
       pgvector:
@@ -264,7 +264,7 @@ services:
       - pentagi-network
 
   scraper:
-    image: vxcontrol/scraper:latest
+    image: ${SCRAPER_IMAGE:-vxcontrol/scraper:latest}
     restart: unless-stopped
     container_name: scraper
     hostname: scraper

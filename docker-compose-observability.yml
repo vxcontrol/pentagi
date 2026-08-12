@@ -22,7 +22,7 @@ networks:
 
 services:
   grafana:
-    image: grafana/grafana:11.4.0
+    image: ${GRAFANA_IMAGE:-grafana/grafana:11.4.0}
     restart: unless-stopped
     container_name: grafana
     hostname: grafana
@@ -48,14 +48,14 @@ services:
       - observability-network
 
   node-exporter:
-    image: prom/node-exporter:v1.8.2
+    image: ${NODE_EXPORTER_IMAGE:-prom/node-exporter:v1.8.2}
     restart: unless-stopped
     command:
       - --path.procfs=/host/proc
       - --path.sysfs=/host/sys
       - --collector.filesystem.ignored-mount-points
       - ^/(sys|proc|dev|host|etc|rootfs/var/lib/docker/containers|rootfs/var/lib/docker/overlay2|rootfs/run/docker/netns|rootfs/var/lib/docker/aufs)($$|/)
-    container_name: node_exporter
+    container_name: node-exporter
     hostname: node-exporter
     expose:
       - 9100/tcp
@@ -76,7 +76,7 @@ services:
       - observability-network
 
   cadvisor:
-    image: gcr.io/cadvisor/cadvisor:v0.51.0
+    image: ${CADVISOR_IMAGE:-gcr.io/cadvisor/cadvisor:v0.51.0}
     restart: unless-stopped
     command:
       - --store_container_labels=false
@@ -102,7 +102,7 @@ services:
       - observability-network
 
   otel:
-    image: otel/opentelemetry-collector-contrib:0.116.1
+    image: ${OTEL_IMAGE:-otel/opentelemetry-collector-contrib:0.116.1}
     restart: unless-stopped
     entrypoint:
       - "/otelcol-contrib"
@@ -132,7 +132,7 @@ services:
       - pentagi-network
 
   victoriametrics:
-    image: victoriametrics/victoria-metrics:v1.108.1
+    image: ${VICTORIAMETRICS_IMAGE:-victoriametrics/victoria-metrics:v1.108.1}
     restart: unless-stopped
     command:
       - --storageDataPath=/storage
@@ -155,7 +155,7 @@ services:
       - observability-network
 
   clickstore:
-    image: clickhouse/clickhouse-server:24
+    image: ${CLICKSTORE_IMAGE:-clickhouse/clickhouse-server:24}
     restart: unless-stopped
     container_name: clickstore
     hostname: clickstore
@@ -186,7 +186,7 @@ services:
       - observability-network
 
   loki:
-    image: grafana/loki:3.3.2
+    image: ${LOKI_IMAGE:-grafana/loki:3.3.2}
     restart: unless-stopped
     command: -config.file=/etc/loki/config.yml
     container_name: loki
@@ -203,7 +203,7 @@ services:
       - observability-network
 
   jaeger:
-    image: jaegertracing/all-in-one:1.56.0
+    image: ${JAEGER_IMAGE:-jaegertracing/all-in-one:1.56.0}
     restart: unless-stopped
     entrypoint: >
       /bin/sh -c '
