@@ -4,13 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"pentagi/cmd/installer/loader"
 	"pentagi/cmd/installer/state"
@@ -263,14 +260,50 @@ func TestParseImageRef(t *testing.T) {
 		{"nginx", "", "nginx", "latest", ""},
 		{"nginx", "sha256:def", "nginx", "latest", "sha256:def"},
 		{"repo/nginx:1.2", "", "repo/nginx", "1.2", ""},
-		{"docker.io/library/ubuntu:latest", "", "library/ubuntu", "latest", ""},
+		// Docker Hub spells an official image in full; everywhere else it is just "ubuntu",
+		// and that is the name the update server is asked about.
+		{"docker.io/library/ubuntu:latest", "", "ubuntu", "latest", ""},
 		{"nginx@sha256:deadbeef", "", "nginx", "latest", "sha256:deadbeef"},
-		{"myreg:5000/foo/bar:tag@sha256:beef", "", "foo/bar", "tag", "sha256:beef"},
-		{"localhost:5000/myapp:v1.0", "", "myapp", "v1.0", ""},
-		{"registry.example.com/team/app", "", "team/app", "latest", ""},
+
+		// Everywhere that is not Docker Hub, the host is PART of the name and stays.
+		//
+		// These three used to expect the opposite, and that expectation is what
+		// made the defect invisible: the service stores a reference the way
+		// compose writes it — `gcr.io/cadvisor/cadvisor`, host and all — and
+		// matches on exact equality. A client reporting `cadvisor/cadvisor` names
+		// a different image (a Docker Hub repository that is not cAdvisor), so the
+		// component matched nothing, came back `repository_not_tracked`, and took
+		// its whole stack's resolution down to `not_tracked` with it. Two tests
+		// were green the whole time, one on each side, pinning opposite rules.
+		{"myreg:5000/foo/bar:tag@sha256:beef", "", "myreg:5000/foo/bar", "tag", "sha256:beef"},
+		{"localhost:5000/myapp:v1.0", "", "localhost:5000/myapp", "v1.0", ""},
+		{"registry.example.com/team/app", "", "registry.example.com/team/app", "latest", ""},
+
+		// The two components that are not on Docker Hub, exactly as their compose
+		// defaults spell them and exactly as the service has them stored.
+		{"gcr.io/cadvisor/cadvisor:v0.51.0", "", "gcr.io/cadvisor/cadvisor", "v0.51.0", ""},
+		{"quay.io/prometheuscommunity/postgres-exporter:v0.16.0", "",
+			"quay.io/prometheuscommunity/postgres-exporter", "v0.16.0", ""},
+
+		// Docker Hub under each of the names it answers to: here the host IS
+		// dropped, because that is the form compose writes and the service stores.
+		{"index.docker.io/library/redis:7", "", "redis", "7", ""},
+		{"registry-1.docker.io/prom/node-exporter:v1.8.2", "", "prom/node-exporter", "v1.8.2", ""},
 		{"", "", "", "", ""},
 		{"ubuntu:", "", "ubuntu", "latest", ""},
 		{"ubuntu:@sha256:hash", "", "ubuntu", "latest", "sha256:hash"},
+
+		// Every version-numbered tag the shipped compose files use. These are the cases the
+		// old dot-means-a-port rule got wrong: the tag was swallowed into the repository
+		// name and replaced with "latest", so the pair the server matches on named nothing
+		// and the component silently got no answer.
+		{"neo4j:5.26.2", "", "neo4j", "5.26.2", ""},
+		{"grafana/grafana:11.4.0", "", "grafana/grafana", "11.4.0", ""},
+		{"grafana/loki:3.3.2", "", "grafana/loki", "3.3.2", ""},
+		{"jaegertracing/all-in-one:1.56.0", "", "jaegertracing/all-in-one", "1.56.0", ""},
+		{"victoriametrics/victoria-metrics:v1.108.1", "", "victoriametrics/victoria-metrics", "v1.108.1", ""},
+		{"otel/opentelemetry-collector-contrib:0.116.1", "", "otel/opentelemetry-collector-contrib", "0.116.1", ""},
+		{"minio/minio:RELEASE.2025-07-23T15-54-02Z", "", "minio/minio", "RELEASE.2025-07-23T15-54-02Z", ""},
 	}
 
 	for _, tt := range tests {
@@ -289,16 +322,92 @@ func TestParseImageRef(t *testing.T) {
 				return
 			}
 
-			// note: current implementation has some edge cases with registry parsing
-			// we test for non-nil result and basic structure rather than exact parsing
-			if info.Name == "" {
-				t.Errorf("parseImageRef(%q).Name should not be empty", tt.imageRef)
+			if info.Name != tt.wantName {
+				t.Errorf("parseImageRef(%q).Name = %q, want %q", tt.imageRef, info.Name, tt.wantName)
 			}
-			if info.Tag == "" {
-				t.Errorf("parseImageRef(%q).Tag should not be empty", tt.imageRef)
+			if info.Tag != tt.wantTag {
+				t.Errorf("parseImageRef(%q).Tag = %q, want %q", tt.imageRef, info.Tag, tt.wantTag)
 			}
-			// hash may be empty, that's OK
+			if info.Hash != tt.wantHash {
+				t.Errorf("parseImageRef(%q).Hash = %q, want %q", tt.imageRef, info.Hash, tt.wantHash)
+			}
 		})
+	}
+}
+
+// TestEveryComposeImageParsesIntoAMatchablePair reads the shipped compose files and checks
+// that every image reference in them splits into a repository and tag the update server can
+// match. It reads the files rather than a copy, so an image pinned to a new kind of tag is
+// caught here instead of quietly costing that component its answer.
+func TestEveryComposeImageParsesIntoAMatchablePair(t *testing.T) {
+	for _, path := range []string{
+		"../files/fs/docker-compose.yml",
+		"../files/fs/docker-compose-graphiti.yml",
+		"../files/fs/docker-compose-langfuse.yml",
+		"../files/fs/docker-compose-observability.yml",
+	} {
+		content, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read %s: %v", path, err)
+		}
+
+		for _, line := range strings.Split(string(content), "\n") {
+			trimmed := strings.TrimSpace(line)
+			if !strings.HasPrefix(trimmed, "image:") {
+				continue
+			}
+			ref := strings.TrimSpace(strings.TrimPrefix(trimmed, "image:"))
+			// Every image line is `${<COMPONENT>_IMAGE:-<default>}` now — the server chooses
+			// the tag and the installer only writes what it was given — so the default inside
+			// the wrapper is what a fresh installation actually pulls, and it is the thing
+			// worth checking. Stripping only PENTAGI_IMAGE was right when it was the only
+			// parameterised line and became wrong the day the rest followed.
+			//
+			// The wrapper is never handed to parseImageRef in production: the checker parses
+			// what the daemon reports for a running container, which is already resolved. A
+			// template reaching the parser produces nonsense either way — `${NEO4J_IMAGE:-neo4j`
+			// as a repository, or the quieter `latest}` as a tag when the default has a slash
+			// and the wrapper's own colon gets mistaken for a registry port.
+			if inner, found := strings.CutPrefix(ref, "${"); found {
+				if _, def, ok := strings.Cut(strings.TrimSuffix(inner, "}"), ":-"); ok {
+					ref = def
+				}
+			}
+
+			info := parseImageRef(ref, "")
+			if info == nil {
+				t.Errorf("%s: %q did not parse at all", filepath.Base(path), ref)
+				continue
+			}
+			// A tag glued onto the repository is the exact shape of the old defect, and it
+			// produces a pair that matches nothing on the server.
+			if strings.Contains(info.Name, ":") {
+				t.Errorf("%s: %q parsed to repository %q — the tag was swallowed into the name",
+					filepath.Base(path), ref, info.Name)
+			}
+			// Only a reference that genuinely omits its tag should come out as "latest".
+			if info.Tag == "latest" && !strings.HasSuffix(ref, ":latest") && strings.Contains(ref, ":") {
+				t.Errorf("%s: %q parsed to tag %q, but the reference pins a different one",
+					filepath.Base(path), ref, info.Tag)
+			}
+			// A reference that names a registry must still name it after parsing.
+			//
+			// The service stores what compose writes and matches on exact equality,
+			// so a dropped host is a repository that names a DIFFERENT image —
+			// `cadvisor/cadvisor` on Docker Hub instead of the one on gcr.io. The
+			// component then resolves to nothing and is answered
+			// `repository_not_tracked` for the life of the installation. Checking
+			// every compose line rather than the two that have a host today is the
+			// point: the next third-party image added to these files gets the same
+			// guarantee without anybody remembering this.
+			if host, _, found := strings.Cut(ref, "/"); found && !isDockerHubHost(host) {
+				if strings.ContainsAny(host, ".:") && !strings.HasPrefix(info.Name, host+"/") {
+					t.Errorf("%s: %q parsed to repository %q — the registry host was dropped, "+
+						"which names a different image than the one running",
+						filepath.Base(path), ref, info.Name)
+				}
+			}
+		}
 	}
 }
 
@@ -436,143 +545,6 @@ func TestCheckDiskSpaceWithContext(t *testing.T) {
 	}
 }
 
-func TestCheckUpdatesServer(t *testing.T) {
-	// test successful response
-	t.Run("successful_response", func(t *testing.T) {
-		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.Method != "POST" {
-				w.WriteHeader(http.StatusMethodNotAllowed)
-				return
-			}
-			if r.Header.Get("Content-Type") != "application/json" {
-				w.WriteHeader(http.StatusBadRequest)
-				return
-			}
-			if r.Header.Get("User-Agent") != UserAgent {
-				w.WriteHeader(http.StatusBadRequest)
-				return
-			}
-
-			w.Header().Set("Content-Type", "application/json")
-			fmt.Fprintf(w, `{
-				"installer_is_up_to_date": true,
-				"pentagi_is_up_to_date": false,
-				"langfuse_is_up_to_date": true,
-				"observability_is_up_to_date": false,
-				"worker_is_up_to_date": true
-			}`)
-		}))
-		defer ts.Close()
-
-		ctx := context.Background()
-		request := CheckUpdatesRequest{
-			InstallerVersion: "1.0.0",
-			InstallerOsType:  "darwin",
-		}
-
-		response := checkUpdatesServer(ctx, ts.URL, "", request)
-		if response == nil {
-			t.Fatal("expected non-nil response")
-		}
-		if !response.InstallerIsUpToDate {
-			t.Error("expected installer to be up to date")
-		}
-		if response.PentagiIsUpToDate {
-			t.Error("expected pentagi to not be up to date")
-		}
-		if !response.LangfuseIsUpToDate {
-			t.Error("expected langfuse to be up to date")
-		}
-		if response.ObservabilityIsUpToDate {
-			t.Error("expected observability to not be up to date")
-		}
-		if !response.WorkerIsUpToDate {
-			t.Error("expected worker to be up to date")
-		}
-	})
-
-	// test server error
-	t.Run("server_error", func(t *testing.T) {
-		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusInternalServerError)
-		}))
-		defer ts.Close()
-
-		ctx := context.Background()
-		request := CheckUpdatesRequest{InstallerVersion: "1.0.0"}
-
-		response := checkUpdatesServer(ctx, ts.URL, "", request)
-		if response != nil {
-			t.Error("expected nil response for server error")
-		}
-	})
-
-	// test invalid JSON response
-	t.Run("invalid_json", func(t *testing.T) {
-		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			fmt.Fprintf(w, `invalid json`)
-		}))
-		defer ts.Close()
-
-		ctx := context.Background()
-		request := CheckUpdatesRequest{InstallerVersion: "1.0.0"}
-
-		response := checkUpdatesServer(ctx, ts.URL, "", request)
-		if response != nil {
-			t.Error("expected nil response for invalid JSON")
-		}
-	})
-
-	// test context timeout
-	t.Run("context_timeout", func(t *testing.T) {
-		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			time.Sleep(100 * time.Millisecond) // delay response
-			w.WriteHeader(http.StatusOK)
-		}))
-		defer ts.Close()
-
-		ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
-		defer cancel()
-
-		request := CheckUpdatesRequest{InstallerVersion: "1.0.0"}
-		response := checkUpdatesServer(ctx, ts.URL, "", request)
-		if response != nil {
-			t.Error("expected nil response for timeout")
-		}
-	})
-
-	// test proxy configuration
-	t.Run("with_proxy", func(t *testing.T) {
-		// create a proxy server that just forwards requests
-		proxyTs := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			fmt.Fprintf(w, `{"installer_is_up_to_date": true, "pentagi_is_up_to_date": true, "langfuse_is_up_to_date": true, "observability_is_up_to_date": true}`)
-		}))
-		defer proxyTs.Close()
-
-		ctx := context.Background()
-		request := CheckUpdatesRequest{InstallerVersion: "1.0.0"}
-
-		// note: testing with actual proxy setup is complex in unit tests
-		// this mainly tests that proxy URL doesn't cause the function to panic
-		response := checkUpdatesServer(ctx, proxyTs.URL, "http://invalid-proxy:8080", request)
-		// response might be nil due to proxy connection failure, which is expected
-		_ = response
-	})
-
-	// test malformed server URL
-	t.Run("malformed_url", func(t *testing.T) {
-		ctx := context.Background()
-		request := CheckUpdatesRequest{InstallerVersion: "1.0.0"}
-
-		response := checkUpdatesServer(ctx, "://invalid-url", "", request)
-		if response != nil {
-			t.Error("expected nil response for malformed URL")
-		}
-	})
-}
-
 func TestCreateTempFileForTesting(t *testing.T) {
 	// helper test to ensure temp file creation works for other tests
 	tmpDir := os.TempDir()
@@ -610,9 +582,6 @@ func TestConstants(t *testing.T) {
 	}
 	if DefaultUpdateServerEndpoint == "" {
 		t.Error("DefaultUpdateServerEndpoint should not be empty")
-	}
-	if UpdatesCheckEndpoint == "" {
-		t.Error("UpdatesCheckEndpoint should not be empty")
 	}
 
 	// test memory and disk constants are reasonable
@@ -655,37 +624,6 @@ func TestGetImageInfoEdgeCases(t *testing.T) {
 
 	// test with empty image name
 	// again, testing without real Docker client
-}
-
-func TestCheckUpdatesRequestStructure(t *testing.T) {
-	// test that CheckUpdatesRequest can be marshaled to JSON
-	request := CheckUpdatesRequest{
-		InstallerOsType:        "darwin",
-		InstallerVersion:       "1.0.0",
-		LangfuseConnected:      true,
-		LangfuseExternal:       false,
-		ObservabilityConnected: true,
-		ObservabilityExternal:  false,
-	}
-
-	result := fmt.Sprintf("%+v", request)
-	if result == "" {
-		t.Error("CheckUpdatesRequest should be formattable")
-	}
-
-	// test with pointer fields
-	imageName := "test-image"
-	imageTag := "latest"
-	imageHash := "sha256:abc123"
-
-	request.PentagiImageName = &imageName
-	request.PentagiImageTag = &imageTag
-	request.PentagiImageHash = &imageHash
-
-	result = fmt.Sprintf("%+v", request)
-	if result == "" {
-		t.Error("CheckUpdatesRequest with pointers should be formattable")
-	}
 }
 
 func TestImageInfoStructure(t *testing.T) {
@@ -837,3 +775,5 @@ func TestCheckVolumesExist_MatchingLogic(t *testing.T) {
 		})
 	}
 }
+
+func (m *mockState) WriteVars(vars map[string]string) error { return nil }

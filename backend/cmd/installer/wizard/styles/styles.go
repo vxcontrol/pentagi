@@ -1,14 +1,19 @@
 package styles
 
 import (
+	"os"
 	"slices"
 	"strings"
+	"sync"
 
 	"pentagi/cmd/installer/wizard/locale"
 	"pentagi/cmd/installer/wizard/logger"
 
 	"github.com/charmbracelet/glamour"
+	glamourstyles "github.com/charmbracelet/glamour/styles"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/muesli/termenv"
+	"golang.org/x/term"
 )
 
 // Colors defines the color palette for the installer
@@ -76,30 +81,128 @@ type Styles struct {
 
 	// Markdown renderer
 	renderer *glamour.TermRenderer
+	// renderers memoises the width-aware renderers. A POINTER, deliberately:
+	// Styles is copied by value into every screen, and building a glamour
+	// renderer is not free, so the cache has to be shared rather than cloned.
+	renderers *rendererCache
+	// markdownStyle is the dark/light glamour style every renderer in this
+	// process uses, resolved exactly once in New(). See resolveMarkdownStyle
+	// for why this is not glamour.WithAutoStyle() called fresh per renderer.
+	markdownStyle string
+}
+
+// Word-wrap bounds for rendered markdown.
+//
+// The floor keeps a narrow terminal from breaking every changelog line into two
+// or three; the ceiling exists because a line running the full width of a
+// maximised terminal is measurably harder to read than one that stops — the same
+// reason every prose medium has a column width.
+const (
+	MinRenderWidth     = 40
+	MaxRenderWidth     = 120
+	DefaultRenderWidth = 80
+)
+
+// rendererCache hands out one renderer per wrap width.
+//
+// Locked because renderers are built inside tea.Cmd goroutines: a screen loads
+// its markdown off the update loop, which is exactly where two screens can ask
+// for the same width at once.
+type rendererCache struct {
+	mu sync.Mutex
+	by map[int]*glamour.TermRenderer
 }
 
 // New creates a new styles instance with default values
 func New() Styles {
+	markdownStyle := resolveMarkdownStyle()
+
 	// Create glamour renderer for markdown
 	renderer, err := glamour.NewTermRenderer(
-		glamour.WithAutoStyle(),
-		glamour.WithWordWrap(80),
+		glamour.WithStandardStyle(markdownStyle),
+		glamour.WithWordWrap(DefaultRenderWidth),
 	)
 	if err != nil {
 		logger.Errorf("[Styles] NEW: error creating renderer: %v", err)
 	}
 
 	s := Styles{
-		renderer: renderer,
+		renderer:      renderer,
+		renderers:     &rendererCache{by: map[int]*glamour.TermRenderer{}},
+		markdownStyle: markdownStyle,
 	}
 	s.initializeStyles()
 
 	return s
 }
 
-// GetRenderer returns the markdown renderer
+// resolveMarkdownStyle decides dark vs light exactly once, here, at New() —
+// which the wizard calls before tea.NewProgram(...).Run() takes over the
+// terminal.
+//
+// glamour.WithAutoStyle() makes this same decision by calling
+// termenv.HasDarkBackground(), which queries the terminal directly (an OSC
+// background-color request over stdout, read back from stdin) and — on
+// termenv's default, uncached output — does that full round trip again on
+// EVERY call, not just the first. GetRendererForWidth calls WithAutoStyle()
+// fresh for every wrap width it has not seen yet, and it does so WHILE the
+// program is running: bubbletea's own input reader already owns stdin at
+// that point, so the query and the reader are pulling on the same bytes.
+// Whichever one loses that race sits waiting — for termenv's read timeout, or
+// for the next keypress to hand it something to (mis)read — and that is what
+// the screen looked frozen for. Resolving the choice once, here, before
+// bubbletea has claimed the terminal, and reusing the answer for every
+// renderer afterwards removes the query from the running program entirely
+// instead of hoping it loses the race quickly.
+func resolveMarkdownStyle() string {
+	if !term.IsTerminal(int(os.Stdout.Fd())) {
+		return glamourstyles.NoTTYStyle
+	}
+	if termenv.HasDarkBackground() {
+		return glamourstyles.DarkStyle
+	}
+	return glamourstyles.LightStyle
+}
+
+// GetRenderer returns the markdown renderer at the default width.
+//
+// Prefer GetRendererForWidth on any screen that knows how much room it has: this
+// one wraps at 80 columns whatever the terminal is doing.
 func (s *Styles) GetRenderer() *glamour.TermRenderer {
 	return s.renderer
+}
+
+// GetRendererForWidth returns a markdown renderer wrapping at the given width,
+// clamped to a readable band and memoised.
+//
+// It never returns nil: a width that cannot be built falls back to the default
+// renderer, and a caller that got nil would have to check for it on every render
+// path — which is how a changelog ends up not being shown at all.
+func (s *Styles) GetRendererForWidth(width int) *glamour.TermRenderer {
+	width = min(max(width, MinRenderWidth), MaxRenderWidth)
+
+	if s.renderers == nil {
+		return s.renderer
+	}
+
+	s.renderers.mu.Lock()
+	defer s.renderers.mu.Unlock()
+
+	if cached, ok := s.renderers.by[width]; ok {
+		return cached
+	}
+
+	renderer, err := glamour.NewTermRenderer(
+		glamour.WithStandardStyle(s.markdownStyle),
+		glamour.WithWordWrap(width),
+	)
+	if err != nil {
+		logger.Errorf("[Styles] RENDERER: width %d: %v", width, err)
+		return s.renderer
+	}
+
+	s.renderers.by[width] = renderer
+	return renderer
 }
 
 // initializeStyles sets up all the style definitions

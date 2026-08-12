@@ -19,6 +19,19 @@ type operationState struct {
 	operation     ProcessorOperation
 	passwordValue string // password value for reset password operation
 
+	// announced is the stack the CALLER asked about — the first one to announce itself.
+	// Started and completion messages are sent for it and for nothing else.
+	//
+	// The operations fan out: an update of `compose` runs four stacks, an update of `all`
+	// runs six, and each nested call used to announce its own completion. The screen takes
+	// the first completion as the end of the whole operation — it stops the terminal, prints
+	// the result and, because HandleMsg returns nil for a completion, stops polling. So the
+	// first stack to finish reported success on behalf of all of them, and every error
+	// after it was never drained. Which stacks are installed does not change this: the
+	// fan-out lists are fixed, and a stack with nothing to do finishes fastest of all.
+	announced    ProductStack
+	announcedSet bool
+
 	// message chain for reply
 	mx     *sync.Mutex
 	ctx    context.Context
@@ -153,6 +166,12 @@ func (state *operationState) sendCompletion(stack ProductStack, err error) {
 	state.mx.Lock()
 	defer state.mx.Unlock()
 
+	// A nested stack finishing is not the operation finishing. Its error is not lost by
+	// staying silent here — the caller returns it, and the announced stack carries it.
+	if state.announcedSet && state.announced != stack {
+		return
+	}
+
 	state.msgs = append(state.msgs, ProcessorCompletionMsg{
 		ID:        state.id,
 		Error:     err,
@@ -167,6 +186,15 @@ func (state *operationState) sendCompletion(stack ProductStack, err error) {
 func (state *operationState) sendStarted(stack ProductStack) {
 	state.mx.Lock()
 	defer state.mx.Unlock()
+
+	// The first stack to announce itself is the one the caller asked about; everything
+	// after it is the fan-out this operation performs internally.
+	if !state.announcedSet {
+		state.announced, state.announcedSet = stack, true
+	}
+	if state.announced != stack {
+		return
+	}
 
 	state.msgs = append(state.msgs, ProcessorStartedMsg{
 		ID:        state.id,

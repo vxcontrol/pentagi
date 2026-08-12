@@ -23,6 +23,9 @@ type mockState struct {
 	envPath string
 	stack   []string
 	dirty   bool
+	// written stands in for the environment file on disk — the one `docker compose
+	// --env-file` reads. Only WriteVars puts anything here; SetVars stages.
+	written map[string]string
 }
 
 func newMockState() *mockState {
@@ -70,6 +73,22 @@ func (m *mockState) SetVars(vars map[string]string) error {
 	m.dirty = true
 	return nil
 }
+
+// WriteVars is deliberately NOT the same as SetVars here: it records into `written`, the
+// mock's stand-in for the environment file on disk, and it does not make the state dirty.
+// A test that cannot tell staging from writing cannot catch the defect this method exists
+// to fix — a staged image reference is one `docker compose --env-file` never sees.
+func (m *mockState) WriteVars(vars map[string]string) error {
+	if m.written == nil {
+		m.written = make(map[string]string, len(vars))
+	}
+	for name, value := range vars {
+		m.written[name] = value
+		m.vars[name] = loader.EnvVar{Name: name, Value: value}
+	}
+	return nil
+}
+
 func (m *mockState) ResetVars(names []string) error {
 	for _, name := range names {
 		delete(m.vars, name)
@@ -204,7 +223,13 @@ func (m *baseMockFileSystemOperations) record(method string, stack ProductStack,
 	return err
 }
 
+// checkError reads errOn, which setError writes from another goroutine in the
+// concurrency tests — so it takes the same lock. Without it `go test -race` fails inside
+// the mock, and a race reported in test scaffolding is a race nobody looks at again.
 func (m *baseMockFileSystemOperations) checkError(method string, stack ProductStack) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	if m.errOn != nil {
 		// check for stack-specific error first
 		methodKey := fmt.Sprintf("%s_%s", method, stack)
@@ -292,6 +317,9 @@ func (m *baseMockDockerOperations) record(method string, name string, err error)
 }
 
 func (m *baseMockDockerOperations) checkError(method string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	if m.errOn != nil {
 		if configuredErr, ok := m.errOn[method]; ok {
 			return configuredErr
@@ -411,6 +439,9 @@ func (m *baseMockComposeOperations) record(method string, stack ProductStack, er
 }
 
 func (m *baseMockComposeOperations) checkError(method string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	if m.errOn != nil {
 		if configuredErr, ok := m.errOn[method]; ok {
 			// one-shot error to avoid leaking into subsequent subtests
@@ -516,11 +547,15 @@ func (m *baseMockComposeOperations) determineComposeFile(stack ProductStack) (st
 }
 
 func (m *baseMockComposeOperations) performStackCommand(ctx context.Context, stack ProductStack, state *operationState, args ...string) error {
-	if err := m.checkError("performStackCommand"); err != nil {
-		m.record("performStackCommand", stack, err)
-		return err
-	}
-	return m.record("performStackCommand", stack, nil)
+	// The args are recorded, because this is the only compose call whose MEANING is in
+	// them — "restart jaeger" and "up -d" are otherwise the same method, and a test that
+	// cannot tell them apart cannot check that a replaced plugin got its restart.
+	err := m.checkError("performStackCommand")
+	m.mu.Lock()
+	m.calls = append(m.calls, call{Method: "performStackCommand", Stack: stack, Args: args, Error: err})
+	m.mu.Unlock()
+
+	return err
 }
 
 // baseMockUpdateOperations provides base implementation with call logging
@@ -528,6 +563,9 @@ type baseMockUpdateOperations struct {
 	mu    sync.Mutex
 	calls []call
 	errOn map[string]error
+	// jaegerPluginReplaced is what updateJaegerPlugin reports back, which decides whether
+	// the caller restarts the Jaeger service afterwards.
+	jaegerPluginReplaced bool
 }
 
 func newBaseMockUpdateOperations() *baseMockUpdateOperations {
@@ -545,6 +583,9 @@ func (m *baseMockUpdateOperations) record(method string, err error) error {
 }
 
 func (m *baseMockUpdateOperations) checkError(method string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	if m.errOn != nil {
 		if configuredErr, ok := m.errOn[method]; ok {
 			return configuredErr
@@ -570,13 +611,13 @@ func (m *baseMockUpdateOperations) setError(method string, err error) {
 	m.errOn[method] = err
 }
 
-func (m *baseMockUpdateOperations) checkUpdates(ctx context.Context, state *operationState) (*checker.CheckUpdatesResponse, error) {
+func (m *baseMockUpdateOperations) checkUpdates(ctx context.Context, state *operationState) error {
 	if err := m.checkError("checkUpdates"); err != nil {
 		m.record("checkUpdates", err)
-		return nil, err
+		return err
 	}
 	m.record("checkUpdates", nil)
-	return &checker.CheckUpdatesResponse{}, nil
+	return nil
 }
 
 func (m *baseMockUpdateOperations) downloadInstaller(ctx context.Context, state *operationState) error {
@@ -601,6 +642,25 @@ func (m *baseMockUpdateOperations) removeInstaller(ctx context.Context, state *o
 		return err
 	}
 	return m.record("removeInstaller", nil)
+}
+
+func (m *baseMockUpdateOperations) updateJaegerPlugin(ctx context.Context, state *operationState) (bool, error) {
+	if err := m.checkError("updateJaegerPlugin"); err != nil {
+		m.record("updateJaegerPlugin", err)
+		return false, err
+	}
+	return m.jaegerPluginReplaced, m.record("updateJaegerPlugin", nil)
+}
+
+func (m *baseMockUpdateOperations) installerPackage(ctx context.Context) (*InstallerPackage, error) {
+	if err := m.checkError("installerPackage"); err != nil {
+		m.record("installerPackage", err)
+		return nil, err
+	}
+	if err := m.record("installerPackage", nil); err != nil {
+		return nil, err
+	}
+	return &InstallerPackage{Version: "1.2.3", OS: "linux", Arch: "amd64", Size: 1024, Path: "installer_1.2.3"}, nil
 }
 
 // testState creates a test state with initialized environment
@@ -2148,13 +2208,11 @@ func TestBaseMockUpdateOperations(t *testing.T) {
 		})
 	}
 
-	// test checkUpdates separately as it returns a response
+	// checkUpdates leaves its answer on the shared check result rather than returning it,
+	// so there is one place holding what the server said instead of two that can disagree.
 	t.Run("checkUpdates", func(t *testing.T) {
-		resp, err := mock.checkUpdates(t.Context(), state)
+		err := mock.checkUpdates(t.Context(), state)
 		assertNoError(t, err)
-		if resp == nil {
-			t.Error("expected response, got nil")
-		}
 
 		calls := mock.getCalls()
 		// offset by 6 due to previous tests (3 tests * 2 calls each)
@@ -2165,12 +2223,8 @@ func TestBaseMockUpdateOperations(t *testing.T) {
 		// test error injection
 		testErr := fmt.Errorf("check updates error")
 		mock.setError("checkUpdates", testErr)
-		resp, err = mock.checkUpdates(t.Context(), state)
-		if err != testErr {
+		if err := mock.checkUpdates(t.Context(), state); err != testErr {
 			t.Errorf("expected error %v, got %v", testErr, err)
-		}
-		if resp != nil {
-			t.Error("expected nil response on error")
 		}
 	})
 }

@@ -319,3 +319,5 @@ func TestStateIntegrationWithExistingStack(t *testing.T) {
 		t.Errorf("expected 2 screens in navigator stack, got %v", nav.GetStack())
 	}
 }
+
+func (m *mockState) WriteVars(map[string]string) error { return nil }

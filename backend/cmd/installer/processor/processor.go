@@ -63,6 +63,9 @@ type Processor interface {
 	Stop(ctx context.Context, stack ProductStack, opts ...OperationOption) error
 	Restart(ctx context.Context, stack ProductStack, opts ...OperationOption) error
 	ResetPassword(ctx context.Context, stack ProductStack, opts ...OperationOption) error
+
+	// InstallerPackage describes the installer build on offer without downloading it.
+	InstallerPackage(ctx context.Context) (*InstallerPackage, error)
 }
 
 // WithForce skips validation checks and attempts maximum operations
@@ -120,10 +123,12 @@ type composeOperations interface {
 }
 
 type updateOperations interface {
-	checkUpdates(ctx context.Context, state *operationState) (*checker.CheckUpdatesResponse, error)
+	checkUpdates(ctx context.Context, state *operationState) error
 	downloadInstaller(ctx context.Context, state *operationState) error
 	updateInstaller(ctx context.Context, state *operationState) error
 	removeInstaller(ctx context.Context, state *operationState) error
+	installerPackage(ctx context.Context) (*InstallerPackage, error)
+	updateJaegerPlugin(ctx context.Context, state *operationState) (bool, error)
 }
 
 type processor struct {
@@ -250,4 +255,15 @@ func (p *processor) ResetPassword(ctx context.Context, stack ProductStack, opts 
 
 	opts = append(opts, withContext(ctx), withOperation(ProcessorOperationResetPassword))
 	return p.resetPassword(ctx, stack, newOperationState(opts))
+}
+
+// InstallerPackage asks the update server what it offers for this host.
+//
+// It takes the same lock as the operations even though it changes nothing: the answer is
+// remembered for the download that follows, and the download runs under this lock.
+func (p *processor) InstallerPackage(ctx context.Context) (*InstallerPackage, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	return p.updateOps.installerPackage(ctx)
 }

@@ -16,6 +16,7 @@ import (
 	"pentagi/pkg/config"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/vxcontrol/cloud/models"
 	"github.com/vxcontrol/cloud/sdk"
 )
 
@@ -49,6 +50,27 @@ func (m *ServerSettingsFormModel) BuildForm() tea.Cmd {
 		locale.ServerSettingsLicenseKeyDesc,
 		config.LicenseKey,
 		true,
+	))
+
+	fields = append(fields, m.createTextField("update_strategy",
+		locale.ServerSettingsUpdateStrategy,
+		locale.ServerSettingsUpdateStrategyDesc,
+		config.UpdateStrategy,
+		false,
+	))
+
+	fields = append(fields, m.createTextField("update_server_host",
+		locale.ServerSettingsUpdateServerHost,
+		locale.ServerSettingsUpdateServerHostDesc,
+		config.UpdateServerHost,
+		false,
+	))
+
+	fields = append(fields, m.createTextField("support_server_host",
+		locale.ServerSettingsSupportServerHost,
+		locale.ServerSettingsSupportServerHostDesc,
+		config.SupportServerHost,
+		false,
 	))
 
 	fields = append(fields, m.createTextField("pentagi_tenant_id",
@@ -475,6 +497,9 @@ func (m *ServerSettingsFormModel) HandleSave() error {
 	newCfg := &controller.ServerSettingsConfig{
 		TenantID:                 cfg.TenantID,
 		LicenseKey:               cfg.LicenseKey,
+		UpdateStrategy:           cfg.UpdateStrategy,
+		UpdateServerHost:         cfg.UpdateServerHost,
+		SupportServerHost:        cfg.SupportServerHost,
 		PprofAddr:                cfg.PprofAddr,
 		ListenIP:                 cfg.ListenIP,
 		ListenPort:               cfg.ListenPort,
@@ -505,6 +530,23 @@ func (m *ServerSettingsFormModel) HandleSave() error {
 				}
 			}
 			newCfg.LicenseKey.Value = value
+		case "update_strategy":
+			// Empty means "use the default", which is a legitimate answer and the
+			// one every existing installation currently gives. Anything else has to
+			// be a member of the vocabulary: the field is free text, so this is the
+			// only thing standing between a typo and an installation that quietly
+			// falls back to a channel the user did not pick.
+			if value != "" {
+				if err := models.UpdateStrategy(strings.ToLower(value)).Valid(); err != nil {
+					return fmt.Errorf("invalid update strategy %q: use preview, stable or nightly", value)
+				}
+				value = strings.ToLower(value)
+			}
+			newCfg.UpdateStrategy.Value = value
+		case "update_server_host":
+			newCfg.UpdateServerHost.Value = value
+		case "support_server_host":
+			newCfg.SupportServerHost.Value = value
 		case "pentagi_tenant_id":
 			if err := (&config.Config{TenantID: value}).ValidateTenantID(); err != nil {
 				return err

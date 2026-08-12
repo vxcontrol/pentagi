@@ -2,12 +2,14 @@ package processor
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"sync"
 
 	"pentagi/cmd/installer/checker"
@@ -491,19 +493,72 @@ func (p *processor) install(ctx context.Context, state *operationState) (err err
 	return nil
 }
 
+// update is the entry point for an update operation: it announces itself, does the work,
+// and then asks the cloud ONCE what is left.
+//
+// That single question used to be five. The fresh check lived in a deferred call inside
+// the recursive worker, so `compose` — four stacks — spent four nested checks plus this
+// one, and a stack with nothing to do paid for a check too, because the defer was
+// registered before the early return. One press of "Update PentAGI" cost five requests
+// out of a daily budget, and told the cloud nothing it had not been told four times
+// already: GatherUpdatesInfo reports the WHOLE installation, not one stack.
 func (p *processor) update(ctx context.Context, stack ProductStack, state *operationState) (err error) {
 	state.sendStarted(stack)
 	defer func() { state.sendCompletion(stack, err) }()
-	defer func() {
-		if err != nil {
-			return
-		}
-		// refresh state for updates
-		if gatherErr := p.checker.GatherUpdatesInfo(ctx); gatherErr != nil {
-			err = fmt.Errorf("failed to gather info after update: %w", gatherErr)
-		}
-	}()
 
+	// What the cloud currently offers, captured before the update replaces the answer with
+	// a newer one, for every stack this operation will touch. Only stacks whose update
+	// actually swaps what is installed are verified: the installer operation downloads a
+	// build without applying it, so comparing against the running binary would report a
+	// mismatch that is the intended outcome.
+	targets := make(map[ProductStack][]componentTarget)
+	for _, touched := range stacksTouchedByUpdate(stack) {
+		if verifiableUpdateStacks[touched] {
+			targets[touched] = captureStackTargets(p.checker, string(touched))
+		}
+	}
+
+	if err = p.updateStacks(ctx, stack, state); err != nil {
+		return err
+	}
+
+	// The fresh answer is what decides whether anything is still pending, so it comes
+	// after all the work and before the comparison.
+	if gatherErr := p.checker.GatherUpdatesInfo(ctx); gatherErr != nil {
+		err = fmt.Errorf("failed to gather info after update: %w", gatherErr)
+		return err
+	}
+
+	for _, touched := range stacksTouchedByUpdate(stack) {
+		p.verifyStackUpdate(touched, targets[touched], state)
+	}
+
+	return nil
+}
+
+// stacksTouchedByUpdate expands a requested stack into the ones an update of it actually
+// runs, so their targets can be captured before anything changes.
+//
+// A stack that is not installed still appears here and costs nothing: captureStackTargets
+// finds it in no answer and returns nil, and verifyStackUpdate returns immediately on an
+// empty target list.
+func stacksTouchedByUpdate(stack ProductStack) []ProductStack {
+	switch stack {
+	case ProductStackCompose:
+		return composeOperationAllStacksOrder[ProcessorOperationUpdate]
+	case ProductStackAll:
+		return append(
+			slices.Clone(composeOperationAllStacksOrder[ProcessorOperationUpdate]),
+			ProductStackWorker, ProductStackInstaller,
+		)
+	default:
+		return []ProductStack{stack}
+	}
+}
+
+// updateStacks does the work and recurses without announcing itself or asking the cloud
+// anything: both belong to the operation as a whole, which is update() above.
+func (p *processor) updateStacks(ctx context.Context, stack ProductStack, state *operationState) (err error) {
 	allStacks := append(composeOperationAllStacksOrder[ProcessorOperationUpdate],
 		ProductStackWorker,
 		ProductStackInstaller,
@@ -532,6 +587,23 @@ func (p *processor) update(ctx context.Context, stack ProductStack, state *opera
 			return nil
 		}
 
+		// The image references the server chose are written by downloadStack and
+		// updateStack themselves — every path that fetches goes through one of them,
+		// and a call site that forgot would fetch the compose default in silence.
+
+		// The Jaeger storage plugin is a FILE mounted into the jaeger container, so no
+		// amount of pulling images brings it up to date. Fetched before the images
+		// because a plugin that cannot be downloaded should abort the update with
+		// nothing else disturbed.
+		pluginReplaced := false
+		if stack == ProductStackObservability {
+			replaced, err := p.updateOps.updateJaegerPlugin(ctx, state)
+			if err != nil {
+				return err
+			}
+			pluginReplaced = replaced
+		}
+
 		if err := p.composeOps.downloadStack(ctx, stack, state); err != nil {
 			return fmt.Errorf("failed to download stack: %w", err)
 		}
@@ -539,6 +611,21 @@ func (p *processor) update(ctx context.Context, stack ProductStack, state *opera
 		// docker compose update equivalent for all images
 		if err := p.composeOps.updateStack(ctx, stack, state); err != nil {
 			return fmt.Errorf("failed to update stack: %w", err)
+		}
+
+		// `up -d` above recreates a container only when its SPEC changed, and a different
+		// file inside a bind mount is not a spec change — so when the plugin was replaced
+		// but the jaeger image was not, the container above was left running, still
+		// holding the plugin it exec'd when it started. Without this the update reports
+		// success and Jaeger goes on writing traces through the old plugin until
+		// something else happens to restart it.
+		if pluginReplaced {
+			p.appendLog(MsgJaegerPluginRestarting, stack, state)
+			if err := p.composeOps.performStackCommand(
+				ctx, stack, state, "restart", jaegerServiceName,
+			); err != nil {
+				return fmt.Errorf("failed to restart jaeger after replacing its storage plugin: %w", err)
+			}
 		}
 
 		if err := composeStacksGatherInfo[stack](ctx); err != nil {
@@ -568,7 +655,7 @@ func (p *processor) update(ctx context.Context, stack ProductStack, state *opera
 
 	case ProductStackCompose:
 		for _, s := range composeOperationAllStacksOrder[ProcessorOperationUpdate] {
-			if err := p.update(ctx, s, state); err != nil {
+			if err := p.updateStacks(ctx, s, state); err != nil {
 				return err
 			}
 		}
@@ -576,7 +663,7 @@ func (p *processor) update(ctx context.Context, stack ProductStack, state *opera
 	case ProductStackAll:
 		// update all applicable stacks
 		for _, s := range allStacks {
-			if err := p.update(ctx, s, state); err != nil {
+			if err := p.updateStacks(ctx, s, state); err != nil {
 				return err
 			}
 		}
@@ -711,11 +798,17 @@ func (p *processor) remove(ctx context.Context, stack ProductStack, state *opera
 		}
 
 	case ProductStackAll:
-		// remove all stacks
+		// Every stack is attempted even when one fails: the user asked for all of them
+		// gone, and stopping halfway leaves an installation in a state nobody chose.
+		// errors.Join reports every failure rather than only the first.
+		var failures []error
 		for _, s := range allStacks {
 			if err := p.remove(ctx, s, state); err != nil {
-				return err
+				failures = append(failures, err)
 			}
+		}
+		if len(failures) > 0 {
+			return errors.Join(failures...)
 		}
 
 	default:
@@ -791,10 +884,17 @@ func (p *processor) purge(ctx context.Context, stack ProductStack, state *operat
 		}
 
 	case ProductStackAll:
-		// purge all stacks
+		// Every stack is attempted even when one fails, and the networks go regardless.
+		//
+		// Both used to depend on nothing going wrong. The loop returned on the first
+		// error, and the network removal below it was simply skipped — so one stack that
+		// could not be purged left three custom docker networks behind, on an operation
+		// whose whole purpose is to leave nothing. Which stacks exist varies per
+		// installation, so "the first failure" is not a rare path.
+		var failures []error
 		for _, s := range allStacks {
 			if err := p.purge(ctx, s, state); err != nil {
-				return err
+				failures = append(failures, err)
 			}
 		}
 
@@ -802,6 +902,10 @@ func (p *processor) purge(ctx context.Context, stack ProductStack, state *operat
 		_ = p.dockerOps.removeMainDockerNetwork(ctx, state, string(ProductDockerNetworkPentagi))
 		_ = p.dockerOps.removeMainDockerNetwork(ctx, state, string(ProductDockerNetworkObservability))
 		_ = p.dockerOps.removeMainDockerNetwork(ctx, state, string(ProductDockerNetworkLangfuse))
+
+		if len(failures) > 0 {
+			return errors.Join(failures...)
+		}
 
 	default:
 		return fmt.Errorf("operation purge not applicable for stack %s", stack)

@@ -305,6 +305,97 @@ Use arrow keys, page up/down, or home/end keys to navigate through the document.
 	EULAProgressComplete      = " • Complete"
 )
 
+// Update Overview Screen constants
+const (
+	UpdateOverviewFormName        = "Update PentAGI"
+	UpdateOverviewFormDescription = "What this update changes, and the release notes behind it"
+	UpdateOverviewFormOverview    = `Review what the update will change before applying it.
+
+The overview shows:
+• Each stack with the version it is on and the version it moves to
+• Every component and whether it will actually change
+• The changelog and release notes of every release you cross
+
+Nothing is downloaded or changed on this screen. Continue to apply the update.
+
+Use arrow keys, page up/down, or home/end keys to navigate through the document.`
+
+	UpdateOverviewLoading         = "Preparing update overview..."
+	UpdateOverviewConfigurationOK = "✓ Update available"
+	UpdateOverviewConfigurationNo = "✓ Everything up to date"
+
+	// Document
+	UpdateOverviewHeading         = "# Update overview"
+	UpdateOverviewNothingToDo     = "Everything is up to date. There is nothing to apply."
+	UpdateOverviewCheckFailed     = "The last update check did not complete, so there is nothing to show here.\n\nApplying the update will pull whatever the compose files currently point at."
+	UpdateOverviewStackHeading    = "## %s"
+	UpdateOverviewVersionMove     = "**%s → %s**"
+	UpdateOverviewVersionTarget   = "**→ %s**"
+	UpdateOverviewVersionUnknown  = "*Version unknown — this installation could not be matched to a release.*"
+	UpdateOverviewVersionMixed    = "*Components come from different releases, so the version above is the oldest of them.*"
+	UpdateOverviewComponentsTitle = "Components:"
+	UpdateOverviewComponentChange = "- **%s** (%s/%s) — %s"
+	UpdateOverviewWillChange      = "will be updated"
+	UpdateOverviewNoChange        = "unchanged"
+	UpdateOverviewCannotVerify    = "cannot verify — nothing to compare against"
+	UpdateOverviewReleaseHeading  = "### %s"
+	UpdateOverviewReleasePreview  = "### %s (preview)"
+	UpdateOverviewReleaseDate     = "*Released %s*"
+	UpdateOverviewReleasesCut     = "*Older releases omitted — showing the most recent %d.*"
+	UpdateOverviewUpToDateTitle   = "## Already up to date"
+	UpdateOverviewRenderFallback  = "%s\n\n---\n\n*Note: Markdown rendering failed: %v*"
+)
+
+// Installer Update Screen constants.
+//
+// The wording is deliberate and was wrong before: the screen this replaced promised to
+// "replace the current installer" and "exit for manual restart", and no version of this
+// installer has ever done either. What happens is a download of one verified file.
+const (
+	InstallerUpdateFormOverview = `Download the installer build the update server offers for this machine.
+
+The file is written next to your installation under its own versioned name, so the installer you are running now is left untouched. Its length, sha256 and signature are checked as it arrives; anything that fails is deleted rather than kept.
+
+Replacing the installer you use is your decision to make afterwards — run the downloaded file when you are ready.`
+
+	InstallerUpdateHelpTitle       = "Update Installer"
+	InstallerUpdateConfigurationOK = "✓ Newer build available"
+	InstallerUpdateConfigurationNo = "✓ Installer up to date"
+
+	// Left panel: what is on offer, before anything is fetched.
+	InstallerUpdateAsking         = "Asking the update server about the build on offer..."
+	InstallerUpdateLoadFailed     = "Could not get the package description: %v"
+	InstallerUpdateCurrentVersion = "• Running version: %s"
+	InstallerUpdateOfferedVersion = "• Offered version: %s"
+	InstallerUpdatePlatform       = "• Platform: %s/%s"
+	InstallerUpdateSize           = "• Download size: %s"
+	InstallerUpdateTarget         = "• Will be saved as: %s"
+	InstallerUpdateManualNote     = "The installer you are running is not replaced. You move the downloaded file into place yourself, with the command shown when the download finishes."
+	InstallerUpdateSameVersion    = "The offered build is the one already running. Downloading it changes nothing."
+	InstallerUpdatePressEnter     = "Press Enter to download"
+
+	// The only thing worth a confirmation: a file under that exact name is already here,
+	// and it may be one somebody put there on purpose. Downloading over nothing needs no
+	// permission and is not asked about.
+	InstallerUpdateAlreadyHere     = "A file of this name is already here — a previous download, or one interrupted partway."
+	InstallerUpdateOverwritePrompt = "Download again and replace %s?"
+	InstallerUpdatePressYN         = "Press y to download and replace it, n to keep the file already on disk"
+	InstallerUpdateKeptExisting    = "Kept the file already on disk. Nothing was downloaded."
+
+	// Left panel: the download itself. There is no "completed" here — the operation
+	// reports where the file landed and that it verified, and a second line saying the
+	// same thing reads as a second thing having happened.
+	InstallerUpdateInProgress = "Downloading the installer build...\n"
+	InstallerUpdateFailed     = "Failed to download the installer build"
+
+	// What to do with the file afterwards. The installer never does this itself.
+	InstallerUpdateFileIsAt    = "The build is at %s"
+	InstallerUpdateMoveTitle   = "To start using it, run:"
+	InstallerUpdateMoveUnknown = "Move it over the installer you launched when you are ready — this installer does not replace itself."
+	InstallerUpdateWindowsNote = "Windows will not replace a program that is running: close this installer before running the command."
+	InstallerUpdateMoveIndent  = "    %s"
+)
+
 // Main Menu Screen constants
 const (
 	MainMenuTitle       = "PentAGI Configuration"
@@ -1240,6 +1331,20 @@ const (
 	ServerSettingsLicenseKey     = "License Key"
 	ServerSettingsLicenseKeyDesc = "PentAGI License Key in format of XXXX-XXXX-XXXX-XXXX"
 
+	ServerSettingsUpdateStrategy = "Update Strategy"
+	// The three values are spelled out because the field is free text: the
+	// validator refuses anything else on save, and a user who has to guess the
+	// vocabulary will find that out the hard way.
+	ServerSettingsUpdateStrategyDesc = "Which builds updates come from: preview (default, follows " +
+		"the channels you already use), stable (published releases only) or nightly (newest build, " +
+		"released or not)"
+
+	ServerSettingsUpdateServerHost     = "Update Server Host"
+	ServerSettingsUpdateServerHostDesc = "PentAGI Cloud API endpoint as host[:port]; leave empty for update.pentagi.com"
+
+	ServerSettingsSupportServerHost     = "Support Server Host"
+	ServerSettingsSupportServerHostDesc = "PentAGI Support API endpoint as host[:port]; leave empty for support.pentagi.com"
+
 	ToolsDockerInsideHost     = "Worker Docker Daemon Host"
 	ToolsDockerInsideHostDesc = "Daemon endpoint given to worker containers (e.g., tcp://dind:2376); empty keeps socket mounting"
 
@@ -2119,7 +2224,7 @@ Each operation will provide real-time status updates and confirmation when requi
 	MaintenanceUpdatePentagi           = "Update PentAGI"
 	MaintenanceUpdatePentagiDesc       = "Update PentAGI to the latest version"
 	MaintenanceUpdateInstaller         = "Update Installer"
-	MaintenanceUpdateInstallerDesc     = "Update this installer to the latest version"
+	MaintenanceUpdateInstallerDesc     = "Download and verify the latest installer build"
 	MaintenanceFactoryReset            = "Factory Reset"
 	MaintenanceFactoryResetDesc        = "Reset PentAGI to factory defaults"
 	MaintenanceRemovePentagi           = "Remove PentAGI"
@@ -2282,13 +2387,6 @@ Note: This is a large download (6GB+).`
 • Preserve all data and configurations
 
 Services will be briefly unavailable during update.`
-
-	ProcessorHelpUpdateInstaller = `This will:
-• Download the latest installer binary
-• Replace the current installer
-• Exit for manual restart
-
-You'll need to restart the installer after update.`
 
 	ProcessorHelpFactoryReset = `⚠️  WARNING: This operation will:
 • Remove all containers and networks
@@ -2568,15 +2666,14 @@ const (
 	PlannedWillRestore  = "will restore:"
 
 	// effect notes per operation (concise and practical)
-	EffectsStart           = "PentAGI web UI becomes available. Background services are brought online in the required order."
-	EffectsStop            = "Web UI becomes unavailable. In-progress flows pause safely. When you start PentAGI again, flows resume automatically. A small portion of the current agent step may be lost."
-	EffectsRestart         = "Services stop and start again with a clean state. Brief downtime is expected. Flows resume automatically afterwards."
-	EffectsUpdateAll       = "Images are pulled and services are recreated where needed. External or disabled components are skipped. Temporary downtime is expected."
-	EffectsDownloadWorker  = "Running worker containers are not touched. New flows will use the downloaded image. To switch an existing flow to the new image, finish the flow and start a new task or create a new assistant."
-	EffectsUpdateWorker    = "Pulls latest worker image. Running worker containers keep using the old image; new containers will use the updated one."
-	EffectsUpdateInstaller = "The installer binary will be updated and the app will exit. Start the installer again to continue."
-	EffectsFactoryReset    = "Removes containers, volumes and networks, restores default .env and embedded files. Produces a clean baseline. This action cannot be undone."
-	EffectsRemove          = "Stops and removes containers but keeps volumes and images. Data is preserved. Web UI becomes unavailable until you start again."
-	EffectsPurge           = "Complete cleanup: containers, images, volumes and configuration files are deleted. Irreversible."
-	EffectsInstall         = "Required files are created and services are started. External components are detected and skipped."
+	EffectsStart          = "PentAGI web UI becomes available. Background services are brought online in the required order."
+	EffectsStop           = "Web UI becomes unavailable. In-progress flows pause safely. When you start PentAGI again, flows resume automatically. A small portion of the current agent step may be lost."
+	EffectsRestart        = "Services stop and start again with a clean state. Brief downtime is expected. Flows resume automatically afterwards."
+	EffectsUpdateAll      = "Images are pulled and services are recreated where needed. External or disabled components are skipped. Temporary downtime is expected."
+	EffectsDownloadWorker = "Running worker containers are not touched. New flows will use the downloaded image. To switch an existing flow to the new image, finish the flow and start a new task or create a new assistant."
+	EffectsUpdateWorker   = "Pulls latest worker image. Running worker containers keep using the old image; new containers will use the updated one."
+	EffectsFactoryReset   = "Removes containers, volumes and networks, restores default .env and embedded files. Produces a clean baseline. This action cannot be undone."
+	EffectsRemove         = "Stops and removes containers but keeps volumes and images. Data is preserved. Web UI becomes unavailable until you start again."
+	EffectsPurge          = "Complete cleanup: containers, images, volumes and configuration files are deleted. Irreversible."
+	EffectsInstall        = "Required files are created and services are started. External components are detected and skipped."
 )

@@ -2068,6 +2068,9 @@ type ServerSettingsConfig struct {
 	// direct form field mappings using loader.EnvVar
 	TenantID                 loader.EnvVar // TENANT_ID
 	LicenseKey               loader.EnvVar // LICENSE_KEY
+	UpdateStrategy           loader.EnvVar // UPDATE_STRATEGY
+	UpdateServerHost         loader.EnvVar // UPDATE_SERVER_HOST
+	SupportServerHost        loader.EnvVar // SUPPORT_SERVER_HOST
 	PprofAddr                loader.EnvVar // PPROF_ADDR
 	ListenIP                 loader.EnvVar // PENTAGI_LISTEN_IP
 	ListenPort               loader.EnvVar // PENTAGI_LISTEN_PORT
@@ -2094,6 +2097,9 @@ func (c *controller) GetServerSettingsConfig() *ServerSettingsConfig {
 	vars, _ := c.GetVars([]string{
 		"TENANT_ID",
 		"LICENSE_KEY",
+		"UPDATE_STRATEGY",
+		"UPDATE_SERVER_HOST",
+		"SUPPORT_SERVER_HOST",
 		"PPROF_ADDR",
 		"PENTAGI_LISTEN_IP",
 		"PENTAGI_LISTEN_PORT",
@@ -2113,6 +2119,9 @@ func (c *controller) GetServerSettingsConfig() *ServerSettingsConfig {
 
 	defaults := map[string]string{
 		"LICENSE_KEY":                      "",
+		"UPDATE_STRATEGY":                  string(checker.DefaultUpdateStrategy),
+		"UPDATE_SERVER_HOST":               strings.TrimPrefix(strings.TrimSuffix(checker.DefaultUpdateServerEndpoint, "/"), "https://"),
+		"SUPPORT_SERVER_HOST":              strings.TrimPrefix(strings.TrimSuffix(checker.DefaultSupportServerEndpoint, "/"), "https://"),
 		"PPROF_ADDR":                       "",
 		"PENTAGI_LISTEN_IP":                "127.0.0.1",
 		"PENTAGI_LISTEN_PORT":              "8443",
@@ -2137,6 +2146,9 @@ func (c *controller) GetServerSettingsConfig() *ServerSettingsConfig {
 	cfg := &ServerSettingsConfig{
 		TenantID:                 vars["TENANT_ID"],
 		LicenseKey:               vars["LICENSE_KEY"],
+		UpdateStrategy:           vars["UPDATE_STRATEGY"],
+		UpdateServerHost:         vars["UPDATE_SERVER_HOST"],
+		SupportServerHost:        vars["SUPPORT_SERVER_HOST"],
 		PprofAddr:                vars["PPROF_ADDR"],
 		ListenIP:                 vars["PENTAGI_LISTEN_IP"],
 		ListenPort:               vars["PENTAGI_LISTEN_PORT"],
@@ -2181,6 +2193,9 @@ func (c *controller) UpdateServerSettingsConfig(config *ServerSettingsConfig) er
 	updates := map[string]string{
 		"TENANT_ID":                        config.TenantID.Value,
 		"LICENSE_KEY":                      config.LicenseKey.Value,
+		"UPDATE_STRATEGY":                  config.UpdateStrategy.Value,
+		"UPDATE_SERVER_HOST":               config.UpdateServerHost.Value,
+		"SUPPORT_SERVER_HOST":              config.SupportServerHost.Value,
 		"PPROF_ADDR":                       config.PprofAddr.Value,
 		"PENTAGI_LISTEN_IP":                config.ListenIP.Value,
 		"PENTAGI_LISTEN_PORT":              config.ListenPort.Value,
@@ -2210,6 +2225,9 @@ func (c *controller) ResetServerSettingsConfig() *ServerSettingsConfig {
 	vars := []string{
 		"TENANT_ID",
 		"LICENSE_KEY",
+		"UPDATE_STRATEGY",
+		"UPDATE_SERVER_HOST",
+		"SUPPORT_SERVER_HOST",
 		"PPROF_ADDR",
 		"PENTAGI_LISTEN_IP",
 		"PENTAGI_LISTEN_PORT",
@@ -2529,6 +2547,7 @@ func (c *controller) getVariableDescription(varName string) string {
 // maskedVariables contains environment variable names that should be masked in display
 var maskedVariables = map[string]bool{
 	// API keys and Secrets
+	"LICENSE_KEY":               true,
 	"OPEN_AI_KEY":               true,
 	"ANTHROPIC_API_KEY":         true,
 	"GEMINI_API_KEY":            true,

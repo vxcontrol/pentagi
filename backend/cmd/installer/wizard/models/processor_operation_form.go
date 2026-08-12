@@ -242,11 +242,6 @@ func (m *ProcessorOperationFormModel) getOperationInfo() *processorOperationInfo
 			info.title = locale.MaintenanceUpdateWorkerImage
 			info.description = locale.MaintenanceUpdateWorkerImageDesc
 			info.help = locale.ProcessorHelpUpdateWorkerImage
-		case processor.ProductStackInstaller:
-			info.title = locale.MaintenanceUpdateInstaller
-			info.description = locale.MaintenanceUpdateInstallerDesc
-			info.help = locale.ProcessorHelpUpdateInstaller
-			info.requiresConfirmation = true
 		case processor.ProductStackAll, processor.ProductStackCompose:
 			info.title = locale.MaintenanceUpdatePentagi
 			info.description = locale.MaintenanceUpdatePentagiDesc
@@ -534,8 +529,6 @@ func (m *ProcessorOperationFormModel) isActionAvailable() bool {
 		switch m.stack {
 		case processor.ProductStackWorker:
 			return checker.CanUpdateWorker()
-		case processor.ProductStackInstaller:
-			return checker.CanUpdateInstaller()
 		case processor.ProductStackAll, processor.ProductStackCompose:
 			return checker.CanUpdateAll()
 		default:
@@ -652,9 +645,6 @@ func (m *ProcessorOperationFormModel) renderEffectsText() string {
 	case processor.ProcessorOperationUpdate:
 		if m.stack == processor.ProductStackWorker {
 			return locale.EffectsUpdateWorker
-		}
-		if m.stack == processor.ProductStackInstaller {
-			return locale.EffectsUpdateInstaller
 		}
 		return locale.EffectsUpdateAll
 	case processor.ProcessorOperationDownload:

@@ -56,8 +56,37 @@ const (
 	MsgUpdatingInstaller          = "Updating installer"
 	MsgRemovingInstaller          = "Removing installer"
 	MsgInstallerUpdateCompleted   = "Installer update completed"
-	MsgVerifyingBinaryChecksum    = "Verifying binary checksum"
-	MsgReplacingInstallerBinary   = "Replacing installer binary"
+	// Past tense: the length, the sha256 and the Ed25519 signature are all checked as the
+	// stream arrives, so by the time this is printed the verdict is already in.
+	MsgVerifyingBinaryChecksum   = "Checksum and signature verified"
+	MsgInstallerSavedTo          = "Installer saved to %s"
+	MsgInstallerDownloadProgress = "Downloaded %d%% (%s of %s)"
+	// The installer binary outlives the removal on purpose: a process cannot delete the
+	// file it is running from, and trying would leave the user with neither.
+	MsgInstallerNotRemoved            = "The installer itself is left in place at %s — delete it yourself when you no longer need it"
+	MsgInstallerNotRemovedUnknownPath = "The installer itself is left in place — delete it yourself when you no longer need it"
+)
+
+// Jaeger storage plugin messages. The plugin is a file mounted into the Jaeger container,
+// not an image, so none of the compose output covers it.
+const (
+	MsgJaegerPluginDownloading       = "Downloading Jaeger storage plugin %s (%s)"
+	MsgJaegerPluginProgress          = "  %s: %d%% (%s of %s)"
+	MsgJaegerPluginInstalled         = "Jaeger storage plugin in place: %s"
+	MsgJaegerPluginStaleRemoved      = "Removed leftover from an interrupted download: %s"
+	MsgJaegerPluginStaleRemoveFailed = "Could not remove leftover %s: %v"
+	MsgJaegerPluginRestarting        = "Restarting Jaeger so it loads the new storage plugin"
+)
+
+// Post-update verification messages
+const (
+	MsgVerifyingUpdatedComponents = "Verifying updated %s components"
+	MsgComponentUpToDate          = "  %s: matches the published build"
+	MsgComponentNewerThanOffered  = "  %s: newer than the offered build (registry moved ahead)"
+	MsgComponentMismatch          = "  %s: expected %s, got %s"
+	MsgComponentNotVerifiable     = "  %s: no published digest to compare against"
+	MsgVerificationPassed         = "All updated %s components match the published build"
+	MsgVerificationMismatch       = "%d %s component(s) do not match the published build"
 )
 
 // Remove operations messages

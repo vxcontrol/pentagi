@@ -1049,3 +1049,5 @@ func TestDoSyncNetworkSettings_PreventOverrideExistingSettings(t *testing.T) {
 		})
 	}
 }
+
+func (m *mockStateWithErrors) WriteVars(vars map[string]string) error { return m.SetVars(vars) }

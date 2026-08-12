@@ -35,6 +35,20 @@ var filesToExcludeFromVerification = []string{
 	"graphiti/gemini.yaml",
 	"graphiti/litellm.yaml",
 	"graphiti/openai.yaml",
+	// The Jaeger storage plugin is updated over the network, so the embedded copy and the
+	// cloud are two sources of truth for one path and the priority has to be declared.
+	// Without this the update undoes itself: a downloaded plugin differs from what the
+	// installer ships, so verifyDirectoryContentIntegrity calls it modified. On every
+	// Apply Changes the user is then offered a "repair" — an offer to roll the update
+	// back, dressed up as tidying — and answering yes sets force, which copies the
+	// embedded version straight over the downloaded one. Factory reset does the same
+	// without asking.
+	//
+	// The exclusion policy is exactly the one this needs: still created when missing, so
+	// the embedded copy remains the source for a first install, and never overwritten
+	// afterwards, so the cloud becomes the source once it has answered.
+	"observability/jaeger/bin/jaeger-clickhouse-linux-amd64",
+	"observability/jaeger/bin/jaeger-clickhouse-linux-arm64",
 }
 
 var allStacks = []ProductStack{

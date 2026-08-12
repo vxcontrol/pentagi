@@ -61,11 +61,28 @@ func (c *composeOperationsImpl) restartStack(ctx context.Context, stack ProductS
 }
 
 // updateStack performs rolling update with health checks (also used for install)
+// updateStack and downloadStack are the only two compose operations that FETCH anything,
+// and both write the image references the server chose into the environment file first.
+//
+// Here rather than at each call site, because there are five of them — update, download,
+// install and the three apply-changes phases — and the one that forgets is not a compile
+// error: `${COMPONENT_IMAGE:-default}` quietly resolves to the default the compose file
+// ships with, the pull fetches that, and the operation reports success having fetched
+// something the update server never offered.
+//
+// The tear-down operations below deliberately do not: `down` needs no reference, and
+// writing one while removing a stack would be a side effect nobody asked for.
 func (c *composeOperationsImpl) updateStack(ctx context.Context, stack ProductStack, state *operationState) error {
+	if err := c.processor.applyPullReferences(stack); err != nil {
+		return err
+	}
 	return c.performStackOperation(ctx, stack, state, ProcessorOperationUpdate, "up", "-d")
 }
 
 func (c *composeOperationsImpl) downloadStack(ctx context.Context, stack ProductStack, state *operationState) error {
+	if err := c.processor.applyPullReferences(stack); err != nil {
+		return err
+	}
 	return c.performStackOperation(ctx, stack, state, ProcessorOperationDownload, "pull")
 }
 

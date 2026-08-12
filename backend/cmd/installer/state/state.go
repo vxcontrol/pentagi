@@ -33,6 +33,20 @@ type State interface {
 	SetVars(vars map[string]string) error
 	ResetVars(names []string) error
 
+	// WriteVars puts values into the environment FILE, bypassing the staging area.
+	//
+	// Everything else here stages: SetVar and SetVars record an intention that only
+	// reaches .env when the user applies their changes. That is right for anything a
+	// person typed into a form, and wrong for a value the installer itself must have on
+	// disk before the very next command runs — `docker compose` is given --env-file
+	// pointing at the real file, so a staged variable is one compose has never heard of
+	// and it silently uses the default the compose file ships with.
+	//
+	// The user's pending edits are not written along with it: the file is re-read from
+	// disk, these values are set on that, and the result is saved. Committing the whole
+	// staged view here would apply form changes the user has not agreed to apply.
+	WriteVars(vars map[string]string) error
+
 	GetAllVars() map[string]loader.EnvVar
 	GetEnvPath() string
 }
@@ -218,6 +232,40 @@ func (s *state) SetVars(vars map[string]string) error {
 	}
 
 	return s.flushState()
+}
+
+func (s *state) WriteVars(vars map[string]string) error {
+	s.mx.Lock()
+	defer s.mx.Unlock()
+
+	if len(vars) == 0 {
+		return nil
+	}
+
+	// From disk, not from s.envFile: that one carries every staged edit, and saving it
+	// would apply the user's un-applied form changes as a side effect of an update.
+	envFile, err := loader.LoadEnvFile(s.envPath)
+	if err != nil {
+		return err
+	}
+
+	for name, value := range vars {
+		envFile.Set(name, value)
+	}
+
+	if err := envFile.Save(s.envPath); err != nil {
+		return err
+	}
+
+	// The in-memory view is kept in step so a later Commit does not write the previous
+	// value back over what was just saved. The staging FILE is deliberately not touched:
+	// a value the installer wrote for itself must not make the installation look dirty
+	// and prompt the user to apply something they never changed.
+	for name, value := range vars {
+		s.envFile.Set(name, value)
+	}
+
+	return nil
 }
 
 func (s *state) ResetVars(names []string) error {

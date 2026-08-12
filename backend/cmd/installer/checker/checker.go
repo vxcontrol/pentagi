@@ -20,37 +20,50 @@ var (
 )
 
 const (
-	DockerComposeFile            = "docker-compose.yml"
-	GraphitiComposeFile          = "docker-compose-graphiti.yml"
-	LangfuseComposeFile          = "docker-compose-langfuse.yml"
-	ObservabilityComposeFile     = "docker-compose-observability.yml"
-	ExampleCustomConfigLLMFile   = "example.custom.provider.yml"
-	ExampleOllamaConfigLLMFile   = "example.ollama.provider.yml"
-	PentagiScriptFile            = "/usr/local/bin/pentagi"
-	PentagiContainerName         = "pentagi"
-	GraphitiContainerName        = "graphiti"
-	Neo4jContainerName           = "neo4j"
-	LangfuseWorkerContainerName  = "langfuse-worker"
-	LangfuseWebContainerName     = "langfuse-web"
-	GrafanaContainerName         = "grafana"
-	OpenTelemetryContainerName   = "otel"
-	DefaultImage                 = "debian:latest"
-	DefaultImageForPentest       = "vxcontrol/kali-linux"
-	DefaultGraphitiEndpoint      = "http://graphiti:8000"
-	DefaultLangfuseEndpoint      = "http://langfuse-web:3000"
-	DefaultObservabilityEndpoint = "otelcol:8148"
-	DefaultLangfuseOtelEndpoint  = "http://otelcol:4318"
-	DefaultUpdateServerEndpoint  = "https://update.pentagi.com"
-	UpdatesCheckEndpoint         = "/api/v1/updates/check"
-	MinFreeMemGB                 = 0.5
-	MinFreeMemGBForPentagi       = 0.5
-	MinFreeMemGBForGraphiti      = 2.0
-	MinFreeMemGBForLangfuse      = 1.5
-	MinFreeMemGBForObservability = 1.5
-	MinFreeDiskGB                = 5.0
-	MinFreeDiskGBForComponents   = 10.0
-	MinFreeDiskGBPerComponents   = 2.0
-	MinFreeDiskGBForWorkerImages = 25.0
+	DockerComposeFile               = "docker-compose.yml"
+	GraphitiComposeFile             = "docker-compose-graphiti.yml"
+	LangfuseComposeFile             = "docker-compose-langfuse.yml"
+	ObservabilityComposeFile        = "docker-compose-observability.yml"
+	ExampleCustomConfigLLMFile      = "example.custom.provider.yml"
+	ExampleOllamaConfigLLMFile      = "example.ollama.provider.yml"
+	PentagiScriptFile               = "/usr/local/bin/pentagi"
+	PentagiContainerName            = "pentagi"
+	ScraperContainerName            = "scraper"
+	PgvectorContainerName           = "pgvector"
+	PgexporterContainerName         = "pgexporter"
+	GraphitiContainerName           = "graphiti"
+	Neo4jContainerName              = "neo4j"
+	LangfuseWorkerContainerName     = "langfuse-worker"
+	LangfuseWebContainerName        = "langfuse-web"
+	LangfusePostgresContainerName   = "langfuse-postgres"
+	LangfuseClickhouseContainerName = "langfuse-clickhouse"
+	LangfuseRedisContainerName      = "langfuse-redis"
+	LangfuseMinioContainerName      = "langfuse-minio"
+	GrafanaContainerName            = "grafana"
+	OpenTelemetryContainerName      = "otel"
+	VictoriaMetricsContainerName    = "victoriametrics"
+	LokiContainerName               = "loki"
+	JaegerContainerName             = "jaeger"
+	NodeExporterContainerName       = "node-exporter"
+	CadvisorContainerName           = "cadvisor"
+	ClickstoreContainerName         = "clickstore"
+	DefaultImage                    = "debian:latest"
+	DefaultImageForPentest          = "vxcontrol/kali-linux"
+	DefaultGraphitiEndpoint         = "http://graphiti:8000"
+	DefaultLangfuseEndpoint         = "http://langfuse-web:3000"
+	DefaultObservabilityEndpoint    = "otelcol:8148"
+	DefaultLangfuseOtelEndpoint     = "http://otelcol:4318"
+	DefaultUpdateServerEndpoint     = "https://update.pentagi.com"
+	DefaultSupportServerEndpoint    = "https://support.pentagi.com"
+	MinFreeMemGB                    = 0.5
+	MinFreeMemGBForPentagi          = 0.5
+	MinFreeMemGBForGraphiti         = 2.0
+	MinFreeMemGBForLangfuse         = 1.5
+	MinFreeMemGBForObservability    = 1.5
+	MinFreeDiskGB                   = 5.0
+	MinFreeDiskGBForComponents      = 10.0
+	MinFreeDiskGBPerComponents      = 2.0
+	MinFreeDiskGBForWorkerImages    = 25.0
 )
 
 var (
@@ -112,6 +125,19 @@ type CheckResult struct {
 	SysNetworkFailures []string        `json:"sys_network_failures" yaml:"sys_network_failures"`
 	DockerErrorType    DockerErrorType `json:"docker_error_type" yaml:"docker_error_type"`
 	EnvDirWritable     bool            `json:"env_dir_writable" yaml:"env_dir_writable"`
+
+	// StackUpdates is the update server's answer in full: per stack, what version is
+	// offered, what the release says, and which artefacts would actually change. The
+	// per-stack booleans above are the same verdict reduced to what the menus need.
+	StackUpdates []StackUpdate `json:"stack_updates,omitempty" yaml:"stack_updates,omitempty"`
+	// UpdateFailure explains why there is no answer, and is nil when there is one. It
+	// replaces guessing from UpdateServerAccessible: "unreachable", "quota spent" and
+	// "not allowed for this license" need different things from the user.
+	UpdateFailure *UpdateCheckFailure `json:"update_failure,omitempty" yaml:"update_failure,omitempty"`
+	// InstalledComponents is what the last check observed on this machine. Verifying an
+	// update afterwards needs it, and keeping it here means the verification reads facts
+	// the check already gathered instead of interrogating Docker a second time.
+	InstalledComponents []InstalledComponent `json:"installed_components,omitempty" yaml:"installed_components,omitempty"`
 
 	// handler controls how information is gathered. If nil, skip gathering
 	handler CheckHandler
@@ -423,7 +449,14 @@ func (h *defaultCheckHandler) GatherGraphitiInfo(ctx context.Context, c *CheckRe
 	graphitiURL := getEnvVar(h.appState, "GRAPHITI_URL", "")
 
 	c.GraphitiConnected = graphitiEnabled == "true" && graphitiURL != ""
-	c.GraphitiExternal = graphitiURL != DefaultGraphitiEndpoint
+	// Gated on Connected, and not for tidiness. "External" means somebody else
+	// operates this stack, which is only a statement about a stack that exists:
+	// an unset URL is not the default URL, so the bare comparison reports a stack
+	// nobody has configured as externally hosted. Every consumer of this field
+	// already begins with `Connected &&`, so the guard changes no decision — what
+	// it changes is what the field SAYS, in the TUI and on the wire, where a
+	// released installer has been claiming a Graphiti that does not exist.
+	c.GraphitiExternal = c.GraphitiConnected && graphitiURL != DefaultGraphitiEndpoint
 
 	envDir := filepath.Dir(h.appState.GetEnvPath())
 	graphitiComposeFile := filepath.Join(envDir, GraphitiComposeFile)
@@ -454,7 +487,9 @@ func (h *defaultCheckHandler) GatherLangfuseInfo(ctx context.Context, c *CheckRe
 	secretKey := getEnvVar(h.appState, "LANGFUSE_SECRET_KEY", "")
 
 	c.LangfuseConnected = baseURL != "" && projectID != "" && publicKey != "" && secretKey != ""
-	c.LangfuseExternal = baseURL != DefaultLangfuseEndpoint
+	// See the note on GraphitiExternal: without the guard an unconfigured stack
+	// reports itself as externally hosted.
+	c.LangfuseExternal = c.LangfuseConnected && baseURL != DefaultLangfuseEndpoint
 
 	envDir := filepath.Dir(h.appState.GetEnvPath())
 	langfuseFile := filepath.Join(envDir, LangfuseComposeFile)
@@ -481,7 +516,9 @@ func (h *defaultCheckHandler) GatherObservabilityInfo(ctx context.Context, c *Ch
 
 	otelHost := getEnvVar(h.appState, "OTEL_HOST", "")
 	c.ObservabilityConnected = otelHost != ""
-	c.ObservabilityExternal = otelHost != DefaultObservabilityEndpoint
+	// See the note on GraphitiExternal: without the guard an unconfigured stack
+	// reports itself as externally hosted.
+	c.ObservabilityExternal = c.ObservabilityConnected && otelHost != DefaultObservabilityEndpoint
 
 	envDir := filepath.Dir(h.appState.GetEnvPath())
 	obsFile := filepath.Join(envDir, ObservabilityComposeFile)
@@ -546,109 +583,6 @@ func (h *defaultCheckHandler) GatherSystemInfo(ctx context.Context, c *CheckResu
 	proxyURL := getProxyURL(h.appState)
 	c.SysNetworkFailures = getNetworkFailures(ctx, proxyURL, h.dockerClient, h.workerClient)
 	c.SysNetworkOK = len(c.SysNetworkFailures) == 0
-
-	return nil
-}
-
-func (h *defaultCheckHandler) GatherUpdatesInfo(ctx context.Context, c *CheckResult) error {
-	h.mx.Lock()
-	defer h.mx.Unlock()
-
-	proxyURL := getProxyURL(h.appState)
-	updateServerURL := getEnvVar(h.appState, "UPDATE_SERVER_URL", DefaultUpdateServerEndpoint)
-
-	request := CheckUpdatesRequest{
-		InstallerOsType:        runtime.GOOS,
-		InstallerVersion:       InstallerVersion,
-		GraphitiConnected:      c.GraphitiConnected,
-		GraphitiExternal:       c.GraphitiExternal,
-		GraphitiInstalled:      c.GraphitiInstalled,
-		LangfuseConnected:      c.LangfuseConnected,
-		LangfuseExternal:       c.LangfuseExternal,
-		LangfuseInstalled:      c.LangfuseInstalled,
-		ObservabilityConnected: c.ObservabilityConnected,
-		ObservabilityExternal:  c.ObservabilityExternal,
-		ObservabilityInstalled: c.ObservabilityInstalled,
-	}
-
-	// get PentAGI container image info
-	if h.dockerClient != nil && c.PentagiInstalled {
-		if imageInfo := getContainerImageInfo(ctx, h.dockerClient, PentagiContainerName); imageInfo != nil {
-			request.PentagiImageName = &imageInfo.Name
-			request.PentagiImageTag = &imageInfo.Tag
-			request.PentagiImageHash = &imageInfo.Hash
-		}
-	}
-
-	// get Worker image info from environment
-	if h.workerClient != nil {
-		defaultImage := getEnvVar(h.appState, "DOCKER_DEFAULT_IMAGE_FOR_PENTEST", DefaultImageForPentest)
-		if imageInfo := getImageInfo(ctx, h.workerClient, defaultImage); imageInfo != nil {
-			request.WorkerImageName = &imageInfo.Name
-			request.WorkerImageTag = &imageInfo.Tag
-			request.WorkerImageHash = &imageInfo.Hash
-		}
-	}
-
-	// get Graphiti image info if installed locally
-	if h.dockerClient != nil && c.GraphitiConnected && !c.GraphitiExternal && c.GraphitiInstalled {
-		if graphitiInfo := getContainerImageInfo(ctx, h.dockerClient, GraphitiContainerName); graphitiInfo != nil {
-			request.GraphitiImageName = &graphitiInfo.Name
-			request.GraphitiImageTag = &graphitiInfo.Tag
-			request.GraphitiImageHash = &graphitiInfo.Hash
-		}
-		if neo4jInfo := getContainerImageInfo(ctx, h.dockerClient, Neo4jContainerName); neo4jInfo != nil {
-			request.Neo4jImageName = &neo4jInfo.Name
-			request.Neo4jImageTag = &neo4jInfo.Tag
-			request.Neo4jImageHash = &neo4jInfo.Hash
-		}
-	}
-
-	// get Langfuse image info if installed locally
-	if h.dockerClient != nil && c.LangfuseConnected && !c.LangfuseExternal && c.LangfuseInstalled {
-		if workerInfo := getContainerImageInfo(ctx, h.dockerClient, LangfuseWorkerContainerName); workerInfo != nil {
-			request.LangfuseWorkerImageName = &workerInfo.Name
-			request.LangfuseWorkerImageTag = &workerInfo.Tag
-			request.LangfuseWorkerImageHash = &workerInfo.Hash
-		}
-		if webInfo := getContainerImageInfo(ctx, h.dockerClient, LangfuseWebContainerName); webInfo != nil {
-			request.LangfuseWebImageName = &webInfo.Name
-			request.LangfuseWebImageTag = &webInfo.Tag
-			request.LangfuseWebImageHash = &webInfo.Hash
-		}
-	}
-
-	// get Grafana and OpenTelemetry image info if observability installed locally
-	if h.dockerClient != nil && c.ObservabilityConnected && !c.ObservabilityExternal && c.ObservabilityInstalled {
-		if grafanaInfo := getContainerImageInfo(ctx, h.dockerClient, GrafanaContainerName); grafanaInfo != nil {
-			request.GrafanaImageName = &grafanaInfo.Name
-			request.GrafanaImageTag = &grafanaInfo.Tag
-			request.GrafanaImageHash = &grafanaInfo.Hash
-		}
-		if otelInfo := getContainerImageInfo(ctx, h.dockerClient, OpenTelemetryContainerName); otelInfo != nil {
-			request.OpenTelemetryImageName = &otelInfo.Name
-			request.OpenTelemetryImageTag = &otelInfo.Tag
-			request.OpenTelemetryImageHash = &otelInfo.Hash
-		}
-	}
-
-	response := checkUpdatesServer(ctx, updateServerURL, proxyURL, request)
-	if response != nil {
-		c.UpdateServerAccessible = true
-		c.InstallerIsUpToDate = response.InstallerIsUpToDate
-		c.PentagiIsUpToDate = response.PentagiIsUpToDate
-		c.GraphitiIsUpToDate = response.GraphitiIsUpToDate
-		c.LangfuseIsUpToDate = response.LangfuseIsUpToDate
-		c.ObservabilityIsUpToDate = response.ObservabilityIsUpToDate
-		c.WorkerIsUpToDate = response.WorkerIsUpToDate
-	} else {
-		c.UpdateServerAccessible = false
-		c.InstallerIsUpToDate = false
-		c.PentagiIsUpToDate = false
-		c.GraphitiIsUpToDate = false
-		c.LangfuseIsUpToDate = false
-		c.ObservabilityIsUpToDate = false
-	}
 
 	return nil
 }

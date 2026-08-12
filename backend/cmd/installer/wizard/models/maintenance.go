@@ -75,8 +75,12 @@ func (h *MaintenanceHandler) LoadItems() []ListItem {
 	showUpdatePentagi := checker.CanUpdateAll()
 
 	if showUpdatePentagi {
+		// The overview screen, not the operation form: the entry used to lead
+		// straight into "are you sure?", which asked for consent to something
+		// the interface had never described. The overview continues into the
+		// same form, confirmation and all.
 		items = append(items, ListItem{
-			ID:          UpdatePentagiScreen,
+			ID:          UpdateOverviewScreen,
 			Highlighted: true,
 		})
 	}
@@ -84,7 +88,7 @@ func (h *MaintenanceHandler) LoadItems() []ListItem {
 	// update Installer - show if installer updates are available
 	if checker.CanUpdateInstaller() {
 		items = append(items, ListItem{
-			ID:          UpdateInstallerScreen,
+			ID:          InstallerUpdateScreen,
 			Highlighted: true,
 		})
 	}

@@ -90,6 +90,16 @@ func (r *registry) initScreens() {
 	// Changes Form
 	r.screens[models.ApplyChangesScreen] = models.NewApplyChangesFormModel(r.controller, r.styles, r.window, r.processor)
 
+	// Update Overview — the screen the maintenance entry leads to, which then
+	// continues into the update operation form below.
+	r.screens[models.UpdateOverviewScreen] = models.NewUpdateOverviewModel(r.controller, r.styles, r.window)
+
+	// Installer self-update — its own screen rather than an operation form: it describes
+	// the build on offer and downloads one verified file, and no part of that is the
+	// generic "are you sure?" the form provides.
+	r.screens[models.InstallerUpdateScreen] = models.NewInstallerUpdateModel(
+		r.controller, r.styles, r.window, r.processor)
+
 	// Maintenance
 	r.screens[models.MaintenanceScreen] = models.NewMaintenanceModel(r.controller, r.styles, r.window, r)
 	r.screens[models.ResetPasswordScreen] = models.NewResetPasswordModel(r.controller, r.styles, r.window, r.processor)
@@ -103,7 +113,6 @@ func (r *registry) initScreens() {
 		models.DownloadWorkerImageScreen,
 		models.UpdateWorkerImageScreen,
 		models.UpdatePentagiScreen,
-		models.UpdateInstallerScreen,
 		models.FactoryResetScreen,
 		models.RemovePentagiScreen,
 		models.PurgePentagiScreen,

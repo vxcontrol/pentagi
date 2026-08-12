@@ -1579,3 +1579,5 @@ func isHexString(s string) bool {
 	}
 	return true
 }
+
+func (m *mockState) WriteVars(vars map[string]string) error { return m.SetVars(vars) }

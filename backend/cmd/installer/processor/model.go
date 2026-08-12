@@ -30,6 +30,13 @@ type ProcessorModel interface {
 	Restart(ctx context.Context, stack ProductStack, opts ...OperationOption) tea.Cmd
 	ResetPassword(ctx context.Context, stack ProductStack, opts ...OperationOption) tea.Cmd
 	HandleMsg(msg tea.Msg) tea.Cmd
+
+	// InstallerPackage describes the installer build on offer without downloading it.
+	//
+	// Blocking rather than a tea.Cmd, unlike everything above it: this is one short
+	// request with one answer, not an operation that streams output into a terminal
+	// panel, and the screen that needs it already wraps it in a command of its own.
+	InstallerPackage(ctx context.Context) (*InstallerPackage, error)
 }
 
 func NewProcessorModel(state state.State, checker *checker.CheckResult, files files.Files) ProcessorModel {
@@ -211,10 +218,19 @@ func (pm *processorModel) HandleMsg(msg tea.Msg) tea.Cmd {
 
 	switch msg := msg.(type) {
 	case ProcessorWaitMsg:
-		if msg.Error != nil {
-			// stop polling after error
-			return nil
-		}
+		// Polling continues even when this message carries an error, and that is the
+		// whole point of it.
+		//
+		// An error here means the operation ENDED — wrapCommand's select received it from
+		// the operation's channel, or the context was cancelled. Either way the operation
+		// has already appended its completion message to the queue, and the completion is
+		// what tells the screen to stop the spinner and show what happened. Returning nil
+		// here stopped the polling that would have delivered it, so an operation that
+		// failed faster than wrapCommand's 500 ms window left the screen saying "in
+		// progress" forever, with the error displayed nowhere.
+		//
+		// The chain still terminates: ProcessorCompletionMsg below returns nil, and every
+		// operation sends one from a deferred call.
 		return pollMsg(msg.num, msg.Stack, msg.state)
 	case ProcessorOutputMsg:
 		return pollMsg(msg.num, msg.Stack, msg.state)
