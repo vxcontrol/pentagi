@@ -40,6 +40,7 @@
   - [Langfuse Integration](#langfuse-integration)
   - [Monitoring and Observability](#monitoring-and-observability)
   - [Knowledge Graph (Graphiti)](#knowledge-graph-integration-graphiti)
+  - [External Tools (MCP)](#external-tools-mcp)
   - [OAuth Integration](#github-and-google-oauth-integration)
   - [Docker Image Configuration](#docker-image-configuration)
 - [Development](#development)
@@ -656,7 +657,7 @@ The following configuration areas still need to be set on the server through env
 - **LLM credentials and connection details**: API keys, endpoints, auth modes, and provider-specific connection settings for OpenAI, Anthropic, Bedrock, Ollama, custom providers, and similar backends; config-path settings apply only where supported, such as `OLLAMA_SERVER_CONFIG_PATH` and `LLM_SERVER_CONFIG_PATH`.
 - **Search provider credentials and options**: Settings such as `DUCKDUCKGO_*`, `GOOGLE_*`, `TAVILY_API_KEY`, `FIRECRAWL_API_*`, `TRAVERSAAL_API_KEY`, `PERPLEXITY_*`, `SEARXNG_*`, `SPLOITUS_ENABLED`, and the optional `WEB_SEARCH_INTERNAL_*` browser-analytics fallback settings.
 - **Third-party integrations**: Langfuse, Graphiti, and similar external services remain server-side configuration.
-- **MCP server management**: MCP settings pages are not currently exposed as a live web-console feature.
+- **MCP server management**: MCP client connections are configured with environment variables; see [External Tools (MCP)](#external-tools-mcp).
 
 **For Production & Enhanced Security:**
 
@@ -2872,6 +2873,40 @@ Update `.env`, `docker-compose-graphiti.yml`, the Graphiti image, and the `graph
 - The Graphiti HTTP API has no authentication layer in the bundled service. The stock compose binds it and Neo4j to `127.0.0.1`; secure external deployments with network controls and authentication at a trusted reverse proxy.
 - Agent and tool output may contain credentials and exploitation evidence. Protect Neo4j data, logs, dead letters, diagnostics, and backups accordingly.
 - If Graphiti is unavailable, PentAGI continues with its primary memory and vector store after logging the failed startup health check. Set `GRAPHITI_ENABLED=false` to disable the integration explicitly.
+
+### External Tools (MCP)
+
+PentAGI can act as a [Model Context Protocol](https://modelcontextprotocol.io) client: tools advertised by external MCP servers (Burp Suite, Nuclei, Shodan, home-grown tooling, ...) are discovered at startup and offered to agents as first-class tools next to the built-in ones. Tools are namespaced as `mcp_<server>_<tool>`, so they can never collide with built-in tool names.
+
+Servers are configured through `MCP_SERVERS`, a JSON array of server definitions:
+
+```bash
+MCP_SERVERS='[
+  {"name":"burp","transport":"http","url":"http://burp:9876/mcp","contexts":["pentester"]},
+  {"name":"nuclei","transport":"stdio","command":"nuclei-mcp","args":["--serve"],"env":{"NUCLEI_API_KEY":"..."}}
+]'
+```
+
+| Key | Required | Description |
+| --- | --- | --- |
+| `name` | yes | Server identifier used in the `mcp_<server>_<tool>` tool namespace and in allow/deny selectors |
+| `transport` | yes | `stdio` (local command run by PentAGI), `http` (streamable HTTP) or `sse` (legacy HTTP servers) |
+| `url` | http/sse | Server endpoint URL |
+| `command` | stdio | Executable to run; managed as a child process of PentAGI |
+| `args` | no | Arguments passed to `command` |
+| `env` | no | Extra `KEY=VALUE` environment entries for the child process |
+| `contexts` | no | Restrict visibility to specific agents: `primary_agent`, `assistant`, `coder`, `installer`, `searcher`, `pentester`. Empty exposes the tools to all of them |
+
+Two optional filters control which discovered tools are actually exposed; both accept `*` (everything), `<server>` (whole server), `<server>/*` (every tool of a server) and `<server>/<tool>` (one tool), and the deny-list always wins:
+
+```bash
+MCP_ALLOWED_TOOLS=nuclei,burp/scan
+MCP_DENIED_TOOLS=burp/spider
+```
+
+`MCP_TOOL_TIMEOUT` (seconds, default 120) bounds a single MCP tool call; `0` disables the deadline.
+
+A server that cannot be reached at startup is logged and skipped — the remaining servers keep working and PentAGI itself starts normally. An empty `MCP_SERVERS` (the default) leaves the integration fully disabled. See [backend/docs/config.md — MCP Client Settings](backend/docs/config.md#mcp-client-settings) for the full reference.
 
 ### GitHub and Google OAuth Integration
 

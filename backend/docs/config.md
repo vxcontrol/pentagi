@@ -79,6 +79,10 @@ This document serves as a comprehensive guide to the configuration system in Pen
     - [Client Lifecycle and Failure Behavior](#client-lifecycle-and-failure-behavior)
     - [Data Flow, Search, and Tenancy](#data-flow-search-and-tenancy)
     - [Deployment Ownership](#deployment-ownership)
+  - [MCP Client Settings](#mcp-client-settings)
+    - [Server Definitions](#server-definitions)
+    - [Tool Filtering](#tool-filtering)
+    - [Failure Behavior](#failure-behavior)
   - [Agent Supervision Settings](#agent-supervision-settings)
     - [Usage Details](#usage-details-13)
     - [Supervision System Integration](#supervision-system-integration)
@@ -135,7 +139,7 @@ The environment variables documented below remain the source of truth for config
 - **LLM credentials and connection settings**: API keys, base URLs, auth modes, and provider-specific connection settings for OpenAI, Anthropic, Bedrock, Ollama, custom providers, and similar backends; config-path settings apply only where supported, such as `OLLAMA_SERVER_CONFIG_PATH`, `LLM_SERVER_CONFIG_PATH`, and `BEDROCK_CONFIG_PATH`.
 - **Search provider credentials and options**: DuckDuckGo, Google, Tavily, Traversaal, Perplexity, Searxng, Sploitus, and related search configuration.
 - **Third-party integrations**: Langfuse, Graphiti, and other external observability or knowledge services.
-- **MCP server management**: MCP settings are not currently exposed as a live web-console feature.
+- **MCP server management**: MCP client connections are configured with environment variables; see [MCP Client Settings](#mcp-client-settings).
 
 ## General Settings
 
@@ -1887,6 +1891,53 @@ The bundled stack is separate from `docker-compose.yml`. The installer distingui
 Installer assets include `docker-compose-graphiti.yml` and the `graphiti` preset directory sourced from `examples/graphiti`. The target directory is checked, repaired, and removed with the Graphiti stack. Compose mounts it through `GRAPHITI_CONFIG_PATH` and `GRAPHITI_CONFIG_DIR`; the fallback target `configs` prevents a newer compose file paired with an older `.env` from masking the image's built-in `llm_configs` with an empty host directory.
 
 Models and call parameters belong to the provider YAML presets, selected by `GRAPHITI_LLM_CLIENT_TYPE`; they are not fields in the PentAGI Go configuration. `GRAPHITI_MODEL_NAME` is obsolete. Refer operators to the README instead of duplicating the sidecar's tuning reference here.
+
+## MCP Client Settings
+
+PentAGI can act as a Model Context Protocol (MCP) client: tools advertised by external MCP servers (Burp Suite, Nuclei, Shodan, home-grown tooling, ...) are discovered at startup and offered to agents as first-class tools next to the built-in ones. Tools are namespaced as `mcp_<server>_<tool>` so they can never collide with built-in tool names.
+
+| Field | Environment Variable | Default | Description |
+| --- | --- | --- | --- |
+| `MCPServers` | `MCP_SERVERS` | *(empty)* | JSON array of server definitions (see below); empty disables the integration |
+| `MCPAllowedTools` | `MCP_ALLOWED_TOOLS` | *(empty)* | When non-empty, only matching MCP tools are exposed |
+| `MCPDeniedTools` | `MCP_DENIED_TOOLS` | *(empty)* | Matching MCP tools are hidden even when the allow-list would permit them |
+| `MCPToolTimeout` | `MCP_TOOL_TIMEOUT` | `120` seconds | Per-call deadline for MCP tool invocations; `0` disables the deadline |
+
+### Server Definitions
+
+`MCP_SERVERS` holds a JSON array; each entry describes one server:
+
+| Key | Required | Description |
+| --- | --- | --- |
+| `name` | yes | Server identifier used in the `mcp_<server>_<tool>` namespace and in allow/deny selectors |
+| `transport` | yes | `stdio` (local command), `http` (streamable HTTP, 2025-03-26 spec) or `sse` (legacy HTTP, 2024-11-05 spec) |
+| `url` | http/sse | Server endpoint URL |
+| `command` | stdio | Executable to run; managed as a child process of PentAGI |
+| `args` | no | Arguments passed to `command` |
+| `env` | no | Extra `KEY=VALUE` environment entries for the child process (the PentAGI environment is inherited) |
+| `contexts` | no | Restrict visibility to specific agents: `primary_agent`, `assistant`, `coder`, `installer`, `searcher`, `pentester`. Empty exposes the tools to all of them |
+
+```bash
+MCP_SERVERS='[
+  {"name":"burp","transport":"http","url":"http://burp:9876/mcp","contexts":["pentester"]},
+  {"name":"nuclei","transport":"stdio","command":"nuclei-mcp","args":["--serve"],"env":{"NUCLEI_API_KEY":"..."}}
+]'
+```
+
+### Tool Filtering
+
+`MCP_ALLOWED_TOOLS` and `MCP_DENIED_TOOLS` are comma-separated selectors; the deny-list always wins:
+
+- `*` — every tool
+- `burp` — every tool of the `burp` server
+- `burp/scan` — the `scan` tool of the `burp` server
+- `burp/*` — every tool of the `burp` server
+
+Selectors are matched against the sanitized tool vocabulary, so the names can be written as the MCP servers announce them.
+
+### Failure Behavior
+
+Servers are contacted once during the first use after startup. A server that cannot be reached, or that fails tool discovery, is logged as a warning and skipped; the remaining servers keep working and PentAGI itself starts normally. An empty `MCP_SERVERS` (the default) leaves the integration fully disabled.
 
 ## Agent Supervision Settings
 
