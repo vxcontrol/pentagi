@@ -1,6 +1,8 @@
 package config
 
 import (
+	"encoding/json"
+	"fmt"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -268,6 +270,22 @@ type Config struct {
 	// === Agent Planning Phase Configuration ===
 	AgentPlanningStepEnabled bool `env:"AGENT_PLANNING_STEP_ENABLED" envDefault:"false"`
 
+	// === MCP (Model Context Protocol) Client ===
+	// MCPServers lists external MCP servers whose tools are exposed to agents
+	// as first-class tools. Parsed from the MCP_SERVERS env variable, which
+	// holds a JSON array (see MCPServerConfig). An empty value disables the
+	// integration entirely.
+	MCPServers []MCPServerConfig `env:"MCP_SERVERS"`
+	// MCPAllowedTools, when non-empty, restricts the exposed MCP tools to the
+	// listed selectors ("server", "server/tool", or "*" for everything).
+	MCPAllowedTools []string `env:"MCP_ALLOWED_TOOLS"`
+	// MCPDeniedTools removes matching tools even when the allow-list would
+	// permit them. Same selector syntax as MCPAllowedTools.
+	MCPDeniedTools []string `env:"MCP_DENIED_TOOLS"`
+	// MCPToolTimeout bounds a single MCP tool call in seconds; 0 disables the
+	// deadline (not recommended: a hung server would stall the agent).
+	MCPToolTimeout int `env:"MCP_TOOL_TIMEOUT" envDefault:"120"`
+
 	// === Database Configuration ===
 	DatabaseURL string `env:"DATABASE_URL" envDefault:"postgres://pentagiuser:pentagipass@pgvector:5432/pentagidb?sslmode=disable"`
 
@@ -287,6 +305,74 @@ type Config struct {
 	PgxPool *pgxpool.Pool `env:"-"`
 }
 
+// MCPServerConfig describes one external MCP server connection.
+//
+// Transport selects how PentAGI reaches the server:
+//
+//	stdio — the server is a local command spawned and managed by PentAGI
+//	         (Command and Args; Env optionally extends the inherited
+//	         environment with KEY=VALUE entries)
+//	http   — the server speaks the streamable HTTP transport (2025-03-26
+//	         spec revision) at URL
+//	sse    — legacy HTTP servers using server-sent events (2024-11-05 spec
+//	         revision) at URL
+//
+// Contexts optionally restricts which agents see the server tools. Valid
+// values: primary_agent, assistant, coder, installer, searcher, pentester.
+// An empty list (the default) exposes the tools to all of them.
+type MCPServerConfig struct {
+	Name      string            `json:"name"`
+	Transport string            `json:"transport"`
+	Command   string            `json:"command,omitempty"`
+	Args      []string          `json:"args,omitempty"`
+	Env       map[string]string `json:"env,omitempty"`
+	URL       string            `json:"url,omitempty"`
+	Contexts  []string          `json:"contexts,omitempty"`
+}
+
+// ValidMCPAgentContexts lists the agent contexts that can be referenced from
+// an MCPServerConfig Contexts field. The names follow the agent role naming
+// used by flow executors (database.MsgchainType values).
+var ValidMCPAgentContexts = map[string]struct{}{
+	"primary_agent": {},
+	"assistant":     {},
+	"coder":         {},
+	"installer":     {},
+	"searcher":      {},
+	"pentester":     {},
+}
+
+// Validate checks one server entry for consistency with its transport.
+func (s MCPServerConfig) Validate() error {
+	if strings.TrimSpace(s.Name) == "" {
+		return fmt.Errorf("mcp server name must not be empty")
+	}
+
+	switch s.Transport {
+	case "stdio":
+		if s.Command == "" {
+			return fmt.Errorf("mcp server %q: stdio transport requires command", s.Name)
+		}
+	case "http", "sse":
+		if s.URL == "" {
+			return fmt.Errorf("mcp server %q: %s transport requires url", s.Name, s.Transport)
+		}
+		if _, err := url.ParseRequestURI(s.URL); err != nil {
+			return fmt.Errorf("mcp server %q: invalid url %q: %w", s.Name, s.URL, err)
+		}
+	default:
+		return fmt.Errorf("mcp server %q: unsupported transport %q (use stdio, http or sse)", s.Name, s.Transport)
+	}
+
+	for _, ctx := range s.Contexts {
+		if _, ok := ValidMCPAgentContexts[ctx]; !ok {
+			return fmt.Errorf("mcp server %q: unknown agent context %q", s.Name, ctx)
+		}
+	}
+
+	return nil
+}
+
 func NewConfig() (*Config, error) {
 	_ = godotenv.Load()
 
@@ -300,6 +386,17 @@ func NewConfig() (*Config, error) {
 				}
 				return url.Parse(s)
 			},
+			reflect.TypeOf([]MCPServerConfig{}): func(s string) (any, error) {
+				s = strings.TrimSpace(s)
+				if s == "" {
+					return []MCPServerConfig{}, nil
+				}
+				var servers []MCPServerConfig
+				if err := json.Unmarshal([]byte(s), &servers); err != nil {
+					return nil, fmt.Errorf("MCP_SERVERS must be a JSON array of server definitions: %w", err)
+				}
+				return servers, nil
+			},
 		},
 	}); err != nil {
 		return nil, err
@@ -309,10 +406,31 @@ func NewConfig() (*Config, error) {
 		return nil, err
 	}
 
+	if err := config.validateMCPServers(); err != nil {
+		return nil, err
+	}
+
 	ensureInstallationID(&config)
 	ensureLicenseKey(&config)
 
 	return &config, nil
+}
+
+// validateMCPServers verifies every configured server entry and rejects
+// duplicate server names up front: tools are namespaced as mcp_<server>_*
+// and a duplicate would silently overwrite another server's tools.
+func (c *Config) validateMCPServers() error {
+	names := make(map[string]struct{}, len(c.MCPServers))
+	for _, server := range c.MCPServers {
+		if err := server.Validate(); err != nil {
+			return err
+		}
+		if _, dup := names[server.Name]; dup {
+			return fmt.Errorf("mcp server name %q is defined more than once", server.Name)
+		}
+		names[server.Name] = struct{}{}
+	}
+	return nil
 }
 
 func ensureInstallationID(config *Config) {

@@ -317,6 +317,7 @@ func clearConfigEnv(t *testing.T) {
 		"EXECUTION_MONITOR_ENABLED", "EXECUTION_MONITOR_SAME_TOOL_LIMIT", "EXECUTION_MONITOR_TOTAL_TOOL_LIMIT",
 		"MAX_GENERAL_AGENT_TOOL_CALLS", "MAX_LIMITED_AGENT_TOOL_CALLS",
 		"AGENT_PLANNING_STEP_ENABLED",
+		"MCP_SERVERS", "MCP_ALLOWED_TOOLS", "MCP_DENIED_TOOLS", "MCP_TOOL_TIMEOUT",
 	}
 	for _, v := range envVars {
 		t.Setenv(v, "")
@@ -765,4 +766,108 @@ func TestWorkerDockerHelpersNilSafe(t *testing.T) {
 	if socket, autodetect := c.WorkerDockerSocket(); socket != "" || !autodetect {
 		t.Errorf("WorkerDockerSocket() = (%q, %v), want (\"\", true)", socket, autodetect)
 	}
+}
+
+func TestNewConfig_MCPServers(t *testing.T) {
+	clearConfigEnv(t)
+	t.Chdir(t.TempDir())
+
+	t.Run("disabled by default", func(t *testing.T) {
+		config, err := NewConfig()
+		require.NoError(t, err)
+		assert.Empty(t, config.MCPServers)
+		assert.Equal(t, 120, config.MCPToolTimeout)
+	})
+
+	t.Run("parses stdio and http servers", func(t *testing.T) {
+		t.Setenv("MCP_SERVERS", `[
+			{"name":"burp","transport":"http","url":"http://burp:9876/mcp","contexts":["pentester"]},
+			{"name":"nmap","transport":"stdio","command":"nmap-mcp","args":["--verbose"],"env":{"NMAP_HOME":"/opt/nmap"}}
+		]`)
+
+		config, err := NewConfig()
+		require.NoError(t, err)
+		require.Len(t, config.MCPServers, 2)
+
+		burp := config.MCPServers[0]
+		assert.Equal(t, "burp", burp.Name)
+		assert.Equal(t, "http", burp.Transport)
+		assert.Equal(t, "http://burp:9876/mcp", burp.URL)
+		assert.Equal(t, []string{"pentester"}, burp.Contexts)
+
+		nmap := config.MCPServers[1]
+		assert.Equal(t, "stdio", nmap.Transport)
+		assert.Equal(t, "nmap-mcp", nmap.Command)
+		assert.Equal(t, []string{"--verbose"}, nmap.Args)
+		assert.Equal(t, map[string]string{"NMAP_HOME": "/opt/nmap"}, nmap.Env)
+	})
+
+	t.Run("rejects malformed JSON", func(t *testing.T) {
+		t.Setenv("MCP_SERVERS", `{"name":"burp"}`)
+
+		_, err := NewConfig()
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "MCP_SERVERS")
+	})
+
+	t.Run("rejects unknown transport", func(t *testing.T) {
+		t.Setenv("MCP_SERVERS", `[{"name":"burp","transport":"grpc","url":"http://burp"}]`)
+
+		_, err := NewConfig()
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "unsupported transport")
+	})
+
+	t.Run("rejects stdio without command", func(t *testing.T) {
+		t.Setenv("MCP_SERVERS", `[{"name":"burp","transport":"stdio"}]`)
+
+		_, err := NewConfig()
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "requires command")
+	})
+
+	t.Run("rejects http without url", func(t *testing.T) {
+		t.Setenv("MCP_SERVERS", `[{"name":"burp","transport":"http"}]`)
+
+		_, err := NewConfig()
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "requires url")
+	})
+
+	t.Run("rejects duplicate server names", func(t *testing.T) {
+		t.Setenv("MCP_SERVERS", `[
+			{"name":"burp","transport":"http","url":"http://a"},
+			{"name":"burp","transport":"http","url":"http://b"}
+		]`)
+
+		_, err := NewConfig()
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "more than once")
+	})
+
+	t.Run("rejects unknown agent context", func(t *testing.T) {
+		t.Setenv("MCP_SERVERS", `[{"name":"burp","transport":"http","url":"http://burp","contexts":["nobody"]}]`)
+
+		_, err := NewConfig()
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "unknown agent context")
+	})
+
+	t.Run("custom tool timeout", func(t *testing.T) {
+		t.Setenv("MCP_TOOL_TIMEOUT", "30")
+
+		config, err := NewConfig()
+		require.NoError(t, err)
+		assert.Equal(t, 30, config.MCPToolTimeout)
+	})
+
+	t.Run("allow and deny lists parse", func(t *testing.T) {
+		t.Setenv("MCP_ALLOWED_TOOLS", "burp,nuclei/scan")
+		t.Setenv("MCP_DENIED_TOOLS", "burp/spider")
+
+		config, err := NewConfig()
+		require.NoError(t, err)
+		assert.Equal(t, []string{"burp", "nuclei/scan"}, config.MCPAllowedTools)
+		assert.Equal(t, []string{"burp/spider"}, config.MCPDeniedTools)
+	})
 }
