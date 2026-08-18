@@ -62,6 +62,8 @@ func TestGetToolType(t *testing.T) {
 		{name: "code_result", toolName: CodeResultToolName, want: StoreAgentResultToolType},
 		{name: "store_guide", toolName: StoreGuideToolName, want: StoreVectorDbToolType},
 		{name: "unknown tool", toolName: "nonexistent_tool", want: NoneToolType},
+		{name: "mcp namespaced tool", toolName: "mcp_burp_scan", want: EnvironmentToolType},
+		{name: "mcp prefix alone", toolName: "mcp_", want: EnvironmentToolType},
 		{name: "empty string", toolName: "", want: NoneToolType},
 	}
 

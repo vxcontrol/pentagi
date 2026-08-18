@@ -22,6 +22,7 @@ import (
 	"pentagi/pkg/observability/profiling"
 	"pentagi/pkg/providers"
 	router "pentagi/pkg/server"
+	"pentagi/pkg/tools"
 	"pentagi/pkg/version"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -218,6 +219,9 @@ func main() {
 			logrus.WithError(err).Warn("Telemetry drain incomplete")
 		}
 		cancelDrain()
+
+		// Stop stdio MCP server subprocesses and close remote connections.
+		tools.CloseSharedMCPClient()
 	case err := <-serverErrChan:
 		logrus.Fatalf("Server terminated unexpectedly: %v", err)
 	}

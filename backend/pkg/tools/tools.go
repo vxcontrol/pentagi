@@ -177,6 +177,7 @@ type flowToolsExecutor struct {
 	embedder       embeddings.Embedder
 	store          *pgvector.Store
 	graphitiClient *graphiti.Client
+	mcpClient      MCPClient
 	image          string
 	docker         docker.DockerClient
 	primaryID      int64
@@ -332,6 +333,7 @@ type FlowToolsExecutor interface {
 	SetToolCallLogProvider(tclp ToolCallLogProvider)
 	SetKnowledgeProvider(knp KnowledgeProvider)
 	SetGraphitiClient(client *graphiti.Client)
+	SetMCPClient(client MCPClient)
 
 	Prepare(ctx context.Context) error
 	Release(ctx context.Context) error
@@ -478,6 +480,10 @@ func (fte *flowToolsExecutor) SetKnowledgeProvider(knp KnowledgeProvider) {
 
 func (fte *flowToolsExecutor) SetGraphitiClient(client *graphiti.Client) {
 	fte.graphitiClient = client
+}
+
+func (fte *flowToolsExecutor) SetMCPClient(client MCPClient) {
+	fte.mcpClient = client
 }
 
 func (fte *flowToolsExecutor) Prepare(ctx context.Context) error {
@@ -994,6 +1000,8 @@ func (fte *flowToolsExecutor) GetAssistantExecutor(cfg AssistantExecutorConfig) 
 		summarizer:  cfg.Summarizer,
 	}
 
+	fte.appendMCPTools(ce, database.MsgchainTypeAssistant)
+
 	return ce, nil
 }
 
@@ -1065,6 +1073,8 @@ func (fte *flowToolsExecutor) GetPrimaryExecutor(cfg PrimaryExecutorConfig) (Con
 		ce.handlers[AskUserToolName] = cfg.Barrier
 		ce.barriers[AskUserToolName] = struct{}{}
 	}
+
+	fte.appendMCPTools(ce, database.MsgchainTypePrimaryAgent)
 
 	return ce, nil
 }
@@ -1168,6 +1178,8 @@ func (fte *flowToolsExecutor) GetInstallerExecutor(cfg InstallerExecutorConfig) 
 		ce.handlers[StoreGuideToolName] = guide.Handle
 		ce.handlers[SearchGuideToolName] = guide.Handle
 	}
+
+	fte.appendMCPTools(ce, database.MsgchainTypeInstaller)
 
 	return ce, nil
 }
@@ -1289,6 +1301,8 @@ func (fte *flowToolsExecutor) GetCoderExecutor(cfg CoderExecutorConfig) (Context
 		ce.definitions = append(ce.definitions, registryDefinitions[GraphitiSearchToolName])
 		ce.handlers[GraphitiSearchToolName] = graphitiSearch.Handle
 	}
+
+	fte.appendMCPTools(ce, database.MsgchainTypeCoder)
 
 	return ce, nil
 }
@@ -1423,6 +1437,8 @@ func (fte *flowToolsExecutor) GetPentesterExecutor(cfg PentesterExecutorConfig) 
 		ce.handlers[WebSearchToolName] = webSearch.Handle
 	}
 
+	fte.appendMCPTools(ce, database.MsgchainTypePentester)
+
 	return ce, nil
 }
 
@@ -1498,6 +1514,8 @@ func (fte *flowToolsExecutor) GetSearcherExecutor(cfg SearcherExecutorConfig) (C
 		ce.handlers[SearchAnswerToolName] = search.Handle
 		ce.handlers[StoreAnswerToolName] = search.Handle
 	}
+
+	fte.appendMCPTools(ce, database.MsgchainTypeSearcher)
 
 	return ce, nil
 }

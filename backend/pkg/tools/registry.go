@@ -2,7 +2,10 @@ package tools
 
 import (
 	"maps"
+	"strings"
+
 	"pentagi/pkg/database"
+	"pentagi/pkg/mcp"
 
 	"github.com/invopop/jsonschema"
 	"github.com/vxcontrol/langchaingo/llms"
@@ -91,6 +94,11 @@ func (t ToolType) String() string {
 func GetToolType(name string) ToolType {
 	if toolType, ok := toolsTypeMapping[name]; ok {
 		return toolType
+	}
+	// Dynamically registered MCP tools are namespaced with the mcp_ prefix
+	// (see pkg/mcp.ToolName) and act as environment interactions.
+	if strings.HasPrefix(name, mcp.ToolNamePrefix) {
+		return EnvironmentToolType
 	}
 	return NoneToolType
 }
