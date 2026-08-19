@@ -339,10 +339,12 @@ func (c *Client) CallTool(ctx context.Context, name string, args json.RawMessage
 	output := renderResult(result)
 	if result.IsError {
 		// A tool-level error means the server rejected the invocation
-		// (usually bad arguments). Surface it as a Go error so the agent's
-		// tool-call fixing flow can react; the payload usually explains
-		// what the server rejected.
-		return "", fmt.Errorf("MCP tool '%s' reported an error: %s", name, truncateForError(output))
+		// (bad arguments, out-of-scope guard, upstream refused). That is
+		// data for the model, not an infrastructure failure: return the
+		// payload as the tool observation so the agent reads it and
+		// corrects course. Surfacing it as a Go error makes the executor
+		// retry the identical call and then abort the whole chain.
+		return fmt.Sprintf("TOOL ERROR: %s", truncateForError(output)), nil
 	}
 	return output, nil
 }
