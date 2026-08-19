@@ -333,7 +333,19 @@ func (c *Client) CallTool(ctx context.Context, name string, args json.RawMessage
 		Arguments: arguments,
 	})
 	if err != nil {
-		return "", fmt.Errorf("MCP tool '%s' call failed: %w", name, err)
+		// A connection-level failure (server restart, dropped stream) is
+		// recoverable: re-establish the session once and retry. Without
+		// this a single MCP server restart poisons every later call for
+		// the lifetime of the engine.
+		if reconnected, rerr := c.reconnectServer(ctx, serverName, conn.session); rerr == nil {
+			result, err = reconnected.session.CallTool(ctx, &gomcp.CallToolParams{
+				Name:      descriptor.localName,
+				Arguments: arguments,
+			})
+		}
+		if err != nil {
+			return "", fmt.Errorf("MCP tool '%s' call failed: %w", name, err)
+		}
 	}
 
 	output := renderResult(result)
@@ -347,6 +359,39 @@ func (c *Client) CallTool(ctx context.Context, name string, args json.RawMessage
 		return fmt.Sprintf("TOOL ERROR: %s", truncateForError(output)), nil
 	}
 	return output, nil
+}
+
+// reconnectServer replaces the session of the named server after a
+// connection-level failure. It is safe under concurrency: when another caller
+// has already reconnected (the cached session no longer matches the failed
+// one), the current connection is returned unchanged.
+func (c *Client) reconnectServer(ctx context.Context, serverName string, failed *gomcp.ClientSession) (*serverConn, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	conn, ok := c.servers[serverName]
+	if !ok {
+		return nil, fmt.Errorf("MCP server '%s' is not connected", serverName)
+	}
+	if conn.session != failed {
+		return conn, nil
+	}
+
+	_ = failed.Close()
+
+	transport, err := transportFactory(conn.config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to rebuild transport for MCP server '%s': %w", serverName, err)
+	}
+	client := gomcp.NewClient(clientImplementation, nil)
+	session, err := client.Connect(ctx, transport, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to reconnect to MCP server '%s': %w", serverName, err)
+	}
+	conn.session = session
+
+	logrus.WithField("mcp_server", serverName).Info("reconnected to MCP server after connection failure")
+	return conn, nil
 }
 
 // renderResult converts a CallToolResult into the string returned to the

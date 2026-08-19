@@ -269,7 +269,42 @@ func TestClientToolErrorSurfaced(t *testing.T) {
 	))
 	t.Cleanup(client.Close)
 
-	_, err := client.CallTool(context.Background(), "mcp_failing_fail", json.RawMessage(`{}`))
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "target unreachable")
+	output, err := client.CallTool(context.Background(), "mcp_failing_fail", json.RawMessage(`{}`))
+	require.NoError(t, err)
+	assert.Contains(t, output, "TOOL ERROR")
+	assert.Contains(t, output, "target unreachable")
+}
+
+func TestClientReconnectsAfterSessionDrop(t *testing.T) {
+	// Two independent server instances: the first serves discovery, the
+	// second answers after the reconnect, proving the call was retried
+	// against a freshly dialed session.
+	first := fakeServer(t, "flaky")
+	second := fakeServer(t, "flaky")
+
+	calls := 0
+	withTransportFactory(t, func(cfg config.MCPServerConfig) (gomcp.Transport, error) {
+		calls++
+		if calls == 1 {
+			return first, nil
+		}
+		return second, nil
+	})
+
+	client := NewClient(context.Background(), mcpConfig(
+		config.MCPServerConfig{Name: "flaky", Transport: "http", URL: "http://unused"},
+	))
+	t.Cleanup(client.Close)
+	require.True(t, client.IsEnabled())
+
+	// Simulate a server restart: the live session dies underneath the client.
+	client.mu.RLock()
+	session := client.servers["flaky"].session
+	client.mu.RUnlock()
+	require.NoError(t, session.Close())
+
+	output, err := client.CallTool(context.Background(), "mcp_flaky_echo", json.RawMessage(`{"message":"ping"}`))
+	require.NoError(t, err)
+	assert.Contains(t, output, "echo: ping")
+	assert.Equal(t, 2, calls, "client must dial a new session instead of failing the call")
 }
