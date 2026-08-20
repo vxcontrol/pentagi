@@ -177,6 +177,20 @@ type DailyUsageStats struct {
 	Stats *UsageStats `json:"stats"`
 }
 
+type DeafGuardEvent struct {
+	ID        int64  `json:"id"`
+	FlowID    int64  `json:"flowId"`
+	Timestamp int    `json:"timestamp"`
+	Command   string `json:"command"`
+	Category  string `json:"category"`
+	Tier      int    `json:"tier"`
+	Risk      string `json:"risk"`
+	Action    string `json:"action"`
+	Allowed   bool   `json:"allowed"`
+	Mode      string `json:"mode"`
+	Reason    string `json:"reason"`
+}
+
 type DefaultPrompt struct {
 	Type      PromptType `json:"type"`
 	Template  string     `json:"template"`

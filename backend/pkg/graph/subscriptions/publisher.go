@@ -125,6 +125,16 @@ func (p *flowPublisher) AssistantLogUpdated(ctx context.Context, assistantLog da
 	p.ctrl.assistantLogUpdated.Publish(ctx, p.flowID, converter.ConvertAssistantLog(assistantLog, appendPart))
 }
 
+// DeafGuardEventAdded publishes a Deaf Guard classification event to the
+// channel keyed by flowID. Event construction is caller-owned; this method
+// only fans the already-built model out to active subscribers.
+func (p *flowPublisher) DeafGuardEventAdded(ctx context.Context, event *model.DeafGuardEvent) {
+	if event == nil {
+		return
+	}
+	p.ctrl.deafGuardEventAdded.Publish(ctx, p.flowID, event)
+}
+
 func (p *flowPublisher) KnowledgeDocumentCreated(ctx context.Context, doc *model.KnowledgeDocument) {
 	p.ctrl.knowledgeDocumentCreated.Publish(ctx, p.userID, doc)
 	p.ctrl.knowledgeDocumentCreatedAdmin.Broadcast(ctx, doc)

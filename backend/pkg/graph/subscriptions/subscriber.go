@@ -128,6 +128,10 @@ func (s *flowSubscriber) AssistantLogUpdated(ctx context.Context) (<-chan *model
 	return s.ctrl.assistantLogUpdated.Subscribe(ctx, s.flowID), nil
 }
 
+func (s *flowSubscriber) DeafGuardEventAdded(ctx context.Context) (<-chan *model.DeafGuardEvent, error) {
+	return s.ctrl.deafGuardEventAdded.Subscribe(ctx, s.flowID), nil
+}
+
 // providerSubscriber subscribes to user-scoped provider events.
 type providerSubscriber struct {
 	userID int64

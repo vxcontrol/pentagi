@@ -1478,6 +1478,10 @@ Tool Call Limits:
 Task Planning (⚠️  BETA):
 • Enable Task Planning: generate structured execution plans for specialist agents
 
+Deaf Guard:
+• Enable Deaf Guard: classify terminal commands before execution
+• Deaf Guard Mode: log (record only), warn (block BLOCK-tier), enforce (block BLOCK and WARN)
+
 ⚠️  BETA features are under active development. Enable for testing only.`
 
 	// field labels and descriptions
@@ -1497,6 +1501,10 @@ Task Planning (⚠️  BETA):
 	ToolsAIAgentsSettingMaxLimitedToolCallsDesc = "Maximum tool calls for Searcher, Enricher, Memorist, etc."
 	ToolsAIAgentsSettingTaskPlanning            = "Enable Task Planning (beta)"
 	ToolsAIAgentsSettingTaskPlanningDesc        = "Generate structured execution plans for specialist agents"
+	ToolsAIAgentsSettingDeafGuardEnabled        = "Enable Deaf Guard"
+	ToolsAIAgentsSettingDeafGuardEnabledDesc    = "Classify terminal commands before execution (Settings → Security)"
+	ToolsAIAgentsSettingDeafGuardMode           = "Deaf Guard Mode"
+	ToolsAIAgentsSettingDeafGuardModeDesc       = "log (record only), warn (block BLOCK-tier), enforce (block BLOCK and WARN)"
 
 	// help content
 	ToolsAIAgentsSettingsHelp = `AI Agents Settings define how agents collaborate, interact with users, and handle execution control.
@@ -1513,6 +1521,9 @@ Generates 3-7 step execution plans before specialist agents begin work. Prevents
 
 Tool Call Limits (always active):
 Hard limits prevent infinite loops: General agents default 100, Limited agents default 20. Works independently from beta features.
+
+Deaf Guard:
+Classifies every terminal command against a 9-tier rule table before execution. Modes: log (record only), warn (block BLOCK-tier), enforce (block BLOCK and WARN). Runtime toggles also live in Settings → Security.
 
 OPEN SOURCE MODELS < 32B (Qwen3.5-27B, DeepSeek-V3, Llama-3.1-70B):
 ✓ ENABLE both beta features - ESSENTIAL for quality results
@@ -2419,6 +2430,8 @@ const (
 	EnvDesc_MAX_GENERAL_AGENT_TOOL_CALLS       = "Max Tool Calls for General Agents"
 	EnvDesc_MAX_LIMITED_AGENT_TOOL_CALLS       = "Max Tool Calls for Limited Agents"
 	EnvDesc_AGENT_PLANNING_STEP_ENABLED        = "Enable Task Planning (beta)"
+	EnvDesc_DEAF_GUARD_ENABLED                 = "Enable Deaf Guard command classification"
+	EnvDesc_DEAF_GUARD_MODE                    = "Deaf Guard mode (log, warn, enforce)"
 
 	EnvDesc_SCRAPER_PUBLIC_URL                    = "Scraper Public URL"
 	EnvDesc_SCRAPER_PRIVATE_URL                   = "Scraper Private URL"

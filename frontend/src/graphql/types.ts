@@ -448,6 +448,20 @@ export type VectorStoreLogFragmentFragment = {
     createdAt: string;
 };
 
+export type DeafGuardEventFragmentFragment = {
+    id: string;
+    flowId: string;
+    timestamp: number;
+    command: string;
+    category: string;
+    tier: number;
+    risk: string;
+    action: string;
+    allowed: boolean;
+    mode: string;
+    reason: string;
+};
+
 export type AssistantFragmentFragment = {
     id: string;
     title: string;
@@ -820,6 +834,7 @@ export type FlowQuery = {
     agentLogs: Array<AgentLogFragmentFragment> | null;
     searchLogs: Array<SearchLogFragmentFragment> | null;
     vectorStoreLogs: Array<VectorStoreLogFragmentFragment> | null;
+    deafGuardEvents: Array<DeafGuardEventFragmentFragment> | null;
 };
 
 export type TasksQueryVariables = Exact<{
@@ -1268,6 +1283,12 @@ export type VectorStoreLogAddedSubscriptionVariables = Exact<{
 }>;
 
 export type VectorStoreLogAddedSubscription = { vectorStoreLogAdded: VectorStoreLogFragmentFragment };
+
+export type DeafGuardEventAddedSubscriptionVariables = Exact<{
+    flowId: string | number;
+}>;
+
+export type DeafGuardEventAddedSubscription = { deafGuardEventAdded: DeafGuardEventFragmentFragment };
 
 export type AssistantCreatedSubscriptionVariables = Exact<{
     flowId: string | number;
@@ -1797,6 +1818,32 @@ export const VectorStoreLogFragmentFragmentDoc = {
         },
     ],
 } as unknown as DocumentNode<VectorStoreLogFragmentFragment, unknown>;
+export const DeafGuardEventFragmentFragmentDoc = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'deafGuardEventFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'DeafGuardEvent' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'flowId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'timestamp' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'command' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'category' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'tier' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'risk' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'action' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'allowed' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'mode' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'reason' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<DeafGuardEventFragmentFragment, unknown>;
 export const AssistantFragmentFragmentDoc = {
     kind: 'Document',
     definitions: [
@@ -5141,6 +5188,23 @@ export const FlowDocument = {
                             ],
                         },
                     },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'deafGuardEvents' },
+                        arguments: [
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'flowId' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'id' } },
+                            },
+                        ],
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'deafGuardEventFragment' } },
+                            ],
+                        },
+                    },
                 ],
             },
         },
@@ -5359,6 +5423,27 @@ export const FlowDocument = {
                     { kind: 'Field', name: { kind: 'Name', value: 'taskId' } },
                     { kind: 'Field', name: { kind: 'Name', value: 'subtaskId' } },
                     { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'deafGuardEventFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'DeafGuardEvent' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'flowId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'timestamp' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'command' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'category' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'tier' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'risk' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'action' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'allowed' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'mode' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'reason' } },
                 ],
             },
         },
@@ -10378,6 +10463,66 @@ export const VectorStoreLogAddedDocument = {
         },
     ],
 } as unknown as DocumentNode<VectorStoreLogAddedSubscription, VectorStoreLogAddedSubscriptionVariables>;
+export const DeafGuardEventAddedDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'subscription',
+            name: { kind: 'Name', value: 'deafGuardEventAdded' },
+            variableDefinitions: [
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'flowId' } },
+                    type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'ID' } } },
+                },
+            ],
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'deafGuardEventAdded' },
+                        arguments: [
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'flowId' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'flowId' } },
+                            },
+                        ],
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'deafGuardEventFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'deafGuardEventFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'DeafGuardEvent' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'flowId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'timestamp' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'command' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'category' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'tier' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'risk' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'action' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'allowed' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'mode' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'reason' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<DeafGuardEventAddedSubscription, DeafGuardEventAddedSubscriptionVariables>;
 export const AssistantCreatedDocument = {
     kind: 'Document',
     definitions: [

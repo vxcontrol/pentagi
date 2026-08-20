@@ -136,6 +136,7 @@ export const flowQueryData = (
     terminalLogs: TerminalLogFragmentFragment[] = [],
 ): ResultOf<typeof FlowDocument> => ({
     agentLogs: [],
+    deafGuardEvents: [],
     flow,
     messageLogs,
     screenshots: [],
@@ -345,6 +346,7 @@ const PNG_1X1 = Buffer.from(
 
 const flowTabsData: ResultOf<typeof FlowDocument> = {
     agentLogs: [TABS_AGENT_LOG],
+    deafGuardEvents: [],
     flow: FLOW_A,
     messageLogs: [],
     screenshots: [TABS_SCREENSHOT],

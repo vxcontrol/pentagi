@@ -424,6 +424,12 @@ func setSettingsGroup(parent *gin.RouterGroup, svc *services.SettingsService) {
 	{
 		settingsGroup.GET("/", svc.GetSettings)
 	}
+
+	deafGuardGroup := parent.Group("/deafguard")
+	{
+		deafGuardGroup.GET("/config", svc.GetDeafGuardConfig)
+		deafGuardGroup.PUT("/config", svc.PutDeafGuardConfig)
+	}
 }
 
 func setGraphqlGroup(parent *gin.RouterGroup, svc *services.GraphqlService) {

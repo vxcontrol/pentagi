@@ -225,6 +225,7 @@ func NewAssistantWorker(ctx context.Context, awc newAssistantWorkerCtx) (Assista
 	executor.SetVectorStoreLogProvider(workers.vslw)
 	executor.SetToolCallLogProvider(workers.tclw)
 	executor.SetKnowledgeProvider(pub)
+	executor.SetDeafGuardEventProvider(NewFlowDeafGuardEventWorker(awc.flowID, pub))
 	executor.SetGraphitiClient(awc.provs.GraphitiClient())
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -373,6 +374,7 @@ func LoadAssistantWorker(
 	executor.SetVectorStoreLogProvider(workers.vslw)
 	executor.SetToolCallLogProvider(workers.tclw)
 	executor.SetKnowledgeProvider(pub)
+	executor.SetDeafGuardEventProvider(NewFlowDeafGuardEventWorker(awc.flowID, pub))
 
 	var msgChainID int64
 	pmsgChainID := database.NullInt64ToInt64(assistant.MsgchainID)

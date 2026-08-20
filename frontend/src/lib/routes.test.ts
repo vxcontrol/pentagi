@@ -25,6 +25,7 @@ const builtUrlToPattern: [string, string][] = [
     [routes.settings.prompts, '/settings/prompts'],
     [routes.settings.prompt('p1'), '/settings/prompts/:promptId'],
     [routes.settings.apiTokens, '/settings/api-tokens'],
+    [routes.settings.security, '/settings/security'],
     [routes.login(), '/login'],
     [routes.oauthResult, '/oauth/result'],
     [routes.root, '/'],

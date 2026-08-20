@@ -317,6 +317,7 @@ func clearConfigEnv(t *testing.T) {
 		"EXECUTION_MONITOR_ENABLED", "EXECUTION_MONITOR_SAME_TOOL_LIMIT", "EXECUTION_MONITOR_TOTAL_TOOL_LIMIT",
 		"MAX_GENERAL_AGENT_TOOL_CALLS", "MAX_LIMITED_AGENT_TOOL_CALLS",
 		"AGENT_PLANNING_STEP_ENABLED",
+		"DEAF_GUARD_ENABLED", "DEAF_GUARD_MODE",
 	}
 	for _, v := range envVars {
 		t.Setenv(v, "")
@@ -595,6 +596,8 @@ func TestNewConfig_AgentSupervisionDefaults(t *testing.T) {
 	assert.Equal(t, 100, config.MaxGeneralAgentToolCalls)
 	assert.Equal(t, 20, config.MaxLimitedAgentToolCalls)
 	assert.Equal(t, false, config.AgentPlanningStepEnabled)
+	assert.Equal(t, true, config.DeafGuardEnabled)
+	assert.Equal(t, "log", config.DeafGuardMode)
 }
 
 func TestNewConfig_AgentSupervisionOverride(t *testing.T) {
@@ -607,6 +610,8 @@ func TestNewConfig_AgentSupervisionOverride(t *testing.T) {
 	t.Setenv("MAX_GENERAL_AGENT_TOOL_CALLS", "150")
 	t.Setenv("MAX_LIMITED_AGENT_TOOL_CALLS", "30")
 	t.Setenv("AGENT_PLANNING_STEP_ENABLED", "true")
+	t.Setenv("DEAF_GUARD_ENABLED", "false")
+	t.Setenv("DEAF_GUARD_MODE", "enforce")
 
 	config, err := NewConfig()
 	require.NoError(t, err)
@@ -617,6 +622,8 @@ func TestNewConfig_AgentSupervisionOverride(t *testing.T) {
 	assert.Equal(t, 150, config.MaxGeneralAgentToolCalls)
 	assert.Equal(t, 30, config.MaxLimitedAgentToolCalls)
 	assert.Equal(t, true, config.AgentPlanningStepEnabled)
+	assert.Equal(t, false, config.DeafGuardEnabled)
+	assert.Equal(t, "enforce", config.DeafGuardMode)
 }
 
 // TestWorkerDockerEnvDisabled pins the first rule: with DOCKER_INSIDE off, a

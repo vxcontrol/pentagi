@@ -268,6 +268,10 @@ type Config struct {
 	// === Agent Planning Phase Configuration ===
 	AgentPlanningStepEnabled bool `env:"AGENT_PLANNING_STEP_ENABLED" envDefault:"false"`
 
+	// === Deaf Guard: Command Interception ===
+	DeafGuardEnabled bool   `env:"DEAF_GUARD_ENABLED" envDefault:"true"`
+	DeafGuardMode    string `env:"DEAF_GUARD_MODE" envDefault:"log"` // log | warn | enforce
+
 	// === Database Configuration ===
 	DatabaseURL string `env:"DATABASE_URL" envDefault:"postgres://pentagiuser:pentagipass@pgvector:5432/pentagidb?sslmode=disable"`
 

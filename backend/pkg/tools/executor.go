@@ -14,6 +14,7 @@ import (
 	obs "pentagi/pkg/observability"
 	"pentagi/pkg/observability/langfuse"
 	"pentagi/pkg/schema"
+	"pentagi/pkg/tools/deafguard"
 
 	"github.com/vxcontrol/langchaingo/documentloaders"
 	"github.com/vxcontrol/langchaingo/llms"
@@ -134,11 +135,13 @@ type customExecutor struct {
 	taskID    *int64
 	subtaskID *int64
 
-	db    database.Querier
-	mlp   MsgLogProvider
-	tclp  ToolCallLogProvider
-	store *pgvector.Store
-	vslp  VectorStoreLogProvider
+	db        database.Querier
+	mlp       MsgLogProvider
+	tclp      ToolCallLogProvider
+	dgep      DeafGuardEventProvider
+	deafGuard *deafguard.DeafGuard
+	store     *pgvector.Store
+	vslp      VectorStoreLogProvider
 
 	definitions []llms.FunctionDefinition
 	handlers    map[string]ExecutorHandler
@@ -294,6 +297,27 @@ func (ce *customExecutor) Execute(
 
 	wrapHandler := func(ctx context.Context, name string, args json.RawMessage) (string, database.MsglogResultFormat, error) {
 		resultFormat := getMessageResultFormat(name)
+
+		// Deaf Guard: classify the command before execution
+		if ce.deafGuard != nil {
+			dgResult := ce.deafGuard.Classify(name, args)
+			// Surface the classification to any live GraphQL subscribers
+			// regardless of whether the command was allowed — the UI needs
+			// the full stream (log / warn / block) to render action counts.
+			if ce.dgep != nil {
+				ce.dgep.Publish(ctx, dgResult)
+			}
+			if !dgResult.Allowed {
+				blockedMsg := fmt.Sprintf(
+					"BLOCKED by Deaf Guard [%s / tier %d]: %s\nMode: %s | Risk: %s\nAdjust your approach or request operator approval.",
+					dgResult.Category, dgResult.Tier, dgResult.Reason, dgResult.Mode, dgResult.Risk,
+				)
+				durationDelta := time.Since(startTime).Seconds()
+				_ = ce.tclp.UpdateLogFailed(context.WithoutCancel(ctx), tcID, blockedMsg, durationDelta)
+				return blockedMsg, resultFormat, nil
+			}
+		}
+
 		result, err := handler(ctx, name, args)
 		persistCtx := context.WithoutCancel(ctx)
 

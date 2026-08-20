@@ -387,6 +387,24 @@ type ToolCallLog {
   updatedAt: Time!
 }
 
+# DeafGuardEvent is emitted for every terminal command classification made
+# by the Deaf Guard. It is NOT persisted to the database — this is a pure
+# pub/sub event surfaced for operator visibility. Events observed before a
+# client subscribes are not replayed.
+type DeafGuardEvent {
+  id: ID!
+  flowId: ID!
+  timestamp: Int!
+  command: String!
+  category: String!
+  tier: Int!
+  risk: String!
+  action: String!
+  allowed: Boolean!
+  mode: String!
+  reason: String!
+}
+
 type Screenshot {
   id: ID!
   flowId: ID!
@@ -1006,6 +1024,11 @@ type Query {
   vectorStoreLogs(flowId: ID!): [VectorStoreLog!]
   toolCallLogs(flowId: ID!): [ToolCallLog!]
   assistantLogs(flowId: ID!, assistantId: ID!): [AssistantLog!]
+  # Deaf Guard classification events are not persisted; this query always
+  # returns an empty list. It exists so the Apollo cache on the frontend
+  # has a field to append live subscription events to, mirroring the
+  # pattern used by terminalLogs/agentLogs/etc.
+  deafGuardEvents(flowId: ID!): [DeafGuardEvent!]
 
   # Usage statistics and analytics
   usageStatsTotal: UsageStats!
@@ -1135,6 +1158,7 @@ type Subscription {
   toolCallLogUpdated(flowId: ID!): ToolCallLog!
   assistantLogAdded(flowId: ID!): AssistantLog!
   assistantLogUpdated(flowId: ID!): AssistantLog!
+  deafGuardEventAdded(flowId: ID!): DeafGuardEvent!
 
   # Provider events
   providerCreated: ProviderConfig!

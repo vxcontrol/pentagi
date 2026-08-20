@@ -3,6 +3,7 @@ import { useEffect, useRef } from 'react';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import FlowAgents from '@/features/flows/agents/flow-agents';
+import FlowDeafGuard from '@/features/flows/deaf-guard/flow-deaf-guard';
 import FlowDashboard from '@/features/flows/dashboard/flow-dashboard';
 import FlowFiles from '@/features/flows/files/flow-files';
 import FlowAssistantMessages from '@/features/flows/messages/flow-assistant-messages';
@@ -47,6 +48,7 @@ function FlowTabs({ activeTab, onTabChange }: FlowTabsProps) {
                         <TabsTrigger value="terminal">Terminal</TabsTrigger>
                         <TabsTrigger value="tasks">Tasks</TabsTrigger>
                         <TabsTrigger value="agents">Agents</TabsTrigger>
+                        <TabsTrigger value="deafGuard">Deaf Guard</TabsTrigger>
                         <TabsTrigger value="tools">Searches</TabsTrigger>
                         <TabsTrigger value="vectorStores">Vector Store</TabsTrigger>
                         <TabsTrigger value="files">Files</TabsTrigger>
@@ -100,6 +102,13 @@ function FlowTabs({ activeTab, onTabChange }: FlowTabsProps) {
                 value="agents"
             >
                 <FlowAgents />
+            </TabsContent>
+
+            <TabsContent
+                className="mt-1 flex-1 overflow-auto pr-4"
+                value="deafGuard"
+            >
+                <FlowDeafGuard />
             </TabsContent>
 
             <TabsContent

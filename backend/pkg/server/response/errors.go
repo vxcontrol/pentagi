@@ -163,6 +163,8 @@ var ErrToolcallsInvalidData = NewHttpError(500, "Toolcalls.InvalidData", "invali
 
 // anonymize
 
+var ErrDeafGuardInvalidRequest = NewHttpError(400, "DeafGuard.InvalidRequest", "invalid deaf guard request data")
+
 var ErrAnonymizeInvalidRequest = NewHttpError(400, "Anonymize.InvalidRequest", "invalid anonymize request data")
 var ErrAnonymizeUnavailable = NewHttpError(503, "Anonymize.Unavailable", "anonymizer is not configured")
 

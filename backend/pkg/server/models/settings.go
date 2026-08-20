@@ -15,3 +15,15 @@ type Settings struct {
 func (s Settings) Valid() error {
 	return validate.Struct(s)
 }
+
+// DeafGuardConfig is the runtime command-classifier configuration.
+type DeafGuardConfig struct {
+	Enabled bool   `json:"enabled" example:"true"`
+	Mode    string `json:"mode" example:"log"`
+}
+
+// DeafGuardConfigUpdate is a partial update for Deaf Guard configuration.
+type DeafGuardConfigUpdate struct {
+	Enabled *bool   `json:"enabled"`
+	Mode    *string `json:"mode"`
+}

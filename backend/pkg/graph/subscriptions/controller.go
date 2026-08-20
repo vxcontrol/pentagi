@@ -68,6 +68,7 @@ type FlowSubscriber interface {
 	ToolCallLogUpdated(ctx context.Context) (<-chan *model.ToolCallLog, error)
 	AssistantLogAdded(ctx context.Context) (<-chan *model.AssistantLog, error)
 	AssistantLogUpdated(ctx context.Context) (<-chan *model.AssistantLog, error)
+	DeafGuardEventAdded(ctx context.Context) (<-chan *model.DeafGuardEvent, error)
 	FlowContext
 	UserContext
 }
@@ -131,6 +132,7 @@ type FlowPublisher interface {
 	ToolCallLogUpdated(ctx context.Context, toolCallLog database.Toolcall)
 	AssistantLogAdded(ctx context.Context, assistantLog database.Assistantlog)
 	AssistantLogUpdated(ctx context.Context, assistantLog database.Assistantlog, appendPart bool)
+	DeafGuardEventAdded(ctx context.Context, event *model.DeafGuardEvent)
 	KnowledgeDocumentCreated(ctx context.Context, doc *model.KnowledgeDocument)
 	FlowContext
 	UserContext
@@ -217,6 +219,7 @@ type controller struct {
 	toolCallLogUpdated  Channel[*model.ToolCallLog]
 	assistantLogAdded   Channel[*model.AssistantLog]
 	assistantLogUpdated Channel[*model.AssistantLog]
+	deafGuardEventAdded Channel[*model.DeafGuardEvent]
 
 	providerCreated Channel[*model.ProviderConfig]
 	providerUpdated Channel[*model.ProviderConfig]
@@ -274,6 +277,7 @@ func NewSubscriptionsController() SubscriptionsController {
 		toolCallLogUpdated:  NewChannel[*model.ToolCallLog](),
 		assistantLogAdded:   NewChannel[*model.AssistantLog](),
 		assistantLogUpdated: NewChannel[*model.AssistantLog](),
+		deafGuardEventAdded: NewChannel[*model.DeafGuardEvent](),
 
 		providerCreated: NewChannel[*model.ProviderConfig](),
 		providerUpdated: NewChannel[*model.ProviderConfig](),

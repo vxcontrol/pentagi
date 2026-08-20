@@ -30,6 +30,12 @@ function renderSidebar(entry: { pathname: string; state?: unknown }) {
 const backToApp = () => screen.getByRole('link', { name: /Back to App/ });
 
 describe('SettingsSidebar "Back to App"', () => {
+    it('lists the Security tab', () => {
+        renderSidebar({ pathname: '/settings/account' });
+
+        expect(screen.getByRole('link', { name: 'Security' })).toHaveAttribute('href', '/settings/security');
+    });
+
     it('returns to the page the user came from', () => {
         renderSidebar({ pathname: '/settings/account', state: { from: '/dashboard' } });
 

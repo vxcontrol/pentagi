@@ -112,6 +112,7 @@ type flowProviderWorkers struct {
 	tlw  FlowTermLogWorker
 	vslw FlowVectorStoreLogWorker
 	tclw FlowToolCallLogWorker
+	dgew FlowDeafGuardEventWorker
 	sw   FlowScreenshotWorker
 }
 
@@ -252,6 +253,7 @@ func NewFlowWorker(
 	executor.SetVectorStoreLogProvider(workers.vslw)
 	executor.SetToolCallLogProvider(workers.tclw)
 	executor.SetKnowledgeProvider(pub)
+	executor.SetDeafGuardEventProvider(workers.dgew)
 	executor.SetGraphitiClient(fwc.provs.GraphitiClient())
 
 	flowCtx := &FlowContext{
@@ -412,6 +414,7 @@ func LoadFlowWorker(ctx context.Context, flow database.Flow, fwc flowWorkerCtx) 
 	executor.SetVectorStoreLogProvider(workers.vslw)
 	executor.SetToolCallLogProvider(workers.tclw)
 	executor.SetKnowledgeProvider(pub)
+	executor.SetDeafGuardEventProvider(workers.dgew)
 	executor.SetGraphitiClient(fwc.provs.GraphitiClient())
 
 	flowCtx := &FlowContext{
@@ -1199,6 +1202,8 @@ func newFlowProviderWorkers(
 		return nil, fmt.Errorf("failed to create flow screenshot: %w", err)
 	}
 
+	dgew := NewFlowDeafGuardEventWorker(flowID, pub)
+
 	return &flowProviderWorkers{
 		mlw:  mlw,
 		alw:  alw,
@@ -1206,6 +1211,7 @@ func newFlowProviderWorkers(
 		tlw:  tlw,
 		vslw: vslw,
 		tclw: tclw,
+		dgew: dgew,
 		sw:   sw,
 	}, nil
 }

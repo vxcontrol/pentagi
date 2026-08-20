@@ -84,6 +84,8 @@ export const routeTitles = {
 
     providers: { title: 'Providers' },
 
+    security: { title: 'Security' },
+
     resources: { title: 'Resources' },
 
     template: {

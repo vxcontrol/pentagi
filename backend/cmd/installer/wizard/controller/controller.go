@@ -1389,6 +1389,8 @@ type AIAgentsConfig struct {
 	MaxGeneralAgentToolCalls       loader.EnvVar // MAX_GENERAL_AGENT_TOOL_CALLS
 	MaxLimitedAgentToolCalls       loader.EnvVar // MAX_LIMITED_AGENT_TOOL_CALLS
 	AgentPlanningStepEnabled       loader.EnvVar // AGENT_PLANNING_STEP_ENABLED
+	DeafGuardEnabled               loader.EnvVar // DEAF_GUARD_ENABLED
+	DeafGuardMode                  loader.EnvVar // DEAF_GUARD_MODE
 }
 
 func (c *controller) GetAIAgentsConfig() *AIAgentsConfig {
@@ -1402,6 +1404,8 @@ func (c *controller) GetAIAgentsConfig() *AIAgentsConfig {
 	config.MaxGeneralAgentToolCalls, _ = c.GetVar("MAX_GENERAL_AGENT_TOOL_CALLS")
 	config.MaxLimitedAgentToolCalls, _ = c.GetVar("MAX_LIMITED_AGENT_TOOL_CALLS")
 	config.AgentPlanningStepEnabled, _ = c.GetVar("AGENT_PLANNING_STEP_ENABLED")
+	config.DeafGuardEnabled, _ = c.GetVar("DEAF_GUARD_ENABLED")
+	config.DeafGuardMode, _ = c.GetVar("DEAF_GUARD_MODE")
 
 	return config
 }
@@ -1434,6 +1438,12 @@ func (c *controller) UpdateAIAgentsConfig(config *AIAgentsConfig) error {
 	}
 	if err := c.SetVar("AGENT_PLANNING_STEP_ENABLED", config.AgentPlanningStepEnabled.Value); err != nil {
 		return fmt.Errorf("failed to set AGENT_PLANNING_STEP_ENABLED: %w", err)
+	}
+	if err := c.SetVar("DEAF_GUARD_ENABLED", config.DeafGuardEnabled.Value); err != nil {
+		return fmt.Errorf("failed to set DEAF_GUARD_ENABLED: %w", err)
+	}
+	if err := c.SetVar("DEAF_GUARD_MODE", config.DeafGuardMode.Value); err != nil {
+		return fmt.Errorf("failed to set DEAF_GUARD_MODE: %w", err)
 	}
 
 	return nil
@@ -2414,6 +2424,8 @@ func (c *controller) getVariableDescription(varName string) string {
 		"MAX_GENERAL_AGENT_TOOL_CALLS":       locale.EnvDesc_MAX_GENERAL_AGENT_TOOL_CALLS,
 		"MAX_LIMITED_AGENT_TOOL_CALLS":       locale.EnvDesc_MAX_LIMITED_AGENT_TOOL_CALLS,
 		"AGENT_PLANNING_STEP_ENABLED":        locale.EnvDesc_AGENT_PLANNING_STEP_ENABLED,
+		"DEAF_GUARD_ENABLED":                 locale.EnvDesc_DEAF_GUARD_ENABLED,
+		"DEAF_GUARD_MODE":                    locale.EnvDesc_DEAF_GUARD_MODE,
 
 		"SCRAPER_PUBLIC_URL":                    locale.EnvDesc_SCRAPER_PUBLIC_URL,
 		"SCRAPER_PRIVATE_URL":                   locale.EnvDesc_SCRAPER_PRIVATE_URL,
@@ -2728,6 +2740,8 @@ var criticalVariables = map[string]bool{
 	"MAX_GENERAL_AGENT_TOOL_CALLS":       true,
 	"MAX_LIMITED_AGENT_TOOL_CALLS":       true,
 	"AGENT_PLANNING_STEP_ENABLED":        true,
+	"DEAF_GUARD_ENABLED":                 true,
+	"DEAF_GUARD_MODE":                    true,
 
 	"TENANT_ID":                        true,
 	"LICENSE_KEY":                      true,

@@ -92,6 +92,18 @@ func (m *AIAgentsSettingsFormModel) BuildForm() tea.Cmd {
 			locale.ToolsAIAgentsSettingTaskPlanningDesc,
 			cfg.AgentPlanningStepEnabled,
 		),
+		m.createBooleanField(
+			"deaf_guard_enabled",
+			locale.ToolsAIAgentsSettingDeafGuardEnabled,
+			locale.ToolsAIAgentsSettingDeafGuardEnabledDesc,
+			cfg.DeafGuardEnabled,
+		),
+		m.createTextField(
+			"deaf_guard_mode",
+			locale.ToolsAIAgentsSettingDeafGuardMode,
+			locale.ToolsAIAgentsSettingDeafGuardModeDesc,
+			cfg.DeafGuardMode,
+		),
 	}
 
 	m.SetFormFields(fields)
@@ -134,6 +146,23 @@ func (m *AIAgentsSettingsFormModel) createIntegerField(key, title, description s
 	}
 }
 
+func (m *AIAgentsSettingsFormModel) createTextField(key, title, description string, envVar loader.EnvVar) FormField {
+	input := NewTextInput(m.GetStyles(), m.GetWindow(), envVar)
+	if envVar.Default != "" {
+		input.Placeholder = envVar.Default
+	}
+
+	return FormField{
+		Key:         key,
+		Title:       title,
+		Description: description,
+		Required:    false,
+		Masked:      false,
+		Input:       input,
+		Value:       input.Value(),
+	}
+}
+
 func (m *AIAgentsSettingsFormModel) validateBooleanField(value, fieldName string) error {
 	if value != "" && value != "true" && value != "false" {
 		return fmt.Errorf("invalid boolean value for %s: %s (must be 'true' or 'false')", fieldName, value)
@@ -156,6 +185,18 @@ func (m *AIAgentsSettingsFormModel) validateIntegerField(value, fieldName string
 	}
 
 	return intVal, nil
+}
+
+func (m *AIAgentsSettingsFormModel) validateDeafGuardMode(value string) error {
+	if value == "" {
+		return nil
+	}
+	switch strings.ToLower(value) {
+	case "log", "warn", "enforce":
+		return nil
+	default:
+		return fmt.Errorf("invalid Deaf Guard mode: %s (must be 'log', 'warn', or 'enforce')", value)
+	}
 }
 
 func (m *AIAgentsSettingsFormModel) formatNumber(n int) string {
@@ -229,6 +270,8 @@ func (m *AIAgentsSettingsFormModel) GetCurrentConfiguration() string {
 
 	// task planning
 	displayBoolean(cfg.AgentPlanningStepEnabled, locale.ToolsAIAgentsSettingTaskPlanning)
+	displayBoolean(cfg.DeafGuardEnabled, locale.ToolsAIAgentsSettingDeafGuardEnabled)
+	displayInteger(cfg.DeafGuardMode, locale.ToolsAIAgentsSettingDeafGuardMode)
 
 	return strings.Join(sections, "\n")
 }
@@ -242,7 +285,9 @@ func (m *AIAgentsSettingsFormModel) IsConfigured() bool {
 		cfg.ExecutionMonitorTotalToolLimit.IsPresent() || cfg.ExecutionMonitorTotalToolLimit.IsChanged ||
 		cfg.MaxGeneralAgentToolCalls.IsPresent() || cfg.MaxGeneralAgentToolCalls.IsChanged ||
 		cfg.MaxLimitedAgentToolCalls.IsPresent() || cfg.MaxLimitedAgentToolCalls.IsChanged ||
-		cfg.AgentPlanningStepEnabled.IsPresent() || cfg.AgentPlanningStepEnabled.IsChanged
+		cfg.AgentPlanningStepEnabled.IsPresent() || cfg.AgentPlanningStepEnabled.IsChanged ||
+		cfg.DeafGuardEnabled.IsPresent() || cfg.DeafGuardEnabled.IsChanged ||
+		cfg.DeafGuardMode.IsPresent() || cfg.DeafGuardMode.IsChanged
 }
 
 func (m *AIAgentsSettingsFormModel) GetHelpContent() string {
@@ -255,7 +300,7 @@ func (m *AIAgentsSettingsFormModel) GetHelpContent() string {
 
 func (m *AIAgentsSettingsFormModel) HandleSave() error {
 	fields := m.GetFormFields()
-	if len(fields) != 8 {
+	if len(fields) != 10 {
 		return fmt.Errorf("unexpected number of fields: %d", len(fields))
 	}
 
@@ -269,6 +314,8 @@ func (m *AIAgentsSettingsFormModel) HandleSave() error {
 		MaxGeneralAgentToolCalls:       cur.MaxGeneralAgentToolCalls,
 		MaxLimitedAgentToolCalls:       cur.MaxLimitedAgentToolCalls,
 		AgentPlanningStepEnabled:       cur.AgentPlanningStepEnabled,
+		DeafGuardEnabled:               cur.DeafGuardEnabled,
+		DeafGuardMode:                  cur.DeafGuardMode,
 	}
 
 	// validate and set each field
@@ -328,6 +375,18 @@ func (m *AIAgentsSettingsFormModel) HandleSave() error {
 			}
 			newCfg.AgentPlanningStepEnabled.Value = value
 
+		case "deaf_guard_enabled":
+			if err := m.validateBooleanField(value, locale.ToolsAIAgentsSettingDeafGuardEnabled); err != nil {
+				return err
+			}
+			newCfg.DeafGuardEnabled.Value = value
+
+		case "deaf_guard_mode":
+			if err := m.validateDeafGuardMode(value); err != nil {
+				return err
+			}
+			newCfg.DeafGuardMode.Value = value
+
 		default:
 			return fmt.Errorf("unknown field key at index %d: %s", i, field.Key)
 		}
@@ -376,6 +435,14 @@ func (m *AIAgentsSettingsFormModel) HandleReset() {
 	if len(fields) >= 8 {
 		fields[7].Input.SetValue(cfg.AgentPlanningStepEnabled.Value)
 		fields[7].Value = fields[7].Input.Value()
+	}
+	if len(fields) >= 9 {
+		fields[8].Input.SetValue(cfg.DeafGuardEnabled.Value)
+		fields[8].Value = fields[8].Input.Value()
+	}
+	if len(fields) >= 10 {
+		fields[9].Input.SetValue(cfg.DeafGuardMode.Value)
+		fields[9].Value = fields[9].Input.Value()
 	}
 
 	m.SetFormFields(fields)

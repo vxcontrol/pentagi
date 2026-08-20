@@ -124,6 +124,7 @@ The running PentAGI instance already exposes several settings areas in the web U
 - **Settings -> Providers**: Manage user-defined provider profiles, per-agent model and runtime options, and provider test actions for provider types supported by the running server.
 - **Settings -> Prompts**: Manage system, human, and tool prompt templates.
 - **Settings -> PentAGI API**: Create, revoke, and delete PentAGI API tokens.
+- **Settings -> Security**: Enable Deaf Guard and set enforcement mode (`log` / `warn` / `enforce`). Runtime changes apply to new flows only; see [deaf-guard.md](./deaf-guard.md).
 - **Other UI-managed preferences**: Favorite flows are stored as user preferences, and theme selection is handled client-side from the main sidebar/profile controls.
 
 These web-console features do not replace the environment variables in this guide for provider credentials, endpoints, or external integrations.
@@ -1900,6 +1901,8 @@ These settings control the agent supervision system, including execution monitor
 | MaxGeneralAgentToolCalls       | `MAX_GENERAL_AGENT_TOOL_CALLS`      | `100`         | Maximum tool calls for general agents (Assistant, Primary, Pentester, Coder, Installer) |
 | MaxLimitedAgentToolCalls       | `MAX_LIMITED_AGENT_TOOL_CALLS`      | `20`          | Maximum tool calls for limited agents (Searcher, Enricher, etc.)       |
 | AgentPlanningStepEnabled       | `AGENT_PLANNING_STEP_ENABLED`       | `false`       | Enable automatic task planning for specialist agents                   |
+| DeafGuardEnabled               | `DEAF_GUARD_ENABLED`                | `true`        | Master switch for pre-execution terminal command classification        |
+| DeafGuardMode                  | `DEAF_GUARD_MODE`                   | `log`         | Enforcement posture: `log` (record only), `warn` (block BLOCK-tier), `enforce` (block BLOCK and WARN) |
 
 ### Usage Details
 

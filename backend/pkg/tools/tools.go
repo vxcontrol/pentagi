@@ -22,6 +22,7 @@ import (
 	"pentagi/pkg/graphiti"
 	"pentagi/pkg/providers/embeddings"
 	"pentagi/pkg/schema"
+	"pentagi/pkg/tools/deafguard"
 
 	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/client"
@@ -160,17 +161,28 @@ type KnowledgeProvider interface {
 	KnowledgeDocumentCreated(ctx context.Context, doc *model.KnowledgeDocument)
 }
 
+// DeafGuardEventProvider fans classification results out to live GraphQL
+// subscribers. Implementations must be non-blocking from the caller's
+// perspective — the Deaf Guard runs inline on the tool-call hot path, so
+// Publish is expected to return promptly and MUST NOT take the caller's
+// lock. A nil provider is valid; callers must nil-check before invoking.
+type DeafGuardEventProvider interface {
+	Publish(ctx context.Context, result *deafguard.ClassificationResult)
+}
+
 type flowToolsExecutor struct {
-	userID int64
-	flowID int64
-	scp    ScreenshotProvider
-	alp    AgentLogProvider
-	mlp    MsgLogProvider
-	slp    SearchLogProvider
-	tlp    TermLogProvider
-	vslp   VectorStoreLogProvider
-	tclp   ToolCallLogProvider
-	knp    KnowledgeProvider
+	userID    int64
+	flowID    int64
+	scp       ScreenshotProvider
+	alp       AgentLogProvider
+	mlp       MsgLogProvider
+	slp       SearchLogProvider
+	tlp       TermLogProvider
+	vslp      VectorStoreLogProvider
+	tclp      ToolCallLogProvider
+	knp       KnowledgeProvider
+	dgep      DeafGuardEventProvider
+	deafGuard *deafguard.DeafGuard
 
 	db             database.Querier
 	cfg            *config.Config
@@ -331,6 +343,7 @@ type FlowToolsExecutor interface {
 	SetVectorStoreLogProvider(vslp VectorStoreLogProvider)
 	SetToolCallLogProvider(tclp ToolCallLogProvider)
 	SetKnowledgeProvider(knp KnowledgeProvider)
+	SetDeafGuardEventProvider(dgep DeafGuardEventProvider)
 	SetGraphitiClient(client *graphiti.Client)
 
 	Prepare(ctx context.Context) error
@@ -383,6 +396,8 @@ func NewFlowToolsExecutor(
 		return nil, fmt.Errorf("failed to create replacer: %v", sharedReplacerErr)
 	}
 
+	dg := deafguard.New(cfg)
+
 	return &flowToolsExecutor{
 		db:          db,
 		docker:      docker,
@@ -391,6 +406,7 @@ func NewFlowToolsExecutor(
 		cfg:         cfg,
 		flowID:      flowID,
 		userID:      userID,
+		deafGuard:   dg,
 		definitions: make(map[string]llms.FunctionDefinition),
 		handlers:    make(map[string]ExecutorHandler),
 	}, nil
@@ -474,6 +490,10 @@ func (fte *flowToolsExecutor) SetToolCallLogProvider(tclp ToolCallLogProvider) {
 
 func (fte *flowToolsExecutor) SetKnowledgeProvider(knp KnowledgeProvider) {
 	fte.knp = knp
+}
+
+func (fte *flowToolsExecutor) SetDeafGuardEventProvider(dgep DeafGuardEventProvider) {
+	fte.dgep = dgep
 }
 
 func (fte *flowToolsExecutor) SetGraphitiClient(client *graphiti.Client) {
@@ -803,6 +823,8 @@ func (fte *flowToolsExecutor) GetCustomExecutor(cfg CustomExecutorConfig) (Conte
 		subtaskID:   cfg.SubtaskID,
 		mlp:         fte.mlp,
 		tclp:        fte.tclp,
+		dgep:        fte.dgep,
+		deafGuard:   fte.deafGuard,
 		vslp:        fte.vslp,
 		db:          fte.db,
 		store:       fte.store,
@@ -985,6 +1007,8 @@ func (fte *flowToolsExecutor) GetAssistantExecutor(cfg AssistantExecutorConfig) 
 		flowID:      fte.flowID,
 		mlp:         fte.mlp,
 		tclp:        fte.tclp,
+		dgep:        fte.dgep,
+		deafGuard:   fte.deafGuard,
 		vslp:        fte.vslp,
 		db:          fte.db,
 		store:       fte.store,
@@ -1033,6 +1057,8 @@ func (fte *flowToolsExecutor) GetPrimaryExecutor(cfg PrimaryExecutorConfig) (Con
 		subtaskID: &cfg.SubtaskID,
 		mlp:       fte.mlp,
 		tclp:      fte.tclp,
+		dgep:      fte.dgep,
+		deafGuard: fte.deafGuard,
 		vslp:      fte.vslp,
 		db:        fte.db,
 		store:     fte.store,
@@ -1110,6 +1136,8 @@ func (fte *flowToolsExecutor) GetInstallerExecutor(cfg InstallerExecutorConfig) 
 		subtaskID: cfg.SubtaskID,
 		mlp:       fte.mlp,
 		tclp:      fte.tclp,
+		dgep:      fte.dgep,
+		deafGuard: fte.deafGuard,
 		vslp:      fte.vslp,
 		db:        fte.db,
 		store:     fte.store,
@@ -1217,6 +1245,8 @@ func (fte *flowToolsExecutor) GetCoderExecutor(cfg CoderExecutorConfig) (Context
 		subtaskID: cfg.SubtaskID,
 		mlp:       fte.mlp,
 		tclp:      fte.tclp,
+		dgep:      fte.dgep,
+		deafGuard: fte.deafGuard,
 		vslp:      fte.vslp,
 		db:        fte.db,
 		store:     fte.store,
@@ -1342,6 +1372,8 @@ func (fte *flowToolsExecutor) GetPentesterExecutor(cfg PentesterExecutorConfig) 
 		subtaskID: cfg.SubtaskID,
 		mlp:       fte.mlp,
 		tclp:      fte.tclp,
+		dgep:      fte.dgep,
+		deafGuard: fte.deafGuard,
 		vslp:      fte.vslp,
 		db:        fte.db,
 		store:     fte.store,
@@ -1442,6 +1474,8 @@ func (fte *flowToolsExecutor) GetSearcherExecutor(cfg SearcherExecutorConfig) (C
 		subtaskID: cfg.SubtaskID,
 		mlp:       fte.mlp,
 		tclp:      fte.tclp,
+		dgep:      fte.dgep,
+		deafGuard: fte.deafGuard,
 		vslp:      fte.vslp,
 		db:        fte.db,
 		store:     fte.store,
@@ -1529,14 +1563,16 @@ func (fte *flowToolsExecutor) GetGeneratorExecutor(cfg GeneratorExecutorConfig) 
 	)
 
 	ce := &customExecutor{
-		userID: fte.userID,
-		flowID: fte.flowID,
-		taskID: &cfg.TaskID,
-		mlp:    fte.mlp,
-		tclp:   fte.tclp,
-		vslp:   fte.vslp,
-		db:     fte.db,
-		store:  fte.store,
+		userID:    fte.userID,
+		flowID:    fte.flowID,
+		taskID:    &cfg.TaskID,
+		mlp:       fte.mlp,
+		tclp:      fte.tclp,
+		dgep:      fte.dgep,
+		deafGuard: fte.deafGuard,
+		vslp:      fte.vslp,
+		db:        fte.db,
+		store:     fte.store,
 		definitions: []llms.FunctionDefinition{
 			registryDefinitions[MemoristToolName],
 			registryDefinitions[SearchToolName],
@@ -1598,14 +1634,16 @@ func (fte *flowToolsExecutor) GetRefinerExecutor(cfg RefinerExecutorConfig) (Con
 	)
 
 	ce := &customExecutor{
-		userID: fte.userID,
-		flowID: fte.flowID,
-		taskID: &cfg.TaskID,
-		mlp:    fte.mlp,
-		tclp:   fte.tclp,
-		vslp:   fte.vslp,
-		db:     fte.db,
-		store:  fte.store,
+		userID:    fte.userID,
+		flowID:    fte.flowID,
+		taskID:    &cfg.TaskID,
+		mlp:       fte.mlp,
+		tclp:      fte.tclp,
+		dgep:      fte.dgep,
+		deafGuard: fte.deafGuard,
+		vslp:      fte.vslp,
+		db:        fte.db,
+		store:     fte.store,
 		definitions: []llms.FunctionDefinition{
 			registryDefinitions[MemoristToolName],
 			registryDefinitions[SearchToolName],
@@ -1669,6 +1707,8 @@ func (fte *flowToolsExecutor) GetMemoristExecutor(cfg MemoristExecutorConfig) (C
 		subtaskID: cfg.SubtaskID,
 		mlp:       fte.mlp,
 		tclp:      fte.tclp,
+		dgep:      fte.dgep,
+		deafGuard: fte.deafGuard,
 		vslp:      fte.vslp,
 		db:        fte.db,
 		store:     fte.store,
@@ -1742,6 +1782,8 @@ func (fte *flowToolsExecutor) GetEnricherExecutor(cfg EnricherExecutorConfig) (C
 		subtaskID: cfg.SubtaskID,
 		mlp:       fte.mlp,
 		tclp:      fte.tclp,
+		dgep:      fte.dgep,
+		deafGuard: fte.deafGuard,
 		vslp:      fte.vslp,
 		db:        fte.db,
 		store:     fte.store,
@@ -1812,6 +1854,8 @@ func (fte *flowToolsExecutor) GetReporterExecutor(cfg ReporterExecutorConfig) (C
 		subtaskID:   cfg.SubtaskID,
 		mlp:         fte.mlp,
 		tclp:        fte.tclp,
+		dgep:        fte.dgep,
+		deafGuard:   fte.deafGuard,
 		vslp:        fte.vslp,
 		db:          fte.db,
 		store:       fte.store,

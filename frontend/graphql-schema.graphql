@@ -150,6 +150,20 @@ fragment vectorStoreLogFragment on VectorStoreLog {
     createdAt
 }
 
+fragment deafGuardEventFragment on DeafGuardEvent {
+    id
+    flowId
+    timestamp
+    command
+    category
+    tier
+    risk
+    action
+    allowed
+    mode
+    reason
+}
+
 fragment assistantFragment on Assistant {
     id
     title
@@ -832,6 +846,9 @@ query flow($id: ID!) {
     vectorStoreLogs(flowId: $id) {
         ...vectorStoreLogFragment
     }
+    deafGuardEvents(flowId: $id) {
+        ...deafGuardEventFragment
+    }
 }
 
 query tasks($flowId: ID!) {
@@ -1246,6 +1263,12 @@ subscription searchLogAdded($flowId: ID!) {
 subscription vectorStoreLogAdded($flowId: ID!) {
     vectorStoreLogAdded(flowId: $flowId) {
         ...vectorStoreLogFragment
+    }
+}
+
+subscription deafGuardEventAdded($flowId: ID!) {
+    deafGuardEventAdded(flowId: $flowId) {
+        ...deafGuardEventFragment
     }
 }
 

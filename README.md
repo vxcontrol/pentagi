@@ -488,6 +488,15 @@ PentAGI includes sophisticated multi-layered agent supervision mechanisms to ens
 
 **Enhanced Adviser Configuration**: Works exceptionally well when adviser agent uses stronger model or enhanced settings. Example: using same base model with maximum reasoning mode for adviser (see [`vllm-qwen3.5-27b-fp8.provider.yml`](examples/configs/vllm-qwen3.5-27b-fp8.provider.yml)) enables comprehensive task analysis and strategic planning from identical model architecture.
 
+### Deaf Guard
+- **Pre-execution classification**: Every `terminal` tool call is matched against a 9-tier regex rule table before it runs in the sandbox
+- **Modes**: `log` (record only), `warn` (block BLOCK-tier), `enforce` (block BLOCK and WARN)
+- **Settings UI**: Settings → Security toggles enabled/mode at runtime (applies to the next flow)
+- **Flow UI**: Deaf Guard tab on a flow (between Agents and Searches) streams live classifications
+- **Configurable**: `DEAF_GUARD_ENABLED` (default: true) and `DEAF_GUARD_MODE` (default: log)
+
+Full management reference: [`backend/docs/deaf-guard.md`](backend/docs/deaf-guard.md).
+
 **Performance Impact**: Adds planning overhead but significantly improves completion rates and reduces redundant work
 
 ### Tool Call Limits (Always Active)

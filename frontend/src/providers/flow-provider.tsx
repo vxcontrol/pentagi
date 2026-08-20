@@ -17,6 +17,7 @@ import {
     AssistantUpdatedDocument,
     CallAssistantDocument,
     CreateAssistantDocument,
+    DeafGuardEventAddedDocument,
     DeleteAssistantDocument,
     FlowDocument,
     FlowUpdatedDocument,
@@ -96,7 +97,7 @@ export function FlowProvider({ children }: FlowProviderProps) {
     });
 
     // Also gates `subscriptionSkip` below: raising it on a refetch that still holds the flow
-    // would tear down 14 live subscriptions mid-flight.
+    // would tear down 15 live subscriptions mid-flight.
     const isLoading = loading && !flowData?.flow;
 
     // A real load failure that left nothing to show (cold cache + backend error on a
@@ -158,6 +159,7 @@ export function FlowProvider({ children }: FlowProviderProps) {
     useSubscription(AgentLogAddedDocument, { skip: subscriptionSkip, variables: subscriptionVariables });
     useSubscription(SearchLogAddedDocument, { skip: subscriptionSkip, variables: subscriptionVariables });
     useSubscription(VectorStoreLogAddedDocument, { skip: subscriptionSkip, variables: subscriptionVariables });
+    useSubscription(DeafGuardEventAddedDocument, { skip: subscriptionSkip, variables: subscriptionVariables });
 
     useSubscription(AssistantCreatedDocument, { skip: subscriptionSkip, variables: subscriptionVariables });
     useSubscription(AssistantUpdatedDocument, { skip: subscriptionSkip, variables: subscriptionVariables });

@@ -1612,6 +1612,23 @@ func (r *queryResolver) AssistantLogs(ctx context.Context, flowID int64, assista
 	return converter.ConvertAssistantLogs(logs), nil
 }
 
+// DeafGuardEvents is the resolver for the deafGuardEvents field.
+func (r *queryResolver) DeafGuardEvents(ctx context.Context, flowID int64) ([]*model.DeafGuardEvent, error) {
+	// Deaf Guard classification events are published live via the
+	// deafGuardEventAdded subscription and held only in the client-side
+	// Apollo cache for the duration of the session. Nothing is persisted
+	// server-side today, so the initial query response is always empty.
+	// The query still exists so the frontend can cache-write incoming
+	// subscription events onto a real server-declared field, mirroring
+	// the terminalLogs/agentLogs pattern. Permission reuses
+	// termlogs.subscribe — see the DeafGuardEventAdded resolver for why.
+	if _, err := validatePermissionWithFlowID(ctx, "termlogs.subscribe", flowID, r.DB); err != nil {
+		return nil, err
+	}
+
+	return []*model.DeafGuardEvent{}, nil
+}
+
 // UsageStatsTotal is the resolver for the usageStatsTotal field.
 func (r *queryResolver) UsageStatsTotal(ctx context.Context) (*model.UsageStats, error) {
 	uid, _, err := validatePermission(ctx, "usage.view")
@@ -2801,6 +2818,22 @@ func (r *subscriptionResolver) AssistantLogUpdated(ctx context.Context, flowID i
 	}
 
 	return r.Subscriptions.NewFlowSubscriber(uid, flowID).AssistantLogUpdated(ctx)
+}
+
+// DeafGuardEventAdded is the resolver for the deafGuardEventAdded field.
+func (r *subscriptionResolver) DeafGuardEventAdded(ctx context.Context, flowID int64) (<-chan *model.DeafGuardEvent, error) {
+	// Permission reuse note: we deliberately check "termlogs.subscribe"
+	// here rather than a dedicated "deafguardevents.subscribe" permission.
+	// Deaf Guard classifies terminal commands, so the authorization scope
+	// is identical — any user who can stream terminal logs for a flow is
+	// implicitly entitled to see the classifier verdicts over that same
+	// stream.
+	uid, err := validatePermissionWithFlowID(ctx, "termlogs.subscribe", flowID, r.DB)
+	if err != nil {
+		return nil, err
+	}
+
+	return r.Subscriptions.NewFlowSubscriber(uid, flowID).DeafGuardEventAdded(ctx)
 }
 
 // ProviderCreated is the resolver for the providerCreated field.
