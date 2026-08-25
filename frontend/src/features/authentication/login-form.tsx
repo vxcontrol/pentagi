@@ -6,6 +6,7 @@ import type { OAuthProvider } from '@/providers/user-provider';
 
 import Github from '@/components/icons/github';
 import Google from '@/components/icons/google';
+import Sso from '@/components/icons/sso';
 import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { FormSubmitButton } from '@/components/ui/form-submit-button';
@@ -53,6 +54,11 @@ const providerActions: AuthProviderAction[] = [
         icon: <Github className="size-5" />,
         id: 'github',
         name: 'Continue with GitHub',
+    },
+    {
+        icon: <Sso className="size-5" />,
+        id: 'oidc',
+        name: 'Continue with SSO',
     },
 ];
 

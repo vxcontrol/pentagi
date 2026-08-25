@@ -598,6 +598,10 @@ These settings control authentication mechanisms, including cookie-based session
 | OAuthGoogleClientSecret | `OAUTH_GOOGLE_CLIENT_SECRET` | *(none)*      | Google OAuth client secret                             |
 | OAuthGithubClientID     | `OAUTH_GITHUB_CLIENT_ID`     | *(none)*      | GitHub OAuth client ID for authentication              |
 | OAuthGithubClientSecret | `OAUTH_GITHUB_CLIENT_SECRET` | *(none)*      | GitHub OAuth client secret                             |
+| OAuthOIDCIssuer         | `OAUTH_OIDC_ISSUER`          | *(none)*      | Issuer URL of any OpenID Connect provider, i.e. the URL serving `/.well-known/openid-configuration` |
+| OAuthOIDCClientID       | `OAUTH_OIDC_CLIENT_ID`       | *(none)*      | Client ID registered with the OpenID Connect provider  |
+| OAuthOIDCClientSecret   | `OAUTH_OIDC_CLIENT_SECRET`   | *(none)*      | Client secret registered with the OpenID Connect provider |
+| OAuthOIDCScopes         | `OAUTH_OIDC_SCOPES`          | `openid,email,profile` | Comma separated scopes requested from the provider |
 
 ### Usage Details
 
@@ -640,6 +644,34 @@ The authentication settings are used in `pkg/server/router.go` to set up authent
   OAUTH_GOOGLE_CLIENT_ID=your_google_client_id
   OAUTH_GOOGLE_CLIENT_SECRET=your_google_client_secret
   ```
+
+- **Generic OpenID Connect (SSO)**: Any OpenID Connect provider — Keycloak, Authentik, Okta,
+  Entra ID, Auth0 — is configured with three settings. PentAGI reads the provider's discovery
+  document at startup, so no endpoint URLs have to be spelled out:
+
+  ```bash
+  PUBLIC_URL=https://pentagi.example.com
+  OAUTH_OIDC_ISSUER=https://keycloak.example.com/realms/pentagi
+  OAUTH_OIDC_CLIENT_ID=pentagi
+  OAUTH_OIDC_CLIENT_SECRET=your_client_secret
+  # optional, defaults to openid,email,profile
+  OAUTH_OIDC_SCOPES=openid,email,profile
+  ```
+
+  Register the client in the identity provider with the standard authorization code flow and the
+  redirect URI `${PUBLIC_URL}/api/v1/auth/login-callback`. The provider then appears on the login
+  screen as **Continue with SSO**.
+
+  PentAGI matches the account by the `email` claim, taking it from the ID token and falling back to
+  the UserInfo endpoint when the ID token carries no email. Users whose email is unknown to PentAGI
+  are created on first login with the regular `User` role, exactly as with the Google and GitHub
+  providers — administrators are still promoted explicitly. PentAGI itself does not restrict which
+  accounts may log in, so limit access on the identity provider side (for example by binding the
+  client to a group or policy) when the provider serves more people than PentAGI should admit.
+
+  When the identity provider is unreachable at startup, discovery fails, the error is logged and the
+  server keeps running with the remaining login methods — SSO simply stays absent from the login
+  screen until the next restart.
 
 - **OAuth Provider Settings**: Used to configure authentication with Google and GitHub:
   ```go

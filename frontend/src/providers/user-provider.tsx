@@ -23,7 +23,7 @@ export interface LoginResult {
     success: boolean;
 }
 
-export type OAuthProvider = 'github' | 'google';
+export type OAuthProvider = 'github' | 'google' | 'oidc';
 
 interface UserContextType {
     authInfo: AuthInfo | null;

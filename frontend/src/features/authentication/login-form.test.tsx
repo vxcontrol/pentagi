@@ -20,10 +20,10 @@ vi.mock('@/providers/user-provider', () => ({ useUser: () => userApi }));
 
 import LoginForm from './login-form';
 
-const renderLogin = () =>
+const renderLogin = (providers: string[] = []) =>
     render(
         <LoginForm
-            providers={[]}
+            providers={providers}
             returnUrl="/after-login"
         />,
     );
@@ -101,5 +101,24 @@ describe('LoginForm validation convention', () => {
 
         expect(await screen.findByText('Account locked')).toBeInTheDocument();
         expect(navigate).not.toHaveBeenCalled();
+    });
+});
+
+describe('LoginForm OAuth providers', () => {
+    it('offers only the providers the server advertises', () => {
+        renderLogin(['oidc']);
+
+        expect(screen.getByRole('button', { name: 'Continue with SSO' })).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Continue with Google' })).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Continue with GitHub' })).not.toBeInTheDocument();
+    });
+
+    it('starts the OAuth flow for the clicked provider', async () => {
+        const user = userEvent.setup();
+        renderLogin(['oidc']);
+
+        await user.click(screen.getByRole('button', { name: 'Continue with SSO' }));
+
+        await waitFor(() => expect(userApi.loginWithOAuth).toHaveBeenCalledWith('oidc'));
     });
 });

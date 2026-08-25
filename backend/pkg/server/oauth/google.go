@@ -68,5 +68,5 @@ func NewGoogleOAuthClient(clientID, clientSecret, redirectURL string) OAuthClien
 			"openid",
 		},
 		Endpoint: google.Endpoint,
-	}, newGoogleEmailResolver(clientID))
+	}, newGoogleEmailResolver(clientID), WithFormPostCallback())
 }

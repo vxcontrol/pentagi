@@ -46,6 +46,11 @@ const baseURL = "/api/v1"
 
 const corsAllowGoogleOAuth = "https://accounts.google.com"
 
+// oauthOIDCDiscoveryTimeout bounds the OpenID Connect discovery request made
+// while the server starts, so that an unreachable identity provider delays
+// startup by seconds instead of blocking it.
+const oauthOIDCDiscoveryTimeout = 10 * time.Second
+
 // frontendRoutes defines the list of URI prefixes that should be handled by the frontend SPA.
 // Add new frontend base routes here if they are added in the frontend router (e.g., in App.tsx).
 var frontendRoutes = []string{
@@ -123,6 +128,28 @@ func NewRouter(
 			publicURL.String(),
 		)
 		oauthClients[githubClient.ProviderName()] = githubClient
+	}
+
+	if publicURL != nil && cfg.OAuthOIDCIssuer != "" &&
+		cfg.OAuthOIDCClientID != "" && cfg.OAuthOIDCClientSecret != "" {
+		// Discovery talks to the identity provider, so give it a deadline and
+		// keep serving without the provider when the IdP is unreachable.
+		discoveryCtx, cancel := context.WithTimeout(context.Background(), oauthOIDCDiscoveryTimeout)
+		oidcClient, err := oauth.NewOIDCOAuthClient(
+			discoveryCtx,
+			cfg.OAuthOIDCIssuer,
+			cfg.OAuthOIDCClientID,
+			cfg.OAuthOIDCClientSecret,
+			publicURL.String(),
+			cfg.OAuthOIDCScopes,
+		)
+		cancel()
+		if err != nil {
+			logrus.WithError(err).
+				Errorf("failed to initialize OIDC provider '%s', SSO login is disabled", cfg.OAuthOIDCIssuer)
+		} else {
+			oauthClients[oidcClient.ProviderName()] = oidcClient
+		}
 	}
 
 	// ---- Knowledge (pgvector) store -----------------------------------------

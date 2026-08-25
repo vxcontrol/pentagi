@@ -44,6 +44,12 @@ func (f *fakeOAuthClient) RefreshToken(context.Context, string) (*oauth2.Token, 
 
 func (f *fakeOAuthClient) AuthCodeURL(string, ...oauth2.AuthCodeOption) string { return "" }
 
+func (f *fakeOAuthClient) AuthCodeOptions(nonce string) []oauth2.AuthCodeOption {
+	return []oauth2.AuthCodeOption{oauth2.SetAuthURLParam("nonce", nonce)}
+}
+
+func (f *fakeOAuthClient) CallbackSameSite() http.SameSite { return http.SameSiteLaxMode }
+
 func newOAuthService(db *gorm.DB, email string) *AuthService {
 	return newOAuthServiceVerified(db, email, true)
 }

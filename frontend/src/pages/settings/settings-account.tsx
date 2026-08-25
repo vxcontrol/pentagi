@@ -17,6 +17,7 @@ type EditingSection = 'email' | 'name' | 'password';
 const PROVIDER_LABELS: Record<string, string> = {
     github: 'GitHub',
     google: 'Google',
+    oidc: 'SSO',
 };
 
 function SettingsAccount() {

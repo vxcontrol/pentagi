@@ -29,7 +29,6 @@ import (
 	"github.com/jinzhu/gorm"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/crypto/bcrypt"
-	"golang.org/x/oauth2"
 )
 
 const (
@@ -243,7 +242,7 @@ func (s *AuthService) refreshCookie(c *gin.Context, resp *info, privs []string) 
 // @Tags Public
 // @Produce json
 // @Param return_uri query string false "URI to redirect user there after login" default(/)
-// @Param provider query string false "OAuth provider name (google, github, etc.)" default(google) enums:"google,github"
+// @Param provider query string false "OAuth provider name (google, github, oidc)" default(google) enums:"google,github,oidc"
 // @Success 307 "redirect to SSO login page"
 // @Failure 400 {object} response.errorResp "invalid autorizarion query"
 // @Failure 403 {object} response.errorResp "authorize not permitted"
@@ -304,24 +303,16 @@ func (s *AuthService) AuthAuthorize(c *gin.Context) {
 	signedStateJSON := append(signature, stateJSON...)
 	state := base64.RawURLEncoding.EncodeToString(signedStateJSON)
 
-	// Google OAuth uses POST callback which requires SameSite=None for cross-site requests
-	// GitHub and other providers use GET callback which works with SameSite=Lax
-	sameSiteMode := http.SameSiteLaxMode
-	if provider == "google" {
-		sameSiteMode = http.SameSiteNoneMode
-	}
+	// Providers answering with a cross-site form POST (Google) need SameSite=None
+	// for the temporary cookies; providers using a GET callback work with Lax.
+	sameSiteMode := oauthClient.CallbackSameSite()
 
 	maxAge := int(authStateRequestTTL / time.Second)
 	s.setCallbackCookie(c.Writer, c.Request, s.stateCookieName(), state, maxAge, sameSiteMode)
 	s.setCallbackCookie(c.Writer, c.Request, s.nonceCookieName(), nonce, maxAge, sameSiteMode)
 
-	authOpts := []oauth2.AuthCodeOption{
-		oauth2.SetAuthURLParam("nonce", nonce),
-		oauth2.SetAuthURLParam("response_mode", "form_post"),
-		oauth2.SetAuthURLParam("response_type", "code id_token"),
-	}
 	http.Redirect(c.Writer, c.Request,
-		oauthClient.AuthCodeURL(state, authOpts...),
+		oauthClient.AuthCodeURL(state, oauthClient.AuthCodeOptions(nonce)...),
 		http.StatusTemporaryRedirect)
 }
 
@@ -627,12 +618,11 @@ func (s *AuthService) authLoginCallback(c *gin.Context, stateData map[string]str
 		return
 	}
 
-	// delete temporary cookies
-	// Google OAuth uses POST callback which requires SameSite=None for cross-site requests
-	// GitHub and other providers use GET callback which works with SameSite=Lax
+	// delete temporary cookies with the same SameSite mode they were issued with,
+	// otherwise the browser keeps them until they expire
 	sameSiteMode := http.SameSiteLaxMode
-	if stateData["provider"] == "google" {
-		sameSiteMode = http.SameSiteNoneMode
+	if oauthClient, ok := s.oauth[stateData["provider"]]; ok {
+		sameSiteMode = oauthClient.CallbackSameSite()
 	}
 	s.setCallbackCookie(c.Writer, c.Request, s.stateCookieName(), "", 0, sameSiteMode)
 	s.setCallbackCookie(c.Writer, c.Request, s.nonceCookieName(), "", 0, sameSiteMode)

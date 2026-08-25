@@ -183,6 +183,12 @@ type Config struct {
 	OAuthGithubClientID     string `env:"OAUTH_GITHUB_CLIENT_ID"`
 	OAuthGithubClientSecret string `env:"OAUTH_GITHUB_CLIENT_SECRET"`
 
+	// === OAuth Provider: generic OpenID Connect (Keycloak, Authentik, Okta, Entra ID) ===
+	OAuthOIDCIssuer       string   `env:"OAUTH_OIDC_ISSUER"`
+	OAuthOIDCClientID     string   `env:"OAUTH_OIDC_CLIENT_ID"`
+	OAuthOIDCClientSecret string   `env:"OAUTH_OIDC_CLIENT_SECRET"`
+	OAuthOIDCScopes       []string `env:"OAUTH_OIDC_SCOPES" envSeparator:","`
+
 	// === OAuth Callback Configuration ===
 	PublicURL string `env:"PUBLIC_URL" envDefault:""`
 
