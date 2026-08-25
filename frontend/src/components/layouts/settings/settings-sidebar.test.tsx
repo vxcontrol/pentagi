@@ -1,11 +1,21 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { SidebarProvider } from '@/components/ui/sidebar';
 
+const { authState } = vi.hoisted(() => ({ authState: { privileges: [] as string[] } }));
+
+vi.mock('@/providers/user-provider', () => ({
+    useUser: () => ({ authInfo: { privileges: authState.privileges, type: 'user' } }),
+}));
+
 import { SettingsSidebar } from './settings-sidebar';
+
+beforeEach(() => {
+    authState.privileges = [];
+});
 
 function renderSidebar(entry: { pathname: string; state?: unknown }) {
     return render(
@@ -49,5 +59,21 @@ describe('SettingsSidebar "Back to App"', () => {
         await user.click(screen.getByRole('link', { name: 'Providers' }));
 
         expect(backToApp()).toHaveAttribute('href', '/dashboard');
+    });
+});
+
+describe('SettingsSidebar privileged items', () => {
+    it('hides Users from accounts without the users.view privilege', () => {
+        renderSidebar({ pathname: '/settings/account' });
+
+        expect(screen.queryByRole('link', { name: /Users/ })).not.toBeInTheDocument();
+        expect(screen.getByRole('link', { name: /Account/ })).toBeInTheDocument();
+    });
+
+    it('shows Users once the account may view them', () => {
+        authState.privileges = ['users.view'];
+        renderSidebar({ pathname: '/settings/account' });
+
+        expect(screen.getByRole('link', { name: /Users/ })).toHaveAttribute('href', '/settings/users');
     });
 });

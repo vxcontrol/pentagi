@@ -553,3 +553,156 @@ func TestIsUniqueViolation(t *testing.T) {
 	assert.False(t, isUniqueViolation(errors.New("connection refused")))
 	assert.False(t, isUniqueViolation(nil))
 }
+
+// patchUserContext builds a request context for PatchUser as the caller identified
+// by callerHash with the given role and privileges.
+func patchUserContext(
+	t *testing.T,
+	target models.User,
+	roleID uint64,
+	callerID uint64,
+	callerHash string,
+	callerRoleID uint64,
+	privs []string,
+) (*gin.Context, *httptest.ResponseRecorder) {
+	t.Helper()
+
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+
+	c.Set("uid", callerID)
+	c.Set("rid", callerRoleID)
+	c.Set("uhash", callerHash)
+	c.Set("prm", privs)
+	c.Params = gin.Params{{Key: "hash", Value: target.Hash}}
+
+	payload := models.UserPassword{User: models.User{
+		Hash:   target.Hash,
+		ID:     target.ID,
+		Mail:   target.Mail,
+		Name:   target.Name,
+		RoleID: roleID,
+		Status: target.Status,
+		Type:   target.Type,
+	}}
+
+	body, err := json.Marshal(payload)
+	require.NoError(t, err)
+
+	c.Request, _ = http.NewRequest("PUT", "/users/"+target.Hash, bytes.NewBuffer(body))
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	return c, w
+}
+
+// seedPatchUser inserts a user the tests can then patch.
+func seedPatchUser(t *testing.T, db *gorm.DB, hash, mail string, roleID uint64) models.User {
+	t.Helper()
+
+	user := models.User{
+		Hash:   hash,
+		Mail:   mail,
+		Name:   "Target User",
+		RoleID: roleID,
+		Status: models.UserStatusActive,
+		Type:   models.UserTypeLocal,
+	}
+	require.NoError(t, db.Create(&user).Error)
+
+	return user
+}
+
+func TestPatchUser_ChangesRoleWithEditPrivilege(t *testing.T) {
+	db := setupTestDB(t)
+	defer db.Close()
+
+	service := NewUserService(db, auth.NewUserCache(db))
+	target := seedPatchUser(t, db, "aa000000000000000000000000000001", "target-a@test.com", 2)
+
+	c, w := patchUserContext(t, target, 1, 1, "bb000000000000000000000000000001", 1, []string{"users.edit"})
+	service.PatchUser(c)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var updated models.User
+	require.NoError(t, db.Where("hash = ?", target.Hash).First(&updated).Error)
+	assert.Equal(t, uint64(1), updated.RoleID, "role should be updated to Admin")
+}
+
+func TestPatchUser_RejectsRoleChangeWithoutEditPrivilege(t *testing.T) {
+	db := setupTestDB(t)
+	defer db.Close()
+
+	service := NewUserService(db, auth.NewUserCache(db))
+	target := seedPatchUser(t, db, "aa000000000000000000000000000002", "target-b@test.com", 2)
+
+	// The caller may patch itself, but that does not extend to role changes.
+	c, w := patchUserContext(t, target, 1, target.ID, target.Hash, 2, []string{})
+	service.PatchUser(c)
+
+	assert.Equal(t, http.StatusForbidden, w.Code)
+
+	var updated models.User
+	require.NoError(t, db.Where("hash = ?", target.Hash).First(&updated).Error)
+	assert.Equal(t, uint64(2), updated.RoleID, "role must stay unchanged")
+}
+
+func TestPatchUser_RejectsSelfRoleChange(t *testing.T) {
+	db := setupTestDB(t)
+	defer db.Close()
+
+	service := NewUserService(db, auth.NewUserCache(db))
+	admin := seedPatchUser(t, db, "bb000000000000000000000000000002", "admin-self@test.com", 1)
+
+	c, w := patchUserContext(t, admin, 2, admin.ID, admin.Hash, 1, []string{"users.edit"})
+	service.PatchUser(c)
+
+	assert.Equal(t, http.StatusForbidden, w.Code, "an administrator must not demote themselves")
+
+	var updated models.User
+	require.NoError(t, db.Where("hash = ?", admin.Hash).First(&updated).Error)
+	assert.Equal(t, uint64(1), updated.RoleID)
+}
+
+func TestPatchUser_RejectsPrivilegeEscalation(t *testing.T) {
+	db := setupTestDB(t)
+	defer db.Close()
+
+	// A role that can edit users but holds fewer privileges than Admin.
+	require.NoError(t, db.Exec("INSERT INTO roles (id, name) VALUES (3, 'Operator')").Error)
+	require.NoError(t, db.Exec(`INSERT INTO privileges (role_id, name) VALUES
+		(3, 'users.view'), (3, 'users.edit'), (3, 'roles.view')`).Error)
+
+	service := NewUserService(db, auth.NewUserCache(db))
+	target := seedPatchUser(t, db, "aa000000000000000000000000000003", "target-c@test.com", 2)
+
+	// Operator tries to promote the target to Admin, which holds privileges the
+	// operator does not have.
+	c, w := patchUserContext(t, target, 1, 1, "cc000000000000000000000000000001", 3, []string{"users.edit"})
+	service.PatchUser(c)
+
+	assert.Equal(t, http.StatusForbidden, w.Code)
+
+	var updated models.User
+	require.NoError(t, db.Where("hash = ?", target.Hash).First(&updated).Error)
+	assert.Equal(t, uint64(2), updated.RoleID, "privilege escalation must be refused")
+}
+
+func TestPatchUser_KeepsRoleWhenUnchanged(t *testing.T) {
+	db := setupTestDB(t)
+	defer db.Close()
+
+	service := NewUserService(db, auth.NewUserCache(db))
+	target := seedPatchUser(t, db, "aa000000000000000000000000000004", "target-d@test.com", 2)
+
+	c, w := patchUserContext(t, target, 2, 1, "bb000000000000000000000000000003", 1, []string{"users.edit"})
+	service.PatchUser(c)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var updated models.User
+	require.NoError(t, db.Where("hash = ?", target.Hash).First(&updated).Error)
+	assert.Equal(t, uint64(2), updated.RoleID)
+	assert.Equal(t, "Target User", updated.Name)
+}

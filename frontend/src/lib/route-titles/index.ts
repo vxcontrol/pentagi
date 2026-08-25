@@ -84,6 +84,7 @@ export const routeTitles = {
 
     providers: { title: 'Providers' },
 
+
     resources: { title: 'Resources' },
 
     template: {
@@ -96,4 +97,6 @@ export const routeTitles = {
     },
 
     templates: { title: 'Templates' },
+
+    users: { title: 'Users' },
 } as const satisfies Record<string, RouteTitleHandle>;

@@ -652,6 +652,12 @@ func (s *UserService) PatchUser(c *gin.Context) {
 		return
 	}
 
+	// Use map to update fields to avoid GORM ignoring zero values (false for bool)
+	updates := map[string]any{
+		"name":   user.Name,
+		"status": user.Status,
+	}
+
 	if user.Password != "" {
 		var encPassword []byte
 		encPassword, err = rdb.EncryptPassword(user.Password)
@@ -660,21 +666,41 @@ func (s *UserService) PatchUser(c *gin.Context) {
 			response.Error(c, response.ErrInternal, err)
 			return
 		}
-		// Use map to update fields to avoid GORM ignoring zero values (false for bool)
-		updates := map[string]any{
-			"name":                     user.Name,
-			"status":                   user.Status,
-			"password":                 string(encPassword),
-			"password_change_required": false,
-		}
-		err = s.db.Model(&existingUser).Updates(updates).Error
-	} else {
-		updates := map[string]any{
-			"name":   user.Name,
-			"status": user.Status,
-		}
-		err = s.db.Model(&existingUser).Updates(updates).Error
+		updates["password"] = string(encPassword)
+		updates["password_change_required"] = false
 	}
+
+	// Role changes are an administrative action: they require users.edit, they may
+	// not grant privileges the caller does not hold, and nobody may change their
+	// own role, which would otherwise let the last administrator demote themselves.
+	if user.RoleID != 0 && user.RoleID != existingUser.RoleID {
+		if !slices.Contains(privs, "users.edit") || uhash == hash {
+			logger.FromContext(c).Errorf("error changing user role: permission not found")
+			response.Error(c, response.ErrNotPermitted, nil)
+			return
+		}
+
+		var privsCurrentUser, privsTargetRole []string
+		if privsCurrentUser, err = s.GetUserPrivileges(c, c.GetUint64("rid")); err != nil {
+			logger.FromContext(c).WithError(err).Errorf("error getting current user privileges")
+			response.Error(c, response.ErrInternal, err)
+			return
+		}
+		if privsTargetRole, err = s.GetUserPrivileges(c, user.RoleID); err != nil {
+			logger.FromContext(c).WithError(err).Errorf("error getting target role privileges")
+			response.Error(c, response.ErrInternal, err)
+			return
+		}
+		if !s.CheckPrivilege(c, privsCurrentUser, privsTargetRole) {
+			logger.FromContext(c).Errorf("error checking target role privileges")
+			response.Error(c, response.ErrNotPermitted, nil)
+			return
+		}
+
+		updates["role_id"] = user.RoleID
+	}
+
+	err = s.db.Model(&existingUser).Updates(updates).Error
 
 	if err != nil {
 		logger.FromContext(c).WithError(err).Errorf("error updating user by hash '%s'", hash)

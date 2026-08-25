@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-import { ArrowLeft, FileText, Key, Plug, Settings as SettingsIcon, User } from 'lucide-react';
+import { ArrowLeft, FileText, Key, Plug, Settings as SettingsIcon, User, Users } from 'lucide-react';
 import { useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 
@@ -17,11 +17,14 @@ import {
 } from '@/components/ui/sidebar';
 import { routes } from '@/lib/routes';
 import { getSafeReturnUrl } from '@/lib/utils/auth';
+import { useUser } from '@/providers/user-provider';
 
 interface MenuItem {
     icon?: ReactNode;
     id: string;
     path: string;
+    // Privilege the account must hold for the item to be shown at all.
+    privilege?: string;
     title: string;
 }
 
@@ -54,10 +57,20 @@ const menuItems: readonly MenuItem[] = [
         path: routes.settings.apiTokens,
         title: 'API Tokens',
     },
+    {
+        icon: <Users className="size-4" />,
+        id: 'users',
+        path: routes.settings.users,
+        privilege: 'users.view',
+        title: 'Users',
+    },
 ] as const;
 
 export function SettingsSidebar() {
     const location = useLocation();
+    const { authInfo } = useUser();
+    const privileges = authInfo?.privileges ?? [];
+    const visibleItems = menuItems.filter((item) => !item.privilege || privileges.includes(item.privilege));
     const [returnUrl] = useState(() =>
         getSafeReturnUrl((location.state as null | { from?: string })?.from ?? null, routes.flows),
     );
@@ -80,7 +93,7 @@ export function SettingsSidebar() {
                 <SidebarGroup>
                     <SidebarGroupContent>
                         <SidebarMenu>
-                            {menuItems.map((item) => (
+                            {visibleItems.map((item) => (
                                 <SettingsSidebarMenuItem
                                     item={item}
                                     key={item.id}
