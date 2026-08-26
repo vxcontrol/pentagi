@@ -41,6 +41,7 @@ const (
 	EnginePerplexity = database.SearchengineTypePerplexity
 	EngineSearxng    = database.SearchengineTypeSearxng
 	EngineSploitus   = database.SearchengineTypeSploitus
+	EngineXquik      = database.SearchengineTypeXquik
 	EngineInternal   = database.SearchengineTypeBrowser
 )
 
@@ -64,6 +65,10 @@ const (
 	// ModeExploit — exploit / PoC / offensive-tool discovery. The exploit index
 	// leads; universal analytic engines and then classic engines back it up.
 	ModeExploit SearchMode = "exploit"
+
+	// ModeSocial searches visible X posts for authorized reconnaissance. It has no
+	// generic web fallback because indexed web pages do not preserve social intent.
+	ModeSocial SearchMode = "social"
 )
 
 // defaultMode is used when the agent omits `mode` (or sends an unknown one). "answer"
@@ -106,6 +111,10 @@ var fallbackStrategy = map[SearchMode][]database.SearchengineType{
 		EngineSploitus, EngineTavily, EngineFirecrawl, EnginePerplexity, EngineInternal,
 		EngineTraversaal, EngineGoogle, EngineDuckDuckGo, EngineSearxng,
 	},
+
+	// 5. Social search is provider-specific. Falling back to web results would
+	//    silently change the requested data source and result contract.
+	ModeSocial: {EngineXquik},
 }
 
 // linkEngineOrder is the priority order of link-discovery engines. It is used to feed
@@ -184,6 +193,7 @@ func buildSearchEngines(
 		EnginePerplexity: searchers.NewPerplexity(cfg, sum),
 		EngineSearxng:    searchers.NewSearxng(cfg, sum),
 		EngineSploitus:   searchers.NewSploitus(cfg),
+		EngineXquik:      searchers.NewXquik(cfg),
 	}
 
 	// The internal analytics engine discovers URLs with the link engines (in priority
@@ -297,9 +307,8 @@ func (w *webSearch) Handle(ctx context.Context, name string, args json.RawMessag
 	if attempted == 0 {
 		msg := fmt.Sprintf(
 			"web_search: no search engine is configured for mode '%s'. "+
-				"Ask the operator to configure at least one provider "+
-				"(e.g. TAVILY_API_KEY, GOOGLE_API_KEY + GOOGLE_CX_KEY, or DUCKDUCKGO_ENABLED).",
-			mode,
+				"Ask the operator to configure %s.",
+			mode, searchProviderGuidance(mode),
 		)
 		observation.Event(
 			langfuse.WithEventName("web_search unavailable"),
@@ -393,9 +402,18 @@ func normalizeMode(mode string) SearchMode {
 		return ModeResearch
 	case ModeExploit:
 		return ModeExploit
+	case ModeSocial:
+		return ModeSocial
 	default:
 		return defaultMode
 	}
+}
+
+func searchProviderGuidance(mode SearchMode) string {
+	if mode == ModeSocial {
+		return "XQUIK_API_KEY"
+	}
+	return "at least one provider (for example TAVILY_API_KEY, GOOGLE_API_KEY + GOOGLE_CX_KEY, or DUCKDUCKGO_ENABLED)"
 }
 
 func clampResults(n int) int {

@@ -1,5 +1,5 @@
 // Package searchers holds the individual web-search primitives (google, duckduckgo,
-// tavily, perplexity, traversaal, sploitus, searxng, firecrawl, and the optional
+// tavily, perplexity, traversaal, sploitus, searxng, firecrawl, xquik, and the optional
 // internal browser-analytics engine) that the tools.web_search orchestrator drives.
 //
 // Each searcher wraps a single provider, keeps its own Langfuse observation, and

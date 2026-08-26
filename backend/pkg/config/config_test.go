@@ -303,7 +303,7 @@ func clearConfigEnv(t *testing.T) {
 		"GOOGLE_API_KEY", "GOOGLE_CX_KEY", "GOOGLE_LR_KEY",
 		"OAUTH_GOOGLE_CLIENT_ID", "OAUTH_GOOGLE_CLIENT_SECRET",
 		"OAUTH_GITHUB_CLIENT_ID", "OAUTH_GITHUB_CLIENT_SECRET",
-		"PUBLIC_URL", "TRAVERSAAL_API_KEY", "TAVILY_API_KEY",
+		"PUBLIC_URL", "TRAVERSAAL_API_KEY", "TAVILY_API_KEY", "XQUIK_API_KEY",
 		"PERPLEXITY_API_KEY", "PERPLEXITY_MODEL", "PERPLEXITY_CONTEXT_SIZE",
 		"SEARXNG_URL", "SEARXNG_CATEGORIES", "SEARXNG_LANGUAGE",
 		"SEARXNG_SAFESEARCH", "SEARXNG_TIME_RANGE", "SEARXNG_TIMEOUT",
@@ -431,11 +431,22 @@ func TestNewConfig_SearchEngineDefaults(t *testing.T) {
 	assert.Equal(t, "general", config.SearxngCategories)
 	assert.Equal(t, "0", config.SearxngSafeSearch)
 	assert.Equal(t, "lang_en", config.GoogleLRKey)
+	assert.Empty(t, config.XquikAPIKey)
 
 	// web_search internal analytics engine: off by default, with bounded scraping.
 	assert.False(t, config.WebSearchInternalEnabled)
 	assert.Equal(t, 5, config.WebSearchInternalMaxSites)
 	assert.Equal(t, 10240, config.WebSearchInternalMaxSiteBytes)
+}
+
+func TestNewConfig_XquikAPIKey(t *testing.T) {
+	clearConfigEnv(t)
+	t.Chdir(t.TempDir())
+	t.Setenv("XQUIK_API_KEY", "test-xquik-key")
+
+	config, err := NewConfig()
+	require.NoError(t, err)
+	assert.Equal(t, "test-xquik-key", config.XquikAPIKey)
 }
 
 func TestEnsureInstallationID_GeneratesNewUUID(t *testing.T) {

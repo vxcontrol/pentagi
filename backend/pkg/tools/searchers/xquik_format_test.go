@@ -1,0 +1,60 @@
+package searchers
+
+import (
+	"strings"
+	"testing"
+	"unicode/utf8"
+)
+
+func TestFormatXquikResultsBoundsUntrustedFields(t *testing.T) {
+	longText := strings.Repeat("a", xquikMaxTextBytes-1) + "é" + strings.Repeat("b", 20)
+	result := formatXquikResults("query", xquikSearchResponse{Tweets: []xquikTweet{{
+		ID:   "456",
+		Text: longText,
+		URL:  "https://x.com.evil.example/injected",
+		Author: xquikAuthor{
+			Username: "safe_user\n## injected",
+			Name:     "Safe name\n## injected",
+		},
+	}}})
+
+	if strings.Contains(result, "x.com.evil.example") {
+		t.Errorf("result trusted an invalid X host: %s", result)
+	}
+	if strings.Contains(result, "https://x.com/safe_user/status/456") {
+		t.Errorf("result built a URL from an invalid username: %s", result)
+	}
+	if !strings.Contains(result, "[truncated]") {
+		t.Errorf("result did not truncate oversized post text: %s", result)
+	}
+	if !strings.Contains(result, "Safe name ## injected (@safe_user ## injected)") {
+		t.Errorf("result did not flatten untrusted author fields: %s", result)
+	}
+	if !utf8.ValidString(result) {
+		t.Errorf("result contains invalid UTF-8 after truncation")
+	}
+}
+
+func TestFormatXquikResultsClampsUnexpectedRows(t *testing.T) {
+	tweets := make([]xquikTweet, xquikMaxLimit+1)
+	for index := range tweets {
+		tweets[index] = xquikTweet{ID: "1", Text: "post", Author: xquikAuthor{Username: "user"}}
+	}
+
+	result := formatXquikResults("query", xquikSearchResponse{Tweets: tweets})
+	if got := strings.Count(result, "<x_post_json>"); got != xquikMaxLimit {
+		t.Errorf("rendered posts = %d, want %d", got, xquikMaxLimit)
+	}
+	if !strings.Contains(result, "did not follow the cursor") {
+		t.Errorf("result missing bounded-result notice: %s", result)
+	}
+}
+
+func TestClampXquikLimit(t *testing.T) {
+	tests := map[int]int{-1: xquikDefaultLimit, 0: xquikDefaultLimit, 1: 1, 25: 25, 26: xquikMaxLimit}
+	for input, want := range tests {
+		if got := clampXquikLimit(input); got != want {
+			t.Errorf("clampXquikLimit(%d) = %d, want %d", input, got, want)
+		}
+	}
+}

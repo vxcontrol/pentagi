@@ -277,7 +277,8 @@ var registryDefinitions = map[string]llms.FunctionDefinition{
 		Description: "Search the web through a unified engine. Provide a `query` and a `mode`: " +
 			"`links` for a quick list of source links with snippets, `answer` for a synthesized answer over " +
 			"live sources (default), `research` for deep multi-source analysis with reasoning, or `exploit` for " +
-			"exploit code, PoCs, and offensive tooling. The tool selects the best available search provider for " +
+			"exploit code, PoCs, and offensive tooling. Use `social` for visible X posts relevant to authorized " +
+			"reconnaissance. The tool selects the best available search provider for " +
 			"that mode, retries transient failures, and automatically falls back to alternative providers, so you " +
 			"do NOT choose or name a specific engine. Queries must be short, keyword-focused, and in English.",
 		Parameters: reflector.Reflect(&WebSearchAction{}),

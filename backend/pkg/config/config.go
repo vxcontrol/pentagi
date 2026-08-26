@@ -192,6 +192,9 @@ type Config struct {
 	// === Search Engine: Tavily AI ===
 	TavilyAPIKey string `env:"TAVILY_API_KEY"`
 
+	// === Search Engine: Xquik ===
+	XquikAPIKey string `env:"XQUIK_API_KEY"`
+
 	// === Search Engine: Firecrawl ===
 	FirecrawlAPIKey string `env:"FIRECRAWL_API_KEY"`
 	FirecrawlAPIURL string `env:"FIRECRAWL_API_URL" envDefault:"https://api.firecrawl.dev"`
