@@ -122,7 +122,8 @@ func TestXquikHandleStatusErrors(t *testing.T) {
 		wantDelay  time.Duration
 	}{
 		{name: "unauthorized", status: http.StatusUnauthorized},
-		{name: "rate limited", status: http.StatusTooManyRequests, retryAfter: "7", retryable: true, wantDelay: 7 * time.Second},
+		{name: "rate limited", status: http.StatusTooManyRequests, retryAfter: "3", retryable: true, wantDelay: 3 * time.Second},
+		{name: "long retry capped", status: http.StatusTooManyRequests, retryAfter: "3600", retryable: true, wantDelay: xquikMaxRetryAfter},
 		{name: "service unavailable", status: http.StatusServiceUnavailable, retryable: true},
 	}
 

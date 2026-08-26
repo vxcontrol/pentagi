@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 	"unicode/utf8"
 )
 
@@ -14,6 +15,7 @@ const (
 	xquikMaxTextBytes  = 2000
 	xquikMaxFieldBytes = 200
 	xquikMaxErrorBytes = 500
+	xquikMaxRetryAfter = 5 * time.Second
 )
 
 type xquikSearchResponse struct {
@@ -175,4 +177,15 @@ func clampXquikLimit(limit int) int {
 		return xquikMaxLimit
 	}
 	return limit
+}
+
+func parseRetryAfter(value string) time.Duration {
+	seconds, err := strconv.Atoi(strings.TrimSpace(value))
+	if err != nil || seconds < 1 {
+		return 0
+	}
+	if seconds > int(xquikMaxRetryAfter/time.Second) {
+		return xquikMaxRetryAfter
+	}
+	return time.Duration(seconds) * time.Second
 }

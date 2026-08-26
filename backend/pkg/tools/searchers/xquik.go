@@ -9,7 +9,6 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
-	"time"
 
 	"pentagi/pkg/config"
 	"pentagi/pkg/database"
@@ -156,12 +155,4 @@ func classifyXquikError(resp *http.Response, body []byte) error {
 		return Retryable(fmt.Errorf("%s (HTTP %d)", message, resp.StatusCode), parseRetryAfter(resp.Header.Get("Retry-After")))
 	}
 	return Fatal(fmt.Errorf("%s (HTTP %d)", message, resp.StatusCode))
-}
-
-func parseRetryAfter(value string) time.Duration {
-	seconds, err := strconv.Atoi(strings.TrimSpace(value))
-	if err != nil || seconds < 1 {
-		return 0
-	}
-	return time.Duration(seconds) * time.Second
 }

@@ -3,6 +3,7 @@ package searchers
 import (
 	"strings"
 	"testing"
+	"time"
 	"unicode/utf8"
 )
 
@@ -73,6 +74,22 @@ func TestClampXquikLimit(t *testing.T) {
 	for input, want := range tests {
 		if got := clampXquikLimit(input); got != want {
 			t.Errorf("clampXquikLimit(%d) = %d, want %d", input, got, want)
+		}
+	}
+}
+
+func TestParseRetryAfter(t *testing.T) {
+	tests := map[string]time.Duration{
+		"":                    0,
+		"0":                   0,
+		"nope":                0,
+		"3":                   3 * time.Second,
+		"3600":                xquikMaxRetryAfter,
+		"9223372036854775807": xquikMaxRetryAfter,
+	}
+	for input, want := range tests {
+		if got := parseRetryAfter(input); got != want {
+			t.Errorf("parseRetryAfter(%q) = %v, want %v", input, got, want)
 		}
 	}
 }
