@@ -234,6 +234,7 @@ func TestGetSecretPatterns_AllFields(t *testing.T) {
 		OAuthGithubClientSecret: "github-client-secret",
 		TraversaalAPIKey:        "traversaal-123",
 		TavilyAPIKey:            "tavily-123",
+		XquikAPIKey:             "xquik-123",
 		PerplexityAPIKey:        "perplexity-123",
 		ProxyURL:                "http://proxy:8080",
 		LangfusePublicKey:       "lf-public-123",
@@ -242,7 +243,7 @@ func TestGetSecretPatterns_AllFields(t *testing.T) {
 
 	patterns := cfg.GetSecretPatterns()
 
-	expectedCount := 30
+	expectedCount := 31
 	if len(patterns) != expectedCount {
 		t.Errorf("expected %d patterns, got %d", expectedCount, len(patterns))
 	}
