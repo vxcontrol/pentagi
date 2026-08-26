@@ -162,7 +162,7 @@ External search engines and the vector store are indexed in English and shared a
 {{- if .UseAgents}}
 - Web research and memory: delegated to specialists (see TEAM COLLABORATION & DELEGATION above) — you do NOT invoke search engines or vector-store searches directly in this mode
 {{- else}}
-- Web search: `{{.WebSearchToolName}}` — one unified tool. Provide a `query` and a `mode` (`links`, `answer`, `research`, or `exploit`); it selects the best available engine, retries transient failures, and falls back automatically, so you never name a specific engine
+- Web search: `{{.WebSearchToolName}}` — one unified tool. Provide a `query` and a `mode` (`links`, `answer`, `research`, `exploit`, or `social`); use `social` only for visible X posts relevant to authorized reconnaissance. The tool selects the best available engine for that mode, retries transient failures, and falls back automatically, so you never name a specific engine
 - Memory search (read-only): `{{.SearchInMemoryToolName}}`, `{{.SearchGuideToolName}}`, `{{.SearchAnswerToolName}}`, `{{.SearchCodeToolName}}` for retrieving stored knowledge from past engagements
 {{- end}}
 </available_tools>

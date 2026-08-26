@@ -99,7 +99,7 @@ func ctxWithAgent() context.Context {
 // TestWebSearchStrategyOrder verifies the orchestrator walks fallbackStrategy in order
 // and skips unavailable engines.
 func TestWebSearchStrategyOrder(t *testing.T) {
-	for _, mode := range []SearchMode{ModeLinks, ModeAnswer, ModeResearch, ModeExploit} {
+	for _, mode := range []SearchMode{ModeLinks, ModeAnswer, ModeResearch, ModeExploit, ModeSocial} {
 		t.Run(string(mode), func(t *testing.T) {
 			var order []database.SearchengineType
 			engines := map[database.SearchengineType]searchers.Searcher{}
@@ -268,6 +268,21 @@ func TestWebSearchNothingConfiguredReturnsSoftError(t *testing.T) {
 	}
 }
 
+func TestWebSearchSocialModeNamesRequiredProvider(t *testing.T) {
+	engines := map[database.SearchengineType]searchers.Searcher{
+		EngineXquik: &fakeSearcher{engine: EngineXquik, available: false},
+	}
+	ws := newTestWebSearch(&searchLogProviderMock{}, engines)
+
+	got, err := ws.Handle(ctxWithAgent(), WebSearchToolName, webSearchArgs(t, "social", "q"))
+	if err != nil {
+		t.Fatalf("expected soft error, got hard error: %v", err)
+	}
+	if !strings.Contains(got, "XQUIK_API_KEY") {
+		t.Errorf("message = %q, want XQUIK_API_KEY guidance", got)
+	}
+}
+
 func TestWebSearchMalformedArgsIsHardError(t *testing.T) {
 	ws := newTestWebSearch(&searchLogProviderMock{}, map[database.SearchengineType]searchers.Searcher{})
 	_, err := ws.Handle(ctxWithAgent(), WebSearchToolName, []byte("{not json"))
@@ -307,7 +322,7 @@ func TestWebSearchDefaultMode(t *testing.T) {
 
 func TestNormalizeMode(t *testing.T) {
 	cases := map[string]SearchMode{
-		"links": ModeLinks, "answer": ModeAnswer, "research": ModeResearch, "exploit": ModeExploit,
+		"links": ModeLinks, "answer": ModeAnswer, "research": ModeResearch, "exploit": ModeExploit, "social": ModeSocial,
 		"": defaultMode, "bogus": defaultMode, "ANSWER": ModeAnswer, " research ": ModeResearch,
 	}
 	for in, want := range cases {

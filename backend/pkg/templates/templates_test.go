@@ -242,6 +242,24 @@ func TestTemplateRenderability(t *testing.T) {
 	testRenderability(t, reflect.ValueOf(defaultPrompts), dummyData, "DefaultPrompts")
 }
 
+func TestSearchPromptsDescribeSocialMode(t *testing.T) {
+	defaultPrompts, err := templates.GetDefaultPrompts()
+	if err != nil {
+		t.Fatalf("Failed to load default prompts: %v", err)
+	}
+
+	assistant := defaultPrompts.AgentsPrompts.Assistant.System.Template
+	searcher := defaultPrompts.AgentsPrompts.Searcher.System.Template
+	for name, prompt := range map[string]string{"assistant": assistant, "searcher": searcher} {
+		if !strings.Contains(prompt, "`social`") && !strings.Contains(prompt, "mode=social") {
+			t.Errorf("%s prompt does not describe social search mode", name)
+		}
+	}
+	if !strings.Contains(searcher, "Xquik") || !strings.Contains(searcher, `<mode name="social">`) {
+		t.Errorf("searcher prompt does not map social mode to Xquik")
+	}
+}
+
 // testRenderability recursively tests if all prompts can be rendered with dummy data
 func testRenderability(t *testing.T, v reflect.Value, dummyData map[string]any, structName string) {
 	if v.Kind() == reflect.Ptr {

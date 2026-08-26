@@ -1622,6 +1622,17 @@ These settings control the integration with various search engines used for web 
 | ------------ | -------------------- | ------------- | -------------------------------- |
 | TavilyAPIKey | `TAVILY_API_KEY`     | *(none)*      | API key for Tavily search engine |
 
+### Xquik Social Search
+
+Xquik backs the `social` mode of `web_search`. It returns bounded, newest-first
+results from visible X posts. Other search modes never fall back to Xquik.
+
+Xquik is an independent third-party service. Not affiliated with X Corp. "Twitter" and "X" are trademarks of X Corp.
+
+| Option      | Environment Variable | Default Value | Description                      |
+| ----------- | -------------------- | ------------- | -------------------------------- |
+| XquikAPIKey | `XQUIK_API_KEY`      | *(none)*      | API key for Xquik social search  |
+
 ### Firecrawl Search
 
 | Option          | Environment Variable | Default Value               | Description                                                                    |
