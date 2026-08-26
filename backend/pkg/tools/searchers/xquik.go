@@ -127,7 +127,7 @@ func (x *xquik) search(ctx context.Context, query string, limit int) (string, er
 		return "", Fatal(fmt.Errorf("failed to decode Xquik response: %w", err))
 	}
 
-	return formatXquikResults(query, result), nil
+	return formatXquikResults(query, limit, result), nil
 }
 
 func (x *xquik) apiKey() string {

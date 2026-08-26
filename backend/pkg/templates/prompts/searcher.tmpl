@@ -51,7 +51,7 @@ External search engines and the answer vector store are indexed in English and s
 3. **Source Prioritization**
    - Internal memory → `web_search` → targeted `browser` reads
    - Use "browser" for reading technical documentation directly from a known URL
-   - Use `web_search` with `mode=research` (or `mode=answer`) for complex questions requiring synthesis; `mode=links` for quick link discovery; `mode=exploit` for exploits/PoCs
+   - Use `web_search` with `mode=research` (or `mode=answer`) for complex questions requiring synthesis; `mode=links` for quick link discovery; `mode=exploit` for exploits/PoCs; `mode=social` for visible X posts relevant to authorized reconnaissance
    - Match the `web_search` mode to query complexity
 
 ## SUMMARIZATION AWARENESS PROTOCOL
@@ -101,12 +101,13 @@ External search engines and the answer vector store are indexed in English and s
 <web_search priority="3">
 The single `web_search` tool covers ALL external web search. You do NOT choose a
 provider (Google, DuckDuckGo, Tavily, Firecrawl, Traversaal, Perplexity, Searxng,
-Sploitus) — you choose an intent `mode`, and web_search selects the best available
+Sploitus, Xquik) — you choose an intent `mode`, and web_search selects the best available
 engine for that mode, retries transient failures, and falls back automatically:
 <mode name="links">Rapid link discovery with titles/snippets — the cheapest option for collecting public sources.</mode>
 <mode name="answer">A synthesized answer over live sources — the default for a concrete question.</mode>
 <mode name="research">Deep, multi-source analysis with reasoning — for complex technical topics needing synthesis.</mode>
 <mode name="exploit">Exploit code, PoCs, and offensive tooling — for CVEs, software, or vulnerability classes.</mode>
+<mode name="social">Visible X posts for authorized reconnaissance. Requires configured Xquik access and never falls back to generic web results.</mode>
 </web_search>
 
 <tool name="browser" priority="4">For targeted content extraction from a specific, already-identified URL</tool>

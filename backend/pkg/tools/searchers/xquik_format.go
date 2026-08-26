@@ -39,11 +39,12 @@ type xquikAuthor struct {
 	Name     string `json:"name"`
 }
 
-func formatXquikResults(query string, result xquikSearchResponse) string {
+func formatXquikResults(query string, limit int, result xquikSearchResponse) string {
+	limit = clampXquikLimit(limit)
 	tweets := result.Tweets
-	truncatedResults := len(tweets) > xquikMaxLimit
+	truncatedResults := len(tweets) > limit
 	if truncatedResults {
-		tweets = tweets[:xquikMaxLimit]
+		tweets = tweets[:limit]
 	}
 
 	var output strings.Builder

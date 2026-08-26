@@ -8,7 +8,7 @@ import (
 
 func TestFormatXquikResultsBoundsUntrustedFields(t *testing.T) {
 	longText := strings.Repeat("a", xquikMaxTextBytes-1) + "é" + strings.Repeat("b", 20)
-	result := formatXquikResults("query", xquikSearchResponse{Tweets: []xquikTweet{{
+	result := formatXquikResults("query", 1, xquikSearchResponse{Tweets: []xquikTweet{{
 		ID:   "456",
 		Text: longText,
 		URL:  "https://x.com.evil.example/injected",
@@ -41,9 +41,27 @@ func TestFormatXquikResultsClampsUnexpectedRows(t *testing.T) {
 		tweets[index] = xquikTweet{ID: "1", Text: "post", Author: xquikAuthor{Username: "user"}}
 	}
 
-	result := formatXquikResults("query", xquikSearchResponse{Tweets: tweets})
+	result := formatXquikResults("query", xquikMaxLimit, xquikSearchResponse{Tweets: tweets})
 	if got := strings.Count(result, "<x_post_json>"); got != xquikMaxLimit {
 		t.Errorf("rendered posts = %d, want %d", got, xquikMaxLimit)
+	}
+	if !strings.Contains(result, "did not follow the cursor") {
+		t.Errorf("result missing bounded-result notice: %s", result)
+	}
+}
+
+func TestFormatXquikResultsHonorsRequestedLimit(t *testing.T) {
+	tweets := []xquikTweet{
+		{ID: "1", Text: "first", Author: xquikAuthor{Username: "user"}},
+		{ID: "2", Text: "second", Author: xquikAuthor{Username: "user"}},
+	}
+
+	result := formatXquikResults("query", 1, xquikSearchResponse{Tweets: tweets})
+	if got := strings.Count(result, "<x_post_json>"); got != 1 {
+		t.Errorf("rendered posts = %d, want 1", got)
+	}
+	if strings.Contains(result, `"second"`) {
+		t.Errorf("result exceeded the requested limit: %s", result)
 	}
 	if !strings.Contains(result, "did not follow the cursor") {
 		t.Errorf("result missing bounded-result notice: %s", result)
