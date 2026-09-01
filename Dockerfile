@@ -182,6 +182,8 @@ COPY examples/configs/vllm-qwen3.5-27b-fp8-no-think.provider.yml /opt/pentagi/co
 COPY examples/configs/vllm-qwen3.5-27b-fp8.provider.yml /opt/pentagi/conf/
 COPY examples/configs/vllm-qwen3.6-27b-fp8-no-think.provider.yml /opt/pentagi/conf/
 COPY examples/configs/vllm-qwen3.6-27b-fp8.provider.yml /opt/pentagi/conf/
+COPY examples/configs/vllm-qwen3.8-27b-fp8-no-think.provider.yml /opt/pentagi/conf/
+COPY examples/configs/vllm-qwen3.8-27b-fp8.provider.yml /opt/pentagi/conf/
 COPY examples/configs/vllm-qwen3.6-35b-a3b-fp8-no-think.provider.yml /opt/pentagi/conf/
 COPY examples/configs/vllm-qwen3.6-35b-a3b-fp8.provider.yml /opt/pentagi/conf/
 COPY examples/configs/vllm-qwen332b-fp16.provider.yml /opt/pentagi/conf/
