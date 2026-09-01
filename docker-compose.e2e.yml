@@ -54,6 +54,11 @@ services:
       - LLM_SERVER_KEY=e2e-dummy-key
       - LLM_SERVER_MODEL=e2e-mock
       - EMBEDDING_PROVIDER=none
+      # Creating a bridge for the nested worker changes the runner's network
+      # topology, which makes Chromium drop the flow's HTTP/WebSocket traffic.
+      # This fixed mock scenario only executes `uname -a`, so it does not need
+      # an isolated worker network.
+      - DOCKER_NETWORK=host
     # The base service has no healthcheck, so `up --wait` would return before
     # goose migrations finish and the API serves. The runtime image is alpine —
     # probe with busybox wget, not curl.

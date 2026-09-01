@@ -4,6 +4,7 @@
 // answers stay deterministic: the whole request JSON is matched against
 // scenario.mjs rules in order, first hit wins.
 import { createServer } from 'node:http';
+import { setTimeout as sleep } from 'node:timers/promises';
 
 import { FALLBACK, RULES } from './scenario.mjs';
 
@@ -143,6 +144,11 @@ createServer(async (request, response) => {
         const toolNames = toolList.map((tool) => tool?.function?.name ?? tool?.type ?? '?').join(',');
 
         console.log(`[mock-llm] ${rule.label}: ${payload.stream ? 'stream' : 'plain'} tools=[${toolNames}]`);
+
+        if (rule.delayMs) {
+            await sleep(rule.delayMs);
+        }
+
         respondCompletion(response, payload, rule);
 
         return;

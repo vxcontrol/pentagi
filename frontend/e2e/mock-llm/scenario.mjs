@@ -104,6 +104,10 @@ export const RULES = [
         ],
     },
     {
+        // Flow creation starts its worker before the mutation returns. Give the
+        // browser time to route to the flow and attach the live log subscriptions
+        // before this fixture emits its only sandbox command and final messages.
+        delayMs: 1_000,
         label: 'agent-terminal',
         match: /"terminal"/,
         toolCalls: [
