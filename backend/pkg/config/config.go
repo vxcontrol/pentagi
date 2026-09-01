@@ -55,7 +55,12 @@ type Config struct {
 	DockerPortsBase              int    `env:"DOCKER_PORTS_BASE" envDefault:"28000"`
 	DockerDefaultImage           string `env:"DOCKER_DEFAULT_IMAGE" envDefault:"debian:latest"`
 	DockerDefaultImageForPentest string `env:"DOCKER_DEFAULT_IMAGE_FOR_PENTEST" envDefault:"vxcontrol/kali-linux"`
-	TerminalToolTimeout          int    `env:"TERMINAL_TOOL_TIMEOUT" envDefault:"1200"`
+	// DockerImageSelectionMode controls how the terminal container image is
+	// chosen for a flow: "llm" (default) asks the LLM via the image_chooser
+	// prompt; "fixed" skips the LLM call and deterministically uses the
+	// configured pentest image (DOCKER_DEFAULT_IMAGE_FOR_PENTEST).
+	DockerImageSelectionMode string `env:"DOCKER_IMAGE_SELECTION_MODE" envDefault:"llm"`
+	TerminalToolTimeout      int    `env:"TERMINAL_TOOL_TIMEOUT" envDefault:"1200"`
 
 	// === API Server Configuration ===
 	ServerPort   int    `env:"SERVER_PORT" envDefault:"8080"`

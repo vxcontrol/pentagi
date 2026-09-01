@@ -284,6 +284,22 @@ func NewProviderController(
 	return pc, nil
 }
 
+// dockerImageSelectionModeFixed makes image selection deterministic: the
+// configured pentest image is used without an LLM call. Any other
+// DOCKER_IMAGE_SELECTION_MODE value keeps the default LLM-based selection.
+const dockerImageSelectionModeFixed = "fixed"
+
+// resolvePentestImage returns the image to use when image selection runs in
+// fixed mode: the configured pentest image (lowercased/trimmed), falling back
+// to the default docker image when the pentest image is not configured.
+func resolvePentestImage(pentestImage, defaultImage string) string {
+	image := strings.ToLower(strings.TrimSpace(pentestImage))
+	if image == "" {
+		return strings.ToLower(strings.TrimSpace(defaultImage))
+	}
+	return image
+}
+
 func (pc *providerController) NewFlowProvider(
 	ctx context.Context,
 	prvname provider.ProviderName,
@@ -301,20 +317,29 @@ func (pc *providerController) NewFlowProvider(
 		return nil, fmt.Errorf("failed to get provider: %w", err)
 	}
 
-	imageTmpl, err := prompter.RenderTemplate(templates.PromptTypeImageChooser, map[string]any{
-		"DefaultImage":           pc.docker.GetDefaultImage(),
-		"DefaultImageForPentest": pc.cfg.DockerDefaultImageForPentest,
-		"Input":                  input,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to get primary docker image template: %w", err)
-	}
+	// Select the terminal container image. With DOCKER_IMAGE_SELECTION_MODE=fixed
+	// the configured pentest image is used deterministically, without relying on
+	// the model following the image_chooser prompt. Any other mode value keeps
+	// the default LLM-based selection.
+	var image string
+	if pc.cfg.DockerImageSelectionMode == dockerImageSelectionModeFixed {
+		image = resolvePentestImage(pc.cfg.DockerDefaultImageForPentest, pc.docker.GetDefaultImage())
+	} else {
+		imageTmpl, err := prompter.RenderTemplate(templates.PromptTypeImageChooser, map[string]any{
+			"DefaultImage":           pc.docker.GetDefaultImage(),
+			"DefaultImageForPentest": pc.cfg.DockerDefaultImageForPentest,
+			"Input":                  input,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to get primary docker image template: %w", err)
+		}
 
-	image, err := callWithSetupRetries(ctx, prv, pconfig.OptionsTypeSimple, imageTmpl)
-	if err != nil {
-		return nil, fmt.Errorf("failed to select primary docker image via llm call: %w", err)
+		image, err = callWithSetupRetries(ctx, prv, pconfig.OptionsTypeSimple, imageTmpl)
+		if err != nil {
+			return nil, fmt.Errorf("failed to select primary docker image via llm call: %w", err)
+		}
+		image = strings.ToLower(strings.TrimSpace(image))
 	}
-	image = strings.ToLower(strings.TrimSpace(image))
 
 	languageTmpl, err := prompter.RenderTemplate(templates.PromptTypeLanguageChooser, map[string]any{
 		"Input": input,
