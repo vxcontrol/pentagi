@@ -31,6 +31,7 @@ import { SidebarFlowsProvider } from '@/providers/sidebar-flows-provider';
 import { TemplatesProvider } from '@/providers/templates-provider';
 import { ThemeProvider } from '@/providers/theme-provider';
 import { UserProvider } from '@/providers/user-provider';
+import { VersionInfoProvider } from '@/providers/version-info-provider';
 
 import { SystemSettingsProvider } from './providers/system-settings-provider';
 
@@ -73,11 +74,13 @@ function ProtectedAppLayout() {
     return (
         <ProtectedRoute>
             <SystemSettingsProvider>
-                <ProvidersProvider>
-                    <SidebarFlowsProvider>
-                        <AppLayout />
-                    </SidebarFlowsProvider>
-                </ProvidersProvider>
+                <VersionInfoProvider>
+                    <ProvidersProvider>
+                        <SidebarFlowsProvider>
+                            <AppLayout />
+                        </SidebarFlowsProvider>
+                    </ProvidersProvider>
+                </VersionInfoProvider>
             </SystemSettingsProvider>
         </ProtectedRoute>
     );

@@ -206,6 +206,24 @@ type Settings {
   assistantUseAgents: Boolean!
 }
 
+enum UpdateState {
+  disabled
+  pending
+  unreachable
+  unknown
+  up_to_date
+  update_available
+}
+
+type VersionInfo {
+  current: String!
+  state: UpdateState!
+  latest: String
+  strategy: String!
+  checkedAt: Time
+  failedAt: Time
+}
+
 # ==================== User Preferences Types ====================
 
 type UserPreferences {
@@ -1034,6 +1052,7 @@ type Query {
 
   # System settings
   settings: Settings!
+  versionInfo: VersionInfo!
   settingsProviders: ProvidersConfig!
   settingsPrompts: PromptsConfig!
   settingsUser: UserPreferences!

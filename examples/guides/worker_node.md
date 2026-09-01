@@ -620,11 +620,11 @@ sudo tee /usr/local/bin/run-node-exporter > /dev/null << EOF
 
 set -e
 
-CONTAINER_NAME=node_exporter
+CONTAINER_NAME=node-exporter
 IMAGE=prom/node-exporter:v1.5.0
 LISTEN_IP=${METRICS_IP}
 LISTEN_PORT=9100
-TEXTFILE_DIR=/var/lib/node_exporter/textfile_collector
+TEXTFILE_DIR=/var/lib/node-exporter/textfile_collector
 RESTART_POLICY=unless-stopped
 LOG_MAX_SIZE=50m
 LOG_MAX_FILE=7

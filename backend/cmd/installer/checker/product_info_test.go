@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/moby/moby/api/pkg/stdcopy"
+	"github.com/vxcontrol/cloud/models"
 )
 
 // frame writes one chunk the way the docker daemon does on a non-TTY exec: an
@@ -106,6 +107,41 @@ func TestNothingThatIsNotADocumentIsCarried(t *testing.T) {
 		if info := productInfoFromOutput([]byte(output)); info != nil {
 			t.Errorf("%s was carried through as a document: %q", name, info)
 		}
+	}
+}
+
+// TestTheDocumentBoundIsTheContractsOwn.
+//
+// The bound here has one job: never build a request the service will refuse whole.
+// That makes it the CONTRACT's number, and asserting it as a literal is what let it
+// be wrong — it stood at 64 KiB against a 16 KiB contract, and every other test in
+// this file measures against the same constant, so they all agreed with each other
+// and none of them agreed with the server.
+//
+// Both halves are pinned: that the constant IS the contract's, and that a document
+// one byte over the contract is refused. The second would still fail if somebody
+// reintroduced a local number that happened to be larger.
+func TestTheDocumentBoundIsTheContractsOwn(t *testing.T) {
+	if maxProductInfoBytes != models.MaxProductInfoBytes {
+		t.Errorf("the installer accepts %d bytes, the contract accepts %d — a document in "+
+			"between costs the whole update check", maxProductInfoBytes, models.MaxProductInfoBytes)
+	}
+
+	padding := models.MaxProductInfoBytes // the envelope around it pushes this over
+	oversized := `{"schema":1,"padding":"` + strings.Repeat("x", padding) + `"}`
+	if len(oversized) <= models.MaxProductInfoBytes {
+		t.Fatalf("the fixture is not oversized: %d bytes (test bug)", len(oversized))
+	}
+	if info := productInfoFromOutput([]byte(oversized)); info != nil {
+		t.Errorf("a document of %d bytes was carried into a request the contract bounds at %d",
+			len(oversized), models.MaxProductInfoBytes)
+	}
+
+	// And one that fits is still carried: a bound that refuses everything would
+	// pass the assertion above and quietly drop the document on every check.
+	fitting := `{"schema":1,"version":"0.9.3"}`
+	if info := productInfoFromOutput([]byte(fitting)); info == nil {
+		t.Error("a document well inside the bound was dropped")
 	}
 }
 

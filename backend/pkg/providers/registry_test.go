@@ -3,6 +3,7 @@ package providers
 import (
 	"testing"
 
+	"pentagi/pkg/config"
 	"pentagi/pkg/providers/provider"
 
 	"github.com/stretchr/testify/assert"
@@ -37,4 +38,39 @@ func TestProviderRegistryMatchesAllProviderTypes(t *testing.T) {
 		_, ok := allTypes[pt]
 		assert.Truef(t, ok, "%q is in providerRegistry but missing from AllProviderTypes", pt)
 	}
+}
+
+// TestEnabledDefaultProviderTypes pins that it reports exactly the types whose
+// registry gate is satisfied — the same gate NewProviderController uses to
+// decide what to construct — without requiring a database or Docker client.
+func TestEnabledDefaultProviderTypes(t *testing.T) {
+	t.Run("nothing configured", func(t *testing.T) {
+		assert.Empty(t, EnabledDefaultProviderTypes(&config.Config{}))
+	})
+
+	t.Run("only credentialed types are reported", func(t *testing.T) {
+		cfg := &config.Config{
+			OpenAIKey:       "key",
+			AnthropicAPIKey: "key",
+			KimiAPIKey:      "key",
+		}
+
+		types := EnabledDefaultProviderTypes(cfg)
+
+		assert.ElementsMatch(t, []string{
+			string(provider.ProviderOpenAI),
+			string(provider.ProviderAnthropic),
+			string(provider.ProviderKimi),
+		}, types)
+	})
+
+	t.Run("custom needs both a URL and a model or config path", func(t *testing.T) {
+		assert.Empty(t, EnabledDefaultProviderTypes(&config.Config{LLMServerURL: "http://llm"}))
+
+		types := EnabledDefaultProviderTypes(&config.Config{
+			LLMServerURL:   "http://llm",
+			LLMServerModel: "some-model",
+		})
+		assert.Equal(t, []string{string(provider.ProviderCustom)}, types)
+	})
 }

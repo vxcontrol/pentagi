@@ -1,7 +1,21 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+vi.mock('@/providers/version-info-provider', () => ({
+    useVersionInfo: () => ({
+        isLoading: false,
+        versionInfo: {
+            checkedAt: null,
+            current: '2.1.0-93e99748',
+            failedAt: null,
+            latest: null,
+            state: 'up_to_date',
+            strategy: 'preview',
+        },
+    }),
+}));
 
 import { SidebarProvider } from '@/components/ui/sidebar';
 
@@ -28,6 +42,14 @@ function renderSidebar(entry: { pathname: string; state?: unknown }) {
 }
 
 const backToApp = () => screen.getByRole('link', { name: /Back to App/ });
+
+describe('SettingsSidebar version', () => {
+    it('names the product and the running version at the bottom of the menu', () => {
+        renderSidebar({ pathname: '/settings/account' });
+
+        expect(screen.getByRole('button', { name: /PentAGI v2\.1\.0/ })).toHaveTextContent('PentAGI v2.1.0');
+    });
+});
 
 describe('SettingsSidebar "Back to App"', () => {
     it('returns to the page the user came from', () => {

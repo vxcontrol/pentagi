@@ -647,6 +647,15 @@ type VectorStoreLog struct {
 	CreatedAt time.Time         `json:"createdAt"`
 }
 
+type VersionInfo struct {
+	Current   string      `json:"current"`
+	State     UpdateState `json:"state"`
+	Latest    *string     `json:"latest,omitempty"`
+	Strategy  string      `json:"strategy"`
+	CheckedAt *time.Time  `json:"checkedAt,omitempty"`
+	FailedAt  *time.Time  `json:"failedAt,omitempty"`
+}
+
 type AgentConfigType string
 
 const (
@@ -1631,6 +1640,55 @@ func (e *ToolCallStatus) UnmarshalGQL(v interface{}) error {
 }
 
 func (e ToolCallStatus) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+type UpdateState string
+
+const (
+	UpdateStateDisabled        UpdateState = "disabled"
+	UpdateStatePending         UpdateState = "pending"
+	UpdateStateUnreachable     UpdateState = "unreachable"
+	UpdateStateUnknown         UpdateState = "unknown"
+	UpdateStateUpToDate        UpdateState = "up_to_date"
+	UpdateStateUpdateAvailable UpdateState = "update_available"
+)
+
+var AllUpdateState = []UpdateState{
+	UpdateStateDisabled,
+	UpdateStatePending,
+	UpdateStateUnreachable,
+	UpdateStateUnknown,
+	UpdateStateUpToDate,
+	UpdateStateUpdateAvailable,
+}
+
+func (e UpdateState) IsValid() bool {
+	switch e {
+	case UpdateStateDisabled, UpdateStatePending, UpdateStateUnreachable, UpdateStateUnknown, UpdateStateUpToDate, UpdateStateUpdateAvailable:
+		return true
+	}
+	return false
+}
+
+func (e UpdateState) String() string {
+	return string(e)
+}
+
+func (e *UpdateState) UnmarshalGQL(v interface{}) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = UpdateState(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid UpdateState", str)
+	}
+	return nil
+}
+
+func (e UpdateState) MarshalGQL(w io.Writer) {
 	fmt.Fprint(w, strconv.Quote(e.String()))
 }
 

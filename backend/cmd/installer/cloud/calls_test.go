@@ -305,10 +305,16 @@ func TestDownloadPackageRefusesAMalformedRequestBeforeSending(t *testing.T) {
 		},
 	}
 
-	// Only file-distributed components can be downloaded; an image component has no
-	// package behind it.
+	// Only components an executable is published for can be downloaded, and neo4j is
+	// somebody else's container image — there is no file behind it under any
+	// circumstances.
+	//
+	// Deliberately NOT pentagi, which is the one component where "delivered as an
+	// image" and "has no package" came apart: it ships an executable a running
+	// product can replace itself with, so it is a valid download and would make this
+	// test pass for the wrong reason.
 	request := models.DownloadPackageRequest{
-		Component: models.ComponentTypePentagi,
+		Component: models.ComponentTypeNeo4j,
 		Version:   "2.0.0",
 		OS:        models.OSTypeLinux,
 		Arch:      models.ArchTypeAMD64,

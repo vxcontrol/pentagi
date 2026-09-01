@@ -46,6 +46,7 @@ func (a *App) View() string {
 - **Controller Layer**: Business logic, environment variables, configuration
 - **Styles Layer**: Presentation, theming, responsive calculations
 - **Window Layer**: Terminal size management, dimension coordination
+- **Cloud Layer**: The only route out to the PentAGI Cloud API — request construction, envelope handling, error classification
 
 ## 🏗️ **Navigation Architecture**
 
@@ -139,6 +140,80 @@ func (a *App) createModelForScreen(screenID ScreenID, data any) tea.Model {
     }
 }
 ```
+
+## 🏗️ **Screen Registration Architecture**
+
+### **Where the Update Screens Sit**
+Two screens were inserted into the maintenance branch of the navigation graph, and both took over a destination that used to belong to the generic processor operation form:
+
+```
+MaintenanceScreen (list)
+  ├── UpdateOverviewScreen ──enter──> UpdatePentagiScreen   ("processor_operation_form§compose§update")
+  └── InstallerUpdateScreen                                  (replaced "processor_operation_form§installer§update")
+```
+
+- **`UpdateOverviewScreen`** stands *between* the menu entry and the operation form.
+The entry used to lead straight into "are you sure?", asking for consent to something the interface had never described.
+The overview describes it, then continues to the same form — the confirmation there is untouched.
+The screen makes no network call: everything it renders comes from the last check result held by the controller, so it cannot fail and has no error state.
+`Enter` is deliberately *not* bound to page-down as it is on the EULA screen: this screen asks for no consent, so its one unambiguous key belongs to its one action.
+
+- **`InstallerUpdateScreen`** is a screen rather than an operation form because what it does is describe a build and download one verified file, and the generic form's help text claimed the running binary would be replaced and the app would exit — something no version of the installer has ever done.
+It names version, platform, size and target path *first*, then offers a single action, and confirms only the one thing worth confirming: a file already occupying the target name.
+
+### **The Four Registration Steps**
+A new screen is not a single file. It is four edits, and only the first of them is enforced by the compiler:
+
+| # | Where | What |
+|---|---|---|
+| 1 | `wizard/models/types.go` | the `ScreenID` constant |
+| 2 | `wizard/models/types.go` — `RestoreModel` | a `case` for the concrete model type |
+| 3 | `wizard/registry/registry.go` — `initScreens` | construct the screen and store it under its `ScreenID` |
+| 4 | `wizard/locale/locale.go` + `app.initHotkeysLocale` | the screen's strings, and a caption for every hotkey it returns |
+
+```go
+// Step 2 — the branch without which the screen is inert
+func RestoreModel(model tea.Model) BaseScreenModel {
+    switch m := model.(type) {
+    // ...
+    case *UpdateOverviewModel:
+        return m
+    case *InstallerUpdateModel:
+        return m
+    default:
+        return nil
+    }
+}
+```
+
+### **Why Step 2 Is the Dangerous One**
+`RestoreModel` is the *only* path by which a model returned from `Update` gets back into the
+app:
+
+```go
+func (app *App) forwardMsgToCurrentModel(msg tea.Msg) tea.Cmd {
+    model, cmd := app.currentModel.Update(msg)
+    if newModel := models.RestoreModel(model); newModel != nil {
+        app.currentModel = newModel
+    }
+    return cmd
+}
+```
+
+A type the switch does not know yields `nil` and the app keeps the model it already had.
+
+What that costs is worth stating precisely, because the obvious answer is wrong: every screen here has a pointer receiver on `Update` and returns itself, so the mutation has already happened in place and the pointer the app is holding *is* the updated model — nothing freezes.
+
+The branch is load-bearing for the case the signature allows but no screen has used yet: a model whose `Update` returns a *different* model. That one is dropped silently, with no panic, no log line and no error anywhere.
+
+The compile-time assertion each screen carries (`var _ BaseScreenModel = (*InstallerUpdateModel)(nil)`) does **not** catch it either, because `RestoreModel` is a runtime type switch and a missing `case` is not a type error.
+
+`TestEveryScreenModelIsRestorable` therefore enumerates both new screens, and that test is the only guard there is. The contract it encodes is "every screen is listed" rather than "list the ones that need it", because the day a screen starts returning something else is not the day anybody remembers this rule.
+
+Steps 3 and 4 fail just as quietly, which is why they are listed rather than assumed:
+
+- A screen missing from `initScreens` is not a crash — `GetScreen` falls back to `initMockScreen` and the user gets a placeholder form where the feature should be.
+- The footer renders a hotkey only if its key is present in `app.hotkeys` (`if localeHotKey, ok := app.hotkeys[hotkey]; ok`). A screen returning a key with no caption simply shows nothing in the footer.
 
 ## 🏗️ **Adaptive Layout Strategy**
 
@@ -455,6 +530,125 @@ func (c *StateController) loadProviderConfig(providerID string) ProviderConfig {
 }
 ```
 
+## 🏗️ **Cloud Client Architecture**
+
+### **Single Egress Pattern**
+Everything the installer asks of the PentAGI Cloud API goes through one package: `cmd/installer/cloud`.
+
+Both `checker` and `processor` build a `cloud.Config` from the installer state and call methods on the client. Neither constructs requests, parses responses, or opens connections to `update.pentagi.com` directly.
+
+The `cloud` package is independent from the rest of the installer — it does not depend on `checker`, `processor`, or `wizard`. The dependency arrow points only one way. In tests, the client can be exercised by substituting the call functions, with no actual server involved.
+
+```go
+// cloud/client.go — three routes bound in one build
+const (
+    routeUpdatesCheck     = "updates_check"      // POST /api/v1/proxy/updates/check
+    routePackagesInfo     = "packages_info"      // GET  /api/v1/proxy/packages/info
+    routePackagesDownload = "packages_download"  // GET  /api/v1/proxy/packages/download
+)
+
+type Client struct {
+    checkUpdates    sdk.CallReqBytesRespBytes
+    packageInfo     sdk.CallReqQueryRespBytes
+    downloadPackage sdk.CallReqQueryRespWriter
+    // ...
+}
+```
+
+Route names are part of the contract, not internal labels: the server dispatches on the name, and one it does not recognise is refused outright rather than reported as a missing page.
+
+### **One Proxy Setting Governs Every Call**
+The SDK's default transport reads the proxy from the process environment. The installer has its own `PROXY_URL` setting — often carrying credentials the environment does not — and that setting has to win, because it is the one the user actually configured.
+
+```go
+func newTransport(proxyURL string) (*http.Transport, error) {
+    transport := sdk.DefaultTransport()
+    value := strings.TrimSpace(proxyURL)
+    if value == "" {
+        return transport, nil // nothing configured: leave the environment behaviour alone
+    }
+    parsed, err := url.Parse(value)
+    // ... reject a URL with no host ...
+    transport.Proxy = http.ProxyURL(parsed)
+    return transport, nil
+}
+```
+
+The transport is built once in `New` and shared by all three calls, so there is no route that can quietly bypass it. Both construction sites — the checker's update check and the processor's package download — read the same `PROXY_URL`, which is what makes "one setting" true in practice rather than only by intent.
+
+Two neighbouring normalisations belong to the same idea of a single, predictable egress:
+
+- **`NormalizeHost`** reduces the configured address to `host[:port]`. A scheme and trailing path are tolerated because the setting historically held a full URL, but an explicit `http://` is an **error** rather than a silent upgrade: the connection is always encrypted, and quietly doing the opposite of what the user wrote would hide a misconfiguration.
+
+- **`NormalizeVersion`** turns the build version into one the contract accepts, falling back to `0.0.0` for anything that is not a version number — a branch name, a bare commit hash, an empty string. The original is not lost: it travels in the `User-Agent`, where it identifies the exact build without having to satisfy the version grammar.
+
+### **The License Key Is Validated Before It Is Handed Over**
+```go
+if key := strings.TrimSpace(cfg.LicenseKey); key != "" {
+    if _, err := sdk.IntrospectLicenseKey(key); err != nil {
+        client.licenseWarning = fmt.Errorf("license key is not usable, continuing without it: %w", err)
+    } else {
+        options = append(options, sdk.WithLicenseKey(key))
+    }
+}
+```
+
+The SDK drops a key it cannot decode without saying so, and the call then runs anonymously — which from the outside looks exactly like the license not being honoured. Validating first turns that into a stated reason, available from `LicenseWarning()`.
+
+An unusable key is deliberately **not** fatal. The update check is the one thing that still works without a license, so refusing to build the client would leave the user with no way to discover that their key is the problem. `New` fails only on configuration that cannot produce working calls at all: an unusable host or an unusable proxy.
+
+### **Answers Arrive Inside an Envelope**
+Every non-streaming answer is wrapped as `{"status": …, "data": …}`, and unwrapping it is not optional:
+
+```go
+answer, err := c.checkUpdates(ctx, body)
+if err != nil {
+    return nil, Classify(err)
+}
+// Decoding straight into the response type SUCCEEDS against the wrapper — every field
+// simply stays at its zero value. Skipping this reports "no updates" for every answer.
+response, err := models.ParseEnvelope[models.CheckUpdatesResponse](answer)
+```
+
+This is the sharpest edge in the whole client. `json.Unmarshal` of an envelope into the payload type produces no error and no populated fields, so the installer concludes there is nothing to install and never learns it was wrong.
+
+`ParseEnvelope` also turns a `2xx` body whose status is not `success` into an `*APIError` describing what the server reported. Binary downloads are the one exception — they carry the file itself, with no envelope around it.
+
+### **Failure Classification**
+`Classify` maps SDK errors onto reasons the interface can act on, wrapping the original so `errors.Is`/`errors.As` keep working through it:
+
+| Reason | What the user can do about it |
+|---|---|
+| `unreachable` | check the network — nothing ever reached a verdict |
+| `timeout` | a deadline, including the proof-of-work budget on slow hardware |
+| `rate_limited` / `quota_exceeded` | wait; `RetryAfter` says how long |
+| `forbidden` | retrying never helps; the license does |
+| `not_found` | an answer, not an outage — no such package or version |
+| `rejected` | the request was malformed: our bug, and resending it cannot succeed |
+| `server_error` | worth retrying later |
+
+`Retryable()` collapses the table back down for callers that only need the one bit. Ordering inside `Classify` matters: the typed errors are matched before the sentinels they wrap, because that is where the server-advertised cooldown lives. Collapsing all of this into a single "update server unavailable" flag — as the installer used to — tells the user nothing they can act on.
+
+### **Verification Belongs to the Client, Not the Caller**
+
+`PackageInfo` validates the answer before returning it, because everything `DownloadPackage` checks is taken from that answer: an unverified description of a file is not a basis for trusting the file.
+
+The download then feeds one pass over the stream into three checks at once:
+
+```go
+digest := sha256.New()
+counter := &countingWriter{}
+signed := info.Signature.ValidateWrapWriter(io.MultiWriter(dst, digest, counter))
+```
+
+The expected length has to come from `info.Size` because the encrypted response carries no `Content-Length` — there is no header to read it from. It catches nothing the sha256 and the signature would miss; what it buys is a legible error ("package is N bytes, expected M") ahead of a bare hash mismatch.
+
+Verification can only complete once the last byte is written, so on any error `dst` holds a partial or unverified file. Discarding it is the caller's job, and the two callers discharge that obligation differently on purpose.
+
+`installPluginFile` streams into `<target>.new` and renames only once the write has returned clean, because the file it replaces is the one a running Jaeger has mounted — a download that dies halfway would otherwise leave a truncated plugin and the container would come back up unable to start.
+
+`fetchInstaller` does the opposite: it writes the binary under its final name in the environment directory and removes it on error. Staging an executable through the system temp directory and moving it into place is a pattern antivirus and EDR products score heavily, and a false positive there costs the user their update.
+
 ## 🏗️ **Resource Estimation Architecture**
 
 ### **Token Calculation Pattern**
@@ -588,3 +782,4 @@ This architecture provides:
 - **Responsive Design**: Adaptive to terminal capabilities
 - **Resource Awareness**: Real-time estimation and optimization
 - **User Experience**: Professional interaction patterns
+- **Single Egress**: One package, one proxy setting, one place where answers are unwrapped and failures are classified

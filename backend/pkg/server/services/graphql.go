@@ -17,6 +17,7 @@ import (
 	"pentagi/pkg/providers"
 	"pentagi/pkg/server/auth"
 	"pentagi/pkg/server/logger"
+	"pentagi/pkg/server/update"
 	"pentagi/pkg/templates"
 
 	"github.com/99designs/gqlgen/graphql"
@@ -60,6 +61,7 @@ func NewGraphqlService(
 	subscriptions subscriptions.SubscriptionsController,
 	knowledgeStore knowledge.KnowledgeStore,
 	replacer anonymizer.Replacer,
+	updates *update.Service,
 ) *GraphqlService {
 	srv := handler.New(graph.NewExecutableSchema(graph.Config{Resolvers: &graph.Resolver{
 		DB:              db,
@@ -72,6 +74,7 @@ func NewGraphqlService(
 		Subscriptions:   subscriptions,
 		Knowledge:       knowledgeStore,
 		Replacer:        replacer,
+		Updates:         updates,
 	}}))
 
 	component := "pentagi-gql"

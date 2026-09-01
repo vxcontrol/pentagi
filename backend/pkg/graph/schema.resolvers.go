@@ -28,6 +28,7 @@ import (
 	"pentagi/pkg/providers/qwen"
 	"pentagi/pkg/resources"
 	"pentagi/pkg/server/auth"
+	"pentagi/pkg/server/update"
 	"pentagi/pkg/templates"
 	"pentagi/pkg/templates/validator"
 	"pentagi/pkg/version"
@@ -2080,6 +2081,24 @@ func (r *queryResolver) Settings(ctx context.Context) (*model.Settings, error) {
 	}
 
 	return settings, nil
+}
+
+// VersionInfo is the resolver for the versionInfo field.
+func (r *queryResolver) VersionInfo(ctx context.Context) (*model.VersionInfo, error) {
+	_, _, err := validatePermission(ctx, "settings.view")
+	if err != nil {
+		return nil, err
+	}
+
+	// No service means checks were never configured — an installation id that is
+	// missing or malformed — which to whoever reads the badge is the same as
+	// checks switched off. The build itself is still named either way.
+	status := update.DisabledStatus(r.Config)
+	if r.Updates != nil {
+		status = r.Updates.Status()
+	}
+
+	return versionInfoFromStatus(status), nil
 }
 
 // SettingsProviders is the resolver for the settingsProviders field.

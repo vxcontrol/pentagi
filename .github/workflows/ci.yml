@@ -112,6 +112,22 @@ jobs:
         run: go mod download
         continue-on-error: true
 
+      # The installer embeds the deployment descriptors it extracts onto a host —
+      # the compose files, the observability configuration, the Jaeger plugin — and
+      # that embedded copy is GENERATED from symlinks in cmd/installer/files/links,
+      # not committed (see cmd/installer/files/.gitignore).
+      #
+      # It has to run before the tests, not only before a build: the checker's
+      # compose-consistency tests read the generated copy, because that copy is what
+      # a host actually gets. Without this step they fail on a missing file, and an
+      # installer built in this workflow would ship compose files with the image tags
+      # hardcoded instead of the ${COMPONENT_IMAGE:-default} variables the update
+      # mechanism writes into — an update that resolves correctly and then applies
+      # nothing.
+      - name: Backend - Generate embedded installer files
+        working-directory: backend/cmd/installer/files
+        run: go run generate.go
+
       - name: Backend - Lint
         uses: golangci/golangci-lint-action@v9
         with:

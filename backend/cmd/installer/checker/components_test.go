@@ -173,6 +173,16 @@ func TestInventoryFitsTheRequestCeiling(t *testing.T) {
 		t.Fatalf("the inventory is %d components, above the %d a request carries: "+
 			"some would be dropped and never reported on", total, maxReportedComponents)
 	}
+
+	// The ceiling has to BE the contract's, not a number that matches it today. Too
+	// high and the service refuses the whole request, costing the answer for every
+	// component; too low and the tail is trimmed here while the service would have
+	// accepted it. Both are invisible from inside this package, because every other
+	// test in this file measures against this same constant.
+	if maxReportedComponents != models.MaxReportedComponents {
+		t.Errorf("the installer caps a request at %d artefacts, the contract at %d",
+			maxReportedComponents, models.MaxReportedComponents)
+	}
 }
 
 // TestEveryReportedComponentIsInTheListForItsKind.

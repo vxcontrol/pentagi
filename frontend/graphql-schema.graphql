@@ -9,6 +9,15 @@ fragment settingsFragment on Settings {
     assistantUseAgents
 }
 
+fragment versionInfoFragment on VersionInfo {
+    current
+    state
+    latest
+    strategy
+    checkedAt
+    failedAt
+}
+
 fragment flowFragment on Flow {
     id
     title
@@ -552,6 +561,12 @@ query providers {
 query settings {
     settings {
         ...settingsFragment
+    }
+}
+
+query versionInfo {
+    versionInfo {
+        ...versionInfoFragment
     }
 }
 

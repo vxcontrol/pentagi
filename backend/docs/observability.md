@@ -16,6 +16,7 @@
   - [Infrastructure Requirements](#infrastructure-requirements)
     - [Components](#components)
     - [Setup](#setup)
+    - [Jaeger Storage Plugin](#jaeger-storage-plugin)
   - [Configuration](#configuration)
     - [Environment Variables](#environment-variables)
     - [Initialization](#initialization)
@@ -247,6 +248,43 @@ docker-compose -f docker-compose-observability.yml up -d
 ```
 
 For detailed setup instructions, refer to the README.md file in the repository.
+
+### Jaeger Storage Plugin
+
+Jaeger keeps its traces in ClickHouse through the `jaeger-clickhouse` gRPC storage plugin. Unlike everything else in the stack, the plugin is not an image: it is a binary bind-mounted into the Jaeger container, which loads it over gRPC at start.
+
+```yaml
+# docker-compose-observability.yml, service jaeger (abridged)
+entrypoint: >
+  /bin/sh -c '
+  if [ "$$(uname -m)" = "x86_64" ]; then ARCH="amd64"
+  elif [ "$$(uname -m)" = "aarch64" ]; then ARCH="arm64"
+  ... fi &&
+  /go/bin/all-in-one-linux
+  --grpc-storage-plugin.binary=/etc/jaeger/bin/jaeger-clickhouse-linux-$$ARCH
+  --grpc-storage-plugin.configuration-file=/etc/jaeger/plugin-config.yml'
+environment:
+  SPAN_STORAGE_TYPE: grpc-plugin
+volumes:
+  - ./observability/jaeger:/etc/jaeger:rw
+```
+
+Both files — `jaeger-clickhouse-linux-amd64` and `jaeger-clickhouse-linux-arm64` — are kept in `observability/jaeger/bin/` next to the environment file regardless of the host, because which one runs is decided *inside* the container by `uname -m`: that is the architecture of the Docker VM, not of the machine the installer runs on. The entrypoint picks the file at start.
+
+Because it is a file and not an image, no amount of `docker compose pull` brings it up to date. The installer updates it as part of an observability stack update: it sends the sha256 of each file it finds on disk with the update check, and the answer names a hash, a version and an action per file. The digest comparison is only the first word on the matter — a file whose hash differs from the offered one is marked outdated, and then the action overrides that verdict either way: `install`, `upgrade` and `downgrade` mark the file outdated whatever the hashes say, which is also how a file that is not on disk at all — and therefore was never reported, so there was no digest to compare — gets fetched, while `unknown` marks it current. Fetched, then, is every plugin component left marked outdated that also carries a target version (an empty one leaves nothing to ask the server for) and is for `linux` (the file name says `linux`, and the plugin is a linux binary whatever the host is). For each file that needs fetching:
+
+1. `GET /api/v1/proxy/packages/info` describes the package — its size, its sha256 and the signature over it;
+2. `GET /api/v1/proxy/packages/download` is streamed into `<name>.new`, a sibling of the target, created with mode `0755`;
+3. the length, the sha256 and an Ed25519 signature are verified over the whole stream;
+4. only then is the staging file renamed over the target.
+
+None of those three checks can be decided before the last byte arrives, so what is on disk before step 4 is unverified — that is why the download is staged rather than written in place: an interrupted attempt would otherwise leave a truncated plugin under the name a running Jaeger loads. The staging file is a sibling of the target because `os.Rename` is atomic only within one filesystem. The mode is set at creation and not afterwards, because the rename does not preserve the destination's mode: a plugin created `0644` and moved over an executable one ends up not executable, and Jaeger then fails with an opaque gRPC plugin error rather than a permission one. A leftover `.new` from an interrupted download is removed at the start of the next observability update, by exact name — the directory is mounted into a container and may hold an operator's own files, so nothing is deleted by glob.
+
+The download runs *before* anything else in the stack update touches the installation: the images are pulled, and the image references the server chose are written into the environment file, only afterwards — both of those happen inside the `pull` and the `up` that follow. So a plugin that cannot be fetched aborts the stack update with nothing else disturbed.
+
+Replacing the file does not affect a running Jaeger, and the `docker compose up -d` that follows does not either: compose recreates a container only when its *spec* changes, and a different file inside a bind mount is not a spec change. The plugin is exec'd by the container's entrypoint at start, so a container left running is still serving through the plugin it loaded when it came up. The installer therefore reports whether it actually replaced anything, and when it did it restarts the `jaeger` service explicitly once the stack is up — without that, the update reports success while nothing about it is in effect.
+
+Both plugin paths are excluded from the installer's file-integrity verification. The copy shipped inside the installer seeds a first install, and is never written over afterwards. Without that exclusion the update would undo itself: a downloaded plugin differs from the shipped one, so verification would call it modified and offer to repair it. A stack update never repairs files, but two paths do — answering yes to the integrity prompt on Apply Changes, and a factory reset, which does it without asking — and either would copy the shipped file straight back over the downloaded one.
 
 ## Configuration
 

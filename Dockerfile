@@ -199,6 +199,11 @@ USER pentagi
 
 ENTRYPOINT ["/opt/pentagi/bin/entrypoint.sh", "/opt/pentagi/bin/pentagi"]
 
+# Version of the PentAGI binary inside
+ARG PACKAGE_VER
+ARG PACKAGE_REV
+LABEL com.pentagi.version="${PACKAGE_VER:-develop}${PACKAGE_REV:+-${PACKAGE_REV}}"
+
 # Image Metadata
 LABEL org.opencontainers.image.source="https://github.com/vxcontrol/pentagi"
 LABEL org.opencontainers.image.description="Fully autonomous AI Agents system capable of performing complex penetration testing tasks"

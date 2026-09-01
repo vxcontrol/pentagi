@@ -25,6 +25,7 @@ import (
 	"pentagi/pkg/server/logger"
 	"pentagi/pkg/server/oauth"
 	"pentagi/pkg/server/services"
+	"pentagi/pkg/server/update"
 
 	_ "pentagi/pkg/server/docs" // swagger docs
 
@@ -88,6 +89,7 @@ func NewRouter(
 	controller controller.FlowController,
 	subscriptions subscriptions.SubscriptionsController,
 	dockerClient docker.DockerClient,
+	updates *update.Service,
 ) *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
 	if cfg.Debug {
@@ -203,6 +205,7 @@ func NewRouter(
 	anonymizerService := services.NewAnonymizerService(textReplacer)
 	graphqlService := services.NewGraphqlService(
 		db, cfg, baseURL, cfg.CorsOrigins, tokenCache, providers, controller, subscriptions, knowledgeStore, textReplacer,
+		updates,
 	)
 
 	router := gin.Default()

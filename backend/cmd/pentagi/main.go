@@ -22,6 +22,7 @@ import (
 	"pentagi/pkg/observability/profiling"
 	"pentagi/pkg/providers"
 	router "pentagi/pkg/server"
+	"pentagi/pkg/server/update"
 	"pentagi/pkg/version"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -40,6 +41,13 @@ func main() {
 		syscall.SIGQUIT,
 	)
 	defer cancelOnSignal()
+
+	// Before anything is logged or started. `-info` describes this server and
+	// exits, and its output is a JSON document on stdout — a greeting printed
+	// first would be the first thing a reader has to strip back out.
+	if wantsInfo(os.Args[1:]) {
+		os.Exit(runInfo(ctx))
+	}
 
 	logrus.Infof("Starting PentAGI %s", version.GetBinaryVersion())
 
@@ -165,6 +173,25 @@ func main() {
 
 	logrus.Info("Database schema updated successfully")
 
+	// Keep the update service informed about this installation, periodically.
+	// After the migrations, deliberately: on a first boot the tables it reads do
+	// not exist until this point, and a summary of a schema that is not there yet
+	// describes an installation with nothing in it — which is also what an
+	// installation nobody uses looks like.
+	//
+	// A goroutine that owns nothing: it reads, it sends, and every failure along
+	// the way is a debug line. A server must not fail to start because something
+	// it only talks to is unreachable. What it learns is handed to the router, so
+	// the UI can show whether this build is current; nil means it never runs, and
+	// the UI says so.
+	var updates *update.Service
+	if built, err := update.New(cfg, queries); err != nil {
+		logrus.WithError(err).Debug("update service integration is not configured")
+	} else {
+		updates = built
+		go updates.Run(ctx)
+	}
+
 	if cfg.PprofAddr != "" {
 		go profiling.Start(cfg.PprofAddr)
 	}
@@ -185,7 +212,7 @@ func main() {
 		logrus.WithError(err).Fatal("Active flows restoration failed")
 	}
 
-	r := router.NewRouter(queries, orm, cfg, providers, controller, subscriptions, client)
+	r := router.NewRouter(queries, orm, cfg, providers, controller, subscriptions, client, updates)
 
 	// Launch HTTP/HTTPS server in background goroutine
 	serverErrChan := make(chan error, 1)

@@ -17,6 +17,19 @@ vi.mock('@/providers/sidebar-flows-provider', () => ({ useSidebarFlows: () => ({
 vi.mock('@/features/resources/use-resources-upload', () => ({
     useResourcesUpload: () => ({ fileInputKey: 'k', fileInputProps: {}, openFilePicker: vi.fn() }),
 }));
+vi.mock('@/providers/version-info-provider', () => ({
+    useVersionInfo: () => ({
+        isLoading: false,
+        versionInfo: {
+            checkedAt: null,
+            current: '2.1.0-93e99748',
+            failedAt: null,
+            latest: '2.4.0',
+            state: 'update_available',
+            strategy: 'preview',
+        },
+    }),
+}));
 
 import { SidebarProvider } from '@/components/ui/sidebar';
 
@@ -51,6 +64,16 @@ function renderSidebar() {
         </MemoryRouter>,
     );
 }
+
+describe('MainSidebar version badge', () => {
+    it('shows the running version under the product name, with the update indicator', () => {
+        renderSidebar();
+
+        expect(screen.getByRole('button', { name: /PentAGI v2\.1\.0/ })).toHaveTextContent('v2.1.0');
+        expect(screen.getByTestId('version-indicator-update')).toBeInTheDocument();
+        expect(screen.getByTestId('version-attention-dot')).toBeInTheDocument();
+    });
+});
 
 describe('MainSidebar settings entry points', () => {
     it('the Settings link carries the current path as the return origin', async () => {

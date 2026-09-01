@@ -148,3 +148,14 @@ func entryForType(t provider.ProviderType) (registryEntry, bool) {
 	}
 	return registryEntry{}, false
 }
+
+// EnabledDefaultProviderTypes reports the built-in (environment-configured)
+func EnabledDefaultProviderTypes(cfg *config.Config) []string {
+	types := make([]string, 0, len(providerRegistry))
+	for _, e := range providerRegistry {
+		if e.Enabled(cfg) {
+			types = append(types, string(e.Type))
+		}
+	}
+	return types
+}

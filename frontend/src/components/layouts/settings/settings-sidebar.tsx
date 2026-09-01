@@ -15,6 +15,7 @@ import {
     SidebarMenuButton,
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
+import { VersionBadge } from '@/features/version/version-badge';
 import { routes } from '@/lib/routes';
 import { getSafeReturnUrl } from '@/lib/utils/auth';
 
@@ -91,6 +92,9 @@ export function SettingsSidebar() {
                 </SidebarGroup>
             </SidebarContent>
             <SidebarFooter>
+                <div className="flex items-center px-1 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0">
+                    <VersionBadge showProductName />
+                </div>
                 <SidebarMenuButton asChild>
                     <NavLink to={returnUrl}>
                         <ArrowLeft />

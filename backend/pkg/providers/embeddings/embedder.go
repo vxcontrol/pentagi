@@ -35,6 +35,14 @@ func (e *embedder) IsAvailable() bool {
 	return e.Embedder != nil
 }
 
+// ResolvedProviderType reports the embedding provider type actually in effect.
+func ResolvedProviderType(cfg *config.Config) string {
+	if cfg.EmbeddingProvider == "openai" && cfg.EmbeddingURL != "" {
+		return "custom"
+	}
+	return cfg.EmbeddingProvider
+}
+
 func New(cfg *config.Config) (Embedder, error) {
 	httpClient, err := system.GetHTTPClient(cfg)
 	if err != nil {

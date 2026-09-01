@@ -58,6 +58,34 @@ func TestNew_UnsupportedProvider(t *testing.T) {
 	assert.False(t, e.IsAvailable())
 }
 
+// TestResolvedProviderType pins that an "openai"-typed embedder pointed at a
+// custom EMBEDDING_URL is reported as "custom" — it is not really talking to
+// OpenAI — while every other combination is reported verbatim.
+func TestResolvedProviderType(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		provider string
+		url      string
+		want     string
+	}{
+		{"openai without a custom url stays openai", "openai", "", "openai"},
+		{"openai with a custom url becomes custom", "openai", "https://my-gateway/v1", "custom"},
+		{"non-openai provider is untouched even with a url", "ollama", "https://my-gateway/v1", "ollama"},
+		{"none stays none", "none", "", "none"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			cfg := &config.Config{EmbeddingProvider: tt.provider, EmbeddingURL: tt.url}
+			assert.Equal(t, tt.want, ResolvedProviderType(cfg))
+		})
+	}
+}
+
 func TestNew_OpenAI_DefaultModel(t *testing.T) {
 	t.Parallel()
 

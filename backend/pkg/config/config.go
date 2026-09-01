@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/caarlos0/env/v10"
 	"github.com/google/uuid"
@@ -230,6 +231,16 @@ type Config struct {
 
 	// === Network Proxy Settings ===
 	ProxyURL string `env:"PROXY_URL"`
+
+	// === PentAGI Cloud API ===
+	// UpdateStrategy is the strategy to use for updates. It can be "preview", "stable" or "nightly".
+	UpdateStrategy string `env:"UPDATE_STRATEGY" envDefault:"preview"`
+	// UpdateCheckInterval is how often this server reports its own state. Zero disables it.
+	UpdateCheckInterval time.Duration `env:"UPDATE_CHECK_INTERVAL" envDefault:"3h"`
+	// UpdateServerHost is the endpoint as host[:port]; empty means the default.
+	UpdateServerHost string `env:"UPDATE_SERVER_HOST" envDefault:"update.pentagi.com"`
+	// SupportServerHost is the endpoint as host[:port]; empty means the default.
+	SupportServerHost string `env:"SUPPORT_SERVER_HOST" envDefault:"support.pentagi.com"`
 
 	// SSL Trusted CA Certificate Path (for external communication with LLM backends)
 	ExternalSSLCAPath   string `env:"EXTERNAL_SSL_CA_PATH" envDefault:""`

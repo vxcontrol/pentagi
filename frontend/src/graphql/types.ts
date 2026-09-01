@@ -293,6 +293,15 @@ export type UpdateKnowledgeDocumentInput = {
     question?: string | null | undefined;
 };
 
+export enum UpdateState {
+    Disabled = 'disabled',
+    Pending = 'pending',
+    Unknown = 'unknown',
+    Unreachable = 'unreachable',
+    UpToDate = 'up_to_date',
+    UpdateAvailable = 'update_available',
+}
+
 export enum UsageStatsPeriod {
     Month = 'month',
     Quarter = 'quarter',
@@ -311,6 +320,15 @@ export type SettingsFragmentFragment = {
     dockerInside: boolean;
     isDevelopMode: boolean;
     assistantUseAgents: boolean;
+};
+
+export type VersionInfoFragmentFragment = {
+    current: string;
+    state: UpdateState;
+    latest: string | null;
+    strategy: string;
+    checkedAt: string | null;
+    failedAt: string | null;
 };
 
 export type FlowFragmentFragment = {
@@ -718,6 +736,10 @@ export type ProvidersQuery = { providers: Array<ProviderFragmentFragment> };
 export type SettingsQueryVariables = Exact<{ [key: string]: never }>;
 
 export type SettingsQuery = { settings: SettingsFragmentFragment };
+
+export type VersionInfoQueryVariables = Exact<{ [key: string]: never }>;
+
+export type VersionInfoQuery = { versionInfo: VersionInfoFragmentFragment };
 
 export type SettingsProvidersQueryVariables = Exact<{ [key: string]: never }>;
 
@@ -1434,6 +1456,27 @@ export const SettingsFragmentFragmentDoc = {
         },
     ],
 } as unknown as DocumentNode<SettingsFragmentFragment, unknown>;
+export const VersionInfoFragmentFragmentDoc = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'versionInfoFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'VersionInfo' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'current' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'state' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'latest' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'strategy' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'checkedAt' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'failedAt' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<VersionInfoFragmentFragment, unknown>;
 export const TerminalFragmentFragmentDoc = {
     kind: 'Document',
     definitions: [
@@ -3528,6 +3571,47 @@ export const SettingsDocument = {
         },
     ],
 } as unknown as DocumentNode<SettingsQuery, SettingsQueryVariables>;
+export const VersionInfoDocument = {
+    kind: 'Document',
+    definitions: [
+        {
+            kind: 'OperationDefinition',
+            operation: 'query',
+            name: { kind: 'Name', value: 'versionInfo' },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'versionInfo' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [
+                                { kind: 'FragmentSpread', name: { kind: 'Name', value: 'versionInfoFragment' } },
+                            ],
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'versionInfoFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'VersionInfo' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'current' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'state' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'latest' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'strategy' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'checkedAt' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'failedAt' } },
+                ],
+            },
+        },
+    ],
+} as unknown as DocumentNode<VersionInfoQuery, VersionInfoQueryVariables>;
 export const SettingsProvidersDocument = {
     kind: 'Document',
     definitions: [

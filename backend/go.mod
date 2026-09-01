@@ -53,7 +53,7 @@ require (
 	github.com/swaggo/gin-swagger v1.3.0
 	github.com/swaggo/swag v1.8.7
 	github.com/vektah/gqlparser/v2 v2.5.19
-	github.com/vxcontrol/cloud v1.0.0
+	github.com/vxcontrol/cloud v1.0.1
 	github.com/vxcontrol/graphiti-go-client v0.9.0
 	github.com/vxcontrol/langchaingo v0.1.14-update.7
 	github.com/wasilibs/go-re2 v1.10.0

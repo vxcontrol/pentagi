@@ -22,11 +22,16 @@ import (
 // told, so a component left out comes back as "nothing to report" — which reads exactly
 // like "up to date" and is the more dangerous of the two mistakes.
 
-// maxReportedComponents is the server-side ceiling on one request. The inventory is well
-// under it today, but the list grows with every stack, so the limit is enforced here and
-// what gets dropped is written to the log — a silently truncated list would report the
-// remaining components as complete.
-const maxReportedComponents = 30
+// maxReportedComponents is the server-side ceiling on one request, and it IS the
+// contract's constant rather than a number that agrees with it today. A local literal
+// can only be wrong in two ways, and both are silent: too high and the service refuses
+// the whole request — losing the answer for every component, not just the ones past the
+// bound — too low and the tail is trimmed here while the service would have taken it.
+//
+// The inventory is well under it, but the list grows with every stack, so the limit is
+// enforced before sending and what gets dropped is written to the log: a silently
+// truncated list would report the remaining components as complete.
+const maxReportedComponents = models.MaxReportedComponents
 
 // JaegerPluginDir holds the Jaeger storage plugin, relative to the directory the
 // environment file lives in.

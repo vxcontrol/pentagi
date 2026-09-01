@@ -8,6 +8,7 @@ import (
 	"pentagi/pkg/graph/subscriptions"
 	"pentagi/pkg/providers"
 	"pentagi/pkg/server/auth"
+	"pentagi/pkg/server/update"
 	"pentagi/pkg/templates"
 
 	"github.com/sirupsen/logrus"
@@ -29,4 +30,5 @@ type Resolver struct {
 	Subscriptions   subscriptions.SubscriptionsController
 	Knowledge       knowledge.KnowledgeStore
 	Replacer        anonymizer.Replacer
+	Updates         *update.Service
 }

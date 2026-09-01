@@ -48,6 +48,7 @@ import {
 } from '@/components/ui/sidebar';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useResourcesUpload } from '@/features/resources/use-resources-upload';
+import { VersionAttentionDot, VersionBadge } from '@/features/version/version-badge';
 import { useTheme } from '@/hooks/use-theme';
 import { routes } from '@/lib/routes';
 import { useFavorites } from '@/providers/favorites-provider';
@@ -103,11 +104,13 @@ export function MainSidebar() {
             <SidebarHeader>
                 <SidebarMenu>
                     <SidebarMenuItem className="flex items-center gap-2">
-                        <div className="flex aspect-square size-8 items-center justify-center">
+                        <div className="relative flex aspect-square size-8 items-center justify-center">
                             <Logo className="hover:animate-logo-spin size-6" />
+                            <VersionAttentionDot className="absolute top-0 right-0 hidden group-data-[collapsible=icon]:block" />
                         </div>
                         <div className="grid flex-1 text-left leading-tight">
                             <span className="truncate font-semibold">PentAGI</span>
+                            <VersionBadge className="-ml-1 justify-self-start group-data-[collapsible=icon]:hidden" />
                         </div>
                     </SidebarMenuItem>
                 </SidebarMenu>

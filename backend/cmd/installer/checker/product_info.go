@@ -11,6 +11,7 @@ import (
 
 	"github.com/moby/moby/api/pkg/stdcopy"
 	"github.com/moby/moby/client"
+	"github.com/vxcontrol/cloud/models"
 )
 
 // productInfoCommand asks the running product to describe its own state.
@@ -28,7 +29,13 @@ const productInfoTimeout = 20 * time.Second
 // The contract that carries this field refuses anything larger, so reading more
 // would only build a request the service rejects whole — losing the answer for
 // every component along with it.
-const maxProductInfoBytes = 64 * 1024
+//
+// It is the contract's own constant rather than a number that agrees with it
+// today. This was written as 64 KiB against a 16 KiB contract: a product whose
+// description landed in between passed every check here and cost the installation
+// the answer for all of its components, and the local test could not see it
+// because it measured against this same constant.
+const maxProductInfoBytes = models.MaxProductInfoBytes
 
 // gatherProductInfo asks the running product for its state and returns it exactly
 // as it was given.

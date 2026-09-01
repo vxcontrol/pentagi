@@ -628,8 +628,8 @@ github.com/vmihailenco/tagparser v0.1.2 h1:gnjoVuB/kljJ5wICEEOpx98oXMWPLj22G67Vb
 github.com/vmihailenco/tagparser v0.1.2/go.mod h1:OeAg3pn3UbLjkWt+rN9oFYB6u/cQgqMEUPoW2WPyhdI=
 github.com/vmihailenco/tagparser/v2 v2.0.0 h1:y09buUbR+b5aycVFQs/g70pqKVZNBmxwAhO7/IwNM9g=
 github.com/vmihailenco/tagparser/v2 v2.0.0/go.mod h1:Wri+At7QHww0WTrCBeu4J6bNtoV6mEfg5OIWRZA9qds=
-github.com/vxcontrol/cloud v1.0.0 h1:2T8xM0z6+38Uj8a4lKfDxRP2/iXZVoS2vZmNgt6VQmk=
-github.com/vxcontrol/cloud v1.0.0/go.mod h1:AeiQFqiMgJJAXy6FYXtDS2a3P/PMB56iiBNY2vGrZhQ=
+github.com/vxcontrol/cloud v1.0.1 h1:sskfyc3F09SQEbSvj0w3QQbTU1cAWfi4hF6dDxGLyIM=
+github.com/vxcontrol/cloud v1.0.1/go.mod h1:AeiQFqiMgJJAXy6FYXtDS2a3P/PMB56iiBNY2vGrZhQ=
 github.com/vxcontrol/graphiti-go-client v0.9.0 h1:3GxpFmQoHmz/d7/9tyEqD8+S99v2cuqG1UEmrbAFrLU=
 github.com/vxcontrol/graphiti-go-client v0.9.0/go.mod h1:6UHL5uqAKp4KAdziva4qgcAxFtBzU05Hm/BAo4NkAuo=
 github.com/vxcontrol/langchaingo v0.1.14-update.7 h1:iQnSNMmYQGbPQK5622JewlruaY6MIc7wzJklWq0Fja4=

@@ -11,6 +11,17 @@ import (
 
 type Querier interface {
 	AddFavoriteFlow(ctx context.Context, arg AddFavoriteFlowParams) (UserPreference, error)
+	CountAPITokens(ctx context.Context) (int64, error)
+	CountActiveFlows(ctx context.Context) (int64, error)
+	CountAssistants(ctx context.Context) (int64, error)
+	CountContainers(ctx context.Context) (int64, error)
+	CountFlowTemplates(ctx context.Context) (int64, error)
+	CountFlows(ctx context.Context) (int64, error)
+	CountPrompts(ctx context.Context) (int64, error)
+	CountSubtasks(ctx context.Context) (int64, error)
+	CountTasks(ctx context.Context) (int64, error)
+	CountToolcalls(ctx context.Context) (int64, error)
+	CountUsers(ctx context.Context) (int64, error)
 	CreateAPIToken(ctx context.Context, arg CreateAPITokenParams) (ApiToken, error)
 	CreateAgentLog(ctx context.Context, arg CreateAgentLogParams) (Agentlog, error)
 	CreateAssistant(ctx context.Context, arg CreateAssistantParams) (Assistant, error)
@@ -159,6 +170,11 @@ type Querier interface {
 	GetSubtaskVectorStoreLogs(ctx context.Context, subtaskID sql.NullInt64) ([]Vecstorelog, error)
 	// Get all subtasks for multiple tasks
 	GetSubtasksForTasks(ctx context.Context, taskIds []int64) ([]GetSubtasksForTasksRow, error)
+	// Number of configured providers per type, for the instance summary.
+	GetSummaryProviderCounts(ctx context.Context) ([]GetSummaryProviderCountsRow, error)
+	// Aggregate LLM usage per provider type, over the whole life of the instance,
+	// for the instance summary.
+	GetSummaryUsageByProvider(ctx context.Context) ([]GetSummaryUsageByProviderRow, error)
 	GetTask(ctx context.Context, id int64) (Task, error)
 	GetTaskAgentLogs(ctx context.Context, taskID sql.NullInt64) ([]Agentlog, error)
 	GetTaskCompletedSubtasks(ctx context.Context, taskID int64) ([]Subtask, error)

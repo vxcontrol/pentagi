@@ -17,6 +17,11 @@ This document serves as a comprehensive guide to the configuration system in Pen
       - [Extensions installed outside `public` (`DATABASE_EXTENSIONS_SCHEMA`)](#extensions-installed-outside-public-database_extensions_schema)
       - [Multi-tenant PostgreSQL access through PgBouncer](#multi-tenant-postgresql-access-through-pgbouncer)
       - [Multi-tenant PostgreSQL through Supabase's Supavisor pooler (`DATABASE_SEARCH_PATH_VIA_OPTIONS`)](#multi-tenant-postgresql-through-supabases-supavisor-pooler-database_search_path_via_options)
+    - [PentAGI Cloud API Settings](#pentagi-cloud-api-settings)
+      - [`UPDATE_STRATEGY`](#update_strategy)
+      - [`UPDATE_CHECK_INTERVAL`](#update_check_interval)
+      - [`UPDATE_SERVER_HOST`](#update_server_host)
+      - [`SUPPORT_SERVER_HOST`](#support_server_host)
     - [Usage Details](#usage-details)
   - [Docker Settings](#docker-settings)
     - [Worker Docker Access (`DOCKER_INSIDE_*`)](#worker-docker-access-docker_inside_)
@@ -80,13 +85,13 @@ This document serves as a comprehensive guide to the configuration system in Pen
     - [Data Flow, Search, and Tenancy](#data-flow-search-and-tenancy)
     - [Deployment Ownership](#deployment-ownership)
   - [Agent Supervision Settings](#agent-supervision-settings)
-    - [Usage Details](#usage-details-13)
+    - [Usage Details](#usage-details-12)
     - [Supervision System Integration](#supervision-system-integration)
     - [Recommended Settings](#recommended-settings)
   - [Observability Settings](#observability-settings)
     - [Telemetry](#telemetry)
     - [Langfuse](#langfuse)
-    - [Usage Details](#usage-details-14)
+    - [Usage Details](#usage-details-13)
 
 ## Configuration Basics
 
@@ -156,6 +161,10 @@ These settings control basic application behavior and are foundational for the s
 | DockerPortsBase  | `DOCKER_PORTS_BASE`         | `0` (means `28000`)                                                          | First host port for per-flow sandbox port publishing; each instance owns `[base, base+2000)` |
 | InstallationID   | `INSTALLATION_ID`           | *(none)*                                                                     | Unique installation identifier for PentAGI Cloud API communication       |
 | LicenseKey       | `LICENSE_KEY`               | *(none)*                                                                     | License key for PentAGI Cloud API authentication and feature activation  |
+| UpdateStrategy   | `UPDATE_STRATEGY`         | `preview`                                                                    | Which builds this installation is offered: `nightly`, `preview` or `stable`. An unrecognised value falls back to `preview`. See [PentAGI Cloud API Settings](#pentagi-cloud-api-settings). |
+| UpdateCheckInterval | `UPDATE_CHECK_INTERVAL` | `3h`                                                                         | How often the running server reports its own state to the Cloud API. `0` disables the report. See [PentAGI Cloud API Settings](#pentagi-cloud-api-settings). |
+| UpdateServerHost | `UPDATE_SERVER_HOST`      | `update.pentagi.com`                                                         | PentAGI Cloud API endpoint as `host[:port]`, **without a scheme** — the connection is always HTTPS. See [PentAGI Cloud API Settings](#pentagi-cloud-api-settings). |
+| SupportServerHost | `SUPPORT_SERVER_HOST`    | `support.pentagi.com`                                                        | PentAGI Support API endpoint as `host[:port]`, same shape as `UPDATE_SERVER_HOST`. See [PentAGI Cloud API Settings](#pentagi-cloud-api-settings). |
 
 ### Multi-Instance Deployment (`TENANT_ID`)
 
@@ -261,6 +270,62 @@ DATABASE_SEARCH_PATH_VIA_OPTIONS=true
 This sends the tenant's search_path as `options=--search_path=<tenant>,<DATABASE_EXTENSIONS_SCHEMA>` instead of a bare `search_path=` parameter. Some poolers forward the `options` startup parameter through to the real backend while silently dropping an unrecognized bare `search_path` — this is exactly the workaround reported to work against some Supavisor versions. **It is not guaranteed** — verify it actually took effect by checking that the app starts (`verifySearchPath` fails fast with a clear error if it did not) rather than assuming success from the flag alone.
 
 This flag changes nothing for a direct PostgreSQL connection or a PgBouncer setup already following the recipe above; both accept `search_path` and `options` equally, so there is no reason to enable it outside a Supavisor-fronted deployment.
+
+### PentAGI Cloud API Settings
+
+These four are **shared**: one value in one `.env`, read by the installer and by the running PentAGI server alike. The server parses them into the `Config` struct as `UpdateServerHost`, `UpdateStrategy`, `UpdateCheckInterval` and `SupportServerHost`, and `docker-compose.yml` passes all four into the container; the installer's own calls read them straight from the file, and its *Server Settings* form edits every one of them except `UPDATE_CHECK_INTERVAL`, which concerns only the server and is set by hand. There is deliberately no per-component variant of any of them — an installation that pointed the installer at one endpoint and the server at another would be talking about itself in two places at once.
+
+`UPDATE_SERVER_HOST`, together with `INSTALLATION_ID` and `LICENSE_KEY`, is behind every call either side makes to the PentAGI Cloud API: the update check the installer runs while gathering the state of the machine, the package info and download calls behind the installer build it offers, the same pair of calls used to fetch the Jaeger ClickHouse storage plugin whenever the observability stack is updated — that plugin is a file mounted into the container rather than an image, so a broken `UPDATE_SERVER_HOST` stops it from being installed as surely as it stops a check — and the running server's own periodic report, described under [`UPDATE_CHECK_INTERVAL`](#update_check_interval). `UPDATE_STRATEGY` travels only in the update check; the package calls name a component, a version and a platform, and nothing else.
+
+Both sides honour `PROXY_URL`. The installer's own proxy setting takes precedence over `HTTP_PROXY`/`HTTPS_PROXY` in the environment, because it is the one the operator configured deliberately and often the only one carrying credentials. See [Network and Proxy Settings](#network-and-proxy-settings).
+
+#### `UPDATE_STRATEGY`
+
+Which builds this installation is offered. The value is trimmed and lower-cased before it is matched, so `NIGHTLY` and `  preview  ` are accepted. Empty means `preview`; an unrecognised value logs a warning and also falls back to `preview`, deliberately, because a typo must not leave an installation quietly unable to hear about security updates.
+
+| Value | What the installation is offered |
+| --- | --- |
+| `preview` (default) | Pre-release builds from the channels this installation already follows, offered as soon as they are published, without waiting for a release to be cut. The version, changelog and release notes that come with the answer still describe the stack's latest *release*, so they name the last release crossed and not the preview build itself. |
+| `stable` | Only artefacts belonging to the latest curated stable release. The whole installation moves onto one released set, which is what lets it be described by a single version. A component that release does not cover is answered `unknown` with a reason rather than a newer build from elsewhere — offering part of an installation from outside the curated set is exactly the promise `stable` makes. |
+| `nightly` | The newest build published, with no release attached to it. The answer carries no version metadata, so the update overview can report that a newer build exists and little else about it. |
+
+The default is `preview` rather than `stable`, and the difference is not caution versus eagerness. Under `stable` the answer is measured against curated releases, so a stack with no published release is offered nothing at all — which reads as "no updates exist" when it means "we are not publishing releases for this yet". `preview` follows the channels the client is already on, which is what an installation wants until releases are something it can rely on.
+
+The strategy is sent with each update check and applies to every stack in the answer, including the installer's own build — so it also decides which installer version is offered for download. Offered, not applied: the installer downloads that build next to the environment file under a name carrying its version, verifies it, and prints the command that moves it into place. It never writes over the binary it is running — a process cannot reliably replace its own executable, so "download the installer" and "update the installer" are the same operation, and putting the new build in place stays a deliberate step the operator takes.
+
+#### `UPDATE_CHECK_INTERVAL`
+
+How often the **running server** reports its own state to the Cloud API, as a Go duration (`3h` by default, `90m` and `1h30m` are the same value). `0`, or any negative value, disables the report entirely.
+
+This is the other half of the picture the update check cannot see. An installer's check describes the artefacts on the machine and says nothing about the server itself, so an installation deployed once and never started looks exactly like one in daily use. The report closes that gap: on each tick it sends the build that is running, the platform it was compiled for, the sha256 of that binary, and a summary of how the server is configured — quantities and closed vocabularies produced by `GetInstanceSummary`, nothing that identifies a person and nothing anybody wrote. Those first three are read off this process and travel **inside** the summary as well as beside it, because the same summary is what `-info` prints for a caller that will forward it: whoever carries a description cannot produce the platform of the process that wrote it, and the executable's digest is not something an image digest can stand in for.
+
+The answer is kept in memory and shown in the web UI as a version badge — in the main sidebar header and at the bottom of the settings sidebar — read through the `versionInfo` GraphQL query (permission `settings.view`). The badge shows a yellow **↓** when the service names a newer version, and a yellow **?** whenever no verdict is available: the first check has not completed yet, the service could not be reached, it answered without naming a version to move to, it could not match the running build to a published release, or checks are disabled. A verdict, once reached, outlives the failures that follow it — an update that was available an hour ago is still available — so a badge keeps its arrow through an outage and the popover dates both the last answer and the last failure. Nothing is applied from the UI: the tooltip and the popover say to run the installer.
+
+Two properties are worth knowing when reading logs. The first send is delayed by a random wait of up to two minutes, so a fleet restarted at once does not arrive as one burst. And nothing here can interrupt the product: a missing or malformed `INSTALLATION_ID` means the service is never built, every later failure is a debug line, and the next tick simply tries again — an endpoint that is down or a licence that has expired are ordinary states of the world for something the server does not depend on.
+
+#### `UPDATE_SERVER_HOST`
+
+The address is `host[:port]` with **no scheme** — the connection is always TLS, so writing one is redundant. Empty, which is the normal case, means `update.pentagi.com`.
+
+A full URL is still accepted because this setting historically held one: an `https://` prefix is stripped, so is anything after the host (path, query string, fragment), surrounding whitespace is trimmed, and the remainder is lower-cased. What has to be left over is a host, and five shapes are refused outright rather than repaired:
+
+| Value | Result |
+| --- | --- |
+| `http://update.example.com` | **Rejected.** The transport is HTTPS-only, and silently upgrading a value someone deliberately wrote as `http` would hide the misconfiguration instead of reporting it. |
+| Any other scheme (`ftp://`, `tcp://`, ...) | **Rejected** as unsupported. |
+| `https://` or `https:///some/path` | **Rejected** — dropping the scheme and the path leaves nothing, so there is no host to connect to. |
+| `user:pass@update.example.com` | **Rejected** — credentials in the host are not supported. Authentication to the Cloud API is `LICENSE_KEY`, and a proxy's credentials belong in `PROXY_URL`. |
+| `update .example.com` (a space or a tab inside the host) | **Rejected.** Whitespace around the value is trimmed, but whitespace inside it is a typo rather than an address. |
+
+Writing a scheme is the common mistake here, and `https://…` being tolerated makes `http://…` look like it should work too. A rejected value does not abort the installer: the client is never built, the update check is recorded as failed with the reason `unreachable`, and the reason is written to the installer log. The visible symptom is therefore an unreachable update server, which is worth checking the log about before concluding the server is actually down.
+
+The repairs and the refusals above are the installer's. The running server hands the value to the Cloud SDK as written — nothing normalises it and nothing reports it — so a value the SDK cannot build a client from costs one debug line at startup and then no product report at all. Write a bare host and both sides agree.
+
+#### `SUPPORT_SERVER_HOST`
+
+The PentAGI Support API endpoint, in exactly the shape `UPDATE_SERVER_HOST` takes: `host[:port]`, no scheme, empty meaning `support.pentagi.com`. It is a separate service from the update endpoint and is configured separately, so that an installation reaching the Cloud API through a mirror or an internal proxy can point the two at different places.
+
+It is written by the installer's *Server Settings* form and parsed by the server, and no call targets it yet — the support integration that will use it is not in place. Setting it today changes nothing; leaving it empty costs nothing either.
 
 ### Usage Details
 
