@@ -433,6 +433,7 @@ const (
 	ProviderTypeKimi      ProviderType = "kimi"
 	ProviderTypeQwen      ProviderType = "qwen"
 	ProviderTypeMinimax   ProviderType = "minimax"
+	ProviderTypeAimlapi   ProviderType = "aimlapi"
 )
 
 func (e *ProviderType) Scan(src interface{}) error {

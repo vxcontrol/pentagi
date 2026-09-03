@@ -148,8 +148,8 @@ type LLMProviderConfig struct {
 
 	// direct form field mappings using loader.EnvVar
 	// these fields directly correspond to environment variables and form inputs (not computed)
-	BaseURL loader.EnvVar // OPEN_AI_SERVER_URL | ANTHROPIC_SERVER_URL | GEMINI_SERVER_URL | BEDROCK_SERVER_URL | OLLAMA_SERVER_URL | DEEPSEEK_SERVER_URL | GLM_SERVER_URL | KIMI_SERVER_URL | QWEN_SERVER_URL | MINIMAX_SERVER_URL | LLM_SERVER_URL
-	APIKey  loader.EnvVar // OPEN_AI_KEY | ANTHROPIC_API_KEY | GEMINI_API_KEY | LLM_SERVER_KEY | DEEPSEEK_API_KEY | GLM_API_KEY | KIMI_API_KEY | QWEN_API_KEY | MINIMAX_API_KEY | OLLAMA_SERVER_API_KEY
+	BaseURL loader.EnvVar // OPEN_AI_SERVER_URL | ANTHROPIC_SERVER_URL | GEMINI_SERVER_URL | BEDROCK_SERVER_URL | OLLAMA_SERVER_URL | DEEPSEEK_SERVER_URL | GLM_SERVER_URL | KIMI_SERVER_URL | QWEN_SERVER_URL | MINIMAX_SERVER_URL | AIMLAPI_SERVER_URL | LLM_SERVER_URL
+	APIKey  loader.EnvVar // OPEN_AI_KEY | ANTHROPIC_API_KEY | GEMINI_API_KEY | LLM_SERVER_KEY | DEEPSEEK_API_KEY | GLM_API_KEY | KIMI_API_KEY | QWEN_API_KEY | MINIMAX_API_KEY | AIMLAPI_API_KEY | OLLAMA_SERVER_API_KEY
 	Model   loader.EnvVar // LLM_SERVER_MODEL
 	// AWS Bedrock specific fields
 	DefaultAuth  loader.EnvVar // BEDROCK_DEFAULT_AUTH
@@ -203,6 +203,7 @@ func (c *controller) GetLLMProviders() map[string]*LLMProviderConfig {
 		"kimi":      c.GetLLMProviderConfig("kimi"),
 		"qwen":      c.GetLLMProviderConfig("qwen"),
 		"minimax":   c.GetLLMProviderConfig("minimax"),
+		"aimlapi":   c.GetLLMProviderConfig("aimlapi"),
 		"custom":    c.GetLLMProviderConfig("custom"),
 	}
 }
@@ -296,6 +297,13 @@ func (c *controller) GetLLMProviderConfig(providerID string) *LLMProviderConfig 
 		providerConfig.APIKey, _ = c.GetVar("MINIMAX_API_KEY")
 		providerConfig.BaseURL, _ = c.GetVar("MINIMAX_SERVER_URL")
 		providerConfig.ProviderName, _ = c.GetVar("MINIMAX_PROVIDER")
+		providerConfig.Configured = providerConfig.APIKey.Value != ""
+
+	case "aimlapi":
+		providerConfig.Name = "aimlapi.com"
+		providerConfig.APIKey, _ = c.GetVar("AIMLAPI_API_KEY")
+		providerConfig.BaseURL, _ = c.GetVar("AIMLAPI_SERVER_URL")
+		providerConfig.ProviderName, _ = c.GetVar("AIMLAPI_PROVIDER")
 		providerConfig.Configured = providerConfig.APIKey.Value != ""
 
 	case "custom":
@@ -450,7 +458,7 @@ func (c *controller) UpdateLLMProviderConfig(providerID string, config *LLMProvi
 			return fmt.Errorf("failed to set %s: %w", config.ProviderName.Name, err)
 		}
 
-	case "minimax":
+	case "minimax", "aimlapi":
 		if err := c.SetVar(config.APIKey.Name, config.APIKey.Value); err != nil {
 			return fmt.Errorf("failed to set %s: %w", config.APIKey.Name, err)
 		}
@@ -540,6 +548,8 @@ func (c *controller) ResetLLMProviderConfig(providerID string) map[string]*LLMPr
 		vars = []string{"QWEN_API_KEY", "QWEN_SERVER_URL", "QWEN_PROVIDER"}
 	case "minimax":
 		vars = []string{"MINIMAX_API_KEY", "MINIMAX_SERVER_URL", "MINIMAX_PROVIDER"}
+	case "aimlapi":
+		vars = []string{"AIMLAPI_API_KEY", "AIMLAPI_SERVER_URL", "AIMLAPI_PROVIDER"}
 	case "custom":
 		vars = []string{
 			"LLM_SERVER_URL", "LLM_SERVER_KEY", "LLM_SERVER_MODEL",
@@ -2347,6 +2357,9 @@ func (c *controller) getVariableDescription(varName string) string {
 		"MINIMAX_API_KEY":                   locale.EnvDesc_MINIMAX_API_KEY,
 		"MINIMAX_SERVER_URL":                locale.EnvDesc_MINIMAX_SERVER_URL,
 		"MINIMAX_PROVIDER":                  locale.EnvDesc_MINIMAX_PROVIDER,
+		"AIMLAPI_API_KEY":                   locale.EnvDesc_AIMLAPI_API_KEY,
+		"AIMLAPI_SERVER_URL":                locale.EnvDesc_AIMLAPI_SERVER_URL,
+		"AIMLAPI_PROVIDER":                  locale.EnvDesc_AIMLAPI_PROVIDER,
 		"LLM_SERVER_URL":                    locale.EnvDesc_LLM_SERVER_URL,
 		"LLM_SERVER_KEY":                    locale.EnvDesc_LLM_SERVER_KEY,
 		"LLM_SERVER_MODEL":                  locale.EnvDesc_LLM_SERVER_MODEL,
@@ -2542,6 +2555,7 @@ var maskedVariables = map[string]bool{
 	"KIMI_API_KEY":              true,
 	"QWEN_API_KEY":              true,
 	"MINIMAX_API_KEY":           true,
+	"AIMLAPI_API_KEY":           true,
 	"LLM_SERVER_KEY":            true,
 	"LANGFUSE_PUBLIC_KEY":       true,
 	"LANGFUSE_SECRET_KEY":       true,
@@ -2633,6 +2647,9 @@ var criticalVariables = map[string]bool{
 	"MINIMAX_API_KEY":                   true,
 	"MINIMAX_SERVER_URL":                true,
 	"MINIMAX_PROVIDER":                  true,
+	"AIMLAPI_API_KEY":                   true,
+	"AIMLAPI_SERVER_URL":                true,
+	"AIMLAPI_PROVIDER":                  true,
 	"LLM_SERVER_URL":                    true,
 	"LLM_SERVER_KEY":                    true,
 	"LLM_SERVER_MODEL":                  true,

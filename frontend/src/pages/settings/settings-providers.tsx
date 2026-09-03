@@ -35,6 +35,7 @@ type Provider = ProviderConfigFragmentFragment;
 // Exhaustive Record so a newly-added ProviderType is a compile error here, not a
 // provider silently missing from the create-provider menu.
 const providerLabels: Record<ProviderType, string> = {
+    [ProviderType.Aimlapi]: 'aimlapi.com',
     [ProviderType.Anthropic]: 'Anthropic',
     [ProviderType.Bedrock]: 'Bedrock',
     [ProviderType.Custom]: 'Custom',

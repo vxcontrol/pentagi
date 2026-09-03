@@ -569,6 +569,7 @@ query settingsProviders {
             kimi
             qwen
             minimax
+            aimlapi
         }
         default {
             openai {
@@ -602,6 +603,9 @@ query settingsProviders {
                 ...providerConfigFragment
             }
             minimax {
+                ...providerConfigFragment
+            }
+            aimlapi {
                 ...providerConfigFragment
             }
         }
@@ -640,6 +644,9 @@ query settingsProviders {
                 ...modelConfigFragment
             }
             minimax {
+                ...modelConfigFragment
+            }
+            aimlapi {
                 ...modelConfigFragment
             }
         }

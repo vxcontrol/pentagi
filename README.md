@@ -36,6 +36,7 @@
     - [Kimi](#kimi-provider-configuration)
     - [Qwen](#qwen-provider-configuration)
     - [MiniMax](#minimax-provider-configuration)
+    - [aimlapi.com](#aimlapicom-provider-configuration)
 - [Advanced Setup](#advanced-setup)
   - [Langfuse Integration](#langfuse-integration)
   - [Monitoring and Observability](#monitoring-and-observability)
@@ -75,7 +76,7 @@ You can watch the video **PentAGI overview**:
 - Persistent Storage. All commands and outputs are stored in PostgreSQL with [pgvector](https://hub.docker.com/r/vxcontrol/pgvector) extension.
 - Scalable Architecture. Microservices-based design supporting horizontal scaling.
 - Self-Hosted Solution. Complete control over your deployment and data.
-- Flexible Authentication. Support for 10+ LLM providers ([OpenAI](https://platform.openai.com/), [Anthropic](https://www.anthropic.com/), [Google AI/Gemini](https://ai.google.dev/), [AWS Bedrock](https://aws.amazon.com/bedrock/), [Ollama](https://ollama.com/), [DeepSeek](https://www.deepseek.com/en/), [GLM](https://z.ai/), [Kimi](https://platform.moonshot.ai/), [Qwen](https://www.alibabacloud.com/en/), [MiniMax](https://www.minimax.io/), Custom) plus aggregators ([OpenRouter](https://openrouter.ai/), [DeepInfra](https://deepinfra.com/), [Atlas Cloud](https://www.atlascloud.ai/), [OpenCode Go plan](https://opencode.ai/en/go)). For production local deployments, see our [vLLM + Qwen3.5-27B-FP8 guide](examples/guides/vllm-qwen35-27b-fp8.md).
+- Flexible Authentication. Support for 10+ LLM providers ([OpenAI](https://platform.openai.com/), [Anthropic](https://www.anthropic.com/), [Google AI/Gemini](https://ai.google.dev/), [AWS Bedrock](https://aws.amazon.com/bedrock/), [Ollama](https://ollama.com/), [DeepSeek](https://www.deepseek.com/en/), [GLM](https://z.ai/), [Kimi](https://platform.moonshot.ai/), [Qwen](https://www.alibabacloud.com/en/), [MiniMax](https://www.minimax.io/), Custom) plus aggregators ([OpenRouter](https://openrouter.ai/), [DeepInfra](https://deepinfra.com/), [Atlas Cloud](https://www.atlascloud.ai/), [OpenCode Go plan](https://opencode.ai/en/go), [aimlapi.com](https://aimlapi.com/)). For production local deployments, see our [vLLM + Qwen3.5-27B-FP8 guide](examples/guides/vllm-qwen35-27b-fp8.md).
 - API Token Authentication. Secure Bearer token system for programmatic access to REST and GraphQL APIs.
 - Quick Deployment. Easy setup through [Docker Compose](https://docs.docker.com/compose/) with comprehensive environment configuration.
 
@@ -765,6 +766,9 @@ BEDROCK_DEFAULT_AUTH=true                        # Option 1: Use AWS SDK default
 # KIMI_API_KEY=your_kimi_key                     # Kimi (Moonshot AI, ultra-long context)
 # QWEN_API_KEY=your_qwen_key                     # Qwen (Alibaba Cloud, multimodal)
 # MINIMAX_API_KEY=your_minimax_key               # MiniMax
+
+# Optional: aggregators (one key, many vendors)
+# AIMLAPI_API_KEY=your_aimlapi_key               # aimlapi.com (350+ chat models)
 
 # Optional: Local LLM provider (zero-cost inference)
 OLLAMA_SERVER_URL=http://localhost:11434
@@ -2576,6 +2580,50 @@ PentAGI ships 3 MiniMax models with tool calling, JSON output, and streaming. `M
 
 **LiteLLM Integration**: Set `MINIMAX_PROVIDER=minimax` to enable model name prefixing when using default PentAGI configurations with LiteLLM proxy. Leave empty for direct API usage.
 
+### aimlapi.com Provider Configuration
+
+[aimlapi.com](https://aimlapi.com/) is an aggregator: one OpenAI-compatible endpoint at `https://api.aimlapi.com/v1` and one key in front of 350+ chat models from many vendors, with tool calling, structured output, streaming and reasoning support.
+
+Requests PentAGI sends to `api.aimlapi.com` carry `HTTP-Referer`, `X-Title`, `X-AIMLAPI-Source` and `X-AIMLAPI-Partner-ID` identifying PentAGI as the calling application. The headers are scoped to that host, so pointing `AIMLAPI_SERVER_URL` at a proxy or a self-hosted gateway disables them rather than tagging someone else's traffic.
+
+#### Configuration Variables
+
+| Variable             | Default Value                | Description                                        |
+| -------------------- | ---------------------------- | -------------------------------------------------- |
+| `AIMLAPI_API_KEY`    |                              | aimlapi.com API key for authentication             |
+| `AIMLAPI_SERVER_URL` | `https://api.aimlapi.com/v1` | aimlapi.com API endpoint URL                       |
+| `AIMLAPI_PROVIDER`   |                              | Provider prefix for LiteLLM integration (optional) |
+
+#### Configuration Examples
+
+```bash
+# Direct API usage
+AIMLAPI_API_KEY=your_aimlapi_api_key
+AIMLAPI_SERVER_URL=https://api.aimlapi.com/v1
+
+# With LiteLLM proxy
+AIMLAPI_API_KEY=your_litellm_key
+AIMLAPI_SERVER_URL=http://litellm-proxy:4000
+AIMLAPI_PROVIDER=aimlapi  # Adds prefix to model names for LiteLLM
+```
+
+#### Supported Models
+
+PentAGI ships 6 aimlapi.com models across the 13 agent roles. Model ids are vendor-namespaced and are sent verbatim; the gateway also accepts short aliases, but an alias can resolve to a different model than its name suggests, so only canonical ids are used. Prices are USD per 1M tokens as published by `GET https://api.aimlapi.com/v1/models?include=all` on 2026-09-03.
+
+| Model ID                      | Context | Price (Input/Output) | Use Case                                                          |
+| ----------------------------- | ------- | -------------------- | ----------------------------------------------------------------- |
+| `deepseek/deepseek-v4-flash`* | 1M      | $0.182/$0.364        | Utility agents, enricher and pentester; provider-wide fallback (default) |
+| `deepseek/deepseek-v4-pro`    | 1M      | $0.5655/$1.131       | Reserved for heavy multi-step reasoning                           |
+| `z-ai/glm-5-turbo`            | 262K    | $1.56/$5.20          | Orchestrator and assistant, tuned for tool invocation             |
+| `zhipu/glm-5.2`               | 1M      | $1.82/$5.72          | Plan generation and refinement at max reasoning effort            |
+| `minimax/minimax-m3`          | 524K    | $0.39/$1.56          | Adviser, adaptive thinking via `extra_body`                       |
+| `moonshot/kimi-k2-7-code`     | 262K    | $1.235/$5.20         | Coder and installer                                               |
+
+The default roster deliberately excludes the OpenAI/Anthropic/Google models the gateway also carries: this product runs offensive-security workloads and those vendors' guardrails false-positive on legitimate exploit-development content. Any other catalog id can be selected per agent role in the Settings UI or in a provider config file.
+
+**LiteLLM Integration**: Set `AIMLAPI_PROVIDER=aimlapi` to enable model name prefixing when using default PentAGI configurations with LiteLLM proxy. Leave empty for direct API usage.
+
 ## Advanced Setup
 
 ### Langfuse Integration
@@ -3997,7 +4045,7 @@ To access detailed logs:
 The main utility accepts several options:
 
 - `-env <path>` - Path to environment file (optional, default: `.env`)
-- `-provider <type>` - Provider type to use (default: `custom`, options: `openai`, `anthropic`, `gemini`, `bedrock`, `ollama`, `deepseek`, `glm`, `kimi`, `qwen`, `minimax`, `custom`)
+- `-provider <type>` - Provider type to use (default: `custom`, options: `openai`, `anthropic`, `gemini`, `bedrock`, `ollama`, `deepseek`, `glm`, `kimi`, `qwen`, `minimax`, `aimlapi`, `custom`)
 - `-flow <id>` - Flow ID for testing functions that require it (0 means using mocks, default: `0`)
 - `-user <id>` - User ID for testing functions that require it (default: `0`; `1` is the default admin user)
 - `-task <id>` - Task ID for agent context (optional)

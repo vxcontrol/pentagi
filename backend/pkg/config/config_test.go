@@ -226,6 +226,7 @@ func TestGetSecretPatterns_AllFields(t *testing.T) {
 		KimiAPIKey:              "kimi-123",
 		QwenAPIKey:              "qwen-123",
 		MiniMaxAPIKey:           "minimax-123",
+		AIMLAPIKey:              "aimlapi-123",
 		GoogleAPIKey:            "AIza123",
 		GoogleCXKey:             "cx-123",
 		OAuthGoogleClientID:     "google-client-id",
@@ -242,7 +243,7 @@ func TestGetSecretPatterns_AllFields(t *testing.T) {
 
 	patterns := cfg.GetSecretPatterns()
 
-	expectedCount := 30
+	expectedCount := 31
 	if len(patterns) != expectedCount {
 		t.Errorf("expected %d patterns, got %d", expectedCount, len(patterns))
 	}
@@ -298,6 +299,7 @@ func clearConfigEnv(t *testing.T) {
 		"KIMI_API_KEY", "KIMI_SERVER_URL", "KIMI_PROVIDER",
 		"QWEN_API_KEY", "QWEN_SERVER_URL", "QWEN_PROVIDER",
 		"MINIMAX_API_KEY", "MINIMAX_SERVER_URL", "MINIMAX_PROVIDER",
+		"AIMLAPI_API_KEY", "AIMLAPI_SERVER_URL", "AIMLAPI_PROVIDER",
 		"DUCKDUCKGO_ENABLED", "DUCKDUCKGO_REGION", "DUCKDUCKGO_SAFESEARCH", "DUCKDUCKGO_TIME_RANGE",
 		"SPLOITUS_ENABLED",
 		"GOOGLE_API_KEY", "GOOGLE_CX_KEY", "GOOGLE_LR_KEY",

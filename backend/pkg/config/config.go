@@ -160,6 +160,11 @@ type Config struct {
 	MiniMaxServerURL string `env:"MINIMAX_SERVER_URL" envDefault:"https://api.minimax.io/v1"`
 	MiniMaxProvider  string `env:"MINIMAX_PROVIDER"`
 
+	// === LLM Provider: aimlapi.com ===
+	AIMLAPIKey       string `env:"AIMLAPI_API_KEY"`
+	AIMLAPIServerURL string `env:"AIMLAPI_SERVER_URL" envDefault:"https://api.aimlapi.com/v1"`
+	AIMLAPIProvider  string `env:"AIMLAPI_PROVIDER"`
+
 	// === Search Engine: DuckDuckGo ===
 	DuckDuckGoEnabled    bool   `env:"DUCKDUCKGO_ENABLED" envDefault:"true"`
 	DuckDuckGoRegion     string `env:"DUCKDUCKGO_REGION"`
@@ -456,6 +461,7 @@ func (c *Config) GetSecretPatterns() []patterns.Pattern {
 		{c.KimiAPIKey, "Kimi Key"},
 		{c.QwenAPIKey, "Qwen Key"},
 		{c.MiniMaxAPIKey, "MiniMax Key"},
+		{c.AIMLAPIKey, "AI/ML API Key"},
 		{c.GoogleAPIKey, "Google API Key"},
 		{c.GoogleCXKey, "Google CX Key"},
 		{c.OAuthGoogleClientID, "Google Client ID"},

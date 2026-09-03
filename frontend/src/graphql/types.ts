@@ -204,6 +204,7 @@ export enum PromptValidationErrorType {
 }
 
 export enum ProviderType {
+    Aimlapi = 'aimlapi',
     Anthropic = 'anthropic',
     Bedrock = 'bedrock',
     Custom = 'custom',
@@ -735,6 +736,7 @@ export type SettingsProvidersQuery = {
             kimi: boolean;
             qwen: boolean;
             minimax: boolean;
+            aimlapi: boolean;
         };
         default: {
             openai: ProviderConfigFragmentFragment;
@@ -748,6 +750,7 @@ export type SettingsProvidersQuery = {
             kimi: ProviderConfigFragmentFragment | null;
             qwen: ProviderConfigFragmentFragment | null;
             minimax: ProviderConfigFragmentFragment | null;
+            aimlapi: ProviderConfigFragmentFragment | null;
         };
         userDefined: Array<ProviderConfigFragmentFragment> | null;
         models: {
@@ -762,6 +765,7 @@ export type SettingsProvidersQuery = {
             kimi: Array<ModelConfigFragmentFragment> | null;
             qwen: Array<ModelConfigFragmentFragment> | null;
             minimax: Array<ModelConfigFragmentFragment> | null;
+            aimlapi: Array<ModelConfigFragmentFragment> | null;
         };
     };
 };
@@ -3561,6 +3565,7 @@ export const SettingsProvidersDocument = {
                                             { kind: 'Field', name: { kind: 'Name', value: 'kimi' } },
                                             { kind: 'Field', name: { kind: 'Name', value: 'qwen' } },
                                             { kind: 'Field', name: { kind: 'Name', value: 'minimax' } },
+                                            { kind: 'Field', name: { kind: 'Name', value: 'aimlapi' } },
                                         ],
                                     },
                                 },
@@ -3703,6 +3708,19 @@ export const SettingsProvidersDocument = {
                                             {
                                                 kind: 'Field',
                                                 name: { kind: 'Name', value: 'minimax' },
+                                                selectionSet: {
+                                                    kind: 'SelectionSet',
+                                                    selections: [
+                                                        {
+                                                            kind: 'FragmentSpread',
+                                                            name: { kind: 'Name', value: 'providerConfigFragment' },
+                                                        },
+                                                    ],
+                                                },
+                                            },
+                                            {
+                                                kind: 'Field',
+                                                name: { kind: 'Name', value: 'aimlapi' },
                                                 selectionSet: {
                                                     kind: 'SelectionSet',
                                                     selections: [
@@ -3868,6 +3886,19 @@ export const SettingsProvidersDocument = {
                                             {
                                                 kind: 'Field',
                                                 name: { kind: 'Name', value: 'minimax' },
+                                                selectionSet: {
+                                                    kind: 'SelectionSet',
+                                                    selections: [
+                                                        {
+                                                            kind: 'FragmentSpread',
+                                                            name: { kind: 'Name', value: 'modelConfigFragment' },
+                                                        },
+                                                    ],
+                                                },
+                                            },
+                                            {
+                                                kind: 'Field',
+                                                name: { kind: 'Name', value: 'aimlapi' },
                                                 selectionSet: {
                                                     kind: 'SelectionSet',
                                                     selections: [

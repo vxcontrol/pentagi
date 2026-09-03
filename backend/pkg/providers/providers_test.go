@@ -10,6 +10,7 @@ import (
 
 	"pentagi/pkg/config"
 	"pentagi/pkg/database"
+	"pentagi/pkg/providers/aimlapi"
 	"pentagi/pkg/providers/anthropic"
 	"pentagi/pkg/providers/bedrock"
 	"pentagi/pkg/providers/deepseek"
@@ -144,6 +145,7 @@ func TestOpenAICompatProvidersDoNotUseAdaptiveThinking(t *testing.T) {
 		{"deepseek", deepseek.DefaultProviderConfig, deepseek.DefaultModels},
 		{"kimi", kimi.DefaultProviderConfig, kimi.DefaultModels},
 		{"minimax", minimax.DefaultProviderConfig, minimax.DefaultModels},
+		{"aimlapi", aimlapi.DefaultProviderConfig, aimlapi.DefaultModels},
 	}
 
 	for _, p := range providers {
@@ -193,6 +195,7 @@ func TestAgentConfigPricesMatchCatalog(t *testing.T) {
 		{"glm", glm.DefaultProviderConfig, glm.DefaultModels},
 		{"kimi", kimi.DefaultProviderConfig, kimi.DefaultModels},
 		{"minimax", minimax.DefaultProviderConfig, minimax.DefaultModels},
+		{"aimlapi", aimlapi.DefaultProviderConfig, aimlapi.DefaultModels},
 		{"openai", openai.DefaultProviderConfig, openai.DefaultModels},
 		{"qwen", qwen.DefaultProviderConfig, qwen.DefaultModels},
 	}

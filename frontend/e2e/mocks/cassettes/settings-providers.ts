@@ -85,6 +85,7 @@ const modelConfig = (name: string): ModelConfigFragmentFragment =>
 // create-form's model-dropdown seeding path structurally unreachable.
 const allDefaults = () =>
     entity('DefaultProvidersConfig', {
+        aimlapi: defaultConfig(ProviderType.Aimlapi),
         anthropic: defaultConfig(ProviderType.Anthropic),
         bedrock: defaultConfig(ProviderType.Bedrock),
         custom: defaultConfig(ProviderType.Custom),
@@ -102,6 +103,7 @@ const catalog = (type: ProviderType) => [modelConfig(`e2e-${type}-model`), model
 
 const allModels = () =>
     entity('ProvidersModelsList', {
+        aimlapi: catalog(ProviderType.Aimlapi),
         anthropic: catalog(ProviderType.Anthropic),
         bedrock: catalog(ProviderType.Bedrock),
         custom: catalog(ProviderType.Custom),
@@ -119,6 +121,7 @@ const noProviders: ResultOf<typeof SettingsProvidersDocument> = {
     settingsProviders: entity('ProvidersConfig', {
         default: allDefaults(),
         enabled: entity('ProvidersReadinessStatus', {
+            aimlapi: false,
             anthropic: false,
             bedrock: false,
             custom: false,
@@ -170,6 +173,7 @@ export const providersList = (...userDefined: ProviderConfigFragmentFragment[]) 
     settingsProviders: entity('ProvidersConfig', {
         default: allDefaults(),
         enabled: entity('ProvidersReadinessStatus', {
+            aimlapi: false,
             anthropic: true,
             bedrock: false,
             custom: false,

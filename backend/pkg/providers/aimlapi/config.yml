@@ -1,0 +1,200 @@
+# AI/ML API agent configuration.
+#
+# Strategy mirrors examples/configs/openrouter.provider.yml, because the two are
+# the same kind of backend: one OpenAI-compatible endpoint fronting many vendors.
+# Models are picked per agent role for price/intelligence fit, drawn from four
+# families (DeepSeek, GLM, MiniMax, Kimi) and deliberately excluding the
+# OpenAI/Anthropic/Google models the gateway also carries — this product runs
+# offensive-security workloads and those vendors' guardrails false-positive on
+# legitimate exploit-development content.
+#
+#   - deepseek/deepseek-v4-flash : utility tier (simple/simple_json/reflector/
+#     searcher/enricher) and pentester. The pentester keeps thinking on for tool-call
+#     quality but stays on the flash tier — it is the most frequently invoked
+#     agent in a flow.
+#   - z-ai/glm-5-turbo   : primary_agent/assistant — tool-invocation-optimized,
+#     which is what the orchestration loop needs.
+#   - zhipu/glm-5.2      : generator/refiner — flagship GLM, the only model in
+#     this roster whose catalog entry documents graduated reasoning effort, used
+#     at max effort for the most consequential decisions in a flow.
+#   - minimax/minimax-m3 : adviser — adaptive thinking, toggled through
+#     extra_body.thinking.type (MiniMax exposes no reasoning_effort). NOT used for
+#     the enricher, unlike the OpenRouter config: through this gateway m3 ignores
+#     both reasoning_effort:"none" and extra_body.thinking.type:"disabled" and
+#     still thinks, returning the chain inline in `content` wrapped in <think>
+#     tags rather than in reasoning_content. The enricher is the one role that
+#     explicitly wants thinking off, so it stays on deepseek-v4-flash, which does
+#     honour it (verified by ctester's reasoning_off capability test).
+#   - moonshot/kimi-k2-7-code : coder/installer — coding-specialized, also covers
+#     the installer's build/environment scripting, keeping the roster small.
+#
+# Prices are USD per 1M tokens from the gateway catalog on 2026-09-03 and match
+# models.yml. Ids are canonical (never aliases) and each was checked against both
+# the `id` and `aliases` sets of `GET /v1/models?include=all`.
+#
+# Reasoning notes:
+#   - `reasoning: {mode: off}` maps to langchaingo's disable wire for the true
+#     fast/deterministic utility agents.
+#   - `reasoning: {effort: ...}` is set only where the model documents graduated
+#     effort support (glm-5.2). glm-5-turbo and kimi-k2-7-code do not, so their
+#     own hybrid-thinking defaults are left alone.
+#   - minimax-m3's depth is set via extra_body.thinking.type, which the gateway
+#     forwards verbatim to the MiniMax backend.
+
+simple:
+  model: "deepseek/deepseek-v4-flash"
+  temperature: 1.0
+  n: 1
+  max_tokens: 8192
+  reasoning:
+    mode: off
+  price:
+    input: 0.182
+    output: 0.364
+    cache_read: 0.00364
+
+simple_json:
+  model: "deepseek/deepseek-v4-flash"
+  temperature: 1.0
+  n: 1
+  max_tokens: 4096
+  json: true
+  reasoning:
+    mode: off
+  price:
+    input: 0.182
+    output: 0.364
+    cache_read: 0.00364
+
+primary_agent:
+  model: "z-ai/glm-5-turbo"
+  temperature: 1.0
+  top_p: 0.95
+  n: 1
+  max_tokens: 16384
+  price:
+    input: 1.56
+    output: 5.2
+    cache_read: 0.312
+
+assistant:
+  model: "z-ai/glm-5-turbo"
+  temperature: 1.0
+  top_p: 0.95
+  n: 1
+  max_tokens: 16384
+  price:
+    input: 1.56
+    output: 5.2
+    cache_read: 0.312
+
+generator:
+  model: "zhipu/glm-5.2"
+  temperature: 1.0
+  top_p: 0.95
+  n: 1
+  max_tokens: 32768
+  reasoning:
+    effort: max
+  price:
+    input: 1.82
+    output: 5.72
+    cache_read: 0.338
+
+refiner:
+  model: "zhipu/glm-5.2"
+  temperature: 1.0
+  top_p: 0.95
+  n: 1
+  max_tokens: 32768
+  reasoning:
+    effort: max
+  price:
+    input: 1.82
+    output: 5.72
+    cache_read: 0.338
+
+adviser:
+  model: "minimax/minimax-m3"
+  temperature: 1.0
+  top_p: 0.95
+  top_k: 40
+  n: 1
+  max_tokens: 16384
+  extra_body:
+    thinking:
+      type: adaptive
+  price:
+    input: 0.39
+    output: 1.56
+    cache_read: 0.078
+
+reflector:
+  model: "deepseek/deepseek-v4-flash"
+  temperature: 1.0
+  n: 1
+  max_tokens: 4096
+  reasoning:
+    mode: off
+  price:
+    input: 0.182
+    output: 0.364
+    cache_read: 0.00364
+
+searcher:
+  model: "deepseek/deepseek-v4-flash"
+  temperature: 1.0
+  n: 1
+  max_tokens: 4096
+  reasoning:
+    mode: off
+  price:
+    input: 0.182
+    output: 0.364
+    cache_read: 0.00364
+
+enricher:
+  model: "deepseek/deepseek-v4-flash"
+  temperature: 1.0
+  n: 1
+  max_tokens: 8192
+  reasoning:
+    mode: off
+  price:
+    input: 0.182
+    output: 0.364
+    cache_read: 0.00364
+
+coder:
+  model: "moonshot/kimi-k2-7-code"
+  temperature: 1.0
+  top_p: 0.95
+  n: 1
+  max_tokens: 20480
+  price:
+    input: 1.235
+    output: 5.2
+    cache_read: 0.247
+
+installer:
+  model: "moonshot/kimi-k2-7-code"
+  temperature: 1.0
+  top_p: 0.95
+  n: 1
+  max_tokens: 16384
+  price:
+    input: 1.235
+    output: 5.2
+    cache_read: 0.247
+
+pentester:
+  model: "deepseek/deepseek-v4-flash"
+  temperature: 1.0
+  n: 1
+  max_tokens: 16384
+  reasoning:
+    effort: high
+  price:
+    input: 0.182
+    output: 0.364
+    cache_read: 0.00364

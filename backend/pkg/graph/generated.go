@@ -210,6 +210,7 @@ type ComplexityRoot struct {
 	}
 
 	DefaultProvidersConfig struct {
+		Aimlapi   func(childComplexity int) int
 		Anthropic func(childComplexity int) int
 		Bedrock   func(childComplexity int) int
 		Custom    func(childComplexity int) int
@@ -450,6 +451,7 @@ type ComplexityRoot struct {
 	}
 
 	ProvidersModelsList struct {
+		Aimlapi   func(childComplexity int) int
 		Anthropic func(childComplexity int) int
 		Bedrock   func(childComplexity int) int
 		Custom    func(childComplexity int) int
@@ -464,6 +466,7 @@ type ComplexityRoot struct {
 	}
 
 	ProvidersReadinessStatus struct {
+		Aimlapi   func(childComplexity int) int
 		Anthropic func(childComplexity int) int
 		Bedrock   func(childComplexity int) int
 		Custom    func(childComplexity int) int
@@ -1647,6 +1650,13 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.DefaultPrompts.Tools(childComplexity), true
+
+	case "DefaultProvidersConfig.aimlapi":
+		if e.complexity.DefaultProvidersConfig.Aimlapi == nil {
+			break
+		}
+
+		return e.complexity.DefaultProvidersConfig.Aimlapi(childComplexity), true
 
 	case "DefaultProvidersConfig.anthropic":
 		if e.complexity.DefaultProvidersConfig.Anthropic == nil {
@@ -2963,6 +2973,13 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.ProvidersConfig.UserDefined(childComplexity), true
 
+	case "ProvidersModelsList.aimlapi":
+		if e.complexity.ProvidersModelsList.Aimlapi == nil {
+			break
+		}
+
+		return e.complexity.ProvidersModelsList.Aimlapi(childComplexity), true
+
 	case "ProvidersModelsList.anthropic":
 		if e.complexity.ProvidersModelsList.Anthropic == nil {
 			break
@@ -3039,6 +3056,13 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.ProvidersModelsList.Qwen(childComplexity), true
+
+	case "ProvidersReadinessStatus.aimlapi":
+		if e.complexity.ProvidersReadinessStatus.Aimlapi == nil {
+			break
+		}
+
+		return e.complexity.ProvidersReadinessStatus.Aimlapi(childComplexity), true
 
 	case "ProvidersReadinessStatus.anthropic":
 		if e.complexity.ProvidersReadinessStatus.Anthropic == nil {
@@ -14583,6 +14607,61 @@ func (ec *executionContext) fieldContext_DefaultProvidersConfig_minimax(_ contex
 	return fc, nil
 }
 
+func (ec *executionContext) _DefaultProvidersConfig_aimlapi(ctx context.Context, field graphql.CollectedField, obj *model.DefaultProvidersConfig) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_DefaultProvidersConfig_aimlapi(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Aimlapi, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*model.ProviderConfig)
+	fc.Result = res
+	return ec.marshalOProviderConfig2ᚖpentagiᚋpkgᚋgraphᚋmodelᚐProviderConfig(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_DefaultProvidersConfig_aimlapi(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "DefaultProvidersConfig",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_ProviderConfig_id(ctx, field)
+			case "name":
+				return ec.fieldContext_ProviderConfig_name(ctx, field)
+			case "type":
+				return ec.fieldContext_ProviderConfig_type(ctx, field)
+			case "agents":
+				return ec.fieldContext_ProviderConfig_agents(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_ProviderConfig_createdAt(ctx, field)
+			case "updatedAt":
+				return ec.fieldContext_ProviderConfig_updatedAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type ProviderConfig", field.Name)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Flow_id(ctx context.Context, field graphql.CollectedField, obj *model.Flow) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_Flow_id(ctx, field)
 	if err != nil {
@@ -22080,6 +22159,8 @@ func (ec *executionContext) fieldContext_ProvidersConfig_enabled(_ context.Conte
 				return ec.fieldContext_ProvidersReadinessStatus_qwen(ctx, field)
 			case "minimax":
 				return ec.fieldContext_ProvidersReadinessStatus_minimax(ctx, field)
+			case "aimlapi":
+				return ec.fieldContext_ProvidersReadinessStatus_aimlapi(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type ProvidersReadinessStatus", field.Name)
 		},
@@ -22148,6 +22229,8 @@ func (ec *executionContext) fieldContext_ProvidersConfig_default(_ context.Conte
 				return ec.fieldContext_DefaultProvidersConfig_qwen(ctx, field)
 			case "minimax":
 				return ec.fieldContext_DefaultProvidersConfig_minimax(ctx, field)
+			case "aimlapi":
+				return ec.fieldContext_DefaultProvidersConfig_aimlapi(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type DefaultProvidersConfig", field.Name)
 		},
@@ -22271,6 +22354,8 @@ func (ec *executionContext) fieldContext_ProvidersConfig_models(_ context.Contex
 				return ec.fieldContext_ProvidersModelsList_qwen(ctx, field)
 			case "minimax":
 				return ec.fieldContext_ProvidersModelsList_minimax(ctx, field)
+			case "aimlapi":
+				return ec.fieldContext_ProvidersModelsList_aimlapi(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type ProvidersModelsList", field.Name)
 		},
@@ -22892,6 +22977,61 @@ func (ec *executionContext) fieldContext_ProvidersModelsList_minimax(_ context.C
 	return fc, nil
 }
 
+func (ec *executionContext) _ProvidersModelsList_aimlapi(ctx context.Context, field graphql.CollectedField, obj *model.ProvidersModelsList) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_ProvidersModelsList_aimlapi(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Aimlapi, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.([]*model.ModelConfig)
+	fc.Result = res
+	return ec.marshalOModelConfig2ᚕᚖpentagiᚋpkgᚋgraphᚋmodelᚐModelConfigᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_ProvidersModelsList_aimlapi(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ProvidersModelsList",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "name":
+				return ec.fieldContext_ModelConfig_name(ctx, field)
+			case "description":
+				return ec.fieldContext_ModelConfig_description(ctx, field)
+			case "releaseDate":
+				return ec.fieldContext_ModelConfig_releaseDate(ctx, field)
+			case "thinking":
+				return ec.fieldContext_ModelConfig_thinking(ctx, field)
+			case "reasoning":
+				return ec.fieldContext_ModelConfig_reasoning(ctx, field)
+			case "price":
+				return ec.fieldContext_ModelConfig_price(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type ModelConfig", field.Name)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _ProvidersReadinessStatus_openai(ctx context.Context, field graphql.CollectedField, obj *model.ProvidersReadinessStatus) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_ProvidersReadinessStatus_openai(ctx, field)
 	if err != nil {
@@ -23364,6 +23504,50 @@ func (ec *executionContext) _ProvidersReadinessStatus_minimax(ctx context.Contex
 }
 
 func (ec *executionContext) fieldContext_ProvidersReadinessStatus_minimax(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ProvidersReadinessStatus",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ProvidersReadinessStatus_aimlapi(ctx context.Context, field graphql.CollectedField, obj *model.ProvidersReadinessStatus) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_ProvidersReadinessStatus_aimlapi(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Aimlapi, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(bool)
+	fc.Result = res
+	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_ProvidersReadinessStatus_aimlapi(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "ProvidersReadinessStatus",
 		Field:      field,
@@ -38795,6 +38979,8 @@ func (ec *executionContext) _DefaultProvidersConfig(ctx context.Context, sel ast
 			out.Values[i] = ec._DefaultProvidersConfig_qwen(ctx, field, obj)
 		case "minimax":
 			out.Values[i] = ec._DefaultProvidersConfig_minimax(ctx, field, obj)
+		case "aimlapi":
+			out.Values[i] = ec._DefaultProvidersConfig_aimlapi(ctx, field, obj)
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -40437,6 +40623,8 @@ func (ec *executionContext) _ProvidersModelsList(ctx context.Context, sel ast.Se
 			out.Values[i] = ec._ProvidersModelsList_qwen(ctx, field, obj)
 		case "minimax":
 			out.Values[i] = ec._ProvidersModelsList_minimax(ctx, field, obj)
+		case "aimlapi":
+			out.Values[i] = ec._ProvidersModelsList_aimlapi(ctx, field, obj)
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -40523,6 +40711,11 @@ func (ec *executionContext) _ProvidersReadinessStatus(ctx context.Context, sel a
 			}
 		case "minimax":
 			out.Values[i] = ec._ProvidersReadinessStatus_minimax(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "aimlapi":
+			out.Values[i] = ec._ProvidersReadinessStatus_aimlapi(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}

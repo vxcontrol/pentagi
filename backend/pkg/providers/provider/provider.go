@@ -41,7 +41,8 @@ func (p ProviderType) ReasoningProvider() reasoning.Provider {
 		return reasoning.ProviderBedrock
 	case ProviderGemini:
 		return reasoning.ProviderGoogleAI
-	case ProviderOpenAI, ProviderDeepSeek, ProviderGLM, ProviderKimi, ProviderQwen, ProviderMiniMax, ProviderCustom:
+	case ProviderOpenAI, ProviderDeepSeek, ProviderGLM, ProviderKimi, ProviderQwen, ProviderMiniMax,
+		ProviderAIMLAPI, ProviderCustom:
 		return reasoning.ProviderOpenAI
 	default: // ProviderOllama and anything unrecognized
 		return reasoning.ProviderUnknown
@@ -60,6 +61,7 @@ const (
 	ProviderKimi      ProviderType = "kimi"
 	ProviderQwen      ProviderType = "qwen"
 	ProviderMiniMax   ProviderType = "minimax"
+	ProviderAIMLAPI   ProviderType = "aimlapi"
 )
 
 // AllProviderTypes enumerates every supported provider type; keep it in sync with
@@ -76,6 +78,7 @@ var AllProviderTypes = ProvidersListTypes{
 	ProviderKimi,
 	ProviderQwen,
 	ProviderMiniMax,
+	ProviderAIMLAPI,
 }
 
 type ProviderName string
@@ -96,6 +99,7 @@ const (
 	DefaultProviderNameKimi      ProviderName = ProviderName(ProviderKimi)
 	DefaultProviderNameQwen      ProviderName = ProviderName(ProviderQwen)
 	DefaultProviderNameMiniMax   ProviderName = ProviderName(ProviderMiniMax)
+	DefaultProviderNameAIMLAPI   ProviderName = ProviderName(ProviderAIMLAPI)
 )
 
 type Provider interface {

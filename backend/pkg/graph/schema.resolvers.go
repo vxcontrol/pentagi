@@ -15,6 +15,7 @@ import (
 	"pentagi/pkg/database/converter"
 	"pentagi/pkg/flowfiles"
 	"pentagi/pkg/graph/model"
+	"pentagi/pkg/providers/aimlapi"
 	"pentagi/pkg/providers/anthropic"
 	"pentagi/pkg/providers/bedrock"
 	"pentagi/pkg/providers/deepseek"
@@ -2165,6 +2166,11 @@ func (r *queryResolver) SettingsProviders(ctx context.Context) (*model.Providers
 			if models, err := minimax.DefaultModels(); err == nil {
 				config.Models.Minimax = converter.ConvertModels(models, prvtype.ReasoningProvider())
 			}
+		case provider.ProviderAIMLAPI:
+			config.Default.Aimlapi = mpcfg
+			if models, err := aimlapi.DefaultModels(); err == nil {
+				config.Models.Aimlapi = converter.ConvertModels(models, prvtype.ReasoningProvider())
+			}
 		}
 	}
 
@@ -2202,6 +2208,8 @@ func (r *queryResolver) SettingsProviders(ctx context.Context) (*model.Providers
 			config.Enabled.Qwen = true
 		case provider.ProviderMiniMax:
 			config.Enabled.Minimax = true
+		case provider.ProviderAIMLAPI:
+			config.Enabled.Aimlapi = true
 		}
 	}
 

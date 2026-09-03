@@ -1,0 +1,71 @@
+# AI/ML API (https://aimlapi.com) model catalog.
+#
+# Ids are the gateway's canonical, vendor-namespaced ids and are sent verbatim.
+# The gateway also publishes short aliases (`deepseek-v4-flash`), but an alias can
+# resolve to a different model than its name implies — `deepseek/deepseek-chat`,
+# for instance, is both its own listed model and an alias of deepseek-v4-flash —
+# so only canonical ids appear here.
+#
+# Prices are USD per 1M tokens as published by
+# `GET https://api.aimlapi.com/v1/models?include=all` on 2026-09-03. That endpoint
+# omits pricing, capabilities and modalities unless `include=all` is passed. Every
+# id below was checked against both the `id` and `aliases` sets of that response.
+#
+# The roster deliberately avoids OpenAI/Anthropic/Google models even though the
+# gateway carries them: PentAGI runs offensive-security workloads, and those
+# vendors' guardrails false-positive on legitimate exploit development. This is
+# the same reasoning already applied in examples/configs/openrouter.provider.yml.
+
+# --- DeepSeek: utility tier and the provider-wide fallback model ---
+- name: deepseek/deepseek-v4-flash
+  description: DeepSeek V4 Flash via AI/ML API - cost-efficient workhorse with hybrid thinking, tool calling, parallel tool calls and structured output. 1M context, 384K max output. Default model for the utility agents.
+  thinking: true
+  price:
+    input: 0.182
+    output: 0.364
+    cache_read: 0.00364
+
+- name: deepseek/deepseek-v4-pro
+  description: DeepSeek V4 Pro via AI/ML API - higher-tier reasoning model for complex logic, exploit analysis and long multi-step planning. 1M context, 384K max output.
+  thinking: true
+  price:
+    input: 0.5655
+    output: 1.131
+    cache_read: 0.0047125
+
+# --- Z.AI / GLM: orchestration and plan generation ---
+- name: z-ai/glm-5-turbo
+  description: GLM 5 Turbo via AI/ML API - tool-invocation-optimized model for long-chain execution; used for the orchestrator and assistant roles. 262K context, 131K max output.
+  thinking: true
+  price:
+    input: 1.56
+    output: 5.2
+    cache_read: 0.312
+
+- name: zhipu/glm-5.2
+  description: GLM 5.2 via AI/ML API - flagship GLM with graduated reasoning effort (high/max), used for plan generation and refinement. 1M context, 131K max output.
+  thinking: true
+  reasoning:
+    efforts: [high, max]
+  price:
+    input: 1.82
+    output: 5.72
+    cache_read: 0.338
+
+# --- MiniMax: advisory ---
+- name: minimax/minimax-m3
+  description: MiniMax M3 via AI/ML API - long-context agentic model with adaptive thinking toggled through extra_body.thinking.type rather than reasoning_effort. 524K context.
+  thinking: true
+  price:
+    input: 0.39
+    output: 1.56
+    cache_read: 0.078
+
+# --- Moonshot / Kimi: code generation and environment setup ---
+- name: moonshot/kimi-k2-7-code
+  description: Kimi K2.7 Code via AI/ML API - coding-specialized model with strong long-context programming performance; covers the coder and installer roles. 262K context, 260K max output.
+  thinking: false
+  price:
+    input: 1.235
+    output: 5.2
+    cache_read: 0.247

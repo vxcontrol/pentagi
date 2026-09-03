@@ -69,7 +69,8 @@ func (m *LLMProviderFormModel) BuildForm() tea.Cmd {
 		fields = append(fields, m.createPullEnabledField(config))
 		fields = append(fields, m.createLoadModelsEnabledField(config))
 
-	case LLMProviderDeepSeek, LLMProviderGLM, LLMProviderKimi, LLMProviderQwen, LLMProviderMiniMax:
+	case LLMProviderDeepSeek, LLMProviderGLM, LLMProviderKimi, LLMProviderQwen, LLMProviderMiniMax,
+		LLMProviderAIMLAPI:
 		fields = append(fields, m.createBaseURLField(config))
 		fields = append(fields, m.createAPIKeyField(config))
 		fields = append(fields, m.createProviderNameField(config))
@@ -367,6 +368,8 @@ func (m *LLMProviderFormModel) GetFormDescription() string {
 		return locale.LLMProviderQwenDesc
 	case LLMProviderMiniMax:
 		return locale.LLMProviderMiniMaxDesc
+	case LLMProviderAIMLAPI:
+		return locale.LLMProviderAIMLAPIDesc
 	case LLMProviderCustom:
 		return locale.LLMProviderCustomDesc
 	default:
@@ -396,6 +399,8 @@ func (m *LLMProviderFormModel) GetFormName() string {
 		return locale.LLMProviderQwen
 	case LLMProviderMiniMax:
 		return locale.LLMProviderMiniMax
+	case LLMProviderAIMLAPI:
+		return locale.LLMProviderAIMLAPI
 	case LLMProviderCustom:
 		return locale.LLMProviderCustom
 	default:
@@ -514,7 +519,8 @@ func (m *LLMProviderFormModel) GetCurrentConfiguration() string {
 				locale.LLMFormFieldLoadModelsEnabled, m.GetStyles().Info.Render(config.LoadModelsEnabled.Value)))
 		}
 
-	case LLMProviderDeepSeek, LLMProviderGLM, LLMProviderKimi, LLMProviderQwen, LLMProviderMiniMax:
+	case LLMProviderDeepSeek, LLMProviderGLM, LLMProviderKimi, LLMProviderQwen, LLMProviderMiniMax,
+		LLMProviderAIMLAPI:
 		if config.BaseURL.Value != "" {
 			sections = append(sections, fmt.Sprintf("• %s: %s",
 				locale.LLMFormFieldBaseURL, m.GetStyles().Info.Render(locale.StatusConfigured)))
@@ -593,6 +599,8 @@ func (m *LLMProviderFormModel) GetHelpContent() string {
 		sections = append(sections, locale.LLMFormQwenHelp)
 	case LLMProviderMiniMax:
 		sections = append(sections, locale.LLMFormMiniMaxHelp)
+	case LLMProviderAIMLAPI:
+		sections = append(sections, locale.LLMFormAIMLAPIHelp)
 	case LLMProviderCustom:
 		sections = append(sections, locale.LLMFormCustomHelp)
 	}
@@ -792,6 +800,8 @@ func (m *LLMProviderFormModel) getDefaultBaseURL() string {
 		return "https://dashscope-us.aliyuncs.com/compatible-mode/v1"
 	case LLMProviderMiniMax:
 		return "https://api.minimax.io/v1"
+	case LLMProviderAIMLAPI:
+		return "https://api.aimlapi.com/v1"
 	case LLMProviderCustom:
 		return "http://llm-server:8000"
 	default:

@@ -367,6 +367,7 @@ const (
 	LLMProviderKimi          = "Kimi Moonshot AI"
 	LLMProviderQwen          = "Qwen Alibaba Cloud"
 	LLMProviderMiniMax       = "MiniMax"
+	LLMProviderAIMLAPI       = "aimlapi.com"
 	LLMProviderCustom        = "Custom"
 	LLMProviderOpenAIDesc    = "Industry-leading GPT models with excellent general performance"
 	LLMProviderAnthropicDesc = "Claude models with superior reasoning and safety features"
@@ -378,6 +379,7 @@ const (
 	LLMProviderKimiDesc      = "Moonshot AI's long-context models for document analysis"
 	LLMProviderQwenDesc      = "Alibaba Cloud's Qwen models for multilingual tasks"
 	LLMProviderMiniMaxDesc   = "MiniMax's M-series models for agentic reasoning and long-context tasks"
+	LLMProviderAIMLAPIDesc   = "Single OpenAI-compatible endpoint fronting 350+ chat models from many vendors"
 	LLMProviderCustomDesc    = "Custom OpenAI-compatible endpoint for maximum flexibility"
 )
 
@@ -626,6 +628,36 @@ Best for: Agentic security workflows that benefit from very large context and re
 Cost: Competitive per-token pricing across the M-series
 
 Setup: Get your API key from https://platform.minimax.io/`
+
+	LLMFormAIMLAPIHelp = `aimlapi.com is an aggregator: one OpenAI-compatible endpoint and one API key in front of 350+ chat models from many vendors.
+
+Default PentAGI Models:
+• deepseek/deepseek-v4-flash: utility agents, enricher and pentester (1M context, hybrid thinking)
+• deepseek/deepseek-v4-pro: reserved for heavy multi-step reasoning
+• z-ai/glm-5-turbo: orchestrator and assistant, tuned for tool invocation
+• zhipu/glm-5.2: plan generation and refinement at max reasoning effort
+• minimax/minimax-m3: adviser, adaptive thinking via extra_body
+• moonshot/kimi-k2-7-code: coder and installer
+
+Key Advantages:
+• One key and one endpoint across DeepSeek, GLM, MiniMax, Kimi, Qwen and others
+• Model ids are vendor-namespaced, so swapping a role's model needs no new credential
+• Full tool calling, structured output, streaming and reasoning support
+
+API Endpoint:
+• https://api.aimlapi.com/v1 (default)
+
+LiteLLM Integration:
+• Set Provider Name to 'aimlapi' when using a LiteLLM proxy
+• Enables model prefix (e.g., aimlapi/deepseek/deepseek-v4-flash) without modifying config.yml
+• Optional for direct aimlapi.com usage
+
+Note: the default model roster deliberately excludes OpenAI/Anthropic/Google models that the gateway also carries, because their guardrails false-positive on legitimate exploit-development work.
+
+Best for: Trying several vendors' models across agent roles without managing one account per vendor
+Cost: Per-token, published per model at https://api.aimlapi.com/v1/models?include=all
+
+Setup: Get your API key from https://aimlapi.com/app/keys`
 
 	LLMFormCustomHelp = `Configure any OpenAI-compatible API endpoint for maximum flexibility and integration with existing infrastructure.
 
@@ -2352,6 +2384,9 @@ const (
 	EnvDesc_MINIMAX_API_KEY                   = "MiniMax API Key"
 	EnvDesc_MINIMAX_SERVER_URL                = "MiniMax Server URL"
 	EnvDesc_MINIMAX_PROVIDER                  = "MiniMax Provider Name Prefix (for LiteLLM, e.g., 'minimax')"
+	EnvDesc_AIMLAPI_API_KEY                   = "aimlapi.com API Key"
+	EnvDesc_AIMLAPI_SERVER_URL                = "aimlapi.com Server URL"
+	EnvDesc_AIMLAPI_PROVIDER                  = "aimlapi.com Provider Name Prefix (for LiteLLM, e.g., 'aimlapi')"
 	EnvDesc_LLM_SERVER_URL                    = "Custom LLM Server URL"
 	EnvDesc_LLM_SERVER_KEY                    = "Custom LLM API Key"
 	EnvDesc_LLM_SERVER_MODEL                  = "Custom LLM Model"

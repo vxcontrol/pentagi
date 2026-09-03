@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"pentagi/pkg/config"
+	"pentagi/pkg/providers/aimlapi"
 	"pentagi/pkg/providers/anthropic"
 	"pentagi/pkg/providers/bedrock"
 	"pentagi/pkg/providers/custom"
@@ -33,7 +34,7 @@ import (
 
 func main() {
 	envFile := flag.String("env", ".env", "Path to environment file")
-	providerType := flag.String("type", "custom", "Provider type [custom, openai, anthropic, gemini, bedrock, ollama, deepseek, glm, kimi, qwen, minimax]")
+	providerType := flag.String("type", "custom", "Provider type [custom, openai, anthropic, gemini, bedrock, ollama, deepseek, glm, kimi, qwen, minimax, aimlapi]")
 	providerName := flag.String("name", "", "Provider name using as PROVDER_NAME/MODEL_NAME while building provider config")
 	configPath := flag.String("config", "", "Path to provider config file")
 	testsPath := flag.String("tests", "", "Path to custom tests YAML file")
@@ -234,6 +235,16 @@ func createProvider(providerType string, cfg *config.Config) (provider.Provider,
 			return nil, fmt.Errorf("error creating minimax provider config: %w", err)
 		}
 		return minimax.New(cfg, provider.DefaultProviderNameMiniMax, providerConfig)
+
+	case "aimlapi":
+		if cfg.AIMLAPIKey == "" {
+			return nil, fmt.Errorf("AI/ML API key is not set")
+		}
+		providerConfig, err := aimlapi.DefaultProviderConfig()
+		if err != nil {
+			return nil, fmt.Errorf("error creating aimlapi provider config: %w", err)
+		}
+		return aimlapi.New(cfg, provider.DefaultProviderNameAIMLAPI, providerConfig)
 
 	default:
 		return nil, fmt.Errorf("unsupported provider type: %s", providerType)

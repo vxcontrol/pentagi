@@ -6,6 +6,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { ProviderType } from '@/graphql/types';
 import { cn } from '@/lib/utils';
 
+import Aimlapi from './aimlapi';
 import Anthropic from './anthropic';
 import Bedrock from './bedrock';
 import Custom from './custom';
@@ -30,6 +31,7 @@ interface ProviderIconProps {
 }
 
 export const providerIcons: Record<ProviderType, ProviderIconConfig> = {
+    [ProviderType.Aimlapi]: { className: 'text-emerald-500', icon: Aimlapi },
     [ProviderType.Anthropic]: { className: 'text-purple-500', icon: Anthropic },
     [ProviderType.Bedrock]: { className: 'text-blue-500', icon: Bedrock },
     [ProviderType.Custom]: { className: 'text-blue-500', icon: Custom },

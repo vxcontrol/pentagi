@@ -93,6 +93,7 @@ const (
 	LLMProviderKimiScreen      ScreenID = "llm_provider_form§kimi"
 	LLMProviderQwenScreen      ScreenID = "llm_provider_form§qwen"
 	LLMProviderMiniMaxScreen   ScreenID = "llm_provider_form§minimax"
+	LLMProviderAIMLAPIScreen   ScreenID = "llm_provider_form§aimlapi"
 
 	// Summarizer screens
 	SummarizerScreen          ScreenID = "summarizer"
@@ -145,6 +146,7 @@ const (
 	LLMProviderKimi      LLMProviderID = "kimi"
 	LLMProviderQwen      LLMProviderID = "qwen"
 	LLMProviderMiniMax   LLMProviderID = "minimax"
+	LLMProviderAIMLAPI   LLMProviderID = "aimlapi"
 )
 
 // NavigationMsg represents screen navigation requests

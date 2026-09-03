@@ -25,6 +25,7 @@ func TestProviderTypeValid(t *testing.T) {
 		{"kimi", ProviderType("kimi")},
 		{"qwen", ProviderType("qwen")},
 		{"minimax", ProviderType("minimax")},
+		{"aimlapi", ProviderType("aimlapi")},
 	}
 
 	for _, tt := range validTypes {
