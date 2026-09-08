@@ -1,0 +1,41 @@
+<!--
+  Bounded retention for ClickHouse system log tables.
+
+  Without TTLs the system tables (trace_log above all) grow unbounded, which
+  keeps scheduling giant merges over tens of thousands of historic parts. With
+  the nofile limit raised these merges complete, but they still should not
+  exist: analytics-grade tracing only needs the last few days locally.
+-->
+<clickhouse>
+    <logger>
+        <level>warning</level>
+    </logger>
+
+    <trace_log>
+        <ttl>event_date + INTERVAL 3 DAY DELETE</ttl>
+    </trace_log>
+
+    <text_log>
+        <ttl>event_date + INTERVAL 3 DAY DELETE</ttl>
+    </text_log>
+
+    <metric_log>
+        <ttl>event_date + INTERVAL 7 DAY DELETE</ttl>
+    </metric_log>
+
+    <query_log>
+        <ttl>event_date + INTERVAL 7 DAY DELETE</ttl>
+    </query_log>
+
+    <part_log>
+        <ttl>event_date + INTERVAL 7 DAY DELETE</ttl>
+    </part_log>
+
+    <processors_profile_log>
+        <ttl>event_date + INTERVAL 7 DAY DELETE</ttl>
+    </processors_profile_log>
+
+    <asynchronous_metric_log>
+        <ttl>event_date + INTERVAL 7 DAY DELETE</ttl>
+    </asynchronous_metric_log>
+</clickhouse>

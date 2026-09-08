@@ -152,6 +152,14 @@ services:
     user: "101:101"
     container_name: langfuse-clickhouse
     hostname: langfuse-clickhouse
+    # ClickHouse merges open thousands of sparse subcolumn files at once; the
+    # Docker default nofile (4096) breaks them with errno 24 and the failing
+    # merge is hot-retried forever, pinning CPU cores. Same limit the
+    # observability clickhouse already runs with.
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
     environment:
       CLICKHOUSE_DB: ${LANGFUSE_CLICKHOUSE_DB:-default}
       CLICKHOUSE_USER: ${LANGFUSE_CLICKHOUSE_USER:-clickhouse}
@@ -159,6 +167,7 @@ services:
     volumes:
       - langfuse-clickhouse-data:/var/lib/clickhouse
       - langfuse-clickhouse-logs:/var/log/clickhouse-server
+      - ./langfuse/clickhouse/system-logs.xml:/etc/clickhouse-server/config.d/system-logs.xml:ro
     healthcheck:
       test: wget --no-verbose --tries=1 --spider http://localhost:8123/ping || exit 1
       interval: 5s
