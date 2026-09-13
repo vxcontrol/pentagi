@@ -44,10 +44,16 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/
 import { FileDropZone } from '@/components/ui/file-drop-zone';
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group';
 import { Spinner } from '@/components/ui/spinner';
+import { LARGE_LIBRARY_PROMPT_THRESHOLD } from '@/features/resources/resources-constants';
 import { ResourcesCopyDialog } from '@/features/resources/resources-copy-dialog';
 import { ResourcesMkdirDialog } from '@/features/resources/resources-mkdir-dialog';
 import { ResourcesMoveDialog } from '@/features/resources/resources-move-dialog';
-import { buildResourcesDownloadHref, pluralizeItems, toFileNode } from '@/features/resources/resources-utils';
+import {
+    buildResourcesDownloadHref,
+    pluralizeItems,
+    shouldPromptToSearchLargeLibrary,
+    toFileNode,
+} from '@/features/resources/resources-utils';
 import { useResourcesDelete } from '@/features/resources/use-resources-delete';
 import { useResourcesMove } from '@/features/resources/use-resources-move';
 import { useResourcesSearch } from '@/features/resources/use-resources-search';
@@ -433,6 +439,30 @@ function Resources() {
         </Empty>
     );
 
+    // Above LARGE_LIBRARY_PROMPT_THRESHOLD entries, the FileManager tree (which
+    // isn't virtualized) can freeze the page on first paint. Skip mounting it
+    // until the user narrows the list down with a search query.
+    const isLibraryTooLargeToBrowse = shouldPromptToSearchLargeLibrary(
+        resources.length,
+        Boolean(search.debouncedQuery.trim()),
+        LARGE_LIBRARY_PROMPT_THRESHOLD,
+    );
+
+    const largeLibraryState = (
+        <Empty>
+            <EmptyHeader>
+                <EmptyMedia variant="icon">
+                    <Search />
+                </EmptyMedia>
+                <EmptyTitle>Large resource library</EmptyTitle>
+                <EmptyDescription>
+                    This library has {resources.length.toLocaleString()} entries — too many to browse at once. Search
+                    above to narrow it down.
+                </EmptyDescription>
+            </EmptyHeader>
+        </Empty>
+    );
+
     // Error surface only when there's no data — a failed background refetch must not blank a working list.
     if (error && !hasResources) {
         return (
@@ -544,25 +574,29 @@ function Resources() {
                     </DropdownMenu>
                 </div>
 
-                <FileManager
-                    actions={fileManagerActions}
-                    bulkActions={fileManagerBulkActions}
-                    className="min-h-0 flex-1"
-                    columns={{
-                        isModifiedVisible: viewOptions.modified,
-                        isSizeVisible: viewOptions.size,
-                    }}
-                    emptyAreaActions={fileManagerEmptyAreaActions}
-                    emptyState={noResourcesState}
-                    files={fileNodes}
-                    isFoldersFirst={viewOptions.foldersFirst}
-                    isLoading={isInitialLoading}
-                    labels={fileManagerLabels}
-                    onExternalFileDrop={handleExternalFileDrop}
-                    onMoveItems={handleMoveItems}
-                    onOpen={handleOpenFile}
-                    search={{ emptyState: noMatchesState, query: search.debouncedQuery }}
-                />
+                {isLibraryTooLargeToBrowse ? (
+                    largeLibraryState
+                ) : (
+                    <FileManager
+                        actions={fileManagerActions}
+                        bulkActions={fileManagerBulkActions}
+                        className="min-h-0 flex-1"
+                        columns={{
+                            isModifiedVisible: viewOptions.modified,
+                            isSizeVisible: viewOptions.size,
+                        }}
+                        emptyAreaActions={fileManagerEmptyAreaActions}
+                        emptyState={noResourcesState}
+                        files={fileNodes}
+                        isFoldersFirst={viewOptions.foldersFirst}
+                        isLoading={isInitialLoading}
+                        labels={fileManagerLabels}
+                        onExternalFileDrop={handleExternalFileDrop}
+                        onMoveItems={handleMoveItems}
+                        onOpen={handleOpenFile}
+                        search={{ emptyState: noMatchesState, query: search.debouncedQuery }}
+                    />
+                )}
 
                 <ResourcesMkdirDialog
                     defaultParentPath={mkdirParentOverride ?? ''}

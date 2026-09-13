@@ -20,3 +20,13 @@ export const MAX_UPLOAD_TOTAL_SIZE_MB = 2 * 1024;
 
 /** Mirrors `resources.MaxUploadFiles`. */
 export const MAX_UPLOAD_FILES_PER_REQUEST = 1000;
+
+/**
+ * Above this many entries, mounting the FileManager tree unfiltered risks
+ * freezing the page: the tree has no row virtualization, so building and
+ * rendering tens of thousands of DOM nodes on first paint blocks the main
+ * thread (see https://github.com/vxcontrol/pentagi/issues/403). Past this
+ * size, the Resources page prompts the user to search instead of eagerly
+ * rendering the whole library.
+ */
+export const LARGE_LIBRARY_PROMPT_THRESHOLD = 5000;

@@ -48,3 +48,14 @@ export const buildResourcesDownloadHref = (files: readonly FileNode[]): string =
 };
 
 export const pluralizeItems = (count: number): string => (count === 1 ? 'item' : 'items');
+
+/**
+ * True when the library is large enough that rendering it unfiltered risks
+ * freezing the page (see `LARGE_LIBRARY_PROMPT_THRESHOLD`), and no search
+ * query is active yet to narrow the result set down.
+ */
+export const shouldPromptToSearchLargeLibrary = (
+    resourceCount: number,
+    hasActiveQuery: boolean,
+    threshold: number,
+): boolean => !hasActiveQuery && resourceCount > threshold;
