@@ -272,6 +272,25 @@ func WrapGenerateContent(
 	// Inject prefixed model name into call options
 	callOptions := append(options, llms.WithModel(modelWithPrefix))
 
+	// Keep prompt + tool schemas + completion budget inside the model window.
+	// vLLM and other OpenAI-compatible backends answer an overflowing request
+	// with an empty-bodied 400, which surfaces as a stuck agent rather than an
+	// error. No-op unless LLM_SERVER_MAX_MODEL_LEN is set.
+	if clamped, budget, ok := ClampMaxTokens(modelWindow(), messages, callOptions); ok {
+		callOptions = clamped
+		_, clampObservation := generation.Observation(ctx)
+		clampObservation.Event(
+			langfuse.WithEventName(fmt.Sprintf("%s-max-tokens-clamped", provider.Type().String())),
+			langfuse.WithEventMetadata(metadata),
+			langfuse.WithEventInput(messages),
+			langfuse.WithEventStatus("MAX_TOKENS_CLAMPED"),
+			langfuse.WithEventOutput(fmt.Sprintf(
+				"clamped max_tokens to %d to fit context window %d", budget, modelWindow(),
+			)),
+			langfuse.WithEventLevel(langfuse.ObservationLevelWarning),
+		)
+	}
+
 	for idx := range MaxTooManyRequestsRetries {
 		resp, err = fn(ctx, messages, callOptions...)
 		if err != nil {
