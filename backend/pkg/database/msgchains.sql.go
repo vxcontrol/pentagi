@@ -203,6 +203,55 @@ func (q *Queries) GetFlowMsgChains(ctx context.Context, flowID int64) ([]Msgchai
 	return items, nil
 }
 
+const getFlowTaskSubtaskTypeLastMsgChain = `-- name: GetFlowTaskSubtaskTypeLastMsgChain :one
+SELECT
+  mc.id, mc.type, mc.model, mc.model_provider, mc.usage_in, mc.usage_out, mc.chain, mc.flow_id, mc.task_id, mc.subtask_id, mc.created_at, mc.updated_at, mc.usage_cache_in, mc.usage_cache_out, mc.usage_cost_in, mc.usage_cost_out, mc.duration_seconds
+FROM msgchains mc
+WHERE mc.flow_id = $1
+  AND mc.task_id IS NOT DISTINCT FROM $2
+  AND mc.subtask_id IS NOT DISTINCT FROM $3
+  AND mc.type = $4
+ORDER BY mc.created_at DESC
+LIMIT 1
+`
+
+type GetFlowTaskSubtaskTypeLastMsgChainParams struct {
+	FlowID    int64         `json:"flow_id"`
+	TaskID    sql.NullInt64 `json:"task_id"`
+	SubtaskID sql.NullInt64 `json:"subtask_id"`
+	Type      MsgchainType  `json:"type"`
+}
+
+func (q *Queries) GetFlowTaskSubtaskTypeLastMsgChain(ctx context.Context, arg GetFlowTaskSubtaskTypeLastMsgChainParams) (Msgchain, error) {
+	row := q.db.QueryRowContext(ctx, getFlowTaskSubtaskTypeLastMsgChain,
+		arg.FlowID,
+		arg.TaskID,
+		arg.SubtaskID,
+		arg.Type,
+	)
+	var i Msgchain
+	err := row.Scan(
+		&i.ID,
+		&i.Type,
+		&i.Model,
+		&i.ModelProvider,
+		&i.UsageIn,
+		&i.UsageOut,
+		&i.Chain,
+		&i.FlowID,
+		&i.TaskID,
+		&i.SubtaskID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.UsageCacheIn,
+		&i.UsageCacheOut,
+		&i.UsageCostIn,
+		&i.UsageCostOut,
+		&i.DurationSeconds,
+	)
+	return i, err
+}
+
 const getFlowTaskTypeLastMsgChain = `-- name: GetFlowTaskTypeLastMsgChain :one
 SELECT
   mc.id, mc.type, mc.model, mc.model_provider, mc.usage_in, mc.usage_out, mc.chain, mc.flow_id, mc.task_id, mc.subtask_id, mc.created_at, mc.updated_at, mc.usage_cache_in, mc.usage_cache_out, mc.usage_cost_in, mc.usage_cost_out, mc.duration_seconds

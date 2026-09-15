@@ -101,6 +101,7 @@ type Querier interface {
 	GetFlowSubtask(ctx context.Context, arg GetFlowSubtaskParams) (Subtask, error)
 	GetFlowSubtasks(ctx context.Context, flowID int64) ([]Subtask, error)
 	GetFlowTask(ctx context.Context, arg GetFlowTaskParams) (Task, error)
+	GetFlowTaskSubtaskTypeLastMsgChain(ctx context.Context, arg GetFlowTaskSubtaskTypeLastMsgChainParams) (Msgchain, error)
 	GetFlowTaskSubtasks(ctx context.Context, arg GetFlowTaskSubtasksParams) ([]Subtask, error)
 	GetFlowTaskTypeLastMsgChain(ctx context.Context, arg GetFlowTaskTypeLastMsgChainParams) (Msgchain, error)
 	GetFlowTasks(ctx context.Context, flowID int64) ([]Task, error)
