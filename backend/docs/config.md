@@ -63,6 +63,7 @@ This document serves as a comprehensive guide to the configuration system in Pen
     - [Built-in Functions Reference](#built-in-functions-reference)
   - [Search Engine Settings](#search-engine-settings)
     - [DuckDuckGo Search](#duckduckgo-search)
+    - [Parallel Search MCP](#parallel-search-mcp)
     - [Sploitus Search](#sploitus-search)
     - [Google Search](#google-search)
     - [Traversaal Search](#traversaal-search)
@@ -1595,6 +1596,20 @@ These settings control the integration with various search engines used for web 
 | DuckDuckGoRegion     | `DUCKDUCKGO_REGION`     | *(none)*      | Region code for search results (e.g., `us-en`, `uk-en`, `cn-zh`)           |
 | DuckDuckGoSafeSearch | `DUCKDUCKGO_SAFESEARCH` | *(none)*      | Safe search filter (`off`, `moderate`, `strict`)                           |
 | DuckDuckGoTimeRange  | `DUCKDUCKGO_TIME_RANGE` | *(none)*      | Time range for search results (`d`: day, `w`: week, `m`: month, `y`: year) |
+
+### Parallel Search MCP
+
+| Parameter | Environment Variable | Default Value | Description |
+|-----------|----------------------|---------------|-------------|
+| ParallelSearchEnabled | `PARALLEL_SEARCH_ENABLED` | `false` | Enable free, anonymous Parallel Search MCP as the last fallback for `web_search` modes `links`, `answer`, and `research` |
+
+Set `PARALLEL_SEARCH_ENABLED=true` in `.env`, or enable **Parallel Search MCP** in the installer's Search Engines form, then apply the change to restart PentAGI. Set it to `false` to disable it. No Parallel account, API key, or OAuth setup is required. Existing engine priorities and DuckDuckGo's enabled default remain in place; Parallel is used only after earlier available engines fail. It is excluded from exploit mode and from the internal engine's link discovery. Browser fetching still uses the configured scraper.
+
+Once enabled, agents may send their search query to `https://search.parallel.ai/mcp` as both the search objective and query. Requests carry `pentagi/<binary-version>` as a project-wide User-Agent so Parallel can measure aggregate free MCP usage. This value contains no user or installation identifier. The adapter uses no Parallel authentication headers and does not forward another provider's keys. PentAGI's search interface has no conversation identity, so optional MCP conversation metadata is omitted.
+
+The adapter uses PentAGI's proxy, CA, TLS, and `HTTP_CLIENT_TIMEOUT` settings. A positive timeout bounds the complete connection, discovery, and search operation; zero leaves it unlimited while preserving caller cancellation. Redirects are rejected. Responses are limited to 2 MiB and formatted output to 32 KiB, with a truncation notice. `max_results` is enforced locally because MCP does not expose that argument. URLs, titles, excerpts, publication dates, and warnings are retained within those bounds; a valid empty result is successful. `exploit_type` and `sort` are rejected before a request is sent. Search logs attribute the winning engine to `parallel`; rolling back its enum migration is refused if historical Parallel search logs exist.
+
+Free access is rate limited and subject to [Parallel's Customer Terms](https://parallel.ai/customer-terms) and [Privacy Policy](https://parallel.ai/privacy-policy). See the [Search MCP setup and data-flow documentation](https://docs.parallel.ai/integrations/mcp/search-mcp).
 
 ### Sploitus Search
 

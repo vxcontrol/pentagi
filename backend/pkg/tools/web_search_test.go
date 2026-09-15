@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -11,6 +12,53 @@ import (
 	"pentagi/pkg/database"
 	"pentagi/pkg/tools/searchers"
 )
+
+func TestWebSearchParallelAvailabilityAndPreservedRoutes(t *testing.T) {
+	cfg := &config.Config{}
+	tool := NewWebSearchTool(cfg, 1, nil, nil, nil, nil, nil).(*webSearch)
+	if tool.IsAvailable() || tool.engines[EngineParallel].IsAvailable() {
+		t.Fatal("Parallel must be unavailable without explicit opt-in")
+	}
+	cfg.ParallelSearchEnabled = true
+	if !tool.IsAvailable() || !tool.engines[EngineParallel].IsAvailable() {
+		t.Fatal("explicit Parallel opt-in did not reach the native registry")
+	}
+	for _, mode := range []SearchMode{ModeLinks, ModeAnswer, ModeResearch} {
+		chain := fallbackStrategy[mode]
+		if chain[len(chain)-1] != EngineParallel {
+			t.Fatalf("Parallel is not the last fallback for %s: %v", mode, chain)
+		}
+	}
+	if slices.Contains(fallbackStrategy[ModeExploit], EngineParallel) || slices.Contains(linkEngineOrder, EngineParallel) {
+		t.Fatal("Parallel changed exploit routing or browser link discovery")
+	}
+	if defaultMode != ModeAnswer {
+		t.Fatal("the default search mode changed")
+	}
+
+	// An enabled Parallel provider must never run when an existing engine succeeds.
+	for _, mode := range []string{"", "links", "answer", "research"} {
+		t.Run(mode, func(t *testing.T) {
+			first := &fakeSearcher{engine: EngineDuckDuckGo, available: true,
+				handler: func(int) (string, error) { return "existing result", nil }}
+			parallel := &fakeSearcher{engine: EngineParallel, available: true,
+				handler: func(int) (string, error) { return "parallel result", nil }}
+			logs := &searchLogProviderMock{}
+			ws := newTestWebSearch(logs, map[database.SearchengineType]searchers.Searcher{
+				EngineDuckDuckGo: first, EngineParallel: parallel,
+			})
+			got, err := ws.Handle(ctxWithAgent(), WebSearchToolName, webSearchArgs(t, mode, "query"))
+			if err != nil || got != "existing result" || parallel.calls != 0 || logs.engine != EngineDuckDuckGo {
+				t.Fatalf("existing routing changed: got=%q err=%v parallel calls=%d logs=%+v", got, err, parallel.calls, logs)
+			}
+			first.handler = func(int) (string, error) { return "", searchers.Fatal(errors.New("failed")) }
+			got, err = ws.Handle(ctxWithAgent(), WebSearchToolName, webSearchArgs(t, mode, "query"))
+			if err != nil || got != "parallel result" || parallel.calls != 1 || logs.calls != 2 || logs.engine != EngineParallel {
+				t.Fatalf("Parallel fallback attribution failed: got=%q err=%v calls=%d logs=%+v", got, err, parallel.calls, logs)
+			}
+		})
+	}
+}
 
 // searchLogProviderMock is a test double for SearchLogProvider. It moved here from the
 // engines' proxy_test.go when those engines were extracted into the searchers

@@ -37,6 +37,7 @@ const (
 	EngineDuckDuckGo = database.SearchengineTypeDuckduckgo
 	EngineTavily     = database.SearchengineTypeTavily
 	EngineFirecrawl  = database.SearchengineTypeFirecrawl
+	EngineParallel   = database.SearchengineTypeParallel
 	EngineTraversaal = database.SearchengineTypeTraversaal
 	EnginePerplexity = database.SearchengineTypePerplexity
 	EngineSearxng    = database.SearchengineTypeSearxng
@@ -84,20 +85,20 @@ var fallbackStrategy = map[SearchMode][]database.SearchengineType{
 	//    analytic engines are a deep last resort so links never dead-ends.
 	ModeLinks: {
 		EngineGoogle, EngineDuckDuckGo, EngineSearxng, EngineFirecrawl,
-		EngineTavily, EnginePerplexity, EngineTraversaal,
+		EngineTavily, EnginePerplexity, EngineTraversaal, EngineParallel,
 	},
 
 	// 2. Answer with analysis — engines that navigate + summarize lead; the internal
 	//    browser-analytics engine is a mid/late fallback; link engines are the floor.
 	ModeAnswer: {
 		EngineTavily, EngineFirecrawl, EnginePerplexity, EngineInternal, EngineTraversaal,
-		EngineGoogle, EngineDuckDuckGo, EngineSearxng,
+		EngineGoogle, EngineDuckDuckGo, EngineSearxng, EngineParallel,
 	},
 
 	// 3. Deep research — strongest reasoning engine first, then the rest.
 	ModeResearch: {
 		EnginePerplexity, EngineTavily, EngineFirecrawl, EngineInternal, EngineTraversaal,
-		EngineGoogle, EngineDuckDuckGo, EngineSearxng,
+		EngineGoogle, EngineDuckDuckGo, EngineSearxng, EngineParallel,
 	},
 
 	// 4. Exploit search — dedicated exploit index first, universal analytic engines
@@ -180,6 +181,7 @@ func buildSearchEngines(
 		EngineDuckDuckGo: searchers.NewDuckDuckGo(cfg),
 		EngineTavily:     searchers.NewTavily(cfg, sum),
 		EngineFirecrawl:  searchers.NewFirecrawl(cfg, sum),
+		EngineParallel:   searchers.NewParallel(cfg),
 		EngineTraversaal: searchers.NewTraversaal(cfg),
 		EnginePerplexity: searchers.NewPerplexity(cfg, sum),
 		EngineSearxng:    searchers.NewSearxng(cfg, sum),

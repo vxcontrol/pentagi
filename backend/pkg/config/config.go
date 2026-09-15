@@ -166,6 +166,9 @@ type Config struct {
 	DuckDuckGoSafeSearch string `env:"DUCKDUCKGO_SAFESEARCH"`
 	DuckDuckGoTimeRange  string `env:"DUCKDUCKGO_TIME_RANGE"`
 
+	// === Search Engine: Parallel Search MCP (anonymous, opt-in) ===
+	ParallelSearchEnabled bool `env:"PARALLEL_SEARCH_ENABLED" envDefault:"false"`
+
 	// Sploitus exploit aggregator (https://sploitus.com)
 	// service under cloudflare protection, IP should have good reputation to avoid being blocked
 	SploitusEnabled bool `env:"SPLOITUS_ENABLED" envDefault:"false"`

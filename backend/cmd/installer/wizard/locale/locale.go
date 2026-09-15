@@ -1534,6 +1534,7 @@ const (
 	ToolsSearchEnginesFormName        = "Search Engines"
 	ToolsSearchEnginesFormOverview    = `Available search engines:
 • DuckDuckGo - Free search engine (no API key required)
+• Parallel Search MCP - Optional free search fallback (rate limited, no Parallel key required)
 • Sploitus - Security exploits and vulnerabilities database (no API key required)
 • Perplexity - AI-powered search with reasoning
 • Tavily - Search API for AI applications
@@ -1551,6 +1552,8 @@ Get API keys from:
 • Google: https://developers.google.com/custom-search/v1/introduction`
 
 	ToolsSearchEnginesDuckDuckGo               = "DuckDuckGo Search"
+	ToolsSearchEnginesParallel                 = "Parallel Search MCP"
+	ToolsSearchEnginesParallelDesc             = "Enable the free, rate-limited fallback for links/answer/research (off by default, no Parallel account or API key required). Agents may send queries to Parallel. Requests identify PentAGI through its project-wide User-Agent for aggregate usage measurement. Setup and data flow: https://docs.parallel.ai/integrations/mcp/search-mcp"
 	ToolsSearchEnginesDuckDuckGoDesc           = "Enable DuckDuckGo search (no API key required)"
 	ToolsSearchEnginesDuckDuckGoRegion         = "DuckDuckGo Region"
 	ToolsSearchEnginesDuckDuckGoRegionDesc     = "DuckDuckGo region code (e.g., us-en, uk-en, cn-zh)"
@@ -2426,19 +2429,20 @@ const (
 	EnvDesc_LOCAL_SCRAPER_PASSWORD                = "Local Scraper Password"
 	EnvDesc_LOCAL_SCRAPER_MAX_CONCURRENT_SESSIONS = "Scraper Max Concurrent Sessions"
 
-	EnvDesc_DUCKDUCKGO_ENABLED    = "DuckDuckGo Search"
-	EnvDesc_DUCKDUCKGO_REGION     = "DuckDuckGo Region"
-	EnvDesc_DUCKDUCKGO_SAFESEARCH = "DuckDuckGo Safe Search"
-	EnvDesc_DUCKDUCKGO_TIME_RANGE = "DuckDuckGo Time Range"
-	EnvDesc_SPLOITUS_ENABLED      = "Sploitus Search"
-	EnvDesc_PERPLEXITY_API_KEY    = "Perplexity API Key"
-	EnvDesc_TAVILY_API_KEY        = "Tavily API Key"
-	EnvDesc_FIRECRAWL_API_KEY     = "Firecrawl API Key"
-	EnvDesc_FIRECRAWL_API_URL     = "Firecrawl API URL"
-	EnvDesc_TRAVERSAAL_API_KEY    = "Traversaal API Key"
-	EnvDesc_GOOGLE_API_KEY        = "Google Search API Key"
-	EnvDesc_GOOGLE_CX_KEY         = "Google Search CX Key"
-	EnvDesc_GOOGLE_LR_KEY         = "Google Search LR Key"
+	EnvDesc_DUCKDUCKGO_ENABLED      = "DuckDuckGo Search"
+	EnvDesc_DUCKDUCKGO_REGION       = "DuckDuckGo Region"
+	EnvDesc_DUCKDUCKGO_SAFESEARCH   = "DuckDuckGo Safe Search"
+	EnvDesc_DUCKDUCKGO_TIME_RANGE   = "DuckDuckGo Time Range"
+	EnvDesc_SPLOITUS_ENABLED        = "Sploitus Search"
+	EnvDesc_PERPLEXITY_API_KEY      = "Perplexity API Key"
+	EnvDesc_TAVILY_API_KEY          = "Tavily API Key"
+	EnvDesc_FIRECRAWL_API_KEY       = "Firecrawl API Key"
+	EnvDesc_PARALLEL_SEARCH_ENABLED = "Enable Parallel Search MCP (off by default, free and rate limited; sends agent queries to Parallel)"
+	EnvDesc_FIRECRAWL_API_URL       = "Firecrawl API URL"
+	EnvDesc_TRAVERSAAL_API_KEY      = "Traversaal API Key"
+	EnvDesc_GOOGLE_API_KEY          = "Google Search API Key"
+	EnvDesc_GOOGLE_CX_KEY           = "Google Search CX Key"
+	EnvDesc_GOOGLE_LR_KEY           = "Google Search LR Key"
 
 	EnvDesc_DOCKER_INSIDE                    = "Docker Inside Container"
 	EnvDesc_DOCKER_NET_ADMIN                 = "Docker Network Admin"

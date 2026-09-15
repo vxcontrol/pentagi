@@ -75,6 +75,8 @@ If you later change the embedding provider or model, flush and reindex the knowl
 
 Search providers improve research quality but are optional. PentAGI supports DuckDuckGo (`DUCKDUCKGO_ENABLED`), Sploitus (`SPLOITUS_ENABLED`), Google (`GOOGLE_API_KEY`, `GOOGLE_CX_KEY`), Tavily (`TAVILY_API_KEY`), Firecrawl (`FIRECRAWL_API_KEY`), Traversaal (`TRAVERSAAL_API_KEY`), Perplexity (`PERPLEXITY_API_KEY`), a self-hosted Searxng instance (`SEARXNG_URL`), and an optional internal browser-analytics fallback engine (`WEB_SEARCH_INTERNAL_ENABLED`, off by default). Set the keys for the engines you want in `.env`; the manual installation section shows the full block of search variables.
 
+For free search without a Parallel account or API key, enable **Parallel Search MCP** in the installer or set `PARALLEL_SEARCH_ENABLED=true` in `.env`, then apply the change to restart PentAGI. It is off by default and runs after existing engines fail in links, answer, and research modes. Agents may send queries to Parallel's anonymous MCP endpoint; requests identify PentAGI through a project-wide User-Agent for aggregate usage measurement. Free access has rate limits. Set the flag to `false` to disable it. See [configuration and data flow](../../backend/docs/config.md#parallel-search-mcp) and the [public Search MCP guide](https://docs.parallel.ai/integrations/mcp/search-mcp).
+
 ## Step 6 - (Optional) Enable Graphiti, Langfuse, and observability
 
 These are separate, optional stacks brought up with additional compose files:

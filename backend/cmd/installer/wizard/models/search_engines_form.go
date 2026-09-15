@@ -36,6 +36,12 @@ func (m *SearchEnginesFormModel) BuildForm() tea.Cmd {
 	config := m.GetController().GetSearchEnginesConfig()
 	fields := []FormField{}
 
+	fields = append(fields, m.createBooleanField("parallel_search_enabled",
+		locale.ToolsSearchEnginesParallel,
+		locale.ToolsSearchEnginesParallelDesc,
+		config.ParallelSearchEnabled,
+	))
+
 	// DuckDuckGo (boolean)
 	fields = append(fields, m.createBooleanField("duckduckgo_enabled",
 		locale.ToolsSearchEnginesDuckDuckGo,
@@ -381,6 +387,18 @@ func (m *SearchEnginesFormModel) GetCurrentConfiguration() string {
 			m.GetStyles().Warning.Render(locale.StatusDisabled)))
 	}
 
+	parallelEnabled := config.ParallelSearchEnabled.Value
+	if parallelEnabled == "" {
+		parallelEnabled = config.ParallelSearchEnabled.Default
+	}
+	if parallelEnabled == "true" {
+		sections = append(sections, fmt.Sprintf("• Parallel Search MCP: %s",
+			m.GetStyles().Success.Render(locale.StatusEnabled)))
+	} else {
+		sections = append(sections, fmt.Sprintf("• Parallel Search MCP: %s",
+			m.GetStyles().Warning.Render(locale.StatusDisabled)))
+	}
+
 	// Sploitus
 	sploitusEnabled := config.SploitusEnabled.Value
 	if sploitusEnabled == "" {
@@ -494,6 +512,7 @@ func (m *SearchEnginesFormModel) HandleSave() error {
 	newConfig := &controller.SearchEnginesConfig{
 		// copy current EnvVar fields - they preserve metadata like Line, IsPresent, etc.
 		DuckDuckGoEnabled:             config.DuckDuckGoEnabled,
+		ParallelSearchEnabled:         config.ParallelSearchEnabled,
 		DuckDuckGoRegion:              config.DuckDuckGoRegion,
 		DuckDuckGoSafeSearch:          config.DuckDuckGoSafeSearch,
 		DuckDuckGoTimeRange:           config.DuckDuckGoTimeRange,
@@ -524,6 +543,11 @@ func (m *SearchEnginesFormModel) HandleSave() error {
 		value := strings.TrimSpace(field.Input.Value())
 
 		switch field.Key {
+		case "parallel_search_enabled":
+			if value != "" && value != "true" && value != "false" {
+				return fmt.Errorf("invalid boolean value for Parallel Search MCP: %s (must be 'true' or 'false')", value)
+			}
+			newConfig.ParallelSearchEnabled.Value = value
 		case "duckduckgo_enabled":
 			// validate boolean input
 			if value != "" && value != "true" && value != "false" {

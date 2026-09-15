@@ -299,6 +299,7 @@ func clearConfigEnv(t *testing.T) {
 		"QWEN_API_KEY", "QWEN_SERVER_URL", "QWEN_PROVIDER",
 		"MINIMAX_API_KEY", "MINIMAX_SERVER_URL", "MINIMAX_PROVIDER",
 		"DUCKDUCKGO_ENABLED", "DUCKDUCKGO_REGION", "DUCKDUCKGO_SAFESEARCH", "DUCKDUCKGO_TIME_RANGE",
+		"PARALLEL_SEARCH_ENABLED",
 		"SPLOITUS_ENABLED",
 		"GOOGLE_API_KEY", "GOOGLE_CX_KEY", "GOOGLE_LR_KEY",
 		"OAUTH_GOOGLE_CLIENT_ID", "OAUTH_GOOGLE_CLIENT_SECRET",
@@ -340,6 +341,7 @@ func TestNewConfig_Defaults(t *testing.T) {
 	assert.Equal(t, 512, config.EmbeddingBatchSize)
 	assert.Equal(t, true, config.EmbeddingStripNewLines)
 	assert.Equal(t, true, config.DuckDuckGoEnabled)
+	assert.False(t, config.ParallelSearchEnabled)
 	assert.Equal(t, "debian:latest", config.DockerDefaultImage)
 	assert.Equal(t, "vxcontrol/kali-linux", config.DockerDefaultImageForPentest)
 }
@@ -359,6 +361,23 @@ func TestNewConfig_EnvOverride(t *testing.T) {
 	assert.Equal(t, 9090, config.ServerPort)
 	assert.Equal(t, "127.0.0.1", config.ServerHost)
 	assert.Equal(t, true, config.Debug)
+}
+
+func TestNewConfig_ParallelSearchOptIn(t *testing.T) {
+	for _, value := range []string{"", "false", "true", "invalid"} {
+		t.Run(value, func(t *testing.T) {
+			clearConfigEnv(t)
+			t.Chdir(t.TempDir())
+			t.Setenv("PARALLEL_SEARCH_ENABLED", value)
+			cfg, err := NewConfig()
+			if value == "invalid" {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, value == "true", cfg.ParallelSearchEnabled)
+		})
+	}
 }
 
 func TestNewConfig_ProviderDefaults(t *testing.T) {

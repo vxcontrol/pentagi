@@ -1662,16 +1662,17 @@ func (c *controller) ResetScraperConfig() *ScraperConfig {
 type SearchEnginesConfig struct {
 	// direct form field mappings using loader.EnvVar
 	// these fields directly correspond to environment variables and form inputs (not computed)
-	DuckDuckGoEnabled loader.EnvVar // DUCKDUCKGO_ENABLED
-	SploitusEnabled   loader.EnvVar // SPLOITUS_ENABLED
-	PerplexityAPIKey  loader.EnvVar // PERPLEXITY_API_KEY
-	TavilyAPIKey      loader.EnvVar // TAVILY_API_KEY
-	FirecrawlAPIKey   loader.EnvVar // FIRECRAWL_API_KEY
-	FirecrawlAPIURL   loader.EnvVar // FIRECRAWL_API_URL
-	TraversaalAPIKey  loader.EnvVar // TRAVERSAAL_API_KEY
-	GoogleAPIKey      loader.EnvVar // GOOGLE_API_KEY
-	GoogleCXKey       loader.EnvVar // GOOGLE_CX_KEY
-	GoogleLRKey       loader.EnvVar // GOOGLE_LR_KEY
+	DuckDuckGoEnabled     loader.EnvVar // DUCKDUCKGO_ENABLED
+	ParallelSearchEnabled loader.EnvVar // PARALLEL_SEARCH_ENABLED
+	SploitusEnabled       loader.EnvVar // SPLOITUS_ENABLED
+	PerplexityAPIKey      loader.EnvVar // PERPLEXITY_API_KEY
+	TavilyAPIKey          loader.EnvVar // TAVILY_API_KEY
+	FirecrawlAPIKey       loader.EnvVar // FIRECRAWL_API_KEY
+	FirecrawlAPIURL       loader.EnvVar // FIRECRAWL_API_URL
+	TraversaalAPIKey      loader.EnvVar // TRAVERSAAL_API_KEY
+	GoogleAPIKey          loader.EnvVar // GOOGLE_API_KEY
+	GoogleCXKey           loader.EnvVar // GOOGLE_CX_KEY
+	GoogleLRKey           loader.EnvVar // GOOGLE_LR_KEY
 
 	// duckduckgo extra settings
 	DuckDuckGoRegion     loader.EnvVar // DUCKDUCKGO_REGION
@@ -1703,6 +1704,7 @@ type SearchEnginesConfig struct {
 func (c *controller) GetSearchEnginesConfig() *SearchEnginesConfig {
 	// get all environment variables using the state controller
 	duckduckgoEnabled, _ := c.GetVar("DUCKDUCKGO_ENABLED")
+	parallelSearchEnabled, _ := c.GetVar("PARALLEL_SEARCH_ENABLED")
 	duckduckgoRegion, _ := c.GetVar("DUCKDUCKGO_REGION")
 	duckduckgoSafeSearch, _ := c.GetVar("DUCKDUCKGO_SAFESEARCH")
 	duckduckgoTimeRange, _ := c.GetVar("DUCKDUCKGO_TIME_RANGE")
@@ -1729,6 +1731,7 @@ func (c *controller) GetSearchEnginesConfig() *SearchEnginesConfig {
 
 	config := &SearchEnginesConfig{
 		DuckDuckGoEnabled:             duckduckgoEnabled,
+		ParallelSearchEnabled:         parallelSearchEnabled,
 		DuckDuckGoRegion:              duckduckgoRegion,
 		DuckDuckGoSafeSearch:          duckduckgoSafeSearch,
 		DuckDuckGoTimeRange:           duckduckgoTimeRange,
@@ -1756,6 +1759,9 @@ func (c *controller) GetSearchEnginesConfig() *SearchEnginesConfig {
 
 	// compute configured count
 	configuredCount := 0
+	if parallelSearchEnabled.Value == "true" || (parallelSearchEnabled.Value == "" && parallelSearchEnabled.Default == "true") {
+		configuredCount++
+	}
 	if duckduckgoEnabled.Value == "true" {
 		configuredCount++
 	} else if duckduckgoEnabled.Value == "" && duckduckgoEnabled.Default == "true" {
@@ -1798,6 +1804,9 @@ func (c *controller) GetSearchEnginesConfig() *SearchEnginesConfig {
 func (c *controller) UpdateSearchEnginesConfig(config *SearchEnginesConfig) error {
 	if config == nil {
 		return fmt.Errorf("config cannot be nil")
+	}
+	if err := c.SetVar("PARALLEL_SEARCH_ENABLED", config.ParallelSearchEnabled.Value); err != nil {
+		return fmt.Errorf("failed to set PARALLEL_SEARCH_ENABLED: %w", err)
 	}
 
 	// update environment variables
@@ -1882,6 +1891,7 @@ func (c *controller) ResetSearchEnginesConfig() *SearchEnginesConfig {
 	// reset all search engines-related environment variables to their defaults
 	vars := []string{
 		"DUCKDUCKGO_ENABLED",
+		"PARALLEL_SEARCH_ENABLED",
 		"DUCKDUCKGO_REGION",
 		"DUCKDUCKGO_SAFESEARCH",
 		"DUCKDUCKGO_TIME_RANGE",
@@ -2421,19 +2431,20 @@ func (c *controller) getVariableDescription(varName string) string {
 		"LOCAL_SCRAPER_PASSWORD":                locale.EnvDesc_LOCAL_SCRAPER_PASSWORD,
 		"LOCAL_SCRAPER_MAX_CONCURRENT_SESSIONS": locale.EnvDesc_LOCAL_SCRAPER_MAX_CONCURRENT_SESSIONS,
 
-		"DUCKDUCKGO_ENABLED":    locale.EnvDesc_DUCKDUCKGO_ENABLED,
-		"DUCKDUCKGO_REGION":     locale.EnvDesc_DUCKDUCKGO_REGION,
-		"DUCKDUCKGO_SAFESEARCH": locale.EnvDesc_DUCKDUCKGO_SAFESEARCH,
-		"DUCKDUCKGO_TIME_RANGE": locale.EnvDesc_DUCKDUCKGO_TIME_RANGE,
-		"SPLOITUS_ENABLED":      locale.EnvDesc_SPLOITUS_ENABLED,
-		"PERPLEXITY_API_KEY":    locale.EnvDesc_PERPLEXITY_API_KEY,
-		"TAVILY_API_KEY":        locale.EnvDesc_TAVILY_API_KEY,
-		"FIRECRAWL_API_KEY":     locale.EnvDesc_FIRECRAWL_API_KEY,
-		"FIRECRAWL_API_URL":     locale.EnvDesc_FIRECRAWL_API_URL,
-		"TRAVERSAAL_API_KEY":    locale.EnvDesc_TRAVERSAAL_API_KEY,
-		"GOOGLE_API_KEY":        locale.EnvDesc_GOOGLE_API_KEY,
-		"GOOGLE_CX_KEY":         locale.EnvDesc_GOOGLE_CX_KEY,
-		"GOOGLE_LR_KEY":         locale.EnvDesc_GOOGLE_LR_KEY,
+		"DUCKDUCKGO_ENABLED":      locale.EnvDesc_DUCKDUCKGO_ENABLED,
+		"PARALLEL_SEARCH_ENABLED": locale.EnvDesc_PARALLEL_SEARCH_ENABLED,
+		"DUCKDUCKGO_REGION":       locale.EnvDesc_DUCKDUCKGO_REGION,
+		"DUCKDUCKGO_SAFESEARCH":   locale.EnvDesc_DUCKDUCKGO_SAFESEARCH,
+		"DUCKDUCKGO_TIME_RANGE":   locale.EnvDesc_DUCKDUCKGO_TIME_RANGE,
+		"SPLOITUS_ENABLED":        locale.EnvDesc_SPLOITUS_ENABLED,
+		"PERPLEXITY_API_KEY":      locale.EnvDesc_PERPLEXITY_API_KEY,
+		"TAVILY_API_KEY":          locale.EnvDesc_TAVILY_API_KEY,
+		"FIRECRAWL_API_KEY":       locale.EnvDesc_FIRECRAWL_API_KEY,
+		"FIRECRAWL_API_URL":       locale.EnvDesc_FIRECRAWL_API_URL,
+		"TRAVERSAAL_API_KEY":      locale.EnvDesc_TRAVERSAAL_API_KEY,
+		"GOOGLE_API_KEY":          locale.EnvDesc_GOOGLE_API_KEY,
+		"GOOGLE_CX_KEY":           locale.EnvDesc_GOOGLE_CX_KEY,
+		"GOOGLE_LR_KEY":           locale.EnvDesc_GOOGLE_LR_KEY,
 
 		"PERPLEXITY_MODEL":        locale.EnvDesc_PERPLEXITY_MODEL,
 		"PERPLEXITY_CONTEXT_SIZE": locale.EnvDesc_PERPLEXITY_CONTEXT_SIZE,
@@ -2643,6 +2654,7 @@ var criticalVariables = map[string]bool{
 
 	// tools changes
 	"DUCKDUCKGO_ENABLED":      true,
+	"PARALLEL_SEARCH_ENABLED": true,
 	"DUCKDUCKGO_REGION":       true,
 	"DUCKDUCKGO_SAFESEARCH":   true,
 	"DUCKDUCKGO_TIME_RANGE":   true,

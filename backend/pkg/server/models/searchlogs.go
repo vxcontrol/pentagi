@@ -14,6 +14,7 @@ const (
 	SearchEngineTypeDuckduckgo SearchEngineType = "duckduckgo"
 	SearchEngineTypeTavily     SearchEngineType = "tavily"
 	SearchEngineTypeFirecrawl  SearchEngineType = "firecrawl"
+	SearchEngineTypeParallel   SearchEngineType = "parallel"
 	SearchEngineTypeTraversaal SearchEngineType = "traversaal"
 	SearchEngineTypePerplexity SearchEngineType = "perplexity"
 	SearchEngineTypeBrowser    SearchEngineType = "browser"
@@ -31,6 +32,7 @@ func (s SearchEngineType) Valid() error {
 		SearchEngineTypeDuckduckgo,
 		SearchEngineTypeTavily,
 		SearchEngineTypeFirecrawl,
+		SearchEngineTypeParallel,
 		SearchEngineTypeTraversaal,
 		SearchEngineTypePerplexity,
 		SearchEngineTypeBrowser,

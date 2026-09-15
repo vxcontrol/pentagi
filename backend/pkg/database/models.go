@@ -482,6 +482,7 @@ const (
 	SearchengineTypePerplexity SearchengineType = "perplexity"
 	SearchengineTypeSearxng    SearchengineType = "searxng"
 	SearchengineTypeSploitus   SearchengineType = "sploitus"
+	SearchengineTypeParallel   SearchengineType = "parallel"
 )
 
 func (e *SearchengineType) Scan(src interface{}) error {
