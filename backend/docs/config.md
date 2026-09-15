@@ -1121,6 +1121,21 @@ These settings control the text summarization behavior used for condensing long 
 | SummarizerMaxQASections  | `SUMMARIZER_MAX_QA_SECTIONS`     | `10`          | Maximum QA sections to include                             |
 | SummarizerMaxQABytes     | `SUMMARIZER_MAX_QA_BYTES`        | `65536`       | Maximum bytes for QA summarization (64KB)                  |
 | SummarizerKeepQASections | `SUMMARIZER_KEEP_QA_SECTIONS`    | `1`           | Number of recent QA sections to keep without summarization |
+| SummarizerSkipToolLoopAgentTypes | `SUMMARIZER_SKIP_TOOL_LOOP_AGENT_TYPES` | empty | Comma-separated agent types that skip incremental summarization after tool-call rounds |
+
+For example, deployments using a large-context model can avoid an additional
+LLM summarization request after each specialist tool round:
+
+```env
+SUMMARIZER_SKIP_TOOL_LOOP_AGENT_TYPES=coder,searcher,enricher,installer,pentester
+```
+
+Values are case-insensitive and surrounding whitespace is ignored. Valid agent
+types are `simple`, `simple_json`, `primary_agent`, `assistant`, `generator`,
+`refiner`, `adviser`, `reflector`, `searcher`, `enricher`, `coder`, `installer`,
+and `pentester`. This option only skips incremental tool-loop summarization;
+restore-time summarization remains enabled to bound an interrupted chain before
+it is resumed. Leave the variable empty for the existing behavior.
 
 ### Usage Details and Impact on System Behavior
 

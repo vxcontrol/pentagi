@@ -12,6 +12,7 @@ import (
 
 	"pentagi/pkg/cast"
 	"pentagi/pkg/config"
+	"pentagi/pkg/providers/pconfig"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/vxcontrol/langchaingo/llms"
@@ -1092,6 +1093,26 @@ func TestExecutionMonitorDetector_ShouldInvokeAdviser(t *testing.T) {
 					t.Errorf("call %d (%s): expected %v, got %v", i, call, tt.expected[i], result)
 				}
 			}
+		})
+	}
+}
+
+func TestShouldSummarizeToolLoop(t *testing.T) {
+	tests := []struct {
+		name      string
+		agentType pconfig.ProviderOptionsType
+		skipped   []string
+		want      bool
+	}{
+		{name: "enabled by default", agentType: pconfig.OptionsTypeCoder, want: true},
+		{name: "skips configured agent", agentType: pconfig.OptionsTypeCoder, skipped: []string{"coder"}, want: false},
+		{name: "trims and folds configured values", agentType: pconfig.OptionsTypeSearcher, skipped: []string{" CODER ", " Searcher "}, want: false},
+		{name: "keeps other agents enabled", agentType: pconfig.OptionsTypePrimaryAgent, skipped: []string{"coder", "searcher"}, want: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, shouldSummarizeToolLoop(tt.agentType, tt.skipped))
 		})
 	}
 }

@@ -102,6 +102,10 @@ type Config struct {
 	SummarizerMaxQASections  int  `env:"SUMMARIZER_MAX_QA_SECTIONS" envDefault:"10"`
 	SummarizerMaxQABytes     int  `env:"SUMMARIZER_MAX_QA_BYTES" envDefault:"65536"`
 	SummarizerKeepQASections int  `env:"SUMMARIZER_KEEP_QA_SECTIONS" envDefault:"1"`
+	// SummarizerSkipToolLoopAgentTypes disables incremental summarization after
+	// tool-call rounds for selected agent types. Restore-time summarization is
+	// unaffected, preserving a safety boundary for interrupted long chains.
+	SummarizerSkipToolLoopAgentTypes []string `env:"SUMMARIZER_SKIP_TOOL_LOOP_AGENT_TYPES"`
 
 	// === LLM Provider: Custom/Self-Hosted ===
 	LLMServerURL               string `env:"LLM_SERVER_URL"`

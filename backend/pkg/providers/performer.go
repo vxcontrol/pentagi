@@ -45,6 +45,19 @@ type callResult struct {
 	content   string
 }
 
+func shouldSummarizeToolLoop(
+	optAgentType pconfig.ProviderOptionsType,
+	skippedAgentTypes []string,
+) bool {
+	for _, skippedAgentType := range skippedAgentTypes {
+		if strings.EqualFold(strings.TrimSpace(skippedAgentType), string(optAgentType)) {
+			return false
+		}
+	}
+
+	return true
+}
+
 func (fp *flowProvider) performAgentChain(
 	ctx context.Context,
 	optAgentType pconfig.ProviderOptionsType,
@@ -231,7 +244,9 @@ func (fp *flowProvider) performAgentChain(
 			return nil
 		}
 
-		if summarizer != nil {
+		if summarizer != nil && shouldSummarizeToolLoop(
+			optAgentType, fp.cfg.SummarizerSkipToolLoopAgentTypes,
+		) {
 			// it returns the same chain state if error occurs
 			chain, err = summarizer.SummarizeChain(ctx, summarizerHandler, chain, fp.tcIDTemplate)
 			if err != nil {

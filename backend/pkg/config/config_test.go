@@ -417,6 +417,17 @@ func TestNewConfig_SummarizerDefaults(t *testing.T) {
 	assert.Equal(t, 10, config.SummarizerMaxQASections)
 	assert.Equal(t, 65536, config.SummarizerMaxQABytes)
 	assert.Equal(t, 1, config.SummarizerKeepQASections)
+	assert.Empty(t, config.SummarizerSkipToolLoopAgentTypes)
+}
+
+func TestNewConfig_SummarizerSkipToolLoopAgentTypes(t *testing.T) {
+	clearConfigEnv(t)
+	t.Chdir(t.TempDir())
+	t.Setenv("SUMMARIZER_SKIP_TOOL_LOOP_AGENT_TYPES", "coder, searcher")
+
+	config, err := NewConfig()
+	require.NoError(t, err)
+	assert.Equal(t, []string{"coder", " searcher"}, config.SummarizerSkipToolLoopAgentTypes)
 }
 
 func TestNewConfig_SearchEngineDefaults(t *testing.T) {
