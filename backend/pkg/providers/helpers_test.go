@@ -12,6 +12,7 @@ import (
 
 	"pentagi/pkg/cast"
 	"pentagi/pkg/config"
+	"pentagi/pkg/database"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/vxcontrol/langchaingo/llms"
@@ -1092,6 +1093,33 @@ func TestExecutionMonitorDetector_ShouldInvokeAdviser(t *testing.T) {
 					t.Errorf("call %d (%s): expected %v, got %v", i, call, tt.expected[i], result)
 				}
 			}
+		})
+	}
+}
+
+func TestScopedMsgChainLookupParams(t *testing.T) {
+	taskID := int64(12)
+	subtaskID := int64(34)
+
+	tests := []struct {
+		name      string
+		taskID    *int64
+		subtaskID *int64
+		wantTask  *int64
+		wantSub   *int64
+	}{
+		{name: "assistant scope keeps null identifiers"},
+		{name: "task scope keeps a null subtask", taskID: &taskID, wantTask: &taskID},
+		{name: "subtask scope includes both identifiers", taskID: &taskID, subtaskID: &subtaskID, wantTask: &taskID, wantSub: &subtaskID},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			params := scopedMsgChainLookupParams(7, tt.taskID, tt.subtaskID, database.MsgchainTypeCoder)
+			assert.Equal(t, int64(7), params.FlowID)
+			assert.Equal(t, database.Int64ToNullInt64(tt.wantTask), params.TaskID)
+			assert.Equal(t, database.Int64ToNullInt64(tt.wantSub), params.SubtaskID)
+			assert.Equal(t, database.MsgchainTypeCoder, params.Type)
 		})
 	}
 }

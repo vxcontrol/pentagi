@@ -444,6 +444,19 @@ func (fp *flowProvider) getTaskMsgLogsSummary(
 	return summary, nil
 }
 
+func scopedMsgChainLookupParams(
+	flowID int64,
+	taskID, subtaskID *int64,
+	msgChainType database.MsgchainType,
+) database.GetFlowTaskSubtaskTypeLastMsgChainParams {
+	return database.GetFlowTaskSubtaskTypeLastMsgChainParams{
+		FlowID:    flowID,
+		TaskID:    database.Int64ToNullInt64(taskID),
+		SubtaskID: database.Int64ToNullInt64(subtaskID),
+		Type:      msgChainType,
+	}
+}
+
 func (fp *flowProvider) restoreChain(
 	ctx context.Context,
 	taskID, subtaskID *int64,
@@ -454,11 +467,9 @@ func (fp *flowProvider) restoreChain(
 	ctx, observation := obs.Observer.NewObservation(ctx)
 
 	// Get raw chain from DB for observation input
-	msgChain, err := fp.db.GetFlowTaskTypeLastMsgChain(ctx, database.GetFlowTaskTypeLastMsgChainParams{
-		FlowID: fp.flowID,
-		TaskID: database.Int64ToNullInt64(taskID),
-		Type:   msgChainType,
-	})
+	msgChain, err := fp.db.GetFlowTaskSubtaskTypeLastMsgChain(ctx, scopedMsgChainLookupParams(
+		fp.flowID, taskID, subtaskID, msgChainType,
+	))
 
 	var rawChain []llms.MessageContent
 	if err == nil && !isEmptyChain(msgChain.Chain) {

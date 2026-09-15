@@ -77,6 +77,17 @@ WHERE mc.flow_id = $1 AND (mc.task_id = $2 OR $2 IS NULL) AND mc.type = $3
 ORDER BY mc.created_at DESC
 LIMIT 1;
 
+-- name: GetFlowTaskSubtaskTypeLastMsgChain :one
+SELECT
+  mc.*
+FROM msgchains mc
+WHERE mc.flow_id = $1
+  AND mc.task_id IS NOT DISTINCT FROM $2
+  AND mc.subtask_id IS NOT DISTINCT FROM $3
+  AND mc.type = $4
+ORDER BY mc.created_at DESC
+LIMIT 1;
+
 -- name: GetMsgChain :one
 SELECT
   mc.*
