@@ -20,7 +20,7 @@ const (
 	attributionReferer   = "https://github.com/vxcontrol/pentagi"
 	attributionTitle     = "PentAGI"
 	attributionSource    = "agent/pentagi"
-	attributionPartnerID = "part_pentagi"
+	attributionPartnerID = "part_6bffrRIYBS8OtYbQhsEPi0SS"
 )
 
 // attributionHeaders builds a fresh map per call so no caller can mutate a
