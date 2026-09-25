@@ -128,18 +128,10 @@ type Querier interface {
 	GetFlowVectorStoreLog(ctx context.Context, arg GetFlowVectorStoreLogParams) (Vecstorelog, error)
 	GetFlowVectorStoreLogs(ctx context.Context, flowID int64) ([]Vecstorelog, error)
 	GetFlows(ctx context.Context) ([]Flow, error)
-	// Get flow IDs created in the last 3 months for analytics
-	GetFlowsForPeriodLast3Months(ctx context.Context, userID int64) ([]GetFlowsForPeriodLast3MonthsRow, error)
-	// Get flow IDs created in the last month for analytics
-	GetFlowsForPeriodLastMonth(ctx context.Context, userID int64) ([]GetFlowsForPeriodLastMonthRow, error)
-	// Get flow IDs created in the last week for analytics
-	GetFlowsForPeriodLastWeek(ctx context.Context, userID int64) ([]GetFlowsForPeriodLastWeekRow, error)
-	// Get flows stats by day for the last 3 months
-	GetFlowsStatsByDayLast3Months(ctx context.Context, userID int64) ([]GetFlowsStatsByDayLast3MonthsRow, error)
-	// Get flows stats by day for the last month
-	GetFlowsStatsByDayLastMonth(ctx context.Context, userID int64) ([]GetFlowsStatsByDayLastMonthRow, error)
-	// Get flows stats by day for the last week
-	GetFlowsStatsByDayLastWeek(ctx context.Context, userID int64) ([]GetFlowsStatsByDayLastWeekRow, error)
+	// Flows created within the last N whole calendar days in the caller's timezone.
+	GetFlowsForPeriod(ctx context.Context, arg GetFlowsForPeriodParams) ([]GetFlowsForPeriodRow, error)
+	// One dense row per calendar day in the caller's timezone, zeros included.
+	GetFlowsStatsByDay(ctx context.Context, arg GetFlowsStatsByDayParams) ([]GetFlowsStatsByDayRow, error)
 	// Fetch a single knowledge document by its UUID (admin view — no user_id check).
 	GetKnowledgeDocument(ctx context.Context, uuid string) (GetKnowledgeDocumentRow, error)
 	GetMsgChain(ctx context.Context, id int64) (Msgchain, error)
@@ -197,19 +189,14 @@ type Querier interface {
 	GetTermLog(ctx context.Context, id int64) (Termlog, error)
 	// Get all toolcalls for a flow
 	GetToolcallsForFlow(ctx context.Context, flowID int64) ([]GetToolcallsForFlowRow, error)
-	// Get toolcalls stats by day for the last 3 months
-	GetToolcallsStatsByDayLast3Months(ctx context.Context, userID int64) ([]GetToolcallsStatsByDayLast3MonthsRow, error)
-	// Get toolcalls stats by day for the last month
-	GetToolcallsStatsByDayLastMonth(ctx context.Context, userID int64) ([]GetToolcallsStatsByDayLastMonthRow, error)
-	// Get toolcalls stats by day for the last week
-	GetToolcallsStatsByDayLastWeek(ctx context.Context, userID int64) ([]GetToolcallsStatsByDayLastWeekRow, error)
+	// One dense row per calendar day in the caller's timezone, zeros included.
+	GetToolcallsStatsByDay(ctx context.Context, arg GetToolcallsStatsByDayParams) ([]GetToolcallsStatsByDayRow, error)
 	// Get toolcalls stats grouped by function name for a user
 	GetToolcallsStatsByFunction(ctx context.Context, userID int64) ([]GetToolcallsStatsByFunctionRow, error)
 	// Get toolcalls stats grouped by function name for a specific flow
 	GetToolcallsStatsByFunctionForFlow(ctx context.Context, flowID int64) ([]GetToolcallsStatsByFunctionForFlowRow, error)
-	GetUsageStatsByDayLast3Months(ctx context.Context, userID int64) ([]GetUsageStatsByDayLast3MonthsRow, error)
-	GetUsageStatsByDayLastMonth(ctx context.Context, userID int64) ([]GetUsageStatsByDayLastMonthRow, error)
-	GetUsageStatsByDayLastWeek(ctx context.Context, userID int64) ([]GetUsageStatsByDayLastWeekRow, error)
+	// One dense row per calendar day in the caller's timezone, zeros included.
+	GetUsageStatsByDay(ctx context.Context, arg GetUsageStatsByDayParams) ([]GetUsageStatsByDayRow, error)
 	GetUsageStatsByModel(ctx context.Context, userID int64) ([]GetUsageStatsByModelRow, error)
 	GetUsageStatsByModelAgentsForFlow(ctx context.Context, flowID int64) ([]GetUsageStatsByModelAgentsForFlowRow, error)
 	GetUsageStatsByProvider(ctx context.Context, userID int64) ([]GetUsageStatsByProviderRow, error)
@@ -269,6 +256,8 @@ type Querier interface {
 	ListFlowKnowledgeDocuments(ctx context.Context, flowID sql.NullString) ([]ListFlowKnowledgeDocumentsRow, error)
 	// List all non-memory knowledge documents owned by a specific user (user-scoped view).
 	ListUserKnowledgeDocuments(ctx context.Context, userID sql.NullString) ([]ListUserKnowledgeDocumentsRow, error)
+	SaveAssistantLog(ctx context.Context, arg SaveAssistantLogParams) error
+	SaveAssistantLogContent(ctx context.Context, arg SaveAssistantLogContentParams) error
 	// Vector similarity search over all knowledge documents (admin view, no user filter).
 	// Returns rows ordered by cosine similarity descending (highest score first).
 	// embedding    query vector as a PostgreSQL vector literal, e.g. '[0.1,0.2,...]'

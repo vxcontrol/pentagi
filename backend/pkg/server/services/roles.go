@@ -69,7 +69,11 @@ func (s *RoleService) GetRoles(c *gin.Context) {
 		return db
 	}
 
-	query.Init("roles", rolesSQLMappers)
+	if err := query.Init("roles", rolesSQLMappers); err != nil {
+		logger.FromContext(c).WithError(err).Errorf("error initializing roles query")
+		response.Error(c, response.ErrRolesInvalidRequest, err)
+		return
+	}
 
 	if resp.Total, err = query.Query(s.db, &resp.Roles, scope); err != nil {
 		logger.FromContext(c).WithError(err).Errorf("error finding roles")

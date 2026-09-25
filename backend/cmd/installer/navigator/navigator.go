@@ -42,7 +42,7 @@ func NewNavigator(state state.State, checkResult checker.CheckResult) Navigator 
 	logger.Log("[Nav] NEW: %s", strings.Join(state.GetStack(), " -> "))
 
 	if !checkResult.IsReadyToContinue() {
-		state.SetStack([]string{string(models.WelcomeScreen)})
+		_ = state.SetStack([]string{string(models.WelcomeScreen)})
 		return &navigator{
 			stack:        []models.ScreenID{models.WelcomeScreen},
 			stateManager: state,
@@ -63,7 +63,7 @@ func NewNavigator(state state.State, checkResult checker.CheckResult) Navigator 
 func (n *navigator) Push(screenID models.ScreenID) {
 	logger.Log("[Nav] PUSH: %s -> %s", n.Current(), screenID)
 	n.stack = append(n.stack, screenID)
-	n.stateManager.SetStack(n.stack.Strings())
+	_ = n.stateManager.SetStack(n.stack.Strings())
 }
 
 func (n *navigator) Pop() models.ScreenID {
@@ -74,7 +74,7 @@ func (n *navigator) Pop() models.ScreenID {
 
 	n.stack = n.stack[:len(n.stack)-1]
 	previous := n.Current()
-	n.stateManager.SetStack(n.stack.Strings())
+	_ = n.stateManager.SetStack(n.stack.Strings())
 	logger.Log("[Nav] POP: %s -> %s", current, previous)
 	return previous
 }

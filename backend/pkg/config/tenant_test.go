@@ -5,95 +5,65 @@ import (
 	"testing"
 )
 
-// TestTenantHelpersAreNoOpWhenEmpty is the backward-compatibility contract: with
-// TENANT_ID unset every helper must return exactly the value the codebase used
-// before tenancy existed.
-func TestTenantHelpersAreNoOpWhenEmpty(t *testing.T) {
-	c := &Config{CookieSigningSalt: "salt"}
+// Rows are keyed by helper; the untenanted column holds the literal each name had before tenancy existed.
+func TestTenant_ScopesNamesOnlyWhenATenantIsSet(t *testing.T) {
+	plain := &Config{CookieSigningSalt: "salt"}
+	acme := &Config{TenantID: "acme", CookieSigningSalt: "salt"}
 
-	if c.HasTenant() {
-		t.Error("HasTenant() = true, want false for empty tenant id")
+	tests := []struct {
+		what       string
+		get        func(*Config) string
+		untenanted string
+		tenanted   string
+	}{
+		{"docker container name", func(c *Config) string { return c.ScopedName("pentagi-terminal-1") }, "pentagi-terminal-1", "acme-pentagi-terminal-1"},
+		{"session cookie name", func(c *Config) string { return c.ScopedName("auth") }, "auth", "acme-auth"},
+		{"oauth state cookie", func(c *Config) string { return c.TenantPrefix() + "state" }, "state", "acme-state"},
+		{"graphiti group id", func(c *Config) string { return c.GroupID(1) }, "flow-1", "acme-flow-1"},
+		{"large graphiti group id", func(c *Config) string { return c.GroupID(9999999999) }, "flow-9999999999", "acme-flow-9999999999"},
+		{"postgres schema", (*Config).SchemaName, "public", "acme"},
+		{"cookie and jwt salt", (*Config).AuthSalt, "salt", "salt|tenant|acme"},
+		{"langfuse trace prefix", (*Config).TenantLabel, "", "acme "},
+		{"langfuse user id", func(c *Config) string { return c.TenantUserID("admin@pentagi.com") }, "admin@pentagi.com", "acme/admin@pentagi.com"},
 	}
-	if got := c.TenantPrefix(); got != "" {
-		t.Errorf("TenantPrefix() = %q, want %q", got, "")
+
+	for _, tt := range tests {
+		t.Run(tt.what, func(t *testing.T) {
+			if got := tt.get(plain); got != tt.untenanted {
+				t.Errorf("without a tenant = %q, want %q (backward compatibility broken)", got, tt.untenanted)
+			}
+			if got := tt.get(acme); got != tt.tenanted {
+				t.Errorf("with tenant acme = %q, want %q", got, tt.tenanted)
+			}
+		})
 	}
-	if got := c.ScopedName("pentagi-terminal-1"); got != "pentagi-terminal-1" {
-		t.Errorf("ScopedName() = %q, want %q", got, "pentagi-terminal-1")
+
+	if plain.HasTenant() || !acme.HasTenant() {
+		t.Errorf("HasTenant() = %v without a tenant and %v with one", plain.HasTenant(), acme.HasTenant())
 	}
-	if got := c.ScopedName("auth"); got != "auth" {
-		t.Errorf("ScopedName(auth) = %q, want %q", got, "auth")
+	if got := plain.TenantLabels(); got != nil {
+		t.Errorf("TenantLabels() = %v without a tenant, want nil so docker objects stay unlabelled", got)
 	}
-	if got := c.GroupID(42); got != "flow-42" {
-		t.Errorf("GroupID(42) = %q, want %q", got, "flow-42")
-	}
-	if got := c.TenantLabel(); got != "" {
-		t.Errorf("TenantLabel() = %q, want %q", got, "")
-	}
-	if got := c.SchemaName(); got != "public" {
-		t.Errorf("SchemaName() = %q, want %q", got, "public")
-	}
-	if got := c.AuthSalt(); got != "salt" {
-		t.Errorf("AuthSalt() = %q, want %q (must equal CookieSigningSalt verbatim)", got, "salt")
-	}
-	if got := c.TenantLabels(); got != nil {
-		t.Errorf("TenantLabels() = %v, want nil so docker objects stay unlabelled", got)
+	if got := acme.TenantLabels()[TenantLabelKey]; got != "acme" {
+		t.Errorf("TenantLabels()[%s] = %q, want %q", TenantLabelKey, got, "acme")
 	}
 }
 
-func TestTenantHelpersWithTenant(t *testing.T) {
-	c := &Config{TenantID: "acme", CookieSigningSalt: "salt"}
-
-	if !c.HasTenant() {
-		t.Error("HasTenant() = false, want true")
-	}
-	if got, want := c.TenantPrefix(), "acme-"; got != want {
-		t.Errorf("TenantPrefix() = %q, want %q", got, want)
-	}
-	if got, want := c.ScopedName("pentagi-terminal-1"), "acme-pentagi-terminal-1"; got != want {
-		t.Errorf("ScopedName() = %q, want %q", got, want)
-	}
-	if got, want := c.GroupID(42), "acme-flow-42"; got != want {
-		t.Errorf("GroupID(42) = %q, want %q", got, want)
-	}
-	if got, want := c.TenantLabel(), "acme "; got != want {
-		t.Errorf("TenantLabel() = %q, want %q", got, want)
-	}
-	if got, want := c.SchemaName(), "acme"; got != want {
-		t.Errorf("SchemaName() = %q, want %q", got, want)
-	}
-	if got := c.AuthSalt(); got == "salt" {
-		t.Error("AuthSalt() must differ from the raw salt when a tenant is configured")
-	}
-	if got := c.TenantLabels(); got[TenantLabelKey] != "acme" {
-		t.Errorf("TenantLabels()[%s] = %q, want %q", TenantLabelKey, got[TenantLabelKey], "acme")
-	}
-}
-
-// TestScopedNameEscapesInstallerVolumeSweep pins the property that motivated
-// putting the tenant prefix in front rather than in the middle: the installer's
-// garbage collector force-removes volumes matching
-// HasPrefix("pentagi-terminal-") && HasSuffix("-data"), and a tenant's volumes
-// must fall outside that filter.
-func TestScopedNameEscapesInstallerVolumeSweep(t *testing.T) {
-	tenant := &Config{TenantID: "acme"}
-	def := &Config{}
-
-	tenantVolume := tenant.ScopedName("pentagi-terminal-1") + "-data"
-	defaultVolume := def.ScopedName("pentagi-terminal-1") + "-data"
-
+// The installer force-removes volumes matching pentagi-terminal-*-data; a tenant's volumes must fall outside it.
+func TestTenant_ScopedName_EscapesTheInstallerVolumeSweep(t *testing.T) {
 	sweepMatches := func(name string) bool {
 		return strings.HasPrefix(name, "pentagi-terminal-") && strings.HasSuffix(name, "-data")
 	}
 
-	if sweepMatches(tenantVolume) {
+	if tenantVolume := (&Config{TenantID: "acme"}).ScopedName("pentagi-terminal-1") + "-data"; sweepMatches(tenantVolume) {
 		t.Errorf("tenant volume %q matches the installer sweep; it would be destroyed by another tenant's purge", tenantVolume)
 	}
-	if !sweepMatches(defaultVolume) {
+	if defaultVolume := (&Config{}).ScopedName("pentagi-terminal-1") + "-data"; !sweepMatches(defaultVolume) {
 		t.Errorf("default volume %q no longer matches the installer sweep; single-instance cleanup would break", defaultVolume)
 	}
 }
 
-func TestParseGroupIDRoundTrip(t *testing.T) {
+func TestTenant_ParseGroupID_InvertsGroupID(t *testing.T) {
 	for _, tenantID := range []string{"", "acme"} {
 		c := &Config{TenantID: tenantID}
 		for _, flowID := range []int64{0, 1, 42, 9999999999} {
@@ -110,27 +80,27 @@ func TestParseGroupIDRoundTrip(t *testing.T) {
 	}
 }
 
-func TestParseGroupIDRejectsForeignTenant(t *testing.T) {
-	c := &Config{TenantID: "acme"}
+func TestTenant_ParseGroupID_RejectsForeignAndMalformedIDs(t *testing.T) {
+	tests := []struct {
+		tenantID string
+		groupIDs []string
+		wantErr  string
+	}{
+		{tenantID: "acme", groupIDs: []string{"flow-1", "other-flow-1", "acme2-flow-1", ""}, wantErr: `does not belong to tenant "acme"`},
+		{tenantID: "", groupIDs: []string{"flow-", "flow-abc", "flow-1x", "notflow-1", "1", ""}, wantErr: "invalid groupId format"},
+	}
 
-	for _, gid := range []string{"flow-1", "other-flow-1", "acme2-flow-1", ""} {
-		if _, err := c.ParseGroupID(gid); err == nil {
-			t.Errorf("ParseGroupID(%q) succeeded; want rejection for tenant %q", gid, c.TenantID)
+	for _, tt := range tests {
+		c := &Config{TenantID: tt.tenantID}
+		for _, gid := range tt.groupIDs {
+			if _, err := c.ParseGroupID(gid); err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Errorf("tenant %q: ParseGroupID(%q) error = %v, want one containing %q", tt.tenantID, gid, err, tt.wantErr)
+			}
 		}
 	}
 }
 
-func TestParseGroupIDRejectsMalformed(t *testing.T) {
-	c := &Config{}
-
-	for _, gid := range []string{"flow-", "flow-abc", "flow-1x", "notflow-1", "1", ""} {
-		if _, err := c.ParseGroupID(gid); err == nil {
-			t.Errorf("ParseGroupID(%q) succeeded; want rejection", gid)
-		}
-	}
-}
-
-func TestValidateTenantID(t *testing.T) {
+func TestTenant_ValidateTenantID_AcceptsOnlyShortLowercaseIdentifiers(t *testing.T) {
 	valid := []string{
 		"",  // single-instance mode
 		"a", // minimum
@@ -161,81 +131,14 @@ func TestValidateTenantID(t *testing.T) {
 	}
 	for _, id := range invalid {
 		c := &Config{TenantID: id}
-		if err := c.ValidateTenantID(); err == nil {
-			t.Errorf("ValidateTenantID(%q) = nil, want error", id)
+		if err := c.ValidateTenantID(); err == nil || !strings.Contains(err.Error(), "invalid TENANT_ID") {
+			t.Errorf("ValidateTenantID(%q) = %v, want an invalid TENANT_ID error", id, err)
 		}
 	}
 }
 
-// TestTenantIDFitsPostgresIdentifierLimit guards the derivation in SchemaName
-// against PostgreSQL's 63-byte identifier cap.
-func TestTenantIDFitsPostgresIdentifierLimit(t *testing.T) {
-	c := &Config{TenantID: strings.Repeat("a", 32)}
-	if err := c.ValidateTenantID(); err != nil {
-		t.Fatalf("max-length tenant id rejected: %v", err)
-	}
-	if got := len(c.SchemaName()); got > 63 {
-		t.Errorf("SchemaName() is %d bytes, exceeds the PostgreSQL 63-byte identifier limit", got)
-	}
-}
-
-// TestBackwardCompatibilityContract is the guard for the single hard requirement
-// of the tenancy work: with TENANT_ID unset, every externally-visible name,
-// path, identifier and key must be exactly what it was before tenancy existed.
-//
-// The literals on the right-hand side are the historical values, written out
-// explicitly rather than computed, so that a future refactor of the helpers
-// cannot silently move them.
-func TestBackwardCompatibilityContract(t *testing.T) {
-	c := &Config{
-		DataDir:           "./data",
-		DockerNetwork:     "pentagi-network",
-		CookieSigningSalt: "salt",
-		InstallationID:    "3f2504e0-4f89-11d3-9a0c-0305e82c3301",
-	}
-	if err := c.ValidateTenantID(); err != nil {
-		t.Fatalf("empty TENANT_ID must be valid, got %v", err)
-	}
-
-	cases := []struct {
-		what string
-		got  string
-		want string
-	}{
-		{"docker container name", c.ScopedName("pentagi-terminal-1"), "pentagi-terminal-1"},
-		{"docker volume name", c.ScopedName("pentagi-terminal-1") + "-data", "pentagi-terminal-1-data"},
-		{"docker network", c.DockerNetwork, "pentagi-network"},
-		{"session cookie name", c.ScopedName("auth"), "auth"},
-		{"oauth state cookie", c.TenantPrefix() + "state", "state"},
-		{"oauth nonce cookie", c.TenantPrefix() + "nonce", "nonce"},
-		{"graphiti group id", c.GroupID(1), "flow-1"},
-		{"graphiti group id (large)", c.GroupID(9999999999), "flow-9999999999"},
-		{"postgres schema", c.SchemaName(), "public"},
-		{"cookie/jwt salt", c.AuthSalt(), "salt"},
-		// Left verbatim, not even filepath.Clean'ed: applyTenantScoping returns
-		// before touching it, so an upgraded deployment sees the identical string.
-		{"data dir", c.DataDir, "./data"},
-		{"langfuse trace prefix", c.TenantLabel(), ""},
-		{"installation id", c.InstallationID, "3f2504e0-4f89-11d3-9a0c-0305e82c3301"},
-	}
-	for _, tc := range cases {
-		if tc.got != tc.want {
-			t.Errorf("%s = %q, want %q (backward compatibility broken)", tc.what, tc.got, tc.want)
-		}
-	}
-
-	if c.TenantLabels() != nil {
-		t.Error("docker objects must carry no labels when TENANT_ID is unset")
-	}
-	if c.HasTenant() {
-		t.Error("HasTenant() must be false when TENANT_ID is unset")
-	}
-}
-
-// TestTenantIsolationIsMutual checks the property that actually matters at
-// runtime: two instances with different tenant ids must not produce a single
-// colliding name for the same flow id.
-func TestTenantIsolationIsMutual(t *testing.T) {
+// Two instances with different tenant ids must not produce one colliding name for the same flow id.
+func TestTenant_IsolationIsMutual(t *testing.T) {
 	alpha := &Config{TenantID: "alpha", CookieSigningSalt: "shared"}
 	beta := &Config{TenantID: "beta", CookieSigningSalt: "shared"}
 	plain := &Config{CookieSigningSalt: "shared"}

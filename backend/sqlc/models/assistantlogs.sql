@@ -59,11 +59,21 @@ SET type = $1, message = $2, thinking = $3, result = $4, result_format = $5
 WHERE id = $6
 RETURNING *;
 
+-- name: SaveAssistantLog :exec
+UPDATE assistantlogs
+SET type = $1, message = $2, thinking = $3, result = $4, result_format = $5
+WHERE id = $6;
+
 -- name: UpdateAssistantLogContent :one
 UPDATE assistantlogs
 SET type = $1, message = $2, thinking = $3
 WHERE id = $4
 RETURNING *;
+
+-- name: SaveAssistantLogContent :exec
+UPDATE assistantlogs
+SET type = $1, message = $2, thinking = $3
+WHERE id = $4;
 
 -- name: UpdateAssistantLogResult :one
 UPDATE assistantlogs

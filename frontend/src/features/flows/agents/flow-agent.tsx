@@ -6,6 +6,7 @@ import type { AgentLogFragmentFragment } from '@/graphql/types';
 import Markdown from '@/components/shared/markdown';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { copyMessageToClipboard } from '@/lib/clipboard';
+import { matchesSearchTerm } from '@/lib/text-filter';
 import { formatDate } from '@/lib/utils/format';
 
 import FlowAgentIcon from './flow-agent-icon';
@@ -16,14 +17,6 @@ interface FlowAgentProps {
     log: AgentLogFragmentFragment;
     searchValue?: string;
 }
-
-const containsSearchValue = (text: null | string | undefined, searchValue: string): boolean => {
-    if (!text || !searchValue.trim()) {
-        return false;
-    }
-
-    return text.toLowerCase().includes(searchValue.toLowerCase().trim());
-};
 
 function FlowAgent({ log, searchValue = '' }: FlowAgentProps) {
     const { createdAt, executor, initiator, result, subtaskId, task, taskId } = log;
@@ -36,8 +29,8 @@ function FlowAgent({ log, searchValue = '' }: FlowAgentProps) {
         }
 
         return {
-            hasResultMatch: containsSearchValue(result, trimmedSearch),
-            hasTaskMatch: containsSearchValue(task, trimmedSearch),
+            hasResultMatch: matchesSearchTerm(result, trimmedSearch),
+            hasTaskMatch: matchesSearchTerm(task, trimmedSearch),
         };
     }, [searchValue, task, result]);
 

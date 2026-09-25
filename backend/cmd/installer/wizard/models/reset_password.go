@@ -11,6 +11,7 @@ import (
 	"pentagi/cmd/installer/wizard/locale"
 	"pentagi/cmd/installer/wizard/styles"
 	"pentagi/cmd/installer/wizard/window"
+	"pentagi/pkg/password"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -275,14 +276,18 @@ func (m *ResetPasswordModel) executePasswordReset(newPassword string, closeOnSuc
 	)
 }
 
-// validatePasswords validates that passwords match and meet requirements
+//nolint:staticcheck // ST1005: user-facing UI strings, not wrapped error text
 func (m *ResetPasswordModel) validatePasswords(newPassword, confirmPassword string) error {
 	if newPassword == "" {
 		return fmt.Errorf(locale.ResetPasswordErrorEmptyPassword)
 	}
 
-	if len(newPassword) < 5 {
-		return fmt.Errorf(locale.ResetPasswordErrorShortPassword)
+	if !password.FitsHashLimit(newPassword) {
+		return fmt.Errorf(locale.ResetPasswordErrorLongPassword)
+	}
+
+	if !password.IsStrong(newPassword) {
+		return fmt.Errorf(locale.ResetPasswordErrorWeakPassword)
 	}
 
 	if newPassword != confirmPassword {

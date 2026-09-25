@@ -25,7 +25,11 @@ const defaultIcon = { className: 'text-muted-foreground', icon: CircleDashed };
 function FlowTaskStatusIcon({ className, status, tooltip }: FlowTaskStatusIconProps) {
     const { className: defaultClassName, icon: Icon } = status ? statusIcons[status] || defaultIcon : defaultIcon;
     const iconElement = (
-        <Icon className={cn('size-4 shrink-0', defaultClassName, tooltip && 'cursor-pointer', className)} />
+        <Icon
+            aria-label={status ? formatName(status) : 'Unknown'}
+            className={cn('size-4 shrink-0', defaultClassName, tooltip && 'cursor-pointer', className)}
+            role="img"
+        />
     );
 
     if (!tooltip) {

@@ -77,7 +77,7 @@ const defaultConfig = (type: ProviderType): ProviderConfigFragmentFragment =>
     });
 
 const modelConfig = (name: string): ModelConfigFragmentFragment =>
-    entity('ModelConfig', { name, price: null, reasoning: null, thinking: null });
+    entity('ModelConfig', { maxOutputTokens: null, name, price: null, reasoning: null, thinking: null });
 
 // The backend fills a default config AND a model catalog for EVERY type, keyed or not (verified live:
 // gemini/deepseek/ollama all return a non-null default and a populated catalog with zero keys). A
@@ -93,9 +93,11 @@ const allDefaults = () =>
         glm: defaultConfig(ProviderType.Glm),
         kimi: defaultConfig(ProviderType.Kimi),
         minimax: defaultConfig(ProviderType.Minimax),
+        mistral: defaultConfig(ProviderType.Mistral),
         ollama: defaultConfig(ProviderType.Ollama),
         openai: defaultConfig(ProviderType.Openai),
         qwen: defaultConfig(ProviderType.Qwen),
+        xai: defaultConfig(ProviderType.Xai),
     });
 
 const catalog = (type: ProviderType) => [modelConfig(`e2e-${type}-model`), modelConfig(`e2e-${type}-model-mini`)];
@@ -110,9 +112,11 @@ const allModels = () =>
         glm: catalog(ProviderType.Glm),
         kimi: catalog(ProviderType.Kimi),
         minimax: catalog(ProviderType.Minimax),
+        mistral: catalog(ProviderType.Mistral),
         ollama: catalog(ProviderType.Ollama),
         openai: catalog(ProviderType.Openai),
         qwen: catalog(ProviderType.Qwen),
+        xai: catalog(ProviderType.Xai),
     });
 
 const noProviders: ResultOf<typeof SettingsProvidersDocument> = {
@@ -127,9 +131,11 @@ const noProviders: ResultOf<typeof SettingsProvidersDocument> = {
             glm: false,
             kimi: false,
             minimax: false,
+            mistral: false,
             ollama: false,
             openai: false,
             qwen: false,
+            xai: false,
         }),
         models: allModels(),
         userDefined: [],
@@ -178,14 +184,30 @@ export const providersList = (...userDefined: ProviderConfigFragmentFragment[]) 
             glm: false,
             kimi: false,
             minimax: false,
+            mistral: false,
             ollama: false,
             openai: true,
             qwen: false,
+            xai: false,
         }),
         models: allModels(),
         userDefined,
     }),
 });
+
+export const providersListWithEnabled = (
+    enabled: Partial<ReturnType<typeof providersList>['settingsProviders']['enabled']>,
+    ...userDefined: ProviderConfigFragmentFragment[]
+) => {
+    const list = providersList(...userDefined);
+
+    return {
+        settingsProviders: {
+            ...list.settingsProviders,
+            enabled: { ...list.settingsProviders.enabled, ...enabled },
+        },
+    };
+};
 
 /** A second row so a delete spec can operate a row that is not index 0, and prove the table survived. */
 export const OTHER_PROVIDER = {

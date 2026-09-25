@@ -70,7 +70,7 @@ const docTemplate = `{
                         "minimum": -1,
                         "type": "integer",
                         "default": 5,
-                        "description": "Amount items per page (min -1, max 1000, -1 means unlimited)",
+                        "description": "Amount items per page (min -1, max 1000, -1 means unlimited, absent means DefaultPageSize)",
                         "name": "pageSize",
                         "in": "query"
                     },
@@ -254,7 +254,7 @@ const docTemplate = `{
                         "minimum": -1,
                         "type": "integer",
                         "default": 5,
-                        "description": "Amount items per page (min -1, max 1000, -1 means unlimited)",
+                        "description": "Amount items per page (min -1, max 1000, -1 means unlimited, absent means DefaultPageSize)",
                         "name": "pageSize",
                         "in": "query"
                     },
@@ -422,6 +422,12 @@ const docTemplate = `{
                             "$ref": "#/definitions/ErrorResponse"
                         }
                     },
+                    "429": {
+                        "description": "too many login attempts",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
                     "500": {
                         "description": "internal error on login",
                         "schema": {
@@ -535,26 +541,26 @@ const docTemplate = `{
             }
         },
         "/auth/logout": {
-            "get": {
+            "post": {
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "Public"
                 ],
-                "summary": "Logout current user via HTTP redirect",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "default": "/",
-                        "description": "URI to redirect user there after logout",
-                        "name": "return_uri",
-                        "in": "query"
-                    }
-                ],
+                "summary": "Logout current user and end all of their sessions",
                 "responses": {
-                    "307": {
-                        "description": "redirect to input return_uri path"
+                    "200": {
+                        "description": "logout successful",
+                        "schema": {
+                            "$ref": "#/definitions/SuccessResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "internal error on ending the user's sessions",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
                     }
                 }
             }
@@ -573,6 +579,12 @@ const docTemplate = `{
                         "description": "logout successful",
                         "schema": {
                             "$ref": "#/definitions/SuccessResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "internal error on ending the user's sessions",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
                         }
                     }
                 }
@@ -623,7 +635,7 @@ const docTemplate = `{
                         "minimum": -1,
                         "type": "integer",
                         "default": 5,
-                        "description": "Amount items per page (min -1, max 1000, -1 means unlimited)",
+                        "description": "Amount items per page (min -1, max 1000, -1 means unlimited, absent means DefaultPageSize)",
                         "name": "pageSize",
                         "in": "query"
                     },
@@ -738,7 +750,7 @@ const docTemplate = `{
                         "minimum": -1,
                         "type": "integer",
                         "default": 5,
-                        "description": "Amount items per page (min -1, max 1000, -1 means unlimited)",
+                        "description": "Amount items per page (min -1, max 1000, -1 means unlimited, absent means DefaultPageSize)",
                         "name": "pageSize",
                         "in": "query"
                     },
@@ -1124,7 +1136,7 @@ const docTemplate = `{
                         "minimum": -1,
                         "type": "integer",
                         "default": 5,
-                        "description": "Amount items per page (min -1, max 1000, -1 means unlimited)",
+                        "description": "Amount items per page (min -1, max 1000, -1 means unlimited, absent means DefaultPageSize)",
                         "name": "pageSize",
                         "in": "query"
                     },
@@ -1247,7 +1259,7 @@ const docTemplate = `{
                         "minimum": -1,
                         "type": "integer",
                         "default": 5,
-                        "description": "Amount items per page (min -1, max 1000, -1 means unlimited)",
+                        "description": "Amount items per page (min -1, max 1000, -1 means unlimited, absent means DefaultPageSize)",
                         "name": "pageSize",
                         "in": "query"
                     },
@@ -1370,7 +1382,7 @@ const docTemplate = `{
                         "minimum": -1,
                         "type": "integer",
                         "default": 5,
-                        "description": "Amount items per page (min -1, max 1000, -1 means unlimited)",
+                        "description": "Amount items per page (min -1, max 1000, -1 means unlimited, absent means DefaultPageSize)",
                         "name": "pageSize",
                         "in": "query"
                     },
@@ -1788,7 +1800,7 @@ const docTemplate = `{
                         "minimum": -1,
                         "type": "integer",
                         "default": 5,
-                        "description": "Amount items per page (min -1, max 1000, -1 means unlimited)",
+                        "description": "Amount items per page (min -1, max 1000, -1 means unlimited, absent means DefaultPageSize)",
                         "name": "pageSize",
                         "in": "query"
                     },
@@ -2713,7 +2725,7 @@ const docTemplate = `{
                         "minimum": -1,
                         "type": "integer",
                         "default": 5,
-                        "description": "Amount items per page (min -1, max 1000, -1 means unlimited)",
+                        "description": "Amount items per page (min -1, max 1000, -1 means unlimited, absent means DefaultPageSize)",
                         "name": "pageSize",
                         "in": "query"
                     },
@@ -2836,7 +2848,7 @@ const docTemplate = `{
                         "minimum": -1,
                         "type": "integer",
                         "default": 5,
-                        "description": "Amount items per page (min -1, max 1000, -1 means unlimited)",
+                        "description": "Amount items per page (min -1, max 1000, -1 means unlimited, absent means DefaultPageSize)",
                         "name": "pageSize",
                         "in": "query"
                     },
@@ -3086,7 +3098,7 @@ const docTemplate = `{
                         "minimum": -1,
                         "type": "integer",
                         "default": 5,
-                        "description": "Amount items per page (min -1, max 1000, -1 means unlimited)",
+                        "description": "Amount items per page (min -1, max 1000, -1 means unlimited, absent means DefaultPageSize)",
                         "name": "pageSize",
                         "in": "query"
                     },
@@ -3209,7 +3221,7 @@ const docTemplate = `{
                         "minimum": -1,
                         "type": "integer",
                         "default": 5,
-                        "description": "Amount items per page (min -1, max 1000, -1 means unlimited)",
+                        "description": "Amount items per page (min -1, max 1000, -1 means unlimited, absent means DefaultPageSize)",
                         "name": "pageSize",
                         "in": "query"
                     },
@@ -3332,7 +3344,7 @@ const docTemplate = `{
                         "minimum": -1,
                         "type": "integer",
                         "default": 5,
-                        "description": "Amount items per page (min -1, max 1000, -1 means unlimited)",
+                        "description": "Amount items per page (min -1, max 1000, -1 means unlimited, absent means DefaultPageSize)",
                         "name": "pageSize",
                         "in": "query"
                     },
@@ -3607,7 +3619,7 @@ const docTemplate = `{
                         "minimum": -1,
                         "type": "integer",
                         "default": 5,
-                        "description": "Amount items per page (min -1, max 1000, -1 means unlimited)",
+                        "description": "Amount items per page (min -1, max 1000, -1 means unlimited, absent means DefaultPageSize)",
                         "name": "pageSize",
                         "in": "query"
                     },
@@ -3810,7 +3822,7 @@ const docTemplate = `{
                         "minimum": -1,
                         "type": "integer",
                         "default": 5,
-                        "description": "Amount items per page (min -1, max 1000, -1 means unlimited)",
+                        "description": "Amount items per page (min -1, max 1000, -1 means unlimited, absent means DefaultPageSize)",
                         "name": "pageSize",
                         "in": "query"
                     },
@@ -3933,7 +3945,7 @@ const docTemplate = `{
                         "minimum": -1,
                         "type": "integer",
                         "default": 5,
-                        "description": "Amount items per page (min -1, max 1000, -1 means unlimited)",
+                        "description": "Amount items per page (min -1, max 1000, -1 means unlimited, absent means DefaultPageSize)",
                         "name": "pageSize",
                         "in": "query"
                     },
@@ -4206,7 +4218,7 @@ const docTemplate = `{
                         "minimum": -1,
                         "type": "integer",
                         "default": 5,
-                        "description": "Amount items per page (min -1, max 1000, -1 means unlimited)",
+                        "description": "Amount items per page (min -1, max 1000, -1 means unlimited, absent means DefaultPageSize)",
                         "name": "pageSize",
                         "in": "query"
                     },
@@ -4390,6 +4402,12 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/ErrorResponse"
                         }
+                    },
+                    "503": {
+                        "description": "the session could not be checked right now",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
                     }
                 }
             }
@@ -4439,7 +4457,7 @@ const docTemplate = `{
                         "minimum": -1,
                         "type": "integer",
                         "default": 5,
-                        "description": "Amount items per page (min -1, max 1000, -1 means unlimited)",
+                        "description": "Amount items per page (min -1, max 1000, -1 means unlimited, absent means DefaultPageSize)",
                         "name": "pageSize",
                         "in": "query"
                     },
@@ -4903,7 +4921,7 @@ const docTemplate = `{
                         "minimum": -1,
                         "type": "integer",
                         "default": 5,
-                        "description": "Amount items per page (min -1, max 1000, -1 means unlimited)",
+                        "description": "Amount items per page (min -1, max 1000, -1 means unlimited, absent means DefaultPageSize)",
                         "name": "pageSize",
                         "in": "query"
                     },
@@ -5018,7 +5036,7 @@ const docTemplate = `{
                         "minimum": -1,
                         "type": "integer",
                         "default": 5,
-                        "description": "Amount items per page (min -1, max 1000, -1 means unlimited)",
+                        "description": "Amount items per page (min -1, max 1000, -1 means unlimited, absent means DefaultPageSize)",
                         "name": "pageSize",
                         "in": "query"
                     },
@@ -5786,6 +5804,22 @@ const docTemplate = `{
                         "description": "additional virtual paths to download (repeatable)",
                         "name": "paths[]",
                         "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "resource id to download (may be combined with ids[])",
+                        "name": "id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "integer"
+                        },
+                        "collectionFormat": "multi",
+                        "description": "additional resource ids to download (repeatable)",
+                        "name": "ids[]",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -5838,7 +5872,7 @@ const docTemplate = `{
                 "tags": [
                     "Resources"
                 ],
-                "summary": "Create a virtual directory",
+                "summary": "Create a virtual directory and any missing parents",
                 "parameters": [
                     {
                         "description": "mkdir request",
@@ -6010,7 +6044,7 @@ const docTemplate = `{
                         "minimum": -1,
                         "type": "integer",
                         "default": 5,
-                        "description": "Amount items per page (min -1, max 1000, -1 means unlimited)",
+                        "description": "Amount items per page (min -1, max 1000, -1 means unlimited, absent means DefaultPageSize)",
                         "name": "pageSize",
                         "in": "query"
                     },
@@ -6183,7 +6217,7 @@ const docTemplate = `{
                         "minimum": -1,
                         "type": "integer",
                         "default": 5,
-                        "description": "Amount items per page (min -1, max 1000, -1 means unlimited)",
+                        "description": "Amount items per page (min -1, max 1000, -1 means unlimited, absent means DefaultPageSize)",
                         "name": "pageSize",
                         "in": "query"
                     },
@@ -6298,7 +6332,7 @@ const docTemplate = `{
                         "minimum": -1,
                         "type": "integer",
                         "default": 5,
-                        "description": "Amount items per page (min -1, max 1000, -1 means unlimited)",
+                        "description": "Amount items per page (min -1, max 1000, -1 means unlimited, absent means DefaultPageSize)",
                         "name": "pageSize",
                         "in": "query"
                     },
@@ -6455,7 +6489,7 @@ const docTemplate = `{
                         "minimum": -1,
                         "type": "integer",
                         "default": 5,
-                        "description": "Amount items per page (min -1, max 1000, -1 means unlimited)",
+                        "description": "Amount items per page (min -1, max 1000, -1 means unlimited, absent means DefaultPageSize)",
                         "name": "pageSize",
                         "in": "query"
                     },
@@ -6850,7 +6884,7 @@ const docTemplate = `{
                         "minimum": -1,
                         "type": "integer",
                         "default": 5,
-                        "description": "Amount items per page (min -1, max 1000, -1 means unlimited)",
+                        "description": "Amount items per page (min -1, max 1000, -1 means unlimited, absent means DefaultPageSize)",
                         "name": "pageSize",
                         "in": "query"
                     },
@@ -6996,6 +7030,13 @@ const docTemplate = `{
                         "name": "period",
                         "in": "path",
                         "required": true
+                    },
+                    {
+                        "type": "string",
+                        "default": "UTC",
+                        "description": "IANA timezone name the day boundaries are cut in",
+                        "name": "timezone",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -7298,7 +7339,7 @@ const docTemplate = `{
                         "minimum": -1,
                         "type": "integer",
                         "default": 5,
-                        "description": "Amount items per page (min -1, max 1000, -1 means unlimited)",
+                        "description": "Amount items per page (min -1, max 1000, -1 means unlimited, absent means DefaultPageSize)",
                         "name": "pageSize",
                         "in": "query"
                     },
@@ -7656,7 +7697,7 @@ const docTemplate = `{
                         "minimum": -1,
                         "type": "integer",
                         "default": 5,
-                        "description": "Amount items per page (min -1, max 1000, -1 means unlimited)",
+                        "description": "Amount items per page (min -1, max 1000, -1 means unlimited, absent means DefaultPageSize)",
                         "name": "pageSize",
                         "in": "query"
                     },
@@ -8276,8 +8317,6 @@ const docTemplate = `{
             "required": [
                 "flow_id",
                 "image",
-                "local_dir",
-                "local_id",
                 "name",
                 "status",
                 "type"
@@ -8499,8 +8538,7 @@ const docTemplate = `{
                 },
                 "content": {
                     "type": "string",
-                    "maxLength": 65536,
-                    "minLength": 1
+                    "maxLength": 65536
                 },
                 "description": {
                     "type": "string",
@@ -8514,8 +8552,7 @@ const docTemplate = `{
                 },
                 "question": {
                     "type": "string",
-                    "maxLength": 2048,
-                    "minLength": 1
+                    "maxLength": 2048
                 }
             }
         },
@@ -9005,8 +9042,7 @@ const docTemplate = `{
                 },
                 "query": {
                     "type": "string",
-                    "maxLength": 2048,
-                    "minLength": 1
+                    "maxLength": 2048
                 }
             }
         },
@@ -9264,7 +9300,8 @@ const docTemplate = `{
                         "stop",
                         "finish",
                         "input",
-                        "rename"
+                        "rename",
+                        "report"
                     ]
                 },
                 "input": {
@@ -9283,6 +9320,12 @@ const docTemplate = `{
                     "items": {
                         "type": "integer"
                     }
+                },
+                "timeout": {
+                    "type": "integer",
+                    "maximum": 7200,
+                    "minimum": 30,
+                    "example": 600
                 }
             }
         },
@@ -9986,8 +10029,7 @@ const docTemplate = `{
                 },
                 "content": {
                     "type": "string",
-                    "maxLength": 65536,
-                    "minLength": 1
+                    "maxLength": 65536
                 },
                 "description": {
                     "type": "string",
@@ -9998,8 +10040,7 @@ const docTemplate = `{
                 },
                 "question": {
                     "type": "string",
-                    "maxLength": 2048,
-                    "minLength": 1
+                    "maxLength": 2048
                 }
             }
         },

@@ -1,26 +1,31 @@
 # Kimi K3 - Flagship for long-horizon coding and end-to-end knowledge work
 - name: kimi-k3
-  description: Kimi K3 - Flagship model for long-horizon coding and end-to-end knowledge work with 1M context. Always reasons; reasoning_effort currently supports max only. ToolCalls, JSON Mode, structured output, automatic context caching, tool_choice constraints, and dynamically loaded tools
+  description: Kimi K3 - Flagship model for long-horizon coding and end-to-end knowledge work with 1M context. Always reasons; reasoning_effort takes low, high and max, with max the default. ToolCalls, JSON Mode, structured output, automatic context caching, tool_choice constraints, and dynamically loaded tools
   thinking: true
   reasoning:
-    efforts: [max]
+    efforts: [low, high, max]
+  context_window: 1048576
+  max_output_tokens: 1048576
   price:
     input: 3.00
     output: 15.00
     cache_read: 0.30
+    cache_write: 3.00
 
 # Kimi K2.7 Code - Coding-focused model (and high-speed variant)
 - name: kimi-k2.7-code
-  description: Kimi K2.7 Code - Coding-focused model with higher success rates on long-context programming tasks. Supports text/image/video input, thinking mode, dialogue and agent tasks, 256k context, automatic context caching, ToolCalls, JSON Mode, Partial Mode
+  description: Kimi K2.7 Code - Coding-focused model with higher success rates on long-context programming tasks. Thinking is always on and cannot be turned off, and the model takes no reasoning_effort - only the thinking object. Supports text/image/video input, dialogue and agent tasks, 256k context, automatic context caching, ToolCalls, JSON Mode, Partial Mode
   thinking: true
+  context_window: 262144
   price:
     input: 0.95
     output: 4.00
     cache_read: 0.19
 
 - name: kimi-k2.7-code-highspeed
-  description: Kimi K2.7 Code HighSpeed - Same model as kimi-k2.7-code with higher output throughput (~180 tokens/s, up to ~260 tokens/s in short context). Supports text/image/video input, thinking mode, 256k context, automatic context caching, ToolCalls, JSON Mode, Partial Mode
+  description: Kimi K2.7 Code HighSpeed - Same model as kimi-k2.7-code with higher output throughput (~180 tokens/s, up to ~260 tokens/s in short context). Thinking is always on and cannot be turned off, and the model takes no reasoning_effort. Supports text/image/video input, 256k context, automatic context caching, ToolCalls, JSON Mode, Partial Mode
   thinking: true
+  context_window: 262144
   price:
     input: 1.90
     output: 8.00
@@ -28,62 +33,10 @@
 
 # Kimi K2.6 - Latest flagship multimodal model with native architecture
 - name: kimi-k2.6
-  description: Kimi K2.6 - Latest and most intelligent multimodal model with native architecture, stronger long-term code writing, improved instruction compliance and self-correction. Supports text/image/video input, thinking/non-thinking modes, 256k context, automatic context caching, ToolCalls, JSON Mode, internet search
+  description: Kimi K2.6 - Multimodal model with native architecture, superseded as flagship by K3, stronger long-term code writing, improved instruction compliance and self-correction. Supports text/image/video input, thinking/non-thinking modes and no reasoning_effort support, 256k context, automatic context caching, ToolCalls, JSON Mode, internet search
   thinking: true
+  context_window: 262144
   price:
     input: 0.95
     output: 4.00
     cache_read: 0.16
-
-# Kimi K2.5 - Previous-gen multimodal model (cost-optimized alternative to K2.6)
-- name: kimi-k2.5
-  description: Kimi K2.5 - Multimodal model supporting text/image/video input, thinking/non-thinking modes, 256k context, automatic context caching, ToolCalls, JSON Mode, Partial Mode, internet search. 36% cheaper input than K2.6
-  thinking: true
-  price:
-    input: 0.60
-    output: 3.00
-    cache_read: 0.10
-
-# Moonshot V1 - Generation models with flexible parameters (no thinking, free temp/top_p)
-- name: moonshot-v1-8k
-  description: Moonshot V1-8K - Short text generation, 8k context window (input+output combined). Flexible OpenAI-standard parameters
-  thinking: false
-  price:
-    input: 0.20
-    output: 2.00
-
-- name: moonshot-v1-32k
-  description: Moonshot V1-32K - Long text generation, 32k context window. Flexible OpenAI-standard parameters
-  thinking: false
-  price:
-    input: 1.00
-    output: 3.00
-
-- name: moonshot-v1-128k
-  description: Moonshot V1-128K - Very long text generation, 128k context window. Flexible OpenAI-standard parameters
-  thinking: false
-  price:
-    input: 2.00
-    output: 5.00
-
-# Moonshot V1 Vision - Multimodal generation models with image understanding
-- name: moonshot-v1-8k-vision-preview
-  description: Moonshot V1-8K Vision - Image understanding with text output, 8k context window
-  thinking: false
-  price:
-    input: 0.20
-    output: 2.00
-
-- name: moonshot-v1-32k-vision-preview
-  description: Moonshot V1-32K Vision - Image understanding with text output, 32k context window
-  thinking: false
-  price:
-    input: 1.00
-    output: 3.00
-
-- name: moonshot-v1-128k-vision-preview
-  description: Moonshot V1-128K Vision - Image understanding with text output, 128k context window
-  thinking: false
-  price:
-    input: 2.00
-    output: 5.00

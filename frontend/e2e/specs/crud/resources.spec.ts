@@ -4,6 +4,7 @@ import type { Page } from '@playwright/test';
 import type { ResourceAddedDocument } from '@/graphql/types';
 
 import { expect, test } from '../../fixtures/test.ts';
+import { clipboardWrites, recordClipboardWrites } from '../../helpers/clipboard.ts';
 import { expectCleanPage } from '../../helpers/errors.ts';
 import {
     COPY_DESTINATION,
@@ -11,6 +12,9 @@ import {
     emptyResourcesCassette,
     FILE_RESOURCE,
     FOLDER_RESOURCE,
+    NESTED_FOLDER,
+    NESTED_RESOURCE,
+    nestedResourcesCassette,
     RENAMED_PATH,
     resourcesCassette,
     resourceWrites,
@@ -20,6 +24,16 @@ interface DownloadClick {
     download: string;
     href: string;
 }
+
+const BULK_SELECTION = [FILE_RESOURCE.path, NESTED_RESOURCE.path];
+
+// A nested entry on purpose: for a top-level row the name and the path are the same string, and
+// every payload that should carry the path would read the same with the name in its place.
+const selectBoth = async (page: Page) => {
+    await page.getByRole('button', { name: 'Expand all' }).click();
+    await page.getByRole('checkbox', { name: `Select ${NESTED_RESOURCE.name}` }).click();
+    await page.getByRole('checkbox', { name: `Select ${FILE_RESOURCE.name}` }).click();
+};
 
 test.describe('resources', { tag: '@coverage' }, () => {
     test.describe('listing', () => {
@@ -87,8 +101,7 @@ test.describe('resources', { tag: '@coverage' }, () => {
             await page.goto('/resources');
 
             await expect(page.getByText('No resources yet')).toBeVisible();
-            // Scope to the drop zone (its hint is unique) so the toolbar's Upload button is excluded.
-            const dropZone = page.locator('div').filter({ hasText: 'Up to 300 MB per file' }).last();
+            const dropZone = page.locator('[data-slot="file-drop-zone"]');
 
             await expect(dropZone.getByRole('button', { name: 'Upload files' })).toBeVisible();
             expectCleanPage(pageErrorLog);
@@ -97,11 +110,178 @@ test.describe('resources', { tag: '@coverage' }, () => {
 
     // Every write here is a different verb on a path that also serves the SPA: a wrong method answers
     // 200 with HTML instead of 404, so these tests pin the method and the payload, not just the toast.
+    test.describe('bulk verbs', () => {
+        test.use({
+            cassette: nestedResourcesCassette({
+                rest: {
+                    'DELETE /api/v1/resources/': [
+                        {
+                            body: { data: {}, status: 'success' },
+                            querySubset: { 'paths[]': BULK_SELECTION },
+                        },
+                    ],
+                    'POST /api/v1/resources/copy': [
+                        {
+                            body: { data: {}, status: 'success' },
+                            bodySubset: { destination: 'backup', force: false, sources: BULK_SELECTION },
+                        },
+                    ],
+                    'PUT /api/v1/resources/move': [
+                        {
+                            body: { data: {}, status: 'success' },
+                            bodySubset: { destination: 'archive', force: false, sources: BULK_SELECTION },
+                        },
+                    ],
+                },
+            }),
+        });
+
+        const BULK_MOVE_DIRECTORY = 'archive';
+        const BULK_COPY_DIRECTORY = 'backup';
+
+        test('move sends one destination directory for the whole selection', async ({ page, pageErrorLog }) => {
+            await page.goto('/resources');
+            await selectBoth(page);
+            await page.getByRole('button', { exact: true, name: 'Move to…' }).click();
+
+            const dialog = page.getByRole('dialog');
+
+            await expect(dialog.getByRole('heading', { name: 'Move 2 items' })).toBeVisible();
+            await dialog.getByLabel('Destination directory').fill(BULK_MOVE_DIRECTORY);
+
+            const request = page.waitForRequest(
+                (candidate) =>
+                    candidate.method() === 'PUT' && new URL(candidate.url()).pathname === '/api/v1/resources/move',
+            );
+
+            await dialog.getByRole('button', { exact: true, name: 'Move' }).click();
+
+            expect((await request).postDataJSON()).toMatchObject({
+                destination: BULK_MOVE_DIRECTORY,
+                force: false,
+                sources: BULK_SELECTION,
+            });
+            await expect(page.getByText(`Moved 2 items into /${BULK_MOVE_DIRECTORY}`)).toBeVisible();
+            expectCleanPage(pageErrorLog);
+        });
+
+        test('copy sends the same selection to its own destination', async ({ page, pageErrorLog }) => {
+            await page.goto('/resources');
+            await selectBoth(page);
+            await page.getByRole('button', { name: 'More actions' }).click();
+            await page.getByRole('menuitem', { name: 'Copy to…' }).click();
+
+            const dialog = page.getByRole('dialog');
+
+            await expect(dialog.getByRole('heading', { name: 'Copy 2 items' })).toBeVisible();
+            await dialog.getByLabel('Destination directory').fill(BULK_COPY_DIRECTORY);
+
+            const request = page.waitForRequest(
+                (candidate) =>
+                    candidate.method() === 'POST' && new URL(candidate.url()).pathname === '/api/v1/resources/copy',
+            );
+
+            await dialog.getByRole('button', { exact: true, name: 'Copy' }).click();
+
+            expect((await request).postDataJSON()).toMatchObject({
+                destination: BULK_COPY_DIRECTORY,
+                force: false,
+                sources: BULK_SELECTION,
+            });
+            await expect(page.getByText(`Copied 2 items into /${BULK_COPY_DIRECTORY}`)).toBeVisible();
+            expectCleanPage(pageErrorLog);
+        });
+
+        test('delete sends every checked path in one request', async ({ page, pageErrorLog }) => {
+            await page.goto('/resources');
+            await selectBoth(page);
+
+            const request = page.waitForRequest(
+                (candidate) =>
+                    candidate.method() === 'DELETE' && new URL(candidate.url()).pathname === '/api/v1/resources/',
+            );
+
+            await page.getByRole('button', { name: 'Delete' }).click();
+            await page.getByRole('dialog').getByRole('button', { exact: true, name: 'Delete' }).click();
+
+            const sent = new URL((await request).url()).searchParams.getAll('paths[]');
+
+            expect(sent).toEqual(BULK_SELECTION);
+            expectCleanPage(pageErrorLog);
+        });
+    });
+
+    test.describe('drag onto a directory', () => {
+        test.use({
+            cassette: nestedResourcesCassette({
+                rest: {
+                    'PUT /api/v1/resources/move': [
+                        {
+                            body: { data: {}, status: 'success' },
+                            bodySubset: {
+                                destination: NESTED_FOLDER.path,
+                                force: false,
+                                sources: [NESTED_RESOURCE.path],
+                            },
+                        },
+                    ],
+                },
+            }),
+        });
+
+        test('moves the dragged row into the folder it was dropped on', async ({ page, pageErrorLog }) => {
+            await page.goto('/resources');
+            await page.getByRole('button', { name: 'Expand all' }).click();
+
+            const request = page.waitForRequest(
+                (candidate) =>
+                    candidate.method() === 'PUT' && new URL(candidate.url()).pathname === '/api/v1/resources/move',
+            );
+
+            await page
+                .getByRole('treeitem', { name: new RegExp(NESTED_RESOURCE.name) })
+                .dragTo(page.getByRole('treeitem', { name: new RegExp(NESTED_FOLDER.name) }));
+
+            expect((await request).postDataJSON()).toMatchObject({
+                destination: NESTED_FOLDER.path,
+                force: false,
+                sources: [NESTED_RESOURCE.path],
+            });
+            await expect(page.getByText(`Moved to /${NESTED_FOLDER.path}`)).toBeVisible();
+            expectCleanPage(pageErrorLog);
+        });
+    });
+
+    test.describe('copy paths', () => {
+        test.use({ cassette: nestedResourcesCassette() });
+
+        test('puts the row path on the clipboard', async ({ page, pageErrorLog }) => {
+            await recordClipboardWrites(page);
+            await page.goto('/resources');
+
+            await page.getByRole('button', { name: 'Expand all' }).click();
+            await page
+                .getByRole('treeitem', { name: new RegExp(NESTED_RESOURCE.name) })
+                .getByRole('button', { name: 'Row actions' })
+                .click();
+            await page.getByRole('menuitem', { name: 'Copy path' }).click();
+
+            await expect(page.getByText('Path copied to clipboard')).toBeVisible();
+            expect(await clipboardWrites(page)).toEqual([NESTED_RESOURCE.path]);
+            expectCleanPage(pageErrorLog);
+        });
+    });
+
     test.describe('write verbs', () => {
-        test.use({ cassette: resourcesCassette({ rest: resourceWrites() }) });
+        test.use({ cassette: nestedResourcesCassette({ rest: resourceWrites() }) });
 
         const rowActions = (page: Page, name: string) =>
             page.getByRole('treeitem', { name: new RegExp(name) }).getByRole('button', { name: 'Row actions' });
+
+        const openNestedRowActions = async (page: Page) => {
+            await page.getByRole('button', { name: 'Expand all' }).click();
+            await rowActions(page, NESTED_RESOURCE.name).click();
+        };
 
         test('rename issues a PUT to /resources/move carrying the typed destination', async ({
             page,
@@ -114,7 +294,7 @@ test.describe('resources', { tag: '@coverage' }, () => {
                     candidate.method() === 'PUT' && new URL(candidate.url()).pathname === '/api/v1/resources/move',
             );
 
-            await rowActions(page, FILE_RESOURCE.name).click();
+            await openNestedRowActions(page);
             await page.getByRole('menuitem', { name: 'Rename or move' }).click();
 
             const dialog = page.getByRole('dialog');
@@ -124,7 +304,7 @@ test.describe('resources', { tag: '@coverage' }, () => {
 
             expect((await request).postDataJSON()).toMatchObject({
                 destination: RENAMED_PATH,
-                sources: [FILE_RESOURCE.path],
+                sources: [NESTED_RESOURCE.path],
             });
             expectCleanPage(pageErrorLog);
         });
@@ -137,7 +317,7 @@ test.describe('resources', { tag: '@coverage' }, () => {
                     candidate.method() === 'POST' && new URL(candidate.url()).pathname === '/api/v1/resources/copy',
             );
 
-            await rowActions(page, FILE_RESOURCE.name).click();
+            await openNestedRowActions(page);
             await page.getByRole('menuitem', { name: 'Copy to…' }).click();
 
             const dialog = page.getByRole('dialog');
@@ -147,7 +327,7 @@ test.describe('resources', { tag: '@coverage' }, () => {
 
             expect((await request).postDataJSON()).toMatchObject({
                 destination: COPY_DESTINATION,
-                sources: [FILE_RESOURCE.path],
+                sources: [NESTED_RESOURCE.path],
             });
             expectCleanPage(pageErrorLog);
         });
@@ -185,11 +365,11 @@ test.describe('resources', { tag: '@coverage' }, () => {
                     candidate.method() === 'DELETE' && new URL(candidate.url()).pathname === '/api/v1/resources/',
             );
 
-            await rowActions(page, FILE_RESOURCE.name).click();
+            await openNestedRowActions(page);
             await page.getByRole('menuitem', { name: 'Delete' }).click();
             await page.getByRole('dialog').getByRole('button', { exact: true, name: 'Delete' }).click();
 
-            expect(new URL((await request).url()).searchParams.getAll('paths[]')).toEqual([FILE_RESOURCE.path]);
+            expect(new URL((await request).url()).searchParams.getAll('paths[]')).toEqual([NESTED_RESOURCE.path]);
             expectCleanPage(pageErrorLog);
         });
 
@@ -198,16 +378,16 @@ test.describe('resources', { tag: '@coverage' }, () => {
         // the preview proxy targets. The bytes are asserted in specs/real/resources-download.spec.ts.
         test('the row download action links at the row, saved under its name', async ({ page, pageErrorLog }) => {
             await page.goto('/resources');
-            await rowActions(page, FILE_RESOURCE.name).click();
+            await openNestedRowActions(page);
 
             const link = page.getByRole('menuitem', { name: 'Download' });
 
-            await expect(link).toHaveAttribute('download', FILE_RESOURCE.name);
+            await expect(link).toHaveAttribute('download', NESTED_RESOURCE.name);
 
             const href = new URL((await link.getAttribute('href')) ?? '', page.url());
 
             expect(href.pathname).toBe('/api/v1/resources/download');
-            expect(href.searchParams.getAll('paths[]')).toEqual([FILE_RESOURCE.path]);
+            expect(href.searchParams.getAll('paths[]')).toEqual([NESTED_RESOURCE.path]);
             expectCleanPage(pageErrorLog);
         });
 
@@ -234,8 +414,8 @@ test.describe('resources', { tag: '@coverage' }, () => {
                 };
             });
             await page.goto('/resources');
-            await page.getByRole('checkbox', { name: `Select ${FILE_RESOURCE.name}` }).click();
-            await page.getByRole('checkbox', { name: `Select ${FOLDER_RESOURCE.name}` }).click();
+            await selectBoth(page);
+            await page.getByRole('checkbox', { name: `Select ${NESTED_FOLDER.name}` }).click();
             await page.getByRole('button', { exact: true, name: 'Download' }).click();
 
             const clicks = await page.evaluate(
@@ -248,7 +428,7 @@ test.describe('resources', { tag: '@coverage' }, () => {
 
             expect(new URL(href).pathname).toBe('/api/v1/resources/download');
             expect(new URL(href).searchParams.getAll('paths[]').sort()).toEqual(
-                [FILE_RESOURCE.path, FOLDER_RESOURCE.path].sort(),
+                [...BULK_SELECTION, NESTED_FOLDER.path].sort(),
             );
             expect(download).toMatch(/\.zip$/);
             expectCleanPage(pageErrorLog);

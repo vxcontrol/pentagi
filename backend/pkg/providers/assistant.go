@@ -117,8 +117,8 @@ func (ap *assistantProvider) PrepareAgentChain(ctx context.Context) (int64, erro
 		return 0, fmt.Errorf("failed to get assistant system prompt: %w", err)
 	}
 
-	optAgentType := pconfig.OptionsTypeAssistant
 	msgChainType := database.MsgchainTypeAssistant
+	optAgentType := agentByChain[msgChainType]
 	ap.msgChainID, _, err = ap.fp.restoreChain(
 		ctx, nil, nil, optAgentType, msgChainType, systemPrompt, "",
 	)
@@ -387,7 +387,7 @@ func (ap *assistantProvider) getAssistantExecutionContext(ctx context.Context) (
 
 	var (
 		executionContext     string
-		lastActiveSubtaskIDX int = -1
+		lastActiveSubtaskIDX = -1
 	)
 	for sdx, subtask := range subtasks {
 		if subtask.Status != database.SubtaskStatusCreated {

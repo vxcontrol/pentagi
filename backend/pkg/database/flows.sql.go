@@ -198,23 +198,56 @@ func (q *Queries) GetFlows(ctx context.Context) ([]Flow, error) {
 	return items, nil
 }
 
-const getFlowsStatsByDayLast3Months = `-- name: GetFlowsStatsByDayLast3Months :many
+const getFlowsStatsByDay = `-- name: GetFlowsStatsByDay :many
+WITH bounds AS (
+  SELECT
+    ((NOW() AT TIME ZONE $1::text)::date - $2::int) AS first_day,
+    (NOW() AT TIME ZONE $1::text)::date AS last_day
+),
+days AS (
+  SELECT generate_series(b.first_day, b.last_day, INTERVAL '1 day')::date AS day
+  FROM bounds b
+),
+agg AS (
+  SELECT
+    (f.created_at AT TIME ZONE $1::text)::date AS day,
+    COUNT(DISTINCT f.id)::bigint AS total_flows_count,
+    COUNT(DISTINCT t.id)::bigint AS total_tasks_count,
+    COUNT(DISTINCT s.id)::bigint AS total_subtasks_count,
+    COUNT(DISTINCT a.id)::bigint AS total_assistants_count
+  FROM flows f
+  LEFT JOIN tasks t ON f.id = t.flow_id
+  LEFT JOIN subtasks s ON t.id = s.task_id
+  LEFT JOIN assistants a ON f.id = a.flow_id AND a.deleted_at IS NULL
+  WHERE f.deleted_at IS NULL
+    AND f.user_id = $3
+    -- The coarse bounds keep the index; the exact test repeats the grouping
+    -- expression, because an ambiguous local midnight resolves to the later
+    -- instant and would drop the earlier hour of that day.
+    AND f.created_at >= (((SELECT first_day FROM bounds) - 1)::timestamp AT TIME ZONE $1::text)
+    AND f.created_at < (((SELECT last_day FROM bounds) + 2)::timestamp AT TIME ZONE $1::text)
+    AND (f.created_at AT TIME ZONE $1::text)::date
+        BETWEEN (SELECT first_day FROM bounds) AND (SELECT last_day FROM bounds)
+  GROUP BY 1
+)
 SELECT
-  DATE(f.created_at) AS date,
-  COALESCE(COUNT(DISTINCT f.id), 0)::bigint AS total_flows_count,
-  COALESCE(COUNT(DISTINCT t.id), 0)::bigint AS total_tasks_count,
-  COALESCE(COUNT(DISTINCT s.id), 0)::bigint AS total_subtasks_count,
-  COALESCE(COUNT(DISTINCT a.id), 0)::bigint AS total_assistants_count
-FROM flows f
-LEFT JOIN tasks t ON f.id = t.flow_id
-LEFT JOIN subtasks s ON t.id = s.task_id
-LEFT JOIN assistants a ON f.id = a.flow_id AND a.deleted_at IS NULL
-WHERE f.created_at >= NOW() - INTERVAL '90 days' AND f.deleted_at IS NULL AND f.user_id = $1
-GROUP BY DATE(f.created_at)
+  (d.day::timestamp AT TIME ZONE $1::text) AS date,
+  COALESCE(a.total_flows_count, 0)::bigint AS total_flows_count,
+  COALESCE(a.total_tasks_count, 0)::bigint AS total_tasks_count,
+  COALESCE(a.total_subtasks_count, 0)::bigint AS total_subtasks_count,
+  COALESCE(a.total_assistants_count, 0)::bigint AS total_assistants_count
+FROM days d
+LEFT JOIN agg a ON a.day = d.day
 ORDER BY date DESC
 `
 
-type GetFlowsStatsByDayLast3MonthsRow struct {
+type GetFlowsStatsByDayParams struct {
+	Tz     string `json:"tz"`
+	Days   int32  `json:"days"`
+	UserID int64  `json:"user_id"`
+}
+
+type GetFlowsStatsByDayRow struct {
 	Date                 time.Time `json:"date"`
 	TotalFlowsCount      int64     `json:"total_flows_count"`
 	TotalTasksCount      int64     `json:"total_tasks_count"`
@@ -222,124 +255,16 @@ type GetFlowsStatsByDayLast3MonthsRow struct {
 	TotalAssistantsCount int64     `json:"total_assistants_count"`
 }
 
-// Get flows stats by day for the last 3 months
-func (q *Queries) GetFlowsStatsByDayLast3Months(ctx context.Context, userID int64) ([]GetFlowsStatsByDayLast3MonthsRow, error) {
-	rows, err := q.db.QueryContext(ctx, getFlowsStatsByDayLast3Months, userID)
+// One dense row per calendar day in the caller's timezone, zeros included.
+func (q *Queries) GetFlowsStatsByDay(ctx context.Context, arg GetFlowsStatsByDayParams) ([]GetFlowsStatsByDayRow, error) {
+	rows, err := q.db.QueryContext(ctx, getFlowsStatsByDay, arg.Tz, arg.Days, arg.UserID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []GetFlowsStatsByDayLast3MonthsRow
+	var items []GetFlowsStatsByDayRow
 	for rows.Next() {
-		var i GetFlowsStatsByDayLast3MonthsRow
-		if err := rows.Scan(
-			&i.Date,
-			&i.TotalFlowsCount,
-			&i.TotalTasksCount,
-			&i.TotalSubtasksCount,
-			&i.TotalAssistantsCount,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const getFlowsStatsByDayLastMonth = `-- name: GetFlowsStatsByDayLastMonth :many
-SELECT
-  DATE(f.created_at) AS date,
-  COALESCE(COUNT(DISTINCT f.id), 0)::bigint AS total_flows_count,
-  COALESCE(COUNT(DISTINCT t.id), 0)::bigint AS total_tasks_count,
-  COALESCE(COUNT(DISTINCT s.id), 0)::bigint AS total_subtasks_count,
-  COALESCE(COUNT(DISTINCT a.id), 0)::bigint AS total_assistants_count
-FROM flows f
-LEFT JOIN tasks t ON f.id = t.flow_id
-LEFT JOIN subtasks s ON t.id = s.task_id
-LEFT JOIN assistants a ON f.id = a.flow_id AND a.deleted_at IS NULL
-WHERE f.created_at >= NOW() - INTERVAL '30 days' AND f.deleted_at IS NULL AND f.user_id = $1
-GROUP BY DATE(f.created_at)
-ORDER BY date DESC
-`
-
-type GetFlowsStatsByDayLastMonthRow struct {
-	Date                 time.Time `json:"date"`
-	TotalFlowsCount      int64     `json:"total_flows_count"`
-	TotalTasksCount      int64     `json:"total_tasks_count"`
-	TotalSubtasksCount   int64     `json:"total_subtasks_count"`
-	TotalAssistantsCount int64     `json:"total_assistants_count"`
-}
-
-// Get flows stats by day for the last month
-func (q *Queries) GetFlowsStatsByDayLastMonth(ctx context.Context, userID int64) ([]GetFlowsStatsByDayLastMonthRow, error) {
-	rows, err := q.db.QueryContext(ctx, getFlowsStatsByDayLastMonth, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []GetFlowsStatsByDayLastMonthRow
-	for rows.Next() {
-		var i GetFlowsStatsByDayLastMonthRow
-		if err := rows.Scan(
-			&i.Date,
-			&i.TotalFlowsCount,
-			&i.TotalTasksCount,
-			&i.TotalSubtasksCount,
-			&i.TotalAssistantsCount,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const getFlowsStatsByDayLastWeek = `-- name: GetFlowsStatsByDayLastWeek :many
-SELECT
-  DATE(f.created_at) AS date,
-  COALESCE(COUNT(DISTINCT f.id), 0)::bigint AS total_flows_count,
-  COALESCE(COUNT(DISTINCT t.id), 0)::bigint AS total_tasks_count,
-  COALESCE(COUNT(DISTINCT s.id), 0)::bigint AS total_subtasks_count,
-  COALESCE(COUNT(DISTINCT a.id), 0)::bigint AS total_assistants_count
-FROM flows f
-LEFT JOIN tasks t ON f.id = t.flow_id
-LEFT JOIN subtasks s ON t.id = s.task_id
-LEFT JOIN assistants a ON f.id = a.flow_id AND a.deleted_at IS NULL
-WHERE f.created_at >= NOW() - INTERVAL '7 days' AND f.deleted_at IS NULL AND f.user_id = $1
-GROUP BY DATE(f.created_at)
-ORDER BY date DESC
-`
-
-type GetFlowsStatsByDayLastWeekRow struct {
-	Date                 time.Time `json:"date"`
-	TotalFlowsCount      int64     `json:"total_flows_count"`
-	TotalTasksCount      int64     `json:"total_tasks_count"`
-	TotalSubtasksCount   int64     `json:"total_subtasks_count"`
-	TotalAssistantsCount int64     `json:"total_assistants_count"`
-}
-
-// Get flows stats by day for the last week
-func (q *Queries) GetFlowsStatsByDayLastWeek(ctx context.Context, userID int64) ([]GetFlowsStatsByDayLastWeekRow, error) {
-	rows, err := q.db.QueryContext(ctx, getFlowsStatsByDayLastWeek, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []GetFlowsStatsByDayLastWeekRow
-	for rows.Next() {
-		var i GetFlowsStatsByDayLastWeekRow
+		var i GetFlowsStatsByDayRow
 		if err := rows.Scan(
 			&i.Date,
 			&i.TotalFlowsCount,

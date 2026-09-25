@@ -11,232 +11,88 @@ import (
 	"pentagi/pkg/database"
 )
 
-const testTavilyAPIKey = "test-key"
-
-func testTavilyConfig() *config.Config {
-	return &config.Config{TavilyAPIKey: testTavilyAPIKey}
-}
-
-func TestTavilyHandle(t *testing.T) {
-	var seenRequest bool
-	var receivedMethod string
-	var receivedContentType string
-	var receivedBody []byte
-
-	mockMux := http.NewServeMux()
-	mockMux.HandleFunc("/search", func(w http.ResponseWriter, r *http.Request) {
-		seenRequest = true
-		receivedMethod = r.Method
-		receivedContentType = r.Header.Get("Content-Type")
-
-		var err error
-		receivedBody, err = io.ReadAll(r.Body)
-		if err != nil {
-			t.Errorf("failed to read request body: %v", err)
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"answer":"final answer","query":"test query","response_time":0.1,"results":[{"title":"Doc","url":"https://example.com","content":"short","raw_content":"long raw content","score":0.9}]}`))
-	})
-
-	proxy, err := newTestProxy("api.tavily.com", mockMux)
-	if err != nil {
-		t.Fatalf("failed to create proxy: %v", err)
-	}
-	defer proxy.Close()
-
-	cfg := &config.Config{
-		TavilyAPIKey:        testTavilyAPIKey,
-		ProxyURL:            proxy.URL(),
-		ExternalSSLCAPath:   proxy.CACertPath(),
-		ExternalSSLInsecure: false,
-	}
-
-	tav := NewTavily(cfg, nil)
-
-	got, err := tav.Handle(
-		t.Context(),
-		Request{Query: "test query", MaxResults: 5},
-	)
-	if err != nil {
-		t.Fatalf("Handle() unexpected error: %v", err)
-	}
+func TestTavily_Handle_PostsTheSearchAndReturnsItsOutcome(t *testing.T) {
+	up := &searchersUpstream{}
+	p := newTestProxy(t, "api.tavily.com", up)
+	tav := NewTavily(&config.Config{TavilyAPIKey: "test-key", ProxyURL: p.URL(), ExternalSSLCAPath: p.CACertPath()}, nil)
 	if tav.Engine() != database.SearchengineTypeTavily {
 		t.Errorf("Engine() = %q, want %q", tav.Engine(), database.SearchengineTypeTavily)
 	}
 
-	// Verify mock handler was called
-	if !seenRequest {
-		t.Fatal("request was not intercepted by proxy - mock handler was not called")
-	}
-
-	// Verify request was built correctly
-	if receivedMethod != http.MethodPost {
-		t.Errorf("request method = %q, want POST", receivedMethod)
-	}
-	if receivedContentType != "application/json" {
-		t.Errorf("Content-Type = %q, want application/json", receivedContentType)
-	}
-	if !strings.Contains(string(receivedBody), `"query":"test query"`) {
-		t.Errorf("request body = %q, expected to contain query", string(receivedBody))
-	}
-	if !strings.Contains(string(receivedBody), `"api_key":"test-key"`) {
-		t.Errorf("request body = %q, expected to contain api_key", string(receivedBody))
-	}
-	if !strings.Contains(string(receivedBody), `"max_results":5`) {
-		t.Errorf("request body = %q, expected to contain max_results", string(receivedBody))
-	}
-
-	// Verify response was parsed correctly
-	if !strings.Contains(got, "# Answer") {
-		t.Errorf("result missing '# Answer' section: %q", got)
-	}
-	if !strings.Contains(got, "# Links") {
-		t.Errorf("result missing '# Links' section: %q", got)
-	}
-	if !strings.Contains(got, "final answer") {
-		t.Errorf("result missing expected text 'final answer': %q", got)
-	}
-	if !strings.Contains(got, "https://example.com") {
-		t.Errorf("result missing expected URL 'https://example.com': %q", got)
-	}
-
-}
-
-func TestTavilyIsAvailable(t *testing.T) {
-	tests := []struct {
-		name string
-		cfg  *config.Config
-		want bool
+	for _, tt := range []struct {
+		name          string
+		status        int
+		body          string
+		wantRetryable bool
 	}{
 		{
-			name: "available when API key is set",
-			cfg:  testTavilyConfig(),
-			want: true,
+			name:   "an answer is returned with its links",
+			status: http.StatusOK,
+			body:   `{"answer":"final answer","query":"test query","response_time":0.1,"results":[{"title":"Doc","url":"https://example.com","content":"short","raw_content":"long raw content","score":0.9}]}`,
 		},
-		{
-			name: "unavailable when API key is empty",
-			cfg:  &config.Config{},
-			want: false,
-		},
-		{
-			name: "unavailable when nil config",
-			cfg:  nil,
-			want: false,
-		},
-	}
-
-	for _, tt := range tests {
+		{name: "an upstream 502 is retryable", status: http.StatusBadGateway, wantRetryable: true},
+	} {
 		t.Run(tt.name, func(t *testing.T) {
-			tav := &tavily{cfg: tt.cfg}
-			if got := tav.IsAvailable(); got != tt.want {
-				t.Errorf("IsAvailable() = %v, want %v", got, tt.want)
+			up.reset(tt.status, tt.body)
+
+			got, err := tav.Handle(t.Context(), Request{Query: "test query", MaxResults: 5})
+
+			if up.hits != 1 {
+				t.Fatalf("upstream saw %d requests, want 1", up.hits)
+			}
+			if up.method != http.MethodPost || up.path != "/search" {
+				t.Errorf("request = %s %s, want POST /search", up.method, up.path)
+			}
+			if ct := up.header.Get("Content-Type"); ct != "application/json" {
+				t.Errorf("Content-Type = %q, want application/json", ct)
+			}
+			for _, want := range []string{`"query":"test query"`, `"api_key":"test-key"`, `"max_results":5`} {
+				if !strings.Contains(string(up.payload), want) {
+					t.Errorf("request body = %s, want it to contain %s", up.payload, want)
+				}
+			}
+
+			if tt.wantRetryable {
+				if got != "" || !IsRetryable(err) {
+					t.Fatalf("Handle() = %q, %v; want no result and a RetryableError", got, err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("Handle() unexpected error: %v", err)
+			}
+			for _, want := range []string{"# Answer", "# Links", "final answer", "https://example.com"} {
+				if !strings.Contains(got, want) {
+					t.Errorf("result misses %q: %q", want, got)
+				}
 			}
 		})
 	}
 }
 
-func TestTavilyParseHTTPResponse_StatusAndDecodeErrors(t *testing.T) {
+func TestTavily_ParseHTTPResponse_ClassifiesEachStatus(t *testing.T) {
 	tav := &tavily{}
 
 	tests := []struct {
 		name       string
 		statusCode int
 		body       string
-		wantErr    bool
-		errContain string
+		errContain string // empty for a success
+		retryable  bool
 	}{
-		{
-			name:       "successful response",
-			statusCode: http.StatusOK,
-			body:       `{"answer":"ok","query":"q","response_time":0.1,"results":[{"title":"A","url":"https://a.com","content":"c","score":0.3}]}`,
-			wantErr:    false,
-		},
-		{
-			name:       "decode error",
-			statusCode: http.StatusOK,
-			body:       "{invalid json",
-			wantErr:    true,
-			errContain: "failed to decode response body",
-		},
-		{
-			name:       "bad request",
-			statusCode: http.StatusBadRequest,
-			body:       "",
-			wantErr:    true,
-			errContain: "invalid",
-		},
-		{
-			name:       "unauthorized",
-			statusCode: http.StatusUnauthorized,
-			body:       "",
-			wantErr:    true,
-			errContain: "API key",
-		},
-		{
-			name:       "forbidden",
-			statusCode: http.StatusForbidden,
-			body:       "",
-			wantErr:    true,
-			errContain: "administrators only",
-		},
-		{
-			name:       "not found",
-			statusCode: http.StatusNotFound,
-			body:       "",
-			wantErr:    true,
-			errContain: "could not be found",
-		},
-		{
-			name:       "method not allowed",
-			statusCode: http.StatusMethodNotAllowed,
-			body:       "",
-			wantErr:    true,
-			errContain: "invalid method",
-		},
-		{
-			name:       "too many requests",
-			statusCode: http.StatusTooManyRequests,
-			body:       "",
-			wantErr:    true,
-			errContain: "too many",
-		},
-		{
-			name:       "internal server error",
-			statusCode: http.StatusInternalServerError,
-			body:       "",
-			wantErr:    true,
-			errContain: "server",
-		},
-		{
-			name:       "bad gateway",
-			statusCode: http.StatusBadGateway,
-			body:       "",
-			wantErr:    true,
-			errContain: "server",
-		},
-		{
-			name:       "service unavailable",
-			statusCode: http.StatusServiceUnavailable,
-			body:       "",
-			wantErr:    true,
-			errContain: "offline",
-		},
-		{
-			name:       "gateway timeout",
-			statusCode: http.StatusGatewayTimeout,
-			body:       "",
-			wantErr:    true,
-			errContain: "offline",
-		},
-		{
-			name:       "unknown status code",
-			statusCode: 418,
-			body:       "",
-			wantErr:    true,
-			errContain: "unexpected status code",
-		},
+		{"successful response", http.StatusOK, `{"answer":"ok","query":"q","response_time":0.1,"results":[{"title":"A","url":"https://a.com","content":"c","score":0.3}]}`, "", false},
+		{"decode error", http.StatusOK, "{invalid json", "failed to decode response body", false},
+		{"bad request", http.StatusBadRequest, "", "invalid", false},
+		{"unauthorized", http.StatusUnauthorized, "", "API key", false},
+		{"forbidden", http.StatusForbidden, "", "administrators only", false},
+		{"not found", http.StatusNotFound, "", "could not be found", false},
+		{"method not allowed", http.StatusMethodNotAllowed, "", "invalid method", false},
+		{"too many requests", http.StatusTooManyRequests, "", "too many", true},
+		{"internal server error", http.StatusInternalServerError, "", "server", true},
+		{"bad gateway", http.StatusBadGateway, "", "server", true},
+		{"service unavailable", http.StatusServiceUnavailable, "", "offline", true},
+		{"gateway timeout", http.StatusGatewayTimeout, "", "offline", true},
+		{"unknown status code", http.StatusTeapot, "", "unexpected status code", false},
 	}
 
 	for _, tt := range tests {
@@ -247,7 +103,7 @@ func TestTavilyParseHTTPResponse_StatusAndDecodeErrors(t *testing.T) {
 			}
 			result, err := tav.parseHTTPResponse(t.Context(), resp)
 
-			if !tt.wantErr {
+			if tt.errContain == "" {
 				if err != nil {
 					t.Errorf("parseHTTPResponse() unexpected error: %v", err)
 				}
@@ -263,11 +119,14 @@ func TestTavilyParseHTTPResponse_StatusAndDecodeErrors(t *testing.T) {
 			if !strings.Contains(err.Error(), tt.errContain) {
 				t.Errorf("parseHTTPResponse() error = %q, want to contain %q", err.Error(), tt.errContain)
 			}
+			if IsRetryable(err) != tt.retryable || IsFatal(err) == tt.retryable {
+				t.Errorf("parseHTTPResponse() error = %T, want retryable=%v", err, tt.retryable)
+			}
 		})
 	}
 }
 
-func TestTavilyBuildResult_WithSummarizer(t *testing.T) {
+func TestTavily_BuildTavilyResult_SummarizesOrInlinesTheRawContent(t *testing.T) {
 	t.Run("uses summarizer when raw content exists", func(t *testing.T) {
 		tav := &tavily{
 			summarizer: func(ctx context.Context, prompt string) (string, error) {
@@ -355,49 +214,23 @@ func TestTavilyBuildResult_WithSummarizer(t *testing.T) {
 	})
 }
 
-func TestTavilyHandle_ReturnsTypedError(t *testing.T) {
-	t.Run("upstream 502 returns a retryable error", func(t *testing.T) {
-		var seenRequest bool
-		mockMux := http.NewServeMux()
-		mockMux.HandleFunc("/search", func(w http.ResponseWriter, r *http.Request) {
-			seenRequest = true
-			w.WriteHeader(http.StatusBadGateway)
+func TestTavily_IsAvailable_RequiresAnAPIKey(t *testing.T) {
+	tests := []struct {
+		name string
+		cfg  *config.Config
+		want bool
+	}{
+		{"available when API key is set", &config.Config{TavilyAPIKey: "test-key"}, true},
+		{"unavailable when API key is empty", &config.Config{}, false},
+		{"unavailable when nil config", nil, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tav := &tavily{cfg: tt.cfg}
+			if got := tav.IsAvailable(); got != tt.want {
+				t.Errorf("IsAvailable() = %v, want %v", got, tt.want)
+			}
 		})
-
-		proxy, err := newTestProxy("api.tavily.com", mockMux)
-		if err != nil {
-			t.Fatalf("failed to create proxy: %v", err)
-		}
-		defer proxy.Close()
-
-		tav := &tavily{
-			cfg: &config.Config{
-				TavilyAPIKey:        testTavilyAPIKey,
-				ProxyURL:            proxy.URL(),
-				ExternalSSLCAPath:   proxy.CACertPath(),
-				ExternalSSLInsecure: false,
-			},
-		}
-
-		result, err := tav.Handle(
-			t.Context(),
-			Request{Query: "q", MaxResults: 5},
-		)
-
-		// Verify mock handler was called (request was intercepted)
-		if !seenRequest {
-			t.Error("request was not intercepted by proxy - mock handler was not called")
-		}
-
-		// The error is now surfaced (not swallowed) and classified. A 502 is retryable.
-		if err == nil {
-			t.Fatal("Handle() expected an error, got nil")
-		}
-		if result != "" {
-			t.Errorf("Handle() result = %q, want empty on error", result)
-		}
-		if !IsRetryable(err) {
-			t.Errorf("Handle() error = %v, want a RetryableError", err)
-		}
-	})
+	}
 }

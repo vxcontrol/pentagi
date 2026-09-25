@@ -63,10 +63,10 @@ func initEmbeddingProviders() map[string]*EmbeddingProviderInfo {
 			Description:       locale.EmbedderProviderDefaultDesc,
 			URLPlaceholder:    "",
 			APIKeyPlaceholder: "",
-			ModelPlaceholder:  "",
+			ModelPlaceholder:  locale.EmbedderModelPlaceholderOpenAI,
 			RequiresAPIKey:    false,
 			SupportsURL:       false,
-			SupportsModel:     false,
+			SupportsModel:     true,
 			HelpText:          locale.EmbedderHelpDefault,
 		},
 		locale.EmbedderProviderIDOpenAI: {
@@ -102,7 +102,7 @@ func initEmbeddingProviders() map[string]*EmbeddingProviderInfo {
 			ModelPlaceholder:  locale.EmbedderModelPlaceholderMistral,
 			RequiresAPIKey:    true,
 			SupportsURL:       true,
-			SupportsModel:     false,
+			SupportsModel:     true,
 			HelpText:          locale.EmbedderHelpMistral,
 		},
 		locale.EmbedderProviderIDJina: {
@@ -149,7 +149,7 @@ func initEmbeddingProviders() map[string]*EmbeddingProviderInfo {
 			APIKeyPlaceholder: locale.EmbedderAPIKeyPlaceholderVoyageAI,
 			ModelPlaceholder:  locale.EmbedderModelPlaceholderVoyageAI,
 			RequiresAPIKey:    true,
-			SupportsURL:       false,
+			SupportsURL:       true,
 			SupportsModel:     true,
 			HelpText:          locale.EmbedderHelpVoyageAI,
 		},
@@ -581,11 +581,11 @@ func (m *EmbedderFormModel) OnFieldChanged(fieldIndex int, oldValue, newValue st
 }
 
 func (m *EmbedderFormModel) GetFormFields() []FormField {
-	return m.BaseScreen.fields
+	return m.fields
 }
 
 func (m *EmbedderFormModel) SetFormFields(fields []FormField) {
-	m.BaseScreen.fields = fields
+	m.fields = fields
 }
 
 // BaseListHandler interface implementation

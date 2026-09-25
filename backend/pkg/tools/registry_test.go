@@ -7,25 +7,26 @@ import (
 	"pentagi/pkg/database"
 )
 
-func TestToolTypeString(t *testing.T) {
+func TestRegistry_ToolType_StringNamesEveryType(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
+		name     string
 		toolType ToolType
 		want     string
 	}{
-		{NoneToolType, "none"},
-		{EnvironmentToolType, "environment"},
-		{SearchNetworkToolType, "search_network"},
-		{SearchVectorDbToolType, "search_vector_db"},
-		{AgentToolType, "agent"},
-		{StoreAgentResultToolType, "store_agent_result"},
-		{StoreVectorDbToolType, "store_vector_db"},
-		{BarrierToolType, "barrier"},
+		{"the zero type", NoneToolType, "none"},
+		{"the environment type", EnvironmentToolType, "environment"},
+		{"the network search type", SearchNetworkToolType, "search_network"},
+		{"the vector search type", SearchVectorDbToolType, "search_vector_db"},
+		{"the agent type", AgentToolType, "agent"},
+		{"the agent result type", StoreAgentResultToolType, "store_agent_result"},
+		{"the vector store type", StoreVectorDbToolType, "store_vector_db"},
+		{"the barrier type", BarrierToolType, "barrier"},
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.want, func(t *testing.T) {
+		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
 			if got := tt.toolType.String(); got != tt.want {
@@ -35,7 +36,7 @@ func TestToolTypeString(t *testing.T) {
 	}
 }
 
-func TestGetToolType(t *testing.T) {
+func TestRegistry_GetToolType_ClassifiesEachTool(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -43,26 +44,27 @@ func TestGetToolType(t *testing.T) {
 		toolName string
 		want     ToolType
 	}{
-		{name: "terminal", toolName: TerminalToolName, want: EnvironmentToolType},
-		{name: "file", toolName: FileToolName, want: EnvironmentToolType},
-		{name: "google", toolName: GoogleToolName, want: SearchNetworkToolType},
-		{name: "duckduckgo", toolName: DuckDuckGoToolName, want: SearchNetworkToolType},
-		{name: "tavily", toolName: TavilyToolName, want: SearchNetworkToolType},
-		{name: "browser", toolName: BrowserToolName, want: SearchNetworkToolType},
-		{name: "perplexity", toolName: PerplexityToolName, want: SearchNetworkToolType},
-		{name: "sploitus", toolName: SploitusToolName, want: SearchNetworkToolType},
-		{name: "search_in_memory", toolName: SearchInMemoryToolName, want: SearchVectorDbToolType},
-		{name: "graphiti_search", toolName: GraphitiSearchToolName, want: SearchVectorDbToolType},
-		{name: "search agent", toolName: SearchToolName, want: AgentToolType},
-		{name: "maintenance", toolName: MaintenanceToolName, want: AgentToolType},
-		{name: "coder", toolName: CoderToolName, want: AgentToolType},
-		{name: "pentester", toolName: PentesterToolName, want: AgentToolType},
-		{name: "done barrier", toolName: FinalyToolName, want: BarrierToolType},
-		{name: "ask barrier", toolName: AskUserToolName, want: BarrierToolType},
-		{name: "code_result", toolName: CodeResultToolName, want: StoreAgentResultToolType},
-		{name: "store_guide", toolName: StoreGuideToolName, want: StoreVectorDbToolType},
-		{name: "unknown tool", toolName: "nonexistent_tool", want: NoneToolType},
-		{name: "empty string", toolName: "", want: NoneToolType},
+		{name: "the terminal acts on the environment", toolName: TerminalToolName, want: EnvironmentToolType},
+		{name: "the file tool acts on the environment", toolName: FileToolName, want: EnvironmentToolType},
+		{name: "google searches the network", toolName: GoogleToolName, want: SearchNetworkToolType},
+		{name: "duckduckgo searches the network", toolName: DuckDuckGoToolName, want: SearchNetworkToolType},
+		{name: "tavily searches the network", toolName: TavilyToolName, want: SearchNetworkToolType},
+		{name: "the browser searches the network", toolName: BrowserToolName, want: SearchNetworkToolType},
+		{name: "perplexity searches the network", toolName: PerplexityToolName, want: SearchNetworkToolType},
+		{name: "sploitus searches the network", toolName: SploitusToolName, want: SearchNetworkToolType},
+		{name: "the search orchestrator searches the network", toolName: WebSearchToolName, want: SearchNetworkToolType},
+		{name: "the memory search reads the vector store", toolName: SearchInMemoryToolName, want: SearchVectorDbToolType},
+		{name: "the knowledge graph search reads the vector store", toolName: GraphitiSearchToolName, want: SearchVectorDbToolType},
+		{name: "the search agent is an agent", toolName: SearchToolName, want: AgentToolType},
+		{name: "the maintenance agent is an agent", toolName: MaintenanceToolName, want: AgentToolType},
+		{name: "the coder is an agent", toolName: CoderToolName, want: AgentToolType},
+		{name: "the pentester is an agent", toolName: PentesterToolName, want: AgentToolType},
+		{name: "finishing is a barrier", toolName: FinalyToolName, want: BarrierToolType},
+		{name: "asking the user is a barrier", toolName: AskUserToolName, want: BarrierToolType},
+		{name: "reporting the code result stores an agent result", toolName: CodeResultToolName, want: StoreAgentResultToolType},
+		{name: "storing a guide writes the vector store", toolName: StoreGuideToolName, want: StoreVectorDbToolType},
+		{name: "an unknown tool has no type", toolName: "nonexistent_tool", want: NoneToolType},
+		{name: "an empty name has no type", toolName: "", want: NoneToolType},
 	}
 
 	for _, tt := range tests {
@@ -76,9 +78,7 @@ func TestGetToolType(t *testing.T) {
 	}
 }
 
-// TestRegistryDefinitionsCompleteness verifies every tool name in toolsTypeMapping
-// has a corresponding entry in registryDefinitions.
-func TestRegistryDefinitionsCompleteness(t *testing.T) {
+func TestRegistry_GetRegistryDefinitions_DefinesEveryMappedToolUnderItsOwnName(t *testing.T) {
 	t.Parallel()
 
 	mapping := GetToolTypeMapping()
@@ -90,71 +90,56 @@ func TestRegistryDefinitionsCompleteness(t *testing.T) {
 		}
 	}
 
-	// Reverse direction: every tool in registryDefinitions should be in toolsTypeMapping
-	for name := range defs {
+	for name, def := range defs {
 		if _, ok := mapping[name]; !ok {
 			t.Errorf("tool %q is in registryDefinitions but missing from toolsTypeMapping", name)
+		}
+		if def.Name != name {
+			t.Errorf("registryDefinitions[%q].Name = %q, want %q", name, def.Name, name)
 		}
 	}
 }
 
-// TestRegistryDefinitionsReturnsCopy verifies that GetRegistryDefinitions returns
-// a copy that can be mutated without affecting the original registry.
-func TestRegistryDefinitionsReturnsCopy(t *testing.T) {
+func TestRegistry_GetRegistryDefinitions_ReturnsACopy(t *testing.T) {
 	t.Parallel()
+	registryAssertReturnsACopy(t, GetRegistryDefinitions)
+}
+
+func TestRegistry_GetToolTypeMapping_ReturnsACopy(t *testing.T) {
+	t.Parallel()
+	registryAssertReturnsACopy(t, GetToolTypeMapping)
+}
+
+func registryAssertReturnsACopy[V any](t *testing.T, get func() map[string]V) {
+	t.Helper()
 
 	const sentinelKey = "test_sentinel"
 
-	defs1 := GetRegistryDefinitions()
-	originalLen := len(defs1)
-	if _, ok := defs1[sentinelKey]; ok {
+	first := get()
+	originalLen := len(first)
+	if _, ok := first[sentinelKey]; ok {
 		t.Fatalf("precondition failed: sentinel key %q already exists", sentinelKey)
 	}
-	defer delete(defs1, sentinelKey)
+	defer delete(first, sentinelKey)
 
-	defs1[sentinelKey] = defs1[TerminalToolName]
+	var zero V
+	first[sentinelKey] = zero
 
-	defs2 := GetRegistryDefinitions()
-	if len(defs2) != originalLen {
-		t.Errorf("mutation leaked: original len = %d, new len = %d", originalLen, len(defs2))
+	second := get()
+	if len(second) != originalLen {
+		t.Errorf("mutation leaked: original len = %d, new len = %d", originalLen, len(second))
 	}
-	if _, ok := defs2[sentinelKey]; ok {
-		t.Error("mutation leaked: test_sentinel found in fresh copy")
+	if _, ok := second[sentinelKey]; ok {
+		t.Errorf("mutation leaked: %q found in a fresh copy", sentinelKey)
 	}
 }
 
-// TestToolTypeMappingReturnsCopy verifies that GetToolTypeMapping returns a copy.
-func TestToolTypeMappingReturnsCopy(t *testing.T) {
-	t.Parallel()
-
-	const sentinelKey = "test_sentinel"
-
-	m1 := GetToolTypeMapping()
-	originalLen := len(m1)
-	if _, ok := m1[sentinelKey]; ok {
-		t.Fatalf("precondition failed: sentinel key %q already exists", sentinelKey)
-	}
-	defer delete(m1, sentinelKey)
-
-	m1[sentinelKey] = NoneToolType
-
-	m2 := GetToolTypeMapping()
-	if len(m2) != originalLen {
-		t.Errorf("mutation leaked: original len = %d, new len = %d", originalLen, len(m2))
-	}
-	if _, ok := m2[sentinelKey]; ok {
-		t.Error("mutation leaked: test_sentinel found in fresh mapping copy")
-	}
-}
-
-// TestGetToolsByType verifies the reverse mapping is consistent with the forward mapping.
-func TestGetToolsByType(t *testing.T) {
+func TestRegistry_GetToolsByType_InvertsTheTypeMapping(t *testing.T) {
 	t.Parallel()
 
 	forward := GetToolTypeMapping()
 	reverse := GetToolsByType()
 
-	// Build expected reverse map from forward map
 	expected := make(map[ToolType]map[string]struct{})
 	for name, toolType := range forward {
 		if expected[toolType] == nil {
@@ -163,7 +148,6 @@ func TestGetToolsByType(t *testing.T) {
 		expected[toolType][name] = struct{}{}
 	}
 
-	// Verify all entries in reverse exist in forward
 	for toolType, names := range reverse {
 		for _, name := range names {
 			if forward[name] != toolType {
@@ -172,14 +156,12 @@ func TestGetToolsByType(t *testing.T) {
 		}
 	}
 
-	// Verify counts match
 	for toolType, expectedNames := range expected {
 		if len(reverse[toolType]) != len(expectedNames) {
 			t.Errorf("GetToolsByType()[%v] has %d entries, want %d", toolType, len(reverse[toolType]), len(expectedNames))
 		}
 	}
 
-	// Verify there are no duplicates in each reverse slice
 	for toolType, names := range reverse {
 		seen := make(map[string]struct{}, len(names))
 		for _, name := range names {
@@ -191,19 +173,7 @@ func TestGetToolsByType(t *testing.T) {
 	}
 }
 
-// TestRegistryDefinitionNames verifies each definition Name field matches its map key.
-func TestRegistryDefinitionNames(t *testing.T) {
-	t.Parallel()
-
-	defs := GetRegistryDefinitions()
-	for key, def := range defs {
-		if def.Name != key {
-			t.Errorf("registryDefinitions[%q].Name = %q, want %q", key, def.Name, key)
-		}
-	}
-}
-
-func TestGetMessageType(t *testing.T) {
+func TestRegistry_GetMessageType_PicksTheLogTypeOfATool(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -211,14 +181,15 @@ func TestGetMessageType(t *testing.T) {
 		tool string
 		want database.MsglogType
 	}{
-		{"terminal", TerminalToolName, database.MsglogTypeTerminal},
-		{"file", FileToolName, database.MsglogTypeFile},
-		{"browser", BrowserToolName, database.MsglogTypeBrowser},
-		{"search engine", GoogleToolName, database.MsglogTypeSearch},
-		{"advice", AdviceToolName, database.MsglogTypeAdvice},
-		{"ask", AskUserToolName, database.MsglogTypeAsk},
-		{"done", FinalyToolName, database.MsglogTypeDone},
-		{"unknown", "unknown_tool", database.MsglogTypeThoughts},
+		{"a terminal call logs as terminal", TerminalToolName, database.MsglogTypeTerminal},
+		{"a file call logs as file", FileToolName, database.MsglogTypeFile},
+		{"a browser call logs as browser", BrowserToolName, database.MsglogTypeBrowser},
+		{"a search engine call logs as search", GoogleToolName, database.MsglogTypeSearch},
+		{"a search orchestrator call logs as search", WebSearchToolName, database.MsglogTypeSearch},
+		{"asking the adviser logs as advice", AdviceToolName, database.MsglogTypeAdvice},
+		{"asking the user logs as ask", AskUserToolName, database.MsglogTypeAsk},
+		{"finishing logs as done", FinalyToolName, database.MsglogTypeDone},
+		{"an unknown tool logs as thoughts", "unknown_tool", database.MsglogTypeThoughts},
 	}
 
 	for _, tt := range tests {
@@ -231,7 +202,7 @@ func TestGetMessageType(t *testing.T) {
 	}
 }
 
-func TestGetMessageResultFormat(t *testing.T) {
+func TestRegistry_GetMessageResultFormat_PicksTheResultFormatOfATool(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -239,11 +210,11 @@ func TestGetMessageResultFormat(t *testing.T) {
 		tool string
 		want database.MsglogResultFormat
 	}{
-		{"terminal", TerminalToolName, database.MsglogResultFormatTerminal},
-		{"file", FileToolName, database.MsglogResultFormatPlain},
-		{"browser", BrowserToolName, database.MsglogResultFormatPlain},
-		{"search default", GoogleToolName, database.MsglogResultFormatMarkdown},
-		{"unknown default", "unknown_tool", database.MsglogResultFormatMarkdown},
+		{"terminal output keeps its terminal format", TerminalToolName, database.MsglogResultFormatTerminal},
+		{"the content of a file is plain", FileToolName, database.MsglogResultFormatPlain},
+		{"a browsed page is plain", BrowserToolName, database.MsglogResultFormatPlain},
+		{"a search result is markdown", GoogleToolName, database.MsglogResultFormatMarkdown},
+		{"the result of an unknown tool is markdown", "unknown_tool", database.MsglogResultFormatMarkdown},
 	}
 
 	for _, tt := range tests {
@@ -256,7 +227,7 @@ func TestGetMessageResultFormat(t *testing.T) {
 	}
 }
 
-func TestAllowedToolListsContainKnownUniqueTools(t *testing.T) {
+func TestRegistry_AllowedToolListsNameKnownToolsOnce(t *testing.T) {
 	t.Parallel()
 
 	mapping := GetToolTypeMapping()
@@ -279,7 +250,7 @@ func TestAllowedToolListsContainKnownUniqueTools(t *testing.T) {
 	validate(t, "allowedSummarizingToolsResult", allowedSummarizingToolsResult)
 	validate(t, "allowedStoringInMemoryTools", allowedStoringInMemoryTools)
 
-	// Minimal invariant checks for critical tools.
+	// Pinned because losing either entry fails no call and only degrades the agents quietly.
 	if !slices.Contains(allowedSummarizingToolsResult, BrowserToolName) {
 		t.Errorf("allowedSummarizingToolsResult must contain %q", BrowserToolName)
 	}

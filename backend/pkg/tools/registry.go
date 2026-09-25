@@ -145,11 +145,13 @@ var reflector = &jsonschema.Reflector{
 	ExpandedStruct: true,
 }
 
+// A rendered browser page routinely exceeds the result size limit; a tool off this list hands it over whole.
 var allowedSummarizingToolsResult = []string{
 	TerminalToolName,
 	BrowserToolName,
 }
 
+// Results later subtasks recall from memory; losing the search agent's findings degrades them silently.
 var allowedStoringInMemoryTools = []string{
 	TerminalToolName,
 	FileToolName,

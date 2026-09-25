@@ -1,4 +1,4 @@
-import { format } from 'date-fns';
+import { format, isValid } from 'date-fns';
 import { enUS } from 'date-fns/locale';
 import { Lock, Mail, User } from 'lucide-react';
 import { useState } from 'react';
@@ -10,14 +10,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { EmailChangeForm } from '@/features/authentication/email-change-form';
 import { NameChangeForm } from '@/features/authentication/name-change-form';
 import { PasswordChangeForm } from '@/features/authentication/password-change-form';
+import { formatAccountProvider } from '@/lib/utils/format';
 import { useUser } from '@/providers/user-provider';
 
 type EditingSection = 'email' | 'name' | 'password';
-
-const PROVIDER_LABELS: Record<string, string> = {
-    github: 'GitHub',
-    google: 'Google',
-};
 
 function SettingsAccount() {
     const { authInfo } = useUser();
@@ -41,13 +37,8 @@ function SettingsAccount() {
     const displayName = user.name?.trim() || user.mail;
     const initial = ([...(displayName || '?')][0] ?? '?').toUpperCase();
     const createdAt = user.created_at ? new Date(user.created_at) : null;
-    const memberSince =
-        createdAt && !Number.isNaN(createdAt.getTime()) ? format(createdAt, 'MMMM yyyy', { locale: enUS }) : null;
-    const accountLabel = isLocal
-        ? 'Local account'
-        : user.provider
-          ? (PROVIDER_LABELS[user.provider] ?? user.provider)
-          : 'OAuth account';
+    const memberSince = createdAt && isValid(createdAt) ? format(createdAt, 'MMMM yyyy', { locale: enUS }) : null;
+    const accountLabel = isLocal ? 'Local account' : (formatAccountProvider(user.provider) ?? 'OAuth account');
 
     return (
         <>

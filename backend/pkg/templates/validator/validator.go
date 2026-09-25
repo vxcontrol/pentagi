@@ -2,7 +2,9 @@ package validator
 
 import (
 	"fmt"
+	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"text/template"
 	"text/template/parse"
@@ -49,7 +51,8 @@ func ValidatePrompt(promptType templates.PromptType, prompt string) error {
 	if err != nil {
 		return &ValidationError{
 			Type:    ErrorTypeSyntax,
-			Message: fmt.Sprintf("failed to parse template: %v", err),
+			Message: err.Error(),
+			Line:    extractSyntaxLine(err),
 			Details: extractSyntaxDetails(err),
 		}
 	}
@@ -256,6 +259,22 @@ func isBuiltinFunction(name string) bool {
 func testTemplateRendering(templateContent string, data map[string]any) error {
 	_, err := templates.RenderPrompt("validation", templateContent, data)
 	return err
+}
+
+var templateErrorPosition = regexp.MustCompile(`template: [^:]*:(\d+)(?::\d+)?:`)
+
+func extractSyntaxLine(err error) int {
+	match := templateErrorPosition.FindStringSubmatch(err.Error())
+	if len(match) < 2 {
+		return 0
+	}
+
+	line, convErr := strconv.Atoi(match[1])
+	if convErr != nil {
+		return 0
+	}
+
+	return line
 }
 
 // extractSyntaxDetails extracts more detailed information from parsing errors

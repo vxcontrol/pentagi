@@ -1,13 +1,14 @@
 import { subMonths, subYears } from 'date-fns';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { clamp } from '@/lib/clamp';
+
 import type { FileManagerInternalNode, FileManagerRootGroup, FileNode } from './file-manager-types';
 
 import {
     addAll,
     buildFileManagerGridTemplate,
     buildFileManagerTree,
-    clamp,
     collectAllNodePaths,
     collectDirectoryPaths,
     collectSubtreePaths,
@@ -16,6 +17,7 @@ import {
     computeRowClickSelection,
     computeToggleSelectAll,
     computeToggleSelection,
+    countAffectedEntries,
     dedupeOverlappingPaths,
     filterFileManagerTree,
     findNodeByPath,
@@ -27,6 +29,7 @@ import {
     normalizeRootGroups,
     pluralizeItemsEnglish,
     removeAll,
+    resolveActionPaths,
     resolveSelectionModifier,
     sortFileManagerTree,
     toggleSubtreeOnSet,
@@ -1910,5 +1913,51 @@ describe('computeNextSort', () => {
             column: 'size',
             direction: 'asc',
         });
+    });
+});
+
+describe('resolveActionPaths', () => {
+    const tree = buildFileManagerTree([dir('cascdemo/keep'), dir('cascdemo/drop'), file('loose.txt')]);
+
+    it('drops a directory whose descendant the user unticked', () => {
+        const selectedPaths = new Set(['cascdemo', 'cascdemo/keep']);
+
+        expect(resolveActionPaths({ selectedPaths, tree })).toEqual(['cascdemo/keep']);
+    });
+
+    it('lets a directory stand in for its descendants once they are all selected', () => {
+        const selectedPaths = new Set(['cascdemo', 'cascdemo/drop', 'cascdemo/keep']);
+
+        expect(resolveActionPaths({ selectedPaths, tree })).toEqual(['cascdemo']);
+    });
+
+    it('yields nothing for a directory whose whole content was unticked', () => {
+        expect(resolveActionPaths({ selectedPaths: new Set(['cascdemo']), tree })).toEqual([]);
+    });
+
+    it('keeps entries selected outside the partial directory', () => {
+        const selectedPaths = new Set(['cascdemo', 'cascdemo/keep', 'loose.txt']);
+
+        expect(resolveActionPaths({ selectedPaths, tree }).sort()).toEqual(['cascdemo/keep', 'loose.txt']);
+    });
+
+    it('returns an empty list for an empty selection', () => {
+        expect(resolveActionPaths({ selectedPaths: new Set(), tree })).toEqual([]);
+    });
+});
+
+describe('countAffectedEntries', () => {
+    const tree = buildFileManagerTree([dir('cascdemo/keep'), dir('cascdemo/drop'), file('loose.txt')]);
+
+    it('counts a directory together with everything under it', () => {
+        expect(countAffectedEntries(tree, ['cascdemo'])).toBe(3);
+    });
+
+    it('counts a lone entry as one', () => {
+        expect(countAffectedEntries(tree, ['cascdemo/keep'])).toBe(1);
+    });
+
+    it('skips paths that are no longer in the tree', () => {
+        expect(countAffectedEntries(tree, ['gone', 'loose.txt'])).toBe(1);
     });
 });

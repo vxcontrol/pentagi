@@ -194,10 +194,10 @@ func appendSources(answer string, urls []string) string {
 	for i, u := range urls {
 		parsedURL, err := url.Parse(u)
 		if err != nil {
-			sb.WriteString(fmt.Sprintf("%d. %s\n", i+1, u))
+			fmt.Fprintf(&sb, "%d. %s\n", i+1, u)
 			continue
 		}
-		sb.WriteString(fmt.Sprintf("%d. [%s](%s)\n", i+1, parsedURL.Hostname(), u))
+		fmt.Fprintf(&sb, "%d. [%s](%s)\n", i+1, parsedURL.Hostname(), u)
 	}
 	return sb.String()
 }
@@ -227,7 +227,7 @@ func (e *internalEngine) buildPrompt(query string, blocks []string) string {
 	var sb strings.Builder
 	sb.WriteString("<instructions>\n")
 	sb.WriteString("TASK: Answer the user query using ONLY the web sources below.\n\n")
-	sb.WriteString(fmt.Sprintf("USER QUERY: %q\n\n", query))
+	fmt.Fprintf(&sb, "USER QUERY: %q\n\n", query)
 	sb.WriteString("REQUIREMENTS:\n")
 	sb.WriteString("1. Give a direct, comprehensive answer to the user query.\n")
 	sb.WriteString("2. Preserve critical facts, numbers, commands, code snippets, and technical details.\n")

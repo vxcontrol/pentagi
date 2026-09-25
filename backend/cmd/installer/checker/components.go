@@ -58,8 +58,8 @@ var JaegerPluginBinaries = map[models.ArchType]string{
 // redis and minio all carry the `langfuse-` prefix of the stack that owns them. Guessing
 // the container from the component would silently drop those four — a name matching no
 // container is indistinguishable from a container that is not deployed — so the mapping
-// lives in exactly one place, and TestEveryObservedContainerExistsInCompose keeps it
-// honest against the compose files.
+// lives in exactly one place, and TestComponents_ImageComponent_MatchesTheComposeContainersBothWays
+// keeps it honest against the compose files.
 type imageComponent struct {
 	Component models.ComponentType
 	Container string

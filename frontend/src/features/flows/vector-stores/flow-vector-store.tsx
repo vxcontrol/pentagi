@@ -8,6 +8,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import FlowAgentIcon from '@/features/flows/agents/flow-agent-icon';
 import { VectorStoreAction } from '@/graphql/types';
 import { copyMessageToClipboard } from '@/lib/clipboard';
+import { matchesSearchTerm } from '@/lib/text-filter';
 import { formatDate } from '@/lib/utils/format';
 
 import FlowVectorStoreActionIcon from './flow-vector-store-action-icon';
@@ -58,14 +59,6 @@ interface FlowVectorStoreProps {
     searchValue?: string;
 }
 
-const containsSearchValue = (text: null | string | undefined, searchValue: string): boolean => {
-    if (!text || !searchValue.trim()) {
-        return false;
-    }
-
-    return text.toLowerCase().includes(searchValue.toLowerCase().trim());
-};
-
 function FlowVectorStore({ log, searchValue = '' }: FlowVectorStoreProps) {
     const { action, createdAt, executor, initiator, query, result, subtaskId, taskId } = log;
 
@@ -77,8 +70,8 @@ function FlowVectorStore({ log, searchValue = '' }: FlowVectorStoreProps) {
         }
 
         return {
-            hasQueryMatch: containsSearchValue(query, trimmedSearch),
-            hasResultMatch: containsSearchValue(result, trimmedSearch),
+            hasQueryMatch: matchesSearchTerm(query, trimmedSearch),
+            hasResultMatch: matchesSearchTerm(result, trimmedSearch),
         };
     }, [searchValue, query, result]);
 

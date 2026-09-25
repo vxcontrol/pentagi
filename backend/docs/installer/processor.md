@@ -482,7 +482,7 @@ func WithTerminalModel(terminal ProcessorTerminalModel) CommandOption {
 - **pull_reference.go, jaeger_plugin.go, verify.go, reference_drift.go**: The update path — image references, plugin file, post-update comparison, drift reporting
 
 **Testing Infrastructure**:
-- **mock_test.go**: Comprehensive mocks with call tracking
+- **fixtures_test.go**: Comprehensive mocks with call tracking
 - **logic_test.go**: Business logic tests
 - **fs_test.go**: File system operation tests
 - **update_test.go, pull_reference_test.go, jaeger_plugin_test.go, verify_test.go**: Download progress and package description reuse, image reference selection, plugin staging and cleanup, the four verification outcomes

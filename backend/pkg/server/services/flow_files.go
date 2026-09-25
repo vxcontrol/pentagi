@@ -345,6 +345,13 @@ func (s *FlowFileService) DeleteFlowFile(c *gin.Context) {
 	if singlePath := c.Query("path"); singlePath != "" {
 		rawPaths = append(rawPaths, singlePath)
 	}
+	if unsafe, found := flowfiles.FirstUnsafePath(rawPaths); found {
+		err = fmt.Errorf("invalid path %q", unsafe)
+		logger.FromContext(c).WithError(err).WithField("flow_id", flowID).Error("unsafe delete path")
+		response.Error(c, response.ErrFlowFilesInvalidRequest, err)
+		return
+	}
+
 	reqPaths := flowfiles.DeduplicatePaths(rawPaths)
 	if len(reqPaths) == 0 {
 		err = errors.New("at least one path is required (use 'path' or 'paths[]' query parameters)")
@@ -475,6 +482,13 @@ func (s *FlowFileService) DownloadFlowFile(c *gin.Context) {
 	if singlePath := c.Query("path"); singlePath != "" {
 		rawPaths = append(rawPaths, singlePath)
 	}
+	if unsafe, found := flowfiles.FirstUnsafePath(rawPaths); found {
+		err = fmt.Errorf("invalid path %q", unsafe)
+		logger.FromContext(c).WithError(err).WithField("flow_id", flowID).Error("unsafe download path")
+		response.Error(c, response.ErrFlowFilesInvalidRequest, err)
+		return
+	}
+
 	reqPaths := flowfiles.DeduplicatePaths(rawPaths)
 	if len(reqPaths) == 0 {
 		err = errors.New("at least one path is required (use 'path' or 'paths[]' query parameters)")
@@ -756,6 +770,10 @@ func (s *FlowFileService) PullFlowFiles(c *gin.Context) {
 				"flow_id":        flowID,
 				"container_path": entry.containerPath,
 			}).Error("error copying from container")
+			if docker.IsNotFound(err) {
+				response.Error(c, response.ErrFlowFilesNotFound, err)
+				return
+			}
 			response.Error(c, response.ErrInternal, err)
 			return
 		}
@@ -779,7 +797,20 @@ func (s *FlowFileService) PullFlowFiles(c *gin.Context) {
 
 		stagedTarget := flowfiles.ResolvePulledStagedTarget(stagingDir, entry.cacheRelPath)
 		if stagedTarget == "" {
+			staged, readErr := os.ReadDir(stagingDir)
+			nothingStaged := readErr == nil && len(staged) == 0
 			os.RemoveAll(stagingDir)
+
+			if nothingStaged {
+				err = fmt.Errorf("%q cannot be pulled: it is not a regular file or directory", entry.containerPath)
+				logger.FromContext(c).WithError(err).WithFields(map[string]any{
+					"flow_id":    flowID,
+					"cache_path": entry.cacheRelPath,
+				}).Warn("nothing extractable in pulled container archive")
+				response.Error(c, response.ErrFlowFilesInvalidData, err)
+				return
+			}
+
 			err = fmt.Errorf("pulled archive did not contain expected entry '%s'", entry.cacheRelPath)
 			logger.FromContext(c).WithError(err).WithFields(map[string]any{
 				"flow_id":    flowID,
@@ -1081,6 +1112,10 @@ func (s *FlowFileService) GetFlowContainerFiles(c *gin.Context) {
 	// listed, so fail the request instead of returning an empty 200.
 	if pathsListed == 0 && len(containerPaths) > 0 {
 		logger.FromContext(c).WithError(firstPathErr).WithField("flow_id", flowID).Error("error listing container directory")
+		if docker.IsNotFound(firstPathErr) {
+			response.Error(c, response.ErrFlowFilesNotFound, firstPathErr)
+			return
+		}
 		response.Error(c, response.ErrInternal, firstPathErr)
 		return
 	}
@@ -1755,6 +1790,12 @@ func (s *FlowFileService) AddResourceFromFlow(c *gin.Context) {
 	if req.Source != "" {
 		rawSources = append(rawSources, req.Source)
 	}
+	if unsafe, found := flowfiles.FirstUnsafePath(rawSources); found {
+		response.Error(c, response.ErrFlowFilesInvalidData,
+			fmt.Errorf("invalid source path %q", unsafe))
+		return
+	}
+
 	dedupSources := flowfiles.DeduplicatePaths(rawSources)
 	if len(dedupSources) == 0 {
 		response.Error(c, response.ErrFlowFilesInvalidRequest,
@@ -1996,7 +2037,7 @@ func (s *FlowFileService) promoteToResources(
 			continue
 		}
 		ensuredDirs[dir] = true
-		rootDirs, _, rootOrphans, dirErr := ensureResourceDirs(tx, uid, dir, force)
+		rootDirs, _, rootOrphans, dirErr := ensureDestinationDirs(tx, uid, dir, force)
 		if dirErr != nil {
 			txErr = dirErr
 			break
@@ -2015,7 +2056,7 @@ func (s *FlowFileService) promoteToResources(
 		}
 		if parentDir := path.Dir(src.destPath); parentDir != "." && parentDir != "/" && !ensuredDirs[parentDir] {
 			ensuredDirs[parentDir] = true
-			parentDirs, _, parentOrphans, dirErr := ensureResourceDirs(tx, uid, parentDir, force)
+			parentDirs, _, parentOrphans, dirErr := ensureParentDirs(tx, uid, src.destPath)
 			if dirErr != nil {
 				txErr = dirErr
 				break
@@ -2033,7 +2074,7 @@ func (s *FlowFileService) promoteToResources(
 
 		if subParent := path.Dir(p.vPath); subParent != "." && subParent != "/" && !ensuredDirs[subParent] {
 			ensuredDirs[subParent] = true
-			subDirs, _, subOrphans, dirErr := ensureResourceDirs(tx, uid, subParent, force)
+			subDirs, _, subOrphans, dirErr := ensureParentDirs(tx, uid, p.vPath)
 			if dirErr != nil {
 				txErr = dirErr
 				break

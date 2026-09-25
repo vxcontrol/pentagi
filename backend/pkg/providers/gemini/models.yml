@@ -1,18 +1,57 @@
+# Gemini 3.8 / 3.7 Series - Newest Flash generations (August-September 2026)
+- name: gemini-3.8-flash
+  description: Gemini 3.8 Flash - Google's most intelligent Flash model, engineered for long-horizon software engineering, autonomous agents and complex enterprise workflows. Prices below are the promotional rate through 2026-12-31; from 2027-01-01 they return to 1.5 input / 7.5 output
+  thinking: true
+  reasoning:
+    mode: adaptive
+    efforts: [low, medium, high]
+  release_date: 2026-09-02
+  context_window: 1048576
+  max_output_tokens: 65536
+  price:
+    input: 0.75
+    output: 3.75
+    cache_read: 0.075
+
+- name: gemini-3.7-flash
+  description: Gemini 3.7 Flash - Workhorse Flash generation with substantial gains in software engineering, web development and agentic workflows. Prices below are the promotional rate through 2026-12-31; from 2027-01-01 they return to 1.5 input / 7.5 output
+  thinking: true
+  reasoning:
+    mode: adaptive
+    efforts: [low, medium, high]
+  release_date: 2026-08-13
+  context_window: 1048576
+  max_output_tokens: 65536
+  price:
+    input: 0.75
+    output: 3.75
+    cache_read: 0.075
+
 # Gemini 3.6 Series - Latest Stable Flash (July 2026)
 - name: gemini-3.6-flash
-  description: Gemini 3.6 Flash - Newest sustained frontier-level Flash model with higher speed and lower cost than prior generations, excelling at code generation, agentic execution, and spatial reasoning. Ideal for rapid agentic loops through complex coding cycles, making it well suited for iterative exploit development and continuous large-scale penetration testing pipelines with 1M token context
+  description: Gemini 3.6 Flash - Newest sustained frontier-level Flash model with higher speed and lower cost than prior generations, excelling at code generation, agentic execution, and spatial reasoning. Ideal for rapid agentic loops through complex coding cycles, making it well suited for iterative exploit development and continuous large-scale penetration testing pipelines with 1M token context. Prices below are the promotional rate through 2026-12-31; from 2027-01-01 they return to 1.5 input / 7.5 output
   thinking: true
+  reasoning:
+    mode: adaptive
+    efforts: [minimal, low, medium, high]
   release_date: 2026-07-23
+  context_window: 1048576
+  max_output_tokens: 65536
   price:
-    input: 1.5
-    output: 7.5
-    cache_read: 0.15
+    input: 0.75
+    output: 3.75
+    cache_read: 0.075
 
 # Gemini 3.5 Series - Stable Flash + Flash-Lite (May-July 2026)
 - name: gemini-3.5-flash
   description: Gemini 3.5 Flash - Most intelligent Flash model with sustained frontier performance on agentic and coding tasks, superior search and grounding. Optimal for large-scale autonomous penetration testing, high-throughput security scanning, and continuous vulnerability analysis with hybrid reasoning and 1M token context
   thinking: true
+  reasoning:
+    mode: adaptive
+    efforts: [minimal, low, medium, high]
   release_date: 2026-05-19
+  context_window: 1048576
+  max_output_tokens: 65536
   price:
     input: 1.5
     output: 9.0
@@ -21,7 +60,12 @@
 - name: gemini-3.5-flash-lite
   description: Gemini 3.5 Flash-Lite - Low-latency, cost-effective multimodal model optimized for high-throughput, low-cost execution of subagent tasks and document parsing. Well suited for high-volume agentic subagent orchestration, lightweight extraction of structured data from scan output, and latency-sensitive security monitoring where API cost is the primary constraint. 1M input / 65K output tokens
   thinking: true
+  reasoning:
+    mode: adaptive
+    efforts: [minimal, low, medium, high]
   release_date: 2026-07-09
+  context_window: 1048576
+  max_output_tokens: 65536
   price:
     input: 0.3
     output: 2.5
@@ -29,27 +73,42 @@
 
 # Gemini 3.1 Series - Stable Flash-Lite + Pro Preview (Feb-May 2026)
 - name: gemini-3.1-pro-preview
-  description: Gemini 3.1 Pro - Latest flagship with refined performance, improved thinking, better token efficiency, and grounded factual consistency. Optimized for software engineering and agentic workflows with precise tool usage, sophisticated threat modeling, and deep multimodal reasoning for advanced penetration testing scenarios. 1M input / 65K output tokens, knowledge cutoff January 2025
+  description: Gemini 3.1 Pro Preview - Latest flagship, served as a preview endpoint, with refined performance, improved thinking, better token efficiency, and grounded factual consistency. Optimized for software engineering and agentic workflows with precise tool usage, sophisticated threat modeling, and deep multimodal reasoning for advanced penetration testing scenarios. 1M input / 65K output tokens, knowledge cutoff January 2025. Prices below are for a prompt of up to 200K tokens; above that input bills 4.00, output 18.00 and cache reads 0.40
   thinking: true
+  reasoning:
+    mode: adaptive
+    efforts: [low, medium, high]
   release_date: 2026-02-19
+  context_window: 1048576
+  max_output_tokens: 65536
   price:
     input: 2.0
     output: 12.0
     cache_read: 0.2
 
 - name: gemini-3.1-pro-preview-customtools
-  description: Gemini 3.1 Pro Custom Tools - Specialized endpoint optimized for agentic workflows mixing custom tools and bash, better at prioritizing registered custom tools (view_file, search_code) over bash commands. Ideal for autonomous security agents that orchestrate bespoke pentesting tool ecosystems. Same pricing as gemini-3.1-pro-preview
+  description: Gemini 3.1 Pro Custom Tools Preview - Specialized preview endpoint optimized for agentic workflows mixing custom tools and bash, better at prioritizing registered custom tools (view_file, search_code) over bash commands. Ideal for autonomous security agents that orchestrate bespoke pentesting tool ecosystems. Prices below, the same as gemini-3.1-pro-preview, are for a prompt of up to 200K tokens; above that input bills 4.00, output 18.00 and cache reads 0.40
   thinking: true
+  reasoning:
+    mode: adaptive
+    efforts: [low, medium, high]
   release_date: 2026-02-23
+  context_window: 1048576
+  max_output_tokens: 65536
   price:
     input: 2.0
     output: 12.0
     cache_read: 0.2
 
 - name: gemini-3.1-flash-lite
-  description: Gemini 3.1 Flash-Lite - Cost-efficient multimodal model with frontier-class performance rivaling larger models at a fraction of the cost. Suitable for high-volume agentic tasks, simple data extraction, high-frequency lightweight pentesting checks, and low-latency security monitoring (superseded by gemini-3.5-flash-lite)
+  description: Gemini 3.1 Flash-Lite - Cost-efficient multimodal model for high-volume agentic tasks, simple data extraction, high-frequency lightweight pentesting checks, and low-latency security monitoring
   thinking: true
+  reasoning:
+    mode: adaptive
+    efforts: [minimal, low, medium, high]
   release_date: 2026-05-07
+  context_window: 1048576
+  max_output_tokens: 65536
   price:
     input: 0.25
     output: 1.5
@@ -59,7 +118,12 @@
 - name: gemini-3-flash-preview
   description: Gemini 3 Flash Preview - Early preview of the Gemini 3.x Flash line offering state-of-the-art multimodal understanding, richer visuals, and deep interactivity for agentic and vibe-coding workloads. Useful for experimental multimodal threat analysis and early access to next-generation agentic pentesting workflows ahead of general availability (preview endpoint, superseded by stable gemini-3.5-flash)
   thinking: true
+  reasoning:
+    mode: adaptive
+    efforts: [minimal, low, medium, high]
   release_date: 2025-12-08
+  context_window: 1048576
+  max_output_tokens: 65536
   price:
     input: 0.5
     output: 3.0
@@ -67,27 +131,42 @@
 
 # Gemini 2.5 Series - Advanced thinking models with enhanced reasoning capabilities
 - name: gemini-2.5-pro
-  description: Gemini 2.5 Pro - State-of-the-art multipurpose model excelling at coding and complex reasoning tasks, sophisticated threat modeling, and comprehensive penetration testing methodologies. Strong choice for deep exploit research and advanced code analysis (shutdown October 16, 2026)
+  description: Gemini 2.5 Pro - State-of-the-art multipurpose model excelling at coding and complex reasoning tasks, sophisticated threat modeling, and comprehensive penetration testing methodologies. Strong choice for deep exploit research and advanced code analysis. Prices below are for a prompt of up to 200K tokens; above that input bills 2.50, output 15.00 and cache reads 0.25
   thinking: true
+  reasoning:
+    mode: adaptive
+    efforts: [low, medium, high]
   release_date: 2025-06-17
+  context_window: 1048576
+  max_output_tokens: 65536
   price:
     input: 1.25
     output: 10.0
     cache_read: 0.125
 
 - name: gemini-2.5-flash
-  description: Gemini 2.5 Flash - First hybrid reasoning model with 1M token context window and thinking budgets, best price-performance for large-scale security assessments and automated vulnerability analysis (shutdown October 16, 2026, recommended replacement gemini-3.5-flash)
+  description: Gemini 2.5 Flash - First hybrid reasoning model with 1M token context window and thinking budgets, best price-performance for large-scale security assessments and automated vulnerability analysis
   thinking: true
+  reasoning:
+    mode: adaptive
+    efforts: [low, medium, high]
   release_date: 2025-06-17
+  context_window: 1048576
+  max_output_tokens: 65536
   price:
     input: 0.3
     output: 2.5
     cache_read: 0.03
 
 - name: gemini-2.5-flash-lite
-  description: Gemini 2.5 Flash-Lite - Smallest and most cost-effective 2.5 model built for at-scale usage, high-throughput security scanning, and rapid vulnerability classification (shutdown October 16, 2026, recommended replacement gemini-3.5-flash-lite)
+  description: Gemini 2.5 Flash-Lite - Smallest and most cost-effective 2.5 model built for at-scale usage, high-throughput security scanning, and rapid vulnerability classification
   thinking: true
+  reasoning:
+    mode: adaptive
+    efforts: [low, medium, high]
   release_date: 2025-07-22
+  context_window: 1048576
+  max_output_tokens: 65536
   price:
     input: 0.1
     output: 0.4
@@ -98,6 +177,8 @@
   description: Gemma 4 31B Instruction-Tuned - Largest open-source Gemma 4 dense model (~31B params) with 256K context window, multimodal text+image input, support for 140+ languages, and toggleable thinking process. Apache 2.0 license enables unrestricted on-premises deployment for privacy-sensitive penetration testing, customizable security analysis workflows, and air-gapped offensive research. Free of charge on Gemini API
   thinking: true
   release_date: 2026-03-31
+  context_window: 262144
+  max_output_tokens: 32768
   price:
     input: 0.0
     output: 0.0
@@ -106,6 +187,8 @@
   description: Gemma 4 26B A4B Instruction-Tuned - Open-source Mixture-of-Experts model (~26B total / ~3.8B active params) with 256K context window, multimodal input, and configurable thinking. Highly efficient inference suitable for consumer GPUs, ideal for on-premises high-throughput security scanning, local vulnerability triage, and privacy-preserving offensive workflows. Apache 2.0 license, free of charge on Gemini API
   thinking: true
   release_date: 2026-03-31
+  context_window: 262144
+  max_output_tokens: 32768
   price:
     input: 0.0
     output: 0.0

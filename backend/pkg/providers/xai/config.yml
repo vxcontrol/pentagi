@@ -1,0 +1,142 @@
+# xAI (Grok) agent configuration.
+#
+# Strategy: grok-4.20-0309-non-reasoning for utility calls, grok-4.3 for
+# tool-heavy roles, search, and advice. On nine saved
+# generator requests grok-4.3 called subtask_list nine times, while
+# grok-4.6 answered with text nine times. Other roles passed a safe
+# API/config smoke; real prompts for those roles were not replayed.
+#
+# Only the non-reasoning agents carry temperature and top_p. We leave
+# reasoning_effort unset on grok-4.3: its model page documents a default of
+# "low" (and configurable effort), so no effort is silently pinned here.
+# presence_penalty and frequency_penalty never travel: the vendor rejects
+# them together with `stop` on reasoning models.
+#
+# Prices are for a prompt under 200k tokens; at or above that the vendor doubles
+# the rate for the whole request.
+
+simple:
+  model: grok-4.20-0309-non-reasoning
+  temperature: 0.3
+  top_p: 0.9
+  n: 1
+  max_tokens: 8192
+  price:
+    input: 1.25
+    output: 2.50
+    cache_read: 0.2
+
+simple_json:
+  model: grok-4.20-0309-non-reasoning
+  temperature: 0.3
+  top_p: 0.9
+  n: 1
+  max_tokens: 4096
+  json: true
+  price:
+    input: 1.25
+    output: 2.50
+    cache_read: 0.2
+
+primary_agent:
+  model: grok-4.3
+  n: 1
+  max_tokens: 16384
+  price:
+    input: 1.25
+    output: 2.50
+    cache_read: 0.20
+
+assistant:
+  model: grok-4.3
+  n: 1
+  max_tokens: 16384
+  price:
+    input: 1.25
+    output: 2.50
+    cache_read: 0.20
+
+generator:
+  model: grok-4.3
+  n: 1
+  max_tokens: 32768
+  price:
+    input: 1.25
+    output: 2.50
+    cache_read: 0.20
+
+refiner:
+  model: grok-4.3
+  n: 1
+  max_tokens: 32768
+  price:
+    input: 1.25
+    output: 2.50
+    cache_read: 0.20
+
+adviser:
+  model: grok-4.3
+  n: 1
+  max_tokens: 16384
+  price:
+    input: 1.25
+    output: 2.50
+    cache_read: 0.20
+
+reflector:
+  model: grok-4.20-0309-non-reasoning
+  temperature: 0.3
+  top_p: 0.9
+  n: 1
+  max_tokens: 8192
+  price:
+    input: 1.25
+    output: 2.50
+    cache_read: 0.2
+
+searcher:
+  model: grok-4.3
+  n: 1
+  max_tokens: 8192
+  price:
+    input: 1.25
+    output: 2.50
+    cache_read: 0.2
+
+enricher:
+  model: grok-4.20-0309-non-reasoning
+  temperature: 0.3
+  top_p: 0.9
+  n: 1
+  max_tokens: 8192
+  price:
+    input: 1.25
+    output: 2.50
+    cache_read: 0.2
+
+coder:
+  model: grok-4.3
+  n: 1
+  max_tokens: 20480
+  price:
+    input: 1.25
+    output: 2.50
+    cache_read: 0.20
+
+installer:
+  model: grok-4.3
+  n: 1
+  max_tokens: 16384
+  price:
+    input: 1.25
+    output: 2.50
+    cache_read: 0.20
+
+pentester:
+  model: grok-4.3
+  n: 1
+  max_tokens: 16384
+  price:
+    input: 1.25
+    output: 2.50
+    cache_read: 0.20

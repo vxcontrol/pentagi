@@ -115,50 +115,46 @@ LEFT JOIN subtasks s ON t.id = s.task_id
 LEFT JOIN assistants a ON f.id = a.flow_id AND a.deleted_at IS NULL
 WHERE f.user_id = $1 AND f.deleted_at IS NULL;
 
--- name: GetFlowsStatsByDayLastWeek :many
--- Get flows stats by day for the last week
+-- name: GetFlowsStatsByDay :many
+-- One dense row per calendar day in the caller's timezone, zeros included.
+WITH bounds AS (
+  SELECT
+    ((NOW() AT TIME ZONE sqlc.arg(tz)::text)::date - sqlc.arg(days)::int) AS first_day,
+    (NOW() AT TIME ZONE sqlc.arg(tz)::text)::date AS last_day
+),
+days AS (
+  SELECT generate_series(b.first_day, b.last_day, INTERVAL '1 day')::date AS day
+  FROM bounds b
+),
+agg AS (
+  SELECT
+    (f.created_at AT TIME ZONE sqlc.arg(tz)::text)::date AS day,
+    COUNT(DISTINCT f.id)::bigint AS total_flows_count,
+    COUNT(DISTINCT t.id)::bigint AS total_tasks_count,
+    COUNT(DISTINCT s.id)::bigint AS total_subtasks_count,
+    COUNT(DISTINCT a.id)::bigint AS total_assistants_count
+  FROM flows f
+  LEFT JOIN tasks t ON f.id = t.flow_id
+  LEFT JOIN subtasks s ON t.id = s.task_id
+  LEFT JOIN assistants a ON f.id = a.flow_id AND a.deleted_at IS NULL
+  WHERE f.deleted_at IS NULL
+    AND f.user_id = sqlc.arg(user_id)
+    -- The coarse bounds keep the index; the exact test repeats the grouping
+    -- expression, because an ambiguous local midnight resolves to the later
+    -- instant and would drop the earlier hour of that day.
+    AND f.created_at >= (((SELECT first_day FROM bounds) - 1)::timestamp AT TIME ZONE sqlc.arg(tz)::text)
+    AND f.created_at < (((SELECT last_day FROM bounds) + 2)::timestamp AT TIME ZONE sqlc.arg(tz)::text)
+    AND (f.created_at AT TIME ZONE sqlc.arg(tz)::text)::date
+        BETWEEN (SELECT first_day FROM bounds) AND (SELECT last_day FROM bounds)
+  GROUP BY 1
+)
 SELECT
-  DATE(f.created_at) AS date,
-  COALESCE(COUNT(DISTINCT f.id), 0)::bigint AS total_flows_count,
-  COALESCE(COUNT(DISTINCT t.id), 0)::bigint AS total_tasks_count,
-  COALESCE(COUNT(DISTINCT s.id), 0)::bigint AS total_subtasks_count,
-  COALESCE(COUNT(DISTINCT a.id), 0)::bigint AS total_assistants_count
-FROM flows f
-LEFT JOIN tasks t ON f.id = t.flow_id
-LEFT JOIN subtasks s ON t.id = s.task_id
-LEFT JOIN assistants a ON f.id = a.flow_id AND a.deleted_at IS NULL
-WHERE f.created_at >= NOW() - INTERVAL '7 days' AND f.deleted_at IS NULL AND f.user_id = $1
-GROUP BY DATE(f.created_at)
+  (d.day::timestamp AT TIME ZONE sqlc.arg(tz)::text) AS date,
+  COALESCE(a.total_flows_count, 0)::bigint AS total_flows_count,
+  COALESCE(a.total_tasks_count, 0)::bigint AS total_tasks_count,
+  COALESCE(a.total_subtasks_count, 0)::bigint AS total_subtasks_count,
+  COALESCE(a.total_assistants_count, 0)::bigint AS total_assistants_count
+FROM days d
+LEFT JOIN agg a ON a.day = d.day
 ORDER BY date DESC;
 
--- name: GetFlowsStatsByDayLastMonth :many
--- Get flows stats by day for the last month
-SELECT
-  DATE(f.created_at) AS date,
-  COALESCE(COUNT(DISTINCT f.id), 0)::bigint AS total_flows_count,
-  COALESCE(COUNT(DISTINCT t.id), 0)::bigint AS total_tasks_count,
-  COALESCE(COUNT(DISTINCT s.id), 0)::bigint AS total_subtasks_count,
-  COALESCE(COUNT(DISTINCT a.id), 0)::bigint AS total_assistants_count
-FROM flows f
-LEFT JOIN tasks t ON f.id = t.flow_id
-LEFT JOIN subtasks s ON t.id = s.task_id
-LEFT JOIN assistants a ON f.id = a.flow_id AND a.deleted_at IS NULL
-WHERE f.created_at >= NOW() - INTERVAL '30 days' AND f.deleted_at IS NULL AND f.user_id = $1
-GROUP BY DATE(f.created_at)
-ORDER BY date DESC;
-
--- name: GetFlowsStatsByDayLast3Months :many
--- Get flows stats by day for the last 3 months
-SELECT
-  DATE(f.created_at) AS date,
-  COALESCE(COUNT(DISTINCT f.id), 0)::bigint AS total_flows_count,
-  COALESCE(COUNT(DISTINCT t.id), 0)::bigint AS total_tasks_count,
-  COALESCE(COUNT(DISTINCT s.id), 0)::bigint AS total_subtasks_count,
-  COALESCE(COUNT(DISTINCT a.id), 0)::bigint AS total_assistants_count
-FROM flows f
-LEFT JOIN tasks t ON f.id = t.flow_id
-LEFT JOIN subtasks s ON t.id = s.task_id
-LEFT JOIN assistants a ON f.id = a.flow_id AND a.deleted_at IS NULL
-WHERE f.created_at >= NOW() - INTERVAL '90 days' AND f.deleted_at IS NULL AND f.user_id = $1
-GROUP BY DATE(f.created_at)
-ORDER BY date DESC;

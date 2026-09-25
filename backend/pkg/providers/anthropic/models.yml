@@ -1,11 +1,42 @@
 # Claude 5 / 4 series - Most capable models for advanced security operations
-- name: claude-fable-5
-  description: Anthropic's most capable widely released model for long-running agents and the most demanding reasoning workloads. Adaptive thinking is always on (budget thinking and an explicit disable are rejected); sampling parameters are not supported.
+- name: claude-fable-5-1
+  description: Anthropic's most capable model, succeeding Fable 5. Adaptive thinking is always on (budget thinking and an explicit disable are rejected); sampling parameters are not supported. Cache reads are billed at 0.025x the base input rate rather than the 0.1x used by every other model. Runs the Claude 4.7+ tokenizer, which yields about 30% more tokens for the same text than Claude 4.6 and earlier, so this per-token price is not comparable to older generations.
   thinking: true
   reasoning:
     mode: adaptive-only
     efforts: [low, medium, high, xhigh, max]
-  release_date: 2026-06-09
+  release_date: 2026-08-28
+  context_window: 1000000
+  max_output_tokens: 128000
+  price:
+    input: 10.0
+    output: 50.0
+    cache_read: 0.25
+    cache_write: 12.5
+
+- name: claude-opus-5-5
+  description: Anthropic's flagship model for long-running agentic coding and knowledge work. Adaptive thinking is always on, with medium effort by default. Cache reads are billed at 0.05x the base input rate.
+  thinking: true
+  reasoning:
+    mode: adaptive-only
+    efforts: [low, medium, high, xhigh, max]
+  context_window: 1000000
+  max_output_tokens: 128000
+  price:
+    input: 4.0
+    output: 20.0
+    cache_read: 0.2
+    cache_write: 5.0
+
+- name: claude-fable-5
+  description: Anthropic's most capable widely released model for long-running agents and the most demanding reasoning workloads. Adaptive thinking is always on (budget thinking and an explicit disable are rejected); sampling parameters are not supported. Runs the Claude 4.7+ tokenizer, which yields about 30% more tokens for the same text than Claude 4.6 and earlier, so this per-token price is not comparable to older generations.
+  thinking: true
+  reasoning:
+    mode: adaptive-only
+    efforts: [low, medium, high, xhigh, max]
+  release_date: 2026-06-07
+  context_window: 1000000
+  max_output_tokens: 128000
   price:
     input: 10.0
     output: 50.0
@@ -13,12 +44,14 @@
     cache_write: 12.5
 
 - name: claude-opus-5
-  description: Anthropic's flagship model for complex agentic coding and enterprise work, succeeding Opus 4.8. Adaptive thinking is on by default (a change from Opus 4.8, which defaulted off) but can still be explicitly disabled; manual budget thinking is rejected and sampling parameters are not supported.
+  description: Anthropic's flagship model for complex agentic coding and enterprise work, succeeding Opus 4.8. Adaptive thinking is on by default (a change from Opus 4.8, which defaulted off) but can still be explicitly disabled; manual budget thinking is rejected and sampling parameters are not supported. Prices below are the standard-speed rate; fast mode, a research preview on the first-party API only, bills 10 input / 50 output across the whole context. Runs the Claude 4.7+ tokenizer, which yields about 30% more tokens for the same text than Claude 4.6 and earlier, so this per-token price is not comparable to older generations.
   thinking: true
   reasoning:
     mode: adaptive-only
     efforts: [low, medium, high, xhigh, max]
   release_date: 2026-07-24
+  context_window: 1000000
+  max_output_tokens: 128000
   price:
     input: 5.0
     output: 25.0
@@ -26,25 +59,29 @@
     cache_write: 6.25
 
 - name: claude-sonnet-5
-  description: Best combination of speed and intelligence for coding, agents, and professional work at scale. Adaptive thinking only (manual budget thinking is rejected); sampling parameters are not supported.
+  description: Best combination of speed and intelligence for coding, agents, and professional work at scale. Adaptive thinking only (manual budget thinking is rejected); sampling parameters are not supported. Runs the Claude 4.7+ tokenizer, which yields about 30% more tokens for the same text than Claude 4.6 and earlier, so this per-token price is not comparable to older generations.
   thinking: true
   reasoning:
     mode: adaptive-only
     efforts: [low, medium, high, xhigh, max]
-  release_date: 2026-07-01
+  release_date: 2026-06-29
+  context_window: 1000000
+  max_output_tokens: 128000
   price:
-    input: 3.0
-    output: 15.0
-    cache_read: 0.3
-    cache_write: 3.75
+    input: 2.0
+    output: 10.0
+    cache_read: 0.2
+    cache_write: 2.5
 
 - name: claude-opus-4-8
-  description: Anthropic Opus 4.8 - flagship model for coding, agents, and deep reasoning in enterprise security workflows. Adaptive thinking only (manual budget thinking is rejected); sampling parameters are not supported.
+  description: Anthropic Opus 4.8 - flagship model for coding, agents, and deep reasoning in enterprise security workflows. Adaptive thinking only (manual budget thinking is rejected); sampling parameters are not supported. Prices below are the standard-speed rate; fast mode, a research preview on the first-party API only, bills 10 input / 50 output across the whole context. Runs the Claude 4.7+ tokenizer, which yields about 30% more tokens for the same text than Claude 4.6 and earlier, so this per-token price is not comparable to older generations.
   thinking: true
   reasoning:
     mode: adaptive-only
     efforts: [low, medium, high, xhigh, max]
   release_date: 2026-05-28
+  context_window: 1000000
+  max_output_tokens: 128000
   price:
     input: 5.0
     output: 25.0
@@ -52,12 +89,14 @@
     cache_write: 6.25
 
 - name: claude-opus-4-7
-  description: Anthropic Opus 4.7 for advanced software engineering, long-running agentic tasks, and rigorous security analysis. Adaptive thinking only (manual budget thinking is rejected); sampling parameters are not supported.
+  description: Anthropic Opus 4.7 for advanced software engineering, long-running agentic tasks, and rigorous security analysis. Adaptive thinking only (manual budget thinking is rejected); sampling parameters are not supported. Runs the Claude 4.7+ tokenizer, which yields about 30% more tokens for the same text than Claude 4.6 and earlier, so this per-token price is not comparable to older generations.
   thinking: true
   reasoning:
     mode: adaptive-only
     efforts: [low, medium, high, xhigh, max]
-  release_date: 2026-04-16
+  release_date: 2026-04-14
+  context_window: 1000000
+  max_output_tokens: 128000
   price:
     input: 5.0
     output: 25.0
@@ -70,7 +109,9 @@
   reasoning:
     mode: adaptive
     efforts: [low, medium, high, max]
-  release_date: 2026-02-05
+  release_date: 2026-02-04
+  context_window: 1000000
+  max_output_tokens: 128000
   price:
     input: 5.0
     output: 25.0
@@ -84,6 +125,8 @@
     mode: adaptive
     efforts: [low, medium, high, max]
   release_date: 2026-02-17
+  context_window: 1000000
+  max_output_tokens: 128000
   price:
     input: 3.0
     output: 15.0
@@ -92,8 +135,12 @@
 
 - name: claude-haiku-4-5
   description: Fast and efficient model with exceptional function calling and low latency. Ideal for high-frequency security scanning, rapid vulnerability detection, real-time monitoring, and bulk automated testing where speed is paramount. Strong tool orchestration capabilities at minimal cost.
-  thinking: false
+  thinking: true
+  reasoning:
+    mode: budget
   release_date: 2025-10-15
+  context_window: 200000
+  max_output_tokens: 64000
   price:
     input: 1.0
     output: 5.0
@@ -104,7 +151,11 @@
 - name: claude-sonnet-4-5
   description: State-of-the-art reasoning model with superior analytical depth and enhanced tool integration (superseded by sonnet-4-6). Premier choice for sophisticated penetration testing, advanced threat analysis, complex exploit development, and autonomous security research requiring deep reasoning and precise tool orchestration.
   thinking: true
+  reasoning:
+    mode: budget
   release_date: 2025-09-29
+  context_window: 200000
+  max_output_tokens: 64000
   price:
     input: 3.0
     output: 15.0
@@ -114,7 +165,12 @@
 - name: claude-opus-4-5
   description: Ultimate reasoning model with unparalleled analytical depth and comprehensive security expertise (superseded by opus-4-6). Designed for critical security research, advanced zero-day discovery, sophisticated red team operations, and complex autonomous penetration testing requiring maximum intelligence and reasoning capability.
   thinking: true
+  reasoning:
+    mode: budget
+    efforts: [low, medium, high]
   release_date: 2025-11-24
+  context_window: 200000
+  max_output_tokens: 64000
   price:
     input: 5.0
     output: 25.0

@@ -7,8 +7,10 @@ import (
 	obs "pentagi/pkg/observability"
 
 	"github.com/99designs/gqlgen/graphql"
+	"github.com/99designs/gqlgen/graphql/errcode"
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
+	"github.com/vektah/gqlparser/v2/gqlerror"
 )
 
 // FromContext is function to get logrus Entry with context
@@ -55,8 +57,8 @@ func WithGinLogger(service string) gin.HandlerFunc {
 			"http_status_code": c.Writer.Status(),
 			"http_resp_size":   c.Writer.Size(),
 		}).WithContext(c.Request.Context())
-		if c.Writer.Status() >= 400 {
-			entry.Error("http request handled error")
+		if status := c.Writer.Status(); status >= 400 {
+			entry.Log(LevelForStatus(status), "http request handled error")
 		} else {
 			entry.Debug("http request handled success")
 		}
@@ -73,12 +75,13 @@ func WithGqlLogger(service string) func(ctx context.Context, next graphql.Respon
 
 		res := next(ctx)
 
-		op := graphql.GetOperationContext(ctx)
-		if op != nil && op.Operation != nil {
-			entry = entry.WithFields(logrus.Fields{
-				"operation_name": op.OperationName,
-				"operation_type": op.Operation.Operation,
-			})
+		if graphql.HasOperationContext(ctx) {
+			if op := graphql.GetOperationContext(ctx); op.Operation != nil {
+				entry = entry.WithFields(logrus.Fields{
+					"operation_name": op.OperationName,
+					"operation_type": op.Operation.Operation,
+				})
+			}
 		}
 
 		entry = entry.WithField("duration", time.Since(start).String())
@@ -89,11 +92,53 @@ func WithGqlLogger(service string) func(ctx context.Context, next graphql.Respon
 
 		if len(res.Errors) > 0 {
 			entry = entry.WithField("gql.errors", res.Errors.Error())
-			entry.Error("graphql request handled with errors")
+			entry.Log(levelForGqlErrors(res.Errors, graphql.HasOperationContext(ctx)),
+				"graphql request handled with errors")
 		} else {
 			entry.Debug("graphql request handled success")
 		}
 
 		return res
 	}
+}
+
+func LevelForStatus(status int) logrus.Level {
+	switch {
+	case status >= 500:
+		return logrus.ErrorLevel
+	case status >= 400:
+		return logrus.WarnLevel
+	default:
+		return logrus.DebugLevel
+	}
+}
+
+func LevelForGqlCode(code string) logrus.Level {
+	switch code {
+	case "UNAUTHENTICATED", "FORBIDDEN", "NOT_FOUND", "ALREADY_EXISTS", "INVALID_REFERENCE",
+		"BAD_USER_INPUT", errcode.ValidationFailed, errcode.ParseFailed,
+		"COMPLEXITY_LIMIT_EXCEEDED", "PERSISTED_QUERY_NOT_FOUND":
+		return logrus.WarnLevel
+	default:
+		return logrus.ErrorLevel
+	}
+}
+
+// hasOperation is false only for a failure gqlgen dispatches before the request ever
+// becomes an operation: an unreadable body or a malformed envelope.
+func levelForGqlErrors(errs gqlerror.List, hasOperation bool) logrus.Level {
+	for _, err := range errs {
+		code := ""
+		if err != nil && err.Extensions != nil {
+			code, _ = err.Extensions["code"].(string)
+		}
+		if code == "" && !hasOperation {
+			continue
+		}
+		if LevelForGqlCode(code) == logrus.ErrorLevel {
+			return logrus.ErrorLevel
+		}
+	}
+
+	return logrus.WarnLevel
 }

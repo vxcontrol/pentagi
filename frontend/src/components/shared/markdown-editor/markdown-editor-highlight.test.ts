@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import { GROWTH_IF_QUADRATIC, slowdownWhenInputQuadruples } from '@/test-utils/cost-growth';
+
 import { TAG_RE } from './markdown-editor-tag-highlight';
 import { findVariableUseRanges, VARIABLE_RE, variableUseRegex } from './markdown-editor-variable-syntax';
 
@@ -60,12 +62,11 @@ describe('findVariableUseRanges — block-first {{ … .Var … }} ranges (ReDoS
     });
 
     it('stays linear on an unclosed {{ with many anchors (the old lazy regex froze here)', () => {
-        const pathological = `{{ ${' .Foo'.repeat(20000)}`;
-        const start = performance.now();
-        const ranges = findVariableUseRanges(pathological, 'Foo');
+        const anchors = (count: number) => `{{ ${' .Foo'.repeat(count)}`;
+        const probe = (value: string) => findVariableUseRanges(value, 'Foo');
 
-        expect(performance.now() - start).toBeLessThan(200);
-        expect(ranges).toEqual([]);
+        expect(probe(anchors(20_000))).toEqual([]);
+        expect(slowdownWhenInputQuadruples(anchors, probe, 20_000)).toBeLessThan(GROWTH_IF_QUADRATIC / 2);
     });
 });
 

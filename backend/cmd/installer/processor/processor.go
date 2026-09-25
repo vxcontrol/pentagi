@@ -73,7 +73,6 @@ func WithForce() OperationOption {
 	return func(c *operationState) { c.force = true }
 }
 
-// WithTerminalModel enables embedded terminal model integration
 func WithTerminal(term terminal.Terminal) OperationOption {
 	return func(c *operationState) {
 		if term != nil {

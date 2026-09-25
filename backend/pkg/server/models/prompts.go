@@ -19,31 +19,10 @@ func (s PromptType) String() string {
 
 // Valid is function to control input/output data
 func (s PromptType) Valid() error {
-	// Convert to templates.PromptType and validate against known constants
-	templateType := templates.PromptType(s)
-	switch templateType {
-	case templates.PromptTypePrimaryAgent, templates.PromptTypeAssistant,
-		templates.PromptTypePentester, templates.PromptTypeQuestionPentester,
-		templates.PromptTypeCoder, templates.PromptTypeQuestionCoder,
-		templates.PromptTypeInstaller, templates.PromptTypeQuestionInstaller,
-		templates.PromptTypeSearcher, templates.PromptTypeQuestionSearcher,
-		templates.PromptTypeMemorist, templates.PromptTypeQuestionMemorist,
-		templates.PromptTypeAdviser, templates.PromptTypeQuestionAdviser,
-		templates.PromptTypeGenerator, templates.PromptTypeSubtasksGenerator,
-		templates.PromptTypeRefiner, templates.PromptTypeSubtasksRefiner,
-		templates.PromptTypeReporter, templates.PromptTypeTaskReporter,
-		templates.PromptTypeReflector, templates.PromptTypeQuestionReflector,
-		templates.PromptTypeEnricher, templates.PromptTypeQuestionEnricher,
-		templates.PromptTypeToolCallFixer, templates.PromptTypeInputToolCallFixer,
-		templates.PromptTypeSummarizer, templates.PromptTypeImageChooser,
-		templates.PromptTypeLanguageChooser, templates.PromptTypeFlowDescriptor,
-		templates.PromptTypeTaskDescriptor, templates.PromptTypeExecutionLogs,
-		templates.PromptTypeFullExecutionContext, templates.PromptTypeShortExecutionContext,
-		templates.PromptTypeToolCallIDCollector, templates.PromptTypeToolCallIDDetector:
-		return nil
-	default:
+	if _, ok := templates.PromptVariables[templates.PromptType(s)]; !ok {
 		return fmt.Errorf("invalid PromptType: %s", s)
 	}
+	return nil
 }
 
 // Validate is function to use callback to control input/output data

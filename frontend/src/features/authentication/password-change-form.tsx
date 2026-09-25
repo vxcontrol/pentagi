@@ -10,7 +10,7 @@ import { useAppForm } from '@/hooks/use-app-form';
 import { api, resolveApiErrorMessage } from '@/lib/axios';
 import { cn } from '@/lib/utils';
 
-const passwordChangeSchema = z
+const passwordChangeFormSchema = z
     .object({
         confirmPassword: z.string().min(1, { message: 'Confirm your password' }),
         currentPassword: z.string().min(1, { message: 'Current password is required' }),
@@ -23,12 +23,14 @@ const passwordChangeSchema = z
             })
             .refine(
                 (password) => {
-                    if (password.length > 15) {
+                    const length = [...password].length;
+
+                    if (length > 15) {
                         return true;
                     }
 
                     return (
-                        password.length >= 8 &&
+                        length >= 8 &&
                         /[0-9]/.test(password) &&
                         /[a-z]/.test(password) &&
                         /[A-Z]/.test(password) &&
@@ -65,7 +67,7 @@ interface PasswordChangeFormProps {
     onSuccess?: () => void;
 }
 
-type PasswordChangeFormValues = z.infer<typeof passwordChangeSchema>;
+type PasswordChangeFormValues = z.infer<typeof passwordChangeFormSchema>;
 
 export function PasswordChangeForm({
     buttonSize = 'default',
@@ -82,7 +84,7 @@ export function PasswordChangeForm({
             currentPassword: '',
             newPassword: '',
         },
-        schema: passwordChangeSchema,
+        schema: passwordChangeFormSchema,
     });
 
     const handleSubmit = async (values: PasswordChangeFormValues) => {

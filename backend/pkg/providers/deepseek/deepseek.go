@@ -15,7 +15,7 @@ import (
 //go:embed config.yml models.yml
 var configFS embed.FS
 
-const DeepSeekAgentModel = "deepseek-v4-flash"
+const DeepSeekAgentModel = "deepseek-flash"
 
 const DeepSeekToolCallIDTemplate = "call_{r:2:d}_{r:24:b}"
 
@@ -75,5 +75,7 @@ func New(
 		ServerURL:          cfg.DeepSeekServerURL,
 		Prefix:             cfg.DeepSeekProvider,
 		PreserveReasoning:  true,
+		// DeepSeek takes json_object but refuses json_schema.
+		StructuredOutputFallback: true,
 	}, httpClient, models, providerName, providerConfig)
 }

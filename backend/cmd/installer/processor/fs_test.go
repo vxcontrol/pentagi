@@ -1,243 +1,238 @@
 package processor
 
 import (
-	"context"
+	"maps"
 	"os"
 	"path/filepath"
-	"sync"
+	"slices"
 	"testing"
 
+	"pentagi/cmd/installer/checker"
 	"pentagi/cmd/installer/files"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-// testStackIntegrityOperation is a helper for testing stack integrity operations
-func testStackIntegrityOperation(t *testing.T, operation func(*fileSystemOperationsImpl, context.Context, ProductStack, *operationState) error, needsTempDir bool) {
+// fsStackFiles are what each stack extracts into the working directory.
+var fsStackFiles = map[ProductStack][]string{
+	ProductStackPentagi:       {"docker-compose.yml", "example.custom.provider.yml", "example.ollama.provider.yml"},
+	ProductStackGraphiti:      {"docker-compose-graphiti.yml", "graphiti", "neo4j"},
+	ProductStackLangfuse:      {"docker-compose-langfuse.yml"},
+	ProductStackObservability: {"docker-compose-observability.yml", "observability"},
+}
+
+// fsEveryStackFile is every stack's files, in the order the stacks are processed.
+var fsEveryStackFile = slices.Concat(
+	fsStackFiles[ProductStackPentagi], fsStackFiles[ProductStackGraphiti],
+	fsStackFiles[ProductStackLangfuse], fsStackFiles[ProductStackObservability],
+)
+
+// fsOperations is the real file system operations over mocked embedded files, in a temp directory.
+func fsOperations(t *testing.T) (*fileSystemOperationsImpl, *mockFiles, string) {
 	t.Helper()
+	state, embedded := newMockState(t), newMockFiles()
+	ops := newFileSystemOperations(&processor{state: state, files: embedded}).(*fileSystemOperationsImpl)
+	return ops, embedded, filepath.Dir(state.envPath)
+}
 
-	tests := []struct {
-		name      string
-		stack     ProductStack
-		expectErr bool
-	}{
-		{"ProductStackPentagi", ProductStackPentagi, false},
-		{"ProductStackLangfuse", ProductStackLangfuse, false},
-		{"ProductStackObservability", ProductStackObservability, false},
-		{"ProductStackCompose", ProductStackCompose, false},
-		{"ProductStackAll", ProductStackAll, false},
-		{"ProductStackWorker - unsupported", ProductStackWorker, true},
+// fsCopied lists what was extracted, failing on a copy outside the working directory or without rewrite.
+func fsCopied(t *testing.T, embedded *mockFiles, workingDir string) []string {
+	t.Helper()
+	var copied []string
+	for _, c := range embedded.copies {
+		assert.Equal(t, workingDir, c.Dst, "copy of %s", c.Src)
+		assert.True(t, c.Rewrite, "copy of %s", c.Src)
+		copied = append(copied, c.Src)
 	}
+	return copied
+}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			processor := createTestProcessor()
-			fsOps := newFileSystemOperations(processor).(*fileSystemOperationsImpl)
+func TestFs_EnsureStackIntegrity_ExtractsEveryFileOfTheStack(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		stack   ProductStack
+		want    []string
+		wantErr string
+	}{
+		{"pentagi with its provider examples", ProductStackPentagi, fsStackFiles[ProductStackPentagi], ""},
+		{"langfuse has its compose file only", ProductStackLangfuse, fsStackFiles[ProductStackLangfuse], ""},
+		{"observability with its directory", ProductStackObservability, fsStackFiles[ProductStackObservability], ""},
+		{"compose covers every stack", ProductStackCompose, fsEveryStackFile, ""},
+		{"all covers every stack", ProductStackAll, fsEveryStackFile, ""},
+		{"the worker has no files", ProductStackWorker, nil, "operation ensure integrity not applicable for stack worker"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ops, embedded, dir := fsOperations(t)
+			err := ops.ensureStackIntegrity(t.Context(), tc.stack, testOperationState(t))
+			if tc.wantErr == "" {
+				require.NoError(t, err)
+			} else {
+				require.EqualError(t, err, tc.wantErr)
+			}
+			assert.Equal(t, tc.want, fsCopied(t, embedded, dir))
+		})
+	}
+}
 
-			// for cleanup operations, ensure temp directory setup
-			if needsTempDir {
-				tmpDir := t.TempDir()
-				mockState := processor.state.(*mockState)
-				mockState.envPath = filepath.Join(tmpDir, ".env")
+func TestFs_VerifyStackIntegrity_RestoresEveryMissingFileItVerifies(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		stack   ProductStack
+		want    []string
+		wantErr string
+	}{
+		{"pentagi verifies its compose file only", ProductStackPentagi, []string{"docker-compose.yml"}, ""},
+		{"langfuse has its compose file only", ProductStackLangfuse, []string{"docker-compose-langfuse.yml"}, ""},
+		{"observability with its directory", ProductStackObservability, fsStackFiles[ProductStackObservability], ""},
+		{"compose covers every stack", ProductStackCompose, []string{
+			"docker-compose.yml", "docker-compose-graphiti.yml", "graphiti", "neo4j",
+			"docker-compose-langfuse.yml", "docker-compose-observability.yml", "observability",
+		}, ""},
+		{"all covers every stack", ProductStackAll, []string{
+			"docker-compose.yml", "docker-compose-graphiti.yml", "graphiti", "neo4j",
+			"docker-compose-langfuse.yml", "docker-compose-observability.yml", "observability",
+		}, ""},
+		{"the worker has no files", ProductStackWorker, nil, "operation verify integrity not applicable for stack worker"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ops, embedded, dir := fsOperations(t)
+			err := ops.verifyStackIntegrity(t.Context(), tc.stack, testOperationState(t))
+			if tc.wantErr == "" {
+				require.NoError(t, err)
+			} else {
+				require.EqualError(t, err, tc.wantErr)
+			}
+			assert.Equal(t, tc.want, fsCopied(t, embedded, dir))
+		})
+	}
+}
+
+func TestFs_CleanupStackFiles_RemovesEveryFileOfTheStackAndNothingElse(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		stack   ProductStack
+		removed []string
+		wantErr string
+	}{
+		{"pentagi with its provider examples", ProductStackPentagi, fsStackFiles[ProductStackPentagi], ""},
+		{"graphiti with its config directories", ProductStackGraphiti, fsStackFiles[ProductStackGraphiti], ""},
+		{"langfuse has its compose file only", ProductStackLangfuse, fsStackFiles[ProductStackLangfuse], ""},
+		{"observability with its directory", ProductStackObservability, fsStackFiles[ProductStackObservability], ""},
+		{"compose covers every stack", ProductStackCompose, fsEveryStackFile, ""},
+		{"all covers every stack", ProductStackAll, fsEveryStackFile, ""},
+		{"the worker has no files", ProductStackWorker, nil, "operation cleanup not applicable for stack worker"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ops, _, dir := fsOperations(t)
+			for _, name := range fsEveryStackFile {
+				if filepath.Ext(name) == "" {
+					require.NoError(t, os.MkdirAll(filepath.Join(dir, name, "conf"), 0o755))
+				} else {
+					require.NoError(t, os.WriteFile(filepath.Join(dir, name), []byte("x"), 0o644))
+				}
 			}
 
-			err := operation(fsOps, t.Context(), tt.stack, testOperationState(t))
-			assertError(t, err, tt.expectErr, "")
+			err := ops.cleanupStackFiles(t.Context(), tc.stack, testOperationState(t))
+			if tc.wantErr == "" {
+				require.NoError(t, err)
+			} else {
+				require.EqualError(t, err, tc.wantErr)
+			}
+			for _, name := range append([]string{".env"}, fsEveryStackFile...) {
+				_, statErr := os.Stat(filepath.Join(dir, name))
+				if slices.Contains(tc.removed, name) {
+					assert.ErrorIs(t, statErr, os.ErrNotExist, "%s survived the cleanup", name)
+				} else {
+					assert.NoError(t, statErr, "the cleanup removed %s, which is not the stack's", name)
+				}
+			}
 		})
 	}
 }
 
-func TestFileSystemOperationsImpl_EnsureStackIntegrity(t *testing.T) {
-	testStackIntegrityOperation(t, (*fileSystemOperationsImpl).ensureStackIntegrity, false)
+func TestFs_EnsureFileFromEmbed_CopiesOnlyWhatIsMissingUnlessForced(t *testing.T) {
+	for _, tc := range []struct {
+		name          string
+		onDisk, force bool
+		want          []string
+	}{
+		{"a missing file is extracted", false, false, []string{"test.yml"}},
+		{"a file on disk is kept", true, false, nil},
+		{"a file on disk is overwritten when forced", true, true, []string{"test.yml"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ops, embedded, dir := fsOperations(t)
+			embedded.AddFile("test.yml", []byte("test content"))
+			if tc.onDisk {
+				require.NoError(t, os.WriteFile(filepath.Join(dir, "test.yml"), []byte("existing"), 0o644))
+			}
+			state := testOperationState(t)
+			state.force = tc.force
+
+			require.NoError(t, ops.ensureFileFromEmbed("test.yml", state))
+			assert.Equal(t, tc.want, fsCopied(t, embedded, dir))
+		})
+	}
 }
 
-func TestFileSystemOperationsImpl_VerifyStackIntegrity(t *testing.T) {
-	testStackIntegrityOperation(t, (*fileSystemOperationsImpl).verifyStackIntegrity, false)
-}
-
-func TestFileSystemOperationsImpl_CleanupStackFiles(t *testing.T) {
-	testStackIntegrityOperation(t, (*fileSystemOperationsImpl).cleanupStackFiles, true)
-}
-
-func TestFileSystemOperationsImpl_EnsureFileFromEmbed(t *testing.T) {
-	tests := []struct {
+// Driven through verifyDirectoryIntegrity over a directory on disk, where a forced update enters it.
+func TestFs_VerifyDirectoryContentIntegrity_RestoresMissingFilesAndSparesEditedOnes(t *testing.T) {
+	regular, other := "observability/config1.yml", "observability/config2.yml"
+	excluded := "observability/otel/config.yml"
+	for _, tc := range []struct {
 		name     string
-		filename string
+		dir      string
+		statuses map[string]files.FileStatus // the embedded directory's files; none means it is not shipped
 		force    bool
-		setup    func(*mockFiles, string) // setup mock and working dir
+		want     []string
+		wantErr  string
 	}{
-		{
-			name:     "file missing - should copy",
-			filename: "test.yml",
-			force:    false,
-			setup: func(m *mockFiles, workingDir string) {
-				// file not exists, will be copied
-				m.AddFile("test.yml", []byte("test content"))
+		{name: "a directory the installer does not ship", dir: "nonexistent",
+			wantErr: "embedded directory nonexistent not found"},
+		{name: "every file intact", dir: "observability",
+			statuses: map[string]files.FileStatus{regular: files.FileStatusOK, other: files.FileStatusOK}},
+		{name: "a missing file is restored", dir: "observability",
+			statuses: map[string]files.FileStatus{regular: files.FileStatusOK, other: files.FileStatusMissing},
+			want:     []string{other}},
+		{name: "an edited file is kept", dir: "observability",
+			statuses: map[string]files.FileStatus{regular: files.FileStatusModified}},
+		{name: "a missing excluded file is created", dir: "observability",
+			statuses: map[string]files.FileStatus{excluded: files.FileStatusMissing},
+			want:     []string{excluded}},
+		{name: "an edited excluded file is kept", dir: "observability",
+			statuses: map[string]files.FileStatus{excluded: files.FileStatusModified}},
+		{name: "a forced update overwrites an edited file but not a user-editable one", dir: "neo4j", force: true,
+			statuses: map[string]files.FileStatus{
+				"neo4j/conf/neo4j.conf":       files.FileStatusModified,
+				"neo4j/plugins/apoc-core.jar": files.FileStatusModified,
 			},
-		},
-		{
-			name:     "file exists, force false - should skip",
-			filename: "test.yml",
-			force:    false,
-			setup: func(m *mockFiles, workingDir string) {
-				// create existing file
-				os.WriteFile(filepath.Join(workingDir, "test.yml"), []byte("existing"), 0644)
-				m.AddFile("test.yml", []byte("test content"))
-			},
-		},
-		{
-			name:     "file exists, force true - should update",
-			filename: "test.yml",
-			force:    true,
-			setup: func(m *mockFiles, workingDir string) {
-				// create existing file
-				os.WriteFile(filepath.Join(workingDir, "test.yml"), []byte("existing"), 0644)
-				m.AddFile("test.yml", []byte("test content"))
-			},
-		},
-	}
+			want: []string{"neo4j/plugins/apoc-core.jar"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ops, embedded, dir := fsOperations(t)
+			if tc.statuses != nil {
+				embedded.statuses = tc.statuses
+				embedded.lists[tc.dir] = slices.Sorted(maps.Keys(tc.statuses))
+			}
+			require.NoError(t, os.MkdirAll(filepath.Join(dir, tc.dir), 0o755))
+			state := testOperationState(t)
+			state.force = tc.force
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// create temp directory
-			tmpDir := t.TempDir()
-
-			// create test processor using unified mocks
-			processor := createTestProcessor()
-			mockState := processor.state.(*mockState)
-			mockState.envPath = filepath.Join(tmpDir, ".env")
-
-			mockFiles := processor.files.(*mockFiles)
-			tt.setup(mockFiles, tmpDir)
-
-			fsOps := newFileSystemOperations(processor).(*fileSystemOperationsImpl)
-			state := &operationState{force: tt.force, mx: &sync.Mutex{}, ctx: t.Context()}
-
-			err := fsOps.ensureFileFromEmbed(tt.filename, state)
-			assertNoError(t, err)
+			err := ops.verifyDirectoryIntegrity(tc.dir, state)
+			if tc.wantErr == "" {
+				require.NoError(t, err)
+			} else {
+				require.EqualError(t, err, tc.wantErr)
+			}
+			assert.Equal(t, tc.want, fsCopied(t, embedded, dir))
 		})
 	}
 }
 
-func TestFileSystemOperationsImpl_VerifyDirectoryContentIntegrity(t *testing.T) {
-	tests := []struct {
-		name      string
-		embedPath string
-		setup     func(*mockFiles, string, string) // setup mock, embedPath, targetPath
-		force     bool
-		expectErr bool
-	}{
-		{
-			name:      "embedded directory not found",
-			embedPath: "nonexistent",
-			setup:     func(m *mockFiles, embedPath, targetPath string) {},
-			force:     false,
-			expectErr: true,
-		},
-		{
-			name:      "directory with all files OK",
-			embedPath: "observability",
-			setup: func(m *mockFiles, embedPath, targetPath string) {
-				// setup embedded files
-				m.lists[embedPath] = []string{
-					"observability/config1.yml",
-					"observability/config2.yml",
-				}
-				m.statuses["observability/config1.yml"] = files.FileStatusOK
-				m.statuses["observability/config2.yml"] = files.FileStatusOK
-				m.AddFile(embedPath, []byte{}) // mark as existing directory
-
-				// create target directory
-				os.MkdirAll(targetPath, 0755)
-			},
-			force:     false,
-			expectErr: false,
-		},
-		{
-			name:      "directory with missing files",
-			embedPath: "observability",
-			setup: func(m *mockFiles, embedPath, targetPath string) {
-				// setup embedded files
-				m.lists[embedPath] = []string{
-					"observability/config1.yml",
-					"observability/config2.yml",
-				}
-				m.statuses["observability/config1.yml"] = files.FileStatusOK
-				m.statuses["observability/config2.yml"] = files.FileStatusMissing
-				m.AddFile(embedPath, []byte{}) // mark as existing directory
-
-				// create target directory
-				os.MkdirAll(targetPath, 0755)
-			},
-			force:     false,
-			expectErr: false,
-		},
-		{
-			name:      "directory with modified files, force false",
-			embedPath: "observability",
-			setup: func(m *mockFiles, embedPath, targetPath string) {
-				// setup embedded files
-				m.lists[embedPath] = []string{
-					"observability/config1.yml",
-				}
-				m.statuses["observability/config1.yml"] = files.FileStatusModified
-				m.AddFile(embedPath, []byte{}) // mark as existing directory
-
-				// create target directory
-				os.MkdirAll(targetPath, 0755)
-			},
-			force:     false,
-			expectErr: false,
-		},
-		{
-			name:      "directory with modified files, force true",
-			embedPath: "observability",
-			setup: func(m *mockFiles, embedPath, targetPath string) {
-				// setup embedded files
-				m.lists[embedPath] = []string{
-					"observability/config1.yml",
-				}
-				m.statuses["observability/config1.yml"] = files.FileStatusModified
-				m.AddFile(embedPath, []byte{}) // mark as existing directory
-
-				// create target directory
-				os.MkdirAll(targetPath, 0755)
-			},
-			force:     true,
-			expectErr: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// create temp directory
-			tmpDir := t.TempDir()
-			targetPath := filepath.Join(tmpDir, tt.embedPath)
-
-			// create test processor
-			processor := createTestProcessor()
-			mockState := processor.state.(*mockState)
-			mockState.envPath = filepath.Join(tmpDir, ".env")
-
-			mockFiles := processor.files.(*mockFiles)
-			tt.setup(mockFiles, tt.embedPath, targetPath)
-
-			fsOps := newFileSystemOperations(processor).(*fileSystemOperationsImpl)
-			state := &operationState{force: tt.force, mx: &sync.Mutex{}, ctx: t.Context()}
-
-			err := fsOps.verifyDirectoryContentIntegrity(tt.embedPath, targetPath, state)
-			assertError(t, err, tt.expectErr, "")
-		})
-	}
-}
-
-// TestFileSystemOperationsImpl_UserEditableFilesExcluded ensures the specific
-// user-editable static config files (Neo4j/APOC settings and Graphiti LLM
-// provider presets) are registered in the exclusion policy: created once if
-// missing, but never overwritten afterwards even when force=true is used.
-func TestFileSystemOperationsImpl_UserEditableFilesExcluded(t *testing.T) {
-	processor := createTestProcessor()
-	fsOps := newFileSystemOperations(processor).(*fileSystemOperationsImpl)
-
-	mustBeExcluded := []string{
+// Created once and never overwritten afterwards, even by a forced files update.
+func TestFs_IsExcludedFromVerification_CoversUserEditableFilesAndTheJaegerPlugin(t *testing.T) {
+	paths := []string{
 		"neo4j/conf/neo4j.conf",
 		"neo4j/conf/apoc.conf",
 		"graphiti/custom.yaml",
@@ -245,575 +240,114 @@ func TestFileSystemOperationsImpl_UserEditableFilesExcluded(t *testing.T) {
 		"graphiti/litellm.yaml",
 		"graphiti/openai.yaml",
 	}
+	// Tied to the plugin table, so a third architecture cannot be added on one side only.
+	for _, name := range checker.JaegerPluginBinaries {
+		paths = append(paths, checker.JaegerPluginDir+"/"+name)
+	}
 
-	for _, path := range mustBeExcluded {
-		if !fsOps.isExcludedFromVerification(path) {
-			t.Errorf("expected %s to be excluded from verification (user-editable), but it is not", path)
-		}
+	fs := &fileSystemOperationsImpl{}
+	for _, path := range paths {
+		assert.True(t, fs.isExcludedFromVerification(path), "%s is not excluded, so a forced update overwrites it", path)
 	}
 }
 
-// TestFileSystemOperationsImpl_UserEditableFilesNeverOverwritten verifies the
-// end-to-end behavior via verifyDirectoryContentIntegrity: a modified
-// user-editable file is left untouched even when force=true is set, unlike a
-// regular (non-excluded) modified file in the same directory.
-func TestFileSystemOperationsImpl_UserEditableFilesNeverOverwritten(t *testing.T) {
-	tmpDir := t.TempDir()
-	targetPath := filepath.Join(tmpDir, neo4jDirectory)
+// Subtests are keyed by path; each asserts both fileExists and directoryExists.
+func TestFs_TellsAFileFromADirectory(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "test.txt")
+	require.NoError(t, os.WriteFile(file, []byte("test"), 0o644))
 
-	processor := createTestProcessor()
-	mockState := processor.state.(*mockState)
-	mockState.envPath = filepath.Join(tmpDir, ".env")
-
-	mockFiles := processor.files.(*mockFiles)
-	regularFile := "neo4j/plugins/apoc-core.jar"
-	mockFiles.lists[neo4jDirectory] = []string{
-		"neo4j/conf/neo4j.conf",
-		regularFile,
-	}
-	mockFiles.statuses["neo4j/conf/neo4j.conf"] = files.FileStatusModified
-	mockFiles.statuses[regularFile] = files.FileStatusModified
-	mockFiles.AddFile(neo4jDirectory, []byte{})
-
-	_ = os.MkdirAll(targetPath, 0o755)
-
-	fsOps := newFileSystemOperations(processor).(*fileSystemOperationsImpl)
-	state := &operationState{force: true, mx: &sync.Mutex{}, ctx: t.Context()}
-
-	err := fsOps.verifyDirectoryIntegrity(neo4jDirectory, state)
-	assertNoError(t, err)
-
-	if len(mockFiles.copies) != 1 {
-		t.Fatalf("expected exactly 1 copy (only the non-excluded modified file), got %d: %+v",
-			len(mockFiles.copies), mockFiles.copies)
-	}
-	if mockFiles.copies[0].Src != regularFile {
-		t.Errorf("expected only %s to be updated, got copy of %s instead", regularFile, mockFiles.copies[0].Src)
-	}
-}
-
-func TestFileSystemOperationsImpl_ExcludedFilesHandling(t *testing.T) {
-	if len(filesToExcludeFromVerification) == 0 {
-		t.Skip("no excluded files configured; skipping excluded files tests")
-	}
-
-	excluded := filesToExcludeFromVerification[0]
-
-	t.Run("excluded_missing_should_be_copied", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		targetPath := filepath.Join(tmpDir, observabilityDirectory)
-
-		processor := createTestProcessor()
-		mockState := processor.state.(*mockState)
-		mockState.envPath = filepath.Join(tmpDir, ".env")
-
-		mockFiles := processor.files.(*mockFiles)
-		// mark embedded directory and list with excluded file only
-		mockFiles.lists[observabilityDirectory] = []string{
-			excluded,
-		}
-		mockFiles.statuses[excluded] = files.FileStatusMissing
-		mockFiles.AddFile(observabilityDirectory, []byte{})
-
-		// ensure target directory exists on fs
-		_ = os.MkdirAll(targetPath, 0o755)
-
-		fsOps := newFileSystemOperations(processor).(*fileSystemOperationsImpl)
-		state := &operationState{force: false, mx: &sync.Mutex{}, ctx: t.Context()}
-
-		err := fsOps.verifyDirectoryContentIntegrity(observabilityDirectory, targetPath, state)
-		assertNoError(t, err)
-
-		if len(mockFiles.copies) != 1 {
-			t.Fatalf("expected 1 copy for missing excluded file, got %d", len(mockFiles.copies))
-		}
-		if mockFiles.copies[0].Src != excluded || mockFiles.copies[0].Dst != tmpDir {
-			t.Errorf("unexpected copy details: %+v", mockFiles.copies[0])
-		}
-	})
-
-	t.Run("excluded_modified_should_not_be_copied", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		targetPath := filepath.Join(tmpDir, observabilityDirectory)
-
-		processor := createTestProcessor()
-		mockState := processor.state.(*mockState)
-		mockState.envPath = filepath.Join(tmpDir, ".env")
-
-		mockFiles := processor.files.(*mockFiles)
-		// mark embedded directory and list with excluded file only
-		mockFiles.lists[observabilityDirectory] = []string{
-			excluded,
-		}
-		mockFiles.statuses[excluded] = files.FileStatusModified
-		mockFiles.AddFile(observabilityDirectory, []byte{})
-
-		// ensure target directory exists on fs
-		_ = os.MkdirAll(targetPath, 0o755)
-
-		fsOps := newFileSystemOperations(processor).(*fileSystemOperationsImpl)
-		state := &operationState{force: false, mx: &sync.Mutex{}, ctx: t.Context()}
-
-		err := fsOps.verifyDirectoryContentIntegrity(observabilityDirectory, targetPath, state)
-		assertNoError(t, err)
-
-		if len(mockFiles.copies) != 0 {
-			t.Fatalf("expected 0 copies for modified excluded file, got %d", len(mockFiles.copies))
-		}
-	})
-
-	t.Run("force_true_updates_only_non_excluded", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		targetPath := filepath.Join(tmpDir, observabilityDirectory)
-
-		processor := createTestProcessor()
-		mockState := processor.state.(*mockState)
-		mockState.envPath = filepath.Join(tmpDir, ".env")
-
-		mockFiles := processor.files.(*mockFiles)
-		// list contains excluded and non-excluded files
-		nonExcluded := "observability/other.yml"
-		mockFiles.lists[observabilityDirectory] = []string{
-			excluded,    // excluded
-			nonExcluded, // non-excluded
-		}
-		mockFiles.statuses[excluded] = files.FileStatusModified
-		mockFiles.statuses[nonExcluded] = files.FileStatusModified
-		mockFiles.AddFile(observabilityDirectory, []byte{})
-
-		// ensure target directory exists on fs
-		_ = os.MkdirAll(targetPath, 0o755)
-
-		fsOps := newFileSystemOperations(processor).(*fileSystemOperationsImpl)
-		// call higher-level method to exercise force=true branch
-		state := &operationState{force: true, mx: &sync.Mutex{}, ctx: t.Context()}
-
-		err := fsOps.verifyDirectoryIntegrity(observabilityDirectory, state)
-		assertNoError(t, err)
-
-		if len(mockFiles.copies) != 1 {
-			t.Fatalf("expected 1 copy for non-excluded modified file, got %d", len(mockFiles.copies))
-		}
-		if mockFiles.copies[0].Src != nonExcluded || mockFiles.copies[0].Dst != tmpDir {
-			t.Errorf("unexpected copy details: %+v", mockFiles.copies[0])
-		}
-	})
-}
-
-func TestFileSystemOperationsImpl_FileExists(t *testing.T) {
-	tmpDir := t.TempDir()
-	processor := createTestProcessor()
-	fsOps := newFileSystemOperations(processor).(*fileSystemOperationsImpl)
-
-	// create test file
-	testFile := filepath.Join(tmpDir, "test.txt")
-	os.WriteFile(testFile, []byte("test"), 0644)
-
-	// create test directory
-	testDir := filepath.Join(tmpDir, "testdir")
-	os.MkdirAll(testDir, 0755)
-
-	tests := []struct {
-		name     string
-		path     string
-		expected bool
+	fs := &fileSystemOperationsImpl{}
+	for _, tc := range []struct {
+		name          string
+		path          string
+		isFile, isDir bool
 	}{
-		{"existing file", testFile, true},
-		{"existing directory", testDir, false}, // fileExists should return false for directories
-		{"nonexistent path", filepath.Join(tmpDir, "nonexistent"), false},
+		{"a file", file, true, false},
+		{"a directory", dir, false, true},
+		{"a missing path", filepath.Join(dir, "missing"), false, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.isFile, fs.fileExists(tc.path), "fileExists")
+			assert.Equal(t, tc.isDir, fs.directoryExists(tc.path), "directoryExists")
+		})
 	}
+}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := fsOps.fileExists(tt.path)
-			if result != tt.expected {
-				t.Errorf("fileExists(%s) = %v, want %v", tt.path, result, tt.expected)
+func TestFs_ValidateYamlFile_RejectsOnlyMalformedYAML(t *testing.T) {
+	fs := &fileSystemOperationsImpl{}
+	for _, tc := range []struct {
+		name, content, wantErr string
+	}{
+		{"a compose file", "\nversion: '3.8'\nservices:\n  app:\n    image: nginx\n    ports:\n      - \"80:80\"\n", ""},
+		{"an unterminated quote",
+			"\nversion: '3.8'\nservices:\n  app:\n    image: nginx\n    ports:\n      - \"80:80\n    # missing closing quote\n",
+			"invalid YAML syntax"},
+		{"an empty file", "", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "test.yml")
+			require.NoError(t, os.WriteFile(path, []byte(tc.content), 0o644))
+
+			err := fs.validateYamlFile(path)
+			if tc.wantErr == "" {
+				assert.NoError(t, err)
+			} else {
+				assert.ErrorContains(t, err, tc.wantErr)
 			}
 		})
 	}
 }
 
-func TestFileSystemOperationsImpl_DirectoryExists(t *testing.T) {
-	tmpDir := t.TempDir()
-	processor := createTestProcessor()
-	fsOps := newFileSystemOperations(processor).(*fileSystemOperationsImpl)
-
-	// create test file
-	testFile := filepath.Join(tmpDir, "test.txt")
-	os.WriteFile(testFile, []byte("test"), 0644)
-
-	// create test directory
-	testDir := filepath.Join(tmpDir, "testdir")
-	os.MkdirAll(testDir, 0755)
-
-	tests := []struct {
-		name     string
-		path     string
-		expected bool
-	}{
-		{"existing file", testFile, false}, // directoryExists should return false for files
-		{"existing directory", testDir, true},
-		{"nonexistent path", filepath.Join(tmpDir, "nonexistent"), false},
+func TestFs_CheckStackIntegrity_ReportsEveryFileOfTheStack(t *testing.T) {
+	statuses := FilesCheckResult{
+		"docker-compose.yml":               files.FileStatusOK,
+		"docker-compose-graphiti.yml":      files.FileStatusOK,
+		"graphiti/openai.yaml":             files.FileStatusOK,
+		"neo4j/conf/neo4j.conf":            files.FileStatusOK,
+		"neo4j/conf/apoc.conf":             files.FileStatusOK,
+		"neo4j/plugins/apoc-core.jar":      files.FileStatusOK,
+		"docker-compose-langfuse.yml":      files.FileStatusModified,
+		"docker-compose-observability.yml": files.FileStatusMissing,
+		"observability/config1.yml":        files.FileStatusOK,
+		"observability/config2.yml":        files.FileStatusModified,
+		"observability/subdir/config3.yml": files.FileStatusMissing,
 	}
+	lists := map[string][]string{
+		"graphiti":      {"graphiti/openai.yaml"},
+		"neo4j":         {"neo4j/conf/neo4j.conf", "neo4j/conf/apoc.conf", "neo4j/plugins/apoc-core.jar"},
+		"observability": {"observability/config1.yml", "observability/config2.yml", "observability/subdir/config3.yml"},
+	}
+	for _, tc := range []struct {
+		name    string
+		stack   ProductStack
+		want    FilesCheckResult
+		wantErr string
+	}{
+		{"pentagi reports its compose file", ProductStackPentagi, FilesCheckResult{"docker-compose.yml": files.FileStatusOK}, ""},
+		{"langfuse reports its compose file", ProductStackLangfuse, FilesCheckResult{"docker-compose-langfuse.yml": files.FileStatusModified}, ""},
+		{"observability with its directory", ProductStackObservability, FilesCheckResult{
+			"docker-compose-observability.yml": files.FileStatusMissing,
+			"observability/config1.yml":        files.FileStatusOK,
+			"observability/config2.yml":        files.FileStatusModified,
+			"observability/subdir/config3.yml": files.FileStatusMissing,
+		}, ""},
+		{"compose covers every stack", ProductStackCompose, statuses, ""},
+		{"all covers every stack", ProductStackAll, statuses, ""},
+		{"the worker has no files", ProductStackWorker, FilesCheckResult{},
+			"operation check integrity not applicable for stack worker"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ops, embedded, _ := fsOperations(t)
+			embedded.statuses, embedded.lists = statuses, lists
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := fsOps.directoryExists(tt.path)
-			if result != tt.expected {
-				t.Errorf("directoryExists(%s) = %v, want %v", tt.path, result, tt.expected)
+			result, err := ops.checkStackIntegrity(t.Context(), tc.stack)
+			if tc.wantErr == "" {
+				require.NoError(t, err)
+			} else {
+				require.EqualError(t, err, tc.wantErr)
 			}
+			assert.Equal(t, tc.want, result)
 		})
 	}
-}
-
-func TestFileSystemOperationsImpl_ValidateYamlFile(t *testing.T) {
-	tmpDir := t.TempDir()
-	processor := createTestProcessor()
-	fsOps := newFileSystemOperations(processor).(*fileSystemOperationsImpl)
-
-	tests := []struct {
-		name      string
-		content   string
-		expectErr bool
-	}{
-		{
-			name: "valid YAML",
-			content: `
-version: '3.8'
-services:
-  app:
-    image: nginx
-    ports:
-      - "80:80"
-`,
-			expectErr: false,
-		},
-		{
-			name: "invalid YAML - syntax error",
-			content: `
-version: '3.8'
-services:
-  app:
-    image: nginx
-    ports:
-      - "80:80
-    # missing closing quote
-`,
-			expectErr: true,
-		},
-		{
-			name:      "empty file",
-			content:   "",
-			expectErr: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// create test file
-			testFile := filepath.Join(tmpDir, "test.yml")
-			err := os.WriteFile(testFile, []byte(tt.content), 0644)
-			if err != nil {
-				t.Fatalf("failed to create test file: %v", err)
-			}
-
-			err = fsOps.validateYamlFile(testFile)
-			assertError(t, err, tt.expectErr, "")
-		})
-	}
-}
-
-func TestCheckStackIntegrity(t *testing.T) {
-	tests := []struct {
-		name     string
-		stack    ProductStack
-		setup    func(*mockFiles)
-		expected map[string]files.FileStatus
-	}{
-		{
-			name:  "pentagi_stack_all_files_ok",
-			stack: ProductStackPentagi,
-			setup: func(m *mockFiles) {
-				m.statuses[composeFilePentagi] = files.FileStatusOK
-			},
-			expected: map[string]files.FileStatus{
-				composeFilePentagi: files.FileStatusOK,
-			},
-		},
-		{
-			name:  "langfuse_stack_file_modified",
-			stack: ProductStackLangfuse,
-			setup: func(m *mockFiles) {
-				m.statuses[composeFileLangfuse] = files.FileStatusModified
-			},
-			expected: map[string]files.FileStatus{
-				composeFileLangfuse: files.FileStatusModified,
-			},
-		},
-		{
-			name:  "observability_stack_mixed_status",
-			stack: ProductStackObservability,
-			setup: func(m *mockFiles) {
-				m.statuses[composeFileObservability] = files.FileStatusOK
-				m.lists[observabilityDirectory] = []string{
-					"observability/config1.yml",
-					"observability/config2.yml",
-					"observability/subdir/config3.yml",
-				}
-				m.statuses["observability/config1.yml"] = files.FileStatusOK
-				m.statuses["observability/config2.yml"] = files.FileStatusModified
-				m.statuses["observability/subdir/config3.yml"] = files.FileStatusMissing
-			},
-			expected: map[string]files.FileStatus{
-				composeFileObservability:           files.FileStatusOK,
-				"observability/config1.yml":        files.FileStatusOK,
-				"observability/config2.yml":        files.FileStatusModified,
-				"observability/subdir/config3.yml": files.FileStatusMissing,
-			},
-		},
-		{
-			name:  "compose_stacks_combined",
-			stack: ProductStackCompose,
-			setup: func(m *mockFiles) {
-				// pentagi
-				m.statuses[composeFilePentagi] = files.FileStatusOK
-				// graphiti
-				m.statuses[composeFileGraphiti] = files.FileStatusOK
-				m.lists[graphitiConfigsDirectory] = []string{
-					"graphiti/openai.yaml",
-				}
-				m.statuses["graphiti/openai.yaml"] = files.FileStatusOK
-				m.lists[neo4jDirectory] = []string{
-					"neo4j/conf/neo4j.conf",
-					"neo4j/conf/apoc.conf",
-					"neo4j/plugins/apoc-core.jar",
-				}
-				m.statuses["neo4j/conf/neo4j.conf"] = files.FileStatusOK
-				m.statuses["neo4j/conf/apoc.conf"] = files.FileStatusOK
-				m.statuses["neo4j/plugins/apoc-core.jar"] = files.FileStatusOK
-				// langfuse
-				m.statuses[composeFileLangfuse] = files.FileStatusModified
-				// observability
-				m.statuses[composeFileObservability] = files.FileStatusMissing
-				m.lists[observabilityDirectory] = []string{
-					"observability/config.yml",
-				}
-				m.statuses["observability/config.yml"] = files.FileStatusOK
-			},
-			expected: map[string]files.FileStatus{
-				composeFilePentagi:            files.FileStatusOK,
-				composeFileGraphiti:           files.FileStatusOK,
-				"graphiti/openai.yaml":        files.FileStatusOK,
-				"neo4j/conf/neo4j.conf":       files.FileStatusOK,
-				"neo4j/conf/apoc.conf":        files.FileStatusOK,
-				"neo4j/plugins/apoc-core.jar": files.FileStatusOK,
-				composeFileLangfuse:           files.FileStatusModified,
-				composeFileObservability:      files.FileStatusMissing,
-				"observability/config.yml":    files.FileStatusOK,
-			},
-		},
-		{
-			name:  "all_stacks_combined",
-			stack: ProductStackAll,
-			setup: func(m *mockFiles) {
-				// pentagi
-				m.statuses[composeFilePentagi] = files.FileStatusOK
-				// graphiti
-				m.statuses[composeFileGraphiti] = files.FileStatusOK
-				m.lists[graphitiConfigsDirectory] = []string{
-					"graphiti/openai.yaml",
-				}
-				m.statuses["graphiti/openai.yaml"] = files.FileStatusOK
-				m.lists[neo4jDirectory] = []string{
-					"neo4j/conf/neo4j.conf",
-					"neo4j/conf/apoc.conf",
-					"neo4j/plugins/apoc-core.jar",
-				}
-				m.statuses["neo4j/conf/neo4j.conf"] = files.FileStatusOK
-				m.statuses["neo4j/conf/apoc.conf"] = files.FileStatusOK
-				m.statuses["neo4j/plugins/apoc-core.jar"] = files.FileStatusOK
-				// langfuse
-				m.statuses[composeFileLangfuse] = files.FileStatusModified
-				// observability
-				m.statuses[composeFileObservability] = files.FileStatusMissing
-				m.lists[observabilityDirectory] = []string{
-					"observability/config.yml",
-				}
-				m.statuses["observability/config.yml"] = files.FileStatusOK
-			},
-			expected: map[string]files.FileStatus{
-				composeFilePentagi:            files.FileStatusOK,
-				composeFileGraphiti:           files.FileStatusOK,
-				"graphiti/openai.yaml":        files.FileStatusOK,
-				"neo4j/conf/neo4j.conf":       files.FileStatusOK,
-				"neo4j/conf/apoc.conf":        files.FileStatusOK,
-				"neo4j/plugins/apoc-core.jar": files.FileStatusOK,
-				composeFileLangfuse:           files.FileStatusModified,
-				composeFileObservability:      files.FileStatusMissing,
-				"observability/config.yml":    files.FileStatusOK,
-			},
-		},
-		{
-			name:     "unsupported_stack",
-			stack:    ProductStackWorker,
-			setup:    func(m *mockFiles) {},
-			expected: map[string]files.FileStatus{},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			mockFiles := newMockFiles()
-			tt.setup(mockFiles)
-
-			// create test processor and fsOps
-			processor := createTestProcessor()
-			// set working dir via state env path
-			mockState := processor.state.(*mockState)
-			mockState.envPath = filepath.Join("/test/working", ".env")
-			processor.files = mockFiles
-
-			fsOps := newFileSystemOperations(processor).(*fileSystemOperationsImpl)
-			result, err := fsOps.checkStackIntegrity(t.Context(), tt.stack)
-			if err != nil {
-				if tt.stack == ProductStackWorker {
-					// unsupported stack should return an error or empty result; current impl returns error
-					return
-				}
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if len(result) != len(tt.expected) {
-				t.Errorf("expected %d file statuses, got %d", len(tt.expected), len(result))
-			}
-
-			for path, expectedStatus := range tt.expected {
-				if actualStatus, ok := result[path]; !ok {
-					t.Errorf("expected file %s not found in result", path)
-				} else if actualStatus != expectedStatus {
-					t.Errorf("file %s: expected status %v, got %v", path, expectedStatus, actualStatus)
-				}
-			}
-		})
-	}
-}
-
-func TestCheckStackIntegrity_RealFiles(t *testing.T) {
-	// Test with real files interface would require proper embedded files setup
-	// For now, we focus on mock-based testing which covers the logic
-	t.Run("mock_based_coverage", func(t *testing.T) {
-		// The logic is covered by TestGetStackFilesStatus above
-		// Real files integration would require setting up embedded content
-		// which is beyond the scope of unit tests
-		mockFiles := newMockFiles()
-
-		// Setup comprehensive test scenario
-		mockFiles.statuses[composeFilePentagi] = files.FileStatusOK
-		mockFiles.statuses[composeFileGraphiti] = files.FileStatusOK
-		mockFiles.lists[graphitiConfigsDirectory] = []string{
-			"graphiti/openai.yaml",
-		}
-		mockFiles.statuses["graphiti/openai.yaml"] = files.FileStatusOK
-		mockFiles.lists[neo4jDirectory] = []string{
-			"neo4j/conf/neo4j.conf",
-			"neo4j/conf/apoc.conf",
-			"neo4j/plugins/apoc-core.jar",
-		}
-		mockFiles.statuses["neo4j/conf/neo4j.conf"] = files.FileStatusOK
-		mockFiles.statuses["neo4j/conf/apoc.conf"] = files.FileStatusOK
-		mockFiles.statuses["neo4j/plugins/apoc-core.jar"] = files.FileStatusOK
-		mockFiles.statuses[composeFileLangfuse] = files.FileStatusModified
-		mockFiles.statuses[composeFileObservability] = files.FileStatusMissing
-		mockFiles.lists[observabilityDirectory] = []string{
-			"observability/config.yml",
-			"observability/subdir/nested.yml",
-		}
-		mockFiles.statuses["observability/config.yml"] = files.FileStatusOK
-		mockFiles.statuses["observability/subdir/nested.yml"] = files.FileStatusModified
-
-		for _, stack := range []ProductStack{ProductStackAll, ProductStackCompose} {
-			// create test processor and fsOps
-			processor := createTestProcessor()
-			mockState := processor.state.(*mockState)
-			mockState.envPath = filepath.Join("/test", ".env")
-			processor.files = mockFiles
-			fsOps := newFileSystemOperations(processor).(*fileSystemOperationsImpl)
-			result, err := fsOps.checkStackIntegrity(t.Context(), stack)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			// Verify all files are captured
-			expectedCount := 10 // 4 compose files + 1 Graphiti config + 3 Neo4j files + 2 observability files
-			if len(result) != expectedCount {
-				t.Errorf("expected %d files, got %d", expectedCount, len(result))
-			}
-		}
-	})
-}
-
-func TestFileSystemOperations_IntegrityWithForceMode(t *testing.T) {
-	// Test the interaction between ensure/verify integrity and force mode
-	t.Run("ensure_respects_force_mode", func(t *testing.T) {
-		processor := createTestProcessor()
-		mockFiles := processor.files.(*mockFiles)
-
-		// Setup files
-		mockFiles.statuses[composeFilePentagi] = files.FileStatusModified
-		mockFiles.AddFile(composeFilePentagi, []byte("embedded content"))
-
-		fsOps := newFileSystemOperations(processor).(*fileSystemOperationsImpl)
-
-		// First without force - should not overwrite
-		state := &operationState{force: false, mx: &sync.Mutex{}, ctx: t.Context()}
-		err := fsOps.ensureStackIntegrity(t.Context(), ProductStackPentagi, state)
-		assertNoError(t, err)
-
-		// Check that file was not copied (force=false with existing file)
-		copyCount := 0
-		for _, copy := range mockFiles.copies {
-			if copy.Src == composeFilePentagi {
-				copyCount++
-			}
-		}
-		// Note: in real implementation, existing file check happens in ensureFileFromEmbed
-		// which uses fileExists check on actual filesystem, not mock
-
-		// Now with force - should overwrite
-		state.force = true
-		err = fsOps.ensureStackIntegrity(t.Context(), ProductStackPentagi, state)
-		assertNoError(t, err)
-	})
-}
-
-func TestFileSystemOperations_StackSpecificBehavior(t *testing.T) {
-	// Test stack-specific behaviors
-	t.Run("observability_handles_directory", func(t *testing.T) {
-		processor := createTestProcessor()
-		mockFiles := processor.files.(*mockFiles)
-		tmpDir := t.TempDir()
-		mockState := processor.state.(*mockState)
-		mockState.envPath = filepath.Join(tmpDir, ".env")
-
-		// Setup observability directory
-		mockFiles.lists[observabilityDirectory] = []string{
-			"observability/config1.yml",
-			"observability/nested/config2.yml",
-		}
-		mockFiles.statuses["observability/config1.yml"] = files.FileStatusOK
-		mockFiles.statuses["observability/nested/config2.yml"] = files.FileStatusOK
-		mockFiles.AddFile(observabilityDirectory, []byte{}) // mark as directory
-
-		fsOps := newFileSystemOperations(processor).(*fileSystemOperationsImpl)
-		state := &operationState{force: false, mx: &sync.Mutex{}, ctx: t.Context()}
-
-		err := fsOps.ensureStackIntegrity(t.Context(), ProductStackObservability, state)
-		assertNoError(t, err)
-
-		// Should have attempted to copy both compose file and directory
-		expectedCopies := 2 // compose file + directory
-		if len(mockFiles.copies) < expectedCopies {
-			t.Errorf("expected at least %d copy operations, got %d", expectedCopies, len(mockFiles.copies))
-		}
-	})
 }

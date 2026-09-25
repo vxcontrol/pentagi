@@ -2,1234 +2,509 @@ package processor
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"pentagi/cmd/installer/checker"
 	"pentagi/cmd/installer/files"
-	"pentagi/pkg/version"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-// newProcessorForLogicTests creates a processor with recording mocks and mock checker
-func newProcessorForLogicTests(t *testing.T) (*processor, *baseMockComposeOperations, *baseMockFileSystemOperations, *baseMockDockerOperations) {
+type logicOperation func(*processor, context.Context, ProductStack, *operationState) error
+
+var (
+	logicApplyChanges logicOperation = func(p *processor, ctx context.Context, _ ProductStack, s *operationState) error {
+		return p.applyChanges(ctx, s)
+	}
+	logicInstall logicOperation = func(p *processor, ctx context.Context, _ ProductStack, s *operationState) error {
+		return p.install(ctx, s)
+	}
+	logicFactoryReset logicOperation = func(p *processor, ctx context.Context, _ ProductStack, s *operationState) error {
+		return p.factoryReset(ctx, s)
+	}
+
+	// logicEmbedded points every optional stack at its embedded endpoint.
+	logicEmbedded = map[string]string{
+		"OTEL_HOST":         checker.DefaultObservabilityEndpoint,
+		"LANGFUSE_BASE_URL": checker.DefaultLangfuseEndpoint,
+		"GRAPHITI_URL":      checker.DefaultGraphitiEndpoint,
+	}
+)
+
+// logicCase is one operation run against recording doubles, and every call it must make.
+type logicCase struct {
+	name      string
+	run       logicOperation
+	stack     ProductStack
+	configure func(*mockCheckConfig)
+	vars      map[string]string
+	// fail reaches every double, each answering its own methods; "method_stack" fails one fs stack.
+	fail     map[string]error
+	replaced bool                    // what updateJaegerPlugin reports
+	prepare  func(*processorHarness) // runs on the harness just before the operation
+	wantErr  string
+
+	fs, compose, docker, update []string
+}
+
+func logicRun(t *testing.T, tc logicCase) *processorHarness {
 	t.Helper()
-
-	// build fresh processor with mock checker result
-	mockState := testState(t)
-	checkResult := defaultCheckResult()
-
-	p := createProcessorWithState(mockState, checkResult)
-
-	// return typed mock operations for call verification
-	composeOps := p.composeOps.(*baseMockComposeOperations)
-	fsOps := p.fsOps.(*baseMockFileSystemOperations)
-	dockerOps := p.dockerOps.(*baseMockDockerOperations)
-
-	return p, composeOps, fsOps, dockerOps
-}
-
-// newProcessorForLogicTestsWithConfig creates a processor with custom checker configuration
-func newProcessorForLogicTestsWithConfig(t *testing.T, configFunc func(*mockCheckConfig)) (*processor, *baseMockComposeOperations, *baseMockFileSystemOperations, *baseMockDockerOperations) {
-	t.Helper()
-
-	// build fresh processor with custom checker configuration
-	mockState := testState(t)
-
-	handler := newMockCheckHandler()
-	if configFunc != nil {
-		configFunc(&handler.config)
+	h := processorHarnessWith(t, tc.configure)
+	h.update.jaegerPluginReplaced = tc.replaced
+	for name, value := range tc.vars {
+		require.NoError(t, h.p.state.SetVar(name, value))
 	}
-
-	checkResult := createCheckResultWithHandler(handler)
-	p := createProcessorWithState(mockState, checkResult)
-
-	// return typed mock operations for call verification
-	composeOps := p.composeOps.(*baseMockComposeOperations)
-	fsOps := p.fsOps.(*baseMockFileSystemOperations)
-	dockerOps := p.dockerOps.(*baseMockDockerOperations)
-
-	return p, composeOps, fsOps, dockerOps
-}
-
-// injectComposeError injects error into compose operations for testing
-func injectComposeError(p *processor, errorMethods map[string]error) {
-	baseMock := p.composeOps.(*baseMockComposeOperations)
-	for method, err := range errorMethods {
-		baseMock.setError(method, err)
-	}
-}
-
-// injectDockerError injects error into docker operations for testing
-func injectDockerError(p *processor, errorMethods map[string]error) {
-	baseMock := p.dockerOps.(*baseMockDockerOperations)
-	for method, err := range errorMethods {
-		baseMock.setError(method, err)
-	}
-}
-
-// injectFSError injects error into filesystem operations for testing
-func injectFSError(p *processor, errorMethods map[string]error) {
-	baseMock := p.fsOps.(*baseMockFileSystemOperations)
-	for method, err := range errorMethods {
-		baseMock.setError(method, err)
-	}
-}
-
-// testStackOperation is a helper that tests stack operations with standard patterns
-func testStackOperation(t *testing.T,
-	operation func(*processor, context.Context, ProductStack, *operationState) error,
-	expectedMethod string, processorOp ProcessorOperation,
-) {
-	t.Helper()
-
-	// test successful delegation
-	t.Run("delegates_to_compose", func(t *testing.T) {
-		p, composeOps, _, _ := newProcessorForLogicTests(t)
-
-		err := operation(p, t.Context(), ProductStackPentagi, testOperationState(t))
-		assertNoError(t, err)
-
-		calls := composeOps.getCalls()
-		if len(calls) != 1 {
-			t.Fatalf("expected 1 compose call, got %d", len(calls))
-		}
-		if calls[0].Method != expectedMethod || calls[0].Stack != ProductStackPentagi {
-			t.Fatalf("unexpected call: %+v", calls[0])
-		}
-	})
-
-	// test validation errors
-	t.Run("validation_errors", func(t *testing.T) {
-		p, _, _, _ := newProcessorForLogicTests(t)
-
-		testCases := generateStackTestCases(processorOp)
-		for _, tc := range testCases {
-			if tc.expectErr {
-				t.Run(tc.name, func(t *testing.T) {
-					err := operation(p, t.Context(), tc.stack, testOperationState(t))
-					assertError(t, err, true, tc.errorMsg)
-				})
-			}
-		}
-	})
-}
-
-func TestStart(t *testing.T) {
-	testStackOperation(t, (*processor).start, "startStack", ProcessorOperationStart)
-}
-
-func TestStop(t *testing.T) {
-	testStackOperation(t, (*processor).stop, "stopStack", ProcessorOperationStop)
-}
-
-func TestRestart(t *testing.T) {
-	testStackOperation(t, (*processor).restart, "restartStack", ProcessorOperationRestart)
-}
-
-func TestUpdate(t *testing.T) {
-	t.Run("compose_stacks", func(t *testing.T) {
-		// Test that update respects IsUpToDate flags
-		testCases := []struct {
-			name         string
-			stack        ProductStack
-			isUpToDate   bool
-			expectUpdate bool
-			configSetup  func(*mockCheckConfig)
-		}{
-			{
-				name:         "pentagi_needs_update",
-				stack:        ProductStackPentagi,
-				isUpToDate:   false,
-				expectUpdate: true,
-				configSetup: func(config *mockCheckConfig) {
-					config.PentagiIsUpToDate = false
-				},
-			},
-			{
-				name:         "pentagi_already_updated",
-				stack:        ProductStackPentagi,
-				isUpToDate:   true,
-				expectUpdate: false,
-				configSetup: func(config *mockCheckConfig) {
-					config.PentagiIsUpToDate = true
-				},
-			},
-			{
-				name:         "langfuse_needs_update",
-				stack:        ProductStackLangfuse,
-				isUpToDate:   false,
-				expectUpdate: true,
-				configSetup: func(config *mockCheckConfig) {
-					config.LangfuseIsUpToDate = false
-				},
-			},
-			{
-				name:         "observability_already_updated",
-				stack:        ProductStackObservability,
-				isUpToDate:   true,
-				expectUpdate: false,
-				configSetup: func(config *mockCheckConfig) {
-					config.ObservabilityIsUpToDate = true
-				},
-			},
-		}
-
-		for _, tc := range testCases {
-			t.Run(tc.name, func(t *testing.T) {
-				p, composeOps, _, _ := newProcessorForLogicTestsWithConfig(t, tc.configSetup)
-
-				err := p.update(t.Context(), tc.stack, testOperationState(t))
-				assertNoError(t, err)
-
-				calls := composeOps.getCalls()
-				if tc.expectUpdate {
-					if len(calls) != 2 || calls[0].Method != "downloadStack" || calls[1].Method != "updateStack" {
-						t.Errorf("expected downloadStack and updateStack calls, got: %+v", calls)
-					}
-				} else {
-					if len(calls) != 0 {
-						t.Errorf("expected no calls for up-to-date stack, got: %+v", calls)
-					}
-				}
-			})
-		}
-	})
-
-	t.Run("worker_stack", func(t *testing.T) {
-		p, _, _, dockerOps := newProcessorForLogicTests(t)
-
-		err := p.update(t.Context(), ProductStackWorker, testOperationState(t))
-		assertNoError(t, err)
-
-		calls := dockerOps.getCalls()
-		if len(calls) != 1 || calls[0].Method != "pullWorkerImage" {
-			t.Errorf("expected pullWorkerImage call, got: %+v", calls)
-		}
-	})
-
-	t.Run("installer_stack", func(t *testing.T) {
-		p, _, _, _ := newProcessorForLogicTestsWithConfig(t, func(config *mockCheckConfig) {
-			config.InstallerIsUpToDate = false
-			config.UpdateServerAccessible = true
-		})
-
-		// Mock updateOps to avoid "not implemented" error
-		updateOps := p.updateOps.(*baseMockUpdateOperations)
-		updateOps.setError("updateInstaller", fmt.Errorf("not implemented"))
-
-		err := p.update(t.Context(), ProductStackInstaller, testOperationState(t))
-		assertError(t, err, true, "not implemented")
-
-		calls := updateOps.getCalls()
-		if len(calls) != 1 || calls[0].Method != "updateInstaller" {
-			t.Errorf("expected updateInstaller call, got: %+v", calls)
-		}
-	})
-
-	t.Run("compose_stacks", func(t *testing.T) {
-		p, composeOps, _, dockerOps := newProcessorForLogicTestsWithConfig(t, func(config *mockCheckConfig) {
-			config.PentagiIsUpToDate = true // should skip
-			config.LangfuseIsUpToDate = false
-			config.ObservabilityIsUpToDate = false
-		})
-
-		err := p.update(t.Context(), ProductStackCompose, testOperationState(t))
-		assertNoError(t, err)
-
-		// Check compose calls - should update langfuse and observability, skip pentagi
-		composeCalls := composeOps.getCalls()
-		updateCount := 0
-		for _, call := range composeCalls {
-			if call.Method == "updateStack" {
-				updateCount++
-				// Verify we don't update pentagi
-				if call.Stack == ProductStackPentagi {
-					t.Error("should not update pentagi when it's up to date")
-				}
-			}
-		}
-		if updateCount != 2 {
-			t.Errorf("expected 2 updateStack calls, got %d", updateCount)
-		}
-
-		// Check docker calls for worker
-		dockerCalls := dockerOps.getCalls()
-		workerPulled := false
-		for _, call := range dockerCalls {
-			if call.Method == "pullWorkerImage" {
-				workerPulled = true
-			}
-		}
-		if workerPulled {
-			t.Error("expected no worker image to be pulled")
-		}
-	})
-
-	t.Run("all_stacks", func(t *testing.T) {
-		p, composeOps, _, dockerOps := newProcessorForLogicTestsWithConfig(t, func(config *mockCheckConfig) {
-			config.PentagiIsUpToDate = false
-			config.LangfuseIsUpToDate = true // should skip
-			config.ObservabilityIsUpToDate = false
-		})
-
-		err := p.update(t.Context(), ProductStackAll, testOperationState(t))
-		assertNoError(t, err)
-
-		// Check compose calls - should update pentagi and observability, skip langfuse
-		composeCalls := composeOps.getCalls()
-		updateCount := 0
-		for _, call := range composeCalls {
-			if call.Method == "updateStack" {
-				updateCount++
-				// Verify we don't update Langfuse
-				if call.Stack == ProductStackLangfuse {
-					t.Error("should not update Langfuse when it's up to date")
-				}
-			}
-		}
-		if updateCount != 2 {
-			t.Errorf("expected 2 updateStack calls, got %d", updateCount)
-		}
-
-		// Check docker calls for worker
-		dockerCalls := dockerOps.getCalls()
-		workerPulled := false
-		for _, call := range dockerCalls {
-			if call.Method == "pullWorkerImage" {
-				workerPulled = true
-			}
-		}
-		if !workerPulled {
-			t.Error("expected worker image to be pulled")
-		}
-	})
-
-	// Test validation errors
-	t.Run("validation_errors", func(t *testing.T) {
-		p, _, _, _ := newProcessorForLogicTests(t)
-
-		testCases := generateStackTestCases(ProcessorOperationUpdate)
-		for _, tc := range testCases {
-			if tc.expectErr {
-				t.Run(tc.name, func(t *testing.T) {
-					err := p.update(t.Context(), tc.stack, testOperationState(t))
-					assertError(t, err, true, tc.errorMsg)
-				})
-			}
-		}
-	})
-}
-
-func TestRemove(t *testing.T) {
-	testStackOperation(t, (*processor).remove, "removeStack", ProcessorOperationRemove)
-}
-
-func TestApplyChanges_ErrorPropagation_FromEnsureNetworks(t *testing.T) {
-	p, _, _, _ := newProcessorForLogicTests(t)
-
-	// inject error into ensureNetworks
-	injectDockerError(p, map[string]error{
-		"ensureMainDockerNetworks": fmt.Errorf("network error"),
-	})
-
-	_ = p.state.SetVar("OTEL_HOST", checker.DefaultObservabilityEndpoint)
-	_ = p.state.SetVar("LANGFUSE_BASE_URL", checker.DefaultLangfuseEndpoint)
-
-	// not extracted forces ensure
-	p.checker.ObservabilityExtracted = false
-	p.checker.LangfuseExtracted = false
-	p.checker.PentagiExtracted = false
-
-	err := p.applyChanges(t.Context(), testOperationState(t))
-	assertError(t, err, true, "failed to ensure docker networks: network error")
-}
-
-func TestPurge_StrictAndDockerCleanup(t *testing.T) {
-	t.Run("compose_stack_purge", func(t *testing.T) {
-		p, composeOps, _, dockerOps := newProcessorForLogicTests(t)
-
-		err := p.purge(t.Context(), ProductStackPentagi, testOperationState(t))
-		assertNoError(t, err)
-
-		// first call must be strict purge (images)
-		composeCalls := composeOps.getCalls()
-		if len(composeCalls) == 0 || composeCalls[0].Method != "purgeImagesStack" || composeCalls[0].Stack != ProductStackPentagi {
-			t.Fatalf("expected purgeImagesStack call for pentagi, got: %+v", composeCalls)
-		}
-
-		// docker cleanup operations should NOT be called for individual compose stack
-		dockerCalls := dockerOps.getCalls()
-		if len(dockerCalls) > 0 {
-			t.Errorf("expected no docker calls for individual compose stack purge, got: %+v", dockerCalls)
-		}
-	})
-
-	t.Run("worker_stack_purge", func(t *testing.T) {
-		p, _, _, dockerOps := newProcessorForLogicTests(t)
-
-		err := p.purge(t.Context(), ProductStackWorker, testOperationState(t))
-		assertNoError(t, err)
-
-		// worker purge should call purgeWorkerImages (which internally calls removeWorkerContainers)
-		dockerCalls := dockerOps.getCalls()
-		if len(dockerCalls) == 0 || dockerCalls[0].Method != "purgeWorkerImages" {
-			t.Errorf("expected purgeWorkerImages call for worker, got: %+v", dockerCalls)
-		}
-	})
-}
-
-func TestApplyChanges_Embedded_AllStacksUpdated(t *testing.T) {
-	// use custom config to set specific states
-	p, composeOps, fsOps, dockerOps := newProcessorForLogicTestsWithConfig(t, func(config *mockCheckConfig) {
-		// mark as not extracted to force ensure
-		config.ObservabilityExtracted = false
-		config.LangfuseExtracted = false
-		config.GraphitiExtracted = false
-		config.PentagiExtracted = false
-		// ensure embedded mode conditions
-		config.ObservabilityConnected = true
-		config.ObservabilityExternal = false
-		config.LangfuseConnected = true
-		config.LangfuseExternal = false
-		config.GraphitiConnected = true
-		config.GraphitiExternal = false
-	})
-
-	// mark state dirty and set embedded modes
-	_ = p.state.SetVar("OTEL_HOST", checker.DefaultObservabilityEndpoint)
-	_ = p.state.SetVar("LANGFUSE_BASE_URL", checker.DefaultLangfuseEndpoint)
-	_ = p.state.SetVar("GRAPHITI_URL", checker.DefaultGraphitiEndpoint)
-
-	err := p.applyChanges(t.Context(), testOperationState(t))
-	if err != nil {
-		t.Fatalf("applyChanges returned error: %v", err)
-	}
-
-	dockerCalls := dockerOps.getCalls()
-	if len(dockerCalls) == 0 || dockerCalls[0].Method != "ensureMainDockerNetworks" {
-		t.Fatalf("expected ensureMainDockerNetworks first, got: %+v", dockerCalls)
-	}
-
-	// ensure/verify for four stacks and update four stacks
-	// since all not extracted -> ensure called for obs, langfuse, graphiti, pentagi
-	fsCalls := fsOps.getCalls()
-	ensureCount := 0
-	for _, c := range fsCalls {
-		if c.Method == "ensureStackIntegrity" {
-			ensureCount++
+	for method, err := range tc.fail {
+		for _, double := range []*processorCallRecorder{
+			&h.fs.processorCallRecorder, &h.docker.processorCallRecorder,
+			&h.compose.processorCallRecorder, &h.update.processorCallRecorder,
+		} {
+			double.setError(method, err)
 		}
 	}
 
-	composeCalls := composeOps.getCalls()
-	updateCount := 0
-	for _, c := range composeCalls {
-		if c.Method == "updateStack" {
-			updateCount++
-		}
+	if tc.prepare != nil {
+		tc.prepare(h)
 	}
-	if ensureCount != 4 || updateCount != 4 {
-		t.Fatalf("expected ensure=4 and update=4, got ensure=%d update=%d", ensureCount, updateCount)
+
+	err := tc.run(h.p, t.Context(), tc.stack, testOperationState(t))
+	if tc.wantErr == "" {
+		require.NoError(t, err)
+	} else {
+		require.EqualError(t, err, tc.wantErr)
 	}
+	assert.Equal(t, tc.fs, logicTrace(h.fs.getCalls()), "file system calls")
+	assert.Equal(t, tc.compose, logicTrace(h.compose.getCalls()), "compose calls")
+	assert.Equal(t, tc.docker, logicTrace(h.docker.getCalls()), "docker calls")
+	assert.Equal(t, tc.update, logicTrace(h.update.getCalls()), "update calls")
+	return h
 }
 
-func TestApplyChanges_Disabled_RemovesInstalled(t *testing.T) {
-	// use custom config to simulate installed observability that should be removed
-	p, composeOps, _, _ := newProcessorForLogicTestsWithConfig(t, func(config *mockCheckConfig) {
-		// simulate installed observability
-		config.ObservabilityInstalled = true
-		config.ObservabilityConnected = true
-		config.ObservabilityExternal = true // external means it should be removed if installed
-	})
-
-	// mark state dirty and set external for observability
-	_ = p.state.SetVar("OTEL_HOST", "http://external-otel:4318")
-
-	err := p.applyChanges(t.Context(), testOperationState(t))
-	if err != nil {
-		t.Fatalf("applyChanges returned error: %v", err)
-	}
-
-	// should include remove for observability
-	calls := composeOps.getCalls()
-	found := false
+// logicTrace renders calls as "method stack-or-network args [force]" lines, to compare a whole sequence.
+func logicTrace(calls []call) []string {
+	var trace []string
 	for _, c := range calls {
-		if c.Method == "removeStack" && c.Stack == ProductStackObservability {
-			found = true
-			break
+		fields := append([]string{c.Method, string(c.Stack), c.Name}, c.Args...)
+		if c.Force {
+			fields = append(fields, "force")
 		}
+		trace = append(trace, strings.Join(strings.Fields(strings.Join(fields, " ")), " "))
 	}
-	if !found {
-		t.Fatalf("expected removeStack(observability) call not found; calls: %+v", calls)
+	return trace
+}
+
+// logicOutdated makes the check call the given stacks outdated.
+func logicOutdated(stacks ...ProductStack) func(*mockCheckConfig) {
+	return func(c *mockCheckConfig) {
+		for _, stack := range stacks {
+			switch stack {
+			case ProductStackPentagi:
+				c.PentagiIsUpToDate = false
+			case ProductStackGraphiti:
+				c.GraphitiIsUpToDate = false
+			case ProductStackLangfuse:
+				c.LangfuseIsUpToDate = false
+			case ProductStackObservability:
+				c.ObservabilityIsUpToDate = false
+			case ProductStackInstaller:
+				c.InstallerIsUpToDate = false
+			}
+		}
 	}
 }
 
-// Additional comprehensive tests for business logic coverage
+func logicConnected(c *mockCheckConfig) {
+	c.LangfuseConnected, c.GraphitiConnected = true, true
+}
 
-func TestDownload_ComposeStacks(t *testing.T) {
-	p, composeOps, _, dockerOps := newProcessorForLogicTests(t)
-
-	err := p.download(t.Context(), ProductStackCompose, testOperationState(t))
-	if err != nil {
-		t.Fatalf("download returned error: %v", err)
-	}
-
-	// should download all individual stacks
-	composeCalls := composeOps.getCalls()
-	expectedComposeStacks := []ProductStack{
-		ProductStackPentagi, ProductStackGraphiti, ProductStackLangfuse, ProductStackObservability,
-	}
-	composeCallCount := 0
-	for _, call := range composeCalls {
-		if call.Method == "downloadStack" {
-			composeCallCount++
+func countCalls(calls []string, name string) int {
+	found := 0
+	for _, call := range calls {
+		if call == name {
+			found++
 		}
 	}
-	if composeCallCount != len(expectedComposeStacks) {
-		t.Errorf("expected %d compose download calls, got %d", len(expectedComposeStacks), composeCallCount)
-	}
+	return found
+}
 
-	// should also download worker
-	dockerCalls := dockerOps.getCalls()
-	workerDownloaded := false
-	for _, call := range dockerCalls {
-		if call.Method == "pullWorkerImage" {
-			workerDownloaded = true
-			break
-		}
-	}
-	if workerDownloaded {
-		t.Error("expected no worker image download, but found")
+// Subtests are keyed by unit; a refused stack must not reach compose.
+func TestLogic_StartStopAndRestartDelegateToComposeOrRefuseTheStack(t *testing.T) {
+	start, stop, restart := (*processor).start, (*processor).stop, (*processor).restart
+	for _, tc := range []logicCase{
+		{name: "start hands pentagi to compose", run: start, stack: ProductStackPentagi,
+			compose: []string{"startStack pentagi"}},
+		{name: "start refuses the worker", run: start, stack: ProductStackWorker,
+			wantErr: "operation start not applicable for stack worker"},
+		{name: "stop hands pentagi to compose", run: stop, stack: ProductStackPentagi,
+			compose: []string{"stopStack pentagi"}},
+		{name: "stop refuses the worker", run: stop, stack: ProductStackWorker,
+			wantErr: "operation stop not applicable for stack worker"},
+		{name: "restart hands pentagi to compose", run: restart, stack: ProductStackPentagi,
+			compose: []string{"restartStack pentagi"}},
+		{name: "restart refuses the worker", run: restart, stack: ProductStackWorker,
+			wantErr: "operation restart not applicable for stack worker"},
+		{name: "restart refuses the installer", run: restart, stack: ProductStackInstaller,
+			wantErr: "operation restart not applicable for stack installer"},
+	} {
+		t.Run(tc.name, func(t *testing.T) { logicRun(t, tc) })
 	}
 }
 
-func TestDownload_AllStacks(t *testing.T) {
-	p, composeOps, _, dockerOps := newProcessorForLogicTests(t)
-
-	err := p.download(t.Context(), ProductStackAll, testOperationState(t))
-	if err != nil {
-		t.Fatalf("download returned error: %v", err)
-	}
-
-	// should download all individual stacks
-	composeCalls := composeOps.getCalls()
-	expectedComposeStacks := []ProductStack{
-		ProductStackPentagi, ProductStackGraphiti, ProductStackLangfuse, ProductStackObservability,
-	}
-	composeCallCount := 0
-	for _, call := range composeCalls {
-		if call.Method == "downloadStack" {
-			composeCallCount++
-		}
-	}
-	if composeCallCount != len(expectedComposeStacks) {
-		t.Errorf("expected %d compose download calls, got %d", len(expectedComposeStacks), composeCallCount)
-	}
-
-	// should also download worker
-	dockerCalls := dockerOps.getCalls()
-	workerDownloaded := false
-	for _, call := range dockerCalls {
-		if call.Method == "pullWorkerImage" {
-			workerDownloaded = true
-			break
-		}
-	}
-	if !workerDownloaded {
-		t.Error("expected worker image download, but not found")
-	}
-}
-
-func TestDownload_WorkerStack(t *testing.T) {
-	p, _, _, dockerOps := newProcessorForLogicTests(t)
-
-	err := p.download(t.Context(), ProductStackWorker, testOperationState(t))
-	if err != nil {
-		t.Fatalf("download returned error: %v", err)
-	}
-
-	calls := dockerOps.getCalls()
-	if len(calls) != 1 || calls[0].Method != "pullWorkerImage" {
-		t.Fatalf("expected pullWorkerImage call, got: %+v", calls)
+func TestLogic_UpdateStacks_UpdatesOnlyTheOutdatedStacks(t *testing.T) {
+	for _, tc := range []logicCase{
+		{name: "an outdated pentagi is pulled then brought up", stack: ProductStackPentagi,
+			configure: logicOutdated(ProductStackPentagi),
+			compose:   []string{"downloadStack pentagi", "updateStack pentagi"}},
+		{name: "a current pentagi is left alone", stack: ProductStackPentagi},
+		{name: "an outdated langfuse is pulled then brought up", stack: ProductStackLangfuse,
+			configure: logicOutdated(ProductStackLangfuse),
+			compose:   []string{"downloadStack langfuse", "updateStack langfuse"}},
+		{name: "a current observability is left alone", stack: ProductStackObservability},
+		{name: "the worker pulls its image", stack: ProductStackWorker,
+			docker: []string{"pullWorkerImage"}},
+		{name: "an installer update failure is returned", stack: ProductStackInstaller,
+			configure: logicOutdated(ProductStackInstaller),
+			fail:      map[string]error{"updateInstaller": errors.New("download refused")},
+			wantErr:   "download refused", update: []string{"updateInstaller"}},
+		{name: "compose skips the current stacks", stack: ProductStackCompose,
+			configure: logicOutdated(ProductStackLangfuse, ProductStackObservability),
+			compose: []string{
+				"downloadStack observability", "updateStack observability",
+				"downloadStack langfuse", "updateStack langfuse",
+			},
+			update: []string{"updateJaegerPlugin"}},
+		{name: "all adds the worker and skips a current stack", stack: ProductStackAll,
+			configure: logicOutdated(ProductStackPentagi, ProductStackObservability),
+			compose: []string{
+				"downloadStack observability", "updateStack observability",
+				"downloadStack pentagi", "updateStack pentagi",
+			},
+			docker: []string{"pullWorkerImage"}, update: []string{"updateJaegerPlugin"}},
+	} {
+		tc.run = (*processor).update
+		t.Run(tc.name, func(t *testing.T) { logicRun(t, tc) })
 	}
 }
 
-func TestDownload_InvalidStack(t *testing.T) {
-	p, _, _, _ := newProcessorForLogicTests(t)
-
-	err := p.download(t.Context(), ProductStack("invalid"), testOperationState(t))
-	if err == nil {
-		t.Error("expected error for invalid stack, got nil")
+func TestLogic_UpdateStacks_RestartsJaegerOnlyWhenThePluginWasReplaced(t *testing.T) {
+	for _, tc := range []logicCase{
+		{name: "a replaced plugin restarts jaeger", replaced: true, compose: []string{
+			"downloadStack observability", "updateStack observability",
+			"performStackCommand observability restart jaeger",
+		}},
+		{name: "an unchanged plugin costs no downtime", compose: []string{
+			"downloadStack observability", "updateStack observability",
+		}},
+	} {
+		tc.run, tc.stack = (*processor).update, ProductStackObservability
+		tc.configure, tc.update = logicOutdated(ProductStackObservability), []string{"updateJaegerPlugin"}
+		t.Run(tc.name, func(t *testing.T) { logicRun(t, tc) })
 	}
 }
 
-func TestValidateOperation_ErrorCases(t *testing.T) {
-	p, _, _, _ := newProcessorForLogicTests(t)
-
-	tests := []struct {
+func TestLogic_Update_AsksTheCloudOnceWhateverItFansOutTo(t *testing.T) {
+	everything := logicOutdated(ProductStackPentagi, ProductStackLangfuse, ProductStackGraphiti, ProductStackObservability)
+	for _, tc := range []struct {
 		name      string
 		stack     ProductStack
-		operation ProcessorOperation
-		expectErr bool
-		errMsg    string
+		configure func(*mockCheckConfig)
 	}{
-		{"start worker", ProductStackWorker, ProcessorOperationStart, true, "operation start not applicable for stack worker"},
-		{"stop worker", ProductStackWorker, ProcessorOperationStop, true, "operation stop not applicable for stack worker"},
-		{"restart installer", ProductStackInstaller, ProcessorOperationRestart, true, "operation restart not applicable for stack installer"},
-		{"remove installer", ProductStackInstaller, ProcessorOperationRemove, false, ""}, // remove is allowed for installer
-		{"valid start pentagi", ProductStackPentagi, ProcessorOperationStart, false, ""},
-		{"valid remove worker", ProductStackWorker, ProcessorOperationRemove, false, ""},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := p.validateOperation(tt.stack, tt.operation)
-			if tt.expectErr {
-				if err == nil {
-					t.Error("expected error but got none")
-				} else if err.Error() != tt.errMsg {
-					t.Errorf("expected error message '%s', got '%s'", tt.errMsg, err.Error())
-				}
-			} else {
-				if err != nil {
-					t.Errorf("unexpected error: %v", err)
-				}
-			}
+		{"an update of every compose stack", ProductStackCompose, everything},
+		{"an update of a single stack", ProductStackPentagi, everything},
+		{"an update of everything", ProductStackAll, everything},
+		{"an update of compose where three stacks have nothing to do", ProductStackCompose, logicOutdated(ProductStackPentagi)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h := processorHarnessWith(t, tc.configure)
+			before := countCalls(h.checks.getCalls(), "GatherUpdatesInfo")
+			require.NoError(t, h.p.update(t.Context(), tc.stack, testOperationState(t)))
+			asked := countCalls(h.checks.getCalls(), "GatherUpdatesInfo") - before
+			assert.Equal(t, 1, asked, "one press must cost one check out of a daily budget")
 		})
 	}
 }
 
-func TestIsEmbeddedDeployment(t *testing.T) {
-	tests := []struct {
+func TestLogic_StacksTouchedByUpdate_ExpandsComposeAndAll(t *testing.T) {
+	assert.Equal(t, []ProductStack{
+		ProductStackObservability, ProductStackLangfuse, ProductStackGraphiti, ProductStackPentagi,
+	}, stacksTouchedByUpdate(ProductStackCompose))
+	assert.Equal(t, []ProductStack{ProductStackPentagi}, stacksTouchedByUpdate(ProductStackPentagi))
+	assert.Equal(t, []ProductStack{
+		ProductStackObservability, ProductStackLangfuse, ProductStackGraphiti, ProductStackPentagi,
+		ProductStackWorker, ProductStackInstaller,
+	}, stacksTouchedByUpdate(ProductStackAll))
+}
+
+func TestLogic_ApplyChanges_BringsEachStackToItsConfiguredMode(t *testing.T) {
+	networks := []string{"ensureMainDockerNetworks"}
+	for _, tc := range []logicCase{
+		{name: "a clean state changes nothing"},
+		{name: "a network failure stops before any stack",
+			configure: logicConnected, vars: logicEmbedded,
+			fail:    map[string]error{"ensureMainDockerNetworks": errors.New("network error")},
+			wantErr: "failed to ensure docker networks: network error", docker: networks},
+		{name: "every embedded stack not yet extracted is extracted and brought up",
+			configure: logicConnected, vars: logicEmbedded,
+			fs: []string{
+				"ensureStackIntegrity observability", "ensureStackIntegrity langfuse",
+				"ensureStackIntegrity graphiti", "ensureStackIntegrity pentagi",
+			},
+			compose: []string{
+				"updateStack observability", "updateStack langfuse", "updateStack graphiti", "updateStack pentagi",
+			},
+			docker: networks},
+		{name: "an external observability that is installed is taken down",
+			configure: func(c *mockCheckConfig) {
+				c.ObservabilityExternal, c.ObservabilityInstalled = true, true
+				c.LangfuseConnected, c.LangfuseExtracted = true, true
+			},
+			vars: map[string]string{
+				"OTEL_HOST":         "http://external:4318",
+				"LANGFUSE_BASE_URL": checker.DefaultLangfuseEndpoint,
+			},
+			fs:      []string{"verifyStackIntegrity langfuse", "ensureStackIntegrity pentagi"},
+			compose: []string{"removeStack observability", "updateStack langfuse", "updateStack pentagi"},
+			docker:  networks},
+		{name: "an external graphiti that is installed is taken down",
+			configure: func(c *mockCheckConfig) {
+				c.GraphitiConnected, c.GraphitiExternal, c.GraphitiInstalled = true, true, true
+			},
+			vars:    map[string]string{"GRAPHITI_URL": "http://external:8000"},
+			fs:      []string{"ensureStackIntegrity pentagi"},
+			compose: []string{"removeStack graphiti", "updateStack pentagi"},
+			docker:  networks},
+		{name: "an embedded graphiti already extracted is verified instead",
+			configure: func(c *mockCheckConfig) { c.GraphitiConnected, c.GraphitiExtracted = true, true },
+			vars:      map[string]string{"GRAPHITI_URL": checker.DefaultGraphitiEndpoint},
+			fs:        []string{"verifyStackIntegrity graphiti", "ensureStackIntegrity pentagi"},
+			compose:   []string{"updateStack graphiti", "updateStack pentagi"},
+			docker:    networks},
+		{name: "an observability failure names its phase",
+			vars:    map[string]string{"OTEL_HOST": checker.DefaultObservabilityEndpoint},
+			fail:    map[string]error{"ensureStackIntegrity": errors.New("fs error")},
+			wantErr: "failed to apply observability changes: failed to ensure observability integrity: fs error",
+			fs:      []string{"ensureStackIntegrity observability"}, docker: networks},
+		{name: "a langfuse failure names its phase after observability went through",
+			configure: logicConnected,
+			vars: map[string]string{
+				"OTEL_HOST":         checker.DefaultObservabilityEndpoint,
+				"LANGFUSE_BASE_URL": checker.DefaultLangfuseEndpoint,
+			},
+			fail:    map[string]error{"ensureStackIntegrity_langfuse": errors.New("langfuse error")},
+			wantErr: "failed to apply langfuse changes: failed to ensure langfuse integrity: langfuse error",
+			fs:      []string{"ensureStackIntegrity observability", "ensureStackIntegrity langfuse"},
+			compose: []string{"updateStack observability"}, docker: networks},
+		{name: "a graphiti failure names its phase",
+			configure: logicConnected,
+			vars:      map[string]string{"GRAPHITI_URL": checker.DefaultGraphitiEndpoint},
+			fail:      map[string]error{"ensureStackIntegrity": errors.New("graphiti error")},
+			wantErr:   "failed to apply graphiti changes: failed to ensure graphiti integrity: graphiti error",
+			fs:        []string{"ensureStackIntegrity graphiti"}, docker: networks},
+		{name: "a pentagi failure names its phase",
+			vars:    map[string]string{"PENTAGI_VERSION": "1.0.1"},
+			fail:    map[string]error{"ensureStackIntegrity_pentagi": errors.New("pentagi error")},
+			wantErr: "failed to apply pentagi changes: failed to ensure pentagi integrity: pentagi error",
+			fs:      []string{"ensureStackIntegrity pentagi"}, docker: networks},
+	} {
+		tc.run = logicApplyChanges
+		t.Run(tc.name, func(t *testing.T) { logicRun(t, tc) })
+	}
+}
+
+func TestLogic_Install_InstallsOnlyWhatIsNotInstalled(t *testing.T) {
+	networks := []string{"ensureMainDockerNetworks"}
+	for _, tc := range []logicCase{
+		{name: "a fresh installation installs every embedded stack",
+			configure: logicConnected, vars: logicEmbedded,
+			fs: []string{
+				"ensureStackIntegrity observability", "ensureStackIntegrity langfuse",
+				"ensureStackIntegrity graphiti", "ensureStackIntegrity pentagi",
+			},
+			compose: []string{
+				"updateStack observability", "updateStack langfuse", "updateStack graphiti", "updateStack pentagi",
+			},
+			docker: networks},
+		{name: "an installed stack is skipped while the others are installed",
+			configure: func(c *mockCheckConfig) { c.PentagiInstalled = true },
+			vars:      map[string]string{"OTEL_HOST": checker.DefaultObservabilityEndpoint},
+			fs:        []string{"ensureStackIntegrity observability"},
+			compose:   []string{"updateStack observability"},
+			docker:    networks},
+	} {
+		tc.run = logicInstall
+		t.Run(tc.name, func(t *testing.T) { logicRun(t, tc) })
+	}
+}
+
+func TestLogic_FactoryReset_PurgesEverythingAndRestoresTheEmbeddedFiles(t *testing.T) {
+	var copiesAtReset []int
+	h := logicRun(t, logicCase{
+		run:  logicFactoryReset,
+		vars: map[string]string{"PENTAGI_VERSION": "1.0.1"},
+		prepare: func(h *processorHarness) {
+			h.p.state.(*mockState).onReset = func() {
+				copiesAtReset = append(copiesAtReset, len(h.p.files.(*mockFiles).copies))
+			}
+		},
+		compose: []string{"purgeStack all"},
+		docker: []string{
+			"removeWorkerContainers", "removeWorkerVolumes",
+			"removeMainDockerNetwork pentagi-network",
+			"removeMainDockerNetwork observability-network",
+			"removeMainDockerNetwork langfuse-network",
+		},
+		fs: []string{"ensureStackIntegrity all force"},
+	})
+	assert.Equal(t, []struct {
+		Src, Dst string
+		Rewrite  bool
+	}{{".env", filepath.Dir(h.p.state.GetEnvPath()), true}}, h.p.files.(*mockFiles).copies,
+		"the embedded .env must overwrite the user's")
+	assert.Equal(t, []int{1}, copiesAtReset, "the state must be reloaded once, from the restored .env")
+	assert.False(t, h.p.state.IsDirty(), "a staged edit would be written back over the restored .env")
+}
+
+func TestLogic_Download_FetchesEveryStackItCovers(t *testing.T) {
+	everyComposeStack := []string{
+		"downloadStack observability", "downloadStack langfuse", "downloadStack graphiti", "downloadStack pentagi",
+	}
+	for _, tc := range []logicCase{
+		{name: "compose fetches every compose stack and not the worker", stack: ProductStackCompose,
+			compose: everyComposeStack},
+		{name: "all fetches the worker too", stack: ProductStackAll,
+			compose: everyComposeStack, docker: []string{"pullWorkerImage"}},
+		{name: "the worker pulls its image", stack: ProductStackWorker, docker: []string{"pullWorkerImage"}},
+		{name: "a current installer is not fetched", stack: ProductStackInstaller},
+		{name: "an unreachable update server is reported", stack: ProductStackInstaller,
+			configure: func(c *mockCheckConfig) { c.InstallerIsUpToDate, c.UpdateServerAccessible = false, false },
+			wantErr:   "update server is not accessible"},
+		{name: "an unknown stack is refused", stack: ProductStack("invalid"),
+			wantErr: "operation download not applicable for stack invalid"},
+	} {
+		tc.run = (*processor).download
+		t.Run(tc.name, func(t *testing.T) { logicRun(t, tc) })
+	}
+}
+
+func TestLogic_Remove_KeepsDataAndAttemptsEveryStack(t *testing.T) {
+	for _, tc := range []logicCase{
+		{name: "pentagi is taken down and keeps its volumes", stack: ProductStackPentagi,
+			compose: []string{"removeStack pentagi"}},
+		{name: "langfuse is taken down and keeps its volumes", stack: ProductStackLangfuse,
+			compose: []string{"removeStack langfuse"}},
+		{name: "observability is taken down and keeps its volumes", stack: ProductStackObservability,
+			compose: []string{"removeStack observability"}},
+		{name: "the worker loses its images", stack: ProductStackWorker,
+			docker: []string{"removeWorkerImages"}},
+		{name: "the installer is left in place without failing", stack: ProductStackInstaller,
+			update: []string{"removeInstaller"}},
+		{name: "every stack is attempted when the first one fails", stack: ProductStackAll,
+			fail:    map[string]error{"removeStack": errors.New("compose exploded")},
+			wantErr: "failed to remove stack: compose exploded",
+			compose: []string{
+				"removeStack observability", "removeStack langfuse", "removeStack graphiti", "removeStack pentagi",
+			},
+			docker: []string{"removeWorkerImages"}, update: []string{"removeInstaller"}},
+	} {
+		tc.run = (*processor).remove
+		t.Run(tc.name, func(t *testing.T) { logicRun(t, tc) })
+	}
+}
+
+func TestLogic_Purge_RemovesImagesAndNetworksEvenWhenAStackFails(t *testing.T) {
+	everyComposeStack := []string{
+		"purgeImagesStack observability", "purgeImagesStack langfuse",
+		"purgeImagesStack graphiti", "purgeImagesStack pentagi",
+	}
+	workerAndNetworks := []string{
+		"purgeWorkerImages",
+		"removeMainDockerNetwork pentagi-network",
+		"removeMainDockerNetwork observability-network",
+		"removeMainDockerNetwork langfuse-network",
+	}
+	for _, tc := range []logicCase{
+		{name: "pentagi is purged with its images and nothing else", stack: ProductStackPentagi,
+			compose: []string{"purgeImagesStack pentagi"}},
+		{name: "the worker is purged", stack: ProductStackWorker, docker: []string{"purgeWorkerImages"}},
+		{name: "everything is purged and the networks removed", stack: ProductStackAll,
+			compose: everyComposeStack, docker: workerAndNetworks, update: []string{"removeInstaller"}},
+		{name: "a failing stack still leaves no network behind", stack: ProductStackAll,
+			fail:    map[string]error{"purgeImagesStack": errors.New("compose exploded")},
+			wantErr: "failed to purge with images stack: compose exploded",
+			compose: everyComposeStack, docker: workerAndNetworks, update: []string{"removeInstaller"}},
+	} {
+		tc.run = (*processor).purge
+		t.Run(tc.name, func(t *testing.T) { logicRun(t, tc) })
+	}
+}
+
+func TestLogic_IsEmbeddedDeployment_FollowsTheConfiguredEndpoint(t *testing.T) {
+	for _, tc := range []struct {
 		name              string
 		stack             ProductStack
-		envVar            string
-		envValue          string
+		envVar, envValue  string
 		langfuseConnected bool
 		graphitiConnected bool
-		expected          bool
+		want              bool
 	}{
-		{"observability embedded", ProductStackObservability, "OTEL_HOST", checker.DefaultObservabilityEndpoint, false, false, true},
-		{"observability external", ProductStackObservability, "OTEL_HOST", "http://external:4318", false, false, false},
-		{"langfuse embedded", ProductStackLangfuse, "LANGFUSE_BASE_URL", checker.DefaultLangfuseEndpoint, true, false, true},
-		{"langfuse external", ProductStackLangfuse, "LANGFUSE_BASE_URL", "http://external:3000", true, false, false},
-		{"langfuse disabled", ProductStackLangfuse, "", "", false, false, false},
-		{"graphiti embedded", ProductStackGraphiti, "GRAPHITI_URL", checker.DefaultGraphitiEndpoint, false, true, true},
-		{"graphiti external", ProductStackGraphiti, "GRAPHITI_URL", "http://external:8000", false, true, false},
-		{"graphiti disabled", ProductStackGraphiti, "", "", false, false, false},
-		{"pentagi always embedded", ProductStackPentagi, "", "", false, false, true},     // pentagi is always embedded
-		{"worker always embedded", ProductStackWorker, "", "", false, false, true},       // worker is always embedded
-		{"installer always embedded", ProductStackInstaller, "", "", false, false, true}, // installer is always embedded
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			p, _, _, _ := newProcessorForLogicTestsWithConfig(t, func(config *mockCheckConfig) {
-				config.LangfuseConnected = tt.langfuseConnected
-				config.GraphitiConnected = tt.graphitiConnected
+		{"observability at its embedded endpoint", ProductStackObservability, "OTEL_HOST", checker.DefaultObservabilityEndpoint, false, false, true},
+		{"observability at an external endpoint", ProductStackObservability, "OTEL_HOST", "http://external:4318", false, false, false},
+		{"langfuse at its embedded endpoint", ProductStackLangfuse, "LANGFUSE_BASE_URL", checker.DefaultLangfuseEndpoint, true, false, true},
+		{"langfuse at an external endpoint", ProductStackLangfuse, "LANGFUSE_BASE_URL", "http://external:3000", true, false, false},
+		{"langfuse at its embedded endpoint but not connected", ProductStackLangfuse, "LANGFUSE_BASE_URL", checker.DefaultLangfuseEndpoint, false, false, false},
+		{"graphiti at its embedded endpoint", ProductStackGraphiti, "GRAPHITI_URL", checker.DefaultGraphitiEndpoint, false, true, true},
+		{"graphiti at an external endpoint", ProductStackGraphiti, "GRAPHITI_URL", "http://external:8000", false, true, false},
+		{"graphiti at its embedded endpoint but not connected", ProductStackGraphiti, "GRAPHITI_URL", checker.DefaultGraphitiEndpoint, false, false, false},
+		{"pentagi is always embedded", ProductStackPentagi, "", "", false, false, true},
+		{"the worker is always embedded", ProductStackWorker, "", "", false, false, true},
+		{"the installer is always embedded", ProductStackInstaller, "", "", false, false, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h := processorHarnessWith(t, func(c *mockCheckConfig) {
+				c.LangfuseConnected, c.GraphitiConnected = tc.langfuseConnected, tc.graphitiConnected
 			})
-
-			if tt.envVar != "" {
-				_ = p.state.SetVar(tt.envVar, tt.envValue)
+			if tc.envVar != "" {
+				require.NoError(t, h.p.state.SetVar(tc.envVar, tc.envValue))
 			}
-
-			result := p.isEmbeddedDeployment(tt.stack)
-			if result != tt.expected {
-				t.Errorf("expected %v, got %v", tt.expected, result)
-			}
+			assert.Equal(t, tc.want, h.p.isEmbeddedDeployment(tc.stack))
 		})
 	}
 }
 
-func TestFactoryReset_FullSequence(t *testing.T) {
-	p, composeOps, _, dockerOps := newProcessorForLogicTests(t)
+func TestLogic_CheckFiles_ReportsEmbeddedStacksOnlyAndHidesEditedExcludedFiles(t *testing.T) {
+	h := processorHarnessWith(t, func(c *mockCheckConfig) { c.LangfuseConnected, c.LangfuseExternal = true, true })
+	h.p.fsOps = newFileSystemOperations(h.p)
+	require.NoError(t, h.p.state.SetVar("OTEL_HOST", checker.DefaultObservabilityEndpoint))
 
-	err := p.factoryReset(t.Context(), testOperationState(t))
-	if err != nil {
-		t.Fatalf("factoryReset returned error: %v", err)
+	regular := "observability/subdir/config.yml"
+	excludedMissing, excludedOK := "observability/otel/config.yml", "observability/grafana/config/grafana.ini"
+	embedded := h.p.files.(*mockFiles)
+	embedded.statuses = map[string]files.FileStatus{
+		"docker-compose.yml":               files.FileStatusModified,
+		"docker-compose-langfuse.yml":      files.FileStatusOK,
+		"docker-compose-observability.yml": files.FileStatusMissing,
+		regular:                            files.FileStatusModified,
+		excludedMissing:                    files.FileStatusMissing,
+		excludedOK:                         files.FileStatusOK,
 	}
-
-	// verify sequence: purge stacks, remove worker containers/volumes, remove networks
-	composeCalls := composeOps.getCalls()
-	if len(composeCalls) == 0 || composeCalls[0].Method != "purgeStack" || composeCalls[0].Stack != ProductStackAll {
-		t.Errorf("expected purgeStack(all) as first call, got: %+v", composeCalls)
-	}
-
-	dockerCalls := dockerOps.getCalls()
-	expectedMethods := []string{"removeWorkerContainers", "removeWorkerVolumes", "removeMainDockerNetwork", "removeMainDockerNetwork", "removeMainDockerNetwork"}
-	if len(dockerCalls) < len(expectedMethods) {
-		t.Errorf("expected at least %d docker calls, got %d", len(expectedMethods), len(dockerCalls))
-	}
-
-	for i, expectedMethod := range expectedMethods {
-		if i < len(dockerCalls) && dockerCalls[i].Method != expectedMethod {
-			t.Errorf("docker call %d: expected %s, got %s", i, expectedMethod, dockerCalls[i].Method)
+	for _, excluded := range filesToExcludeFromVerification {
+		if _, set := embedded.statuses[excluded]; !set {
+			embedded.statuses[excluded] = files.FileStatusModified
 		}
 	}
-}
-
-func TestApplyChanges_StateMachine_PhaseErrors(t *testing.T) {
-	tests := []struct {
-		name          string
-		configSetup   func(*mockCheckConfig)
-		setupError    func(*processor)
-		expectedError string
-	}{
-		{
-			name: "observability phase error",
-			configSetup: func(config *mockCheckConfig) {
-				config.ObservabilityExtracted = false
-				config.ObservabilityConnected = true
-				config.ObservabilityExternal = false
-			},
-			setupError: func(p *processor) {
-				_ = p.state.SetVar("OTEL_HOST", checker.DefaultObservabilityEndpoint)
-				_ = p.state.SetVar("PENTAGI_VERSION", version.GetBinaryVersion()) // make state dirty
-				injectFSError(p, map[string]error{
-					"ensureStackIntegrity": fmt.Errorf("fs error"),
-				})
-			},
-			expectedError: "failed to apply observability changes: failed to ensure observability integrity: fs error",
-		},
-		{
-			name: "langfuse phase error",
-			configSetup: func(config *mockCheckConfig) {
-				config.LangfuseExtracted = false
-				config.LangfuseConnected = true
-				config.LangfuseExternal = false
-			},
-			setupError: func(p *processor) {
-				_ = p.state.SetVar("LANGFUSE_BASE_URL", checker.DefaultLangfuseEndpoint)
-				_ = p.state.SetVar("PENTAGI_VERSION", version.GetBinaryVersion()) // make state dirty
-				injectFSError(p, map[string]error{
-					"ensureStackIntegrity": fmt.Errorf("langfuse error"),
-				})
-			},
-			expectedError: "failed to apply langfuse changes: failed to ensure langfuse integrity: langfuse error",
-		},
-		{
-			name: "graphiti phase error",
-			configSetup: func(config *mockCheckConfig) {
-				config.GraphitiExtracted = false
-				config.GraphitiConnected = true
-				config.GraphitiExternal = false
-			},
-			setupError: func(p *processor) {
-				_ = p.state.SetVar("GRAPHITI_URL", checker.DefaultGraphitiEndpoint)
-				_ = p.state.SetVar("PENTAGI_VERSION", version.GetBinaryVersion()) // make state dirty
-				injectFSError(p, map[string]error{
-					"ensureStackIntegrity": fmt.Errorf("graphiti error"),
-				})
-			},
-			expectedError: "failed to apply graphiti changes: failed to ensure graphiti integrity: graphiti error",
-		},
-		{
-			name: "pentagi phase error",
-			configSetup: func(config *mockCheckConfig) {
-				config.PentagiExtracted = false
-			},
-			setupError: func(p *processor) {
-				// make state dirty so applyChanges proceeds
-				_ = p.state.SetVar("PENTAGI_VERSION", version.GetBinaryVersion())
-				injectFSError(p, map[string]error{
-					"ensureStackIntegrity_pentagi": fmt.Errorf("pentagi error"),
-					"ensureStackIntegrity":         fmt.Errorf("general error"), // fallback to catch any call
-				})
-			},
-			expectedError: "failed to apply pentagi changes: failed to ensure pentagi integrity: pentagi error",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			p, _, _, _ := newProcessorForLogicTestsWithConfig(t, tt.configSetup)
-			tt.setupError(p)
-
-			err := p.applyChanges(t.Context(), testOperationState(t))
-			assertError(t, err, true, tt.expectedError)
-		})
-	}
-}
-
-func TestApplyChanges_CleanState_NoOp(t *testing.T) {
-	p, composeOps, fsOps, dockerOps := newProcessorForLogicTests(t)
-
-	// clean state should result in no operations
-	p.state.Reset() // ensure state is not dirty
-
-	err := p.applyChanges(t.Context(), testOperationState(t))
-	if err != nil {
-		t.Fatalf("applyChanges returned error: %v", err)
-	}
-
-	// no operations should be called
-	if len(composeOps.getCalls()) > 0 {
-		t.Errorf("expected no compose calls, got: %+v", composeOps.getCalls())
-	}
-	if len(fsOps.getCalls()) > 0 {
-		t.Errorf("expected no fs calls, got: %+v", fsOps.getCalls())
-	}
-	if len(dockerOps.getCalls()) > 0 {
-		t.Errorf("expected no docker calls, got: %+v", dockerOps.getCalls())
-	}
-}
-
-func TestInstall_FullScenario(t *testing.T) {
-	t.Run("all_stacks_fresh_install", func(t *testing.T) {
-		p, composeOps, fsOps, dockerOps := newProcessorForLogicTestsWithConfig(t, func(config *mockCheckConfig) {
-			// simulate fresh install - nothing installed
-			config.ObservabilityInstalled = false
-			config.LangfuseInstalled = false
-			config.GraphitiInstalled = false
-			config.PentagiInstalled = false
-			config.ObservabilityExtracted = false
-			config.LangfuseExtracted = false
-			config.GraphitiExtracted = false
-			config.PentagiExtracted = false
-			// mark as embedded
-			config.ObservabilityConnected = true
-			config.ObservabilityExternal = false
-			config.LangfuseConnected = true
-			config.LangfuseExternal = false
-			config.GraphitiConnected = true
-			config.GraphitiExternal = false
-		})
-
-		// set embedded mode for all
-		_ = p.state.SetVar("OTEL_HOST", checker.DefaultObservabilityEndpoint)
-		_ = p.state.SetVar("LANGFUSE_BASE_URL", checker.DefaultLangfuseEndpoint)
-		_ = p.state.SetVar("GRAPHITI_URL", checker.DefaultGraphitiEndpoint)
-
-		err := p.install(t.Context(), testOperationState(t))
-		assertNoError(t, err)
-
-		// verify docker networks created first
-		dockerCalls := dockerOps.getCalls()
-		if len(dockerCalls) == 0 || dockerCalls[0].Method != "ensureMainDockerNetworks" {
-			t.Errorf("expected ensureMainDockerNetworks as first docker call, got: %+v", dockerCalls)
-		}
-
-		// verify file system operations
-		fsCalls := fsOps.getCalls()
-		ensureCount := 0
-		for _, call := range fsCalls {
-			if call.Method == "ensureStackIntegrity" {
-				ensureCount++
-			}
-		}
-		// should be 3 (observability, langfuse, graphiti) since pentagi might be handled differently
-		if ensureCount < 3 {
-			t.Errorf("expected at least 3 ensureStackIntegrity calls, got %d", ensureCount)
-		}
-
-		// verify compose update operations
-		composeCalls := composeOps.getCalls()
-		updateCount := 0
-		for _, call := range composeCalls {
-			if call.Method == "updateStack" {
-				updateCount++
-			}
-		}
-		// all 4 stacks should be updated (observability, langfuse, graphiti, pentagi)
-		if updateCount != 4 {
-			t.Errorf("expected 4 updateStack calls, got %d", updateCount)
-		}
-	})
-
-	t.Run("partial_install_skip_installed", func(t *testing.T) {
-		p, composeOps, _, _ := newProcessorForLogicTestsWithConfig(t, func(config *mockCheckConfig) {
-			// pentagi already installed
-			config.PentagiInstalled = true
-			config.LangfuseInstalled = false
-			config.ObservabilityInstalled = false
-		})
-
-		err := p.install(t.Context(), testOperationState(t))
-		assertNoError(t, err)
-
-		// should not update pentagi since it's already installed
-		composeCalls := composeOps.getCalls()
-		for _, call := range composeCalls {
-			if call.Method == "updateStack" && call.Stack == ProductStackPentagi {
-				t.Error("should not update pentagi when already installed")
-			}
-		}
-	})
-}
-
-func TestPreviewFilesStatus_Behavior(t *testing.T) {
-	if len(filesToExcludeFromVerification) < 3 {
-		t.Skip("not enough excluded files configured; skipping excluded files tests")
-	}
-
-	p, _, _, _ := newProcessorForLogicTestsWithConfig(t, func(config *mockCheckConfig) {
-		config.ObservabilityConnected = true
-		config.LangfuseConnected = true
-		config.LangfuseExternal = true // external langfuse should not be present
-	})
-	// use real fs implementation for preview to exercise real logic
-	p.fsOps = newFileSystemOperations(p)
-
-	// prepare files in mock
-	tmpDir := t.TempDir()
-	mockState := p.state.(*mockState)
-	mockState.envPath = filepath.Join(tmpDir, ".env")
-	mockFiles := p.files.(*mockFiles)
-	mockFiles.statuses[composeFilePentagi] = files.FileStatusModified
-	mockFiles.statuses[composeFileLangfuse] = files.FileStatusOK
-	mockFiles.statuses[composeFileObservability] = files.FileStatusMissing
-	mockFiles.statuses["observability/subdir/config.yml"] = files.FileStatusModified
-	mockFiles.statuses[filesToExcludeFromVerification[0]] = files.FileStatusMissing
-	mockFiles.statuses[filesToExcludeFromVerification[1]] = files.FileStatusOK
-	for i := 2; i < len(filesToExcludeFromVerification); i++ {
-		mockFiles.statuses[filesToExcludeFromVerification[i]] = files.FileStatusModified
-	}
-	mockFiles.lists[observabilityDirectory] = append([]string{
-		"observability/subdir/config.yml", // normal
-	}, filesToExcludeFromVerification...)
-
-	// ensure embedded mode via state env for observability
-	_ = p.state.SetVar("OTEL_HOST", checker.DefaultObservabilityEndpoint)
-
-	statuses, err := p.checkFiles(t.Context(), ProductStackAll, testOperationState(t))
-	assertNoError(t, err)
-
-	// pentagi, observability compose must be present and reflect modified
-	for _, k := range []string{composeFilePentagi, composeFileObservability} {
-		if statuses[k] != mockFiles.statuses[k] {
-			t.Errorf("expected %s to be %s, got %s", k, mockFiles.statuses[k], statuses[k])
-		}
-	}
-
-	// langfuse compose should not be present because it's not embedded
-	if _, ok := statuses[composeFileLangfuse]; ok {
-		t.Errorf("expected langfuse compose to be missing, got %s", statuses[composeFileLangfuse])
-	}
-
-	// all non-modified excluded files must be present and reflect modified
-	for i := range 2 {
-		if k := filesToExcludeFromVerification[i]; statuses[k] != mockFiles.statuses[k] {
-			t.Errorf("expected %s to be %s, got %s", k, mockFiles.statuses[k], statuses[k])
-		}
-	}
-
-	// all non-excluded modified files should not be present
-	for i := 2; i < len(filesToExcludeFromVerification); i++ {
-		k, empty := filesToExcludeFromVerification[i], files.FileStatus("")
-		if status, ok := statuses[k]; ok || status != empty {
-			t.Errorf("expected %s to be missing, got %s", k, status)
-		}
-	}
-}
-
-func TestDownload_EdgeCases(t *testing.T) {
-	t.Run("installer_up_to_date", func(t *testing.T) {
-		p, _, _, _ := newProcessorForLogicTestsWithConfig(t, func(config *mockCheckConfig) {
-			config.InstallerIsUpToDate = true
-		})
-
-		updateOps := p.updateOps.(*baseMockUpdateOperations)
-
-		err := p.download(t.Context(), ProductStackInstaller, testOperationState(t))
-		assertNoError(t, err)
-
-		// should not call downloadInstaller when up to date
-		calls := updateOps.getCalls()
-		if len(calls) > 0 {
-			t.Errorf("expected no update calls when installer is up to date, got: %+v", calls)
-		}
-	})
-
-	t.Run("update_server_inaccessible", func(t *testing.T) {
-		p, _, _, _ := newProcessorForLogicTestsWithConfig(t, func(config *mockCheckConfig) {
-			config.InstallerIsUpToDate = false
-			config.UpdateServerAccessible = false
-		})
-
-		err := p.download(t.Context(), ProductStackInstaller, testOperationState(t))
-		assertError(t, err, true, "update server is not accessible")
-	})
-}
-
-func TestPurge_AllStacks_Detailed(t *testing.T) {
-	p, composeOps, _, dockerOps := newProcessorForLogicTests(t)
-
-	err := p.purge(t.Context(), ProductStackAll, testOperationState(t))
-	assertNoError(t, err)
-
-	// verify compose operations for all stacks
-	composeCalls := composeOps.getCalls()
-
-	// should have purgeImagesStack for all four compose stacks in order
-	expectedOrder := []ProductStack{
-		ProductStackObservability, ProductStackLangfuse, ProductStackGraphiti, ProductStackPentagi,
-	}
-	purgeImagesCalls := 0
-	for _, call := range composeCalls {
-		if call.Method == "purgeImagesStack" {
-			if purgeImagesCalls < len(expectedOrder) && call.Stack != expectedOrder[purgeImagesCalls] {
-				t.Errorf("expected purgeImagesStack call %d for %s, got %s",
-					purgeImagesCalls, expectedOrder[purgeImagesCalls], call.Stack)
-			}
-			purgeImagesCalls++
-		}
-	}
-	if purgeImagesCalls != 4 {
-		t.Errorf("expected 4 purgeImagesStack calls, got %d", purgeImagesCalls)
-	}
-
-	// verify docker cleanup operations
-	dockerCalls := dockerOps.getCalls()
-
-	// For ProductStackAll, we expect:
-	// 1. purgeWorkerImages (from purge worker)
-	// 2-4. removeMainDockerNetwork x3 (cleanup networks)
-	expectedDockerMethods := []string{
-		"purgeWorkerImages",
-		"removeMainDockerNetwork",
-		"removeMainDockerNetwork",
-		"removeMainDockerNetwork",
-	}
-
-	if len(dockerCalls) < len(expectedDockerMethods) {
-		t.Fatalf("expected at least %d docker calls, got %d", len(expectedDockerMethods), len(dockerCalls))
-	}
-
-	for i, expected := range expectedDockerMethods {
-		if i < len(dockerCalls) && dockerCalls[i].Method != expected {
-			t.Errorf("docker call %d: expected %s, got %s", i, expected, dockerCalls[i].Method)
-		}
-	}
-}
-
-func TestRemove_PreservesData(t *testing.T) {
-	t.Run("compose_stacks_preserve_volumes", func(t *testing.T) {
-		p, composeOps, _, _ := newProcessorForLogicTests(t)
-
-		stacks := []ProductStack{ProductStackPentagi, ProductStackLangfuse, ProductStackObservability}
-
-		for _, stack := range stacks {
-			err := p.remove(t.Context(), stack, testOperationState(t))
-			assertNoError(t, err)
-		}
-
-		// verify removeStack (not purgeStack) was called
-		calls := composeOps.getCalls()
-		for _, call := range calls {
-			if call.Method != "removeStack" {
-				t.Errorf("expected removeStack, got %s", call.Method)
-			}
-		}
-	})
-
-	t.Run("worker_removes_images_and_containers", func(t *testing.T) {
-		p, _, _, dockerOps := newProcessorForLogicTests(t)
-
-		err := p.remove(t.Context(), ProductStackWorker, testOperationState(t))
-		assertNoError(t, err)
-
-		calls := dockerOps.getCalls()
-		// remove for worker calls removeWorkerImages (which internally removes containers first)
-		hasRemoveImages := false
-		for _, call := range calls {
-			if call.Method == "removeWorkerImages" {
-				hasRemoveImages = true
-			}
-		}
-
-		if !hasRemoveImages {
-			t.Error("expected removeWorkerImages to be called")
-		}
-	})
-}
-
-func TestApplyChanges_ComplexScenarios(t *testing.T) {
-	t.Run("mixed_deployment_modes", func(t *testing.T) {
-		p, composeOps, _, _ := newProcessorForLogicTestsWithConfig(t, func(config *mockCheckConfig) {
-			// observability external, langfuse embedded, graphiti disabled, pentagi always embedded
-			config.ObservabilityExternal = true
-			config.ObservabilityInstalled = true // should be removed
-			config.LangfuseExternal = false
-			config.LangfuseExtracted = true // mark as extracted so it goes to update path
-			config.LangfuseConnected = true // required for isEmbeddedDeployment to return true
-			config.GraphitiConnected = false
-			config.PentagiExtracted = false
-		})
-
-		_ = p.state.SetVar("OTEL_HOST", "http://external:4318")
-		_ = p.state.SetVar("LANGFUSE_BASE_URL", checker.DefaultLangfuseEndpoint)
-
-		err := p.applyChanges(t.Context(), testOperationState(t))
-		assertNoError(t, err)
-
-		// verify observability removed
-		composeCalls := composeOps.getCalls()
-		obsRemoved := false
-		for _, call := range composeCalls {
-			if call.Method == "removeStack" && call.Stack == ProductStackObservability {
-				obsRemoved = true
-			}
-		}
-		if !obsRemoved {
-			t.Error("expected observability to be removed when external")
-		}
-
-		// verify langfuse installed - check for update operation
-		langfuseUpdated := false
-		for _, call := range composeCalls {
-			if call.Method == "updateStack" && call.Stack == ProductStackLangfuse {
-				langfuseUpdated = true
-			}
-		}
-		if !langfuseUpdated {
-			t.Error("expected langfuse to be updated")
-		}
-	})
-
-	t.Run("graphiti_external_removes_installed", func(t *testing.T) {
-		p, composeOps, _, _ := newProcessorForLogicTestsWithConfig(t, func(config *mockCheckConfig) {
-			// graphiti external but installed locally - should be removed
-			config.GraphitiConnected = true
-			config.GraphitiExternal = true
-			config.GraphitiInstalled = true
-		})
-
-		_ = p.state.SetVar("GRAPHITI_URL", "http://external:8000")
-
-		err := p.applyChanges(t.Context(), testOperationState(t))
-		assertNoError(t, err)
-
-		// verify graphiti removed
-		composeCalls := composeOps.getCalls()
-		graphitiRemoved := false
-		for _, call := range composeCalls {
-			if call.Method == "removeStack" && call.Stack == ProductStackGraphiti {
-				graphitiRemoved = true
-			}
-		}
-		if !graphitiRemoved {
-			t.Error("expected graphiti to be removed when external")
-		}
-	})
-
-	t.Run("graphiti_embedded_installs", func(t *testing.T) {
-		p, composeOps, fsOps, _ := newProcessorForLogicTestsWithConfig(t, func(config *mockCheckConfig) {
-			// graphiti embedded but not installed yet
-			config.GraphitiConnected = true
-			config.GraphitiExternal = false
-			config.GraphitiExtracted = false
-			config.GraphitiInstalled = false
-		})
-
-		_ = p.state.SetVar("GRAPHITI_URL", checker.DefaultGraphitiEndpoint)
-
-		err := p.applyChanges(t.Context(), testOperationState(t))
-		assertNoError(t, err)
-
-		// verify graphiti files ensured
-		fsCalls := fsOps.getCalls()
-		graphitiEnsured := false
-		for _, call := range fsCalls {
-			if call.Method == "ensureStackIntegrity" && call.Stack == ProductStackGraphiti {
-				graphitiEnsured = true
-			}
-		}
-		if !graphitiEnsured {
-			t.Error("expected graphiti files to be ensured")
-		}
-
-		// verify graphiti updated
-		composeCalls := composeOps.getCalls()
-		graphitiUpdated := false
-		for _, call := range composeCalls {
-			if call.Method == "updateStack" && call.Stack == ProductStackGraphiti {
-				graphitiUpdated = true
-			}
-		}
-		if !graphitiUpdated {
-			t.Error("expected graphiti to be updated")
-		}
-	})
-
-	t.Run("graphiti_embedded_already_extracted", func(t *testing.T) {
-		p, composeOps, fsOps, _ := newProcessorForLogicTestsWithConfig(t, func(config *mockCheckConfig) {
-			// graphiti embedded and already extracted - should verify integrity
-			config.GraphitiConnected = true
-			config.GraphitiExternal = false
-			config.GraphitiExtracted = true
-			config.GraphitiInstalled = false
-		})
-
-		_ = p.state.SetVar("GRAPHITI_URL", checker.DefaultGraphitiEndpoint)
-
-		err := p.applyChanges(t.Context(), testOperationState(t))
-		assertNoError(t, err)
-
-		// verify graphiti files verified (not ensured)
-		fsCalls := fsOps.getCalls()
-		graphitiVerified := false
-		for _, call := range fsCalls {
-			if call.Method == "verifyStackIntegrity" && call.Stack == ProductStackGraphiti {
-				graphitiVerified = true
-			}
-		}
-		if !graphitiVerified {
-			t.Error("expected graphiti files to be verified")
-		}
-
-		// verify graphiti updated
-		composeCalls := composeOps.getCalls()
-		graphitiUpdated := false
-		for _, call := range composeCalls {
-			if call.Method == "updateStack" && call.Stack == ProductStackGraphiti {
-				graphitiUpdated = true
-			}
-		}
-		if !graphitiUpdated {
-			t.Error("expected graphiti to be updated")
-		}
-	})
-
-	t.Run("error_recovery_partial_state", func(t *testing.T) {
-		p, _, _, _ := newProcessorForLogicTestsWithConfig(t, func(config *mockCheckConfig) {
-			config.ObservabilityExtracted = false
-			config.LangfuseExtracted = false
-			config.LangfuseConnected = true // required for isEmbeddedDeployment to return true
-			config.PentagiExtracted = false
-		})
-
-		_ = p.state.SetVar("OTEL_HOST", checker.DefaultObservabilityEndpoint)
-		_ = p.state.SetVar("LANGFUSE_BASE_URL", checker.DefaultLangfuseEndpoint)
-		_ = p.state.SetVar("DIRTY_FLAG", "true") // ensure state is dirty
-
-		// inject error in langfuse phase
-		injectFSError(p, map[string]error{
-			"ensureStackIntegrity_langfuse": fmt.Errorf("langfuse error"),
-		})
-
-		err := p.applyChanges(t.Context(), testOperationState(t))
-		assertError(t, err, true, "failed to apply langfuse changes: failed to ensure langfuse integrity: langfuse error")
-
-		// verify observability was processed before langfuse error
-		fsCalls := p.fsOps.(*baseMockFileSystemOperations).getCalls()
-		obsProcessed := false
-		langfuseAttempted := false
-		for _, call := range fsCalls {
-			if call.Method == "ensureStackIntegrity" {
-				if call.Stack == ProductStackObservability && call.Error == nil {
-					obsProcessed = true
-				}
-				if call.Stack == ProductStackLangfuse && call.Error != nil {
-					langfuseAttempted = true
-				}
-			}
-		}
-
-		if !obsProcessed {
-			t.Error("expected observability to be processed before error")
-		}
-		if !langfuseAttempted {
-			t.Error("expected langfuse processing to be attempted")
-		}
-	})
+	embedded.lists[observabilityDirectory] = append([]string{regular}, filesToExcludeFromVerification...)
+
+	result, err := h.p.checkFiles(t.Context(), ProductStackAll, testOperationState(t))
+	require.NoError(t, err)
+	assert.Equal(t, map[string]files.FileStatus{
+		"docker-compose.yml":               files.FileStatusModified,
+		"docker-compose-observability.yml": files.FileStatusMissing,
+		regular:                            files.FileStatusModified,
+		excludedMissing:                    files.FileStatusMissing,
+		excludedOK:                         files.FileStatusOK,
+	}, result, "langfuse is external, graphiti disabled, and an edited excluded file is nobody's business")
 }

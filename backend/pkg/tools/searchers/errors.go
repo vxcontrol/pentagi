@@ -15,6 +15,12 @@ var ErrNotConfigured = errors.New("search engine is not configured")
 // RetryableError wraps a transient failure that MAY succeed if the SAME engine is
 // retried: HTTP 429, HTTP 5xx, and network/transport errors (*url.Error, timeouts,
 // context deadline on the outbound request). RetryAfter is a hint (0 if unknown).
+//
+// A client deadline is retryable only where the endpoint answers within the
+// budget in the normal case. An engine whose endpoint runs work of its own
+// behind the request -- perplexity's /v1/agent -- classifies its own deadline as
+// Fatal instead, because the second attempt spends the same budget on a run that
+// was never going to be shorter.
 type RetryableError struct {
 	Err        error
 	RetryAfter time.Duration

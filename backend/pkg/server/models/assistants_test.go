@@ -1,58 +1,17 @@
 package models
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
 
-func TestAssistantStatusValid(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name    string
-		status  AssistantStatus
-		wantErr bool
-	}{
-		{"valid created", AssistantStatusCreated, false},
-		{"valid running", AssistantStatusRunning, false},
-		{"valid waiting", AssistantStatusWaiting, false},
-		{"valid finished", AssistantStatusFinished, false},
-		{"valid failed", AssistantStatusFailed, false},
-		{"invalid empty", AssistantStatus(""), true},
-		{"invalid unknown", AssistantStatus("unknown"), true},
-		{"invalid paused", AssistantStatus("paused"), true},
-	}
-
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			err := tt.status.Valid()
-			if tt.wantErr {
-				assert.Error(t, err)
-				assert.Contains(t, err.Error(), "invalid AssistantStatus")
-			} else {
-				assert.NoError(t, err)
-			}
-		})
-	}
-}
-
-func TestAssistantStatusString(t *testing.T) {
-	t.Parallel()
-
-	assert.Equal(t, "created", AssistantStatusCreated.String())
-	assert.Equal(t, "running", AssistantStatusRunning.String())
-	assert.Equal(t, "finished", AssistantStatusFinished.String())
-}
-
-func TestAssistantValid(t *testing.T) {
-	t.Parallel()
-
+func assistantsAssistant() Assistant {
 	traceID := "trace-123"
 	msgchainID := uint64(1)
-	validAssistant := Assistant{
+
+	return Assistant{
 		Status:             AssistantStatusCreated,
 		Title:              "test assistant",
 		Model:              "gpt-4",
@@ -64,148 +23,65 @@ func TestAssistantValid(t *testing.T) {
 		FlowID:             1,
 		MsgchainID:         &msgchainID,
 	}
+}
 
-	t.Run("valid assistant", func(t *testing.T) {
-		t.Parallel()
-		assert.NoError(t, validAssistant.Valid())
-	})
+// Rows are keyed by the type whose Valid they call.
+func TestAssistants_Valid_RefusesExactlyTheInvalidField(t *testing.T) {
+	t.Parallel()
 
-	t.Run("invalid status", func(t *testing.T) {
-		t.Parallel()
-		a := validAssistant
-		a.Status = AssistantStatus("invalid")
-		assert.Error(t, a.Valid())
-	})
+	input := "user response"
 
-	t.Run("missing title", func(t *testing.T) {
-		t.Parallel()
-		a := validAssistant
-		a.Title = ""
-		assert.Error(t, a.Valid())
-	})
+	modelsCheckValid(t, []modelsValidCase{
+		{"a created assistant status", AssistantStatusCreated, ""},
+		{"a running assistant status", AssistantStatusRunning, ""},
+		{"a waiting assistant status", AssistantStatusWaiting, ""},
+		{"a finished assistant status", AssistantStatusFinished, ""},
+		{"a failed assistant status", AssistantStatusFailed, ""},
+		{"an empty assistant status", AssistantStatus(""), "invalid AssistantStatus: "},
+		{"an unknown assistant status", AssistantStatus("unknown"), "invalid AssistantStatus: unknown"},
 
-	t.Run("missing model", func(t *testing.T) {
-		t.Parallel()
-		a := validAssistant
-		a.Model = ""
-		assert.Error(t, a.Valid())
+		{"a complete assistant", assistantsAssistant(), ""},
+		{"an assistant in an unknown status", modelsWith(assistantsAssistant(), func(a *Assistant) { a.Status = "invalid" }),
+			"Assistant.Status:valid"},
+		{"an assistant without a title", modelsWith(assistantsAssistant(), func(a *Assistant) { a.Title = "" }),
+			"Assistant.Title:required"},
+		{"an assistant without a model", modelsWith(assistantsAssistant(), func(a *Assistant) { a.Model = "" }),
+			"Assistant.Model:required"},
+
+		{"an assistant request", CreateAssistant{Input: "hello", Provider: "openai"}, ""},
+		{"an assistant request without input", CreateAssistant{Provider: "openai"}, "CreateAssistant.Input:required"},
+		{"an assistant request without a provider", CreateAssistant{Input: "hello"}, "CreateAssistant.Provider:required"},
+
+		{"stopping an assistant", PatchAssistant{Action: "stop"}, ""},
+		{"answering an assistant", PatchAssistant{Action: "input", Input: &input}, ""},
+		{"an action assistants do not take", PatchAssistant{Action: "restart"}, "PatchAssistant.Action:oneof"},
+		{"answering an assistant with nothing", PatchAssistant{Action: "input"}, "PatchAssistant.Input:required_if"},
+
+		{"an assistant with its flow", AssistantFlow{Flow: modelsFlow(), Assistant: assistantsAssistant()}, ""},
+		{"an assistant with an invalid flow", AssistantFlow{Flow: modelsWith(modelsFlow(), func(f *Flow) { f.Title = "" }),
+			Assistant: assistantsAssistant()}, "Flow.Title:required"},
+		{"an invalid assistant with its flow", AssistantFlow{Flow: modelsFlow(),
+			Assistant: modelsWith(assistantsAssistant(), func(a *Assistant) { a.Title = "" })}, "Assistant.Title:required"},
 	})
 }
 
-func TestAssistantTableName(t *testing.T) {
-	t.Parallel()
-	a := &Assistant{}
-	assert.Equal(t, "assistants", a.TableName())
-}
-
-func TestCreateAssistantValid(t *testing.T) {
+func TestAssistants_String_SpellsTheStoredValue(t *testing.T) {
 	t.Parallel()
 
-	t.Run("valid create assistant", func(t *testing.T) {
-		t.Parallel()
-		ca := CreateAssistant{Input: "hello", Provider: "openai"}
-		assert.NoError(t, ca.Valid())
-	})
-
-	t.Run("missing input", func(t *testing.T) {
-		t.Parallel()
-		ca := CreateAssistant{Input: "", Provider: "openai"}
-		assert.Error(t, ca.Valid())
-	})
-
-	t.Run("missing provider", func(t *testing.T) {
-		t.Parallel()
-		ca := CreateAssistant{Input: "hello", Provider: ""}
-		assert.Error(t, ca.Valid())
-	})
-}
-
-func TestPatchAssistantValid(t *testing.T) {
-	t.Parallel()
-
-	t.Run("valid stop action", func(t *testing.T) {
-		t.Parallel()
-		pa := PatchAssistant{Action: "stop"}
-		assert.NoError(t, pa.Valid())
-	})
-
-	t.Run("valid input action with input", func(t *testing.T) {
-		t.Parallel()
-		input := "user response"
-		pa := PatchAssistant{Action: "input", Input: &input}
-		assert.NoError(t, pa.Valid())
-	})
-
-	t.Run("invalid action", func(t *testing.T) {
-		t.Parallel()
-		pa := PatchAssistant{Action: "restart"}
-		assert.Error(t, pa.Valid())
-	})
-
-	t.Run("input action without input", func(t *testing.T) {
-		t.Parallel()
-		pa := PatchAssistant{Action: "input"}
-		assert.Error(t, pa.Valid())
-	})
-}
-
-func TestAssistantFlowValid(t *testing.T) {
-	t.Parallel()
-
-	traceID := "trace-123"
-	mcID := uint64(1)
-	validAssistant := Assistant{
-		Status:             AssistantStatusCreated,
-		Title:              "test",
-		Model:              "gpt-4",
-		ModelProviderName:  "openai",
-		ModelProviderType:  ProviderType("openai"),
-		Language:           "en",
-		ToolCallIDTemplate: "call_{id}",
-		TraceID:            &traceID,
-		FlowID:             1,
-		MsgchainID:         &mcID,
+	for _, tc := range []struct {
+		value fmt.Stringer
+		want  string
+	}{
+		{AssistantStatusCreated, "created"},
+		{AssistantStatusRunning, "running"},
+		{AssistantStatusFinished, "finished"},
+	} {
+		assert.Equal(t, tc.want, tc.value.String())
 	}
-	validFlow := Flow{
-		Status:             FlowStatusCreated,
-		Title:              "flow",
-		Model:              "gpt-4",
-		ModelProviderName:  "openai",
-		ModelProviderType:  ProviderType("openai"),
-		Language:           "en",
-		ToolCallIDTemplate: "call_{id}",
-		TraceID:            &traceID,
-		UserID:             1,
-	}
+}
 
-	t.Run("valid assistant flow", func(t *testing.T) {
-		t.Parallel()
-		af := AssistantFlow{
-			Flow:      validFlow,
-			Assistant: validAssistant,
-		}
-		assert.NoError(t, af.Valid())
-	})
+func TestAssistants_TableName_NamesTheMappedTable(t *testing.T) {
+	t.Parallel()
 
-	t.Run("invalid flow", func(t *testing.T) {
-		t.Parallel()
-		badFlow := validFlow
-		badFlow.Title = ""
-		af := AssistantFlow{
-			Flow:      badFlow,
-			Assistant: validAssistant,
-		}
-		assert.Error(t, af.Valid())
-	})
-
-	t.Run("invalid assistant", func(t *testing.T) {
-		t.Parallel()
-		badAssistant := validAssistant
-		badAssistant.Title = ""
-		af := AssistantFlow{
-			Flow:      validFlow,
-			Assistant: badAssistant,
-		}
-		assert.Error(t, af.Valid())
-	})
+	assert.Equal(t, "assistants", (&Assistant{}).TableName())
 }

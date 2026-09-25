@@ -76,7 +76,16 @@ describe('MarkdownEditorField raw-mode handle', () => {
 });
 
 describe('MarkdownEditorField rich-mode handle', () => {
-    it('lazy-mounts the editor and delegates handle methods to it', async () => {
+    // MarkdownEditorField loads the tiptap chunk via React.lazy. Under a saturated CI
+    // runner the dynamic import can outlast waitFor's default 1s — and
+    // `querySelector(...)?.textContent` becomes undefined, which makes toContain throw
+    // a confusing "undefined and string" error instead of a timeout. Preload the chunk
+    // and assert the mount node first so failures stay readable.
+    beforeAll(async () => {
+        await import('./markdown-editor');
+    });
+
+    it('lazy-mounts the editor and delegates handle methods to it', { timeout: 15_000 }, async () => {
         const ref = createRef<MarkdownEditorFieldHandle>();
         const { container } = render(
             <MarkdownEditorField
@@ -86,7 +95,14 @@ describe('MarkdownEditorField rich-mode handle', () => {
                 value={'x {{.Foo}} y'}
             />,
         );
-        await waitFor(() => expect(container.querySelector('.ProseMirror')?.textContent).toContain('Foo'));
+        await waitFor(
+            () => {
+                const prose = container.querySelector('.ProseMirror');
+                expect(prose).not.toBeNull();
+                expect(prose!.textContent).toContain('Foo');
+            },
+            { timeout: 10_000 },
+        );
 
         expect(ref.current?.selectNextUse('Foo')).toBe(true);
         expect(ref.current?.selectNextUse('Nope')).toBe(false);
@@ -94,7 +110,11 @@ describe('MarkdownEditorField rich-mode handle', () => {
 });
 
 describe('MarkdownEditorField handle contract', () => {
-    it('exposes focus, selectNextUse, and insertAtCursor in both modes', async () => {
+    beforeAll(async () => {
+        await import('./markdown-editor');
+    });
+
+    it('exposes focus, selectNextUse, and insertAtCursor in both modes', { timeout: 15_000 }, async () => {
         const rawRef = createRef<MarkdownEditorFieldHandle>();
         render(
             <MarkdownEditorField
@@ -114,7 +134,9 @@ describe('MarkdownEditorField handle contract', () => {
                 value=""
             />,
         );
-        await waitFor(() => expect(container.querySelector('.ProseMirror')).not.toBeNull());
+        await waitFor(() => expect(container.querySelector('.ProseMirror')).not.toBeNull(), {
+            timeout: 10_000,
+        });
 
         for (const current of [rawRef.current, richRef.current]) {
             expect(typeof current?.focus).toBe('function');

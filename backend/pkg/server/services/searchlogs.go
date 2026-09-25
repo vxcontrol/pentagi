@@ -93,7 +93,7 @@ func (s *SearchlogService) GetSearchlogs(c *gin.Context) {
 		return
 	}
 
-	query.Init("searchlogs", searchlogsSQLMappers)
+	_ = query.Init("searchlogs", searchlogsSQLMappers)
 
 	if query.Group != "" {
 		if _, ok := searchlogsSQLMappers[query.Group]; !ok {
@@ -183,7 +183,7 @@ func (s *SearchlogService) GetFlowSearchlogs(c *gin.Context) {
 		return
 	}
 
-	query.Init("searchlogs", searchlogsSQLMappers)
+	_ = query.Init("searchlogs", searchlogsSQLMappers)
 
 	if query.Group != "" {
 		if _, ok := searchlogsSQLMappers[query.Group]; !ok {

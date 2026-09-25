@@ -1,5 +1,7 @@
 import { type DragEvent as ReactDragEvent, useCallback, useEffect, useRef, useState } from 'react';
 
+import { getParentDir } from '@/lib/file-paths';
+
 import type { FileManagerInternalNode, FileNode } from './file-manager-types';
 
 import { dedupeOverlappingPaths } from './file-manager-utils';
@@ -83,12 +85,6 @@ interface UseFileManagerDndResult {
 }
 
 /** Returns the parent directory of a virtual path, or `''` for root. */
-const getParentDir = (path: string): string => {
-    const idx = path.lastIndexOf('/');
-
-    return idx === -1 ? '' : path.slice(0, idx);
-};
-
 /**
  * Validates that every source can be moved into `destDir`:
  *   - never into itself,

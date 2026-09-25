@@ -1,4 +1,5 @@
 import { ApolloProvider } from '@apollo/client/react';
+import { MotionConfig } from 'motion/react';
 import { lazy, Suspense } from 'react';
 import {
     createBrowserRouter,
@@ -15,6 +16,7 @@ import MainLayout from '@/components/layouts/main/main-layout';
 import SettingsLayout from '@/components/layouts/settings/settings-layout';
 import ProtectedRoute from '@/components/routes/protected-route';
 import PublicRoute from '@/components/routes/public-route';
+import { ConnectionStatus } from '@/components/shared/connection-status';
 import { DocumentTitle } from '@/components/shared/document-title';
 import PageLoader from '@/components/shared/page-loader';
 import RouteErrorBoundary from '@/components/shared/route-error-boundary';
@@ -279,10 +281,13 @@ const router = createBrowserRouter(
 function App() {
     return (
         <ApolloProvider client={client}>
-            <ThemeProvider>
-                <Toaster />
-                <RouterProvider router={router} />
-            </ThemeProvider>
+            <MotionConfig reducedMotion="user">
+                <ThemeProvider>
+                    <Toaster />
+                    <ConnectionStatus />
+                    <RouterProvider router={router} />
+                </ThemeProvider>
+            </MotionConfig>
         </ApolloProvider>
     );
 }

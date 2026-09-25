@@ -28,8 +28,8 @@ function Probe() {
 
     return (
         <div>
-            <span data-testid="mail">{authInfo?.user?.mail ?? 'none'}</span>
-            <span data-testid="path">{location.pathname}</span>
+            <span data-slot="probe-mail">{authInfo?.user?.mail ?? 'none'}</span>
+            <span data-slot="probe-path">{location.pathname}</span>
             <button onClick={() => void refreshAuthInfo()}>refresh</button>
             <button onClick={() => navigate('/dashboard')}>go</button>
         </div>
@@ -64,7 +64,7 @@ describe('UserProvider transient /info handling', () => {
         await user.click(screen.getByRole('button', { name: 'refresh' }));
         await waitFor(() => expect(get).toHaveBeenCalled());
 
-        expect(screen.getByTestId('mail')).toHaveTextContent('me@example.com');
+        expect(screen.getByTestId('probe-mail')).toHaveTextContent('me@example.com');
     });
 
     it('keeps the session and stays on the page when the navigation refresh fails transiently', async () => {
@@ -76,7 +76,7 @@ describe('UserProvider transient /info handling', () => {
         await user.click(screen.getByRole('button', { name: 'go' }));
         await waitFor(() => expect(get).toHaveBeenCalled());
 
-        expect(screen.getByTestId('path')).toHaveTextContent('/dashboard');
-        expect(screen.getByTestId('mail')).toHaveTextContent('me@example.com');
+        expect(screen.getByTestId('probe-path')).toHaveTextContent('/dashboard');
+        expect(screen.getByTestId('probe-mail')).toHaveTextContent('me@example.com');
     });
 });

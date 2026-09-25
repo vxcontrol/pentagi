@@ -24,11 +24,10 @@ type FlowSearchLogWorker interface {
 }
 
 type flowSearchLogWorker struct {
-	db         database.Querier
-	mx         *sync.Mutex
-	flowID     int64
-	containers map[int64]struct{}
-	pub        subscriptions.FlowPublisher
+	db     database.Querier
+	mx     *sync.Mutex
+	flowID int64
+	pub    subscriptions.FlowPublisher
 }
 
 func NewFlowSearchLogWorker(db database.Querier, flowID int64, pub subscriptions.FlowPublisher) FlowSearchLogWorker {

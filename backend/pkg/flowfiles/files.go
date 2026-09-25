@@ -398,7 +398,7 @@ func ExtractTar(r io.Reader, destDir string) error {
 			if err := os.MkdirAll(entryPath, 0755); err != nil {
 				return fmt.Errorf("failed to create directory '%s': %w", entryPath, err)
 			}
-		case tar.TypeReg, tar.TypeRegA:
+		case tar.TypeReg:
 			if hdr.Size < 0 {
 				return fmt.Errorf("tar entry '%s' has invalid size %d", hdr.Name, hdr.Size)
 			}
@@ -812,6 +812,27 @@ func collectRelativeFilePaths(dir string) []string {
 	return paths
 }
 
+func normalizePath(p string) string {
+	return path.Clean(strings.ReplaceAll(strings.TrimSpace(p), "\\", "/"))
+}
+
+func isUnsafePath(normalized string) bool {
+	return path.IsAbs(normalized) || normalized == ".." || strings.HasPrefix(normalized, "../")
+}
+
+func FirstUnsafePath(paths []string) (string, bool) {
+	for _, p := range paths {
+		trimmed := strings.TrimSpace(p)
+		if trimmed == "" {
+			continue
+		}
+		if isUnsafePath(normalizePath(trimmed)) {
+			return trimmed, true
+		}
+	}
+	return "", false
+}
+
 // DeduplicatePaths returns a deduplicated, coverage-minimised slice of the
 // original input paths, preserving first-occurrence order. The rules applied:
 //
@@ -844,10 +865,10 @@ func DeduplicatePaths(paths []string) []string {
 		}
 
 		// Normalise for comparison (backslashes → forward slashes, then Clean).
-		normalized := path.Clean(strings.ReplaceAll(trimmed, "\\", "/"))
+		normalized := normalizePath(trimmed)
 
 		// Safety: reject absolute paths and anything that escapes via "..".
-		if path.IsAbs(normalized) || normalized == ".." || strings.HasPrefix(normalized, "../") {
+		if isUnsafePath(normalized) {
 			continue
 		}
 

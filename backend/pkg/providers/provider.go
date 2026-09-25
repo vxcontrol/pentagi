@@ -225,6 +225,8 @@ func (fp *flowProvider) SetProvider(ctx context.Context, newProvider provider.Pr
 	fp.mx.Lock()
 	defer fp.mx.Unlock()
 
+	tcIDTemplate = toolCallIDTemplateOrDefault(tcIDTemplate)
+
 	fp.Provider = newProvider
 	fp.tcIDTemplate = tcIDTemplate
 
@@ -338,6 +340,7 @@ func (fp *flowProvider) GetTaskTitle(ctx context.Context, input string) (string,
 	if err != nil {
 		return "", wrapErrorEndEvaluatorSpan(ctx, getterEvaluator, "failed to get flow title", err)
 	}
+	title = normalizeTitle(title)
 
 	getterEvaluator.End(
 		langfuse.WithEvaluatorStatus("success"),
@@ -634,8 +637,8 @@ func (fp *flowProvider) PrepareAgentChain(ctx context.Context, taskID, subtaskID
 	ctx, span := obs.Observer.NewSpan(ctx, obs.SpanKindInternal, "providers.flowProvider.PrepareAgentChain")
 	defer span.End()
 
-	optAgentType := pconfig.OptionsTypePrimaryAgent
 	msgChainType := database.MsgchainTypePrimaryAgent
+	optAgentType := agentByChain[msgChainType]
 
 	logger := logrus.WithContext(ctx).WithFields(logrus.Fields{
 		"provider":   fp.Type(),
@@ -706,8 +709,8 @@ func (fp *flowProvider) PerformAgentChain(ctx context.Context, taskID, subtaskID
 	ctx, span := obs.Observer.NewSpan(ctx, obs.SpanKindInternal, "providers.flowProvider.PerformAgentChain")
 	defer span.End()
 
-	optAgentType := pconfig.OptionsTypePrimaryAgent
 	msgChainType := database.MsgchainTypePrimaryAgent
+	optAgentType := agentByChain[msgChainType]
 
 	logger := logrus.WithContext(ctx).WithFields(logrus.Fields{
 		"provider":     fp.Type(),
@@ -812,9 +815,13 @@ func (fp *flowProvider) PerformAgentChain(ctx context.Context, taskID, subtaskID
 					loggerFunc.WithError(err).Error("failed to unmarshal done result")
 					return "", fmt.Errorf("failed to unmarshal done result: %w", err)
 				}
+				if err := done.Validate(); err != nil {
+					loggerFunc.WithError(err).Warn("done result is incomplete")
+					return "", fmt.Errorf("failed to unmarshal done result: %w", err)
+				}
 
 				loggerFunc = loggerFunc.WithFields(logrus.Fields{
-					"status": done.Success,
+					"status": done.Success.Bool(),
 					"result": done.Result[:min(len(done.Result), 1000)],
 				})
 
@@ -825,7 +832,7 @@ func (fp *flowProvider) PerformAgentChain(ctx context.Context, taskID, subtaskID
 					executorAgent.End(opts...)
 				}()
 
-				if !done.Success {
+				if !done.Success.Bool() {
 					performResult = PerformResultError
 					opts = append(opts,
 						langfuse.WithAgentStatus("done handler: failed"),

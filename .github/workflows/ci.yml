@@ -133,13 +133,11 @@ jobs:
         with:
           version: v2.12.2
           working-directory: backend
-          args: --timeout=5m --issues-exit-code=0
-        continue-on-error: true
+          args: --timeout=5m
 
       - name: Backend - Test
         working-directory: backend
-        run: go test ./... -v
-        continue-on-error: true
+        run: go test ./... -race -v
 
       - name: Backend - Test Build
         working-directory: backend
@@ -170,7 +168,6 @@ jobs:
           # Build for ARM64
           GOOS=linux GOARCH=arm64 go build -trimpath -ldflags "$LDFLAGS" -o /tmp/pentagi-arm64 ./cmd/pentagi
           echo "✓ Successfully built for linux/arm64"
-        continue-on-error: true
 
   docker-build:
     needs: lint-and-test

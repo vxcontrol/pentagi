@@ -87,13 +87,11 @@ func (m *SearchEnginesFormModel) BuildForm() tea.Cmd {
 		config.PerplexityAPIKey,
 	))
 
-	// Perplexity Model (suggestions)
-	fields = append(fields, m.createSelectTextField(
+	fields = append(fields, m.createTextField(
 		"perplexity_model",
 		"Perplexity Model",
-		"Select Perplexity model",
+		"Perplexity chat/completions model (sonar, sonar-pro, ...); empty defaults to sonar",
 		config.PerplexityModel,
-		[]string{"sonar", "sonar-pro", "sonar-reasoning", "sonar-reasoning-pro", "sonar-deep-research"},
 		false,
 	))
 
@@ -104,6 +102,14 @@ func (m *SearchEnginesFormModel) BuildForm() tea.Cmd {
 		"Select Perplexity context size",
 		config.PerplexityContextSize,
 		[]string{"low", "medium", "high"},
+		false,
+	))
+
+	fields = append(fields, m.createTextField(
+		"perplexity_timeout",
+		locale.ToolsSearchEnginesPerplexityTimeout,
+		locale.ToolsSearchEnginesPerplexityTimeoutDesc,
+		config.PerplexityTimeout,
 		false,
 	))
 
@@ -501,6 +507,7 @@ func (m *SearchEnginesFormModel) HandleSave() error {
 		PerplexityAPIKey:              config.PerplexityAPIKey,
 		PerplexityModel:               config.PerplexityModel,
 		PerplexityContextSize:         config.PerplexityContextSize,
+		PerplexityTimeout:             config.PerplexityTimeout,
 		TavilyAPIKey:                  config.TavilyAPIKey,
 		FirecrawlAPIKey:               config.FirecrawlAPIKey,
 		FirecrawlAPIURL:               config.FirecrawlAPIURL,
@@ -548,6 +555,13 @@ func (m *SearchEnginesFormModel) HandleSave() error {
 			newConfig.PerplexityModel.Value = value
 		case "perplexity_context_size":
 			newConfig.PerplexityContextSize.Value = value
+		case "perplexity_timeout":
+			if value != "" {
+				if _, err := strconv.Atoi(value); err != nil {
+					return fmt.Errorf("invalid number for Perplexity timeout: %s (seconds)", value)
+				}
+			}
+			newConfig.PerplexityTimeout.Value = value
 		case "tavily_api_key":
 			newConfig.TavilyAPIKey.Value = value
 		case "firecrawl_api_key":
@@ -619,11 +633,11 @@ func (m *SearchEnginesFormModel) OnFieldChanged(fieldIndex int, oldValue, newVal
 }
 
 func (m *SearchEnginesFormModel) GetFormFields() []FormField {
-	return m.BaseScreen.fields
+	return m.fields
 }
 
 func (m *SearchEnginesFormModel) SetFormFields(fields []FormField) {
-	m.BaseScreen.fields = fields
+	m.fields = fields
 }
 
 // Update method - handle screen-specific input

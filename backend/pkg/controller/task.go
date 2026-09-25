@@ -30,6 +30,7 @@ type TaskWorker interface {
 	GetStatus(ctx context.Context) (database.TaskStatus, error)
 	SetStatus(ctx context.Context, status database.TaskStatus) error
 	GetResult(ctx context.Context) (string, error)
+	Report(ctx context.Context) error
 	SetResult(ctx context.Context, result string) error
 	PutInput(ctx context.Context, input string) error
 	Run(ctx context.Context) error
@@ -51,7 +52,7 @@ func NewTaskWorker(
 	flowCtx *FlowContext,
 	input string,
 	updater FlowUpdater,
-) (TaskWorker, error) {
+) (_ TaskWorker, err error) {
 	ctx, span := obs.Observer.NewSpan(ctx, obs.SpanKindInternal, "controller.NewTaskWorker")
 	defer span.End()
 
@@ -71,6 +72,11 @@ func NewTaskWorker(
 	if err != nil {
 		return nil, fmt.Errorf("failed to create task in DB: %w", err)
 	}
+	defer func() {
+		if err != nil {
+			failCreatedTask(ctx, flowCtx, task, err)
+		}
+	}()
 
 	flowCtx.Publisher.TaskCreated(ctx, task, []database.Subtask{})
 
@@ -113,6 +119,39 @@ func NewTaskWorker(
 		completed: false,
 		waiting:   false,
 	}, nil
+}
+
+func failCreatedTask(ctx context.Context, flowCtx *FlowContext, task database.Task, cause error) {
+	ctx = context.WithoutCancel(ctx)
+
+	var (
+		closed database.Task
+		err    error
+	)
+	if errors.Is(cause, context.Canceled) {
+		closed, err = flowCtx.DB.UpdateTaskStatus(ctx, database.UpdateTaskStatusParams{
+			Status: database.TaskStatusFinished,
+			ID:     task.ID,
+		})
+	} else {
+		closed, err = flowCtx.DB.UpdateTaskFailedResult(ctx, database.UpdateTaskFailedResultParams{
+			Result: database.SanitizeUTF8(cause.Error()),
+			ID:     task.ID,
+		})
+	}
+	if err != nil {
+		logrus.WithContext(ctx).WithError(err).
+			Warnf("failed to close task %d after it could not start", task.ID)
+		return
+	}
+
+	subtasks, err := flowCtx.DB.GetTaskSubtasks(ctx, task.ID)
+	if err != nil {
+		logrus.WithContext(ctx).WithError(err).
+			Warnf("failed to get subtasks of task %d, publishing it closed without them", task.ID)
+	}
+
+	flowCtx.Publisher.TaskUpdated(ctx, closed, subtasks)
 }
 
 func LoadTaskWorker(
@@ -333,6 +372,14 @@ func (tw *taskWorker) Run(ctx context.Context) error {
 		}
 	}
 
+	return tw.writeResult(ctx)
+}
+
+// writeResult asks the reporter for the task's write-up and publishes it: the
+// result, the task status it implies, and the report message the operator
+// reads. Shared with Report, which is the same work asked for on demand
+// instead of at the end of the subtask queue.
+func (tw *taskWorker) writeResult(ctx context.Context) error {
 	jobResult, err := tw.taskCtx.Provider.GetTaskResult(ctx, tw.taskCtx.TaskID)
 	if err != nil {
 		tw.handleInterrupting(err)
@@ -340,7 +387,7 @@ func (tw *taskWorker) Run(ctx context.Context) error {
 	}
 
 	var taskStatus database.TaskStatus
-	if jobResult.Success {
+	if jobResult.Success.Bool() {
 		taskStatus = database.TaskStatusFinished
 	} else {
 		taskStatus = database.TaskStatusFailed
@@ -369,6 +416,72 @@ func (tw *taskWorker) Run(ctx context.Context) error {
 	if err != nil {
 		tw.handleInterrupting(err)
 		return fmt.Errorf("failed to put report for task %d: %w", tw.taskCtx.TaskID, err)
+	}
+
+	return nil
+}
+
+// ErrTaskAlreadyCompleted is a report asked for on a task that has nothing left
+// to write up. It is the caller's mistake rather than a fault, and the retry
+// loop in flowWorker.runReport stops on it rather than asking three times.
+var ErrTaskAlreadyCompleted = errors.New("task has already completed")
+
+// Report writes the task up on demand, for a task still open -- running or
+// waiting alike. The write-up is the one artefact a flow produces that cannot
+// be re-derived once the flow is finished, so this exists to ask for it before
+// that point.
+//
+// The caller bounds the run: the context it passes is the whole allowance,
+// because a retrying caller must not multiply it.
+func (tw *taskWorker) Report(ctx context.Context) error {
+	ctx, span := obs.Observer.NewSpan(ctx, obs.SpanKindInternal, "controller.taskWorker.Report")
+	defer span.End()
+
+	if tw.IsCompleted() {
+		return fmt.Errorf("%w: task %d", ErrTaskAlreadyCompleted, tw.taskCtx.TaskID)
+	}
+
+	// Run's first statement, so a report-initiated chain is attributed the same
+	// way the ordinary one is.
+	ctx = tools.PutAgentContext(ctx, database.MsgchainTypePrimaryAgent)
+
+	if err := tw.SetStatus(ctx, database.TaskStatusRunning); err != nil {
+		return fmt.Errorf("failed to start reporting task %d: %w", tw.taskCtx.TaskID, err)
+	}
+
+	if err := tw.writeResult(ctx); err != nil {
+		// Only when the write-up did not already close the task. writeResult
+		// commits the status before the report message, so a failure on that
+		// last step leaves a task that IS finished -- and resetting it here
+		// would un-finish it and buy a second reporter run. This is the same
+		// invariant handleInterrupting protects.
+		if !tw.IsCompleted() {
+			resetCtx := ctx
+			if ctx.Err() != nil {
+				resetCtx = context.WithoutCancel(ctx)
+			}
+			_ = tw.SetStatus(resetCtx, database.TaskStatusWaiting)
+		}
+
+		return err
+	}
+
+	// A task closed by a report has the same leftovers an ordinary finish
+	// closes: writeResult marks the task done without touching subtasks that
+	// never ran, and they would sit under a finished task forever.
+	return tw.finishOutstandingSubtasks(ctx)
+}
+
+// finishOutstandingSubtasks closes any subtask the task did not reach. Shared
+// wording with Finish, which does the same before marking the task done.
+func (tw *taskWorker) finishOutstandingSubtasks(ctx context.Context) error {
+	for _, st := range tw.stc.ListSubtasks(ctx) {
+		if st.IsCompleted() {
+			continue
+		}
+		if err := st.Finish(ctx); err != nil {
+			return fmt.Errorf("failed to finish subtask %d after reporting: %w", st.GetSubtaskID(), err)
+		}
 	}
 
 	return nil

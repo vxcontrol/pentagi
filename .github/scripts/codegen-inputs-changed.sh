@@ -39,7 +39,7 @@ INPUTS=(
     frontend/src/graphql/types.ts
 )
 
-if ! files=$(git diff --name-only "$base" "$HEAD_SHA"); then
+if ! files=$(git diff --name-only --no-renames "$base" "$HEAD_SHA"); then
     echo "reason=diff-failed" >&2
     echo "changed=true"
     exit 0

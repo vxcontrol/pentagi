@@ -92,7 +92,7 @@ func (s *AgentlogService) GetAgentlogs(c *gin.Context) {
 		return
 	}
 
-	query.Init("agentlogs", agentlogsSQLMappers)
+	_ = query.Init("agentlogs", agentlogsSQLMappers)
 
 	if query.Group != "" {
 		if _, ok := agentlogsSQLMappers[query.Group]; !ok {
@@ -182,7 +182,7 @@ func (s *AgentlogService) GetFlowAgentlogs(c *gin.Context) {
 		return
 	}
 
-	query.Init("agentlogs", agentlogsSQLMappers)
+	_ = query.Init("agentlogs", agentlogsSQLMappers)
 
 	if query.Group != "" {
 		if _, ok := agentlogsSQLMappers[query.Group]; !ok {

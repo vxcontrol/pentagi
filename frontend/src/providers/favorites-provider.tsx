@@ -22,6 +22,7 @@ import { useUser } from '@/providers/user-provider';
 
 interface FavoritesContextValue {
     addFavoriteFlow: (flowId: number | string) => Promise<void>;
+    canToggleFavorite: (flow: { id: number | string; userId: string }) => boolean;
     favoriteFlowIds: number[];
     isFavoriteFlow: (flowId: number | string) => boolean;
     isLoading: boolean;
@@ -206,20 +207,33 @@ export function FavoritesProvider({ children }: FavoritesProviderProps) {
         [favoriteFlowIds],
     );
 
+    const canToggleFavorite = useCallback(
+        (flow: { id: number | string; userId: string }) => {
+            const currentUserId = userPreferencesData?.settingsUser?.id;
+
+            return currentUserId != null && (flow.userId === currentUserId || isFavoriteFlow(flow.id));
+        },
+        [userPreferencesData?.settingsUser?.id, isFavoriteFlow],
+    );
+
+    const isLoading = isLoadingPreferences && !userPreferencesData;
+
     const value = useMemo(
         () => ({
             addFavoriteFlow,
+            canToggleFavorite,
             favoriteFlowIds,
             isFavoriteFlow,
-            isLoading: isLoadingPreferences,
+            isLoading,
             removeFavoriteFlow,
             toggleFavoriteFlow,
         }),
         [
             addFavoriteFlow,
+            canToggleFavorite,
             favoriteFlowIds,
             isFavoriteFlow,
-            isLoadingPreferences,
+            isLoading,
             removeFavoriteFlow,
             toggleFavoriteFlow,
         ],

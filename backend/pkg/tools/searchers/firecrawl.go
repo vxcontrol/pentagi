@@ -220,10 +220,10 @@ func (f *firecrawl) buildFirecrawlResult(ctx context.Context, query string, resu
 
 	isMarkdownExists := false
 	for i, res := range result.Data.Web {
-		writer.WriteString(fmt.Sprintf("## %d. %s\n\n", i+1, res.resolvedTitle()))
-		writer.WriteString(fmt.Sprintf("* URL %s\n\n", res.resolvedURL()))
+		fmt.Fprintf(&writer, "## %d. %s\n\n", i+1, res.resolvedTitle())
+		fmt.Fprintf(&writer, "* URL %s\n\n", res.resolvedURL())
 		if res.Description != "" {
-			writer.WriteString(fmt.Sprintf("### Short content\n\n%s\n\n", res.Description))
+			fmt.Fprintf(&writer, "### Short content\n\n%s\n\n", res.Description)
 		}
 		if res.Markdown != "" {
 			isMarkdownExists = true
@@ -239,7 +239,7 @@ func (f *firecrawl) buildFirecrawlResult(ctx context.Context, query string, resu
 			if err != nil {
 				writer.WriteString(f.getContentFromResults(result.Data.Web))
 			} else {
-				writer.WriteString(fmt.Sprintf("### Summarized Content\n\n%s\n\n", summarizedContents))
+				fmt.Fprintf(&writer, "### Summarized Content\n\n%s\n\n", summarizedContents)
 			}
 		}
 	} else {
@@ -255,7 +255,7 @@ func (f *firecrawl) getContentFromResults(results []firecrawlResult) string {
 		if res.Markdown != "" {
 			markdown := res.Markdown
 			markdown = markdown[:min(len(markdown), maxRawContentLength)]
-			writer.WriteString(fmt.Sprintf("### Raw content for %d. %s\n\n%s\n\n", i+1, res.resolvedTitle(), markdown))
+			fmt.Fprintf(&writer, "### Raw content for %d. %s\n\n%s\n\n", i+1, res.resolvedTitle(), markdown)
 		}
 	}
 	return writer.String()

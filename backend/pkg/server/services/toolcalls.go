@@ -95,7 +95,7 @@ func (s *ToolcallService) GetToolcalls(c *gin.Context) {
 		return
 	}
 
-	query.Init("toolcalls", toolcallsSQLMappers)
+	_ = query.Init("toolcalls", toolcallsSQLMappers)
 
 	if query.Group != "" {
 		if _, ok := toolcallsSQLMappers[query.Group]; !ok {
@@ -185,7 +185,7 @@ func (s *ToolcallService) GetFlowToolcalls(c *gin.Context) {
 		return
 	}
 
-	query.Init("toolcalls", toolcallsSQLMappers)
+	_ = query.Init("toolcalls", toolcallsSQLMappers)
 
 	if query.Group != "" {
 		if _, ok := toolcallsSQLMappers[query.Group]; !ok {

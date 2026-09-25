@@ -14,111 +14,9 @@ import (
 	"pentagi/pkg/observability/langfuse/api"
 )
 
-// Shutdown cancels without flushing, so the process shutdown path must ForceFlush
-// (Observer.Flush) before Shutdown or the last batch of observations is dropped.
-// These pin both halves so a change to either method surfaces here.
-func TestObserverShutdownDropsBatch_ForceFlushDrains(t *testing.T) {
-	// GET serves the project list that NewClient validates against; POST is the
-	// ingestion batch endpoint whose hits mean the batch was actually drained.
-	newSink := func() (*httptest.Server, *int32) {
-		var ingestHits int32
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			if r.Method == http.MethodGet {
-				_, _ = w.Write([]byte(`{"data":[{"id":"proj","name":"test"}]}`))
-				return
-			}
-			atomic.AddInt32(&ingestHits, 1)
-			_, _ = w.Write([]byte(`{"successes":[],"errors":[]}`))
-		}))
-		return srv, &ingestHits
-	}
-
-	makeObserver := func(t *testing.T, url string) *observer {
-		t.Helper()
-		client, err := NewClient(
-			WithBaseURL(url),
-			WithPublicKey("pk"),
-			WithSecretKey("sk"),
-			WithProjectID("proj"),
-		)
-		if err != nil {
-			t.Fatalf("NewClient: %v", err)
-		}
-		// Huge interval + queue so nothing auto-flushes: the batch accumulates and
-		// is drained only by the method under test.
-		return NewObserver(client,
-			WithSendInterval(10*time.Minute),
-			WithSendTimeout(2*time.Second),
-			WithQueueSize(100),
-		).(*observer)
-	}
-
-	newEvent := func() *api.IngestionEvent {
-		return &api.IngestionEvent{IngestionEventZero: &api.IngestionEventZero{
-			ID:        newSpanID(),
-			Timestamp: getCurrentTimeString(),
-		}}
-	}
-
-	// Block until the sender goroutine has pulled the enqueued event out of the
-	// buffered queue and into its in-memory batch, so the subsequent action acts
-	// on a non-empty batch deterministically.
-	waitBatched := func(t *testing.T, o *observer) {
-		t.Helper()
-		for i := 0; i < 400; i++ {
-			if len(o.queue) == 0 {
-				return
-			}
-			time.Sleep(5 * time.Millisecond)
-		}
-		t.Fatal("sender never consumed the queued event into its batch")
-	}
-
-	t.Run("Shutdown alone drops the buffered batch", func(t *testing.T) {
-		srv, hits := newSink()
-		defer srv.Close()
-		o := makeObserver(t, srv.URL)
-		o.enqueue(newEvent())
-		waitBatched(t, o)
-
-		_ = o.Shutdown(context.Background())
-
-		if got := atomic.LoadInt32(hits); got != 0 {
-			t.Fatalf("Shutdown must not flush; sink received %d requests", got)
-		}
-	})
-
-	t.Run("ForceFlush drains the buffered batch", func(t *testing.T) {
-		srv, hits := newSink()
-		defer srv.Close()
-		o := makeObserver(t, srv.URL)
-		o.enqueue(newEvent())
-		waitBatched(t, o)
-
-		_ = o.ForceFlush(context.Background())
-
-		if got := atomic.LoadInt32(hits); got != 1 {
-			t.Fatalf("ForceFlush must send the batch exactly once; sink received %d requests", got)
-		}
-		_ = o.Shutdown(context.Background())
-	})
-}
-
-// TestObserverFlushWithSplit_413SplitsInstead OfDroppingBatch reproduces the
-// production failure: Langfuse rejects an oversized batch with 413 "Body
-// exceeded ... limit". Previously the whole batch was discarded on any flush
-// error; flushWithSplit must instead split the batch and retry each half so
-// every event still lands, as long as no single event alone is oversized.
-func TestObserverFlushWithSplit_413SplitsInsteadOfDroppingBatch(t *testing.T) {
-	const maxEventsPerRequest = 2
-
-	var (
-		mu          sync.Mutex
-		received    = map[string]bool{}
-		postCount   int32
-		rejectCount int32
-	)
+// observerSink serves the project list NewClient validates against and hands every ingestion POST to ingest.
+func observerSink(t *testing.T, ingest http.HandlerFunc) *httptest.Server {
+	t.Helper()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -126,8 +24,99 @@ func TestObserverFlushWithSplit_413SplitsInsteadOfDroppingBatch(t *testing.T) {
 			_, _ = w.Write([]byte(`{"data":[{"id":"proj","name":"test"}]}`))
 			return
 		}
+		ingest(w, r)
+	}))
+	t.Cleanup(srv.Close)
 
-		atomic.AddInt32(&postCount, 1)
+	return srv
+}
+
+// observerNew never flushes on its own, so a batch is sent only by the call under test.
+func observerNew(t *testing.T, url string) *observer {
+	t.Helper()
+
+	client, err := NewClient(WithBaseURL(url), WithPublicKey("pk"), WithSecretKey("sk"), WithProjectID("proj"))
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+
+	return NewObserver(client,
+		WithSendInterval(10*time.Minute),
+		WithSendTimeout(2*time.Second),
+		WithQueueSize(100),
+	).(*observer)
+}
+
+func observerEvent(id string) *api.IngestionEvent {
+	return &api.IngestionEvent{IngestionEventZero: &api.IngestionEventZero{ID: id, Timestamp: getCurrentTimeString()}}
+}
+
+// observerWaitBatched waits until the sender has moved every queued event into its in-memory batch.
+func observerWaitBatched(t *testing.T, o *observer) {
+	t.Helper()
+
+	for range 400 {
+		if len(o.queue) == 0 {
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Fatal("sender never consumed the queued events into its batch")
+}
+
+// observerCountingSink accepts every batch and counts the requests.
+func observerCountingSink(t *testing.T) (*httptest.Server, *atomic.Int32) {
+	t.Helper()
+
+	var hits atomic.Int32
+	srv := observerSink(t, func(w http.ResponseWriter, _ *http.Request) {
+		hits.Add(1)
+		_, _ = w.Write([]byte(`{"successes":[],"errors":[]}`))
+	})
+	return srv, &hits
+}
+
+// Shutdown cancels without flushing, so the process must ForceFlush first or the last batch is lost.
+func TestObserver_Shutdown_DropsTheBufferedBatch(t *testing.T) {
+	srv, hits := observerCountingSink(t)
+	o := observerNew(t, srv.URL)
+	o.enqueue(observerEvent(newSpanID()))
+	observerWaitBatched(t, o)
+
+	_ = o.Shutdown(context.Background())
+
+	if got := hits.Load(); got != 0 {
+		t.Fatalf("Shutdown must not flush; sink received %d requests", got)
+	}
+}
+
+func TestObserver_ForceFlush_DrainsTheBufferedBatch(t *testing.T) {
+	srv, hits := observerCountingSink(t)
+	o := observerNew(t, srv.URL)
+	o.enqueue(observerEvent(newSpanID()))
+	observerWaitBatched(t, o)
+
+	_ = o.ForceFlush(context.Background())
+
+	if got := hits.Load(); got != 1 {
+		t.Fatalf("ForceFlush must send the batch exactly once; sink received %d requests", got)
+	}
+	_ = o.Shutdown(context.Background())
+}
+
+// Langfuse answers an oversized batch with 413; every event must still land once the batch is split.
+func TestObserver_FlushWithSplit_SplitsA413InsteadOfDroppingTheBatch(t *testing.T) {
+	const maxEventsPerRequest = 2
+
+	var (
+		mu          sync.Mutex
+		received    = map[string]bool{}
+		postCount   atomic.Int32
+		rejectCount atomic.Int32
+	)
+
+	srv := observerSink(t, func(w http.ResponseWriter, r *http.Request) {
+		postCount.Add(1)
 
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
@@ -143,7 +132,7 @@ func TestObserverFlushWithSplit_413SplitsInsteadOfDroppingBatch(t *testing.T) {
 		}
 
 		if len(req.Batch) > maxEventsPerRequest {
-			atomic.AddInt32(&rejectCount, 1)
+			rejectCount.Add(1)
 			w.WriteHeader(http.StatusRequestEntityTooLarge)
 			_, _ = w.Write([]byte("Body exceeded 4.5mb limit"))
 			return
@@ -158,52 +147,27 @@ func TestObserverFlushWithSplit_413SplitsInsteadOfDroppingBatch(t *testing.T) {
 		mu.Unlock()
 
 		_, _ = w.Write([]byte(`{"successes":[],"errors":[]}`))
-	}))
-	defer srv.Close()
+	})
 
-	client, err := NewClient(
-		WithBaseURL(srv.URL),
-		WithPublicKey("pk"),
-		WithSecretKey("sk"),
-		WithProjectID("proj"),
-	)
-	if err != nil {
-		t.Fatalf("NewClient: %v", err)
-	}
+	o := observerNew(t, srv.URL)
 
-	o := NewObserver(client,
-		WithSendInterval(10*time.Minute),
-		WithSendTimeout(2*time.Second),
-		WithQueueSize(100),
-	).(*observer)
-
-	const numEvents = 5
-	ids := make([]string, 0, numEvents)
-	for i := 0; i < numEvents; i++ {
+	ids := make([]string, 0, 5)
+	for range 5 {
 		id := newSpanID()
 		ids = append(ids, id)
-		o.enqueue(&api.IngestionEvent{IngestionEventZero: &api.IngestionEventZero{
-			ID:        id,
-			Timestamp: getCurrentTimeString(),
-		}})
+		o.enqueue(observerEvent(id))
 	}
-
-	for i := 0; i < 400; i++ {
-		if len(o.queue) == 0 {
-			break
-		}
-		time.Sleep(5 * time.Millisecond)
-	}
+	observerWaitBatched(t, o)
 
 	if err := o.ForceFlush(context.Background()); err != nil {
 		t.Fatalf("ForceFlush() error = %v, want nil (splitting should recover from 413)", err)
 	}
 	_ = o.Shutdown(context.Background())
 
-	if got := atomic.LoadInt32(&rejectCount); got == 0 {
+	if rejectCount.Load() == 0 {
 		t.Fatal("expected at least one 413 rejection to exercise the split path")
 	}
-	if got := atomic.LoadInt32(&postCount); got <= 1 {
+	if got := postCount.Load(); got <= 1 {
 		t.Fatalf("expected multiple POST requests from splitting, got %d", got)
 	}
 
@@ -216,46 +180,17 @@ func TestObserverFlushWithSplit_413SplitsInsteadOfDroppingBatch(t *testing.T) {
 	}
 }
 
-// TestObserverFlushWithSplit_OversizedSingleEventIsDroppedNotRetriedForever
-// checks that when even a single event alone still exceeds the body-size
-// limit, flushWithSplit gives up after splitting down to it (returning nil,
-// logging the drop) instead of recursing forever.
-func TestObserverFlushWithSplit_OversizedSingleEventIsDroppedNotRetriedForever(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		if r.Method == http.MethodGet {
-			_, _ = w.Write([]byte(`{"data":[{"id":"proj","name":"test"}]}`))
-			return
-		}
+// A single event that alone exceeds the limit is dropped, not split and retried forever.
+func TestObserver_FlushWithSplit_DropsAnOversizedSingleEvent(t *testing.T) {
+	srv := observerSink(t, func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusRequestEntityTooLarge)
 		_, _ = w.Write([]byte("Body exceeded 4.5mb limit"))
-	}))
-	defer srv.Close()
-
-	client, err := NewClient(
-		WithBaseURL(srv.URL),
-		WithPublicKey("pk"),
-		WithSecretKey("sk"),
-		WithProjectID("proj"),
-	)
-	if err != nil {
-		t.Fatalf("NewClient: %v", err)
-	}
-
-	o := NewObserver(client,
-		WithSendInterval(10*time.Minute),
-		WithSendTimeout(2*time.Second),
-		WithQueueSize(100),
-	).(*observer)
-
-	batch := []*api.IngestionEvent{
-		{IngestionEventZero: &api.IngestionEventZero{ID: newSpanID(), Timestamp: getCurrentTimeString()}},
-		{IngestionEventZero: &api.IngestionEventZero{ID: newSpanID(), Timestamp: getCurrentTimeString()}},
-	}
+	})
+	o := observerNew(t, srv.URL)
 
 	done := make(chan error, 1)
 	go func() {
-		done <- o.flushWithSplit(context.Background(), batch)
+		done <- o.flushWithSplit(context.Background(), []*api.IngestionEvent{observerEvent(newSpanID()), observerEvent(newSpanID())})
 	}()
 
 	select {

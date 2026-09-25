@@ -41,7 +41,7 @@ export interface RouteTab {
 
 /** Order matters: the flow auto-opens Assistant, so tabs.spec pins that no entry is already open. */
 export const FLOW_DETAIL_TABS: RouteTab[] = [
-    { name: 'Dashboard', ready: (page) => page.getByText('Usage by Model & Provider') },
+    { name: 'Dashboard', ready: (page) => page.getByText('Usage by Agent Type') },
     { name: 'Assistant', ready: (page) => page.getByText('New assistant', { exact: true }) },
     { name: 'Automation', ready: (page) => page.getByText('No active tasks') },
     { name: 'Tasks', ready: (page) => page.getByText('E2E Task Alpha') },

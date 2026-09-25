@@ -37,7 +37,7 @@ Two rules make the orchestrator possible:
 2. Add the engine's config field(s) to `pkg/config/config.go` (+ `.env.example`, `docker-compose.yml`, `config_test.go`).
 3. Construct it in `buildSearchEngines` (`pkg/tools/web_search.go`) and place its id in the relevant `fallbackStrategy` chains — that table is the only place engine priority lives.
 4. If the engine needs a **new** attribution value (not one of the existing `SearchengineType`s), add a goose migration under `backend/migrations/sql/`, a `SearchengineType<Name>` constant in `pkg/database/models.go`, and reconcile `pkg/server/models/searchlogs.go`. Reusing an existing value (as the internal engine reuses `browser`) needs no migration.
-5. Add `<name>_test.go`. The shared MITM proxy harness (`newTestProxy`) lives in `proxy_test.go`.
+5. Add `<name>_test.go`. The shared MITM proxy harness (`newTestProxy`) lives in `fixtures_test.go`.
 
 ## Current engines
 

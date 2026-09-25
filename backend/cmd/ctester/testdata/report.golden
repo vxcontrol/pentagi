@@ -1,0 +1,77 @@
+# LLM Agent Testing Report
+
+Generated: <stamped>
+
+## Overall Results
+
+| Agent | Model | Reasoning | Success Rate | Average Latency |
+|-------|-------|-----------|--------------|-----------------|
+| assistant | gpt-4o | true | 4/5 (80.00%) | 1.400s |
+| installer | claude-sonnet | false | 1/1 (100.00%) | 0.700s |
+| empty | none | false | 0/0 (0.00%) | 0.000s |
+
+**Total**: 5/6 (83.33%) successful tests
+**Refused by a vendor's content filter**: 1 of the failed tests
+**Overall average latency**: 1.283s
+
+## Detailed Results
+
+### assistant (gpt-4o)
+
+#### Basic Tests
+
+| Test | Result | Latency | Error |
+|------|--------|---------|-------|
+| simple call | ✅ Pass | 1.200s |  |
+| Streaming streamed call | ✅ Pass | 0.900s |  |
+| bad call | ❌ Fail | 0.300s | rate limited \| try again |
+
+#### Advanced Tests
+
+| Test | Result | Latency | Error |
+|------|--------|---------|-------|
+| tool call | ✅ Pass | 2.500s |  |
+| refused call | ⛔ Filtered | 0.400s | the model returned no answer; stop reason: content\_filter |
+
+#### Capability Tests
+
+| Test | Capability | Result | Latency | Note |
+|------|------------|--------|---------|------|
+| adaptive thinking | reasoning | ✅ Pass | 1.500s |  |
+| structured output | schema | ⊘ Not Supported | 0.000s | not supported |
+| reasoning off | reasoning | ❌ Fail | 0.800s | gateway timeout |
+
+**Summary**: 4/5 (80.00%) successful tests
+
+**Refused by the vendor's content filter**: 1 of the failed tests
+
+**Average latency**: 1.400s
+
+---
+
+### installer (claude-sonnet)
+
+#### Basic Tests
+
+| Test | Result | Latency | Error |
+|------|--------|---------|-------|
+| simple call | ✅ Pass | 0.700s |  |
+
+#### Advanced Tests
+
+*advanced tests skipped for this model*
+
+**Summary**: 1/1 (100.00%) successful tests
+
+**Average latency**: 0.700s
+
+---
+
+### empty (none)
+
+**Summary**: 0/0 (0.00%) successful tests
+
+**Average latency**: 0.000s
+
+---
+

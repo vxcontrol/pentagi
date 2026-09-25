@@ -138,9 +138,9 @@ func (m *InstallerUpdateModel) HandleReset() {}
 
 func (m *InstallerUpdateModel) OnFieldChanged(fieldIndex int, oldValue, newValue string) {}
 
-func (m *InstallerUpdateModel) GetFormFields() []FormField { return m.BaseScreen.fields }
+func (m *InstallerUpdateModel) GetFormFields() []FormField { return m.fields }
 
-func (m *InstallerUpdateModel) SetFormFields(fields []FormField) { m.BaseScreen.fields = fields }
+func (m *InstallerUpdateModel) SetFormFields(fields []FormField) { m.fields = fields }
 
 // Update implements tea.Model
 func (m *InstallerUpdateModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {

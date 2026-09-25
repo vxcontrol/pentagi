@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useDebounce } from 'use-debounce';
 
-import { URL_PARAMS } from '@/lib/url-params';
+import { getLatestSearchParams, URL_PARAMS } from '@/lib/url-params';
 
 interface SetPageOptions {
     /**
@@ -114,21 +114,10 @@ export function useTableState(options: UseTableStateOptions = {}): UseTableState
     // eslint-disable-next-line react-hooks/refs
     searchParamsReference.current = searchParams;
 
-    /**
-     * Read the freshest possible `URLSearchParams` for the next write.
-     *
-     * Under `BrowserRouter` (production), `window.location.search` reflects
-     * the URL bar one frame ahead of react-router's internal snapshot when
-     * batched updates are in flight — that's the seam we exploit to merge
-     * multi-source URL mutations safely. Under `MemoryRouter` (tests)
-     * `window.location` doesn't track the in-memory history, so we fall
-     * back to the rendered react-router snapshot.
-     */
-    const readLatestParams = useCallback((): URLSearchParams => {
-        const fromWindow = typeof window !== 'undefined' ? window.location.search : '';
-
-        return fromWindow ? new URLSearchParams(fromWindow) : new URLSearchParams(searchParamsReference.current);
-    }, []);
+    const readLatestParams = useCallback(
+        (): URLSearchParams => getLatestSearchParams(searchParamsReference.current),
+        [],
+    );
 
     // Canonicalize `?<pageParamName>=1` away. The first page is the default
     // URL, so two URLs (`/flows` vs `/flows?page=1`) would otherwise denote

@@ -15,17 +15,9 @@ import (
 	"pentagi/pkg/database/converter"
 	"pentagi/pkg/flowfiles"
 	"pentagi/pkg/graph/model"
-	"pentagi/pkg/providers/anthropic"
-	"pentagi/pkg/providers/bedrock"
-	"pentagi/pkg/providers/deepseek"
-	"pentagi/pkg/providers/gemini"
-	"pentagi/pkg/providers/glm"
-	"pentagi/pkg/providers/kimi"
-	"pentagi/pkg/providers/minimax"
-	"pentagi/pkg/providers/openai"
+	"pentagi/pkg/providers"
 	"pentagi/pkg/providers/pconfig"
 	"pentagi/pkg/providers/provider"
-	"pentagi/pkg/providers/qwen"
 	"pentagi/pkg/resources"
 	"pentagi/pkg/server/auth"
 	"pentagi/pkg/server/update"
@@ -34,6 +26,7 @@ import (
 	"pentagi/pkg/version"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/sirupsen/logrus"
 )
@@ -74,19 +67,19 @@ func (r *mutationResolver) CreateFlow(ctx context.Context, modelProvider string,
 	}
 	prvtype := prv.Type()
 
-	fw, err := r.Controller.CreateFlow(ctx, uid, input, prvname, prvtype, nil, dbResources)
+	flowID, err := r.Controller.CreateFlow(ctx, uid, input, prvname, prvtype, nil, dbResources)
 	if err != nil {
 		return nil, err
 	}
 
-	flow, err := r.DB.GetFlow(ctx, fw.GetFlowID())
+	flow, err := r.DB.GetFlow(ctx, flowID)
 	if err != nil {
 		return nil, err
 	}
 
 	var containers []database.Container
 	if _, _, err = validatePermission(ctx, "containers.view"); err == nil {
-		containers, err = r.DB.GetFlowContainers(ctx, fw.GetFlowID())
+		containers, err = r.DB.GetFlowContainers(ctx, flowID)
 		if err != nil {
 			return nil, err
 		}
@@ -233,6 +226,17 @@ func (r *mutationResolver) DeleteFlow(ctx context.Context, flowID int64) (model.
 		r.Logger.WithError(err).Warnf("failed to clean up memory documents for deleted flow %d", flow.ID)
 	}
 
+	prefs, err := r.DB.DeleteFavoriteFlow(ctx, database.DeleteFavoriteFlowParams{
+		FlowID: flow.ID,
+		UserID: flow.UserID,
+	})
+	switch {
+	case err != nil && !errors.Is(err, sql.ErrNoRows):
+		r.Logger.WithError(err).Warnf("failed to drop deleted flow %d from favorites", flow.ID)
+	case err == nil:
+		r.Subscriptions.NewSettingsPublisher(flow.UserID).SettingsUserUpdated(ctx, prefs)
+	}
+
 	publisher := r.Subscriptions.NewFlowPublisher(flow.UserID, flow.ID)
 	publisher.FlowUpdated(ctx, flow, containers)
 	publisher.FlowDeleted(ctx, flow, containers)
@@ -258,7 +262,7 @@ func (r *mutationResolver) RenameFlow(ctx context.Context, flowID int64, title s
 	}).Debug("rename flow")
 
 	err = r.Controller.RenameFlow(ctx, flowID, title)
-	if errors.Is(err, controller.ErrFlowNotFound) {
+	if errors.Is(err, controller.ErrFlowNotFound) || errors.Is(err, controller.ErrFlowNotLoaded) {
 		flow, err := r.DB.UpdateFlowTitle(ctx, database.UpdateFlowTitleParams{
 			ID:    flowID,
 			Title: title,
@@ -289,8 +293,7 @@ func (r *mutationResolver) CreateAssistant(ctx context.Context, flowID int64, mo
 	)
 
 	if flowID == 0 {
-		uid, _, err = validatePermission(ctx, "assistants.create")
-		if err != nil {
+		if _, _, err = validatePermission(ctx, "assistants.create"); err != nil {
 			return nil, err
 		}
 		uid, _, err = validatePermission(ctx, "flows.create")
@@ -334,12 +337,14 @@ func (r *mutationResolver) CreateAssistant(ctx context.Context, flowID int64, mo
 	}
 	prvtype := prv.Type()
 
-	aw, err := r.Controller.CreateAssistant(ctx, uid, flowID, input, useAgents, prvname, prvtype, nil, dbResources)
+	assistantID, err := r.Controller.CreateAssistant(
+		ctx, uid, flowID, input, useAgents, prvname, prvtype, nil, dbResources,
+	)
 	if err != nil {
 		return nil, err
 	}
 
-	assistant, err := r.DB.GetAssistant(ctx, aw.GetAssistantID())
+	assistant, err := r.DB.GetAssistant(ctx, assistantID)
 	if err != nil {
 		return nil, err
 	}
@@ -475,7 +480,7 @@ func (r *mutationResolver) DeleteAssistant(ctx context.Context, flowID int64, as
 }
 
 // TestAgent is the resolver for the testAgent field.
-func (r *mutationResolver) TestAgent(ctx context.Context, typeArg model.ProviderType, agentType model.AgentConfigType, agent model.AgentConfig) (*model.AgentTestResult, error) {
+func (r *mutationResolver) TestAgent(ctx context.Context, typeArg model.ProviderType, agentType model.AgentConfigType, agent model.AgentConfig, simple *model.AgentConfig) (*model.AgentTestResult, error) {
 	uid, _, err := validatePermission(ctx, "settings.providers.view")
 	if err != nil {
 		return nil, err
@@ -489,7 +494,7 @@ func (r *mutationResolver) TestAgent(ctx context.Context, typeArg model.Provider
 	cfg := converter.ConvertAgentConfigFromGqlModel(&agent)
 	prvtype := provider.ProviderType(typeArg)
 	atype := pconfig.ProviderOptionsType(agentType)
-	result, err := r.ProvidersCtrl.TestAgent(ctx, prvtype, atype, cfg)
+	result, err := r.ProvidersCtrl.TestAgent(ctx, prvtype, atype, cfg, converter.ConvertAgentConfigFromGqlModel(simple))
 	if err != nil {
 		return nil, err
 	}
@@ -575,11 +580,9 @@ func (r *mutationResolver) UpdateProvider(ctx context.Context, providerID int64,
 
 	r.Subscriptions.NewProviderPublisher(uid).ProviderUpdated(ctx, prv, cfg)
 
-	// Repoint every flow/assistant that referred to the old name so they keep
-	// resolving to a valid provider. This must not fail the mutation: the
-	// provider itself is already renamed, and the sweep is idempotent.
-	if oldName != prvname {
-		if err := r.Controller.RenameFlowsProvider(ctx, uid, oldName, prvname); err != nil {
+	newName := provider.ProviderName(prv.Name)
+	if oldName != newName {
+		if err := r.Controller.RenameFlowsProvider(ctx, uid, oldName, newName); err != nil {
 			r.Logger.WithError(err).Error("failed to cascade provider rename to flows/assistants")
 		}
 	}
@@ -639,7 +642,7 @@ func (r *mutationResolver) ValidatePrompt(ctx context.Context, typeArg model.Pro
 	}).Debug("validate prompt")
 
 	var (
-		result    model.ResultType = model.ResultTypeSuccess
+		result    = model.ResultTypeSuccess
 		errorType *model.PromptValidationErrorType
 		message   *string
 		line      *int
@@ -762,6 +765,13 @@ func (r *mutationResolver) DeletePrompt(ctx context.Context, promptID int64) (mo
 		"prompt": promptID,
 	}).Debug("delete prompt")
 
+	if _, err = r.DB.GetUserPrompt(ctx, database.GetUserPromptParams{
+		ID:     promptID,
+		UserID: uid,
+	}); err != nil {
+		return model.ResultTypeError, fmt.Errorf("prompt not found: %w", err)
+	}
+
 	err = r.DB.DeleteUserPrompt(ctx, database.DeleteUserPromptParams{
 		ID:     promptID,
 		UserID: uid,
@@ -797,7 +807,7 @@ func (r *mutationResolver) CreateAPIToken(ctx context.Context, input model.Creat
 		return nil, fmt.Errorf("invalid TTL: must be between 60 and 94608000 seconds")
 	}
 
-	if input.Name != nil && len(*input.Name) > maxAPITokenNameLen {
+	if input.Name != nil && utf8.RuneCountInString(*input.Name) > maxAPITokenNameLen {
 		return nil, fmt.Errorf("token name must not exceed %d characters", maxAPITokenNameLen)
 	}
 
@@ -870,7 +880,7 @@ func (r *mutationResolver) UpdateAPIToken(ctx context.Context, tokenID string, i
 		return nil, fmt.Errorf("unauthorized: non-user session is not allowed to update API tokens")
 	}
 
-	if input.Name != nil && len(*input.Name) > maxAPITokenNameLen {
+	if input.Name != nil && utf8.RuneCountInString(*input.Name) > maxAPITokenNameLen {
 		return nil, fmt.Errorf("token name must not exceed %d characters", maxAPITokenNameLen)
 	}
 
@@ -903,6 +913,8 @@ func (r *mutationResolver) UpdateAPIToken(ctx context.Context, tokenID string, i
 			status = database.TokenStatusActive
 		case model.TokenStatusRevoked:
 			status = database.TokenStatusRevoked
+		case model.TokenStatusExpired:
+			// Derived from the ttl, never stored: keep whatever the row holds.
 		default:
 			return nil, fmt.Errorf("invalid token status: %s", s.String())
 		}
@@ -918,7 +930,7 @@ func (r *mutationResolver) UpdateAPIToken(ctx context.Context, tokenID string, i
 		return nil, fmt.Errorf("failed to update token: %w", err)
 	}
 
-	if input.Status != nil {
+	if status != token.Status {
 		r.TokenCache.Invalidate(tokenID)
 		r.TokenCache.InvalidateUser(uint64(uid))
 	}
@@ -997,7 +1009,7 @@ func (r *mutationResolver) AddFavoriteFlow(ctx context.Context, flowID int64) (m
 	}
 
 	if flow.UserID != uid {
-		return model.ResultTypeError, fmt.Errorf("unauthorized: cannot favorite other user's flow")
+		return model.ResultTypeError, fmt.Errorf("%w: flow belongs to another user", ErrForbidden)
 	}
 
 	prefs, err := r.DB.AddFavoriteFlow(ctx, database.AddFavoriteFlowParams{
@@ -1068,6 +1080,11 @@ func (r *mutationResolver) CreateFlowTemplate(ctx context.Context, input model.C
 		return nil, fmt.Errorf("unauthorized: non-user session is not allowed to create templates")
 	}
 
+	title, text, err := validateFlowTemplateFields(input.Title, input.Text)
+	if err != nil {
+		return nil, err
+	}
+
 	r.Logger.WithFields(logrus.Fields{
 		"uid":   uid,
 		"title": input.Title,
@@ -1075,8 +1092,8 @@ func (r *mutationResolver) CreateFlowTemplate(ctx context.Context, input model.C
 
 	template, err := r.DB.CreateFlowTemplate(ctx, database.CreateFlowTemplateParams{
 		UserID: uid,
-		Title:  input.Title,
-		Text:   input.Text,
+		Title:  title,
+		Text:   text,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create template: %w", err)
@@ -1103,6 +1120,11 @@ func (r *mutationResolver) UpdateFlowTemplate(ctx context.Context, templateID in
 		return nil, fmt.Errorf("unauthorized: non-user session is not allowed to update templates")
 	}
 
+	title, text, err := validateFlowTemplateFields(input.Title, input.Text)
+	if err != nil {
+		return nil, err
+	}
+
 	r.Logger.WithFields(logrus.Fields{
 		"uid":        uid,
 		"templateID": templateID,
@@ -1119,8 +1141,8 @@ func (r *mutationResolver) UpdateFlowTemplate(ctx context.Context, templateID in
 	template, err := r.DB.UpdateFlowTemplate(ctx, database.UpdateFlowTemplateParams{
 		ID:     templateID,
 		UserID: uid,
-		Title:  input.Title,
-		Text:   input.Text,
+		Title:  title,
+		Text:   text,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to update template: %w", err)
@@ -1180,8 +1202,11 @@ func (r *mutationResolver) CreateKnowledgeDocument(ctx context.Context, input mo
 		return nil, err
 	}
 
-	if input.Content == "" || input.Question == "" {
-		return nil, fmt.Errorf("content and question are required")
+	if strings.TrimSpace(input.Content) == "" {
+		return nil, fmt.Errorf("content is required")
+	}
+	if err := validateKnowledgeQuestion(&input.Question); err != nil {
+		return nil, err
 	}
 	if err := validateKnowledgeFieldLengths(input.Content, &input.Question, input.Description, input.CodeLang); err != nil {
 		return nil, err
@@ -1202,8 +1227,11 @@ func (r *mutationResolver) UpdateKnowledgeDocument(ctx context.Context, id strin
 		return nil, err
 	}
 
-	if input.Content == "" {
+	if strings.TrimSpace(input.Content) == "" {
 		return nil, fmt.Errorf("content is required")
+	}
+	if err := validateKnowledgeQuestion(input.Question); err != nil {
+		return nil, err
 	}
 	if err := validateKnowledgeFieldLengths(input.Content, input.Question, input.Description, input.CodeLang); err != nil {
 		return nil, err
@@ -1225,6 +1253,10 @@ func (r *mutationResolver) UpdateKnowledgeDocument(ctx context.Context, id strin
 func (r *mutationResolver) RenameKnowledgeDocument(ctx context.Context, id string, question string) (*model.KnowledgeDocument, error) {
 	uid, admin, err := validatePermission(ctx, "knowledge.edit")
 	if err != nil {
+		return nil, err
+	}
+
+	if err := validateKnowledgeQuestion(&question); err != nil {
 		return nil, err
 	}
 
@@ -1446,7 +1478,7 @@ func (r *queryResolver) FlowFiles(ctx context.Context, flowID int64) ([]*model.F
 		return nil, err
 	}
 
-	return convertFlowFiles(files), nil
+	return convertFlowFiles(files, flowID), nil
 }
 
 // Screenshots is the resolver for the screenshots field.
@@ -1633,39 +1665,38 @@ func (r *queryResolver) UsageStatsTotal(ctx context.Context) (*model.UsageStats,
 }
 
 // UsageStatsByPeriod is the resolver for the usageStatsByPeriod field.
-func (r *queryResolver) UsageStatsByPeriod(ctx context.Context, period model.UsageStatsPeriod) ([]*model.DailyUsageStats, error) {
+func (r *queryResolver) UsageStatsByPeriod(ctx context.Context, period model.UsageStatsPeriod, timezone *string) ([]*model.DailyUsageStats, error) {
 	uid, _, err := validatePermission(ctx, "usage.view")
 	if err != nil {
 		return nil, err
 	}
 
+	days, err := periodDays(period)
+	if err != nil {
+		return nil, err
+	}
+
+	tz, err := r.Timezones.ResolveFor(timezone)
+	if err != nil {
+		return nil, err
+	}
+
 	r.Logger.WithFields(logrus.Fields{
-		"uid":    uid,
-		"period": period,
+		"uid":      uid,
+		"period":   period,
+		"timezone": tz,
 	}).Debug("get usage stats by period")
 
-	switch period {
-	case model.UsageStatsPeriodWeek:
-		stats, err := r.DB.GetUsageStatsByDayLastWeek(ctx, uid)
-		if err != nil {
-			return nil, err
-		}
-		return converter.ConvertDailyUsageStats(stats), nil
-	case model.UsageStatsPeriodMonth:
-		stats, err := r.DB.GetUsageStatsByDayLastMonth(ctx, uid)
-		if err != nil {
-			return nil, err
-		}
-		return converter.ConvertDailyUsageStatsMonth(stats), nil
-	case model.UsageStatsPeriodQuarter:
-		stats, err := r.DB.GetUsageStatsByDayLast3Months(ctx, uid)
-		if err != nil {
-			return nil, err
-		}
-		return converter.ConvertDailyUsageStatsQuarter(stats), nil
-	default:
-		return nil, fmt.Errorf("invalid period: %s", period)
+	stats, err := r.DB.GetUsageStatsByDay(ctx, database.GetUsageStatsByDayParams{
+		UserID: uid,
+		Tz:     tz,
+		Days:   days,
+	})
+	if err != nil {
+		return nil, err
 	}
+
+	return converter.ConvertDailyUsageStats(stats), nil
 }
 
 // UsageStatsByProvider is the resolver for the usageStatsByProvider field.
@@ -1805,39 +1836,38 @@ func (r *queryResolver) ToolcallsStatsTotal(ctx context.Context) (*model.Toolcal
 }
 
 // ToolcallsStatsByPeriod is the resolver for the toolcallsStatsByPeriod field.
-func (r *queryResolver) ToolcallsStatsByPeriod(ctx context.Context, period model.UsageStatsPeriod) ([]*model.DailyToolcallsStats, error) {
+func (r *queryResolver) ToolcallsStatsByPeriod(ctx context.Context, period model.UsageStatsPeriod, timezone *string) ([]*model.DailyToolcallsStats, error) {
 	uid, _, err := validatePermission(ctx, "usage.view")
 	if err != nil {
 		return nil, err
 	}
 
+	days, err := periodDays(period)
+	if err != nil {
+		return nil, err
+	}
+
+	tz, err := r.Timezones.ResolveFor(timezone)
+	if err != nil {
+		return nil, err
+	}
+
 	r.Logger.WithFields(logrus.Fields{
-		"uid":    uid,
-		"period": period,
+		"uid":      uid,
+		"period":   period,
+		"timezone": tz,
 	}).Debug("get toolcalls stats by period")
 
-	switch period {
-	case model.UsageStatsPeriodWeek:
-		stats, err := r.DB.GetToolcallsStatsByDayLastWeek(ctx, uid)
-		if err != nil {
-			return nil, err
-		}
-		return converter.ConvertDailyToolcallsStatsWeek(stats), nil
-	case model.UsageStatsPeriodMonth:
-		stats, err := r.DB.GetToolcallsStatsByDayLastMonth(ctx, uid)
-		if err != nil {
-			return nil, err
-		}
-		return converter.ConvertDailyToolcallsStatsMonth(stats), nil
-	case model.UsageStatsPeriodQuarter:
-		stats, err := r.DB.GetToolcallsStatsByDayLast3Months(ctx, uid)
-		if err != nil {
-			return nil, err
-		}
-		return converter.ConvertDailyToolcallsStatsQuarter(stats), nil
-	default:
-		return nil, fmt.Errorf("unsupported period: %s", period)
+	stats, err := r.DB.GetToolcallsStatsByDay(ctx, database.GetToolcallsStatsByDayParams{
+		UserID: uid,
+		Tz:     tz,
+		Days:   days,
+	})
+	if err != nil {
+		return nil, err
 	}
+
+	return converter.ConvertDailyToolcallsStats(stats), nil
 }
 
 // ToolcallsStatsByFunction is the resolver for the toolcallsStatsByFunction field.
@@ -1919,39 +1949,38 @@ func (r *queryResolver) FlowsStatsTotal(ctx context.Context) (*model.FlowsStats,
 }
 
 // FlowsStatsByPeriod is the resolver for the flowsStatsByPeriod field.
-func (r *queryResolver) FlowsStatsByPeriod(ctx context.Context, period model.UsageStatsPeriod) ([]*model.DailyFlowsStats, error) {
+func (r *queryResolver) FlowsStatsByPeriod(ctx context.Context, period model.UsageStatsPeriod, timezone *string) ([]*model.DailyFlowsStats, error) {
 	uid, _, err := validatePermission(ctx, "usage.view")
 	if err != nil {
 		return nil, err
 	}
 
+	days, err := periodDays(period)
+	if err != nil {
+		return nil, err
+	}
+
+	tz, err := r.Timezones.ResolveFor(timezone)
+	if err != nil {
+		return nil, err
+	}
+
 	r.Logger.WithFields(logrus.Fields{
-		"uid":    uid,
-		"period": period,
+		"uid":      uid,
+		"period":   period,
+		"timezone": tz,
 	}).Debug("get flows stats by period")
 
-	switch period {
-	case model.UsageStatsPeriodWeek:
-		stats, err := r.DB.GetFlowsStatsByDayLastWeek(ctx, uid)
-		if err != nil {
-			return nil, err
-		}
-		return converter.ConvertDailyFlowsStatsWeek(stats), nil
-	case model.UsageStatsPeriodMonth:
-		stats, err := r.DB.GetFlowsStatsByDayLastMonth(ctx, uid)
-		if err != nil {
-			return nil, err
-		}
-		return converter.ConvertDailyFlowsStatsMonth(stats), nil
-	case model.UsageStatsPeriodQuarter:
-		stats, err := r.DB.GetFlowsStatsByDayLast3Months(ctx, uid)
-		if err != nil {
-			return nil, err
-		}
-		return converter.ConvertDailyFlowsStatsQuarter(stats), nil
-	default:
-		return nil, fmt.Errorf("unsupported period: %s", period)
+	stats, err := r.DB.GetFlowsStatsByDay(ctx, database.GetFlowsStatsByDayParams{
+		UserID: uid,
+		Tz:     tz,
+		Days:   days,
+	})
+	if err != nil {
+		return nil, err
 	}
+
+	return converter.ConvertDailyFlowsStats(stats), nil
 }
 
 // FlowStatsByFlow is the resolver for the flowStatsByFlow field.
@@ -1975,7 +2004,7 @@ func (r *queryResolver) FlowStatsByFlow(ctx context.Context, flowID int64) (*mod
 }
 
 // FlowsExecutionStatsByPeriod is the resolver for the flowsExecutionStatsByPeriod field.
-func (r *queryResolver) FlowsExecutionStatsByPeriod(ctx context.Context, period model.UsageStatsPeriod) ([]*model.FlowExecutionStats, error) {
+func (r *queryResolver) FlowsExecutionStatsByPeriod(ctx context.Context, period model.UsageStatsPeriod, timezone *string) ([]*model.FlowExecutionStats, error) {
 	uid, _, err := validatePermission(ctx, "usage.view")
 	if err != nil {
 		return nil, err
@@ -1992,33 +2021,27 @@ func (r *queryResolver) FlowsExecutionStatsByPeriod(ctx context.Context, period 
 	}
 	var flows []flowInfo
 
-	switch period {
-	case model.UsageStatsPeriodWeek:
-		rows, err := r.DB.GetFlowsForPeriodLastWeek(ctx, uid)
-		if err != nil {
-			return nil, err
-		}
-		for _, row := range rows {
-			flows = append(flows, flowInfo{ID: row.ID, Title: row.Title})
-		}
-	case model.UsageStatsPeriodMonth:
-		rows, err := r.DB.GetFlowsForPeriodLastMonth(ctx, uid)
-		if err != nil {
-			return nil, err
-		}
-		for _, row := range rows {
-			flows = append(flows, flowInfo{ID: row.ID, Title: row.Title})
-		}
-	case model.UsageStatsPeriodQuarter:
-		rows, err := r.DB.GetFlowsForPeriodLast3Months(ctx, uid)
-		if err != nil {
-			return nil, err
-		}
-		for _, row := range rows {
-			flows = append(flows, flowInfo{ID: row.ID, Title: row.Title})
-		}
-	default:
-		return nil, fmt.Errorf("unsupported period: %s", period)
+	days, err := periodDays(period)
+	if err != nil {
+		return nil, err
+	}
+
+	tz, err := r.Timezones.ResolveFor(timezone)
+	if err != nil {
+		return nil, err
+	}
+
+	rows, err := r.DB.GetFlowsForPeriod(ctx, database.GetFlowsForPeriodParams{
+		UserID: uid,
+		Tz:     tz,
+		Days:   days,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	for _, row := range rows {
+		flows = append(flows, flowInfo{ID: row.ID, Title: row.Title})
 	}
 
 	result := make([]*model.FlowExecutionStats, 0, len(flows))
@@ -2126,6 +2149,7 @@ func (r *queryResolver) SettingsProviders(ctx context.Context) (*model.Providers
 	now := time.Now()
 	defaultProvidersConfig := r.ProvidersCtrl.DefaultProvidersConfig()
 	for prvtype, pcfg := range defaultProvidersConfig {
+		prefix := providers.ModelPrefix(r.Config, prvtype)
 		mpcfg := &model.ProviderConfig{
 			Name:      string(prvtype),
 			Type:      model.ProviderType(prvtype),
@@ -2137,23 +2161,23 @@ func (r *queryResolver) SettingsProviders(ctx context.Context) (*model.Providers
 		switch prvtype {
 		case provider.ProviderOpenAI:
 			config.Default.Openai = mpcfg
-			if models, err := openai.DefaultModels(); err == nil {
-				config.Models.Openai = converter.ConvertModels(models, prvtype.ReasoningProvider())
+			if models, ok := providers.BundledCatalogs()[prvtype]; ok {
+				config.Models.Openai = converter.ConvertModelsWithPrefix(models, prvtype.ReasoningProvider(), prefix)
 			}
 		case provider.ProviderAnthropic:
 			config.Default.Anthropic = mpcfg
-			if models, err := anthropic.DefaultModels(); err == nil {
-				config.Models.Anthropic = converter.ConvertModels(models, prvtype.ReasoningProvider())
+			if models, ok := providers.BundledCatalogs()[prvtype]; ok {
+				config.Models.Anthropic = converter.ConvertModelsWithPrefix(models, prvtype.ReasoningProvider(), prefix)
 			}
 		case provider.ProviderGemini:
 			config.Default.Gemini = mpcfg
-			if models, err := gemini.DefaultModels(); err == nil {
-				config.Models.Gemini = converter.ConvertModels(models, prvtype.ReasoningProvider())
+			if models, ok := providers.BundledCatalogs()[prvtype]; ok {
+				config.Models.Gemini = converter.ConvertModelsWithPrefix(models, prvtype.ReasoningProvider(), prefix)
 			}
 		case provider.ProviderBedrock:
 			config.Default.Bedrock = mpcfg
-			if models, err := bedrock.DefaultModels(); err == nil {
-				config.Models.Bedrock = converter.ConvertModels(models, prvtype.ReasoningProvider())
+			if models, ok := providers.BundledCatalogs()[prvtype]; ok {
+				config.Models.Bedrock = converter.ConvertModelsWithPrefix(models, prvtype.ReasoningProvider(), prefix)
 			}
 		case provider.ProviderOllama:
 			config.Default.Ollama = mpcfg
@@ -2161,34 +2185,45 @@ func (r *queryResolver) SettingsProviders(ctx context.Context) (*model.Providers
 			config.Default.Custom = mpcfg
 		case provider.ProviderDeepSeek:
 			config.Default.Deepseek = mpcfg
-			if models, err := deepseek.DefaultModels(); err == nil {
-				config.Models.Deepseek = converter.ConvertModels(models, prvtype.ReasoningProvider())
+			if models, ok := providers.BundledCatalogs()[prvtype]; ok {
+				config.Models.Deepseek = converter.ConvertModelsWithPrefix(models, prvtype.ReasoningProvider(), prefix)
 			}
 		case provider.ProviderGLM:
 			config.Default.Glm = mpcfg
-			if models, err := glm.DefaultModels(); err == nil {
-				config.Models.Glm = converter.ConvertModels(models, prvtype.ReasoningProvider())
+			if models, ok := providers.BundledCatalogs()[prvtype]; ok {
+				config.Models.Glm = converter.ConvertModelsWithPrefix(models, prvtype.ReasoningProvider(), prefix)
 			}
 		case provider.ProviderKimi:
 			config.Default.Kimi = mpcfg
-			if models, err := kimi.DefaultModels(); err == nil {
-				config.Models.Kimi = converter.ConvertModels(models, prvtype.ReasoningProvider())
+			if models, ok := providers.BundledCatalogs()[prvtype]; ok {
+				config.Models.Kimi = converter.ConvertModelsWithPrefix(models, prvtype.ReasoningProvider(), prefix)
 			}
 		case provider.ProviderQwen:
 			config.Default.Qwen = mpcfg
-			if models, err := qwen.DefaultModels(); err == nil {
-				config.Models.Qwen = converter.ConvertModels(models, prvtype.ReasoningProvider())
+			if models, ok := providers.BundledCatalogs()[prvtype]; ok {
+				config.Models.Qwen = converter.ConvertModelsWithPrefix(models, prvtype.ReasoningProvider(), prefix)
 			}
 		case provider.ProviderMiniMax:
 			config.Default.Minimax = mpcfg
-			if models, err := minimax.DefaultModels(); err == nil {
-				config.Models.Minimax = converter.ConvertModels(models, prvtype.ReasoningProvider())
+			if models, ok := providers.BundledCatalogs()[prvtype]; ok {
+				config.Models.Minimax = converter.ConvertModelsWithPrefix(models, prvtype.ReasoningProvider(), prefix)
+			}
+		case provider.ProviderMistral:
+			config.Default.Mistral = mpcfg
+			if models, ok := providers.BundledCatalogs()[prvtype]; ok {
+				config.Models.Mistral = converter.ConvertModelsWithPrefix(models, prvtype.ReasoningProvider(), prefix)
+			}
+		case provider.ProviderXAI:
+			config.Default.Xai = mpcfg
+			if models, ok := providers.BundledCatalogs()[prvtype]; ok {
+				config.Models.Xai = converter.ConvertModelsWithPrefix(models, prvtype.ReasoningProvider(), prefix)
 			}
 		}
 	}
 
 	defaultProviders := r.ProvidersCtrl.DefaultProviders()
 	for _, prvtype := range defaultProviders.ListTypes() {
+		prefix := providers.ModelPrefix(r.Config, prvtype)
 		switch prvtype {
 		case provider.ProviderOpenAI:
 			config.Enabled.Openai = true
@@ -2199,17 +2234,17 @@ func (r *queryResolver) SettingsProviders(ctx context.Context) (*model.Providers
 		case provider.ProviderBedrock:
 			config.Enabled.Bedrock = true
 			if p, ok := defaultProviders[provider.DefaultProviderNameBedrock]; ok {
-				config.Models.Bedrock = converter.ConvertModels(p.GetModels(), prvtype.ReasoningProvider())
+				config.Models.Bedrock = converter.ConvertModelsWithPrefix(p.GetModels(), prvtype.ReasoningProvider(), prefix)
 			}
 		case provider.ProviderOllama:
 			config.Enabled.Ollama = true
 			if p, ok := defaultProviders[provider.DefaultProviderNameOllama]; ok {
-				config.Models.Ollama = converter.ConvertModels(p.GetModels(), prvtype.ReasoningProvider())
+				config.Models.Ollama = converter.ConvertModelsWithPrefix(p.GetModels(), prvtype.ReasoningProvider(), prefix)
 			}
 		case provider.ProviderCustom:
 			config.Enabled.Custom = true
 			if p, ok := defaultProviders[provider.DefaultProviderNameCustom]; ok {
-				config.Models.Custom = converter.ConvertModels(p.GetModels(), prvtype.ReasoningProvider())
+				config.Models.Custom = converter.ConvertModelsWithPrefix(p.GetModels(), prvtype.ReasoningProvider(), prefix)
 			}
 		case provider.ProviderDeepSeek:
 			config.Enabled.Deepseek = true
@@ -2221,6 +2256,10 @@ func (r *queryResolver) SettingsProviders(ctx context.Context) (*model.Providers
 			config.Enabled.Qwen = true
 		case provider.ProviderMiniMax:
 			config.Enabled.Minimax = true
+		case provider.ProviderMistral:
+			config.Enabled.Mistral = true
+		case provider.ProviderXAI:
+			config.Enabled.Xai = true
 		}
 	}
 
@@ -2410,8 +2449,8 @@ func (r *queryResolver) FlowTemplate(ctx context.Context, templateID int64) (*mo
 		UserID: uid,
 	})
 	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, fmt.Errorf("template not found")
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, fmt.Errorf("template not found: %w", err)
 		}
 		return nil, fmt.Errorf("failed to get template: %w", err)
 	}
@@ -2522,6 +2561,9 @@ func (r *queryResolver) Resources(ctx context.Context, path *string, recursive *
 		return nil, fmt.Errorf("failed to list resources: %w", err)
 	}
 
+	recs = resources.DedupeByPathPreferringOwner(recs, uid,
+		func(rec database.UserResource) (string, int64) { return rec.Path, rec.UserID })
+
 	return converter.ConvertUserResources(recs), nil
 }
 
@@ -2576,9 +2618,9 @@ func (r *queryResolver) SearchKnowledge(ctx context.Context, query string, filte
 		"query": query[:min(len(query), 200)],
 	}).Debug("search knowledge documents")
 
-	lim := 0
-	if limit != nil {
-		lim = *limit
+	lim, err := validateKnowledgeSearch(query, limit)
+	if err != nil {
+		return nil, err
 	}
 
 	if admin {

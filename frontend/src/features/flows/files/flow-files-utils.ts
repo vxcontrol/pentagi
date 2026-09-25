@@ -113,5 +113,3 @@ export const containerFileToFileNode = (file: RestContainerFile): FileNode => ({
     path: file.path,
     size: file.size,
 });
-
-export const pluralizeItems = (count: number): string => (count === 1 ? 'item' : 'items');

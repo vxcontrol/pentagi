@@ -49,6 +49,12 @@ func (m *DockerFormModel) BuildForm() tea.Cmd {
 		config.DockerNetAdmin,
 	))
 
+	fields = append(fields, m.createBooleanField("docker_inside_policy_tests",
+		locale.ToolsDockerInsidePolicyTests,
+		locale.ToolsDockerInsidePolicyTestsDesc,
+		config.DockerInsidePolicyTests,
+	))
+
 	// Connection settings
 	fields = append(fields, m.createTextField("docker_socket",
 		locale.ToolsDockerSocket,
@@ -91,6 +97,27 @@ func (m *DockerFormModel) BuildForm() tea.Cmd {
 		locale.ToolsDockerDefaultImageForPentest,
 		locale.ToolsDockerDefaultImageForPentestDesc,
 		config.DockerDefaultImageForPentest,
+		false,
+	))
+
+	fields = append(fields, m.createTextField("docker_default_image_for_test",
+		locale.ToolsDockerDefaultImageForTest,
+		locale.ToolsDockerDefaultImageForTestDesc,
+		config.DockerDefaultImageForTest,
+		false,
+	))
+
+	fields = append(fields, m.createTextField("docker_image_selection_mode",
+		locale.ToolsDockerImageSelectionMode,
+		locale.ToolsDockerImageSelectionModeDesc,
+		config.DockerImageSelectionMode,
+		false,
+	))
+
+	fields = append(fields, m.createTextField("docker_allowed_images",
+		locale.ToolsDockerAllowedImages,
+		locale.ToolsDockerAllowedImagesDesc,
+		config.DockerAllowedImages,
 		false,
 	))
 
@@ -320,6 +347,8 @@ func (m *DockerFormModel) GetHelpContent() string {
 			sections = append(sections, locale.ToolsDockerInsideHelp)
 		case "docker_net_admin":
 			sections = append(sections, locale.ToolsDockerNetAdminHelp)
+		case "docker_inside_policy_tests":
+			sections = append(sections, locale.ToolsDockerInsidePolicyTestsHelp)
 		case "docker_socket":
 			sections = append(sections, locale.ToolsDockerSocketHelp)
 		case "docker_network":
@@ -332,6 +361,12 @@ func (m *DockerFormModel) GetHelpContent() string {
 			sections = append(sections, locale.ToolsDockerDefaultImageHelp)
 		case "docker_default_image_for_pentest":
 			sections = append(sections, locale.ToolsDockerDefaultImageForPentestHelp)
+		case "docker_default_image_for_test":
+			sections = append(sections, locale.ToolsDockerDefaultImageForTestHelp)
+		case "docker_image_selection_mode":
+			sections = append(sections, locale.ToolsDockerImageSelectionModeHelp)
+		case "docker_allowed_images":
+			sections = append(sections, locale.ToolsDockerAllowedImagesHelp)
 		case "docker_host":
 			sections = append(sections, locale.ToolsDockerHostHelp)
 		case "docker_tls_verify":
@@ -367,6 +402,10 @@ func (m *DockerFormModel) HandleSave() error {
 		DockerWorkDir:                config.DockerWorkDir,
 		DockerDefaultImage:           config.DockerDefaultImage,
 		DockerDefaultImageForPentest: config.DockerDefaultImageForPentest,
+		DockerDefaultImageForTest:    config.DockerDefaultImageForTest,
+		DockerImageSelectionMode:     config.DockerImageSelectionMode,
+		DockerAllowedImages:          config.DockerAllowedImages,
+		DockerInsidePolicyTests:      config.DockerInsidePolicyTests,
 		DockerHost:                   config.DockerHost,
 		DockerTLSVerify:              config.DockerTLSVerify,
 		HostDockerCertPath:           config.HostDockerCertPath,
@@ -392,6 +431,12 @@ func (m *DockerFormModel) HandleSave() error {
 				return fmt.Errorf("invalid boolean value for Network Admin: %s (must be 'true' or 'false')", value)
 			}
 			newConfig.DockerNetAdmin.Value = value
+		case "docker_inside_policy_tests":
+			// validate boolean input
+			if value != "" && value != "true" && value != "false" {
+				return fmt.Errorf("invalid boolean value for Sandbox Isolation Self-Test: %s (must be 'true' or 'false')", value)
+			}
+			newConfig.DockerInsidePolicyTests.Value = value
 		case "docker_socket":
 			newConfig.DockerSocket.Value = value
 		case "docker_network":
@@ -404,6 +449,16 @@ func (m *DockerFormModel) HandleSave() error {
 			newConfig.DockerDefaultImage.Value = value
 		case "docker_default_image_for_pentest":
 			newConfig.DockerDefaultImageForPentest.Value = value
+		case "docker_default_image_for_test":
+			newConfig.DockerDefaultImageForTest.Value = value
+		case "docker_image_selection_mode":
+			// two modes the runtime understands; empty falls back to the "llm" default
+			if value != "" && value != "llm" && value != "fixed" {
+				return fmt.Errorf("invalid image selection mode: %s (must be 'llm' or 'fixed')", value)
+			}
+			newConfig.DockerImageSelectionMode.Value = value
+		case "docker_allowed_images":
+			newConfig.DockerAllowedImages.Value = value
 		case "docker_host":
 			newConfig.DockerHost.Value = value
 		case "docker_tls_verify":
@@ -484,11 +539,11 @@ func (m *DockerFormModel) OnFieldChanged(fieldIndex int, oldValue, newValue stri
 }
 
 func (m *DockerFormModel) GetFormFields() []FormField {
-	return m.BaseScreen.fields
+	return m.fields
 }
 
 func (m *DockerFormModel) SetFormFields(fields []FormField) {
-	m.BaseScreen.fields = fields
+	m.fields = fields
 }
 
 // Update method - handle screen-specific input

@@ -1,188 +1,88 @@
-package validator_test
+package validator
 
 import (
-	"sort"
-	"strings"
 	"testing"
 
 	"pentagi/pkg/templates"
-	"pentagi/pkg/templates/validator"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-// TestDummyDataCompleteness verifies that createDummyTemplateData contains all variables from PromptVariables
-func TestDummyDataCompleteness(t *testing.T) {
-	// Extract all unique variables from PromptVariables map
-	allVariables := make(map[string]bool)
-	for _, variables := range templates.PromptVariables {
-		for _, variable := range variables {
-			allVariables[variable] = true
-		}
-	}
-
-	// Get dummy data
-	dummyData := validator.CreateDummyTemplateData()
-
-	// Check that all variables from PromptVariables exist in dummy data
-	var missingVars []string
-	for variable := range allVariables {
-		if _, exists := dummyData[variable]; !exists {
-			missingVars = append(missingVars, variable)
-		}
-	}
-
-	if len(missingVars) > 0 {
-		sort.Strings(missingVars)
-		t.Errorf("createDummyTemplateData() is missing variables declared in PromptVariables: %v", missingVars)
-	}
-
-	// Check for potentially unused variables in dummy data (optional warning)
-	var unusedVars []string
-	for variable := range dummyData {
-		if !allVariables[variable] {
-			unusedVars = append(unusedVars, variable)
-		}
-	}
-
-	if len(unusedVars) > 0 {
-		sort.Strings(unusedVars)
-		t.Logf("WARNING: createDummyTemplateData() contains variables not declared in PromptVariables: %v", unusedVars)
-	}
-
-	t.Logf("Total variables in PromptVariables: %d", len(allVariables))
-	t.Logf("Total variables in createDummyTemplateData: %d", len(dummyData))
-}
-
-// TestExtractTemplateVariables tests the AST-based variable extraction
-func TestExtractTemplateVariables(t *testing.T) {
-	testCases := []struct {
-		name      string
-		template  string
-		expected  []string
-		shouldErr bool
+func TestValidator_ExtractTemplateVariables_ReturnsSortedTopLevelNames(t *testing.T) {
+	tests := []struct {
+		name     string
+		template string
+		want     []string
+		wantErr  string
 	}{
+		{name: "an empty template", template: "", wantErr: "template content is empty"},
+		{name: "a syntax error", template: "{{.Name", wantErr: "failed to parse template"},
+		{name: "a single field", template: "Hello {{.Name}}!", want: []string{"Name"}},
 		{
-			name:      "empty template",
-			template:  "",
-			shouldErr: true,
-		},
-		{
-			name:     "simple variable",
-			template: "Hello {{.Name}}!",
-			expected: []string{"Name"},
-		},
-		{
-			name:     "multiple variables",
+			name:     "several fields come back sorted",
 			template: "User {{.Name}} has {{.Age}} years and {{.Email}} email",
-			expected: []string{"Age", "Email", "Name"},
+			want:     []string{"Age", "Email", "Name"},
 		},
+		{name: "a nested field names its root", template: "{{.User.Name}} works at {{.Company.Name}}", want: []string{"Company", "User"}},
 		{
-			name:     "nested fields",
-			template: "{{.User.Name}} works at {{.Company.Name}}",
-			expected: []string{"Company", "User"},
-		},
-		{
-			name:     "range context",
+			name:     "fields inside a range belong to its items",
 			template: "{{range .Items}}Item: {{.Name}} - {{.Value}}{{end}}",
-			expected: []string{"Items"},
+			want:     []string{"Items"},
 		},
+		{name: "nested ranges", template: "{{range .Categories}}{{range .Items}}{{.Name}}{{end}}{{end}}", want: []string{"Categories", "Items"}},
+		{name: "local variables are skipped", template: "{{range .Items}}{{$item := .}}{{$item.Name}}{{end}}", want: []string{"Items"}},
 		{
-			name:     "with builtin functions",
-			template: "{{if .Condition}}{{.Items}}{{end}}",
-			expected: []string{"Condition", "Items"},
-		},
-		{
-			name:      "syntax error",
-			template:  "{{.Name",
-			shouldErr: true,
-		},
-		{
-			name:     "complex template with conditions",
+			name:     "if and else branches",
 			template: `{{if .UseAgents}}Agent: {{.AgentName}}{{else}}Tool: {{.ToolName}}{{end}}`,
-			expected: []string{"AgentName", "ToolName", "UseAgents"},
+			want:     []string{"AgentName", "ToolName", "UseAgents"},
+		},
+		{name: "nested conditions", template: "{{if .A}}{{.C}}{{else}}{{if .D}}{{.E}}{{end}}{{end}}", want: []string{"A", "C", "D", "E"}},
+		{
+			name:     "keywords around empty bodies",
+			template: "{{.Items}} {{range .Items}}{{end}} {{if .Condition}}{{end}}",
+			want:     []string{"Condition", "Items"},
 		},
 	}
 
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			result, err := validator.ExtractTemplateVariables(tc.template)
-
-			if tc.shouldErr {
-				if err == nil {
-					t.Errorf("Expected error but got none")
-				}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ExtractTemplateVariables(tt.template)
+			if tt.wantErr != "" {
+				assert.ErrorContains(t, err, tt.wantErr)
 				return
 			}
-
-			if err != nil {
-				t.Fatalf("Unexpected error: %v", err)
-			}
-
-			if len(result) != len(tc.expected) {
-				t.Errorf("Expected %d variables, got %d: %v", len(tc.expected), len(result), result)
-				return
-			}
-
-			for i, expected := range tc.expected {
-				if result[i] != expected {
-					t.Errorf("Variable %d: expected %s, got %s", i, expected, result[i])
-				}
-			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }
 
-// TestValidatePrompt tests the main validation function
-func TestValidatePrompt(t *testing.T) {
-	testCases := []struct {
+func TestValidator_ValidatePrompt_ClassifiesEveryFailure(t *testing.T) {
+	defaultPrompts, err := templates.GetDefaultPrompts()
+	require.NoError(t, err)
+
+	const (
+		primary = templates.PromptTypePrimaryAgent
+		chooser = templates.PromptTypeImageChooser
+	)
+
+	tests := []struct {
 		name        string
 		promptType  templates.PromptType
 		template    string
-		expectedErr string
-		errorType   validator.ErrorType
+		wantType    ErrorType
+		wantMessage string
+		wantDetails string
+		wantLine    int
 	}{
 		{
-			name:        "valid template",
-			promptType:  templates.PromptTypePrimaryAgent,
-			template:    "You are an AI assistant. Your name is {{.FinalyToolName}} and you can use {{.SearchToolName}} for searches.",
-			expectedErr: "",
+			name:       "declared variables",
+			promptType: primary,
+			template:   "You are an AI assistant. Your name is {{.FinalyToolName}} and you can use {{.SearchToolName}} for searches.",
 		},
 		{
-			name:        "empty template",
-			promptType:  templates.PromptTypePrimaryAgent,
-			template:    "",
-			expectedErr: "Empty Template",
-			errorType:   validator.ErrorTypeEmptyTemplate,
-		},
-		{
-			name:        "unauthorized variable",
-			promptType:  templates.PromptTypePrimaryAgent,
-			template:    "Hello {{.UnauthorizedVar}}! You can use {{.FinalyToolName}}.",
-			expectedErr: "Unauthorized Variable",
-			errorType:   validator.ErrorTypeUnauthorizedVar,
-		},
-		{
-			name:        "syntax error",
-			promptType:  templates.PromptTypePrimaryAgent,
-			template:    "{{.FinalyToolName",
-			expectedErr: "Syntax Error",
-			errorType:   validator.ErrorTypeSyntax,
-		},
-		{
-			name:        "unknown prompt type",
-			promptType:  "unknown_prompt_type",
-			template:    "{{.SomeVar}}",
-			expectedErr: "Unauthorized Variable",
-			errorType:   validator.ErrorTypeUnauthorizedVar,
-		},
-		{
-			name:        "multiple unauthorized variables",
-			promptType:  templates.PromptTypePrimaryAgent,
-			template:    "{{.UnauthorizedVar1}} and {{.UnauthorizedVar2}} with valid {{.FinalyToolName}}",
-			expectedErr: "Unauthorized Variable",
-			errorType:   validator.ErrorTypeUnauthorizedVar,
-		},
-		{
-			name:       "valid complex template",
+			name:       "declared variables under a condition",
 			promptType: templates.PromptTypeAssistant,
 			template: `You are an assistant with the following tools:
 {{if .UseAgents}}
@@ -192,184 +92,95 @@ func TestValidatePrompt(t *testing.T) {
 {{end}}
 Current time: {{.CurrentTime}}
 Language: {{.Lang}}`,
-			expectedErr: "",
+		},
+		{name: "the shipped primary agent prompt", promptType: primary, template: defaultPrompts.AgentsPrompts.PrimaryAgent.System.Template},
+		{
+			name:       "the shipped assistant prompt",
+			promptType: templates.PromptTypeAssistant,
+			template:   defaultPrompts.AgentsPrompts.Assistant.System.Template,
+		},
+		{
+			name:       "the shipped pentester prompt",
+			promptType: templates.PromptTypePentester,
+			template:   defaultPrompts.AgentsPrompts.Pentester.System.Template,
+		},
+		{
+			name:        "an empty template",
+			promptType:  primary,
+			template:    "",
+			wantType:    "Empty Template",
+			wantMessage: "template content cannot be empty",
+		},
+		{
+			name:        "an undeclared variable",
+			promptType:  primary,
+			template:    "{{.FinalyToolName}} and {{.NonExistentVar}}",
+			wantType:    "Unauthorized Variable",
+			wantMessage: "[NonExistentVar]",
+			wantDetails: "Backend code cannot provide these variables",
+		},
+		{
+			name:        "several undeclared variables",
+			promptType:  primary,
+			template:    "{{.UnauthorizedVar1}} and {{.UnauthorizedVar2}} with valid {{.FinalyToolName}}",
+			wantType:    "Unauthorized Variable",
+			wantMessage: "[UnauthorizedVar1 UnauthorizedVar2]",
+		},
+		{
+			name:        "an unknown prompt type",
+			promptType:  "unknown_prompt_type",
+			template:    "{{.SomeVar}}",
+			wantType:    "Unauthorized Variable",
+			wantMessage: "unknown prompt type: unknown_prompt_type",
+		},
+		{
+			name:        "an unclosed action",
+			promptType:  primary,
+			template:    "{{.FinalyToolName",
+			wantType:    "Syntax Error",
+			wantDetails: "missing closing braces",
+			wantLine:    1,
+		},
+		{
+			name:       "an unclosed action on the third line",
+			promptType: chooser,
+			template:   "line one\nline two\n{{ .Input }\nline four",
+			wantType:   "Syntax Error",
+			wantLine:   3,
+		},
+		{name: "an unclosed action on the first line", promptType: chooser, template: "{{ .Input }\nline two", wantType: "Syntax Error", wantLine: 1},
+		{
+			name:       "an unterminated action at the end",
+			promptType: chooser,
+			template:   "line one\nline two\nline three\n{{ .Input",
+			wantType:   "Syntax Error",
+			wantLine:   4,
+		},
+		{
+			name:        "a declared variable used as the wrong type",
+			promptType:  primary,
+			template:    "{{.FinalyToolName.Foo}}",
+			wantType:    "Rendering Failed",
+			wantMessage: "template rendering failed",
+			wantDetails: "Variable type mismatch",
 		},
 	}
 
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			err := validator.ValidatePrompt(tc.promptType, tc.template)
-
-			if tc.expectedErr == "" {
-				if err != nil {
-					t.Errorf("Expected no error, but got: %v", err)
-				}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidatePrompt(tt.promptType, tt.template)
+			if tt.wantType == "" {
+				require.NoError(t, err)
 				return
 			}
 
-			if err == nil {
-				t.Errorf("Expected error containing '%s', but got no error", tc.expectedErr)
-				return
-			}
-
-			if !strings.Contains(err.Error(), tc.expectedErr) {
-				t.Errorf("Expected error containing '%s', but got: %v", tc.expectedErr, err)
-			}
-
-			// Check error type if it's a ValidationError
-			if validationErr, ok := err.(*validator.ValidationError); ok {
-				if validationErr.Type != tc.errorType {
-					t.Errorf("Expected error type %s, but got %s", tc.errorType, validationErr.Type)
-				}
-			}
-		})
-	}
-}
-
-// TestValidationErrorTypes tests that validation errors provide helpful information
-func TestValidationErrorTypes(t *testing.T) {
-	testCases := []struct {
-		name         string
-		promptType   templates.PromptType
-		template     string
-		checkDetails func(t *testing.T, err error)
-	}{
-		{
-			name:       "syntax error with details",
-			promptType: templates.PromptTypePrimaryAgent,
-			template:   "{{.FinalyToolName",
-			checkDetails: func(t *testing.T, err error) {
-				validationErr, ok := err.(*validator.ValidationError)
-				if !ok {
-					t.Errorf("Expected ValidationError, got %T", err)
-					return
-				}
-				if validationErr.Details == "" {
-					t.Error("Expected syntax error details, but got empty string")
-				}
-				if !strings.Contains(validationErr.Details, "brace") {
-					t.Errorf("Expected syntax details to mention braces, got: %s", validationErr.Details)
-				}
-			},
-		},
-		{
-			name:       "unauthorized variable with explanation",
-			promptType: templates.PromptTypePrimaryAgent,
-			template:   "{{.FinalyToolName}} and {{.NonExistentVar}}",
-			checkDetails: func(t *testing.T, err error) {
-				validationErr, ok := err.(*validator.ValidationError)
-				if !ok {
-					t.Errorf("Expected ValidationError, got %T", err)
-					return
-				}
-				if !strings.Contains(validationErr.Message, "NonExistentVar") {
-					t.Errorf("Expected error message to mention NonExistentVar, got: %s", validationErr.Message)
-				}
-				if !strings.Contains(validationErr.Details, "Backend code") {
-					t.Errorf("Expected details to explain backend limitation, got: %s", validationErr.Details)
-				}
-			},
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			err := validator.ValidatePrompt(tc.promptType, tc.template)
-			if err == nil {
-				t.Fatal("Expected error, but got none")
-			}
-			tc.checkDetails(t, err)
-		})
-	}
-}
-
-// TestValidatePromptWithRealTemplates tests validation using actual templates from the system
-func TestValidatePromptWithRealTemplates(t *testing.T) {
-	defaultPrompts, err := templates.GetDefaultPrompts()
-	if err != nil {
-		t.Fatalf("Failed to load default prompts: %v", err)
-	}
-
-	// Test a few key templates to ensure they validate correctly
-	testCases := []struct {
-		name        string
-		promptType  templates.PromptType
-		getTemplate func() string
-	}{
-		{
-			name:        "primary agent template",
-			promptType:  templates.PromptTypePrimaryAgent,
-			getTemplate: func() string { return defaultPrompts.AgentsPrompts.PrimaryAgent.System.Template },
-		},
-		{
-			name:        "assistant template",
-			promptType:  templates.PromptTypeAssistant,
-			getTemplate: func() string { return defaultPrompts.AgentsPrompts.Assistant.System.Template },
-		},
-		{
-			name:        "pentester template",
-			promptType:  templates.PromptTypePentester,
-			getTemplate: func() string { return defaultPrompts.AgentsPrompts.Pentester.System.Template },
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			template := tc.getTemplate()
-			err := validator.ValidatePrompt(tc.promptType, template)
-			if err != nil {
-				t.Errorf("Real template failed validation: %v", err)
-			}
-		})
-	}
-}
-
-// TestVariableExtractionEdgeCases tests edge cases in variable extraction
-func TestVariableExtractionEdgeCases(t *testing.T) {
-	testCases := []struct {
-		name     string
-		template string
-		expected []string
-	}{
-		{
-			name:     "local variables ignored",
-			template: "{{range .Items}}{{$item := .}}{{$item.Name}}{{end}}",
-			expected: []string{"Items"},
-		},
-		{
-			name:     "builtin functions ignored",
-			template: "{{.Items}} {{range .Items}}{{end}} {{if .Condition}}{{end}}",
-			expected: []string{"Condition", "Items"},
-		},
-		{
-			name:     "nested range contexts",
-			template: "{{range .Categories}}{{range .Items}}{{.Name}}{{end}}{{end}}",
-			expected: []string{"Categories", "Items"},
-		},
-		{
-			name:     "complex conditions",
-			template: "{{if .A}}{{.C}}{{else}}{{if .D}}{{.E}}{{end}}{{end}}",
-			expected: []string{"A", "C", "D", "E"},
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			result, err := validator.ExtractTemplateVariables(tc.template)
-			if err != nil {
-				t.Fatalf("Unexpected error: %v", err)
-			}
-
-			if len(result) != len(tc.expected) {
-				t.Errorf("Expected %v, got %v", tc.expected, result)
-				return
-			}
-
-			for i, expected := range tc.expected {
-				if result[i] != expected {
-					t.Errorf("Variable %d: expected %s, got %s", i, expected, result[i])
-				}
-			}
+			var vErr *ValidationError
+			require.ErrorAs(t, err, &vErr)
+			assert.Equal(t, tt.wantType, vErr.Type)
+			assert.Contains(t, err.Error(), string(tt.wantType))
+			assert.Contains(t, vErr.Message, tt.wantMessage)
+			assert.Contains(t, vErr.Details, tt.wantDetails)
+			assert.Equal(t, tt.wantLine, vErr.Line, "message: %s", vErr.Message)
 		})
 	}
 }

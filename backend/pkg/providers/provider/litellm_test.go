@@ -8,571 +8,318 @@ import (
 	"time"
 
 	"pentagi/pkg/providers/pconfig"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func TestApplyModelPrefix(t *testing.T) {
+func TestLitellm_ApplyModelPrefix_PrefixesOnlyWhenAPrefixIsSet(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
-		name      string
-		modelName string
-		prefix    string
-		expected  string
+		name, modelName, prefix, expected string
 	}{
-		{
-			name:      "with prefix",
-			modelName: "deepseek-chat",
-			prefix:    "deepseek",
-			expected:  "deepseek/deepseek-chat",
-		},
-		{
-			name:      "without prefix (empty string)",
-			modelName: "deepseek-chat",
-			prefix:    "",
-			expected:  "deepseek-chat",
-		},
-		{
-			name:      "model already has different prefix",
-			modelName: "anthropic/claude-3",
-			prefix:    "openrouter",
-			expected:  "openrouter/anthropic/claude-3",
-		},
-		{
-			name:      "complex model name with special chars",
-			modelName: "claude-3.5-sonnet@20241022",
-			prefix:    "provider",
-			expected:  "provider/claude-3.5-sonnet@20241022",
-		},
+		{"with prefix", "deepseek-chat", "deepseek", "deepseek/deepseek-chat"},
+		{"without prefix", "deepseek-chat", "", "deepseek-chat"},
+		{"a model already carrying another prefix", "anthropic/claude-3", "openrouter", "openrouter/anthropic/claude-3"},
+		{"a name with special characters", "claude-3.5-sonnet@20241022", "provider", "provider/claude-3.5-sonnet@20241022"},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := ApplyModelPrefix(tt.modelName, tt.prefix)
-			if result != tt.expected {
-				t.Errorf("ApplyModelPrefix(%q, %q) = %q, want %q",
-					tt.modelName, tt.prefix, result, tt.expected)
-			}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			assert.Equal(t, tc.expected, ApplyModelPrefix(tc.modelName, tc.prefix))
 		})
 	}
 }
 
-func TestRemoveModelPrefix(t *testing.T) {
+func TestLitellm_RemoveModelPrefix_StripsOnlyItsOwnPrefix(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
-		name      string
-		modelName string
-		prefix    string
-		expected  string
+		name, modelName, prefix, expected string
 	}{
-		{
-			name:      "model with matching prefix",
-			modelName: "deepseek/deepseek-chat",
-			prefix:    "deepseek",
-			expected:  "deepseek-chat",
-		},
-		{
-			name:      "model without prefix",
-			modelName: "deepseek-chat",
-			prefix:    "deepseek",
-			expected:  "deepseek-chat",
-		},
-		{
-			name:      "empty prefix",
-			modelName: "deepseek/deepseek-chat",
-			prefix:    "",
-			expected:  "deepseek/deepseek-chat",
-		},
-		{
-			name:      "model with different prefix",
-			modelName: "openrouter/deepseek-chat",
-			prefix:    "deepseek",
-			expected:  "openrouter/deepseek-chat",
-		},
-		{
-			name:      "model with nested prefixes",
-			modelName: "openrouter/anthropic/claude-3",
-			prefix:    "openrouter",
-			expected:  "anthropic/claude-3",
-		},
+		{"a model with the matching prefix", "deepseek/deepseek-chat", "deepseek", "deepseek-chat"},
+		{"a model without a prefix", "deepseek-chat", "deepseek", "deepseek-chat"},
+		{"an empty prefix", "deepseek/deepseek-chat", "", "deepseek/deepseek-chat"},
+		{"a model with another prefix", "openrouter/deepseek-chat", "deepseek", "openrouter/deepseek-chat"},
+		{"a model with nested prefixes", "openrouter/anthropic/claude-3", "openrouter", "anthropic/claude-3"},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := RemoveModelPrefix(tt.modelName, tt.prefix)
-			if result != tt.expected {
-				t.Errorf("RemoveModelPrefix(%q, %q) = %q, want %q",
-					tt.modelName, tt.prefix, result, tt.expected)
-			}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			assert.Equal(t, tc.expected, RemoveModelPrefix(tc.modelName, tc.prefix))
 		})
 	}
 }
 
-func TestLoadModelsFromYAML(t *testing.T) {
+// listedModels serves one answer on a keyed GET /models and loads it the way a door does.
+func listedModels(t *testing.T, prefix string, status int, body string) (pconfig.ModelsConfig, error) {
+	t.Helper()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/models" || r.Header.Get("Authorization") != "Bearer test-key" {
+			http.NotFound(w, r)
+			return
+		}
+		w.WriteHeader(status)
+		fmt.Fprint(w, body)
+	}))
+	defer server.Close()
+
+	return LoadModelsFromHTTP(server.URL, "test-key", &http.Client{Timeout: 5 * time.Second}, prefix)
+}
+
+func TestLitellm_LoadModelsFromHTTP_ListsEachUsableModelOnceWithWhatTheGatewayStates(t *testing.T) {
+	t.Parallel()
+
+	yes, no := true, false
+	text := func(value string) *string { return &value }
+	released := time.Date(2023, 6, 12, 16, 54, 56, 0, time.UTC)
+	stated := `"max_input_tokens": 128000, "max_output_tokens": 16384`
+	tighter := `"max_input_tokens": 64000, "max_output_tokens": 8192`
+	limited := func(window, output int) pconfig.ModelsConfig {
+		return pconfig.ModelsConfig{{Name: "gpt-4o", Thinking: &no, ContextWindow: limit(window), MaxOutputTokens: limit(output)}}
+	}
+	unlimited := pconfig.ModelsConfig{{Name: "gpt-4o", Thinking: &no}}
+	thinking := func(value bool) pconfig.ModelsConfig {
+		return pconfig.ModelsConfig{{Name: "claude-sonnet-5", Thinking: &value}}
+	}
+	windowOnly := func(name string, window int) pconfig.ModelsConfig {
+		return pconfig.ModelsConfig{{Name: name, ContextWindow: limit(window)}}
+	}
+
 	tests := []struct {
-		name        string
-		yamlData    string
-		prefix      string
-		expectError bool
-		validate    func(*testing.T, pconfig.ModelsConfig)
+		name    string
+		prefix  string
+		entries string
+		want    pconfig.ModelsConfig
 	}{
 		{
-			name: "basic models without prefix",
-			yamlData: `
-- name: deepseek-chat
-  description: DeepSeek chat model
-  thinking: false
-  price:
-    input: 0.28
-    output: 0.42
+			name: "every field the listing states",
+			entries: `{"id": "model-a", "description": "Model A description", "supported_parameters": ["tools", "max_tokens"]},
+				{"id": "model-b", "created": 1686588896, "description": "Model B description",
+				 "supported_parameters": ["reasoning", "tools"], "pricing": {"prompt": "0.0001", "completion": "0.0005"}}`,
+			want: pconfig.ModelsConfig{
+				{Name: "model-a", Description: text("Model A description"), Thinking: &no},
+				{
+					Name: "model-b", Description: text("Model B description"), ReleaseDate: &released, Thinking: &yes,
+					Price: &pconfig.PriceInfo{Input: 100, Output: 500},
+				},
+			},
+		},
+		{
+			name:   "a prefix keeps only its own models, stripped, with per-million prices as stated",
+			prefix: "deepseek",
+			entries: `{"id": "deepseek/deepseek-chat", "description": "DeepSeek chat model",
+				 "supported_parameters": ["tools", "max_tokens"], "pricing": {"prompt": "0.28", "completion": "0.42"}},
+				{"id": "deepseek/deepseek-reasoner", "description": "DeepSeek reasoning model",
+				 "supported_parameters": ["reasoning", "tools"], "pricing": {"prompt": "0.28", "completion": "0.42"}},
+				{"id": "openai/gpt-4", "supported_parameters": ["tools"], "pricing": {"prompt": "30.0", "completion": "60.0"}},
+				{"id": "anthropic/claude-3-opus", "supported_parameters": ["tools"]}`,
+			want: pconfig.ModelsConfig{
+				{
+					Name: "deepseek-chat", Description: text("DeepSeek chat model"), Thinking: &no,
+					Price: &pconfig.PriceInfo{Input: 0.28, Output: 0.42},
+				},
+				{
+					Name: "deepseek-reasoner", Description: text("DeepSeek reasoning model"), Thinking: &yes,
+					Price: &pconfig.PriceInfo{Input: 0.28, Output: 0.42},
+				},
+			},
+		},
+		{
+			name: "a model that can neither call tools nor answer in a schema is skipped",
+			entries: `{"id": "model-with-tools", "supported_parameters": ["tools", "max_tokens"]},
+				{"id": "model-without-tools", "supported_parameters": ["max_tokens", "temperature"]},
+				{"id": "model-with-structured-outputs", "supported_parameters": ["structured_outputs"]}`,
+			want: pconfig.ModelsConfig{
+				{Name: "model-with-tools", Thinking: &no},
+				{Name: "model-with-structured-outputs", Thinking: &no},
+			},
+		},
+		{
+			name: "repeated names are listed once in first-seen order",
+			entries: `{"id": "openai/gpt-5.6-luna", "supported_parameters": ["tools"]},
+				{"id": "openai/gpt-5.6-luna", "supported_parameters": ["tools"]},
+				{"id": "anthropic/claude-sonnet-5", "supported_parameters": ["tools"]},
+				{"id": "openai/gpt-5.6-luna", "supported_parameters": ["tools"]}`,
+			want: pconfig.ModelsConfig{
+				{Name: "openai/gpt-5.6-luna", Thinking: &no},
+				{Name: "anthropic/claude-sonnet-5", Thinking: &no},
+			},
+		},
+		{
+			name: "a listing only its ids can be read from falls back to the ids, once each",
+			entries: `{"id": "m1", "created": "not-a-number", "pricing": {"prompt": "0.001", "completion": "0.002"}},
+				{"id": "m1", "created": "not-a-number"},
+				{"id": "m2", "created": "not-a-number"},
+				{"id": "m1", "created": "not-a-number"}`,
+			want: pconfig.ModelsConfig{{Name: "m1"}, {Name: "m2"}},
+		},
 
-- name: deepseek-reasoner
-  description: DeepSeek reasoning model
-  thinking: true
-  price:
-    input: 0.28
-    output: 0.42
-`,
-			prefix:      "",
-			expectError: false,
-			validate: func(t *testing.T, models pconfig.ModelsConfig) {
-				if len(models) != 2 {
-					t.Fatalf("Expected 2 models, got %d", len(models))
-				}
-				if models[0].Name != "deepseek-chat" {
-					t.Errorf("Expected first model name 'deepseek-chat', got %q", models[0].Name)
-				}
-				if models[1].Name != "deepseek-reasoner" {
-					t.Errorf("Expected second model name 'deepseek-reasoner', got %q", models[1].Name)
-				}
-				if models[0].Thinking != nil && *models[0].Thinking {
-					t.Error("Expected first model thinking=false")
-				}
-				if models[1].Thinking == nil || !*models[1].Thinking {
-					t.Error("Expected second model thinking=true")
-				}
-			},
+		{
+			name:    "reasoning stated by the first entry of a name",
+			entries: `{"id": "claude-sonnet-5", "supported_parameters": ["tools", "reasoning"]}, {"id": "claude-sonnet-5", "supported_parameters": ["tools"]}`,
+			want:    thinking(true),
 		},
 		{
-			name: "models with all metadata fields",
-			yamlData: `
-- name: gpt-4o
-  description: GPT-4 Optimized
-  release_date: 2024-05-13
-  thinking: false
-  price:
-    input: 5.0
-    output: 15.0
-`,
-			prefix:      "",
-			expectError: false,
-			validate: func(t *testing.T, models pconfig.ModelsConfig) {
-				if len(models) != 1 {
-					t.Fatalf("Expected 1 model, got %d", len(models))
-				}
-				model := models[0]
-				if model.Name != "gpt-4o" {
-					t.Errorf("Expected model name 'gpt-4o', got %q", model.Name)
-				}
-				if model.Description == nil || *model.Description != "GPT-4 Optimized" {
-					t.Error("Expected description 'GPT-4 Optimized'")
-				}
-				if model.ReleaseDate == nil {
-					t.Error("Expected release_date to be set")
-				}
-				if model.Price == nil {
-					t.Error("Expected price to be set")
-				} else {
-					if model.Price.Input != 5.0 {
-						t.Errorf("Expected input price 5.0, got %f", model.Price.Input)
-					}
-					if model.Price.Output != 15.0 {
-						t.Errorf("Expected output price 15.0, got %f", model.Price.Output)
-					}
-				}
-			},
+			name:    "reasoning stated by the second entry of a name",
+			entries: `{"id": "claude-sonnet-5", "supported_parameters": ["tools"]}, {"id": "claude-sonnet-5", "supported_parameters": ["tools", "reasoning"]}`,
+			want:    thinking(true),
 		},
 		{
-			name:        "invalid YAML",
-			yamlData:    `invalid: [unclosed`,
-			prefix:      "",
-			expectError: true,
+			name:    "reasoning stated only by an unusable entry listed first",
+			entries: `{"id": "claude-sonnet-5", "supported_parameters": ["reasoning"]}, {"id": "claude-sonnet-5", "supported_parameters": ["tools"]}`,
+			want:    thinking(false),
+		},
+		{
+			name:    "reasoning stated only by an unusable entry listed second",
+			entries: `{"id": "claude-sonnet-5", "supported_parameters": ["tools"]}, {"id": "claude-sonnet-5", "supported_parameters": ["reasoning"]}`,
+			want:    thinking(false),
+		},
+		{
+			name:    "an entry stating no parameters listed first",
+			entries: `{"id": "claude-sonnet-5"}, {"id": "claude-sonnet-5", "supported_parameters": ["tools"]}`,
+			want:    thinking(false),
+		},
+		{
+			name:    "an entry stating no parameters listed second",
+			entries: `{"id": "claude-sonnet-5", "supported_parameters": ["tools"]}, {"id": "claude-sonnet-5"}`,
+			want:    thinking(false),
+		},
+		{
+			name:    "an entry stating no parameters before a reasoning one",
+			entries: `{"id": "claude-sonnet-5"}, {"id": "claude-sonnet-5", "supported_parameters": ["tools", "reasoning"]}`,
+			want:    thinking(true),
+		},
+		{
+			name: "structured outputs make an entry usable for reasoning",
+			entries: `{"id": "claude-sonnet-5", "supported_parameters": ["structured_outputs"]},
+				{"id": "claude-sonnet-5", "supported_parameters": ["structured_outputs", "reasoning"]}`,
+			want: thinking(true),
+		},
+
+		{
+			name:    "limits the gateway states",
+			entries: `{"id": "gpt-4o", "supported_parameters": ["tools"], ` + stated + `}`,
+			want:    limited(128000, 16384),
+		},
+		{name: "limits absent", entries: `{"id": "gpt-4o", "supported_parameters": ["tools"]}`, want: unlimited},
+		{
+			name:    "limits null",
+			entries: `{"id": "gpt-4o", "supported_parameters": ["tools"], "max_input_tokens": null, "max_output_tokens": null}`,
+			want:    unlimited,
+		},
+		{
+			name:    "limits zero",
+			entries: `{"id": "gpt-4o", "supported_parameters": ["tools"], "max_input_tokens": 0, "max_output_tokens": 0}`,
+			want:    unlimited,
+		},
+		{
+			name:    "limits negative",
+			entries: `{"id": "gpt-4o", "supported_parameters": ["tools"], "max_input_tokens": -1, "max_output_tokens": -1}`,
+			want:    unlimited,
+		},
+		{
+			name: "a silent copy after a stated one keeps the stated limits",
+			entries: `{"id": "gpt-4o", "supported_parameters": ["tools"], ` + stated + `},
+				{"id": "gpt-4o", "supported_parameters": ["tools"]}`,
+			want: limited(128000, 16384),
+		},
+		{
+			name: "a silent copy before a stated one takes the stated limits",
+			entries: `{"id": "gpt-4o", "supported_parameters": ["tools"]},
+				{"id": "gpt-4o", "supported_parameters": ["tools"], ` + stated + `}`,
+			want: limited(128000, 16384),
+		},
+		{
+			name: "a tighter copy second wins",
+			entries: `{"id": "gpt-4o", "supported_parameters": ["tools"], ` + stated + `},
+				{"id": "gpt-4o", "supported_parameters": ["tools"], ` + tighter + `}`,
+			want: limited(64000, 8192),
+		},
+		{
+			name: "a tighter copy first wins",
+			entries: `{"id": "gpt-4o", "supported_parameters": ["tools"], ` + tighter + `},
+				{"id": "gpt-4o", "supported_parameters": ["tools"], ` + stated + `}`,
+			want: limited(64000, 8192),
+		},
+		{
+			name: "a copy stating max_model_len tighter than another's input limit wins",
+			entries: `{"id": "gpt-4o", "supported_parameters": ["tools"], "max_input_tokens": 128000},
+				{"id": "gpt-4o", "supported_parameters": ["tools"], "max_model_len": 32768}`,
+			want: pconfig.ModelsConfig{{Name: "gpt-4o", Thinking: &no, ContextWindow: limit(32768)}},
+		},
+
+		{
+			name:    "the window vLLM and SGLang state as max_model_len",
+			entries: `{"id": "qwen3-32b", "object": "model", "max_model_len": 32768}`,
+			want:    windowOnly("qwen3-32b", 32768),
+		},
+		{
+			name:    "the window Groq states as context_window",
+			entries: `{"id": "qwen3-32b", "object": "model", "context_window": 32768}`,
+			want:    windowOnly("qwen3-32b", 32768),
+		},
+		{
+			name:    "the window OpenRouter states as context_length",
+			entries: `{"id": "qwen3-32b", "object": "model", "context_length": 32768}`,
+			want:    windowOnly("qwen3-32b", 32768),
+		},
+		{
+			name:    "an input limit wins over the total context stated beside it",
+			entries: `{"id": "gpt-4o", "max_input_tokens": 128000, "context_length": 200000}`,
+			want:    windowOnly("gpt-4o", 128000),
+		},
+		{
+			name: "a limit that is not a number reads as unstated and keeps the rest of the entry",
+			entries: `{"id": "qwen3-32b", "supported_parameters": ["tools"], "pricing": {"prompt": "0.000001", "completion": "0.000002"},
+				"context_length": "32768", "max_model_len": 32768.0, "max_output_tokens": {"value": 8192}}`,
+			want: pconfig.ModelsConfig{{
+				Name: "qwen3-32b", Thinking: &no, Price: &pconfig.PriceInfo{Input: 1, Output: 2}, ContextWindow: limit(32768),
+			}},
+		},
+		{
+			name:    "a limit no real window reaches reads as unstated",
+			entries: `{"id": "gpt-4o", "supported_parameters": ["tools"], "max_input_tokens": 1e10, "max_output_tokens": 2147483648}`,
+			want:    unlimited,
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			models, err := pconfig.LoadModelsConfigData([]byte(tt.yamlData))
-			if tt.expectError {
-				if err == nil {
-					t.Fatal("Expected error but got none")
-				}
-				return
-			}
-			if err != nil {
-				t.Fatalf("Unexpected error: %v", err)
-			}
-			if tt.validate != nil {
-				tt.validate(t, models)
-			}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			models, err := listedModels(t, tc.prefix, http.StatusOK, `{"data": [`+tc.entries+`]}`)
+			require.NoError(t, err)
+			assert.Equal(t, tc.want, models)
 		})
 	}
 }
 
-func TestLoadModelsFromHTTP_WithoutPrefix(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/models" {
-			t.Errorf("Expected /models path, got %s", r.URL.Path)
-		}
-		if r.Method != "GET" {
-			t.Errorf("Expected GET method, got %s", r.Method)
-		}
+func TestLitellm_LoadModelsFromHTTP_ReportsWhyTheListingIsUnusable(t *testing.T) {
+	t.Parallel()
 
-		response := `{
-			"data": [
-				{
-					"id": "model-a",
-					"description": "Model A description",
-					"supported_parameters": ["tools", "max_tokens"]
-				},
-				{
-					"id": "model-b",
-					"created": 1686588896,
-					"description": "Model B description",
-					"supported_parameters": ["reasoning", "tools"],
-					"pricing": {
-						"prompt": "0.0001",
-						"completion": "0.0005"
-					}
-				}
-			]
-		}`
-		w.WriteHeader(http.StatusOK)
-		fmt.Fprint(w, response)
-	}))
-	defer server.Close()
-
-	client := &http.Client{Timeout: 5 * time.Second}
-	models, err := LoadModelsFromHTTP(server.URL, "test-key", client, "")
-	if err != nil {
-		t.Fatalf("Unexpected error: %v", err)
-	}
-
-	if len(models) != 2 {
-		t.Fatalf("Expected 2 models, got %d", len(models))
-	}
-
-	// Verify first model
-	if models[0].Name != "model-a" {
-		t.Errorf("Expected first model name 'model-a', got %q", models[0].Name)
-	}
-	if models[0].Description == nil || *models[0].Description != "Model A description" {
-		t.Error("Expected description for first model")
-	}
-
-	// Verify second model with all metadata
-	if models[1].Name != "model-b" {
-		t.Errorf("Expected second model name 'model-b', got %q", models[1].Name)
-	}
-	if models[1].Thinking == nil || !*models[1].Thinking {
-		t.Error("Expected thinking capability for second model")
-	}
-	if models[1].Price == nil {
-		t.Error("Expected pricing for second model")
-	} else {
-		// 0.0001 * 1000000 = 100.0
-		if models[1].Price.Input != 100.0 {
-			t.Errorf("Expected input price 100.0, got %f", models[1].Price.Input)
-		}
-		// 0.0005 * 1000000 = 500.0
-		if models[1].Price.Output != 500.0 {
-			t.Errorf("Expected output price 500.0, got %f", models[1].Price.Output)
-		}
-	}
-}
-
-func TestLoadModelsFromHTTP_WithPrefix(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Simulate LiteLLM proxy returning models from multiple providers
-		response := `{
-			"data": [
-				{
-					"id": "deepseek/deepseek-chat",
-					"description": "DeepSeek chat model",
-					"supported_parameters": ["tools", "max_tokens"],
-					"pricing": {
-						"prompt": "0.28",
-						"completion": "0.42"
-					}
-				},
-				{
-					"id": "deepseek/deepseek-reasoner",
-					"description": "DeepSeek reasoning model",
-					"supported_parameters": ["reasoning", "tools"],
-					"pricing": {
-						"prompt": "0.28",
-						"completion": "0.42"
-					}
-				},
-				{
-					"id": "openai/gpt-4",
-					"description": "GPT-4 model",
-					"supported_parameters": ["tools"],
-					"pricing": {
-						"prompt": "30.0",
-						"completion": "60.0"
-					}
-				},
-				{
-					"id": "anthropic/claude-3-opus",
-					"description": "Claude 3 Opus",
-					"supported_parameters": ["tools"],
-					"pricing": {
-						"prompt": "15.0",
-						"completion": "75.0"
-					}
-				}
-			]
-		}`
-		w.WriteHeader(http.StatusOK)
-		fmt.Fprint(w, response)
-	}))
-	defer server.Close()
-
-	client := &http.Client{Timeout: 5 * time.Second}
-	models, err := LoadModelsFromHTTP(server.URL, "test-key", client, "deepseek")
-	if err != nil {
-		t.Fatalf("Unexpected error: %v", err)
-	}
-
-	// Should only include deepseek models, with prefix stripped
-	if len(models) != 2 {
-		t.Fatalf("Expected 2 deepseek models, got %d", len(models))
-	}
-
-	// Verify model names have prefix stripped
-	if models[0].Name != "deepseek-chat" {
-		t.Errorf("Expected model name 'deepseek-chat' (without prefix), got %q", models[0].Name)
-	}
-	if models[1].Name != "deepseek-reasoner" {
-		t.Errorf("Expected model name 'deepseek-reasoner' (without prefix), got %q", models[1].Name)
-	}
-
-	// Verify metadata is preserved
-	if models[0].Description == nil || *models[0].Description != "DeepSeek chat model" {
-		t.Error("Expected description for first model")
-	}
-	if models[1].Thinking == nil || !*models[1].Thinking {
-		t.Error("Expected reasoning capability for second model")
-	}
-
-	// Verify pricing (should be in per-million-token format, not modified)
-	if models[0].Price == nil {
-		t.Error("Expected pricing for first model")
-	} else {
-		if models[0].Price.Input != 0.28 {
-			t.Errorf("Expected input price 0.28, got %f", models[0].Price.Input)
-		}
-	}
-}
-
-func TestLoadModelsFromHTTP_FallbackParsing(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Simplified response format
-		response := `{
-			"data": [
-				{"id": "model-1"},
-				{"id": "model-2"}
-			]
-		}`
-		w.WriteHeader(http.StatusOK)
-		fmt.Fprint(w, response)
-	}))
-	defer server.Close()
-
-	client := &http.Client{Timeout: 5 * time.Second}
-	models, err := LoadModelsFromHTTP(server.URL, "", client, "")
-	if err != nil {
-		t.Fatalf("Unexpected error: %v", err)
-	}
-
-	if len(models) != 2 {
-		t.Fatalf("Expected 2 models, got %d", len(models))
-	}
-
-	if models[0].Name != "model-1" {
-		t.Errorf("Expected model name 'model-1', got %q", models[0].Name)
-	}
-	if models[1].Name != "model-2" {
-		t.Errorf("Expected model name 'model-2', got %q", models[1].Name)
-	}
-}
-
-func TestLoadModelsFromHTTP_SkipModelsWithoutTools(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		response := `{
-			"data": [
-				{
-					"id": "model-with-tools",
-					"supported_parameters": ["tools", "max_tokens"]
-				},
-				{
-					"id": "model-without-tools",
-					"supported_parameters": ["max_tokens", "temperature"]
-				},
-				{
-					"id": "model-with-structured-outputs",
-					"supported_parameters": ["structured_outputs"]
-				}
-			]
-		}`
-		w.WriteHeader(http.StatusOK)
-		fmt.Fprint(w, response)
-	}))
-	defer server.Close()
-
-	client := &http.Client{Timeout: 5 * time.Second}
-	models, err := LoadModelsFromHTTP(server.URL, "", client, "")
-	if err != nil {
-		t.Fatalf("Unexpected error: %v", err)
-	}
-
-	// Should only include models with tools or structured_outputs
-	if len(models) != 2 {
-		t.Fatalf("Expected 2 models (with tools/structured_outputs), got %d", len(models))
-	}
-
-	if models[0].Name != "model-with-tools" {
-		t.Errorf("Expected first model 'model-with-tools', got %q", models[0].Name)
-	}
-	if models[1].Name != "model-with-structured-outputs" {
-		t.Errorf("Expected second model 'model-with-structured-outputs', got %q", models[1].Name)
-	}
-}
-
-func TestLoadModelsFromHTTP_Errors(t *testing.T) {
 	tests := []struct {
-		name        string
-		setupServer func() *httptest.Server
-		expectError bool
+		name    string
+		status  int
+		body    string
+		wantErr string
 	}{
-		{
-			name: "HTTP error status",
-			setupServer: func() *httptest.Server {
-				return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					w.WriteHeader(http.StatusInternalServerError)
-					fmt.Fprint(w, `{"error": "internal error"}`)
-				}))
-			},
-			expectError: true,
-		},
-		{
-			name: "invalid JSON response",
-			setupServer: func() *httptest.Server {
-				return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					w.WriteHeader(http.StatusOK)
-					fmt.Fprint(w, `{invalid json}`)
-				}))
-			},
-			expectError: true,
-		},
+		{"an error status", http.StatusInternalServerError, `{"error": "internal error"}`, "unexpected status code: 500"},
+		{"a body that is not JSON", http.StatusOK, `{invalid json}`, "failed to parse models response"},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			server := tt.setupServer()
-			defer server.Close()
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 
-			client := &http.Client{Timeout: 5 * time.Second}
-			_, err := LoadModelsFromHTTP(server.URL, "", client, "")
-			if tt.expectError && err == nil {
-				t.Fatal("Expected error but got none")
-			}
-			if !tt.expectError && err != nil {
-				t.Fatalf("Unexpected error: %v", err)
-			}
+			_, err := listedModels(t, "", tc.status, tc.body)
+			require.ErrorContains(t, err, tc.wantErr)
 		})
-	}
-}
-
-// TestEndToEndProviderSimulation simulates complete provider lifecycle with prefix handling
-func TestEndToEndProviderSimulation(t *testing.T) {
-	// Setup mock HTTP server simulating LiteLLM proxy
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		response := `{
-			"data": [
-				{
-					"id": "moonshot/kimi-k2-turbo",
-					"description": "Kimi K2 Turbo",
-					"supported_parameters": ["tools", "reasoning"],
-					"pricing": {
-						"prompt": "0.0001",
-						"completion": "0.0002"
-					}
-				},
-				{
-					"id": "moonshot/kimi-k2.5",
-					"description": "Kimi K2.5",
-					"supported_parameters": ["tools"],
-					"pricing": {
-						"prompt": "0.00015",
-						"completion": "0.0003"
-					}
-				},
-				{
-					"id": "openai/gpt-4o",
-					"supported_parameters": ["tools"]
-				}
-			]
-		}`
-		w.WriteHeader(http.StatusOK)
-		fmt.Fprint(w, response)
-	}))
-	defer server.Close()
-
-	// Step 1: Load models from HTTP with LiteLLM prefix
-	client := &http.Client{Timeout: 5 * time.Second}
-	providerPrefix := "moonshot"
-	models, err := LoadModelsFromHTTP(server.URL, "test-key", client, providerPrefix)
-	if err != nil {
-		t.Fatalf("Failed to load models: %v", err)
-	}
-
-	// Verify only moonshot models loaded, with prefix stripped
-	if len(models) != 2 {
-		t.Fatalf("Expected 2 moonshot models, got %d", len(models))
-	}
-	if models[0].Name != "kimi-k2-turbo" {
-		t.Errorf("Expected 'kimi-k2-turbo' (without prefix), got %q", models[0].Name)
-	}
-	if models[1].Name != "kimi-k2.5" {
-		t.Errorf("Expected 'kimi-k2.5' (without prefix), got %q", models[1].Name)
-	}
-
-	// Step 2: Simulate Model() call - should return without prefix
-	modelWithoutPrefix := models[0].Name
-	if modelWithoutPrefix != "kimi-k2-turbo" {
-		t.Errorf("Model() should return 'kimi-k2-turbo', got %q", modelWithoutPrefix)
-	}
-
-	// Step 3: Simulate ModelWithPrefix() call - should return with prefix
-	modelWithPrefix := ApplyModelPrefix(modelWithoutPrefix, providerPrefix)
-	if modelWithPrefix != "moonshot/kimi-k2-turbo" {
-		t.Errorf("ModelWithPrefix() should return 'moonshot/kimi-k2-turbo', got %q", modelWithPrefix)
-	}
-
-	// Step 4: Verify round-trip consistency
-	stripped := RemoveModelPrefix(modelWithPrefix, providerPrefix)
-	if stripped != modelWithoutPrefix {
-		t.Errorf("Round-trip failed: %q -> %q -> %q", modelWithoutPrefix, modelWithPrefix, stripped)
-	}
-
-	// Step 5: Verify metadata preservation
-	if models[0].Price == nil {
-		t.Error("Expected pricing information to be preserved")
-	} else {
-		// 0.0001 * 1000000 = 100.0
-		if models[0].Price.Input != 100.0 {
-			t.Errorf("Expected input price 100.0, got %f", models[0].Price.Input)
-		}
-	}
-	if models[0].Thinking == nil || !*models[0].Thinking {
-		t.Error("Expected reasoning capability to be preserved")
 	}
 }

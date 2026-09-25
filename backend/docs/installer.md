@@ -944,7 +944,7 @@ func (m *Model) ensureFocusVisible() {
 - **AWS Bedrock**: Region + Authentication (Default Auth OR Bearer Token OR Access Key + Secret Key) + Session Token (optional) + Base URL (optional)
 - **DeepSeek/GLM/Kimi/Qwen**: Base URL + API Key + Provider Name (optional, for LiteLLM)
 - **Ollama**: Base URL + API Key (optional, for cloud) + Model + Config Path + Pull/Load options
-- **Custom**: Base URL + API Key + Model + Config Path + Provider Name + Legacy Reasoning (boolean)
+- **Custom**: Base URL + API Key + Model + Config Path + Preserve Reasoning (boolean) + Provider Name
 
 **Dynamic Form Generation**: Forms adapt based on provider type with appropriate validation and help text.
 
@@ -1285,7 +1285,7 @@ provider := ProviderInfo{
   - **Static Credentials**: Access Key + Secret Key + Session Token (optional) - traditional IAM authentication
 - **DeepSeek/GLM/Kimi/Qwen**: Base URL + API Key + Provider Name (optional, for LiteLLM)
 - **Ollama**: Base URL + API Key (optional, for cloud) + Model + Config Path + Pull/Load options
-- **Custom**: Base URL + API Key + Model + Config Path + Provider Name + Legacy/Preserve Reasoning (boolean with suggestions)
+- **Custom**: Base URL + API Key + Model + Config Path + Preserve Reasoning (boolean with suggestions) + Provider Name
 
 ### **Screen Architecture (App.go Integration)**
 

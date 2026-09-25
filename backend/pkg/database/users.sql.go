@@ -25,7 +25,7 @@ INSERT INTO users (
 VALUES (
   $1, $2, $3, $4, $5, $6, $7
 )
-RETURNING id, hash, type, mail, name, password, status, role_id, password_change_required, provider, created_at
+RETURNING id, hash, type, mail, name, password, status, role_id, password_change_required, provider, created_at, session_generation
 `
 
 type CreateUserParams struct {
@@ -61,6 +61,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.PasswordChangeRequired,
 		&i.Provider,
 		&i.CreatedAt,
+		&i.SessionGeneration,
 	)
 	return i, err
 }
@@ -77,7 +78,7 @@ func (q *Queries) DeleteUser(ctx context.Context, id int64) error {
 
 const getUser = `-- name: GetUser :one
 SELECT
-  u.id, u.hash, u.type, u.mail, u.name, u.password, u.status, u.role_id, u.password_change_required, u.provider, u.created_at,
+  u.id, u.hash, u.type, u.mail, u.name, u.password, u.status, u.role_id, u.password_change_required, u.provider, u.created_at, u.session_generation,
   r.name AS role_name,
   (
     SELECT ARRAY_AGG(p.name)
@@ -101,6 +102,7 @@ type GetUserRow struct {
 	PasswordChangeRequired bool           `json:"password_change_required"`
 	Provider               sql.NullString `json:"provider"`
 	CreatedAt              sql.NullTime   `json:"created_at"`
+	SessionGeneration      int64          `json:"session_generation"`
 	RoleName               string         `json:"role_name"`
 	Privileges             []string       `json:"privileges"`
 }
@@ -120,6 +122,7 @@ func (q *Queries) GetUser(ctx context.Context, id int64) (GetUserRow, error) {
 		&i.PasswordChangeRequired,
 		&i.Provider,
 		&i.CreatedAt,
+		&i.SessionGeneration,
 		&i.RoleName,
 		pq.Array(&i.Privileges),
 	)
@@ -128,7 +131,7 @@ func (q *Queries) GetUser(ctx context.Context, id int64) (GetUserRow, error) {
 
 const getUserByHash = `-- name: GetUserByHash :one
 SELECT
-  u.id, u.hash, u.type, u.mail, u.name, u.password, u.status, u.role_id, u.password_change_required, u.provider, u.created_at,
+  u.id, u.hash, u.type, u.mail, u.name, u.password, u.status, u.role_id, u.password_change_required, u.provider, u.created_at, u.session_generation,
   r.name AS role_name,
   (
     SELECT ARRAY_AGG(p.name)
@@ -152,6 +155,7 @@ type GetUserByHashRow struct {
 	PasswordChangeRequired bool           `json:"password_change_required"`
 	Provider               sql.NullString `json:"provider"`
 	CreatedAt              sql.NullTime   `json:"created_at"`
+	SessionGeneration      int64          `json:"session_generation"`
 	RoleName               string         `json:"role_name"`
 	Privileges             []string       `json:"privileges"`
 }
@@ -171,6 +175,7 @@ func (q *Queries) GetUserByHash(ctx context.Context, hash string) (GetUserByHash
 		&i.PasswordChangeRequired,
 		&i.Provider,
 		&i.CreatedAt,
+		&i.SessionGeneration,
 		&i.RoleName,
 		pq.Array(&i.Privileges),
 	)
@@ -179,7 +184,7 @@ func (q *Queries) GetUserByHash(ctx context.Context, hash string) (GetUserByHash
 
 const getUsers = `-- name: GetUsers :many
 SELECT
-  u.id, u.hash, u.type, u.mail, u.name, u.password, u.status, u.role_id, u.password_change_required, u.provider, u.created_at,
+  u.id, u.hash, u.type, u.mail, u.name, u.password, u.status, u.role_id, u.password_change_required, u.provider, u.created_at, u.session_generation,
   r.name AS role_name,
   (
     SELECT ARRAY_AGG(p.name)
@@ -203,6 +208,7 @@ type GetUsersRow struct {
 	PasswordChangeRequired bool           `json:"password_change_required"`
 	Provider               sql.NullString `json:"provider"`
 	CreatedAt              sql.NullTime   `json:"created_at"`
+	SessionGeneration      int64          `json:"session_generation"`
 	RoleName               string         `json:"role_name"`
 	Privileges             []string       `json:"privileges"`
 }
@@ -228,6 +234,7 @@ func (q *Queries) GetUsers(ctx context.Context) ([]GetUsersRow, error) {
 			&i.PasswordChangeRequired,
 			&i.Provider,
 			&i.CreatedAt,
+			&i.SessionGeneration,
 			&i.RoleName,
 			pq.Array(&i.Privileges),
 		); err != nil {
@@ -248,7 +255,7 @@ const updateUserName = `-- name: UpdateUserName :one
 UPDATE users
 SET name = $1
 WHERE id = $2
-RETURNING id, hash, type, mail, name, password, status, role_id, password_change_required, provider, created_at
+RETURNING id, hash, type, mail, name, password, status, role_id, password_change_required, provider, created_at, session_generation
 `
 
 type UpdateUserNameParams struct {
@@ -271,6 +278,7 @@ func (q *Queries) UpdateUserName(ctx context.Context, arg UpdateUserNameParams) 
 		&i.PasswordChangeRequired,
 		&i.Provider,
 		&i.CreatedAt,
+		&i.SessionGeneration,
 	)
 	return i, err
 }
@@ -279,7 +287,7 @@ const updateUserPassword = `-- name: UpdateUserPassword :one
 UPDATE users
 SET password = $1
 WHERE id = $2
-RETURNING id, hash, type, mail, name, password, status, role_id, password_change_required, provider, created_at
+RETURNING id, hash, type, mail, name, password, status, role_id, password_change_required, provider, created_at, session_generation
 `
 
 type UpdateUserPasswordParams struct {
@@ -302,6 +310,7 @@ func (q *Queries) UpdateUserPassword(ctx context.Context, arg UpdateUserPassword
 		&i.PasswordChangeRequired,
 		&i.Provider,
 		&i.CreatedAt,
+		&i.SessionGeneration,
 	)
 	return i, err
 }
@@ -310,7 +319,7 @@ const updateUserPasswordChangeRequired = `-- name: UpdateUserPasswordChangeRequi
 UPDATE users
 SET password_change_required = $1
 WHERE id = $2
-RETURNING id, hash, type, mail, name, password, status, role_id, password_change_required, provider, created_at
+RETURNING id, hash, type, mail, name, password, status, role_id, password_change_required, provider, created_at, session_generation
 `
 
 type UpdateUserPasswordChangeRequiredParams struct {
@@ -333,6 +342,7 @@ func (q *Queries) UpdateUserPasswordChangeRequired(ctx context.Context, arg Upda
 		&i.PasswordChangeRequired,
 		&i.Provider,
 		&i.CreatedAt,
+		&i.SessionGeneration,
 	)
 	return i, err
 }
@@ -341,7 +351,7 @@ const updateUserRole = `-- name: UpdateUserRole :one
 UPDATE users
 SET role_id = $1
 WHERE id = $2
-RETURNING id, hash, type, mail, name, password, status, role_id, password_change_required, provider, created_at
+RETURNING id, hash, type, mail, name, password, status, role_id, password_change_required, provider, created_at, session_generation
 `
 
 type UpdateUserRoleParams struct {
@@ -364,6 +374,7 @@ func (q *Queries) UpdateUserRole(ctx context.Context, arg UpdateUserRoleParams) 
 		&i.PasswordChangeRequired,
 		&i.Provider,
 		&i.CreatedAt,
+		&i.SessionGeneration,
 	)
 	return i, err
 }
@@ -372,7 +383,7 @@ const updateUserStatus = `-- name: UpdateUserStatus :one
 UPDATE users
 SET status = $1
 WHERE id = $2
-RETURNING id, hash, type, mail, name, password, status, role_id, password_change_required, provider, created_at
+RETURNING id, hash, type, mail, name, password, status, role_id, password_change_required, provider, created_at, session_generation
 `
 
 type UpdateUserStatusParams struct {
@@ -395,6 +406,7 @@ func (q *Queries) UpdateUserStatus(ctx context.Context, arg UpdateUserStatusPara
 		&i.PasswordChangeRequired,
 		&i.Provider,
 		&i.CreatedAt,
+		&i.SessionGeneration,
 	)
 	return i, err
 }

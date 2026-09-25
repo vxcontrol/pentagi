@@ -26,11 +26,10 @@ type FlowVectorStoreLogWorker interface {
 }
 
 type flowVectorStoreLogWorker struct {
-	db         database.Querier
-	mx         *sync.Mutex
-	flowID     int64
-	containers map[int64]struct{}
-	pub        subscriptions.FlowPublisher
+	db     database.Querier
+	mx     *sync.Mutex
+	flowID int64
+	pub    subscriptions.FlowPublisher
 }
 
 func NewFlowVectorStoreLogWorker(

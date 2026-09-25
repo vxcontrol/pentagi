@@ -21,4 +21,15 @@ describe('resolveApiErrorMessage', () => {
     it('uses the fallback when there is neither a mapped code nor a server message', () => {
         expect(resolveApiErrorMessage({}, messages, 'fallback')).toBe('fallback');
     });
+
+    it('shows a request the server gave up on in words', () => {
+        const timedOut = apiError(
+            'RequestTimeout',
+            'the server took too long to answer; the action may still be running',
+        );
+
+        expect(resolveApiErrorMessage(timedOut, messages, 'fallback')).toBe(
+            'the server took too long to answer; the action may still be running',
+        );
+    });
 });

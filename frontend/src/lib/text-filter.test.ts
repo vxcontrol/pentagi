@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { createTextMatcher, matchesTextFilter, normalizeForFilter } from './text-filter';
+import { createTextMatcher, matchesSearchTerm, matchesTextFilter, normalizeForFilter } from './text-filter';
 
 describe('normalizeForFilter', () => {
     it('lowercases ASCII text', () => {
@@ -96,5 +96,22 @@ describe('matchesTextFilter', () => {
     it('folds diacritics symmetrically on both sides', () => {
         expect(matchesTextFilter('résumé.pdf', 'resume')).toBe(true);
         expect(matchesTextFilter('resume.pdf', 'résumé')).toBe(true);
+    });
+});
+
+describe('matchesSearchTerm', () => {
+    it('highlights nothing while the box is empty', () => {
+        expect(matchesSearchTerm('anything', '')).toBe(false);
+        expect(matchesSearchTerm('anything', '   ')).toBe(false);
+    });
+
+    it('ignores case, padding and diacritics', () => {
+        expect(matchesSearchTerm('Café Terminal', '  cafe ')).toBe(true);
+        expect(matchesSearchTerm('naïve', 'naive')).toBe(true);
+    });
+
+    it('says no for an absent value', () => {
+        expect(matchesSearchTerm(null, 'x')).toBe(false);
+        expect(matchesSearchTerm(undefined, 'x')).toBe(false);
     });
 });

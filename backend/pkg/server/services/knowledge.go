@@ -34,7 +34,7 @@ var knowledgeSQLMappers = map[string]any{
 	"code_lang":   "(langchain_pg_embedding.cmetadata ->> 'code_lang')",
 
 	// Searchable concat of common text fields for generic "data" filter.
-	"data": "((langchain_pg_embedding.cmetadata ->> 'doc_type') || ' ' || " +
+	"data": "(COALESCE(langchain_pg_embedding.cmetadata ->> 'doc_type', '') || ' ' || " +
 		"COALESCE(langchain_pg_embedding.cmetadata ->> 'question', ''))",
 
 	// Numeric ID fields: stored as JSON numbers; cast to bigint before comparison.
@@ -379,6 +379,10 @@ func (s *KnowledgeService) CreateDocument(c *gin.Context) {
 			response.Error(c, response.ErrKnowledgeStoreUnavail, err)
 			return
 		}
+		if errors.Is(err, knowledgepkg.ErrInvalidDocument) {
+			response.Error(c, response.ErrKnowledgeInvalidRequest, err)
+			return
+		}
 		logger.FromContext(c).WithError(err).Error("error creating knowledge document")
 		response.Error(c, response.ErrInternal, err)
 		return
@@ -447,6 +451,10 @@ func (s *KnowledgeService) UpdateDocument(c *gin.Context) {
 		}
 		if isKnowledgeNotFound(err) {
 			response.Error(c, response.ErrKnowledgeNotFound, err)
+			return
+		}
+		if errors.Is(err, knowledgepkg.ErrInvalidDocument) {
+			response.Error(c, response.ErrKnowledgeInvalidRequest, err)
 			return
 		}
 		logger.FromContext(c).WithError(err).Errorf("error updating knowledge document %s", id)

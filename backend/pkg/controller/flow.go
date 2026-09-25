@@ -9,6 +9,7 @@ import (
 	"os"
 	"slices"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"pentagi/pkg/cast"
@@ -48,28 +49,33 @@ type FlowWorker interface {
 	PutResources(ctx context.Context, resources []database.UserResource) error
 	Finish(ctx context.Context) error
 	Stop(ctx context.Context) error
+	Report(ctx context.Context, budget time.Duration) error
 	Rename(ctx context.Context, title string) error
 	WaitTaskCompletion(ctx context.Context) error
 	InvalidateTaskSubtasks(ctx context.Context, taskID int64, subtaskIDs []int64)
 }
 
 type flowWorker struct {
-	tc      TaskController
-	wg      *sync.WaitGroup
-	cfg     *config.Config
-	aws     map[int64]AssistantWorker
-	awsMX   *sync.Mutex
-	ctx     context.Context
-	cancel  context.CancelFunc
-	taskMX  *sync.Mutex
-	taskST  context.CancelFunc
-	taskWG  *sync.WaitGroup
-	taskCMX sync.Mutex
-	taskCCH chan struct{}
-	input   chan flowInput
-	flowCtx *FlowContext
-	docker  docker.DockerClient
-	logger  *logrus.Entry
+	tc        TaskController
+	wg        *sync.WaitGroup
+	cfg       *config.Config
+	aws       map[int64]AssistantWorker
+	awsMX     *sync.Mutex
+	ctx       context.Context
+	cancel    context.CancelFunc
+	taskMX    *sync.Mutex
+	taskST    context.CancelFunc
+	taskWG    *sync.WaitGroup
+	reportWG  sync.WaitGroup
+	reportMX  sync.Mutex
+	reportST  context.CancelFunc
+	finalized atomic.Bool
+	taskCMX   sync.Mutex
+	taskCCH   chan struct{}
+	input     chan flowInput
+	flowCtx   *FlowContext
+	docker    docker.DockerClient
+	logger    *logrus.Entry
 }
 
 type newFlowWorkerCtx struct {
@@ -117,16 +123,24 @@ type flowProviderWorkers struct {
 
 const flowInputTimeout = 1 * time.Second
 
+// ErrInputAccepted reports that the worker took the input but had not finished
+// with it before the CALLER's deadline. The work continues, so the caller must
+// observe the outcome through the flow's status rather than send it again.
+// A worker that merely outlives flowInputTimeout returns nil, as it always has.
+var ErrInputAccepted = errors.New("input accepted, still being processed")
+
+// ErrInputNotAccepted reports the opposite: the worker never took the input, so
+// nothing was started and sending it again is safe. Telling these two apart is
+// the whole point -- a caller that cannot duplicates the action or drops it.
+var ErrInputNotAccepted = errors.New("input was not accepted")
+
 type flowInput struct {
 	input string
-	done  chan error
+	reply *inputReply
 }
 
-func NewFlowWorker(
-	ctx context.Context,
-	fwc newFlowWorkerCtx,
-) (_ FlowWorker, err error) {
-	ctx, span := obs.Observer.NewSpan(ctx, obs.SpanKindInternal, "controller.NewFlowWorker")
+func reserveFlow(ctx context.Context, fwc newFlowWorkerCtx) (database.Flow, error) {
+	ctx, span := obs.Observer.NewSpan(ctx, obs.SpanKindInternal, "controller.reserveFlow")
 	defer span.End()
 
 	flow, err := fwc.db.CreateFlow(ctx, database.CreateFlowParams{
@@ -142,8 +156,24 @@ func NewFlowWorker(
 	})
 	if err != nil {
 		obs.LogErrorOrCancel(logrus.WithContext(ctx), err, "failed to create flow in DB")
-		return nil, fmt.Errorf("failed to create flow in DB: %w", err)
+		return database.Flow{}, fmt.Errorf("failed to create flow in DB: %w", err)
 	}
+
+	logrus.WithContext(ctx).WithFields(logrus.Fields{
+		"flow_id":       flow.ID,
+		"user_id":       fwc.userID,
+		"provider_name": fwc.prvname.String(),
+		"provider_type": fwc.prvtype.String(),
+	}).Info("flow created in DB")
+
+	return flow, nil
+}
+
+func buildFlowWorker(
+	ctx context.Context, flow database.Flow, fwc newFlowWorkerCtx, commit func() error,
+) (FlowWorker, error) {
+	ctx, span := obs.Observer.NewSpan(ctx, obs.SpanKindInternal, "controller.buildFlowWorker")
+	defer span.End()
 
 	logger := logrus.WithContext(ctx).WithFields(logrus.Fields{
 		"flow_id":       flow.ID,
@@ -151,26 +181,6 @@ func NewFlowWorker(
 		"provider_name": fwc.prvname.String(),
 		"provider_type": fwc.prvtype.String(),
 	})
-	logger.Info("flow created in DB")
-
-	// Held separately because `flow` is reassigned below by UpdateFlow, which — like every sqlc query —
-	// returns a zero-valued row alongside an error, and a cleanup aimed at id 0 deletes nothing.
-	flowID := flow.ID
-
-	// DeleteFlow is a soft delete and the listings filter on deleted_at, so this is what keeps a flow
-	// the caller was told it never got out of the UI. Disarmed once the worker goroutine owns the flow —
-	// from there a failure is the worker's to unwind, not ours.
-	cleanupFlow := true
-	defer func() {
-		if err == nil || !cleanupFlow {
-			return
-		}
-
-		// The caller's context is usually already cancelled by whatever failed.
-		if _, cerr := fwc.db.DeleteFlow(context.WithoutCancel(ctx), flowID); cerr != nil {
-			logger.WithError(cerr).Error("failed to drop the flow left behind by a failed start")
-		}
-	}()
 
 	user, err := fwc.db.GetUser(ctx, fwc.userID)
 	if err != nil {
@@ -295,14 +305,22 @@ func NewFlowWorker(
 		return nil, wrapErrorEndSpan(ctx, flowSpan, "failed to prepare flow resources", err)
 	}
 
+	if err := commit(); err != nil {
+		if relErr := executor.Release(ctx); relErr != nil {
+			logger.WithError(relErr).Warn("failed to release the sandbox of a flow closed while it was preparing")
+		}
+		cancel()
+		flowSpan.End(langfuse.WithSpanStatus("flow closed while preparing"))
+
+		return nil, err
+	}
+
 	containers, err := fwc.db.GetFlowContainers(ctx, flow.ID)
 	if err != nil {
 		return nil, wrapErrorEndSpan(ctx, flowSpan, "failed to get flow containers", err)
 	}
 
-	fw.flowCtx.Publisher.FlowCreated(ctx, flow, containers)
-
-	cleanupFlow = false
+	pub.FlowUpdated(ctx, flow, containers)
 
 	fw.wg.Add(1)
 	go fw.worker()
@@ -522,6 +540,17 @@ func (fw *flowWorker) GetTitle() string {
 	return ""
 }
 
+func (fw *flowWorker) takeStatus(status database.FlowStatus) bool {
+	switch status {
+	case database.FlowStatusFinished, database.FlowStatusFailed:
+		fw.finalized.Store(true)
+
+		return true
+	default:
+		return !fw.finalized.Load()
+	}
+}
+
 func (fw *flowWorker) GetContext() *FlowContext {
 	return fw.flowCtx
 }
@@ -539,6 +568,10 @@ func (fw *flowWorker) GetStatus(ctx context.Context) (database.FlowStatus, error
 }
 
 func (fw *flowWorker) SetStatus(ctx context.Context, status database.FlowStatus) error {
+	if !fw.takeStatus(status) {
+		return nil
+	}
+
 	flow, err := fw.flowCtx.DB.UpdateFlowStatus(ctx, database.UpdateFlowStatusParams{
 		Status: status,
 		ID:     fw.flowCtx.FlowID,
@@ -571,6 +604,10 @@ func (fw *flowWorker) InvalidateTaskSubtasks(ctx context.Context, taskID int64, 
 func (fw *flowWorker) AddAssistant(ctx context.Context, aw AssistantWorker) error {
 	fw.awsMX.Lock()
 	defer fw.awsMX.Unlock()
+
+	if fw.ctx.Err() != nil {
+		return fmt.Errorf("flow %d: %w", fw.flowCtx.FlowID, ErrFlowAlreadyStopped)
+	}
 
 	if taw, ok := fw.aws[aw.GetAssistantID()]; ok {
 		if taw == aw {
@@ -649,6 +686,10 @@ func (fw *flowWorker) PutInput(
 	ctx, span := obs.Observer.NewSpan(ctx, obs.SpanKindInternal, "controller.flowWorker.PutInput")
 	defer span.End()
 
+	if err := fw.ctx.Err(); err != nil {
+		return fmt.Errorf("flow %d stopped: %w", fw.flowCtx.FlowID, err)
+	}
+
 	if err := fw.switchProvider(ctx, prv); err != nil {
 		return fmt.Errorf("failed to switch provider: %w", err)
 	}
@@ -657,28 +698,39 @@ func (fw *flowWorker) PutInput(
 		fw.logger.WithError(err).Warn("failed to copy resources before user input")
 	}
 
-	flin := flowInput{input: input, done: make(chan error, 1)}
+	flin := flowInput{input: input, reply: newInputReply()}
 	select {
 	case <-fw.ctx.Done():
-		close(flin.done)
-		return fmt.Errorf("flow %d stopped: %w", fw.flowCtx.FlowID, fw.ctx.Err())
+		return fmt.Errorf("flow %d stopped: %w: %w", fw.flowCtx.FlowID, ErrInputNotAccepted, fw.ctx.Err())
 	case <-ctx.Done():
-		close(flin.done)
-		return fmt.Errorf("flow %d input processing timeout: %w", fw.flowCtx.FlowID, ctx.Err())
+		return fmt.Errorf("flow %d input processing timeout: %w: %w",
+			fw.flowCtx.FlowID, ErrInputNotAccepted, ctx.Err())
 	case fw.input <- flin:
 		timer := time.NewTimer(flowInputTimeout)
 		defer timer.Stop()
 
+		// The worker has the input. Whether it answers in time decides only what
+		// this caller learns, not whether the work happens -- so the timer
+		// expiring stays the ordinary quiet success it has always been, and only
+		// the caller's own deadline needs a name, because that is the one that
+		// reaches an HTTP client deciding whether to send the input again.
+		var stopErr error
 		select {
-		case err := <-flin.done:
+		case err := <-flin.reply.done:
 			return err
 		case <-timer.C:
-			return nil // no early error
 		case <-fw.ctx.Done():
-			return fmt.Errorf("flow %d stopped: %w", fw.flowCtx.FlowID, fw.ctx.Err())
+			stopErr = fmt.Errorf("flow %d stopped: %w", fw.flowCtx.FlowID, fw.ctx.Err())
 		case <-ctx.Done():
-			return fmt.Errorf("flow %d input processing timeout: %w", fw.flowCtx.FlowID, ctx.Err())
+			stopErr = fmt.Errorf("flow %d input processing timeout: %w: %w",
+				fw.flowCtx.FlowID, ErrInputAccepted, ctx.Err())
 		}
+
+		if isDelivered, err := flin.reply.abandon(); isDelivered {
+			return err
+		}
+
+		return stopErr
 	}
 }
 
@@ -802,6 +854,10 @@ func (fw *flowWorker) Finish(ctx context.Context) error {
 		}
 	}
 
+	if err := fw.SetStatus(ctx, database.FlowStatusFinished); err != nil {
+		return fmt.Errorf("failed to set flow %d status: %w", fw.flowCtx.FlowID, err)
+	}
+
 	fw.awsMX.Lock()
 	defer fw.awsMX.Unlock()
 
@@ -815,10 +871,6 @@ func (fw *flowWorker) Finish(ctx context.Context) error {
 		return fmt.Errorf("failed to release flow %d resources: %w", fw.flowCtx.FlowID, err)
 	}
 
-	if err := fw.SetStatus(ctx, database.FlowStatusFinished); err != nil {
-		return fmt.Errorf("failed to set flow %d status: %w", fw.flowCtx.FlowID, err)
-	}
-
 	return nil
 }
 
@@ -830,6 +882,10 @@ func (fw *flowWorker) Stop(ctx context.Context) error {
 	defer fw.taskMX.Unlock()
 
 	fw.taskST()
+	fw.stopReports()
+	fw.killFlowCommands(ctx)
+	defer fw.killFlowCommands(ctx)
+
 	done := make(chan struct{})
 	timer := time.NewTimer(stopTaskTimeout)
 	defer timer.Stop()
@@ -845,6 +901,225 @@ func (fw *flowWorker) Stop(ctx context.Context) error {
 	case <-done:
 		return nil
 	}
+}
+
+func (fw *flowWorker) killFlowCommands(ctx context.Context) {
+	if fw.docker == nil {
+		return
+	}
+
+	containerName := tools.PrimaryTerminalName(fw.cfg.TenantPrefix(), fw.flowCtx.FlowID)
+	if err := fw.docker.KillFlowCommands(ctx, containerName); err != nil {
+		fw.logger.WithError(err).Warn("failed to stop the commands left running in the sandbox")
+	}
+}
+
+const (
+	// maxReportAttempts is how many times the write-up is asked for before the
+	// task is left unreported.
+	maxReportAttempts = 3
+	// reportRetryDelay is multiplied by the attempt number, so the three
+	// attempts span roughly a minute -- long enough to outlast a gateway
+	// restart, short enough that a stopped run is not held open by it.
+	reportRetryDelay = 20 * time.Second
+	// defaultReportAllowance bounds a report whose caller named no budget. The
+	// three attempts and their backoff all live inside it.
+	defaultReportAllowance = 30 * time.Minute
+	// reportDrainTimeout bounds the wait for the run a report displaces, so an
+	// unresponsive task delays the write-up instead of withholding it.
+	reportDrainTimeout = 30 * time.Second
+)
+
+// ErrNothingToReport is a report asked for on a flow whose tasks are all
+// finished. The caller's mistake, not a fault.
+var ErrNothingToReport = errors.New("flow has no unfinished task to report on")
+
+func reportAllowance(budget time.Duration) time.Duration {
+	if budget > 0 {
+		return budget
+	}
+
+	return defaultReportAllowance
+}
+
+// waitForDisplacedTask drains the run whose slot a report is taking.
+func (fw *flowWorker) waitForDisplacedTask() {
+	drained := make(chan struct{})
+	go func() {
+		defer close(drained)
+		fw.taskWG.Wait()
+	}()
+
+	select {
+	case <-drained:
+	case <-time.After(reportDrainTimeout):
+		fw.logger.Warn("the displaced run did not finish in time; reporting anyway")
+	}
+}
+
+// Report asks for the write-up of this flow's open task.
+//
+// budget zero means the reporter's ordinary allowance; a caller that supplies
+// one bounds the run by it.
+func (fw *flowWorker) Report(ctx context.Context, budget time.Duration) error {
+	ctx, span := obs.Observer.NewSpan(ctx, obs.SpanKindInternal, "controller.flowWorker.Report")
+	defer span.End()
+
+	if err := fw.ctx.Err(); err != nil {
+		return fmt.Errorf("flow %d is stopped: %w", fw.flowCtx.FlowID, err)
+	}
+
+	task := reportableTask(fw.tc.ListTasks(ctx))
+	if task == nil {
+		return fmt.Errorf("%w: flow %d", ErrNothingToReport, fw.flowCtx.FlowID)
+	}
+
+	// Registered before the goroutine exists, so a Finish arriving in between
+	// still waits for it. Its own group rather than taskWG: Stop holds taskMX
+	// across the whole of taskWG.Wait, and runReport's first act is to take
+	// that mutex, so a report counted there before it starts would stall Stop
+	// for its full timeout.
+	fw.reportWG.Add(1)
+
+	// Detached, like every other way a task starts here. A report is a model run
+	// with a budget measured in minutes, and the caller is an HTTP request:
+	// holding it open for the whole write-up would time out at the first proxy
+	// in front of this server. Everything that can fail synchronously -- the
+	// flow being stopped, there being nothing to report on -- is checked above,
+	// so the caller still gets a real error for the cases it can act on.
+	go fw.runReport(task, budget)
+
+	return nil
+}
+
+// runReport is the body of Report, on its own goroutine.
+func (fw *flowWorker) runReport(task TaskWorker, budget time.Duration) {
+	defer fw.reportWG.Done()
+
+	// The same locking as runTask: a report is a model run against this flow's
+	// container, so it takes the task slot and it is interruptible by Stop.
+	//
+	// The run being displaced is drained before the slot is taken, the way Stop
+	// drains it. Without that, its unwinding writes TaskStatusWaiting on a
+	// background context and lands on top of the report's own status, leaving
+	// the task reading waiting for the whole write-up.
+	fw.taskMX.Lock()
+	fw.taskST()
+	fw.taskMX.Unlock()
+
+	fw.waitForDisplacedTask()
+
+	fw.taskMX.Lock()
+	runCtx, taskST := context.WithCancel(fw.ctx)
+	fw.taskST = taskST
+	fw.taskMX.Unlock()
+
+	defer taskST()
+
+	fw.taskWG.Add(1)
+	defer fw.taskWG.Done()
+	defer fw.signalTaskComplete()
+
+	_, observation := obs.Observer.NewObservation(fw.ctx)
+	obsSpan := observation.Span(
+		langfuse.WithSpanName(fmt.Sprintf("report task %d: %s", task.GetTaskID(), task.GetTitle())),
+		langfuse.WithSpanMetadata(langfuse.Metadata{"task_id": task.GetTaskID()}),
+	)
+	runCtx, _ = obsSpan.Observation(runCtx)
+
+	// The write-up is the most valuable thing a flow produces, and the one piece
+	// of work with nothing after it to compensate for its loss: every subtask can
+	// be re-planned, the report cannot be re-derived once the flow is finished.
+	// The chain already retries each model turn; these attempts are spaced far
+	// enough apart to outlive a gateway restart, which is the failure those
+	// inner retries cannot cover.
+	// Detached from runCtx and bounded once, outside the loop: the write-up is
+	// what the whole call exists to produce, so an input arriving while it runs
+	// must not discard it, and a caller's timeout is the allowance for the
+	// request rather than for each attempt.
+	reportCtx, cancelReport := context.WithTimeout(context.WithoutCancel(runCtx), reportAllowance(budget))
+	defer cancelReport()
+
+	fw.reportMX.Lock()
+	fw.reportST = cancelReport
+	fw.reportMX.Unlock()
+
+	var err error
+retry:
+	for attempt := 1; attempt <= maxReportAttempts; attempt++ {
+		if err = task.Report(reportCtx); err == nil {
+			break
+		}
+
+		// A cancelled report was not lost, it was stopped; and a task that is
+		// already written up has nothing more to give. Repeating either fights
+		// the operator or spends a model run for nothing.
+		if errors.Is(err, context.Canceled) || errors.Is(err, ErrTaskAlreadyCompleted) || reportCtx.Err() != nil {
+			break
+		}
+
+		if attempt == maxReportAttempts {
+			break
+		}
+
+		fw.logger.WithError(err).WithFields(logrus.Fields{
+			"task_id": task.GetTaskID(),
+			"attempt": attempt,
+		}).Warn("the write-up failed; trying again rather than losing it")
+
+		select {
+		case <-reportCtx.Done():
+			break retry
+		case <-time.After(time.Duration(attempt) * reportRetryDelay):
+		}
+	}
+
+	if err != nil {
+		entry := fw.logger.WithError(err).WithField("task_id", task.GetTaskID())
+		if errors.Is(err, context.Canceled) {
+			obsSpan.End(langfuse.WithSpanStatus(err.Error()), langfuse.WithSpanLevel(langfuse.ObservationLevelWarning))
+			entry.Warn("the write-up was stopped before it finished")
+
+			return
+		}
+
+		obsSpan.End(langfuse.WithSpanStatus(err.Error()), langfuse.WithSpanLevel(langfuse.ObservationLevelError))
+		entry.Error("failed to write up the task on request")
+		fw.reportWriteUpFailure(task, err)
+
+		return
+	}
+
+	result, _ := task.GetResult(fw.ctx)
+	obsSpan.End(langfuse.WithSpanOutput(result), langfuse.WithSpanStatus("success"))
+}
+
+func (fw *flowWorker) reportWriteUpFailure(task TaskWorker, err error) {
+	if errors.Is(err, ErrTaskAlreadyCompleted) {
+		return
+	}
+
+	_, putErr := fw.flowCtx.MsgLog.PutTaskMsg(context.WithoutCancel(fw.ctx), database.MsglogTypeReport,
+		task.GetTaskID(), "", fmt.Sprintf("The report could not be written: %s", err))
+	if putErr != nil {
+		fw.logger.WithError(putErr).Warn("failed to report why the write-up did not arrive")
+	}
+}
+
+// reportableTask picks the task a report would be about: the open one, running
+// or waiting alike.
+//
+// A waiting task is deliberately accepted -- that is the whole case the
+// endpoint exists for. Last rather than first, because a flow accumulates tasks
+// and the one an operator means is the one they were just watching.
+func reportableTask(tasks []TaskWorker) TaskWorker {
+	for idx := len(tasks) - 1; idx >= 0; idx-- {
+		if !tasks[idx].IsCompleted() {
+			return tasks[idx]
+		}
+	}
+
+	return nil
 }
 
 func (fw *flowWorker) Rename(ctx context.Context, title string) error {
@@ -948,10 +1223,37 @@ func (fw *flowWorker) finish() error {
 	}
 
 	fw.cancel()
-	close(fw.input)
+	fw.stopReports()
 	fw.wg.Wait()
+	fw.waitForReports()
 
 	return nil
+}
+
+func (fw *flowWorker) stopReports() {
+	fw.reportMX.Lock()
+	defer fw.reportMX.Unlock()
+
+	if fw.reportST != nil {
+		fw.reportST()
+	}
+}
+
+// waitForReports drains an on-demand report that is still unwinding. Its run
+// context is already cancelled by the caller, so this is bounded by how long
+// the write-up takes to notice rather than by its own budget.
+func (fw *flowWorker) waitForReports() {
+	drained := make(chan struct{})
+	go func() {
+		defer close(drained)
+		fw.reportWG.Wait()
+	}()
+
+	select {
+	case <-drained:
+	case <-time.After(reportDrainTimeout):
+		fw.logger.Warn("a report was still running when the flow finished")
+	}
 }
 
 // signalTaskComplete broadcasts task completion to all goroutines currently
@@ -1007,7 +1309,7 @@ func (fw *flowWorker) worker() {
 		if !task.IsCompleted() && !task.IsWaiting() {
 			input := "continue after loading"
 			spanName := fmt.Sprintf("continue task %d: %s", task.GetTaskID(), task.GetTitle())
-			if err := fw.runTask(spanName, input, task); err != nil {
+			if err := fw.reportFailure(task, input, fw.runTask(spanName, input, task)); err != nil {
 				if errors.Is(err, context.Canceled) {
 					getLogger(input, task).Info("flow are going to be stopped by user")
 					return
@@ -1024,7 +1326,14 @@ func (fw *flowWorker) worker() {
 	}
 
 	// process user input in regular job
-	for flin := range fw.input {
+	for {
+		var flin flowInput
+		select {
+		case <-fw.ctx.Done():
+			return
+		case flin = <-fw.input:
+		}
+
 		if task, err := fw.processInput(flin); err != nil {
 			if errors.Is(err, context.Canceled) {
 				getLogger(flin.input, task).Info("flow are going to be stopped by user")
@@ -1046,12 +1355,14 @@ func (fw *flowWorker) processInput(flin flowInput) (TaskWorker, error) {
 		if !task.IsCompleted() && task.IsWaiting() {
 			if err := task.PutInput(fw.ctx, flin.input); err != nil {
 				err = fmt.Errorf("failed to process input to task %d: %w", task.GetTaskID(), err)
-				flin.done <- err
-				return nil, err
-			} else {
-				flin.done <- nil
-				return task, fw.runTask("put input to task and run", flin.input, task)
+				if flin.reply.deliver(err) {
+					return nil, err
+				}
+				return nil, fw.reportFailure(task, flin.input, err)
 			}
+
+			flin.reply.deliver(nil)
+			return task, fw.reportFailure(task, flin.input, fw.runTask("put input to task and run", flin.input, task))
 		}
 	}
 
@@ -1079,18 +1390,40 @@ func (fw *flowWorker) processInput(flin flowInput) (TaskWorker, error) {
 		if errors.Is(err, context.Canceled) && fw.ctx.Err() == nil {
 			// CreateTask was cancelled by Stop() — not a fatal flow error.
 			// Keep the worker alive and return the flow to Waiting state.
-			flin.done <- nil
+			flin.reply.deliver(nil)
 			_ = fw.SetStatus(fw.ctx, database.FlowStatusWaiting)
 			return nil, nil
 		}
 		err = fmt.Errorf("failed to create task for flow %d: %w", fw.flowCtx.FlowID, err)
-		flin.done <- err
-		return nil, err
+		if flin.reply.deliver(err) {
+			return nil, err
+		}
+		return nil, fw.reportFailure(nil, flin.input, err)
 	}
 
-	flin.done <- nil
+	flin.reply.deliver(nil)
 	spanName := fmt.Sprintf("perform task %d: %s", task.GetTaskID(), task.GetTitle())
-	return task, fw.execTask(ctx, spanName, flin.input, task)
+	return task, fw.reportFailure(task, flin.input, fw.execTask(ctx, spanName, flin.input, task))
+}
+
+func (fw *flowWorker) reportFailure(task TaskWorker, input string, err error) error {
+	if err == nil || errors.Is(err, context.Canceled) {
+		return err
+	}
+
+	var putErr error
+	if task == nil {
+		_, putErr = fw.flowCtx.MsgLog.PutFlowMsgResult(fw.ctx, database.MsglogTypeReport, "",
+			fmt.Sprintf("The task could not start: %s", err), input, database.MsglogResultFormatPlain)
+	} else {
+		_, putErr = fw.flowCtx.MsgLog.PutTaskMsg(fw.ctx, database.MsglogTypeReport, task.GetTaskID(), "",
+			fmt.Sprintf("The task stopped on an error: %s", err))
+	}
+	if putErr != nil {
+		fw.logger.WithError(putErr).Warn("failed to report why the task did not go on")
+	}
+
+	return err
 }
 
 // runTask creates a fresh per-task cancellable context and runs an already-created task.

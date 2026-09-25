@@ -5,49 +5,49 @@ import (
 	"testing"
 )
 
-// TestApplyUnifiedDiff covers ApplyUnifiedDiff end to end (parse + patch +
-// apply) with both positive (diff applies, exact content produced) and
-// negative (diff rejected, or doesn't match, with content left untouched)
-// cases, using table-driven test cases as sub-tests.
-func TestApplyUnifiedDiff(t *testing.T) {
+// A hunk lands where its lines match the file; the header's line number only breaks a tie.
+func TestFileDiff_ApplyUnifiedDiff_PatchesTheLinesItsHunksLocate(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name    string
-		content string
-		diff    string
-		want    string // expected new content, when wantErr is false
-		wantErr string // substring expected in the error, when non-empty
+		name      string
+		content   string
+		diff      string
+		want      string
+		wantHunks int
 	}{
 		{
-			name:    "replace a single line",
+			name:    "a replaced line",
 			content: "line1\nline2\nline3\n",
 			diff: "@@ -1,2 +1,2 @@\n" +
 				" line1\n" +
 				"-line2\n" +
 				"+line2 changed\n",
-			want: "line1\nline2 changed\nline3\n",
+			want:      "line1\nline2 changed\nline3\n",
+			wantHunks: 1,
 		},
 		{
-			name:    "insert lines with pure addition",
+			name:    "an inserted line",
 			content: "line1\nline2\nline3\n",
 			diff: "@@ -1,2 +1,3 @@\n" +
 				" line1\n" +
 				"+inserted\n" +
 				" line2\n",
-			want: "line1\ninserted\nline2\nline3\n",
+			want:      "line1\ninserted\nline2\nline3\n",
+			wantHunks: 1,
 		},
 		{
-			name:    "delete a line",
+			name:    "a deleted line",
 			content: "line1\nline2\nline3\n",
 			diff: "@@ -1,3 +1,2 @@\n" +
 				" line1\n" +
 				"-line2\n" +
 				" line3\n",
-			want: "line1\nline3\n",
+			want:      "line1\nline3\n",
+			wantHunks: 1,
 		},
 		{
-			name:    "multiple non-overlapping hunks applied together",
+			name:    "two hunks apart",
 			content: "a\nb\nc\nd\ne\nf\ng\n",
 			diff: "@@ -1,2 +1,2 @@\n" +
 				" a\n" +
@@ -57,56 +57,12 @@ func TestApplyUnifiedDiff(t *testing.T) {
 				" f\n" +
 				"-g\n" +
 				"+G\n",
-			want: "a\nB\nc\nd\ne\nf\nG\n",
+			want:      "a\nB\nc\nd\ne\nf\nG\n",
+			wantHunks: 2,
 		},
 		{
-			name:    "tolerates minor line-number drift when content matches",
-			content: "line1\nline2\nline3\nline4\n",
-			// Header claims the hunk starts at line 2; its own context lines
-			// show it's really at line 1 (as if a line had been
-			// inserted/removed elsewhere since the diff was written) -
-			// PatchApply's fuzzy search must find the real position from
-			// the content, not the (slightly wrong) header line number.
-			diff: "@@ -2,3 +2,3 @@\n" +
-				" line1\n" +
-				"-line2\n" +
-				"+line2 changed\n" +
-				" line3\n",
-			want: "line1\nline2 changed\nline3\nline4\n",
-		},
-		{
-			name:    "tolerates '--- a/file' / '+++ b/file' headers",
-			content: "line1\nline2\n",
-			diff: "--- a/file.txt\n" +
-				"+++ b/file.txt\n" +
-				"@@ -2,1 +2,1 @@\n" +
-				"-line2\n" +
-				"+line2 changed\n",
-			want: "line1\nline2 changed\n",
-		},
-		{
-			name:    "tolerates a fully blank line as an empty context line",
-			content: "line1\n\nline3\n",
-			diff: "@@ -1,3 +1,3 @@\n" +
-				" line1\n" +
-				"\n" +
-				"-line3\n" +
-				"+line3 changed\n",
-			want: "line1\n\nline3 changed\n",
-		},
-		{
-			name:    "preserves special characters requiring URL-escaping",
-			content: "a = 1 + 2 % 3 & done\n",
-			diff: "@@ -1,1 +1,1 @@\n" +
-				"-a = 1 + 2 % 3 & done\n" +
-				"+a = 4 + 5 % 6 & done\n",
-			want: "a = 4 + 5 % 6 & done\n",
-		},
-		{
-			name:    "multi-hunk: middle hunk has no context on either side",
+			name:    "three hunks, the middle one without context",
 			content: "a\nb\nc\nd\ne\nf\ng\n",
-			// Only the first and last hunk need synthesized context (see
-			// ensureContextBoundaries); the middle hunk works fine without it.
 			diff: "@@ -1,2 +1,2 @@\n" +
 				" a\n" +
 				"-b\n" +
@@ -118,81 +74,210 @@ func TestApplyUnifiedDiff(t *testing.T) {
 				"-f\n" +
 				"+F\n" +
 				" g\n",
-			want: "a\nB\nc\nD\ne\nF\ng\n",
+			want:      "a\nB\nc\nD\ne\nF\ng\n",
+			wantHunks: 3,
 		},
 		{
-			name:    "hunk header without explicit line counts (implicit 1)",
+			name:    "hunks given out of file order",
+			content: "a\nb\nc\nd\n",
+			diff: "@@ -4,1 +4,1 @@\n" +
+				"-d\n" +
+				"+D\n" +
+				"@@ -1,1 +1,1 @@\n" +
+				"-a\n" +
+				"+A\n",
+			want:      "A\nb\nc\nD\n",
+			wantHunks: 2,
+		},
+		{
+			name:    "a header number off by one, the context right",
+			content: "line1\nline2\nline3\nline4\n",
+			diff: "@@ -2,3 +2,3 @@\n" +
+				" line1\n" +
+				"-line2\n" +
+				"+line2 changed\n" +
+				" line3\n",
+			want:      "line1\nline2 changed\nline3\nline4\n",
+			wantHunks: 1,
+		},
+		{
+			name:    "a header number far from the real line",
+			content: strings.Repeat("filler line\n", 60) + "target line\n",
+			diff: "@@ -1,1 +1,1 @@\n" +
+				"-target line\n" +
+				"+changed line\n",
+			want:      strings.Repeat("filler line\n", 60) + "changed line\n",
+			wantHunks: 1,
+		},
+		{
+			name:    "a header number past the end of the file",
+			content: "Status: draft\nOwner: alice\nPriority: low\n",
+			diff: "@@ -99,1 +99,1 @@\n" +
+				"-Priority: low\n" +
+				"+Priority: high\n",
+			want:      "Status: draft\nOwner: alice\nPriority: high\n",
+			wantHunks: 1,
+		},
+		{
+			name:    "a header without line counts",
 			content: "line1\nline2\nline3\n",
 			diff: "@@ -2 +2 @@\n" +
 				"-line2\n" +
 				"+line2 changed\n",
-			want: "line1\nline2 changed\nline3\n",
+			want:      "line1\nline2 changed\nline3\n",
+			wantHunks: 1,
 		},
 		{
-			name:    "negative: empty diff is rejected",
-			content: "line1\n",
-			diff:    "",
-			wantErr: "diff is empty",
+			name:      "a bare '@@' header",
+			content:   "Status: draft\nOwner: alice\nPriority: low\n",
+			diff:      "@@\n-Priority: low\n+Priority: high\n",
+			want:      "Status: draft\nOwner: alice\nPriority: high\n",
+			wantHunks: 1,
 		},
 		{
-			name:    "negative: whitespace-only diff is rejected",
-			content: "line1\n",
-			diff:    "   \n\n  ",
-			wantErr: "no hunks",
+			name:      "text after a bare '@@' header",
+			content:   "line1\n",
+			diff:      "@@ not a real header @@\n-line1\n+line2\n",
+			want:      "line2\n",
+			wantHunks: 1,
 		},
 		{
-			name:    "negative: no hunk header at all",
-			content: "line1\n",
-			diff:    "just some text\nwith no diff markers\n",
-			wantErr: "expected a hunk header",
-		},
-		{
-			// Observed from a real model (gpt-oss:120b via Ollama): it
-			// sometimes emits a bare "@@" with no position info at all when
-			// unsure of exact line numbers. diffmatchpatch's content-based
-			// fuzzy search must still locate the hunk from context alone -
-			// which requires the target line to be textually distinct from
-			// the file's other lines (unlike near-duplicates such as
-			// "line1"/"line2"/"line3", fuzzy search without any position
-			// hint can genuinely prefer a closer-but-wrong near-duplicate).
-			name:    "tolerates a hunk header with no position info at all (bare '@@')",
-			content: "Status: draft\nOwner: alice\nPriority: low\n",
-			diff:    "@@\n-Priority: low\n+Priority: high\n",
-			want:    "Status: draft\nOwner: alice\nPriority: high\n",
-		},
-		{
-			name:    "tolerates unparseable text after a bare '@@' header",
-			content: "line1\n",
-			diff:    "@@ not a real header @@\n-line1\n+line2\n",
-			want:    "line2\n",
-		},
-		{
-			name:    "negative: hunk body line with invalid prefix",
+			name:    "'--- a/file' and '+++ b/file' headers",
 			content: "line1\nline2\n",
-			diff:    "@@ -1,2 +1,2 @@\n line1\n*line2\n",
-			wantErr: "invalid diff line",
+			diff: "--- a/file.txt\n" +
+				"+++ b/file.txt\n" +
+				"@@ -2,1 +2,1 @@\n" +
+				"-line2\n" +
+				"+line2 changed\n",
+			want:      "line1\nline2 changed\n",
+			wantHunks: 1,
 		},
 		{
-			name:    "negative: hunk header with no content lines",
-			content: "line1\nline2\n",
-			diff:    "@@ -1,1 +1,1 @@\n@@ -2,1 +2,1 @@\n-line2\n+line2 changed\n",
-			wantErr: "no content lines",
+			// The empty context line is all that tells the two "b" lines apart.
+			name:      "a fully blank line standing for an empty context line",
+			content:   "b\nc\n\nb\n",
+			diff:      "@@\n\n-b\n+B\n",
+			want:      "b\nc\n\nB\n",
+			wantHunks: 1,
 		},
 		{
-			name:    "negative: context does not match file content",
-			content: "line1\nline2\nline3\n",
-			diff: "@@ -2,1 +2,1 @@\n" +
-				"-this line does not exist in the file\n" +
-				"+replacement\n",
-			wantErr: "could not be applied",
+			// The shape `diff -u` gives a file whose last line has no newline.
+			name:    "a '\\ No newline at end of file' marker",
+			content: "a\nb",
+			diff: "@@ -1,2 +1,2 @@\n" +
+				" a\n" +
+				"-b\n" +
+				"\\ No newline at end of file\n" +
+				"+B\n" +
+				"\\ No newline at end of file\n",
+			want:      "a\nB",
+			wantHunks: 1,
 		},
 		{
-			name:    "negative: content matches nowhere near the claimed location",
-			content: strings.Repeat("filler line\n", 50) + "target line\n" + strings.Repeat("filler line\n", 50),
+			name:    "'%', '&' and '+' inside a line",
+			content: "a = 1 + 2 % 3 & done\n",
 			diff: "@@ -1,1 +1,1 @@\n" +
-				"-completely different text that is nowhere in the file\n" +
-				"+replacement\n",
-			wantErr: "could not be applied",
+				"-a = 1 + 2 % 3 & done\n" +
+				"+a = 4 + 5 % 6 & done\n",
+			want:      "a = 4 + 5 % 6 & done\n",
+			wantHunks: 1,
+		},
+		{
+			name:    "context lines are taken from the file, not the diff",
+			content: "a\nfoo   \nb\n",
+			diff: "@@ -1,3 +1,3 @@\n" +
+				" a\n" +
+				" foo\n" +
+				"-b\n" +
+				"+B\n",
+			want:      "a\nfoo   \nB\n",
+			wantHunks: 1,
+		},
+		{
+			name:    "a stale context line around a change the file has once",
+			content: "a\nb\nc\n",
+			diff: "@@ -1,2 +1,2 @@\n" +
+				" z\n" +
+				"-b\n" +
+				"+B\n",
+			want:      "a\nB\nc\n",
+			wantHunks: 1,
+		},
+		{
+			name:    "the duplicate its context points at",
+			content: "dup\nx\ndup\ny\ndup\n",
+			diff: "@@ -2,3 +2,2 @@\n" +
+				" x\n" +
+				"-dup\n" +
+				" y\n",
+			want:      "dup\nx\ny\ndup\n",
+			wantHunks: 1,
+		},
+		{
+			name:    "identical lines: the header number picks one",
+			content: strings.Repeat("cfg = 1\n", 5),
+			diff: "@@ -3,1 +3,1 @@\n" +
+				"-cfg = 1\n" +
+				"+cfg = 2\n",
+			want:      "cfg = 1\ncfg = 1\ncfg = 2\ncfg = 1\ncfg = 1\n",
+			wantHunks: 1,
+		},
+		{
+			name:    "a file without a trailing newline",
+			content: "line1\nline2",
+			diff: "@@ -2,1 +2,1 @@\n" +
+				"-line2\n" +
+				"+line2 changed\n",
+			want:      "line1\nline2 changed",
+			wantHunks: 1,
+		},
+		{
+			name:    "crlf line endings",
+			content: "line1\r\nline2\r\n",
+			diff: "@@ -2,1 +2,1 @@\n" +
+				"-line2\n" +
+				"+line2 changed\n",
+			want:      "line1\r\nline2 changed\r\n",
+			wantHunks: 1,
+		},
+		{
+			name:    "a crlf file with repeated lines",
+			content: "cfg = 1\r\ncfg = 1\r\ncfg = 1\r\n",
+			diff: "@@ -2,1 +2,1 @@\n" +
+				"-cfg = 1\n" +
+				"+cfg = 2\n",
+			want:      "cfg = 1\r\ncfg = 2\r\ncfg = 1\r\n",
+			wantHunks: 1,
+		},
+		{
+			name:      "an addition past the end of a crlf file",
+			content:   "a\r\nb\r\n",
+			diff:      "@@ -9,0 +10 @@\n+c\n",
+			want:      "a\r\nb\r\nc\r\n",
+			wantHunks: 1,
+		},
+		{
+			name:      "an empty file",
+			content:   "",
+			diff:      "@@ -0,0 +1,2 @@\n+x\n+y\n",
+			want:      "x\ny\n",
+			wantHunks: 1,
+		},
+		{
+			name:      "every line deleted",
+			content:   "only\n",
+			diff:      "@@ -1 +0,0 @@\n-only\n",
+			want:      "",
+			wantHunks: 1,
+		},
+		{
+			name:    "multi-byte content is edited by line, not by byte",
+			content: "заголовок\nстатус: черновик\nконец\n",
+			diff: "@@ -1,1 +1,1 @@\n" +
+				"-статус: черновик\n" +
+				"+статус: готово\n",
+			want:      "заголовок\nстатус: готово\nконец\n",
+			wantHunks: 1,
 		},
 	}
 
@@ -201,71 +286,124 @@ func TestApplyUnifiedDiff(t *testing.T) {
 			t.Parallel()
 
 			got, hunks, err := ApplyUnifiedDiff(tt.content, tt.diff)
-
-			if tt.wantErr != "" {
-				if err == nil {
-					t.Fatalf("ApplyUnifiedDiff() expected error containing %q, got nil (result: %q)", tt.wantErr, got)
-				}
-				if !strings.Contains(err.Error(), tt.wantErr) {
-					t.Fatalf("ApplyUnifiedDiff() error = %q, want it to contain %q", err.Error(), tt.wantErr)
-				}
-				if got != "" {
-					t.Errorf("ApplyUnifiedDiff() on error must return empty content, got %q", got)
-				}
-				return
-			}
-
 			if err != nil {
 				t.Fatalf("ApplyUnifiedDiff() unexpected error: %v", err)
 			}
 			if got != tt.want {
 				t.Errorf("ApplyUnifiedDiff() content = %q, want %q", got, tt.want)
 			}
-			if hunks <= 0 {
-				t.Errorf("ApplyUnifiedDiff() hunks applied = %d, want > 0", hunks)
+			if hunks != tt.wantHunks {
+				t.Errorf("ApplyUnifiedDiff() hunks applied = %d, want %d", hunks, tt.wantHunks)
 			}
 		})
 	}
 }
 
-// TestParseUnifiedDiff checks the parser in isolation, independent of
-// go-diff, so a bug in hunk parsing and a bug in patch application are
-// distinguishable from their respective test failures.
-func TestParseUnifiedDiff(t *testing.T) {
+func TestFileDiff_ApplyUnifiedDiff_RefusesADiffItCannotApplyWhole(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name      string
-		diff      string
-		wantHunks int
-		wantLines int // lines in the first hunk, when wantHunks > 0
-		wantErr   string
+		name    string
+		content string
+		diff    string
+		wantErr string
 	}{
 		{
-			name:      "single hunk",
-			diff:      "@@ -1,2 +1,2 @@\n line1\n-line2\n+line2 changed\n",
-			wantHunks: 1,
-			wantLines: 3,
-		},
-		{
-			name:      "two hunks",
-			diff:      "@@ -1,1 +1,1 @@\n-a\n+A\n@@ -3,1 +3,1 @@\n-c\n+C\n",
-			wantHunks: 2,
-		},
-		{
-			name:    "empty",
+			name:    "an empty diff",
+			content: "line1\n",
 			diff:    "",
 			wantErr: "diff is empty",
 		},
 		{
-			name:    "garbage before first hunk",
-			diff:    "not a diff at all",
+			name:    "a diff of blank lines",
+			content: "line1\n",
+			diff:    "   \n\n  ",
+			wantErr: "no hunks",
+		},
+		{
+			name:    "text with no hunk header",
+			content: "line1\n",
+			diff:    "just some text\nwith no diff markers\n",
 			wantErr: "expected a hunk header",
 		},
 		{
-			name:    "garbage between header lines and hunk",
+			name:    "a stray line after the file headers",
+			content: "a\n",
 			diff:    "--- a/file\nsome garbage line\n@@ -1,1 +1,1 @@\n-a\n+A\n",
 			wantErr: "expected a hunk header",
+		},
+		{
+			name:    "a hunk line with an unknown prefix",
+			content: "line1\nline2\n",
+			diff:    "@@ -1,2 +1,2 @@\n line1\n*line2\n",
+			wantErr: "invalid diff line",
+		},
+		{
+			name:    "a hunk header with no lines under it",
+			content: "line1\nline2\n",
+			diff:    "@@ -1,1 +1,1 @@\n@@ -2,1 +2,1 @@\n-line2\n+line2 changed\n",
+			wantErr: "no content lines",
+		},
+		{
+			name:    "a hunk of context lines only",
+			content: "a\nb\n",
+			diff:    "@@ -1,2 +1,2 @@\n a\n b\n",
+			wantErr: "has no '-' or '+' line, so it changes nothing",
+		},
+		{
+			name:    "a removed line the file does not have",
+			content: "line1\nline2\nline3\n",
+			diff: "@@ -2,1 +2,1 @@\n" +
+				"-this line does not exist in the file\n" +
+				"+replacement\n",
+			wantErr: `@@ -2,1 +2,1 @@ (not found in the file, looked for: "this line does not exist in the file\n")`,
+		},
+		{
+			name:    "a one-character typo in the removed line",
+			content: "Status: draft\nOwner: alice\nPriority: low\n",
+			diff: "@@ -2,1 +2,1 @@\n" +
+				"-Owner: alicia\n" +
+				"+Owner: carol\n",
+			wantErr: "could not be applied",
+		},
+		{
+			name:    "indentation that differs from the file",
+			content: "func f() {\n\treturn 1\n}\n",
+			diff: "@@ -2,1 +2,1 @@\n" +
+				"-    return 1\n" +
+				"+    return 2\n",
+			wantErr: "could not be applied",
+		},
+		{
+			name:    "a stale context line around a change the file has twice",
+			content: "a\nb\na\nb\n",
+			diff: "@@ -1,2 +1,2 @@\n" +
+				" z\n" +
+				"-b\n" +
+				"+B\n",
+			wantErr: "could not be applied",
+		},
+		{
+			name:    "one bad hunk among good ones",
+			content: "a\nb\nc\n",
+			diff: "@@ -1,1 +1,1 @@\n" +
+				"-a\n" +
+				"+A\n" +
+				"@@ -2,1 +2,1 @@\n" +
+				"-nope\n" +
+				"+X\n",
+			wantErr: "1 of 2 hunk(s)",
+		},
+		{
+			name:    "two hunks that change the same line",
+			content: "a\n",
+			diff: "@@ -1 +1 @@\n" +
+				"-a\n" +
+				"+A\n" +
+				"@@ -1 +1 @@\n" +
+				"-a\n" +
+				"+B\n",
+			wantErr: "overlaps an earlier hunk",
 		},
 	}
 
@@ -273,26 +411,18 @@ func TestParseUnifiedDiff(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			hunks, err := parseUnifiedDiff(tt.diff)
-
-			if tt.wantErr != "" {
-				if err == nil {
-					t.Fatalf("parseUnifiedDiff() expected error containing %q, got nil", tt.wantErr)
-				}
-				if !strings.Contains(err.Error(), tt.wantErr) {
-					t.Fatalf("parseUnifiedDiff() error = %q, want it to contain %q", err.Error(), tt.wantErr)
-				}
-				return
+			got, hunks, err := ApplyUnifiedDiff(tt.content, tt.diff)
+			if err == nil {
+				t.Fatalf("ApplyUnifiedDiff() expected error containing %q, got nil (result: %q)", tt.wantErr, got)
 			}
-
-			if err != nil {
-				t.Fatalf("parseUnifiedDiff() unexpected error: %v", err)
+			if !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("ApplyUnifiedDiff() error = %q, want it to contain %q", err.Error(), tt.wantErr)
 			}
-			if len(hunks) != tt.wantHunks {
-				t.Fatalf("parseUnifiedDiff() hunks = %d, want %d", len(hunks), tt.wantHunks)
+			if got != "" {
+				t.Errorf("ApplyUnifiedDiff() on error must return empty content, got %q", got)
 			}
-			if tt.wantLines > 0 && len(hunks[0].lines) != tt.wantLines {
-				t.Errorf("parseUnifiedDiff() first hunk lines = %d, want %d", len(hunks[0].lines), tt.wantLines)
+			if hunks != 0 {
+				t.Errorf("ApplyUnifiedDiff() on error reports %d hunks applied, want 0", hunks)
 			}
 		})
 	}

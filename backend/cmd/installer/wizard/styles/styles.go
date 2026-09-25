@@ -272,7 +272,7 @@ func (s *Styles) initializeStyles() {
 		BorderForeground(Primary).
 		Padding(0, 1)
 
-	s.ButtonActive = s.Button.Copy().
+	s.ButtonActive = s.Button.
 		Foreground(Background).
 		Background(Primary).
 		Bold(true)

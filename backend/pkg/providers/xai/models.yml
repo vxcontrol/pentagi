@@ -1,0 +1,85 @@
+# xAI catalogue. Prices are dollars per 1M tokens from
+# https://docs.x.ai/developers/pricing, read 24.09.2026, and they hold for a
+# prompt under 200k tokens: at or above that the vendor doubles the rate for the
+# whole request, not for the excess, and the price schema cannot express that.
+#
+# reasoning.efforts is listed only where the vendor documents the values
+# (https://docs.x.ai/developers/model-capabilities/text/reasoning names them for
+# grok-4.7, grok-4.6 and grok-4.5 and states that reasoning cannot be disabled on
+# any of them). The grok-4.3 model page now describes configurable reasoning;
+# this catalogue does not yet advertise its effort values because that specific
+# parameter was not exercised by the saved-chain replay. Other models have no
+# advertised effort list rather than an invented one.
+#
+# Retired by the vendor 15.05.2026 and deliberately absent even though the gateway
+# still lists the routes: grok-3, grok-4-0709, grok-4-fast-reasoning and
+# -non-reasoning, grok-4-1-fast-reasoning and -non-reasoning, grok-code-fast-1,
+# grok-imagine-image-pro.
+- name: grok-4.7
+  description: Grok 4.7 - xAI's most capable model and recommendation for chat and code, with a May 2026 knowledge cutoff and 500k context. Reasoning cannot be turned off; reasoning_effort takes low, medium, high and xhigh, and defaults to high. Prices apply to a prompt under 200k tokens - at or above that the vendor doubles the rate for the whole request.
+  thinking: true
+  reasoning:
+    efforts: [low, medium, high, xhigh]
+  context_window: 500000
+  price:
+    input: 2.00
+    output: 6.00
+    cache_read: 0.50
+
+- name: grok-4.6
+  description: Grok 4.6 - previous flagship, 500k context. Reasoning cannot be turned off; reasoning_effort takes low, medium, high and xhigh, and defaults to high. Prices apply to a prompt under 200k tokens - at or above that the vendor doubles the rate for the whole request.
+  thinking: true
+  reasoning:
+    efforts: [low, medium, high, xhigh]
+  context_window: 500000
+  price:
+    input: 2.00
+    output: 6.00
+    cache_read: 0.50
+
+- name: grok-4.5
+  description: Grok 4.5 - earlier flagship, 500k context. Reasoning cannot be turned off; reasoning_effort takes low, medium and high, and defaults to high. Prices apply to a prompt under 200k tokens - at or above that the vendor doubles the rate for the whole request.
+  thinking: true
+  reasoning:
+    efforts: [low, medium, high]
+  context_window: 500000
+  price:
+    input: 2.00
+    output: 6.00
+    cache_read: 0.30
+
+- name: grok-4.3
+  description: Grok 4.3 - 1M context at a quarter of the flagship output price. Supports configurable reasoning; the bundled agent config leaves effort unset. Prices apply to a prompt under 200k tokens - at or above that the vendor doubles the rate for the whole request.
+  thinking: true
+  context_window: 1000000
+  price:
+    input: 1.25
+    output: 2.50
+    cache_read: 0.20
+
+- name: grok-4.20-0309-reasoning
+  description: Grok 4.20 reasoning snapshot, 1M context. Its door does not take the reasoning_effort field. Prices apply to a prompt under 200k tokens - at or above that the vendor doubles the rate for the whole request.
+  thinking: true
+  context_window: 1000000
+  price:
+    input: 1.25
+    output: 2.50
+    cache_read: 0.20
+
+- name: grok-4.20-0309-non-reasoning
+  description: Grok 4.20 non-reasoning snapshot, 1M context. Prices apply to a prompt under 200k tokens - at or above that the vendor doubles the rate for the whole request.
+  thinking: false
+  context_window: 1000000
+  price:
+    input: 1.25
+    output: 2.50
+    cache_read: 0.20
+
+- name: grok-build-0.1
+  description: Grok Build 0.1 - coding model, 256k context. Reasons; its door does not take the reasoning_effort field. Prices apply to a prompt under 200k tokens - at or above that the vendor doubles the rate for the whole request.
+  thinking: true
+  context_window: 256000
+  price:
+    input: 1.00
+    output: 2.00
+    cache_read: 0.20

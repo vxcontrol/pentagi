@@ -421,8 +421,6 @@ definitions:
     required:
     - flow_id
     - image
-    - local_dir
-    - local_id
     - name
     - status
     - type
@@ -558,7 +556,6 @@ definitions:
         type: string
       content:
         maxLength: 65536
-        minLength: 1
         type: string
       description:
         maxLength: 1000
@@ -569,7 +566,6 @@ definitions:
         type: string
       question:
         maxLength: 2048
-        minLength: 1
         type: string
     required:
     - content
@@ -912,7 +908,6 @@ definitions:
         type: boolean
       query:
         maxLength: 2048
-        minLength: 1
         type: string
     required:
     - query
@@ -1102,6 +1097,7 @@ definitions:
         - finish
         - input
         - rename
+        - report
         type: string
       input:
         example: user input for waiting flow
@@ -1115,6 +1111,11 @@ definitions:
         items:
           type: integer
         type: array
+      timeout:
+        example: 600
+        maximum: 7200
+        minimum: 30
+        type: integer
     required:
     - action
     type: object
@@ -1607,7 +1608,6 @@ definitions:
         type: string
       content:
         maxLength: 65536
-        minLength: 1
         type: string
       description:
         maxLength: 1000
@@ -1616,7 +1616,6 @@ definitions:
         type: string
       question:
         maxLength: 2048
-        minLength: 1
         type: string
     required:
     - content
@@ -2091,7 +2090,8 @@ paths:
         required: true
         type: integer
       - default: 5
-        description: Amount items per page (min -1, max 1000, -1 means unlimited)
+        description: Amount items per page (min -1, max 1000, -1 means unlimited,
+          absent means DefaultPageSize)
         in: query
         maximum: 1000
         minimum: -1
@@ -2217,7 +2217,8 @@ paths:
         required: true
         type: integer
       - default: 5
-        description: Amount items per page (min -1, max 1000, -1 means unlimited)
+        description: Amount items per page (min -1, max 1000, -1 means unlimited,
+          absent means DefaultPageSize)
         in: query
         maximum: 1000
         minimum: -1
@@ -2337,6 +2338,10 @@ paths:
           description: login not permitted
           schema:
             $ref: '#/definitions/ErrorResponse'
+        "429":
+          description: too many login attempts
+          schema:
+            $ref: '#/definitions/ErrorResponse'
         "500":
           description: internal error on login
           schema:
@@ -2412,19 +2417,19 @@ paths:
       tags:
       - Public
   /auth/logout:
-    get:
-      parameters:
-      - default: /
-        description: URI to redirect user there after logout
-        in: query
-        name: return_uri
-        type: string
+    post:
       produces:
       - application/json
       responses:
-        "307":
-          description: redirect to input return_uri path
-      summary: Logout current user via HTTP redirect
+        "200":
+          description: logout successful
+          schema:
+            $ref: '#/definitions/SuccessResponse'
+        "500":
+          description: internal error on ending the user's sessions
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      summary: Logout current user and end all of their sessions
       tags:
       - Public
   /auth/logout-callback:
@@ -2436,6 +2441,10 @@ paths:
           description: logout successful
           schema:
             $ref: '#/definitions/SuccessResponse'
+        "500":
+          description: internal error on ending the user's sessions
+          schema:
+            $ref: '#/definitions/ErrorResponse'
       summary: Logout current user from external OAuth application
       tags:
       - Public
@@ -2466,7 +2475,8 @@ paths:
         required: true
         type: integer
       - default: 5
-        description: Amount items per page (min -1, max 1000, -1 means unlimited)
+        description: Amount items per page (min -1, max 1000, -1 means unlimited,
+          absent means DefaultPageSize)
         in: query
         maximum: 1000
         minimum: -1
@@ -2550,7 +2560,8 @@ paths:
         required: true
         type: integer
       - default: 5
-        description: Amount items per page (min -1, max 1000, -1 means unlimited)
+        description: Amount items per page (min -1, max 1000, -1 means unlimited,
+          absent means DefaultPageSize)
         in: query
         maximum: 1000
         minimum: -1
@@ -2797,7 +2808,8 @@ paths:
         required: true
         type: integer
       - default: 5
-        description: Amount items per page (min -1, max 1000, -1 means unlimited)
+        description: Amount items per page (min -1, max 1000, -1 means unlimited,
+          absent means DefaultPageSize)
         in: query
         maximum: 1000
         minimum: -1
@@ -2887,7 +2899,8 @@ paths:
         required: true
         type: integer
       - default: 5
-        description: Amount items per page (min -1, max 1000, -1 means unlimited)
+        description: Amount items per page (min -1, max 1000, -1 means unlimited,
+          absent means DefaultPageSize)
         in: query
         maximum: 1000
         minimum: -1
@@ -2977,7 +2990,8 @@ paths:
         required: true
         type: integer
       - default: 5
-        description: Amount items per page (min -1, max 1000, -1 means unlimited)
+        description: Amount items per page (min -1, max 1000, -1 means unlimited,
+          absent means DefaultPageSize)
         in: query
         maximum: 1000
         minimum: -1
@@ -3248,7 +3262,8 @@ paths:
         required: true
         type: integer
       - default: 5
-        description: Amount items per page (min -1, max 1000, -1 means unlimited)
+        description: Amount items per page (min -1, max 1000, -1 means unlimited,
+          absent means DefaultPageSize)
         in: query
         maximum: 1000
         minimum: -1
@@ -3843,7 +3858,8 @@ paths:
         required: true
         type: integer
       - default: 5
-        description: Amount items per page (min -1, max 1000, -1 means unlimited)
+        description: Amount items per page (min -1, max 1000, -1 means unlimited,
+          absent means DefaultPageSize)
         in: query
         maximum: 1000
         minimum: -1
@@ -3933,7 +3949,8 @@ paths:
         required: true
         type: integer
       - default: 5
-        description: Amount items per page (min -1, max 1000, -1 means unlimited)
+        description: Amount items per page (min -1, max 1000, -1 means unlimited,
+          absent means DefaultPageSize)
         in: query
         maximum: 1000
         minimum: -1
@@ -4103,7 +4120,8 @@ paths:
         required: true
         type: integer
       - default: 5
-        description: Amount items per page (min -1, max 1000, -1 means unlimited)
+        description: Amount items per page (min -1, max 1000, -1 means unlimited,
+          absent means DefaultPageSize)
         in: query
         maximum: 1000
         minimum: -1
@@ -4193,7 +4211,8 @@ paths:
         required: true
         type: integer
       - default: 5
-        description: Amount items per page (min -1, max 1000, -1 means unlimited)
+        description: Amount items per page (min -1, max 1000, -1 means unlimited,
+          absent means DefaultPageSize)
         in: query
         maximum: 1000
         minimum: -1
@@ -4283,7 +4302,8 @@ paths:
         required: true
         type: integer
       - default: 5
-        description: Amount items per page (min -1, max 1000, -1 means unlimited)
+        description: Amount items per page (min -1, max 1000, -1 means unlimited,
+          absent means DefaultPageSize)
         in: query
         maximum: 1000
         minimum: -1
@@ -4467,7 +4487,8 @@ paths:
         required: true
         type: integer
       - default: 5
-        description: Amount items per page (min -1, max 1000, -1 means unlimited)
+        description: Amount items per page (min -1, max 1000, -1 means unlimited,
+          absent means DefaultPageSize)
         in: query
         maximum: 1000
         minimum: -1
@@ -4607,7 +4628,8 @@ paths:
         required: true
         type: integer
       - default: 5
-        description: Amount items per page (min -1, max 1000, -1 means unlimited)
+        description: Amount items per page (min -1, max 1000, -1 means unlimited,
+          absent means DefaultPageSize)
         in: query
         maximum: 1000
         minimum: -1
@@ -4697,7 +4719,8 @@ paths:
         required: true
         type: integer
       - default: 5
-        description: Amount items per page (min -1, max 1000, -1 means unlimited)
+        description: Amount items per page (min -1, max 1000, -1 means unlimited,
+          absent means DefaultPageSize)
         in: query
         maximum: 1000
         minimum: -1
@@ -4879,7 +4902,8 @@ paths:
         required: true
         type: integer
       - default: 5
-        description: Amount items per page (min -1, max 1000, -1 means unlimited)
+        description: Amount items per page (min -1, max 1000, -1 means unlimited,
+          absent means DefaultPageSize)
         in: query
         maximum: 1000
         minimum: -1
@@ -5002,6 +5026,10 @@ paths:
           description: internal error on getting information about system and config
           schema:
             $ref: '#/definitions/ErrorResponse'
+        "503":
+          description: the session could not be checked right now
+          schema:
+            $ref: '#/definitions/ErrorResponse'
       security:
       - BearerAuth: []
       summary: Retrieve current user and system settings
@@ -5034,7 +5062,8 @@ paths:
         required: true
         type: integer
       - default: 5
-        description: Amount items per page (min -1, max 1000, -1 means unlimited)
+        description: Amount items per page (min -1, max 1000, -1 means unlimited,
+          absent means DefaultPageSize)
         in: query
         maximum: 1000
         minimum: -1
@@ -5329,7 +5358,8 @@ paths:
         required: true
         type: integer
       - default: 5
-        description: Amount items per page (min -1, max 1000, -1 means unlimited)
+        description: Amount items per page (min -1, max 1000, -1 means unlimited,
+          absent means DefaultPageSize)
         in: query
         maximum: 1000
         minimum: -1
@@ -5413,7 +5443,8 @@ paths:
         required: true
         type: integer
       - default: 5
-        description: Amount items per page (min -1, max 1000, -1 means unlimited)
+        description: Amount items per page (min -1, max 1000, -1 means unlimited,
+          absent means DefaultPageSize)
         in: query
         maximum: 1000
         minimum: -1
@@ -5882,6 +5913,17 @@ paths:
           type: string
         name: paths[]
         type: array
+      - description: resource id to download (may be combined with ids[])
+        in: query
+        name: id
+        type: integer
+      - collectionFormat: multi
+        description: additional resource ids to download (repeatable)
+        in: query
+        items:
+          type: integer
+        name: ids[]
+        type: array
       produces:
       - application/octet-stream
       - application/zip
@@ -5949,7 +5991,7 @@ paths:
             $ref: '#/definitions/ErrorResponse'
       security:
       - BearerAuth: []
-      summary: Create a virtual directory
+      summary: Create a virtual directory and any missing parents
       tags:
       - Resources
   /resources/move:
@@ -6027,7 +6069,8 @@ paths:
         required: true
         type: integer
       - default: 5
-        description: Amount items per page (min -1, max 1000, -1 means unlimited)
+        description: Amount items per page (min -1, max 1000, -1 means unlimited,
+          absent means DefaultPageSize)
         in: query
         maximum: 1000
         minimum: -1
@@ -6144,7 +6187,8 @@ paths:
         required: true
         type: integer
       - default: 5
-        description: Amount items per page (min -1, max 1000, -1 means unlimited)
+        description: Amount items per page (min -1, max 1000, -1 means unlimited,
+          absent means DefaultPageSize)
         in: query
         maximum: 1000
         minimum: -1
@@ -6228,7 +6272,8 @@ paths:
         required: true
         type: integer
       - default: 5
-        description: Amount items per page (min -1, max 1000, -1 means unlimited)
+        description: Amount items per page (min -1, max 1000, -1 means unlimited,
+          absent means DefaultPageSize)
         in: query
         maximum: 1000
         minimum: -1
@@ -6335,7 +6380,8 @@ paths:
         required: true
         type: integer
       - default: 5
-        description: Amount items per page (min -1, max 1000, -1 means unlimited)
+        description: Amount items per page (min -1, max 1000, -1 means unlimited,
+          absent means DefaultPageSize)
         in: query
         maximum: 1000
         minimum: -1
@@ -6591,7 +6637,8 @@ paths:
         required: true
         type: integer
       - default: 5
-        description: Amount items per page (min -1, max 1000, -1 means unlimited)
+        description: Amount items per page (min -1, max 1000, -1 means unlimited,
+          absent means DefaultPageSize)
         in: query
         maximum: 1000
         minimum: -1
@@ -6689,6 +6736,11 @@ paths:
         in: path
         name: period
         required: true
+        type: string
+      - default: UTC
+        description: IANA timezone name the day boundaries are cut in
+        in: query
+        name: timezone
         type: string
       produces:
       - application/json
@@ -6886,7 +6938,8 @@ paths:
         required: true
         type: integer
       - default: 5
-        description: Amount items per page (min -1, max 1000, -1 means unlimited)
+        description: Amount items per page (min -1, max 1000, -1 means unlimited,
+          absent means DefaultPageSize)
         in: query
         maximum: 1000
         minimum: -1
@@ -7121,7 +7174,8 @@ paths:
         required: true
         type: integer
       - default: 5
-        description: Amount items per page (min -1, max 1000, -1 means unlimited)
+        description: Amount items per page (min -1, max 1000, -1 means unlimited,
+          absent means DefaultPageSize)
         in: query
         maximum: 1000
         minimum: -1

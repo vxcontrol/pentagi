@@ -341,14 +341,16 @@ type MarkdownTokenizer = {
 // document, and @tiptap/extension-list's ordered/task tokenizers open with `src.split('\n')` before bailing
 // on a first line that isn't a list item — so each boundary materialises all remaining lines, O(n²).
 //
-// The gate is the tokenizer's OWN `start`, never a copy of its marker syntax: `start` is anchored and cheap,
-// and reusing it means the guard cannot drift narrower than the grammar upstream accepts. A non-zero result
-// says the block does not begin here, which is exactly when `tokenize` would have returned undefined anyway.
-const guardBlockTokenizer = <T extends AnyExtension>(extension: T): T => {
-    const original = (extension.config as { markdownTokenizer?: MarkdownTokenizer }).markdownTokenizer;
-    const start = original?.start;
+// The gate must stay WIDER than the marker grammar upstream accepts: narrower silently demotes a list to a
+// paragraph. Upstream's own `start` cannot serve as it — @tiptap/extension-list ships `start: () => -1` for
+// orderedList, which would gate the tokenizer off entirely.
+const OPENS_ORDERED_LIST = /^[ \t]*[0-9A-Za-z]{1,8}[.)][ \t]/;
+const OPENS_TASK_LIST = /^[ \t]*[-+*][ \t]+\[[ xX]\][ \t]/;
 
-    if (!original || !start) {
+const guardBlockTokenizer = <T extends AnyExtension>(extension: T, opens: RegExp): T => {
+    const original = (extension.config as { markdownTokenizer?: MarkdownTokenizer }).markdownTokenizer;
+
+    if (!original) {
         return extension;
     }
 
@@ -356,7 +358,7 @@ const guardBlockTokenizer = <T extends AnyExtension>(extension: T): T => {
         markdownTokenizer: {
             ...original,
             tokenize: (src: string, tokens: unknown[], lexer: unknown) =>
-                start(src) === 0 ? original.tokenize(src, tokens, lexer) : undefined,
+                opens.test(src) ? original.tokenize(src, tokens, lexer) : undefined,
         },
     }) as T;
 };
@@ -483,7 +485,11 @@ const TunedStarterKit = StarterKit.extend({
             }
 
             if (extension.name === 'orderedList') {
-                return withWholeDocumentToggle(guardBlockTokenizer(extension), 'toggleOrderedList', listFamily);
+                return withWholeDocumentToggle(
+                    guardBlockTokenizer(extension, OPENS_ORDERED_LIST),
+                    'toggleOrderedList',
+                    listFamily,
+                );
             }
 
             if (extension.name === 'bulletList') {
@@ -546,7 +552,7 @@ export const createMarkdownExtensions = (placeholder?: string) => [
     TableRow,
     TableHeader,
     TableCell,
-    withWholeDocumentToggle(guardBlockTokenizer(TaskList), 'toggleTaskList', listFamily),
+    withWholeDocumentToggle(guardBlockTokenizer(TaskList, OPENS_TASK_LIST), 'toggleTaskList', listFamily),
     TaskItem.configure({
         a11y: {
             checkboxLabel: (node) => `Task item checkbox for ${node.firstChild?.textContent || 'empty task item'}`,

@@ -90,7 +90,6 @@ func validateSearchOptions(opts *SearchOptions) error {
 	return nil
 }
 
-// ParseSearchArgs parses command line arguments specific for search
 func parseSearchArgs(args []string) (*SearchOptions, error) {
 	if len(args) == 0 {
 		return nil, fmt.Errorf("no arguments provided")

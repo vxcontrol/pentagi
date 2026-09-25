@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"slices"
 	"strconv"
@@ -44,6 +45,51 @@ type modelInfo struct {
 	Description         string       `json:"description,omitempty"`
 	SupportedParameters []string     `json:"supported_parameters,omitempty"`
 	Pricing             *pricingInfo `json:"pricing,omitempty"`
+	MaxInputTokens      tokenLimit   `json:"max_input_tokens,omitempty"`
+	MaxOutputTokens     tokenLimit   `json:"max_output_tokens,omitempty"`
+
+	// Servers that do not speak LiteLLM state the total context instead: vLLM and
+	// SGLang as max_model_len, Groq as context_window, OpenRouter as context_length.
+	MaxModelLen   tokenLimit `json:"max_model_len,omitempty"`
+	ContextWindow tokenLimit `json:"context_window,omitempty"`
+	ContextLength tokenLimit `json:"context_length,omitempty"`
+}
+
+// max_input_tokens wins where an entry states several: an input limit is never
+// looser than the total context beside it.
+func (m modelInfo) window() *int {
+	for _, limit := range []tokenLimit{m.MaxInputTokens, m.MaxModelLen, m.ContextWindow, m.ContextLength} {
+		if stated := limit.stated(); stated != nil {
+			return stated
+		}
+	}
+
+	return nil
+}
+
+// tokenLimit reads a limit stated as a number in 1..MaxInt32. Anything else reads
+// as unstated instead of failing the whole listing, which would drop every model
+// back to the ID-only parse.
+type tokenLimit int
+
+func (l *tokenLimit) UnmarshalJSON(data []byte) error {
+	var value float64
+	if json.Unmarshal(data, &value) != nil || value < 1 || value > math.MaxInt32 {
+		*l = 0
+		return nil
+	}
+
+	*l = tokenLimit(value)
+	return nil
+}
+
+func (l tokenLimit) stated() *int {
+	if l <= 0 {
+		return nil
+	}
+
+	value := int(l)
+	return &value
 }
 
 // fallbackModelInfo represents simplified model structure for fallback parsing
@@ -116,6 +162,7 @@ func LoadModelsFromHTTP(baseURL, apiKey string, httpClient *http.Client, prefix 
 // parseFallbackModels parses simplified model structure with prefix filtering
 func parseFallbackModels(models []fallbackModelInfo, prefix string) pconfig.ModelsConfig {
 	var result pconfig.ModelsConfig
+	seen := make(map[string]struct{}, len(models))
 
 	for _, model := range models {
 		// Filter by prefix if set
@@ -128,6 +175,11 @@ func parseFallbackModels(models []fallbackModelInfo, prefix string) pconfig.Mode
 		if prefix != "" {
 			modelName = strings.TrimPrefix(model.ID, prefix+"/")
 		}
+
+		if _, duplicate := seen[modelName]; duplicate {
+			continue
+		}
+		seen[modelName] = struct{}{}
 
 		result = append(result, pconfig.ModelConfig{
 			Name: modelName,
@@ -140,6 +192,7 @@ func parseFallbackModels(models []fallbackModelInfo, prefix string) pconfig.Mode
 // parseFullModels parses full model structure with all metadata and prefix filtering
 func parseFullModels(models []modelInfo, prefix string) pconfig.ModelsConfig {
 	var result pconfig.ModelsConfig
+	seen := make(map[string]int, len(models))
 
 	for _, model := range models {
 		// Filter by prefix if set
@@ -151,6 +204,28 @@ func parseFullModels(models []modelInfo, prefix string) pconfig.ModelsConfig {
 		modelName := model.ID
 		if prefix != "" {
 			modelName = strings.TrimPrefix(model.ID, prefix+"/")
+		}
+
+		if len(model.SupportedParameters) > 0 {
+			hasTools := slices.Contains(model.SupportedParameters, "tools")
+			hasStructuredOutputs := slices.Contains(model.SupportedParameters, "structured_outputs")
+			if !hasTools && !hasStructuredOutputs {
+				continue
+			}
+		}
+
+		if at, duplicate := seen[modelName]; duplicate {
+			if len(model.SupportedParameters) > 0 {
+				reasons := slices.Contains(model.SupportedParameters, "reasoning")
+				if reasons || result[at].Thinking == nil {
+					result[at].Thinking = &reasons
+				}
+			}
+
+			result[at].ContextWindow = tighterLimit(result[at].ContextWindow, model.window())
+			result[at].MaxOutputTokens = tighterLimit(result[at].MaxOutputTokens, model.MaxOutputTokens.stated())
+
+			continue
 		}
 
 		modelConfig := pconfig.ModelConfig{
@@ -174,15 +249,6 @@ func parseFullModels(models []modelInfo, prefix string) pconfig.ModelsConfig {
 			modelConfig.Thinking = &thinking
 		}
 
-		// Check for tool support - skip models without tool/structured output support
-		if len(model.SupportedParameters) > 0 {
-			hasTools := slices.Contains(model.SupportedParameters, "tools")
-			hasStructuredOutputs := slices.Contains(model.SupportedParameters, "structured_outputs")
-			if !hasTools && !hasStructuredOutputs {
-				continue
-			}
-		}
-
 		// Parse pricing if available
 		if model.Pricing != nil {
 			if input, err := strconv.ParseFloat(model.Pricing.Prompt, 64); err == nil {
@@ -201,8 +267,25 @@ func parseFullModels(models []modelInfo, prefix string) pconfig.ModelsConfig {
 			}
 		}
 
+		modelConfig.ContextWindow = model.window()
+		modelConfig.MaxOutputTokens = model.MaxOutputTokens.stated()
+
+		seen[modelName] = len(result)
+
 		result = append(result, modelConfig)
 	}
 
 	return result
+}
+
+func tighterLimit(kept, stated *int) *int {
+	if stated == nil {
+		return kept
+	}
+
+	if kept == nil || *stated < *kept {
+		return stated
+	}
+
+	return kept
 }

@@ -52,9 +52,10 @@ models:
   # JSON field mapping to RawMessage
   JSON:
     model:
+      - github.com/99designs/gqlgen/graphql.Map
       - encoding/json.RawMessage
-  
-  # Reuse existing Go types for input objects (avoids duplication)
+
+  # Input types for avoiding types duplication
   ReasoningConfigInput:
     model: pentagi/pkg/graph/model.ReasoningConfig
   ModelPriceInput:

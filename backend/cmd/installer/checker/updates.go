@@ -368,7 +368,7 @@ func buildStackUpdate(update models.UpdateInfo, installed map[string]installedAr
 		CurrentVersion:      derefString(update.CurrentVersion),
 		CurrentVersionMixed: update.CurrentVersionMixed,
 		LatestVersion:       derefString(update.LatestVersion),
-		Changelog:           derefString(update.Changelog),
+		Changelog:           derefString(update.Changelog), //nolint:staticcheck
 		ReleaseNotes:        derefString(update.ReleaseNotes),
 		ReleasesTruncated:   update.ReleasesTruncated,
 		Resolution:          string(update.Resolution),
@@ -563,15 +563,6 @@ func derefString(value *string) string {
 		return ""
 	}
 	return *value
-}
-
-func firstNonEmpty(values ...string) string {
-	for _, value := range values {
-		if value != "" {
-			return value
-		}
-	}
-	return ""
 }
 
 // stackStatuses says how each product stack is deployed on this machine.

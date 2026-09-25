@@ -1,6 +1,8 @@
 package models
 
 import (
+	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -8,233 +10,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestUserStatusValid(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name    string
-		status  UserStatus
-		wantErr bool
-	}{
-		{"valid created", UserStatusCreated, false},
-		{"valid active", UserStatusActive, false},
-		{"valid blocked", UserStatusBlocked, false},
-		{"invalid empty", UserStatus(""), true},
-		{"invalid unknown", UserStatus("unknown"), true},
-		{"invalid suspended", UserStatus("suspended"), true},
-	}
-
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			err := tt.status.Valid()
-			if tt.wantErr {
-				assert.Error(t, err)
-				assert.Contains(t, err.Error(), "invalid UserStatus")
-			} else {
-				assert.NoError(t, err)
-			}
-		})
-	}
-}
-
-func TestUserStatusString(t *testing.T) {
-	t.Parallel()
-
-	assert.Equal(t, "created", UserStatusCreated.String())
-	assert.Equal(t, "active", UserStatusActive.String())
-	assert.Equal(t, "blocked", UserStatusBlocked.String())
-}
-
-func TestUserTypeValid(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name     string
-		userType UserType
-		wantErr  bool
-	}{
-		{"valid local", UserTypeLocal, false},
-		{"valid oauth", UserTypeOAuth, false},
-		{"valid api", UserTypeAPI, false},
-		{"invalid empty", UserType(""), true},
-		{"invalid unknown", UserType("unknown"), true},
-		{"invalid saml", UserType("saml"), true},
-	}
-
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			err := tt.userType.Valid()
-			if tt.wantErr {
-				assert.Error(t, err)
-				assert.Contains(t, err.Error(), "invalid UserType")
-			} else {
-				assert.NoError(t, err)
-			}
-		})
-	}
-}
-
-func TestUserTypeString(t *testing.T) {
-	t.Parallel()
-
-	assert.Equal(t, "local", UserTypeLocal.String())
-	assert.Equal(t, "oauth", UserTypeOAuth.String())
-	assert.Equal(t, "api", UserTypeAPI.String())
-}
-
-func TestLoginValid(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name    string
-		login   Login
-		wantErr bool
-	}{
-		{
-			name:    "valid login",
-			login:   Login{Mail: "test@example.com", Password: "password123"},
-			wantErr: false,
-		},
-		{
-			name:    "valid admin mail",
-			login:   Login{Mail: "admin", Password: "password123"},
-			wantErr: false,
-		},
-		{
-			name:    "empty mail",
-			login:   Login{Mail: "", Password: "password123"},
-			wantErr: true,
-		},
-		{
-			name:    "empty password",
-			login:   Login{Mail: "test@example.com", Password: ""},
-			wantErr: true,
-		},
-		{
-			name:    "password too short",
-			login:   Login{Mail: "test@example.com", Password: "ab"},
-			wantErr: true,
-		},
-	}
-
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			err := tt.login.Valid()
-			if tt.wantErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-			}
-		})
-	}
-}
-
-func TestPasswordValid(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name    string
-		pw      Password
-		wantErr bool
-	}{
-		{
-			name: "valid strong password with special chars",
-			pw: Password{
-				CurrentPassword: "OldPass1!abc",
-				Password:        "NewPass1!abc",
-				ConfirmPassword: "NewPass1!abc",
-			},
-			wantErr: false,
-		},
-		{
-			name: "valid long password over 15 chars",
-			pw: Password{
-				CurrentPassword: "oldpasswordvalue",
-				Password:        "newpasswordvalue1",
-				ConfirmPassword: "newpasswordvalue1",
-			},
-			wantErr: false,
-		},
-		{
-			name: "confirm password mismatch",
-			pw: Password{
-				CurrentPassword: "OldPass1!abc",
-				Password:        "NewPass1!abc",
-				ConfirmPassword: "DifferentPass1!",
-			},
-			wantErr: true,
-		},
-		{
-			name: "current equals new password",
-			pw: Password{
-				CurrentPassword: "SamePass1!abc",
-				Password:        "SamePass1!abc",
-				ConfirmPassword: "SamePass1!abc",
-			},
-			wantErr: true,
-		},
-		{
-			name: "weak password no special chars",
-			pw: Password{
-				CurrentPassword: "OldPass1!abc",
-				Password:        "newpass1",
-				ConfirmPassword: "newpass1",
-			},
-			wantErr: true,
-		},
-		{
-			name: "empty current password",
-			pw: Password{
-				CurrentPassword: "",
-				Password:        "NewPass1!abc",
-				ConfirmPassword: "NewPass1!abc",
-			},
-			wantErr: true,
-		},
-		{
-			name: "new password at the bcrypt limit",
-			pw: Password{
-				CurrentPassword: "OldPass1!abc",
-				Password:        strings.Repeat("a", MaxPasswordBytes),
-				ConfirmPassword: strings.Repeat("a", MaxPasswordBytes),
-			},
-			wantErr: false,
-		},
-		{
-			name: "new password over the bcrypt limit",
-			pw: Password{
-				CurrentPassword: "OldPass1!abc",
-				Password:        strings.Repeat("a", MaxPasswordBytes+1),
-				ConfirmPassword: strings.Repeat("a", MaxPasswordBytes+1),
-			},
-			wantErr: true,
-		},
-	}
-
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			err := tt.pw.Valid()
-			if tt.wantErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-			}
-		})
-	}
-}
-
-func TestUserValid(t *testing.T) {
-	t.Parallel()
-
-	validUser := User{
+func usersUser() User {
+	return User{
 		ID:     1,
 		Hash:   "abcdef1234567890abcdef1234567890",
 		Type:   UserTypeLocal,
@@ -242,386 +19,177 @@ func TestUserValid(t *testing.T) {
 		Status: UserStatusActive,
 		RoleID: RoleUser,
 	}
+}
 
-	t.Run("valid user", func(t *testing.T) {
-		t.Parallel()
-		assert.NoError(t, validUser.Valid())
-	})
+// Rows are keyed by the type whose Valid they call.
+func TestUsers_Valid_RefusesExactlyTheInvalidField(t *testing.T) {
+	t.Parallel()
 
-	t.Run("missing mail", func(t *testing.T) {
-		t.Parallel()
-		u := validUser
-		u.Mail = ""
-		assert.Error(t, u.Valid())
-	})
+	withoutMail := modelsWith(usersUser(), func(u *User) { u.Mail = "" })
+	admin := Role{ID: 1, Name: "admin"}
+	read := []Privilege{{Name: "read"}}
 
-	t.Run("invalid user type", func(t *testing.T) {
-		t.Parallel()
-		u := validUser
-		u.Type = UserType("invalid")
-		assert.Error(t, u.Valid())
-	})
+	modelsCheckValid(t, []modelsValidCase{
+		{"a created user status", UserStatusCreated, ""},
+		{"an active user status", UserStatusActive, ""},
+		{"a blocked user status", UserStatusBlocked, ""},
+		{"an empty user status", UserStatus(""), "invalid UserStatus: "},
+		{"an unknown user status", UserStatus("unknown"), "invalid UserStatus: unknown"},
 
-	t.Run("invalid user status", func(t *testing.T) {
-		t.Parallel()
-		u := validUser
-		u.Status = UserStatus("invalid")
-		assert.Error(t, u.Valid())
-	})
+		{"a local user type", UserTypeLocal, ""},
+		{"an oauth user type", UserTypeOAuth, ""},
+		{"an api user type", UserTypeAPI, ""},
+		{"an empty user type", UserType(""), "invalid UserType: "},
+		{"an unknown user type", UserType("saml"), "invalid UserType: saml"},
 
-	t.Run("invalid hash length", func(t *testing.T) {
-		t.Parallel()
-		u := validUser
-		u.Hash = "tooshort"
-		assert.Error(t, u.Valid())
+		{"a complete user", usersUser(), ""},
+		{"a user without a mail", withoutMail, "User.Mail:vmail"},
+		{"a user of an unknown type", modelsWith(usersUser(), func(u *User) { u.Type = "invalid" }), "User.Type:valid"},
+		{"a user in an unknown status", modelsWith(usersUser(), func(u *User) { u.Status = "invalid" }), "User.Status:valid"},
+		{"a user with a short hash", modelsWith(usersUser(), func(u *User) { u.Hash = "tooshort" }), "User.Hash:len"},
+
+		{"a user with a strong password", UserPassword{Password: "SecurePass123!", User: usersUser()}, ""},
+		{"a user with no password", UserPassword{User: usersUser()}, "UserPassword.Password:stpass"},
+		{"an invalid user behind a strong password", UserPassword{Password: "SecurePass123!", User: withoutMail}, "User.Mail:vmail"},
+		{"a user password at the bcrypt limit", UserPassword{Password: strings.Repeat("a", MaxPasswordBytes), User: usersUser()}, ""},
+		{"a user password over the bcrypt limit", UserPassword{Password: strings.Repeat("a", MaxPasswordBytes+1), User: usersUser()},
+			"UserPassword.Password:passlen"},
+		{"a weak user password", UserPassword{Password: "somepassword", User: usersUser()}, "UserPassword.Password:stpass"},
+		{"a multibyte user password within the rune count but over the byte limit",
+			UserPassword{Password: strings.Repeat("é", 40), User: usersUser()}, "UserPassword.Password:passlen"},
+
+		{"a login with a mail", Login{Mail: "test@example.com", Password: "password123"}, ""},
+		{"a login as admin", Login{Mail: "admin", Password: "password123"}, ""},
+		{"a login without a mail", Login{Password: "password123"}, "Login.Mail:required"},
+		{"a login without a password", Login{Mail: "test@example.com"}, "Login.Password:min"},
+		{"a login with a password under four characters", Login{Mail: "test@example.com", Password: "abc"}, "Login.Password:min"},
+
+		{"a strong new password", Password{CurrentPassword: "OldPass1!abc", Password: "NewPass1!abc", ConfirmPassword: "NewPass1!abc"}, ""},
+		{"a long new password", Password{CurrentPassword: "oldpasswordvalue", Password: "newpasswordvalue1",
+			ConfirmPassword: "newpasswordvalue1"}, ""},
+		{"a confirmation that differs", Password{CurrentPassword: "OldPass1!abc", Password: "NewPass1!abc",
+			ConfirmPassword: "DifferentPass1!"}, "Password.ConfirmPassword:eqfield"},
+		{"a new password equal to the current one", Password{CurrentPassword: "SamePass1!abc", Password: "SamePass1!abc",
+			ConfirmPassword: "SamePass1!abc"}, "Password.CurrentPassword:nefield"},
+		{"a weak new password", Password{CurrentPassword: "OldPass1!abc", Password: "newpass1", ConfirmPassword: "newpass1"},
+			"Password.Password:stpass"},
+		{"no current password", Password{Password: "NewPass1!abc", ConfirmPassword: "NewPass1!abc"}, "Password.CurrentPassword:min"},
+		{"a new password at the bcrypt limit", Password{CurrentPassword: "OldPass1!abc", Password: strings.Repeat("a", MaxPasswordBytes),
+			ConfirmPassword: strings.Repeat("a", MaxPasswordBytes)}, ""},
+		{"a new password over the bcrypt limit", Password{CurrentPassword: "OldPass1!abc", Password: strings.Repeat("a", MaxPasswordBytes+1),
+			ConfirmPassword: strings.Repeat("a", MaxPasswordBytes+1)}, "Password.Password:passlen"},
+
+		{"a complete oauth callback", AuthCallback{Code: "auth-code-123", IdToken: modelsJWT, Scope: "openid email profile",
+			State: "random-state-value"}, ""},
+		{"an oauth callback without a code", AuthCallback{IdToken: modelsJWT, Scope: "openid email", State: "state123"},
+			"AuthCallback.Code:required"},
+		{"an oauth callback without the openid scope", AuthCallback{Code: "code123", IdToken: modelsJWT, Scope: "email profile",
+			State: "state123"}, "AuthCallback.Scope:oauth_min_scope"},
+		{"an oauth callback whose id token is not a jwt", AuthCallback{Code: "code123", IdToken: "not-a-jwt", Scope: "openid email",
+			State: "state123"}, "AuthCallback.IdToken:jwt"},
+
+		{"a user with a role", UserRole{Role: admin, User: usersUser()}, ""},
+		{"a user with an unnamed role", UserRole{Role: Role{}, User: usersUser()}, "Role.Name:required"},
+		{"a role on an invalid user", UserRole{Role: admin, User: withoutMail}, "User.Mail:vmail"},
+
+		{"a user with role privileges", UserRolePrivileges{Role: RolePrivileges{Privileges: read, Role: admin}, User: usersUser()}, ""},
+		{"a user with an unnamed privilege", UserRolePrivileges{Role: RolePrivileges{Privileges: []Privilege{{}}, Role: admin},
+			User: usersUser()}, "Privilege.Name:required"},
+		{"role privileges on an invalid user", UserRolePrivileges{Role: RolePrivileges{Privileges: read, Role: admin},
+			User: withoutMail}, "User.Mail:vmail"},
+
+		{"preferences of a user", UserPreferences{UserID: 1}, ""},
+		{"preferences of no user", UserPreferences{}, "user_id is required"},
 	})
 }
 
-func TestUserTableName(t *testing.T) {
+func TestUsers_String_SpellsTheStoredValue(t *testing.T) {
 	t.Parallel()
-	u := &User{}
-	assert.Equal(t, "users", u.TableName())
-}
-
-func TestUserPasswordValid(t *testing.T) {
-	t.Parallel()
-
-	t.Run("valid user password", func(t *testing.T) {
-		t.Parallel()
-		up := UserPassword{
-			Password: "somepassword",
-			User: User{
-				ID:     1,
-				Hash:   "abcdef1234567890abcdef1234567890",
-				Type:   UserTypeLocal,
-				Mail:   "test@example.com",
-				Status: UserStatusActive,
-				RoleID: RoleUser,
-			},
-		}
-		assert.NoError(t, up.Valid())
-	})
-
-	t.Run("empty password", func(t *testing.T) {
-		t.Parallel()
-		up := UserPassword{
-			Password: "",
-			User: User{
-				ID:     1,
-				Hash:   "abcdef1234567890abcdef1234567890",
-				Type:   UserTypeLocal,
-				Mail:   "test@example.com",
-				Status: UserStatusActive,
-				RoleID: RoleUser,
-			},
-		}
-		assert.Error(t, up.Valid())
-	})
-
-	t.Run("invalid user in user password", func(t *testing.T) {
-		t.Parallel()
-		up := UserPassword{
-			Password: "somepassword",
-			User: User{
-				Mail: "",
-			},
-		}
-		assert.Error(t, up.Valid())
-	})
 
 	for _, tc := range []struct {
-		name    string
-		length  int
-		wantErr bool
+		value fmt.Stringer
+		want  string
 	}{
-		{name: "password at the bcrypt limit", length: MaxPasswordBytes, wantErr: false},
-		{name: "password over the bcrypt limit", length: MaxPasswordBytes + 1, wantErr: true},
+		{UserStatusCreated, "created"},
+		{UserStatusActive, "active"},
+		{UserStatusBlocked, "blocked"},
+		{UserTypeLocal, "local"},
+		{UserTypeOAuth, "oauth"},
+		{UserTypeAPI, "api"},
 	} {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			up := UserPassword{
-				Password: strings.Repeat("a", tc.length),
-				User: User{
-					ID:     1,
-					Hash:   "abcdef1234567890abcdef1234567890",
-					Type:   UserTypeLocal,
-					Mail:   "test@example.com",
-					Status: UserStatusActive,
-					RoleID: RoleUser,
-				},
-			}
-			if tc.wantErr {
-				assert.Error(t, up.Valid())
-			} else {
-				assert.NoError(t, up.Valid())
-			}
-		})
+		assert.Equal(t, tc.want, tc.value.String())
 	}
+}
 
-	t.Run("multibyte password within the rune count but over the byte limit", func(t *testing.T) {
+func TestUsers_TableName_NamesTheMappedTable(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		model modelsTabled
+		want  string
+	}{
+		{&User{}, "users"},
+		{&UserPassword{}, "users"},
+		{&Login{}, "users"},
+		{&Password{}, "users"},
+		{&UserPreferences{}, "user_preferences"},
+	} {
+		assert.Equal(t, tc.want, tc.model.TableName(), "%T", tc.model)
+	}
+}
+
+func TestUsers_UserPreferencesOptions_StoresAndLoadsTheFavouriteFlows(t *testing.T) {
+	t.Parallel()
+
+	t.Run("a stored list loads back", func(t *testing.T) {
 		t.Parallel()
-		up := UserPassword{
-			// 40 runes, 80 bytes: a rune-counting `max=72` would let this through.
-			Password: strings.Repeat("é", 40),
-			User: User{
-				ID:     1,
-				Hash:   "abcdef1234567890abcdef1234567890",
-				Type:   UserTypeLocal,
-				Mail:   "test@example.com",
-				Status: UserStatusActive,
-				RoleID: RoleUser,
-			},
-		}
-		assert.Error(t, up.Valid())
-	})
-}
 
-func TestUserPasswordTableName(t *testing.T) {
-	t.Parallel()
-	up := &UserPassword{}
-	assert.Equal(t, "users", up.TableName())
-}
-
-func TestLoginTableName(t *testing.T) {
-	t.Parallel()
-	l := &Login{}
-	assert.Equal(t, "users", l.TableName())
-}
-
-func TestPasswordTableName(t *testing.T) {
-	t.Parallel()
-	p := &Password{}
-	assert.Equal(t, "users", p.TableName())
-}
-
-func TestUserPreferencesOptionsValueScan(t *testing.T) {
-	t.Parallel()
-
-	t.Run("value and scan round trip", func(t *testing.T) {
-		t.Parallel()
-		original := UserPreferencesOptions{FavoriteFlows: []int64{1, 2, 3}}
-		val, err := original.Value()
+		stored, err := UserPreferencesOptions{FavoriteFlows: []int64{1, 2, 3}}.Value()
 		require.NoError(t, err)
+		assert.JSONEq(t, `{"favoriteFlows":[1,2,3]}`, fmt.Sprintf("%s", stored))
 
-		var scanned UserPreferencesOptions
-		switch v := val.(type) {
-		case string:
-			err = scanned.Scan([]byte(v))
-		case []byte:
-			err = scanned.Scan(v)
-		default:
-			t.Fatalf("unexpected Value() type: %T", val)
-		}
+		var loaded UserPreferencesOptions
+		require.NoError(t, loaded.Scan([]byte(fmt.Sprintf("%s", stored))))
+		assert.Equal(t, []int64{1, 2, 3}, loaded.FavoriteFlows)
+	})
+
+	t.Run("an empty list is stored under its key", func(t *testing.T) {
+		t.Parallel()
+
+		stored, err := UserPreferencesOptions{FavoriteFlows: []int64{}}.Value()
 		require.NoError(t, err)
-		assert.Equal(t, original.FavoriteFlows, scanned.FavoriteFlows)
+		assert.JSONEq(t, `{"favoriteFlows":[]}`, fmt.Sprintf("%s", stored))
 	})
 
-	t.Run("scan nil value", func(t *testing.T) {
+	t.Run("a null column loads as an empty list", func(t *testing.T) {
 		t.Parallel()
-		var upo UserPreferencesOptions
-		err := upo.Scan(nil)
-		require.NoError(t, err)
-		assert.Equal(t, []int64{}, upo.FavoriteFlows)
+
+		var loaded UserPreferencesOptions
+		require.NoError(t, loaded.Scan(nil))
+		assert.Equal(t, []int64{}, loaded.FavoriteFlows)
 	})
 
-	t.Run("scan unsupported type", func(t *testing.T) {
+	t.Run("a column that is not bytes is refused", func(t *testing.T) {
 		t.Parallel()
-		var upo UserPreferencesOptions
-		err := upo.Scan(12345)
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "expected []byte")
+
+		var loaded UserPreferencesOptions
+		assert.EqualError(t, loaded.Scan(12345), "failed to scan UserPreferencesOptions: expected []byte, got int")
 	})
 
-	t.Run("scan invalid json", func(t *testing.T) {
+	t.Run("a column that is not JSON is refused", func(t *testing.T) {
 		t.Parallel()
-		var upo UserPreferencesOptions
-		err := upo.Scan([]byte("not json"))
-		assert.Error(t, err)
-	})
 
-	t.Run("value with empty flows", func(t *testing.T) {
-		t.Parallel()
-		upo := UserPreferencesOptions{FavoriteFlows: []int64{}}
-		val, err := upo.Value()
-		require.NoError(t, err)
-		var valStr string
-		switch v := val.(type) {
-		case string:
-			valStr = v
-		case []byte:
-			valStr = string(v)
-		}
-		assert.Contains(t, valStr, "favoriteFlows")
+		var loaded UserPreferencesOptions
+		var syntax *json.SyntaxError
+		assert.ErrorAs(t, loaded.Scan([]byte("not json")), &syntax)
 	})
 }
 
-func TestUserPreferencesValid(t *testing.T) {
-	t.Parallel()
-
-	t.Run("valid preferences", func(t *testing.T) {
-		t.Parallel()
-		up := UserPreferences{UserID: 1}
-		assert.NoError(t, up.Valid())
-	})
-
-	t.Run("zero user id", func(t *testing.T) {
-		t.Parallel()
-		up := UserPreferences{UserID: 0}
-		err := up.Valid()
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "user_id")
-	})
-}
-
-func TestUserPreferencesTableName(t *testing.T) {
-	t.Parallel()
-	up := &UserPreferences{}
-	assert.Equal(t, "user_preferences", up.TableName())
-}
-
-func TestNewUserPreferences(t *testing.T) {
+func TestUsers_NewUserPreferences_StartsWithNoFavouriteFlows(t *testing.T) {
 	t.Parallel()
 
 	up := NewUserPreferences(42)
+
 	assert.Equal(t, uint64(42), up.UserID)
-	assert.NotNil(t, up.Preferences.FavoriteFlows)
-	assert.Empty(t, up.Preferences.FavoriteFlows)
-}
-
-func TestAuthCallbackValid(t *testing.T) {
-	t.Parallel()
-
-	// JWT token with 3 dot-separated base64 segments (header.payload.signature)
-	validJWT := "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.POstGetfAytaZS82wHcjoTyoqhMyxXiWdR7Nn7A29DNSl0EiXLdwJ6xC6AfgZWF1bOsS_TuYI3OG85AmiExREkrS6tDfTQ2B3WXlrr-wp5AokiRbz3_oB4OxG-W9KcEEbDRcZc0nH3L7LzYptiy1PtAylQGxHTWZXtGz4ht0bAecBgmpdgXMguEIcoqPJ1n3pIWk_dUZegpqx0Lka21H6XxUTxiy8OcaarA8zdnPUnV6AmNP3ecFawIFYdvJB_cm-GvpCSbr8G8y_Mllj8f4x9nBH8pQux89_6gUY618iYv7tuPWBFfEbLxtF2pZS6YC1aSfLQxaOoaBSTNRg"
-
-	t.Run("valid callback", func(t *testing.T) {
-		t.Parallel()
-		ac := AuthCallback{
-			Code:    "auth-code-123",
-			IdToken: validJWT,
-			Scope:   "openid email profile",
-			State:   "random-state-value",
-		}
-		assert.NoError(t, ac.Valid())
-	})
-
-	t.Run("missing code", func(t *testing.T) {
-		t.Parallel()
-		ac := AuthCallback{
-			Code:    "",
-			IdToken: validJWT,
-			Scope:   "openid email",
-			State:   "state123",
-		}
-		assert.Error(t, ac.Valid())
-	})
-
-	t.Run("scope missing openid", func(t *testing.T) {
-		t.Parallel()
-		ac := AuthCallback{
-			Code:    "code123",
-			IdToken: validJWT,
-			Scope:   "email profile",
-			State:   "state123",
-		}
-		assert.Error(t, ac.Valid())
-	})
-
-	t.Run("invalid id token not jwt", func(t *testing.T) {
-		t.Parallel()
-		ac := AuthCallback{
-			Code:    "code123",
-			IdToken: "not-a-jwt",
-			Scope:   "openid email",
-			State:   "state123",
-		}
-		assert.Error(t, ac.Valid())
-	})
-}
-
-func TestUserRoleValid(t *testing.T) {
-	t.Parallel()
-
-	validUserForRole := User{
-		Hash:   "abcdef1234567890abcdef1234567890",
-		Type:   UserTypeLocal,
-		Mail:   "test@example.com",
-		Status: UserStatusActive,
-		RoleID: RoleUser,
-	}
-
-	t.Run("valid user role", func(t *testing.T) {
-		t.Parallel()
-		ur := UserRole{
-			Role: Role{ID: 1, Name: "admin"},
-			User: validUserForRole,
-		}
-		assert.NoError(t, ur.Valid())
-	})
-
-	t.Run("invalid role", func(t *testing.T) {
-		t.Parallel()
-		ur := UserRole{
-			Role: Role{Name: ""},
-			User: validUserForRole,
-		}
-		assert.Error(t, ur.Valid())
-	})
-
-	t.Run("invalid user", func(t *testing.T) {
-		t.Parallel()
-		ur := UserRole{
-			Role: Role{ID: 1, Name: "admin"},
-			User: User{Mail: ""},
-		}
-		assert.Error(t, ur.Valid())
-	})
-}
-
-func TestUserRolePrivilegesValid(t *testing.T) {
-	t.Parallel()
-
-	validUserForRole := User{
-		Hash:   "abcdef1234567890abcdef1234567890",
-		Type:   UserTypeLocal,
-		Mail:   "test@example.com",
-		Status: UserStatusActive,
-		RoleID: RoleUser,
-	}
-
-	t.Run("valid user role privileges", func(t *testing.T) {
-		t.Parallel()
-		urp := UserRolePrivileges{
-			Role: RolePrivileges{
-				Privileges: []Privilege{{Name: "read"}},
-				Role:       Role{ID: 1, Name: "admin"},
-			},
-			User: validUserForRole,
-		}
-		assert.NoError(t, urp.Valid())
-	})
-
-	t.Run("invalid role privileges", func(t *testing.T) {
-		t.Parallel()
-		urp := UserRolePrivileges{
-			Role: RolePrivileges{
-				Privileges: []Privilege{{Name: ""}},
-				Role:       Role{ID: 1, Name: "admin"},
-			},
-			User: validUserForRole,
-		}
-		assert.Error(t, urp.Valid())
-	})
-
-	t.Run("invalid user", func(t *testing.T) {
-		t.Parallel()
-		urp := UserRolePrivileges{
-			Role: RolePrivileges{
-				Privileges: []Privilege{{Name: "read"}},
-				Role:       Role{ID: 1, Name: "admin"},
-			},
-			User: User{Mail: ""},
-		}
-		assert.Error(t, urp.Valid())
-	})
+	assert.Equal(t, []int64{}, up.Preferences.FavoriteFlows)
 }

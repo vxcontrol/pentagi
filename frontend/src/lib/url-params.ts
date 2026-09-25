@@ -58,3 +58,10 @@ export const mergeHrefWithSearchParams = (
 
     return `${url.pathname}${url.search}${url.hash}`;
 };
+
+/**
+ * The query string as the address bar has it, which is not always the snapshot the router handed
+ * this render: a navigation applied inside a transition reaches `window.location` first.
+ */
+export const getLatestSearchParams = (snapshot: URLSearchParams): URLSearchParams =>
+    typeof window === 'undefined' ? new URLSearchParams(snapshot) : new URLSearchParams(window.location.search);

@@ -5,7 +5,7 @@ FROM subtasks s
 INNER JOIN tasks t ON s.task_id = t.id
 INNER JOIN flows f ON t.flow_id = f.id
 WHERE t.flow_id = $1 AND f.deleted_at IS NULL
-ORDER BY s.created_at ASC;
+ORDER BY s.created_at ASC, s.id ASC;
 
 -- name: GetFlowTaskSubtasks :many
 SELECT
@@ -14,7 +14,7 @@ FROM subtasks s
 INNER JOIN tasks t ON s.task_id = t.id
 INNER JOIN flows f ON t.flow_id = f.id
 WHERE s.task_id = $1 AND t.flow_id = $2 AND f.deleted_at IS NULL
-ORDER BY s.created_at ASC;
+ORDER BY s.created_at ASC, s.id ASC;
 
 -- name: GetUserFlowSubtasks :many
 SELECT
@@ -24,7 +24,7 @@ INNER JOIN tasks t ON s.task_id = t.id
 INNER JOIN flows f ON t.flow_id = f.id
 INNER JOIN users u ON f.user_id = u.id
 WHERE t.flow_id = $1 AND f.user_id = $2 AND f.deleted_at IS NULL
-ORDER BY s.created_at ASC;
+ORDER BY s.created_at ASC, s.id ASC;
 
 -- name: GetUserFlowTaskSubtasks :many
 SELECT
@@ -34,7 +34,7 @@ INNER JOIN tasks t ON s.task_id = t.id
 INNER JOIN flows f ON t.flow_id = f.id
 INNER JOIN users u ON f.user_id = u.id
 WHERE s.task_id = $1 AND t.flow_id = $2 AND f.user_id = $3 AND f.deleted_at IS NULL
-ORDER BY s.created_at ASC;
+ORDER BY s.created_at ASC, s.id ASC;
 
 -- name: GetTaskSubtasks :many
 SELECT
@@ -43,7 +43,7 @@ FROM subtasks s
 INNER JOIN tasks t ON s.task_id = t.id
 INNER JOIN flows f ON t.flow_id = f.id
 WHERE s.task_id = $1 AND f.deleted_at IS NULL
-ORDER BY s.created_at DESC;
+ORDER BY s.created_at ASC, s.id ASC;
 
 -- name: GetTaskPlannedSubtasks :many
 SELECT

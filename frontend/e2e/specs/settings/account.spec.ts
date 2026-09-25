@@ -2,10 +2,13 @@ import type { Locator, Page } from '@playwright/test';
 
 import type { Cassette } from '../../mocks/cassette.ts';
 
-import { SEEDED_USER } from '../../fixtures/auth.ts';
+import { infoEntryFor, seedAuthenticatedAs, SEEDED_USER } from '../../fixtures/auth.ts';
 import { expect, test } from '../../fixtures/test.ts';
 import { expectCleanPage } from '../../helpers/errors.ts';
 import { baseQueries, baseRest } from '../../mocks/cassettes/base.ts';
+
+const GH_USER = { mail: 'gh@example.com', name: 'GH User', provider: 'github', type: 'oauth' } as const;
+const ANON_USER = { mail: 'x@example.com', name: 'X User', type: 'oauth' } as const;
 
 const CURRENT_PASSWORD = 'CurrentPass1!';
 // The server-side half of this boundary lives in specs/real/account-password.spec.ts.
@@ -50,6 +53,40 @@ test.describe('account settings', { tag: '@settings' }, () => {
             await expect(section(page, 'Password').getByText('••••••••••••')).toBeVisible();
 
             expectCleanPage(pageErrorLog);
+        });
+    });
+
+    test.describe('a federated account the record names', () => {
+        test.use({
+            cassette: accountCassette({
+                'GET /api/v1/info': [infoEntryFor(GH_USER)],
+            }),
+            isAuthSeeded: false,
+        });
+
+        test('names the provider in the badge and in the sentence beside the address', async ({ page }) => {
+            await seedAuthenticatedAs(page, GH_USER);
+            await page.goto('/settings/account');
+
+            await expect(page.getByText('GitHub', { exact: true })).toBeVisible();
+            await expect(page.getByText('Linked from your GitHub.')).toBeVisible();
+        });
+    });
+
+    test.describe('a federated account the record does not name', () => {
+        test.use({
+            cassette: accountCassette({
+                'GET /api/v1/info': [infoEntryFor(ANON_USER)],
+            }),
+            isAuthSeeded: false,
+        });
+
+        test('falls back to the kind of account, and the sentence still parses', async ({ page }) => {
+            await seedAuthenticatedAs(page, ANON_USER);
+            await page.goto('/settings/account');
+
+            await expect(page.getByText('OAuth account', { exact: true })).toBeVisible();
+            await expect(page.getByText('Linked from your OAuth account.')).toBeVisible();
         });
     });
 

@@ -41,7 +41,7 @@ export interface GraphQLCassetteEntry extends GraphQLPayload, WorldFlagged {
 
 export interface GraphQLPayload {
     data?: unknown;
-    errors?: Array<{ message: string }>;
+    errors?: Array<{ extensions?: Record<string, unknown>; message: string }>;
 }
 
 export interface RestCassetteEntry extends WorldFlagged {

@@ -2,695 +2,987 @@ package tools
 
 import (
 	"archive/tar"
-	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"io"
-	"net"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"pentagi/pkg/database"
 	"pentagi/pkg/docker"
-	"pentagi/pkg/flowfiles"
 
 	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/client"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-// contextTestTermLogProvider implements TermLogProvider for context tests.
-type contextTestTermLogProvider struct{}
-
-func (m *contextTestTermLogProvider) PutMsg(_ context.Context, _ database.TermlogType, _ string,
-	_ int64, _, _ *int64) (int64, error) {
-	return 1, nil
-}
-
-var _ TermLogProvider = (*contextTestTermLogProvider)(nil)
-
-// contextAwareMockDockerClient tracks whether the context was canceled
-// when getExecResult runs, proving context.WithoutCancel works. It also
-// records which of CopyFromContainer (read_file) / CopyToContainer
-// (write_file) was invoked, for tests asserting on the file-tool's
-// inferred/validated action.
-type contextAwareMockDockerClient struct {
-	isRunning      bool
-	execCreateResp client.ExecCreateResult
-	attachOutput   []byte
-	attachDelay    time.Duration
-	inspectResp    client.ExecInspectResult
-
-	// Set by ContainerExecAttach to track if ctx was canceled during attach
-	ctxWasCanceled bool
-
-	// Set by CopyFromContainer/CopyToContainer to track which file operation ran
-	copyFromCalled bool
-	copyToCalled   bool
-
-	// readFileContent, when non-empty, is what CopyFromContainer returns as
-	// the "current" file content (wrapped in a single-file tar archive) -
-	// used by EditFile tests that need to read-then-patch existing content.
-	readFileContent string
-	// writtenContent captures the last file content CopyToContainer received
-	// (unwrapped from its tar archive), so tests can assert on the result of
-	// an edit_file/write_file operation.
-	writtenContent string
-}
-
-func (m *contextAwareMockDockerClient) RunContainer(_ context.Context, _ string, _ database.ContainerType,
-	_ int64, _ *container.Config, _ *container.HostConfig) (database.Container, error) {
-	return database.Container{}, nil
-}
-func (m *contextAwareMockDockerClient) StopContainer(_ context.Context, _ string, _ int64) error {
-	return nil
-}
-func (m *contextAwareMockDockerClient) RemoveContainer(_ context.Context, _ string, _ int64) error {
-	return nil
-}
-func (m *contextAwareMockDockerClient) IsContainerRunning(_ context.Context, _ string) (bool, error) {
-	return m.isRunning, nil
-}
-func (m *contextAwareMockDockerClient) ContainerExecCreate(_ context.Context, _ string, _ client.ExecCreateOptions) (client.ExecCreateResult, error) {
-	return m.execCreateResp, nil
-}
-func (m *contextAwareMockDockerClient) ContainerExecAttach(ctx context.Context, _ string, _ client.ExecAttachOptions) (client.HijackedResponse, error) {
-	// Wait for the configured delay, simulating a long-running command
-	if m.attachDelay > 0 {
-		select {
-		case <-time.After(m.attachDelay):
-			// Command completed normally
-		case <-ctx.Done():
-			// Context was canceled -- this is the bug behavior (without WithoutCancel)
-			m.ctxWasCanceled = true
-			return client.HijackedResponse{}, ctx.Err()
-		}
-	}
-
-	// Check if context was already canceled by the time we get here
-	select {
-	case <-ctx.Done():
-		m.ctxWasCanceled = true
-		return client.HijackedResponse{}, ctx.Err()
-	default:
-	}
-
-	pr, pw := net.Pipe()
-	go func() {
-		pw.Write(m.attachOutput)
-		pw.Close()
-	}()
-
-	return client.HijackedResponse{
-		Conn:   pr,
-		Reader: bufio.NewReader(pr),
-	}, nil
-}
-func (m *contextAwareMockDockerClient) ContainerStatPath(_ context.Context, _ string, _ string) (container.PathStat, error) {
-	return container.PathStat{}, nil
-}
-func (m *contextAwareMockDockerClient) ListContainerDir(_ context.Context, _ string, _ string) (docker.ContainerDirListing, error) {
-	return docker.ContainerDirListing{}, nil
-}
-func (m *contextAwareMockDockerClient) ContainerExecInspect(_ context.Context, _ string) (client.ExecInspectResult, error) {
-	return m.inspectResp, nil
-}
-func (m *contextAwareMockDockerClient) CopyToContainer(_ context.Context, _ string, _ string, src io.Reader, _ client.CopyToContainerOptions) error {
-	m.copyToCalled = true
-
-	tarReader := tar.NewReader(src)
-	if hdr, err := tarReader.Next(); err == nil {
-		buf := make([]byte, hdr.Size)
-		_, _ = io.ReadFull(tarReader, buf)
-		m.writtenContent = string(buf)
-	}
-
-	return nil
-}
-func (m *contextAwareMockDockerClient) CopyFromContainer(_ context.Context, _ string, _ string) (io.ReadCloser, container.PathStat, error) {
-	m.copyFromCalled = true
-
-	if m.readFileContent == "" {
-		return io.NopCloser(bytes.NewReader(nil)), container.PathStat{}, nil
-	}
-
-	var tarBuffer bytes.Buffer
-	tarWriter := tar.NewWriter(&tarBuffer)
-	_ = tarWriter.WriteHeader(&tar.Header{
-		Name: "file",
-		Mode: 0600,
-		Size: int64(len(m.readFileContent)),
-	})
-	_, _ = tarWriter.Write([]byte(m.readFileContent))
-	_ = tarWriter.Close()
-
-	return io.NopCloser(&tarBuffer), container.PathStat{}, nil
-}
-func (m *contextAwareMockDockerClient) Cleanup(_ context.Context) error { return nil }
-func (m *contextAwareMockDockerClient) GetDefaultImage() string         { return "test-image" }
-
-var _ docker.DockerClient = (*contextAwareMockDockerClient)(nil)
-
-func TestExecCommandDetachSurvivesParentCancel(t *testing.T) {
-	// This test validates the fix for Issue #176:
-	// Detached commands must NOT be killed when the parent context is canceled.
-	//
-	// Before the fix: detached goroutine used parent ctx directly, so when the
-	// parent was canceled (e.g., agent delegation timeout), ctx.Done() fired
-	// in getExecResult and killed the background command.
-	//
-	// After the fix: context.WithoutCancel(ctx) creates an isolated context
-	// that preserves values but ignores parent cancellation.
-
-	mock := &contextAwareMockDockerClient{
-		isRunning:      true,
-		execCreateResp: client.ExecCreateResult{ID: "exec-cancel-test"},
-		attachOutput:   []byte("background result"),
-		attachDelay:    2 * time.Second, // simulates a long-running command
-		inspectResp:    client.ExecInspectResult{ExitCode: 0},
-	}
-
-	term := &terminal{
-		flowID:       1,
-		containerID:  1,
-		containerLID: "test-container",
-		dockerClient: mock,
-		tlp:          &contextTestTermLogProvider{},
-	}
-
-	// Create a cancellable parent context
-	parentCtx, cancel := context.WithCancel(t.Context())
-
-	// Start ExecCommand with detach=true (returns quickly due to quick check timeout)
-	output, err := term.ExecCommand(parentCtx, "/work", "long-running-scan", true, 5*time.Minute)
-	assert.NoError(t, err)
-	assert.Contains(t, output, "Command started in background")
-
-	// Cancel the parent context -- simulating agent delegation timeout
-	cancel()
-
-	// Wait enough time for the detached goroutine to complete its work.
-	// If context.WithoutCancel is working correctly, the goroutine should
-	// NOT see ctx.Done() and should complete normally after attachDelay.
-	// If the fix regresses, ctxWasCanceled will be true.
-	time.Sleep(3 * time.Second)
-
-	assert.False(t, mock.ctxWasCanceled,
-		"detached goroutine should NOT see parent context cancellation (context.WithoutCancel must be used)")
-}
-
-func TestExecCommandNonDetachRespectsParentCancel(t *testing.T) {
-	// Counterpart: non-detached commands SHOULD respect parent cancellation.
-	// This ensures we didn't accidentally apply WithoutCancel to the non-detach path.
-
-	mock := &contextAwareMockDockerClient{
-		isRunning:      true,
-		execCreateResp: client.ExecCreateResult{ID: "exec-nondetach-cancel"},
-		attachOutput:   []byte("should not complete"),
-		attachDelay:    5 * time.Second, // longer than cancel delay
-		inspectResp:    client.ExecInspectResult{ExitCode: 0},
-	}
-
-	term := &terminal{
-		flowID:       1,
-		containerID:  1,
-		containerLID: "test-container",
-		dockerClient: mock,
-		tlp:          &contextTestTermLogProvider{},
-	}
-
-	parentCtx, cancel := context.WithCancel(t.Context())
-
-	// Cancel after 200ms -- non-detached command should see this
-	go func() {
-		time.Sleep(200 * time.Millisecond)
-		cancel()
-	}()
-
-	_, err := term.ExecCommand(parentCtx, "/work", "long-command", false, 5*time.Minute)
-
-	// Non-detached command should fail with context error
-	assert.Error(t, err)
-	assert.True(t, mock.ctxWasCanceled,
-		"non-detached command SHOULD see parent context cancellation")
-}
-
-func TestTerminalHandle_FileAction_DefaultsToWriteFile_WhenContentPresent(t *testing.T) {
-	mock := &contextAwareMockDockerClient{isRunning: true}
-	term := &terminal{
-		flowID:       1,
-		containerID:  1,
-		containerLID: "test-container",
-		dockerClient: mock,
-		tlp:          &contextTestTermLogProvider{},
-	}
-
-	// No "action" field at all - mirrors the malformed tool calls observed in
-	// production logs (LLM omits the required 'action' when content+path make
-	// the intent unambiguous).
-	args := json.RawMessage(`{"path":"/work/test.py","content":"print(1)","message":"m"}`)
-	_, err := term.Handle(t.Context(), FileToolName, args)
-
-	if err != nil {
-		t.Fatalf("expected inferred write_file to succeed, got error: %v", err)
-	}
-	if !mock.copyToCalled || mock.copyFromCalled {
-		t.Fatalf("expected CopyToContainer (write_file) to be called, copyTo=%v copyFrom=%v",
-			mock.copyToCalled, mock.copyFromCalled)
-	}
-}
-
-// TestTerminalHandle_FileAction_ExtraQuotedAction_StillDispatches reproduces
-// the exact production failure: the LLM sent action/path wrapped in an extra
-// literal pair of quotes (e.g. `"action": "\"write_file\""`), which used to
-// fail with "unknown file action" since the corrupted value matched no case.
-// The String type now unwraps this at unmarshal time, so dispatch succeeds.
-func TestTerminalHandle_FileAction_ExtraQuotedAction_StillDispatches(t *testing.T) {
-	mock := &contextAwareMockDockerClient{isRunning: true}
-	term := &terminal{
-		flowID:       1,
-		containerID:  1,
-		containerLID: "test-container",
-		dockerClient: mock,
-		tlp:          &contextTestTermLogProvider{},
-	}
-
-	args := json.RawMessage(`{"action": "\"write_file\"", "path": "\"/home/evidence/inject.py\"", "content": "print(1)", "message": "m"}`)
-	_, err := term.Handle(t.Context(), FileToolName, args)
-
-	if err != nil {
-		t.Fatalf("expected extra-quoted write_file to still dispatch, got error: %v", err)
-	}
-	if !mock.copyToCalled || mock.copyFromCalled {
-		t.Fatalf("expected CopyToContainer (write_file) to be called, copyTo=%v copyFrom=%v",
-			mock.copyToCalled, mock.copyFromCalled)
-	}
-}
-
-// TestTerminalHandle_FileAction_EditFile_AppliesDiff exercises edit_file end
-// to end through Handle(): it reads the mock's current content, applies the
-// diff in memory, and writes the result back - all via CopyFromContainer /
-// CopyToContainer, exactly like write_file, but without resending unchanged
-// content.
-func TestTerminalHandle_FileAction_EditFile_AppliesDiff(t *testing.T) {
-	mock := &contextAwareMockDockerClient{
-		isRunning:       true,
-		readFileContent: "line1\nline2\nline3\n",
-	}
-	term := &terminal{
-		flowID:       1,
-		containerID:  1,
-		containerLID: "test-container",
-		dockerClient: mock,
-		tlp:          &contextTestTermLogProvider{},
-	}
-
-	diff := "@@ -1,2 +1,2 @@\n line1\n-line2\n+line2 changed\n"
-	args := json.RawMessage(fmt.Sprintf(
-		`{"action":"edit_file","path":"/work/test.py","diff":%s,"message":"m"}`,
-		mustJSONString(t, diff),
-	))
-	result, err := term.Handle(t.Context(), FileToolName, args)
-
-	if err != nil {
-		t.Fatalf("expected edit_file to succeed, got error: %v", err)
-	}
-	if !mock.copyFromCalled || !mock.copyToCalled {
-		t.Fatalf("expected both CopyFromContainer (read) and CopyToContainer (write), got from=%v to=%v",
-			mock.copyFromCalled, mock.copyToCalled)
-	}
-	want := "line1\nline2 changed\nline3\n"
-	if mock.writtenContent != want {
-		t.Errorf("written content = %q, want %q", mock.writtenContent, want)
-	}
-	if !strings.Contains(result, "1 diff hunk") {
-		t.Errorf("result = %q, want it to mention the number of hunks applied", result)
-	}
-}
-
-// TestTerminalHandle_FileAction_DefaultsToEditFile_WhenDiffPresent mirrors
-// the write_file/read_file action-inference tests: when 'action' is omitted
-// but 'diff' is present, the intent is unambiguous.
-func TestTerminalHandle_FileAction_DefaultsToEditFile_WhenDiffPresent(t *testing.T) {
-	mock := &contextAwareMockDockerClient{
-		isRunning:       true,
-		readFileContent: "line1\nline2\n",
-	}
-	term := &terminal{
-		flowID:       1,
-		containerID:  1,
-		containerLID: "test-container",
-		dockerClient: mock,
-		tlp:          &contextTestTermLogProvider{},
-	}
-
-	diff := "@@ -2,1 +2,1 @@\n-line2\n+line2 changed\n"
-	args := json.RawMessage(fmt.Sprintf(
-		`{"path":"/work/test.py","diff":%s,"message":"m"}`,
-		mustJSONString(t, diff),
-	))
-	_, err := term.Handle(t.Context(), FileToolName, args)
-
-	if err != nil {
-		t.Fatalf("expected inferred edit_file to succeed, got error: %v", err)
-	}
-	if !mock.copyFromCalled || !mock.copyToCalled {
-		t.Fatalf("expected inferred edit_file to read then write, got from=%v to=%v",
-			mock.copyFromCalled, mock.copyToCalled)
-	}
-}
-
-// TestTerminalHandle_FileAction_EditFile_NoMatch_LeavesFileUntouched checks
-// that a diff whose context doesn't match the current content fails clearly
-// and never reaches CopyToContainer - a bad edit must not corrupt the file.
-func TestTerminalHandle_FileAction_EditFile_NoMatch_LeavesFileUntouched(t *testing.T) {
-	mock := &contextAwareMockDockerClient{
-		isRunning:       true,
-		readFileContent: "line1\nline2\nline3\n",
-	}
-	term := &terminal{
-		flowID:       1,
-		containerID:  1,
-		containerLID: "test-container",
-		dockerClient: mock,
-		tlp:          &contextTestTermLogProvider{},
-	}
-
-	diff := "@@ -2,1 +2,1 @@\n-this text is not in the file\n+replacement\n"
-	args := json.RawMessage(fmt.Sprintf(
-		`{"action":"edit_file","path":"/work/test.py","diff":%s,"message":"m"}`,
-		mustJSONString(t, diff),
-	))
-	result, err := term.Handle(t.Context(), FileToolName, args)
-
-	// Handle() wraps tool errors into a successful-looking result string (see
-	// wrapCommandResult) rather than a Go error, so assert on the message.
-	if err != nil {
-		t.Fatalf("Handle() should swallow tool errors via wrapCommandResult, got error: %v", err)
-	}
-	if !strings.Contains(result, "could not be applied") {
-		t.Errorf("result = %q, want it to mention the hunk could not be applied", result)
-	}
-	if mock.copyToCalled {
-		t.Fatal("expected CopyToContainer to NOT be called when the diff doesn't apply")
-	}
-}
-
-// TestTerminalHandle_FileAction_EmptyDiff_ReturnsClearError checks edit_file
-// with an empty diff fails with a clear message instead of a Docker-level error.
-func TestTerminalHandle_FileAction_EmptyDiff_ReturnsClearError(t *testing.T) {
-	mock := &contextAwareMockDockerClient{isRunning: true}
-	term := &terminal{
-		flowID:       1,
-		containerID:  1,
-		containerLID: "test-container",
-		dockerClient: mock,
-		tlp:          &contextTestTermLogProvider{},
-	}
-
-	args := json.RawMessage(`{"action":"edit_file","path":"/work/test.py","diff":"","message":"m"}`)
-	result, err := term.Handle(t.Context(), FileToolName, args)
-
-	if err != nil {
-		t.Fatalf("Handle() should swallow tool errors via wrapCommandResult, got error: %v", err)
-	}
-	if !strings.Contains(result, "diff is required") {
-		t.Errorf("result = %q, want it to mention that diff is required", result)
-	}
-	if mock.copyFromCalled || mock.copyToCalled {
-		t.Fatal("expected neither CopyFromContainer nor CopyToContainer to be called for an empty diff")
-	}
-}
-
-// mustJSONString marshals s as a JSON string literal, for embedding
-// multi-line diff text into a hand-written JSON args payload in tests.
-func mustJSONString(t *testing.T, s string) string {
-	t.Helper()
-	b, err := json.Marshal(s)
-	if err != nil {
-		t.Fatalf("json.Marshal(%q) error: %v", s, err)
-	}
-	return string(b)
-}
-
-func TestTerminalHandle_FileAction_DefaultsToReadFile_WhenContentAbsent(t *testing.T) {
-	mock := &contextAwareMockDockerClient{isRunning: true}
-	term := &terminal{
-		flowID:       1,
-		containerID:  1,
-		containerLID: "test-container",
-		dockerClient: mock,
-		tlp:          &contextTestTermLogProvider{},
-	}
-
-	args := json.RawMessage(`{"path":"/work/test.py","message":"m"}`)
-	_, err := term.Handle(t.Context(), FileToolName, args)
-
-	if err != nil {
-		t.Fatalf("expected inferred read_file to succeed, got error: %v", err)
-	}
-	if !mock.copyFromCalled || mock.copyToCalled {
-		t.Fatalf("expected CopyFromContainer (read_file) to be called, copyFrom=%v copyTo=%v",
-			mock.copyFromCalled, mock.copyToCalled)
-	}
-}
-
-func TestTerminalHandle_FileAction_EmptyPath_ReadFile_ReturnsClearError(t *testing.T) {
-	mock := &contextAwareMockDockerClient{isRunning: true}
-	term := &terminal{
-		flowID:       1,
-		containerID:  1,
-		containerLID: "test-container",
-		dockerClient: mock,
-		tlp:          &contextTestTermLogProvider{},
-	}
-
-	args := json.RawMessage(`{"action":"read_file","path":"","message":"m"}`)
-	// Handle() wraps ReadFile/WriteFile errors into a soft (nil-error) response
-	// via wrapCommandResult, same as every other terminal-tool failure - so the
-	// error text is asserted on the returned string, not a returned Go error.
-	result, err := term.Handle(t.Context(), FileToolName, args)
-
-	if err != nil {
-		t.Fatalf("expected soft-failed (nil error) response, got error: %v", err)
-	}
-	if !strings.Contains(result, "path is required and cannot be empty") {
-		t.Fatalf("expected result to mention the empty-path error, got: %q", result)
-	}
-	if mock.copyFromCalled {
-		t.Fatal("expected CopyFromContainer to not be called for an empty path")
-	}
-}
-
-func TestTerminalHandle_FileAction_EmptyPath_WriteFile_ReturnsClearError(t *testing.T) {
-	mock := &contextAwareMockDockerClient{isRunning: true}
-	term := &terminal{
-		flowID:       1,
-		containerID:  1,
-		containerLID: "test-container",
-		dockerClient: mock,
-		tlp:          &contextTestTermLogProvider{},
-	}
-
-	args := json.RawMessage(`{"action":"write_file","path":"","content":"data","message":"m"}`)
-	result, err := term.Handle(t.Context(), FileToolName, args)
-
-	if err != nil {
-		t.Fatalf("expected soft-failed (nil error) response, got error: %v", err)
-	}
-	if !strings.Contains(result, "path is required and cannot be empty") {
-		t.Fatalf("expected result to mention the empty-path error, got: %q", result)
-	}
-	if mock.copyToCalled {
-		t.Fatal("expected CopyToContainer to not be called for an empty path")
-	}
-}
-
-func TestTerminalHandle_FileAction_ExplicitInvalidAction_StillFails(t *testing.T) {
-	mock := &contextAwareMockDockerClient{isRunning: true}
-	term := &terminal{
-		flowID:       1,
-		containerID:  1,
-		containerLID: "test-container",
-		dockerClient: mock,
-		tlp:          &contextTestTermLogProvider{},
-	}
-
-	// An explicit but invalid action must still be a hard failure - inference
-	// only kicks in when the field is empty.
-	args := json.RawMessage(`{"path":"/work/test.py","action":"delete_file","message":"m"}`)
-	_, err := term.Handle(t.Context(), FileToolName, args)
-
-	if err == nil || !strings.Contains(err.Error(), "unknown file action") {
-		t.Fatalf("expected unknown file action error, got: %v", err)
-	}
-	if mock.copyFromCalled || mock.copyToCalled {
-		t.Fatalf("expected no docker calls for an invalid explicit action")
-	}
-}
-
-func TestPrimaryTerminalName(t *testing.T) {
-	t.Parallel()
-
+// Each refusal is a hard error, and none of them reaches Docker.
+func TestTerminal_Handle_RejectsACallItCannotDispatch(t *testing.T) {
 	tests := []struct {
-		flowID int64
-		want   string
+		name     string
+		noDocker bool
+		tool     string
+		args     string
+		want     string
 	}{
-		{1, PrimaryTerminalNamePrefix + "1"},
-		{0, PrimaryTerminalNamePrefix + "0"},
-		{12345, PrimaryTerminalNamePrefix + "12345"},
+		{
+			name:     "a terminal without a docker client",
+			noDocker: true,
+			tool:     TerminalToolName,
+			args:     `{"input":"id","cwd":"/work","detach":false,"timeout":60,"message":"m"}`,
+			want:     "terminal is not available",
+		},
+		{
+			name: "terminal arguments that are not JSON",
+			tool: TerminalToolName,
+			args: `{"input":`,
+			want: "failed to unmarshal terminal action",
+		},
+		{
+			name: "file arguments that are not JSON",
+			tool: FileToolName,
+			args: `{"path":`,
+			want: "failed to unmarshal file action",
+		},
+		{
+			// Inference fills only an absent action; a wrong one the model named stays a hard failure.
+			name: "an explicit action it does not know",
+			tool: FileToolName,
+			args: `{"path":"/work/test.py","action":"delete_file","message":"m"}`,
+			want: `unknown file action "delete_file": expected one of read_file, write_file or edit_file`,
+		},
+		{
+			name: "a tool it does not serve",
+			tool: BrowserToolName,
+			args: `{}`,
+			want: "unknown tool: browser",
+		},
 	}
 
 	for _, tt := range tests {
-		t.Run(fmt.Sprintf("flowID=%d", tt.flowID), func(t *testing.T) {
-			t.Parallel()
+		t.Run(tt.name, func(t *testing.T) {
+			mock := &fakeDockerClient{isRunning: true}
+			term := terminalFor(mock, &recordingTermLog{})
+			if tt.noDocker {
+				term.dockerClient = nil
+			}
 
-			if got := PrimaryTerminalName("", tt.flowID); got != tt.want {
-				t.Errorf("PrimaryTerminalName(%d) = %q, want %q", tt.flowID, got, tt.want)
+			result, err := term.Handle(t.Context(), tt.tool, json.RawMessage(tt.args))
+
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tt.want)
+			assert.Empty(t, result)
+			if tt.noDocker {
+				// This terminal does not hold the mock, so the mock cannot see a call.
+				return
+			}
+			assert.Empty(t, mock.execCreated.Cmd, "no command may run")
+			assert.False(t, mock.copyFromCalled, "no file may be read")
+			assert.Zero(t, mock.copies, "no file may be written")
+		})
+	}
+}
+
+func TestTerminal_Handle_InfersTheFileActionFromItsFields(t *testing.T) {
+	const current = "line1\nline2\n"
+	diff := "@@ -2,1 +2,1 @@\n-line2\n+line2 changed\n"
+
+	tests := []struct {
+		name        string
+		args        map[string]any
+		wantRead    bool
+		wantWritten string
+		wantResult  string
+	}{
+		{
+			name:        "content is a write",
+			args:        map[string]any{"path": "/work/test.py", "content": "print(1)", "message": "m"},
+			wantWritten: "print(1)",
+			wantResult:  "Successfully wrote 8 bytes to /work/test.py",
+		},
+		{
+			name:        "a diff is an edit",
+			args:        map[string]any{"path": "/work/test.py", "diff": diff, "message": "m"},
+			wantRead:    true,
+			wantWritten: "line1\nline2 changed\n",
+			wantResult:  "Applied 1 diff hunk(s) to /work/test.py (12 -> 20 bytes)",
+		},
+		{
+			name:        "a diff beside content is an edit",
+			args:        map[string]any{"path": "/work/test.py", "content": "print(1)", "diff": diff, "message": "m"},
+			wantRead:    true,
+			wantWritten: "line1\nline2 changed\n",
+			wantResult:  "Applied 1 diff hunk(s) to /work/test.py (12 -> 20 bytes)",
+		},
+		{
+			name:       "neither is a read",
+			args:       map[string]any{"path": "/work/test.py", "message": "m"},
+			wantRead:   true,
+			wantResult: current,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mock := &fakeDockerClient{isRunning: true, readFileContent: current}
+
+			result, err := terminalFor(mock, &recordingTermLog{}).
+				Handle(t.Context(), FileToolName, mustJSON(tt.args))
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantResult, result)
+			assert.Equal(t, tt.wantRead, mock.copyFromCalled, "whether the file was read")
+			assert.Equal(t, tt.wantWritten != "", mock.copies > 0, "whether the file was written")
+			assert.Equal(t, tt.wantWritten, mock.writtenContent)
+		})
+	}
+}
+
+func TestTerminal_Handle_DispatchesAnExtraQuotedFileAction(t *testing.T) {
+	mock := &fakeDockerClient{isRunning: true}
+
+	args := json.RawMessage(`{"action": "\"write_file\"", "path": "\"/home/evidence/inject.py\"", "content": "print(1)", "message": "m"}`)
+	result, err := terminalFor(mock, &recordingTermLog{}).Handle(t.Context(), FileToolName, args)
+
+	require.NoError(t, err)
+	assert.Equal(t, "Successfully wrote 8 bytes to /home/evidence/inject.py", result)
+	assert.Equal(t, 1, mock.copies, "an extra-quoted write_file must still write")
+	assert.False(t, mock.copyFromCalled)
+	assert.Equal(t, "print(1)", mock.writtenContent)
+}
+
+func TestTerminal_Handle_RequiresAFilePath(t *testing.T) {
+	tests := []struct {
+		name string
+		args map[string]any
+	}{
+		{"a read", map[string]any{"action": "read_file", "path": "", "message": "m"}},
+		{"a write", map[string]any{"action": "write_file", "path": "", "content": "data", "message": "m"}},
+		{"an edit", map[string]any{"action": "edit_file", "path": "", "diff": "@@ -1 +1 @@\n-a\n+b\n", "message": "m"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mock := &fakeDockerClient{isRunning: true}
+
+			result, err := terminalFor(mock, &recordingTermLog{}).
+				Handle(t.Context(), FileToolName, mustJSON(tt.args))
+
+			require.NoError(t, err, "a tool failure is a soft (nil-error) response")
+			assert.Contains(t, result, "path is required and cannot be empty")
+			assert.False(t, mock.copyFromCalled, "an empty path must not be read")
+			assert.Zero(t, mock.copies, "an empty path must not be written")
+		})
+	}
+}
+
+func TestTerminal_ReadFile_ReturnsTheWholeContent(t *testing.T) {
+	big := terminalLargeFileContent(2000)
+	other := terminalLargeFileContent(1500)
+	require.Greater(t, len(other), dockerReadChunk, "every file must exceed one read")
+
+	const rule = "--------------------------------------------------\n"
+	tests := []struct {
+		name    string
+		archive []byte
+		dir     bool
+		want    string
+	}{
+		{
+			name:    "a file larger than one socket read",
+			archive: terminalTar(t, terminalTarEntry{name: "big.txt", body: big}),
+			want:    big,
+		},
+		{
+			name: "a directory of files larger than one socket read",
+			archive: terminalTar(t,
+				terminalTarEntry{name: "recon/", dir: true},
+				terminalTarEntry{name: "recon/a.txt", body: big},
+				terminalTarEntry{name: "recon/sub/", dir: true},
+				terminalTarEntry{name: "recon/sub/b.txt", body: other},
+			),
+			dir: true,
+			want: rule + fmt.Sprintf("'recon/a.txt' file content (with size %d bytes) shown below:\n", len(big)) +
+				big + "\n\n" +
+				rule + fmt.Sprintf("'recon/sub/b.txt' file content (with size %d bytes) shown below:\n", len(other)) +
+				other + "\n\n",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dc := &fakeDockerClient{isRunning: true, archive: tt.archive}
+			if tt.dir {
+				dc.stat = container.PathStat{Name: "recon", Mode: os.ModeDir | 0o755}
+			}
+
+			result, err := terminalFor(dc, &recordingTermLog{}).Handle(t.Context(),
+				FileToolName, json.RawMessage(`{"action":"read_file","path":"/work/recon","message":"m"}`))
+
+			require.NoError(t, err)
+			if n := strings.Count(result, "\x00"); n != 0 {
+				t.Errorf("read returned %d NUL bytes; the content past the first read was not read at all", n)
+			}
+			if result != tt.want {
+				t.Errorf("read returned %d bytes, want %d:\n%.300q", len(result), len(tt.want), result)
 			}
 		})
 	}
 }
 
-func TestWriteUploadsTar(t *testing.T) {
-	uploadDir := t.TempDir()
-	requireNoError := func(err error) {
-		if err != nil {
-			t.Fatal(err)
-		}
+func TestTerminal_ReadFile_RefusesWhatItCannotReadWhole(t *testing.T) {
+	var huge bytes.Buffer
+	require.NoError(t, tar.NewWriter(&huge).WriteHeader(&tar.Header{Name: "huge.bin", Mode: 0o600, Size: 100<<20 + 1}))
+	var negative bytes.Buffer
+	require.NoError(t, tar.NewWriter(&negative).WriteHeader(&tar.Header{
+		Name: "a.txt", Linkname: "target", Mode: 0o777, Typeflag: tar.TypeSymlink, Size: -1,
+	}))
+
+	tests := []struct {
+		name    string
+		copyErr error
+		archive []byte
+		want    string
+	}{
+		{
+			name:    "a path the sandbox does not have",
+			copyErr: errors.New("Could not find the file /work/a.txt in container"),
+			want:    "failed to copy file: Could not find the file /work/a.txt in container",
+		},
+		{
+			name:    "a file above the read limit",
+			archive: huge.Bytes(),
+			want:    "file 'huge.bin' size 104857601 exceeds maximum allowed size 104857600",
+		},
+		{
+			name:    "an archive that ends inside the file",
+			archive: terminalShortArchive(t, "a.txt", "12345", 5),
+			want:    "failed to read file 'a.txt' content: unexpected EOF",
+		},
+		{
+			name:    "an archive that is not a tar",
+			archive: bytes.Repeat([]byte("x"), 512),
+			want:    "failed to read tar header: archive/tar: invalid tar header",
+		},
+		{
+			// archive/tar passes a negative size through on a header-only entry, and copying -1 bytes is a no-op.
+			name:    "a link entry that declares a negative size",
+			archive: negative.Bytes(),
+			want:    "file 'a.txt' has invalid size -1",
+		},
 	}
-	requireNoError(os.WriteFile(filepath.Join(uploadDir, "a.txt"), []byte("alpha"), 0644))
-	requireNoError(os.Mkdir(filepath.Join(uploadDir, "sub"), 0755))
-	requireNoError(os.WriteFile(filepath.Join(uploadDir, "sub", "b.txt"), []byte("bravo"), 0644))
-	if err := os.Symlink(filepath.Join(uploadDir, "a.txt"), filepath.Join(uploadDir, "link.txt")); err != nil {
-		t.Skipf("symlink creation not available: %v", err)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dc := &fakeDockerClient{isRunning: true, copyFromErr: tt.copyErr, archive: tt.archive}
+
+			result, err := terminalFor(dc, &recordingTermLog{}).Handle(t.Context(),
+				FileToolName, json.RawMessage(`{"action":"read_file","path":"/work/a.txt","message":"m"}`))
+
+			require.NoError(t, err, "a tool failure is a soft (nil-error) response")
+			assert.Equal(t, "terminal tool 'file' handled with error: "+tt.want, result)
+		})
 	}
-
-	pr, pw := io.Pipe()
-	errCh := make(chan error, 1)
-	go func() {
-		errCh <- flowfiles.WriteUploadsTar(pw, uploadDir)
-	}()
-
-	var buf bytes.Buffer
-	_, err := io.Copy(&buf, pr)
-	assert.NoError(t, err)
-	assert.NoError(t, <-errCh)
-
-	tr := tar.NewReader(bytes.NewReader(buf.Bytes()))
-	contents := map[string]string{}
-	for {
-		hdr, err := tr.Next()
-		if err == io.EOF {
-			break
-		}
-		assert.NoError(t, err)
-		if hdr.Typeflag != tar.TypeReg {
-			continue
-		}
-		data, err := io.ReadAll(tr)
-		assert.NoError(t, err)
-		contents[hdr.Name] = string(data)
-	}
-
-	assert.Equal(t, "alpha", contents["uploads/a.txt"])
-	assert.Equal(t, "bravo", contents["uploads/sub/b.txt"])
-	assert.NotContains(t, contents, "uploads/link.txt")
 }
 
-func TestCollectFileSyncEntries(t *testing.T) {
-	localDir := t.TempDir()
-	requireNoError := func(err error) {
-		if err != nil {
-			t.Fatal(err)
-		}
-	}
-	requireNoError(os.MkdirAll(filepath.Join(localDir, "targets"), 0755))
-	requireNoError(os.WriteFile(filepath.Join(localDir, "targets", "ips.txt"), []byte("127.0.0.1"), 0644))
-	requireNoError(os.WriteFile(filepath.Join(localDir, "top.txt"), []byte("top"), 0644))
-	if err := os.Symlink(filepath.Join(localDir, "top.txt"), filepath.Join(localDir, "link.txt")); err != nil {
-		t.Skipf("symlink creation not available: %v", err)
-	}
-
-	entries, err := collectFileSyncEntries(localDir, flowfiles.UploadsDirName)
-	assert.NoError(t, err)
-
-	byTarPath := map[string]fileSyncEntry{}
-	for _, entry := range entries {
-		byTarPath[entry.tarPath] = entry
+// validateFilePath lets both through, so the archive refuses them before anything is copied.
+func TestTerminal_WriteFile_RefusesANameTheArchiveCannotCarry(t *testing.T) {
+	tests := []struct {
+		name string
+		path string
+		want string
+	}{
+		{
+			name: "a name holding a NUL byte",
+			path: "/work/a\x00b.txt",
+			want: "tar archive header generation failed: archive/tar: cannot encode header",
+		},
+		{
+			// The entry for "/" is a directory, which holds no content.
+			name: "the root directory",
+			path: "/",
+			want: "tar archive content serialization failed: archive/tar: write too long",
+		},
 	}
 
-	assert.Contains(t, byTarPath, "uploads/top.txt")
-	assert.Contains(t, byTarPath, "uploads/targets/ips.txt")
-	assert.NotContains(t, byTarPath, "uploads/link.txt")
-	assert.Equal(t, docker.WorkFolderPathInContainer+"/uploads/top.txt", byTarPath["uploads/top.txt"].containerPath)
-	assert.Equal(t, filepath.Join(localDir, "top.txt"), byTarPath["uploads/top.txt"].localPath)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mock := &fakeDockerClient{isRunning: true}
+
+			result, err := terminalFor(mock, &recordingTermLog{}).Handle(t.Context(), FileToolName,
+				mustJSON(map[string]any{"action": "write_file", "path": tt.path, "content": "print(1)", "message": "m"}))
+
+			require.NoError(t, err, "a tool failure is a soft (nil-error) response")
+			assert.Contains(t, result, "terminal tool 'file' handled with error: "+tt.want)
+			assert.Zero(t, mock.copies, "nothing may be copied into the sandbox")
+		})
+	}
 }
 
-func TestCollectFileSyncEntriesMissingDir(t *testing.T) {
-	entries, err := collectFileSyncEntries(filepath.Join(t.TempDir(), "missing"), flowfiles.ResourcesDirName)
-	assert.NoError(t, err)
-	assert.Empty(t, entries)
-}
+func TestTerminal_EditFile_AppliesTheDiff(t *testing.T) {
+	big := terminalLargeFileContent(2000)
+	const firstLine = "line 00000: the quick brown fox jumps over the lazy dog"
 
-func TestConvertSyncEntriesToTarEntries(t *testing.T) {
-	entries := []fileSyncEntry{
-		{localPath: "/tmp/a.txt", tarPath: "uploads/a.txt"},
-		{localPath: "/tmp/b.txt", tarPath: "resources/b.txt"},
+	tests := []struct {
+		name    string
+		current string
+		diff    string
+		want    string
+	}{
+		{
+			name:    "a small file",
+			current: "line1\nline2\nline3\n",
+			diff:    "@@ -1,2 +1,2 @@\n line1\n-line2\n+line2 changed\n",
+			want:    "line1\nline2 changed\nline3\n",
+		},
+		{
+			name:    "a file larger than one socket read",
+			current: big,
+			diff: "@@ -1,2 +1,2 @@\n-" + firstLine + "\n+line 00000: patched\n" +
+				" line 00001: the quick brown fox jumps over the lazy dog\n",
+			want: strings.Replace(big, firstLine, "line 00000: patched", 1),
+		},
 	}
 
-	tarEntries := convertSyncEntriesToTarEntries(entries)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mock := &fakeDockerClient{isRunning: true, readFileContent: tt.current}
 
-	assert.Equal(t, []flowfiles.TarEntry{
-		{LocalPath: "/tmp/a.txt", TarPath: "uploads/a.txt"},
-		{LocalPath: "/tmp/b.txt", TarPath: "resources/b.txt"},
-	}, tarEntries)
+			result, err := terminalFor(mock, &recordingTermLog{}).Handle(t.Context(), FileToolName,
+				mustJSON(map[string]any{"action": "edit_file", "path": "/work/test.py", "diff": tt.diff, "message": "m"}))
+
+			require.NoError(t, err)
+			assert.True(t, mock.copyFromCalled, "edit_file must read the current content")
+			assert.Equal(t, 1, mock.copies, "edit_file must write the result back")
+			if n := strings.Count(mock.writtenContent, "\x00"); n != 0 {
+				t.Errorf("edit_file wrote %d NUL bytes back to the file, destroying what it never read", n)
+			}
+			if mock.writtenContent != tt.want {
+				t.Errorf("edit_file wrote %d bytes, want %d; only the patched line may differ",
+					len(mock.writtenContent), len(tt.want))
+			}
+			assert.Contains(t, result, "Applied 1 diff hunk(s)", "the result must say how many hunks applied")
+		})
+	}
 }
 
-func TestFindMissingInContainer(t *testing.T) {
-	mock := &contextAwareMockDockerClient{
-		execCreateResp: client.ExecCreateResult{ID: "exec-file-check"},
-		attachOutput: []byte(
-			docker.WorkFolderPathInContainer + "/uploads/a.txt\n" +
-				docker.WorkFolderPathInContainer + "/resources/b.txt\n" +
-				docker.WorkFolderPathInContainer + "/unknown.txt\n",
-		),
+func TestTerminal_EditFile_LeavesTheFileUntouchedOnFailure(t *testing.T) {
+	const applies = "@@ -2,1 +2,1 @@\n-line2\n+line2 changed\n"
+
+	tests := []struct {
+		name     string
+		diff     string
+		prepare  func(*fakeDockerClient)
+		wantRead bool
+		want     string
+	}{
+		{
+			name:     "a diff whose context is not in the file",
+			diff:     "@@ -2,1 +2,1 @@\n-this text is not in the file\n+replacement\n",
+			wantRead: true,
+			want:     "could not be applied",
+		},
+		{
+			name: "an empty diff",
+			diff: "",
+			want: "diff is required",
+		},
+		{
+			name: "a read that ends inside the file",
+			diff: applies,
+			prepare: func(d *fakeDockerClient) {
+				// What arrives holds the diff's context, so only the read error prevents a truncated write-back.
+				d.archive = terminalShortArchive(t, "test.py", "line1\nline2\n", len("line3\n"))
+			},
+			wantRead: true,
+			want:     "failed to read current content of /work/test.py before editing",
+		},
+		{
+			name:     "a sandbox that stops between the read and the write",
+			diff:     applies,
+			prepare:  func(d *fakeDockerClient) { d.running = terminalRunningOnlyAtFirst },
+			wantRead: true,
+			want:     "failed to write edited content of /work/test.py: container runtime is not operational",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mock := &fakeDockerClient{isRunning: true, readFileContent: "line1\nline2\nline3\n"}
+			if tt.prepare != nil {
+				tt.prepare(mock)
+			}
+
+			result, err := terminalFor(mock, &recordingTermLog{}).Handle(t.Context(), FileToolName,
+				mustJSON(map[string]any{"action": "edit_file", "path": "/work/test.py", "diff": tt.diff, "message": "m"}))
+
+			require.NoError(t, err, "a tool failure is a soft (nil-error) response")
+			assert.Contains(t, result, tt.want)
+			assert.Equal(t, tt.wantRead, mock.copyFromCalled, "whether the file was read")
+			assert.Zero(t, mock.copies, "the file must be left untouched")
+		})
+	}
+}
+
+func TestTerminal_ExecCommand_DetachedSurvivesParentCancel(t *testing.T) {
+	mock := &fakeDockerClient{
+		isRunning:      true,
+		execCreateResp: client.ExecCreateResult{ID: "exec-cancel-test"},
+		attachOutput:   []byte("background result"),
+		// Outlasts the quick check, so the call returns while the command runs.
+		attachDelay: 2 * time.Second,
 		inspectResp: client.ExecInspectResult{ExitCode: 0},
 	}
-	fte := &flowToolsExecutor{flowID: 7, docker: mock}
-	entries := []fileSyncEntry{
-		{localPath: "/tmp/a.txt", containerPath: docker.WorkFolderPathInContainer + "/uploads/a.txt", tarPath: "uploads/a.txt"},
-		{localPath: "/tmp/b.txt", containerPath: docker.WorkFolderPathInContainer + "/resources/b.txt", tarPath: "resources/b.txt"},
-	}
+	term := terminalFor(mock, &recordingTermLog{})
+	parentCtx, cancel := context.WithCancel(t.Context())
 
-	missing, err := fte.findMissingInContainer(t.Context(), entries)
+	output, err := term.ExecCommand(parentCtx, "/work", "long-running-scan", true, 5*time.Minute)
+	require.NoError(t, err)
+	assert.Contains(t, output, "Command started in background")
 
-	assert.NoError(t, err)
-	assert.Equal(t, entries, missing)
+	cancel()
+	// Outlasts attachDelay, so by the check the watcher has finished or seen the cancel.
+	time.Sleep(3 * time.Second)
+
+	assert.False(t, mock.ctxWasCanceled,
+		"the detached command saw its caller's cancellation and was stopped")
 }
 
-func TestFindMissingInContainerChecksExitCode(t *testing.T) {
-	mock := &contextAwareMockDockerClient{
-		execCreateResp: client.ExecCreateResult{ID: "exec-file-check"},
-		attachOutput:   []byte("shell failed"),
-		inspectResp:    client.ExecInspectResult{ExitCode: 2},
+func TestTerminal_ExecCommand_NonDetachedStopsOnParentCancel(t *testing.T) {
+	mock := &fakeDockerClient{
+		isRunning:      true,
+		execCreateResp: client.ExecCreateResult{ID: "exec-nondetach-cancel"},
+		attachOutput:   []byte("should not complete"),
+		// Far longer than the cancel below, so only the cancel can end it early.
+		attachDelay: 5 * time.Second,
+		inspectResp: client.ExecInspectResult{ExitCode: 0},
 	}
-	fte := &flowToolsExecutor{flowID: 7, docker: mock}
+	term := terminalFor(mock, &recordingTermLog{})
+	parentCtx, cancel := context.WithCancel(t.Context())
+	time.AfterFunc(200*time.Millisecond, cancel)
 
-	_, err := fte.findMissingInContainer(t.Context(), []fileSyncEntry{
-		{containerPath: docker.WorkFolderPathInContainer + "/uploads/a.txt"},
+	_, err := term.ExecCommand(parentCtx, "/work", "long-command", false, 5*time.Minute)
+
+	require.ErrorIs(t, err, context.Canceled, "the call must end because its caller cancelled it")
+	assert.True(t, mock.ctxWasCanceled, "the foreground command ignored its caller's cancellation")
+}
+
+func TestTerminal_ExecCommand_LaunchesOnlyAFlowTaskCommandForStopToEnd(t *testing.T) {
+	taskID := int64(7)
+
+	tests := map[string]struct {
+		taskID  *int64
+		wantCmd []string
+	}{
+		"a flow task's command":  {taskID: &taskID, wantCmd: docker.FlowCommand("nmap -sV target")},
+		"an assistant's command": {wantCmd: docker.SandboxCommand("nmap -sV target")},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			mock := &fakeDockerClient{
+				isRunning:      true,
+				execCreateResp: client.ExecCreateResult{ID: "exec-owner-test"},
+				inspectResp:    client.ExecInspectResult{ExitCode: 0},
+			}
+			term := terminalFor(mock, &recordingTermLog{})
+			term.taskID = tc.taskID
+
+			_, err := term.ExecCommand(t.Context(), "/work", "nmap -sV target", false, time.Minute)
+			require.NoError(t, err)
+
+			assert.Equal(t, tc.wantCmd, mock.execCreated.Cmd)
+		})
+	}
+}
+
+func TestTerminal_ExecCommand_ReportsTheExitCodeItEndedWith(t *testing.T) {
+	tests := []struct {
+		name     string
+		output   string
+		exitCode int
+		want     string
+	}{
+		{"a command that fails without output", "", 1, "[no output]\n[exit code: 1]"},
+		{"a failing command keeps its output", "grep: /x: No such file or directory\r\n", 2,
+			"grep: /x: No such file or directory\r\n\n[exit code: 2]"},
+		{"a command that succeeds", "uid=0(root)\r\n", 0, "uid=0(root)\r\n\n[exit code: 0]"},
+		{"a command that succeeds silently", "", 0, "[no output]\n[exit code: 0]"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tlp := &recordingTermLog{}
+			term := terminalFor(&fakeDockerClient{
+				isRunning:      true,
+				execCreateResp: client.ExecCreateResult{ID: "exec-status"},
+				attachOutput:   []byte(tt.output),
+				inspectResp:    client.ExecInspectResult{ExitCode: tt.exitCode},
+			}, tlp)
+
+			result, err := term.Handle(t.Context(), TerminalToolName,
+				json.RawMessage(`{"input":"cmd","cwd":"/work","detach":false,"timeout":60,"message":"m"}`))
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, result)
+			assert.Empty(t, tlp.states(termLogNotRunning), "a sandbox that is still running is not reported")
+		})
+	}
+}
+
+func TestTerminal_ExecCommand_ADetachedCommandThatEndsAtOnceReportsHowItEnded(t *testing.T) {
+	tests := []struct {
+		name      string
+		attachErr error
+		want      string
+		wantErr   string
+	}{
+		{
+			name: "a command that exits at once",
+			want: "[no output]\n[exit code: 1]",
+		},
+		{
+			name:      "a command Docker cannot attach to",
+			attachErr: errors.New("exec 1a2b is not running"),
+			wantErr:   "command failed: failed to attach to exec process: exec 1a2b is not running",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			term := terminalFor(&fakeDockerClient{
+				isRunning:      true,
+				execCreateResp: client.ExecCreateResult{ID: "exec-detached"},
+				inspectResp:    client.ExecInspectResult{ExitCode: 1},
+				attachErr:      tt.attachErr,
+			}, &recordingTermLog{})
+
+			result, err := term.ExecCommand(t.Context(), "/work", "nc -lvnp 4444", true, time.Minute)
+
+			if tt.wantErr != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.wantErr)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, result)
+		})
+	}
+}
+
+// Only an exit code above 128, a death by signal, makes the terminal probe the sandbox a second time.
+func TestTerminal_ExecCommand_BlamesTheSandboxOnlyWhenItStopped(t *testing.T) {
+	tests := []struct {
+		name         string
+		exitCode     int
+		running      func(probe int) (bool, error)
+		want         string
+		wantProbes   int
+		wantReported []int64
+	}{
+		{
+			name:         "a signal death while the sandbox stopped",
+			exitCode:     137,
+			running:      terminalRunningOnlyAtFirst,
+			want:         "[no output]\n[exit code: 137]\n[interrupted: the sandbox container stopped]",
+			wantProbes:   2,
+			wantReported: []int64{7},
+		},
+		{
+			name:       "a signal death inside a running sandbox",
+			exitCode:   137,
+			running:    terminalAlwaysRunning,
+			want:       "[no output]\n[exit code: 137]",
+			wantProbes: 2,
+		},
+		{
+			name:       "an ordinary failure",
+			exitCode:   1,
+			running:    terminalAlwaysRunning,
+			want:       "[no output]\n[exit code: 1]",
+			wantProbes: 1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dc := &fakeDockerClient{
+				execCreateResp: client.ExecCreateResult{ID: "exec-killed"},
+				inspectResp:    client.ExecInspectResult{ExitCode: tt.exitCode},
+				running:        tt.running,
+			}
+			tlp := &recordingTermLog{}
+
+			result, err := terminalFor(dc, tlp).ExecCommand(t.Context(), "/work", "sleep 90 && echo done", false, time.Minute)
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, result)
+			assert.Equal(t, tt.wantProbes, len(dc.probed), "only a signal death asks Docker a second time")
+			assert.Equal(t, tt.wantReported, terminalRecorded(tlp, termLogNotRunning))
+		})
+	}
+}
+
+// The log write runs after the call's context fired, and recordingTermLog refuses a done context.
+func TestTerminal_ExecCommand_TimeoutKeepsWhatTheCommandPrinted(t *testing.T) {
+	partial := strings.Repeat("scanning host 10.0.0.1 ... open\n", 100)
+	require.Greater(t, len(partial), 500, "the fixture must be long enough for a 500-byte cut to show")
+
+	tests := []struct {
+		name        string
+		timeout     time.Duration
+		cancelAfter time.Duration
+		refuseLog   bool
+		wantCause   string
+	}{
+		{
+			name:      "the deadline passes",
+			timeout:   time.Second,
+			wantCause: "context deadline exceeded",
+		},
+		{
+			name:        "the parent is cancelled",
+			timeout:     time.Minute,
+			cancelAfter: 200 * time.Millisecond,
+			wantCause:   "context canceled",
+		},
+		{
+			name:      "the terminal log refuses the write",
+			timeout:   time.Second,
+			refuseLog: true,
+			wantCause: "context deadline exceeded",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mock := &fakeDockerClient{
+				isRunning:      true,
+				execCreateResp: client.ExecCreateResult{ID: "exec-timeout"},
+				attachOutput:   []byte(partial),
+				attachHold:     5 * time.Second,
+				inspectResp:    client.ExecInspectResult{ExitCode: 0},
+			}
+			tlp := &recordingTermLog{}
+			if tt.refuseLog {
+				tlp.failOn = database.TermlogTypeStdout
+			}
+			ctx := t.Context()
+			if tt.cancelAfter > 0 {
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithCancel(ctx)
+				time.AfterFunc(tt.cancelAfter, cancel)
+			}
+
+			_, err := terminalFor(mock, tlp).ExecCommand(ctx, "/work", "nmap -sV target", false, tt.timeout)
+
+			require.Error(t, err, "a command that outlives its budget must report the timeout")
+			assert.Contains(t, err.Error(), "command execution timeout ("+tt.wantCause+")")
+			assert.Contains(t, err.Error(), partial,
+				"the whole partial output must reach the agent, not the first 500 bytes")
+			if tt.refuseLog {
+				assert.NotContains(t, tlp.written(), partial, "the terminal log refused the output")
+			} else {
+				assert.Contains(t, tlp.written(), partial,
+					"the partial output must also reach the terminal log the user is watching")
+			}
+		})
+	}
+}
+
+func TestTerminal_RequireRunningContainer_ReportsASandboxFoundNotRunning(t *testing.T) {
+	calls := map[string]func(context.Context, *terminal) error{
+		"a command": func(ctx context.Context, term *terminal) error {
+			_, err := term.ExecCommand(ctx, "/work", "id", false, time.Minute)
+			return err
+		},
+		"a file read": func(ctx context.Context, term *terminal) error {
+			_, err := term.ReadFile(ctx, 1, "/work/a")
+			return err
+		},
+		"a file write": func(ctx context.Context, term *terminal) error {
+			_, err := term.WriteFile(ctx, 1, "x", "/work/a")
+			return err
+		},
+		"a file edit": func(ctx context.Context, term *terminal) error {
+			_, err := term.EditFile(ctx, 1, "/work/a", "@@ -1 +1 @@\n-a\n+b\n")
+			return err
+		},
+	}
+
+	for name, call := range calls {
+		t.Run(name, func(t *testing.T) {
+			mock := &fakeDockerClient{isRunning: false}
+			tlp := &recordingTermLog{}
+			subtaskID := int64(12)
+			term := terminalFor(mock, tlp)
+			term.subtaskID = &subtaskID
+			term.containerLID = "dead"
+
+			err := call(t.Context(), term)
+
+			require.ErrorIs(t, err, errContainerNotOperational)
+			assert.Equal(t, []termLogEntry{{state: termLogNotRunning, containerID: 7, subtaskID: &subtaskID}},
+				tlp.states(termLogNotRunning), "recorded once, against the sandbox's row and the subtask that found it")
+			assert.Empty(t, mock.execCreated.Cmd)
+			assert.False(t, mock.copyFromCalled)
+			assert.Zero(t, mock.copies)
+		})
+	}
+}
+
+func TestTerminal_RequireRunningContainer_ReportsASandboxFoundRunning(t *testing.T) {
+	tlp := &recordingTermLog{}
+	term := terminalFor(&fakeDockerClient{isRunning: true}, tlp)
+
+	_, err := term.WriteFile(t.Context(), 1, "x", "/work/a")
+
+	require.NoError(t, err)
+	assert.Equal(t, []int64{7}, terminalRecorded(tlp, termLogRunning))
+	assert.Empty(t, tlp.states(termLogNotRunning))
+}
+
+func TestTerminal_RequireRunningContainer_FailsWhenDockerCannotBeAsked(t *testing.T) {
+	daemonDown := errors.New("Cannot connect to the Docker daemon at unix:///var/run/docker.sock")
+	mock := &fakeDockerClient{isRunning: true, probeErr: daemonDown}
+	tlp := &recordingTermLog{}
+	term := terminalFor(mock, tlp)
+
+	_, err := term.ExecCommand(t.Context(), "/work", "id", false, time.Minute)
+
+	require.ErrorIs(t, err, daemonDown)
+	assert.Contains(t, err.Error(), "runtime verification failed")
+	assert.NotErrorIs(t, err, errContainerNotOperational)
+	assert.Empty(t, tlp.states(termLogNotRunning), "an unanswered probe must not mark the sandbox stopped")
+	assert.Empty(t, tlp.states(termLogRunning), "an unanswered probe must not mark the sandbox running")
+	assert.Empty(t, mock.execCreated.Cmd, "no command may run")
+}
+
+// A failed recording leaves the call's answer unchanged.
+func TestTerminal_RequireRunningContainer_WarnsOfAStateItCannotRecord(t *testing.T) {
+	hook := captureLogrus(t)
+
+	recordErr := errors.New("connection reset by peer")
+	tests := []struct {
+		name        string
+		running     bool
+		wantErr     error
+		wantWarning string
+	}{
+		{
+			name:        "a sandbox found running",
+			running:     true,
+			wantWarning: "failed to record the sandbox as running again",
+		},
+		{
+			name:        "a sandbox found stopped",
+			running:     false,
+			wantErr:     errContainerNotOperational,
+			wantWarning: "failed to record the sandbox as not running",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			hook.Reset()
+			term := terminalFor(&fakeDockerClient{
+				isRunning:      tt.running,
+				execCreateResp: client.ExecCreateResult{ID: "exec-state"},
+				inspectResp:    client.ExecInspectResult{ExitCode: 0},
+			}, &recordingTermLog{stateErr: recordErr})
+
+			_, err := term.ExecCommand(t.Context(), "/work", "id", false, time.Minute)
+
+			if tt.wantErr == nil {
+				require.NoError(t, err)
+			} else {
+				require.ErrorIs(t, err, tt.wantErr)
+				assert.NotErrorIs(t, err, recordErr)
+			}
+			var warning *logrus.Entry
+			for _, entry := range hook.AllEntries() {
+				if entry.Level == logrus.WarnLevel && entry.Message == tt.wantWarning {
+					warning = entry
+				}
+			}
+			require.NotNil(t, warning, "the failed recording went unreported: %v", hook.AllEntries())
+			assert.Equal(t, recordErr, warning.Data[logrus.ErrorKey])
+			assert.Equal(t, int64(1), warning.Data["flow_id"])
+		})
+	}
+}
+
+func TestTerminal_AnActionThatRanIsNotReportedFailedWhenItsLogIsNot(t *testing.T) {
+	tests := []struct {
+		name        string
+		failOn      database.TermlogType
+		call        func(context.Context, *terminal) (string, error)
+		want        string
+		wantWritten string
+	}{
+		{
+			name:   "a command whose output is not logged",
+			failOn: database.TermlogTypeStdout,
+			call: func(ctx context.Context, term *terminal) (string, error) {
+				return term.ExecCommand(ctx, "/work", "id", false, time.Minute)
+			},
+			want: "uid=0(root)",
+		},
+		{
+			name:   "a written file whose write is not logged",
+			failOn: database.TermlogTypeStdin,
+			call: func(ctx context.Context, term *terminal) (string, error) {
+				return term.WriteFile(ctx, 1, "print(1)", "/work/test.py")
+			},
+			want:        "Successfully wrote 8 bytes to /work/test.py",
+			wantWritten: "print(1)",
+		},
+		{
+			name:   "an edited file whose edit is not logged",
+			failOn: database.TermlogTypeStdin,
+			call: func(ctx context.Context, term *terminal) (string, error) {
+				return term.EditFile(ctx, 1, "/work/test.py", "@@ -2,1 +2,1 @@\n-line2\n+line2 changed\n")
+			},
+			want:        "Applied 1 diff hunk(s)",
+			wantWritten: "line1\nline2 changed\nline3\n",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mock := &fakeDockerClient{
+				isRunning:       true,
+				execCreateResp:  client.ExecCreateResult{ID: "exec-unlogged"},
+				attachOutput:    []byte("uid=0(root)"),
+				inspectResp:     client.ExecInspectResult{ExitCode: 0},
+				readFileContent: "line1\nline2\nline3\n",
+			}
+
+			result, err := tt.call(t.Context(), terminalFor(mock, &recordingTermLog{failOn: tt.failOn}))
+
+			require.NoError(t, err, "an action that ran must not come back as a failed call")
+			assert.Contains(t, result, tt.want)
+			assert.Equal(t, tt.wantWritten, mock.writtenContent)
+		})
+	}
+}
+
+func TestTerminal_DoesNotActOnACommandItCouldNotLog(t *testing.T) {
+	tests := []struct {
+		name string
+		call func(context.Context, *terminal) error
+		want string
+	}{
+		{
+			name: "a command",
+			call: func(ctx context.Context, term *terminal) error {
+				_, err := term.ExecCommand(ctx, "/work", "rm -rf /work/loot", false, time.Minute)
+				return err
+			},
+			want: "failed to put terminal log (stdin): connection reset by peer",
+		},
+		{
+			name: "a file read",
+			call: func(ctx context.Context, term *terminal) error {
+				_, err := term.ReadFile(ctx, 1, "/work/a")
+				return err
+			},
+			want: "failed to put terminal log (read file cmd): connection reset by peer",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mock := &fakeDockerClient{
+				isRunning:       true,
+				execCreateResp:  client.ExecCreateResult{ID: "exec-unlogged-cmd"},
+				readFileContent: "secret",
+			}
+
+			err := tt.call(t.Context(), terminalFor(mock, &recordingTermLog{failOn: database.TermlogTypeStdin}))
+
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tt.want)
+			assert.Empty(t, mock.execCreated.Cmd, "no command may run")
+			assert.False(t, mock.copyFromCalled, "no file may be read")
+		})
+	}
+}
+
+func TestTerminal_ValidateFilePath_AcceptsOnlyALiteralPath(t *testing.T) {
+	t.Parallel()
+
+	t.Run("accepts a literal path", func(t *testing.T) {
+		t.Parallel()
+
+		for _, path := range []string{
+			"/work/notes.txt",
+			"/work/recon/pages/index.html",
+			"/tmp/a b/c-d_e.2026.log",
+			"/work/O'Brien.txt",
+			"/work/отчёт.md",
+			// Legal in a Linux filename, and the copy API takes them literally.
+			"/work/*.log",
+			"/work/report?.txt",
+			"/work/a;b.txt",
+			"/work/out>1.txt",
+			"/work/a|b.txt",
+			"/work/cost$5.txt",
+			"/mnt/C$/share.txt",
+		} {
+			if err := validateFilePath(path); err != nil {
+				t.Errorf("%q: want no error, got %v", path, err)
+			}
+		}
 	})
 
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "exit code 2")
+	t.Run("rejects a shell expression", func(t *testing.T) {
+		t.Parallel()
+
+		for _, tt := range []struct{ path, token string }{
+			{"/work/recon/pages/$(echo -n '/page' | md5sum | cut -c1-12).html", "$("},
+			{"/work/${TARGET}/notes.txt", "${"},
+			{"/work/`hostname`.txt", "`"},
+			{"/work/$TARGET/notes.txt", "$TARGET"},
+			{"$HOME/.ssh/config", "$HOME"},
+		} {
+			err := validateFilePath(tt.path)
+			if err == nil {
+				t.Errorf("%q: want an error naming %q", tt.path, tt.token)
+				continue
+			}
+			if !strings.Contains(err.Error(), fmt.Sprintf("contains %q", tt.token)) {
+				t.Errorf("%q: the message must name %q, got %q", tt.path, tt.token, err)
+			}
+			if !strings.Contains(err.Error(), "literal filename") {
+				t.Errorf("%q: the message must say the field is literal, got %q", tt.path, err)
+			}
+			if !strings.Contains(err.Error(), "terminal tool") {
+				t.Errorf("%q: the message must point at the way to resolve the name, got %q", tt.path, err)
+			}
+		}
+	})
+
+	t.Run("rejects an absent path", func(t *testing.T) {
+		t.Parallel()
+
+		err := validateFilePath("")
+		if err == nil {
+			t.Fatal("want an error")
+		}
+		if !strings.Contains(err.Error(), "/work/") {
+			t.Errorf("the message must show the shape expected, got %q", err)
+		}
+	})
 }
 
-func TestConfiguredExecTimeout(t *testing.T) {
+func TestTerminal_ConfiguredExecTimeout_KeepsAValueUpToThreeHoursAndCapsTheRest(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -704,39 +996,39 @@ func TestConfiguredExecTimeout(t *testing.T) {
 			want:       600 * time.Second,
 		},
 		{
-			name:       "new default (1200 s) is returned as-is",
+			name:       "the shipped default (1200 s) is returned as-is",
 			configured: 1200 * time.Second,
 			want:       1200 * time.Second,
 		},
 		{
 			name:       "exactly at the 3-hour ceiling is returned as-is",
-			configured: maxExplicitExecCommandTimeout,
-			want:       maxExplicitExecCommandTimeout,
+			configured: 3 * time.Hour,
+			want:       3 * time.Hour,
 		},
 		{
 			name:       "zero is capped to the 3-hour ceiling",
 			configured: 0,
-			want:       maxExplicitExecCommandTimeout,
+			want:       3 * time.Hour,
 		},
 		{
 			name:       "negative one second is capped to the 3-hour ceiling",
 			configured: -1 * time.Second,
-			want:       maxExplicitExecCommandTimeout,
+			want:       3 * time.Hour,
 		},
 		{
 			name:       "large negative is capped to the 3-hour ceiling",
 			configured: -9999 * time.Second,
-			want:       maxExplicitExecCommandTimeout,
+			want:       3 * time.Hour,
 		},
 		{
 			name:       "one second above the ceiling is capped",
-			configured: maxExplicitExecCommandTimeout + time.Second,
-			want:       maxExplicitExecCommandTimeout,
+			configured: 3*time.Hour + time.Second,
+			want:       3 * time.Hour,
 		},
 		{
 			name:       "very large value (> 3 h) is capped to the 3-hour ceiling",
 			configured: 100000 * time.Second,
-			want:       maxExplicitExecCommandTimeout,
+			want:       3 * time.Hour,
 		},
 	}
 
@@ -750,15 +1042,9 @@ func TestConfiguredExecTimeout(t *testing.T) {
 	}
 }
 
-func TestNormalizeExecTimeout(t *testing.T) {
+// The ceiling is the configured value plus a five-second grace for the exec round-trip.
+func TestTerminal_NormalizeExecTimeout_KeepsOnlyARequestWithinTheCeiling(t *testing.T) {
 	t.Parallel()
-
-	// ceilFor computes the effective runtime ceiling for a given configured value:
-	// it equals configuredExecTimeout() + defaultExtraExecTimeout.
-	ceilFor := func(configured time.Duration) time.Duration {
-		term := &terminal{defaultExecTimeout: configured}
-		return term.configuredExecTimeout() + defaultExtraExecTimeout
-	}
 
 	tests := []struct {
 		name       string
@@ -766,94 +1052,47 @@ func TestNormalizeExecTimeout(t *testing.T) {
 		requested  time.Duration
 		want       time.Duration
 	}{
-		// --- Explicit positive values: preserved when within the operator ceiling ---
 		{
-			name:       "typical explicit value is preserved",
+			name:       "a request within the ceiling is kept",
 			configured: 10 * time.Minute,
 			requested:  45 * time.Second,
 			want:       45 * time.Second,
 		},
 		{
-			name:       "explicit value exactly at the ceiling is preserved",
+			name:       "a request at the ceiling is kept",
 			configured: 10 * time.Minute,
-			requested:  ceilFor(10 * time.Minute), // 600s + 5s = 605s
-			want:       ceilFor(10 * time.Minute),
+			requested:  10*time.Minute + 5*time.Second,
+			want:       10*time.Minute + 5*time.Second,
 		},
 		{
-			name:       "explicit value one second above the ceiling falls back to ceiling",
+			name:       "a request one second above the ceiling falls back to it",
 			configured: 10 * time.Minute,
-			requested:  ceilFor(10*time.Minute) + time.Second,
-			want:       ceilFor(10 * time.Minute),
+			requested:  10*time.Minute + 6*time.Second,
+			want:       10*time.Minute + 5*time.Second,
 		},
 		{
-			name:       "explicit value at the default configured (1200 s) is preserved",
-			configured: 1200 * time.Second,
-			requested:  1200 * time.Second,
-			want:       1200 * time.Second,
-		},
-		{
-			name:       "explicit value above the 1200-s ceiling falls back to that ceiling",
-			configured: 1200 * time.Second,
-			requested:  ceilFor(1200*time.Second) + time.Second, // 1205s + 1s → fallback
-			want:       ceilFor(1200 * time.Second),             // 1205s
-		},
-		{
-			name:       "explicit value at the 3-hour ceiling is preserved when configured=0",
-			configured: 0,
-			requested:  ceilFor(0), // 3h + 5s
-			want:       ceilFor(0),
-		},
-		{
-			name:       "explicit value above the 3-hour ceiling falls back to 3-hour ceiling",
-			configured: 0,
-			requested:  ceilFor(0) + time.Second,
-			want:       ceilFor(0),
-		},
-
-		// --- Zero requested: falls back to the operator ceiling ---
-		{
-			name:       "zero requested with typical configured falls back to ceiling",
+			name:       "no request falls back to the ceiling",
 			configured: 10 * time.Minute,
 			requested:  0,
-			want:       ceilFor(10 * time.Minute), // 605s
+			want:       10*time.Minute + 5*time.Second,
 		},
 		{
-			name:       "zero requested with default configured (1200 s) falls back to ceiling",
-			configured: 1200 * time.Second,
-			requested:  0,
-			want:       ceilFor(1200 * time.Second), // 1205s
-		},
-		{
-			name:       "zero requested with configured=0 falls back to 3-hour ceiling",
-			configured: 0,
-			requested:  0,
-			want:       ceilFor(0), // 3h + 5s
-		},
-		{
-			name:       "zero requested with oversized configured (> 3 h) falls back to 3-hour ceiling",
-			configured: 100000 * time.Second,
-			requested:  0,
-			want:       ceilFor(0), // capped to 3h + 5s
-		},
-
-		// --- Negative requested: treated identically to zero ---
-		{
-			name:       "negative requested falls back to configured ceiling",
+			name:       "a negative request falls back to the ceiling",
 			configured: 10 * time.Minute,
 			requested:  -5 * time.Second,
-			want:       ceilFor(10 * time.Minute),
+			want:       10*time.Minute + 5*time.Second,
 		},
 		{
-			name:       "negative requested with configured=0 falls back to 3-hour ceiling",
+			name:       "no request on an unconfigured server gets the 3-hour ceiling",
 			configured: 0,
-			requested:  -1 * time.Second,
-			want:       ceilFor(0),
+			requested:  0,
+			want:       3*time.Hour + 5*time.Second,
 		},
 		{
-			name:       "negative requested with negative configured falls back to 3-hour ceiling",
-			configured: -5 * time.Second,
-			requested:  -1 * time.Second,
-			want:       ceilFor(0), // both negative → absolute 3-hour max
+			name:       "a request above 3 hours on an unconfigured server falls back to that ceiling",
+			configured: 0,
+			requested:  3*time.Hour + 6*time.Second,
+			want:       3*time.Hour + 5*time.Second,
 		},
 	}
 
@@ -865,4 +1104,125 @@ func TestNormalizeExecTimeout(t *testing.T) {
 			assert.Equal(t, tt.want, term.normalizeExecTimeout(tt.requested))
 		})
 	}
+}
+
+func TestTerminal_PrimaryTerminalName_PutsTheTenantFirstAndTheFlowLast(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name         string
+		tenantPrefix string
+		flowID       int64
+		want         string
+	}{
+		{"a single instance", "", 1, "pentagi-terminal-1"},
+		{"flow zero", "", 0, "pentagi-terminal-0"},
+		{"a multi-digit flow", "", 12345, "pentagi-terminal-12345"},
+		{"a tenant", "acme-", 1, "acme-pentagi-terminal-1"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := PrimaryTerminalName(tt.tenantPrefix, tt.flowID); got != tt.want {
+				t.Errorf("PrimaryTerminalName(%q, %d) = %q, want %q", tt.tenantPrefix, tt.flowID, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestTerminal_TruncateString_CutsPastTheLimitAndSaysTheFullSize(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		in     string
+		maxLen int
+		want   string
+	}{
+		{"shorter than the limit", "abc", 5, "abc"},
+		{"exactly at the limit", "abcde", 5, "abcde"},
+		{"longer than the limit", "abcdefgh", 5, "abcde... [truncated full size is 8 bytes]"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			assert.Equal(t, tt.want, truncateString(tt.in, tt.maxLen))
+		})
+	}
+}
+
+// terminalFor is the terminal of flow 1 whose sandbox is container row 7.
+func terminalFor(dc docker.DockerClient, tlp TermLogProvider) *terminal {
+	return &terminal{
+		flowID:       1,
+		containerID:  7,
+		containerLID: "test-container",
+		dockerClient: dc,
+		tlp:          tlp,
+	}
+}
+
+func terminalRunningOnlyAtFirst(probe int) (bool, error) { return probe == 1, nil }
+
+func terminalAlwaysRunning(int) (bool, error) { return true, nil }
+
+type terminalTarEntry struct {
+	name string
+	body string
+	dir  bool
+}
+
+func terminalTar(t *testing.T, entries ...terminalTarEntry) []byte {
+	t.Helper()
+
+	var buf bytes.Buffer
+	tw := tar.NewWriter(&buf)
+	for _, e := range entries {
+		hdr := &tar.Header{Name: e.name, Mode: 0o600, Size: int64(len(e.body)), Typeflag: tar.TypeReg}
+		if e.dir {
+			hdr = &tar.Header{Name: e.name, Mode: 0o755, Typeflag: tar.TypeDir}
+		}
+		require.NoError(t, tw.WriteHeader(hdr))
+		_, err := tw.Write([]byte(e.body))
+		require.NoError(t, err)
+	}
+	require.NoError(t, tw.Close())
+
+	return buf.Bytes()
+}
+
+// terminalShortArchive declares a size `missing` bytes past body and ends after body, like a copy cut off mid-stream.
+func terminalShortArchive(t *testing.T, name, body string, missing int) []byte {
+	t.Helper()
+
+	var buf bytes.Buffer
+	tw := tar.NewWriter(&buf)
+	require.NoError(t, tw.WriteHeader(&tar.Header{Name: name, Mode: 0o600, Size: int64(len(body) + missing)}))
+	_, err := tw.Write([]byte(body))
+	require.NoError(t, err)
+
+	return buf.Bytes()
+}
+
+// terminalLargeFileContent numbers every line and holds no NUL, so a lost or zeroed chunk shows.
+func terminalLargeFileContent(lines int) string {
+	var b strings.Builder
+	for i := range lines {
+		fmt.Fprintf(&b, "line %05d: the quick brown fox jumps over the lazy dog\n", i)
+	}
+
+	return b.String()
+}
+
+// terminalRecorded is the container id of every write of that state, nil when there is none.
+func terminalRecorded(tlp *recordingTermLog, state termLogState) []int64 {
+	var containers []int64
+	for _, entry := range tlp.states(state) {
+		containers = append(containers, entry.containerID)
+	}
+	return containers
 }

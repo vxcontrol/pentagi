@@ -1,4 +1,4 @@
-import { useQuery, useSubscription } from '@apollo/client/react';
+import { useApolloClient, useQuery, useSubscription } from '@apollo/client/react';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
 import type { Provider } from '@/models/provider';
@@ -28,6 +28,7 @@ interface ProvidersProviderProps {
 
 export function ProvidersProvider({ children }: ProvidersProviderProps) {
     const { isAuthenticated } = useUser();
+    const client = useApolloClient();
 
     const { data: providersData, refetch: refetchProviders } = useQuery(ProvidersDocument, {
         skip: !isAuthenticated(),
@@ -44,7 +45,8 @@ export function ProvidersProvider({ children }: ProvidersProviderProps) {
         }
 
         void refetchProviders();
-    }, [isAuthenticated, refetchProviders]);
+        void client.refetchQueries({ include: ['settingsProviders'] });
+    }, [client, isAuthenticated, refetchProviders]);
 
     const subscriptionSkip = !isAuthenticated();
     useSubscription(ProviderCreatedDocument, { onData: refetchOnProviderEvent, skip: subscriptionSkip });

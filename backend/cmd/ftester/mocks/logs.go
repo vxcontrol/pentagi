@@ -241,6 +241,17 @@ func (p *proxyTermLogProvider) PutMsg(
 	return 0, nil
 }
 
+func (p *proxyTermLogProvider) ContainerNotRunning(ctx context.Context, containerID int64, _, _ *int64) error {
+	terminal.PrintInfo("Container reported not running:")
+	terminal.PrintKeyValueFormat("Container ID", "%d", containerID)
+
+	return nil
+}
+
+func (p *proxyTermLogProvider) ContainerRunning(ctx context.Context, containerID int64, _, _ *int64) error {
+	return nil
+}
+
 // proxyVectorStoreLogProvider is a proxy implementation of VectorStoreLogProvider
 type proxyVectorStoreLogProvider struct{}
 

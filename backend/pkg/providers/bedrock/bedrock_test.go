@@ -1,10 +1,15 @@
 package bedrock
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"sort"
+	"strings"
 	"testing"
 
 	"pentagi/pkg/config"
@@ -12,231 +17,386 @@ import (
 	"pentagi/pkg/providers/provider"
 
 	"github.com/invopop/jsonschema"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/vxcontrol/langchaingo/llms"
-	"github.com/vxcontrol/langchaingo/llms/bedrock"
 )
 
-func TestConfigLoading(t *testing.T) {
-	cfg := &config.Config{
-		BedrockRegion:    "us-east-1",
-		BedrockAccessKey: "test-key",
-		BedrockSecretKey: "test-key",
-	}
+func TestBedrock_DefaultProviderConfig_GivesEveryAgentAModelAndAPrice(t *testing.T) {
+	t.Parallel()
 
 	providerConfig, err := DefaultProviderConfig(&config.Config{})
-	if err != nil {
-		t.Fatalf("Failed to create provider config: %v", err)
-	}
+	require.NoError(t, err)
 
-	prov, err := New(cfg, provider.DefaultProviderNameBedrock, providerConfig)
-	if err != nil {
-		t.Fatalf("Failed to create provider: %v", err)
-	}
+	prov, err := New(&config.Config{
+		BedrockRegion: "us-east-1", BedrockAccessKey: "test-key", BedrockSecretKey: "test-key",
+	}, provider.DefaultProviderNameBedrock, providerConfig)
+	require.NoError(t, err)
 
-	rawConfig := prov.GetRawConfig()
-	if len(rawConfig) == 0 {
-		t.Fatal("Raw config should not be empty")
-	}
-
-	providerConfig = prov.GetProviderConfig()
-	if providerConfig == nil {
-		t.Fatal("Provider config should not be nil")
-	}
+	assert.Equal(t, provider.ProviderBedrock, prov.Type())
+	assert.NotEmpty(t, prov.GetRawConfig())
+	assert.Same(t, providerConfig, prov.GetProviderConfig())
 
 	for _, agentType := range pconfig.AllAgentTypes {
-		model := prov.Model(agentType)
-		if model == "" {
-			t.Errorf("Agent type %v should have a model assigned", agentType)
-		}
-	}
+		assert.NotEmpty(t, prov.Model(agentType), "agent type %v has no model", agentType)
 
-	for _, agentType := range pconfig.AllAgentTypes {
 		priceInfo := prov.GetPriceInfo(agentType)
-		if priceInfo == nil {
-			t.Errorf("Agent type %v should have price information", agentType)
-		} else {
-			if priceInfo.Input <= 0 || priceInfo.Output <= 0 {
-				t.Errorf("Agent type %v should have positive input (%f) and output (%f) prices",
-					agentType, priceInfo.Input, priceInfo.Output)
-			}
+		if assert.NotNil(t, priceInfo, "agent type %v has no price", agentType) {
+			assert.Positive(t, priceInfo.Input, "agent type %v input price", agentType)
+			assert.Positive(t, priceInfo.Output, "agent type %v output price", agentType)
 		}
 	}
 }
 
-func TestProviderType(t *testing.T) {
-	cfg := &config.Config{
-		BedrockRegion:    "us-east-1",
-		BedrockAccessKey: "test-key",
-		BedrockSecretKey: "test-key",
-	}
+func TestBedrock_DefaultProviderConfig_ReadsAnExternalFileInsteadOfTheEmbeddedOne(t *testing.T) {
+	t.Parallel()
 
-	providerConfig, err := DefaultProviderConfig(&config.Config{})
-	if err != nil {
-		t.Fatalf("Failed to create provider config: %v", err)
-	}
-
-	prov, err := New(cfg, provider.DefaultProviderNameBedrock, providerConfig)
-	if err != nil {
-		t.Fatalf("Failed to create provider: %v", err)
-	}
-
-	if prov.Type() != provider.ProviderBedrock {
-		t.Errorf("Expected provider type %v, got %v", provider.ProviderBedrock, prov.Type())
-	}
-}
-
-func TestModelsLoading(t *testing.T) {
-	models, err := DefaultModels()
-	if err != nil {
-		t.Fatalf("Failed to load models: %v", err)
-	}
-
-	if len(models) == 0 {
-		t.Fatal("Models list should not be empty")
-	}
-
-	for _, model := range models {
-		if model.Name == "" {
-			t.Error("Model name should not be empty")
-		}
-
-		if model.Price == nil {
-			t.Errorf("Model %s should have price information", model.Name)
-			continue
-		}
-
-		if model.Price.Input <= 0 {
-			t.Errorf("Model %s should have positive input price", model.Name)
-		}
-
-		if model.Price.Output <= 0 {
-			t.Errorf("Model %s should have positive output price", model.Name)
-		}
-	}
-}
-
-func TestBedrockProviderConfigPathOverride(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "bedrock.provider.yml")
-	external := "simple:\n  model: zai.glm-4.7-flash\n  temperature: 0.5\n  n: 1\n  max_tokens: 1000\n  price:\n    input: 0.15\n    output: 0.6\n"
-	if err := os.WriteFile(path, []byte(external), 0o600); err != nil {
-		t.Fatalf("Failed to write external config: %v", err)
-	}
+	path := filepath.Join(t.TempDir(), "bedrock.provider.yml")
+	external := "simple:\n  model: zai.glm-4.7-flash\n  temperature: 0.5\n  n: 1\n  max_tokens: 1000\n" +
+		"  price:\n    input: 0.15\n    output: 0.6\n"
+	require.NoError(t, os.WriteFile(path, []byte(external), 0o600))
 
 	cfg := &config.Config{
-		BedrockRegion:    "us-east-1",
-		BedrockAccessKey: "test-key",
-		BedrockSecretKey: "test-key",
-		BedrockConfig:    path,
+		BedrockRegion: "us-east-1", BedrockAccessKey: "test-key", BedrockSecretKey: "test-key", BedrockConfig: path,
 	}
 
 	providerConfig, err := DefaultProviderConfig(cfg)
-	if err != nil {
-		t.Fatalf("Failed to load external provider config: %v", err)
-	}
+	require.NoError(t, err)
 
 	prov, err := New(cfg, provider.DefaultProviderNameBedrock, providerConfig)
-	if err != nil {
-		t.Fatalf("Failed to create provider: %v", err)
-	}
+	require.NoError(t, err)
 
-	if got := prov.Model(pconfig.OptionsTypeSimple); got != "zai.glm-4.7-flash" {
-		t.Errorf("simple agent model = %q, want zai.glm-4.7-flash (external override)", got)
-	}
+	assert.Equal(t, "zai.glm-4.7-flash", prov.Model(pconfig.OptionsTypeSimple))
 }
 
-func TestBedrockSpecificFeatures(t *testing.T) {
+func TestBedrock_DefaultModels_PricesEveryModelAndDatesItToItsBedrockLaunch(t *testing.T) {
+	t.Parallel()
+
+	const (
+		whatsNew           = "https://aws.amazon.com/about-aws/whats-new/"
+		docHistory         = "https://docs.aws.amazon.com/bedrock/latest/userguide/doc-history.html"
+		novaLaunch         = whatsNew + "2024/12/amazon-nova-foundation-models-bedrock"
+		llama3Launch       = whatsNew + "2024/04/meta-llama-3-amazon-bedrock/"
+		llama31Launch      = whatsNew + "2024/07/meta-llama-3-1-generative-ai-models-amazon-bedrock"
+		qwen3Launch        = whatsNew + "2025/09/qwen3-models-fully-managed-amazon-bedrock"
+		openWeights18      = whatsNew + "2025/12/amazon-bedrock-fully-managed-open-weight-models"
+		openWeights6       = whatsNew + "2026/02/amazon-bedrock-adds-support-six-open-weights-models"
+		minimaxGLMLaunch   = whatsNew + "2026/03/amazon-bedrock-minimax-glm/"
+		mistralLarge3Batch = whatsNew + "2025/12/mistral-large-3-ministral-3-family-available-amazon-bedrock"
+	)
+
+	announced := map[string]struct{ date, source string }{
+		"us.amazon.nova-2-lite-v1:0": {"2025-12-02", whatsNew + "2025/12/nova-2-foundation-models-amazon-bedrock/"},
+		"us.amazon.nova-pro-v1:0":    {"2024-12-03", novaLaunch},
+		"us.amazon.nova-lite-v1:0":   {"2024-12-03", novaLaunch},
+		"us.amazon.nova-micro-v1:0":  {"2024-12-03", novaLaunch},
+
+		"us.anthropic.claude-opus-5":                   {"2026-07-24", whatsNew + "2026/07/claude-opus-5-aws/"},
+		"us.anthropic.claude-fable-5-1":                {"2026-09-01", whatsNew + "2026/09/claude-fable-5-1-aws/"},
+		"us.anthropic.claude-fable-5":                  {"2026-06-09", whatsNew + "2026/06/claude-fable-5-aws/"},
+		"us.anthropic.claude-opus-4-8":                 {"2026-05-28", whatsNew + "2026/05/claude-opus-4.8-aws/"},
+		"us.anthropic.claude-opus-4-7":                 {"2026-04-16", whatsNew + "2026/04/claude-opus-4.7-amazon-bedrock/"},
+		"us.anthropic.claude-sonnet-5":                 {"2026-06-30", whatsNew + "2026/06/claude-sonnet-5-now-available-on-aws"},
+		"us.anthropic.claude-opus-4-6-v1":              {"2026-02-05", whatsNew + "2026/2/claude-opus-4.6-available-amazon-bedrock/"},
+		"us.anthropic.claude-sonnet-4-6":               {"2026-02-17", whatsNew + "2026/02/claude-sonnet-4.6-available-in-amazon-bedrock/"},
+		"us.anthropic.claude-opus-4-5-20251101-v1:0":   {"2025-11-24", whatsNew + "2025/11/claude-opus-4-5-amazon-bedrock"},
+		"us.anthropic.claude-haiku-4-5-20251001-v1:0":  {"2025-10-15", whatsNew + "2025/10/claude-4-5-haiku-anthropic-amazon-bedrock"},
+		"us.anthropic.claude-sonnet-4-5-20250929-v1:0": {"2025-09-29", whatsNew + "2025/09/anthropics-claude-sonnet-4-5-amazon-bedrock"},
+
+		"us.meta.llama4-maverick-17b-instruct-v1:0": {"2025-04-28", docHistory},
+		"us.meta.llama4-scout-17b-instruct-v1:0":    {"2025-04-28", docHistory},
+		"us.meta.llama3-3-70b-instruct-v1:0":        {"2024-12-19", whatsNew + "2024/12/metas-llama-3-3-70b-model-amazon-bedrock/"},
+		"us.meta.llama3-1-70b-instruct-v1:0":        {"2024-07-23", llama31Launch},
+		"us.meta.llama3-1-8b-instruct-v1:0":         {"2024-07-23", llama31Launch},
+		"meta.llama3-70b-instruct-v1:0":             {"2024-04-23", llama3Launch},
+		"meta.llama3-8b-instruct-v1:0":              {"2024-04-23", llama3Launch},
+
+		"deepseek.v3.2":       {"2026-02-10", openWeights6},
+		"us.deepseek.r1-v1:0": {"2025-03-10", whatsNew + "2025/03/deepseek-r1-fully-managed-amazon-bedrock"},
+
+		"openai.gpt-oss-safeguard-120b": {"2025-12-02", openWeights18},
+		"openai.gpt-oss-safeguard-20b":  {"2025-12-02", openWeights18},
+		"openai.gpt-oss-120b-1:0":       {"2025-08-05", docHistory},
+		"openai.gpt-oss-20b-1:0":        {"2025-08-05", docHistory},
+
+		"qwen.qwen3-next-80b-a3b":       {"2025-12-02", openWeights18},
+		"qwen.qwen3-vl-235b-a22b":       {"2025-12-02", openWeights18},
+		"qwen.qwen3-32b-v1:0":           {"2025-09-18", qwen3Launch},
+		"qwen.qwen3-coder-30b-a3b-v1:0": {"2025-09-18", qwen3Launch},
+		"qwen.qwen3-coder-next":         {"2026-02-10", openWeights6},
+
+		"mistral.mistral-large-3-675b-instruct": {"2025-12-02", mistralLarge3Batch},
+		"mistral.devstral-2-123b":               {"2026-02-18", whatsNew + "2026/02/mistral-ai-devstral-bedrock/"},
+		"mistral.magistral-small-2509":          {"2025-12-02", mistralLarge3Batch},
+		"mistral.mistral-large-2402-v1:0":       {"2024-04-03", whatsNew + "2024/04/mistral-large-foundation-model-amazon-bedrock/"},
+
+		"moonshotai.kimi-k2.5":      {"2026-02-10", openWeights6},
+		"moonshot.kimi-k2-thinking": {"2025-12-02", openWeights18},
+
+		"zai.glm-4.7":       {"2026-02-10", openWeights6},
+		"zai.glm-4.7-flash": {"2026-02-10", openWeights6},
+		"zai.glm-5":         {"2026-03-18", minimaxGLMLaunch},
+
+		"minimax.minimax-m2.5": {"2026-03-18", minimaxGLMLaunch},
+		"minimax.minimax-m2.1": {"2026-02-10", openWeights6},
+		"minimax.minimax-m2":   {"2025-12-02", openWeights18},
+
+		"nvidia.nemotron-nano-3-30b":   {"2025-12-23", whatsNew + "2025/12/nvidia-nemotron-3-nano-amazon-bedrock/"},
+		"nvidia.nemotron-super-3-120b": {"2026-03-18", whatsNew + "2026/03/amazon-bedrock-nemotron-3-super/"},
+	}
+
 	models, err := DefaultModels()
-	if err != nil {
-		t.Fatalf("Failed to load models: %v", err)
-	}
+	require.NoError(t, err, "cannot read the bundled bedrock catalogue")
 
-	// Models present in langchaingo/llms/bedrock models_list (and this catalog)
-	expectedModels := []string{
-		"us.amazon.nova-2-lite-v1:0",
-		"us.amazon.nova-pro-v1:0",
-		"us.anthropic.claude-fable-5",
-		"us.anthropic.claude-sonnet-5",
-		"us.anthropic.claude-opus-4-8",
-		"us.anthropic.claude-opus-4-6-v1",
-		"us.meta.llama4-maverick-17b-instruct-v1:0",
-		"deepseek.v3.2",
-		"zai.glm-4.7-flash",
-		"minimax.minimax-m2.5",
-		"nvidia.nemotron-super-3-120b",
-	}
-	for _, expectedModel := range expectedModels {
-		found := false
-		for _, model := range models {
-			if model.Name == expectedModel {
-				found = true
-				break
-			}
+	seen := map[string]bool{}
+	for _, m := range models {
+		if m.Price == nil {
+			t.Errorf("%s carries no price", m.Name)
+		} else if m.Price.Input <= 0 || m.Price.Output <= 0 {
+			t.Errorf("%s prices must be positive, got input %f and output %f", m.Name, m.Price.Input, m.Price.Output)
 		}
-		if !found {
-			t.Errorf("Expected model %s not found in models list", expectedModel)
+
+		want, ok := announced[m.Name]
+		if !ok {
+			t.Errorf("%s has no entry here; add the day Bedrock began serving it and the AWS record that says so", m.Name)
+			continue
+		}
+		seen[m.Name] = true
+
+		if m.ReleaseDate == nil {
+			t.Errorf("%s carries no release_date; Bedrock began serving it on %s (%s)", m.Name, want.date, want.source)
+			continue
+		}
+		if got := m.ReleaseDate.Format("2006-01-02"); got != want.date {
+			t.Errorf("%s release_date = %s, but Bedrock began serving it on %s (%s)", m.Name, got, want.date, want.source)
 		}
 	}
 
-	// Test default agent model
-	if BedrockAgentModel != bedrock.ModelAnthropicClaudeSonnet46 {
-		t.Errorf("Expected default agent model to be %s, got %s",
-			bedrock.ModelAnthropicClaudeSonnet46, BedrockAgentModel)
+	for name := range announced {
+		if !seen[name] {
+			t.Errorf("%s is no longer in the bedrock catalogue; drop it from this table", name)
+		}
 	}
 }
 
-func TestGetUsage(t *testing.T) {
-	cfg := &config.Config{
-		BedrockRegion:    "us-east-1",
-		BedrockAccessKey: "test-key",
-		BedrockSecretKey: "test-key",
-	}
+func TestBedrock_GetUsage_ReadsTheTokenCountsBedrockReports(t *testing.T) {
+	t.Parallel()
+
+	prov := &bedrockProvider{}
+
+	assert.Equal(t, pconfig.CallUsage{Input: 100, Output: 50},
+		prov.GetUsage(map[string]any{"PromptTokens": int32(100), "CompletionTokens": int32(50)}))
+	usage := prov.GetUsage(map[string]any{})
+	assert.True(t, usage.IsZero(), "missing usage info must read as zero, got %s", usage.String())
+}
+
+// bedrockProbe is a Converse endpoint that answers every request and keeps the last one's headers and body.
+type bedrockProbe struct {
+	url    string
+	calls  int
+	header http.Header
+	body   map[string]any
+}
+
+func bedrockEndpoint(t *testing.T) *bedrockProbe {
+	t.Helper()
+
+	p := &bedrockProbe{}
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		p.calls++
+		p.header, p.body = r.Header.Clone(), nil
+		_ = json.Unmarshal(raw, &p.body)
+
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"output":{"message":{"role":"assistant","content":[{"text":"ok"}]}},` +
+			`"stopReason":"end_turn","usage":{"inputTokens":1,"outputTokens":1,"totalTokens":2}}`))
+	}))
+	t.Cleanup(srv.Close)
+	p.url = srv.URL
+
+	return p
+}
+
+// door builds a provider on the credentials in cfg that reaches the probe.
+func (p *bedrockProbe) door(t *testing.T, cfg config.Config, providerConfig *pconfig.ProviderConfig) provider.Provider {
+	t.Helper()
+
+	cfg.BedrockRegion, cfg.BedrockServerURL, cfg.ExternalSSLInsecure = "us-east-1", p.url, true
+	prov, err := New(&cfg, provider.DefaultProviderNameBedrock, providerConfig)
+	require.NoError(t, err)
+
+	return prov
+}
+
+func TestBedrock_New_SignsWithTheCredentialItIsGiven(t *testing.T) {
+	t.Setenv("AWS_ACCESS_KEY_ID", "AKIDENV")
+	t.Setenv("AWS_SECRET_ACCESS_KEY", "env-secret")
+	t.Setenv("AWS_SESSION_TOKEN", "")
+	t.Setenv("AWS_PROFILE", "")
+	t.Setenv("AWS_BEARER_TOKEN_BEDROCK", "")
+	t.Setenv("AWS_CONFIG_FILE", filepath.Join(t.TempDir(), "config"))
+	t.Setenv("AWS_SHARED_CREDENTIALS_FILE", filepath.Join(t.TempDir(), "credentials"))
 
 	providerConfig, err := DefaultProviderConfig(&config.Config{})
-	if err != nil {
-		t.Fatalf("Failed to create provider config: %v", err)
+	require.NoError(t, err)
+
+	tests := []struct {
+		name         string
+		cfg          config.Config
+		signer       string
+		sessionToken string
+	}{
+		{
+			name:   "static credentials sign the request",
+			cfg:    config.Config{BedrockAccessKey: "test-access-key", BedrockSecretKey: "test-secret-key"},
+			signer: "AWS4-HMAC-SHA256 Credential=test-access-key",
+		},
+		{
+			name: "a session token travels with static credentials",
+			cfg: config.Config{
+				BedrockAccessKey: "test-access-key", BedrockSecretKey: "test-secret-key", BedrockSessionToken: "test-session-token",
+			},
+			signer: "AWS4-HMAC-SHA256 Credential=test-access-key", sessionToken: "test-session-token",
+		},
+		{
+			name:   "a bearer token needs no AWS credentials",
+			cfg:    config.Config{BedrockBearerToken: "test-bearer-token-value"},
+			signer: "Bearer test-bearer-token-value",
+		},
+		{
+			name: "a bearer token wins over static credentials",
+			cfg: config.Config{
+				BedrockBearerToken: "bearer-token", BedrockAccessKey: "access-key", BedrockSecretKey: "secret-key",
+			},
+			signer: "Bearer bearer-token",
+		},
+		{
+			name: "default auth wins over every configured credential",
+			cfg: config.Config{
+				BedrockDefaultAuth: true, BedrockBearerToken: "bearer-token",
+				BedrockAccessKey: "access-key", BedrockSecretKey: "secret-key",
+			},
+			signer: "AWS4-HMAC-SHA256 Credential=AKIDENV",
+		},
 	}
 
-	prov, err := New(cfg, provider.DefaultProviderNameBedrock, providerConfig)
-	if err != nil {
-		t.Fatalf("Failed to create provider: %v", err)
-	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			probe := bedrockEndpoint(t)
+			prov := probe.door(t, tc.cfg, providerConfig)
 
-	// Test usage parsing with Google AI format
-	usageInfo := map[string]any{
-		"PromptTokens":     int32(100),
-		"CompletionTokens": int32(50),
-	}
+			_, err := prov.CallEx(context.Background(), pconfig.OptionsTypeSimple,
+				[]llms.MessageContent{llms.TextParts(llms.ChatMessageTypeHuman, "hi")}, nil)
+			require.NoError(t, err)
 
-	usage := prov.GetUsage(usageInfo)
-	if usage.Input != 100 {
-		t.Errorf("Expected input tokens 100, got %d", usage.Input)
-	}
-	if usage.Output != 50 {
-		t.Errorf("Expected output tokens 50, got %d", usage.Output)
-	}
-
-	// Test with missing usage info
-	emptyInfo := map[string]any{}
-	usage = prov.GetUsage(emptyInfo)
-	if !usage.IsZero() {
-		t.Errorf("Expected zero tokens with empty usage info, got %s", usage.String())
+			signer, _, _ := strings.Cut(probe.header.Get("Authorization"), "/")
+			assert.Equal(t, tc.signer, signer)
+			assert.Equal(t, tc.sessionToken, probe.header.Get("X-Amz-Security-Token"))
+		})
 	}
 }
 
-// toolNames is a test helper that extracts tool names from a slice of llms.Tool.
-func toolNames(tools []llms.Tool) []string {
-	names := make([]string, 0, len(tools))
-	for _, t := range tools {
-		if t.Function != nil {
-			names = append(names, t.Function.Name)
-		}
+func TestBedrock_New_RefusesWithoutACompleteCredential(t *testing.T) {
+	t.Parallel()
+
+	providerConfig, err := DefaultProviderConfig(&config.Config{})
+	require.NoError(t, err)
+
+	tests := []struct {
+		name string
+		cfg  config.Config
+	}{
+		{"no credential at all", config.Config{}},
+		{"an access key without its secret", config.Config{BedrockAccessKey: "test-key"}},
+		{"a secret without its access key", config.Config{BedrockSecretKey: "test-secret"}},
 	}
-	return names
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			cfg := tc.cfg
+			cfg.BedrockRegion = "us-east-1"
+
+			_, err := New(&cfg, provider.DefaultProviderNameBedrock, providerConfig)
+			assert.EqualError(t, err, "no valid authentication method configured for Bedrock")
+		})
+	}
 }
 
-// TestInferPropertyType verifies type inference for individual property values.
-func TestInferPropertyType(t *testing.T) {
+// TestBedrock_EveryCallPathSendsTheAgentsThinkingAndTheChainsTools is keyed by calling method.
+func TestBedrock_EveryCallPathSendsTheAgentsThinkingAndTheChainsTools(t *testing.T) {
+	t.Parallel()
+
+	providerConfig, err := BuildProviderConfig([]byte(
+		"simple:\n  model: us.anthropic.claude-opus-5\n  reasoning:\n    mode: adaptive\n    effort: low\n"))
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	chain := []llms.MessageContent{
+		llms.TextParts(llms.ChatMessageTypeHuman, "hi"),
+		{Role: llms.ChatMessageTypeAI, Parts: []llms.ContentPart{llms.ToolCall{
+			ID: "c1", Type: "function", FunctionCall: &llms.FunctionCall{Name: "search", Arguments: `{"query":"x"}`},
+		}}},
+		{Role: llms.ChatMessageTypeTool, Parts: []llms.ContentPart{llms.ToolCallResponse{
+			ToolCallID: "c1", Name: "search", Content: "found",
+		}}},
+	}
+	tools := []llms.Tool{createToolWithSchema("noop", "draft/2020-12")}
+
+	paths := []struct {
+		name  string
+		call  func(prov provider.Provider) error
+		tools []string
+	}{
+		{"a single prompt", func(prov provider.Provider) error {
+			_, err := prov.Call(ctx, pconfig.OptionsTypeSimple, "hi")
+			return err
+		}, nil},
+		{"a chain", func(prov provider.Provider) error {
+			_, err := prov.CallEx(ctx, pconfig.OptionsTypeSimple, chain, nil)
+			return err
+		}, []string{"search"}},
+		{"a chain with tools", func(prov provider.Provider) error {
+			_, err := prov.CallWithTools(ctx, pconfig.OptionsTypeSimple, chain, tools, nil)
+			return err
+		}, []string{"noop", "search"}},
+		{"a chain with extra options", func(prov provider.Provider) error {
+			_, err := prov.CallWithExtraOptions(ctx, pconfig.OptionsTypeSimple, chain, tools, nil)
+			return err
+		}, []string{"noop", "search"}},
+	}
+
+	for _, path := range paths {
+		t.Run(path.name, func(t *testing.T) {
+			t.Parallel()
+
+			probe := bedrockEndpoint(t)
+			require.NoError(t, path.call(probe.door(t, config.Config{BedrockBearerToken: "t"}, providerConfig)))
+			require.Equal(t, 1, probe.calls)
+
+			fields, _ := probe.body["additionalModelRequestFields"].(map[string]any)
+			thinking, _ := fields["thinking"].(map[string]any)
+			assert.Equal(t, "adaptive", thinking["type"], "body=%v", probe.body)
+
+			toolConfig, _ := probe.body["toolConfig"].(map[string]any)
+			specs, _ := toolConfig["tools"].([]any)
+			var names []string
+			for _, spec := range specs {
+				toolSpec, _ := spec.(map[string]any)["toolSpec"].(map[string]any)
+				names = append(names, fmt.Sprint(toolSpec["name"]))
+				inputSchema, _ := toolSpec["inputSchema"].(map[string]any)
+				assert.NotContains(t, inputSchema["json"], "$schema", "tool %v", toolSpec["name"])
+			}
+			assert.Equal(t, path.tools, names, "the Converse API refuses a chain with tool use but no toolConfig")
+		})
+	}
+}
+
+func TestBedrock_InferPropertyType_ClassifiesTheTopLevelJSONType(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name     string
 		value    any
@@ -244,969 +404,309 @@ func TestInferPropertyType(t *testing.T) {
 	}{
 		{"nil value", nil, "null"},
 		{"string", "hello", "string"},
-		{"empty string", "", "string"},
-		{"boolean true", true, "boolean"},
-		{"boolean false", false, "boolean"},
-		{"int", 42, "number"},
-		{"int64", int64(42), "number"},
-		{"float32", float32(3.14), "number"},
-		{"float64", 3.14159, "number"},
+		{"boolean", true, "boolean"},
+		{"integer", 42, "number"},
+		{"float", 3.14159, "number"},
 		{"slice", []int{1, 2, 3}, "array"},
-		{"empty slice", []string{}, "array"},
 		{"map", map[string]string{"key": "value"}, "object"},
-		{"empty map", map[string]any{}, "object"},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := inferPropertyType(tt.value)
-			if result != tt.expected {
-				t.Errorf("inferPropertyType(%v) = %q, want %q", tt.value, result, tt.expected)
-			}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			assert.Equal(t, tc.expected, inferPropertyType(tc.value))
 		})
 	}
 }
 
-// TestInferSchemaFromArguments verifies JSON schema inference from argument samples.
-func TestInferSchemaFromArguments(t *testing.T) {
-	t.Run("no samples returns empty schema", func(t *testing.T) {
-		schema := inferSchemaFromArguments(nil)
-		if schema["type"] != "object" {
-			t.Errorf("expected type 'object', got %v", schema["type"])
-		}
-		props, ok := schema["properties"].(map[string]any)
-		if !ok || len(props) != 0 {
-			t.Errorf("expected empty properties, got %v", schema["properties"])
-		}
-	})
-
-	t.Run("single sample with multiple types", func(t *testing.T) {
-		samples := []string{`{"name":"test","count":5,"active":true,"tags":["a","b"],"meta":{}}`}
-		schema := inferSchemaFromArguments(samples)
-
-		props, ok := schema["properties"].(map[string]any)
-		if !ok {
-			t.Fatalf("expected properties map, got %T", schema["properties"])
-		}
-
-		expectedTypes := map[string]string{
-			"name":   "string",
-			"count":  "number",
-			"active": "boolean",
-			"tags":   "array",
-			"meta":   "object",
-		}
-
-		for key, expectedType := range expectedTypes {
-			prop, exists := props[key]
-			if !exists {
-				t.Errorf("property %q not found in schema", key)
-				continue
-			}
-			propMap, ok := prop.(map[string]any)
-			if !ok {
-				t.Errorf("property %q is not a map", key)
-				continue
-			}
-			if propMap["type"] != expectedType {
-				t.Errorf("property %q type = %v, want %v", key, propMap["type"], expectedType)
-			}
-		}
-	})
-
-	t.Run("multiple samples aggregate properties", func(t *testing.T) {
-		samples := []string{
-			`{"field1":"value1"}`,
-			`{"field2":42}`,
-			`{"field3":true}`,
-		}
-		schema := inferSchemaFromArguments(samples)
-
-		props, ok := schema["properties"].(map[string]any)
-		if !ok {
-			t.Fatalf("expected properties map")
-		}
-
-		if len(props) != 3 {
-			t.Errorf("expected 3 properties, got %d", len(props))
-		}
-
-		expectedTypes := map[string]string{
-			"field1": "string",
-			"field2": "number",
-			"field3": "boolean",
-		}
-
-		for key, expectedType := range expectedTypes {
-			prop := props[key].(map[string]any)
-			if prop["type"] != expectedType {
-				t.Errorf("property %q type = %v, want %v", key, prop["type"], expectedType)
-			}
-		}
-	})
-
-	t.Run("invalid JSON is ignored", func(t *testing.T) {
-		samples := []string{
-			`{invalid json}`,
-			`{"valid":"field"}`,
-			`not json at all`,
-		}
-		schema := inferSchemaFromArguments(samples)
-
-		props := schema["properties"].(map[string]any)
-		if len(props) != 1 {
-			t.Errorf("expected 1 valid property, got %d", len(props))
-		}
-	})
-
-	t.Run("empty string samples are skipped", func(t *testing.T) {
-		samples := []string{"", "", `{"key":"value"}`}
-		schema := inferSchemaFromArguments(samples)
-
-		props := schema["properties"].(map[string]any)
-		if len(props) != 1 {
-			t.Errorf("expected 1 property, got %d", len(props))
-		}
-	})
-
-	t.Run("duplicate keys use first occurrence", func(t *testing.T) {
-		samples := []string{
-			`{"field":"string_value"}`,
-			`{"field":123}`, // Same field with different type - should be ignored
-		}
-		schema := inferSchemaFromArguments(samples)
-
-		props := schema["properties"].(map[string]any)
-		fieldProp := props["field"].(map[string]any)
-		if fieldProp["type"] != "string" {
-			t.Errorf("expected first occurrence type 'string', got %v", fieldProp["type"])
-		}
-	})
-}
-
-// TestCollectToolUsageFromChain verifies tool usage collection from message chains.
-func TestCollectToolUsageFromChain(t *testing.T) {
-	t.Run("empty chain returns empty map", func(t *testing.T) {
-		result := collectToolUsageFromChain(nil)
-		if len(result) != 0 {
-			t.Errorf("expected empty map, got %v", result)
-		}
-
-		result = collectToolUsageFromChain([]llms.MessageContent{})
-		if len(result) != 0 {
-			t.Errorf("expected empty map, got %v", result)
-		}
-	})
-
-	t.Run("collects from ToolCall", func(t *testing.T) {
-		chain := []llms.MessageContent{
-			{
-				Role: llms.ChatMessageTypeAI,
-				Parts: []llms.ContentPart{
-					llms.ToolCall{
-						ID:   "c1",
-						Type: "function",
-						FunctionCall: &llms.FunctionCall{
-							Name:      "search",
-							Arguments: `{"query":"test"}`,
-						},
-					},
-				},
-			},
-		}
-
-		result := collectToolUsageFromChain(chain)
-		if len(result) != 1 {
-			t.Fatalf("expected 1 tool, got %d", len(result))
-		}
-		if args, ok := result["search"]; !ok || len(args) != 1 {
-			t.Errorf("expected search tool with 1 argument, got %v", result)
-		}
-	})
-
-	t.Run("collects from ToolCallResponse", func(t *testing.T) {
-		chain := []llms.MessageContent{
-			{
-				Role: llms.ChatMessageTypeTool,
-				Parts: []llms.ContentPart{
-					llms.ToolCallResponse{
-						ToolCallID: "c1",
-						Name:       "execute",
-						Content:    "done",
-					},
-				},
-			},
-		}
-
-		result := collectToolUsageFromChain(chain)
-		if len(result) != 1 {
-			t.Fatalf("expected 1 tool, got %d", len(result))
-		}
-		if _, ok := result["execute"]; !ok {
-			t.Errorf("expected execute tool in result")
-		}
-	})
-
-	t.Run("aggregates multiple calls to same tool", func(t *testing.T) {
-		chain := []llms.MessageContent{
-			{
-				Role: llms.ChatMessageTypeAI,
-				Parts: []llms.ContentPart{
-					llms.ToolCall{
-						ID:   "c1",
-						Type: "function",
-						FunctionCall: &llms.FunctionCall{
-							Name:      "calc",
-							Arguments: `{"op":"add","a":1,"b":2}`,
-						},
-					},
-				},
-			},
-			{
-				Role: llms.ChatMessageTypeAI,
-				Parts: []llms.ContentPart{
-					llms.ToolCall{
-						ID:   "c2",
-						Type: "function",
-						FunctionCall: &llms.FunctionCall{
-							Name:      "calc",
-							Arguments: `{"op":"multiply","a":3,"b":4}`,
-						},
-					},
-				},
-			},
-		}
-
-		result := collectToolUsageFromChain(chain)
-		if len(result) != 1 {
-			t.Fatalf("expected 1 tool (deduplicated), got %d", len(result))
-		}
-		if args := result["calc"]; len(args) != 2 {
-			t.Errorf("expected 2 argument samples for calc, got %d", len(args))
-		}
-	})
-
-	t.Run("handles mixed ToolCall and ToolCallResponse", func(t *testing.T) {
-		chain := []llms.MessageContent{
-			{
-				Role: llms.ChatMessageTypeAI,
-				Parts: []llms.ContentPart{
-					llms.ToolCall{
-						ID:           "c1",
-						Type:         "function",
-						FunctionCall: &llms.FunctionCall{Name: "tool1", Arguments: `{}`},
-					},
-				},
-			},
-			{
-				Role: llms.ChatMessageTypeTool,
-				Parts: []llms.ContentPart{
-					llms.ToolCallResponse{ToolCallID: "c1", Name: "tool1", Content: "ok"},
-				},
-			},
-			{
-				Role: llms.ChatMessageTypeTool,
-				Parts: []llms.ContentPart{
-					llms.ToolCallResponse{ToolCallID: "c2", Name: "tool2", Content: "ok"},
-				},
-			},
-		}
-
-		result := collectToolUsageFromChain(chain)
-		if len(result) != 2 {
-			t.Fatalf("expected 2 tools, got %d", len(result))
-		}
-		if _, ok := result["tool1"]; !ok {
-			t.Error("expected tool1 in result")
-		}
-		if _, ok := result["tool2"]; !ok {
-			t.Error("expected tool2 in result")
-		}
-	})
-
-	t.Run("ignores ToolCall without FunctionCall", func(t *testing.T) {
-		chain := []llms.MessageContent{
-			{
-				Role: llms.ChatMessageTypeAI,
-				Parts: []llms.ContentPart{
-					llms.ToolCall{ID: "c1", Type: "function"}, // no FunctionCall
-				},
-			},
-		}
-
-		result := collectToolUsageFromChain(chain)
-		if len(result) != 0 {
-			t.Errorf("expected empty result for ToolCall without FunctionCall, got %v", result)
-		}
-	})
-
-	t.Run("ignores non-tool parts", func(t *testing.T) {
-		chain := []llms.MessageContent{
-			llms.TextParts(llms.ChatMessageTypeHuman, "hello"),
-			llms.TextParts(llms.ChatMessageTypeAI, "hi"),
-		}
-
-		result := collectToolUsageFromChain(chain)
-		if len(result) != 0 {
-			t.Errorf("expected empty result for text-only chain, got %v", result)
-		}
-	})
-}
-
-// TestRestoreMissedToolsFromChain verifies the main function that merges
-// declared tools with inferred tools from the chain.
-func TestRestoreMissedToolsFromChain(t *testing.T) {
-	t.Run("empty chain returns original tools unchanged", func(t *testing.T) {
-		declaredTools := []llms.Tool{
-			{
-				Type: "function",
-				Function: &llms.FunctionDefinition{
-					Name:        "existing_tool",
-					Description: "Already declared",
-					Parameters:  map[string]any{"type": "object"},
-				},
-			},
-		}
-
-		result := restoreMissedToolsFromChain(nil, declaredTools)
-		if len(result) != len(declaredTools) {
-			t.Errorf("expected %d tools, got %d", len(declaredTools), len(result))
-		}
-	})
-
-	t.Run("chain with no tool usage returns original tools", func(t *testing.T) {
-		chain := []llms.MessageContent{
-			llms.TextParts(llms.ChatMessageTypeHuman, "Hello"),
-			llms.TextParts(llms.ChatMessageTypeAI, "Hi"),
-		}
-		declaredTools := []llms.Tool{
-			{Type: "function", Function: &llms.FunctionDefinition{Name: "tool1"}},
-		}
-
-		result := restoreMissedToolsFromChain(chain, declaredTools)
-		if len(result) != 1 {
-			t.Errorf("expected 1 tool, got %d", len(result))
-		}
-	})
-
-	t.Run("adds new tools from chain", func(t *testing.T) {
-		chain := []llms.MessageContent{
-			{
-				Role: llms.ChatMessageTypeAI,
-				Parts: []llms.ContentPart{
-					llms.ToolCall{
-						ID:   "c1",
-						Type: "function",
-						FunctionCall: &llms.FunctionCall{
-							Name:      "new_tool",
-							Arguments: `{"param":"value"}`,
-						},
-					},
-				},
-			},
-		}
-
-		result := restoreMissedToolsFromChain(chain, nil)
-		if len(result) != 1 {
-			t.Fatalf("expected 1 tool, got %d", len(result))
-		}
-		if result[0].Function.Name != "new_tool" {
-			t.Errorf("expected tool name 'new_tool', got %q", result[0].Function.Name)
-		}
-
-		// Verify inferred schema has the parameter
-		schema, ok := result[0].Function.Parameters.(map[string]any)
-		if !ok {
-			t.Fatalf("expected Parameters to be map[string]any")
-		}
-		props, ok := schema["properties"].(map[string]any)
-		if !ok {
-			t.Fatalf("expected properties in schema")
-		}
-		if _, exists := props["param"]; !exists {
-			t.Error("expected 'param' property in inferred schema")
-		}
-	})
-
-	t.Run("does not overwrite existing tool declarations", func(t *testing.T) {
-		declaredTools := []llms.Tool{
-			{
-				Type: "function",
-				Function: &llms.FunctionDefinition{
-					Name:        "search",
-					Description: "Custom search description",
-					Parameters: map[string]any{
-						"type": "object",
-						"properties": map[string]any{
-							"query":  map[string]any{"type": "string"},
-							"limit":  map[string]any{"type": "number"},
-							"custom": map[string]any{"type": "boolean"},
-						},
-					},
-				},
-			},
-		}
-
-		chain := []llms.MessageContent{
-			{
-				Role: llms.ChatMessageTypeAI,
-				Parts: []llms.ContentPart{
-					llms.ToolCall{
-						ID:   "c1",
-						Type: "function",
-						FunctionCall: &llms.FunctionCall{
-							Name:      "search",
-							Arguments: `{"query":"test"}`, // Different schema
-						},
-					},
-				},
-			},
-		}
-
-		result := restoreMissedToolsFromChain(chain, declaredTools)
-		if len(result) != 1 {
-			t.Fatalf("expected 1 tool (not duplicated), got %d", len(result))
-		}
-
-		// Verify the declared tool was preserved exactly
-		if result[0].Function.Description != "Custom search description" {
-			t.Errorf("declared tool description was overwritten")
-		}
-
-		schema, ok := result[0].Function.Parameters.(map[string]any)
-		if !ok {
-			t.Fatalf("expected Parameters to be map[string]any")
-		}
-		props := schema["properties"].(map[string]any)
-		if _, exists := props["custom"]; !exists {
-			t.Error("declared tool schema was overwritten - 'custom' field missing")
-		}
-	})
-
-	t.Run("merges declared and inferred tools", func(t *testing.T) {
-		declaredTools := []llms.Tool{
-			{Type: "function", Function: &llms.FunctionDefinition{Name: "tool_a"}},
-			{Type: "function", Function: &llms.FunctionDefinition{Name: "tool_b"}},
-		}
-
-		chain := []llms.MessageContent{
-			{
-				Role: llms.ChatMessageTypeAI,
-				Parts: []llms.ContentPart{
-					llms.ToolCall{
-						ID:           "c1",
-						Type:         "function",
-						FunctionCall: &llms.FunctionCall{Name: "tool_b", Arguments: `{}`},
-					},
-					llms.ToolCall{
-						ID:           "c2",
-						Type:         "function",
-						FunctionCall: &llms.FunctionCall{Name: "tool_c", Arguments: `{}`},
-					},
-				},
-			},
-		}
-
-		result := restoreMissedToolsFromChain(chain, declaredTools)
-
-		// Should have tool_a, tool_b (declared), and tool_c (inferred)
-		if len(result) != 3 {
-			t.Fatalf("expected 3 tools, got %d (%v)", len(result), toolNames(result))
-		}
-
-		names := toolNames(result)
-		sort.Strings(names)
-		expected := []string{"tool_a", "tool_b", "tool_c"}
-		for i, name := range expected {
-			if names[i] != name {
-				t.Errorf("expected tool[%d] = %q, got %q", i, name, names[i])
-			}
-		}
-	})
-
-	t.Run("handles complex schema inference", func(t *testing.T) {
-		chain := []llms.MessageContent{
-			{
-				Role: llms.ChatMessageTypeAI,
-				Parts: []llms.ContentPart{
-					llms.ToolCall{
-						ID:   "c1",
-						Type: "function",
-						FunctionCall: &llms.FunctionCall{
-							Name:      "complex_tool",
-							Arguments: `{"str":"text","num":42,"bool":true,"arr":[1,2,3],"obj":{"nested":"value"}}`,
-						},
-					},
-				},
-			},
-		}
-
-		result := restoreMissedToolsFromChain(chain, nil)
-		if len(result) != 1 {
-			t.Fatalf("expected 1 tool, got %d", len(result))
-		}
-
-		schema := result[0].Function.Parameters.(map[string]any)
-		props := schema["properties"].(map[string]any)
-
-		expectedTypes := map[string]string{
-			"str":  "string",
-			"num":  "number",
-			"bool": "boolean",
-			"arr":  "array",
-			"obj":  "object",
-		}
-
-		for key, expectedType := range expectedTypes {
-			prop, exists := props[key]
-			if !exists {
-				t.Errorf("expected property %q in schema", key)
-				continue
-			}
-			propMap := prop.(map[string]any)
-			if propMap["type"] != expectedType {
-				t.Errorf("property %q type = %v, want %v", key, propMap["type"], expectedType)
-			}
-		}
-	})
-
-	t.Run("nil and empty tools both trigger restoration", func(t *testing.T) {
-		chain := []llms.MessageContent{
-			{
-				Role: llms.ChatMessageTypeAI,
-				Parts: []llms.ContentPart{
-					llms.ToolCall{
-						ID:   "c1",
-						Type: "function",
-						FunctionCall: &llms.FunctionCall{
-							Name:      "scan_tool",
-							Arguments: `{"target":"10.0.0.1"}`,
-						},
-					},
-				},
-			},
-		}
-
-		// Both nil and empty slice should restore tools from chain
-		resultNil := restoreMissedToolsFromChain(chain, nil)
-		resultEmpty := restoreMissedToolsFromChain(chain, []llms.Tool{})
-
-		if len(resultNil) == 0 {
-			t.Error("expected tools restored from nil input")
-		}
-		if len(resultEmpty) == 0 {
-			t.Error("expected tools restored from empty slice input")
-		}
-		if len(resultNil) != len(resultEmpty) {
-			t.Errorf("nil and empty should produce same result: got %d vs %d", len(resultNil), len(resultEmpty))
-		}
-
-		// Verify the tool was properly inferred
-		if resultNil[0].Function == nil || resultNil[0].Function.Name != "scan_tool" {
-			t.Error("expected scan_tool to be restored")
-		}
-	})
-
-	t.Run("integration with extractToolsFromOptions", func(t *testing.T) {
-		chain := []llms.MessageContent{
-			{
-				Role: llms.ChatMessageTypeAI,
-				Parts: []llms.ContentPart{
-					llms.ToolCall{
-						ID:   "c1",
-						Type: "function",
-						FunctionCall: &llms.FunctionCall{
-							Name:      "nmap_scan",
-							Arguments: `{"port":"443"}`,
-						},
-					},
-				},
-			},
-		}
-
-		// Simulate real usage: options with no tools, followed by restoration from chain
-		options := []llms.CallOption{
-			llms.WithTemperature(0.7),
-			llms.WithMaxTokens(1000),
-		}
-
-		extractedTools := extractToolsFromOptions(options)
-		if len(extractedTools) > 0 {
-			t.Error("expected no tools from options without WithTools")
-		}
-
-		restored := restoreMissedToolsFromChain(chain, extractedTools)
-		if len(restored) == 0 {
-			t.Fatal("expected tools to be restored from chain when options contain no tools")
-		}
-
-		found := false
-		for _, tool := range restored {
-			if tool.Function != nil && tool.Function.Name == "nmap_scan" {
-				found = true
-				schema, ok := tool.Function.Parameters.(map[string]any)
-				if !ok {
-					t.Fatal("expected inferred schema to be map[string]any")
-				}
-				props, ok := schema["properties"].(map[string]any)
-				if !ok {
-					t.Fatal("expected properties in inferred schema")
-				}
-				if _, exists := props["port"]; !exists {
-					t.Error("expected 'port' property in inferred schema")
-				}
-				break
-			}
-		}
-		if !found {
-			t.Error("expected nmap_scan tool to be restored")
-		}
-	})
-}
-
-// TestExtractToolsFromOptions verifies tool extraction from CallOptions.
-func TestExtractToolsFromOptions(t *testing.T) {
-	t.Run("empty options returns nil", func(t *testing.T) {
-		result := extractToolsFromOptions(nil)
-		if result != nil {
-			t.Errorf("expected nil, got %v", result)
-		}
-
-		result = extractToolsFromOptions([]llms.CallOption{})
-		if result != nil {
-			t.Errorf("expected nil, got %v", result)
-		}
-	})
-
-	t.Run("extracts tools from WithTools option", func(t *testing.T) {
-		tools := []llms.Tool{
-			{Type: "function", Function: &llms.FunctionDefinition{Name: "tool1"}},
-			{Type: "function", Function: &llms.FunctionDefinition{Name: "tool2"}},
-		}
-
-		options := []llms.CallOption{
-			llms.WithTools(tools),
-		}
-
-		result := extractToolsFromOptions(options)
-		if len(result) != 2 {
-			t.Errorf("expected 2 tools, got %d", len(result))
-		}
-	})
-
-	t.Run("extracts tools from multiple options", func(t *testing.T) {
-		tools := []llms.Tool{
-			{Type: "function", Function: &llms.FunctionDefinition{Name: "tool1"}},
-		}
-
-		options := []llms.CallOption{
-			llms.WithModel("test-model"),
-			llms.WithTemperature(0.7),
-			llms.WithTools(tools),
-			llms.WithMaxTokens(100),
-		}
-
-		result := extractToolsFromOptions(options)
-		if len(result) != 1 {
-			t.Errorf("expected 1 tool, got %d", len(result))
-		}
-	})
-}
-
-// TestAuthenticationStrategies verifies all supported authentication methods.
-func TestAuthenticationStrategies(t *testing.T) {
-	providerConfig, err := DefaultProviderConfig(&config.Config{})
-	if err != nil {
-		t.Fatalf("Failed to create provider config: %v", err)
+func bedrockSchema(types map[string]string) map[string]any {
+	properties := make(map[string]any, len(types))
+	for key, typ := range types {
+		properties[key] = map[string]any{"type": typ}
 	}
 
-	t.Run("static credentials authentication", func(t *testing.T) {
-		cfg := &config.Config{
-			BedrockRegion:    "us-east-1",
-			BedrockAccessKey: "test-access-key",
-			BedrockSecretKey: "test-secret-key",
-		}
-
-		prov, err := New(cfg, provider.DefaultProviderNameBedrock, providerConfig)
-		if err != nil {
-			t.Fatalf("Failed to create provider with static credentials: %v", err)
-		}
-		if prov == nil {
-			t.Fatal("Expected provider to be created")
-		}
-		if prov.Type() != provider.ProviderBedrock {
-			t.Errorf("Expected provider type Bedrock, got %v", prov.Type())
-		}
-	})
-
-	t.Run("static credentials with session token", func(t *testing.T) {
-		cfg := &config.Config{
-			BedrockRegion:       "us-west-2",
-			BedrockAccessKey:    "test-access-key",
-			BedrockSecretKey:    "test-secret-key",
-			BedrockSessionToken: "test-session-token",
-		}
-
-		prov, err := New(cfg, provider.DefaultProviderNameBedrock, providerConfig)
-		if err != nil {
-			t.Fatalf("Failed to create provider with session token: %v", err)
-		}
-		if prov == nil {
-			t.Fatal("Expected provider to be created")
-		}
-	})
-
-	t.Run("bearer token authentication", func(t *testing.T) {
-		cfg := &config.Config{
-			BedrockRegion:      "eu-west-1",
-			BedrockBearerToken: "test-bearer-token-value",
-		}
-
-		prov, err := New(cfg, provider.DefaultProviderNameBedrock, providerConfig)
-		if err != nil {
-			t.Fatalf("Failed to create provider with bearer token: %v", err)
-		}
-		if prov == nil {
-			t.Fatal("Expected provider to be created")
-		}
-	})
-
-	t.Run("default AWS authentication", func(t *testing.T) {
-		cfg := &config.Config{
-			BedrockRegion:      "ap-southeast-1",
-			BedrockDefaultAuth: true,
-		}
-
-		prov, err := New(cfg, provider.DefaultProviderNameBedrock, providerConfig)
-		if err != nil {
-			t.Fatalf("Failed to create provider with default auth: %v", err)
-		}
-		if prov == nil {
-			t.Fatal("Expected provider to be created")
-		}
-	})
-
-	t.Run("bearer token takes precedence over static credentials", func(t *testing.T) {
-		cfg := &config.Config{
-			BedrockRegion:      "us-east-1",
-			BedrockBearerToken: "bearer-token",
-			BedrockAccessKey:   "access-key",
-			BedrockSecretKey:   "secret-key",
-		}
-
-		prov, err := New(cfg, provider.DefaultProviderNameBedrock, providerConfig)
-		if err != nil {
-			t.Fatalf("Failed to create provider: %v", err)
-		}
-		if prov == nil {
-			t.Fatal("Expected provider to be created")
-		}
-	})
-
-	t.Run("default auth takes precedence over all", func(t *testing.T) {
-		cfg := &config.Config{
-			BedrockRegion:      "us-east-1",
-			BedrockDefaultAuth: true,
-			BedrockBearerToken: "bearer-token",
-			BedrockAccessKey:   "access-key",
-			BedrockSecretKey:   "secret-key",
-		}
-
-		prov, err := New(cfg, provider.DefaultProviderNameBedrock, providerConfig)
-		if err != nil {
-			t.Fatalf("Failed to create provider: %v", err)
-		}
-		if prov == nil {
-			t.Fatal("Expected provider to be created")
-		}
-	})
-
-	t.Run("custom server URL with authentication", func(t *testing.T) {
-		cfg := &config.Config{
-			BedrockRegion:    "us-east-1",
-			BedrockServerURL: "https://custom-bedrock-endpoint.example.com",
-			BedrockAccessKey: "test-key",
-			BedrockSecretKey: "test-secret",
-		}
-
-		prov, err := New(cfg, provider.DefaultProviderNameBedrock, providerConfig)
-		if err != nil {
-			t.Fatalf("Failed to create provider with custom server URL: %v", err)
-		}
-		if prov == nil {
-			t.Fatal("Expected provider to be created")
-		}
-	})
-
-	t.Run("proxy configuration", func(t *testing.T) {
-		cfg := &config.Config{
-			BedrockRegion:    "us-east-1",
-			BedrockAccessKey: "test-key",
-			BedrockSecretKey: "test-secret",
-			ProxyURL:         "http://proxy.example.com:8080",
-		}
-
-		prov, err := New(cfg, provider.DefaultProviderNameBedrock, providerConfig)
-		if err != nil {
-			t.Fatalf("Failed to create provider with proxy: %v", err)
-		}
-		if prov == nil {
-			t.Fatal("Expected provider to be created")
-		}
-	})
+	return map[string]any{"type": "object", "properties": properties}
 }
 
-// TestAuthenticationErrors verifies error handling for invalid configurations.
-func TestAuthenticationErrors(t *testing.T) {
-	providerConfig, err := DefaultProviderConfig(&config.Config{})
-	if err != nil {
-		t.Fatalf("Failed to create provider config: %v", err)
-	}
+func TestBedrock_InferSchemaFromArguments_AggregatesThePropertiesOfEverySample(t *testing.T) {
+	t.Parallel()
 
-	t.Run("no authentication method configured", func(t *testing.T) {
-		cfg := &config.Config{
-			BedrockRegion: "us-east-1",
-			// No auth credentials set
-		}
-
-		_, err := New(cfg, provider.DefaultProviderNameBedrock, providerConfig)
-		if err == nil {
-			t.Error("Expected error when no authentication method is configured")
-		}
-		if err != nil && err.Error() != "no valid authentication method configured for Bedrock" {
-			t.Errorf("Expected specific error message, got: %v", err)
-		}
-	})
-
-	t.Run("only access key without secret key", func(t *testing.T) {
-		cfg := &config.Config{
-			BedrockRegion:    "us-east-1",
-			BedrockAccessKey: "test-key",
-			// BedrockSecretKey not set
-		}
-
-		_, err := New(cfg, provider.DefaultProviderNameBedrock, providerConfig)
-		if err == nil {
-			t.Error("Expected error when only access key is provided")
-		}
-	})
-
-	t.Run("only secret key without access key", func(t *testing.T) {
-		cfg := &config.Config{
-			BedrockRegion:    "us-east-1",
-			BedrockSecretKey: "test-secret",
-			// BedrockAccessKey not set
-		}
-
-		_, err := New(cfg, provider.DefaultProviderNameBedrock, providerConfig)
-		if err == nil {
-			t.Error("Expected error when only secret key is provided")
-		}
-	})
-}
-
-// TestCleanToolSchemas verifies that $schema field is removed from tool parameters.
-func TestCleanToolSchemas(t *testing.T) {
 	tests := []struct {
-		name          string
-		input         []llms.Tool
-		wantCount     int
-		checkSchema   bool
-		checkOriginal bool
+		name    string
+		samples []string
+		want    map[string]string
+	}{
+		{name: "no samples"},
+		{
+			name:    "one sample of every type",
+			samples: []string{`{"name":"test","count":5,"active":true,"tags":["a","b"],"meta":{}}`},
+			want:    map[string]string{"name": "string", "count": "number", "active": "boolean", "tags": "array", "meta": "object"},
+		},
+		{
+			name:    "samples add up",
+			samples: []string{`{"field1":"value1"}`, `{"field2":42}`, `{"field3":true}`},
+			want:    map[string]string{"field1": "string", "field2": "number", "field3": "boolean"},
+		},
+		{
+			name:    "invalid JSON is skipped",
+			samples: []string{`{invalid json}`, `{"valid":"field"}`, `not json at all`},
+			want:    map[string]string{"valid": "string"},
+		},
+		{name: "empty samples are skipped", samples: []string{"", "", `{"key":"value"}`}, want: map[string]string{"key": "string"}},
+		{
+			name:    "the first sample of a key decides its type",
+			samples: []string{`{"field":"string_value"}`, `{"field":123}`},
+			want:    map[string]string{"field": "string"},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			assert.Equal(t, bedrockSchema(tc.want), inferSchemaFromArguments(tc.samples))
+		})
+	}
+}
+
+func TestBedrock_CollectToolUsageFromChain_RecordsEveryToolTheChainUsed(t *testing.T) {
+	t.Parallel()
+
+	call := func(id, name, arguments string) llms.MessageContent {
+		return llms.MessageContent{Role: llms.ChatMessageTypeAI, Parts: []llms.ContentPart{llms.ToolCall{
+			ID: id, Type: "function", FunctionCall: &llms.FunctionCall{Name: name, Arguments: arguments},
+		}}}
+	}
+	response := func(id, name string) llms.MessageContent {
+		return llms.MessageContent{Role: llms.ChatMessageTypeTool, Parts: []llms.ContentPart{llms.ToolCallResponse{
+			ToolCallID: id, Name: name, Content: "done",
+		}}}
+	}
+
+	tests := []struct {
+		name  string
+		chain []llms.MessageContent
+		want  map[string][]string
+	}{
+		{name: "an empty chain", want: map[string][]string{}},
+		{
+			name:  "a tool call",
+			chain: []llms.MessageContent{call("c1", "search", `{"query":"test"}`)},
+			want:  map[string][]string{"search": {`{"query":"test"}`}},
+		},
+		{
+			name:  "a tool response",
+			chain: []llms.MessageContent{response("c1", "execute")},
+			want:  map[string][]string{"execute": {}},
+		},
+		{
+			name: "every call to one tool is a sample",
+			chain: []llms.MessageContent{
+				call("c1", "calc", `{"op":"add","a":1,"b":2}`), call("c2", "calc", `{"op":"multiply","a":3,"b":4}`),
+			},
+			want: map[string][]string{"calc": {`{"op":"add","a":1,"b":2}`, `{"op":"multiply","a":3,"b":4}`}},
+		},
+		{
+			name:  "a response keeps the samples of its call",
+			chain: []llms.MessageContent{call("c1", "tool1", `{}`), response("c1", "tool1"), response("c2", "tool2")},
+			want:  map[string][]string{"tool1": {`{}`}, "tool2": {}},
+		},
+		{
+			name: "a tool call without a function",
+			chain: []llms.MessageContent{{Role: llms.ChatMessageTypeAI, Parts: []llms.ContentPart{
+				llms.ToolCall{ID: "c1", Type: "function"},
+			}}},
+			want: map[string][]string{},
+		},
+		{
+			name: "text only",
+			chain: []llms.MessageContent{
+				llms.TextParts(llms.ChatMessageTypeHuman, "hello"), llms.TextParts(llms.ChatMessageTypeAI, "hi"),
+			},
+			want: map[string][]string{},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			assert.Equal(t, tc.want, collectToolUsageFromChain(tc.chain))
+		})
+	}
+}
+
+func TestBedrock_RestoreMissedToolsFromChain_DeclaresOnlyTheToolsNobodyDeclared(t *testing.T) {
+	t.Parallel()
+
+	calls := func(names ...string) []llms.MessageContent {
+		parts := make([]llms.ContentPart, 0, len(names))
+		for idx, name := range names {
+			parts = append(parts, llms.ToolCall{
+				ID: fmt.Sprintf("c%d", idx), Type: "function", FunctionCall: &llms.FunctionCall{Name: name, Arguments: `{}`},
+			})
+		}
+		return []llms.MessageContent{{Role: llms.ChatMessageTypeAI, Parts: parts}}
+	}
+	restored := func(name string, types map[string]string) llms.Tool {
+		return llms.Tool{Type: "function", Function: &llms.FunctionDefinition{
+			Name: name, Description: "Tool: " + name, Parameters: bedrockSchema(types),
+		}}
+	}
+	declared := func(name string) llms.Tool {
+		return llms.Tool{Type: "function", Function: &llms.FunctionDefinition{Name: name}}
+	}
+	search := llms.Tool{Type: "function", Function: &llms.FunctionDefinition{
+		Name: "search", Description: "Custom search description",
+		Parameters: map[string]any{"type": "object", "properties": map[string]any{
+			"query": map[string]any{"type": "string"}, "custom": map[string]any{"type": "boolean"},
+		}},
+	}}
+	searchCall := []llms.MessageContent{{Role: llms.ChatMessageTypeAI, Parts: []llms.ContentPart{llms.ToolCall{
+		ID: "c1", Type: "function", FunctionCall: &llms.FunctionCall{Name: "search", Arguments: `{"query":"test"}`},
+	}}}}
+	scanCall := []llms.MessageContent{{Role: llms.ChatMessageTypeAI, Parts: []llms.ContentPart{llms.ToolCall{
+		ID: "c1", Type: "function", FunctionCall: &llms.FunctionCall{Name: "scan_tool", Arguments: `{"target":"10.0.0.1"}`},
+	}}}}
+
+	tests := []struct {
+		name     string
+		chain    []llms.MessageContent
+		declared []llms.Tool
+		want     []llms.Tool
 	}{
 		{
-			name:      "empty tools",
-			input:     nil,
-			wantCount: 0,
+			name:     "a chain without tool use returns the declared tools",
+			chain:    []llms.MessageContent{llms.TextParts(llms.ChatMessageTypeHuman, "Hello")},
+			declared: []llms.Tool{declared("tool1")},
+			want:     []llms.Tool{declared("tool1")},
 		},
 		{
-			name:        "removes $schema from parameters",
-			input:       []llms.Tool{createToolWithSchema("test_tool", "draft/2020-12")},
-			wantCount:   1,
-			checkSchema: true,
+			name:  "an undeclared tool is restored with a schema inferred from its arguments",
+			chain: scanCall,
+			want:  []llms.Tool{restored("scan_tool", map[string]string{"target": "string"})},
 		},
 		{
-			name:        "preserves tools without $schema",
-			input:       []llms.Tool{createToolWithoutSchema("clean_tool")},
-			wantCount:   1,
-			checkSchema: false,
+			name:     "an empty declared list is restored like a missing one",
+			chain:    scanCall,
+			declared: []llms.Tool{},
+			want:     []llms.Tool{restored("scan_tool", map[string]string{"target": "string"})},
 		},
 		{
-			name: "handles multiple tools",
-			input: []llms.Tool{
-				createToolWithSchema("tool1", "draft/2020-12"),
-				createToolWithoutSchema("tool2"),
-				createToolWithSchema("tool3", "draft-07"),
-			},
-			wantCount:   3,
-			checkSchema: true,
+			name:     "a declared tool is kept as declared",
+			chain:    searchCall,
+			declared: []llms.Tool{search},
+			want:     []llms.Tool{search},
 		},
 		{
-			name:      "handles nil Function",
-			input:     []llms.Tool{{Type: "function", Function: nil}},
-			wantCount: 1,
-		},
-		{
-			name: "handles nil Parameters",
-			input: []llms.Tool{{
-				Type:     "function",
-				Function: &llms.FunctionDefinition{Name: "no_params", Parameters: nil},
-			}},
-			wantCount: 1,
-		},
-		{
-			name: "handles non-map Parameters",
-			input: []llms.Tool{{
-				Type:     "function",
-				Function: &llms.FunctionDefinition{Name: "string_params", Parameters: "not a map"},
-			}},
-			wantCount: 1,
-		},
-		{
-			name:          "does not modify original",
-			input:         []llms.Tool{createToolWithSchema("original", "draft/2020-12")},
-			wantCount:     1,
-			checkOriginal: true,
-		},
-		{
-			name:        "handles *jsonschema.Schema parameters",
-			input:       []llms.Tool{createToolWithJsonSchemaType("json_schema_tool")},
-			wantCount:   1,
-			checkSchema: true,
+			name:     "declared and restored tools are merged",
+			chain:    calls("tool_b", "tool_c"),
+			declared: []llms.Tool{declared("tool_a"), declared("tool_b")},
+			want:     []llms.Tool{declared("tool_a"), declared("tool_b"), restored("tool_c", nil)},
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			var originalParams map[string]any
-			if tt.checkOriginal && len(tt.input) > 0 && tt.input[0].Function != nil {
-				originalParams, _ = tt.input[0].Function.Parameters.(map[string]any)
-			}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 
-			result := cleanToolSchemas(tt.input)
+			assert.Equal(t, tc.want, restoreMissedToolsFromChain(tc.chain, tc.declared))
+		})
+	}
+}
 
-			if len(result) != tt.wantCount {
-				t.Errorf("got %d tools, want %d", len(result), tt.wantCount)
-			}
+func TestBedrock_ExtractToolsFromOptions_ReturnsTheToolsTheOptionsCarry(t *testing.T) {
+	t.Parallel()
 
-			if tt.checkSchema && len(result) > 0 {
-				for i, tool := range result {
-					if tool.Function == nil || tool.Function.Parameters == nil {
-						continue
-					}
-					if params, ok := tool.Function.Parameters.(map[string]any); ok {
-						if _, exists := params["$schema"]; exists {
-							t.Errorf("tool[%d] still has $schema field", i)
-						}
-					}
+	tools := []llms.Tool{
+		{Type: "function", Function: &llms.FunctionDefinition{Name: "tool1"}},
+		{Type: "function", Function: &llms.FunctionDefinition{Name: "tool2"}},
+	}
+
+	assert.Nil(t, extractToolsFromOptions(nil))
+	assert.Equal(t, tools, extractToolsFromOptions([]llms.CallOption{
+		llms.WithModel("test-model"), llms.WithTemperature(0.7), llms.WithTools(tools), llms.WithMaxTokens(100),
+	}))
+}
+
+func TestBedrock_CleanToolSchemas_DropsTheSchemaKeyWithoutTouchingTheCaller(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		tools func() []llms.Tool
+		want  []llms.Tool
+	}{
+		{name: "no tools", tools: func() []llms.Tool { return nil }},
+		{
+			name:  "a map schema loses its $schema key",
+			tools: func() []llms.Tool { return []llms.Tool{createToolWithSchema("test_tool", "draft/2020-12")} },
+			want:  []llms.Tool{createToolWithoutSchema("test_tool")},
+		},
+		{
+			name:  "a map schema without the key is kept",
+			tools: func() []llms.Tool { return []llms.Tool{createToolWithoutSchema("clean_tool")} },
+			want:  []llms.Tool{createToolWithoutSchema("clean_tool")},
+		},
+		{
+			name: "every tool of several is cleaned",
+			tools: func() []llms.Tool {
+				return []llms.Tool{
+					createToolWithSchema("tool1", "draft/2020-12"),
+					createToolWithoutSchema("tool2"),
+					createToolWithSchema("tool3", "draft-07"),
 				}
-			}
+			},
+			want: []llms.Tool{createToolWithoutSchema("tool1"), createToolWithoutSchema("tool2"), createToolWithoutSchema("tool3")},
+		},
+		{
+			name:  "a tool without a function is kept",
+			tools: func() []llms.Tool { return []llms.Tool{{Type: "function"}} },
+			want:  []llms.Tool{{Type: "function"}},
+		},
+		{
+			name: "a function without parameters is kept",
+			tools: func() []llms.Tool {
+				return []llms.Tool{{Type: "function", Function: &llms.FunctionDefinition{Name: "no_params"}}}
+			},
+			want: []llms.Tool{{Type: "function", Function: &llms.FunctionDefinition{Name: "no_params"}}},
+		},
+		{
+			name: "parameters of another shape are kept",
+			tools: func() []llms.Tool {
+				return []llms.Tool{{Type: "function", Function: &llms.FunctionDefinition{
+					Name: "string_params", Parameters: "not a map",
+				}}}
+			},
+			want: []llms.Tool{{Type: "function", Function: &llms.FunctionDefinition{
+				Name: "string_params", Parameters: "not a map",
+			}}},
+		},
+		{
+			name:  "a reflected schema becomes a map without the key",
+			tools: func() []llms.Tool { return []llms.Tool{createToolWithJsonSchemaType("json_schema_tool")} },
+			want: []llms.Tool{{Type: "function", Function: &llms.FunctionDefinition{
+				Name: "json_schema_tool",
+				Parameters: map[string]any{
+					"type":                 "object",
+					"additionalProperties": false,
+					"required":             []any{"arg"},
+					"properties": map[string]any{
+						"arg": map[string]any{"type": "string", "description": "Test argument"},
+					},
+				},
+			}}},
+		},
+	}
 
-			if tt.checkOriginal && originalParams != nil {
-				if _, exists := originalParams["$schema"]; !exists {
-					t.Error("original parameters were modified")
-				}
-			}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			input := tc.tools()
+			assert.Equal(t, tc.want, cleanToolSchemas(input))
+			assert.Equal(t, tc.tools(), input, "cleaning must not touch the caller's tools")
 		})
 	}
 }

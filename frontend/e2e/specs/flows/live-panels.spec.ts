@@ -6,6 +6,13 @@ import {
     livePanelsCassette,
     makeMessage,
     STREAMED,
+    STREAMED_FILE_SIZE_RENDERED,
+    STREAMED_SCREENSHOT_NAME,
+    STREAMED_SCREENSHOT_URL,
+    TABS_FILE_NAME,
+    TABS_SCREENSHOT_NEWER_URL,
+    TABS_SCREENSHOT_NEWEST_URL,
+    TABS_SCREENSHOT_URL,
     VARIED_MESSAGES,
     variedMessagesCassette,
 } from '../../mocks/cassettes/flows.ts';
@@ -33,6 +40,20 @@ test.describe('live panels', { tag: '@flows' }, () => {
 
         await page.getByRole('tab', { name: 'Vector Store' }).click();
         await expect(page.getByText(STREAMED.vector)).toBeVisible();
+
+        await page.getByRole('tab', { name: 'Screenshots' }).click();
+        await expect(page.getByRole('img', { name: STREAMED_SCREENSHOT_NAME })).toBeVisible();
+        await expect(page.getByRole('tabpanel', { name: 'Screenshots' }).getByRole('link')).toHaveText([
+            TABS_SCREENSHOT_URL,
+            TABS_SCREENSHOT_NEWER_URL,
+            TABS_SCREENSHOT_NEWEST_URL,
+            STREAMED_SCREENSHOT_URL,
+        ]);
+
+        await page.getByRole('tab', { name: 'Files' }).click();
+        await expect(page.getByRole('treeitem', { name: new RegExp(TABS_FILE_NAME) })).toContainText(
+            STREAMED_FILE_SIZE_RENDERED,
+        );
 
         await page.getByRole('tab', { name: 'Terminal' }).click();
         await expect(async () => {

@@ -128,7 +128,7 @@ Comprehensive tests include:
 - Validation tests for operation applicability
 - Factory reset, lifecycle, and ordering behavior at logic level
 - `update_test.go` — progress stepping and clamping, silence without a size, the description key, cleanup of file and description after a failed download, the versioned file name, the inode comparison guarding the running binary, `MoveCommand` quoting, `FormatSize`
-- `jaeger_plugin_test.go` — only outdated linux components are fetched, a failed download leaves the running plugin alone, the installed plugin is executable, staging leftovers are removed by exact name, the plugin is exempt from integrity verification
+- `jaeger_plugin_test.go` — only outdated linux components are fetched, a failed download leaves the running plugin alone, the installed plugin is executable, staging leftovers are removed by exact name
 - `verify_test.go` — targets captured before the answer is replaced, an already current component's target is what it runs, an unverifiable component carries no target, "newer" is distinguished from "wrong", the installer is not verified against the running binary
 - `pull_reference_test.go` — the compose variable is derived from the component name, only resolved components get a reference, and every `image:` in the shipped compose files is parameterised
 
@@ -156,10 +156,10 @@ Comprehensive tests include:
 - `locale.go` - Operation message strings
 
 ### Testing
-- `mock_test.go` - Mocks for interfaces with call tracking
+- `fixtures_test.go` - Mocks for interfaces with call tracking
 - `logic_test.go` - Business logic tests (state machine and sequencing)
-- `fs_test.go` - File system operations tests (including excluded files policy)
-- `update_test.go`, `jaeger_plugin_test.go`, `verify_test.go`, `pull_reference_test.go`, `compose_test.go`
+- `fs_test.go` - File system operations tests (including excluded files policy, the Jaeger plugin among them)
+- `update_test.go`, `jaeger_plugin_test.go`, `verify_test.go`, `pull_reference_test.go`, `reference_drift_test.go`, `compose_test.go`, `pg_test.go`, `state_test.go`, `model_test.go`
 
 ## Status
 ✅ **COMPLETE** - Processor functionality implemented and tested, with one known gap

@@ -33,7 +33,21 @@ type attemptRecord struct {
 	Error    string
 }
 
-func lookupInCache(provider Provider) (string, bool) {
+type templateCacheBypassKey struct{}
+
+func WithoutToolCallIDTemplateCache(ctx context.Context) context.Context {
+	return context.WithValue(ctx, templateCacheBypassKey{}, true)
+}
+
+func bypassesTemplateCache(ctx context.Context) bool {
+	bypass, _ := ctx.Value(templateCacheBypassKey{}).(bool)
+	return bypass
+}
+
+func lookupInCache(ctx context.Context, provider Provider) (string, bool) {
+	if bypassesTemplateCache(ctx) {
+		return "", false
+	}
 	if template, ok := cacheTemplates.Load(provider.Type()); ok {
 		if template, ok := template.(string); ok {
 			return template, true
@@ -42,7 +56,10 @@ func lookupInCache(provider Provider) (string, bool) {
 	return "", false
 }
 
-func storeInCache(provider Provider, template string) {
+func storeInCache(ctx context.Context, provider Provider, template string) {
+	if bypassesTemplateCache(ctx) {
+		return
+	}
 	cacheTemplates.Store(provider.Type(), template)
 }
 
@@ -112,13 +129,13 @@ func DetermineToolCallIDTemplate(
 	}
 
 	// Step 0: Check if template is already in cache
-	if template, ok := lookupInCache(provider); ok {
+	if template, ok := lookupInCache(ctx, provider); ok {
 		return wrapEndAgentSpan(template, "found in cache", nil)
 	}
 
 	// Step 0.5: Test default template if provided (makes one LLM call for validation)
 	if defaultTemplate != "" && testTemplate(ctx, provider, opt, prompter, defaultTemplate) {
-		storeInCache(provider, defaultTemplate)
+		storeInCache(ctx, provider, defaultTemplate)
 		return wrapEndAgentSpan(defaultTemplate, "validated default template", nil)
 	}
 
@@ -146,7 +163,7 @@ func DetermineToolCallIDTemplate(
 			// If AI detection completely fails, use fallback
 			if attempt == maxRetries-1 {
 				template = fallbackHeuristicDetection(samples)
-				storeInCache(provider, template)
+				storeInCache(ctx, provider, template)
 				return wrapEndAgentSpan(template, "partially detected", nil)
 			}
 			continue
@@ -158,7 +175,7 @@ func DetermineToolCallIDTemplate(
 		// Validate template against all samples
 		validationErr := templates.ValidatePattern(template, allSamples)
 		if validationErr == nil {
-			storeInCache(provider, template)
+			storeInCache(ctx, provider, template)
 			return wrapEndAgentSpan(template, "validated", nil)
 		}
 
@@ -174,7 +191,7 @@ func DetermineToolCallIDTemplate(
 
 	// All retries exhausted, use fallback heuristic
 	template := fallbackHeuristicDetection(samples)
-	storeInCache(provider, template)
+	storeInCache(ctx, provider, template)
 	return wrapEndAgentSpan(template, "fallback heuristic detection", nil)
 }
 
@@ -522,7 +539,7 @@ func fallbackHeuristicDetection(samples []templates.PatternSample) string {
 			// Determine charset for all collected random characters
 			if len(allCharsInRandom) > 0 {
 				charset := determineCommonCharset(allCharsInRandom)
-				pattern.WriteString(fmt.Sprintf("{r:%d:%s}", len(allCharsInRandom), charset))
+				fmt.Fprintf(&pattern, "{r:%d:%s}", len(allCharsInRandom), charset)
 			}
 		}
 	}

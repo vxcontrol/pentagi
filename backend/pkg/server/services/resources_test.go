@@ -4,20 +4,20 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
-	"crypto/md5"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
-	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
+	"time"
 
-	graphmodel "pentagi/pkg/graph/model"
+	"pentagi/pkg/graph/model"
 	"pentagi/pkg/graph/subscriptions"
 	"pentagi/pkg/resources"
 	"pentagi/pkg/server/models"
@@ -28,42 +28,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-func setupResourceServiceTestDB(t *testing.T) *gorm.DB {
-	t.Helper()
-
-	db, err := gorm.Open("sqlite3", ":memory:")
-	require.NoError(t, err)
-	db.LogMode(false)
-
-	require.NoError(t, db.Exec(`
-		CREATE TABLE user_resources (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			user_id INTEGER NOT NULL,
-			hash TEXT NOT NULL DEFAULT '',
-			name TEXT NOT NULL,
-			path TEXT NOT NULL,
-			size INTEGER NOT NULL DEFAULT 0,
-			is_dir BOOLEAN NOT NULL DEFAULT FALSE,
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			UNIQUE(user_id, path)
-		)
-	`).Error)
-
-	t.Cleanup(func() {
-		require.NoError(t, db.Close())
-	})
-
-	return db
-}
-
-func seedResource(t *testing.T, db *gorm.DB, rec models.UserResource) models.UserResource {
-	t.Helper()
-
-	require.NoError(t, db.Create(&rec).Error)
-	return rec
-}
 
 func resourcePaths(entries []models.ResourceEntry) []string {
 	paths := make([]string, len(entries))
@@ -85,167 +49,178 @@ func allResourcePaths(t *testing.T, db *gorm.DB) []string {
 	return paths
 }
 
-func newResourceTestContext(method, target string, body *bytes.Buffer, privs []string) (*gin.Context, *httptest.ResponseRecorder) {
-	return newResourceTestContextWithUID(method, target, body, privs, 1)
-}
-
-func newResourceTestContextWithUID(
-	method, target string,
-	body *bytes.Buffer,
-	privs []string,
-	uid uint64,
-) (*gin.Context, *httptest.ResponseRecorder) {
-	gin.SetMode(gin.TestMode)
-	w := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(w)
-	c.Set("uid", uid)
-	c.Set("prm", privs)
-	if body == nil {
-		body = bytes.NewBuffer(nil)
-	}
-	c.Request = httptest.NewRequest(method, target, body)
-	return c, w
-}
-
-func decodeResourceListResponse(t *testing.T, w *httptest.ResponseRecorder) models.ResourceList {
-	t.Helper()
-
-	var resp struct {
-		Status string              `json:"status"`
-		Data   models.ResourceList `json:"data"`
-	}
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	require.Equal(t, "success", resp.Status)
-	return resp.Data
-}
-
-type resourceEvent struct {
-	action string
-	path   string
-}
-
-type uploadTestFile struct {
-	name    string
+type resourcesTransferSeed struct {
+	userID  uint64 // 0: the caller
+	path    string
+	isDir   bool
 	content string
 }
 
-func multipartUploadBody(t *testing.T, files []uploadTestFile) (*bytes.Buffer, string) {
-	return multipartUploadBodyWithField(t, files, "files")
+type resourcesTransferRequest struct {
+	Source      string   `json:"source,omitempty"`
+	Sources     []string `json:"sources,omitempty"`
+	Destination string   `json:"destination"`
+	Force       bool     `json:"force,omitempty"`
 }
 
-func multipartUploadBodyWithField(
+// resourcesTransferCase is one row of the copy and move tables.
+type resourcesTransferCase struct {
+	name                 string
+	seeds                []resourcesTransferSeed
+	req                  resourcesTransferRequest
+	rawBody              string   // sent instead of req when set
+	privs                []string // nil: resources.edit
+	wantStatus           int
+	wantPaths            []string
+	wantResponsePaths    []string
+	wantEvents           []resourceEvent
+	wantDeletedBlobTexts []string
+	wantHashes           map[string]string // path -> content whose md5 the row references
+	wantOwners           map[string]uint64
+}
+
+// resourcesRunTransferCase also checks that a refused request changes no row.
+func resourcesRunTransferCase(
 	t *testing.T,
-	files []uploadTestFile,
-	fieldName string,
-) (*bytes.Buffer, string) {
+	tt resourcesTransferCase,
+	method, target string,
+	handle func(*ResourceService, *gin.Context),
+) {
 	t.Helper()
 
-	var body bytes.Buffer
-	writer := multipart.NewWriter(&body)
-	for _, file := range files {
-		part, err := writer.CreateFormFile(fieldName, file.name)
-		require.NoError(t, err)
-		_, err = part.Write([]byte(file.content))
-		require.NoError(t, err)
+	db := setupResourceServiceTestDB(t)
+	dataDir := t.TempDir()
+	ss := &captureSubscriptions{}
+	svc := NewResourceService(db, dataDir, ss)
+	hashes := map[string]string{}
+	for _, rec := range tt.seeds {
+		userID := rec.userID
+		if userID == 0 {
+			userID = 1
+		}
+		seeded := models.UserResource{
+			UserID: userID,
+			Name:   filepath.Base(rec.path),
+			Path:   rec.path,
+			IsDir:  rec.isDir,
+		}
+		if !rec.isDir {
+			seeded.Hash = md5HexForService(rec.content)
+			seeded.Size = int64(len(rec.content))
+			writeResourceBlob(t, dataDir, seeded.Hash, rec.content)
+			hashes[rec.content] = seeded.Hash
+		}
+		seedResource(t, db, seeded)
 	}
-	require.NoError(t, writer.Close())
-	return &body, writer.FormDataContentType()
+	before := resourcesRows(t, db)
+
+	body := tt.rawBody
+	if body == "" {
+		payload, err := json.Marshal(tt.req)
+		require.NoError(t, err)
+		body = string(payload)
+	}
+	privs := tt.privs
+	if privs == nil {
+		privs = []string{"resources.edit"}
+	}
+	c, w := newResourceTestContext(method, target, bytes.NewBufferString(body), privs)
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	handle(svc, c)
+
+	require.Equal(t, tt.wantStatus, w.Code)
+	assert.ElementsMatch(t, tt.wantPaths, allResourcePaths(t, db))
+	assert.Equal(t, tt.wantEvents, ss.events)
+	if tt.wantStatus == http.StatusOK {
+		list := decodeResourceListResponse(t, w)
+		assert.ElementsMatch(t, tt.wantResponsePaths, resourcePaths(list.Items))
+	} else {
+		assert.Equal(t, before, resourcesRows(t, db), "a refused request must change no row")
+	}
+	for _, content := range tt.wantDeletedBlobTexts {
+		_, err := os.Lstat(resources.BlobPath(dataDir, hashes[content]))
+		assert.True(t, os.IsNotExist(err), "blob for %q should be removed", content)
+	}
+	resourcesRequireHashes(t, db, tt.wantHashes)
+	resourcesRequireOwners(t, db, tt.wantOwners)
+	resourcesRequireBlobsMatchRows(t, db, dataDir)
 }
 
-// countResourceBlobs returns the number of *.blob files in the resources dir.
-func countResourceBlobs(t *testing.T, dataDir string) int {
+// resourcesRows describes every row by what a request may change, in id order.
+func resourcesRows(t *testing.T, db *gorm.DB) []string {
 	t.Helper()
 
-	dir := resources.ResourcesDir(dataDir)
-	entries, err := os.ReadDir(dir)
-	if os.IsNotExist(err) {
-		return 0
+	var rows []models.UserResource
+	require.NoError(t, db.Order("id ASC").Find(&rows).Error)
+	described := make([]string, len(rows))
+	for i, row := range rows {
+		described[i] = fmt.Sprintf("%d %s dir=%t hash=%s owner=%d", row.ID, row.Path, row.IsDir, row.Hash, row.UserID)
 	}
-	require.NoError(t, err)
-	count := 0
-	for _, e := range entries {
-		if !e.IsDir() && filepath.Ext(e.Name()) == ".blob" {
-			count++
+	return described
+}
+
+func resourcesRequireOwners(t *testing.T, db *gorm.DB, want map[string]uint64) {
+	t.Helper()
+
+	for vPath, owner := range want {
+		var rows []models.UserResource
+		require.NoError(t, db.Where("path = ?", vPath).Find(&rows).Error)
+		require.Len(t, rows, 1, "rows at %q", vPath)
+		assert.Equal(t, owner, rows[0].UserID, "owner of %q", vPath)
+	}
+}
+
+// resourcesRequireBlobsMatchRows checks the data directory holds exactly one blob per
+// hash a file row references: no orphan, no dangling row, no leftover temp file.
+func resourcesRequireBlobsMatchRows(t *testing.T, db *gorm.DB, dataDir string) {
+	t.Helper()
+
+	var rows []models.UserResource
+	require.NoError(t, db.Find(&rows).Error)
+	want := map[string]bool{}
+	for _, row := range rows {
+		if !row.IsDir {
+			want[resources.BlobPath(dataDir, row.Hash)] = true
 		}
 	}
-	return count
+
+	got := map[string]bool{}
+	require.NoError(t, filepath.Walk(dataDir, func(p string, info os.FileInfo, err error) error {
+		require.NoError(t, err)
+		if !info.IsDir() {
+			got[p] = true
+		}
+		return nil
+	}))
+
+	assert.Equal(t, want, got, "files under the data directory")
 }
 
-type captureSubscriptions struct {
-	events []resourceEvent
+// resourcesRequireHashes checks each path's row references the blob of the given content.
+func resourcesRequireHashes(t *testing.T, db *gorm.DB, want map[string]string) {
+	t.Helper()
+
+	for vPath, content := range want {
+		var row models.UserResource
+		require.NoError(t, db.Where("path = ?", vPath).First(&row).Error)
+		assert.Equal(t, md5HexForService(content), row.Hash, "blob referenced by %q", vPath)
+	}
 }
 
-func (s *captureSubscriptions) NewFlowSubscriber(int64, int64) subscriptions.FlowSubscriber {
-	return nil
-}
-func (s *captureSubscriptions) NewFlowPublisher(int64, int64) subscriptions.FlowPublisher { return nil }
-func (s *captureSubscriptions) NewResourceSubscriber(int64) subscriptions.ResourceSubscriber {
-	return nil
-}
-func (s *captureSubscriptions) NewProviderSubscriber(int64) subscriptions.ProviderSubscriber {
-	return nil
-}
-func (s *captureSubscriptions) NewProviderPublisher(int64) subscriptions.ProviderPublisher {
-	return nil
-}
-func (s *captureSubscriptions) NewAPITokenSubscriber(int64) subscriptions.APITokenSubscriber {
-	return nil
-}
-func (s *captureSubscriptions) NewAPITokenPublisher(int64) subscriptions.APITokenPublisher {
-	return nil
-}
-func (s *captureSubscriptions) NewSettingsSubscriber(int64) subscriptions.SettingsSubscriber {
-	return nil
-}
-func (s *captureSubscriptions) NewSettingsPublisher(int64) subscriptions.SettingsPublisher {
-	return nil
-}
-func (s *captureSubscriptions) NewFlowTemplateSubscriber(int64) subscriptions.FlowTemplateSubscriber {
-	return nil
-}
-func (s *captureSubscriptions) NewFlowTemplatePublisher(int64) subscriptions.FlowTemplatePublisher {
-	return nil
-}
-func (s *captureSubscriptions) NewResourcePublisher(int64) subscriptions.ResourcePublisher {
-	return &captureResourcePublisher{events: &s.events}
-}
-func (s *captureSubscriptions) NewKnowledgeSubscriber(int64) subscriptions.KnowledgeSubscriber {
-	return nil
-}
-func (s *captureSubscriptions) NewKnowledgePublisher(int64) subscriptions.KnowledgePublisher {
-	return nil
-}
-
-type captureResourcePublisher struct {
-	userID int64
-	events *[]resourceEvent
-}
-
-func (p *captureResourcePublisher) GetUserID() int64 { return p.userID }
-func (p *captureResourcePublisher) SetUserID(userID int64) {
-	p.userID = userID
-}
-func (p *captureResourcePublisher) ResourceAdded(_ context.Context, resource *graphmodel.UserResource) {
-	*p.events = append(*p.events, resourceEvent{action: "added", path: resource.Path})
-}
-func (p *captureResourcePublisher) ResourceUpdated(_ context.Context, resource *graphmodel.UserResource) {
-	*p.events = append(*p.events, resourceEvent{action: "updated", path: resource.Path})
-}
-func (p *captureResourcePublisher) ResourceDeleted(_ context.Context, resource *graphmodel.UserResource) {
-	*p.events = append(*p.events, resourceEvent{action: "deleted", path: resource.Path})
-}
-
-func TestResourceService_ListResourcesScenarios(t *testing.T) {
+func TestResources_ListResources_ListsWhatTheCallerMaySee(t *testing.T) {
 	type seed struct {
 		userID  uint64
 		path    string
 		isDir   bool
 		content string
+		updated time.Duration // updated_at relative to now; 0 keeps the insert time
 	}
 
 	tests := []struct {
 		name              string
 		seeds             []seed
+		sameStamp         bool // every row carries one updated_at
 		path              string
 		paths             []string // additional paths for paths[] param
 		rawQuery          string   // overrides path/paths/recursive URL building when set
@@ -254,6 +229,8 @@ func TestResourceService_ListResourcesScenarios(t *testing.T) {
 		uid               uint64
 		wantStatus        int
 		wantResponsePaths []string
+		wantSorted        bool              // wantResponsePaths is also the order
+		wantOwners        map[string]uint64 // owner of the row listed at a path
 	}{
 		{
 			name: "list root non-recursive returns top-level entries only",
@@ -367,10 +344,7 @@ func TestResourceService_ListResourcesScenarios(t *testing.T) {
 			wantStatus:        http.StatusOK,
 			wantResponsePaths: []string{},
 		},
-
-		// ── paths[] parameter ────────────────────────────────────────────────
 		{
-			// Two sibling directories listed via paths[]; results are merged and sorted.
 			name: "two directories via paths[] returns combined deduplicated results",
 			seeds: []seed{
 				{path: "docs", isDir: true},
@@ -384,7 +358,6 @@ func TestResourceService_ListResourcesScenarios(t *testing.T) {
 			wantResponsePaths: []string{"docs", "docs/a.txt", "other", "other/b.txt"},
 		},
 		{
-			// path= and paths[]= are combined; both directories are listed.
 			name: "path= and paths[] combined return merged results",
 			seeds: []seed{
 				{path: "docs", isDir: true},
@@ -399,7 +372,6 @@ func TestResourceService_ListResourcesScenarios(t *testing.T) {
 			wantResponsePaths: []string{"docs", "docs/a.txt", "extra", "extra/c.txt"},
 		},
 		{
-			// Same path sent twice in paths[]; items appear only once in the response.
 			name: "duplicate paths in paths[] deduplicated",
 			seeds: []seed{
 				{path: "docs", isDir: true},
@@ -411,7 +383,6 @@ func TestResourceService_ListResourcesScenarios(t *testing.T) {
 			wantResponsePaths: []string{"docs", "docs/a.txt"},
 		},
 		{
-			// path and paths[] query the same path; results deduplicated.
 			name: "path= and paths[] with same value deduplicated",
 			seeds: []seed{
 				{path: "docs", isDir: true},
@@ -424,7 +395,6 @@ func TestResourceService_ListResourcesScenarios(t *testing.T) {
 			wantResponsePaths: []string{"docs", "docs/a.txt"},
 		},
 		{
-			// Whitespace-only paths[] entries are ignored; falls back to root listing.
 			name: "whitespace-only paths[] falls back to root listing",
 			seeds: []seed{
 				{path: "root.txt", content: "r"},
@@ -435,14 +405,12 @@ func TestResourceService_ListResourcesScenarios(t *testing.T) {
 			wantResponsePaths: []string{"root.txt"},
 		},
 		{
-			// An invalid path in paths[] returns 400.
 			name:       "invalid path in paths[] returns bad request",
 			rawQuery:   "paths[]=docs&paths[]=../escape",
 			privs:      []string{"resources.view"},
 			wantStatus: http.StatusBadRequest,
 		},
 		{
-			// Results from multiple paths are returned sorted by virtual path.
 			name: "output sorted by path across multiple queried paths",
 			seeds: []seed{
 				{path: "z", isDir: true},
@@ -450,15 +418,14 @@ func TestResourceService_ListResourcesScenarios(t *testing.T) {
 				{path: "a", isDir: true},
 				{path: "a/b.txt", content: "b"},
 			},
-			paths:      []string{"z", "a"},
-			privs:      []string{"resources.view"},
-			wantStatus: http.StatusOK,
-			// a < a/b.txt < z < z/c.txt
+			paths:             []string{"z", "a"},
+			privs:             []string{"resources.view"},
+			wantStatus:        http.StatusOK,
 			wantResponsePaths: []string{"a", "a/b.txt", "z", "z/c.txt"},
+			wantSorted:        true,
 		},
 		{
-			// Querying a nested path must also return its parent directory so that
-			// a client can construct a complete tree without dangling nodes.
+			// the parent comes along so a client never draws a dangling node
 			name: "listing nested path includes parent directory as ancestor",
 			seeds: []seed{
 				{path: "base", isDir: true},
@@ -471,7 +438,6 @@ func TestResourceService_ListResourcesScenarios(t *testing.T) {
 			wantResponsePaths: []string{"base", "base/sub", "base/sub/file.txt"},
 		},
 		{
-			// A deeply nested path must include every ancestor directory.
 			name: "listing deeply nested path includes all ancestor directories",
 			seeds: []seed{
 				{path: "a", isDir: true},
@@ -485,7 +451,6 @@ func TestResourceService_ListResourcesScenarios(t *testing.T) {
 			wantResponsePaths: []string{"a", "a/b", "a/b/c", "a/b/c/file.txt"},
 		},
 		{
-			// If an ancestor directory does not exist in the DB it is simply omitted.
 			name: "missing ancestor directory not added to response",
 			seeds: []seed{
 				// "base" parent is intentionally not seeded
@@ -498,19 +463,102 @@ func TestResourceService_ListResourcesScenarios(t *testing.T) {
 			wantResponsePaths: []string{"base/sub", "base/sub/file.txt"},
 		},
 		{
-			// Ancestors are scoped to the requesting user; another user's ancestor
-			// directory must not appear in the response.
 			name: "ancestor directory belonging to another user is not included",
 			seeds: []seed{
 				{userID: 2, path: "shared", isDir: true},
 				{userID: 1, path: "shared/sub", isDir: true},
 				{userID: 1, path: "shared/sub/file.txt", content: "x"},
 			},
-			paths:      []string{"shared/sub"},
-			privs:      []string{"resources.view"},
-			wantStatus: http.StatusOK,
-			// "shared" belongs to user 2 → not returned for user 1
+			paths:             []string{"shared/sub"},
+			privs:             []string{"resources.view"},
+			wantStatus:        http.StatusOK,
 			wantResponsePaths: []string{"shared/sub", "shared/sub/file.txt"},
+		},
+		{
+			name: "an administrator's own row wins a root path collision with a newer foreign row",
+			seeds: []seed{
+				{userID: 2, path: "report.txt", content: "theirs", updated: time.Hour},
+				{userID: 1, path: "report.txt", content: "mine"},
+			},
+			privs:             []string{"resources.admin"},
+			wantStatus:        http.StatusOK,
+			wantResponsePaths: []string{"report.txt"},
+			wantOwners:        map[string]uint64{"report.txt": 1},
+		},
+		{
+			name: "an administrator's own row wins a directory listing collision",
+			seeds: []seed{
+				{userID: 1, path: "docs", isDir: true},
+				{userID: 2, path: "docs/a.txt", content: "theirs", updated: time.Hour},
+				{userID: 1, path: "docs/a.txt", content: "mine"},
+			},
+			path:              "docs",
+			privs:             []string{"resources.admin"},
+			wantStatus:        http.StatusOK,
+			wantResponsePaths: []string{"docs", "docs/a.txt"},
+			wantOwners:        map[string]uint64{"docs/a.txt": 1},
+		},
+		{
+			name: "an administrator's own row wins an ancestor collision",
+			seeds: []seed{
+				{userID: 2, path: "docs", isDir: true, updated: time.Hour},
+				{userID: 1, path: "docs", isDir: true},
+				{userID: 1, path: "docs/sub", isDir: true},
+			},
+			path:              "docs/sub",
+			privs:             []string{"resources.admin"},
+			wantStatus:        http.StatusOK,
+			wantResponsePaths: []string{"docs", "docs/sub"},
+			wantOwners:        map[string]uint64{"docs": 1},
+		},
+		{
+			name: "of two foreign rows on a path the newer one is listed",
+			seeds: []seed{
+				{userID: 2, path: "report.txt", content: "older", updated: -time.Hour},
+				{userID: 3, path: "report.txt", content: "newer"},
+			},
+			privs:             []string{"resources.admin"},
+			wantStatus:        http.StatusOK,
+			wantResponsePaths: []string{"report.txt"},
+			wantOwners:        map[string]uint64{"report.txt": 3},
+		},
+		{
+			name: "of two foreign rows with one timestamp the lower id is listed",
+			seeds: []seed{
+				{userID: 2, path: "report.txt", content: "older"},
+				{userID: 3, path: "report.txt", content: "newer"},
+			},
+			sameStamp:         true,
+			privs:             []string{"resources.admin"},
+			wantStatus:        http.StatusOK,
+			wantResponsePaths: []string{"report.txt"},
+			wantOwners:        map[string]uint64{"report.txt": 2},
+		},
+		{
+			name: "a directory listing shows the newer of two foreign directory rows",
+			seeds: []seed{
+				{userID: 2, path: "docs", isDir: true, updated: -time.Hour},
+				{userID: 3, path: "docs", isDir: true},
+				{userID: 1, path: "docs/sub", isDir: true},
+			},
+			path:              "docs",
+			privs:             []string{"resources.admin"},
+			wantStatus:        http.StatusOK,
+			wantResponsePaths: []string{"docs", "docs/sub"},
+			wantOwners:        map[string]uint64{"docs": 3},
+		},
+		{
+			name: "the ancestor top-up shows the same foreign directory row as the directory listing",
+			seeds: []seed{
+				{userID: 2, path: "docs", isDir: true, updated: -time.Hour},
+				{userID: 3, path: "docs", isDir: true},
+				{userID: 1, path: "docs/sub", isDir: true},
+			},
+			path:              "docs/sub",
+			privs:             []string{"resources.admin"},
+			wantStatus:        http.StatusOK,
+			wantResponsePaths: []string{"docs", "docs/sub"},
+			wantOwners:        map[string]uint64{"docs": 3},
 		},
 	}
 
@@ -533,7 +581,15 @@ func TestResourceService_ListResourcesScenarios(t *testing.T) {
 					seeded.Hash = md5HexForService(rec.content)
 					seeded.Size = int64(len(rec.content))
 				}
-				seedResource(t, db, seeded)
+				seeded = seedResource(t, db, seeded)
+				if rec.updated != 0 {
+					require.NoError(t, db.Exec(
+						"UPDATE user_resources SET updated_at = ? WHERE id = ?", time.Now().Add(rec.updated), seeded.ID,
+					).Error)
+				}
+			}
+			if tt.sameStamp {
+				require.NoError(t, db.Exec("UPDATE user_resources SET updated_at = ?", time.Now()).Error)
 			}
 
 			var target string
@@ -565,16 +621,28 @@ func TestResourceService_ListResourcesScenarios(t *testing.T) {
 			svc.ListResources(c)
 
 			require.Equal(t, tt.wantStatus, w.Code)
-			if tt.wantStatus == http.StatusOK {
-				list := decodeResourceListResponse(t, w)
+			if tt.wantStatus != http.StatusOK {
+				return
+			}
+			list := decodeResourceListResponse(t, w)
+			if tt.wantSorted {
+				assert.Equal(t, tt.wantResponsePaths, resourcePaths(list.Items))
+			} else {
 				assert.ElementsMatch(t, tt.wantResponsePaths, resourcePaths(list.Items))
-				assert.Equal(t, uint64(len(tt.wantResponsePaths)), list.Total)
+			}
+			assert.Equal(t, uint64(len(tt.wantResponsePaths)), list.Total)
+			for vPath, owner := range tt.wantOwners {
+				for _, item := range list.Items {
+					if item.Path == vPath {
+						assert.Equal(t, owner, item.UserID, "owner of the row listed at %q", vPath)
+					}
+				}
 			}
 		})
 	}
 }
 
-func TestResourceService_MkdirResourceScenarios(t *testing.T) {
+func TestResources_MkdirResource_CreatesTheDirectoryAndItsMissingParents(t *testing.T) {
 	type seed struct {
 		path    string
 		isDir   bool
@@ -614,14 +682,52 @@ func TestResourceService_MkdirResourceScenarios(t *testing.T) {
 			wantEvents:       []resourceEvent{{action: "added", path: "secret"}},
 		},
 		{
-			name:             "deeply nested mkdir creates only the leaf entry",
+			name:             "deeply nested mkdir materialises every parent",
 			path:             "a/b/c",
 			privs:            []string{"resources.edit"},
 			wantStatus:       http.StatusOK,
-			wantPaths:        []string{"a/b/c"},
+			wantPaths:        []string{"a", "a/b", "a/b/c"},
 			wantResponsePath: "a/b/c",
 			wantResponseDir:  true,
-			wantEvents:       []resourceEvent{{action: "added", path: "a/b/c"}},
+			wantEvents: []resourceEvent{
+				{action: "added", path: "a"},
+				{action: "added", path: "a/b"},
+				{action: "added", path: "a/b/c"},
+			},
+		},
+		{
+			name:             "nested mkdir reuses the parents that already exist",
+			seeds:            []seed{{path: "a", isDir: true}},
+			path:             "a/b",
+			privs:            []string{"resources.edit"},
+			wantStatus:       http.StatusOK,
+			wantPaths:        []string{"a", "a/b"},
+			wantResponsePath: "a/b",
+			wantResponseDir:  true,
+			wantEvents:       []resourceEvent{{action: "added", path: "a/b"}},
+		},
+		{
+			name:             "mkdir on an existing leaf fills in the parents it never had",
+			seeds:            []seed{{path: "a/b/c", isDir: true}},
+			path:             "a/b/c",
+			privs:            []string{"resources.edit"},
+			wantStatus:       http.StatusOK,
+			wantPaths:        []string{"a", "a/b", "a/b/c"},
+			wantResponsePath: "a/b/c",
+			wantResponseDir:  true,
+			wantEvents: []resourceEvent{
+				{action: "added", path: "a"},
+				{action: "added", path: "a/b"},
+			},
+		},
+		{
+			name:       "a file standing in for a parent aborts the whole chain",
+			seeds:      []seed{{path: "a", content: "data"}},
+			path:       "a/b/c",
+			privs:      []string{"resources.edit"},
+			wantStatus: http.StatusConflict,
+			wantPaths:  []string{"a"},
+			wantEvents: nil,
 		},
 		{
 			name:             "idempotent existing directory returns existing record without event",
@@ -747,7 +853,7 @@ func TestResourceService_MkdirResourceScenarios(t *testing.T) {
 	}
 }
 
-func TestResourceService_UploadResourcesScenarios(t *testing.T) {
+func TestResources_UploadResources_StoresEachFileAsABlobRow(t *testing.T) {
 	type seed struct {
 		path    string
 		isDir   bool
@@ -759,6 +865,8 @@ func TestResourceService_UploadResourcesScenarios(t *testing.T) {
 		dir               string
 		files             []uploadTestFile
 		fieldName         string
+		rawFileName       string // sent unescaped, with "payload" as content
+		nonMultipart      bool
 		privs             []string
 		seeds             []seed
 		wantStatus        int
@@ -767,6 +875,7 @@ func TestResourceService_UploadResourcesScenarios(t *testing.T) {
 		wantEvents        []resourceEvent
 		wantMissingBlobs  []string
 		wantPresentBlobs  []string
+		wantHashes        map[string]string // path -> content whose md5 the row references
 	}{
 		{
 			name:              "upload without dir creates file in root",
@@ -882,11 +991,8 @@ func TestResourceService_UploadResourcesScenarios(t *testing.T) {
 			wantMissingBlobs: []string{"payload"},
 		},
 		{
-			// a name that survives multipart encoding intact, so the rejection
-			// comes from the handler's own validation rather than from the MIME
-			// parser choking on the header
 			name:             "upload invalid filename rejected",
-			files:            []uploadTestFile{{name: "bad*name.txt", content: "payload"}},
+			files:            []uploadTestFile{{name: "bad<>name.txt", content: "payload"}},
 			privs:            []string{"resources.upload"},
 			wantStatus:       http.StatusBadRequest,
 			wantMissingBlobs: []string{"payload"},
@@ -897,6 +1003,37 @@ func TestResourceService_UploadResourcesScenarios(t *testing.T) {
 			privs:            []string{"resources.view"},
 			wantStatus:       http.StatusForbidden,
 			wantMissingBlobs: []string{"payload"},
+		},
+		{
+			name:         "non-multipart body returns bad request",
+			nonMultipart: true,
+			privs:        []string{"resources.upload"},
+			wantStatus:   http.StatusBadRequest,
+			wantPaths:    []string{},
+		},
+		{
+			name:        "a raw line feed in the filename is rejected",
+			rawFileName: "evil\nname.txt",
+			privs:       []string{"resources.upload"},
+			wantStatus:  http.StatusBadRequest,
+			wantPaths:   []string{},
+		},
+		{
+			name:        "a raw carriage return in the filename is rejected",
+			rawFileName: "evil\rname.txt",
+			privs:       []string{"resources.upload"},
+			wantStatus:  http.StatusBadRequest,
+			wantPaths:   []string{},
+		},
+		{
+			name:              "two files with one content share one blob",
+			files:             []uploadTestFile{{name: "a.txt", content: "shared"}, {name: "b.txt", content: "shared"}},
+			privs:             []string{"resources.upload"},
+			wantStatus:        http.StatusOK,
+			wantPaths:         []string{"a.txt", "b.txt"},
+			wantResponsePaths: []string{"a.txt", "b.txt"},
+			wantEvents:        []resourceEvent{{action: "added", path: "a.txt"}, {action: "added", path: "b.txt"}},
+			wantHashes:        map[string]string{"a.txt": "shared", "b.txt": "shared"},
 		},
 	}
 
@@ -926,11 +1063,20 @@ func TestResourceService_UploadResourcesScenarios(t *testing.T) {
 				hashes[file.content] = md5HexForService(file.content)
 			}
 
-			fieldName := tt.fieldName
-			if fieldName == "" {
-				fieldName = "files"
+			var body *bytes.Buffer
+			var contentType string
+			switch {
+			case tt.nonMultipart:
+				body, contentType = bytes.NewBufferString(`{"hello":"world"}`), "application/json"
+			case tt.rawFileName != "":
+				body, contentType = rawMultipartUpload("files", tt.rawFileName, "payload")
+			default:
+				fieldName := tt.fieldName
+				if fieldName == "" {
+					fieldName = "files"
+				}
+				body, contentType = multipartUploadBodyWithField(t, tt.files, fieldName)
 			}
-			body, contentType := multipartUploadBodyWithField(t, tt.files, fieldName)
 			target := "/resources/"
 			if tt.dir != "" {
 				target += "?dir=" + tt.dir
@@ -957,102 +1103,26 @@ func TestResourceService_UploadResourcesScenarios(t *testing.T) {
 				_, err := os.Lstat(resources.BlobPath(dataDir, hashes[key]))
 				assert.NoError(t, err, "blob for %q should exist", key)
 			}
+			resourcesRequireHashes(t, db, tt.wantHashes)
+			resourcesRequireBlobsMatchRows(t, db, dataDir)
 		})
 	}
 }
 
-func TestResourceService_UploadResourcesNonMultipartBodyReturnsBadRequest(t *testing.T) {
-	db := setupResourceServiceTestDB(t)
-	dataDir := t.TempDir()
-	ss := &captureSubscriptions{}
-	svc := NewResourceService(db, dataDir, ss)
-
-	body := bytes.NewBufferString(`{"hello":"world"}`)
-	c, w := newResourceTestContext(http.MethodPost, "/resources/", body, []string{"resources.upload"})
-	c.Request.Header.Set("Content-Type", "application/json")
-
-	svc.UploadResources(c)
-
-	require.Equal(t, http.StatusBadRequest, w.Code)
-	assert.Empty(t, ss.events)
-	assert.Equal(t, 0, countResourceBlobs(t, dataDir))
-}
-
-func TestResourceService_UploadResourcesDeduplicatesBlobs(t *testing.T) {
-	db := setupResourceServiceTestDB(t)
-	dataDir := t.TempDir()
-	ss := &captureSubscriptions{}
-	svc := NewResourceService(db, dataDir, ss)
-
-	body, contentType := multipartUploadBody(t, []uploadTestFile{
-		{name: "a.txt", content: "shared"},
-		{name: "b.txt", content: "shared"},
-	})
-	c, w := newResourceTestContext(http.MethodPost, "/resources/", body, []string{"resources.upload"})
-	c.Request.Header.Set("Content-Type", contentType)
-
-	svc.UploadResources(c)
-
-	require.Equal(t, http.StatusOK, w.Code)
-	list := decodeResourceListResponse(t, w)
-	assert.ElementsMatch(t, []string{"a.txt", "b.txt"}, resourcePaths(list.Items))
-
-	var rows []models.UserResource
-	require.NoError(t, db.Order("path ASC").Find(&rows).Error)
-	require.Len(t, rows, 2)
-	expectedHash := md5HexForService("shared")
-	for _, row := range rows {
-		assert.Equal(t, expectedHash, row.Hash, "row %q must reference shared blob hash", row.Path)
-	}
-	assert.Equal(t, 1, countResourceBlobs(t, dataDir), "duplicate-content uploads must reuse a single blob file")
-
-	assert.ElementsMatch(t,
-		[]resourceEvent{{action: "added", path: "a.txt"}, {action: "added", path: "b.txt"}},
-		ss.events)
-}
-
-func TestResourceService_UploadResourcesPreservesExistingBlobOnDBFailure(t *testing.T) {
-	db := setupResourceServiceTestDB(t)
-	dataDir := t.TempDir()
-	ss := &captureSubscriptions{}
-	svc := NewResourceService(db, dataDir, ss)
-	hash := md5HexForService("shared-existing")
-	writeResourceBlob(t, dataDir, hash, "shared-existing")
-	seedResource(t, db, models.UserResource{
-		UserID: 1,
-		Hash:   hash,
-		Name:   "existing.txt",
-		Path:   "existing.txt",
-		Size:   int64(len("shared-existing")),
-	})
-
-	body, contentType := multipartUploadBody(t, []uploadTestFile{
-		{name: "existing.txt", content: "different"},
-	})
-	c, w := newResourceTestContext(http.MethodPost, "/resources/", body, []string{"resources.upload"})
-	c.Request.Header.Set("Content-Type", contentType)
-
-	svc.UploadResources(c)
-
-	require.Equal(t, http.StatusConflict, w.Code)
-	_, err := os.Lstat(resources.BlobPath(dataDir, hash))
-	assert.NoError(t, err, "existing blob must not be removed by orphan cleanup on conflict")
-	assert.Empty(t, ss.events)
-}
-
-func TestResourceService_DownloadResourceScenarios(t *testing.T) {
+func TestResources_DownloadResource_ServesAFileOrAZip(t *testing.T) {
 	type seed struct {
-		userID  uint64
-		path    string
-		isDir   bool
-		content string
-		// skipBlobWrite leaves the DB row intact but does not write the blob file.
-		skipBlobWrite bool
+		userID        uint64
+		path          string
+		isDir         bool
+		content       string
+		skipBlobWrite bool          // the row stays, its blob file is never written
+		updated       time.Duration // updated_at relative to now; 0 keeps the insert time
 	}
 
 	tests := []struct {
 		name             string
 		seeds            []seed
+		sameStamp        bool     // every row carries one updated_at
 		path             string   // builds ?path=<value>
 		paths            []string // builds ?paths[]=<value> for each
 		rawQuery         string   // when set, used verbatim (overrides path/paths)
@@ -1063,8 +1133,8 @@ func TestResourceService_DownloadResourceScenarios(t *testing.T) {
 		wantContentType  string
 		wantDispContains string
 		wantZipEntries   map[string]string
+		wantErrCode      string
 	}{
-		// ── single-path: existing behaviour (backward compatibility) ──────────
 		{
 			name:             "download single file with download privilege",
 			seeds:            []seed{{path: "report.txt", content: "payload"}},
@@ -1103,7 +1173,7 @@ func TestResourceService_DownloadResourceScenarios(t *testing.T) {
 			wantStatus:       http.StatusOK,
 			wantContentType:  "application/zip",
 			wantDispContains: "docs.zip",
-			// Single dir → paths relative to dir root.
+			// a lone directory is zipped relative to itself
 			wantZipEntries: map[string]string{
 				"a.txt":     "a-data",
 				"sub/b.txt": "b-data",
@@ -1132,8 +1202,6 @@ func TestResourceService_DownloadResourceScenarios(t *testing.T) {
 			wantDispContains: "docs.zip",
 			wantZipEntries:   map[string]string{},
 		},
-
-		// ── access control ────────────────────────────────────────────────────
 		{
 			name:       "missing privilege returns forbidden",
 			seeds:      []seed{{path: "report.txt", content: "payload"}},
@@ -1141,8 +1209,6 @@ func TestResourceService_DownloadResourceScenarios(t *testing.T) {
 			privs:      []string{"resources.view"},
 			wantStatus: http.StatusForbidden,
 		},
-
-		// ── single-path: invalid input ────────────────────────────────────────
 		{
 			name:       "empty path returns bad request",
 			seeds:      []seed{{path: "report.txt", content: "payload"}},
@@ -1169,11 +1235,7 @@ func TestResourceService_DownloadResourceScenarios(t *testing.T) {
 			privs:      []string{"resources.download"},
 			wantStatus: http.StatusNotFound,
 		},
-
-		// ── paths[] parameter ─────────────────────────────────────────────────
-
 		{
-			// Single file via paths[] behaves identically to path=.
 			name:             "single file via paths[] downloaded directly",
 			seeds:            []seed{{path: "report.txt", content: "payload"}},
 			paths:            []string{"report.txt"},
@@ -1183,7 +1245,6 @@ func TestResourceService_DownloadResourceScenarios(t *testing.T) {
 			wantDispContains: "report.txt",
 		},
 		{
-			// Single directory via paths[] uses dir-relative ZIP paths (backward-compat).
 			name: "single directory via paths[] uses dir-relative zip paths",
 			seeds: []seed{
 				{path: "docs", isDir: true},
@@ -1202,7 +1263,162 @@ func TestResourceService_DownloadResourceScenarios(t *testing.T) {
 			},
 		},
 		{
-			// Two files → ZIP where each entry uses its full virtual path.
+			// Seed order fixes the autoincrement ids: the other owner's row is 1.
+			name: "administrator reaches the other owner's row by id",
+			seeds: []seed{
+				{userID: 2, path: "report.txt", content: "theirs"},
+				{userID: 1, path: "report.txt", content: "mine"},
+			},
+			rawQuery:         "id=1",
+			privs:            []string{"resources.admin"},
+			wantStatus:       http.StatusOK,
+			wantBody:         "theirs",
+			wantDispContains: "report.txt",
+		},
+		{
+			name: "path still answers with the administrator's own row",
+			seeds: []seed{
+				{userID: 2, path: "report.txt", content: "theirs"},
+				{userID: 1, path: "report.txt", content: "mine"},
+			},
+			path:             "report.txt",
+			privs:            []string{"resources.admin"},
+			wantStatus:       http.StatusOK,
+			wantBody:         "mine",
+			wantDispContains: "report.txt",
+		},
+		{
+			name: "of two foreign rows on a path the newer one is downloaded, as the listing shows",
+			seeds: []seed{
+				{userID: 2, path: "report.txt", content: "older", updated: -time.Hour},
+				{userID: 3, path: "report.txt", content: "newer"},
+			},
+			path:             "report.txt",
+			privs:            []string{"resources.admin"},
+			wantStatus:       http.StatusOK,
+			wantBody:         "newer",
+			wantDispContains: "report.txt",
+		},
+		{
+			name: "of two foreign rows with one timestamp the lower id is downloaded, as the listing shows",
+			seeds: []seed{
+				{userID: 2, path: "report.txt", content: "older"},
+				{userID: 3, path: "report.txt", content: "newer"},
+			},
+			sameStamp:        true,
+			path:             "report.txt",
+			privs:            []string{"resources.admin"},
+			wantStatus:       http.StatusOK,
+			wantBody:         "older",
+			wantDispContains: "report.txt",
+		},
+		{
+			name: "plain user cannot reach another owner's row by id, which is as absent as by path",
+			seeds: []seed{
+				{userID: 2, path: "report.txt", content: "theirs"},
+				{userID: 1, path: "own.txt", content: "mine"},
+			},
+			rawQuery:   "id=1",
+			privs:      []string{"resources.download"},
+			wantStatus: http.StatusNotFound,
+		},
+		{
+			name: "an id whose path the archive already holds is refused, not dropped",
+			seeds: []seed{
+				{userID: 2, path: "report.txt", content: "theirs"},
+				{userID: 1, path: "report.txt", content: "mine"},
+			},
+			rawQuery:    "id=1&paths[]=report.txt",
+			privs:       []string{"resources.admin"},
+			wantStatus:  http.StatusBadRequest,
+			wantErrCode: "Resources.SharedPath",
+		},
+		{
+			name: "two ids that share a path are refused, not collapsed",
+			seeds: []seed{
+				{userID: 2, path: "report.txt", content: "theirs"},
+				{userID: 1, path: "report.txt", content: "mine"},
+			},
+			rawQuery:    "ids[]=1&ids[]=2",
+			privs:       []string{"resources.admin"},
+			wantStatus:  http.StatusBadRequest,
+			wantErrCode: "Resources.SharedPath",
+		},
+		{
+			name: "a directory requested by id is refused when one of its files shares the caller's path",
+			seeds: []seed{
+				{userID: 2, path: "docs", isDir: true},
+				{userID: 2, path: "docs/a.txt", content: "theirs"},
+				{userID: 1, path: "docs/a.txt", content: "mine"},
+			},
+			rawQuery:    "id=1&paths[]=docs/a.txt",
+			privs:       []string{"resources.admin"},
+			wantStatus:  http.StatusBadRequest,
+			wantErrCode: "Resources.SharedPath",
+		},
+		{
+			name: "an id and a path that name the same row give it once",
+			seeds: []seed{
+				{userID: 2, path: "report.txt", content: "theirs"},
+				{userID: 1, path: "report.txt", content: "mine"},
+			},
+			rawQuery:         "id=2&paths[]=report.txt",
+			privs:            []string{"resources.admin"},
+			wantStatus:       http.StatusOK,
+			wantContentType:  "application/zip",
+			wantDispContains: "download.zip",
+			wantZipEntries: map[string]string{
+				"report.txt": "mine",
+			},
+		},
+		{
+			name:       "non-numeric id returns bad request",
+			seeds:      []seed{{path: "report.txt", content: "payload"}},
+			rawQuery:   "id=abc",
+			privs:      []string{"resources.download"},
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:       "unknown id returns not found",
+			seeds:      []seed{{path: "report.txt", content: "payload"}},
+			rawQuery:   "id=999",
+			privs:      []string{"resources.download"},
+			wantStatus: http.StatusNotFound,
+		},
+		{
+			// without the owner predicate the order of paths[] would decide whose file is zipped
+			name: "archive keeps the administrator's own file when the directory comes first",
+			seeds: []seed{
+				{userID: 2, path: "docs", isDir: true},
+				{userID: 2, path: "docs/a.txt", content: "theirs"},
+				{userID: 1, path: "docs/a.txt", content: "mine"},
+			},
+			paths:            []string{"docs", "docs/a.txt"},
+			privs:            []string{"resources.admin"},
+			wantStatus:       http.StatusOK,
+			wantContentType:  "application/zip",
+			wantDispContains: "download.zip",
+			wantZipEntries: map[string]string{
+				"docs/a.txt": "mine",
+			},
+		},
+		{
+			name: "archive keeps the administrator's own file when the file comes first",
+			seeds: []seed{
+				{userID: 2, path: "docs", isDir: true},
+				{userID: 2, path: "docs/a.txt", content: "theirs"},
+				{userID: 1, path: "docs/a.txt", content: "mine"},
+			},
+			paths:            []string{"docs/a.txt", "docs"},
+			privs:            []string{"resources.admin"},
+			wantStatus:       http.StatusOK,
+			wantContentType:  "application/zip",
+			wantDispContains: "download.zip",
+			wantZipEntries: map[string]string{
+				"docs/a.txt": "mine",
+			},
+		},
+		{
 			name: "two files via paths[] packaged into zip with full virtual paths",
 			seeds: []seed{
 				{path: "docs/a.txt", content: "a-data"},
@@ -1219,7 +1435,6 @@ func TestResourceService_DownloadResourceScenarios(t *testing.T) {
 			},
 		},
 		{
-			// path= and paths[]= are combined; result is a multi-entry ZIP.
 			name: "path= and paths[] combined produce multi-entry zip",
 			seeds: []seed{
 				{path: "a.txt", content: "a-data"},
@@ -1237,7 +1452,6 @@ func TestResourceService_DownloadResourceScenarios(t *testing.T) {
 			},
 		},
 		{
-			// File and directory combined: directory contents use full virtual paths.
 			name: "file and directory via paths[] combined in zip with full virtual paths",
 			seeds: []seed{
 				{path: "report.txt", content: "report-data"},
@@ -1258,7 +1472,6 @@ func TestResourceService_DownloadResourceScenarios(t *testing.T) {
 			},
 		},
 		{
-			// Same path sent twice: downloaded exactly once.
 			name:             "duplicate paths in paths[] deduplicated",
 			seeds:            []seed{{path: "a.txt", content: "alpha"}},
 			paths:            []string{"a.txt", "a.txt"},
@@ -1268,21 +1481,18 @@ func TestResourceService_DownloadResourceScenarios(t *testing.T) {
 			wantDispContains: "a.txt",
 		},
 		{
-			// Whitespace-only paths → 400.
 			name:       "whitespace-only paths[] returns bad request",
 			rawQuery:   "paths[]=%20%20&paths[]=%09",
 			privs:      []string{"resources.download"},
 			wantStatus: http.StatusBadRequest,
 		},
 		{
-			// Invalid path → 400.
 			name:       "invalid path in paths[] returns bad request",
 			rawQuery:   "paths[]=docs&paths[]=../escape",
 			privs:      []string{"resources.download"},
 			wantStatus: http.StatusBadRequest,
 		},
 		{
-			// First resource valid, second missing → 404, fail-fast.
 			name: "missing resource in batch returns not found",
 			seeds: []seed{
 				{path: "a.txt", content: "alpha"},
@@ -1292,9 +1502,7 @@ func TestResourceService_DownloadResourceScenarios(t *testing.T) {
 			wantStatus: http.StatusNotFound,
 		},
 		{
-			// DB row present but the blob file is gone, inside a multi-file ZIP: must
-			// fail with an error, not stream a truncated archive under 200. Present
-			// blob first so the pre-flight, not write order, is what prevents output.
+			// a missing blob fails the archive before a byte is streamed, never a truncated 200
 			name: "blob missing on disk in a zip batch fails cleanly, no truncated 200",
 			seeds: []seed{
 				{path: "a.txt", content: "alpha"},
@@ -1329,7 +1537,15 @@ func TestResourceService_DownloadResourceScenarios(t *testing.T) {
 						writeResourceBlob(t, dataDir, seeded.Hash, rec.content)
 					}
 				}
-				seedResource(t, db, seeded)
+				seeded = seedResource(t, db, seeded)
+				if rec.updated != 0 {
+					require.NoError(t, db.Exec(
+						"UPDATE user_resources SET updated_at = ? WHERE id = ?", time.Now().Add(rec.updated), seeded.ID,
+					).Error)
+				}
+			}
+			if tt.sameStamp {
+				require.NoError(t, db.Exec("UPDATE user_resources SET updated_at = ?", time.Now()).Error)
 			}
 
 			var target string
@@ -1359,6 +1575,9 @@ func TestResourceService_DownloadResourceScenarios(t *testing.T) {
 
 			require.Equal(t, tt.wantStatus, w.Code)
 			if tt.wantStatus != http.StatusOK {
+				if tt.wantErrCode != "" {
+					assert.Contains(t, w.Body.String(), `"code":"`+tt.wantErrCode+`"`)
+				}
 				return
 			}
 			if tt.wantContentType != "" {
@@ -1368,8 +1587,7 @@ func TestResourceService_DownloadResourceScenarios(t *testing.T) {
 				assert.Contains(t, w.Header().Get("Content-Disposition"), tt.wantDispContains)
 			}
 			if tt.wantZipEntries != nil {
-				// A streamed ZIP download must not buffer the whole archive, so it
-				// must not carry a Content-Length computed from a full buffer.
+				// a streamed archive is never buffered, so it has no Content-Length
 				assert.Empty(t, w.Header().Get("Content-Length"))
 				zr, err := zip.NewReader(bytes.NewReader(w.Body.Bytes()), int64(w.Body.Len()))
 				require.NoError(t, err)
@@ -1390,11 +1608,7 @@ func TestResourceService_DownloadResourceScenarios(t *testing.T) {
 	}
 }
 
-// TestStreamZipArchive verifies the shared streaming helper writes a valid ZIP
-// straight to the response writer without buffering the whole archive (no
-// Content-Length is emitted) and that a build error mid-stream propagates to the
-// caller and aborts the request.
-func TestStreamZipArchive(t *testing.T) {
+func TestResources_StreamZipArchive_StreamsUnbufferedAndReportsABuildError(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	t.Run("streams archive without content-length", func(t *testing.T) {
@@ -1416,7 +1630,6 @@ func TestStreamZipArchive(t *testing.T) {
 		assert.False(t, c.IsAborted())
 		assert.Equal(t, "application/zip", w.Header().Get("Content-Type"))
 		assert.Contains(t, w.Header().Get("Content-Disposition"), "out.zip")
-		// The whole archive was never buffered, so no buffer-derived length exists.
 		assert.Empty(t, w.Header().Get("Content-Length"))
 
 		zr, err := zip.NewReader(bytes.NewReader(w.Body.Bytes()), int64(w.Body.Len()))
@@ -1462,20 +1675,18 @@ func TestStreamZipArchive(t *testing.T) {
 
 		sentinel := errors.New("blob open failed before any write")
 		err := streamZipArchive(c, "out.zip", func(zw io.Writer) error {
-			// Fail immediately, before writing any archive bytes.
 			return sentinel
 		})
 
 		require.ErrorIs(t, err, sentinel)
-		// Nothing was streamed, so a normal (non-200, non-zip) error response is
-		// sent instead of a truncated 200.
+		// nothing was streamed, so a structured error replaces a truncated 200
 		assert.Equal(t, http.StatusInternalServerError, w.Code)
 		assert.NotEqual(t, "application/zip", w.Header().Get("Content-Type"))
 		assert.True(t, c.IsAborted())
 	})
 }
 
-func TestResourceService_DeleteResourceScenarios(t *testing.T) {
+func TestResources_DeleteResource_RemovesTheTreeAndItsOrphanBlobs(t *testing.T) {
 	type seed struct {
 		userID  uint64
 		path    string
@@ -1493,10 +1704,12 @@ func TestResourceService_DeleteResourceScenarios(t *testing.T) {
 		privs             []string
 		wantStatus        int
 		wantPaths         []string
-		wantResponsePaths []string
+		wantResponsePaths []string // in response order
 		wantEvents        []resourceEvent
 		wantMissingBlobs  []string
 		wantPresentBlobs  []string
+		wantOwners        map[string]uint64
+		wantPublisherUIDs []int64 // whose channel the events went to (nil = don't check)
 	}{
 		{
 			name:              "delete file removes row and orphan blob",
@@ -1621,10 +1834,7 @@ func TestResourceService_DeleteResourceScenarios(t *testing.T) {
 			wantPaths:        []string{"report.txt"},
 			wantPresentBlobs: []string{"payload"},
 		},
-
-		// ── paths[] parameter ────────────────────────────────────────────────
 		{
-			// Two sibling files deleted in one request.
 			name: "delete two files via paths[] in batch",
 			seeds: []seed{
 				{path: "a.txt", content: "a"},
@@ -1644,7 +1854,6 @@ func TestResourceService_DeleteResourceScenarios(t *testing.T) {
 			wantPresentBlobs: []string{"keep"},
 		},
 		{
-			// path= and paths[]= are combined.
 			name: "path= and paths[] combined delete both targets",
 			seeds: []seed{
 				{path: "a.txt", content: "a"},
@@ -1662,7 +1871,6 @@ func TestResourceService_DeleteResourceScenarios(t *testing.T) {
 			},
 		},
 		{
-			// Same path sent twice: each record is deleted exactly once.
 			name: "duplicate paths in paths[] deduplicated",
 			seeds: []seed{
 				{path: "a.txt", content: "a"},
@@ -1676,14 +1884,12 @@ func TestResourceService_DeleteResourceScenarios(t *testing.T) {
 			wantMissingBlobs:  []string{"a"},
 		},
 		{
-			// Whitespace-only paths[] → 400 (no valid paths provided).
 			name:       "whitespace-only paths[] returns bad request",
 			rawQuery:   "paths[]=%20%20&paths[]=%09",
 			privs:      []string{"resources.delete"},
 			wantStatus: http.StatusBadRequest,
 		},
 		{
-			// First path valid, second path missing → 404, nothing deleted (fail-fast).
 			name: "missing second path in batch returns 404 without deleting first",
 			seeds: []seed{
 				{path: "a.txt", content: "a"},
@@ -1694,8 +1900,6 @@ func TestResourceService_DeleteResourceScenarios(t *testing.T) {
 			wantPaths:   []string{"a.txt"}, // not deleted due to fail-fast
 		},
 		{
-			// Parent and child both in delete list: all descendants collected once
-			// via ID deduplication; no double-deletion or errors.
 			name: "overlapping paths parent and child both processed correctly",
 			seeds: []seed{
 				{path: "docs", isDir: true},
@@ -1717,7 +1921,6 @@ func TestResourceService_DeleteResourceScenarios(t *testing.T) {
 			},
 		},
 		{
-			// Deleted entries are returned sorted by virtual path.
 			name: "response sorted by path across multiple deleted targets",
 			seeds: []seed{
 				{path: "z.txt", content: "z"},
@@ -1733,6 +1936,43 @@ func TestResourceService_DeleteResourceScenarios(t *testing.T) {
 				{action: "deleted", path: "m.txt"},
 				{action: "deleted", path: "z.txt"},
 			},
+		},
+		{
+			name:              "an administrator deletes the foreign row the listing shows and tells its owner",
+			seeds:             []seed{{userID: 2, path: "report.txt", content: "theirs"}},
+			targetPaths:       []string{"report.txt"},
+			privs:             []string{"resources.admin"},
+			wantStatus:        http.StatusOK,
+			wantPaths:         []string{},
+			wantResponsePaths: []string{"report.txt"},
+			wantEvents:        []resourceEvent{{action: "deleted", path: "report.txt"}},
+			wantMissingBlobs:  []string{"theirs"},
+			wantPublisherUIDs: []int64{2},
+		},
+		{
+			name:             "a caller without the admin privilege cannot reach a foreign row",
+			seeds:            []seed{{userID: 2, path: "report.txt", content: "theirs"}},
+			targetPaths:      []string{"report.txt"},
+			privs:            []string{"resources.delete"},
+			wantStatus:       http.StatusNotFound,
+			wantPaths:        []string{"report.txt"},
+			wantPresentBlobs: []string{"theirs"},
+		},
+		{
+			name: "an administrator's own row wins over a foreign row seeded before it",
+			seeds: []seed{
+				{userID: 2, path: "report.txt", content: "theirs"},
+				{userID: 1, path: "report.txt", content: "mine"},
+			},
+			targetPaths:       []string{"report.txt"},
+			privs:             []string{"resources.admin"},
+			wantStatus:        http.StatusOK,
+			wantPaths:         []string{"report.txt"},
+			wantResponsePaths: []string{"report.txt"},
+			wantEvents:        []resourceEvent{{action: "deleted", path: "report.txt"}},
+			wantMissingBlobs:  []string{"mine"},
+			wantPresentBlobs:  []string{"theirs"},
+			wantOwners:        map[string]uint64{"report.txt": 2},
 		},
 	}
 
@@ -1788,10 +2028,15 @@ func TestResourceService_DeleteResourceScenarios(t *testing.T) {
 				assert.ElementsMatch(t, tt.wantPaths, allResourcePaths(t, db))
 			}
 			assert.Equal(t, tt.wantEvents, ss.events)
+			if tt.wantPublisherUIDs != nil {
+				assert.Equal(t, tt.wantPublisherUIDs, ss.publisherUIDs)
+			}
 			if tt.wantStatus == http.StatusOK {
 				list := decodeResourceListResponse(t, w)
-				assert.ElementsMatch(t, tt.wantResponsePaths, resourcePaths(list.Items))
+				assert.Equal(t, tt.wantResponsePaths, resourcePaths(list.Items))
 			}
+			resourcesRequireOwners(t, db, tt.wantOwners)
+			resourcesRequireBlobsMatchRows(t, db, dataDir)
 			for _, key := range tt.wantMissingBlobs {
 				_, err := os.Lstat(resources.BlobPath(dataDir, hashes[key]))
 				assert.True(t, os.IsNotExist(err), "blob for %q should be removed", key)
@@ -1804,38 +2049,27 @@ func TestResourceService_DeleteResourceScenarios(t *testing.T) {
 	}
 }
 
-func TestResourceService_CopyResourceScenarios(t *testing.T) {
-	type seed struct {
-		path    string
-		isDir   bool
-		content string
-	}
-	type copyRequest struct {
-		Source      string   `json:"source,omitempty"`
-		Sources     []string `json:"sources,omitempty"`
-		Destination string   `json:"destination"`
-		Force       bool     `json:"force,omitempty"`
-	}
+func TestResources_CopyResource_CopiesFilesAndTrees(t *testing.T) {
+	type seed = resourcesTransferSeed
+	type copyRequest = resourcesTransferRequest
 
-	tests := []struct {
-		name                 string
-		seeds                []seed
-		req                  copyRequest
-		privs                []string
-		wantStatus           int
-		wantPaths            []string
-		wantResponsePaths    []string
-		wantEvents           []resourceEvent
-		wantDeletedBlobTexts []string
-	}{
+	tests := []resourcesTransferCase{
 		{
-			name:              "file to absent path adds copy",
+			name:              "file to absent path adds a copy of the same blob",
 			seeds:             []seed{{path: "a.txt", content: "src"}},
 			req:               copyRequest{Source: "a.txt", Destination: "copies/a.txt"},
 			wantStatus:        http.StatusOK,
 			wantPaths:         []string{"a.txt", "copies", "copies/a.txt"},
 			wantResponsePaths: []string{"copies", "copies/a.txt"},
 			wantEvents:        []resourceEvent{{action: "added", path: "copies"}, {action: "added", path: "copies/a.txt"}},
+			wantHashes:        map[string]string{"a.txt": "src", "copies/a.txt": "src"},
+		},
+		{
+			name:       "malformed json returns bad request",
+			seeds:      []seed{{path: "a.txt", content: "src"}},
+			rawBody:    `{not valid json`,
+			wantStatus: http.StatusBadRequest,
+			wantPaths:  []string{"a.txt"},
 		},
 		{
 			name:              "admin can copy file",
@@ -1881,6 +2115,41 @@ func TestResourceService_CopyResourceScenarios(t *testing.T) {
 			wantResponsePaths:    []string{"docs", "docs/a.txt"},
 			wantEvents:           []resourceEvent{{action: "deleted", path: "docs"}, {action: "added", path: "docs"}, {action: "added", path: "docs/a.txt"}},
 			wantDeletedBlobTexts: []string{"blocking"},
+		},
+		{
+			name:              "force replaces a file at a nested named destination",
+			seeds:             []seed{{path: "a.txt", content: "src"}, {path: "docs", isDir: true}, {path: "docs/sub", content: "blocking"}},
+			req:               copyRequest{Source: "a.txt", Destination: "docs/sub/", Force: true},
+			wantStatus:        http.StatusOK,
+			wantPaths:         []string{"a.txt", "docs", "docs/sub", "docs/sub/a.txt"},
+			wantResponsePaths: []string{"docs/sub", "docs/sub/a.txt"},
+			wantEvents: []resourceEvent{
+				{action: "deleted", path: "docs/sub"},
+				{action: "added", path: "docs/sub"},
+				{action: "added", path: "docs/sub/a.txt"},
+			},
+			wantDeletedBlobTexts: []string{"blocking"},
+		},
+		{
+			name:       "force stops at a file one level above a nested destination",
+			seeds:      []seed{{path: "a.txt", content: "src"}, {path: "docs", content: "blocking"}},
+			req:        copyRequest{Source: "a.txt", Destination: "docs/sub/", Force: true},
+			wantStatus: http.StatusConflict,
+			wantPaths:  []string{"a.txt", "docs"},
+		},
+		{
+			name:       "force does not replace a file on the way to the destination",
+			seeds:      []seed{{path: "a.txt", content: "src"}, {path: "victim.txt", content: "irreplaceable"}},
+			req:        copyRequest{Source: "a.txt", Destination: "victim.txt/nested/copy.txt", Force: true},
+			wantStatus: http.StatusConflict,
+			wantPaths:  []string{"a.txt", "victim.txt"},
+		},
+		{
+			name:       "force does not replace a file at the destination's parent",
+			seeds:      []seed{{path: "a.txt", content: "src"}, {path: "docs", content: "blocking"}},
+			req:        copyRequest{Source: "a.txt", Destination: "docs/copy.txt", Force: true},
+			wantStatus: http.StatusConflict,
+			wantPaths:  []string{"a.txt", "docs"},
 		},
 		{
 			name:       "missing privilege returns forbidden",
@@ -2081,8 +2350,6 @@ func TestResourceService_CopyResourceScenarios(t *testing.T) {
 			wantStatus: http.StatusBadRequest,
 			wantPaths:  []string{"a.txt"},
 		},
-
-		// ── multi-source (sources []) ─────────────────────────────────────────
 		{
 			name: "multi-source: two files copied to a common base directory",
 			seeds: []seed{
@@ -2097,6 +2364,20 @@ func TestResourceService_CopyResourceScenarios(t *testing.T) {
 				{action: "added", path: "backup"},
 				{action: "added", path: "backup/a.txt"},
 				{action: "added", path: "backup/b.txt"},
+			},
+		},
+		{
+			name: "sources differing only by separator are one source",
+			seeds: []seed{
+				{path: "dir", isDir: true},
+				{path: "dir/z.txt", content: "zzz"},
+			},
+			req:               copyRequest{Sources: []string{"dir/z.txt", "dir\\z.txt"}, Destination: "backup"},
+			wantStatus:        http.StatusOK,
+			wantPaths:         []string{"dir", "dir/z.txt", "backup"},
+			wantResponsePaths: []string{"backup"},
+			wantEvents: []resourceEvent{
+				{action: "added", path: "backup"},
 			},
 		},
 		{
@@ -2152,7 +2433,7 @@ func TestResourceService_CopyResourceScenarios(t *testing.T) {
 				"backup/a.txt",
 				"backup/b.txt",
 			},
-			// Publish order: Deleted → Added → Updated.
+			// publish order: deleted, added, updated
 			wantEvents: []resourceEvent{
 				{action: "deleted", path: "backup/a.txt"},
 				{action: "added", path: "backup/b.txt"},
@@ -2263,126 +2544,16 @@ func TestResourceService_CopyResourceScenarios(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			db := setupResourceServiceTestDB(t)
-			dataDir := t.TempDir()
-			ss := &captureSubscriptions{}
-			svc := NewResourceService(db, dataDir, ss)
-			deletedHashes := map[string]string{}
-			for _, rec := range tt.seeds {
-				seeded := models.UserResource{
-					UserID: 1,
-					Name:   filepath.Base(rec.path),
-					Path:   rec.path,
-					IsDir:  rec.isDir,
-				}
-				if !rec.isDir {
-					seeded.Hash = md5HexForService(rec.content)
-					seeded.Size = int64(len(rec.content))
-					writeResourceBlob(t, dataDir, seeded.Hash, rec.content)
-					deletedHashes[rec.content] = seeded.Hash
-				}
-				seedResource(t, db, seeded)
-			}
-
-			bodyBytes, err := json.Marshal(tt.req)
-			require.NoError(t, err)
-			privs := tt.privs
-			if privs == nil {
-				privs = []string{"resources.edit"}
-			}
-			c, w := newResourceTestContext(http.MethodPost, "/resources/copy", bytes.NewBuffer(bodyBytes), privs)
-			c.Request.Header.Set("Content-Type", "application/json")
-
-			svc.CopyResource(c)
-
-			require.Equal(t, tt.wantStatus, w.Code)
-			assert.ElementsMatch(t, tt.wantPaths, allResourcePaths(t, db))
-			assert.Equal(t, tt.wantEvents, ss.events)
-			if tt.wantStatus == http.StatusOK {
-				list := decodeResourceListResponse(t, w)
-				assert.ElementsMatch(t, tt.wantResponsePaths, resourcePaths(list.Items))
-			}
-			for _, content := range tt.wantDeletedBlobTexts {
-				_, err := os.Lstat(resources.BlobPath(dataDir, deletedHashes[content]))
-				assert.True(t, os.IsNotExist(err), "blob for %q should be removed", content)
-			}
+			resourcesRunTransferCase(t, tt, http.MethodPost, "/resources/copy", (*ResourceService).CopyResource)
 		})
 	}
 }
 
-func TestResourceService_CopyResourceMalformedJSONReturnsBadRequest(t *testing.T) {
-	db := setupResourceServiceTestDB(t)
-	dataDir := t.TempDir()
-	ss := &captureSubscriptions{}
-	svc := NewResourceService(db, dataDir, ss)
-	seedResource(t, db, models.UserResource{UserID: 1, Name: "a.txt", Path: "a.txt", Hash: md5HexForService("src"), Size: 3})
+func TestResources_MoveResource_MovesFilesAndTrees(t *testing.T) {
+	type seed = resourcesTransferSeed
+	type moveRequest = resourcesTransferRequest
 
-	c, w := newResourceTestContext(
-		http.MethodPost,
-		"/resources/copy",
-		bytes.NewBufferString(`{not valid json`),
-		[]string{"resources.edit"},
-	)
-	c.Request.Header.Set("Content-Type", "application/json")
-
-	svc.CopyResource(c)
-
-	require.Equal(t, http.StatusBadRequest, w.Code)
-	assert.Empty(t, ss.events)
-	assert.ElementsMatch(t, []string{"a.txt"}, allResourcePaths(t, db))
-}
-
-func TestResourceService_CopyResourceFileReusesBlob(t *testing.T) {
-	db := setupResourceServiceTestDB(t)
-	dataDir := t.TempDir()
-	ss := &captureSubscriptions{}
-	svc := NewResourceService(db, dataDir, ss)
-	hash := md5HexForService("payload")
-	writeResourceBlob(t, dataDir, hash, "payload")
-	seedResource(t, db, models.UserResource{UserID: 1, Name: "src.txt", Path: "src.txt", Hash: hash, Size: 7})
-
-	body, err := json.Marshal(map[string]any{"source": "src.txt", "destination": "dst.txt"})
-	require.NoError(t, err)
-	c, w := newResourceTestContext(http.MethodPost, "/resources/copy", bytes.NewBuffer(body), []string{"resources.edit"})
-	c.Request.Header.Set("Content-Type", "application/json")
-
-	svc.CopyResource(c)
-
-	require.Equal(t, http.StatusOK, w.Code)
-
-	var rows []models.UserResource
-	require.NoError(t, db.Order("path ASC").Find(&rows).Error)
-	require.Len(t, rows, 2)
-	for _, row := range rows {
-		assert.Equal(t, hash, row.Hash, "row %q must reuse source blob hash", row.Path)
-	}
-	assert.Equal(t, 1, countResourceBlobs(t, dataDir), "copying a file must not create a new blob on disk")
-}
-
-func TestResourceService_MoveResourceScenarios(t *testing.T) {
-	type seed struct {
-		path    string
-		isDir   bool
-		content string
-	}
-	type moveRequest struct {
-		Source      string   `json:"source,omitempty"`
-		Sources     []string `json:"sources,omitempty"`
-		Destination string   `json:"destination"`
-		Force       bool     `json:"force,omitempty"`
-	}
-
-	tests := []struct {
-		name                 string
-		seeds                []seed
-		req                  moveRequest
-		privs                []string
-		wantStatus           int
-		wantPaths            []string
-		wantResponsePaths    []string
-		wantEvents           []resourceEvent
-		wantDeletedBlobTexts []string
-	}{
+	tests := []resourcesTransferCase{
 		{
 			name:              "file to absent path updates source",
 			seeds:             []seed{{path: "a.txt", content: "src"}},
@@ -2391,6 +2562,24 @@ func TestResourceService_MoveResourceScenarios(t *testing.T) {
 			wantPaths:         []string{"b.txt"},
 			wantResponsePaths: []string{"b.txt"},
 			wantEvents:        []resourceEvent{{action: "updated", path: "b.txt"}},
+		},
+		{
+			name:       "malformed json returns bad request",
+			seeds:      []seed{{path: "a.txt", content: "src"}},
+			rawBody:    `{not valid json`,
+			wantStatus: http.StatusBadRequest,
+			wantPaths:  []string{"a.txt"},
+		},
+		{
+			name:              "an administrator's move leaves a foreign file with its owner",
+			seeds:             []seed{{userID: 2, path: "report.txt", content: "theirs"}},
+			req:               moveRequest{Source: "report.txt", Destination: "archive/report.txt"},
+			privs:             []string{"resources.admin"},
+			wantStatus:        http.StatusOK,
+			wantPaths:         []string{"archive", "archive/report.txt"},
+			wantResponsePaths: []string{"archive", "archive/report.txt"},
+			wantEvents:        []resourceEvent{{action: "added", path: "archive"}, {action: "updated", path: "archive/report.txt"}},
+			wantOwners:        map[string]uint64{"archive": 2, "archive/report.txt": 2},
 		},
 		{
 			name:              "admin can move file",
@@ -2436,6 +2625,31 @@ func TestResourceService_MoveResourceScenarios(t *testing.T) {
 			wantResponsePaths:    []string{"docs", "docs/a.txt"},
 			wantEvents:           []resourceEvent{{action: "deleted", path: "docs"}, {action: "added", path: "docs"}, {action: "updated", path: "docs/a.txt"}},
 			wantDeletedBlobTexts: []string{"blocking"},
+		},
+		{
+			name:       "force does not replace a file on the way to the destination",
+			seeds:      []seed{{path: "a.txt", content: "src"}, {path: "victim.txt", content: "irreplaceable"}},
+			req:        moveRequest{Source: "a.txt", Destination: "victim.txt/nested/moved.txt", Force: true},
+			wantStatus: http.StatusConflict,
+			wantPaths:  []string{"a.txt", "victim.txt"},
+		},
+		{
+			name:       "force does not replace a file at the destination's parent",
+			seeds:      []seed{{path: "a.txt", content: "src"}, {path: "docs", content: "blocking"}},
+			req:        moveRequest{Source: "a.txt", Destination: "docs/moved.txt", Force: true},
+			wantStatus: http.StatusConflict,
+			wantPaths:  []string{"a.txt", "docs"},
+		},
+		{
+			name: "force does not replace a file at a moved directory's parent",
+			seeds: []seed{
+				{path: "src", isDir: true},
+				{path: "src/a.txt", content: "src"},
+				{path: "docs", content: "blocking"},
+			},
+			req:        moveRequest{Source: "src", Destination: "docs/moved", Force: true},
+			wantStatus: http.StatusConflict,
+			wantPaths:  []string{"docs", "src", "src/a.txt"},
 		},
 		{
 			name:       "missing privilege returns forbidden",
@@ -2662,8 +2876,6 @@ func TestResourceService_MoveResourceScenarios(t *testing.T) {
 			wantStatus: http.StatusBadRequest,
 			wantPaths:  []string{"a.txt"},
 		},
-
-		// ── multi-source (sources []) ─────────────────────────────────────────
 		{
 			name: "multi-source: two files moved to a common base directory",
 			seeds: []seed{
@@ -2681,12 +2893,25 @@ func TestResourceService_MoveResourceScenarios(t *testing.T) {
 			},
 		},
 		{
+			name: "sources differing only by separator are one source",
+			seeds: []seed{
+				{path: "dir", isDir: true},
+				{path: "dir/z.txt", content: "zzz"},
+			},
+			req:               moveRequest{Sources: []string{"dir/z.txt", `dir\z.txt`}, Destination: "backup"},
+			wantStatus:        http.StatusOK,
+			wantPaths:         []string{"dir", "backup"},
+			wantResponsePaths: []string{"backup"},
+			wantEvents: []resourceEvent{
+				{action: "updated", path: "backup"},
+			},
+		},
+		{
 			name: "multi-source: source and sources merged and deduplicated",
 			seeds: []seed{
 				{path: "a.txt", content: "aaa"},
 				{path: "b.txt", content: "bbb"},
 			},
-			// a.txt appears in both source and sources → deduplicated to one
 			req:               moveRequest{Source: "a.txt", Sources: []string{"a.txt", "b.txt"}, Destination: "archive"},
 			wantStatus:        http.StatusOK,
 			wantPaths:         []string{"archive", "archive/a.txt", "archive/b.txt"},
@@ -2724,16 +2949,13 @@ func TestResourceService_MoveResourceScenarios(t *testing.T) {
 			seeds: []seed{
 				{path: "a.txt", content: "new-a"},
 				{path: "b.txt", content: "new-b"},
-				// "archive" dir record is intentionally absent; ensureResourceDirs creates it.
 				{path: "archive/a.txt", content: "old-a"},
 			},
-			req:        moveRequest{Sources: []string{"a.txt", "b.txt"}, Destination: "archive", Force: true},
-			wantStatus: http.StatusOK,
-			wantPaths:  []string{"archive", "archive/a.txt", "archive/b.txt"},
-			// "archive" is Added by ensureResourceDirs; Updated contains moved files.
+			req:               moveRequest{Sources: []string{"a.txt", "b.txt"}, Destination: "archive", Force: true},
+			wantStatus:        http.StatusOK,
+			wantPaths:         []string{"archive", "archive/a.txt", "archive/b.txt"},
 			wantResponsePaths: []string{"archive", "archive/a.txt", "archive/b.txt"},
-			// Publish order: DeletedBefore → Added → Updated → DeletedAfter.
-			// archive/a.txt is in DeletedBefore (overwritten), archive dir is in Added.
+			// publish order: deleted before, added, updated, deleted after
 			wantEvents: []resourceEvent{
 				{action: "deleted", path: "archive/a.txt"},
 				{action: "added", path: "archive"},
@@ -2752,8 +2974,7 @@ func TestResourceService_MoveResourceScenarios(t *testing.T) {
 			},
 			req:        moveRequest{Sources: []string{"a.txt", "b.txt"}, Destination: "archive"},
 			wantStatus: http.StatusConflict,
-			// TX rolled back: "archive" dir record was never committed.
-			wantPaths: []string{"a.txt", "archive/a.txt", "b.txt"},
+			wantPaths:  []string{"a.txt", "archive/a.txt", "b.txt"},
 		},
 		{
 			name: "multi-source: duplicate basenames returns conflict",
@@ -2761,7 +2982,6 @@ func TestResourceService_MoveResourceScenarios(t *testing.T) {
 				{path: "dir1/x.txt", content: "x1"},
 				{path: "dir2/x.txt", content: "x2"},
 			},
-			// both sources have basename "x.txt" → conflict
 			req:        moveRequest{Sources: []string{"dir1/x.txt", "dir2/x.txt"}, Destination: "archive"},
 			wantStatus: http.StatusConflict,
 			wantPaths:  []string{"dir1/x.txt", "dir2/x.txt"},
@@ -2802,7 +3022,6 @@ func TestResourceService_MoveResourceScenarios(t *testing.T) {
 				{path: "docs", isDir: true},
 				{path: "a.txt", content: "a"},
 			},
-			// moving "docs" to "docs/sub" would move it into itself
 			req:        moveRequest{Sources: []string{"docs", "a.txt"}, Destination: "docs/sub"},
 			wantStatus: http.StatusBadRequest,
 			wantPaths:  []string{"a.txt", "docs"},
@@ -2816,8 +3035,6 @@ func TestResourceService_MoveResourceScenarios(t *testing.T) {
 			wantStatus: http.StatusBadRequest,
 			wantPaths:  []string{"a.txt"},
 		},
-
-		// ── move to root (destination == "") ─────────────────────────────────
 		{
 			name:              "single source: file in subdirectory moved to root",
 			seeds:             []seed{{path: "reports", isDir: true}, {path: "reports/openai-report.md", content: "rpt"}},
@@ -2877,104 +3094,49 @@ func TestResourceService_MoveResourceScenarios(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			db := setupResourceServiceTestDB(t)
-			dataDir := t.TempDir()
-			ss := &captureSubscriptions{}
-			svc := NewResourceService(db, dataDir, ss)
-			deletedHashes := map[string]string{}
-			for _, rec := range tt.seeds {
-				seeded := models.UserResource{
-					UserID: 1,
-					Name:   filepath.Base(rec.path),
-					Path:   rec.path,
-					IsDir:  rec.isDir,
-				}
-				if !rec.isDir {
-					seeded.Hash = md5HexForService(rec.content)
-					seeded.Size = int64(len(rec.content))
-					writeResourceBlob(t, dataDir, seeded.Hash, rec.content)
-					deletedHashes[rec.content] = seeded.Hash
-				}
-				seedResource(t, db, seeded)
-			}
-
-			bodyBytes, err := json.Marshal(tt.req)
-			require.NoError(t, err)
-			privs := tt.privs
-			if privs == nil {
-				privs = []string{"resources.edit"}
-			}
-			c, w := newResourceTestContext(http.MethodPut, "/resources/move", bytes.NewBuffer(bodyBytes), privs)
-			c.Request.Header.Set("Content-Type", "application/json")
-
-			svc.MoveResource(c)
-
-			require.Equal(t, tt.wantStatus, w.Code)
-			assert.ElementsMatch(t, tt.wantPaths, allResourcePaths(t, db))
-			assert.Equal(t, tt.wantEvents, ss.events)
-			if tt.wantStatus == http.StatusOK {
-				list := decodeResourceListResponse(t, w)
-				assert.ElementsMatch(t, tt.wantResponsePaths, resourcePaths(list.Items))
-			}
-			for _, content := range tt.wantDeletedBlobTexts {
-				_, err := os.Lstat(resources.BlobPath(dataDir, deletedHashes[content]))
-				assert.True(t, os.IsNotExist(err), "blob for %q should be removed", content)
-			}
+			resourcesRunTransferCase(t, tt, http.MethodPut, "/resources/move", (*ResourceService).MoveResource)
 		})
 	}
 }
 
-func TestResourceService_MoveResourceMalformedJSONReturnsBadRequest(t *testing.T) {
-	db := setupResourceServiceTestDB(t)
-	dataDir := t.TempDir()
-	ss := &captureSubscriptions{}
-	svc := NewResourceService(db, dataDir, ss)
-	seedResource(t, db, models.UserResource{UserID: 1, Name: "a.txt", Path: "a.txt", Hash: md5HexForService("src"), Size: 3})
+// MoveResource dedupes its sources, so only a direct call reaches this guard.
+func TestResources_MoveMultipleSources_RefusesSourcesNamingOneResource(t *testing.T) {
+	svc, db := resourcesServiceHoldingOneFile(t)
 
-	c, w := newResourceTestContext(
-		http.MethodPut,
-		"/resources/move",
-		bytes.NewBufferString(`{not valid json`),
-		[]string{"resources.edit"},
-	)
-	c.Request.Header.Set("Content-Type", "application/json")
+	_, err := svc.moveMultipleSources(1, []string{"a.txt", "a.txt"}, "archive", false)
 
-	svc.MoveResource(c)
-
-	require.Equal(t, http.StatusBadRequest, w.Code)
-	assert.Empty(t, ss.events)
+	assert.ErrorIs(t, err, errResourceInvalid)
+	assert.ErrorContains(t, err, "sources resolve to the same resource")
 	assert.ElementsMatch(t, []string{"a.txt"}, allResourcePaths(t, db))
 }
 
-func TestResourceService_QueryResources(t *testing.T) {
-	db := setupResourceServiceTestDB(t)
-	svc := NewResourceService(db, t.TempDir(), nil)
+// CopyResource dedupes its sources, so only a direct call reaches this guard.
+func TestResources_CopyMultipleSources_RefusesSourcesNamingOneResource(t *testing.T) {
+	svc, db := resourcesServiceHoldingOneFile(t)
 
-	seedResource(t, db, models.UserResource{UserID: 1, Hash: md5HexForService("root"), Name: "root.txt", Path: "root.txt", Size: 4})
-	seedResource(t, db, models.UserResource{UserID: 1, Name: "docs", Path: "docs", IsDir: true})
-	seedResource(t, db, models.UserResource{UserID: 1, Hash: md5HexForService("a"), Name: "a.txt", Path: "docs/a.txt", Size: 1})
-	seedResource(t, db, models.UserResource{UserID: 1, Name: "sub", Path: "docs/sub", IsDir: true})
-	seedResource(t, db, models.UserResource{UserID: 1, Hash: md5HexForService("b"), Name: "b.txt", Path: "docs/sub/b.txt", Size: 1})
-	seedResource(t, db, models.UserResource{UserID: 2, Hash: md5HexForService("other"), Name: "other.txt", Path: "other.txt", Size: 5})
+	_, err := svc.copyMultipleSources(1, []string{"a.txt", "a.txt"}, "backup", false)
 
-	root, err := svc.queryResources(1, false, "", false)
-	require.NoError(t, err)
-	assert.ElementsMatch(t, []string{"root.txt", "docs"}, resourcePaths(root))
-
-	docs, err := svc.queryResources(1, false, "docs", false)
-	require.NoError(t, err)
-	assert.ElementsMatch(t, []string{"docs", "docs/a.txt", "docs/sub"}, resourcePaths(docs))
-
-	recursive, err := svc.queryResources(1, false, "docs", true)
-	require.NoError(t, err)
-	assert.ElementsMatch(t, []string{"docs", "docs/a.txt", "docs/sub", "docs/sub/b.txt"}, resourcePaths(recursive))
-
-	adminRoot, err := svc.queryResources(1, true, "", false)
-	require.NoError(t, err)
-	assert.ElementsMatch(t, []string{"root.txt", "docs", "other.txt"}, resourcePaths(adminRoot))
+	assert.ErrorIs(t, err, errResourceInvalid)
+	assert.ErrorContains(t, err, "sources resolve to the same resource")
+	assert.ElementsMatch(t, []string{"a.txt"}, allResourcePaths(t, db))
 }
 
-func TestResourceService_CleanupOrphanBlobsScenarios(t *testing.T) {
+func resourcesServiceHoldingOneFile(t *testing.T) (*ResourceService, *gorm.DB) {
+	t.Helper()
+
+	db := setupResourceServiceTestDB(t)
+	svc := NewResourceService(db, t.TempDir(), &captureSubscriptions{})
+	seedResource(t, db, models.UserResource{
+		UserID: 1,
+		Name:   "a.txt",
+		Path:   "a.txt",
+		Hash:   md5HexForService("src"),
+		Size:   3,
+	})
+	return svc, db
+}
+
+func TestResources_CleanupOrphanBlobs_RemovesOnlyUnreferencedBlobs(t *testing.T) {
 	type seed struct {
 		userID  uint64
 		path    string
@@ -3064,75 +3226,228 @@ func TestResourceService_CleanupOrphanBlobsScenarios(t *testing.T) {
 	}
 }
 
-func TestResourceService_DeleteOrphanBlobScenarios(t *testing.T) {
-	t.Run("removes orphan hash blob", func(t *testing.T) {
-		db := setupResourceServiceTestDB(t)
-		dataDir := t.TempDir()
-		svc := NewResourceService(db, dataDir, nil)
-		hash := md5HexForService("orphan")
-		writeResourceBlob(t, dataDir, hash, "orphan")
-
-		svc.deleteOrphanBlob(context.Background(), hash)
-
-		_, err := os.Lstat(resources.BlobPath(dataDir, hash))
-		assert.True(t, os.IsNotExist(err))
-	})
-
-	t.Run("keeps blob when still referenced", func(t *testing.T) {
-		db := setupResourceServiceTestDB(t)
-		dataDir := t.TempDir()
-		svc := NewResourceService(db, dataDir, nil)
-		hash := md5HexForService("kept")
-		writeResourceBlob(t, dataDir, hash, "kept")
-		seedResource(t, db, models.UserResource{UserID: 1, Hash: hash, Name: "kept.txt", Path: "kept.txt", Size: 4})
-
-		svc.deleteOrphanBlob(context.Background(), hash)
-
-		_, err := os.Lstat(resources.BlobPath(dataDir, hash))
-		assert.NoError(t, err)
-	})
-
-	t.Run("empty hash is a no-op", func(t *testing.T) {
-		db := setupResourceServiceTestDB(t)
-		dataDir := t.TempDir()
-		svc := NewResourceService(db, dataDir, nil)
-
-		assert.NotPanics(t, func() {
-			svc.deleteOrphanBlob(context.Background(), "")
-		})
-	})
-}
-
-func TestResourceService_ConvertResourceToModel(t *testing.T) {
-	entry := models.ResourceEntry{
-		ID:     42,
-		UserID: 7,
-		Name:   "report.txt",
-		Path:   "docs/report.txt",
-		Size:   123,
-		IsDir:  false,
+func TestResources_DeleteOrphanBlob_RemovesOnlyAnUnreferencedBlob(t *testing.T) {
+	tests := []struct {
+		name       string
+		hashOf     string // content whose hash is passed; "" passes an empty hash
+		referenced bool   // a row references the blob
+		wantKept   bool
+	}{
+		{name: "removes orphan hash blob", hashOf: "orphan"},
+		{name: "keeps blob when still referenced", hashOf: "kept", referenced: true, wantKept: true},
+		{name: "empty hash is a no-op", wantKept: true},
 	}
 
-	modelResource := convertResourceToModel(entry)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			db := setupResourceServiceTestDB(t)
+			dataDir := t.TempDir()
+			svc := NewResourceService(db, dataDir, nil)
+			blob := md5HexForService("blob")
+			hash := ""
+			if tt.hashOf != "" {
+				blob = md5HexForService(tt.hashOf)
+				hash = blob
+			}
+			writeResourceBlob(t, dataDir, blob, "blob")
+			if tt.referenced {
+				seedResource(t, db, models.UserResource{UserID: 1, Hash: blob, Name: "kept.txt", Path: "kept.txt", Size: 4})
+			}
 
-	require.NotNil(t, modelResource)
-	assert.Equal(t, int64(entry.ID), modelResource.ID)
-	assert.Equal(t, int64(entry.UserID), modelResource.UserID)
-	assert.Equal(t, entry.Name, modelResource.Name)
-	assert.Equal(t, entry.Path, modelResource.Path)
-	assert.Equal(t, int(entry.Size), modelResource.Size)
-	assert.Equal(t, entry.IsDir, modelResource.IsDir)
+			svc.deleteOrphanBlob(context.Background(), hash)
+
+			_, err := os.Lstat(resources.BlobPath(dataDir, blob))
+			if tt.wantKept {
+				assert.NoError(t, err)
+			} else {
+				assert.True(t, os.IsNotExist(err))
+			}
+		})
+	}
 }
 
-func writeResourceBlob(t *testing.T, dataDir, hash, content string) {
+func TestResources_ConvertResourceToModel_CopiesEveryField(t *testing.T) {
+	modelResource := convertResourceToModel(models.ResourceEntry{
+		ID:        42,
+		UserID:    7,
+		Name:      "docs",
+		Path:      "work/docs",
+		Size:      123,
+		IsDir:     true,
+		CreatedAt: time.Date(2024, 1, 2, 3, 4, 5, 0, time.UTC),
+		UpdatedAt: time.Date(2024, 6, 7, 8, 9, 10, 0, time.UTC),
+	})
+
+	assert.Equal(t, &model.UserResource{
+		ID:        42,
+		UserID:    7,
+		Name:      "docs",
+		Path:      "work/docs",
+		Size:      123,
+		IsDir:     true,
+		CreatedAt: time.Date(2024, 1, 2, 3, 4, 5, 0, time.UTC),
+		UpdatedAt: time.Date(2024, 6, 7, 8, 9, 10, 0, time.UTC),
+	}, modelResource)
+}
+
+// The SQL listing and the REST doors must pick the same row when two owners share a path.
+func TestResources_GetAllResources_OrdersByIDLast(t *testing.T) {
+	raw, err := os.ReadFile("../../../sqlc/models/resources.sql")
+	require.NoError(t, err, "the gate reads the queries themselves — a moved file must fail loudly")
+
+	name := regexp.MustCompile(`(?m)^-- name: (\S+)`)
+	blocks := name.Split(string(raw), -1)
+	names := name.FindAllStringSubmatch(string(raw), -1)
+	require.Len(t, blocks, len(names)+1)
+
+	checked := 0
+	for i, match := range names {
+		query := names[i][1]
+		if !strings.HasPrefix(query, "GetAllResources") {
+			continue
+		}
+
+		checked++
+		body := strings.TrimSpace(blocks[i+1])
+
+		if !strings.Contains(body, "ORDER BY") {
+			t.Errorf("%s has no order at all, so two owners on one path come back in whichever order the database chose", match[1])
+			continue
+		}
+		if !strings.Contains(body, "id ASC;") {
+			t.Errorf("%s orders by updated_at and name only: two rows equal on both leave the winner to the database", match[1])
+		}
+	}
+
+	require.NotZero(t, checked, "no cross-owner query was found — the naming this gate keys on has changed")
+}
+
+func TestResources_IsUniqueViolation_MatchesPostgresAndSQLitePhrasings(t *testing.T) {
+	assert.True(t, isUniqueViolation(errors.New(`pq: duplicate key value violates unique constraint "users_mail_unique"`)))
+	assert.True(t, isUniqueViolation(errors.New("pq: error 23505")))
+	assert.True(t, isUniqueViolation(errors.New("UNIQUE constraint failed: users.mail")), "sqlite phrasing is matched case-insensitively")
+	assert.False(t, isUniqueViolation(errors.New("connection refused")))
+	assert.False(t, isUniqueViolation(nil))
+}
+
+func setupResourceServiceTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
 
-	blobPath := resources.BlobPath(dataDir, hash)
-	require.NoError(t, os.MkdirAll(filepath.Dir(blobPath), 0755))
-	require.NoError(t, os.WriteFile(blobPath, []byte(content), 0644))
+	db, err := gorm.Open("sqlite3", ":memory:")
+	require.NoError(t, err)
+	db.LogMode(false)
+
+	require.NoError(t, db.Exec(`
+		CREATE TABLE user_resources (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id INTEGER NOT NULL,
+			hash TEXT NOT NULL DEFAULT '',
+			name TEXT NOT NULL,
+			path TEXT NOT NULL,
+			size INTEGER NOT NULL DEFAULT 0,
+			is_dir BOOLEAN NOT NULL DEFAULT FALSE,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(user_id, path)
+		)
+	`).Error)
+
+	t.Cleanup(func() {
+		require.NoError(t, db.Close())
+	})
+
+	return db
 }
 
-func md5HexForService(content string) string {
-	sum := md5.Sum([]byte(content))
-	return hex.EncodeToString(sum[:])
+func newResourceTestContext(method, target string, body *bytes.Buffer, privs []string) (*gin.Context, *httptest.ResponseRecorder) {
+	return newResourceTestContextWithUID(method, target, body, privs, 1)
+}
+
+type captureSubscriptions struct {
+	events        []resourceEvent
+	publisherUIDs []int64
+}
+
+func (s *captureSubscriptions) NewFlowSubscriber(int64, int64) subscriptions.FlowSubscriber {
+	return nil
+}
+func (s *captureSubscriptions) NewFlowPublisher(int64, int64) subscriptions.FlowPublisher { return nil }
+func (s *captureSubscriptions) NewResourceSubscriber(int64) subscriptions.ResourceSubscriber {
+	return nil
+}
+func (s *captureSubscriptions) NewProviderSubscriber(int64) subscriptions.ProviderSubscriber {
+	return nil
+}
+func (s *captureSubscriptions) NewProviderPublisher(int64) subscriptions.ProviderPublisher {
+	return nil
+}
+func (s *captureSubscriptions) NewAPITokenSubscriber(int64) subscriptions.APITokenSubscriber {
+	return nil
+}
+func (s *captureSubscriptions) NewAPITokenPublisher(int64) subscriptions.APITokenPublisher {
+	return nil
+}
+func (s *captureSubscriptions) NewSettingsSubscriber(int64) subscriptions.SettingsSubscriber {
+	return nil
+}
+func (s *captureSubscriptions) NewSettingsPublisher(int64) subscriptions.SettingsPublisher {
+	return nil
+}
+func (s *captureSubscriptions) NewFlowTemplateSubscriber(int64) subscriptions.FlowTemplateSubscriber {
+	return nil
+}
+func (s *captureSubscriptions) NewFlowTemplatePublisher(int64) subscriptions.FlowTemplatePublisher {
+	return nil
+}
+func (s *captureSubscriptions) NewResourcePublisher(userID int64) subscriptions.ResourcePublisher {
+	s.publisherUIDs = append(s.publisherUIDs, userID)
+	return &captureResourcePublisher{events: &s.events, userID: userID}
+}
+func (s *captureSubscriptions) NewKnowledgeSubscriber(int64) subscriptions.KnowledgeSubscriber {
+	return nil
+}
+func (s *captureSubscriptions) NewKnowledgePublisher(int64) subscriptions.KnowledgePublisher {
+	return nil
+}
+
+func newResourceTestContextWithUID(
+	method, target string,
+	body *bytes.Buffer,
+	privs []string,
+	uid uint64,
+) (*gin.Context, *httptest.ResponseRecorder) {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Set("uid", uid)
+	c.Set("prm", privs)
+	if body == nil {
+		body = bytes.NewBuffer(nil)
+	}
+	c.Request = httptest.NewRequest(method, target, body)
+	return c, w
+}
+
+type resourceEvent struct {
+	action string
+	path   string
+}
+
+type captureResourcePublisher struct {
+	userID int64
+	events *[]resourceEvent
+}
+
+func (p *captureResourcePublisher) GetUserID() int64 { return p.userID }
+func (p *captureResourcePublisher) SetUserID(userID int64) {
+	p.userID = userID
+}
+func (p *captureResourcePublisher) ResourceAdded(_ context.Context, resource *model.UserResource) {
+	*p.events = append(*p.events, resourceEvent{action: "added", path: resource.Path})
+}
+func (p *captureResourcePublisher) ResourceUpdated(_ context.Context, resource *model.UserResource) {
+	*p.events = append(*p.events, resourceEvent{action: "updated", path: resource.Path})
+}
+func (p *captureResourcePublisher) ResourceDeleted(_ context.Context, resource *model.UserResource) {
+	*p.events = append(*p.events, resourceEvent{action: "deleted", path: resource.Path})
 }

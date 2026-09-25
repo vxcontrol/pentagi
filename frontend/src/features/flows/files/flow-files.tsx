@@ -15,6 +15,7 @@ import {
     type FileManagerAction,
     type FileManagerBulkAction,
     type FileNode,
+    pluralizeItems,
 } from '@/components/shared/file-manager';
 import { Button } from '@/components/ui/button';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
@@ -24,14 +25,14 @@ import { Spinner } from '@/components/ui/spinner';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { StatusType } from '@/graphql/types';
 import { useFilesDragAndDrop } from '@/hooks/use-files-drag-and-drop';
-import { copyToClipboard } from '@/lib/report';
+import { copyToClipboard } from '@/lib/clipboard';
 import { useFlow } from '@/providers/flow-provider';
 
 import { FlowFilesAttachResourcesDialog } from './flow-files-attach-resources-dialog';
 import { ROOT_GROUPS } from './flow-files-constants';
 import { FlowFilesPromoteDialog } from './flow-files-promote-dialog';
 import { FlowFilesPullDialog } from './flow-files-pull-dialog';
-import { buildFlowFilesDownloadHref, pluralizeItems } from './flow-files-utils';
+import { buildFlowFilesDownloadHref } from './flow-files-utils';
 import { useFlowFilesData } from './use-flow-files-data';
 import { useFlowFilesDelete } from './use-flow-files-delete';
 import { useFlowFilesRealtime } from './use-flow-files-realtime';

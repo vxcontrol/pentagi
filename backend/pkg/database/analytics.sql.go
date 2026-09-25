@@ -26,100 +26,40 @@ func (q *Queries) GetAssistantsCountForFlow(ctx context.Context, flowID int64) (
 	return total_assistants_count, err
 }
 
-const getFlowsForPeriodLast3Months = `-- name: GetFlowsForPeriodLast3Months :many
+const getFlowsForPeriod = `-- name: GetFlowsForPeriod :many
+WITH bounds AS (
+  SELECT ((NOW() AT TIME ZONE $1::text)::date - $3::int) AS first_day
+)
 SELECT id, title
 FROM flows
-WHERE created_at >= NOW() - INTERVAL '90 days' AND deleted_at IS NULL AND user_id = $1
+WHERE created_at >= (((SELECT first_day FROM bounds) - 1)::timestamp AT TIME ZONE $1::text)
+  AND (created_at AT TIME ZONE $1::text)::date >= (SELECT first_day FROM bounds)
+  AND deleted_at IS NULL
+  AND user_id = $2
 ORDER BY created_at DESC
 `
 
-type GetFlowsForPeriodLast3MonthsRow struct {
+type GetFlowsForPeriodParams struct {
+	Tz     string `json:"tz"`
+	UserID int64  `json:"user_id"`
+	Days   int32  `json:"days"`
+}
+
+type GetFlowsForPeriodRow struct {
 	ID    int64  `json:"id"`
 	Title string `json:"title"`
 }
 
-// Get flow IDs created in the last 3 months for analytics
-func (q *Queries) GetFlowsForPeriodLast3Months(ctx context.Context, userID int64) ([]GetFlowsForPeriodLast3MonthsRow, error) {
-	rows, err := q.db.QueryContext(ctx, getFlowsForPeriodLast3Months, userID)
+// Flows created within the last N whole calendar days in the caller's timezone.
+func (q *Queries) GetFlowsForPeriod(ctx context.Context, arg GetFlowsForPeriodParams) ([]GetFlowsForPeriodRow, error) {
+	rows, err := q.db.QueryContext(ctx, getFlowsForPeriod, arg.Tz, arg.UserID, arg.Days)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []GetFlowsForPeriodLast3MonthsRow
+	var items []GetFlowsForPeriodRow
 	for rows.Next() {
-		var i GetFlowsForPeriodLast3MonthsRow
-		if err := rows.Scan(&i.ID, &i.Title); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const getFlowsForPeriodLastMonth = `-- name: GetFlowsForPeriodLastMonth :many
-SELECT id, title
-FROM flows
-WHERE created_at >= NOW() - INTERVAL '30 days' AND deleted_at IS NULL AND user_id = $1
-ORDER BY created_at DESC
-`
-
-type GetFlowsForPeriodLastMonthRow struct {
-	ID    int64  `json:"id"`
-	Title string `json:"title"`
-}
-
-// Get flow IDs created in the last month for analytics
-func (q *Queries) GetFlowsForPeriodLastMonth(ctx context.Context, userID int64) ([]GetFlowsForPeriodLastMonthRow, error) {
-	rows, err := q.db.QueryContext(ctx, getFlowsForPeriodLastMonth, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []GetFlowsForPeriodLastMonthRow
-	for rows.Next() {
-		var i GetFlowsForPeriodLastMonthRow
-		if err := rows.Scan(&i.ID, &i.Title); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const getFlowsForPeriodLastWeek = `-- name: GetFlowsForPeriodLastWeek :many
-SELECT id, title
-FROM flows
-WHERE created_at >= NOW() - INTERVAL '7 days' AND deleted_at IS NULL AND user_id = $1
-ORDER BY created_at DESC
-`
-
-type GetFlowsForPeriodLastWeekRow struct {
-	ID    int64  `json:"id"`
-	Title string `json:"title"`
-}
-
-// Get flow IDs created in the last week for analytics
-func (q *Queries) GetFlowsForPeriodLastWeek(ctx context.Context, userID int64) ([]GetFlowsForPeriodLastWeekRow, error) {
-	rows, err := q.db.QueryContext(ctx, getFlowsForPeriodLastWeek, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []GetFlowsForPeriodLastWeekRow
-	for rows.Next() {
-		var i GetFlowsForPeriodLastWeekRow
+		var i GetFlowsForPeriodRow
 		if err := rows.Scan(&i.ID, &i.Title); err != nil {
 			return nil, err
 		}

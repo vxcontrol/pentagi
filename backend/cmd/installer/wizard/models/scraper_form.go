@@ -445,11 +445,11 @@ func (m *ScraperFormModel) OnFieldChanged(fieldIndex int, oldValue, newValue str
 }
 
 func (m *ScraperFormModel) GetFormFields() []FormField {
-	return m.BaseScreen.fields
+	return m.fields
 }
 
 func (m *ScraperFormModel) SetFormFields(fields []FormField) {
-	m.BaseScreen.fields = fields
+	m.fields = fields
 }
 
 // BaseListHandler interface implementation

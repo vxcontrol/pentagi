@@ -1,178 +1,182 @@
 # LLM Agent Testing Report
 
-Generated: Fri, 07 Aug 2026 20:22:34 UTC
+Generated: Thu, 24 Sep 2026 21:36:36 UTC
 
 ## Overall Results
 
 | Agent | Model | Reasoning | Success Rate | Average Latency |
 |-------|-------|-----------|--------------|-----------------|
-| simple | deepseek-v4-flash-0731 | false | 23/24 (95.83%) | 1.271s |
-| simple_json | deepseek-v4-flash-0731 | false | 7/7 (100.00%) | 1.188s |
-| primary_agent | qwen3.7-plus | true | 24/24 (100.00%) | 6.572s |
-| assistant | qwen3.7-plus | true | 24/24 (100.00%) | 5.940s |
-| generator | deepseek-v4-pro | true | 24/24 (100.00%) | 3.752s |
-| refiner | deepseek-v4-pro | true | 24/24 (100.00%) | 3.496s |
-| adviser | glm-5.2 | true | 24/24 (100.00%) | 3.750s |
-| reflector | deepseek-v4-flash-0731 | true | 24/24 (100.00%) | 1.809s |
-| searcher | deepseek-v4-flash-0731 | true | 22/24 (91.67%) | 1.898s |
-| enricher | deepseek-v4-flash-0731 | true | 24/24 (100.00%) | 1.608s |
-| coder | qwen3.7-plus | true | 24/24 (100.00%) | 5.271s |
-| installer | qwen3.7-plus | true | 24/24 (100.00%) | 5.711s |
-| pentester | qwen3.7-plus | true | 23/24 (95.83%) | 6.145s |
+| simple | qwen3.6-flash | true | 25/25 (100.00%) | 5.997s |
+| simple_json | qwen3.6-flash | true | 8/8 (100.00%) | 4.357s |
+| primary_agent | deepseek-v4.1-flash | true | 25/25 (100.00%) | 0.405s |
+| assistant | deepseek-v4.1-flash | true | 25/25 (100.00%) | 0.389s |
+| generator | deepseek-v4-pro | true | 25/25 (100.00%) | 4.838s |
+| refiner | deepseek-v4-pro | true | 25/25 (100.00%) | 4.778s |
+| adviser | deepseek-v4-pro | true | 16/16 (100.00%) | 5.322s |
+| reflector | qwen3.6-flash | true | 16/16 (100.00%) | 4.372s |
+| searcher | qwen3.6-flash | true | 25/25 (100.00%) | 3.003s |
+| enricher | qwen3.6-flash | true | 25/25 (100.00%) | 2.174s |
+| coder | deepseek-v4.1-flash | true | 25/25 (100.00%) | 0.403s |
+| installer | deepseek-v4.1-flash | true | 25/25 (100.00%) | 0.396s |
+| pentester | deepseek-v4.1-flash | true | 25/25 (100.00%) | 0.397s |
 
-**Total**: 291/295 (98.64%) successful tests
-**Overall average latency**: 3.870s
+**Total**: 290/290 (100.00%) successful tests
+**Overall average latency**: 2.619s
 
 ## Detailed Results
 
-### simple (deepseek-v4-flash-0731)
+### simple (qwen3.6-flash)
 
 #### Basic Tests
 
 | Test | Result | Latency | Error |
 |------|--------|---------|-------|
-| Simple Math | ✅ Pass | 1.518s |  |
-| Text Transform Uppercase | ✅ Pass | 1.071s |  |
-| Count from 1 to 5 | ✅ Pass | 0.885s |  |
-| Math Calculation | ✅ Pass | 0.909s |  |
-| Basic Echo Function | ✅ Pass | 1.294s |  |
-| Streaming Simple Math Streaming | ✅ Pass | 0.902s |  |
-| Streaming Count from 1 to 3 Streaming | ✅ Pass | 0.933s |  |
-| Streaming Basic Echo Function Streaming | ✅ Pass | 1.221s |  |
+| Simple Math | ✅ Pass | 1.642s |  |
+| Basic Echo Function | ✅ Pass | 1.864s |  |
+| Streaming Count from 1 to 3 Streaming | ✅ Pass | 1.934s |  |
+| Math Calculation | ✅ Pass | 1.951s |  |
+| Streaming Simple Math Streaming | ✅ Pass | 2.072s |  |
+| Text Transform Uppercase | ✅ Pass | 2.296s |  |
+| Count from 1 to 5 | ✅ Pass | 2.362s |  |
+| Streaming Basic Echo Function Streaming | ✅ Pass | 1.177s |  |
+| Answer Stops At The Output Limit | ✅ Pass | 90.027s |  |
 
 #### Advanced Tests
 
 | Test | Result | Latency | Error |
 |------|--------|---------|-------|
-| JSON Response Function | ✅ Pass | 1.735s |  |
-| Search Query Function | ✅ Pass | 1.316s |  |
-| Ask Advice Function | ✅ Pass | 1.150s |  |
-| Streaming Search Query Function Streaming | ✅ Pass | 1.293s |  |
-| Basic Context Memory Test | ✅ Pass | 1.396s |  |
-| Function Argument Memory Test | ✅ Pass | 0.859s |  |
-| Function Response Memory Test | ✅ Pass | 0.966s |  |
-| Penetration Testing Memory with Tool Call | ❌ Fail | 1.384s | expected function 'generate\_report' not found in tool calls: expected function generate\_report not found in tool calls |
-| Cybersecurity Workflow Memory Test | ✅ Pass | 0.932s |  |
-| Read a file, then edit it via unified diff | ✅ Pass | 3.223s |  |
-| Penetration Testing Methodology | ✅ Pass | 1.073s |  |
-| Vulnerability Assessment Tools | ✅ Pass | 2.742s |  |
-| SQL Injection Attack Type | ✅ Pass | 0.782s |  |
-| Penetration Testing Framework | ✅ Pass | 0.882s |  |
-| Web Application Security Scanner | ✅ Pass | 0.878s |  |
-| Penetration Testing Tool Selection | ✅ Pass | 1.156s |  |
+| JSON Response Function | ✅ Pass | 2.037s |  |
+| Search Query Function | ✅ Pass | 1.691s |  |
+| Ask Advice Function | ✅ Pass | 1.144s |  |
+| Streaming Search Query Function Streaming | ✅ Pass | 1.574s |  |
+| Basic Context Memory Test | ✅ Pass | 2.366s |  |
+| Function Argument Memory Test | ✅ Pass | 1.961s |  |
+| Function Response Memory Test | ✅ Pass | 1.427s |  |
+| Penetration Testing Memory with Tool Call | ✅ Pass | 1.913s |  |
+| Cybersecurity Workflow Memory Test | ✅ Pass | 2.383s |  |
+| Read a file, then edit it via unified diff | ✅ Pass | 2.724s |  |
+| Penetration Testing Methodology | ✅ Pass | 4.131s |  |
+| SQL Injection Attack Type | ✅ Pass | 3.063s |  |
+| Penetration Testing Tool Selection | ✅ Pass | 1.444s |  |
+| Web Application Security Scanner | ✅ Pass | 3.597s |  |
+| Vulnerability Assessment Tools | ✅ Pass | 6.585s |  |
+| Penetration Testing Framework | ✅ Pass | 6.546s |  |
 
-**Summary**: 23/24 (95.83%) successful tests
+**Summary**: 25/25 (100.00%) successful tests
 
-**Average latency**: 1.271s
+**Average latency**: 5.997s
 
 ---
 
-### simple_json (deepseek-v4-flash-0731)
+### simple_json (qwen3.6-flash)
 
 #### Advanced Tests
 
 | Test | Result | Latency | Error |
 |------|--------|---------|-------|
-| Vulnerability Report Memory Test | ✅ Pass | 1.361s |  |
-| Person Information JSON | ✅ Pass | 1.133s |  |
-| Project Information JSON | ✅ Pass | 1.115s |  |
-| User Profile JSON | ✅ Pass | 1.123s |  |
-| JSON Array Response Without Schema | ✅ Pass | 1.058s |  |
-| Streaming Person Information JSON Streaming | ✅ Pass | 1.247s |  |
+| Vulnerability Report Memory Test | ✅ Pass | 2.110s |  |
+| Person Information JSON | ✅ Pass | 4.881s |  |
+| Project Information JSON | ✅ Pass | 5.137s |  |
+| User Profile JSON | ✅ Pass | 7.394s |  |
+| JSON Array Response Without Schema | ✅ Pass | 5.891s |  |
+| Streaming Person Information JSON Streaming | ✅ Pass | 6.453s |  |
 
 #### Capability Tests
 
 | Test | Capability | Result | Latency | Note |
 |------|------------|--------|---------|------|
-| Structured Output With JSON Schema | structured_output | ✅ Pass | 1.278s |  |
+| Structured Output Refuses A Non-Object Schema | structured_output | ✅ Pass | 0.000s |  |
+| Structured Output With JSON Schema | structured_output | ✅ Pass | 2.987s |  |
 
-**Summary**: 7/7 (100.00%) successful tests
+**Summary**: 8/8 (100.00%) successful tests
 
-**Average latency**: 1.188s
+**Average latency**: 4.357s
 
 ---
 
-### primary_agent (qwen3.7-plus)
+### primary_agent (deepseek-v4.1-flash)
 
 #### Basic Tests
 
 | Test | Result | Latency | Error |
 |------|--------|---------|-------|
-| Simple Math | ✅ Pass | 4.391s |  |
-| Text Transform Uppercase | ✅ Pass | 6.788s |  |
-| Count from 1 to 5 | ✅ Pass | 7.668s |  |
-| Math Calculation | ✅ Pass | 3.195s |  |
-| Basic Echo Function | ✅ Pass | 4.227s |  |
-| Streaming Simple Math Streaming | ✅ Pass | 3.069s |  |
-| Streaming Count from 1 to 3 Streaming | ✅ Pass | 6.041s |  |
-| Streaming Basic Echo Function Streaming | ✅ Pass | 4.407s |  |
+| Answer Stops At The Output Limit | ✅ Pass | 0.187s |  |
+| Simple Math | ✅ Pass | 0.175s |  |
+| Text Transform Uppercase | ✅ Pass | 0.189s |  |
+| Count from 1 to 5 | ✅ Pass | 0.172s |  |
+| Math Calculation | ✅ Pass | 0.173s |  |
+| Basic Echo Function | ✅ Pass | 0.174s |  |
+| Streaming Simple Math Streaming | ✅ Pass | 0.176s |  |
+| Streaming Count from 1 to 3 Streaming | ✅ Pass | 0.175s |  |
+| Streaming Basic Echo Function Streaming | ✅ Pass | 0.184s |  |
 
 #### Advanced Tests
 
 | Test | Result | Latency | Error |
 |------|--------|---------|-------|
-| JSON Response Function | ✅ Pass | 2.721s |  |
-| Search Query Function | ✅ Pass | 4.555s |  |
-| Ask Advice Function | ✅ Pass | 7.811s |  |
-| Streaming Search Query Function Streaming | ✅ Pass | 4.268s |  |
-| Basic Context Memory Test | ✅ Pass | 5.569s |  |
-| Function Argument Memory Test | ✅ Pass | 3.924s |  |
-| Function Response Memory Test | ✅ Pass | 4.556s |  |
-| Penetration Testing Memory with Tool Call | ✅ Pass | 4.775s |  |
-| Cybersecurity Workflow Memory Test | ✅ Pass | 5.262s |  |
-| Read a file, then edit it via unified diff | ✅ Pass | 7.173s |  |
-| Penetration Testing Methodology | ✅ Pass | 11.299s |  |
-| SQL Injection Attack Type | ✅ Pass | 6.127s |  |
-| Vulnerability Assessment Tools | ✅ Pass | 26.700s |  |
-| Penetration Testing Framework | ✅ Pass | 13.325s |  |
-| Web Application Security Scanner | ✅ Pass | 6.612s |  |
-| Penetration Testing Tool Selection | ✅ Pass | 3.243s |  |
+| JSON Response Function | ✅ Pass | 0.308s |  |
+| Search Query Function | ✅ Pass | 0.188s |  |
+| Ask Advice Function | ✅ Pass | 0.180s |  |
+| Streaming Search Query Function Streaming | ✅ Pass | 0.195s |  |
+| Basic Context Memory Test | ✅ Pass | 0.181s |  |
+| Function Argument Memory Test | ✅ Pass | 0.942s |  |
+| Cybersecurity Workflow Memory Test | ✅ Pass | 0.983s |  |
+| Function Response Memory Test | ✅ Pass | 1.713s |  |
+| Penetration Testing Memory with Tool Call | ✅ Pass | 2.381s |  |
+| Read a file, then edit it via unified diff | ✅ Pass | 0.361s |  |
+| Penetration Testing Methodology | ✅ Pass | 0.185s |  |
+| Vulnerability Assessment Tools | ✅ Pass | 0.175s |  |
+| SQL Injection Attack Type | ✅ Pass | 0.178s |  |
+| Penetration Testing Framework | ✅ Pass | 0.174s |  |
+| Web Application Security Scanner | ✅ Pass | 0.176s |  |
+| Penetration Testing Tool Selection | ✅ Pass | 0.177s |  |
 
-**Summary**: 24/24 (100.00%) successful tests
+**Summary**: 25/25 (100.00%) successful tests
 
-**Average latency**: 6.572s
+**Average latency**: 0.405s
 
 ---
 
-### assistant (qwen3.7-plus)
+### assistant (deepseek-v4.1-flash)
 
 #### Basic Tests
 
 | Test | Result | Latency | Error |
 |------|--------|---------|-------|
-| Simple Math | ✅ Pass | 3.902s |  |
-| Text Transform Uppercase | ✅ Pass | 6.900s |  |
-| Count from 1 to 5 | ✅ Pass | 7.789s |  |
-| Math Calculation | ✅ Pass | 3.534s |  |
-| Basic Echo Function | ✅ Pass | 4.415s |  |
-| Streaming Simple Math Streaming | ✅ Pass | 2.982s |  |
-| Streaming Count from 1 to 3 Streaming | ✅ Pass | 6.009s |  |
-| Streaming Basic Echo Function Streaming | ✅ Pass | 4.578s |  |
+| Answer Stops At The Output Limit | ✅ Pass | 0.176s |  |
+| Simple Math | ✅ Pass | 0.181s |  |
+| Text Transform Uppercase | ✅ Pass | 0.174s |  |
+| Count from 1 to 5 | ✅ Pass | 0.171s |  |
+| Math Calculation | ✅ Pass | 0.182s |  |
+| Basic Echo Function | ✅ Pass | 0.185s |  |
+| Streaming Simple Math Streaming | ✅ Pass | 0.243s |  |
+| Streaming Count from 1 to 3 Streaming | ✅ Pass | 0.269s |  |
+| Streaming Basic Echo Function Streaming | ✅ Pass | 0.280s |  |
 
 #### Advanced Tests
 
 | Test | Result | Latency | Error |
 |------|--------|---------|-------|
-| JSON Response Function | ✅ Pass | 3.205s |  |
-| Search Query Function | ✅ Pass | 4.018s |  |
-| Ask Advice Function | ✅ Pass | 6.180s |  |
-| Streaming Search Query Function Streaming | ✅ Pass | 4.493s |  |
-| Basic Context Memory Test | ✅ Pass | 4.573s |  |
-| Function Argument Memory Test | ✅ Pass | 4.427s |  |
-| Function Response Memory Test | ✅ Pass | 5.271s |  |
-| Penetration Testing Memory with Tool Call | ✅ Pass | 8.551s |  |
-| Cybersecurity Workflow Memory Test | ✅ Pass | 5.167s |  |
-| Read a file, then edit it via unified diff | ✅ Pass | 7.708s |  |
-| Penetration Testing Methodology | ✅ Pass | 9.038s |  |
-| Vulnerability Assessment Tools | ✅ Pass | 17.434s |  |
-| SQL Injection Attack Type | ✅ Pass | 4.145s |  |
-| Penetration Testing Framework | ✅ Pass | 7.448s |  |
-| Web Application Security Scanner | ✅ Pass | 7.475s |  |
-| Penetration Testing Tool Selection | ✅ Pass | 3.319s |  |
+| JSON Response Function | ✅ Pass | 0.179s |  |
+| Search Query Function | ✅ Pass | 0.184s |  |
+| Ask Advice Function | ✅ Pass | 0.183s |  |
+| Streaming Search Query Function Streaming | ✅ Pass | 0.180s |  |
+| Basic Context Memory Test | ✅ Pass | 0.172s |  |
+| Function Argument Memory Test | ✅ Pass | 1.230s |  |
+| Function Response Memory Test | ✅ Pass | 1.567s |  |
+| Penetration Testing Memory with Tool Call | ✅ Pass | 1.451s |  |
+| Cybersecurity Workflow Memory Test | ✅ Pass | 1.265s |  |
+| Read a file, then edit it via unified diff | ✅ Pass | 0.354s |  |
+| Penetration Testing Methodology | ✅ Pass | 0.180s |  |
+| Vulnerability Assessment Tools | ✅ Pass | 0.174s |  |
+| SQL Injection Attack Type | ✅ Pass | 0.174s |  |
+| Penetration Testing Framework | ✅ Pass | 0.184s |  |
+| Web Application Security Scanner | ✅ Pass | 0.186s |  |
+| Penetration Testing Tool Selection | ✅ Pass | 0.181s |  |
 
-**Summary**: 24/24 (100.00%) successful tests
+**Summary**: 25/25 (100.00%) successful tests
 
-**Average latency**: 5.940s
+**Average latency**: 0.389s
 
 ---
 
@@ -182,39 +186,40 @@ Generated: Fri, 07 Aug 2026 20:22:34 UTC
 
 | Test | Result | Latency | Error |
 |------|--------|---------|-------|
-| Simple Math | ✅ Pass | 3.043s |  |
-| Text Transform Uppercase | ✅ Pass | 2.652s |  |
-| Count from 1 to 5 | ✅ Pass | 2.622s |  |
-| Math Calculation | ✅ Pass | 1.900s |  |
-| Basic Echo Function | ✅ Pass | 2.937s |  |
-| Streaming Simple Math Streaming | ✅ Pass | 2.200s |  |
-| Streaming Count from 1 to 3 Streaming | ✅ Pass | 2.743s |  |
-| Streaming Basic Echo Function Streaming | ✅ Pass | 3.129s |  |
+| Simple Math | ✅ Pass | 2.015s |  |
+| Math Calculation | ✅ Pass | 2.101s |  |
+| Streaming Simple Math Streaming | ✅ Pass | 2.170s |  |
+| Count from 1 to 5 | ✅ Pass | 2.456s |  |
+| Basic Echo Function | ✅ Pass | 2.468s |  |
+| Text Transform Uppercase | ✅ Pass | 2.849s |  |
+| Streaming Count from 1 to 3 Streaming | ✅ Pass | 2.228s |  |
+| Streaming Basic Echo Function Streaming | ✅ Pass | 3.018s |  |
+| Answer Stops At The Output Limit | ✅ Pass | 37.841s |  |
 
 #### Advanced Tests
 
 | Test | Result | Latency | Error |
 |------|--------|---------|-------|
-| JSON Response Function | ✅ Pass | 3.185s |  |
-| Search Query Function | ✅ Pass | 2.884s |  |
-| Ask Advice Function | ✅ Pass | 3.468s |  |
-| Streaming Search Query Function Streaming | ✅ Pass | 2.960s |  |
-| Basic Context Memory Test | ✅ Pass | 2.204s |  |
-| Function Argument Memory Test | ✅ Pass | 2.600s |  |
-| Function Response Memory Test | ✅ Pass | 3.421s |  |
-| Penetration Testing Memory with Tool Call | ✅ Pass | 4.838s |  |
-| Cybersecurity Workflow Memory Test | ✅ Pass | 2.678s |  |
-| Read a file, then edit it via unified diff | ✅ Pass | 9.400s |  |
-| Penetration Testing Methodology | ✅ Pass | 3.804s |  |
-| Vulnerability Assessment Tools | ✅ Pass | 9.340s |  |
-| SQL Injection Attack Type | ✅ Pass | 4.961s |  |
-| Penetration Testing Framework | ✅ Pass | 5.885s |  |
-| Web Application Security Scanner | ✅ Pass | 3.997s |  |
-| Penetration Testing Tool Selection | ✅ Pass | 3.191s |  |
+| JSON Response Function | ✅ Pass | 2.655s |  |
+| Ask Advice Function | ✅ Pass | 2.860s |  |
+| Search Query Function | ✅ Pass | 3.199s |  |
+| Streaming Search Query Function Streaming | ✅ Pass | 2.779s |  |
+| Basic Context Memory Test | ✅ Pass | 3.069s |  |
+| Function Argument Memory Test | ✅ Pass | 2.279s |  |
+| Function Response Memory Test | ✅ Pass | 1.953s |  |
+| Cybersecurity Workflow Memory Test | ✅ Pass | 2.284s |  |
+| Penetration Testing Memory with Tool Call | ✅ Pass | 4.690s |  |
+| Read a file, then edit it via unified diff | ✅ Pass | 7.796s |  |
+| Web Application Security Scanner | ✅ Pass | 2.965s |  |
+| Penetration Testing Methodology | ✅ Pass | 4.736s |  |
+| Penetration Testing Framework | ✅ Pass | 4.376s |  |
+| Penetration Testing Tool Selection | ✅ Pass | 4.317s |  |
+| SQL Injection Attack Type | ✅ Pass | 6.643s |  |
+| Vulnerability Assessment Tools | ✅ Pass | 7.201s |  |
 
-**Summary**: 24/24 (100.00%) successful tests
+**Summary**: 25/25 (100.00%) successful tests
 
-**Average latency**: 3.752s
+**Average latency**: 4.838s
 
 ---
 
@@ -224,333 +229,323 @@ Generated: Fri, 07 Aug 2026 20:22:34 UTC
 
 | Test | Result | Latency | Error |
 |------|--------|---------|-------|
-| Simple Math | ✅ Pass | 2.482s |  |
-| Text Transform Uppercase | ✅ Pass | 3.143s |  |
-| Count from 1 to 5 | ✅ Pass | 2.760s |  |
-| Math Calculation | ✅ Pass | 2.423s |  |
-| Basic Echo Function | ✅ Pass | 2.709s |  |
-| Streaming Simple Math Streaming | ✅ Pass | 2.239s |  |
-| Streaming Count from 1 to 3 Streaming | ✅ Pass | 2.884s |  |
-| Streaming Basic Echo Function Streaming | ✅ Pass | 3.114s |  |
+| Text Transform Uppercase | ✅ Pass | 2.007s |  |
+| Simple Math | ✅ Pass | 2.171s |  |
+| Count from 1 to 5 | ✅ Pass | 2.601s |  |
+| Math Calculation | ✅ Pass | 2.099s |  |
+| Streaming Simple Math Streaming | ✅ Pass | 1.922s |  |
+| Basic Echo Function | ✅ Pass | 2.399s |  |
+| Streaming Count from 1 to 3 Streaming | ✅ Pass | 2.741s |  |
+| Streaming Basic Echo Function Streaming | ✅ Pass | 2.802s |  |
+| Answer Stops At The Output Limit | ✅ Pass | 37.255s |  |
 
 #### Advanced Tests
 
 | Test | Result | Latency | Error |
 |------|--------|---------|-------|
-| JSON Response Function | ✅ Pass | 3.404s |  |
-| Search Query Function | ✅ Pass | 3.028s |  |
-| Ask Advice Function | ✅ Pass | 3.451s |  |
-| Streaming Search Query Function Streaming | ✅ Pass | 3.199s |  |
-| Basic Context Memory Test | ✅ Pass | 2.648s |  |
-| Function Argument Memory Test | ✅ Pass | 2.351s |  |
-| Function Response Memory Test | ✅ Pass | 2.185s |  |
-| Penetration Testing Memory with Tool Call | ✅ Pass | 5.308s |  |
-| Cybersecurity Workflow Memory Test | ✅ Pass | 2.834s |  |
-| Read a file, then edit it via unified diff | ✅ Pass | 7.684s |  |
-| Penetration Testing Methodology | ✅ Pass | 3.990s |  |
-| Vulnerability Assessment Tools | ✅ Pass | 8.206s |  |
-| SQL Injection Attack Type | ✅ Pass | 3.218s |  |
-| Penetration Testing Framework | ✅ Pass | 3.921s |  |
-| Web Application Security Scanner | ✅ Pass | 3.301s |  |
-| Penetration Testing Tool Selection | ✅ Pass | 3.401s |  |
+| JSON Response Function | ✅ Pass | 2.544s |  |
+| Search Query Function | ✅ Pass | 2.655s |  |
+| Streaming Search Query Function Streaming | ✅ Pass | 2.371s |  |
+| Basic Context Memory Test | ✅ Pass | 2.537s |  |
+| Ask Advice Function | ✅ Pass | 3.439s |  |
+| Function Argument Memory Test | ✅ Pass | 2.160s |  |
+| Function Response Memory Test | ✅ Pass | 2.499s |  |
+| Cybersecurity Workflow Memory Test | ✅ Pass | 2.742s |  |
+| Penetration Testing Memory with Tool Call | ✅ Pass | 4.828s |  |
+| Read a file, then edit it via unified diff | ✅ Pass | 8.050s |  |
+| SQL Injection Attack Type | ✅ Pass | 2.962s |  |
+| Penetration Testing Framework | ✅ Pass | 3.494s |  |
+| Penetration Testing Methodology | ✅ Pass | 6.160s |  |
+| Web Application Security Scanner | ✅ Pass | 3.240s |  |
+| Penetration Testing Tool Selection | ✅ Pass | 3.253s |  |
+| Vulnerability Assessment Tools | ✅ Pass | 10.502s |  |
 
-**Summary**: 24/24 (100.00%) successful tests
+**Summary**: 25/25 (100.00%) successful tests
 
-**Average latency**: 3.496s
+**Average latency**: 4.778s
 
 ---
 
-### adviser (glm-5.2)
+### adviser (deepseek-v4-pro)
 
 #### Basic Tests
 
 | Test | Result | Latency | Error |
 |------|--------|---------|-------|
-| Simple Math | ✅ Pass | 3.425s |  |
-| Text Transform Uppercase | ✅ Pass | 3.296s |  |
-| Count from 1 to 5 | ✅ Pass | 3.623s |  |
-| Math Calculation | ✅ Pass | 2.607s |  |
-| Basic Echo Function | ✅ Pass | 1.437s |  |
-| Streaming Simple Math Streaming | ✅ Pass | 3.543s |  |
-| Streaming Count from 1 to 3 Streaming | ✅ Pass | 4.189s |  |
-| Streaming Basic Echo Function Streaming | ✅ Pass | 1.837s |  |
+| Simple Math | ✅ Pass | 2.267s |  |
+| Text Transform Uppercase | ✅ Pass | 2.207s |  |
+| Math Calculation | ✅ Pass | 1.987s |  |
+| Count from 1 to 5 | ✅ Pass | 2.708s |  |
+| Streaming Simple Math Streaming | ✅ Pass | 2.202s |  |
+| Streaming Count from 1 to 3 Streaming | ✅ Pass | 2.477s |  |
+| Answer Stops At The Output Limit | ✅ Pass | 36.965s |  |
 
 #### Advanced Tests
 
 | Test | Result | Latency | Error |
 |------|--------|---------|-------|
-| JSON Response Function | ✅ Pass | 1.627s |  |
-| Search Query Function | ✅ Pass | 1.827s |  |
-| Ask Advice Function | ✅ Pass | 1.552s |  |
-| Streaming Search Query Function Streaming | ✅ Pass | 1.553s |  |
-| Basic Context Memory Test | ✅ Pass | 3.363s |  |
-| Function Argument Memory Test | ✅ Pass | 1.636s |  |
-| Function Response Memory Test | ✅ Pass | 2.117s |  |
-| Penetration Testing Memory with Tool Call | ✅ Pass | 3.255s |  |
-| Cybersecurity Workflow Memory Test | ✅ Pass | 2.200s |  |
-| Read a file, then edit it via unified diff | ✅ Pass | 4.945s |  |
-| Penetration Testing Methodology | ✅ Pass | 7.756s |  |
-| Vulnerability Assessment Tools | ✅ Pass | 14.118s |  |
-| SQL Injection Attack Type | ✅ Pass | 5.324s |  |
-| Penetration Testing Framework | ✅ Pass | 8.220s |  |
-| Web Application Security Scanner | ✅ Pass | 4.583s |  |
-| Penetration Testing Tool Selection | ✅ Pass | 1.944s |  |
+| Function Argument Memory Test | ✅ Pass | 2.083s |  |
+| Basic Context Memory Test | ✅ Pass | 2.582s |  |
+| Function Response Memory Test | ✅ Pass | 2.629s |  |
+| Cybersecurity Workflow Memory Test | ✅ Pass | 2.829s |  |
+| Penetration Testing Methodology | ✅ Pass | 3.659s |  |
+| Web Application Security Scanner | ✅ Pass | 2.776s |  |
+| SQL Injection Attack Type | ✅ Pass | 4.390s |  |
+| Penetration Testing Framework | ✅ Pass | 4.162s |  |
+| Vulnerability Assessment Tools | ✅ Pass | 9.218s |  |
 
-**Summary**: 24/24 (100.00%) successful tests
+**Summary**: 16/16 (100.00%) successful tests
 
-**Average latency**: 3.750s
+**Average latency**: 5.322s
 
 ---
 
-### reflector (deepseek-v4-flash-0731)
+### reflector (qwen3.6-flash)
 
 #### Basic Tests
 
 | Test | Result | Latency | Error |
 |------|--------|---------|-------|
-| Simple Math | ✅ Pass | 1.712s |  |
-| Text Transform Uppercase | ✅ Pass | 1.335s |  |
-| Count from 1 to 5 | ✅ Pass | 1.364s |  |
-| Math Calculation | ✅ Pass | 1.420s |  |
-| Basic Echo Function | ✅ Pass | 1.167s |  |
-| Streaming Simple Math Streaming | ✅ Pass | 0.979s |  |
-| Streaming Count from 1 to 3 Streaming | ✅ Pass | 1.303s |  |
-| Streaming Basic Echo Function Streaming | ✅ Pass | 1.299s |  |
+| Simple Math | ✅ Pass | 1.634s |  |
+| Text Transform Uppercase | ✅ Pass | 2.049s |  |
+| Count from 1 to 5 | ✅ Pass | 1.789s |  |
+| Math Calculation | ✅ Pass | 1.898s |  |
+| Streaming Simple Math Streaming | ✅ Pass | 1.335s |  |
+| Streaming Count from 1 to 3 Streaming | ✅ Pass | 1.729s |  |
+| Answer Stops At The Output Limit | ✅ Pass | 29.101s |  |
 
 #### Advanced Tests
 
 | Test | Result | Latency | Error |
 |------|--------|---------|-------|
-| JSON Response Function | ✅ Pass | 1.340s |  |
-| Search Query Function | ✅ Pass | 1.209s |  |
-| Ask Advice Function | ✅ Pass | 1.273s |  |
-| Streaming Search Query Function Streaming | ✅ Pass | 1.162s |  |
-| Basic Context Memory Test | ✅ Pass | 1.814s |  |
-| Function Argument Memory Test | ✅ Pass | 1.138s |  |
-| Function Response Memory Test | ✅ Pass | 1.095s |  |
-| Penetration Testing Memory with Tool Call | ✅ Pass | 1.660s |  |
-| Cybersecurity Workflow Memory Test | ✅ Pass | 1.371s |  |
-| Read a file, then edit it via unified diff | ✅ Pass | 3.279s |  |
-| Penetration Testing Methodology | ✅ Pass | 5.385s |  |
-| Vulnerability Assessment Tools | ✅ Pass | 5.098s |  |
-| SQL Injection Attack Type | ✅ Pass | 1.509s |  |
-| Penetration Testing Framework | ✅ Pass | 2.385s |  |
-| Web Application Security Scanner | ✅ Pass | 1.757s |  |
-| Penetration Testing Tool Selection | ✅ Pass | 1.353s |  |
+| Basic Context Memory Test | ✅ Pass | 1.644s |  |
+| Function Response Memory Test | ✅ Pass | 1.194s |  |
+| Function Argument Memory Test | ✅ Pass | 1.246s |  |
+| Cybersecurity Workflow Memory Test | ✅ Pass | 1.925s |  |
+| Penetration Testing Methodology | ✅ Pass | 4.958s |  |
+| SQL Injection Attack Type | ✅ Pass | 3.243s |  |
+| Vulnerability Assessment Tools | ✅ Pass | 6.019s |  |
+| Penetration Testing Framework | ✅ Pass | 4.203s |  |
+| Web Application Security Scanner | ✅ Pass | 5.970s |  |
 
-**Summary**: 24/24 (100.00%) successful tests
+**Summary**: 16/16 (100.00%) successful tests
 
-**Average latency**: 1.809s
+**Average latency**: 4.372s
 
 ---
 
-### searcher (deepseek-v4-flash-0731)
+### searcher (qwen3.6-flash)
 
 #### Basic Tests
 
 | Test | Result | Latency | Error |
 |------|--------|---------|-------|
-| Simple Math | ✅ Pass | 2.107s |  |
-| Text Transform Uppercase | ✅ Pass | 1.142s |  |
-| Count from 1 to 5 | ✅ Pass | 1.219s |  |
-| Math Calculation | ✅ Pass | 1.311s |  |
-| Basic Echo Function | ✅ Pass | 1.313s |  |
-| Streaming Simple Math Streaming | ✅ Pass | 1.276s |  |
-| Streaming Count from 1 to 3 Streaming | ✅ Pass | 0.222s |  |
-| Streaming Basic Echo Function Streaming | ✅ Pass | 1.388s |  |
+| Simple Math | ✅ Pass | 0.173s |  |
+| Text Transform Uppercase | ✅ Pass | 0.173s |  |
+| Count from 1 to 5 | ✅ Pass | 0.172s |  |
+| Math Calculation | ✅ Pass | 0.175s |  |
+| Streaming Simple Math Streaming | ✅ Pass | 0.171s |  |
+| Streaming Count from 1 to 3 Streaming | ✅ Pass | 0.180s |  |
+| Basic Echo Function | ✅ Pass | 1.159s |  |
+| Streaming Basic Echo Function Streaming | ✅ Pass | 1.096s |  |
+| Answer Stops At The Output Limit | ✅ Pass | 32.820s |  |
 
 #### Advanced Tests
 
 | Test | Result | Latency | Error |
 |------|--------|---------|-------|
-| JSON Response Function | ✅ Pass | 1.253s |  |
-| Search Query Function | ✅ Pass | 1.177s |  |
-| Ask Advice Function | ✅ Pass | 0.228s |  |
-| Streaming Search Query Function Streaming | ✅ Pass | 1.178s |  |
-| Basic Context Memory Test | ✅ Pass | 1.960s |  |
-| Function Argument Memory Test | ✅ Pass | 1.217s |  |
-| Function Response Memory Test | ✅ Pass | 1.259s |  |
-| Penetration Testing Memory with Tool Call | ❌ Fail | 2.386s | expected function 'generate\_report' not found in tool calls: expected function generate\_report not found in tool calls |
-| Cybersecurity Workflow Memory Test | ✅ Pass | 1.612s |  |
-| Read a file, then edit it via unified diff | ❌ Fail | 2.862s | edit\_file's diff applied but did not produce "Priority: high" \(result: "Status: draft\nOwner: alice\nPriority: low\nPriority: high\n"\) |
-| Penetration Testing Methodology | ✅ Pass | 5.116s |  |
-| Vulnerability Assessment Tools | ✅ Pass | 8.041s |  |
-| SQL Injection Attack Type | ✅ Pass | 0.223s |  |
-| Penetration Testing Framework | ✅ Pass | 1.975s |  |
-| Web Application Security Scanner | ✅ Pass | 3.564s |  |
-| Penetration Testing Tool Selection | ✅ Pass | 1.514s |  |
+| Basic Context Memory Test | ✅ Pass | 0.175s |  |
+| JSON Response Function | ✅ Pass | 1.742s |  |
+| Search Query Function | ✅ Pass | 1.656s |  |
+| Streaming Search Query Function Streaming | ✅ Pass | 1.350s |  |
+| Ask Advice Function | ✅ Pass | 1.657s |  |
+| Function Argument Memory Test | ✅ Pass | 1.611s |  |
+| Function Response Memory Test | ✅ Pass | 1.936s |  |
+| Cybersecurity Workflow Memory Test | ✅ Pass | 1.516s |  |
+| Penetration Testing Memory with Tool Call | ✅ Pass | 1.763s |  |
+| Read a file, then edit it via unified diff | ✅ Pass | 3.870s |  |
+| Penetration Testing Methodology | ✅ Pass | 0.178s |  |
+| SQL Injection Attack Type | ✅ Pass | 3.555s |  |
+| Web Application Security Scanner | ✅ Pass | 3.068s |  |
+| Penetration Testing Tool Selection | ✅ Pass | 1.950s |  |
+| Penetration Testing Framework | ✅ Pass | 6.009s |  |
+| Vulnerability Assessment Tools | ✅ Pass | 6.916s |  |
 
-**Summary**: 22/24 (91.67%) successful tests
+**Summary**: 25/25 (100.00%) successful tests
 
-**Average latency**: 1.898s
+**Average latency**: 3.003s
 
 ---
 
-### enricher (deepseek-v4-flash-0731)
+### enricher (qwen3.6-flash)
 
 #### Basic Tests
 
 | Test | Result | Latency | Error |
 |------|--------|---------|-------|
-| Simple Math | ✅ Pass | 0.230s |  |
-| Text Transform Uppercase | ✅ Pass | 1.514s |  |
-| Count from 1 to 5 | ✅ Pass | 1.183s |  |
-| Math Calculation | ✅ Pass | 0.930s |  |
-| Basic Echo Function | ✅ Pass | 0.225s |  |
-| Streaming Simple Math Streaming | ✅ Pass | 1.206s |  |
-| Streaming Count from 1 to 3 Streaming | ✅ Pass | 0.219s |  |
-| Streaming Basic Echo Function Streaming | ✅ Pass | 1.150s |  |
+| Simple Math | ✅ Pass | 0.177s |  |
+| Text Transform Uppercase | ✅ Pass | 0.173s |  |
+| Count from 1 to 5 | ✅ Pass | 0.173s |  |
+| Math Calculation | ✅ Pass | 0.170s |  |
+| Basic Echo Function | ✅ Pass | 0.174s |  |
+| Streaming Simple Math Streaming | ✅ Pass | 0.189s |  |
+| Streaming Count from 1 to 3 Streaming | ✅ Pass | 0.192s |  |
+| Streaming Basic Echo Function Streaming | ✅ Pass | 0.196s |  |
+| Answer Stops At The Output Limit | ✅ Pass | 30.426s |  |
 
 #### Advanced Tests
 
 | Test | Result | Latency | Error |
 |------|--------|---------|-------|
-| JSON Response Function | ✅ Pass | 1.260s |  |
-| Search Query Function | ✅ Pass | 1.183s |  |
-| Ask Advice Function | ✅ Pass | 0.219s |  |
-| Streaming Search Query Function Streaming | ✅ Pass | 1.120s |  |
-| Basic Context Memory Test | ✅ Pass | 2.418s |  |
-| Function Argument Memory Test | ✅ Pass | 1.495s |  |
-| Function Response Memory Test | ✅ Pass | 1.249s |  |
-| Penetration Testing Memory with Tool Call | ✅ Pass | 1.519s |  |
-| Cybersecurity Workflow Memory Test | ✅ Pass | 1.309s |  |
-| Read a file, then edit it via unified diff | ✅ Pass | 3.113s |  |
-| Penetration Testing Methodology | ✅ Pass | 3.553s |  |
-| Vulnerability Assessment Tools | ✅ Pass | 7.089s |  |
-| SQL Injection Attack Type | ✅ Pass | 0.215s |  |
-| Penetration Testing Framework | ✅ Pass | 1.858s |  |
-| Web Application Security Scanner | ✅ Pass | 3.003s |  |
-| Penetration Testing Tool Selection | ✅ Pass | 1.325s |  |
+| JSON Response Function | ✅ Pass | 0.226s |  |
+| Search Query Function | ✅ Pass | 0.180s |  |
+| Ask Advice Function | ✅ Pass | 0.171s |  |
+| Streaming Search Query Function Streaming | ✅ Pass | 0.179s |  |
+| Basic Context Memory Test | ✅ Pass | 0.178s |  |
+| Function Argument Memory Test | ✅ Pass | 1.316s |  |
+| Function Response Memory Test | ✅ Pass | 1.572s |  |
+| Cybersecurity Workflow Memory Test | ✅ Pass | 2.876s |  |
+| Penetration Testing Memory with Tool Call | ✅ Pass | 4.238s |  |
+| Read a file, then edit it via unified diff | ✅ Pass | 3.747s |  |
+| Penetration Testing Methodology | ✅ Pass | 0.176s |  |
+| Vulnerability Assessment Tools | ✅ Pass | 0.185s |  |
+| SQL Injection Attack Type | ✅ Pass | 0.179s |  |
+| Penetration Testing Framework | ✅ Pass | 0.172s |  |
+| Penetration Testing Tool Selection | ✅ Pass | 1.655s |  |
+| Web Application Security Scanner | ✅ Pass | 5.413s |  |
 
-**Summary**: 24/24 (100.00%) successful tests
+**Summary**: 25/25 (100.00%) successful tests
 
-**Average latency**: 1.608s
+**Average latency**: 2.174s
 
 ---
 
-### coder (qwen3.7-plus)
+### coder (deepseek-v4.1-flash)
 
 #### Basic Tests
 
 | Test | Result | Latency | Error |
 |------|--------|---------|-------|
-| Simple Math | ✅ Pass | 3.565s |  |
-| Text Transform Uppercase | ✅ Pass | 6.030s |  |
-| Count from 1 to 5 | ✅ Pass | 6.661s |  |
-| Math Calculation | ✅ Pass | 2.929s |  |
-| Basic Echo Function | ✅ Pass | 5.160s |  |
-| Streaming Simple Math Streaming | ✅ Pass | 2.850s |  |
-| Streaming Count from 1 to 3 Streaming | ✅ Pass | 6.423s |  |
-| Streaming Basic Echo Function Streaming | ✅ Pass | 4.653s |  |
+| Answer Stops At The Output Limit | ✅ Pass | 0.186s |  |
+| Simple Math | ✅ Pass | 0.179s |  |
+| Text Transform Uppercase | ✅ Pass | 0.170s |  |
+| Count from 1 to 5 | ✅ Pass | 0.170s |  |
+| Math Calculation | ✅ Pass | 0.168s |  |
+| Basic Echo Function | ✅ Pass | 0.176s |  |
+| Streaming Simple Math Streaming | ✅ Pass | 0.183s |  |
+| Streaming Count from 1 to 3 Streaming | ✅ Pass | 0.192s |  |
+| Streaming Basic Echo Function Streaming | ✅ Pass | 0.182s |  |
 
 #### Advanced Tests
 
 | Test | Result | Latency | Error |
 |------|--------|---------|-------|
-| JSON Response Function | ✅ Pass | 3.322s |  |
-| Search Query Function | ✅ Pass | 4.731s |  |
-| Ask Advice Function | ✅ Pass | 5.376s |  |
-| Streaming Search Query Function Streaming | ✅ Pass | 4.241s |  |
-| Basic Context Memory Test | ✅ Pass | 5.628s |  |
-| Function Argument Memory Test | ✅ Pass | 3.853s |  |
-| Function Response Memory Test | ✅ Pass | 5.942s |  |
-| Penetration Testing Memory with Tool Call | ✅ Pass | 4.452s |  |
-| Cybersecurity Workflow Memory Test | ✅ Pass | 5.137s |  |
-| Read a file, then edit it via unified diff | ✅ Pass | 7.263s |  |
-| Penetration Testing Methodology | ✅ Pass | 9.912s |  |
-| Vulnerability Assessment Tools | ✅ Pass | 6.611s |  |
-| SQL Injection Attack Type | ✅ Pass | 4.193s |  |
-| Penetration Testing Framework | ✅ Pass | 6.934s |  |
-| Web Application Security Scanner | ✅ Pass | 7.319s |  |
-| Penetration Testing Tool Selection | ✅ Pass | 3.317s |  |
+| JSON Response Function | ✅ Pass | 0.187s |  |
+| Search Query Function | ✅ Pass | 0.201s |  |
+| Ask Advice Function | ✅ Pass | 0.220s |  |
+| Streaming Search Query Function Streaming | ✅ Pass | 0.178s |  |
+| Basic Context Memory Test | ✅ Pass | 0.198s |  |
+| Function Response Memory Test | ✅ Pass | 0.879s |  |
+| Function Argument Memory Test | ✅ Pass | 1.081s |  |
+| Cybersecurity Workflow Memory Test | ✅ Pass | 1.925s |  |
+| Penetration Testing Memory with Tool Call | ✅ Pass | 2.152s |  |
+| Read a file, then edit it via unified diff | ✅ Pass | 0.361s |  |
+| Penetration Testing Methodology | ✅ Pass | 0.180s |  |
+| Vulnerability Assessment Tools | ✅ Pass | 0.172s |  |
+| SQL Injection Attack Type | ✅ Pass | 0.176s |  |
+| Penetration Testing Framework | ✅ Pass | 0.177s |  |
+| Web Application Security Scanner | ✅ Pass | 0.182s |  |
+| Penetration Testing Tool Selection | ✅ Pass | 0.192s |  |
 
-**Summary**: 24/24 (100.00%) successful tests
+**Summary**: 25/25 (100.00%) successful tests
 
-**Average latency**: 5.271s
+**Average latency**: 0.403s
 
 ---
 
-### installer (qwen3.7-plus)
+### installer (deepseek-v4.1-flash)
 
 #### Basic Tests
 
 | Test | Result | Latency | Error |
 |------|--------|---------|-------|
-| Simple Math | ✅ Pass | 3.251s |  |
-| Text Transform Uppercase | ✅ Pass | 4.359s |  |
-| Count from 1 to 5 | ✅ Pass | 6.351s |  |
-| Math Calculation | ✅ Pass | 2.777s |  |
-| Basic Echo Function | ✅ Pass | 5.419s |  |
-| Streaming Simple Math Streaming | ✅ Pass | 3.569s |  |
-| Streaming Count from 1 to 3 Streaming | ✅ Pass | 5.742s |  |
-| Streaming Basic Echo Function Streaming | ✅ Pass | 4.251s |  |
+| Answer Stops At The Output Limit | ✅ Pass | 0.194s |  |
+| Simple Math | ✅ Pass | 0.181s |  |
+| Text Transform Uppercase | ✅ Pass | 0.180s |  |
+| Count from 1 to 5 | ✅ Pass | 0.187s |  |
+| Math Calculation | ✅ Pass | 0.175s |  |
+| Basic Echo Function | ✅ Pass | 0.180s |  |
+| Streaming Simple Math Streaming | ✅ Pass | 0.178s |  |
+| Streaming Count from 1 to 3 Streaming | ✅ Pass | 0.178s |  |
+| Streaming Basic Echo Function Streaming | ✅ Pass | 0.196s |  |
 
 #### Advanced Tests
 
 | Test | Result | Latency | Error |
 |------|--------|---------|-------|
-| JSON Response Function | ✅ Pass | 2.774s |  |
-| Search Query Function | ✅ Pass | 4.849s |  |
-| Ask Advice Function | ✅ Pass | 6.373s |  |
-| Streaming Search Query Function Streaming | ✅ Pass | 4.060s |  |
-| Basic Context Memory Test | ✅ Pass | 4.301s |  |
-| Function Argument Memory Test | ✅ Pass | 5.596s |  |
-| Function Response Memory Test | ✅ Pass | 5.662s |  |
-| Penetration Testing Memory with Tool Call | ✅ Pass | 4.462s |  |
-| Cybersecurity Workflow Memory Test | ✅ Pass | 5.347s |  |
-| Read a file, then edit it via unified diff | ✅ Pass | 6.245s |  |
-| Penetration Testing Methodology | ✅ Pass | 9.688s |  |
-| SQL Injection Attack Type | ✅ Pass | 5.352s |  |
-| Vulnerability Assessment Tools | ✅ Pass | 18.090s |  |
-| Penetration Testing Framework | ✅ Pass | 7.790s |  |
-| Web Application Security Scanner | ✅ Pass | 7.463s |  |
-| Penetration Testing Tool Selection | ✅ Pass | 3.286s |  |
+| JSON Response Function | ✅ Pass | 0.178s |  |
+| Search Query Function | ✅ Pass | 0.175s |  |
+| Ask Advice Function | ✅ Pass | 0.182s |  |
+| Streaming Search Query Function Streaming | ✅ Pass | 0.175s |  |
+| Basic Context Memory Test | ✅ Pass | 0.181s |  |
+| Function Argument Memory Test | ✅ Pass | 1.154s |  |
+| Function Response Memory Test | ✅ Pass | 1.588s |  |
+| Cybersecurity Workflow Memory Test | ✅ Pass | 1.210s |  |
+| Penetration Testing Memory with Tool Call | ✅ Pass | 1.952s |  |
+| Read a file, then edit it via unified diff | ✅ Pass | 0.379s |  |
+| Penetration Testing Methodology | ✅ Pass | 0.184s |  |
+| Vulnerability Assessment Tools | ✅ Pass | 0.177s |  |
+| SQL Injection Attack Type | ✅ Pass | 0.171s |  |
+| Penetration Testing Framework | ✅ Pass | 0.177s |  |
+| Web Application Security Scanner | ✅ Pass | 0.183s |  |
+| Penetration Testing Tool Selection | ✅ Pass | 0.184s |  |
 
-**Summary**: 24/24 (100.00%) successful tests
+**Summary**: 25/25 (100.00%) successful tests
 
-**Average latency**: 5.711s
+**Average latency**: 0.396s
 
 ---
 
-### pentester (qwen3.7-plus)
+### pentester (deepseek-v4.1-flash)
 
 #### Basic Tests
 
 | Test | Result | Latency | Error |
 |------|--------|---------|-------|
-| Simple Math | ✅ Pass | 3.467s |  |
-| Text Transform Uppercase | ✅ Pass | 4.511s |  |
-| Math Calculation | ✅ Pass | 2.829s |  |
-| Count from 1 to 5 | ✅ Pass | 10.971s |  |
-| Basic Echo Function | ✅ Pass | 3.084s |  |
-| Streaming Simple Math Streaming | ✅ Pass | 3.564s |  |
-| Streaming Count from 1 to 3 Streaming | ✅ Pass | 5.793s |  |
-| Streaming Basic Echo Function Streaming | ✅ Pass | 5.333s |  |
+| Answer Stops At The Output Limit | ✅ Pass | 0.179s |  |
+| Simple Math | ✅ Pass | 0.186s |  |
+| Text Transform Uppercase | ✅ Pass | 0.176s |  |
+| Count from 1 to 5 | ✅ Pass | 0.185s |  |
+| Math Calculation | ✅ Pass | 0.180s |  |
+| Basic Echo Function | ✅ Pass | 0.183s |  |
+| Streaming Simple Math Streaming | ✅ Pass | 0.183s |  |
+| Streaming Count from 1 to 3 Streaming | ✅ Pass | 0.184s |  |
+| Streaming Basic Echo Function Streaming | ✅ Pass | 0.181s |  |
 
 #### Advanced Tests
 
 | Test | Result | Latency | Error |
 |------|--------|---------|-------|
-| JSON Response Function | ✅ Pass | 2.484s |  |
-| Search Query Function | ✅ Pass | 5.115s |  |
-| Ask Advice Function | ✅ Pass | 5.924s |  |
-| Streaming Search Query Function Streaming | ✅ Pass | 4.245s |  |
-| Basic Context Memory Test | ✅ Pass | 5.852s |  |
-| Function Argument Memory Test | ❌ Fail | 5.293s | expected text 'Go programming language' not found |
-| Function Response Memory Test | ✅ Pass | 10.667s |  |
-| Penetration Testing Memory with Tool Call | ✅ Pass | 8.001s |  |
-| Cybersecurity Workflow Memory Test | ✅ Pass | 5.344s |  |
-| Read a file, then edit it via unified diff | ✅ Pass | 6.534s |  |
-| Penetration Testing Methodology | ✅ Pass | 7.778s |  |
-| SQL Injection Attack Type | ✅ Pass | 4.402s |  |
-| Vulnerability Assessment Tools | ✅ Pass | 18.895s |  |
-| Penetration Testing Framework | ✅ Pass | 6.808s |  |
-| Web Application Security Scanner | ✅ Pass | 5.345s |  |
-| Penetration Testing Tool Selection | ✅ Pass | 5.235s |  |
+| JSON Response Function | ✅ Pass | 0.191s |  |
+| Search Query Function | ✅ Pass | 0.275s |  |
+| Ask Advice Function | ✅ Pass | 0.246s |  |
+| Streaming Search Query Function Streaming | ✅ Pass | 0.263s |  |
+| Basic Context Memory Test | ✅ Pass | 0.257s |  |
+| Function Response Memory Test | ✅ Pass | 1.248s |  |
+| Cybersecurity Workflow Memory Test | ✅ Pass | 1.151s |  |
+| Function Argument Memory Test | ✅ Pass | 1.473s |  |
+| Penetration Testing Memory with Tool Call | ✅ Pass | 1.587s |  |
+| Read a file, then edit it via unified diff | ✅ Pass | 0.373s |  |
+| Penetration Testing Methodology | ✅ Pass | 0.176s |  |
+| Vulnerability Assessment Tools | ✅ Pass | 0.174s |  |
+| SQL Injection Attack Type | ✅ Pass | 0.176s |  |
+| Penetration Testing Framework | ✅ Pass | 0.211s |  |
+| Web Application Security Scanner | ✅ Pass | 0.247s |  |
+| Penetration Testing Tool Selection | ✅ Pass | 0.232s |  |
 
-**Summary**: 23/24 (95.83%) successful tests
+**Summary**: 25/25 (100.00%) successful tests
 
-**Average latency**: 6.145s
+**Average latency**: 0.397s
 
 ---
 

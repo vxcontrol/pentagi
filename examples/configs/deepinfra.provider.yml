@@ -1,34 +1,24 @@
-# DeepInfra config. Direct-hosted models only - excludes Partner-tagged entries
-# (Qwen3-Max-Thinking, Seed-1.6/2.0-*, MiniMax-M2.7-Turbo).
+# DeepInfra agent configuration.
 #
-# google/gemma-4-31B-it     -> simple/simple_json
-# moonshotai/Kimi-K2.7-Code -> primary_agent/assistant/adviser/coder
-#                              (occasional HTTP 429 on coder, transient)
-# zai-org/GLM-5.2           -> generator/refiner (effort: xhigh only; "max" = HTTP 422)
-# MiniMaxAI/MiniMax-M3      -> reflector/searcher/enricher/installer/pentester
+# Strategy:
+#   - DeepSeek V4 Flash for inexpensive utility calls;
+#   - Gemma 4 31B for structured JSON;
+#   - DeepSeek V4.1 Flash for planning and routine tool work.
 #
-# Dropped: DeepSeek-V4-flash (HTTP 400, no deployment), GLM-4.7-flash (hangs,
-# never errors). Kimi-K2.5 rejected for simple_json: cheaper but corrupts plain
-# JSON (turned "10.1.1.50" into 10.11). MiniMax-M3 rejects `thinking` (HTTP 400)
-# and `json_schema` (HTTP 405) - no reasoning fields on it, not used for
-# simple_json.
-#
-# Prices from DeepInfra's model API: $/1M = cents_per_token * 10000; cache_read
-# = input_price * rate_per_input_token_cached.
-#
-# Test: HTTP_CLIENT_TIMEOUT=30 ctester -config deepinfra.provider.yml -agents
-# <type> -workers 1 (default 600s timeout otherwise blocks on hanging models).
+# Prices were read from https://api.deepinfra.com/v1/openai/models on 2026-09-25
+# and are dollars per 1M tokens.
 
 simple:
-  model: "google/gemma-4-31B-it"
+  model: "deepseek-ai/DeepSeek-V4-Flash"
   temperature: 1.0
   top_p: 0.9
   repetition_penalty: 1.0
   n: 1
   max_tokens: 8192
   price:
-    input: 0.13
-    output: 0.38
+    input: 0.09
+    output: 0.18
+    cache_read: 0.018
 
 simple_json:
   model: "google/gemma-4-31B-it"
@@ -43,126 +33,122 @@ simple_json:
     output: 0.38
 
 primary_agent:
-  model: "moonshotai/Kimi-K2.7-Code"
+  model: "deepseek-ai/DeepSeek-V4.1-Flash"
   temperature: 1.0
   top_p: 0.95
   n: 1
   max_tokens: 16384
   price:
-    input: 0.74
-    output: 3.50
-    cache_read: 0.15
+    input: 0.20
+    output: 0.60
+    cache_read: 0.006
 
 assistant:
-  model: "moonshotai/Kimi-K2.7-Code"
+  model: "deepseek-ai/DeepSeek-V4.1-Flash"
   temperature: 1.0
   top_p: 0.95
   n: 1
   max_tokens: 16384
   price:
-    input: 0.74
-    output: 3.50
-    cache_read: 0.15
+    input: 0.20
+    output: 0.60
+    cache_read: 0.006
 
 generator:
-  model: "zai-org/GLM-5.2"
+  model: "deepseek-ai/DeepSeek-V4.1-Flash"
   temperature: 1.0
   top_p: 0.95
   n: 1
   max_tokens: 32768
-  reasoning:
-    effort: xhigh
   price:
-    input: 0.93
-    output: 3.00
-    cache_read: 0.18
+    input: 0.20
+    output: 0.60
+    cache_read: 0.006
 
 refiner:
-  model: "zai-org/GLM-5.2"
+  model: "deepseek-ai/DeepSeek-V4.1-Flash"
   temperature: 1.0
   top_p: 0.95
   n: 1
   max_tokens: 32768
-  reasoning:
-    effort: xhigh
   price:
-    input: 0.93
-    output: 3.00
-    cache_read: 0.18
+    input: 0.20
+    output: 0.60
+    cache_read: 0.006
 
 adviser:
-  model: "moonshotai/Kimi-K2.7-Code"
+  model: "deepseek-ai/DeepSeek-V4.1-Flash"
   temperature: 1.0
   top_p: 0.95
   n: 1
   max_tokens: 16384
   price:
-    input: 0.74
-    output: 3.50
-    cache_read: 0.15
+    input: 0.20
+    output: 0.60
+    cache_read: 0.006
 
 reflector:
-  model: "MiniMaxAI/MiniMax-M3"
+  model: "deepseek-ai/DeepSeek-V4-Flash"
   temperature: 1.0
   top_p: 0.95
   n: 1
   max_tokens: 4096
   price:
-    input: 0.30
-    output: 1.20
-    cache_read: 0.06
+    input: 0.09
+    output: 0.18
+    cache_read: 0.018
 
 searcher:
-  model: "MiniMaxAI/MiniMax-M3"
+  model: "deepseek-ai/DeepSeek-V4-Flash"
   temperature: 1.0
   top_p: 0.95
   n: 1
   max_tokens: 4096
   price:
-    input: 0.30
-    output: 1.20
-    cache_read: 0.06
+    input: 0.09
+    output: 0.18
+    cache_read: 0.018
 
 enricher:
-  model: "MiniMaxAI/MiniMax-M3"
+  model: "deepseek-ai/DeepSeek-V4.1-Flash"
   temperature: 1.0
   top_p: 0.95
   n: 1
   max_tokens: 8192
   price:
-    input: 0.30
-    output: 1.20
-    cache_read: 0.06
+    input: 0.20
+    output: 0.60
+    cache_read: 0.006
 
 coder:
-  model: "moonshotai/Kimi-K2.7-Code"
+  model: "deepseek-ai/DeepSeek-V4.1-Flash"
   temperature: 1.0
   top_p: 0.95
   n: 1
   max_tokens: 20480
   price:
-    input: 0.74
-    output: 3.50
-    cache_read: 0.15
+    input: 0.20
+    output: 0.60
+    cache_read: 0.006
 
 installer:
-  model: "MiniMaxAI/MiniMax-M3"
+  model: "deepseek-ai/DeepSeek-V4.1-Flash"
   temperature: 1.0
   top_p: 0.95
   n: 1
   max_tokens: 16384
   price:
-    input: 0.30
-    output: 1.20
-    cache_read: 0.06
+    input: 0.20
+    output: 0.60
+    cache_read: 0.006
 
 pentester:
-  model: "MiniMaxAI/MiniMax-M3"
+  model: "deepseek-ai/DeepSeek-V4.1-Flash"
   temperature: 1.0
   top_p: 0.95
   n: 1
   max_tokens: 16384
   price:
-    input: 0.30
-    output: 1.20
-    cache_read: 0.06
+    input: 0.20
+    output: 0.60
+    cache_read: 0.006

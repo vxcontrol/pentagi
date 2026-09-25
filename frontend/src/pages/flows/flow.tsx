@@ -48,15 +48,19 @@ import FlowTabs from '@/features/flows/flow-tabs';
 import { useFlowDetailNavigation } from '@/features/flows/use-flow-detail-navigation';
 import { RenameFlowDocument, ResultType, StatusType } from '@/graphql/types';
 import { useBreakpoint } from '@/hooks/use-breakpoint';
-import { useFlowTabDetection } from '@/hooks/use-flow-tab-detection';
+import { FLOW_TAB_VALUES, useFlowSideTab, useFlowTabDetection } from '@/hooks/use-flow-tab-detection';
+import { useIsOwnFlow } from '@/hooks/use-is-own-flow';
+import { copyToClipboard } from '@/lib/clipboard';
 import { Log } from '@/lib/log';
-import { copyToClipboard, downloadTextFile, generateFileName, generateReport } from '@/lib/report';
+import { downloadTextFile, generateFileName, generateReport } from '@/lib/report';
 import { routes } from '@/lib/routes';
 import { cn } from '@/lib/utils';
 import { formatName } from '@/lib/utils/format';
+import { isProviderMissing } from '@/models/provider';
 import { useFavorites } from '@/providers/favorites-provider';
 import { useFlow } from '@/providers/flow-provider';
 import { type Flow as FlowItem, useFlows } from '@/providers/flows-provider';
+import { useProviders } from '@/providers/providers-provider';
 
 const renderFlowItem = (item: FlowItem, isCurrent: boolean): ReactNode => (
     <>
@@ -81,13 +85,21 @@ function Flow() {
     const navigate = useNavigate();
 
     const { flowData, flowId, flowLoadError, isFlowMissing, isLoading: isFlowLoading, refetchFlow } = useFlow();
-    const { deleteFlow, finishFlow } = useFlows();
-    const { isFavoriteFlow, toggleFavoriteFlow } = useFavorites();
+    const { deleteFlow, finishFlow, flows } = useFlows();
+    const { canToggleFavorite, isFavoriteFlow, isLoading: isFavoritesLoading, toggleFavoriteFlow } = useFavorites();
 
     const flow = flowData?.flow;
+    const { providers } = useProviders();
+    const isOwnFlow = useIsOwnFlow();
+    const isProviderGone = !!flow && isOwnFlow(flow) && isProviderMissing(flow.provider, providers);
     const actualFlowTitle = flow?.title ?? '';
     const [flowTitle, setOptimisticFlowTitle] = useOptimistic(actualFlowTitle, (_current, next: string) => next);
     const isFlowRunning = flow ? ![StatusType.Failed, StatusType.Finished].includes(flow.status) : false;
+    const isFavoriteToggleable = !!flow && canToggleFavorite(flow);
+    const favoriteSubject = flow ?? (isFlowLoading ? flows.find(({ id }) => String(id) === flowId) : undefined);
+    const isFavoriteSlotShown = favoriteSubject
+        ? isFavoritesLoading || canToggleFavorite(favoriteSubject)
+        : isFlowLoading;
 
     const flowNav = useFlowDetailNavigation(flowId);
 
@@ -171,12 +183,11 @@ function Flow() {
         }
     }, [flow, deleteFlow, navigate]);
 
-    const [desktopTabsTab, setDesktopTabsTab] = useState<string>('terminal');
+    const { handleTabChange: handleSideTabChange, resolvedTab: sideTab } = useFlowSideTab();
+    const { handleTabChange: handleMobileTabChange, resolvedTab: mobileAutoTab } = useFlowTabDetection(FLOW_TAB_VALUES);
 
-    const { handleTabChange: handleMobileTabChange, resolvedTab: mobileAutoTab } = useFlowTabDetection();
-
-    const activeTabsTab = isDesktop ? desktopTabsTab : mobileAutoTab;
-    const handleTabsTabChange = isDesktop ? setDesktopTabsTab : handleMobileTabChange;
+    const activeTabsTab = isDesktop ? sideTab : mobileAutoTab;
+    const handleTabsTabChange = isDesktop ? handleSideTabChange : handleMobileTabChange;
 
     if (flowLoadError) {
         return (
@@ -229,8 +240,13 @@ function Flow() {
                                         />
 
                                         <ProviderIcon
+                                            className={cn('size-4', isProviderGone && 'opacity-50')}
                                             provider={flow.provider}
-                                            tooltip={formatName(flow.provider.name)}
+                                            tooltip={
+                                                isProviderGone
+                                                    ? `${formatName(flow.provider.name)} (unavailable)`
+                                                    : formatName(flow.provider.name)
+                                            }
                                         />
                                     </>
                                 )}
@@ -275,12 +291,12 @@ function Flow() {
                             sheetTitle="Flows"
                         />
                     )}
-                    {flowId && !isMobile && (
+                    {flowId && !isMobile && isFavoriteSlotShown && (
                         <Button
                             aria-label="Toggle favorite"
                             aria-pressed={isFavoriteFlow(flowId)}
                             className="shrink-0"
-                            disabled={isFlowLoading}
+                            disabled={!isFavoriteToggleable}
                             onClick={() => toggleFavoriteFlow(flowId)}
                             size="icon"
                             variant="ghost"
@@ -321,7 +337,7 @@ function Flow() {
                                             />
                                         </div>
                                     </DropdownMenuItem>
-                                    {flowId && (
+                                    {flowId && flow && canToggleFavorite(flow) && (
                                         <DropdownMenuItem
                                             disabled={isFlowLoading}
                                             onClick={() => toggleFavoriteFlow(flowId)}

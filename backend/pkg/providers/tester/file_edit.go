@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"pentagi/pkg/providers/tester/testdata"
+	"pentagi/pkg/providers/tester/cases"
 	"pentagi/pkg/tools"
 
 	"github.com/vxcontrol/langchaingo/llms"
@@ -35,7 +35,7 @@ const (
 // every YAML-driven TestCase, this one is hand-built in Go (not tests.yml)
 // because its whole point is a genuinely dynamic exchange - the harness
 // doesn't know what the model will send until it sends it, so it can't be
-// expressed as a fixed list of messages the way testdata.TestDefinition is.
+// expressed as a fixed list of messages the way cases.TestDefinition is.
 //
 // The tool declaration is not hand-copied JSON: it comes straight from
 // tools.GetRegistryDefinitions(), the exact schema real PentAGI agents get,
@@ -44,7 +44,7 @@ const (
 // Docker container is involved), deliberately separate from - but for the
 // actual diff-merge step, reusing - tools.ApplyUnifiedDiff, the same
 // function terminal.EditFile calls in production.
-func newFileEditTestCase() (testdata.TestCase, error) {
+func newFileEditTestCase() (cases.TestCase, error) {
 	def, ok := tools.GetRegistryDefinitions()[tools.FileToolName]
 	if !ok {
 		return nil, fmt.Errorf("tools.GetRegistryDefinitions() has no definition for %q", tools.FileToolName)
@@ -65,7 +65,7 @@ func newFileEditTestCase() (testdata.TestCase, error) {
 	}, nil
 }
 
-// fileEditTestCase implements testdata.TestCase and testdata.MultiTurnTestCase.
+// fileEditTestCase implements cases.TestCase and cases.MultiTurnTestCase.
 type fileEditTestCase struct {
 	mu       sync.Mutex
 	messages []llms.MessageContent
@@ -79,13 +79,15 @@ type fileEditTestCase struct {
 
 func (f *fileEditTestCase) ID() string                            { return fileEditID }
 func (f *fileEditTestCase) Name() string                          { return fileEditTestName }
-func (f *fileEditTestCase) Type() testdata.TestType               { return testdata.TestTypeFileEdit }
-func (f *fileEditTestCase) Group() testdata.TestGroup             { return testdata.TestGroupAdvanced }
+func (f *fileEditTestCase) Type() cases.TestType                  { return cases.TestTypeFileEdit }
+func (f *fileEditTestCase) Group() cases.TestGroup                { return cases.TestGroupAdvanced }
 func (f *fileEditTestCase) Streaming() bool                       { return false }
 func (f *fileEditTestCase) Prompt() string                        { return "" }
 func (f *fileEditTestCase) Tools() []llms.Tool                    { return f.tools }
-func (f *fileEditTestCase) Capability() testdata.TestCapability   { return testdata.CapabilityNone }
+func (f *fileEditTestCase) Capability() cases.TestCapability      { return cases.CapabilityNone }
 func (f *fileEditTestCase) ExtraOptions() []llms.CallOption       { return nil }
+func (f *fileEditTestCase) ExpectRefusal() cases.RefusalKind      { return cases.RefusalNone }
+func (f *fileEditTestCase) ExpectTruncated() bool                 { return false }
 func (f *fileEditTestCase) StreamingCallback() streaming.Callback { return nil }
 
 func (f *fileEditTestCase) Messages() []llms.MessageContent {
@@ -97,7 +99,7 @@ func (f *fileEditTestCase) Messages() []llms.MessageContent {
 	return out
 }
 
-// HandleToolResponse implements testdata.MultiTurnTestCase. It expects,
+// HandleToolResponse implements cases.MultiTurnTestCase. It expects,
 // across up to two calls, first a read_file call for FileEditTestPath
 // (answered with FileEditTestContent) and then an edit_file call whose diff is applied
 // in-memory via tools.ApplyUnifiedDiff; any other shape ends the exchange
@@ -181,14 +183,14 @@ func (f *fileEditTestCase) appendToolExchange(call llms.ToolCall, result string)
 	)
 }
 
-// Execute implements testdata.TestCase. By the time the runner calls this,
+// Execute implements cases.TestCase. By the time the runner calls this,
 // HandleToolResponse has already driven the exchange to completion (or to
 // the point where it gave up); Execute only needs to report that outcome.
-func (f *fileEditTestCase) Execute(response any, latency time.Duration) testdata.TestResult {
+func (f *fileEditTestCase) Execute(response any, latency time.Duration) cases.TestResult {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
-	result := testdata.TestResult{
+	result := cases.TestResult{
 		ID:      f.ID(),
 		Name:    f.Name(),
 		Type:    f.Type(),

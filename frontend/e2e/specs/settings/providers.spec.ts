@@ -8,6 +8,7 @@ import {
     OTHER_PROVIDER_ROW,
     populatedSettingsProvidersCassette,
     providersList,
+    providersListWithEnabled,
     providerTestResult,
     renamedProviderRow,
     SEEDED_PROVIDER,
@@ -134,6 +135,17 @@ test.describe('settings provider edit paths', { tag: '@coverage' }, () => {
         page.waitForRequest(
             (candidate) => candidate.method() === 'POST' && candidate.postDataJSON()?.operationName === operationName,
         );
+
+    test.describe('unknown id', () => {
+        test.use({ cassette: editCassette() });
+
+        test('an id no provider has returns to the list', async ({ page }) => {
+            await page.goto('/settings/providers/e2e-no-such-provider');
+
+            await expect(page).toHaveURL(/\/settings\/providers$/);
+            await expect(page.getByRole('row', { name: new RegExp(SEEDED_PROVIDER.name) })).toBeVisible();
+        });
+    });
 
     test.describe('update', () => {
         test.use({
@@ -330,5 +342,76 @@ test.describe('settings provider edit paths', { tag: '@coverage' }, () => {
             await expect(dialog.getByText('e2e simulated failure')).toBeVisible();
             expectCleanPage(pageErrorLog);
         });
+    });
+
+    test.describe('events from outside the tab', () => {
+        test.use({
+            cassette: populatedSettingsProvidersCassette({
+                queries: {
+                    settingsProviders: [
+                        { data: providersList(seededProviderRow()) },
+                        { data: providersList(seededProviderRow(), OTHER_PROVIDER_ROW()) },
+                    ],
+                },
+                subscriptions: {
+                    providerCreated: [
+                        { frames: [{ delayMs: 200, payload: { data: { providerCreated: OTHER_PROVIDER_ROW() } } }] },
+                    ],
+                },
+            }),
+        });
+
+        test('a provider created elsewhere joins the list without a reload', async ({ page, pageErrorLog }) => {
+            await page.goto('/settings/providers');
+
+            await expect(page.getByRole('row', { name: new RegExp(SEEDED_PROVIDER.name) })).toBeVisible();
+            await expect(page.getByRole('row', { name: new RegExp(OTHER_PROVIDER.name) })).toBeVisible();
+
+            expectCleanPage(pageErrorLog);
+        });
+    });
+});
+
+test.describe('settings providers, cloning', { tag: '@coverage' }, () => {
+    test.use({
+        cassette: populatedSettingsProvidersCassette({
+            queries: {
+                settingsProviders: [{ data: providersListWithEnabled({ custom: true }, seededProviderRow()) }],
+            },
+        }),
+    });
+
+    test('opens the create form seeded from the row it was cloned from', async ({ page, pageErrorLog }) => {
+        await page.goto('/settings/providers');
+
+        const row = page.getByRole('row', { name: new RegExp(SEEDED_PROVIDER.name) });
+
+        await row.getByRole('button', { name: 'Open menu' }).click();
+        await page.getByRole('menuitem', { name: 'Clone' }).click();
+
+        await expect(page).toHaveURL(new RegExp(`/settings/providers/new\\?.*id=${SEEDED_PROVIDER.id}`));
+        await expect(page.getByLabel('Name', { exact: true })).toHaveValue(`${SEEDED_PROVIDER.name} (Copy)`);
+        expectCleanPage(pageErrorLog);
+    });
+});
+
+test.describe('settings providers, cloning a type the server cannot serve', { tag: '@coverage' }, () => {
+    test.use({ cassette: populatedSettingsProvidersCassette() });
+
+    test('returns the operator to the list rather than seeding a provider that cannot work', async ({
+        page,
+        pageErrorLog,
+    }) => {
+        await page.goto('/settings/providers');
+
+        const row = page.getByRole('row', { name: new RegExp(SEEDED_PROVIDER.name) });
+
+        await row.getByRole('button', { name: 'Open menu' }).click();
+        await page.getByRole('menuitem', { name: 'Clone' }).click();
+
+        await expect(page.getByText(`Provider type "${SEEDED_PROVIDER.type}" is not available`)).toBeVisible();
+        await expect(page).toHaveURL(/\/settings\/providers$/);
+        await expect(row).toBeVisible();
+        expectCleanPage(pageErrorLog);
     });
 });

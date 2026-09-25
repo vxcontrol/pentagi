@@ -6,17 +6,14 @@ import (
 	uv "github.com/charmbracelet/ultraviolet"
 )
 
-// testLogger wraps a testing.TB to implement the Logger interface.
 type testLogger struct {
 	t testing.TB
 }
 
-// Printf implements the Logger interface.
 func (l *testLogger) Printf(format string, v ...any) {
 	l.t.Logf(format, v...)
 }
 
-// newTestTerminal creates a new test terminal.
 func newTestTerminal(t testing.TB, width, height int) *Terminal {
 	term := NewTerminal(width, height, nil)
 	term.SetLogger(&testLogger{t})
@@ -32,7 +29,7 @@ var cases = []struct {
 }{
 	// Cursor Backward Tabulation [ansi.CBT]
 	{
-		name: "CBT Left Beyond First Column",
+		name: "cbt left beyond first column",
 		w:    10, h: 1,
 		input: []string{
 			"\x1b[?W", // reset tab stops
@@ -43,7 +40,7 @@ var cases = []struct {
 		pos:  uv.Pos(1, 0),
 	},
 	{
-		name: "CBT Left Starting After Tab Stop",
+		name: "cbt left starting after tab stop",
 		w:    11, h: 1,
 		input: []string{
 			"\x1b[?W", // reset tab stops
@@ -56,7 +53,7 @@ var cases = []struct {
 		pos:  uv.Pos(9, 0),
 	},
 	{
-		name: "CBT Left Starting on Tabstop",
+		name: "cbt left starting on tabstop",
 		w:    10, h: 1,
 		input: []string{
 			"\x1b[?W", // reset tab stops
@@ -70,7 +67,7 @@ var cases = []struct {
 		pos:  uv.Pos(1, 0),
 	},
 	{
-		name: "CBT Left Margin with Origin Mode",
+		name: "cbt left margin with origin mode",
 		w:    10, h: 1,
 		input: []string{
 			"\x1b[1;1H", // move to top left
@@ -90,7 +87,7 @@ var cases = []struct {
 
 	// Cursor Horizontal Tabulation [ansi.CHT]
 	{
-		name: "CHT Right Beyond Last Column",
+		name: "cht right beyond last column",
 		w:    10, h: 1,
 		input: []string{
 			"\x1b[?W",   // reset tab stops
@@ -101,7 +98,7 @@ var cases = []struct {
 		pos:  uv.Pos(9, 0),
 	},
 	{
-		name: "CHT Right From Before Tabstop",
+		name: "cht right from before tabstop",
 		w:    10, h: 1,
 		input: []string{
 			"\x1b[?W",   // reset tab stops
@@ -114,7 +111,7 @@ var cases = []struct {
 		pos:  uv.Pos(9, 0),
 	},
 	{
-		name: "CHT Right Margin",
+		name: "cht right margin",
 		w:    10, h: 1,
 		input: []string{
 			"\x1b[1;1H", // move to top-left
@@ -133,7 +130,7 @@ var cases = []struct {
 
 	// Carriage Return [ansi.CR]
 	{
-		name: "CR Pending Wrap is Unset",
+		name: "cr pending wrap is unset",
 		w:    10, h: 2,
 		input: []string{
 			"\x1b[10G", // move to last column
@@ -148,7 +145,7 @@ var cases = []struct {
 		pos: uv.Pos(1, 0),
 	},
 	{
-		name: "CR Left Margin",
+		name: "cr left margin",
 		w:    10, h: 1,
 		input: []string{
 			"\x1b[1;1H", // move to top-left
@@ -164,7 +161,7 @@ var cases = []struct {
 		pos:  uv.Pos(2, 0),
 	},
 	{
-		name: "CR Left of Left Margin",
+		name: "cr left of left margin",
 		w:    10, h: 1,
 		input: []string{
 			"\x1b[1;1H", // move to top-left
@@ -181,7 +178,7 @@ var cases = []struct {
 		pos:  uv.Pos(1, 0),
 	},
 	{
-		name: "CR Left Margin with Origin Mode",
+		name: "cr left margin with origin mode",
 		w:    10, h: 1,
 		input: []string{
 			"\x1b[1;1H", // move to top-left
@@ -201,7 +198,7 @@ var cases = []struct {
 
 	// Cursor Backward [ansi.CUB]
 	{
-		name: "CUB Pending Wrap is Unset",
+		name: "cub pending wrap is unset",
 		w:    10, h: 2,
 		input: []string{
 			"\x1b[10G", // move to last column
@@ -216,7 +213,7 @@ var cases = []struct {
 		pos: uv.Pos(1, 1),
 	},
 	{
-		name: "CUB Leftmost Boundary with Reverse Wrap Disabled",
+		name: "cub leftmost boundary with reverse wrap disabled",
 		w:    10, h: 2,
 		input: []string{
 			"\x1b[?45l", // disable reverse wrap
@@ -231,7 +228,7 @@ var cases = []struct {
 		pos: uv.Pos(1, 1),
 	},
 	{
-		name: "CUB Reverse Wrap",
+		name: "cub reverse wrap",
 		w:    10, h: 2,
 		input: []string{
 			"\x1b[?7h",  // enable wraparound
@@ -252,7 +249,7 @@ var cases = []struct {
 
 	// Cursor Down [ansi.CUD]
 	{
-		name: "CUD Cursor Down",
+		name: "cud cursor down",
 		w:    10, h: 3,
 		input: []string{
 			"A",
@@ -267,7 +264,7 @@ var cases = []struct {
 		pos: uv.Pos(2, 2),
 	},
 	{
-		name: "CUD Cursor Down Above Bottom Margin",
+		name: "cud cursor down above bottom margin",
 		w:    10, h: 4,
 		input: []string{
 			"\x1b[1;1H", // move to top-left
@@ -287,7 +284,7 @@ var cases = []struct {
 		pos: uv.Pos(2, 2),
 	},
 	{
-		name: "CUD Cursor Down Below Bottom Margin",
+		name: "cud cursor down below bottom margin",
 		w:    10, h: 5,
 		input: []string{
 			"\x1b[1;1H",  // move to top-left
@@ -311,7 +308,7 @@ var cases = []struct {
 
 	// Cursor Position [ansi.CUP]
 	{
-		name: "CUP Normal Usage",
+		name: "cup normal usage",
 		w:    10, h: 2,
 		input: []string{
 			"\x1b[1;1H", // move to top-left
@@ -326,7 +323,7 @@ var cases = []struct {
 		pos: uv.Pos(3, 1),
 	},
 	{
-		name: "CUP Off the Screen",
+		name: "cup off the screen",
 		w:    10, h: 3,
 		input: []string{
 			"\x1b[1;1H",     // move to top-left
@@ -342,7 +339,7 @@ var cases = []struct {
 		pos: uv.Pos(9, 2),
 	},
 	{
-		name: "CUP Relative to Origin",
+		name: "cup relative to origin",
 		w:    10, h: 2,
 		input: []string{
 			"\x1b[1;1H", // move to top-left
@@ -359,7 +356,7 @@ var cases = []struct {
 		pos: uv.Pos(1, 1),
 	},
 	{
-		name: "CUP Relative to Origin with Margins",
+		name: "cup relative to origin with margins",
 		w:    10, h: 2,
 		input: []string{
 			"\x1b[1;1H", // move to top-left
@@ -378,7 +375,7 @@ var cases = []struct {
 		pos: uv.Pos(3, 1),
 	},
 	{
-		name: "CUP Limits with Scroll Region and Origin Mode",
+		name: "cup limits with scroll region and origin mode",
 		w:    10, h: 3,
 		input: []string{
 			"\x1b[1;1H",     // move to top-left
@@ -398,7 +395,7 @@ var cases = []struct {
 		pos: uv.Pos(5, 2),
 	},
 	{
-		name: "CUP Pending Wrap is Unset",
+		name: "cup pending wrap is unset",
 		w:    10, h: 1,
 		input: []string{
 			"\x1b[10G", // move to last column
@@ -414,7 +411,7 @@ var cases = []struct {
 
 	// Cursor Forward [ansi.CUF]
 	{
-		name: "CUF Pending Wrap is Unset",
+		name: "cuf pending wrap is unset",
 		w:    10, h: 2,
 		input: []string{
 			"\x1b[10G", // move to last column
@@ -429,7 +426,7 @@ var cases = []struct {
 		pos: uv.Pos(2, 1),
 	},
 	{
-		name: "CUF Rightmost Boundary",
+		name: "cuf rightmost boundary",
 		w:    10, h: 1,
 		input: []string{
 			"A",
@@ -442,7 +439,7 @@ var cases = []struct {
 		pos: uv.Pos(9, 0),
 	},
 	{
-		name: "CUF Left of Right Margin",
+		name: "cuf left of right margin",
 		w:    10, h: 1,
 		input: []string{
 			"\x1b[1;1H", // move to top-left
@@ -459,7 +456,7 @@ var cases = []struct {
 		pos: uv.Pos(5, 0),
 	},
 	{
-		name: "CUF Right of Right Margin",
+		name: "cuf right of right margin",
 		w:    10, h: 1,
 		input: []string{
 			"\x1b[1;1H", // move to top-left
@@ -478,7 +475,7 @@ var cases = []struct {
 
 	// Cursor Up [ansi.CUU]
 	{
-		name: "CUU Normal Usage",
+		name: "cuu normal usage",
 		w:    10, h: 3,
 		input: []string{
 			"\x1b[1;1H", // move to top-left
@@ -496,7 +493,7 @@ var cases = []struct {
 		pos: uv.Pos(2, 0),
 	},
 	{
-		name: "CUU Below Top Margin",
+		name: "cuu below top margin",
 		w:    10, h: 4,
 		input: []string{
 			"\x1b[1;1H", // move to top-left
@@ -516,7 +513,7 @@ var cases = []struct {
 		pos: uv.Pos(2, 1),
 	},
 	{
-		name: "CUU Above Top Margin",
+		name: "cuu above top margin",
 		w:    10, h: 5,
 		input: []string{
 			"\x1b[1;1H", // move to top-left
@@ -540,7 +537,7 @@ var cases = []struct {
 
 	// Delete Line [ansi.DL]
 	{
-		name: "DL Simple Delete Line",
+		name: "dl simple delete line",
 		w:    8, h: 3,
 		input: []string{
 			"\x1b[1;1H", // move to top-left
@@ -559,7 +556,7 @@ var cases = []struct {
 		pos: uv.Pos(0, 1),
 	},
 	{
-		name: "DL Cursor Outside Scroll Region",
+		name: "dl cursor outside scroll region",
 		w:    8, h: 3,
 		input: []string{
 			"\x1b[1;1H", // move to top-left
@@ -579,7 +576,7 @@ var cases = []struct {
 		pos: uv.Pos(1, 1),
 	},
 	{
-		name: "DL With Top/Bottom Scroll Regions",
+		name: "dl with top and bottom scroll regions",
 		w:    8, h: 4,
 		input: []string{
 			"\x1b[1;1H", // move to top-left
@@ -601,7 +598,7 @@ var cases = []struct {
 		pos: uv.Pos(0, 1),
 	},
 	{
-		name: "DL With Left/Right Scroll Regions",
+		name: "dl with left and right scroll regions",
 		w:    8, h: 3,
 		input: []string{
 			"\x1b[1;1H", // move to top-left
@@ -624,7 +621,7 @@ var cases = []struct {
 
 	// Insert Line [ansi.IL]
 	{
-		name: "IL Simple Insert Line",
+		name: "il simple insert line",
 		w:    8, h: 4,
 		input: []string{
 			"\x1b[1;1H", // move to top-left
@@ -644,7 +641,7 @@ var cases = []struct {
 		pos: uv.Pos(0, 1),
 	},
 	{
-		name: "IL Cursor Outside Scroll Region",
+		name: "il cursor outside scroll region",
 		w:    8, h: 3,
 		input: []string{
 			"\x1b[1;1H", // move to top-left
@@ -664,7 +661,7 @@ var cases = []struct {
 		pos: uv.Pos(1, 1),
 	},
 	{
-		name: "IL With Top/Bottom Scroll Regions",
+		name: "il with top and bottom scroll regions",
 		w:    8, h: 4,
 		input: []string{
 			"\x1b[1;1H", // move to top-left
@@ -686,7 +683,7 @@ var cases = []struct {
 		pos: uv.Pos(0, 1),
 	},
 	{
-		name: "IL With Left/Right Scroll Regions",
+		name: "il with left and right scroll regions",
 		w:    8, h: 4,
 		input: []string{
 			"\x1b[1;1H", // move to top-left
@@ -710,7 +707,7 @@ var cases = []struct {
 
 	// Delete Character [ansi.DCH]
 	{
-		name: "DCH Simple Delete Character",
+		name: "dch simple delete character",
 		w:    8, h: 1,
 		input: []string{
 			"ABC123",
@@ -721,7 +718,7 @@ var cases = []struct {
 		pos:  uv.Pos(2, 0),
 	},
 	{
-		name: "DCH with SGR State",
+		name: "dch with sgr state",
 		w:    8, h: 1,
 		input: []string{
 			"ABC123",
@@ -733,7 +730,7 @@ var cases = []struct {
 		pos:  uv.Pos(2, 0),
 	},
 	{
-		name: "DCH Outside Left/Right Scroll Region",
+		name: "dch outside left and right scroll region",
 		w:    8, h: 1,
 		input: []string{
 			"\x1b[1;1H", // move to top-left
@@ -748,7 +745,7 @@ var cases = []struct {
 		pos:  uv.Pos(1, 0),
 	},
 	{
-		name: "DCH Inside Left/Right Scroll Region",
+		name: "dch inside left and right scroll region",
 		w:    8, h: 1,
 		input: []string{
 			"\x1b[1;1H", // move to top-left
@@ -763,7 +760,7 @@ var cases = []struct {
 		pos:  uv.Pos(3, 0),
 	},
 	{
-		name: "DCH Split Wide Character",
+		name: "dch split wide character",
 		w:    10, h: 1,
 		input: []string{
 			"\x1b[1;1H", // move to top-left
@@ -778,7 +775,7 @@ var cases = []struct {
 
 	// Set Top and Bottom Margins [ansi.DECSTBM]
 	{
-		name: "DECSTBM Full Screen Scroll Up",
+		name: "decstbm full screen scroll up",
 		w:    8, h: 4,
 		input: []string{
 			"\x1b[1;1H", // move to top-left
@@ -798,7 +795,7 @@ var cases = []struct {
 		pos: uv.Pos(0, 0),
 	},
 	{
-		name: "DECSTBM Top Only Scroll Up",
+		name: "decstbm top only scroll up",
 		w:    8, h: 4,
 		input: []string{
 			"\x1b[1;1H", // move to top-left
@@ -818,7 +815,7 @@ var cases = []struct {
 		pos: uv.Pos(0, 0),
 	},
 	{
-		name: "DECSTBM Top and Bottom Scroll Up",
+		name: "decstbm top and bottom scroll up",
 		w:    8, h: 4,
 		input: []string{
 			"\x1b[1;1H", // move to top-left
@@ -838,7 +835,7 @@ var cases = []struct {
 		pos: uv.Pos(0, 0),
 	},
 	{
-		name: "DECSTBM Top Equal Bottom Scroll Up",
+		name: "decstbm top equal bottom scroll up",
 		w:    8, h: 4,
 		input: []string{
 			"\x1b[1;1H", // move to top-left
@@ -860,7 +857,7 @@ var cases = []struct {
 
 	// Set Left/Right Margins [ansi.DECSLRM]
 	{
-		name: "DECSLRM Full Screen",
+		name: "decslrm full screen",
 		w:    8, h: 3,
 		input: []string{
 			"\x1b[1;1H", // move to top-left
@@ -880,7 +877,7 @@ var cases = []struct {
 		pos: uv.Pos(0, 0),
 	},
 	{
-		name: "DECSLRM Left Only",
+		name: "decslrm left only",
 		w:    8, h: 4,
 		input: []string{
 			"\x1b[1;1H", // move to top-left
@@ -902,7 +899,7 @@ var cases = []struct {
 		pos: uv.Pos(1, 0),
 	},
 	{
-		name: "DECSLRM Left And Right",
+		name: "decslrm left and right",
 		w:    8, h: 4,
 		input: []string{
 			"\x1b[1;1H", // move to top-left
@@ -924,7 +921,7 @@ var cases = []struct {
 		pos: uv.Pos(0, 0),
 	},
 	{
-		name: "DECSLRM Left Equal to Right",
+		name: "decslrm left equal to right",
 		w:    8, h: 3,
 		input: []string{
 			"\x1b[1;1H", // move to top-left
@@ -946,7 +943,7 @@ var cases = []struct {
 
 	// Erase Character [ansi.ECH]
 	{
-		name: "ECH Simple Operation",
+		name: "ech simple operation",
 		w:    8, h: 1,
 		input: []string{
 			"ABC",
@@ -957,7 +954,7 @@ var cases = []struct {
 		pos:  uv.Pos(0, 0),
 	},
 	{
-		name: "ECH Erasing Beyond Edge of Screen",
+		name: "ech erasing beyond edge of screen",
 		w:    8, h: 1,
 		input: []string{
 			"\x1b[8G",
@@ -970,7 +967,7 @@ var cases = []struct {
 		pos:  uv.Pos(6, 0),
 	},
 	{
-		name: "ECH Reset Pending Wrap State",
+		name: "ech reset pending wrap state",
 		w:    8, h: 1,
 		input: []string{
 			"\x1b[8G", // move to last column
@@ -982,7 +979,7 @@ var cases = []struct {
 		pos:  uv.Pos(7, 0),
 	},
 	{
-		name: "ECH with SGR State",
+		name: "ech with sgr state",
 		w:    8, h: 1,
 		input: []string{
 			"ABC",
@@ -994,7 +991,7 @@ var cases = []struct {
 		pos:  uv.Pos(0, 0),
 	},
 	{
-		name: "ECH Multi-cell Character",
+		name: "ech multi-cell character",
 		w:    8, h: 1,
 		input: []string{
 			"橋BC",
@@ -1006,7 +1003,7 @@ var cases = []struct {
 		pos:  uv.Pos(1, 0),
 	},
 	{
-		name: "ECH Left/Right Scroll Region Ignored",
+		name: "ech left and right scroll region ignored",
 		w:    10, h: 1,
 		input: []string{
 			"\x1b[1;1H", // move to top-left
@@ -1021,38 +1018,11 @@ var cases = []struct {
 		want: []string{"    BC    "},
 		pos:  uv.Pos(0, 0),
 	},
-	// XXX: Support DECSCA
-	// {
-	// 	name: "ECH Protected Attributes Ignored with DECSCA",
-	// 	w:    8, h: 1,
-	// 	input: []string{
-	// 		"\x1bV",
-	// 		"ABC",
-	// 		"\x1b[1\"q",
-	// 		"\x1b[0\"q",
-	// 		"\x1b[1G",
-	// 		"\x1b[2X",
-	// 	},
-	// 	want: []string{"  C     "},
-	// 	pos:  uv.Pos(0, 0),
-	// },
-	// {
-	// 	name: "ECH Protected Attributes Respected without DECSCA",
-	// 	w:    8, h: 1,
-	// 	input: []string{
-	// 		"\x1b[1\"q",
-	// 		"ABC",
-	// 		"\x1bV",
-	// 		"\x1b[1G",
-	// 		"\x1b[2X",
-	// 	},
-	// 	want: []string{"ABC     "},
-	// 	pos:  uv.Pos(0, 0),
-	// },
+	// no DECSCA rows for ECH or EL: protected attributes are not supported
 
 	// Erase Line [ansi.EL]
 	{
-		name: "EL Simple Erase Right",
+		name: "el simple erase right",
 		w:    8, h: 1,
 		input: []string{
 			"ABCDE",
@@ -1063,7 +1033,7 @@ var cases = []struct {
 		pos:  uv.Pos(2, 0),
 	},
 	{
-		name: "EL Erase Right Resets Pending Wrap",
+		name: "el erase right resets pending wrap",
 		w:    8, h: 1,
 		input: []string{
 			"\x1b[8G", // move to last column
@@ -1075,7 +1045,7 @@ var cases = []struct {
 		pos:  uv.Pos(7, 0),
 	},
 	{
-		name: "EL Erase Right with SGR State",
+		name: "el erase right with sgr state",
 		w:    8, h: 1,
 		input: []string{
 			"ABC",
@@ -1087,7 +1057,7 @@ var cases = []struct {
 		pos:  uv.Pos(1, 0),
 	},
 	{
-		name: "EL Erase Right Multi-cell Character",
+		name: "el erase right multi-cell character",
 		w:    8, h: 1,
 		input: []string{
 			"AB橋DE",
@@ -1098,7 +1068,7 @@ var cases = []struct {
 		pos:  uv.Pos(3, 0),
 	},
 	{
-		name: "EL Erase Right with Left/Right Margins",
+		name: "el erase right with left and right margins",
 		w:    10, h: 1,
 		input: []string{
 			"\x1b[1;1H", // move to top-left
@@ -1113,7 +1083,7 @@ var cases = []struct {
 		pos:  uv.Pos(1, 0),
 	},
 	{
-		name: "EL Simple Erase Left",
+		name: "el simple erase left",
 		w:    8, h: 1,
 		input: []string{
 			"ABCDE",
@@ -1124,7 +1094,7 @@ var cases = []struct {
 		pos:  uv.Pos(2, 0),
 	},
 	{
-		name: "EL Erase Left with SGR State",
+		name: "el erase left with sgr state",
 		w:    8, h: 1,
 		input: []string{
 			"ABC",
@@ -1136,7 +1106,7 @@ var cases = []struct {
 		pos:  uv.Pos(1, 0),
 	},
 	{
-		name: "EL Erase Left Multi-cell Character",
+		name: "el erase left multi-cell character",
 		w:    8, h: 1,
 		input: []string{
 			"AB橋DE",
@@ -1146,23 +1116,8 @@ var cases = []struct {
 		want: []string{"    DE  "},
 		pos:  uv.Pos(2, 0),
 	},
-	// XXX: Support DECSCA
-	// {
-	// 	name: "EL Erase Left Protected Attributes Ignored with DECSCA",
-	// 	w:    8, h: 1,
-	// 	input: []string{
-	// 		"\x1bV",
-	// 		"ABCDE",
-	// 		"\x1b[1\"q",
-	// 		"\x1b[0\"q",
-	// 		"\x1b[2G",
-	// 		"\x1b[1K",
-	// 	},
-	// 	want: []string{"  CDE   "},
-	// 	pos:  uv.Pos(1, 0),
-	// },
 	{
-		name: "EL Simple Erase Complete Line",
+		name: "el simple erase complete line",
 		w:    8, h: 1,
 		input: []string{
 			"ABCDE",
@@ -1173,7 +1128,7 @@ var cases = []struct {
 		pos:  uv.Pos(2, 0),
 	},
 	{
-		name: "EL Erase Complete with SGR State",
+		name: "el erase complete with sgr state",
 		w:    8, h: 1,
 		input: []string{
 			"ABC",
@@ -1187,7 +1142,7 @@ var cases = []struct {
 
 	// Index [ansi.IND]
 	{
-		name: "IND No Scroll Region Top of Screen",
+		name: "ind no scroll region top of screen",
 		w:    10, h: 2,
 		input: []string{
 			"\x1b[1;1H", // move to top-left
@@ -1203,7 +1158,7 @@ var cases = []struct {
 		pos: uv.Pos(2, 1),
 	},
 	{
-		name: "IND Bottom of Primary Screen",
+		name: "ind bottom of primary screen",
 		w:    10, h: 2,
 		input: []string{
 			"\x1b[1;1H", // move to top-left
@@ -1220,7 +1175,7 @@ var cases = []struct {
 		pos: uv.Pos(2, 1),
 	},
 	{
-		name: "IND Inside Scroll Region",
+		name: "ind inside scroll region",
 		w:    10, h: 2,
 		input: []string{
 			"\x1b[1;1H", // move to top-left
@@ -1237,7 +1192,7 @@ var cases = []struct {
 		pos: uv.Pos(2, 1),
 	},
 	{
-		name: "IND Bottom of Scroll Region",
+		name: "ind bottom of scroll region",
 		w:    10, h: 4,
 		input: []string{
 			"\x1b[1;1H", // move to top-left
@@ -1259,7 +1214,7 @@ var cases = []struct {
 		pos: uv.Pos(2, 2),
 	},
 	{
-		name: "IND Bottom of Primary Screen with Scroll Region",
+		name: "ind bottom of primary screen with scroll region",
 		w:    10, h: 5,
 		input: []string{
 			"\x1b[1;1H", // move to top-left
@@ -1281,7 +1236,7 @@ var cases = []struct {
 		pos: uv.Pos(1, 4),
 	},
 	{
-		name: "IND Outside of Left/Right Scroll Region",
+		name: "ind outside of left and right scroll region",
 		w:    10, h: 3,
 		input: []string{
 			"\x1b[1;1H", // move to top-left
@@ -1303,7 +1258,7 @@ var cases = []struct {
 		pos: uv.Pos(1, 2),
 	},
 	{
-		name: "IND Inside of Left/Right Scroll Region",
+		name: "ind inside of left and right scroll region",
 		w:    10, h: 3,
 		input: []string{
 			"\x1b[1;1H", // move to top-left
@@ -1327,7 +1282,7 @@ var cases = []struct {
 
 	// Erase Display [ansi.ED]
 	{
-		name: "ED Simple Erase Below",
+		name: "ed simple erase below",
 		w:    8, h: 3,
 		input: []string{
 			"\x1b[1;1H", // move to top-left
@@ -1346,7 +1301,7 @@ var cases = []struct {
 		pos: uv.Pos(1, 1),
 	},
 	{
-		name: "ED Erase Below with SGR State",
+		name: "ed erase below with sgr state",
 		w:    8, h: 3,
 		input: []string{
 			"\x1b[1;1H", // move to top-left
@@ -1366,7 +1321,7 @@ var cases = []struct {
 		pos: uv.Pos(1, 1),
 	},
 	{
-		name: "ED Erase Below with Multi-Cell Character",
+		name: "ed erase below with multi-cell character",
 		w:    8, h: 3,
 		input: []string{
 			"\x1b[1;1H", // move to top-left
@@ -1385,7 +1340,7 @@ var cases = []struct {
 		pos: uv.Pos(2, 1),
 	},
 	{
-		name: "ED Simple Erase Above",
+		name: "ed simple erase above",
 		w:    8, h: 3,
 		input: []string{
 			"\x1b[1;1H", // move to top-left
@@ -1404,7 +1359,7 @@ var cases = []struct {
 		pos: uv.Pos(1, 1),
 	},
 	{
-		name: "ED Simple Erase Complete",
+		name: "ed simple erase complete",
 		w:    8, h: 3,
 		input: []string{
 			"\x1b[1;1H", // move to top-left
@@ -1425,7 +1380,7 @@ var cases = []struct {
 
 	// Reverse Index [ansi.RI]
 	{
-		name: "RI No Scroll Region Top of Screen",
+		name: "ri no scroll region top of screen",
 		w:    10, h: 4,
 		input: []string{
 			"\x1b[1;1H", // move to top-left
@@ -1446,7 +1401,7 @@ var cases = []struct {
 		pos: uv.Pos(1, 0),
 	},
 	{
-		name: "RI No Scroll Region Not Top of Screen",
+		name: "ri no scroll region not top of screen",
 		w:    10, h: 3,
 		input: []string{
 			"\x1b[1;1H", // move to top-left
@@ -1466,7 +1421,7 @@ var cases = []struct {
 		pos: uv.Pos(1, 0),
 	},
 	{
-		name: "RI Top/Bottom Scroll Region",
+		name: "ri top and bottom scroll region",
 		w:    10, h: 3,
 		input: []string{
 			"\x1b[1;1H", // move to top-left
@@ -1487,7 +1442,7 @@ var cases = []struct {
 		pos: uv.Pos(1, 1),
 	},
 	{
-		name: "RI Outside of Top/Bottom Scroll Region",
+		name: "ri outside of top and bottom scroll region",
 		w:    10, h: 3,
 		input: []string{
 			"\x1b[1;1H", // move to top-left
@@ -1507,7 +1462,7 @@ var cases = []struct {
 		pos: uv.Pos(0, 0),
 	},
 	{
-		name: "RI Left/Right Scroll Region",
+		name: "ri left and right scroll region",
 		w:    10, h: 4,
 		input: []string{
 			"\x1b[1;1H", // move to top-left
@@ -1529,7 +1484,7 @@ var cases = []struct {
 		pos: uv.Pos(1, 0),
 	},
 	{
-		name: "RI Outside Left/Right Scroll Region",
+		name: "ri outside left and right scroll region",
 		w:    10, h: 3,
 		input: []string{
 			"\x1b[1;1H", // move to top-left
@@ -1552,7 +1507,7 @@ var cases = []struct {
 
 	// Scroll Down [ansi.SD]
 	{
-		name: "SD Outside of Top/Bottom Scroll Region",
+		name: "sd outside of top and bottom scroll region",
 		w:    10, h: 4,
 		input: []string{
 			"\x1b[1;1H", // move to top-left
@@ -1575,7 +1530,7 @@ var cases = []struct {
 
 	// Scroll Up [ansi.SU]
 	{
-		name: "SU Simple Usage",
+		name: "su simple usage",
 		w:    10, h: 3,
 		input: []string{
 			"\x1b[1;1H", // move to top-left
@@ -1594,7 +1549,7 @@ var cases = []struct {
 		pos: uv.Pos(1, 1),
 	},
 	{
-		name: "SU Top/Bottom Scroll Region",
+		name: "su top and bottom scroll region",
 		w:    10, h: 3,
 		input: []string{
 			"\x1b[1;1H", // move to top-left
@@ -1614,7 +1569,7 @@ var cases = []struct {
 		pos: uv.Pos(0, 0),
 	},
 	{
-		name: "SU Left/Right Scroll Regions",
+		name: "su left and right scroll regions",
 		w:    10, h: 3,
 		input: []string{
 			"\x1b[1;1H", // move to top-left
@@ -1635,7 +1590,7 @@ var cases = []struct {
 		pos: uv.Pos(1, 1),
 	},
 	{
-		name: "SU Preserves Pending Wrap",
+		name: "su preserves pending wrap",
 		w:    10, h: 4,
 		input: []string{
 			"\x1b[1;10H", // move to top-right
@@ -1657,7 +1612,7 @@ var cases = []struct {
 		pos: uv.Pos(1, 3),
 	},
 	{
-		name: "SU Scroll Full Top/Bottom Scroll Region",
+		name: "su scroll full top and bottom scroll region",
 		w:    10, h: 5,
 		input: []string{
 			"\x1b[1;1H", // move to top-left
@@ -1680,7 +1635,7 @@ var cases = []struct {
 
 	// Tab Clear [ansi.TBC]
 	{
-		name: "TBC Clear Single Tab Stop",
+		name: "tbc clear single tab stop",
 		w:    23, h: 1,
 		input: []string{
 			"\x1b[1;1H", // move to top-left
@@ -1695,7 +1650,7 @@ var cases = []struct {
 		pos:  uv.Pos(16, 0),
 	},
 	{
-		name: "TBC Clear All Tab Stops",
+		name: "tbc clear all tab stops",
 		w:    23, h: 1,
 		input: []string{
 			"\x1b[1;1H", // move to top-left
@@ -1710,13 +1665,12 @@ var cases = []struct {
 	},
 }
 
-// TestTerminal tests the terminal.
-func TestTerminal(t *testing.T) {
+func TestTerminal_Write_LeavesTheExpectedScreenAndCursor(t *testing.T) {
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
 			term := newTestTerminal(t, tt.w, tt.h)
 			for _, in := range tt.input {
-				term.Write([]byte(in))
+				_, _ = term.Write([]byte(in))
 			}
 			got := termText(term)
 			if len(got) != len(tt.want) {

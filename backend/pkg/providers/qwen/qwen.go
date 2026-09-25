@@ -15,7 +15,7 @@ import (
 //go:embed config.yml models.yml
 var configFS embed.FS
 
-const QwenAgentModel = "qwen-plus"
+const QwenAgentModel = "qwen3.8-max"
 
 const QwenToolCallIDTemplate = "call_{r:24:h}"
 

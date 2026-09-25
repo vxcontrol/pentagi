@@ -11,6 +11,7 @@ fragment settingsFragment on Settings {
 
 fragment versionInfoFragment on VersionInfo {
     current
+    build
     state
     latest
     strategy
@@ -20,6 +21,7 @@ fragment versionInfoFragment on VersionInfo {
 
 fragment flowFragment on Flow {
     id
+    userId
     title
     status
     terminals {
@@ -102,6 +104,7 @@ fragment screenshotFragment on Screenshot {
 
 fragment flowFileFragment on FlowFile {
     id
+    flowId
     name
     path
     size
@@ -246,12 +249,15 @@ fragment providerTestResultFragment on ProviderTestResult {
 fragment modelConfigFragment on ModelConfig {
     name
     thinking
+    maxOutputTokens
     reasoning {
         mode
         efforts
         supported
         cannotDisable
         defaultOn
+        rejectsEffortWithTools
+        takesNoThinkingDepth
     }
     price {
         input
@@ -584,6 +590,8 @@ query settingsProviders {
             kimi
             qwen
             minimax
+            mistral
+            xai
         }
         default {
             openai {
@@ -617,6 +625,12 @@ query settingsProviders {
                 ...providerConfigFragment
             }
             minimax {
+                ...providerConfigFragment
+            }
+            mistral {
+                ...providerConfigFragment
+            }
+            xai {
                 ...providerConfigFragment
             }
         }
@@ -655,6 +669,12 @@ query settingsProviders {
                 ...modelConfigFragment
             }
             minimax {
+                ...modelConfigFragment
+            }
+            mistral {
+                ...modelConfigFragment
+            }
+            xai {
                 ...modelConfigFragment
             }
         }
@@ -894,8 +914,8 @@ query usageStatsTotal {
     }
 }
 
-query usageStatsByPeriod($period: UsageStatsPeriod!) {
-    usageStatsByPeriod(period: $period) {
+query usageStatsByPeriod($period: UsageStatsPeriod!, $timezone: String) {
+    usageStatsByPeriod(period: $period, timezone: $timezone) {
         ...dailyUsageStatsFragment
     }
 }
@@ -942,8 +962,8 @@ query toolcallsStatsTotal {
     }
 }
 
-query toolcallsStatsByPeriod($period: UsageStatsPeriod!) {
-    toolcallsStatsByPeriod(period: $period) {
+query toolcallsStatsByPeriod($period: UsageStatsPeriod!, $timezone: String) {
+    toolcallsStatsByPeriod(period: $period, timezone: $timezone) {
         ...dailyToolcallsStatsFragment
     }
 }
@@ -972,8 +992,8 @@ query flowsStatsTotal {
     }
 }
 
-query flowsStatsByPeriod($period: UsageStatsPeriod!) {
-    flowsStatsByPeriod(period: $period) {
+query flowsStatsByPeriod($period: UsageStatsPeriod!, $timezone: String) {
+    flowsStatsByPeriod(period: $period, timezone: $timezone) {
         ...dailyFlowsStatsFragment
     }
 }
@@ -984,8 +1004,8 @@ query flowStatsByFlow($flowId: ID!) {
     }
 }
 
-query flowsExecutionStatsByPeriod($period: UsageStatsPeriod!) {
-    flowsExecutionStatsByPeriod(period: $period) {
+query flowsExecutionStatsByPeriod($period: UsageStatsPeriod!, $timezone: String) {
+    flowsExecutionStatsByPeriod(period: $period, timezone: $timezone) {
         ...flowExecutionStatsFragment
     }
 }
@@ -1132,8 +1152,8 @@ mutation deleteAssistant($flowId: ID!, $assistantId: ID!) {
     deleteAssistant(flowId: $flowId, assistantId: $assistantId)
 }
 
-mutation testAgent($type: ProviderType!, $agentType: AgentConfigType!, $agent: AgentConfigInput!) {
-    testAgent(type: $type, agentType: $agentType, agent: $agent) {
+mutation testAgent($type: ProviderType!, $agentType: AgentConfigType!, $agent: AgentConfigInput!, $simple: AgentConfigInput) {
+    testAgent(type: $type, agentType: $agentType, agent: $agent, simple: $simple) {
         ...agentTestResultFragment
     }
 }
@@ -1338,13 +1358,7 @@ subscription taskCreated($flowId: ID!) {
 
 subscription taskUpdated($flowId: ID!) {
     taskUpdated(flowId: $flowId) {
-        id
-        status
-        result
-        subtasks {
-            ...subtaskFragment
-        }
-        updatedAt
+        ...taskFragment
     }
 }
 

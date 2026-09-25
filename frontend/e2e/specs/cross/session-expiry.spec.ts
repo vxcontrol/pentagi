@@ -88,12 +88,19 @@ test.describe('session expiry', { tag: '@cross' }, () => {
     test.describe('a GraphQL auth error', () => {
         test.use({
             cassette: flowsCassette({
-                queries: { flows: [{ errors: [{ message: 'auth required' }], setFlag: EXPIRED }] },
+                queries: {
+                    flows: [
+                        {
+                            errors: [{ extensions: { code: 'UNAUTHENTICATED' }, message: 'authentication required' }],
+                            setFlag: EXPIRED,
+                        },
+                    ],
+                },
                 rest: { ...baseRest(), ...infoTurningGuest() },
             }),
         });
 
-        test('re-checks the session on an auth-worded resolver error too', async ({ page }) => {
+        test('re-checks the session on a resolver error carrying the unauthenticated code', async ({ page }) => {
             await page.goto('/flows');
 
             await expect(page).toHaveURL(/\/login\?returnUrl=%2Fflows/);

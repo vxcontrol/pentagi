@@ -1,6 +1,8 @@
+import { StatusType } from '@/graphql/types';
+
 import { expect, test } from '../../fixtures/test.ts';
 import { expectCleanPage } from '../../helpers/errors.ts';
-import { flowsCassette, flowTabsCassette } from '../../mocks/cassettes/flows.ts';
+import { FLOW_A, flowQueryData, flowsCassette, flowTabsCassette, makeFlow } from '../../mocks/cassettes/flows.ts';
 
 test.describe('flow pager', { tag: ['@flows', '@smoke'] }, () => {
     test.use({ cassette: flowsCassette() });
@@ -71,5 +73,99 @@ test.describe('flow pager', { tag: ['@flows', '@smoke'] }, () => {
 
         expect(trail, 'the pager must step straight between siblings').toEqual(['/flows/6', '/flows/5']);
         expectCleanPage(pageErrorLog);
+    });
+
+    test('keeps the header actions where they are while the flow is still loading', async ({ page, pageErrorLog }) => {
+        let releaseFlow = () => {};
+
+        const flowHeld = new Promise<void>((resolve) => {
+            releaseFlow = resolve;
+        });
+        await page.route('**/api/v1/graphql', async (route) => {
+            if (route.request().postDataJSON()?.operationName === 'flow') {
+                await flowHeld;
+            }
+
+            await route.fallback();
+        });
+
+        const header = page.locator('header');
+        const star = header.getByRole('button', { name: 'Toggle favorite' });
+        const actionPositions = () =>
+            Promise.all(
+                ['Previous', 'Next', 'Toggle favorite', 'Flow actions'].map(async (label) =>
+                    header.getByRole('button', { name: label }).evaluate((button) => button.getBoundingClientRect().x),
+                ),
+            );
+
+        await page.goto('/flows/5');
+        await expect(star).toBeDisabled();
+
+        const whileLoading = await actionPositions();
+        releaseFlow();
+
+        await expect(star).toBeEnabled();
+        await expect(header.getByText('E2E Alpha')).toBeVisible();
+        expect(await actionPositions()).toEqual(whileLoading);
+        expectCleanPage(pageErrorLog);
+    });
+
+    test.describe('onto a flow of another user', () => {
+        const FOREIGN_FLOW = makeFlow('6', 'E2E Beta', StatusType.Running, '2');
+
+        test.use({
+            cassette: flowsCassette({
+                queries: {
+                    flow: [
+                        { data: flowQueryData(FLOW_A, []), variables: { id: '5' } },
+                        { data: flowQueryData(FOREIGN_FLOW, []), variables: { id: '6' } },
+                    ],
+                    flows: [{ data: { flows: [FLOW_A, FOREIGN_FLOW] } }],
+                },
+            }),
+        });
+
+        test('shows no favorite toggle while that flow loads', async ({ page, pageErrorLog }) => {
+            const header = page.locator('header');
+            const star = header.getByRole('button', { name: 'Toggle favorite' });
+            const actionPositions = () =>
+                Promise.all(
+                    ['Previous', 'Next', 'Flow actions'].map(async (label) =>
+                        header
+                            .getByRole('button', { name: label })
+                            .evaluate((button) => button.getBoundingClientRect().x),
+                    ),
+                );
+
+            await page.goto('/flows/5');
+            await expect(header.getByText('E2E Alpha')).toBeVisible();
+
+            let releaseForeignFlow = () => {};
+
+            const foreignFlowHeld = new Promise<void>((resolve) => {
+                releaseForeignFlow = resolve;
+            });
+            await page.route('**/api/v1/graphql', async (route) => {
+                const request = route.request().postDataJSON();
+
+                if (request?.operationName === 'flow' && request?.variables?.id === '6') {
+                    await foreignFlowHeld;
+                }
+
+                await route.fallback();
+            });
+
+            await header.getByRole('button', { name: 'Next' }).click();
+            await expect(page).toHaveURL(/\/flows\/6$/);
+            await expect(star).toHaveCount(0);
+
+            const whileLoading = await actionPositions();
+            releaseForeignFlow();
+
+            await expect(header.getByText('E2E Beta')).toBeVisible();
+            await expect(star).toHaveCount(0);
+            expect(await actionPositions()).toEqual(whileLoading);
+            expectCleanPage(pageErrorLog);
+        });
     });
 });

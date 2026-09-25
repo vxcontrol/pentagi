@@ -8,18 +8,19 @@ type TestResult struct {
 	Type       string
 	Capability string
 	Success    bool
-	// Unsupported means the provider/model proactively rejected the requested
-	// capability (e.g. structured output, or disabling reasoning) with a typed
-	// SDK error rather than the call failing for an unrelated reason. It does
-	// not count against TotalSuccess/TotalTests: an optional capability being
-	// unavailable on a given model is informative, not a defect in the config.
-	Unsupported bool
-	Error       error
-	Streaming   bool
-	Reasoning   bool
-	LatencyMs   int64
-	Response    string
-	Expected    string
+	// Unsupported means the case could not exercise what it asks for on this
+	// configuration (a typed capability refusal, or an output limit the library
+	// changed before the vendor), and Error says why. It does not count against
+	// TotalSuccess/TotalTests.
+	Unsupported     bool
+	ContentFiltered bool
+	Error           error
+	StopReason      string
+	Streaming       bool
+	Reasoning       bool
+	LatencyMs       int64
+	Response        string
+	Expected        string
 }
 
 // AgentTestResult collects test results for each agent type for CLI compatibility
@@ -36,6 +37,7 @@ type AgentTestResult struct {
 	CapabilityTests []TestResult
 	TotalSuccess    int
 	TotalTests      int
+	TotalFiltered   int
 	AverageLatency  time.Duration
 	SkippedAdvanced bool
 	SkippedReason   string

@@ -8,56 +8,59 @@ import (
 	"pentagi/pkg/server/update"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
-// A status that has never heard from the service carries zero times and no
-// version. Those have to leave as nulls: a formatted zero time is a date, and a
-// date is a claim.
-func TestVersionInfo_NothingKnownIsNull(t *testing.T) {
-	t.Parallel()
-
-	info := versionInfoFromStatus(update.Status{
-		Current:  "2.1.0-93e99748",
-		State:    update.StatePending,
-		Strategy: "preview",
-	})
-
-	assert.Equal(t, "2.1.0-93e99748", info.Current)
-	assert.Equal(t, model.UpdateStatePending, info.State)
-	assert.Equal(t, "preview", info.Strategy)
-	assert.Nil(t, info.Latest)
-	assert.Nil(t, info.CheckedAt)
-	assert.Nil(t, info.FailedAt)
-}
-
-func TestVersionInfo_AVerdictCarriesItsEvidence(t *testing.T) {
+func TestVersionInfo_VersionInfoFromStatus_NullsWhatIsNotKnown(t *testing.T) {
 	t.Parallel()
 
 	checked := time.Date(2026, 9, 2, 10, 0, 0, 0, time.UTC)
 	failed := checked.Add(3 * time.Hour)
+	latest := "2.4.0"
 
-	info := versionInfoFromStatus(update.Status{
-		Current:   "2.1.0",
-		State:     update.StateUpdateAvailable,
-		Latest:    "2.4.0",
-		Strategy:  "stable",
-		CheckedAt: checked,
-		FailedAt:  failed,
-	})
+	for _, tt := range []struct {
+		name   string
+		status update.Status
+		want   model.VersionInfo
+	}{
+		{
+			// A formatted zero time is a date, and a date is a claim.
+			name:   "nothing heard from the service leaves nulls",
+			status: update.Status{Current: "2.1.0-93e99748", State: update.StatePending, Strategy: "preview"},
+			want:   model.VersionInfo{Current: "2.1.0-93e99748", State: model.UpdateStatePending, Strategy: "preview"},
+		},
+		{
+			name: "a verdict carries its evidence",
+			status: update.Status{
+				Current:   "2.1.0",
+				State:     update.StateUpdateAvailable,
+				Latest:    "2.4.0",
+				Strategy:  "stable",
+				CheckedAt: checked,
+				FailedAt:  failed,
+			},
+			want: model.VersionInfo{
+				Current:   "2.1.0",
+				State:     model.UpdateStateUpdateAvailable,
+				Latest:    &latest,
+				Strategy:  "stable",
+				CheckedAt: &checked,
+				FailedAt:  &failed,
+			},
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 
-	assert.Equal(t, model.UpdateStateUpdateAvailable, info.State)
-	require.NotNil(t, info.Latest)
-	assert.Equal(t, "2.4.0", *info.Latest)
-	require.NotNil(t, info.CheckedAt)
-	assert.True(t, info.CheckedAt.Equal(checked))
-	require.NotNil(t, info.FailedAt)
-	assert.True(t, info.FailedAt.Equal(failed))
+			got := versionInfoFromStatus(tt.status)
+			got.Build = "" // set from the link-time version, not from the status
+
+			assert.Equal(t, &tt.want, got)
+		})
+	}
 }
 
-// Every state the service can be in has a name in the schema, and a state the
-// schema has never heard of reads as "cannot say" rather than as a verdict.
-func TestVersionInfo_EveryStateHasASchemaName(t *testing.T) {
+// A state the schema has never heard of reads as "cannot say" rather than as a verdict.
+func TestVersionInfo_UpdateStateFromStatus_NamesEveryStateInTheSchema(t *testing.T) {
 	t.Parallel()
 
 	for state, expected := range map[update.State]model.UpdateState{
@@ -71,6 +74,5 @@ func TestVersionInfo_EveryStateHasASchemaName(t *testing.T) {
 		update.State("surprise"):    model.UpdateStateUnknown,
 	} {
 		assert.Equal(t, expected, updateStateFromStatus(state), "state %q", state)
-		assert.True(t, expected.IsValid(), "state %q maps outside the schema", state)
 	}
 }

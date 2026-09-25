@@ -36,7 +36,7 @@ var msglogsSQLMappers = map[string]any{
 	"task_id":       "{{table}}.task_id",
 	"subtask_id":    "{{table}}.subtask_id",
 	"created_at":    "{{table}}.created_at",
-	"data":          "({{table}}.type || ' ' || {{table}}.message || ' ' || {{table}}.thinking || ' ' || {{table}}.result)",
+	"data":          "({{table}}.type || ' ' || {{table}}.message || ' ' || COALESCE({{table}}.thinking, '') || ' ' || {{table}}.result)",
 }
 
 type MsglogService struct {
@@ -93,7 +93,7 @@ func (s *MsglogService) GetMsglogs(c *gin.Context) {
 		return
 	}
 
-	query.Init("msglogs", msglogsSQLMappers)
+	_ = query.Init("msglogs", msglogsSQLMappers)
 
 	if query.Group != "" {
 		if _, ok := msglogsSQLMappers[query.Group]; !ok {
@@ -183,7 +183,7 @@ func (s *MsglogService) GetFlowMsglogs(c *gin.Context) {
 		return
 	}
 
-	query.Init("msglogs", msglogsSQLMappers)
+	_ = query.Init("msglogs", msglogsSQLMappers)
 
 	if query.Group != "" {
 		if _, ok := msglogsSQLMappers[query.Group]; !ok {

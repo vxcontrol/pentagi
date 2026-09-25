@@ -118,6 +118,14 @@ func (m *ServerSettingsFormModel) BuildForm() tea.Cmd {
 		false,
 	))
 
+	// trusted proxies
+	fields = append(fields, m.createTextField("pentagi_trusted_proxies",
+		locale.ServerSettingsTrustedProxies,
+		locale.ServerSettingsTrustedProxiesDesc,
+		config.TrustedProxies,
+		false,
+	))
+
 	// proxy: url, username, password
 	fields = append(fields, m.createTextField("proxy_url",
 		locale.ServerSettingsProxyURL,
@@ -462,6 +470,8 @@ func (m *ServerSettingsFormModel) GetHelpContent() string {
 			sections = append(sections, locale.ServerSettingsPublicURLHelp)
 		case "pentagi_cors_origins":
 			sections = append(sections, locale.ServerSettingsCORSOriginsHelp)
+		case "pentagi_trusted_proxies":
+			sections = append(sections, locale.ServerSettingsTrustedProxiesHelp)
 		case "proxy_url":
 			sections = append(sections, locale.ServerSettingsProxyURLHelp)
 		case "http_client_timeout":
@@ -504,6 +514,7 @@ func (m *ServerSettingsFormModel) HandleSave() error {
 		ListenIP:                 cfg.ListenIP,
 		ListenPort:               cfg.ListenPort,
 		CorsOrigins:              cfg.CorsOrigins,
+		TrustedProxies:           cfg.TrustedProxies,
 		CookieSigningSalt:        cfg.CookieSigningSalt,
 		ProxyURL:                 cfg.ProxyURL,
 		HTTPClientTimeout:        cfg.HTTPClientTimeout,
@@ -572,6 +583,8 @@ func (m *ServerSettingsFormModel) HandleSave() error {
 			newCfg.PublicURL.Value = value
 		case "pentagi_cors_origins":
 			newCfg.CorsOrigins.Value = value
+		case "pentagi_trusted_proxies":
+			newCfg.TrustedProxies.Value = value
 		case "proxy_url":
 			newCfg.ProxyURL.Value = value
 		case "proxy_username":
@@ -641,11 +654,11 @@ func (m *ServerSettingsFormModel) OnFieldChanged(fieldIndex int, oldValue, newVa
 }
 
 func (m *ServerSettingsFormModel) GetFormFields() []FormField {
-	return m.BaseScreen.fields
+	return m.fields
 }
 
 func (m *ServerSettingsFormModel) SetFormFields(fields []FormField) {
-	m.BaseScreen.fields = fields
+	m.fields = fields
 }
 
 // Update handles screen-specific input, then delegates to base screen

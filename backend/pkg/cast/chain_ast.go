@@ -653,7 +653,7 @@ func (ast *ChainAST) String() string {
 	b.WriteString("ChainAST {\n")
 
 	for i, section := range ast.Sections {
-		b.WriteString(fmt.Sprintf("  Section %d {\n", i))
+		fmt.Fprintf(&b, "  Section %d {\n", i)
 		b.WriteString("    Header {\n")
 		if section.Header.SystemMessage != nil {
 			b.WriteString("      SystemMessage\n")
@@ -667,14 +667,14 @@ func (ast *ChainAST) String() string {
 		for j, bodyPair := range section.Body {
 			switch bodyPair.Type {
 			case RequestResponse:
-				b.WriteString(fmt.Sprintf("      BodyPair %d (RequestResponse) {\n", j))
+				fmt.Fprintf(&b, "      BodyPair %d (RequestResponse) {\n", j)
 			case Completion:
-				b.WriteString(fmt.Sprintf("      BodyPair %d (Completion) {\n", j))
+				fmt.Fprintf(&b, "      BodyPair %d (Completion) {\n", j)
 			case Summarization:
-				b.WriteString(fmt.Sprintf("      BodyPair %d (Summarization) {\n", j))
+				fmt.Fprintf(&b, "      BodyPair %d (Summarization) {\n", j)
 			}
 			b.WriteString("        AIMessage\n")
-			b.WriteString(fmt.Sprintf("        ToolMessages: %d\n", len(bodyPair.ToolMessages)))
+			fmt.Fprintf(&b, "        ToolMessages: %d\n", len(bodyPair.ToolMessages))
 			b.WriteString("      }\n")
 		}
 		b.WriteString("    }\n")
@@ -823,7 +823,6 @@ func (ast *ChainAST) AddToolResponse(toolCallID, toolName, content string) error
 				}
 
 				// Check if there's already a response for this tool call
-				responseUpdated := false
 				for _, toolMsg := range bodyPair.ToolMessages {
 					oldToolMsgSize := CalculateMessageSize(toolMsg)
 
@@ -832,7 +831,6 @@ func (ast *ChainAST) AddToolResponse(toolCallID, toolName, content string) error
 							// Update existing response
 							resp.Content = content
 							toolMsg.Parts[i] = resp
-							responseUpdated = true
 
 							// Recalculate tool message size and update size differences
 							newToolMsgSize := CalculateMessageSize(toolMsg)
@@ -845,40 +843,34 @@ func (ast *ChainAST) AddToolResponse(toolCallID, toolName, content string) error
 					}
 				}
 
-				// If no existing response was found, add a new one
-				if !responseUpdated {
-					resp := llms.ToolCallResponse{
-						ToolCallID: toolCallID,
-						Name:       toolName,
-						Content:    content,
-					}
-
-					// Add response to existing tool message or create a new one
-					if len(bodyPair.ToolMessages) > 0 {
-						oldToolMsgSize := CalculateMessageSize(bodyPair.ToolMessages[len(bodyPair.ToolMessages)-1])
-
-						lastToolMsg := bodyPair.ToolMessages[len(bodyPair.ToolMessages)-1]
-						lastToolMsg.Parts = append(lastToolMsg.Parts, resp)
-
-						// Recalculate tool message size and update size differences
-						newToolMsgSize := CalculateMessageSize(lastToolMsg)
-						sizeDiff := newToolMsgSize - oldToolMsgSize
-						bodyPair.sizeBytes += sizeDiff
-						section.sizeBytes += sizeDiff
-					} else {
-						toolMsg := &llms.MessageContent{
-							Role:  llms.ChatMessageTypeTool,
-							Parts: []llms.ContentPart{resp},
-						}
-						bodyPair.ToolMessages = append(bodyPair.ToolMessages, toolMsg)
-
-						// Calculate new tool message size and add to totals
-						toolMsgSize := CalculateMessageSize(toolMsg)
-						bodyPair.sizeBytes += toolMsgSize
-						section.sizeBytes += toolMsgSize
-					}
-					return nil
+				resp := llms.ToolCallResponse{
+					ToolCallID: toolCallID,
+					Name:       toolName,
+					Content:    content,
 				}
+
+				if len(bodyPair.ToolMessages) > 0 {
+					oldToolMsgSize := CalculateMessageSize(bodyPair.ToolMessages[len(bodyPair.ToolMessages)-1])
+
+					lastToolMsg := bodyPair.ToolMessages[len(bodyPair.ToolMessages)-1]
+					lastToolMsg.Parts = append(lastToolMsg.Parts, resp)
+
+					newToolMsgSize := CalculateMessageSize(lastToolMsg)
+					sizeDiff := newToolMsgSize - oldToolMsgSize
+					bodyPair.sizeBytes += sizeDiff
+					section.sizeBytes += sizeDiff
+				} else {
+					toolMsg := &llms.MessageContent{
+						Role:  llms.ChatMessageTypeTool,
+						Parts: []llms.ContentPart{resp},
+					}
+					bodyPair.ToolMessages = append(bodyPair.ToolMessages, toolMsg)
+
+					toolMsgSize := CalculateMessageSize(toolMsg)
+					bodyPair.sizeBytes += toolMsgSize
+					section.sizeBytes += toolMsgSize
+				}
+				return nil
 			}
 		}
 	}

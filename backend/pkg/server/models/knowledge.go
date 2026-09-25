@@ -3,6 +3,7 @@ package models
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	gqlmodel "pentagi/pkg/graph/model"
 )
@@ -52,11 +53,11 @@ func knowledgeMetaToEntry(id, content string, m knowledgeRawMeta) KnowledgeDocEn
 		entry.Description = &d
 	}
 	if m.GuideType != "" {
-		gt := KnowledgeGuideType(m.GuideType)
+		gt := canonicalGuideType(m.GuideType)
 		entry.GuideType = &gt
 	}
 	if m.AnswerType != "" {
-		at := KnowledgeAnswerType(m.AnswerType)
+		at := canonicalAnswerType(m.AnswerType)
 		entry.AnswerType = &at
 	}
 	if m.CodeLang != "" {
@@ -228,8 +229,8 @@ func (q KnowledgeListQuery) Valid() error {
 //nolint:lll
 type CreateKnowledgeDocRequest struct {
 	DocType     KnowledgeDocType     `json:"doc_type" validate:"required,valid"`
-	Content     string               `json:"content" validate:"required,min=1,max=65536"`
-	Question    string               `json:"question" validate:"required,min=1,max=2048"`
+	Content     string               `json:"content" validate:"required,notblank,max=65536"`
+	Question    string               `json:"question" validate:"required,notblank,max=2048"`
 	Description *string              `json:"description,omitempty" validate:"omitempty,max=1000"`
 	GuideType   *KnowledgeGuideType  `json:"guide_type,omitempty" validate:"omitempty,valid"`
 	AnswerType  *KnowledgeAnswerType `json:"answer_type,omitempty" validate:"omitempty,valid"`
@@ -259,8 +260,8 @@ func (r CreateKnowledgeDocRequest) Valid() error {
 //
 //nolint:lll
 type UpdateKnowledgeDocRequest struct {
-	Content     string               `json:"content" validate:"required,min=1,max=65536"`
-	Question    *string              `json:"question,omitempty" validate:"omitempty,min=1,max=2048"`
+	Content     string               `json:"content" validate:"required,notblank,max=65536"`
+	Question    *string              `json:"question,omitempty" validate:"omitempty,notblank,max=2048"`
 	Description *string              `json:"description,omitempty" validate:"omitempty,max=1000"`
 	GuideType   *KnowledgeGuideType  `json:"guide_type,omitempty" validate:"omitempty,valid"`
 	AnswerType  *KnowledgeAnswerType `json:"answer_type,omitempty" validate:"omitempty,valid"`
@@ -286,7 +287,7 @@ func (r UpdateKnowledgeDocRequest) Valid() error {
 //
 //nolint:lll
 type KnowledgeSearchRequest struct {
-	Query       string                `json:"query" validate:"required,min=1,max=2048"`
+	Query       string                `json:"query" validate:"required,notblank,max=2048"`
 	Limit       int                   `json:"limit,omitempty" validate:"omitempty,min=1,max=100"`
 	DocTypes    []KnowledgeDocType    `json:"doc_types,omitempty" validate:"omitempty,dive,valid"`
 	GuideTypes  []KnowledgeGuideType  `json:"guide_types,omitempty" validate:"omitempty,dive,valid"`
@@ -390,7 +391,6 @@ func KnowledgeSearchResultFromGQL(results []*gqlmodel.KnowledgeDocumentWithScore
 	return KnowledgeSearchResult{Items: items, Total: len(items)}
 }
 
-// CreateRequestToGQL converts a REST create request to the GraphQL input type.
 func (r CreateKnowledgeDocRequest) ToGQL() gqlmodel.CreateKnowledgeDocumentInput {
 	input := gqlmodel.CreateKnowledgeDocumentInput{
 		DocType:     gqlmodel.KnowledgeDocType(r.DocType),
@@ -410,7 +410,6 @@ func (r CreateKnowledgeDocRequest) ToGQL() gqlmodel.CreateKnowledgeDocumentInput
 	return input
 }
 
-// UpdateRequestToGQL converts a REST update request to the GraphQL input type.
 func (r UpdateKnowledgeDocRequest) ToGQL() gqlmodel.UpdateKnowledgeDocumentInput {
 	input := gqlmodel.UpdateKnowledgeDocumentInput{
 		Content:     r.Content,
@@ -429,7 +428,6 @@ func (r UpdateKnowledgeDocRequest) ToGQL() gqlmodel.UpdateKnowledgeDocumentInput
 	return input
 }
 
-// ListQueryToGQLFilter converts a REST list query to a GraphQL KnowledgeFilter.
 func (q KnowledgeListQuery) ToGQLFilter() *gqlmodel.KnowledgeFilter {
 	f := &gqlmodel.KnowledgeFilter{
 		FlowID: q.FlowID,
@@ -452,7 +450,6 @@ func (q KnowledgeListQuery) ToGQLFilter() *gqlmodel.KnowledgeFilter {
 	return f
 }
 
-// SearchRequestToGQLFilter converts a REST search request to a GraphQL KnowledgeFilter.
 func (r KnowledgeSearchRequest) ToGQLFilter() *gqlmodel.KnowledgeFilter {
 	f := &gqlmodel.KnowledgeFilter{
 		FlowID: r.FlowID,
@@ -473,4 +470,22 @@ func (r KnowledgeSearchRequest) ToGQLFilter() *gqlmodel.KnowledgeFilter {
 		return nil
 	}
 	return f
+}
+
+func canonicalGuideType(stored string) KnowledgeGuideType {
+	guideType := KnowledgeGuideType(strings.ToLower(strings.TrimSpace(stored)))
+	if guideType.Valid() != nil {
+		return KnowledgeGuideTypeOther
+	}
+
+	return guideType
+}
+
+func canonicalAnswerType(stored string) KnowledgeAnswerType {
+	answerType := KnowledgeAnswerType(strings.ToLower(strings.TrimSpace(stored)))
+	if answerType.Valid() != nil {
+		return KnowledgeAnswerTypeOther
+	}
+
+	return answerType
 }

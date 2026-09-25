@@ -11,6 +11,7 @@ import (
 	"path"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -101,6 +102,7 @@ func (s *ResourceService) ListResources(c *gin.Context) {
 			response.Error(c, response.ErrInternal, err)
 			return
 		}
+		items = resources.DedupeByPathPreferringOwner(items, uid, resourceEntryOwner)
 		response.Success(c, http.StatusOK, models.ResourceList{Items: items, Total: uint64(len(items))})
 		return
 	}
@@ -120,13 +122,13 @@ func (s *ResourceService) ListResources(c *gin.Context) {
 			response.Error(c, response.ErrInternal, err)
 			return
 		}
+		items = resources.DedupeByPathPreferringOwner(items, uid, resourceEntryOwner)
 		response.Success(c, http.StatusOK, models.ResourceList{Items: items, Total: uint64(len(items))})
 		return
 	}
 
 	// Query each path and merge results, deduplicating by virtual path.
-	seenPaths := make(map[string]struct{})
-	allItems := make([]models.ResourceEntry, 0)
+	merged := make([]models.ResourceEntry, 0)
 	for _, dirPath := range dirPaths {
 		items, err := s.queryResources(uid, isAdmin, dirPath, recursive)
 		if err != nil {
@@ -134,12 +136,12 @@ func (s *ResourceService) ListResources(c *gin.Context) {
 			response.Error(c, response.ErrInternal, err)
 			return
 		}
-		for _, item := range items {
-			if _, seen := seenPaths[item.Path]; !seen {
-				seenPaths[item.Path] = struct{}{}
-				allItems = append(allItems, item)
-			}
-		}
+		merged = append(merged, items...)
+	}
+	allItems := resources.DedupeByPathPreferringOwner(merged, uid, resourceEntryOwner)
+	seenPaths := make(map[string]struct{}, len(allItems))
+	for _, item := range allItems {
+		seenPaths[item.Path] = struct{}{}
 	}
 
 	// Ensure all ancestor directories of queried paths are present so that
@@ -160,17 +162,16 @@ func (s *ResourceService) ListResources(c *gin.Context) {
 		for p := range ancestorCandidates {
 			neededAncestors = append(neededAncestors, p)
 		}
-		q := s.db.Model(&models.UserResource{}).Where("path IN (?) AND is_dir = true", neededAncestors)
-		if !isAdmin {
-			q = q.Where("user_id = ?", uid)
-		}
+		q := scopeToCaller(s.db.Model(&models.UserResource{}).
+			Order("updated_at DESC, name ASC, id ASC").
+			Where("path IN (?) AND is_dir = true", neededAncestors), uid, isAdmin)
 		var ancestorRecs []models.UserResource
 		if err := q.Find(&ancestorRecs).Error; err != nil {
 			logger.FromContext(c).WithError(err).Error("error fetching ancestor directories for resources listing")
 			response.Error(c, response.ErrInternal, err)
 			return
 		}
-		for _, rec := range ancestorRecs {
+		for _, rec := range resources.DedupeByPathPreferringOwner(ancestorRecs, uid, resourceRecordOwner) {
 			if _, seen := seenPaths[rec.Path]; !seen {
 				seenPaths[rec.Path] = struct{}{}
 				allItems = append(allItems, convertResource(rec))
@@ -395,7 +396,7 @@ func (s *ResourceService) UploadResources(c *gin.Context) {
 	var createdDirs []models.UserResource
 	var txErr error
 	if dirPath != "" {
-		createdDirs, _, _, txErr = ensureResourceDirs(tx, uid, dirPath, false)
+		createdDirs, _, _, txErr = ensureDestinationDirs(tx, uid, dirPath, false)
 	}
 	for _, p := range pendingList {
 		if txErr != nil {
@@ -446,15 +447,17 @@ func (s *ResourceService) UploadResources(c *gin.Context) {
 	}
 
 	entries := convertResources(saved)
-	s.publishResourcesAdded(c.Request.Context(), uid, convertResources(createdDirs))
-	s.publishResourcesAdded(c.Request.Context(), uid, entries)
+	s.publishResourcesAdded(c.Request.Context(), convertResources(createdDirs))
+	s.publishResourcesAdded(c.Request.Context(), entries)
 	response.Success(c, http.StatusOK, models.ResourceList{Items: entries, Total: uint64(len(entries))})
 }
 
 // ---- POST /resources/mkdir -------------------------------------------------
 
-// MkdirResource creates a virtual directory entry (idempotent).
-// @Summary Create a virtual directory
+// MkdirResource creates a virtual directory entry and every missing parent of
+// it (idempotent). The reply names the leaf; the parents reach clients through
+// the resource-added subscription.
+// @Summary Create a virtual directory and any missing parents
 // @Tags Resources
 // @Accept json
 // @Produce json
@@ -486,48 +489,55 @@ func (s *ResourceService) MkdirResource(c *gin.Context) {
 		return
 	}
 
-	// Idempotent — if already exists as a directory, return it.
-	var existing models.UserResource
-	err = s.db.Where("user_id = ? AND path = ?", uid, dirPath).First(&existing).Error
-	if err == nil {
-		if !existing.IsDir {
-			response.Error(c, response.ErrResourcesAlreadyExists,
-				fmt.Errorf("a file already exists at path %q", dirPath))
+	created, err := s.createDirChain(uid, dirPath)
+	if err != nil && !errors.Is(err, errResourceConflict) {
+		// A racing insert of the same segment leaves this transaction aborted,
+		// and Postgres then refuses every later statement in it — the recovery
+		// read inside the chain walk included. A fresh attempt sees the rows.
+		created, err = s.createDirChain(uid, dirPath)
+	}
+	if err != nil {
+		if errors.Is(err, errResourceConflict) {
+			response.Error(c, response.ErrResourcesAlreadyExists, err)
 			return
-		}
-		response.Success(c, http.StatusOK, convertResource(existing))
-		return
-	}
-	if !gorm.IsRecordNotFoundError(err) {
-		logger.FromContext(c).WithError(err).Error("error checking resource for mkdir")
-		response.Error(c, response.ErrInternal, err)
-		return
-	}
-
-	rec := models.UserResource{
-		UserID: uid,
-		Hash:   "",
-		Name:   path.Base(dirPath),
-		Path:   dirPath,
-		Size:   0,
-		IsDir:  true,
-	}
-	if err := s.db.Create(&rec).Error; err != nil {
-		if isUniqueViolation(err) {
-			// Race: another request created it — re-fetch and return.
-			if refetchErr := s.db.Where("user_id = ? AND path = ?", uid, dirPath).First(&rec).Error; refetchErr == nil {
-				response.Success(c, http.StatusOK, convertResource(rec))
-				return
-			}
 		}
 		logger.FromContext(c).WithError(err).Error("error creating resource directory")
 		response.Error(c, response.ErrInternal, err)
 		return
 	}
 
-	entry := convertResource(rec)
-	s.publishResourceAdded(c.Request.Context(), uid, entry)
-	response.Success(c, http.StatusOK, entry)
+	s.publishResourcesAdded(c.Request.Context(), convertResources(created))
+
+	var leaf models.UserResource
+	if err := s.db.Where("user_id = ? AND path = ?", uid, dirPath).First(&leaf).Error; err != nil {
+		logger.FromContext(c).WithError(err).Error("error reading back created resource directory")
+		response.Error(c, response.ErrInternal, err)
+		return
+	}
+
+	response.Success(c, http.StatusOK, convertResource(leaf))
+}
+
+// createDirChain creates the segments of dirPath that have no row yet and
+// returns them. Idempotent: an already-complete path creates nothing.
+func (s *ResourceService) createDirChain(uid uint64, dirPath string) ([]models.UserResource, error) {
+	tx := s.db.Begin()
+	if tx.Error != nil {
+		return nil, tx.Error
+	}
+
+	created, _, _, err := ensureDestinationDirs(tx, uid, dirPath, false)
+	if err != nil {
+		tx.Rollback()
+
+		return nil, err
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		return nil, err
+	}
+
+	return created, nil
 }
 
 // ---- PUT /resources/move ---------------------------------------------------
@@ -564,8 +574,9 @@ func (s *ResourceService) MkdirResource(c *gin.Context) {
 func (s *ResourceService) MoveResource(c *gin.Context) {
 	uid := c.GetUint64("uid")
 	privs := c.GetStringSlice("prm")
+	isAdmin := slices.Contains(privs, "resources.admin")
 
-	if !slices.Contains(privs, "resources.edit") && !slices.Contains(privs, "resources.admin") {
+	if !slices.Contains(privs, "resources.edit") && !isAdmin {
 		response.Error(c, response.ErrNotPermitted, nil)
 		return
 	}
@@ -581,9 +592,12 @@ func (s *ResourceService) MoveResource(c *gin.Context) {
 	if req.Source != "" {
 		rawSources = append(rawSources, req.Source)
 	}
-	// reuse the same dedup helper used elsewhere (trims blanks, normalises, deduplicates)
-	dedupSources := deduplicateResourcePaths(rawSources)
-	if len(dedupSources) == 0 {
+	srcPaths, err := collectAndSanitizeResourcePaths(rawSources)
+	if err != nil {
+		response.Error(c, response.ErrResourcesInvalidRequest, fmt.Errorf("invalid source: %w", err))
+		return
+	}
+	if len(srcPaths) == 0 {
 		response.Error(c, response.ErrResourcesInvalidRequest,
 			errors.New("at least one source path is required (use 'source' or 'sources')"))
 		return
@@ -597,17 +611,6 @@ func (s *ResourceService) MoveResource(c *gin.Context) {
 		return
 	}
 
-	// ── Sanitize all source paths ─────────────────────────────────────────────
-	srcPaths := make([]string, 0, len(dedupSources))
-	for _, raw := range dedupSources {
-		sp, sanitizeErr := resources.SanitizeResourcePath(raw)
-		if sanitizeErr != nil {
-			response.Error(c, response.ErrResourcesInvalidRequest, fmt.Errorf("invalid source %q: %w", raw, sanitizeErr))
-			return
-		}
-		srcPaths = append(srcPaths, sp)
-	}
-
 	// ── Route to single-source or multi-source path ───────────────────────────
 	var result moveResourceResult
 	if len(srcPaths) == 1 {
@@ -619,19 +622,24 @@ func (s *ResourceService) MoveResource(c *gin.Context) {
 			response.Error(c, response.ErrResourcesInvalidRequest, errors.New("source and destination are the same"))
 			return
 		}
-		var src models.UserResource
-		if err := s.db.Where("user_id = ? AND path = ?", uid, srcPath).First(&src).Error; err != nil {
-			if gorm.IsRecordNotFoundError(err) {
-				response.Error(c, response.ErrResourcesNotFound, fmt.Errorf("resource %q not found", srcPath))
-				return
-			}
-			logger.FromContext(c).WithError(err).Error("error finding source resource for move")
-			response.Error(c, response.ErrInternal, err)
+		src, found, findErr := rowAddressedByPath(s.db, uid, isAdmin, srcPath)
+		if findErr != nil {
+			logger.FromContext(c).WithError(findErr).Error("error finding source resource for move")
+			response.Error(c, response.ErrInternal, findErr)
 			return
 		}
-		result, err = s.moveResource(uid, src, srcPath, dstPath, req.Force, dstIsDirHint)
+		if !found {
+			response.Error(c, response.ErrResourcesNotFound, fmt.Errorf("resource %q not found", srcPath))
+			return
+		}
+		result, err = s.moveResource(src.UserID, src, srcPath, dstPath, req.Force, dstIsDirHint)
 	} else {
-		result, err = s.moveMultipleSources(uid, srcPaths, dstPath, req.Force)
+		owner, ownerErr := ownerOfAddressedPaths(s.db, uid, isAdmin, srcPaths)
+		if ownerErr != nil {
+			err = ownerErr
+		} else {
+			result, err = s.moveMultipleSources(owner, srcPaths, dstPath, req.Force)
+		}
 	}
 
 	if err != nil {
@@ -650,10 +658,10 @@ func (s *ResourceService) MoveResource(c *gin.Context) {
 	}
 
 	s.cleanupOrphanBlobs(c.Request.Context(), result.OrphanHashes)
-	s.publishResourcesDeleted(c.Request.Context(), uid, result.DeletedBefore)
-	s.publishResourcesAdded(c.Request.Context(), uid, result.Added)
-	s.publishResourcesUpdated(c.Request.Context(), uid, result.Updated)
-	s.publishResourcesDeleted(c.Request.Context(), uid, result.DeletedAfter)
+	s.publishResourcesDeleted(c.Request.Context(), result.DeletedBefore)
+	s.publishResourcesAdded(c.Request.Context(), result.Added)
+	s.publishResourcesUpdated(c.Request.Context(), result.Updated)
+	s.publishResourcesDeleted(c.Request.Context(), result.DeletedAfter)
 
 	// Return Added + Updated: the frontend Apollo cache needs both newly created
 	// parent directories (Added) and the moved items themselves (Updated) to
@@ -669,8 +677,6 @@ func (s *ResourceService) MoveResource(c *gin.Context) {
 //   - One TX for all moves (atomic: all-or-nothing).
 //   - Batch source lookup (one query regardless of N).
 //   - Within-batch duplicate-basename detection before any DB writes.
-//   - ensureResourceDirs for the destination dir is called once; inner
-//     per-source calls are no-ops because the dir already exists.
 func (s *ResourceService) moveMultipleSources(
 	uid uint64,
 	srcPaths []string,
@@ -700,6 +706,7 @@ func (s *ResourceService) moveMultipleSources(
 				return result, fmt.Errorf("%w: resource %q not found", errResourceNotFound, sp)
 			}
 		}
+		return result, fmt.Errorf("%w: sources resolve to the same resource", errResourceInvalid)
 	}
 
 	// ── Within-batch target-basename conflict check ───────────────────────────
@@ -746,7 +753,7 @@ func (s *ResourceService) moveMultipleSources(
 		)
 	}
 	if !destExists {
-		createdDirs, deletedDirs, orphanHashes, dirErr := ensureResourceDirs(tx, uid, dstPath, force)
+		createdDirs, deletedDirs, orphanHashes, dirErr := ensureDestinationDirs(tx, uid, dstPath, force)
 		if dirErr != nil {
 			tx.Rollback()
 			return result, dirErr
@@ -758,8 +765,6 @@ func (s *ResourceService) moveMultipleSources(
 
 	// ── Move each source into destination/<basename> ──────────────────────────
 	// The inner move functions (moveFileResource / moveDirResource) call
-	// ensureResourceDirs for the parent of the target path. Since dstPath is
-	// already ensured above, those calls are idempotent no-ops.
 	srcByPath := resourcesByPath(srcs)
 	for _, sp := range srcPaths { // preserve original request order
 		src, ok := srcByPath[sp]
@@ -878,7 +883,7 @@ func (s *ResourceService) moveFileResource(
 			return result, err
 		}
 	} else if dstIsDirHint {
-		createdDirs, deletedDirs, orphanHashes, err := ensureResourceDirs(tx, uid, dstPath, force)
+		createdDirs, deletedDirs, orphanHashes, err := ensureDestinationDirs(tx, uid, dstPath, force)
 		if err != nil {
 			return result, err
 		}
@@ -891,7 +896,7 @@ func (s *ResourceService) moveFileResource(
 			return result, err
 		}
 	} else {
-		createdDirs, deletedDirs, orphanHashes, err := ensureResourceDirs(tx, uid, resources.ParentDir(targetPath), force)
+		createdDirs, deletedDirs, orphanHashes, err := ensureParentDirs(tx, uid, targetPath)
 		if err != nil {
 			return result, err
 		}
@@ -939,7 +944,7 @@ func (s *ResourceService) moveDirResource(
 		dstPath = path.Base(srcPath)
 	}
 
-	createdParents, deletedParents, orphanHashes, err := ensureResourceDirs(tx, uid, resources.ParentDir(dstPath), force)
+	createdParents, deletedParents, orphanHashes, err := ensureParentDirs(tx, uid, dstPath)
 	if err != nil {
 		return result, err
 	}
@@ -1145,6 +1150,45 @@ func findResourceByPath(tx *gorm.DB, uid uint64, resourcePath string) (models.Us
 	return models.UserResource{}, false, err
 }
 
+func rowAddressedByPath(tx *gorm.DB, uid uint64, isAdmin bool, vPath string) (models.UserResource, bool, error) {
+	rec, found, err := findResourceByPath(tx, uid, vPath)
+	if err != nil || found || !isAdmin {
+		return rec, found, err
+	}
+
+	err = tx.Where("path = ?", vPath).Order("updated_at DESC, name ASC, id ASC").First(&rec).Error
+	if err == nil {
+		return rec, true, nil
+	}
+	if gorm.IsRecordNotFoundError(err) {
+		return models.UserResource{}, false, nil
+	}
+
+	return models.UserResource{}, false, err
+}
+
+func ownerOfAddressedPaths(tx *gorm.DB, uid uint64, isAdmin bool, vPaths []string) (uint64, error) {
+	owner := uid
+	for i, vPath := range vPaths {
+		rec, found, err := rowAddressedByPath(tx, uid, isAdmin, vPath)
+		if err != nil {
+			return 0, err
+		}
+		if !found {
+			return 0, fmt.Errorf("%w: resource %q not found", errResourceNotFound, vPath)
+		}
+		if i == 0 {
+			owner = rec.UserID
+			continue
+		}
+		if rec.UserID != owner {
+			return 0, fmt.Errorf("%w: resources %q belong to different users", errResourceInvalid, vPath)
+		}
+	}
+
+	return owner, nil
+}
+
 func findResourcesByPaths(tx *gorm.DB, uid uint64, paths []string) ([]models.UserResource, error) {
 	if len(paths) == 0 {
 		return nil, nil
@@ -1212,8 +1256,9 @@ func updateMovedResource(tx *gorm.DB, rec models.UserResource, newPath string, n
 func (s *ResourceService) CopyResource(c *gin.Context) {
 	uid := c.GetUint64("uid")
 	privs := c.GetStringSlice("prm")
+	isAdmin := slices.Contains(privs, "resources.admin")
 
-	if !slices.Contains(privs, "resources.edit") && !slices.Contains(privs, "resources.admin") {
+	if !slices.Contains(privs, "resources.edit") && !isAdmin {
 		response.Error(c, response.ErrNotPermitted, nil)
 		return
 	}
@@ -1229,8 +1274,12 @@ func (s *ResourceService) CopyResource(c *gin.Context) {
 	if req.Source != "" {
 		rawSources = append(rawSources, req.Source)
 	}
-	dedupSources := deduplicateResourcePaths(rawSources)
-	if len(dedupSources) == 0 {
+	srcPaths, err := collectAndSanitizeResourcePaths(rawSources)
+	if err != nil {
+		response.Error(c, response.ErrResourcesInvalidRequest, fmt.Errorf("invalid source: %w", err))
+		return
+	}
+	if len(srcPaths) == 0 {
 		response.Error(c, response.ErrResourcesInvalidRequest,
 			errors.New("at least one source path is required (use 'source' or 'sources')"))
 		return
@@ -1243,17 +1292,6 @@ func (s *ResourceService) CopyResource(c *gin.Context) {
 		return
 	}
 
-	// ── Sanitize all source paths ─────────────────────────────────────────────
-	srcPaths := make([]string, 0, len(dedupSources))
-	for _, raw := range dedupSources {
-		sp, sanitizeErr := resources.SanitizeResourcePath(raw)
-		if sanitizeErr != nil {
-			response.Error(c, response.ErrResourcesInvalidRequest, fmt.Errorf("invalid source %q: %w", raw, sanitizeErr))
-			return
-		}
-		srcPaths = append(srcPaths, sp)
-	}
-
 	// ── Route to single-source or multi-source path ───────────────────────────
 	var result copyResourceResult
 	if len(srcPaths) == 1 {
@@ -1262,19 +1300,24 @@ func (s *ResourceService) CopyResource(c *gin.Context) {
 			response.Error(c, response.ErrResourcesInvalidRequest, errors.New("source and destination are the same"))
 			return
 		}
-		var src models.UserResource
-		if err := s.db.Where("user_id = ? AND path = ?", uid, srcPath).First(&src).Error; err != nil {
-			if gorm.IsRecordNotFoundError(err) {
-				response.Error(c, response.ErrResourcesNotFound, fmt.Errorf("resource %q not found", srcPath))
-				return
-			}
-			logger.FromContext(c).WithError(err).Error("error finding source resource for copy")
-			response.Error(c, response.ErrInternal, err)
+		src, found, findErr := rowAddressedByPath(s.db, uid, isAdmin, srcPath)
+		if findErr != nil {
+			logger.FromContext(c).WithError(findErr).Error("error finding source resource for copy")
+			response.Error(c, response.ErrInternal, findErr)
 			return
 		}
-		result, err = s.copyResource(uid, src, srcPath, dstPath, req.Force, pathHasTrailingSeparator(req.Destination))
+		if !found {
+			response.Error(c, response.ErrResourcesNotFound, fmt.Errorf("resource %q not found", srcPath))
+			return
+		}
+		result, err = s.copyResource(src.UserID, src, srcPath, dstPath, req.Force, pathHasTrailingSeparator(req.Destination))
 	} else {
-		result, err = s.copyMultipleSources(uid, srcPaths, dstPath, req.Force)
+		owner, ownerErr := ownerOfAddressedPaths(s.db, uid, isAdmin, srcPaths)
+		if ownerErr != nil {
+			err = ownerErr
+		} else {
+			result, err = s.copyMultipleSources(owner, srcPaths, dstPath, req.Force)
+		}
 	}
 
 	if err != nil {
@@ -1293,9 +1336,9 @@ func (s *ResourceService) CopyResource(c *gin.Context) {
 	}
 
 	s.cleanupOrphanBlobs(c.Request.Context(), result.OrphanHashes)
-	s.publishResourcesDeleted(c.Request.Context(), uid, result.Deleted)
-	s.publishResourcesAdded(c.Request.Context(), uid, result.Added)
-	s.publishResourcesUpdated(c.Request.Context(), uid, result.Updated)
+	s.publishResourcesDeleted(c.Request.Context(), result.Deleted)
+	s.publishResourcesAdded(c.Request.Context(), result.Added)
+	s.publishResourcesUpdated(c.Request.Context(), result.Updated)
 
 	all := append(result.Added, result.Updated...)
 	response.Success(c, http.StatusOK, models.ResourceList{Items: all, Total: uint64(len(all))})
@@ -1308,8 +1351,6 @@ func (s *ResourceService) CopyResource(c *gin.Context) {
 //   - One TX for all copies (atomic: all-or-nothing).
 //   - Batch source lookup (one query regardless of N).
 //   - Within-batch duplicate-basename detection before any DB writes.
-//   - ensureResourceDirs for the destination dir is called once; inner
-//     per-source calls are no-ops because the dir already exists.
 func (s *ResourceService) copyMultipleSources(
 	uid uint64,
 	srcPaths []string,
@@ -1339,6 +1380,7 @@ func (s *ResourceService) copyMultipleSources(
 				return result, fmt.Errorf("%w: resource %q not found", errResourceNotFound, sp)
 			}
 		}
+		return result, fmt.Errorf("%w: sources resolve to the same resource", errResourceInvalid)
 	}
 
 	// ── Within-batch target-basename conflict check ───────────────────────────
@@ -1384,7 +1426,7 @@ func (s *ResourceService) copyMultipleSources(
 		)
 	}
 	if !destExists {
-		createdDirs, deletedDirs, orphanHashes, dirErr := ensureResourceDirs(tx, uid, dstPath, force)
+		createdDirs, deletedDirs, orphanHashes, dirErr := ensureDestinationDirs(tx, uid, dstPath, force)
 		if dirErr != nil {
 			tx.Rollback()
 			return result, dirErr
@@ -1494,7 +1536,7 @@ func (s *ResourceService) copyFileResource(
 			return result, err
 		}
 	} else if dstIsDirHint {
-		createdDirs, deletedDirs, orphanHashes, err := ensureResourceDirs(tx, uid, dstPath, force)
+		createdDirs, deletedDirs, orphanHashes, err := ensureDestinationDirs(tx, uid, dstPath, force)
 		if err != nil {
 			return result, err
 		}
@@ -1507,7 +1549,7 @@ func (s *ResourceService) copyFileResource(
 			return result, err
 		}
 	} else {
-		createdDirs, deletedDirs, orphanHashes, err := ensureResourceDirs(tx, uid, resources.ParentDir(targetPath), force)
+		createdDirs, deletedDirs, orphanHashes, err := ensureParentDirs(tx, uid, targetPath)
 		if err != nil {
 			return result, err
 		}
@@ -1564,7 +1606,7 @@ func (s *ResourceService) copyDirResource(
 		return result, fmt.Errorf("%w: cannot copy directory into itself", errResourceInvalid)
 	}
 
-	createdRoot, deletedRoot, orphanHashes, err := ensureResourceDirs(tx, uid, dstPath, force)
+	createdRoot, deletedRoot, orphanHashes, err := ensureDestinationDirs(tx, uid, dstPath, force)
 	if err != nil {
 		return result, err
 	}
@@ -1681,8 +1723,9 @@ func (s *ResourceService) copyDirResource(
 func (s *ResourceService) DeleteResource(c *gin.Context) {
 	uid := c.GetUint64("uid")
 	privs := c.GetStringSlice("prm")
+	isAdmin := slices.Contains(privs, "resources.admin")
 
-	if !slices.Contains(privs, "resources.delete") && !slices.Contains(privs, "resources.admin") {
+	if !slices.Contains(privs, "resources.delete") && !isAdmin {
 		response.Error(c, response.ErrNotPermitted, nil)
 		return
 	}
@@ -1716,14 +1759,14 @@ func (s *ResourceService) DeleteResource(c *gin.Context) {
 	var toDelete []models.UserResource
 
 	for _, targetPath := range targetPaths {
-		var root models.UserResource
-		if err := s.db.Where("user_id = ? AND path = ?", uid, targetPath).First(&root).Error; err != nil {
-			if gorm.IsRecordNotFoundError(err) {
-				response.Error(c, response.ErrResourcesNotFound, fmt.Errorf("resource %q not found", targetPath))
-				return
-			}
+		root, found, err := rowAddressedByPath(s.db, uid, isAdmin, targetPath)
+		if err != nil {
 			logger.FromContext(c).WithError(err).Error("error finding resource for delete")
 			response.Error(c, response.ErrInternal, err)
+			return
+		}
+		if !found {
+			response.Error(c, response.ErrResourcesNotFound, fmt.Errorf("resource %q not found", targetPath))
 			return
 		}
 
@@ -1731,7 +1774,7 @@ func (s *ResourceService) DeleteResource(c *gin.Context) {
 		var descendants []models.UserResource
 		if err := s.db.Where(
 			"user_id = ? AND (path = ? OR path LIKE ?)",
-			uid, targetPath, escapedTarget+"/%",
+			root.UserID, targetPath, escapedTarget+"/%",
 		).Find(&descendants).Error; err != nil {
 			logger.FromContext(c).WithError(err).Error("error listing resources for delete")
 			response.Error(c, response.ErrInternal, err)
@@ -1788,7 +1831,7 @@ func (s *ResourceService) DeleteResource(c *gin.Context) {
 		return deleted[i].CreatedAt.Before(deleted[j].CreatedAt)
 	})
 
-	s.publishResourcesDeleted(c.Request.Context(), uid, deleted)
+	s.publishResourcesDeleted(c.Request.Context(), deleted)
 	response.Success(c, http.StatusOK, models.ResourceList{Items: deleted, Total: uint64(len(deleted))})
 }
 
@@ -1804,6 +1847,8 @@ func (s *ResourceService) DeleteResource(c *gin.Context) {
 // @Security BearerAuth
 // @Param path query string false "virtual path to download (may be combined with paths[])"
 // @Param paths[] query []string false "additional virtual paths to download (repeatable)"
+// @Param id query integer false "resource id to download (may be combined with ids[])"
+// @Param ids[] query []integer false "additional resource ids to download (repeatable)"
 // @Success 200 {file} binary "file content, or ZIP archive for directories / multiple paths"
 // @Failure 400 {object} response.errorResp "invalid resource request data"
 // @Failure 403 {object} response.errorResp "downloading resource not permitted"
@@ -1825,9 +1870,22 @@ func (s *ResourceService) DownloadResource(c *gin.Context) {
 	if singlePath := strings.TrimSpace(c.Query("path")); singlePath != "" {
 		rawPaths = append(rawPaths, singlePath)
 	}
-	if len(rawPaths) == 0 {
+
+	rawIDs := c.QueryArray("ids[]")
+	if singleID := strings.TrimSpace(c.Query("id")); singleID != "" {
+		rawIDs = append(rawIDs, singleID)
+	}
+
+	if len(rawPaths) == 0 && len(rawIDs) == 0 {
 		response.Error(c, response.ErrResourcesInvalidRequest,
-			errors.New("at least one path is required (use 'path' or 'paths[]' query parameters)"))
+			errors.New("at least one path or id is required "+
+				"(use 'path', 'paths[]', 'id' or 'ids[]' query parameters)"))
+		return
+	}
+
+	targetIDs, err := collectResourceIDs(rawIDs)
+	if err != nil {
+		response.Error(c, response.ErrResourcesInvalidRequest, err)
 		return
 	}
 
@@ -1836,15 +1894,16 @@ func (s *ResourceService) DownloadResource(c *gin.Context) {
 		response.Error(c, response.ErrResourcesInvalidRequest, err)
 		return
 	}
-	if len(targetPaths) == 0 {
+	if len(targetPaths) == 0 && len(targetIDs) == 0 {
 		response.Error(c, response.ErrResourcesInvalidRequest,
-			errors.New("at least one valid path is required"))
+			errors.New("at least one valid path or id is required"))
 		return
 	}
 
 	// Load each requested resource from the DB; fail-fast on missing.
 	type resolvedEntry struct {
-		rec models.UserResource
+		rec    models.UserResource
+		isByID bool
 	}
 	entries := make([]resolvedEntry, 0, len(targetPaths))
 	seenTargets := make(map[string]struct{}, len(targetPaths))
@@ -1854,12 +1913,12 @@ func (s *ResourceService) DownloadResource(c *gin.Context) {
 		}
 		seenTargets[targetPath] = struct{}{}
 
-		q := s.db.Where("path = ?", targetPath)
-		if !isAdmin {
-			q = q.Where("user_id = ?", uid)
-		}
 		var rec models.UserResource
-		if err := q.First(&rec).Error; err != nil {
+		err := s.db.Where("user_id = ? AND path = ?", uid, targetPath).First(&rec).Error
+		if isAdmin && gorm.IsRecordNotFoundError(err) {
+			err = s.db.Where("path = ?", targetPath).Order("updated_at DESC, name ASC, id ASC").First(&rec).Error
+		}
+		if err != nil {
 			if gorm.IsRecordNotFoundError(err) {
 				response.Error(c, response.ErrResourcesNotFound, fmt.Errorf("resource %q not found", targetPath))
 				return
@@ -1869,6 +1928,21 @@ func (s *ResourceService) DownloadResource(c *gin.Context) {
 			return
 		}
 		entries = append(entries, resolvedEntry{rec: rec})
+	}
+
+	for _, id := range targetIDs {
+		var rec models.UserResource
+		err := scopeToCaller(s.db.Where("id = ?", id), uid, isAdmin).First(&rec).Error
+		if err != nil {
+			if gorm.IsRecordNotFoundError(err) {
+				response.Error(c, response.ErrResourcesNotFound, fmt.Errorf("resource %d not found", id))
+				return
+			}
+			logger.FromContext(c).WithError(err).Error("error finding resource by id for download")
+			response.Error(c, response.ErrInternal, err)
+			return
+		}
+		entries = append(entries, resolvedEntry{rec: rec, isByID: true})
 	}
 
 	// Single regular file → serve as a direct attachment with explicit Content-Length.
@@ -1940,40 +2014,54 @@ func (s *ResourceService) DownloadResource(c *gin.Context) {
 
 	// Multiple paths (any mix of files and directories) → ZIP using the full
 	// virtual path as each entry name so the caller sees the complete path context.
-	seenZipPaths := make(map[string]struct{})
-	zipEntries := make([]resources.ZipEntry, 0)
+	var byPath, byID []models.UserResource
 	for _, e := range entries {
-		if !e.rec.IsDir {
-			if _, dup := seenZipPaths[e.rec.Path]; !dup {
-				seenZipPaths[e.rec.Path] = struct{}{}
-				zipEntries = append(zipEntries, resources.ZipEntry{
-					BlobPath: resources.BlobPath(s.dataDir, e.rec.Hash),
-					ZipPath:  e.rec.Path,
-				})
+		recs := []models.UserResource{e.rec}
+		if e.rec.IsDir {
+			// Directory: collect all file descendants using their full virtual paths.
+			escapedTarget := resources.EscapeLike(e.rec.Path)
+			recs = nil
+			if err := s.db.Where(
+				"user_id = ? AND path LIKE ? AND is_dir = false",
+				e.rec.UserID, escapedTarget+"/%",
+			).Find(&recs).Error; err != nil {
+				logger.FromContext(c).WithError(err).Error("error listing resources for zip download")
+				response.Error(c, response.ErrInternal, err)
+				return
 			}
-			continue
 		}
+		if e.isByID {
+			byID = append(byID, recs...)
+		} else {
+			byPath = append(byPath, recs...)
+		}
+	}
 
-		// Directory: collect all file descendants using their full virtual paths.
-		escapedTarget := resources.EscapeLike(e.rec.Path)
-		var fileRecs []models.UserResource
-		if err := s.db.Where(
-			"user_id = ? AND path LIKE ? AND is_dir = false",
-			e.rec.UserID, escapedTarget+"/%",
-		).Find(&fileRecs).Error; err != nil {
-			logger.FromContext(c).WithError(err).Error("error listing resources for zip download")
-			response.Error(c, response.ErrInternal, err)
+	picked := resources.DedupeByPathPreferringOwner(byPath, uid, resourceRecordOwner)
+	holders := make(map[string]uint64, len(picked)+len(byID))
+	for _, rec := range picked {
+		holders[rec.Path] = rec.ID
+	}
+	for _, rec := range byID {
+		if holder, isHeld := holders[rec.Path]; isHeld {
+			if holder == rec.ID {
+				continue
+			}
+			response.Error(c, response.ErrResourcesSharedPath,
+				fmt.Errorf("resources %d and %d share the path %q", holder, rec.ID, rec.Path))
 			return
 		}
-		for _, fr := range fileRecs {
-			if _, dup := seenZipPaths[fr.Path]; !dup {
-				seenZipPaths[fr.Path] = struct{}{}
-				zipEntries = append(zipEntries, resources.ZipEntry{
-					BlobPath: resources.BlobPath(s.dataDir, fr.Hash),
-					ZipPath:  fr.Path,
-				})
-			}
-		}
+		holders[rec.Path] = rec.ID
+		picked = append(picked, rec)
+	}
+	sort.Slice(picked, func(i, j int) bool { return picked[i].Path < picked[j].Path })
+
+	zipEntries := make([]resources.ZipEntry, 0, len(picked))
+	for _, rec := range picked {
+		zipEntries = append(zipEntries, resources.ZipEntry{
+			BlobPath: resources.BlobPath(s.dataDir, rec.Hash),
+			ZipPath:  rec.Path,
+		})
 	}
 
 	if err := streamZipArchive(c, "download.zip", func(w io.Writer) error {
@@ -2029,16 +2117,20 @@ func streamZipArchive(c *gin.Context, filename string, build func(w io.Writer) e
 
 // ---- helper methods --------------------------------------------------------
 
+func scopeToCaller(q *gorm.DB, uid uint64, isAdmin bool) *gorm.DB {
+	if isAdmin {
+		return q
+	}
+	return q.Where("user_id = ?", uid)
+}
+
 func (s *ResourceService) queryResources(
 	uid uint64,
 	isAdmin bool,
 	dirPath string,
 	recursive bool,
 ) ([]models.ResourceEntry, error) {
-	q := s.db.Model(&models.UserResource{}).Order("updated_at DESC, name ASC")
-	if !isAdmin {
-		q = q.Where("user_id = ?", uid)
-	}
+	q := scopeToCaller(s.db.Model(&models.UserResource{}).Order("updated_at DESC, name ASC, id ASC"), uid, isAdmin)
 
 	if dirPath != "" {
 		escaped := resources.EscapeLike(dirPath)
@@ -2071,7 +2163,25 @@ func (s *ResourceService) resourceExists(uid uint64, vPath string) (bool, error)
 	return count > 0, err
 }
 
-func ensureResourceDirs(tx *gorm.DB, uid uint64, dirPath string, force bool) (
+func ensureDestinationDirs(tx *gorm.DB, uid uint64, dstPath string, force bool) (
+	[]models.UserResource,
+	[]models.UserResource,
+	[]string,
+	error,
+) {
+	return ensureDirChain(tx, uid, dstPath, force)
+}
+
+func ensureParentDirs(tx *gorm.DB, uid uint64, targetPath string) (
+	[]models.UserResource,
+	[]models.UserResource,
+	[]string,
+	error,
+) {
+	return ensureDirChain(tx, uid, resources.ParentDir(targetPath), false)
+}
+
+func ensureDirChain(tx *gorm.DB, uid uint64, dirPath string, forceReplacesLeaf bool) (
 	[]models.UserResource,
 	[]models.UserResource,
 	[]string,
@@ -2086,7 +2196,7 @@ func ensureResourceDirs(tx *gorm.DB, uid uint64, dirPath string, force bool) (
 	deleted := make([]models.UserResource, 0, len(parts))
 	orphanHashes := make([]string, 0, len(parts))
 	current := ""
-	for _, part := range parts {
+	for i, part := range parts {
 		current = resources.FilePath(current, part)
 
 		existing, exists, err := findResourceByPath(tx, uid, current)
@@ -2095,7 +2205,7 @@ func ensureResourceDirs(tx *gorm.DB, uid uint64, dirPath string, force bool) (
 		}
 		if exists {
 			if !existing.IsDir {
-				if !force {
+				if !forceReplacesLeaf || i != len(parts)-1 {
 					return nil, nil, nil, fmt.Errorf("%w: resource %q already exists and is not a directory", errResourceConflict, current)
 				}
 				if err := tx.Delete(&existing).Error; err != nil {
@@ -2181,32 +2291,37 @@ func cleanupResourceUploads(pending []pendingResourceUpload) {
 	}
 }
 
-// deduplicateResourcePaths removes blank and duplicate virtual resource paths,
-// preserving the first occurrence of each unique (cleaned) path.
-func deduplicateResourcePaths(paths []string) []string {
-	seen := make(map[string]struct{}, len(paths))
-	result := make([]string, 0, len(paths))
-	for _, p := range paths {
-		trimmed := strings.TrimSpace(p)
-		if trimmed == "" {
-			continue
-		}
-		normalized := path.Clean(trimmed)
-		if _, ok := seen[normalized]; ok {
-			continue
-		}
-		seen[normalized] = struct{}{}
-		result = append(result, trimmed)
-	}
-	return result
-}
-
 func pathHasTrailingSeparator(p string) bool {
 	trimmed := strings.TrimSpace(p)
 	return strings.HasSuffix(trimmed, "/") || strings.HasSuffix(trimmed, "\\")
 }
 
 // ---- conversion helpers ----------------------------------------------------
+
+func resourceEntryOwner(e models.ResourceEntry) (string, uint64) { return e.Path, e.UserID }
+
+func resourceRecordOwner(r models.UserResource) (string, uint64) { return r.Path, r.UserID }
+
+func collectResourceIDs(raw []string) ([]uint64, error) {
+	ids := make([]uint64, 0, len(raw))
+	seen := make(map[uint64]struct{}, len(raw))
+	for _, item := range raw {
+		trimmed := strings.TrimSpace(item)
+		if trimmed == "" {
+			continue
+		}
+		id, err := strconv.ParseUint(trimmed, 10, 64)
+		if err != nil || id == 0 {
+			return nil, fmt.Errorf("invalid resource id %q", item)
+		}
+		if _, dup := seen[id]; dup {
+			continue
+		}
+		seen[id] = struct{}{}
+		ids = append(ids, id)
+	}
+	return ids, nil
+}
 
 func convertResource(r models.UserResource) models.ResourceEntry {
 	return models.ResourceEntry{
@@ -2244,40 +2359,30 @@ func convertResourceToModel(e models.ResourceEntry) *model.UserResource {
 
 // ---- subscription publishing -----------------------------------------------
 
-func (s *ResourceService) publishResourceAdded(ctx context.Context, uid uint64, e models.ResourceEntry) {
-	if s.ss == nil {
-		return
-	}
-	s.ss.NewResourcePublisher(int64(uid)).ResourceAdded(ctx, convertResourceToModel(e))
-}
-
-func (s *ResourceService) publishResourcesAdded(ctx context.Context, uid uint64, entries []models.ResourceEntry) {
+func (s *ResourceService) publishResourcesAdded(ctx context.Context, entries []models.ResourceEntry) {
 	if s.ss == nil || len(entries) == 0 {
 		return
 	}
-	pub := s.ss.NewResourcePublisher(int64(uid))
 	for _, e := range entries {
-		pub.ResourceAdded(ctx, convertResourceToModel(e))
+		s.ss.NewResourcePublisher(int64(e.UserID)).ResourceAdded(ctx, convertResourceToModel(e))
 	}
 }
 
-func (s *ResourceService) publishResourcesUpdated(ctx context.Context, uid uint64, entries []models.ResourceEntry) {
+func (s *ResourceService) publishResourcesUpdated(ctx context.Context, entries []models.ResourceEntry) {
 	if s.ss == nil || len(entries) == 0 {
 		return
 	}
-	pub := s.ss.NewResourcePublisher(int64(uid))
 	for _, e := range entries {
-		pub.ResourceUpdated(ctx, convertResourceToModel(e))
+		s.ss.NewResourcePublisher(int64(e.UserID)).ResourceUpdated(ctx, convertResourceToModel(e))
 	}
 }
 
-func (s *ResourceService) publishResourcesDeleted(ctx context.Context, uid uint64, entries []models.ResourceEntry) {
+func (s *ResourceService) publishResourcesDeleted(ctx context.Context, entries []models.ResourceEntry) {
 	if s.ss == nil || len(entries) == 0 {
 		return
 	}
-	pub := s.ss.NewResourcePublisher(int64(uid))
 	for _, e := range entries {
-		pub.ResourceDeleted(ctx, convertResourceToModel(e))
+		s.ss.NewResourcePublisher(int64(e.UserID)).ResourceDeleted(ctx, convertResourceToModel(e))
 	}
 }
 

@@ -55,8 +55,13 @@ RUN pnpm run build -- \
 FROM golang:1.26-bookworm AS api-builder
 
 # Version injection arguments
-ARG PACKAGE_VER=develop
+# "ce" is not a release number, so GetBinaryVersion reads it as "no release" and reports
+# the edition alone. The default is a word rather than the empty string because
+# scripts/check-version-rule.sh requires the builder to stamp something: an empty
+# PackageVer reaching the binary is the one case it must never mistake for a release.
+ARG PACKAGE_VER=ce
 ARG PACKAGE_REV=
+ARG PACKAGE_EDITION=ce
 
 # Static binary compilation settings
 ENV CGO_ENABLED=0
@@ -94,7 +99,8 @@ RUN go build -trimpath \
     -ldflags "\
         -X pentagi/pkg/version.PackageName=pentagi \
         -X pentagi/pkg/version.PackageVer=${PACKAGE_VER} \
-        -X pentagi/pkg/version.PackageRev=${PACKAGE_REV}" \
+        -X pentagi/pkg/version.PackageRev=${PACKAGE_REV} \
+        -X pentagi/pkg/version.Edition=${PACKAGE_EDITION}" \
     -o /pentagi ./cmd/pentagi
 
 # Build ctester utility
@@ -102,7 +108,8 @@ RUN go build -trimpath \
     -ldflags "\
         -X pentagi/pkg/version.PackageName=ctester \
         -X pentagi/pkg/version.PackageVer=${PACKAGE_VER} \
-        -X pentagi/pkg/version.PackageRev=${PACKAGE_REV}" \
+        -X pentagi/pkg/version.PackageRev=${PACKAGE_REV} \
+        -X pentagi/pkg/version.Edition=${PACKAGE_EDITION}" \
     -o /ctester ./cmd/ctester
 
 # Build ftester utility
@@ -110,7 +117,8 @@ RUN go build -trimpath \
     -ldflags "\
         -X pentagi/pkg/version.PackageName=ftester \
         -X pentagi/pkg/version.PackageVer=${PACKAGE_VER} \
-        -X pentagi/pkg/version.PackageRev=${PACKAGE_REV}" \
+        -X pentagi/pkg/version.PackageRev=${PACKAGE_REV} \
+        -X pentagi/pkg/version.Edition=${PACKAGE_EDITION}" \
     -o /ftester ./cmd/ftester
 
 # Build etester utility
@@ -118,7 +126,8 @@ RUN go build -trimpath \
     -ldflags "\
         -X pentagi/pkg/version.PackageName=etester \
         -X pentagi/pkg/version.PackageVer=${PACKAGE_VER} \
-        -X pentagi/pkg/version.PackageRev=${PACKAGE_REV}" \
+        -X pentagi/pkg/version.PackageRev=${PACKAGE_REV} \
+        -X pentagi/pkg/version.Edition=${PACKAGE_EDITION}" \
     -o /etester ./cmd/etester
 
 # ========================================
@@ -201,10 +210,25 @@ USER pentagi
 
 ENTRYPOINT ["/opt/pentagi/bin/entrypoint.sh", "/opt/pentagi/bin/pentagi"]
 
-# Version of the PentAGI binary inside
+# Mirrors GetBinaryVersion in backend/pkg/version: "<edition>", "<edition>.h<rev>",
+# "<ver>-<edition>" or "<ver>-<edition>.h<rev>". The "h" keeps the revision an
+# alphanumeric semver identifier. The binary is stamped from the same args in
+# the builder stage, so pass them and nothing else: PACKAGE_VERSION_FULL is where this
+# expression puts its result, and overriding it labels the image with a string the binary
+# never says.
+#
+# PACKAGE_VER is a release number. The words "develop", "ce" and "ee" are not valid values
+# for it: an ARG default can branch on empty but cannot compare strings, so this expression
+# would read one as a release and label the image ce-ce where the binary reports ce. Leave
+# PACKAGE_VER empty for a build with no release behind it — scripts/version.sh and
+# scripts/version.ps1 clear a tag of that name, the CI jobs do not, and
+# scripts/check-version-rule.sh measures the agreement for a release tag or no tag.
 ARG PACKAGE_VER
 ARG PACKAGE_REV
-LABEL com.pentagi.version="${PACKAGE_VER:-develop}${PACKAGE_REV:+-${PACKAGE_REV}}"
+ARG PACKAGE_EDITION=ce
+ARG VER_PART=${PACKAGE_VER:+${PACKAGE_VER}-}${PACKAGE_EDITION}
+ARG PACKAGE_VERSION_FULL=${VER_PART}${PACKAGE_REV:+.h${PACKAGE_REV}}
+LABEL com.pentagi.version="${PACKAGE_VERSION_FULL}"
 
 # Image Metadata
 LABEL org.opencontainers.image.source="https://github.com/vxcontrol/pentagi"

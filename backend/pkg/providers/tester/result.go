@@ -1,10 +1,10 @@
 package tester
 
 import (
-	"pentagi/pkg/providers/tester/testdata"
+	"pentagi/pkg/providers/tester/cases"
 )
 
-type AgentTestResults []testdata.TestResult
+type AgentTestResults []cases.TestResult
 
 type ProviderTestResults struct {
 	Simple       AgentTestResults `json:"simple"`

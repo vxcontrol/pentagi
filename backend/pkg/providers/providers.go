@@ -13,6 +13,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"unicode/utf8"
 
 	"pentagi/pkg/config"
 	"pentagi/pkg/csum"
@@ -20,6 +21,8 @@ import (
 	"pentagi/pkg/docker"
 	"pentagi/pkg/graphiti"
 	obs "pentagi/pkg/observability"
+	"pentagi/pkg/observability/langfuse"
+	"pentagi/pkg/providers/anthropic"
 	"pentagi/pkg/providers/embeddings"
 	"pentagi/pkg/providers/pconfig"
 	"pentagi/pkg/providers/provider"
@@ -128,6 +131,7 @@ type ProviderController interface {
 		prvtype provider.ProviderType,
 		agentType pconfig.ProviderOptionsType,
 		config *pconfig.AgentConfig,
+		simple *pconfig.AgentConfig,
 	) (tester.AgentTestResults, error)
 	TestProvider(
 		ctx context.Context,
@@ -201,6 +205,14 @@ func NewProviderController(
 	defaultConfigs, defaultConfigErrors, err := buildDefaultConfigs(cfg)
 	if err != nil {
 		return nil, err
+	}
+
+	if cfg.LLMServerURL != "" && cfg.LLMServerKey == "" {
+		logrus.Warn("custom provider disabled: LLM_SERVER_URL is set but LLM_SERVER_KEY is empty")
+	}
+
+	if notice := anthropic.CredentialsNotice(cfg); notice != "" {
+		logrus.Warn(notice)
 	}
 
 	for _, e := range providerRegistry {
@@ -301,20 +313,33 @@ func (pc *providerController) NewFlowProvider(
 		return nil, fmt.Errorf("failed to get provider: %w", err)
 	}
 
-	imageTmpl, err := prompter.RenderTemplate(templates.PromptTypeImageChooser, map[string]any{
-		"DefaultImage":           pc.docker.GetDefaultImage(),
-		"DefaultImageForPentest": pc.cfg.DockerDefaultImageForPentest,
-		"Input":                  input,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to get primary docker image template: %w", err)
-	}
+	policy := newImagePolicy(pc.cfg, pc.docker.GetDefaultImage())
 
-	image, err := callWithSetupRetries(ctx, prv, pconfig.OptionsTypeSimple, imageTmpl)
-	if err != nil {
-		return nil, fmt.Errorf("failed to select primary docker image via llm call: %w", err)
+	image := policy.pentestImage()
+	if !policy.skipsModel() {
+		imageTmpl, err := prompter.RenderTemplate(templates.PromptTypeImageChooser, map[string]any{
+			"DefaultImage":           pc.docker.GetDefaultImage(),
+			"DefaultImageForPentest": pc.cfg.DockerDefaultImageForPentest,
+			"Input":                  input,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to get primary docker image template: %w", err)
+		}
+
+		answer, err := callWithSetupRetries(ctx, prv, pconfig.OptionsTypeSimple, imageTmpl)
+		if err != nil {
+			return nil, fmt.Errorf("failed to select primary docker image via llm call: %w", err)
+		}
+
+		var rejected bool
+		if image, rejected = policy.resolve(answer); rejected {
+			logrus.WithFields(logrus.Fields{
+				"flow_id":  flowID,
+				"answer":   strings.TrimSpace(answer),
+				"fallback": image,
+			}).Warn("docker image chosen by the model was rejected, falling back")
+		}
 	}
-	image = strings.ToLower(strings.TrimSpace(image))
 
 	languageTmpl, err := prompter.RenderTemplate(templates.PromptTypeLanguageChooser, map[string]any{
 		"Input": input,
@@ -343,7 +368,7 @@ func (pc *providerController) NewFlowProvider(
 	if err != nil {
 		return nil, fmt.Errorf("failed to get flow title: %w", err)
 	}
-	title = strings.TrimSpace(title)
+	title = normalizeTitle(title)
 
 	tcIDTemplate, err := prv.GetToolCallIDTemplate(ctx, prompter)
 	if err != nil {
@@ -363,7 +388,7 @@ func (pc *providerController) NewFlowProvider(
 		language:        language,
 		askUser:         askUser,
 		planning:        pc.cfg.AgentPlanningStepEnabled,
-		tcIDTemplate:    tcIDTemplate,
+		tcIDTemplate:    toolCallIDTemplateOrDefault(tcIDTemplate),
 		prompter:        prompter,
 		executor:        executor,
 		summarizer:      pc.summarizerAgent,
@@ -413,7 +438,7 @@ func (pc *providerController) LoadFlowProvider(
 		language:        language,
 		askUser:         askUser,
 		planning:        pc.cfg.AgentPlanningStepEnabled,
-		tcIDTemplate:    tcIDTemplate,
+		tcIDTemplate:    toolCallIDTemplateOrDefault(tcIDTemplate),
 		prompter:        prompter,
 		executor:        executor,
 		summarizer:      pc.summarizerAgent,
@@ -485,7 +510,7 @@ func (pc *providerController) NewAssistantProvider(
 	if err != nil {
 		return nil, fmt.Errorf("failed to get flow title: %w", err)
 	}
-	title = strings.TrimSpace(title)
+	title = normalizeTitle(title)
 
 	tcIDTemplate, err := prv.GetToolCallIDTemplate(ctx, prompter)
 	if err != nil {
@@ -506,7 +531,7 @@ func (pc *providerController) NewAssistantProvider(
 			image:           image,
 			title:           title,
 			language:        language,
-			tcIDTemplate:    tcIDTemplate,
+			tcIDTemplate:    toolCallIDTemplateOrDefault(tcIDTemplate),
 			prompter:        prompter,
 			executor:        executor,
 			streamCb:        streamCb,
@@ -559,7 +584,7 @@ func (pc *providerController) LoadAssistantProvider(
 			image:           image,
 			title:           title,
 			language:        language,
-			tcIDTemplate:    tcIDTemplate,
+			tcIDTemplate:    toolCallIDTemplateOrDefault(tcIDTemplate),
 			prompter:        prompter,
 			executor:        executor,
 			streamCb:        streamCb,
@@ -594,6 +619,62 @@ func (pc *providerController) GetProvider(
 	prvname provider.ProviderName,
 	userID int64,
 ) (provider.Provider, error) {
+	prv, err := pc.resolveProvider(ctx, prvname, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	return pc.withFallback(ctx, prv, userID), nil
+}
+
+func (pc *providerController) withFallback(
+	ctx context.Context,
+	primary provider.Provider,
+	userID int64,
+) provider.Provider {
+	name := provider.ProviderName(strings.TrimSpace(pc.cfg.LLMFallbackProvider))
+	if name == "" || name == primary.Name() {
+		return primary
+	}
+
+	backup, err := pc.resolveProvider(ctx, name, userID)
+	if err != nil {
+		logrus.WithContext(ctx).WithError(err).
+			Warnf("fallback provider '%s' does not resolve, calls will not switch", name)
+		return primary
+	}
+
+	return provider.WithFailover(primary, backup, func(
+		ctx context.Context, from, to provider.ProviderName, callErr error,
+	) {
+		logrus.WithContext(ctx).WithError(callErr).WithFields(logrus.Fields{
+			"from": from,
+			"to":   to,
+		}).Warn("provider call failed, repeating it on the fallback provider")
+
+		_, observation := obs.Observer.NewObservation(ctx)
+		observation.Event(
+			langfuse.WithEventName("provider failover"),
+			langfuse.WithEventInput(map[string]any{
+				"from": string(from),
+				"to":   string(to),
+			}),
+			langfuse.WithEventMetadata(langfuse.Metadata{
+				"from":    string(from),
+				"to":      string(to),
+				"user_id": userID,
+			}),
+			langfuse.WithEventLevel(langfuse.ObservationLevelWarning),
+			langfuse.WithEventStatus(callErr.Error()),
+		)
+	})
+}
+
+func (pc *providerController) resolveProvider(
+	ctx context.Context,
+	prvname provider.ProviderName,
+	userID int64,
+) (provider.Provider, error) {
 	// Lookup user defined providers first so they take precedence over built-in providers
 	prv, err := pc.db.GetUserProviderByName(ctx, database.GetUserProviderByNameParams{
 		Name:   string(prvname),
@@ -607,7 +688,7 @@ func (pc *providerController) GetProvider(
 	}
 
 	// Fall back to built-in default providers
-	return pc.Providers.Get(prvname)
+	return pc.Get(prvname)
 }
 
 func (pc *providerController) GetProviders(
@@ -719,6 +800,20 @@ func (pc *providerController) SeedDefaultProviders(ctx context.Context, userID i
 	return err
 }
 
+// MUST stay in sync with the frontend provider form schema (settings-provider.tsx).
+const maxProviderNameLen = 50
+
+func validateProviderName(prvname provider.ProviderName) (provider.ProviderName, error) {
+	trimmed := strings.TrimSpace(string(prvname))
+	if trimmed == "" {
+		return "", fmt.Errorf("provider name is required")
+	}
+	if utf8.RuneCountInString(trimmed) > maxProviderNameLen {
+		return "", fmt.Errorf("provider name must not exceed %d characters", maxProviderNameLen)
+	}
+	return provider.ProviderName(trimmed), nil
+}
+
 func (pc *providerController) CreateProvider(
 	ctx context.Context,
 	userID int64,
@@ -734,11 +829,35 @@ func (pc *providerController) CreateProvider(
 		result database.Provider
 	)
 
+	if prvname, err = validateProviderName(prvname); err != nil {
+		return result, err
+	}
+
+	if !pc.ListTypes().Contains(prvtype) {
+		return result, fmt.Errorf("provider type '%s' is not available", prvtype)
+	}
+
 	if config, err = pc.patchProviderConfig(prvtype, config); err != nil {
 		return result, fmt.Errorf("failed to patch provider config: %w", err)
 	}
 
 	if err = config.Validate(); err != nil {
+		return result, fmt.Errorf("invalid provider config: %w", err)
+	}
+
+	if err = config.ValidateToolReasoning(prvtype.ReasoningProvider()); err != nil {
+		return result, fmt.Errorf("invalid provider config: %w", err)
+	}
+
+	if err = config.ValidateThinkingAgreement(prvtype.ReasoningProvider()); err != nil {
+		return result, fmt.Errorf("invalid provider config: %w", err)
+	}
+
+	if err = config.ValidateReasoningOff(prvtype.ReasoningProvider()); err != nil {
+		return result, fmt.Errorf("invalid provider config: %w", err)
+	}
+
+	if err = config.ValidateThinkingBudget(prvtype.ReasoningProvider(), ModelPrefix(pc.cfg, prvtype)); err != nil {
 		return result, fmt.Errorf("invalid provider config: %w", err)
 	}
 
@@ -775,6 +894,10 @@ func (pc *providerController) UpdateProvider(
 		result database.Provider
 	)
 
+	if prvname, err = validateProviderName(prvname); err != nil {
+		return result, err
+	}
+
 	prv, err := pc.db.GetUserProvider(ctx, database.GetUserProviderParams{
 		ID:     prvID,
 		UserID: userID,
@@ -789,6 +912,22 @@ func (pc *providerController) UpdateProvider(
 	}
 
 	if err = config.Validate(); err != nil {
+		return result, fmt.Errorf("invalid provider config: %w", err)
+	}
+
+	if err = config.ValidateToolReasoning(prvtype.ReasoningProvider()); err != nil {
+		return result, fmt.Errorf("invalid provider config: %w", err)
+	}
+
+	if err = config.ValidateThinkingAgreement(prvtype.ReasoningProvider()); err != nil {
+		return result, fmt.Errorf("invalid provider config: %w", err)
+	}
+
+	if err = config.ValidateReasoningOff(prvtype.ReasoningProvider()); err != nil {
+		return result, fmt.Errorf("invalid provider config: %w", err)
+	}
+
+	if err = config.ValidateThinkingBudget(prvtype.ReasoningProvider(), ModelPrefix(pc.cfg, prvtype)); err != nil {
 		return result, fmt.Errorf("invalid provider config: %w", err)
 	}
 
@@ -834,6 +973,7 @@ func (pc *providerController) TestAgent(
 	prvtype provider.ProviderType,
 	agentType pconfig.ProviderOptionsType,
 	config *pconfig.AgentConfig,
+	simple *pconfig.AgentConfig,
 ) (tester.AgentTestResults, error) {
 	ctx, span := obs.Observer.NewSpan(ctx, obs.SpanKindInternal, "providers.TestAgent")
 	defer span.End()
@@ -873,6 +1013,10 @@ func (pc *providerController) TestAgent(
 		testConfig.Pentester = config
 	default:
 		return result, fmt.Errorf("unsupported agent type: %s", agentType)
+	}
+
+	if testConfig.Simple == nil {
+		testConfig.Simple = simple
 	}
 
 	// Patch with defaults
@@ -1068,43 +1212,13 @@ func newAtomicInt64(seed int64) *atomic.Int64 {
 	return &number
 }
 
-// callWithSetupRetries wraps a single-shot LLM prompt call used during flow/
-// assistant bootstrap (docker image, language, and title selection) with the
-// same short retry-with-backoff already used for the agent execution loop
-// (see performSimpleChain/callWithRetries), so one transient error from the
-// LLM gateway (e.g. a bad gateway from a litellm proxy) does not fail flow or
-// assistant creation outright.
 func callWithSetupRetries(
 	ctx context.Context,
 	prv provider.Provider,
 	opt pconfig.ProviderOptionsType,
 	prompt string,
 ) (string, error) {
-	var (
-		result string
-		err    error
-	)
-
-	for idx := 0; idx <= maxRetriesToCallSimpleChain; idx++ {
-		if idx == maxRetriesToCallSimpleChain {
-			return "", fmt.Errorf("failed to call llm after %d retries: %w", idx, err)
-		}
-
-		result, err = prv.Call(ctx, opt, prompt)
-		if err == nil {
-			return result, nil
-		}
-
-		if errors.Is(err, context.Canceled) {
-			return "", err
-		}
-
-		select {
-		case <-ctx.Done():
-			return "", ctx.Err()
-		case <-time.After(delayBetweenRetries):
-		}
-	}
-
-	return "", err
+	return retryTransient(ctx, delayBetweenRetries, func() (string, error) {
+		return prv.Call(ctx, opt, prompt)
+	})
 }

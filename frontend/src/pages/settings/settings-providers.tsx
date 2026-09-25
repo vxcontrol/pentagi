@@ -29,7 +29,7 @@ import { Spinner } from '@/components/ui/spinner';
 import { DeleteProviderDocument, ProviderType, SettingsProvidersDocument } from '@/graphql/types';
 import { useTableState } from '@/hooks/use-table-state';
 import { routes } from '@/lib/routes';
-import { formatDate } from '@/lib/utils/format';
+import { formatTableDate } from '@/lib/utils/format';
 type Provider = ProviderConfigFragmentFragment;
 
 // Exhaustive Record so a newly-added ProviderType is a compile error here, not a
@@ -43,9 +43,11 @@ const providerLabels: Record<ProviderType, string> = {
     [ProviderType.Glm]: 'GLM',
     [ProviderType.Kimi]: 'Kimi',
     [ProviderType.Minimax]: 'MiniMax',
+    [ProviderType.Mistral]: 'Mistral',
     [ProviderType.Ollama]: 'Ollama',
     [ProviderType.Openai]: 'OpenAI',
     [ProviderType.Qwen]: 'Qwen',
+    [ProviderType.Xai]: 'xAI',
 };
 
 const providerTypes = (Object.keys(providerLabels) as ProviderType[]).map((type) => ({
@@ -202,7 +204,7 @@ function SettingsProviders() {
                 cell: ({ row }) => {
                     const dateString = row.getValue('createdAt') as string;
 
-                    return <div className="text-sm">{formatDate(new Date(dateString))}</div>;
+                    return <div className="text-sm whitespace-nowrap">{formatTableDate(new Date(dateString))}</div>;
                 },
                 header: ({ column }) => (
                     <DataTableColumnHeader
@@ -224,7 +226,7 @@ function SettingsProviders() {
                 cell: ({ row }) => {
                     const dateString = row.getValue('updatedAt') as string;
 
-                    return <div className="text-sm">{formatDate(new Date(dateString))}</div>;
+                    return <div className="text-sm whitespace-nowrap">{formatTableDate(new Date(dateString))}</div>;
                 },
                 header: ({ column }) => (
                     <DataTableColumnHeader
@@ -311,19 +313,25 @@ function SettingsProviders() {
         const getName = (key: string): string =>
             key.replaceAll(/([A-Z])/g, ' $1').replace(/^./, (item) => item.toUpperCase());
 
-        const getFields = (obj: unknown, prefix = ''): { label: string; value: boolean | number | string }[] => {
+        const formatValue = (value: boolean | number | string): string =>
+            typeof value === 'boolean' ? (value ? 'yes' : 'no') : String(value);
+
+        const getFields = (obj: unknown, prefix = '', isPrice = false): { label: string; value: string }[] => {
             if (!obj || typeof obj !== 'object') {
                 return [];
             }
 
             return Object.entries(obj as Record<string, unknown>)
-                .filter(([key, value]) => key !== '__typename' && !!value)
+                .filter(
+                    ([key, value]) =>
+                        key !== '__typename' && value != null && value !== '' && !(isPrice && value === 0),
+                )
                 .flatMap(([key, value]) => {
                     const label = `${prefix ? `${prefix} ` : ''}${getName(key)}`;
 
                     return typeof value === 'object'
-                        ? getFields(value, label)
-                        : [{ label, value: value as boolean | number | string }];
+                        ? getFields(value, label, key === 'price')
+                        : [{ label, value: formatValue(value as boolean | number | string) }];
                 });
         };
 
@@ -476,6 +484,7 @@ function SettingsProviders() {
                     empty={{ entityName: 'providers' }}
                     filterPlaceholder="Filter providers..."
                     filterValue={filter}
+                    label="Providers"
                     onFilterChange={setFilter}
                     onPageChange={handlePageChange}
                     pageIndex={currentPage}

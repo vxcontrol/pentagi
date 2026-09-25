@@ -14,7 +14,7 @@ import (
 const getAllResourcesAll = `-- name: GetAllResourcesAll :many
 SELECT id, user_id, hash, name, path, size, is_dir, created_at, updated_at
 FROM user_resources
-ORDER BY updated_at DESC, name ASC
+ORDER BY updated_at DESC, name ASC, id ASC
 `
 
 func (q *Queries) GetAllResourcesAll(ctx context.Context) ([]UserResource, error) {
@@ -55,7 +55,7 @@ SELECT id, user_id, hash, name, path, size, is_dir, created_at, updated_at
 FROM user_resources
 WHERE (path = $1 AND is_dir = true)
    OR (path LIKE $2 AND path NOT LIKE $3)
-ORDER BY updated_at DESC, name ASC
+ORDER BY updated_at DESC, name ASC, id ASC
 `
 
 type GetAllResourcesInDirParams struct {
@@ -101,7 +101,7 @@ const getAllResourcesRecursive = `-- name: GetAllResourcesRecursive :many
 SELECT id, user_id, hash, name, path, size, is_dir, created_at, updated_at
 FROM user_resources
 WHERE path = $1 OR path LIKE $2
-ORDER BY updated_at DESC, name ASC
+ORDER BY updated_at DESC, name ASC, id ASC
 `
 
 type GetAllResourcesRecursiveParams struct {
@@ -146,7 +146,7 @@ const getAllResourcesRoot = `-- name: GetAllResourcesRoot :many
 SELECT id, user_id, hash, name, path, size, is_dir, created_at, updated_at
 FROM user_resources
 WHERE path NOT LIKE '%/%'
-ORDER BY updated_at DESC, name ASC
+ORDER BY updated_at DESC, name ASC, id ASC
 `
 
 func (q *Queries) GetAllResourcesRoot(ctx context.Context) ([]UserResource, error) {

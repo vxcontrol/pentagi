@@ -5,15 +5,13 @@ import (
 	"embed"
 	"encoding/json"
 	"fmt"
-	"net/http"
-	"net/url"
 	"os"
 	"reflect"
-	"sync"
 
 	"pentagi/pkg/config"
 	"pentagi/pkg/providers/pconfig"
 	"pentagi/pkg/providers/provider"
+	"pentagi/pkg/system"
 	"pentagi/pkg/templates"
 
 	bconfig "github.com/aws/aws-sdk-go-v2/config"
@@ -86,10 +84,6 @@ type bedrockProvider struct {
 	models         pconfig.ModelsConfig
 	providerName   provider.ProviderName
 	providerConfig *pconfig.ProviderConfig
-
-	toolCallIDTemplate     string
-	toolCallIDTemplateOnce sync.Once
-	toolCallIDTemplateErr  error
 }
 
 func New(
@@ -111,7 +105,7 @@ func New(
 			Token: smithybearer.Token{
 				Value: cfg.BedrockBearerToken,
 			},
-		}))
+		}), bconfig.WithAuthSchemePreference("httpBearerAuth"))
 	} else if cfg.BedrockAccessKey != "" && cfg.BedrockSecretKey != "" {
 		// Use static credentials (traditional approach)
 		opts = append(opts, bconfig.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
@@ -127,15 +121,12 @@ func New(
 		opts = append(opts, bconfig.WithBaseEndpoint(cfg.BedrockServerURL))
 	}
 
-	if cfg.ProxyURL != "" {
-		opts = append(opts, bconfig.WithHTTPClient(&http.Client{
-			Transport: &http.Transport{
-				Proxy: func(req *http.Request) (*url.URL, error) {
-					return url.Parse(cfg.ProxyURL)
-				},
-			},
-		}))
+	httpClient, err := system.GetHTTPClient(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create HTTP client: %w", err)
 	}
+
+	opts = append(opts, bconfig.WithHTTPClient(httpClient))
 
 	bcfg, err := bconfig.LoadDefaultConfig(context.Background(), opts...)
 	if err != nil {
@@ -210,12 +201,8 @@ func (p *bedrockProvider) Call(
 	opt pconfig.ProviderOptionsType,
 	prompt string,
 ) (string, error) {
-	ctx, options := p.providerConfig.PrepareAdaptiveCallOptions(
-		ctx, p.models, opt, p.providerConfig.GetOptionsForType(opt),
-	)
-
 	return provider.WrapGenerateFromSinglePrompt(
-		ctx, p, opt, p.llm, prompt, options...,
+		ctx, p, opt, p.llm, prompt, p.providerConfig.GetOptionsForType(opt)...,
 	)
 }
 
@@ -245,7 +232,6 @@ func (p *bedrockProvider) CallEx(
 	options := []llms.CallOption{llms.WithStreamingFunc(streamCb)}
 	options = append(options, configOptions...)
 	options = append(options, llms.WithTools(tools))
-	ctx, options = p.providerConfig.PrepareAdaptiveCallOptions(ctx, p.models, opt, options)
 
 	return provider.WrapGenerateContent(ctx, p, opt, p.llm.GenerateContent, chain, options...)
 }
@@ -270,13 +256,10 @@ func (p *bedrockProvider) CallWithTools(
 
 	// Put cleaned tools after config to override any dirty tools restored from config.
 	options := append(configOptions, llms.WithStreamingFunc(streamCb), llms.WithTools(tools))
-	ctx, options = p.providerConfig.PrepareAdaptiveCallOptions(ctx, p.models, opt, options)
 
 	return provider.WrapGenerateContent(ctx, p, opt, p.llm.GenerateContent, chain, options...)
 }
 
-// CallWithExtraOptions: extra wins over both the config and the auto-adaptive
-// append below, since it's appended last.
 func (p *bedrockProvider) CallWithExtraOptions(
 	ctx context.Context,
 	opt pconfig.ProviderOptionsType,
@@ -290,13 +273,11 @@ func (p *bedrockProvider) CallWithExtraOptions(
 
 	configOptions := p.providerConfig.GetOptionsForType(opt)
 
-	base := []llms.CallOption{llms.WithStreamingFunc(streamCb)}
-	base = append(base, configOptions...)
+	options := []llms.CallOption{llms.WithStreamingFunc(streamCb)}
+	options = append(options, configOptions...)
 	if len(tools) > 0 {
-		base = append(base, llms.WithTools(tools))
+		options = append(options, llms.WithTools(tools))
 	}
-
-	ctx, options := p.providerConfig.PrepareAdaptiveCallOptions(ctx, p.models, opt, base)
 	options = append(options, extra...)
 
 	return provider.WrapGenerateContent(ctx, p, opt, p.llm.GenerateContent, chain, options...)

@@ -30,7 +30,7 @@ import {
 function Probe() {
     const { versionInfo } = useVersionInfo();
 
-    return <span data-testid="state">{versionInfo?.state ?? 'none'}</span>;
+    return <span data-slot="state">{versionInfo?.state ?? 'none'}</span>;
 }
 
 describe('VersionInfoProvider', () => {

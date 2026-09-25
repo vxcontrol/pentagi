@@ -100,6 +100,17 @@ describe('reload guard', () => {
         expect(reloadSpy).toHaveBeenCalledTimes(1);
     });
 
+    it('does not reload while the browser is offline, and reloads once it is back', () => {
+        const onLine = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+
+        expect(reloadOnce()).toBe(false);
+        expect(reloadSpy).not.toHaveBeenCalled();
+
+        onLine.mockReturnValue(true);
+        expect(reloadOnce()).toBe(true);
+        expect(reloadSpy).toHaveBeenCalledTimes(1);
+    });
+
     it('reloads again once the debounce window has passed (a later deploy)', () => {
         expect(reloadOnce()).toBe(true);
         now += 11_000;

@@ -3,10 +3,11 @@ import { toast } from 'sonner';
 
 import type { OverwriteOutcome } from '@/components/shared/overwrite';
 
+import { pluralizeItems } from '@/components/shared/file-manager';
 import { api, getApiErrorMessage, getApiErrorStatusCode } from '@/lib/axios';
 
 import { CONTAINER_TARGET_DIRECTORY, FLOW_FILES_PULL_API_PATH } from './flow-files-constants';
-import { type FlowFilesResponse, pluralizeItems } from './flow-files-utils';
+import { type FlowFilesResponse } from './flow-files-utils';
 
 interface UseFlowFilesPullParams {
     flowId: null | string;

@@ -16,7 +16,7 @@ vi.mock('react-router-dom', () => ({
 }));
 
 vi.mock('@/components/shared/markdown', () => ({
-    default: ({ children }: { children: string }) => <div data-testid="markdown">{children}</div>,
+    default: ({ children }: { children: string }) => <div data-slot="probe-markdown">{children}</div>,
 }));
 
 vi.mock('@/lib/report', () => ({
@@ -37,7 +37,7 @@ describe('FlowReport load states', () => {
 
         render(<FlowReport />);
 
-        expect(screen.getByTestId('markdown')).toHaveTextContent('Recon: 0 tasks');
+        expect(screen.getByTestId('probe-markdown')).toHaveTextContent('Recon: 0 tasks');
         expect(screen.queryByText('Failed to load flow data')).not.toBeInTheDocument();
     });
 

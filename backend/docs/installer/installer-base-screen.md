@@ -608,15 +608,12 @@ case *ExampleFormModel:
 
 `app.forwardMsgToCurrentModel` calls `Update` on the current model and adopts the result only when `RestoreModel` recognises it — when it returns `nil` there is no fallback and no log: the app keeps the pointer it already holds, and returns the command either way. What a missing branch actually costs is worth stating precisely, because the obvious answer is wrong. Every screen in `wizard/models` has a pointer receiver on `Update` and returns *itself*, so the object the app renders is the object `Update` has just mutated — nothing freezes, and a missing branch shows no symptom at all. The branch is load-bearing for the case the type allows but nobody has written yet: a model that returns a *different* model, dropped silently with nothing anywhere to say why. That is why the contract is "every screen is listed" rather than "list the ones that need it" — the day a screen starts returning something else is not the day anybody remembers this rule. The `nil` is load-bearing in the other direction too: a `MaintenanceModel` delegates `Update` to its embedded `*ListScreen`, which returns *itself*, and `RestoreModel` not knowing `*ListScreen` is exactly what keeps the app pointing at the whole screen instead of one of its parts — so list the concrete screen type and nothing else.
 
-`TestEveryScreenModelIsRestorable` in `installer_update_test.go` pins membership:
+`TestTypes_RestoreModel_RestoresTheUpdateScreens` in `types_test.go` pins membership:
 
 ```go
-for name, model := range map[string]tea.Model{
-    "InstallerUpdateModel": (*InstallerUpdateModel)(nil),
-    "UpdateOverviewModel":  (*UpdateOverviewModel)(nil),
-} {
+for _, model := range []tea.Model{(*InstallerUpdateModel)(nil), (*UpdateOverviewModel)(nil)} {
     if RestoreModel(model) == nil {
-        t.Errorf("%s is missing its branch in RestoreModel", name)
+        t.Errorf("%T is missing its branch in RestoreModel", model)
     }
 }
 ```

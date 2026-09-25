@@ -53,3 +53,9 @@ export const createTextMatcher = (query: string): ((text: null | string | undefi
  */
 export const matchesTextFilter = (text: null | string | undefined, query: string): boolean =>
     createTextMatcher(query)(text);
+
+export const matchesSearchTerm = (text: null | string | undefined, searchValue: string): boolean => {
+    const query = searchValue.trim();
+
+    return query.length > 0 && matchesTextFilter(text, query);
+};

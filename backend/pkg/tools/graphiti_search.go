@@ -619,10 +619,10 @@ func FormatGraphitiTemporalResults(
 	var builder strings.Builder
 
 	builder.WriteString("# Temporal Search Results\n\n")
-	builder.WriteString(fmt.Sprintf("**Query:** %s\n\n", query))
-	builder.WriteString(fmt.Sprintf("**Time Window:** %s to %s\n\n",
+	fmt.Fprintf(&builder, "**Query:** %s\n\n", query)
+	fmt.Fprintf(&builder, "**Time Window:** %s to %s\n\n",
 		resp.TimeWindow.Start.Format(time.RFC3339),
-		resp.TimeWindow.End.Format(time.RFC3339)))
+		resp.TimeWindow.End.Format(time.RFC3339))
 
 	// Format edges (facts/relationships)
 	if len(resp.Edges) > 0 {
@@ -632,11 +632,11 @@ func FormatGraphitiTemporalResults(
 			if i < len(resp.EdgeScores) {
 				score = fmt.Sprintf(" (score: %.3f)", resp.EdgeScores[i])
 			}
-			builder.WriteString(fmt.Sprintf("%d. **%s**%s\n", i+1, edge.Name, score))
-			builder.WriteString(fmt.Sprintf("   - Fact: %s\n", edge.Fact))
-			builder.WriteString(fmt.Sprintf("   - Created: %s\n", edge.CreatedAt.Format(time.RFC3339)))
+			fmt.Fprintf(&builder, "%d. **%s**%s\n", i+1, edge.Name, score)
+			fmt.Fprintf(&builder, "   - Fact: %s\n", edge.Fact)
+			fmt.Fprintf(&builder, "   - Created: %s\n", edge.CreatedAt.Format(time.RFC3339))
 			if edge.ValidAt != nil {
-				builder.WriteString(fmt.Sprintf("   - Valid At: %s\n", edge.ValidAt.Format(time.RFC3339)))
+				fmt.Fprintf(&builder, "   - Valid At: %s\n", edge.ValidAt.Format(time.RFC3339))
 			}
 			builder.WriteString("\n")
 		}
@@ -650,12 +650,12 @@ func FormatGraphitiTemporalResults(
 			if i < len(resp.NodeScores) {
 				score = fmt.Sprintf(" (score: %.3f)", resp.NodeScores[i])
 			}
-			builder.WriteString(fmt.Sprintf("%d. **%s**%s\n", i+1, node.Name, score))
-			builder.WriteString(fmt.Sprintf("   - UUID: %s\n", node.UUID))
-			builder.WriteString(fmt.Sprintf("   - Labels: %v\n", node.Labels))
-			builder.WriteString(fmt.Sprintf("   - Summary: %s\n", node.Summary))
+			fmt.Fprintf(&builder, "%d. **%s**%s\n", i+1, node.Name, score)
+			fmt.Fprintf(&builder, "   - UUID: %s\n", node.UUID)
+			fmt.Fprintf(&builder, "   - Labels: %v\n", node.Labels)
+			fmt.Fprintf(&builder, "   - Summary: %s\n", node.Summary)
 			if len(node.Attributes) > 0 {
-				builder.WriteString(fmt.Sprintf("   - Attributes: %v\n", node.Attributes))
+				fmt.Fprintf(&builder, "   - Attributes: %v\n", node.Attributes)
 			}
 			builder.WriteString("\n")
 		}
@@ -669,10 +669,10 @@ func FormatGraphitiTemporalResults(
 			if i < len(resp.EpisodeScores) {
 				score = fmt.Sprintf(" (score: %.3f)", resp.EpisodeScores[i])
 			}
-			builder.WriteString(fmt.Sprintf("%d. **%s**%s\n", i+1, episode.Source, score))
-			builder.WriteString(fmt.Sprintf("   - Description: %s\n", episode.SourceDescription))
-			builder.WriteString(fmt.Sprintf("   - Created: %s\n", episode.CreatedAt.Format(time.RFC3339)))
-			builder.WriteString(fmt.Sprintf("   - Content:\n```\n%s\n```\n", episode.Content))
+			fmt.Fprintf(&builder, "%d. **%s**%s\n", i+1, episode.Source, score)
+			fmt.Fprintf(&builder, "   - Description: %s\n", episode.SourceDescription)
+			fmt.Fprintf(&builder, "   - Created: %s\n", episode.CreatedAt.Format(time.RFC3339))
+			fmt.Fprintf(&builder, "   - Content:\n```\n%s\n```\n", episode.Content)
 			builder.WriteString("\n")
 		}
 	}
@@ -692,12 +692,12 @@ func FormatGraphitiEntityRelationshipResults(
 	var builder strings.Builder
 
 	builder.WriteString("# Entity Relationship Search Results\n\n")
-	builder.WriteString(fmt.Sprintf("**Query:** %s\n\n", query))
+	fmt.Fprintf(&builder, "**Query:** %s\n\n", query)
 
 	if resp.CenterNode != nil {
-		builder.WriteString(fmt.Sprintf("## Center Node: %s\n", resp.CenterNode.Name))
-		builder.WriteString(fmt.Sprintf("- UUID: %s\n", resp.CenterNode.UUID))
-		builder.WriteString(fmt.Sprintf("- Summary: %s\n\n", resp.CenterNode.Summary))
+		fmt.Fprintf(&builder, "## Center Node: %s\n", resp.CenterNode.Name)
+		fmt.Fprintf(&builder, "- UUID: %s\n", resp.CenterNode.UUID)
+		fmt.Fprintf(&builder, "- Summary: %s\n\n", resp.CenterNode.Summary)
 	}
 
 	if len(resp.Edges) > 0 {
@@ -707,10 +707,10 @@ func FormatGraphitiEntityRelationshipResults(
 			if i < len(resp.EdgeDistances) {
 				dist = fmt.Sprintf(" (distance: %.3f)", resp.EdgeDistances[i])
 			}
-			builder.WriteString(fmt.Sprintf("%d. **%s**%s\n", i+1, edge.Name, dist))
-			builder.WriteString(fmt.Sprintf("   - Fact: %s\n", edge.Fact))
-			builder.WriteString(fmt.Sprintf("   - Source: %s\n", edge.SourceNodeUUID))
-			builder.WriteString(fmt.Sprintf("   - Target: %s\n", edge.TargetNodeUUID))
+			fmt.Fprintf(&builder, "%d. **%s**%s\n", i+1, edge.Name, dist)
+			fmt.Fprintf(&builder, "   - Fact: %s\n", edge.Fact)
+			fmt.Fprintf(&builder, "   - Source: %s\n", edge.SourceNodeUUID)
+			fmt.Fprintf(&builder, "   - Target: %s\n", edge.TargetNodeUUID)
 			builder.WriteString("\n")
 		}
 	}
@@ -722,10 +722,10 @@ func FormatGraphitiEntityRelationshipResults(
 			if i < len(resp.NodeDistances) {
 				dist = fmt.Sprintf(" (distance: %.3f)", resp.NodeDistances[i])
 			}
-			builder.WriteString(fmt.Sprintf("%d. **%s**%s\n", i+1, node.Name, dist))
-			builder.WriteString(fmt.Sprintf("   - UUID: %s\n", node.UUID))
-			builder.WriteString(fmt.Sprintf("   - Labels: %v\n", node.Labels))
-			builder.WriteString(fmt.Sprintf("   - Summary: %s\n", node.Summary))
+			fmt.Fprintf(&builder, "%d. **%s**%s\n", i+1, node.Name, dist)
+			fmt.Fprintf(&builder, "   - UUID: %s\n", node.UUID)
+			fmt.Fprintf(&builder, "   - Labels: %v\n", node.Labels)
+			fmt.Fprintf(&builder, "   - Summary: %s\n", node.Summary)
 			builder.WriteString("\n")
 		}
 	}
@@ -745,7 +745,7 @@ func FormatGraphitiDiverseResults(
 	var builder strings.Builder
 
 	builder.WriteString("# Diverse Search Results\n\n")
-	builder.WriteString(fmt.Sprintf("**Query:** %s\n\n", query))
+	fmt.Fprintf(&builder, "**Query:** %s\n\n", query)
 
 	if len(resp.Communities) > 0 {
 		builder.WriteString("## Communities (Context Clusters)\n\n")
@@ -754,9 +754,9 @@ func FormatGraphitiDiverseResults(
 			if i < len(resp.CommunityMMRScores) {
 				score = fmt.Sprintf(" (MMR score: %.3f)", resp.CommunityMMRScores[i])
 			}
-			builder.WriteString(fmt.Sprintf("%d. **%s**%s\n", i+1, comm.Name, score))
-			builder.WriteString(fmt.Sprintf("   - UUID: %s\n", comm.UUID))
-			builder.WriteString(fmt.Sprintf("   - Summary: %s\n\n", comm.Summary))
+			fmt.Fprintf(&builder, "%d. **%s**%s\n", i+1, comm.Name, score)
+			fmt.Fprintf(&builder, "   - UUID: %s\n", comm.UUID)
+			fmt.Fprintf(&builder, "   - Summary: %s\n\n", comm.Summary)
 		}
 	}
 
@@ -767,8 +767,8 @@ func FormatGraphitiDiverseResults(
 			if i < len(resp.EdgeMMRScores) {
 				score = fmt.Sprintf(" (MMR score: %.3f)", resp.EdgeMMRScores[i])
 			}
-			builder.WriteString(fmt.Sprintf("%d. **%s**%s\n", i+1, edge.Name, score))
-			builder.WriteString(fmt.Sprintf("   - Fact: %s\n\n", edge.Fact))
+			fmt.Fprintf(&builder, "%d. **%s**%s\n", i+1, edge.Name, score)
+			fmt.Fprintf(&builder, "   - Fact: %s\n\n", edge.Fact)
 		}
 	}
 
@@ -779,9 +779,9 @@ func FormatGraphitiDiverseResults(
 			if i < len(resp.EpisodeScores) { // Using raw scores for episodes as MMR scores might not be available in same format
 				score = fmt.Sprintf(" (score: %.3f)", resp.EpisodeScores[i])
 			}
-			builder.WriteString(fmt.Sprintf("%d. **%s**%s\n", i+1, ep.Source, score))
-			builder.WriteString(fmt.Sprintf("   - Description: %s\n", ep.SourceDescription))
-			builder.WriteString(fmt.Sprintf("   - Content: %s\n\n", truncate(ep.Content, 200)))
+			fmt.Fprintf(&builder, "%d. **%s**%s\n", i+1, ep.Source, score)
+			fmt.Fprintf(&builder, "   - Description: %s\n", ep.SourceDescription)
+			fmt.Fprintf(&builder, "   - Content: %s\n\n", truncate(ep.Content, 200))
 		}
 	}
 
@@ -796,7 +796,7 @@ func FormatGraphitiEpisodeContextResults(
 	var builder strings.Builder
 
 	builder.WriteString("# Episode Context Results\n\n")
-	builder.WriteString(fmt.Sprintf("**Query:** %s\n\n", query))
+	fmt.Fprintf(&builder, "**Query:** %s\n\n", query)
 
 	if len(resp.Episodes) > 0 {
 		builder.WriteString("## Relevant Agent Activity\n\n")
@@ -805,10 +805,10 @@ func FormatGraphitiEpisodeContextResults(
 			if i < len(resp.RerankerScores) {
 				score = fmt.Sprintf(" (relevance: %.3f)", resp.RerankerScores[i])
 			}
-			builder.WriteString(fmt.Sprintf("%d. **%s**%s\n", i+1, ep.Source, score))
-			builder.WriteString(fmt.Sprintf("   - Time: %s\n", ep.CreatedAt.Format(time.RFC3339)))
-			builder.WriteString(fmt.Sprintf("   - Description: %s\n", ep.SourceDescription))
-			builder.WriteString(fmt.Sprintf("   - Content:\n```\n%s\n```\n\n", ep.Content))
+			fmt.Fprintf(&builder, "%d. **%s**%s\n", i+1, ep.Source, score)
+			fmt.Fprintf(&builder, "   - Time: %s\n", ep.CreatedAt.Format(time.RFC3339))
+			fmt.Fprintf(&builder, "   - Description: %s\n", ep.SourceDescription)
+			fmt.Fprintf(&builder, "   - Content:\n```\n%s\n```\n\n", ep.Content)
 		}
 	}
 
@@ -819,7 +819,7 @@ func FormatGraphitiEpisodeContextResults(
 			if i < len(resp.MentionedNodeScores) {
 				score = fmt.Sprintf(" (relevance: %.3f)", resp.MentionedNodeScores[i])
 			}
-			builder.WriteString(fmt.Sprintf("- **%s**%s (UUID: %s): %s\n", node.Name, score, node.UUID, node.Summary))
+			fmt.Fprintf(&builder, "- **%s**%s (UUID: %s): %s\n", node.Name, score, node.UUID, node.Summary)
 		}
 	}
 
@@ -838,7 +838,7 @@ func FormatGraphitiSuccessfulToolsResults(
 	var builder strings.Builder
 
 	builder.WriteString("# Successful Tools & Techniques\n\n")
-	builder.WriteString(fmt.Sprintf("**Query:** %s\n\n", query))
+	fmt.Fprintf(&builder, "**Query:** %s\n\n", query)
 
 	if len(resp.Episodes) > 0 {
 		builder.WriteString("## Successful Executions\n\n")
@@ -847,9 +847,9 @@ func FormatGraphitiSuccessfulToolsResults(
 			if i < len(resp.EpisodeScores) {
 				score = fmt.Sprintf(" (score: %.3f)", resp.EpisodeScores[i])
 			}
-			builder.WriteString(fmt.Sprintf("%d. **%s**%s\n", i+1, ep.Source, score))
-			builder.WriteString(fmt.Sprintf("   - Description: %s\n", ep.SourceDescription))
-			builder.WriteString(fmt.Sprintf("   - Command/Output:\n```\n%s\n```\n\n", ep.Content))
+			fmt.Fprintf(&builder, "%d. **%s**%s\n", i+1, ep.Source, score)
+			fmt.Fprintf(&builder, "   - Description: %s\n", ep.SourceDescription)
+			fmt.Fprintf(&builder, "   - Command/Output:\n```\n%s\n```\n\n", ep.Content)
 		}
 	}
 
@@ -860,7 +860,7 @@ func FormatGraphitiSuccessfulToolsResults(
 			if i < len(resp.EdgeMentionCounts) {
 				count = fmt.Sprintf(" (mentions: %.0f)", resp.EdgeMentionCounts[i])
 			}
-			builder.WriteString(fmt.Sprintf("- **%s**%s: %s\n", edge.Name, count, edge.Fact))
+			fmt.Fprintf(&builder, "- **%s**%s: %s\n", edge.Name, count, edge.Fact)
 		}
 	}
 
@@ -879,10 +879,10 @@ func FormatGraphitiRecentContextResults(
 	var builder strings.Builder
 
 	builder.WriteString("# Recent Context\n\n")
-	builder.WriteString(fmt.Sprintf("**Query:** %s\n\n", query))
-	builder.WriteString(fmt.Sprintf("**Time Window:** %s to %s\n\n",
+	fmt.Fprintf(&builder, "**Query:** %s\n\n", query)
+	fmt.Fprintf(&builder, "**Time Window:** %s to %s\n\n",
 		resp.TimeWindow.Start.Format(time.RFC3339),
-		resp.TimeWindow.End.Format(time.RFC3339)))
+		resp.TimeWindow.End.Format(time.RFC3339))
 
 	if len(resp.Nodes) > 0 {
 		builder.WriteString("## Recently Discovered Entities\n\n")
@@ -891,10 +891,10 @@ func FormatGraphitiRecentContextResults(
 			if i < len(resp.NodeScores) {
 				score = fmt.Sprintf(" (score: %.3f)", resp.NodeScores[i])
 			}
-			builder.WriteString(fmt.Sprintf("%d. **%s**%s\n", i+1, node.Name, score))
-			builder.WriteString(fmt.Sprintf("   - UUID: %s\n", node.UUID))
-			builder.WriteString(fmt.Sprintf("   - Labels: %v\n", node.Labels))
-			builder.WriteString(fmt.Sprintf("   - Summary: %s\n\n", node.Summary))
+			fmt.Fprintf(&builder, "%d. **%s**%s\n", i+1, node.Name, score)
+			fmt.Fprintf(&builder, "   - UUID: %s\n", node.UUID)
+			fmt.Fprintf(&builder, "   - Labels: %v\n", node.Labels)
+			fmt.Fprintf(&builder, "   - Summary: %s\n\n", node.Summary)
 		}
 	}
 
@@ -905,7 +905,7 @@ func FormatGraphitiRecentContextResults(
 			if i < len(resp.EdgeScores) {
 				score = fmt.Sprintf(" (score: %.3f)", resp.EdgeScores[i])
 			}
-			builder.WriteString(fmt.Sprintf("- **%s**%s: %s\n", edge.Name, score, edge.Fact))
+			fmt.Fprintf(&builder, "- **%s**%s: %s\n", edge.Name, score, edge.Fact)
 		}
 	}
 
@@ -916,7 +916,7 @@ func FormatGraphitiRecentContextResults(
 			if i < len(resp.EpisodeScores) {
 				score = fmt.Sprintf(" (score: %.3f)", resp.EpisodeScores[i])
 			}
-			builder.WriteString(fmt.Sprintf("- **%s**%s: %s\n", ep.Source, score, ep.SourceDescription))
+			fmt.Fprintf(&builder, "- **%s**%s: %s\n", ep.Source, score, ep.SourceDescription)
 		}
 	}
 
@@ -935,7 +935,7 @@ func FormatGraphitiEntityByLabelResults(
 	var builder strings.Builder
 
 	builder.WriteString("# Entity Inventory Search\n\n")
-	builder.WriteString(fmt.Sprintf("**Query:** %s\n\n", query))
+	fmt.Fprintf(&builder, "**Query:** %s\n\n", query)
 
 	if len(resp.Nodes) > 0 {
 		builder.WriteString("## Matching Entities\n\n")
@@ -944,12 +944,12 @@ func FormatGraphitiEntityByLabelResults(
 			if i < len(resp.NodeScores) {
 				score = fmt.Sprintf(" (score: %.3f)", resp.NodeScores[i])
 			}
-			builder.WriteString(fmt.Sprintf("%d. **%s**%s\n", i+1, node.Name, score))
-			builder.WriteString(fmt.Sprintf("   - UUID: %s\n", node.UUID))
-			builder.WriteString(fmt.Sprintf("   - Labels: %v\n", node.Labels))
-			builder.WriteString(fmt.Sprintf("   - Summary: %s\n", node.Summary))
+			fmt.Fprintf(&builder, "%d. **%s**%s\n", i+1, node.Name, score)
+			fmt.Fprintf(&builder, "   - UUID: %s\n", node.UUID)
+			fmt.Fprintf(&builder, "   - Labels: %v\n", node.Labels)
+			fmt.Fprintf(&builder, "   - Summary: %s\n", node.Summary)
 			if len(node.Attributes) > 0 {
-				builder.WriteString(fmt.Sprintf("   - Attributes: %v\n", node.Attributes))
+				fmt.Fprintf(&builder, "   - Attributes: %v\n", node.Attributes)
 			}
 			builder.WriteString("\n")
 		}
@@ -962,7 +962,7 @@ func FormatGraphitiEntityByLabelResults(
 			if i < len(resp.EdgeScores) {
 				score = fmt.Sprintf(" (score: %.3f)", resp.EdgeScores[i])
 			}
-			builder.WriteString(fmt.Sprintf("- **%s**%s: %s\n", edge.Name, score, edge.Fact))
+			fmt.Fprintf(&builder, "- **%s**%s: %s\n", edge.Name, score, edge.Fact)
 		}
 	}
 

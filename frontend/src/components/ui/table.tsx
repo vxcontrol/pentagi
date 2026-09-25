@@ -1,19 +1,20 @@
 import * as React from 'react';
 
+import { ScrollableRegion } from '@/components/ui/scrollable-region';
 import { cn } from '@/lib/utils';
 
-function Table({ className, ...props }: React.ComponentProps<'table'>) {
+function Table({ className, ...props }: React.ComponentProps<'table'> & { 'aria-label': string }) {
     return (
-        <div
-            className="relative w-full overflow-auto"
+        <ScrollableRegion
             data-slot="table-container"
+            label={props['aria-label']}
         >
             <table
                 className={cn('w-full caption-bottom text-sm', className)}
                 data-slot="table"
                 {...props}
             />
-        </div>
+        </ScrollableRegion>
     );
 }
 

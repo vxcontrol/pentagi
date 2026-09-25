@@ -45,6 +45,7 @@ func storeDocumentWithEmbeddingLimit(
 	if err != nil {
 		return "", fmt.Errorf("failed to compute embedding: %w", err)
 	}
+	// A row without a vector is unreachable by similarity search, so it is refused rather than stored.
 	if len(vecs) == 0 {
 		return "", fmt.Errorf("embedder returned no vectors")
 	}

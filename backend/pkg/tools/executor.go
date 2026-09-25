@@ -5,16 +5,21 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 	"text/template"
 	"time"
+	"unicode/utf8"
 
+	"pentagi/pkg/cast"
 	"pentagi/pkg/database"
 	obs "pentagi/pkg/observability"
 	"pentagi/pkg/observability/langfuse"
 	"pentagi/pkg/schema"
 
+	"github.com/sirupsen/logrus"
+	"github.com/vxcontrol/cloud/anonymizer"
 	"github.com/vxcontrol/langchaingo/documentloaders"
 	"github.com/vxcontrol/langchaingo/llms"
 	"github.com/vxcontrol/langchaingo/textsplitter"
@@ -24,6 +29,11 @@ import (
 const DefaultResultSizeLimit = 16 * 1024 // 16 KB
 
 const maxArgValueLength = 1024 // 1 KB limit for argument values
+
+// closingWriteTimeout bounds the writes that must still land after the flow's
+// context is gone. Without a bound a cancelled flow could hold a connection for
+// as long as the database is unresponsive.
+const closingWriteTimeout = 10 * time.Second
 
 type dummyMessage struct {
 	Message string `json:"message"`
@@ -134,11 +144,12 @@ type customExecutor struct {
 	taskID    *int64
 	subtaskID *int64
 
-	db    database.Querier
-	mlp   MsgLogProvider
-	tclp  ToolCallLogProvider
-	store *pgvector.Store
-	vslp  VectorStoreLogProvider
+	db       database.Querier
+	mlp      MsgLogProvider
+	replacer anonymizer.Replacer
+	tclp     ToolCallLogProvider
+	store    *pgvector.Store
+	vslp     VectorStoreLogProvider
 
 	definitions []llms.FunctionDefinition
 	handlers    map[string]ExecutorHandler
@@ -239,6 +250,36 @@ func (ce *customExecutor) createSpanObservation(ctx context.Context, name string
 	}
 }
 
+// unknownToolResponse answers a call to a tool this executor does not have.
+//
+// It returns a result rather than an error on purpose: the model has to be able
+// to correct itself. What it needs to do that is the list of names it may use,
+// which is why the bare "not found" was not enough -- the model repeats the call
+// instead, and the repetition guard ends the chain over it.
+//
+// The summarizer's marker is the case that actually happens: cast.NewChainAST
+// writes a call by that name into the transcript wherever it compacts a segment,
+// so the model sees one and imitates it.
+func (ce *customExecutor) unknownToolResponse(ctx context.Context, id, name string) string {
+	// The marker is not logged. It is the transcript imitation described above,
+	// the answer below steers the model off it, and the call is not a defect in
+	// anything an operator can act on -- it was 108 of 570 lines in one day.
+	if name == cast.SummarizationToolName {
+		return fmt.Sprintf("'%s' is not a tool and never appears in your tool list. Compacting the "+
+			"history happens automatically; that name is only the marker left in the transcript where "+
+			"a stretch of it was replaced by a summary. There is nothing here to invoke by hand -- "+
+			"continue with the tools you were given.", name)
+	}
+
+	logrus.WithContext(ctx).WithFields(enrichLogrusFields(ce.flowID, ce.taskID, ce.subtaskID, logrus.Fields{
+		"tool":         name,
+		"tool_call_id": id,
+	})).Warn("model called a tool that does not exist")
+
+	return fmt.Sprintf("function '%s' not found in available tools list; available: %s",
+		name, strings.Join(slices.Sorted(maps.Keys(ce.handlers)), ", "))
+}
+
 func (ce *customExecutor) Execute(
 	ctx context.Context,
 	streamID int64,
@@ -249,7 +290,7 @@ func (ce *customExecutor) Execute(
 
 	handler, ok := ce.handlers[name]
 	if !ok {
-		return fmt.Sprintf("function '%s' not found in available tools list", name), nil
+		return ce.unknownToolResponse(ctx, id, name), nil
 	}
 
 	var raw any
@@ -292,6 +333,11 @@ func (ce *customExecutor) Execute(
 		return "", fmt.Errorf("failed to create toolcall: %w", err)
 	}
 
+	logger := logrus.WithContext(ctx).WithFields(enrichLogrusFields(ce.flowID, ce.taskID, ce.subtaskID, logrus.Fields{
+		"tool":         name,
+		"tool_call_id": id,
+	}))
+
 	wrapHandler := func(ctx context.Context, name string, args json.RawMessage) (string, database.MsglogResultFormat, error) {
 		resultFormat := getMessageResultFormat(name)
 		result, err := handler(ctx, name, args)
@@ -306,33 +352,28 @@ func (ce *customExecutor) Execute(
 
 		result = database.SanitizeUTF8(result)
 		allowSummarize := slices.Contains(allowedSummarizingToolsResult, name)
-		if ce.summarizer != nil && allowSummarize && len(result) > DefaultResultSizeLimit {
-			summarizePrompt, err := ce.getSummarizePrompt(name, string(args), result)
-			if err != nil {
-				return "", resultFormat, fmt.Errorf("failed to get summarize prompt: %w", err)
+		switch {
+		case ce.summarizer != nil && allowSummarize && len(result) > DefaultResultSizeLimit:
+			summary, err := ce.summarizeResult(ctx, name, args, result)
+			if err == nil {
+				result, resultFormat = summary, database.MsglogResultFormatMarkdown
+				break
 			}
-			result, err = ce.summarizer(persistCtx, summarizePrompt)
-			if err != nil {
+			if ctx.Err() != nil {
 				durationDelta := time.Since(startTime).Seconds()
 				failureResult := fmt.Sprintf("failed to summarize result: %s", err.Error())
 				_ = ce.tclp.UpdateLogFailed(persistCtx, tcID, failureResult, durationDelta)
 				return "", resultFormat, fmt.Errorf("failed to summarize result: %w", err)
 			}
-			resultFormat = database.MsglogResultFormatMarkdown
-		} else if allowSummarize && len(result) > DefaultResultSizeLimit*2 {
-			result = fmt.Sprintf("%s\n[0:%d bytes]\n... [truncated] ...\n[%d:%d bytes]\n%s",
-				result[:DefaultResultSizeLimit],
-				DefaultResultSizeLimit,
-				len(result)-DefaultResultSizeLimit,
-				len(result),
-				result[len(result)-DefaultResultSizeLimit:],
-			)
+			logger.WithError(err).Warn("failed to summarize tool result, truncating it instead")
+			result = truncateResult(result)
+		case allowSummarize:
+			result = truncateResult(result)
 		}
 
 		durationDelta := time.Since(startTime).Seconds()
-		err = ce.tclp.UpdateLogSuccess(persistCtx, tcID, result, durationDelta)
-		if err != nil {
-			return "", resultFormat, fmt.Errorf("failed to update toolcall result: %w", err)
+		if err := ce.tclp.UpdateLogSuccess(persistCtx, tcID, result, durationDelta); err != nil {
+			obs.LogErrorOrCancel(logger, err, "failed to update toolcall result")
 		}
 
 		return result, resultFormat, nil
@@ -351,20 +392,57 @@ func (ce *customExecutor) Execute(
 	}
 
 	if err := ce.storeToolResult(ctx, name, result, args); err != nil {
-		obsWrapper.end(result, err, time.Since(startTime).Seconds())
-		return "", fmt.Errorf("failed to store tool result in long-term memory: %w", err)
+		obs.LogErrorOrCancel(logger, err, "failed to store tool result in long-term memory")
 	}
 
 	if msgID != 0 {
-		if err := ce.mlp.UpdateMsgResult(ctx, msgID, streamID, result, resultFormat); err != nil {
-			obsWrapper.end(result, err, time.Since(startTime).Seconds())
-			return "", err
+		// The toolcall row is already written on a detached context. The message
+		// log is the operator-visible half of the same record, so a cancellation
+		// between the two leaves them disagreeing: the tool call finished with a
+		// result, the message it belongs to empty.
+		msgCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), closingWriteTimeout)
+		defer cancel()
+
+		if err := ce.mlp.UpdateMsgResult(msgCtx, msgID, streamID, result, resultFormat); err != nil {
+			obs.LogErrorOrCancel(logger, err, "failed to update tool call message result")
 		}
 	}
 
 	obsWrapper.end(result, nil, time.Since(startTime).Seconds())
 
 	return result, nil
+}
+
+func (ce *customExecutor) summarizeResult(ctx context.Context, name string, args json.RawMessage, result string) (string, error) {
+	summarizePrompt, err := ce.getSummarizePrompt(name, string(args), result)
+	if err != nil {
+		return "", fmt.Errorf("failed to get summarize prompt: %w", err)
+	}
+
+	return ce.summarizer(ctx, summarizePrompt)
+}
+
+func truncateResult(result string) string {
+	if len(result) <= DefaultResultSizeLimit*2 {
+		return result
+	}
+
+	head := DefaultResultSizeLimit
+	for head > 0 && !utf8.RuneStart(result[head]) {
+		head--
+	}
+	tail := len(result) - DefaultResultSizeLimit
+	for tail < len(result) && !utf8.RuneStart(result[tail]) {
+		tail++
+	}
+
+	return fmt.Sprintf("%s\n[0:%d bytes]\n... [truncated] ...\n[%d:%d bytes]\n%s",
+		result[:head],
+		head,
+		tail,
+		len(result),
+		result[tail:],
+	)
 }
 
 func (ce *customExecutor) IsBarrierFunction(name string) bool {
@@ -474,7 +552,7 @@ The summary must provide the same practical value as the original while being co
 		if len(strValue) > maxArgValueLength {
 			strValue = strValue[:maxArgValueLength] + "... [truncated]"
 		}
-		formattedArgs.WriteString(fmt.Sprintf("%s: %s\n", key, strValue))
+		fmt.Fprintf(&formattedArgs, "%s: %s\n", key, strValue)
 	}
 
 	var schemaJSON string
@@ -526,9 +604,9 @@ func (ce *customExecutor) storeToolResult(ctx context.Context, name, result stri
 	}
 
 	var buffer strings.Builder
-	buffer.WriteString(fmt.Sprintf("### Incoming arguments\n\n```json\n%s\n```\n\n", args))
-	buffer.WriteString(fmt.Sprintf("#### Tool result\n\n%s\n\n", result))
-	text := buffer.String()
+	fmt.Fprintf(&buffer, "### Incoming arguments\n\n```json\n%s\n```\n\n", args)
+	fmt.Fprintf(&buffer, "#### Tool result\n\n%s\n\n", result)
+	text := ce.replacer.ReplaceString(buffer.String())
 
 	split := textsplitter.NewRecursiveCharacter(
 		textsplitter.WithChunkSize(2000),
@@ -582,18 +660,20 @@ func (ce *customExecutor) storeToolResult(ctx context.Context, name, result stri
 		if err != nil {
 			return fmt.Errorf("failed to marshal filters: %w", err)
 		}
-		query, err := ce.argsToMarkdown(args)
+		rawQuery, err := ce.argsToMarkdown(args)
 		if err != nil {
 			return fmt.Errorf("failed to convert arguments to markdown: %w", err)
 		}
+
+		anonymizedQuery := ce.replacer.ReplaceString(rawQuery)
 		_, _ = ce.vslp.PutLog(
 			ctx,
 			agentCtx.ParentAgentType,
 			agentCtx.CurrentAgentType,
 			filtersData,
-			query,
+			anonymizedQuery,
 			database.VecstoreActionTypeStore,
-			result,
+			text,
 			ce.taskID,
 			ce.subtaskID,
 		)
@@ -613,7 +693,7 @@ func (ce *customExecutor) argsToMarkdown(args json.RawMessage) (string, error) {
 		if key == "message" {
 			continue
 		}
-		buffer.WriteString(fmt.Sprintf("* %s: %v\n", key, value))
+		fmt.Fprintf(&buffer, "* %s: %v\n", key, value)
 	}
 
 	return buffer.String(), nil

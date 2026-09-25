@@ -1,10 +1,12 @@
 package searchers
 
 import (
-	"io"
+	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -12,407 +14,181 @@ import (
 	"pentagi/pkg/database"
 )
 
-func testDuckDuckGoConfig() *config.Config {
-	return &config.Config{
-		DuckDuckGoEnabled:    true,
-		DuckDuckGoRegion:     RegionUS,
-		DuckDuckGoSafeSearch: DuckDuckGoSafeSearchModerate,
-		DuckDuckGoTimeRange:  "",
+// searchersDuckduckgoPage renders n result blocks the way html.duckduckgo.com lays them out.
+func searchersDuckduckgoPage(n int) string {
+	var b strings.Builder
+	for i := 1; i <= n; i++ {
+		fmt.Fprintf(&b, `<div class="result results_links results_links_deep web-result">
+	<div class="links_main links_deep result__body">
+		<h2 class="result__title"><a rel="nofollow" class="result__a" href="https://example.com/%d">Result %d</a></h2>
+		<a class="result__snippet" href="https://example.com/%d">Description %d</a>
+		<div class="clear"></div>
+	</div>
+</div>
+`, i, i, i, i)
 	}
+	return b.String()
 }
 
-func TestDuckDuckGoHandle(t *testing.T) {
-	var seenRequest bool
-	var receivedMethod string
-	var receivedContentType string
-	var receivedUserAgent string
-	var receivedAccept string
-	var receivedBody []byte
-
-	mockMux := http.NewServeMux()
-	mockMux.HandleFunc("/html/", func(w http.ResponseWriter, r *http.Request) {
-		seenRequest = true
-		receivedMethod = r.Method
-		receivedContentType = r.Header.Get("Content-Type")
-		receivedUserAgent = r.Header.Get("User-Agent")
-		receivedAccept = r.Header.Get("Accept")
-
-		var err error
-		receivedBody, err = io.ReadAll(r.Body)
-		if err != nil {
-			t.Errorf("failed to read request body: %v", err)
-		}
-
-		// Serve a simple mock HTML response
-		w.Header().Set("Content-Type", "text/html")
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`
-			<div class="result results_links results_links_deep web-result">
-				<div class="links_main links_deep result__body">
-					<h2 class="result__title">
-						<a rel="nofollow" class="result__a" href="https://example.com/test">Test Result Title</a>
-					</h2>
-					<a class="result__snippet" href="https://example.com/test">This is a test description</a>
-					<div class="clear"></div>
-				</div>
-			</div>
-		`))
-	})
-
-	proxy, err := newTestProxy("html.duckduckgo.com", mockMux)
-	if err != nil {
-		t.Fatalf("failed to create proxy: %v", err)
-	}
-	defer proxy.Close()
-
-	cfg := &config.Config{
+func TestDuckduckgo_Handle_PostsTheFormAndReturnsAtMostMaxResults(t *testing.T) {
+	up := &searchersUpstream{body: searchersDuckduckgoPage(12)}
+	p := newTestProxy(t, "html.duckduckgo.com", up)
+	ddg := NewDuckDuckGo(&config.Config{
 		DuckDuckGoEnabled:    true,
-		DuckDuckGoRegion:     RegionUS,
 		DuckDuckGoSafeSearch: DuckDuckGoSafeSearchModerate,
-		ProxyURL:             proxy.URL(),
-		ExternalSSLCAPath:    proxy.CACertPath(),
-	}
-
-	ddg := NewDuckDuckGo(cfg)
-
-	got, err := ddg.Handle(
-		t.Context(),
-		Request{Query: "test query", MaxResults: 5},
-	)
-	if err != nil {
-		t.Fatalf("Handle() unexpected error: %v", err)
-	}
+		ProxyURL:             p.URL(),
+		ExternalSSLCAPath:    p.CACertPath(),
+	})
 	if ddg.Engine() != database.SearchengineTypeDuckduckgo {
 		t.Errorf("Engine() = %q, want %q", ddg.Engine(), database.SearchengineTypeDuckduckgo)
 	}
 
-	// Verify mock handler was called
-	if !seenRequest {
-		t.Fatal("request was not intercepted by proxy - mock handler was not called")
-	}
-
-	// Verify request was built correctly
-	if receivedMethod != http.MethodPost {
-		t.Errorf("request method = %q, want POST", receivedMethod)
-	}
-	if receivedContentType != "application/x-www-form-urlencoded" {
-		t.Errorf("Content-Type = %q, want application/x-www-form-urlencoded", receivedContentType)
-	}
-	if !strings.Contains(receivedUserAgent, "Mozilla") {
-		t.Errorf("User-Agent = %q, want to contain Mozilla", receivedUserAgent)
-	}
-	if !strings.Contains(receivedAccept, "text/html") {
-		t.Errorf("Accept = %q, want to contain text/html", receivedAccept)
-	}
-	if !strings.Contains(string(receivedBody), "q=test+query") {
-		t.Errorf("request body = %q, expected to contain query", string(receivedBody))
-	}
-	if !strings.Contains(string(receivedBody), "kl=us-en") {
-		t.Errorf("request body = %q, expected to contain region", string(receivedBody))
-	}
-
-	// Verify response was parsed correctly
-	if !strings.Contains(got, "# 1. Test Result Title") {
-		t.Errorf("result missing expected title: %q", got)
-	}
-	if !strings.Contains(got, "https://example.com/test") {
-		t.Errorf("result missing expected URL: %q", got)
-	}
-	if !strings.Contains(got, "This is a test description") {
-		t.Errorf("result missing expected description: %q", got)
-	}
-
-}
-
-func TestDuckDuckGoIsAvailable(t *testing.T) {
-	tests := []struct {
-		name string
-		cfg  *config.Config
-		want bool
+	for _, tt := range []struct {
+		name       string
+		maxResults int
+		want       int
 	}{
-		{
-			name: "available when enabled",
-			cfg:  testDuckDuckGoConfig(),
-			want: true,
-		},
-		{
-			name: "unavailable when disabled",
-			cfg:  &config.Config{DuckDuckGoEnabled: false},
-			want: false,
-		},
-		{
-			name: "unavailable when nil config",
-			cfg:  nil,
-			want: false,
-		},
-	}
-
-	for _, tt := range tests {
+		{"a limit below ten is kept", 5, 5},
+		{"a limit of ten is kept", 10, 10},
+		{"a larger limit is cut to ten", 100, 10},
+		{"no limit means ten", 0, 10},
+		{"a negative limit means ten", -5, 10},
+	} {
 		t.Run(tt.name, func(t *testing.T) {
-			ddg := &duckduckgo{cfg: tt.cfg}
-			if got := ddg.IsAvailable(); got != tt.want {
-				t.Errorf("IsAvailable() = %v, want %v", got, tt.want)
+			got, err := ddg.Handle(t.Context(), Request{Query: "test query", MaxResults: tt.maxResults})
+			if err != nil {
+				t.Fatalf("Handle() unexpected error: %v", err)
+			}
+
+			if up.method != http.MethodPost || up.path != "/html/" {
+				t.Errorf("request = %s %s, want POST /html/", up.method, up.path)
+			}
+			if ct := up.header.Get("Content-Type"); ct != "application/x-www-form-urlencoded" {
+				t.Errorf("Content-Type = %q, want application/x-www-form-urlencoded", ct)
+			}
+			if ua := up.header.Get("User-Agent"); !strings.Contains(ua, "Mozilla") {
+				t.Errorf("User-Agent = %q, want to contain Mozilla", ua)
+			}
+			if accept := up.header.Get("Accept"); !strings.Contains(accept, "text/html") {
+				t.Errorf("Accept = %q, want to contain text/html", accept)
+			}
+			form, err := url.ParseQuery(string(up.payload))
+			if err != nil || form.Get("q") != "test query" || form.Get("kl") != "us-en" || form.Get("kp") != "0" {
+				t.Errorf("request form = %q, want q=test query, kl=us-en, kp=0", up.payload)
+			}
+
+			if n := strings.Count(got, "## URL\n"); n != tt.want {
+				t.Errorf("Handle() returned %d results, want %d:\n%s", n, tt.want, got)
+			}
+			if !strings.Contains(got, "# 1. Result 1\n\n## URL\nhttps://example.com/1\n\n## Description\n\nDescription 1") {
+				t.Errorf("Handle() result misses the first result's title, URL and description:\n%s", got)
 			}
 		})
 	}
-}
 
-func TestDuckDuckGoHandle_ReturnsTypedError(t *testing.T) {
-	t.Run("search error returned as typed error", func(t *testing.T) {
-		var seenRequest bool
-		mockMux := http.NewServeMux()
-		mockMux.HandleFunc("/html/", func(w http.ResponseWriter, r *http.Request) {
-			seenRequest = true
-			w.WriteHeader(http.StatusBadGateway)
-		})
-
-		proxy, err := newTestProxy("html.duckduckgo.com", mockMux)
-		if err != nil {
-			t.Fatalf("failed to create proxy: %v", err)
-		}
-		defer proxy.Close()
-
-		ddg := &duckduckgo{
-			cfg: &config.Config{
-				DuckDuckGoEnabled: true,
-				ProxyURL:          proxy.URL(),
-				ExternalSSLCAPath: proxy.CACertPath(),
-			},
-		}
-
-		result, err := ddg.Handle(
-			t.Context(),
-			Request{Query: "test", MaxResults: 5},
-		)
-
-		// Verify mock handler was called (request was intercepted)
-		if !seenRequest {
-			t.Error("request was not intercepted by proxy - mock handler was not called")
-		}
-
-		// The error is now surfaced (not swallowed). DuckDuckGo retries internally, so
-		// a post-retry failure is classified as fatal (move to the next engine).
-		if err == nil {
-			t.Fatal("Handle() expected an error, got nil")
-		}
-		if result != "" {
-			t.Errorf("Handle() result = %q, want empty on error", result)
-		}
-		if !IsFatal(err) {
-			t.Errorf("Handle() error = %v, want a FatalError", err)
+	t.Run("a page without results says so", func(t *testing.T) {
+		up.reset(http.StatusOK, "<div>No results</div>")
+		if got, err := ddg.Handle(t.Context(), Request{Query: "test query", MaxResults: 5}); err != nil || got != "No results found" {
+			t.Errorf("Handle() = %q, %v; want %q", got, err, "No results found")
 		}
 	})
 }
 
-func TestDuckDuckGoHandle_StatusCodeErrors(t *testing.T) {
-	tests := []struct {
-		name       string
-		statusCode int
+func TestDuckduckgo_Handle_GivesUpFatallyAfterThreeRejectedAttempts(t *testing.T) {
+	for _, tt := range []struct {
+		name   string
+		status int
 	}{
-		{"server error", http.StatusInternalServerError},
-		{"not found", http.StatusNotFound},
-		{"forbidden", http.StatusForbidden},
-	}
-
-	for _, tt := range tests {
+		{"a server error is fatal once retried", http.StatusInternalServerError},
+		{"a client error is fatal once retried", http.StatusNotFound},
+	} {
 		t.Run(tt.name, func(t *testing.T) {
-			mockMux := http.NewServeMux()
-			mockMux.HandleFunc("/html/", func(w http.ResponseWriter, r *http.Request) {
-				w.WriteHeader(tt.statusCode)
+			up := &searchersUpstream{status: tt.status}
+			p := newTestProxy(t, "html.duckduckgo.com", up)
+			ddg := NewDuckDuckGo(&config.Config{
+				DuckDuckGoEnabled: true,
+				ProxyURL:          p.URL(),
+				ExternalSSLCAPath: p.CACertPath(),
 			})
 
-			proxy, err := newTestProxy("html.duckduckgo.com", mockMux)
-			if err != nil {
-				t.Fatalf("failed to create proxy: %v", err)
-			}
-			defer proxy.Close()
+			got, err := ddg.Handle(t.Context(), Request{Query: "test", MaxResults: 5})
 
-			ddg := &duckduckgo{
-				cfg: &config.Config{
-					DuckDuckGoEnabled: true,
-					ProxyURL:          proxy.URL(),
-					ExternalSSLCAPath: proxy.CACertPath(),
-				},
+			if got != "" || !IsFatal(err) {
+				t.Fatalf("Handle() = %q, %v; want no result and a FatalError", got, err)
 			}
-
-			result, err := ddg.Handle(
-				t.Context(),
-				Request{Query: "test", MaxResults: 5},
-			)
-
-			// The status-code failure surfaces as a typed (fatal) error.
-			if err == nil {
-				t.Fatal("Handle() expected an error, got nil")
+			if want := fmt.Sprintf("unexpected status code: %d", tt.status); !strings.Contains(err.Error(), want) {
+				t.Errorf("Handle() error = %v, want it to contain %q", err, want)
 			}
-			if result != "" {
-				t.Errorf("Handle() result = %q, want empty on error", result)
-			}
-			if !IsFatal(err) {
-				t.Errorf("Handle() error = %v, want a FatalError", err)
-			}
-			if !strings.Contains(err.Error(), "unexpected status code") {
-				t.Errorf("Handle() error = %v, expected status code detail", err)
+			if up.hits != 3 {
+				t.Errorf("upstream saw %d attempts, want 3", up.hits)
 			}
 		})
 	}
 }
 
-func TestDuckDuckGoParseHTMLStructured(t *testing.T) {
-	ddg := &duckduckgo{}
-	testdata := []struct {
-		filename string
-		expected int
-	}{
-		{filename: "ddg_result_golang_http_client.html", expected: 10},
-		{filename: "ddg_result_site_github_golang.html", expected: 10},
-		{filename: "ddg_result_owasp_vulnerabilities.html", expected: 10},
-		{filename: "ddg_result_sql_injection.html", expected: 10},
-		{filename: "ddg_result_docker_security.html", expected: 10},
+// Subtests are keyed by parser: parseHTMLStructured, and parseHTMLRegex that parseHTMLResponse falls back to.
+func TestDuckduckgo_ParseHTML_FindsEveryResultBlock(t *testing.T) {
+	type page struct {
+		name string
+		body []byte
+		want []searchResult
 	}
-
-	for _, tt := range testdata {
-		t.Run(tt.filename, func(t *testing.T) {
-			t.Parallel()
-
-			body, err := os.ReadFile(filepath.Join("testdata", tt.filename))
-			if err != nil {
-				t.Fatalf("failed to read test data: %v", err)
-			}
-
-			results, err := ddg.parseHTMLStructured(body)
-			if err != nil {
-				t.Fatalf("parseHTMLStructured failed: %v", err)
-			}
-
-			if len(results) != tt.expected {
-				t.Fatalf("expected %d results, got %d", tt.expected, len(results))
-			}
-
-			// Verify results
-			for i, r := range results {
-				if r.Title == "" {
-					t.Errorf("result %d should have title", i)
-				}
-				if r.URL == "" {
-					t.Errorf("result %d should have URL", i)
-				}
-				if r.Description == "" {
-					t.Errorf("result %d should have description", i)
-				}
-			}
-		})
+	pages := []page{{
+		name: "adjacent blocks stay apart",
+		body: []byte(searchersDuckduckgoPage(2)),
+		want: []searchResult{
+			{Title: "Result 1", URL: "https://example.com/1", Description: "Description 1"},
+			{Title: "Result 2", URL: "https://example.com/2", Description: "Description 2"},
+		},
+	}}
+	for _, file := range []string{
+		"ddg_result_golang_http_client.html",
+		"ddg_result_site_github_golang.html",
+		"ddg_result_owasp_vulnerabilities.html",
+		"ddg_result_sql_injection.html",
+		"ddg_result_docker_security.html",
+	} {
+		body, err := os.ReadFile(filepath.Join("testdata", file))
+		if err != nil {
+			t.Fatalf("failed to read test data: %v", err)
+		}
+		pages = append(pages, page{name: "ten results in " + file, body: body})
 	}
-}
-
-func TestDuckDuckGoParseHTMLRegex(t *testing.T) {
-	ddg := &duckduckgo{}
-	testdata := []struct {
-		filename string
-		expected int
-	}{
-		{filename: "ddg_result_golang_http_client.html", expected: 10},
-		{filename: "ddg_result_site_github_golang.html", expected: 10},
-		{filename: "ddg_result_owasp_vulnerabilities.html", expected: 10},
-		{filename: "ddg_result_sql_injection.html", expected: 10},
-		{filename: "ddg_result_docker_security.html", expected: 10},
-	}
-
-	for _, tt := range testdata {
-		t.Run(tt.filename, func(t *testing.T) {
-			t.Parallel()
-
-			body, err := os.ReadFile(filepath.Join("testdata", tt.filename))
-			if err != nil {
-				t.Fatalf("failed to read test data: %v", err)
-			}
-
-			results, err := ddg.parseHTMLRegex(body)
-			if err != nil {
-				t.Fatalf("parseHTMLRegex failed: %v", err)
-			}
-
-			if len(results) != tt.expected {
-				t.Fatalf("expected %d results, got %d", tt.expected, len(results))
-			}
-
-			// Verify results
-			for i, r := range results {
-				if r.Title == "" {
-					t.Errorf("result %d should have title", i)
-				}
-				if r.URL == "" {
-					t.Errorf("result %d should have URL", i)
-				}
-				if r.Description == "" {
-					t.Errorf("result %d should have description", i)
-				}
-			}
-		})
-	}
-}
-
-func TestDuckDuckGoParseHTMLRegex_BlockBoundaries(t *testing.T) {
-	// Sample HTML with multiple result blocks
-	htmlContent := `
-		<div class="result results_links results_links_deep web-result ">
-			<div class="links_main links_deep result__body">
-				<h2 class="result__title">
-					<a rel="nofollow" class="result__a" href="https://example1.com">Example 1</a>
-				</h2>
-				<a class="result__snippet" href="https://example1.com">First result description</a>
-				<div class="clear"></div>
-			</div>
-		</div>
-		<div class="result results_links results_links_deep web-result ">
-			<div class="links_main links_deep result__body">
-				<h2 class="result__title">
-					<a rel="nofollow" class="result__a" href="https://example2.com">Example 2</a>
-				</h2>
-				<a class="result__snippet" href="https://example2.com">Second result description</a>
-				<div class="clear"></div>
-			</div>
-		</div>
-	`
 
 	ddg := &duckduckgo{}
-	results, err := ddg.parseHTMLRegex([]byte(htmlContent))
-	if err != nil {
-		t.Fatalf("parseHTMLRegex failed: %v", err)
-	}
-
-	// Should find exactly 2 results
-	if len(results) != 2 {
-		t.Errorf("expected 2 results, got %d", len(results))
-	}
-
-	// Verify first result
-	if len(results) > 0 {
-		if results[0].Title != "Example 1" {
-			t.Errorf("first result title = %q, want %q", results[0].Title, "Example 1")
-		}
-		if results[0].URL != "https://example1.com" {
-			t.Errorf("first result URL = %q, want %q", results[0].URL, "https://example1.com")
-		}
-		if results[0].Description != "First result description" {
-			t.Errorf("first result description = %q, want %q", results[0].Description, "First result description")
-		}
-	}
-
-	// Verify second result
-	if len(results) > 1 {
-		if results[1].Title != "Example 2" {
-			t.Errorf("second result title = %q, want %q", results[1].Title, "Example 2")
-		}
-		if results[1].URL != "https://example2.com" {
-			t.Errorf("second result URL = %q, want %q", results[1].URL, "https://example2.com")
-		}
-		if results[1].Description != "Second result description" {
-			t.Errorf("second result description = %q, want %q", results[1].Description, "Second result description")
+	for _, pg := range pages {
+		for _, parser := range []struct {
+			name  string
+			parse func([]byte) ([]searchResult, error)
+		}{
+			{"structured parser", ddg.parseHTMLStructured},
+			{"regex parser", ddg.parseHTMLRegex},
+		} {
+			t.Run(parser.name+" finds "+pg.name, func(t *testing.T) {
+				got, err := parser.parse(pg.body)
+				if err != nil {
+					t.Fatalf("parse failed: %v", err)
+				}
+				if pg.want != nil {
+					if !reflect.DeepEqual(got, pg.want) {
+						t.Errorf("parsed %+v, want %+v", got, pg.want)
+					}
+					return
+				}
+				if len(got) != 10 {
+					t.Fatalf("expected 10 results, got %d", len(got))
+				}
+				for i, r := range got {
+					if r.Title == "" || r.URL == "" || r.Description == "" {
+						t.Errorf("result %d has an empty field: %+v", i, r)
+					}
+				}
+			})
 		}
 	}
 }
 
-func TestDuckDuckGoCleanText(t *testing.T) {
+func TestDuckduckgo_CleanText_StripsTagsAndDecodesEntities(t *testing.T) {
 	ddg := &duckduckgo{}
 
 	tests := []struct {
@@ -421,27 +197,32 @@ func TestDuckDuckGoCleanText(t *testing.T) {
 		expected string
 	}{
 		{
-			name:     "HTML tags",
+			name:     "html tags are dropped",
 			input:    "This is <b>bold</b> text",
 			expected: "This is bold text",
 		},
 		{
-			name:     "HTML entities",
+			name:     "a named apostrophe entity is decoded",
 			input:    "Go&#x27;s http package",
 			expected: "Go's http package",
 		},
 		{
-			name:     "Multiple entities",
+			name:     "several entities are decoded",
 			input:    "&quot;Hello&quot; &amp; &lt;goodbye&gt;",
 			expected: "\"Hello\" & <goodbye>",
 		},
 		{
-			name:     "Whitespace normalization",
+			name:     "numeric entities below 128 are decoded and others kept",
+			input:    "&#x41;&#66; &#x263A;",
+			expected: "AB &#x263A;",
+		},
+		{
+			name:     "whitespace is collapsed",
 			input:    "Multiple   spaces   and\n\nnewlines",
 			expected: "Multiple spaces and newlines",
 		},
 		{
-			name:     "Complex HTML",
+			name:     "tags and entities together",
 			input:    "The <b>http</b> package&#x27;s Transport &amp; Server",
 			expected: "The http package's Transport & Server",
 		},
@@ -457,7 +238,7 @@ func TestDuckDuckGoCleanText(t *testing.T) {
 	}
 }
 
-func TestDuckDuckGoFormatResults(t *testing.T) {
+func TestDuckduckgo_FormatSearchResults_NumbersResultsAndSeparatesThem(t *testing.T) {
 	ddg := &duckduckgo{}
 
 	t.Run("empty results", func(t *testing.T) {
@@ -510,122 +291,76 @@ func TestDuckDuckGoFormatResults(t *testing.T) {
 	})
 }
 
-func TestDuckDuckGoMaxResultsClamp(t *testing.T) {
-	tests := []struct {
-		name       string
-		maxResults int
-		wantClamp  int
+func TestDuckduckgo_BuildFormData_MapsTheSettingsToFormFields(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		cfg  config.Config
+		want url.Values
 	}{
-		{"valid max results", 5, 5},
-		{"max limit", 10, 10},
-		{"too large", 100, 10},
-		{"zero gets default", 0, 10},
-		{"negative gets default", -5, 10},
-	}
-
-	for _, tt := range tests {
+		{
+			name: "unset settings search the US without safe search or time range",
+			want: url.Values{"q": {"test query"}, "b": {""}, "df": {""}, "kl": {"us-en"}},
+		},
+		{
+			name: "a region is passed on",
+			cfg:  config.Config{DuckDuckGoRegion: RegionDE},
+			want: url.Values{"q": {"test query"}, "b": {""}, "df": {""}, "kl": {"de-de"}},
+		},
+		{
+			name: "strict safe search is 1",
+			cfg:  config.Config{DuckDuckGoSafeSearch: DuckDuckGoSafeSearchStrict},
+			want: url.Values{"q": {"test query"}, "b": {""}, "df": {""}, "kl": {"us-en"}, "kp": {"1"}},
+		},
+		{
+			name: "moderate safe search is 0",
+			cfg:  config.Config{DuckDuckGoSafeSearch: DuckDuckGoSafeSearchModerate},
+			want: url.Values{"q": {"test query"}, "b": {""}, "df": {""}, "kl": {"us-en"}, "kp": {"0"}},
+		},
+		{
+			name: "safe search off is -1",
+			cfg:  config.Config{DuckDuckGoSafeSearch: DuckDuckGoSafeSearchOff},
+			want: url.Values{"q": {"test query"}, "b": {""}, "df": {""}, "kl": {"us-en"}, "kp": {"-1"}},
+		},
+		{
+			name: "a time range fills df",
+			cfg:  config.Config{DuckDuckGoTimeRange: TimeRangeWeek},
+			want: url.Values{"q": {"test query"}, "b": {""}, "df": {"w"}, "kl": {"us-en"}},
+		},
+	} {
 		t.Run(tt.name, func(t *testing.T) {
-			mockMux := http.NewServeMux()
-			var receivedQuery string
-			mockMux.HandleFunc("/html/", func(w http.ResponseWriter, r *http.Request) {
-				body, _ := io.ReadAll(r.Body)
-				receivedQuery = string(body)
-				w.Header().Set("Content-Type", "text/html")
-				w.WriteHeader(http.StatusOK)
-				w.Write([]byte(`<div>No results</div>`))
-			})
-
-			proxy, err := newTestProxy("html.duckduckgo.com", mockMux)
+			got, err := url.ParseQuery((&duckduckgo{cfg: &tt.cfg}).buildFormData("test query"))
 			if err != nil {
-				t.Fatalf("failed to create proxy: %v", err)
+				t.Fatalf("buildFormData() is not a form: %v", err)
 			}
-			defer proxy.Close()
-
-			ddg := &duckduckgo{
-				cfg: &config.Config{
-					DuckDuckGoEnabled: true,
-					ProxyURL:          proxy.URL(),
-					ExternalSSLCAPath: proxy.CACertPath(),
-				},
-			}
-
-			_, err = ddg.Handle(
-				t.Context(),
-				Request{Query: "test", MaxResults: tt.maxResults},
-			)
-			if err != nil {
-				t.Fatalf("Handle() unexpected error: %v", err)
-			}
-
-			// Verify request was made (proxy captured it)
-			if !strings.Contains(receivedQuery, "q=test") {
-				t.Errorf("request not captured or query missing: %q", receivedQuery)
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("buildFormData() = %v, want %v", got, tt.want)
 			}
 		})
 	}
 }
 
-func TestDuckDuckGoSafeSearchMapping(t *testing.T) {
-	tests := []struct {
-		name       string
-		safeSearch string
-		want       string
-	}{
-		{"strict", DuckDuckGoSafeSearchStrict, "1"},
-		{"moderate", DuckDuckGoSafeSearchModerate, "0"},
-		{"off", DuckDuckGoSafeSearchOff, "-1"},
-		{"empty", "", ""},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			ddg := &duckduckgo{cfg: &config.Config{DuckDuckGoSafeSearch: tt.safeSearch}}
-			if got := ddg.safeSearch(); got != tt.want {
-				t.Errorf("safeSearch() = %q, want %q", got, tt.want)
-			}
-		})
+func TestDuckduckgo_Region_DefaultsToTheUSWithoutAConfig(t *testing.T) {
+	if got := (&duckduckgo{}).region(); got != "us-en" {
+		t.Errorf("region() with no config = %q, want %q", got, "us-en")
 	}
 }
 
-func TestDuckDuckGoRegionDefault(t *testing.T) {
+func TestDuckduckgo_IsAvailable_RequiresTheEnabledFlag(t *testing.T) {
 	tests := []struct {
 		name string
 		cfg  *config.Config
-		want string
+		want bool
 	}{
-		{"custom region", &config.Config{DuckDuckGoRegion: RegionDE}, RegionDE},
-		{"empty defaults to US", &config.Config{DuckDuckGoRegion: ""}, RegionUS},
-		{"nil config defaults to US", nil, RegionUS},
+		{"available when enabled", &config.Config{DuckDuckGoEnabled: true}, true},
+		{"unavailable when disabled", &config.Config{DuckDuckGoEnabled: false}, false},
+		{"unavailable when nil config", nil, false},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ddg := &duckduckgo{cfg: tt.cfg}
-			if got := ddg.region(); got != tt.want {
-				t.Errorf("region() = %q, want %q", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestDuckDuckGoTimeRange(t *testing.T) {
-	tests := []struct {
-		name      string
-		timeRange string
-		want      string
-	}{
-		{"day", TimeRangeDay, TimeRangeDay},
-		{"week", TimeRangeWeek, TimeRangeWeek},
-		{"month", TimeRangeMonth, TimeRangeMonth},
-		{"year", TimeRangeYear, TimeRangeYear},
-		{"empty", "", ""},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			ddg := &duckduckgo{cfg: &config.Config{DuckDuckGoTimeRange: tt.timeRange}}
-			if got := ddg.timeRange(); got != tt.want {
-				t.Errorf("timeRange() = %q, want %q", got, tt.want)
+			if got := ddg.IsAvailable(); got != tt.want {
+				t.Errorf("IsAvailable() = %v, want %v", got, tt.want)
 			}
 		})
 	}

@@ -77,12 +77,8 @@ SELECT
   COALESCE(COUNT(CASE WHEN tc.status IN ('finished', 'failed') THEN 1 END), 0)::bigint AS total_count,
   COALESCE(SUM(CASE WHEN tc.status IN ('finished', 'failed') THEN tc.duration_seconds ELSE 0 END), 0.0)::double precision AS total_duration_seconds
 FROM toolcalls tc
-LEFT JOIN tasks t ON tc.task_id = t.id
-LEFT JOIN subtasks s ON tc.subtask_id = s.id
-INNER JOIN flows f ON tc.flow_id = f.id
-WHERE tc.flow_id = $1 AND f.deleted_at IS NULL 
-  AND (tc.task_id IS NULL OR t.id IS NOT NULL)
-  AND (tc.subtask_id IS NULL OR s.id IS NOT NULL);
+INNER JOIN flows f ON f.id = tc.flow_id
+WHERE tc.flow_id = $1 AND f.deleted_at IS NULL;
 
 -- name: GetTaskToolcallsStats :one
 -- Get total execution time and count of toolcalls for a specific task
@@ -110,16 +106,14 @@ WHERE tc.subtask_id = $1 AND f.deleted_at IS NULL AND s.id IS NOT NULL AND t.id 
 -- name: GetAllFlowsToolcallsStats :many
 -- Get toolcalls stats for all flows
 SELECT
-  COALESCE(tc.flow_id, t.flow_id) AS flow_id,
+  tc.flow_id AS flow_id,
   COALESCE(COUNT(CASE WHEN tc.status IN ('finished', 'failed') THEN 1 END), 0)::bigint AS total_count,
   COALESCE(SUM(CASE WHEN tc.status IN ('finished', 'failed') THEN tc.duration_seconds ELSE 0 END), 0.0)::double precision AS total_duration_seconds
 FROM toolcalls tc
-LEFT JOIN subtasks s ON tc.subtask_id = s.id
-LEFT JOIN tasks t ON s.task_id = t.id OR tc.task_id = t.id
-INNER JOIN flows f ON (tc.flow_id = f.id OR t.flow_id = f.id)
+INNER JOIN flows f ON f.id = tc.flow_id
 WHERE f.deleted_at IS NULL
-GROUP BY COALESCE(tc.flow_id, t.flow_id)
-ORDER BY COALESCE(tc.flow_id, t.flow_id);
+GROUP BY tc.flow_id
+ORDER BY tc.flow_id;
 
 -- name: GetToolcallsStatsByFunction :many
 -- Get toolcalls stats grouped by function name for a user
@@ -129,9 +123,7 @@ SELECT
   COALESCE(SUM(CASE WHEN tc.status IN ('finished', 'failed') THEN tc.duration_seconds ELSE 0 END), 0.0)::double precision AS total_duration_seconds,
   COALESCE(AVG(CASE WHEN tc.status IN ('finished', 'failed') THEN tc.duration_seconds ELSE NULL END), 0.0)::double precision AS avg_duration_seconds
 FROM toolcalls tc
-LEFT JOIN subtasks s ON tc.subtask_id = s.id
-LEFT JOIN tasks t ON s.task_id = t.id OR tc.task_id = t.id
-INNER JOIN flows f ON (tc.flow_id = f.id OR t.flow_id = f.id)
+INNER JOIN flows f ON f.id = tc.flow_id
 WHERE f.deleted_at IS NULL AND f.user_id = $1
 GROUP BY tc.name
 ORDER BY total_duration_seconds DESC;
@@ -144,54 +136,48 @@ SELECT
   COALESCE(SUM(CASE WHEN tc.status IN ('finished', 'failed') THEN tc.duration_seconds ELSE 0 END), 0.0)::double precision AS total_duration_seconds,
   COALESCE(AVG(CASE WHEN tc.status IN ('finished', 'failed') THEN tc.duration_seconds ELSE NULL END), 0.0)::double precision AS avg_duration_seconds
 FROM toolcalls tc
-LEFT JOIN subtasks s ON tc.subtask_id = s.id
-LEFT JOIN tasks t ON s.task_id = t.id OR tc.task_id = t.id
-INNER JOIN flows f ON (tc.flow_id = f.id OR t.flow_id = f.id)
-WHERE (tc.flow_id = $1 OR t.flow_id = $1) AND f.deleted_at IS NULL
+INNER JOIN flows f ON f.id = tc.flow_id
+WHERE tc.flow_id = $1 AND f.deleted_at IS NULL
 GROUP BY tc.name
 ORDER BY total_duration_seconds DESC;
 
--- name: GetToolcallsStatsByDayLastWeek :many
--- Get toolcalls stats by day for the last week
+-- name: GetToolcallsStatsByDay :many
+-- One dense row per calendar day in the caller's timezone, zeros included.
+WITH bounds AS (
+  SELECT
+    ((NOW() AT TIME ZONE sqlc.arg(tz)::text)::date - sqlc.arg(days)::int) AS first_day,
+    (NOW() AT TIME ZONE sqlc.arg(tz)::text)::date AS last_day
+),
+days AS (
+  SELECT generate_series(b.first_day, b.last_day, INTERVAL '1 day')::date AS day
+  FROM bounds b
+),
+agg AS (
+  SELECT
+    (tc.created_at AT TIME ZONE sqlc.arg(tz)::text)::date AS day,
+    COUNT(CASE WHEN tc.status IN ('finished', 'failed') THEN 1 END)::bigint AS total_count,
+    SUM(CASE WHEN tc.status IN ('finished', 'failed') THEN tc.duration_seconds ELSE 0 END)::double precision AS total_duration_seconds
+  FROM toolcalls tc
+  INNER JOIN flows f ON f.id = tc.flow_id
+  WHERE f.deleted_at IS NULL
+    AND f.user_id = sqlc.arg(user_id)
+    -- The coarse bounds keep the index; the exact test repeats the grouping
+    -- expression, because an ambiguous local midnight resolves to the later
+    -- instant and would drop the earlier hour of that day.
+    AND tc.created_at >= (((SELECT first_day FROM bounds) - 1)::timestamp AT TIME ZONE sqlc.arg(tz)::text)
+    AND tc.created_at < (((SELECT last_day FROM bounds) + 2)::timestamp AT TIME ZONE sqlc.arg(tz)::text)
+    AND (tc.created_at AT TIME ZONE sqlc.arg(tz)::text)::date
+        BETWEEN (SELECT first_day FROM bounds) AND (SELECT last_day FROM bounds)
+  GROUP BY 1
+)
 SELECT
-  DATE(tc.created_at) AS date,
-  COALESCE(COUNT(CASE WHEN tc.status IN ('finished', 'failed') THEN 1 END), 0)::bigint AS total_count,
-  COALESCE(SUM(CASE WHEN tc.status IN ('finished', 'failed') THEN tc.duration_seconds ELSE 0 END), 0.0)::double precision AS total_duration_seconds
-FROM toolcalls tc
-LEFT JOIN subtasks s ON tc.subtask_id = s.id
-LEFT JOIN tasks t ON s.task_id = t.id OR tc.task_id = t.id
-INNER JOIN flows f ON (tc.flow_id = f.id OR t.flow_id = f.id)
-WHERE tc.created_at >= NOW() - INTERVAL '7 days' AND f.deleted_at IS NULL AND f.user_id = $1
-GROUP BY DATE(tc.created_at)
+  (d.day::timestamp AT TIME ZONE sqlc.arg(tz)::text) AS date,
+  COALESCE(a.total_count, 0)::bigint AS total_count,
+  COALESCE(a.total_duration_seconds, 0.0)::double precision AS total_duration_seconds
+FROM days d
+LEFT JOIN agg a ON a.day = d.day
 ORDER BY date DESC;
 
--- name: GetToolcallsStatsByDayLastMonth :many
--- Get toolcalls stats by day for the last month
-SELECT
-  DATE(tc.created_at) AS date,
-  COALESCE(COUNT(CASE WHEN tc.status IN ('finished', 'failed') THEN 1 END), 0)::bigint AS total_count,
-  COALESCE(SUM(CASE WHEN tc.status IN ('finished', 'failed') THEN tc.duration_seconds ELSE 0 END), 0.0)::double precision AS total_duration_seconds
-FROM toolcalls tc
-LEFT JOIN subtasks s ON tc.subtask_id = s.id
-LEFT JOIN tasks t ON s.task_id = t.id OR tc.task_id = t.id
-INNER JOIN flows f ON (tc.flow_id = f.id OR t.flow_id = f.id)
-WHERE tc.created_at >= NOW() - INTERVAL '30 days' AND f.deleted_at IS NULL AND f.user_id = $1
-GROUP BY DATE(tc.created_at)
-ORDER BY date DESC;
-
--- name: GetToolcallsStatsByDayLast3Months :many
--- Get toolcalls stats by day for the last 3 months
-SELECT
-  DATE(tc.created_at) AS date,
-  COALESCE(COUNT(CASE WHEN tc.status IN ('finished', 'failed') THEN 1 END), 0)::bigint AS total_count,
-  COALESCE(SUM(CASE WHEN tc.status IN ('finished', 'failed') THEN tc.duration_seconds ELSE 0 END), 0.0)::double precision AS total_duration_seconds
-FROM toolcalls tc
-LEFT JOIN subtasks s ON tc.subtask_id = s.id
-LEFT JOIN tasks t ON s.task_id = t.id OR tc.task_id = t.id
-INNER JOIN flows f ON (tc.flow_id = f.id OR t.flow_id = f.id)
-WHERE tc.created_at >= NOW() - INTERVAL '90 days' AND f.deleted_at IS NULL AND f.user_id = $1
-GROUP BY DATE(tc.created_at)
-ORDER BY date DESC;
 
 -- name: GetUserTotalToolcallsStats :one
 -- Get total toolcalls stats for a user
@@ -199,9 +185,5 @@ SELECT
   COALESCE(COUNT(CASE WHEN tc.status IN ('finished', 'failed') THEN 1 END), 0)::bigint AS total_count,
   COALESCE(SUM(CASE WHEN tc.status IN ('finished', 'failed') THEN tc.duration_seconds ELSE 0 END), 0.0)::double precision AS total_duration_seconds
 FROM toolcalls tc
-LEFT JOIN subtasks s ON tc.subtask_id = s.id
-LEFT JOIN tasks t ON s.task_id = t.id OR tc.task_id = t.id
-INNER JOIN flows f ON (tc.flow_id = f.id OR t.flow_id = f.id)
-WHERE f.deleted_at IS NULL AND f.user_id = $1
-  AND (tc.task_id IS NULL OR t.id IS NOT NULL)
-  AND (tc.subtask_id IS NULL OR s.id IS NOT NULL);
+INNER JOIN flows f ON f.id = tc.flow_id
+WHERE f.deleted_at IS NULL AND f.user_id = $1;

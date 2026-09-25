@@ -5,11 +5,13 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"strings"
 	"time"
 
 	"pentagi/pkg/config"
+	"pentagi/pkg/providers"
 	"pentagi/pkg/providers/anthropic"
 	"pentagi/pkg/providers/bedrock"
 	"pentagi/pkg/providers/custom"
@@ -18,13 +20,15 @@ import (
 	"pentagi/pkg/providers/glm"
 	"pentagi/pkg/providers/kimi"
 	"pentagi/pkg/providers/minimax"
+	"pentagi/pkg/providers/mistral"
 	"pentagi/pkg/providers/ollama"
 	"pentagi/pkg/providers/openai"
 	"pentagi/pkg/providers/pconfig"
 	"pentagi/pkg/providers/provider"
 	"pentagi/pkg/providers/qwen"
 	"pentagi/pkg/providers/tester"
-	"pentagi/pkg/providers/tester/testdata"
+	"pentagi/pkg/providers/tester/cases"
+	"pentagi/pkg/providers/xai"
 	"pentagi/pkg/version"
 
 	"github.com/joho/godotenv"
@@ -33,7 +37,7 @@ import (
 
 func main() {
 	envFile := flag.String("env", ".env", "Path to environment file")
-	providerType := flag.String("type", "custom", "Provider type [custom, openai, anthropic, gemini, bedrock, ollama, deepseek, glm, kimi, qwen, minimax]")
+	providerType := flag.String("type", "custom", "Provider type [custom, openai, anthropic, gemini, bedrock, ollama, deepseek, glm, kimi, qwen, minimax, mistral, xai]")
 	providerName := flag.String("name", "", "Provider name using as PROVDER_NAME/MODEL_NAME while building provider config")
 	configPath := flag.String("config", "", "Path to provider config file")
 	testsPath := flag.String("tests", "", "Path to custom tests YAML file")
@@ -42,6 +46,8 @@ func main() {
 	testGroups := flag.String("groups", "all", "Comma-separated test groups to run")
 	workers := flag.Int("workers", 4, "Number of workers to use")
 	verbose := flag.Bool("verbose", false, "Enable verbose output")
+	checkRouting := flag.Bool("check-routing", false,
+		"Ask each door which models it serves and report catalogue entries it did not name")
 	flag.Parse()
 
 	logrus.Infof("Starting PentAGI Provider Configuration Tester %s", version.GetBinaryVersion())
@@ -61,6 +67,11 @@ func main() {
 	}
 	if *providerName != "" {
 		cfg.LLMServerProvider = *providerName
+	}
+
+	if *checkRouting {
+		reportRouting(providers.CheckRouting(cfg, &http.Client{Timeout: 15 * time.Second}))
+		return
 	}
 
 	prv, err := createProvider(*providerType, cfg)
@@ -83,11 +94,11 @@ func main() {
 		testOptions = append(testOptions, tester.WithGroups(selectedGroups...))
 	} else {
 		// Include all available groups when "all" is specified
-		allGroups := []testdata.TestGroup{
-			testdata.TestGroupBasic,
-			testdata.TestGroupAdvanced,
-			testdata.TestGroupJSON,
-			testdata.TestGroupKnowledge,
+		allGroups := []cases.TestGroup{
+			cases.TestGroupBasic,
+			cases.TestGroupAdvanced,
+			cases.TestGroupJSON,
+			cases.TestGroupKnowledge,
 		}
 		testOptions = append(testOptions, tester.WithGroups(allGroups...))
 	}
@@ -116,10 +127,10 @@ func main() {
 
 	if *reportPath != "" {
 		if err := WriteReportToFile(agentResults, *reportPath); err != nil {
-			log.Printf("Error writing report: %v", err)
-		} else {
-			fmt.Printf("Report written to %s\n", *reportPath)
+			log.Fatalf("Error writing report: %v", err)
 		}
+
+		fmt.Printf("Report written to %s\n", *reportPath)
 	}
 }
 
@@ -130,7 +141,7 @@ func createProvider(providerType string, cfg *config.Config) (provider.Provider,
 		if err != nil {
 			return nil, fmt.Errorf("error creating custom provider config: %w", err)
 		}
-		return custom.New(cfg, provider.DefaultProviderNameCustom, providerConfig)
+		return custom.New(cfg, provider.DefaultProviderNameCustom, providerConfig, providers.EnrichCatalogCapabilities)
 
 	case "openai":
 		if cfg.OpenAIKey == "" {
@@ -143,9 +154,6 @@ func createProvider(providerType string, cfg *config.Config) (provider.Provider,
 		return openai.New(cfg, provider.DefaultProviderNameOpenAI, providerConfig)
 
 	case "anthropic":
-		if cfg.AnthropicAPIKey == "" {
-			return nil, fmt.Errorf("Anthropic API key is not set")
-		}
 		providerConfig, err := anthropic.DefaultProviderConfig()
 		if err != nil {
 			return nil, fmt.Errorf("error creating anthropic provider config: %w", err)
@@ -154,7 +162,7 @@ func createProvider(providerType string, cfg *config.Config) (provider.Provider,
 
 	case "gemini":
 		if cfg.GeminiAPIKey == "" {
-			return nil, fmt.Errorf("Gemini API key is not set")
+			return nil, fmt.Errorf("API key for Gemini is not set")
 		}
 		providerConfig, err := gemini.DefaultProviderConfig()
 		if err != nil {
@@ -165,7 +173,7 @@ func createProvider(providerType string, cfg *config.Config) (provider.Provider,
 	case "bedrock":
 		if !cfg.BedrockDefaultAuth && cfg.BedrockBearerToken == "" &&
 			(cfg.BedrockAccessKey == "" || cfg.BedrockSecretKey == "") {
-			return nil, fmt.Errorf("Bedrock requires authentication: set " +
+			return nil, fmt.Errorf("authentication for Bedrock is not set: provide " +
 				"BEDROCK_DEFAULT_AUTH=true, BEDROCK_BEARER_TOKEN, or " +
 				"BEDROCK_ACCESS_KEY_ID+BEDROCK_SECRET_ACCESS_KEY")
 		}
@@ -177,7 +185,7 @@ func createProvider(providerType string, cfg *config.Config) (provider.Provider,
 
 	case "ollama":
 		if cfg.OllamaServerURL == "" {
-			return nil, fmt.Errorf("Ollama server URL is not set")
+			return nil, fmt.Errorf("server URL for Ollama is not set")
 		}
 		providerConfig, err := ollama.DefaultProviderConfig(cfg)
 		if err != nil {
@@ -207,7 +215,7 @@ func createProvider(providerType string, cfg *config.Config) (provider.Provider,
 
 	case "kimi":
 		if cfg.KimiAPIKey == "" {
-			return nil, fmt.Errorf("Kimi Moonshot AI API key is not set")
+			return nil, fmt.Errorf("API key for Kimi Moonshot AI is not set")
 		}
 		providerConfig, err := kimi.DefaultProviderConfig()
 		if err != nil {
@@ -217,7 +225,7 @@ func createProvider(providerType string, cfg *config.Config) (provider.Provider,
 
 	case "qwen":
 		if cfg.QwenAPIKey == "" {
-			return nil, fmt.Errorf("Qwen Alibaba Cloud API key is not set")
+			return nil, fmt.Errorf("API key for Qwen Alibaba Cloud is not set")
 		}
 		providerConfig, err := qwen.DefaultProviderConfig()
 		if err != nil {
@@ -234,6 +242,26 @@ func createProvider(providerType string, cfg *config.Config) (provider.Provider,
 			return nil, fmt.Errorf("error creating minimax provider config: %w", err)
 		}
 		return minimax.New(cfg, provider.DefaultProviderNameMiniMax, providerConfig)
+
+	case "mistral":
+		if cfg.MistralAPIKey == "" {
+			return nil, fmt.Errorf("mistral API key is not set")
+		}
+		providerConfig, err := mistral.DefaultProviderConfig()
+		if err != nil {
+			return nil, fmt.Errorf("error creating mistral provider config: %w", err)
+		}
+		return mistral.New(cfg, provider.DefaultProviderNameMistral, providerConfig)
+
+	case "xai":
+		if cfg.XAIAPIKey == "" {
+			return nil, fmt.Errorf("xAI API key is not set")
+		}
+		providerConfig, err := xai.DefaultProviderConfig()
+		if err != nil {
+			return nil, fmt.Errorf("error creating xai provider config: %w", err)
+		}
+		return xai.New(cfg, provider.DefaultProviderNameXAI, providerConfig)
 
 	default:
 		return nil, fmt.Errorf("unsupported provider type: %s", providerType)
@@ -270,13 +298,13 @@ func parseAgentTypes(agentStrings []string) []pconfig.ProviderOptionsType {
 	return agentTypes
 }
 
-func parseTestGroups(groupStrings []string) []testdata.TestGroup {
-	var groups []testdata.TestGroup
-	validGroups := map[string]testdata.TestGroup{
-		"basic":     testdata.TestGroupBasic,
-		"advanced":  testdata.TestGroupAdvanced,
-		"json":      testdata.TestGroupJSON,
-		"knowledge": testdata.TestGroupKnowledge,
+func parseTestGroups(groupStrings []string) []cases.TestGroup {
+	var groups []cases.TestGroup
+	validGroups := map[string]cases.TestGroup{
+		"basic":     cases.TestGroupBasic,
+		"advanced":  cases.TestGroupAdvanced,
+		"json":      cases.TestGroupJSON,
+		"knowledge": cases.TestGroupKnowledge,
 	}
 
 	for _, groupStr := range groupStrings {
@@ -335,36 +363,38 @@ func convertToAgentResults(results tester.ProviderTestResults, prv provider.Prov
 		var totalLatency time.Duration
 		for _, testResult := range agentTestResults {
 			oldResult := TestResult{
-				Name:        testResult.Name,
-				Type:        string(testResult.Type),
-				Capability:  string(testResult.Capability),
-				Success:     testResult.Success,
-				Unsupported: testResult.Unsupported,
-				Error:       testResult.Error,
-				Streaming:   testResult.Streaming,
-				Reasoning:   testResult.Reasoning,
-				LatencyMs:   testResult.Latency.Milliseconds(),
+				Name:            testResult.Name,
+				Type:            string(testResult.Type),
+				Capability:      string(testResult.Capability),
+				Success:         testResult.Success,
+				Unsupported:     testResult.Unsupported,
+				ContentFiltered: testResult.ContentFiltered,
+				Error:           testResult.Error,
+				StopReason:      testResult.StopReason,
+				Streaming:       testResult.Streaming,
+				Reasoning:       testResult.Reasoning,
+				LatencyMs:       testResult.Latency.Milliseconds(),
 			}
 
 			switch {
 			case testResult.Capability != "":
 				result.CapabilityTests = append(result.CapabilityTests, oldResult)
-			case testResult.Group == testdata.TestGroupBasic:
+			case testResult.Group == cases.TestGroupBasic:
 				result.BasicTests = append(result.BasicTests, oldResult)
 			default:
 				result.AdvancedTests = append(result.AdvancedTests, oldResult)
 			}
 
-			// an unsupported optional capability doesn't count against the
-			// overall success rate or average latency — it's not
-			// attempted-and-failed, it's attempted-and-not-available on this model.
 			if testResult.Unsupported {
 				continue
 			}
 
 			result.TotalTests++
-			if testResult.Success {
+			switch {
+			case testResult.Success:
 				result.TotalSuccess++
+			case testResult.ContentFiltered:
+				result.TotalFiltered++
 			}
 			if testResult.Reasoning {
 				result.Reasoning = true
@@ -382,10 +412,46 @@ func convertToAgentResults(results tester.ProviderTestResults, prv provider.Prov
 	return agentResults
 }
 
-func loadCustomTests(path string) (*testdata.TestRegistry, error) {
+func loadCustomTests(path string) (*cases.TestRegistry, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read tests file: %w", err)
 	}
-	return testdata.LoadRegistryFromYAML(data)
+	return cases.LoadRegistryFromYAML(data)
+}
+
+func reportRouting(checks []providers.RoutingCheck) {
+	fmt.Println("Catalogue routing")
+	fmt.Println("=================================================")
+
+	var checked, missing, prefixed int
+	for _, check := range checks {
+		if !check.Checked {
+			fmt.Printf("  %-10s %3d shipped   NOT CHECKED: %s\n", check.Door, check.Shipped, check.Skipped)
+			continue
+		}
+
+		checked++
+		missing += len(check.Missing)
+		prefixed += len(check.PrefixedOnly)
+		endpoint := check.Endpoint
+		if check.Prefix != "" {
+			endpoint += " as " + check.Prefix + "/<model>"
+		}
+		fmt.Printf("  %-10s %3d shipped   %d not callable by %s\n",
+			check.Door, check.Shipped, len(check.Missing)+len(check.PrefixedOnly), endpoint)
+		for _, name := range check.Missing {
+			fmt.Printf("       %s\n", name)
+		}
+		for _, name := range check.PrefixedOnly {
+			fmt.Printf("       %s   listed only behind a prefix\n", name)
+		}
+	}
+
+	fmt.Println("=================================================")
+	fmt.Printf("%d of %d doors answered; %d catalogue entries absent, %d listed only behind a prefix\n",
+		checked, len(checks), missing, prefixed)
+	if checked < len(checks) {
+		fmt.Println("a door that did not answer proves nothing about its catalogue")
+	}
 }

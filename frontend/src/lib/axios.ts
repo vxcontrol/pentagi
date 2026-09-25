@@ -2,6 +2,7 @@ import type { AxiosError, AxiosRequestConfig } from 'axios';
 
 import Axios from 'axios';
 
+import { baseUrl } from '@/models/api';
 import { AUTH_STORAGE_KEY } from '@/providers/user-provider';
 
 import { Log } from './log';
@@ -41,6 +42,10 @@ export interface ApiSuccessResponse<T> {
     status: 'success';
 }
 
+// Must stay longer than the server's own deadline, so the user sees the
+// server's answer rather than an abort of ours on a request still being served.
+const REQUEST_DEADLINE_MS = 45_000;
+
 /**
  * Central axios instance for all REST calls in the app.
  *
@@ -53,11 +58,11 @@ export interface ApiSuccessResponse<T> {
  *     instead of the raw `AxiosResponse<T>`.
  */
 const axios = Axios.create({
-    baseURL: '/api/v1',
+    baseURL: baseUrl,
     headers: {
         'Content-Type': 'application/json',
     },
-    timeout: 30_000,
+    timeout: REQUEST_DEADLINE_MS,
     withCredentials: true,
 });
 

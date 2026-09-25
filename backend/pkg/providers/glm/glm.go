@@ -23,6 +23,7 @@ func BuildProviderConfig(configData []byte) (*pconfig.ProviderConfig, error) {
 	defaultOptions := []llms.CallOption{
 		llms.WithModel(GLMAgentModel),
 		llms.WithN(1),
+		llms.WithMaxTokens(4000),
 	}
 
 	providerConfig, err := pconfig.LoadConfigData(configData, defaultOptions)
@@ -74,5 +75,8 @@ func New(
 		ServerURL:          cfg.GLMServerURL,
 		Prefix:             cfg.GLMProvider,
 		PreserveReasoning:  true,
+		LegacyMaxTokens:    true,
+		// Z.ai takes json_object but silently ignores json_schema.
+		StructuredOutputFallback: true,
 	}, httpClient, models, providerName, providerConfig)
 }

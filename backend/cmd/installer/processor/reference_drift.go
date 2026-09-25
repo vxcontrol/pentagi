@@ -18,8 +18,8 @@ import (
 // user decide, separately from updating.
 
 // composeImagePattern matches `image: ${VAR:-default}` in a compose file, which
-// is the only form these files use — TestEveryComposeImageIsParameterised is
-// what keeps that true.
+// is the only form these files use — TestPullReference_EveryComposeImageIsParameterised
+// is what keeps that true.
 var composeImagePattern = regexp.MustCompile(`(?m)^\s*image:\s*\$\{([A-Z0-9_]+):-(\S+)\}\s*$`)
 
 // composeFiles are the four the installer ships and the variables in them are

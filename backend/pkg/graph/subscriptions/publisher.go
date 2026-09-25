@@ -70,14 +70,17 @@ func (p *flowPublisher) AssistantDeleted(ctx context.Context, assistant database
 }
 
 func (p *flowPublisher) FlowFileAdded(ctx context.Context, file *model.FlowFile) {
+	file.FlowID = p.flowID
 	p.ctrl.flowFileAdded.Publish(ctx, p.flowID, file)
 }
 
 func (p *flowPublisher) FlowFileUpdated(ctx context.Context, file *model.FlowFile) {
+	file.FlowID = p.flowID
 	p.ctrl.flowFileUpdated.Publish(ctx, p.flowID, file)
 }
 
 func (p *flowPublisher) FlowFileDeleted(ctx context.Context, file *model.FlowFile) {
+	file.FlowID = p.flowID
 	p.ctrl.flowFileDeleted.Publish(ctx, p.flowID, file)
 }
 

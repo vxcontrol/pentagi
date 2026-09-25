@@ -188,6 +188,9 @@ func VerifySearchPath(ctx context.Context, db *sql.DB, cfg *config.Config) error
 // database.
 func RunMigrations(ctx context.Context, db *sql.DB, cfg *config.Config, up func(*sql.DB) error) error {
 	return WithAdvisoryLock(ctx, db, "pentagi-migrations-"+cfg.SchemaName(), func(*sql.Conn) error {
+		if err := renumberMigrations(ctx, db, cfg.SchemaName()); err != nil {
+			return err
+		}
 		return up(db)
 	})
 }

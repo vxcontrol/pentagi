@@ -17,26 +17,17 @@ import (
 
 // Default configuration constants for the summarization algorithm
 const (
-	// preserveAllLastSectionPairs determines whether to keep all pairs in the last section
-	preserveAllLastSectionPairs = true
-
 	// maxLastSectionByteSize defines the maximum byte size for last section (50 KB)
 	maxLastSectionByteSize = 50 * 1024
 
 	// maxSingleBodyPairByteSize defines the maximum byte size for a single body pair (16 KB)
 	maxSingleBodyPairByteSize = 16 * 1024
 
-	// useQAPairSummarization determines whether to use QA pair summarization
-	useQAPairSummarization = false
-
 	// maxQAPairSections defines the maximum QA pair sections to preserve
 	maxQAPairSections = 10
 
 	// maxQAPairByteSize defines the maximum byte size for QA pair sections (64 KB)
 	maxQAPairByteSize = 64 * 1024
-
-	// summarizeHumanMessagesInQAPairs determines whether to summarize human messages in QA pairs
-	summarizeHumanMessagesInQAPairs = false
 
 	// lastSectionReservePercentage defines percentage of section size to reserve for future messages (25%)
 	lastSectionReservePercentage = 25
@@ -231,7 +222,7 @@ func summarizeSections(
 
 	// Check for any errors
 	errs := make([]error, 0, len(ch))
-	for edx := 0; edx < len(ch); edx++ {
+	for len(ch) > 0 {
 		errs = append(errs, <-ch)
 	}
 
@@ -820,7 +811,7 @@ func messagesToPrompt(humanMessages []llms.MessageContent, aiMessages []llms.Mes
 	// case 1: use human messages as a context for ai messages
 	if len(humanMessages) > 0 && len(aiMessages) > 0 {
 		instructions := getSummarizationInstructions(1)
-		buffer.WriteString(fmt.Sprintf("<instructions>%s</instructions>\n\n", instructions))
+		fmt.Fprintf(&buffer, "<instructions>%s</instructions>\n\n", instructions)
 		buffer.WriteString(humanMessagesText)
 		buffer.WriteString(aiMessagesText)
 	}
@@ -828,14 +819,14 @@ func messagesToPrompt(humanMessages []llms.MessageContent, aiMessages []llms.Mes
 	// case 2: use ai messages as a content to summarize without context
 	if len(aiMessages) > 0 && len(humanMessages) == 0 {
 		instructions := getSummarizationInstructions(2)
-		buffer.WriteString(fmt.Sprintf("<instructions>%s</instructions>\n\n", instructions))
+		fmt.Fprintf(&buffer, "<instructions>%s</instructions>\n\n", instructions)
 		buffer.WriteString(aiMessagesText)
 	}
 
 	// case 3: use human messages as a instructions to summarize them
 	if len(humanMessages) > 0 && len(aiMessages) == 0 {
 		instructions := getSummarizationInstructions(3)
-		buffer.WriteString(fmt.Sprintf("<instructions>%s</instructions>\n\n", instructions))
+		fmt.Fprintf(&buffer, "<instructions>%s</instructions>\n\n", instructions)
 		buffer.WriteString(humanMessagesText)
 	}
 
@@ -928,22 +919,22 @@ func humanMessagesToText(humanMessages []llms.MessageContent) string {
 		if msg.Role != llms.ChatMessageTypeHuman {
 			continue
 		}
-		buffer.WriteString(fmt.Sprintf("<task id=\"%d\">\n", mdx))
+		fmt.Fprintf(&buffer, "<task id=\"%d\">\n", mdx)
 		for _, part := range msg.Parts {
 			switch v := part.(type) {
 			case llms.TextContent:
-				buffer.WriteString(fmt.Sprintf("%s\n", v.Text))
+				fmt.Fprintf(&buffer, "%s\n", v.Text)
 			case llms.ImageURLContent:
-				buffer.WriteString(fmt.Sprintf("<image url=\"%s\">\n", v.URL))
+				fmt.Fprintf(&buffer, "<image url=\"%s\">\n", v.URL)
 				if v.Detail != "" {
-					buffer.WriteString(fmt.Sprintf("%s\n", v.Detail))
+					fmt.Fprintf(&buffer, "%s\n", v.Detail)
 				}
 				buffer.WriteString("</image>\n")
 			case llms.BinaryContent:
-				buffer.WriteString(fmt.Sprintf("<binary mime=\"%s\">\n", v.MIMEType))
+				fmt.Fprintf(&buffer, "<binary mime=\"%s\">\n", v.MIMEType)
 				if v.Data != nil {
 					data := hex.EncodeToString(v.Data[:min(len(v.Data), 100)])
-					buffer.WriteString(fmt.Sprintf("first 100 bytes in hex: %s\n", data))
+					fmt.Fprintf(&buffer, "first 100 bytes in hex: %s\n", data)
 				}
 				buffer.WriteString("</binary>\n")
 			}
@@ -961,35 +952,35 @@ func aiMessagesToText(aiMessages []llms.MessageContent) string {
 
 	buffer.WriteString("<messages>\n")
 	for mdx, msg := range aiMessages {
-		buffer.WriteString(fmt.Sprintf("<message id=\"%d\" role=\"%s\">\n", mdx, msg.Role))
+		fmt.Fprintf(&buffer, "<message id=\"%d\" role=\"%s\">\n", mdx, msg.Role)
 		for pdx, part := range msg.Parts {
 			partNum := fmt.Sprintf("part=\"%d\"", pdx)
 			switch v := part.(type) {
 			case llms.TextContent:
-				buffer.WriteString(fmt.Sprintf("<content %s>\n", partNum))
-				buffer.WriteString(fmt.Sprintf("%s\n", v.Text))
+				fmt.Fprintf(&buffer, "<content %s>\n", partNum)
+				fmt.Fprintf(&buffer, "%s\n", v.Text)
 				buffer.WriteString("</content>\n")
 			case llms.ToolCall:
 				if v.FunctionCall != nil {
-					buffer.WriteString(fmt.Sprintf("<tool_call name=\"%s\" %s>\n", v.FunctionCall.Name, partNum))
-					buffer.WriteString(fmt.Sprintf("%s\n", v.FunctionCall.Arguments))
+					fmt.Fprintf(&buffer, "<tool_call name=\"%s\" %s>\n", v.FunctionCall.Name, partNum)
+					fmt.Fprintf(&buffer, "%s\n", v.FunctionCall.Arguments)
 					buffer.WriteString("</tool_call>\n")
 				}
 			case llms.ToolCallResponse:
-				buffer.WriteString(fmt.Sprintf("<tool_call_response name=\"%s\" %s>\n", v.Name, partNum))
-				buffer.WriteString(fmt.Sprintf("%s\n", v.Content))
+				fmt.Fprintf(&buffer, "<tool_call_response name=\"%s\" %s>\n", v.Name, partNum)
+				fmt.Fprintf(&buffer, "%s\n", v.Content)
 				buffer.WriteString("</tool_call_response>\n")
 			case llms.ImageURLContent:
-				buffer.WriteString(fmt.Sprintf("<image url=\"%s\" %s>\n", v.URL, partNum))
+				fmt.Fprintf(&buffer, "<image url=\"%s\" %s>\n", v.URL, partNum)
 				if v.Detail != "" {
-					buffer.WriteString(fmt.Sprintf("%s\n", v.Detail))
+					fmt.Fprintf(&buffer, "%s\n", v.Detail)
 				}
 				buffer.WriteString("</image>\n")
 			case llms.BinaryContent:
-				buffer.WriteString(fmt.Sprintf("<binary mime=\"%s\" %s>\n", v.MIMEType, partNum))
+				fmt.Fprintf(&buffer, "<binary mime=\"%s\" %s>\n", v.MIMEType, partNum)
 				if v.Data != nil {
 					data := hex.EncodeToString(v.Data[:min(len(v.Data), 100)])
-					buffer.WriteString(fmt.Sprintf("first 100 bytes in hex: %s\n", data))
+					fmt.Fprintf(&buffer, "first 100 bytes in hex: %s\n", data)
 				}
 				buffer.WriteString("</binary>\n")
 			}

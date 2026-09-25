@@ -1,4 +1,5 @@
 scalar Time
+scalar JSON
 scalar Map
 
 # Core execution status for flows, tasks and agents
@@ -23,6 +24,8 @@ enum ProviderType {
   kimi
   qwen
   minimax
+  mistral
+  xai
 }
 
 # Reasoning effort levels for advanced AI models
@@ -32,37 +35,32 @@ enum ReasoningEffort {
   high
   medium
   low
+  minimal
 }
 
-# Reasoning control mode for provider-specific thinking APIs. "off" explicitly
-# disables thinking (distinct from an absent mode, which defers to the model
-# default — models like Gemini 2.5 / Claude Fable 5 think by default).
+# Per-agent thinking control; off disables thinking, while an absent mode defers to the model default
 enum ReasoningMode {
   adaptive
   budget
   off
 }
 
-# A model's reasoning capability — distinct from the per-agent ReasoningMode
-# choice; adaptive_only models reject budget thinking (e.g. Claude Opus 4.7/4.8).
+# A model's thinking support, unlike the per-agent ReasoningMode; adaptive_only models reject budget thinking
 enum ModelReasoningMode {
   budget
   adaptive
   adaptive_only
 }
 
-# Declares how a model supports extended thinking so the UI can offer a valid
-# mode/effort/on-off without hardcoding model names. The capability fields are
-# derived from the langchaingo reasoning tables. An absent reasoning object means
-# the model is not thinking-capable (no reasoning controls); cannotDisable=true
-# hides the off option (the disable would error or be a no-op); defaultOn=true
-# means the model thinks unless explicitly turned off.
+# How a model supports extended thinking, so the UI offers only working controls; absent if it cannot think
 type ModelReasoningInfo {
   mode: ModelReasoningMode
   efforts: [ReasoningEffort!]
   supported: Boolean
   cannotDisable: Boolean
   defaultOn: Boolean
+  rejectsEffortWithTools: Boolean
+  takesNoThinkingDepth: Boolean
 }
 
 # Template types for AI agent prompts and system operations
@@ -217,6 +215,7 @@ enum UpdateState {
 
 type VersionInfo {
   current: String!
+  build: String!
   state: UpdateState!
   latest: String
   strategy: String!
@@ -281,6 +280,7 @@ type FlowAssistant {
 
 type Flow {
   id: ID!
+  userId: ID!
   title: String!
   status: StatusType!
   terminals: [Terminal!]
@@ -417,6 +417,7 @@ type Screenshot {
 
 type FlowFile {
   id: String!
+  flowId: ID!
   name: String!
   path: String!
   size: Int!
@@ -637,7 +638,6 @@ type FlowStats {
   totalAssistantsCount: Int!
 }
 
-# Daily usage statistics
 type DailyUsageStats {
   date: Time!
   stats: UsageStats!
@@ -656,7 +656,6 @@ type ModelUsageStats {
   stats: UsageStats!
 }
 
-# Model-agents usage statistics
 type ModelAgentsUsageStats {
   model: String!
   provider: String!
@@ -664,13 +663,11 @@ type ModelAgentsUsageStats {
   stats: UsageStats!
 }
 
-# Agent type usage statistics
 type AgentTypeUsageStats {
   agentType: AgentType!
   stats: UsageStats!
 }
 
-# Daily toolcalls statistics
 type DailyToolcallsStats {
   date: Time!
   stats: ToolcallsStats!
@@ -685,7 +682,6 @@ type FunctionToolcallsStats {
   avgDurationSeconds: Float!
 }
 
-# Daily flows statistics
 type DailyFlowsStats {
   date: Time!
   stats: FlowsStats!
@@ -741,6 +737,8 @@ type ModelConfig {
   thinking: Boolean
   reasoning: ModelReasoningInfo
   price: ModelPrice
+  contextWindow: Int
+  maxOutputTokens: Int
 }
 
 # Available models for each provider type
@@ -756,6 +754,8 @@ type ProvidersModelsList {
   kimi: [ModelConfig!]
   qwen: [ModelConfig!]
   minimax: [ModelConfig!]
+  mistral: [ModelConfig!]
+  xai: [ModelConfig!]
 }
 
 # Provider availability status
@@ -771,6 +771,8 @@ type ProvidersReadinessStatus {
   kimi: Boolean!
   qwen: Boolean!
   minimax: Boolean!
+  mistral: Boolean!
+  xai: Boolean!
 }
 
 # Default provider configurations
@@ -786,6 +788,8 @@ type DefaultProvidersConfig {
   kimi: ProviderConfig
   qwen: ProviderConfig
   minimax: ProviderConfig
+  mistral: ProviderConfig
+  xai: ProviderConfig
 }
 
 # Complete providers configuration
@@ -944,10 +948,8 @@ enum KnowledgeAnswerType {
 
 # A single document stored in the pgvector knowledge base
 type KnowledgeDocument {
-  # UUID primary key of the embedding row
   id: String!
   docType: KnowledgeDocType!
-  # Chunk text; empty string when withContent=false was requested (to save bandwidth)
   content: String!
   question: String!
   description: String
@@ -960,7 +962,6 @@ type KnowledgeDocument {
   codeLang: String
   partSize: Int!
   totalSize: Int!
-  # True when document was created manually via API rather than by an agent
   manual: Boolean!
 }
 
@@ -1005,7 +1006,6 @@ input UpdateKnowledgeDocumentInput {
 # ==================== GraphQL Operations ====================
 
 type Query {
-  # Provider management
   providers: [Provider!]!
 
   # Flow and assistant management
@@ -1027,7 +1027,7 @@ type Query {
 
   # Usage statistics and analytics
   usageStatsTotal: UsageStats!
-  usageStatsByPeriod(period: UsageStatsPeriod!): [DailyUsageStats!]!
+  usageStatsByPeriod(period: UsageStatsPeriod!, timezone: String): [DailyUsageStats!]!
   usageStatsByProvider: [ProviderUsageStats!]!
   usageStatsByModel: [ModelUsageStats!]!
   usageStatsByAgentType: [AgentTypeUsageStats!]!
@@ -1037,18 +1037,16 @@ type Query {
 
   # Toolcalls statistics and analytics
   toolcallsStatsTotal: ToolcallsStats!
-  toolcallsStatsByPeriod(period: UsageStatsPeriod!): [DailyToolcallsStats!]!
+  toolcallsStatsByPeriod(period: UsageStatsPeriod!, timezone: String): [DailyToolcallsStats!]!
   toolcallsStatsByFunction: [FunctionToolcallsStats!]!
   toolcallsStatsByFlow(flowId: ID!): ToolcallsStats!
   toolcallsStatsByFunctionForFlow(flowId: ID!): [FunctionToolcallsStats!]!
 
   # Flows statistics and analytics
   flowsStatsTotal: FlowsStats!
-  flowsStatsByPeriod(period: UsageStatsPeriod!): [DailyFlowsStats!]!
+  flowsStatsByPeriod(period: UsageStatsPeriod!, timezone: String): [DailyFlowsStats!]!
   flowStatsByFlow(flowId: ID!): FlowStats!
-
-  # Flows/Tasks/Subtasks execution time analytics
-  flowsExecutionStatsByPeriod(period: UsageStatsPeriod!): [FlowExecutionStats!]!
+  flowsExecutionStatsByPeriod(period: UsageStatsPeriod!, timezone: String): [FlowExecutionStats!]!
 
   # System settings
   settings: Settings!
@@ -1065,13 +1063,13 @@ type Query {
   flowTemplate(templateId: ID!): FlowTemplate
   flowTemplates: [FlowTemplate!]!
 
-  # User Resources management
   resources(path: String, recursive: Boolean): [UserResource!]!
 
   # Knowledge (vector store) management
   knowledgeDocuments(filter: KnowledgeFilter, withContent: Boolean!): [KnowledgeDocument!]!
   knowledgeDocument(id: String!): KnowledgeDocument!
   searchKnowledge(query: String!, filter: KnowledgeFilter, limit: Int): [KnowledgeDocumentWithScore!]!
+  
 }
 
 type Mutation {
@@ -1090,7 +1088,7 @@ type Mutation {
   deleteAssistant(flowId: ID!, assistantId: ID!): ResultType!
 
   # Testing and validation
-  testAgent(type: ProviderType!, agentType: AgentConfigType!, agent: AgentConfigInput!): AgentTestResult!
+  testAgent(type: ProviderType!, agentType: AgentConfigType!, agent: AgentConfigInput!, simple: AgentConfigInput): AgentTestResult!
   testProvider(type: ProviderType!, agents: AgentsConfigInput!): ProviderTestResult!
   createProvider(name: String!, type: ProviderType!, agents: AgentsConfigInput!): ProviderConfig!
   updateProvider(providerId: ID!, name: String!, agents: AgentsConfigInput!): ProviderConfig!
@@ -1165,7 +1163,6 @@ type Subscription {
   apiTokenUpdated: APIToken!
   apiTokenDeleted: APIToken!
 
-  # User preferences events
   settingsUserUpdated: UserPreferences!
 
   # Flow template events
@@ -1182,4 +1179,5 @@ type Subscription {
   knowledgeDocumentCreated: KnowledgeDocument!
   knowledgeDocumentUpdated: KnowledgeDocument!
   knowledgeDocumentDeleted: KnowledgeDocument!
+  
 }

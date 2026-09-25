@@ -734,23 +734,6 @@ func getNetworkFailures(ctx context.Context, proxyURL string, dockerClient, work
 	return failures
 }
 
-func getContainerImageInfo(ctx context.Context, cli *client.Client, containerName string) *ImageInfo {
-	containers, err := cli.ContainerList(ctx, client.ContainerListOptions{All: true})
-	if err != nil {
-		return nil
-	}
-
-	for _, cont := range containers.Items {
-		for _, name := range cont.Names {
-			if strings.TrimPrefix(name, "/") == containerName {
-				return parseImageRef(cont.Image, cont.ImageID)
-			}
-		}
-	}
-
-	return nil
-}
-
 func checkImageExists(ctx context.Context, cli *client.Client, imageName string) bool {
 	imageInfo := getImageInfo(ctx, cli, imageName)
 	return imageInfo != nil && imageInfo.Hash != ""

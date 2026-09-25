@@ -29,10 +29,10 @@ primary_agent:
   reasoning:
     mode: adaptive
   price:
-    input: 3.0
-    output: 15.0
-    cache_read: 0.3
-    cache_write: 3.75
+    input: 2.0
+    output: 10.0
+    cache_read: 0.2
+    cache_write: 2.5
 
 assistant:
   model: claude-sonnet-5
@@ -42,10 +42,10 @@ assistant:
   reasoning:
     mode: adaptive
   price:
-    input: 3.0
-    output: 15.0
-    cache_read: 0.3
-    cache_write: 3.75
+    input: 2.0
+    output: 10.0
+    cache_read: 0.2
+    cache_write: 2.5
 
 generator:
   model: claude-opus-4-8
@@ -84,10 +84,10 @@ adviser:
     mode: adaptive
     effort: xhigh
   price:
-    input: 3.0
-    output: 15.0
-    cache_read: 0.3
-    cache_write: 3.75
+    input: 2.0
+    output: 10.0
+    cache_read: 0.2
+    cache_write: 2.5
 
 reflector:
   model: claude-haiku-4-5
@@ -134,10 +134,10 @@ coder:
   reasoning:
     mode: adaptive
   price:
-    input: 3.0
-    output: 15.0
-    cache_read: 0.3
-    cache_write: 3.75
+    input: 2.0
+    output: 10.0
+    cache_read: 0.2
+    cache_write: 2.5
 
 installer:
   model: claude-sonnet-5
@@ -147,10 +147,10 @@ installer:
   reasoning:
     mode: adaptive
   price:
-    input: 3.0
-    output: 15.0
-    cache_read: 0.3
-    cache_write: 3.75
+    input: 2.0
+    output: 10.0
+    cache_read: 0.2
+    cache_write: 2.5
 
 pentester:
   model: claude-sonnet-5
@@ -160,7 +160,7 @@ pentester:
   reasoning:
     mode: adaptive
   price:
-    input: 3.0
-    output: 15.0
-    cache_read: 0.3
-    cache_write: 3.75
+    input: 2.0
+    output: 10.0
+    cache_read: 0.2
+    cache_write: 2.5

@@ -3,21 +3,21 @@ import { chmodSync, existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 
 interface SSLPaths {
-    sslDir: string;
-    serverKey: string;
+    caCert: string;
+    caKey: string;
     serverCert: string;
     serverCsr: string;
-    caKey: string;
-    caCert: string;
+    serverKey: string;
+    sslDir: string;
 }
 
 const SSL_PATHS: SSLPaths = {
-    sslDir: join(process.cwd(), 'ssl'),
-    serverKey: join(process.cwd(), 'ssl', 'server.key'),
+    caCert: join(process.cwd(), 'ssl', 'ca.crt'),
+    caKey: join(process.cwd(), 'ssl', 'ca.key'),
     serverCert: join(process.cwd(), 'ssl', 'server.crt'),
     serverCsr: join(process.cwd(), 'ssl', 'server.csr'),
-    caKey: join(process.cwd(), 'ssl', 'ca.key'),
-    caCert: join(process.cwd(), 'ssl', 'ca.crt'),
+    serverKey: join(process.cwd(), 'ssl', 'server.key'),
+    sslDir: join(process.cwd(), 'ssl'),
 };
 
 const executeCommand = (command: string): void => {
@@ -38,6 +38,7 @@ export const generateCertificates = (): void => {
     // Check if certificates already exist
     if (existsSync(SSL_PATHS.serverKey) && existsSync(SSL_PATHS.serverCert)) {
         console.log('SSL certificates already exist');
+
         return;
     }
 

@@ -1,255 +1,91 @@
 package models
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 )
 
-func TestTokenStatusValid(t *testing.T) {
+func apiTokensToken() APIToken {
+	created := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+
+	return APIToken{
+		TokenID:   "abcdefghij",
+		UserID:    1,
+		RoleID:    1,
+		TTL:       3600,
+		Status:    TokenStatusActive,
+		CreatedAt: created,
+		UpdatedAt: created,
+	}
+}
+
+// Rows are keyed by the type whose Valid they call.
+func TestAPITokens_Valid_RefusesExactlyTheInvalidField(t *testing.T) {
 	t.Parallel()
 
-	tests := []struct {
-		name    string
-		status  TokenStatus
-		wantErr bool
+	unknownStatus := modelsWith(apiTokensToken(), func(at *APIToken) { at.Status = "invalid" })
+	name := "my-token"
+
+	modelsCheckValid(t, []modelsValidCase{
+		{"an active token status", TokenStatusActive, ""},
+		{"a revoked token status", TokenStatusRevoked, ""},
+		{"an expired token status", TokenStatusExpired, ""},
+		{"an empty token status", TokenStatus(""), "invalid TokenStatus: "},
+		{"an unknown token status", TokenStatus("unknown"), "invalid TokenStatus: unknown"},
+
+		{"a complete token", apiTokensToken(), ""},
+		{"a token in an unknown status", unknownStatus, "invalid TokenStatus: invalid"},
+		{"a token id of the wrong length", modelsWith(apiTokensToken(), func(at *APIToken) { at.TokenID = "short" }),
+			"APIToken.TokenID:len"},
+		{"a token living under a minute", modelsWith(apiTokensToken(), func(at *APIToken) { at.TTL = 10 }), "APIToken.TTL:min"},
+		{"a token living over three years", modelsWith(apiTokensToken(), func(at *APIToken) { at.TTL = 94608001 }),
+			"APIToken.TTL:max"},
+		{"a token living exactly a minute", modelsWith(apiTokensToken(), func(at *APIToken) { at.TTL = 60 }), ""},
+		{"a token living exactly three years", modelsWith(apiTokensToken(), func(at *APIToken) { at.TTL = 94608000 }), ""},
+
+		{"a token request", CreateAPITokenRequest{TTL: 3600}, ""},
+		{"a named token request", CreateAPITokenRequest{Name: &name, TTL: 3600}, ""},
+		{"a token request under a minute", CreateAPITokenRequest{TTL: 30}, "CreateAPITokenRequest.TTL:min"},
+		{"a token request with no lifetime", CreateAPITokenRequest{}, "CreateAPITokenRequest.TTL:required"},
+
+		{"a token update revoking it", UpdateAPITokenRequest{Status: TokenStatusRevoked}, ""},
+		{"an empty token update", UpdateAPITokenRequest{}, ""},
+		{"a token update to an unknown status", UpdateAPITokenRequest{Status: "invalid"}, "invalid TokenStatus: invalid"},
+
+		{"a token with its secret", APITokenWithSecret{APIToken: apiTokensToken(), Token: modelsJWT}, ""},
+		{"an invalid token with its secret", APITokenWithSecret{APIToken: unknownStatus, Token: modelsJWT},
+			"invalid TokenStatus: invalid"},
+		{"a token whose secret is not a jwt", APITokenWithSecret{APIToken: apiTokensToken(), Token: "not-a-jwt"},
+			"APITokenWithSecret.Token:jwt"},
+
+		{"complete token claims", APITokenClaims{TokenID: "abcdefghij", RID: 1, UID: 1, UHASH: "somehash"}, ""},
+		{"claims without a token id", APITokenClaims{UHASH: "somehash"}, "APITokenClaims.TokenID:required"},
+		{"claims without a user hash", APITokenClaims{TokenID: "abcdefghij"}, "APITokenClaims.UHASH:required"},
+		{"claims naming a user id past the range", APITokenClaims{TokenID: "abcdefghij", UID: 10001, UHASH: "somehash"},
+			"APITokenClaims.UID:max"},
+	})
+}
+
+func TestAPITokens_String_SpellsTheStoredValue(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		value fmt.Stringer
+		want  string
 	}{
-		{"valid active", TokenStatusActive, false},
-		{"valid revoked", TokenStatusRevoked, false},
-		{"valid expired", TokenStatusExpired, false},
-		{"invalid empty", TokenStatus(""), true},
-		{"invalid unknown", TokenStatus("unknown"), true},
-		{"invalid deleted", TokenStatus("deleted"), true},
-	}
-
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			err := tt.status.Valid()
-			if tt.wantErr {
-				assert.Error(t, err)
-				assert.Contains(t, err.Error(), "invalid TokenStatus")
-			} else {
-				assert.NoError(t, err)
-			}
-		})
+		{TokenStatusActive, "active"},
+		{TokenStatusRevoked, "revoked"},
+		{TokenStatusExpired, "expired"},
+	} {
+		assert.Equal(t, tc.want, tc.value.String())
 	}
 }
 
-func TestTokenStatusString(t *testing.T) {
+func TestAPITokens_TableName_NamesTheMappedTable(t *testing.T) {
 	t.Parallel()
 
-	assert.Equal(t, "active", TokenStatusActive.String())
-	assert.Equal(t, "revoked", TokenStatusRevoked.String())
-	assert.Equal(t, "expired", TokenStatusExpired.String())
-}
-
-func TestAPITokenValid(t *testing.T) {
-	t.Parallel()
-
-	now := time.Now()
-	validToken := APIToken{
-		TokenID:   "abcdefghij",
-		UserID:    1,
-		RoleID:    1,
-		TTL:       3600,
-		Status:    TokenStatusActive,
-		CreatedAt: now,
-		UpdatedAt: now,
-	}
-
-	t.Run("valid token", func(t *testing.T) {
-		t.Parallel()
-		assert.NoError(t, validToken.Valid())
-	})
-
-	t.Run("invalid status", func(t *testing.T) {
-		t.Parallel()
-		token := validToken
-		token.Status = TokenStatus("invalid")
-		assert.Error(t, token.Valid())
-	})
-
-	t.Run("token id wrong length", func(t *testing.T) {
-		t.Parallel()
-		token := validToken
-		token.TokenID = "short"
-		assert.Error(t, token.Valid())
-	})
-
-	t.Run("ttl too small", func(t *testing.T) {
-		t.Parallel()
-		token := validToken
-		token.TTL = 10
-		assert.Error(t, token.Valid())
-	})
-
-	t.Run("ttl too large", func(t *testing.T) {
-		t.Parallel()
-		token := validToken
-		token.TTL = 94608001
-		assert.Error(t, token.Valid())
-	})
-
-	t.Run("ttl minimum boundary", func(t *testing.T) {
-		t.Parallel()
-		token := validToken
-		token.TTL = 60
-		assert.NoError(t, token.Valid())
-	})
-
-	t.Run("ttl maximum boundary", func(t *testing.T) {
-		t.Parallel()
-		token := validToken
-		token.TTL = 94608000
-		assert.NoError(t, token.Valid())
-	})
-}
-
-func TestAPITokenTableName(t *testing.T) {
-	t.Parallel()
-	at := &APIToken{}
-	assert.Equal(t, "api_tokens", at.TableName())
-}
-
-func TestCreateAPITokenRequestValid(t *testing.T) {
-	t.Parallel()
-
-	t.Run("valid request", func(t *testing.T) {
-		t.Parallel()
-		req := CreateAPITokenRequest{TTL: 3600}
-		assert.NoError(t, req.Valid())
-	})
-
-	t.Run("valid request with name", func(t *testing.T) {
-		t.Parallel()
-		name := "my-token"
-		req := CreateAPITokenRequest{Name: &name, TTL: 3600}
-		assert.NoError(t, req.Valid())
-	})
-
-	t.Run("ttl too small", func(t *testing.T) {
-		t.Parallel()
-		req := CreateAPITokenRequest{TTL: 30}
-		assert.Error(t, req.Valid())
-	})
-
-	t.Run("zero ttl", func(t *testing.T) {
-		t.Parallel()
-		req := CreateAPITokenRequest{TTL: 0}
-		assert.Error(t, req.Valid())
-	})
-}
-
-func TestUpdateAPITokenRequestValid(t *testing.T) {
-	t.Parallel()
-
-	t.Run("valid update with status", func(t *testing.T) {
-		t.Parallel()
-		req := UpdateAPITokenRequest{Status: TokenStatusRevoked}
-		assert.NoError(t, req.Valid())
-	})
-
-	t.Run("valid empty update", func(t *testing.T) {
-		t.Parallel()
-		req := UpdateAPITokenRequest{}
-		assert.NoError(t, req.Valid())
-	})
-
-	t.Run("invalid status", func(t *testing.T) {
-		t.Parallel()
-		req := UpdateAPITokenRequest{Status: TokenStatus("invalid")}
-		assert.Error(t, req.Valid())
-	})
-}
-
-func TestAPITokenWithSecretValid(t *testing.T) {
-	t.Parallel()
-
-	now := time.Now()
-	validJWT := "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.POstGetfAytaZS82wHcjoTyoqhMyxXiWdR7Nn7A29DNSl0EiXLdwJ6xC6AfgZWF1bOsS_TuYI3OG85AmiExREkrS6tDfTQ2B3WXlrr-wp5AokiRbz3_oB4OxG-W9KcEEbDRcZc0nH3L7LzYptiy1PtAylQGxHTWZXtGz4ht0bAecBgmpdgXMguEIcoqPJ1n3pIWk_dUZegpqx0Lka21H6XxUTxiy8OcaarA8zdnPUnV6AmNP3ecFawIFYdvJB_cm-GvpCSbr8G8y_Mllj8f4x9nBH8pQux89_6gUY618iYv7tuPWBFfEbLxtF2pZS6YC1aSfLQxaOoaBSTNRg"
-
-	baseToken := APIToken{
-		TokenID:   "abcdefghij",
-		UserID:    1,
-		RoleID:    1,
-		TTL:       3600,
-		Status:    TokenStatusActive,
-		CreatedAt: now,
-		UpdatedAt: now,
-	}
-
-	t.Run("valid token with secret", func(t *testing.T) {
-		t.Parallel()
-		ats := APITokenWithSecret{
-			APIToken: baseToken,
-			Token:    validJWT,
-		}
-		assert.NoError(t, ats.Valid())
-	})
-
-	t.Run("invalid embedded api token", func(t *testing.T) {
-		t.Parallel()
-		badToken := baseToken
-		badToken.Status = TokenStatus("invalid")
-		ats := APITokenWithSecret{
-			APIToken: badToken,
-			Token:    validJWT,
-		}
-		assert.Error(t, ats.Valid())
-	})
-
-	t.Run("invalid jwt token string", func(t *testing.T) {
-		t.Parallel()
-		ats := APITokenWithSecret{
-			APIToken: baseToken,
-			Token:    "not-a-jwt",
-		}
-		assert.Error(t, ats.Valid())
-	})
-}
-
-func TestAPITokenClaimsValid(t *testing.T) {
-	t.Parallel()
-
-	t.Run("valid claims", func(t *testing.T) {
-		t.Parallel()
-		claims := APITokenClaims{
-			TokenID: "abcdefghij",
-			RID:     1,
-			UID:     1,
-			UHASH:   "somehash",
-		}
-		assert.NoError(t, claims.Valid())
-	})
-
-	t.Run("missing token id", func(t *testing.T) {
-		t.Parallel()
-		claims := APITokenClaims{
-			TokenID: "",
-			UHASH:   "somehash",
-		}
-		assert.Error(t, claims.Valid())
-	})
-
-	t.Run("missing uhash", func(t *testing.T) {
-		t.Parallel()
-		claims := APITokenClaims{
-			TokenID: "abcdefghij",
-			UHASH:   "",
-		}
-		assert.Error(t, claims.Valid())
-	})
-
-	t.Run("uid too large", func(t *testing.T) {
-		t.Parallel()
-		claims := APITokenClaims{
-			TokenID: "abcdefghij",
-			UID:     10001,
-			UHASH:   "somehash",
-		}
-		assert.Error(t, claims.Valid())
-	})
+	assert.Equal(t, "api_tokens", (&APIToken{}).TableName())
 }

@@ -2,7 +2,6 @@ package searchers
 
 import (
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -11,73 +10,24 @@ import (
 	"pentagi/pkg/database"
 )
 
-func testSploitusConfig() *config.Config {
-	return &config.Config{SploitusEnabled: true}
-}
+func TestSploitus_Handle_PostsTheSearchAndFormatsTheExploits(t *testing.T) {
+	up := &searchersUpstream{body: `{
+		"exploits":[{
+			"id":"CVE-2024-1234",
+			"title":"Test Exploit for nginx",
+			"type":"githubexploit",
+			"href":"https://github.com/test/exploit",
+			"score":9.8,
+			"published":"2024-01-15",
+			"language":"python",
+			"source":"exploit code here"
+		}],
+		"exploits_total":42
+	}`}
+	p := newTestProxy(t, "sploitus.com", up)
+	sp := NewSploitus(&config.Config{SploitusEnabled: true, ProxyURL: p.URL(), ExternalSSLCAPath: p.CACertPath()})
 
-func TestSploitusHandle(t *testing.T) {
-	var seenRequest bool
-	var receivedMethod string
-	var receivedContentType string
-	var receivedAccept string
-	var receivedOrigin string
-	var receivedReferer string
-	var receivedUserAgent string
-	var receivedBody []byte
-
-	mockMux := http.NewServeMux()
-	mockMux.HandleFunc("/search", func(w http.ResponseWriter, r *http.Request) {
-		seenRequest = true
-		receivedMethod = r.Method
-		receivedContentType = r.Header.Get("Content-Type")
-		receivedAccept = r.Header.Get("Accept")
-		receivedOrigin = r.Header.Get("Origin")
-		receivedReferer = r.Header.Get("Referer")
-		receivedUserAgent = r.Header.Get("User-Agent")
-
-		var err error
-		receivedBody, err = io.ReadAll(r.Body)
-		if err != nil {
-			t.Errorf("failed to read request body: %v", err)
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{
-			"exploits":[
-				{
-					"id":"CVE-2024-1234",
-					"title":"Test Exploit for nginx",
-					"type":"githubexploit",
-					"href":"https://github.com/test/exploit",
-					"score":9.8,
-					"published":"2024-01-15",
-					"language":"python",
-					"source":"exploit code here"
-				}
-			],
-			"exploits_total":42
-		}`))
-	})
-
-	proxy, err := newTestProxy("sploitus.com", mockMux)
-	if err != nil {
-		t.Fatalf("failed to create proxy: %v", err)
-	}
-	defer proxy.Close()
-
-	cfg := &config.Config{
-		SploitusEnabled:   true,
-		ProxyURL:          proxy.URL(),
-		ExternalSSLCAPath: proxy.CACertPath(),
-	}
-
-	sp := NewSploitus(cfg)
-
-	got, err := sp.Handle(
-		t.Context(),
-		Request{Query: "nginx", ExploitType: "exploits", Sort: "date", MaxResults: 5},
-	)
+	got, err := sp.Handle(t.Context(), Request{Query: "nginx", ExploitType: "exploits", Sort: "date", MaxResults: 5})
 	if err != nil {
 		t.Fatalf("Handle() unexpected error: %v", err)
 	}
@@ -85,180 +35,110 @@ func TestSploitusHandle(t *testing.T) {
 		t.Errorf("Engine() = %q, want %q", sp.Engine(), database.SearchengineTypeSploitus)
 	}
 
-	// Verify mock handler was called
-	if !seenRequest {
-		t.Fatal("request was not intercepted by proxy - mock handler was not called")
+	if up.method != http.MethodPost || up.path != "/search" {
+		t.Errorf("request = %s %s, want POST /search", up.method, up.path)
+	}
+	for header, want := range map[string]string{
+		"Content-Type": "application/json",
+		"Accept":       "application/json",
+		"Origin":       "https://sploitus.com",
+		"Referer":      "https://sploitus.com/?query=nginx",
+	} {
+		if got := up.header.Get(header); got != want {
+			t.Errorf("%s = %q, want %q", header, got, want)
+		}
+	}
+	if ua := up.header.Get("User-Agent"); !strings.Contains(ua, "Mozilla") {
+		t.Errorf("User-Agent = %q, want to contain Mozilla", ua)
+	}
+	if want := `{"query":"nginx","type":"exploits","sort":"date","title":false,"offset":0}`; string(up.payload) != want {
+		t.Errorf("request body = %s, want %s", up.payload, want)
 	}
 
-	// Verify request was built correctly
-	if receivedMethod != http.MethodPost {
-		t.Errorf("request method = %q, want POST", receivedMethod)
-	}
-	if receivedContentType != "application/json" {
-		t.Errorf("Content-Type = %q, want application/json", receivedContentType)
-	}
-	if receivedAccept != "application/json" {
-		t.Errorf("Accept = %q, want application/json", receivedAccept)
-	}
-	if receivedOrigin != "https://sploitus.com" {
-		t.Errorf("Origin = %q, want https://sploitus.com", receivedOrigin)
-	}
-	if !strings.Contains(receivedReferer, "sploitus.com") {
-		t.Errorf("Referer = %q, want to contain sploitus.com", receivedReferer)
-	}
-	if !strings.Contains(receivedUserAgent, "Mozilla") {
-		t.Errorf("User-Agent = %q, want to contain Mozilla", receivedUserAgent)
-	}
-	if !strings.Contains(string(receivedBody), `"query":"nginx"`) {
-		t.Errorf("request body = %q, expected to contain query", string(receivedBody))
-	}
-	if !strings.Contains(string(receivedBody), `"type":"exploits"`) {
-		t.Errorf("request body = %q, expected to contain type", string(receivedBody))
-	}
-	if !strings.Contains(string(receivedBody), `"sort":"date"`) {
-		t.Errorf("request body = %q, expected to contain sort", string(receivedBody))
-	}
-
-	// Verify response was parsed correctly
-	if !strings.Contains(got, "# Sploitus Search Results") {
-		t.Errorf("result missing '# Sploitus Search Results' section: %q", got)
-	}
-	if !strings.Contains(got, "**Query:** `nginx`") {
-		t.Errorf("result missing expected query: %q", got)
-	}
-	if !strings.Contains(got, "**Total matches on Sploitus:** 42") {
-		t.Errorf("result missing expected total: %q", got)
-	}
-	if !strings.Contains(got, "Test Exploit for nginx") {
-		t.Errorf("result missing expected title: %q", got)
+	for _, want := range []string{
+		"# Sploitus Search Results",
+		"**Query:** `nginx`",
+		"**Total matches on Sploitus:** 42",
+		"Test Exploit for nginx",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("result misses %q: %q", want, got)
+		}
 	}
 }
 
-func TestSploitusIsAvailable(t *testing.T) {
-	tests := []struct {
-		name string
-		cfg  *config.Config
-		want bool
+func TestSploitus_Handle_NormalisesTypeSortAndLimit(t *testing.T) {
+	exploits := make([]string, 30)
+	for i := range exploits {
+		exploits[i] = fmt.Sprintf(`{"id":"E-%d","title":"Exploit %d","href":"https://example.com/%d"}`, i, i, i)
+	}
+	up := &searchersUpstream{body: `{"exploits":[` + strings.Join(exploits, ",") + `],"exploits_total":30}`}
+	p := newTestProxy(t, "sploitus.com", up)
+	sp := NewSploitus(&config.Config{SploitusEnabled: true, ProxyURL: p.URL(), ExternalSSLCAPath: p.CACertPath()})
+
+	for _, tt := range []struct {
+		name        string
+		req         Request
+		wantPayload string
+		wantShown   int
 	}{
 		{
-			name: "available when enabled",
-			cfg:  testSploitusConfig(),
-			want: true,
+			name:        "an unset type, sort and limit take the defaults",
+			req:         Request{Query: "test"},
+			wantPayload: `{"query":"test","type":"exploits","sort":"default","title":false,"offset":0}`,
+			wantShown:   10,
 		},
 		{
-			name: "unavailable when disabled",
-			cfg:  &config.Config{SploitusEnabled: false},
-			want: false,
+			name:        "padded upper-case hints are normalised and an oversized limit falls back to ten",
+			req:         Request{Query: "test", ExploitType: " Tools ", Sort: " DATE ", MaxResults: 100},
+			wantPayload: `{"query":"test","type":"tools","sort":"date","title":false,"offset":0}`,
+			wantShown:   10,
 		},
-		{
-			name: "unavailable when nil config",
-			cfg:  nil,
-			want: false,
-		},
-	}
-
-	for _, tt := range tests {
+	} {
 		t.Run(tt.name, func(t *testing.T) {
-			sp := &sploitus{cfg: tt.cfg}
-			if got := sp.IsAvailable(); got != tt.want {
-				t.Errorf("IsAvailable() = %v, want %v", got, tt.want)
+			got, err := sp.Handle(t.Context(), tt.req)
+			if err != nil {
+				t.Fatalf("Handle() unexpected error: %v", err)
+			}
+			if string(up.payload) != tt.wantPayload {
+				t.Errorf("request body = %s, want %s", up.payload, tt.wantPayload)
+			}
+			if n := strings.Count(got, "### "); n != tt.wantShown {
+				t.Errorf("Handle() showed %d exploits, want %d", n, tt.wantShown)
 			}
 		})
 	}
 }
 
-func TestSploitusHandle_ReturnsTypedError(t *testing.T) {
-	t.Run("search error returned as typed error", func(t *testing.T) {
-		var seenRequest bool
-		mockMux := http.NewServeMux()
-		mockMux.HandleFunc("/search", func(w http.ResponseWriter, r *http.Request) {
-			seenRequest = true
-			w.WriteHeader(http.StatusBadGateway)
-		})
+func TestSploitus_Search_RetriesRateLimitsAndServerErrorsOnly(t *testing.T) {
+	up := &searchersUpstream{}
+	p := newTestProxy(t, "sploitus.com", up)
+	sp := NewSploitus(&config.Config{SploitusEnabled: true, ProxyURL: p.URL(), ExternalSSLCAPath: p.CACertPath()})
 
-		proxy, err := newTestProxy("sploitus.com", mockMux)
-		if err != nil {
-			t.Fatalf("failed to create proxy: %v", err)
-		}
-		defer proxy.Close()
-
-		sp := &sploitus{
-			cfg: &config.Config{
-				SploitusEnabled:   true,
-				ProxyURL:          proxy.URL(),
-				ExternalSSLCAPath: proxy.CACertPath(),
-			},
-		}
-
-		result, err := sp.Handle(
-			t.Context(),
-			Request{Query: "test", ExploitType: "exploits"},
-		)
-
-		// Verify mock handler was called (request was intercepted)
-		if !seenRequest {
-			t.Error("request was not intercepted by proxy - mock handler was not called")
-		}
-
-		// The error is now surfaced (not swallowed) and classified. A 502 is retryable.
-		if err == nil {
-			t.Fatal("Handle() expected an error, got nil")
-		}
-		if result != "" {
-			t.Errorf("Handle() result = %q, want empty on error", result)
-		}
-		if !IsRetryable(err) {
-			t.Errorf("Handle() error = %v, want a RetryableError", err)
-		}
-	})
-}
-
-func TestSploitusHandle_StatusCodeErrors(t *testing.T) {
-	tests := []struct {
+	for _, tt := range []struct {
 		name       string
-		statusCode int
+		status     int
+		retryable  bool
 		errContain string
 	}{
-		{"rate limit 499", 499, "rate limit exceeded"},
-		{"rate limit 422", 422, "rate limit exceeded"},
-		{"server error", http.StatusInternalServerError, "HTTP 500"},
-	}
-
-	for _, tt := range tests {
+		{"a 499 rate limit is retryable", 499, true, "rate limit exceeded"},
+		{"a 422 rate limit is retryable", http.StatusUnprocessableEntity, true, "rate limit exceeded"},
+		{"a server error is retryable", http.StatusInternalServerError, true, "HTTP 500"},
+		{"a refusal is fatal", http.StatusForbidden, false, "HTTP 403"},
+	} {
 		t.Run(tt.name, func(t *testing.T) {
-			mockMux := http.NewServeMux()
-			mockMux.HandleFunc("/search", func(w http.ResponseWriter, r *http.Request) {
-				w.WriteHeader(tt.statusCode)
-			})
+			up.reset(tt.status, "")
 
-			proxy, err := newTestProxy("sploitus.com", mockMux)
-			if err != nil {
-				t.Fatalf("failed to create proxy: %v", err)
-			}
-			defer proxy.Close()
+			got, err := sp.Handle(t.Context(), Request{Query: "test", ExploitType: "exploits"})
 
-			sp := &sploitus{
-				cfg: &config.Config{
-					SploitusEnabled:   true,
-					ProxyURL:          proxy.URL(),
-					ExternalSSLCAPath: proxy.CACertPath(),
-				},
+			if up.hits != 1 {
+				t.Fatalf("upstream saw %d requests, want 1", up.hits)
 			}
-
-			result, err := sp.Handle(
-				t.Context(),
-				Request{Query: "test", ExploitType: "exploits"},
-			)
-
-			// Errors are now surfaced (not swallowed). 499/422 and 5xx are all retryable.
-			if err == nil {
-				t.Fatal("Handle() expected an error, got nil")
+			if got != "" || err == nil {
+				t.Fatalf("Handle() = %q, %v; want no result and an error", got, err)
 			}
-			if result != "" {
-				t.Errorf("Handle() result = %q, want empty on error", result)
-			}
-			if !IsRetryable(err) {
-				t.Errorf("Handle() error = %v, want a RetryableError", err)
+			if IsRetryable(err) != tt.retryable || IsFatal(err) == tt.retryable {
+				t.Errorf("Handle() error = %v, want retryable=%v", err, tt.retryable)
 			}
 			if !strings.Contains(err.Error(), tt.errContain) {
 				t.Errorf("Handle() error = %v, expected to contain %q", err, tt.errContain)
@@ -267,7 +147,12 @@ func TestSploitusHandle_StatusCodeErrors(t *testing.T) {
 	}
 }
 
-func TestSploitusFormatResults(t *testing.T) {
+func TestSploitus_FormatSploitusResults_RendersEachTypeUpToTheLimit(t *testing.T) {
+	thirty := sploitusResponse{Exploits: make([]sploitusExploit, 30), ExploitsTotal: 30}
+	for i := range thirty.Exploits {
+		thirty.Exploits[i] = sploitusExploit{ID: fmt.Sprintf("TEST-%d", i), Title: fmt.Sprintf("Test %d", i), Href: "https://example.com"}
+	}
+
 	tests := []struct {
 		name        string
 		query       string
@@ -275,6 +160,7 @@ func TestSploitusFormatResults(t *testing.T) {
 		limit       int
 		response    sploitusResponse
 		expected    []string
+		wantItems   int
 	}{
 		{
 			name:        "exploits formatting",
@@ -318,6 +204,7 @@ func TestSploitusFormatResults(t *testing.T) {
 				"### 2. Test Exploit 2",
 				"**CVSS Score:** 7.5",
 			},
+			wantItems: 2,
 		},
 		{
 			name:        "tools formatting",
@@ -356,22 +243,21 @@ func TestSploitusFormatResults(t *testing.T) {
 				"### 2. Nmap Tool 2",
 				"**Download:** https://github.com/tool2",
 			},
+			wantItems: 2,
 		},
 		{
 			name:        "empty results",
 			query:       "nonexistent",
 			exploitType: "exploits",
 			limit:       10,
-			response: sploitusResponse{
-				Exploits:      []sploitusExploit{},
-				ExploitsTotal: 0,
-			},
-			expected: []string{
-				"# Sploitus Search Results",
-				"**Query:** `nonexistent`",
-				"No exploits were found",
-			},
+			response:    sploitusResponse{Exploits: []sploitusExploit{}},
+			expected:    []string{"# Sploitus Search Results", "**Query:** `nonexistent`", "No exploits were found"},
 		},
+		{name: "a limit below the matches cuts them", query: "test", exploitType: "exploits", limit: 5, response: thirty, wantItems: 5},
+		{name: "a limit of ten shows ten", query: "test", exploitType: "exploits", limit: 10, response: thirty, wantItems: 10},
+		{name: "a limit above the matches shows them all", query: "test", exploitType: "exploits", limit: 100, response: thirty, wantItems: 30},
+		{name: "no limit shows ten", query: "test", exploitType: "exploits", limit: 0, response: thirty, wantItems: 10},
+		{name: "a negative limit shows ten", query: "test", exploitType: "exploits", limit: -5, response: thirty, wantItems: 10},
 	}
 
 	for _, tt := range tests {
@@ -383,65 +269,22 @@ func TestSploitusFormatResults(t *testing.T) {
 					t.Errorf("expected result to contain %q\nGot:\n%s", expectedStr, result)
 				}
 			}
+			if n := strings.Count(result, "### "); n != tt.wantItems {
+				t.Errorf("rendered %d items, want %d", n, tt.wantItems)
+			}
 		})
 	}
 }
 
-func TestSploitusDefaultValues(t *testing.T) {
-	mockMux := http.NewServeMux()
-	var receivedBody []byte
-	mockMux.HandleFunc("/search", func(w http.ResponseWriter, r *http.Request) {
-		receivedBody, _ = io.ReadAll(r.Body)
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"exploits":[],"exploits_total":0}`))
-	})
-
-	proxy, err := newTestProxy("sploitus.com", mockMux)
-	if err != nil {
-		t.Fatalf("failed to create proxy: %v", err)
-	}
-	defer proxy.Close()
-
-	sp := &sploitus{
-		cfg: &config.Config{
-			SploitusEnabled:   true,
-			ProxyURL:          proxy.URL(),
-			ExternalSSLCAPath: proxy.CACertPath(),
-		},
-	}
-
-	// Test with minimal request (only query, no type/sort/maxResults)
-	_, err = sp.Handle(
-		t.Context(),
-		Request{Query: "test"},
-	)
-	if err != nil {
-		t.Fatalf("Handle() unexpected error: %v", err)
-	}
-
-	// Verify defaults were applied
-	bodyStr := string(receivedBody)
-	if !strings.Contains(bodyStr, `"type":"exploits"`) {
-		t.Errorf("expected default type 'exploits', got: %s", bodyStr)
-	}
-	if !strings.Contains(bodyStr, `"sort":"default"`) {
-		t.Errorf("expected default sort 'default', got: %s", bodyStr)
-	}
-}
-
-func TestSploitusSizeLimits(t *testing.T) {
+func TestSploitus_FormatSploitusResults_StaysUnder80KB(t *testing.T) {
 	t.Run("source truncation at 50KB", func(t *testing.T) {
-		// Create a large source (60 KB)
-		largeSource := strings.Repeat("A", 60*1024)
-
 		resp := sploitusResponse{
 			Exploits: []sploitusExploit{
 				{
 					ID:     "TEST-1",
 					Title:  "Test with large source",
 					Href:   "https://example.com",
-					Source: largeSource,
+					Source: strings.Repeat("A", 60*1024),
 				},
 			},
 			ExploitsTotal: 1,
@@ -449,91 +292,55 @@ func TestSploitusSizeLimits(t *testing.T) {
 
 		result := formatSploitusResults("test", "exploits", 10, resp)
 
-		// Check that source was truncated
 		if !strings.Contains(result, "source truncated, exceeded 50 KB limit") {
 			t.Error("expected source truncation message for 60 KB source")
 		}
-
-		// Verify result doesn't contain the full 60 KB
 		if len(result) > 80*1024 {
 			t.Errorf("result size %d exceeds 80 KB limit", len(result))
 		}
 	})
 
 	t.Run("total size limit at 80KB", func(t *testing.T) {
-		// Create many results to exceed 80 KB total
 		results := make([]sploitusExploit, 100)
 		for i := range results {
 			results[i] = sploitusExploit{
 				ID:     fmt.Sprintf("TEST-%d", i),
 				Title:  fmt.Sprintf("Test Result %d", i),
 				Href:   "https://example.com",
-				Source: strings.Repeat("X", 5000), // 5 KB each
+				Source: strings.Repeat("X", 5000),
 			}
 		}
 
-		resp := sploitusResponse{
-			Exploits:      results,
-			ExploitsTotal: 100,
-		}
+		result := formatSploitusResults("test", "exploits", 100, sploitusResponse{Exploits: results, ExploitsTotal: 100})
 
-		result := formatSploitusResults("test", "exploits", 100, resp)
-
-		// Result should be under 80 KB
 		if len(result) > 80*1024 {
 			t.Errorf("result size %d exceeds 80 KB hard limit", len(result))
 		}
-
-		// Should have truncation warning
 		if !strings.Contains(result, "Results truncated") {
 			t.Error("expected truncation warning when hitting 80 KB limit")
 		}
-
-		// Should not show all 100 results
-		count := strings.Count(result, "### ")
-		if count >= 100 {
+		if count := strings.Count(result, "### "); count >= 100 {
 			t.Errorf("expected fewer than 100 results due to size limit, got %d", count)
 		}
 	})
 }
 
-func TestSploitusMaxResultsClamp(t *testing.T) {
+func TestSploitus_IsAvailable_RequiresTheEnabledFlag(t *testing.T) {
 	tests := []struct {
-		name          string
-		maxResults    int
-		expectedCount int
+		name string
+		cfg  *config.Config
+		want bool
 	}{
-		{"valid max results", 10, 10},
-		{"valid smaller", 5, 5},
-		{"too large", 100, 30}, // Should limit to available results (30)
-		{"zero gets default", 0, defaultSploitusLimit},
-		{"negative gets default", -5, defaultSploitusLimit},
+		{"available when enabled", &config.Config{SploitusEnabled: true}, true},
+		{"unavailable when disabled", &config.Config{SploitusEnabled: false}, false},
+		{"unavailable when nil config", nil, false},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create response with 30 results
-			resp := sploitusResponse{
-				Exploits:      make([]sploitusExploit, 30),
-				ExploitsTotal: 30,
-			}
-
-			// Fill with dummy data
-			for i := range resp.Exploits {
-				resp.Exploits[i] = sploitusExploit{
-					ID:    fmt.Sprintf("TEST-%d", i),
-					Title: fmt.Sprintf("Test %d", i),
-					Href:  "https://example.com",
-				}
-			}
-
-			result := formatSploitusResults("test", "exploits", tt.maxResults, resp)
-
-			// Count how many results are shown (### is used for each result title)
-			count := strings.Count(result, "### ")
-
-			if count != tt.expectedCount {
-				t.Errorf("expected %d results, got %d", tt.expectedCount, count)
+			sp := &sploitus{cfg: tt.cfg}
+			if got := sp.IsAvailable(); got != tt.want {
+				t.Errorf("IsAvailable() = %v, want %v", got, tt.want)
 			}
 		})
 	}

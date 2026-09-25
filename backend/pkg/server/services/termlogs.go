@@ -91,7 +91,7 @@ func (s *TermlogService) GetTermlogs(c *gin.Context) {
 		return
 	}
 
-	query.Init("termlogs", termlogsSQLMappers)
+	_ = query.Init("termlogs", termlogsSQLMappers)
 
 	if query.Group != "" {
 		if _, ok := termlogsSQLMappers[query.Group]; !ok {
@@ -181,7 +181,7 @@ func (s *TermlogService) GetFlowTermlogs(c *gin.Context) {
 		return
 	}
 
-	query.Init("termlogs", termlogsSQLMappers)
+	_ = query.Init("termlogs", termlogsSQLMappers)
 
 	if query.Group != "" {
 		if _, ok := termlogsSQLMappers[query.Group]; !ok {

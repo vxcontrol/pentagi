@@ -685,11 +685,11 @@ func (m *GraphitiFormModel) OnFieldChanged(fieldIndex int, oldValue, newValue st
 }
 
 func (m *GraphitiFormModel) GetFormFields() []FormField {
-	return m.BaseScreen.fields
+	return m.fields
 }
 
 func (m *GraphitiFormModel) SetFormFields(fields []FormField) {
-	m.BaseScreen.fields = fields
+	m.fields = fields
 }
 
 // BaseListHandler interface implementation

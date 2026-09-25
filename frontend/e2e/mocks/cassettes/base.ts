@@ -7,7 +7,10 @@ import type {
     ResourcesDocument,
     SettingsDocument,
     SettingsUserDocument,
+    VersionInfoDocument,
 } from '@/graphql/types';
+
+import { UpdateState } from '@/graphql/types';
 
 import type { Cassette } from '../cassette.ts';
 
@@ -24,6 +27,18 @@ const resources: ResultOf<typeof ResourcesDocument> = { resources: [] };
 
 const providers: ResultOf<typeof ProvidersDocument> = { providers: [] };
 
+const versionInfo: ResultOf<typeof VersionInfoDocument> = {
+    versionInfo: entity('VersionInfo', {
+        build: 'e2e00000',
+        checkedAt: null,
+        current: 'e2e',
+        failedAt: null,
+        latest: null,
+        state: UpdateState.Disabled,
+        strategy: 'preview',
+    }),
+};
+
 const settings: ResultOf<typeof SettingsDocument> = {
     settings: entity('Settings', {
         askUser: false,
@@ -35,10 +50,12 @@ const settings: ResultOf<typeof SettingsDocument> = {
     }),
 };
 
+export const SIGNED_IN_USER_ID = '1';
+
 const settingsUser: ResultOf<typeof SettingsUserDocument> = {
     settingsUser: entity('UserPreferences', {
         favoriteFlows: [],
-        id: '1',
+        id: SIGNED_IN_USER_ID,
     }),
 };
 
@@ -49,6 +66,7 @@ export const baseQueries = (): NonNullable<Cassette['queries']> => ({
     resources: [{ data: resources }],
     settings: [{ data: settings }],
     settingsUser: [{ data: settingsUser }],
+    versionInfo: [{ data: versionInfo }],
 });
 
 export const baseRest = (): NonNullable<Cassette['rest']> => ({

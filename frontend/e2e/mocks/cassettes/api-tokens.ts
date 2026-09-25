@@ -24,7 +24,8 @@ const tokenFields = (id: string, name: string) => ({
     userId: '1',
 });
 
-const makeToken = (id: string, name: string): ApiTokenFragmentFragment => entity('APIToken', tokenFields(id, name));
+export const makeToken = (id: string, name: string): ApiTokenFragmentFragment =>
+    entity('APIToken', tokenFields(id, name));
 
 export const SEED_TOKEN = makeToken('1', 'E2E seed token');
 export const DOOMED_TOKEN = makeToken('2', 'E2E doomed token');

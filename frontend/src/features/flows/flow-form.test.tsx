@@ -59,7 +59,7 @@ beforeEach(() => {
 describe('FlowForm attachments', () => {
     it('clears the attached resources after a submit', async () => {
         const user = userEvent.setup({ delay: null });
-        const onSubmit = vi.fn();
+        const onSubmit = vi.fn().mockResolvedValue(true);
 
         render(
             <FlowForm
@@ -82,7 +82,7 @@ describe('FlowForm attachments', () => {
 
     it('does not resend the previous attachments on the next submit', async () => {
         const user = userEvent.setup({ delay: null });
-        const onSubmit = vi.fn();
+        const onSubmit = vi.fn().mockResolvedValue(true);
 
         render(
             <FlowForm
@@ -103,6 +103,28 @@ describe('FlowForm attachments', () => {
 
         await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(2));
         expect(onSubmit.mock.calls[1]?.[0]).toMatchObject({ message: 'second', resourceIds: [] });
+    });
+
+    it('keeps the message and the attachments when the submit is not accepted', async () => {
+        const user = userEvent.setup({ delay: null });
+        const onSubmit = vi.fn().mockResolvedValue(false);
+
+        render(
+            <FlowForm
+                defaultValues={{ providerName: 'openai' }}
+                onSubmit={onSubmit}
+                type="automation"
+            />,
+        );
+
+        await attachResource();
+
+        await user.type(screen.getByRole('textbox'), 'scan it');
+        await user.click(screen.getByRole('button', { name: 'Submit' }));
+
+        await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
+        expect(screen.getByRole('textbox')).toHaveValue('scan it');
+        expect(screen.getByRole('button', { name: 'Remove scope.txt' })).toBeInTheDocument();
     });
 
     it('adopts resourceIds that arrive through defaultValues after mount', async () => {

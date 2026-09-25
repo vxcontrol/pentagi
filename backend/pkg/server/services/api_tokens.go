@@ -3,7 +3,6 @@ package services
 import (
 	"errors"
 	"net/http"
-	"time"
 
 	"pentagi/pkg/database"
 	"pentagi/pkg/graph/subscriptions"
@@ -42,6 +41,14 @@ func NewTokenService(
 		tokenCache: tokenCache,
 		ss:         ss,
 	}
+}
+
+func storedTokenName(name *string) *string {
+	if name != nil && *name == "" {
+		return nil
+	}
+
+	return name
 }
 
 // CreateToken creates a new API token
@@ -111,7 +118,7 @@ func (s *TokenService) CreateToken(c *gin.Context) {
 		TokenID: tokenID,
 		UserID:  uid,
 		RoleID:  rid,
-		Name:    req.Name,
+		Name:    storedTokenName(req.Name),
 		TTL:     req.TTL,
 		Status:  models.TokenStatusActive,
 	}
@@ -172,7 +179,7 @@ func (s *TokenService) ListTokens(c *gin.Context) {
 
 	for i := range tokenList {
 		token := &tokenList[i]
-		isExpired := token.CreatedAt.Add(time.Duration(token.TTL) * time.Second).Before(time.Now())
+		isExpired := database.IsAPITokenExpired(token.CreatedAt, int64(token.TTL))
 		if token.Status == models.TokenStatusActive && isExpired {
 			token.Status = models.TokenStatusExpired
 		}
@@ -219,7 +226,7 @@ func (s *TokenService) GetToken(c *gin.Context) {
 		return
 	}
 
-	isExpired := token.CreatedAt.Add(time.Duration(token.TTL) * time.Second).Before(time.Now())
+	isExpired := database.IsAPITokenExpired(token.CreatedAt, int64(token.TTL))
 	if token.Status == models.TokenStatusActive && isExpired {
 		token.Status = models.TokenStatusExpired
 	}
@@ -297,7 +304,7 @@ func (s *TokenService) UpdateToken(c *gin.Context) {
 				}
 			}
 		}
-		updates["name"] = req.Name
+		updates["name"] = storedTokenName(req.Name)
 	}
 	switch req.Status {
 	case models.TokenStatusActive:
@@ -305,17 +312,18 @@ func (s *TokenService) UpdateToken(c *gin.Context) {
 	case models.TokenStatusRevoked:
 		updates["status"] = models.TokenStatusRevoked
 	case models.TokenStatusExpired:
-		updates["status"] = models.TokenStatusRevoked
 	}
 
 	if len(updates) > 0 {
+		previousStatus := token.Status
+
 		if err := s.db.Model(&token).Updates(updates).Error; err != nil {
 			logger.FromContext(c).WithError(err).Errorf("error updating token")
 			response.Error(c, response.ErrInternal, err)
 			return
 		}
 
-		if req.Status != "" {
+		if newStatus, ok := updates["status"]; ok && newStatus != previousStatus {
 			s.tokenCache.Invalidate(tokenID)
 			// also invalidate all tokens for this user (in case of role change or security event)
 			s.tokenCache.InvalidateUser(token.UserID)
@@ -328,7 +336,7 @@ func (s *TokenService) UpdateToken(c *gin.Context) {
 		}
 	}
 
-	isExpired := token.CreatedAt.Add(time.Duration(token.TTL) * time.Second).Before(time.Now())
+	isExpired := database.IsAPITokenExpired(token.CreatedAt, int64(token.TTL))
 	if token.Status == models.TokenStatusActive && isExpired {
 		token.Status = models.TokenStatusExpired
 	}
@@ -398,7 +406,7 @@ func convertAPITokenToDatabase(apiToken models.APIToken) database.ApiToken {
 		TokenID:   apiToken.TokenID,
 		UserID:    int64(apiToken.UserID),
 		RoleID:    int64(apiToken.RoleID),
-		Name:      database.StringToNullString(*apiToken.Name),
+		Name:      database.PtrStringToNullString(apiToken.Name),
 		Ttl:       int64(apiToken.TTL),
 		Status:    database.TokenStatus(apiToken.Status),
 		CreatedAt: database.TimeToNullTime(apiToken.CreatedAt),

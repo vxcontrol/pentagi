@@ -102,9 +102,9 @@ func (g *google) search(ctx context.Context, svc *customsearch.Service, query st
 func (g *google) formatResults(res *customsearch.Search) string {
 	var writer strings.Builder
 	for i, item := range res.Items {
-		writer.WriteString(fmt.Sprintf("# %d. %s\n\n", i+1, item.Title))
-		writer.WriteString(fmt.Sprintf("## URL\n%s\n\n", item.Link))
-		writer.WriteString(fmt.Sprintf("## Snippet\n\n%s\n\n", item.Snippet))
+		fmt.Fprintf(&writer, "# %d. %s\n\n", i+1, item.Title)
+		fmt.Fprintf(&writer, "## URL\n%s\n\n", item.Link)
+		fmt.Fprintf(&writer, "## Snippet\n\n%s\n\n", item.Snippet)
 	}
 
 	return writer.String()

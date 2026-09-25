@@ -94,7 +94,7 @@ func (s *VecstorelogService) GetVecstorelogs(c *gin.Context) {
 		return
 	}
 
-	query.Init("vecstorelogs", vecstorelogsSQLMappers)
+	_ = query.Init("vecstorelogs", vecstorelogsSQLMappers)
 
 	if query.Group != "" {
 		if _, ok := vecstorelogsSQLMappers[query.Group]; !ok {
@@ -184,7 +184,7 @@ func (s *VecstorelogService) GetFlowVecstorelogs(c *gin.Context) {
 		return
 	}
 
-	query.Init("vecstorelogs", vecstorelogsSQLMappers)
+	_ = query.Init("vecstorelogs", vecstorelogsSQLMappers)
 
 	if query.Group != "" {
 		if _, ok := vecstorelogsSQLMappers[query.Group]; !ok {

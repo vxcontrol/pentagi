@@ -1,3089 +1,1894 @@
 package cast
 
 import (
-	"strings"
+	"maps"
+	"slices"
 	"testing"
 
-	"pentagi/pkg/templates"
-
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/vxcontrol/langchaingo/llms"
 	"github.com/vxcontrol/langchaingo/llms/reasoning"
 )
 
-func TestNewChainAST_EmptyChain(t *testing.T) {
-	// Test with empty chain
-	ast, err := NewChainAST(emptyChain, false)
-	assert.NoError(t, err)
-	assert.NotNil(t, ast)
-	assert.Empty(t, ast.Sections)
+const (
+	chainASTFallback    = "the call was not handled, please try again"
+	chainASTAnthropicID = `^toolu_[0-9A-Za-z]{24}$`
+)
 
-	// Check that Messages() returns an empty chain
-	chain := ast.Messages()
-	assert.Empty(t, chain)
-
-	// Check that Dump() also returns an empty chain (backward compatibility)
-	dumpedChain := ast.Messages()
-	assert.Empty(t, dumpedChain)
-
-	// Check total size is 0
-	assert.Equal(t, 0, ast.Size())
+func chainASTPairTypes(ast *ChainAST) [][]BodyPairType {
+	var sections [][]BodyPairType
+	for _, section := range ast.Sections {
+		var types []BodyPairType
+		for _, pair := range section.Body {
+			types = append(types, pair.Type)
+		}
+		sections = append(sections, types)
+	}
+	return sections
 }
 
-func TestNewChainAST_BasicChains(t *testing.T) {
-	tests := []struct {
-		name              string
-		chain             []llms.MessageContent
-		expectedErr       bool
-		expectedSections  int
-		expectedHeaders   int
-		expectNonZeroSize bool
-	}{
-		{
-			name:              "System only",
-			chain:             systemOnlyChain,
-			expectedErr:       false,
-			expectedSections:  1,
-			expectedHeaders:   1,
-			expectNonZeroSize: true,
-		},
-		{
-			name:              "Human only",
-			chain:             humanOnlyChain,
-			expectedErr:       false,
-			expectedSections:  1,
-			expectedHeaders:   1,
-			expectNonZeroSize: true,
-		},
-		{
-			name:              "System + Human",
-			chain:             systemHumanChain,
-			expectedErr:       false,
-			expectedSections:  1,
-			expectedHeaders:   2,
-			expectNonZeroSize: true,
-		},
-		{
-			name:              "System + Human + AI",
-			chain:             basicConversationChain,
-			expectedErr:       false,
-			expectedSections:  1,
-			expectedHeaders:   2,
-			expectNonZeroSize: true,
-		},
+// assertChainASTSizes checks, for every section, its size, its header's size and the size of each pair, in
+// that order, and then the total.
+func assertChainASTSizes(t *testing.T, want [][]int, ast *ChainAST, msgAndArgs ...any) {
+	t.Helper()
+
+	var got [][]int
+	for _, section := range ast.Sections {
+		sizes := []int{section.Size(), section.Header.Size()}
+		for _, pair := range section.Body {
+			sizes = append(sizes, pair.Size())
+		}
+		got = append(got, sizes)
 	}
+	assert.Equal(t, want, got, msgAndArgs...)
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			ast, err := NewChainAST(tt.chain, false)
-
-			if tt.expectedErr {
-				assert.Error(t, err)
-				return
-			}
-
-			assert.NoError(t, err)
-			assert.NotNil(t, ast)
-			assert.Equal(t, tt.expectedSections, len(ast.Sections))
-
-			// Verify headers
-			if len(ast.Sections) > 0 {
-				section := ast.Sections[0]
-				hasSystem := section.Header.SystemMessage != nil
-				hasHuman := section.Header.HumanMessage != nil
-
-				headerCount := 0
-				if hasSystem {
-					headerCount++
-				}
-				if hasHuman {
-					headerCount++
-				}
-
-				assert.Equal(t, tt.expectedHeaders, headerCount, "Header count doesn't match expected value")
-
-				// Check header size tracking
-				if hasSystem || hasHuman {
-					assert.Greater(t, section.Header.Size(), 0, "Header size should be greater than 0")
-				}
-
-				// Check section size tracking
-				if tt.expectNonZeroSize {
-					assert.Greater(t, section.Size(), 0, "Section size should be greater than 0")
-					assert.Greater(t, ast.Size(), 0, "Total size should be greater than 0")
-				}
-
-				// Get messages and verify length
-				messages := ast.Messages()
-				assert.Equal(t, len(tt.chain), len(messages), "Messages length doesn't match original")
-
-				// Check that Dump() returns the same result (backward compatibility)
-				dumpedChain := ast.Messages()
-				assert.Equal(t, len(messages), len(dumpedChain), "Messages method results should be consistent")
-			}
-		})
+	total := 0
+	for _, sizes := range want {
+		total += sizes[0]
 	}
+	assert.Equal(t, total, ast.Size(), msgAndArgs...)
 }
 
-func TestNewChainAST_ToolCallChains(t *testing.T) {
-	tests := []struct {
-		name                  string
-		chain                 []llms.MessageContent
-		force                 bool
-		expectedErr           bool
-		expectedBodyPairs     int
-		expectedToolCalls     int
-		expectedToolResponses int
-		expectAddedResponses  bool
-	}{
-		{
-			name:                  "Chain with tool call, no response, without force",
-			chain:                 chainWithTool,
-			force:                 false,
-			expectedErr:           true, // Should error because there are tool calls without responses
-			expectedBodyPairs:     1,
-			expectedToolCalls:     1,
-			expectedToolResponses: 0,     // No responses expected because it should error
-			expectAddedResponses:  false, // No responses should be added without force=true
-		},
-		{
-			name:                  "Chain with tool call, no response, with force",
-			chain:                 chainWithTool,
-			force:                 true,
-			expectedErr:           false,
-			expectedBodyPairs:     1,
-			expectedToolCalls:     1,
-			expectedToolResponses: 1,
-			expectAddedResponses:  true,
-		},
-		{
-			name:                  "Chain with tool call and response",
-			chain:                 chainWithSingleToolResponse,
-			force:                 false,
-			expectedErr:           false,
-			expectedBodyPairs:     1,
-			expectedToolCalls:     1,
-			expectedToolResponses: 1,
-			expectAddedResponses:  false,
-		},
-		{
-			name:                  "Chain with multiple tool calls, no responses, with force",
-			chain:                 chainWithMultipleTools,
-			force:                 true,
-			expectedErr:           false,
-			expectedBodyPairs:     1,
-			expectedToolCalls:     2,
-			expectedToolResponses: 2,
-			expectAddedResponses:  true,
-		},
-		{
-			name:                  "Chain with missing tool response, with force",
-			chain:                 chainWithMissingToolResponse,
-			force:                 true,
-			expectedErr:           false,
-			expectedBodyPairs:     1,
-			expectedToolCalls:     2,
-			expectedToolResponses: 2,
-			expectAddedResponses:  true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			ast, err := NewChainAST(tt.chain, tt.force)
-
-			if tt.expectedErr {
-				assert.Error(t, err)
-				return
-			}
-
-			assert.NoError(t, err)
-			assert.NotNil(t, ast)
-			assert.NotEmpty(t, ast.Sections)
-
-			// Get the first section's body pairs to analyze
-			section := ast.Sections[0]
-			assert.Equal(t, tt.expectedBodyPairs, len(section.Body))
-
-			if len(section.Body) > 0 {
-				bodyPair := section.Body[0]
-
-				if tt.expectedToolCalls > 0 {
-					assert.Equal(t, RequestResponse, bodyPair.Type)
-
-					// Count actual tool calls in the AI message
-					toolCallCount := 0
-					toolCallIDs := []string{}
-					for _, part := range bodyPair.AIMessage.Parts {
-						if toolCall, ok := part.(llms.ToolCall); ok {
-							toolCallCount++
-							toolCallIDs = append(toolCallIDs, toolCall.ID)
-						}
-					}
-					assert.Equal(t, tt.expectedToolCalls, toolCallCount, "Tool call count doesn't match expected value")
-					t.Logf("Tool call IDs: %v", toolCallIDs)
-
-					// Check tool responses
-					responseCount := 0
-					responseIDs := []string{}
-					for _, toolMsg := range bodyPair.ToolMessages {
-						for _, part := range toolMsg.Parts {
-							if resp, ok := part.(llms.ToolCallResponse); ok {
-								responseCount++
-								responseIDs = append(responseIDs, resp.ToolCallID)
-							}
-						}
-					}
-					assert.Equal(t, tt.expectedToolResponses, responseCount, "Tool response count doesn't match expected value")
-					t.Logf("Tool response IDs: %v", responseIDs)
-
-					// Verify matching between tool calls and responses
-					toolCallsInfo := bodyPair.GetToolCallsInfo()
-					t.Logf("Pending tool call IDs: %v", toolCallsInfo.PendingToolCallIDs)
-					t.Logf("Unmatched tool call IDs: %v", toolCallsInfo.UnmatchedToolCallIDs)
-					t.Logf("Completed tool calls: %v", toolCallsInfo.CompletedToolCalls)
-
-					// If we expect all tools to have responses, verify that
-					if tt.force {
-						assert.Empty(t, toolCallsInfo.PendingToolCallIDs, "With force=true, there should be no pending tool calls")
-					}
-				} else {
-					assert.Equal(t, Completion, bodyPair.Type)
-				}
-			}
-
-			// Test dumping
-			chain := ast.Messages()
-
-			// Check chain length based on whether responses were added
-			if tt.expectAddedResponses {
-				// If we expect responses to be added, don't check exact equality
-				t.Logf("Original chain length: %d, Dumped chain length: %d", len(tt.chain), len(chain))
-			} else {
-				assert.Equal(t, len(tt.chain), len(chain), "Dumped chain length doesn't match original without force changes")
-			}
-
-			// Debug output
-			if t.Failed() {
-				t.Logf("Original chain structure: \n%s", DumpChainStructure(tt.chain))
-				t.Logf("AST structure: \n%s", ast.String())
-				t.Logf("Dumped chain structure: \n%s", DumpChainStructure(chain))
-			}
-		})
-	}
-}
-
-func TestNewChainAST_MultipleHumanMessages(t *testing.T) {
-	// Test with chain containing multiple human messages (sections)
-	ast, err := NewChainAST(chainWithMultipleSections, false)
-	assert.NoError(t, err)
-	assert.NotNil(t, ast)
-	assert.Equal(t, 2, len(ast.Sections), "Should have two sections")
-
-	// First section should have system, human, and AI message
-	assert.NotNil(t, ast.Sections[0].Header.SystemMessage)
-	assert.NotNil(t, ast.Sections[0].Header.HumanMessage)
-	assert.Equal(t, 1, len(ast.Sections[0].Body))
-	assert.Equal(t, Completion, ast.Sections[0].Body[0].Type)
-
-	// Second section should have human, and AI with tool call
-	assert.NotNil(t, ast.Sections[1].Header.HumanMessage)
-	assert.Equal(t, 1, len(ast.Sections[1].Body))
-	assert.Equal(t, RequestResponse, ast.Sections[1].Body[0].Type)
-
-	// The tool call should have a response
-	toolMsg := ast.Sections[1].Body[0].ToolMessages
-	assert.Equal(t, 1, len(toolMsg))
-
-	// Dump and verify length
-	chain := ast.Messages()
-	assert.Equal(t, len(chainWithMultipleSections), len(chain))
-}
-
-func TestNewChainAST_ConsecutiveHumans(t *testing.T) {
-	// Modify chainWithConsecutiveHumans for the test
-	// One System + two Human in a row
-	testChain := []llms.MessageContent{
-		{
-			Role:  llms.ChatMessageTypeSystem,
-			Parts: []llms.ContentPart{llms.TextContent{Text: "You are a helpful assistant."}},
-		},
-		{
-			Role:  llms.ChatMessageTypeHuman,
-			Parts: []llms.ContentPart{llms.TextContent{Text: "First human message"}},
-		},
-		{
-			Role:  llms.ChatMessageTypeHuman,
-			Parts: []llms.ContentPart{llms.TextContent{Text: "Second human message"}},
-		},
-	}
-
-	// Test without force (should error)
-	_, err := NewChainAST(testChain, false)
-	assert.Error(t, err, "Should error with consecutive humans without force=true")
-
-	// Test with force (should merge)
-	ast, err := NewChainAST(testChain, true)
-	assert.NoError(t, err)
-	assert.NotNil(t, ast)
-
-	// Check that we have only one section
-	assert.Equal(t, 1, len(ast.Sections), "Should have one section after merging consecutive humans")
-
-	// Verify the merged parts - human message should have 2 parts after merge
-	humanMsg := ast.Sections[0].Header.HumanMessage
-	assert.NotNil(t, humanMsg)
-	assert.Equal(t, 2, len(humanMsg.Parts), "Human message should contain both parts after merge")
-}
-
-func TestNewChainAST_UnexpectedTool(t *testing.T) {
-	// Test with unexpected tool message without force
-	_, err := NewChainAST(chainWithUnexpectedTool, false)
-	assert.Error(t, err, "Should error with unexpected tool message")
-
-	// Test with force (should skip the invalid tool message)
-	ast, err := NewChainAST(chainWithUnexpectedTool, true)
-	assert.NoError(t, err, "Should not error with force=true")
-	assert.NotNil(t, ast)
-
-	// Check that all valid messages were processed
-	assert.Equal(t, 1, len(ast.Sections), "Should have one section")
-
-	// Verify section structure
-	if len(ast.Sections) > 0 {
-		section := ast.Sections[0]
-		assert.NotNil(t, section.Header.SystemMessage)
-		assert.NotNil(t, section.Header.HumanMessage)
-		assert.Equal(t, 1, len(section.Body))
-
-		// The unexpected tool message should have been skipped
-		chain := ast.Messages()
-		assert.True(t, len(chain) < len(chainWithUnexpectedTool),
-			"Dumped chain should be shorter than original after skipping invalid messages")
-	}
-}
-
-func TestAddToolResponse(t *testing.T) {
-	// Create a chain with one tool call and immediately add a response
-	// to meet the requirement force=false
-	toolCallID := "test-tool-1"
-	toolCallName := "get_weather"
-
-	completedChain := []llms.MessageContent{
-		{
-			Role:  llms.ChatMessageTypeSystem,
-			Parts: []llms.ContentPart{llms.TextContent{Text: "You are a helpful assistant."}},
-		},
-		{
-			Role:  llms.ChatMessageTypeHuman,
-			Parts: []llms.ContentPart{llms.TextContent{Text: "What's the weather like?"}},
-		},
-		{
-			Role: llms.ChatMessageTypeAI,
-			Parts: []llms.ContentPart{
-				llms.ToolCall{
-					ID:   toolCallID,
-					Type: "function",
-					FunctionCall: &llms.FunctionCall{
-						Name:      toolCallName,
-						Arguments: `{"location": "New York"}`,
-					},
-				},
-			},
-		},
-		{
-			Role: llms.ChatMessageTypeTool,
-			Parts: []llms.ContentPart{
-				llms.ToolCallResponse{
-					ToolCallID: toolCallID,
-					Name:       toolCallName,
-					Content:    "Initial response",
-				},
-			},
-		},
-	}
-
-	// Create a chain that already has a response for the tool call
-	ast, err := NewChainAST(completedChain, false)
-	assert.NoError(t, err)
-	assert.NotNil(t, ast)
-
-	// Add an updated response
-	updatedContent := "The weather in New York is sunny."
-	err = ast.AddToolResponse(toolCallID, toolCallName, updatedContent)
-	assert.NoError(t, err)
-
-	// Verify the response was added or updated
-	responses := ast.FindToolCallResponses(toolCallID)
-	assert.Equal(t, 1, len(responses), "Should have exactly one tool response")
-	assert.Equal(t, updatedContent, responses[0].Content, "Response content should match the updated content")
-	assert.Equal(t, toolCallName, responses[0].Name, "Tool name should match")
-
-	// Test with invalid tool call ID
-	err = ast.AddToolResponse("invalid-id", "invalid-name", "content")
-	assert.Error(t, err, "Should error with invalid tool call ID")
-}
-
-func TestAppendHumanMessage(t *testing.T) {
-	tests := []struct {
-		name             string
-		chain            []llms.MessageContent
-		content          string
-		expectedSections int
-		expectedHeaders  int
-	}{
-		{
-			name:             "Empty chain",
-			chain:            emptyChain,
-			content:          "Hello",
-			expectedSections: 1,
-			expectedHeaders:  1,
-		},
-		{
-			name:             "Chain with system only",
-			chain:            systemOnlyChain,
-			content:          "Hello",
-			expectedSections: 1,
-			expectedHeaders:  2,
-		},
-		{
-			name:             "Chain with existing conversation",
-			chain:            basicConversationChain,
-			content:          "Tell me more",
-			expectedSections: 2,
-			expectedHeaders:  3,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			ast, err := NewChainAST(tt.chain, false)
-			assert.NoError(t, err)
-
-			// Append the human message
-			ast.AppendHumanMessage(tt.content)
-
-			// Check the results - total sections
-			assert.Equal(t, tt.expectedSections, len(ast.Sections),
-				"Section count doesn't match expected. AST structure: %s", ast.String())
-
-			// Check the appended message
-			lastSection := ast.Sections[len(ast.Sections)-1]
-			assert.NotNil(t, lastSection.Header.HumanMessage)
-
-			// Count headers to verify the human message was added
-			headerCount := 0
-			for _, section := range ast.Sections {
-				if section.Header.SystemMessage != nil {
-					headerCount++
-				}
-				if section.Header.HumanMessage != nil {
-					headerCount++
-				}
-			}
-			assert.Equal(t, tt.expectedHeaders, headerCount, "Total header count doesn't match expected")
-
-			// Check the content of the appended message
-			var textFound bool
-			for _, part := range lastSection.Header.HumanMessage.Parts {
-				if textContent, ok := part.(llms.TextContent); ok {
-					if textContent.Text == tt.content {
-						textFound = true
-						break
-					}
-				}
-			}
-			assert.True(t, textFound, "Appended human message content not found")
-
-			// Dump and check chain length
-			chain := ast.Messages()
-
-			// For empty chain, adding a human message adds one message
-			// For system-only chain, adding a human message adds one message
-			// For existing conversation, adding a human message adds one message
-			expectedLength := len(tt.chain) + 1
-			assert.Equal(t, expectedLength, len(chain),
-				"Dumped chain length mismatch after appending human message")
-		})
-	}
-}
-
-func TestGeneratedChains(t *testing.T) {
-	tests := []struct {
-		name              string
-		config            ChainConfig
-		force             bool
-		expectedSections  int
-		expectedBodyPairs int
-	}{
-		{
-			name:              "Default config",
-			config:            DefaultChainConfig(),
-			force:             false,
-			expectedSections:  1,
-			expectedBodyPairs: 1,
-		},
-		{
-			name: "Multiple sections",
-			config: ChainConfig{
-				IncludeSystem:           true,
-				Sections:                3,
-				BodyPairsPerSection:     []int{1, 2, 1},
-				ToolsForBodyPairs:       []bool{false, true, false},
-				ToolCallsPerBodyPair:    []int{0, 2, 0},
-				IncludeAllToolResponses: true,
-			},
-			force:             false,
-			expectedSections:  3,
-			expectedBodyPairs: 4, // 1 + 2 + 1
-		},
-		{
-			name: "Missing tool responses",
-			config: ChainConfig{
-				IncludeSystem:           true,
-				Sections:                1,
-				BodyPairsPerSection:     []int{1},
-				ToolsForBodyPairs:       []bool{true},
-				ToolCallsPerBodyPair:    []int{2},
-				IncludeAllToolResponses: false,
-			},
-			force:             true,
-			expectedSections:  1,
-			expectedBodyPairs: 1,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Generate a chain using the config
-			chain := GenerateChain(tt.config)
-
-			// Create AST from the generated chain
-			ast, err := NewChainAST(chain, tt.force)
-			assert.NoError(t, err)
-
-			// Verify section count
-			assert.Equal(t, tt.expectedSections, len(ast.Sections))
-
-			// Count total body pairs
-			totalBodyPairs := 0
-			for _, section := range ast.Sections {
-				totalBodyPairs += len(section.Body)
-			}
-			assert.Equal(t, tt.expectedBodyPairs, totalBodyPairs)
-
-			// Dump the chain
-			dumpedChain := ast.Messages()
-
-			// Without force and all responses, lengths should match
-			if !tt.force && tt.config.IncludeAllToolResponses {
-				assert.Equal(t, len(chain), len(dumpedChain))
-			}
-
-			// With force and missing responses, dumped chain might be longer
-			if tt.force && !tt.config.IncludeAllToolResponses {
-				assert.True(t, len(dumpedChain) >= len(chain))
-			}
-
-			// Debug output
-			if t.Failed() {
-				t.Logf("Generated chain structure: \n%s", DumpChainStructure(chain))
-				t.Logf("AST structure: \n%s", ast.String())
-				t.Logf("Dumped chain structure: \n%s", DumpChainStructure(dumpedChain))
-			}
-		})
-	}
-}
-
-func TestComplexGeneratedChains(t *testing.T) {
-	// Generate complex chains with various configurations
-	chains := []struct {
-		name         string
-		sections     int
-		toolCalls    int
-		missingResps int
-	}{
-		{
-			name:         "Small chain, all responses",
-			sections:     2,
-			toolCalls:    1,
-			missingResps: 0,
-		},
-		{
-			name:         "Medium chain, some missing responses",
-			sections:     3,
-			toolCalls:    2,
-			missingResps: 2,
-		},
-		{
-			name:         "Large chain, many missing responses",
-			sections:     5,
-			toolCalls:    3,
-			missingResps: 7,
-		},
-	}
-
-	for _, tc := range chains {
-		t.Run(tc.name, func(t *testing.T) {
-			chain := GenerateComplexChain(tc.sections, tc.toolCalls, tc.missingResps)
-
-			t.Logf("Generated chain length: %d", len(chain))
-			t.Logf("Generated chain structure: \n%s", DumpChainStructure(chain))
-
-			// Parse with force = true
-			ast, err := NewChainAST(chain, true)
-			assert.NoError(t, err, "Should parse complex chain without error")
-
-			// Dump and verify all tool calls have responses
-			dumpedChain := ast.Messages()
-
-			// If we had missing responses and force=true, dumped chain should be longer
-			if tc.missingResps > 0 {
-				assert.True(t, len(dumpedChain) >= len(chain),
-					"Dumped chain should be at least as long as original when fixing missing responses")
-			}
-
-			// Check if all tool calls have responses
-			newAst, err := NewChainAST(dumpedChain, false)
-			assert.NoError(t, err)
-
-			// Verify all tool calls have responses
-			for _, section := range newAst.Sections {
-				for _, bodyPair := range section.Body {
-					if bodyPair.Type == RequestResponse {
-						// Count tool calls
-						toolCalls := 0
-						toolCallIDs := make(map[string]bool)
-
-						for _, part := range bodyPair.AIMessage.Parts {
-							if toolCall, ok := part.(llms.ToolCall); ok && toolCall.FunctionCall != nil {
-								toolCalls++
-								toolCallIDs[toolCall.ID] = true
-							}
-						}
-
-						// Count tool responses
-						responses := 0
-						respondedIDs := make(map[string]bool)
-
-						for _, toolMsg := range bodyPair.ToolMessages {
-							for _, part := range toolMsg.Parts {
-								if resp, ok := part.(llms.ToolCallResponse); ok {
-									responses++
-									respondedIDs[resp.ToolCallID] = true
-								}
-							}
-						}
-
-						// Verify every tool call has a response
-						assert.Equal(t, toolCalls, responses, "Each tool call should have exactly one response")
-
-						for id := range toolCallIDs {
-							assert.True(t, respondedIDs[id], "Tool call ID %s should have a response", id)
+// chainASTResponses lists, for every pair of the chain, the call ids its tool messages answer, in order.
+func chainASTResponses(ast *ChainAST) [][]string {
+	var pairs [][]string
+	for _, section := range ast.Sections {
+		for _, pair := range section.Body {
+			var ids []string
+			for _, msg := range pair.ToolMessages {
+				for _, part := range msg.Parts {
+					if resp, ok := part.(llms.ToolCallResponse); ok {
+						if resp.Content == chainASTFallback {
+							ids = append(ids, resp.ToolCallID+" (fallback)")
+						} else {
+							ids = append(ids, resp.ToolCallID)
 						}
 					}
 				}
 			}
-		})
+			pairs = append(pairs, ids)
+		}
 	}
+	return pairs
 }
 
-func TestMessages(t *testing.T) {
-	// Test that all components correctly implement Messages()
-
-	// Create a test chain with different message types
-	chain := []llms.MessageContent{
-		{
-			Role:  llms.ChatMessageTypeSystem,
-			Parts: []llms.ContentPart{llms.TextContent{Text: "System message"}},
-		},
-		{
-			Role:  llms.ChatMessageTypeHuman,
-			Parts: []llms.ContentPart{llms.TextContent{Text: "Human message"}},
-		},
-		{
-			Role: llms.ChatMessageTypeAI,
-			Parts: []llms.ContentPart{
-				llms.ToolCall{
-					ID:   "tool-1",
-					Type: "function",
-					FunctionCall: &llms.FunctionCall{
-						Name:      "get_weather",
-						Arguments: `{"location": "New York"}`,
-					},
-				},
-			},
-		},
-		{
-			Role: llms.ChatMessageTypeTool,
-			Parts: []llms.ContentPart{
-				llms.ToolCallResponse{
-					ToolCallID: "tool-1",
-					Name:       "get_weather",
-					Content:    "The weather in New York is sunny.",
-				},
-			},
-		},
+func chainASTDropFallbacks(chain []llms.MessageContent) []llms.MessageContent {
+	var kept []llms.MessageContent
+	for _, msg := range chain {
+		if resp, ok := msg.Parts[0].(llms.ToolCallResponse); ok && len(msg.Parts) == 1 && resp.Content == chainASTFallback {
+			continue
+		}
+		kept = append(kept, msg)
 	}
+	return kept
+}
 
-	ast, err := NewChainAST(chain, false)
-	assert.NoError(t, err)
-
-	// Test Header.Messages()
-	headerMsgs := ast.Sections[0].Header.Messages()
-	assert.Equal(t, 2, len(headerMsgs), "Header should return system and human messages")
-	assert.Equal(t, llms.ChatMessageTypeSystem, headerMsgs[0].Role)
-	assert.Equal(t, llms.ChatMessageTypeHuman, headerMsgs[1].Role)
-
-	// Test BodyPair.Messages()
-	bodyPairMsgs := ast.Sections[0].Body[0].Messages()
-	assert.Equal(t, 2, len(bodyPairMsgs), "BodyPair should return AI and tool messages")
-	assert.Equal(t, llms.ChatMessageTypeAI, bodyPairMsgs[0].Role)
-	assert.Equal(t, llms.ChatMessageTypeTool, bodyPairMsgs[1].Role)
-
-	// Test ChainSection.Messages()
-	sectionMsgs := ast.Sections[0].Messages()
-	assert.Equal(t, 4, len(sectionMsgs), "Section should return all messages in order")
-
-	// Test ChainAST.Messages()
-	allMsgs := ast.Messages()
-	assert.Equal(t, len(chain), len(allMsgs), "AST should return all messages")
-
-	// Check order preservation
+func chainASTClone(chain []llms.MessageContent) []llms.MessageContent {
+	clone := make([]llms.MessageContent, len(chain))
 	for i, msg := range chain {
-		assert.Equal(t, msg.Role, allMsgs[i].Role, "Role mismatch at position %d", i)
+		parts := make([]llms.ContentPart, len(msg.Parts))
+		for j, part := range msg.Parts {
+			if call, ok := part.(llms.ToolCall); ok && call.FunctionCall != nil {
+				function := *call.FunctionCall
+				call.FunctionCall = &function
+				part = call
+			}
+			parts[j] = part
+		}
+		clone[i] = llms.MessageContent{Role: msg.Role, Parts: parts}
+	}
+	return clone
+}
+
+// chainASTUndoRename checks that got is before with only the ids of calls changed, every response following
+// its call, and returns got with the old ids put back along with the renames it found.
+func chainASTUndoRename(t *testing.T, before, got []llms.MessageContent) ([]llms.MessageContent, map[string]string) {
+	t.Helper()
+	require.Len(t, got, len(before))
+
+	renames := map[string]string{}
+	restored := make([]llms.MessageContent, len(got))
+	for i, msg := range got {
+		require.Len(t, msg.Parts, len(before[i].Parts), "the parts of message %d", i)
+		parts := make([]llms.ContentPart, len(msg.Parts))
+		for j, part := range msg.Parts {
+			switch p := part.(type) {
+			case llms.ToolCall:
+				old, ok := before[i].Parts[j].(llms.ToolCall)
+				require.True(t, ok, "part %d of message %d", j, i)
+				if p.ID != old.ID {
+					renames[old.ID] = p.ID
+					p.ID = old.ID
+				}
+				part = p
+			case llms.ToolCallResponse:
+				old, ok := before[i].Parts[j].(llms.ToolCallResponse)
+				require.True(t, ok, "part %d of message %d", j, i)
+				want := old.ToolCallID
+				if id, renamed := renames[old.ToolCallID]; renamed {
+					want = id
+				}
+				assert.Equal(t, want, p.ToolCallID, "the response to %s", old.ToolCallID)
+				p.ToolCallID = old.ToolCallID
+				part = p
+			}
+			parts[j] = part
+		}
+		restored[i] = llms.MessageContent{Role: msg.Role, Parts: parts}
+	}
+	return restored, renames
+}
+
+// chainASTNilIfEmpty lets a want literal leave out an empty set of ToolCallsInfo, nil or not: the callers only
+// range over a set, take its length, join it or look a key up.
+func chainASTNilIfEmpty[T ~[]string | ~map[string]*ToolCallPair](set T) T {
+	if len(set) == 0 {
+		return nil
+	}
+	return set
+}
+
+func chainASTPair(ai llms.MessageContent, tools ...llms.MessageContent) *BodyPair {
+	var toolMsgs []*llms.MessageContent
+	for i := range tools {
+		toolMsgs = append(toolMsgs, &tools[i])
+	}
+	return NewBodyPair(&ai, toolMsgs)
+}
+
+func TestChainAST_NewChainAST_ParsesAWellFormedChain(t *testing.T) {
+	tests := []struct {
+		name      string
+		chain     func() []llms.MessageContent
+		wantPairs [][]BodyPairType
+		wantSizes [][]int
+	}{
+		{
+			name:  "an empty chain has no sections",
+			chain: emptyChain,
+		},
+		{
+			name:      "a system message opens a section",
+			chain:     systemOnlyChain,
+			wantPairs: [][]BodyPairType{nil},
+			wantSizes: [][]int{{28, 28}},
+		},
+		{
+			name:      "a human message opens a section",
+			chain:     humanOnlyChain,
+			wantPairs: [][]BodyPairType{nil},
+			wantSizes: [][]int{{23, 23}},
+		},
+		{
+			name:      "a human message joins the system message in the header",
+			chain:     systemHumanChain,
+			wantPairs: [][]BodyPairType{nil},
+			wantSizes: [][]int{{47, 47}},
+		},
+		{
+			name:      "an answer makes a completion",
+			chain:     basicConversationChain,
+			wantPairs: [][]BodyPairType{{Completion}},
+			wantSizes: [][]int{{88, 47, 41}},
+		},
+		{
+			name:      "a call and its response make a request-response pair",
+			chain:     chainWithSingleToolResponse,
+			wantPairs: [][]BodyPairType{{RequestResponse}},
+			wantSizes: [][]int{{172, 52, 120}},
+		},
+		{
+			name:      "a human message after answers opens a second section",
+			chain:     chainWithMultipleSections,
+			wantPairs: [][]BodyPairType{{Completion}, {RequestResponse}},
+			wantSizes: [][]int{{88, 47, 41}, {144, 24, 120}},
+		},
+		{
+			name:      "a summarization pair is followed by other pairs of its section",
+			chain:     chainWithSummarizationAndOtherPairs,
+			wantPairs: [][]BodyPairType{{Summarization, Completion, RequestResponse}},
+			wantSizes: [][]int{{455, 81, 219, 35, 120}},
+		},
+		{
+			name: "a call without a function after a real call is kept and needs no response",
+			chain: func() []llms.MessageContent {
+				return []llms.MessageContent{
+					chainASTSystem("You are a helpful assistant."),
+					chainASTHuman("What's the weather like?"),
+					chainASTAI(weatherCall(), llms.ToolCall{ID: "tool-2", Type: "function"}),
+					weatherResponse(),
+				}
+			},
+			wantPairs: [][]BodyPairType{{RequestResponse}},
+			wantSizes: [][]int{{186, 52, 134}},
+		},
+		{
+			name:      "reasoning is not counted and the note of a tool message is",
+			chain:     func() []llms.MessageContent { return providerSwitchChain(true) },
+			wantPairs: [][]BodyPairType{{RequestResponse, Completion}, {Completion, RequestResponse}, {Summarization}},
+			wantSizes: [][]int{{297, 43, 237, 17}, {146, 22, 20, 104}, {229, 23, 206}},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			for _, force := range []bool{false, true} {
+				ast, err := NewChainAST(tt.chain(), force)
+				require.NoError(t, err, "force=%v", force)
+
+				assert.Equal(t, tt.wantPairs, chainASTPairTypes(ast), "force=%v", force)
+				assert.Equal(t, tt.chain(), ast.Messages(), "force=%v", force)
+				assertChainASTSizes(t, tt.wantSizes, ast, "force=%v", force)
+				for _, section := range ast.Sections {
+					for i, pair := range section.Body {
+						assert.True(t, pair.IsValid(), "force=%v: pair %d", force, i)
+					}
+				}
+			}
+		})
 	}
 }
 
-func TestConstructors(t *testing.T) {
-	// Test all the constructors
-
-	// Test NewHeader
-	sysMsg := &llms.MessageContent{
-		Role:  llms.ChatMessageTypeSystem,
-		Parts: []llms.ContentPart{llms.TextContent{Text: "System message"}},
+func TestChainAST_NewChainAST_RepairsAMalformedChainOnlyWhenForced(t *testing.T) {
+	tests := []struct {
+		name      string
+		chain     []llms.MessageContent
+		strictErr string
+		want      []llms.MessageContent
+		wantPairs [][]BodyPairType
+		wantSizes [][]int // of the forced AST; nil where the repair adds a message whose bytes it does not count
+	}{
+		{
+			name:      "a call left without a response gets a fallback response",
+			chain:     chainWithTool(),
+			strictErr: "tool calls with IDs [tool-1] have no response",
+			want:      append(chainWithTool(), chainASTTool("tool-1", "get_weather", chainASTFallback)),
+			wantPairs: [][]BodyPairType{{RequestResponse}},
+		},
+		{
+			name:      "two calls left without a response get one fallback each",
+			chain:     chainWithMultipleTools(),
+			strictErr: "tool calls with IDs [tool-1, tool-2] have no response",
+			want: append(chainWithMultipleTools(),
+				chainASTTool("tool-1", "get_weather", chainASTFallback),
+				chainASTTool("tool-2", "get_time", chainASTFallback),
+			),
+			wantPairs: [][]BodyPairType{{RequestResponse}},
+		},
+		{
+			name:      "the second of two calls left without a response gets a fallback",
+			chain:     chainWithMissingToolResponse(),
+			strictErr: "tool calls with IDs [tool-2] have no response",
+			want:      append(chainWithMissingToolResponse(), chainASTTool("tool-2", "get_time", chainASTFallback)),
+			wantPairs: [][]BodyPairType{{RequestResponse}},
+		},
+		{
+			name: "a summarization call left without a response gets a fallback",
+			chain: []llms.MessageContent{
+				chainASTSystem("system"),
+				chainASTHuman("question"),
+				chainASTAI(chainASTCall("summary-1", "execute_task_and_return_summary")),
+			},
+			strictErr: "tool calls with IDs [summary-1] have no response",
+			want: []llms.MessageContent{
+				chainASTSystem("system"),
+				chainASTHuman("question"),
+				chainASTAI(chainASTCall("summary-1", "execute_task_and_return_summary")),
+				chainASTTool("summary-1", "execute_task_and_return_summary", chainASTFallback),
+			},
+			wantPairs: [][]BodyPairType{{Summarization}},
+		},
+		{
+			name: "three calls made out of id order get fallbacks in id order",
+			chain: []llms.MessageContent{
+				chainASTSystem("system"),
+				chainASTHuman("question"),
+				chainASTAI(
+					chainASTCall("tool-2", "get_time"),
+					chainASTCall("tool-1", "get_weather"),
+					chainASTCall("tool-4", "get_news"),
+					chainASTCall("tool-3", "get_maps"),
+				),
+				chainASTTool("tool-4", "get_news", "calm"),
+			},
+			strictErr: "tool calls with IDs [tool-1, tool-2, tool-3] have no response",
+			want: []llms.MessageContent{
+				chainASTSystem("system"),
+				chainASTHuman("question"),
+				chainASTAI(
+					chainASTCall("tool-2", "get_time"),
+					chainASTCall("tool-1", "get_weather"),
+					chainASTCall("tool-4", "get_news"),
+					chainASTCall("tool-3", "get_maps"),
+				),
+				chainASTTool("tool-4", "get_news", "calm"),
+				chainASTTool("tool-1", "get_weather", chainASTFallback),
+				chainASTTool("tool-2", "get_time", chainASTFallback),
+				chainASTTool("tool-3", "get_maps", chainASTFallback),
+			},
+			wantPairs: [][]BodyPairType{{RequestResponse}},
+		},
+		{
+			name: "a call pending when the next human message arrives gets a fallback",
+			chain: []llms.MessageContent{
+				chainASTSystem("system"),
+				chainASTHuman("question"),
+				chainASTAI(chainASTCall("tool-1", "get_weather")),
+				chainASTHuman("follow-up"),
+				chainASTAnswer("answer"),
+			},
+			strictErr: "tool calls with IDs [tool-1] have no response",
+			want: []llms.MessageContent{
+				chainASTSystem("system"),
+				chainASTHuman("question"),
+				chainASTAI(chainASTCall("tool-1", "get_weather")),
+				chainASTTool("tool-1", "get_weather", chainASTFallback),
+				chainASTHuman("follow-up"),
+				chainASTAnswer("answer"),
+			},
+			wantPairs: [][]BodyPairType{{RequestResponse}, {Completion}},
+		},
+		{
+			name: "a call pending when the next AI message arrives gets a fallback",
+			chain: []llms.MessageContent{
+				chainASTSystem("system"),
+				chainASTHuman("question"),
+				chainASTAI(chainASTCall("tool-1", "get_weather")),
+				chainASTAnswer("answer"),
+			},
+			strictErr: "tool calls with IDs [tool-1] have no response",
+			want: []llms.MessageContent{
+				chainASTSystem("system"),
+				chainASTHuman("question"),
+				chainASTAI(chainASTCall("tool-1", "get_weather")),
+				chainASTTool("tool-1", "get_weather", chainASTFallback),
+				chainASTAnswer("answer"),
+			},
+			wantPairs: [][]BodyPairType{{RequestResponse, Completion}},
+		},
+		{
+			name: "consecutive human messages are merged",
+			chain: []llms.MessageContent{
+				chainASTSystem("system"),
+				chainASTHuman("first"),
+				chainASTHuman("second"),
+			},
+			strictErr: "double human messages in the middle of a chain",
+			want: []llms.MessageContent{
+				chainASTSystem("system"),
+				{Role: llms.ChatMessageTypeHuman, Parts: []llms.ContentPart{
+					llms.TextContent{Text: "first"},
+					llms.TextContent{Text: "second"},
+				}},
+			},
+			wantPairs: [][]BodyPairType{nil},
+			wantSizes: [][]int{{17, 17}},
+		},
+		{
+			name:      "a tool message that answers no tool call is dropped",
+			chain:     chainWithUnexpectedTool(),
+			strictErr: "unexpected tool message without a preceding AI message with tool calls",
+			want:      basicConversationChain(),
+			wantPairs: [][]BodyPairType{{Completion}},
+			wantSizes: [][]int{{88, 47, 41}},
+		},
+		{
+			name: "a human message after an answer moves into a header without one",
+			chain: []llms.MessageContent{
+				chainASTSystem("system"),
+				chainASTAnswer("answer"),
+				chainASTHuman("question"),
+			},
+			strictErr: "got human message after AI message in the middle of a chain",
+			want: []llms.MessageContent{
+				chainASTSystem("system"),
+				chainASTHuman("question"),
+				chainASTAnswer("answer"),
+			},
+			wantPairs: [][]BodyPairType{{Completion}},
+			wantSizes: [][]int{{20, 14, 6}},
+		},
+		{
+			name: "responses to calls the AI message never made get the calls added",
+			chain: []llms.MessageContent{
+				chainASTHuman("question"),
+				chainASTAI(chainASTCall("tool-1", "get_weather")),
+				chainASTTool("tool-1", "get_weather", "sunny"),
+				{Role: llms.ChatMessageTypeTool, Parts: []llms.ContentPart{
+					llms.ToolCallResponse{ToolCallID: "tool-3", Name: "get_news", Content: "quiet"},
+					llms.ToolCallResponse{ToolCallID: "tool-2", Name: "get_time", Content: "noon"},
+					llms.ToolCallResponse{ToolCallID: "tool-4", Name: "get_maps", Content: "far"},
+				}},
+			},
+			strictErr: "tool calls with IDs [tool-2, tool-3, tool-4] have no response",
+			want: []llms.MessageContent{
+				chainASTHuman("question"),
+				chainASTAI(
+					chainASTCall("tool-1", "get_weather"),
+					llms.ToolCall{ID: "tool-2", FunctionCall: &llms.FunctionCall{Name: "get_time", Arguments: "{}"}},
+					llms.ToolCall{ID: "tool-3", FunctionCall: &llms.FunctionCall{Name: "get_news", Arguments: "{}"}},
+					llms.ToolCall{ID: "tool-4", FunctionCall: &llms.FunctionCall{Name: "get_maps", Arguments: "{}"}},
+				),
+				chainASTTool("tool-1", "get_weather", "sunny"),
+				{Role: llms.ChatMessageTypeTool, Parts: []llms.ContentPart{
+					llms.ToolCallResponse{ToolCallID: "tool-3", Name: "get_news", Content: "quiet"},
+					llms.ToolCallResponse{ToolCallID: "tool-2", Name: "get_time", Content: "noon"},
+					llms.ToolCallResponse{ToolCallID: "tool-4", Name: "get_maps", Content: "far"},
+				}},
+			},
+			wantPairs: [][]BodyPairType{{RequestResponse}},
+		},
 	}
-	humanMsg := &llms.MessageContent{
-		Role:  llms.ChatMessageTypeHuman,
-		Parts: []llms.ContentPart{llms.TextContent{Text: "Human message"}},
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			strict, err := NewChainAST(tt.chain, false)
+			assert.EqualError(t, err, tt.strictErr)
+			assert.Nil(t, strict)
+
+			ast, err := NewChainAST(tt.chain, true)
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantPairs, chainASTPairTypes(ast))
+			assert.Equal(t, tt.want, ast.Messages())
+			if tt.wantSizes != nil {
+				assertChainASTSizes(t, tt.wantSizes, ast)
+			}
+
+			_, err = NewChainAST(ast.Messages(), false)
+			assert.NoError(t, err, "the repaired chain must parse without force")
+		})
+	}
+}
+
+func TestChainAST_NewChainAST_RejectsAChainItCannotRepair(t *testing.T) {
+	tests := []struct {
+		name    string
+		chain   []llms.MessageContent
+		wantErr string
+	}{
+		{
+			name:    "a chain opened by an AI message is rejected",
+			chain:   []llms.MessageContent{chainASTAnswer("answer"), chainASTHuman("question")},
+			wantErr: "unexpected chain begin: first message must be System or Human, got ai",
+		},
+		{
+			name:    "a chain opened by a tool message is rejected",
+			chain:   []llms.MessageContent{chainASTTool("tool-1", "get_weather", "sunny")},
+			wantErr: "unexpected chain begin: first message must be System or Human, got tool",
+		},
+		{
+			name: "a system message after the conversation began is rejected",
+			chain: []llms.MessageContent{
+				chainASTSystem("system"),
+				chainASTHuman("question"),
+				chainASTAnswer("answer"),
+				chainASTSystem("another system"),
+			},
+			wantErr: "unexpected system message in the middle of a chain",
+		},
+		{
+			name:    "a message of a role the chain does not know is rejected",
+			chain:   []llms.MessageContent{chainASTHuman("question"), chainASTText(llms.ChatMessageTypeGeneric, "note")},
+			wantErr: "unexpected message role: generic",
+		},
 	}
 
-	header := NewHeader(sysMsg, humanMsg)
-	assert.NotNil(t, header)
-	assert.Equal(t, sysMsg, header.SystemMessage)
-	assert.Equal(t, humanMsg, header.HumanMessage)
-	assert.Greater(t, header.Size(), 0, "Header size should be calculated")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			for _, force := range []bool{false, true} {
+				ast, err := NewChainAST(tt.chain, force)
+				assert.EqualError(t, err, tt.wantErr, "force=%v", force)
+				assert.Nil(t, ast, "force=%v", force)
+			}
+		})
+	}
+}
 
-	// Test NewHeader with nil messages
-	headerWithNilSystem := NewHeader(nil, humanMsg)
-	assert.NotNil(t, headerWithNilSystem)
-	assert.Nil(t, headerWithNilSystem.SystemMessage)
-	assert.Equal(t, humanMsg, headerWithNilSystem.HumanMessage)
-	assert.Greater(t, headerWithNilSystem.Size(), 0)
+func TestChainAST_NewChainAST_ParsesOrRepairsAGeneratedChain(t *testing.T) {
+	answered := DefaultChainConfig()
+	answered.Sections = 3
+	answered.BodyPairsPerSection = []int{1, 2, 2}
+	answered.ToolsForBodyPairs = []bool{false, true, false, true, true}
+	answered.ToolCallsPerBodyPair = []int{0, 2, 0, 3, 1}
+	unanswered := answered
+	unanswered.IncludeAllToolResponses = false
 
-	headerWithNilHuman := NewHeader(sysMsg, nil)
-	assert.NotNil(t, headerWithNilHuman)
-	assert.Equal(t, sysMsg, headerWithNilHuman.SystemMessage)
-	assert.Nil(t, headerWithNilHuman.HumanMessage)
-	assert.Greater(t, headerWithNilHuman.Size(), 0)
-
-	// Test NewBodyPair for Completion type
-	aiMsg := &llms.MessageContent{
-		Role:  llms.ChatMessageTypeAI,
-		Parts: []llms.ContentPart{llms.TextContent{Text: "AI message"}},
+	tests := []struct {
+		name          string
+		chain         func() []llms.MessageContent
+		strictErr     string
+		wantPairs     [][]BodyPairType
+		wantResponses [][]string
+		wantSizes     [][]int // of the chain, repaired where it had to be, parsed without force
+	}{
+		{
+			name:      "several pairs and calls per section, all answered, parse as they are",
+			chain:     func() []llms.MessageContent { return GenerateChain(answered) },
+			wantPairs: [][]BodyPairType{{Completion}, {RequestResponse, Completion}, {RequestResponse, RequestResponse}},
+			wantResponses: [][]string{
+				nil,
+				{"tool-1", "tool-2"},
+				nil,
+				{"tool-3", "tool-4", "tool-5"},
+				{"tool-6"},
+			},
+			wantSizes: [][]int{{60, 38, 22}, {200, 10, 168, 22}, {346, 10, 252, 84}},
+		},
+		{
+			name:      "several pairs and calls per section, none answered, get a fallback for every call",
+			chain:     func() []llms.MessageContent { return GenerateChain(unanswered) },
+			strictErr: "tool calls with IDs [tool-1, tool-2] have no response",
+			wantPairs: [][]BodyPairType{{Completion}, {RequestResponse, Completion}, {RequestResponse, RequestResponse}},
+			wantResponses: [][]string{
+				nil,
+				{"tool-1 (fallback)", "tool-2 (fallback)"},
+				nil,
+				{"tool-3 (fallback)", "tool-4 (fallback)", "tool-5 (fallback)"},
+				{"tool-6 (fallback)"},
+			},
+			wantSizes: [][]int{{60, 38, 22}, {246, 10, 214, 22}, {438, 10, 321, 107}},
+		},
+		{
+			name:      "a repaired first section leaves the answered third one as it was",
+			chain:     func() []llms.MessageContent { return GenerateComplexChain(3, 2, 2) },
+			strictErr: "tool calls with IDs [tool-1, tool-2] have no response",
+			wantPairs: [][]BodyPairType{{RequestResponse}, {Completion}, {RequestResponse}},
+			wantResponses: [][]string{
+				{"tool-1 (fallback)", "tool-2 (fallback)"},
+				nil,
+				{"tool-3", "tool-4"},
+			},
+			wantSizes: [][]int{{252, 38, 214}, {32, 10, 22}, {178, 10, 168}},
+		},
+		{
+			name:      "the first seven responses of five alternating sections missing are replaced by fallbacks",
+			chain:     func() []llms.MessageContent { return GenerateComplexChain(5, 3, 7) },
+			strictErr: "tool calls with IDs [tool-1, tool-2, tool-3] have no response",
+			wantPairs: [][]BodyPairType{{RequestResponse}, {Completion}, {RequestResponse}, {Completion}, {RequestResponse}},
+			wantResponses: [][]string{
+				{"tool-1 (fallback)", "tool-2 (fallback)", "tool-3 (fallback)"},
+				nil,
+				{"tool-4 (fallback)", "tool-5 (fallback)", "tool-6 (fallback)"},
+				nil,
+				{"tool-8", "tool-9", "tool-7 (fallback)"},
+			},
+			wantSizes: [][]int{{359, 38, 321}, {32, 10, 22}, {331, 10, 321}, {32, 10, 22}, {285, 10, 275}},
+		},
 	}
 
-	completionPair := NewBodyPair(aiMsg, nil)
-	assert.NotNil(t, completionPair)
-	assert.Equal(t, Completion, completionPair.Type)
-	assert.Equal(t, aiMsg, completionPair.AIMessage)
-	assert.Empty(t, completionPair.ToolMessages)
-	assert.Greater(t, completionPair.Size(), 0, "BodyPair size should be calculated")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			strict, err := NewChainAST(tt.chain(), false)
+			if tt.strictErr != "" {
+				assert.EqualError(t, err, tt.strictErr)
+				assert.Nil(t, strict)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tt.chain(), strict.Messages())
+			}
 
-	// Test NewBodyPair for RequestResponse type
-	aiMsgWithTool := &llms.MessageContent{
-		Role: llms.ChatMessageTypeAI,
-		Parts: []llms.ContentPart{
-			llms.ToolCall{
-				ID:   "tool-1",
+			ast, err := NewChainAST(tt.chain(), true)
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantPairs, chainASTPairTypes(ast))
+			assert.Equal(t, tt.wantResponses, chainASTResponses(ast))
+			assert.Equal(t, tt.chain(), chainASTDropFallbacks(ast.Messages()), "the repair only adds responses")
+
+			reparsed, err := NewChainAST(ast.Messages(), false)
+			require.NoError(t, err, "the repaired chain must parse without force")
+			assertChainASTSizes(t, tt.wantSizes, reparsed)
+		})
+	}
+}
+
+// Header, BodyPair, ChainSection and ChainAST each return their own messages in chain order.
+func TestChainAST_Messages_ReturnsHeaderThenBodyInOrder(t *testing.T) {
+	chain := chainWithMultipleSections()
+	ast, err := NewChainAST(chain, false)
+	require.NoError(t, err)
+	require.Len(t, ast.Sections, 2)
+
+	assert.Equal(t, chain[0:2], ast.Sections[0].Header.Messages())
+	assert.Equal(t, chain[2:3], ast.Sections[0].Body[0].Messages())
+	assert.Equal(t, chain[0:3], ast.Sections[0].Messages())
+	assert.Equal(t, chain[3:4], ast.Sections[1].Header.Messages())
+	assert.Equal(t, chain[4:6], ast.Sections[1].Body[0].Messages())
+	assert.Equal(t, chain[3:6], ast.Sections[1].Messages())
+	assert.Equal(t, chain, ast.Messages())
+}
+
+func TestChainAST_String_DescribesTheHeaderAndEveryPair(t *testing.T) {
+	ast, err := NewChainAST(append(chainWithSummarizationAndOtherPairs(), chainASTHuman("Thanks.")), false)
+	require.NoError(t, err)
+
+	assert.Equal(t, `ChainAST {
+  Section 0 {
+    Header {
+      SystemMessage
+      HumanMessage
+    }
+    Body {
+      BodyPair 0 (Summarization) {
+        AIMessage
+        ToolMessages: 1
+      }
+      BodyPair 1 (Completion) {
+        AIMessage
+        ToolMessages: 0
+      }
+      BodyPair 2 (RequestResponse) {
+        AIMessage
+        ToolMessages: 1
+      }
+    }
+  }
+  Section 1 {
+    Header {
+      HumanMessage
+    }
+    Body {
+    }
+  }
+}
+`, ast.String())
+}
+
+func TestChainAST_BodyPairTypeString_NamesEachType(t *testing.T) {
+	assert.Equal(t, "request-response", RequestResponse.String())
+	assert.Equal(t, "completion", Completion.String())
+	assert.Equal(t, "summarization", Summarization.String())
+	assert.Equal(t, "unknown", BodyPairType(3).String())
+}
+
+func TestChainAST_AppendHumanMessage_OpensOrExtendsTheLastSection(t *testing.T) {
+	tests := []struct {
+		name      string
+		chain     []llms.MessageContent
+		want      []llms.MessageContent
+		wantSizes [][]int
+	}{
+		{
+			name:      "an empty chain gets its first section",
+			chain:     []llms.MessageContent{},
+			want:      []llms.MessageContent{chainASTHuman("hello")},
+			wantSizes: [][]int{{5, 5}},
+		},
+		{
+			name:      "a header with only a system message takes the text",
+			chain:     []llms.MessageContent{chainASTSystem("system")},
+			want:      []llms.MessageContent{chainASTSystem("system"), chainASTHuman("hello")},
+			wantSizes: [][]int{{11, 11}},
+		},
+		{
+			name:  "a header without answers gets the text appended to its human message",
+			chain: []llms.MessageContent{chainASTSystem("system"), chainASTHuman("question")},
+			want: []llms.MessageContent{
+				chainASTSystem("system"),
+				{Role: llms.ChatMessageTypeHuman, Parts: []llms.ContentPart{
+					llms.TextContent{Text: "question"},
+					llms.TextContent{Text: "hello"},
+				}},
+			},
+			wantSizes: [][]int{{19, 19}},
+		},
+		{
+			name:      "the last of several sections, with answers, is followed by a new one",
+			chain:     chainWithMultipleSections(),
+			want:      append(chainWithMultipleSections(), chainASTHuman("hello")),
+			wantSizes: [][]int{{88, 47, 41}, {144, 24, 120}, {5, 5}},
+		},
+		{
+			name: "the last of several sections, without answers, gets the text appended",
+			chain: []llms.MessageContent{
+				chainASTSystem("system"),
+				chainASTHuman("question"),
+				chainASTAnswer("answer"),
+				chainASTHuman("follow-up"),
+			},
+			want: []llms.MessageContent{
+				chainASTSystem("system"),
+				chainASTHuman("question"),
+				chainASTAnswer("answer"),
+				{Role: llms.ChatMessageTypeHuman, Parts: []llms.ContentPart{
+					llms.TextContent{Text: "follow-up"},
+					llms.TextContent{Text: "hello"},
+				}},
+			},
+			wantSizes: [][]int{{20, 14, 6}, {14, 14}},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ast, err := NewChainAST(tt.chain, false)
+			require.NoError(t, err)
+
+			ast.AppendHumanMessage("hello")
+
+			assert.Equal(t, tt.want, ast.Messages())
+			assertChainASTSizes(t, tt.wantSizes, ast)
+		})
+	}
+}
+
+func TestChainAST_AddToolResponse_ReplacesOrAddsTheResponseWhereverTheCallIs(t *testing.T) {
+	ast, err := NewChainAST([]llms.MessageContent{
+		chainASTSystem("system"),
+		chainASTHuman("question"),
+		chainASTAI(chainASTCall("tool-1", "get_weather"), chainASTCall("tool-2", "get_time")),
+		chainASTTool("tool-1", "get_weather", "initial"),
+		chainASTTool("tool-2", "get_time", "initial"),
+		chainASTAI(chainASTCall("tool-3", "get_news")),
+		chainASTTool("tool-3", "get_news", "initial"),
+		chainASTHuman("follow-up"),
+		chainASTAnswer("checking the map"),
+	}, false)
+	require.NoError(t, err)
+	awaiting := chainASTAI(chainASTCall("tool-4", "get_maps"), chainASTCall("tool-5", "get_route"))
+	ast.Sections[1].AddBodyPair(NewBodyPair(&awaiting, nil))
+	assertChainASTSizes(t, [][]int{{155, 14, 96, 45}, {74, 9, 16, 49}}, ast)
+
+	steps := []struct {
+		name      string
+		id        string
+		toolName  string
+		content   string
+		wantErr   string
+		wantSizes [][]int
+	}{
+		{
+			name:      "the response in the second tool message of a pair is replaced",
+			id:        "tool-2",
+			toolName:  "get_time",
+			content:   "noon",
+			wantSizes: [][]int{{152, 14, 93, 45}, {74, 9, 16, 49}},
+		},
+		{
+			name:      "the response in a later pair of the same section is replaced",
+			id:        "tool-3",
+			toolName:  "get_news",
+			content:   "quiet",
+			wantSizes: [][]int{{150, 14, 93, 43}, {74, 9, 16, 49}},
+		},
+		{
+			name:      "a pair without responses gets a tool message",
+			id:        "tool-4",
+			toolName:  "get_maps",
+			content:   "far",
+			wantSizes: [][]int{{150, 14, 93, 43}, {91, 9, 16, 66}},
+		},
+		{
+			name:      "the next response joins the last tool message of the pair",
+			id:        "tool-5",
+			toolName:  "get_route",
+			content:   "north",
+			wantSizes: [][]int{{150, 14, 93, 43}, {111, 9, 16, 86}},
+		},
+		{
+			name:      "a response that shares its tool message gets the new content and keeps its name",
+			id:        "tool-5",
+			toolName:  "get_directions",
+			content:   "south-west",
+			wantSizes: [][]int{{150, 14, 93, 43}, {116, 9, 16, 91}},
+		},
+		{
+			name:      "an unknown call is rejected",
+			id:        "missing",
+			toolName:  "get_news",
+			content:   "late",
+			wantErr:   "tool call with ID missing not found",
+			wantSizes: [][]int{{150, 14, 93, 43}, {116, 9, 16, 91}},
+		},
+	}
+
+	for _, step := range steps {
+		err := ast.AddToolResponse(step.id, step.toolName, step.content)
+		if step.wantErr != "" {
+			assert.EqualError(t, err, step.wantErr, step.name)
+		} else {
+			assert.NoError(t, err, step.name)
+		}
+		assertChainASTSizes(t, step.wantSizes, ast, step.name)
+	}
+
+	assert.Equal(t, []llms.MessageContent{
+		chainASTSystem("system"),
+		chainASTHuman("question"),
+		chainASTAI(chainASTCall("tool-1", "get_weather"), chainASTCall("tool-2", "get_time")),
+		chainASTTool("tool-1", "get_weather", "initial"),
+		chainASTTool("tool-2", "get_time", "noon"),
+		chainASTAI(chainASTCall("tool-3", "get_news")),
+		chainASTTool("tool-3", "get_news", "quiet"),
+		chainASTHuman("follow-up"),
+		chainASTAnswer("checking the map"),
+		chainASTAI(chainASTCall("tool-4", "get_maps"), chainASTCall("tool-5", "get_route")),
+		{Role: llms.ChatMessageTypeTool, Parts: []llms.ContentPart{
+			llms.ToolCallResponse{ToolCallID: "tool-4", Name: "get_maps", Content: "far"},
+			llms.ToolCallResponse{ToolCallID: "tool-5", Name: "get_route", Content: "south-west"},
+		}},
+	}, ast.Messages())
+
+	reparsed, err := NewChainAST(ast.Messages(), false)
+	require.NoError(t, err)
+	assertChainASTSizes(t, [][]int{{150, 14, 93, 43}, {116, 9, 16, 91}}, reparsed)
+}
+
+// The sizes of the forced AST are left unasserted: the repair does not count the fallbacks it adds.
+func TestChainAST_AddToolResponse_ReplacesTheFallbacksOfAForcedRepair(t *testing.T) {
+	ast, err := NewChainAST(chainWithMultipleTools(), true)
+	require.NoError(t, err)
+
+	steps := []struct {
+		name     string
+		id       string
+		toolName string
+		content  string
+		want     []llms.MessageContent
+	}{
+		{
+			name:     "the first fallback is replaced",
+			id:       "tool-1",
+			toolName: "get_weather",
+			content:  "sunny",
+			want: append(chainWithMultipleTools(),
+				chainASTTool("tool-1", "get_weather", "sunny"),
+				chainASTTool("tool-2", "get_time", chainASTFallback),
+			),
+		},
+		{
+			name:     "the second fallback is replaced",
+			id:       "tool-2",
+			toolName: "get_time",
+			content:  "noon",
+			want: append(chainWithMultipleTools(),
+				chainASTTool("tool-1", "get_weather", "sunny"),
+				chainASTTool("tool-2", "get_time", "noon"),
+			),
+		},
+	}
+
+	for _, step := range steps {
+		require.NoError(t, ast.AddToolResponse(step.id, step.toolName, step.content), step.name)
+		assert.Equal(t, step.want, ast.Messages(), step.name)
+		assert.Equal(t, []llms.ToolCallResponse{{ToolCallID: step.id, Name: step.toolName, Content: step.content}},
+			ast.FindToolCallResponses(step.id), step.name)
+	}
+
+	reparsed, err := NewChainAST(ast.Messages(), false)
+	require.NoError(t, err)
+	assertChainASTSizes(t, [][]int{{203, 68, 135}}, reparsed)
+}
+
+func TestChainAST_Size_StaysExactWhileAConversationIsBuilt(t *testing.T) {
+	system, newSystem := chainASTSystem("system"), chainASTSystem("new system")
+	question, summarize := chainASTHuman("question"), chainASTHuman("summarize")
+	call, response := chainASTAI(chainASTCall("tool-1", "get_weather")), chainASTTool("tool-1", "get_weather", "sunny")
+	ast := &ChainAST{}
+
+	steps := []struct {
+		name      string
+		edit      func()
+		wantSizes [][]int
+	}{
+		{
+			name:      "a system message opens a section",
+			edit:      func() { ast.AddSection(NewChainSection(NewHeader(&system, nil), nil)) },
+			wantSizes: [][]int{{6, 6}},
+		},
+		{
+			name:      "the question joins its header",
+			edit:      func() { ast.AppendHumanMessage("question") },
+			wantSizes: [][]int{{14, 14}},
+		},
+		{
+			name:      "an answer is added",
+			edit:      func() { ast.Sections[0].AddBodyPair(NewBodyPairFromCompletion("answer")) },
+			wantSizes: [][]int{{20, 14, 6}},
+		},
+		{
+			name:      "a follow-up opens a section",
+			edit:      func() { ast.AppendHumanMessage("follow-up") },
+			wantSizes: [][]int{{20, 14, 6}, {9, 9}},
+		},
+		{
+			name:      "a tool exchange is added",
+			edit:      func() { ast.Sections[1].AddBodyPair(NewBodyPair(&call, []*llms.MessageContent{&response})) },
+			wantSizes: [][]int{{20, 14, 6}, {58, 9, 49}},
+		},
+		{
+			name:      "the first header is replaced",
+			edit:      func() { ast.Sections[0].SetHeader(NewHeader(&newSystem, &question)) },
+			wantSizes: [][]int{{24, 18, 6}, {58, 9, 49}},
+		},
+		{
+			name: "a section holding a summary is added",
+			edit: func() {
+				summary := NewBodyPairFromSummarization("summary", "call_{r:24:x}", false, nil)
+				ast.AddSection(NewChainSection(NewHeader(nil, &summarize), []*BodyPair{summary}))
+			},
+			wantSizes: [][]int{{24, 18, 6}, {58, 9, 49}, {228, 9, 219}},
+		},
+	}
+
+	for _, step := range steps {
+		step.edit()
+		assertChainASTSizes(t, step.wantSizes, ast, step.name)
+	}
+
+	summaryCall, ok := ast.Sections[2].Body[0].AIMessage.Parts[0].(llms.ToolCall)
+	require.True(t, ok)
+	assert.Regexp(t, `^call_[0-9A-Za-z]{24}$`, summaryCall.ID)
+	assert.Equal(t, []llms.MessageContent{
+		chainASTSystem("new system"),
+		chainASTHuman("question"),
+		chainASTAnswer("answer"),
+		chainASTHuman("follow-up"),
+		chainASTAI(chainASTCall("tool-1", "get_weather")),
+		chainASTTool("tool-1", "get_weather", "sunny"),
+		chainASTHuman("summarize"),
+		chainASTAI(chainASTCallWith(summaryCall.ID, "execute_task_and_return_summary",
+			`{"question": "delegate and execute the task, then return the summary of the result"}`)),
+		chainASTTool(summaryCall.ID, "execute_task_and_return_summary", "summary"),
+	}, ast.Messages())
+
+	reparsed, err := NewChainAST(ast.Messages(), false)
+	require.NoError(t, err)
+	assertChainASTSizes(t, [][]int{{24, 18, 6}, {58, 9, 49}, {228, 9, 219}}, reparsed)
+}
+
+func TestChainAST_FindToolCallResponses_SearchesOnlyRequestResponsePairs(t *testing.T) {
+	ast, err := NewChainAST(append(chainWithSummarizationAndOtherPairs(),
+		chainASTHuman("And tomorrow?"),
+		chainASTAI(chainASTCallWith("tool-1", "get_weather", `{"location": "New York", "day": "tomorrow"}`)),
+		chainASTTool("tool-1", "get_weather", "Rain tomorrow."),
+	), false)
+	require.NoError(t, err)
+
+	tests := []struct {
+		name string
+		id   string
+		want []llms.ToolCallResponse
+	}{
+		{
+			name: "an id reused by a later section finds every response in chain order",
+			id:   "tool-1",
+			want: []llms.ToolCallResponse{
+				{ToolCallID: "tool-1", Name: "get_weather", Content: "The weather in New York is sunny with a high of 75°F."},
+				{ToolCallID: "tool-1", Name: "get_weather", Content: "Rain tomorrow."},
+			},
+		},
+		{
+			name: "the summarization call is not searched",
+			id:   "summary-1",
+		},
+		{
+			name: "an unknown id finds nothing",
+			id:   "missing",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, ast.FindToolCallResponses(tt.id))
+		})
+	}
+}
+
+func TestChainAST_GetToolCallsInfo_SortsPendingAndUnmatchedCallsAndPairsTheRest(t *testing.T) {
+	response := func(id, name, content string) llms.ToolCallResponse {
+		return llms.ToolCallResponse{ToolCallID: id, Name: name, Content: content}
+	}
+
+	tests := []struct {
+		name string
+		pair *BodyPair
+		want ToolCallsInfo
+	}{
+		{
+			name: "answered calls are paired with their responses",
+			pair: chainASTPair(
+				chainASTAI(llms.TextContent{Text: "checking"}, chainASTCall("tool-1", "get_weather"), chainASTCall("tool-2", "get_time")),
+				chainASTTool("tool-2", "get_time", "noon"),
+				chainASTTool("tool-1", "get_weather", "sunny"),
+			),
+			want: ToolCallsInfo{
+				CompletedToolCalls: map[string]*ToolCallPair{
+					"tool-1": {ToolCall: chainASTCall("tool-1", "get_weather"), Response: response("tool-1", "get_weather", "sunny")},
+					"tool-2": {ToolCall: chainASTCall("tool-2", "get_time"), Response: response("tool-2", "get_time", "noon")},
+				},
+			},
+		},
+		{
+			name: "calls without a response are pending in id order and a call without a function is not one",
+			pair: chainASTPair(
+				chainASTAI(
+					chainASTCall("tool-2", "get_time"),
+					chainASTCall("tool-4", "get_news"),
+					chainASTCall("tool-3", "get_maps"),
+					chainASTCall("tool-1", "get_weather"),
+					llms.ToolCall{ID: "tool-5", Type: "function"},
+				),
+				chainASTTool("tool-1", "get_weather", "sunny"),
+			),
+			want: ToolCallsInfo{
+				PendingToolCallIDs: []string{"tool-2", "tool-3", "tool-4"},
+				PendingToolCalls: map[string]*ToolCallPair{
+					"tool-2": {ToolCall: chainASTCall("tool-2", "get_time")},
+					"tool-3": {ToolCall: chainASTCall("tool-3", "get_maps")},
+					"tool-4": {ToolCall: chainASTCall("tool-4", "get_news")},
+				},
+				CompletedToolCalls: map[string]*ToolCallPair{
+					"tool-1": {ToolCall: chainASTCall("tool-1", "get_weather"), Response: response("tool-1", "get_weather", "sunny")},
+				},
+			},
+		},
+		{
+			name: "responses to calls never made are unmatched in id order",
+			pair: chainASTPair(
+				chainASTAI(chainASTCall("tool-1", "get_weather")),
+				llms.MessageContent{Role: llms.ChatMessageTypeTool, Parts: []llms.ContentPart{
+					llms.TextContent{Text: "output follows"},
+					response("tool-3", "get_news", "quiet"),
+					response("tool-1", "get_weather", "sunny"),
+					response("tool-2", "get_time", "noon"),
+					response("tool-4", "get_maps", "far"),
+				}},
+			),
+			want: ToolCallsInfo{
+				UnmatchedToolCallIDs: []string{"tool-2", "tool-3", "tool-4"},
+				CompletedToolCalls: map[string]*ToolCallPair{
+					"tool-1": {ToolCall: chainASTCall("tool-1", "get_weather"), Response: response("tool-1", "get_weather", "sunny")},
+				},
+				UnmatchedToolCalls: map[string]*ToolCallPair{
+					"tool-2": {Response: response("tool-2", "get_time", "noon")},
+					"tool-3": {Response: response("tool-3", "get_news", "quiet")},
+					"tool-4": {Response: response("tool-4", "get_maps", "far")},
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.pair.GetToolCallsInfo()
+			got.PendingToolCallIDs = chainASTNilIfEmpty(got.PendingToolCallIDs)
+			got.UnmatchedToolCallIDs = chainASTNilIfEmpty(got.UnmatchedToolCallIDs)
+			got.PendingToolCalls = chainASTNilIfEmpty(got.PendingToolCalls)
+			got.CompletedToolCalls = chainASTNilIfEmpty(got.CompletedToolCalls)
+			got.UnmatchedToolCalls = chainASTNilIfEmpty(got.UnmatchedToolCalls)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestChainAST_IsValid_RequiresTheResponsesThePairTypeCallsFor(t *testing.T) {
+	tests := []struct {
+		name string
+		pair *BodyPair
+		want bool
+	}{
+		{
+			name: "a completion is valid",
+			pair: chainASTPair(chainASTAnswer("done")),
+			want: true,
+		},
+		{
+			name: "a request-response pair with every call answered is valid",
+			pair: chainASTPair(
+				chainASTAI(chainASTCall("tool-1", "get_weather"), chainASTCall("tool-2", "get_time")),
+				chainASTTool("tool-1", "get_weather", "sunny"),
+				chainASTTool("tool-2", "get_time", "noon"),
+			),
+			want: true,
+		},
+		{
+			name: "a request-response pair whose responses have not arrived is not",
+			pair: chainASTPair(chainASTAI(chainASTCall("tool-1", "get_weather"))),
+		},
+		{
+			name: "a request-response pair with one of its two calls answered is not",
+			pair: chainASTPair(
+				chainASTAI(chainASTCall("tool-1", "get_weather"), chainASTCall("tool-2", "get_time")),
+				chainASTTool("tool-1", "get_weather", "sunny"),
+			),
+		},
+		{
+			name: "a request-response pair answering a call it never made is not",
+			pair: chainASTPair(
+				chainASTAI(chainASTCall("tool-1", "get_weather")),
+				chainASTTool("tool-1", "get_weather", "sunny"),
+				chainASTTool("tool-2", "get_time", "noon"),
+			),
+		},
+		{
+			name: "a summarization pair with its response is valid",
+			pair: chainASTPair(
+				chainASTAI(chainASTCall("summary-1", "execute_task_and_return_summary")),
+				chainASTTool("summary-1", "execute_task_and_return_summary", "summary"),
+			),
+			want: true,
+		},
+		{
+			name: "a summarization pair whose response has not arrived is not",
+			pair: chainASTPair(chainASTAI(chainASTCall("summary-1", "execute_task_and_return_summary"))),
+		},
+		{
+			name: "a pair of none of the three types is not",
+			pair: &BodyPair{Type: BodyPairType(3), AIMessage: &llms.MessageContent{
+				Role:  llms.ChatMessageTypeAI,
+				Parts: []llms.ContentPart{llms.TextContent{Text: "done"}},
+			}},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, tt.pair.IsValid())
+		})
+	}
+}
+
+func TestChainAST_NewHeader_SumsTheSizesOfItsMessages(t *testing.T) {
+	system, human := chainASTSystem("system"), chainASTHuman("question")
+
+	tests := []struct {
+		name     string
+		system   *llms.MessageContent
+		human    *llms.MessageContent
+		wantSize int
+	}{
+		{name: "a system and a human message are both counted", system: &system, human: &human, wantSize: 14},
+		{name: "a human message alone is counted", human: &human, wantSize: 8},
+		{name: "a system message alone is counted", system: &system, wantSize: 6},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			header := NewHeader(tt.system, tt.human)
+			assert.Same(t, tt.system, header.SystemMessage)
+			assert.Same(t, tt.human, header.HumanMessage)
+			assert.Equal(t, tt.wantSize, header.Size())
+		})
+	}
+}
+
+func TestChainAST_NewBodyPair_ClassifiesByItsToolCalls(t *testing.T) {
+	tests := []struct {
+		name      string
+		parts     []llms.ContentPart
+		tools     []llms.MessageContent
+		wantType  BodyPairType
+		wantParts []llms.ContentPart // nil: the parts are kept as given
+		wantSize  int
+		invalid   bool
+	}{
+		{
+			name:     "text parts make a completion",
+			parts:    []llms.ContentPart{llms.TextContent{Text: "first"}, llms.TextContent{Text: "second"}},
+			wantType: Completion,
+			wantSize: 11,
+		},
+		{
+			name:     "a tool message beside text parts leaves it an invalid completion",
+			parts:    []llms.ContentPart{llms.TextContent{Text: "answer"}},
+			tools:    []llms.MessageContent{chainASTText(llms.ChatMessageTypeTool, "sunny")},
+			wantType: Completion,
+			wantSize: 11,
+			invalid:  true,
+		},
+		{
+			name:     "a tool call makes a request-response pair",
+			parts:    []llms.ContentPart{chainASTCall("tool-1", "get_weather")},
+			tools:    []llms.MessageContent{chainASTTool("tool-1", "get_weather", "sunny")},
+			wantType: RequestResponse,
+			wantSize: 49,
+		},
+		{
+			name:     "the summarization call makes a summarization pair",
+			parts:    []llms.ContentPart{chainASTCall("summary-1", "execute_task_and_return_summary")},
+			tools:    []llms.MessageContent{chainASTTool("summary-1", "execute_task_and_return_summary", "summary")},
+			wantType: Summarization,
+			wantSize: 97,
+		},
+		{
+			name: "tool calls without a function are dropped",
+			parts: []llms.ContentPart{
+				llms.ToolCall{ID: "a", Type: "function"},
+				llms.ToolCall{ID: "b", Type: "function"},
+				llms.TextContent{Text: "keep me"},
+			},
+			wantType:  Completion,
+			wantParts: []llms.ContentPart{llms.TextContent{Text: "keep me"}},
+			wantSize:  7,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ai := chainASTAI(append([]llms.ContentPart(nil), tt.parts...)...)
+			var tools []*llms.MessageContent
+			for i := range tt.tools {
+				tools = append(tools, &tt.tools[i])
+			}
+			wantParts := tt.wantParts
+			if wantParts == nil {
+				wantParts = tt.parts
+			}
+
+			pair := NewBodyPair(&ai, tools)
+
+			assert.Equal(t, tt.wantType, pair.Type)
+			assert.Same(t, &ai, pair.AIMessage)
+			assert.Equal(t, wantParts, ai.Parts)
+			assert.Equal(t, tools, pair.ToolMessages)
+			assert.Equal(t, !tt.invalid, pair.IsValid())
+			assert.Equal(t, tt.wantSize, pair.Size())
+		})
+	}
+}
+
+func TestChainAST_NewBodyPairFromMessages_TakesAnAIMessageAndItsToolResponses(t *testing.T) {
+	tests := []struct {
+		name     string
+		messages func() []llms.MessageContent
+		wantType BodyPairType
+		wantErr  string
+	}{
+		{
+			name: "an AI message and the responses to its calls make a request-response pair",
+			messages: func() []llms.MessageContent {
+				return []llms.MessageContent{
+					chainASTAI(chainASTCall("tool-1", "get_weather"), chainASTCall("tool-2", "get_time")),
+					chainASTTool("tool-1", "get_weather", "sunny"),
+					chainASTTool("tool-2", "get_time", "noon"),
+				}
+			},
+			wantType: RequestResponse,
+		},
+		{
+			name:     "a lone AI message is a completion",
+			messages: func() []llms.MessageContent { return []llms.MessageContent{chainASTAnswer("answer")} },
+			wantType: Completion,
+		},
+		{
+			name:     "an empty slice is rejected",
+			messages: func() []llms.MessageContent { return []llms.MessageContent{} },
+			wantErr:  "cannot create body pair from empty message slice",
+		},
+		{
+			name:     "a first message not from the AI is rejected",
+			messages: func() []llms.MessageContent { return []llms.MessageContent{chainASTHuman("question")} },
+			wantErr:  "first message in body pair must be an AI message",
+		},
+		{
+			name: "a non-tool message after the AI message is rejected",
+			messages: func() []llms.MessageContent {
+				return []llms.MessageContent{chainASTAnswer("answer"), chainASTHuman("question")}
+			},
+			wantErr: "non-tool message found in body pair at position 1",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pair, err := NewBodyPairFromMessages(tt.messages())
+			if tt.wantErr != "" {
+				assert.EqualError(t, err, tt.wantErr)
+				assert.Nil(t, pair)
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantType, pair.Type)
+			assert.Equal(t, tt.messages(), pair.Messages())
+			assert.True(t, pair.IsValid())
+		})
+	}
+}
+
+func TestChainAST_NewBodyPairFromSummarization_AnswersItsOwnSummarizationCall(t *testing.T) {
+	thought := llms.TextContent{Text: "thinking", Reasoning: &reasoning.ContentReasoning{Content: "analysis"}}
+	signature := &reasoning.ContentReasoning{Signature: []byte("skip_thought_signature_validator")}
+
+	tests := []struct {
+		name          string
+		fakeSignature bool
+		reasoningMsg  *llms.MessageContent
+		wantBefore    []llms.ContentPart
+		wantReasoning *reasoning.ContentReasoning
+	}{
+		{
+			name: "the call carries no signature unless asked to",
+		},
+		{
+			name:          "a fake signature is put on the call",
+			fakeSignature: true,
+			wantReasoning: signature,
+		},
+		{
+			name:          "the parts of a reasoning message go before the call",
+			fakeSignature: true,
+			reasoningMsg:  &llms.MessageContent{Role: llms.ChatMessageTypeAI, Parts: []llms.ContentPart{thought}},
+			wantBefore:    []llms.ContentPart{thought},
+			wantReasoning: signature,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pair := NewBodyPairFromSummarization("summary", "call_{r:24:x}", tt.fakeSignature, tt.reasoningMsg)
+
+			require.NotEmpty(t, pair.AIMessage.Parts)
+			call, ok := pair.AIMessage.Parts[len(pair.AIMessage.Parts)-1].(llms.ToolCall)
+			require.True(t, ok, "the last part must be the call")
+			assert.Regexp(t, `^call_[0-9A-Za-z]{24}$`, call.ID)
+
+			wantCall := llms.ToolCall{
+				ID:   call.ID,
 				Type: "function",
 				FunctionCall: &llms.FunctionCall{
-					Name:      "get_weather",
-					Arguments: `{"location": "New York"}`,
+					Name:      "execute_task_and_return_summary",
+					Arguments: `{"question": "delegate and execute the task, then return the summary of the result"}`,
 				},
-			},
-		},
+				Reasoning: tt.wantReasoning,
+			}
+			response := chainASTTool(call.ID, "execute_task_and_return_summary", "summary")
+			assert.Equal(t, Summarization, pair.Type)
+			assert.Equal(t, chainASTAI(append(tt.wantBefore, wantCall)...), *pair.AIMessage)
+			assert.Equal(t, []*llms.MessageContent{&response}, pair.ToolMessages)
+			assert.True(t, pair.IsValid())
+		})
 	}
-	toolMsg := &llms.MessageContent{
-		Role: llms.ChatMessageTypeTool,
-		Parts: []llms.ContentPart{
-			llms.ToolCallResponse{
-				ToolCallID: "tool-1",
-				Name:       "get_weather",
-				Content:    "The weather in New York is sunny.",
-			},
-		},
-	}
+}
 
-	requestResponsePair := NewBodyPair(aiMsgWithTool, []*llms.MessageContent{toolMsg})
-	assert.NotNil(t, requestResponsePair)
-	assert.Equal(t, RequestResponse, requestResponsePair.Type)
-	assert.Equal(t, aiMsgWithTool, requestResponsePair.AIMessage)
-	assert.Equal(t, 1, len(requestResponsePair.ToolMessages))
-	assert.Greater(t, requestResponsePair.Size(), 0, "BodyPair size should be calculated")
+func TestChainAST_NewBodyPairFromCompletion_WrapsTheTextInACompletion(t *testing.T) {
+	pair := NewBodyPairFromCompletion("done")
 
-	// Test NewBodyPairFromMessages
-	messages := []llms.MessageContent{
-		{
-			Role:  llms.ChatMessageTypeAI,
-			Parts: []llms.ContentPart{llms.TextContent{Text: "AI message"}},
-		},
-		{
-			Role: llms.ChatMessageTypeTool,
-			Parts: []llms.ContentPart{
-				llms.ToolCallResponse{
-					ToolCallID: "tool-1",
-					Name:       "get_weather",
-					Content:    "The weather in New York is sunny.",
-				},
-			},
-		},
-	}
-
-	bodyPair, err := NewBodyPairFromMessages(messages)
-	assert.NoError(t, err)
-	assert.NotNil(t, bodyPair)
-	assert.Equal(t, Completion, bodyPair.Type) // No tool calls, so it's a Completion
-	assert.Equal(t, 1, len(bodyPair.ToolMessages))
-
-	// Test error case for NewBodyPairFromMessages
-	invalidMessages := []llms.MessageContent{
-		{
-			Role:  llms.ChatMessageTypeHuman, // First message should be AI
-			Parts: []llms.ContentPart{llms.TextContent{Text: "Human message"}},
-		},
-	}
-
-	_, err = NewBodyPairFromMessages(invalidMessages)
-	assert.Error(t, err)
-
-	emptyMessages := []llms.MessageContent{}
-	_, err = NewBodyPairFromMessages(emptyMessages)
-	assert.Error(t, err)
-
-	// Test NewChainSection
-	section := NewChainSection(header, []*BodyPair{completionPair, requestResponsePair})
-	assert.NotNil(t, section)
-	assert.Equal(t, header, section.Header)
-	assert.Equal(t, 2, len(section.Body))
-	assert.Equal(t, header.Size()+completionPair.Size()+requestResponsePair.Size(),
-		section.Size(), "Section size should be sum of header and body pair sizes")
-
-	// Test NewBodyPairFromCompletion
-	text := "This is a completion response"
-	pair := NewBodyPairFromCompletion(text)
-	assert.NotNil(t, pair)
 	assert.Equal(t, Completion, pair.Type)
-	assert.NotNil(t, pair.AIMessage)
-	assert.Equal(t, llms.ChatMessageTypeAI, pair.AIMessage.Role)
+	assert.Equal(t, chainASTAnswer("done"), *pair.AIMessage)
+	assert.Nil(t, pair.ToolMessages)
+	assert.Equal(t, 4, pair.Size())
+}
 
-	// Extract text from the message
-	textContent, ok := pair.AIMessage.Parts[0].(llms.TextContent)
-	assert.True(t, ok)
-	assert.Equal(t, text, textContent.Text)
+func TestChainAST_NewChainSection_SumsHeaderAndPairSizes(t *testing.T) {
+	system, human := chainASTSystem("system"), chainASTHuman("question")
+	call, response := chainASTAI(chainASTCall("tool-1", "get_weather")), chainASTTool("tool-1", "get_weather", "sunny")
+	header := NewHeader(&system, &human)
+	completion := NewBodyPairFromCompletion("answer")
+	exchange := NewBodyPair(&call, []*llms.MessageContent{&response})
 
-	// Test HasToolCalls
-	assert.True(t, HasToolCalls(aiMsgWithTool))
-	assert.False(t, HasToolCalls(aiMsg))
+	section := NewChainSection(header, []*BodyPair{completion, exchange})
+
+	assert.Same(t, header, section.Header)
+	assert.Equal(t, []*BodyPair{completion, exchange}, section.Body)
+	assert.Equal(t, 69, section.Size())
+}
+
+func TestChainAST_HasToolCalls_DetectsAToolCallPart(t *testing.T) {
+	withCall := chainASTAI(llms.TextContent{Text: "checking"}, chainASTCall("tool-1", "get_weather"))
+	textOnly := chainASTAnswer("answer")
+
+	assert.True(t, HasToolCalls(&withCall))
+	assert.False(t, HasToolCalls(&textOnly))
 	assert.False(t, HasToolCalls(nil))
 }
 
-func TestSizeTracking(t *testing.T) {
-	// Test size calculation and tracking
-
-	// Test CalculateMessageSize with different content types
-	textMsg := llms.MessageContent{
-		Role: llms.ChatMessageTypeHuman,
-		Parts: []llms.ContentPart{
-			llms.TextContent{Text: "Hello world"},
+func TestChainAST_CalculateMessageSize_CountsEveryPartType(t *testing.T) {
+	tests := []struct {
+		name string
+		part llms.ContentPart
+		want int
+	}{
+		{
+			name: "text counts its text",
+			part: llms.TextContent{Text: "Hello world"},
+			want: 11,
+		},
+		{
+			name: "an image counts its URL",
+			part: llms.ImageURLContent{URL: "https://example.com/image.jpg"},
+			want: 29,
+		},
+		{
+			name: "binary data counts its bytes",
+			part: llms.BinaryContent{MIMEType: "image/png", Data: []byte{0x89, 'P', 'N', 'G'}},
+			want: 4,
+		},
+		{
+			name: "a tool call counts its id, type, name and arguments",
+			part: llms.ToolCall{ID: "call-1", Type: "function", FunctionCall: &llms.FunctionCall{
+				Name:      "test_function",
+				Arguments: `{"param1": "value1"}`,
+			}},
+			want: 47,
+		},
+		{
+			name: "a tool response counts its call id, name and content",
+			part: llms.ToolCallResponse{ToolCallID: "call-1", Name: "test_function", Content: "Response content"},
+			want: 35,
 		},
 	}
-	textSize := CalculateMessageSize(&textMsg)
-	assert.Equal(t, len("Hello world"), textSize)
 
-	// Test with image URL
-	imageMsg := llms.MessageContent{
-		Role: llms.ChatMessageTypeHuman,
-		Parts: []llms.ContentPart{
-			llms.ImageURLContent{URL: "https://example.com/image.jpg"},
-		},
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			msg := llms.MessageContent{Role: llms.ChatMessageTypeHuman, Parts: []llms.ContentPart{tt.part}}
+			assert.Equal(t, tt.want, CalculateMessageSize(&msg))
+		})
 	}
-	imageSize := CalculateMessageSize(&imageMsg)
-	assert.Equal(t, len("https://example.com/image.jpg"), imageSize)
-
-	// Test with tool call
-	toolCallMsg := llms.MessageContent{
-		Role: llms.ChatMessageTypeAI,
-		Parts: []llms.ContentPart{
-			llms.ToolCall{
-				ID:   "call-1",
-				Type: "function",
-				FunctionCall: &llms.FunctionCall{
-					Name:      "test_function",
-					Arguments: `{"param1": "value1"}`,
-				},
-			},
-		},
-	}
-	toolCallSize := CalculateMessageSize(&toolCallMsg)
-	expectedSize := len("call-1") + len("function") + len("test_function") + len(`{"param1": "value1"}`)
-	assert.Equal(t, expectedSize, toolCallSize)
-
-	// Test with tool response
-	toolResponseMsg := llms.MessageContent{
-		Role: llms.ChatMessageTypeTool,
-		Parts: []llms.ContentPart{
-			llms.ToolCallResponse{
-				ToolCallID: "call-1",
-				Name:       "test_function",
-				Content:    "Response content",
-			},
-		},
-	}
-	toolResponseSize := CalculateMessageSize(&toolResponseMsg)
-	expectedResponseSize := len("call-1") + len("test_function") + len("Response content")
-	assert.Equal(t, expectedResponseSize, toolResponseSize)
-
-	// Test size changes when modifying AST
-
-	// Create a basic AST
-	ast := &ChainAST{Sections: []*ChainSection{}}
-	assert.Equal(t, 0, ast.Size())
-
-	// Add a section with system message
-	sysMsg := &llms.MessageContent{
-		Role:  llms.ChatMessageTypeSystem,
-		Parts: []llms.ContentPart{llms.TextContent{Text: "System message"}},
-	}
-	header := NewHeader(sysMsg, nil)
-	section := NewChainSection(header, []*BodyPair{})
-	ast.AddSection(section)
-
-	initialSize := ast.Size()
-	assert.Equal(t, CalculateMessageSize(sysMsg), initialSize)
-
-	// Add a human message and verify size increases
-	humanContent := "Human message"
-	ast.AppendHumanMessage(humanContent)
-
-	expectedIncrease := len(humanContent)
-	assert.Equal(t, initialSize+expectedIncrease, ast.Size())
-
-	// Add a body pair and verify size increases
-	aiMsg := &llms.MessageContent{
-		Role:  llms.ChatMessageTypeAI,
-		Parts: []llms.ContentPart{llms.TextContent{Text: "AI response"}},
-	}
-	bodyPair := NewBodyPair(aiMsg, nil)
-	section.AddBodyPair(bodyPair)
-
-	expectedBodyPairSize := CalculateMessageSize(aiMsg)
-	assert.Equal(t, initialSize+expectedIncrease+expectedBodyPairSize, ast.Size())
 }
 
-func TestAddSectionAndBodyPair(t *testing.T) {
-	// Test adding sections and body pairs
-
-	// Create empty AST
-	ast := &ChainAST{Sections: []*ChainSection{}}
-
-	// Create section 1
-	header1 := NewHeader(nil, &llms.MessageContent{
-		Role:  llms.ChatMessageTypeHuman,
-		Parts: []llms.ContentPart{llms.TextContent{Text: "Question 1"}},
-	})
-	section1 := NewChainSection(header1, []*BodyPair{})
-
-	// Add section 1
-	ast.AddSection(section1)
-	assert.Equal(t, 1, len(ast.Sections))
-
-	// Add body pair to section 1
-	bodyPair1 := NewBodyPairFromCompletion("Answer 1")
-	section1.AddBodyPair(bodyPair1)
-	assert.Equal(t, 1, len(section1.Body))
-
-	// Create and add section 2
-	header2 := NewHeader(nil, &llms.MessageContent{
-		Role:  llms.ChatMessageTypeHuman,
-		Parts: []llms.ContentPart{llms.TextContent{Text: "Question 2"}},
-	})
-	section2 := NewChainSection(header2, []*BodyPair{})
-	ast.AddSection(section2)
-	assert.Equal(t, 2, len(ast.Sections))
-
-	// Add body pair with tool call to section 2
-	aiMsg := &llms.MessageContent{
-		Role: llms.ChatMessageTypeAI,
-		Parts: []llms.ContentPart{
-			llms.ToolCall{
-				ID:   "tool-1",
-				Type: "function",
-				FunctionCall: &llms.FunctionCall{
-					Name:      "search",
-					Arguments: `{"query": "test"}`,
-				},
-			},
-		},
-	}
-	toolMsg := &llms.MessageContent{
-		Role: llms.ChatMessageTypeTool,
-		Parts: []llms.ContentPart{
-			llms.ToolCallResponse{
-				ToolCallID: "tool-1",
-				Name:       "search",
-				Content:    "Search results",
-			},
-		},
-	}
-	bodyPair2 := NewBodyPair(aiMsg, []*llms.MessageContent{toolMsg})
-	section2.AddBodyPair(bodyPair2)
-	assert.Equal(t, 1, len(section2.Body))
-	assert.Equal(t, RequestResponse, section2.Body[0].Type)
-
-	// Check that Messages() returns all messages in correct order
-	messages := ast.Messages()
-	assert.Equal(t, 5, len(messages)) // 2 human + 1 AI + 1 Tool + 1 AI
-
-	// Order should be: human, AI, human, AI, tool
-	assert.Equal(t, llms.ChatMessageTypeHuman, messages[0].Role)
-	assert.Equal(t, llms.ChatMessageTypeAI, messages[1].Role)
-	assert.Equal(t, llms.ChatMessageTypeHuman, messages[2].Role)
-	assert.Equal(t, llms.ChatMessageTypeAI, messages[3].Role)
-	assert.Equal(t, llms.ChatMessageTypeTool, messages[4].Role)
-}
-
-func TestAppendHumanMessageComplex(t *testing.T) {
-	// Test complex scenarios with AppendHumanMessage
-
-	// Test case 1: Empty AST
-	ast1 := &ChainAST{Sections: []*ChainSection{}}
-	ast1.AppendHumanMessage("First message")
-
-	assert.Equal(t, 1, len(ast1.Sections))
-	assert.NotNil(t, ast1.Sections[0].Header.HumanMessage)
-	assert.Equal(t, "First message", extractText(ast1.Sections[0].Header.HumanMessage))
-
-	// Test case 2: AST with system message only
-	ast2 := &ChainAST{Sections: []*ChainSection{}}
-	sysMsg := &llms.MessageContent{
-		Role:  llms.ChatMessageTypeSystem,
-		Parts: []llms.ContentPart{llms.TextContent{Text: "System prompt"}},
-	}
-	header := NewHeader(sysMsg, nil)
-	section := NewChainSection(header, []*BodyPair{})
-	ast2.AddSection(section)
-
-	ast2.AppendHumanMessage("Human question")
-
-	assert.Equal(t, 1, len(ast2.Sections))
-	assert.NotNil(t, ast2.Sections[0].Header.SystemMessage)
-	assert.NotNil(t, ast2.Sections[0].Header.HumanMessage)
-	assert.Equal(t, "Human question", extractText(ast2.Sections[0].Header.HumanMessage))
-
-	// Test case 3: AST with system+human but no body pairs
-	ast3 := &ChainAST{Sections: []*ChainSection{}}
-	header3 := NewHeader(
-		&llms.MessageContent{
-			Role:  llms.ChatMessageTypeSystem,
-			Parts: []llms.ContentPart{llms.TextContent{Text: "System"}},
-		},
-		&llms.MessageContent{
-			Role:  llms.ChatMessageTypeHuman,
-			Parts: []llms.ContentPart{llms.TextContent{Text: "Initial"}},
-		},
+func TestChainAST_NormalizeToolCallIDs_ReplacesIDsTheTemplateRejects(t *testing.T) {
+	const (
+		openAIID   = `^call_[0-9A-Za-z]{24}$`
+		validToolu = "toolu_0123456789abcdefghijklmn"
+		validCall  = "call_0123456789abcdefghijklmn"
 	)
-	section3 := NewChainSection(header3, []*BodyPair{})
-	ast3.AddSection(section3)
 
-	// Should append to existing human message
-	ast3.AppendHumanMessage("Additional")
-
-	assert.Equal(t, 1, len(ast3.Sections))
-	humanMsg := ast3.Sections[0].Header.HumanMessage
-	assert.NotNil(t, humanMsg)
-
-	// Check that both parts are present in the correct order
-	assert.Equal(t, 2, len(humanMsg.Parts))
-	textPart1, ok1 := humanMsg.Parts[0].(llms.TextContent)
-	textPart2, ok2 := humanMsg.Parts[1].(llms.TextContent)
-	assert.True(t, ok1 && ok2)
-	assert.Equal(t, "Initial", textPart1.Text)
-	assert.Equal(t, "Additional", textPart2.Text)
-
-	// Test case 4: AST with complete section (system+human+body pairs)
-	ast4 := &ChainAST{Sections: []*ChainSection{}}
-	header4 := NewHeader(
-		&llms.MessageContent{
-			Role:  llms.ChatMessageTypeSystem,
-			Parts: []llms.ContentPart{llms.TextContent{Text: "System"}},
-		},
-		&llms.MessageContent{
-			Role:  llms.ChatMessageTypeHuman,
-			Parts: []llms.ContentPart{llms.TextContent{Text: "Question"}},
-		},
-	)
-	bodyPair4 := NewBodyPairFromCompletion("Answer")
-	section4 := NewChainSection(header4, []*BodyPair{bodyPair4})
-	ast4.AddSection(section4)
-
-	// Should create new section
-	ast4.AppendHumanMessage("Follow-up")
-
-	assert.Equal(t, 2, len(ast4.Sections))
-	assert.Nil(t, ast4.Sections[1].Header.SystemMessage)
-	assert.NotNil(t, ast4.Sections[1].Header.HumanMessage)
-	assert.Equal(t, "Follow-up", extractText(ast4.Sections[1].Header.HumanMessage))
-}
-
-func TestAddToolResponseComplex(t *testing.T) {
-	// Test complex scenarios with AddToolResponse
-
-	// Create an AST with multiple tool calls
-	chain := []llms.MessageContent{
-		{
-			Role:  llms.ChatMessageTypeSystem,
-			Parts: []llms.ContentPart{llms.TextContent{Text: "System prompt"}},
-		},
-		{
-			Role:  llms.ChatMessageTypeHuman,
-			Parts: []llms.ContentPart{llms.TextContent{Text: "Tell me about the weather and news"}},
-		},
-		{
-			Role: llms.ChatMessageTypeAI,
-			Parts: []llms.ContentPart{
-				llms.ToolCall{
-					ID:   "weather-1",
-					Type: "function",
-					FunctionCall: &llms.FunctionCall{
-						Name:      "get_weather",
-						Arguments: `{"location": "New York"}`,
-					},
-				},
-				llms.ToolCall{
-					ID:   "news-1",
-					Type: "function",
-					FunctionCall: &llms.FunctionCall{
-						Name:      "get_news",
-						Arguments: `{"topic": "technology"}`,
-					},
-				},
-			},
-		},
-	}
-
-	// Using force=true because the original chain does not contain responses to tool calls
-	ast, err := NewChainAST(chain, true)
-	assert.NoError(t, err)
-
-	// Test case 1: Add response to first tool call
-	weatherResponse := "Sunny and 75°F in New York"
-	err = ast.AddToolResponse("weather-1", "get_weather", weatherResponse)
-	assert.NoError(t, err)
-
-	// Verify the response was added
-	responses := ast.FindToolCallResponses("weather-1")
-	assert.Equal(t, 1, len(responses))
-	assert.Equal(t, weatherResponse, responses[0].Content)
-
-	// Test case 2: Add response to second tool call
-	newsResponse := "Latest tech news: AI advances"
-	err = ast.AddToolResponse("news-1", "get_news", newsResponse)
-	assert.NoError(t, err)
-
-	// Verify the response was added
-	responses = ast.FindToolCallResponses("news-1")
-	assert.Equal(t, 1, len(responses))
-	assert.Equal(t, newsResponse, responses[0].Content)
-
-	// Test case 3: Update existing response
-	updatedWeatherResponse := "Partly cloudy and 72°F in New York"
-	err = ast.AddToolResponse("weather-1", "get_weather", updatedWeatherResponse)
-	assert.NoError(t, err)
-
-	// Verify the response was updated
-	responses = ast.FindToolCallResponses("weather-1")
-	assert.Equal(t, 1, len(responses))
-	assert.Equal(t, updatedWeatherResponse, responses[0].Content)
-
-	// Test case 4: Invalid tool call ID
-	err = ast.AddToolResponse("invalid-id", "invalid-function", "Response")
-	assert.Error(t, err)
-}
-
-// Helper function to extract text from a message
-func extractText(msg *llms.MessageContent) string {
-	if msg == nil {
-		return ""
-	}
-
-	var result strings.Builder
-	for _, part := range msg.Parts {
-		if textContent, ok := part.(llms.TextContent); ok {
-			result.WriteString(textContent.Text)
-		}
-	}
-
-	return result.String()
-}
-
-func TestNewChainAST_Summarization(t *testing.T) {
 	tests := []struct {
-		name                string
-		chain               []llms.MessageContent
-		force               bool
-		expectedErr         bool
-		expectedSections    int
-		expectedBodyPairs   int
-		expectedBodyPairIdx int
-		expectedType        BodyPairType
+		name     string
+		template string
+		pattern  string // every new id must match it
+		chain    []llms.MessageContent
+		renamed  []string // the ids that must be replaced; every other one stays
 	}{
 		{
-			name:                "Chain with summarization as the only body pair",
-			chain:               chainWithSummarization,
-			force:               false,
-			expectedErr:         false,
-			expectedSections:    1,
-			expectedBodyPairs:   1,
-			expectedBodyPairIdx: 0,
-			expectedType:        Summarization,
-		},
-		{
-			name:                "Chain with summarization followed by other pairs",
-			chain:               chainWithSummarizationAndOtherPairs,
-			force:               false,
-			expectedErr:         false,
-			expectedSections:    1,
-			expectedBodyPairs:   3, // Summarization + text + tool call
-			expectedBodyPairIdx: 0,
-			expectedType:        Summarization,
-		},
-		// Test for missing response with force=true
-		{
-			name: "Chain with summarization missing tool response but force=true",
+			name:     "an id with the right prefix and the wrong length is replaced",
+			template: "call_{r:24:x}",
+			pattern:  openAIID,
 			chain: []llms.MessageContent{
-				{
-					Role:  llms.ChatMessageTypeSystem,
-					Parts: []llms.ContentPart{llms.TextContent{Text: "You are a helpful assistant."}},
-				},
-				{
-					Role:  llms.ChatMessageTypeHuman,
-					Parts: []llms.ContentPart{llms.TextContent{Text: "Can you summarize the previous conversation?"}},
-				},
-				{
-					Role: llms.ChatMessageTypeAI,
-					Parts: []llms.ContentPart{
-						llms.ToolCall{
-							ID:   "summary-missing",
-							Type: "function",
-							FunctionCall: &llms.FunctionCall{
-								Name:      SummarizationToolName,
-								Arguments: SummarizationToolArgs,
-							},
-						},
-					},
-				},
-				// No tool response
+				chainASTHuman("question"),
+				chainASTAI(chainASTCall("call_abc", "get_weather")),
+				chainASTTool("call_abc", "get_weather", "sunny"),
 			},
-			force:               true,
-			expectedErr:         false,
-			expectedSections:    1,
-			expectedBodyPairs:   1,
-			expectedBodyPairIdx: 0,
-			expectedType:        Summarization,
+			renamed: []string{"call_abc"},
 		},
-		// Test for missing response with force=false
 		{
-			name: "Chain with summarization missing tool response and force=false",
+			name:     "an id the template accepts is kept",
+			template: "call_{r:24:x}",
+			pattern:  openAIID,
 			chain: []llms.MessageContent{
-				{
-					Role:  llms.ChatMessageTypeSystem,
-					Parts: []llms.ContentPart{llms.TextContent{Text: "You are a helpful assistant."}},
-				},
-				{
-					Role:  llms.ChatMessageTypeHuman,
-					Parts: []llms.ContentPart{llms.TextContent{Text: "Can you summarize the previous conversation?"}},
-				},
-				{
-					Role: llms.ChatMessageTypeAI,
-					Parts: []llms.ContentPart{
-						llms.ToolCall{
-							ID:   "summary-missing",
-							Type: "function",
-							FunctionCall: &llms.FunctionCall{
-								Name:      SummarizationToolName,
-								Arguments: SummarizationToolArgs,
-							},
-						},
-					},
-				},
-				// No tool response
+				chainASTHuman("question"),
+				chainASTAI(chainASTCall(validCall, "get_weather")),
+				chainASTTool(validCall, "get_weather", "sunny"),
 			},
-			force:               false,
-			expectedErr:         true,
-			expectedSections:    0,
-			expectedBodyPairs:   0,
-			expectedBodyPairIdx: 0,
-			expectedType:        Summarization,
+		},
+		{
+			name:     "responses that share one tool message follow their own calls",
+			template: "toolu_{r:24:b}",
+			pattern:  chainASTAnthropicID,
+			chain: []llms.MessageContent{
+				chainASTHuman("question"),
+				chainASTAI(chainASTCall(validToolu, "search_weather"), chainASTCall("call_invalid", "search_news")),
+				{Role: llms.ChatMessageTypeTool, Parts: []llms.ContentPart{
+					llms.ToolCallResponse{ToolCallID: "call_invalid", Name: "search_news", Content: "quiet"},
+					llms.ToolCallResponse{ToolCallID: validToolu, Name: "search_weather", Content: "sunny"},
+				}},
+			},
+			renamed: []string{"call_invalid"},
+		},
+		{
+			name:     "an id a provider reuses in every turn gets a new id in each",
+			template: "toolu_{r:24:b}",
+			pattern:  chainASTAnthropicID,
+			chain: []llms.MessageContent{
+				chainASTHuman("question"),
+				chainASTAI(chainASTCall("0", "get_weather")),
+				chainASTTool("0", "get_weather", "sunny"),
+				chainASTHuman("follow-up"),
+				chainASTAI(chainASTCall("0", "get_time")),
+				chainASTTool("0", "get_time", "noon"),
+			},
+			renamed: []string{"0"},
+		},
+		{
+			name:     "a call without a function after a real call keeps its id",
+			template: "toolu_{r:24:b}",
+			pattern:  chainASTAnthropicID,
+			chain: []llms.MessageContent{
+				chainASTHuman("question"),
+				chainASTAI(chainASTCall("call_abc", "get_weather"), llms.ToolCall{ID: "call_partial", Type: "function"}),
+				chainASTTool("call_abc", "get_weather", "sunny"),
+			},
+			renamed: []string{"call_abc"},
+		},
+		{
+			name:     "every rejected id across three sections is replaced",
+			template: "toolu_{r:24:b}",
+			pattern:  chainASTAnthropicID,
+			chain:    providerSwitchChain(true),
+			renamed:  []string{"call_nmap01", "call_ssh02", "call_sum03"},
+		},
+		{
+			name:     "an empty chain is left empty",
+			template: "toolu_{r:24:b}",
+			pattern:  chainASTAnthropicID,
+			chain:    emptyChain(),
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Logf("Testing chain with %d messages", len(tt.chain))
+			before := chainASTClone(tt.chain)
+			ast, err := NewChainAST(tt.chain, false)
+			require.NoError(t, err)
 
-			ast, err := NewChainAST(tt.chain, tt.force)
+			require.NoError(t, ast.NormalizeToolCallIDs(tt.template))
 
-			if tt.expectedErr {
-				assert.Error(t, err)
-				t.Logf("Got expected error: %v", err)
-				return
+			restored, renames := chainASTUndoRename(t, before, ast.Messages())
+			assert.Equal(t, before, restored, "only the ids of calls and of their responses may change")
+			assert.ElementsMatch(t, tt.renamed, slices.Collect(maps.Keys(renames)))
+			for _, id := range renames {
+				assert.Regexp(t, tt.pattern, id)
 			}
 
-			assert.NoError(t, err)
-			assert.NotNil(t, ast)
-			assert.Equal(t, tt.expectedSections, len(ast.Sections), "Section count doesn't match expected")
-
-			if tt.expectedSections == 0 {
-				return
-			}
-
-			section := ast.Sections[0]
-			assert.Equal(t, tt.expectedBodyPairs, len(section.Body), "Body pair count doesn't match expected")
-
-			if len(section.Body) <= tt.expectedBodyPairIdx {
-				t.Fatalf("Not enough body pairs: got %d, index %d requested",
-					len(section.Body), tt.expectedBodyPairIdx)
-				return
-			}
-
-			// Check that the specified body pair is of the expected type
-			bodyPair := section.Body[tt.expectedBodyPairIdx]
-			assert.Equal(t, tt.expectedType, bodyPair.Type, "Body pair type doesn't match expected")
-
-			// Log the structure of the AST for easier debugging
-			t.Logf("AST Structure: %s", ast.String())
-
-			// Specifically for summarization, check that:
-			// 1. The function call name is SummarizationToolName
-			// 2. The first tool message response is for this call
-			if tt.expectedType == Summarization {
-				found := false
-				var toolCallID string
-				for i, part := range bodyPair.AIMessage.Parts {
-					if toolCall, ok := part.(llms.ToolCall); ok &&
-						toolCall.FunctionCall != nil &&
-						toolCall.FunctionCall.Name == SummarizationToolName {
-						found = true
-						toolCallID = toolCall.ID
-						t.Logf("Found summarization tool call at index %d with ID %s", i, toolCallID)
-						break
+			ids := map[string]bool{}
+			calls := 0
+			for _, msg := range ast.Messages() {
+				for _, part := range msg.Parts {
+					if call, ok := part.(llms.ToolCall); ok {
+						calls++
+						ids[call.ID] = true
 					}
 				}
-				assert.True(t, found, "Summarization tool call not found in body pair")
-
-				// Check that we have a matching tool response
-				if len(bodyPair.ToolMessages) > 0 {
-					foundResponse := false
-					for i, tool := range bodyPair.ToolMessages {
-						for j, part := range tool.Parts {
-							if resp, ok := part.(llms.ToolCallResponse); ok &&
-								resp.ToolCallID == toolCallID &&
-								resp.Name == SummarizationToolName {
-								foundResponse = true
-								t.Logf("Found matching tool response at tool message %d, part %d", i, j)
-								break
-							}
-						}
-						if foundResponse {
-							break
-						}
-					}
-					assert.True(t, foundResponse, "Matching tool response not found for summarization tool call")
-				} else if tt.force {
-					// If force=true, even with no original tool response, a response should be added
-					assert.NotEmpty(t, bodyPair.ToolMessages,
-						"With force=true, a tool response should be automatically added")
-				}
-
-				// Check that the body pair is valid
-				assert.True(t, bodyPair.IsValid(), "Body pair should be valid")
-
-				// Check that GetToolCallsInfo returns expected results
-				toolCallsInfo := bodyPair.GetToolCallsInfo()
-				assert.Empty(t, toolCallsInfo.PendingToolCallIDs, "Should have no pending tool calls")
-				assert.Empty(t, toolCallsInfo.UnmatchedToolCallIDs, "Should have no unmatched tool calls")
-
-				// For each completed tool call, verify it has the right name
-				for id, pair := range toolCallsInfo.CompletedToolCalls {
-					t.Logf("Completed tool call: ID=%s, Name=%s", id, pair.ToolCall.FunctionCall.Name)
-					assert.Equal(t, SummarizationToolName, pair.ToolCall.FunctionCall.Name,
-						"Completed tool call should be a summarization call")
-				}
 			}
+			assert.Len(t, ids, calls, "every call must keep an id of its own")
 
-			// Test dumping
-			chain := ast.Messages()
-
-			// If force=true with missing responses, the dumped chain should be longer
-			if tt.force && len(tt.chain) < len(chain) {
-				t.Logf("Force=true added responses: original length %d, dumped length %d",
-					len(tt.chain), len(chain))
-			} else {
-				assert.Equal(t, len(tt.chain), len(chain),
-					"Dumped chain length should match original")
-			}
-
-			// Verify the dumped chain can be parsed again without error
-			_, err = NewChainAST(chain, false)
-			assert.NoError(t, err, "Re-parsing the dumped chain should not error")
+			_, err = NewChainAST(ast.Messages(), false)
+			assert.NoError(t, err, "the normalized chain must parse without force")
 		})
 	}
 }
 
-func TestBodyPairConstructors(t *testing.T) {
-	// Test cases for NewBodyPair
-	t.Run("NewBodyPair", func(t *testing.T) {
-		// Test creating a Completion body pair
-		aiMsgCompletion := &llms.MessageContent{
-			Role:  llms.ChatMessageTypeAI,
-			Parts: []llms.ContentPart{llms.TextContent{Text: "Simple text response"}},
-		}
+func TestChainAST_NormalizeToolCallIDs_SkipsAPairAndAToolMessageLeftNil(t *testing.T) {
+	ast, err := NewChainAST([]llms.MessageContent{
+		chainASTHuman("question"),
+		chainASTAI(chainASTCall("call_abc", "get_weather")),
+		chainASTTool("call_abc", "get_weather", "sunny"),
+	}, false)
+	require.NoError(t, err)
+	pair := ast.Sections[0].Body[0]
+	pair.ToolMessages = append([]*llms.MessageContent{nil}, pair.ToolMessages...)
+	ast.Sections[0].Body = []*BodyPair{{Type: RequestResponse}, pair}
 
-		completionPair := NewBodyPair(aiMsgCompletion, nil)
-		assert.NotNil(t, completionPair)
-		assert.Equal(t, Completion, completionPair.Type)
-		assert.Equal(t, aiMsgCompletion, completionPair.AIMessage)
-		assert.Empty(t, completionPair.ToolMessages)
-		assert.True(t, completionPair.IsValid())
-		assert.Greater(t, completionPair.Size(), 0)
+	require.NoError(t, ast.NormalizeToolCallIDs("toolu_{r:24:b}"))
 
-		messages := completionPair.Messages()
-		assert.Equal(t, 1, len(messages))
-		assert.Equal(t, llms.ChatMessageTypeAI, messages[0].Role)
-
-		// Log details for better debugging
-		t.Logf("Completion pair size: %d bytes", completionPair.Size())
-
-		// Test creating a RequestResponse body pair
-		aiMsgToolCall := &llms.MessageContent{
-			Role: llms.ChatMessageTypeAI,
-			Parts: []llms.ContentPart{
-				llms.ToolCall{
-					ID:   "tool-1",
-					Type: "function",
-					FunctionCall: &llms.FunctionCall{
-						Name:      "get_weather",
-						Arguments: `{"location": "New York"}`,
-					},
-				},
-			},
-		}
-
-		toolMsg := []*llms.MessageContent{
-			{
-				Role: llms.ChatMessageTypeTool,
-				Parts: []llms.ContentPart{
-					llms.ToolCallResponse{
-						ToolCallID: "tool-1",
-						Name:       "get_weather",
-						Content:    "The weather in New York is sunny with a high of 75°F.",
-					},
-				},
-			},
-		}
-
-		requestResponsePair := NewBodyPair(aiMsgToolCall, toolMsg)
-		assert.NotNil(t, requestResponsePair)
-		assert.Equal(t, RequestResponse, requestResponsePair.Type)
-		assert.Equal(t, aiMsgToolCall, requestResponsePair.AIMessage)
-		assert.Equal(t, toolMsg, requestResponsePair.ToolMessages)
-		assert.True(t, requestResponsePair.IsValid())
-		assert.Greater(t, requestResponsePair.Size(), 0)
-
-		messages = requestResponsePair.Messages()
-		assert.Equal(t, 2, len(messages))
-		assert.Equal(t, llms.ChatMessageTypeAI, messages[0].Role)
-		assert.Equal(t, llms.ChatMessageTypeTool, messages[1].Role)
-
-		t.Logf("RequestResponse pair size: %d bytes", requestResponsePair.Size())
-
-		// Test creating a Summarization body pair
-		aiMsgSummarization := &llms.MessageContent{
-			Role: llms.ChatMessageTypeAI,
-			Parts: []llms.ContentPart{
-				llms.ToolCall{
-					ID:   "summary-1",
-					Type: "function",
-					FunctionCall: &llms.FunctionCall{
-						Name:      SummarizationToolName,
-						Arguments: SummarizationToolArgs,
-					},
-				},
-			},
-		}
-
-		toolMsgSummarization := []*llms.MessageContent{
-			{
-				Role: llms.ChatMessageTypeTool,
-				Parts: []llms.ContentPart{
-					llms.ToolCallResponse{
-						ToolCallID: "summary-1",
-						Name:       SummarizationToolName,
-						Content:    "This is a summary of the conversation.",
-					},
-				},
-			},
-		}
-
-		summarizationPair := NewBodyPair(aiMsgSummarization, toolMsgSummarization)
-		assert.NotNil(t, summarizationPair)
-		assert.Equal(t, Summarization, summarizationPair.Type)
-		assert.Equal(t, aiMsgSummarization, summarizationPair.AIMessage)
-		assert.Equal(t, toolMsgSummarization, summarizationPair.ToolMessages)
-		assert.True(t, summarizationPair.IsValid())
-		assert.Greater(t, summarizationPair.Size(), 0)
-
-		messages = summarizationPair.Messages()
-		assert.Equal(t, 2, len(messages))
-		assert.Equal(t, llms.ChatMessageTypeAI, messages[0].Role)
-		assert.Equal(t, llms.ChatMessageTypeTool, messages[1].Role)
-
-		t.Logf("Summarization pair size: %d bytes", summarizationPair.Size())
-
-		// Test Completion with multiple text parts
-		aiMsgMultiParts := &llms.MessageContent{
-			Role: llms.ChatMessageTypeAI,
-			Parts: []llms.ContentPart{
-				llms.TextContent{Text: "First part of the response."},
-				llms.TextContent{Text: "Second part of the response."},
-			},
-		}
-
-		multiPartsPair := NewBodyPair(aiMsgMultiParts, nil)
-		assert.NotNil(t, multiPartsPair)
-		assert.Equal(t, Completion, multiPartsPair.Type)
-		assert.Equal(t, 2, len(multiPartsPair.AIMessage.Parts))
-		assert.True(t, multiPartsPair.IsValid())
-
-		// Negative case: ToolCall without FunctionCall
-		aiMsgInvalidToolCall := &llms.MessageContent{
-			Role: llms.ChatMessageTypeAI,
-			Parts: []llms.ContentPart{
-				llms.ToolCall{
-					ID:   "invalid-1",
-					Type: "function",
-					// FunctionCall is nil
-				},
-			},
-		}
-
-		invalidToolCallPair := NewBodyPair(aiMsgInvalidToolCall, nil)
-		assert.NotNil(t, invalidToolCallPair)
-		assert.Equal(t, Completion, invalidToolCallPair.Type) // Should default to Completion
-
-		// Verify the invalid tool call was removed
-		foundToolCall := false
-		for _, part := range invalidToolCallPair.AIMessage.Parts {
-			if _, ok := part.(llms.ToolCall); ok {
-				foundToolCall = true
-				break
-			}
-		}
-		assert.False(t, foundToolCall, "Invalid tool call should be removed")
-	})
-
-	// Test cases for NewBodyPairFromMessages
-	t.Run("NewBodyPairFromMessages", func(t *testing.T) {
-		// Positive case: Valid AI + Tool messages
-		messages := []llms.MessageContent{
-			{
-				Role: llms.ChatMessageTypeAI,
-				Parts: []llms.ContentPart{
-					llms.ToolCall{
-						ID:   "tool-1",
-						Type: "function",
-						FunctionCall: &llms.FunctionCall{
-							Name:      "get_weather",
-							Arguments: `{"location": "New York"}`,
-						},
-					},
-				},
-			},
-			{
-				Role: llms.ChatMessageTypeTool,
-				Parts: []llms.ContentPart{
-					llms.ToolCallResponse{
-						ToolCallID: "tool-1",
-						Name:       "get_weather",
-						Content:    "The weather in New York is sunny with a high of 75°F.",
-					},
-				},
-			},
-		}
-
-		bodyPair, err := NewBodyPairFromMessages(messages)
-		assert.NoError(t, err)
-		assert.NotNil(t, bodyPair)
-		assert.Equal(t, RequestResponse, bodyPair.Type)
-		assert.Equal(t, 1, len(bodyPair.ToolMessages))
-		assert.True(t, bodyPair.IsValid())
-
-		// Check GetToolCallsInfo
-		toolCallsInfo := bodyPair.GetToolCallsInfo()
-		assert.Empty(t, toolCallsInfo.PendingToolCallIDs, "Should have no pending tool calls")
-		assert.Empty(t, toolCallsInfo.UnmatchedToolCallIDs, "Should have no unmatched tool calls")
-		assert.Equal(t, 1, len(toolCallsInfo.CompletedToolCalls), "Should have one completed tool call")
-
-		// Positive case: AI with multiple tool calls and their responses
-		multiToolMessages := []llms.MessageContent{
-			{
-				Role: llms.ChatMessageTypeAI,
-				Parts: []llms.ContentPart{
-					llms.ToolCall{
-						ID:   "tool-1",
-						Type: "function",
-						FunctionCall: &llms.FunctionCall{
-							Name:      "get_weather",
-							Arguments: `{"location": "New York"}`,
-						},
-					},
-					llms.ToolCall{
-						ID:   "tool-2",
-						Type: "function",
-						FunctionCall: &llms.FunctionCall{
-							Name:      "get_time",
-							Arguments: `{"location": "New York"}`,
-						},
-					},
-				},
-			},
-			{
-				Role: llms.ChatMessageTypeTool,
-				Parts: []llms.ContentPart{
-					llms.ToolCallResponse{
-						ToolCallID: "tool-1",
-						Name:       "get_weather",
-						Content:    "The weather in New York is sunny with a high of 75°F.",
-					},
-				},
-			},
-			{
-				Role: llms.ChatMessageTypeTool,
-				Parts: []llms.ContentPart{
-					llms.ToolCallResponse{
-						ToolCallID: "tool-2",
-						Name:       "get_time",
-						Content:    "The current time in New York is 3:45 PM.",
-					},
-				},
-			},
-		}
-
-		multiToolPair, err := NewBodyPairFromMessages(multiToolMessages)
-		assert.NoError(t, err)
-		assert.NotNil(t, multiToolPair)
-		assert.Equal(t, RequestResponse, multiToolPair.Type)
-		assert.Equal(t, 2, len(multiToolPair.ToolMessages))
-		assert.True(t, multiToolPair.IsValid())
-
-		// Positive case: AI completion (no tool calls)
-		completionMessages := []llms.MessageContent{
-			{
-				Role:  llms.ChatMessageTypeAI,
-				Parts: []llms.ContentPart{llms.TextContent{Text: "Simple text response"}},
-			},
-		}
-
-		completionPair, err := NewBodyPairFromMessages(completionMessages)
-		assert.NoError(t, err)
-		assert.NotNil(t, completionPair)
-		assert.Equal(t, Completion, completionPair.Type)
-		assert.Empty(t, completionPair.ToolMessages)
-		assert.True(t, completionPair.IsValid())
-
-		// Negative case: Empty messages
-		_, err = NewBodyPairFromMessages([]llms.MessageContent{})
-		assert.Error(t, err)
-		t.Logf("Got expected error for empty messages: %v", err)
-
-		// Negative case: First message not AI
-		invalidMessages := []llms.MessageContent{
-			{
-				Role:  llms.ChatMessageTypeHuman,
-				Parts: []llms.ContentPart{llms.TextContent{Text: "This should be an AI message"}},
-			},
-		}
-
-		_, err = NewBodyPairFromMessages(invalidMessages)
-		assert.Error(t, err)
-		t.Logf("Got expected error for non-AI first message: %v", err)
-
-		// Negative case: Non-tool message after AI
-		invalidMessages = []llms.MessageContent{
-			{
-				Role:  llms.ChatMessageTypeAI,
-				Parts: []llms.ContentPart{llms.TextContent{Text: "AI response"}},
-			},
-			{
-				Role:  llms.ChatMessageTypeHuman, // Should be Tool
-				Parts: []llms.ContentPart{llms.TextContent{Text: "This should be a tool message"}},
-			},
-		}
-
-		_, err = NewBodyPairFromMessages(invalidMessages)
-		assert.Error(t, err)
-		t.Logf("Got expected error for non-tool message after AI: %v", err)
-	})
-
-	// Test cases for NewBodyPairFromSummarization
-	t.Run("NewBodyPairFromSummarization", func(t *testing.T) {
-		summarizationText := "This is a summary of the conversation about the weather in New York."
-
-		// Test without fake signature and without reasoning message
-		bodyPair := NewBodyPairFromSummarization(summarizationText, ToolCallIDTemplate, false, nil)
-		assert.NotNil(t, bodyPair)
-		assert.Equal(t, Summarization, bodyPair.Type)
-
-		// Check AI message has correct tool call
-		foundToolCall := false
-		var toolCallID string
-		for _, part := range bodyPair.AIMessage.Parts {
-			if toolCall, ok := part.(llms.ToolCall); ok &&
-				toolCall.FunctionCall != nil &&
-				toolCall.FunctionCall.Name == SummarizationToolName {
-				foundToolCall = true
-				toolCallID = toolCall.ID
-				assert.Equal(t, SummarizationToolArgs, toolCall.FunctionCall.Arguments)
-				assert.Nil(t, toolCall.Reasoning, "Should not have reasoning without fake signature flag")
-				t.Logf("Found summarization tool call with ID %s", toolCallID)
-				break
-			}
-		}
-		assert.True(t, foundToolCall, "Summarization tool call not found")
-
-		// Check tool message has correct response
-		assert.Equal(t, 1, len(bodyPair.ToolMessages))
-		foundResponse := false
-		for _, part := range bodyPair.ToolMessages[0].Parts {
-			if resp, ok := part.(llms.ToolCallResponse); ok {
-				foundResponse = true
-				assert.Equal(t, toolCallID, resp.ToolCallID)
-				assert.Equal(t, SummarizationToolName, resp.Name)
-				assert.Equal(t, summarizationText, resp.Content)
-				t.Logf("Found summarization tool response with content: %s", resp.Content)
-				break
-			}
-		}
-		assert.True(t, foundResponse, "Summarization tool response not found")
-
-		// Check validity and messages
-		assert.True(t, bodyPair.IsValid())
-		messages := bodyPair.Messages()
-		assert.Equal(t, 2, len(messages))
-
-		// Check GetToolCallsInfo
-		toolCallsInfo := bodyPair.GetToolCallsInfo()
-		assert.Empty(t, toolCallsInfo.PendingToolCallIDs)
-		assert.Empty(t, toolCallsInfo.UnmatchedToolCallIDs)
-		assert.Equal(t, 1, len(toolCallsInfo.CompletedToolCalls))
-
-		// Test with empty text
-		emptyTextPair := NewBodyPairFromSummarization("", ToolCallIDTemplate, false, nil)
-		assert.NotNil(t, emptyTextPair)
-		assert.Equal(t, Summarization, emptyTextPair.Type)
-		assert.True(t, emptyTextPair.IsValid())
-
-		// Test the generated ID format
-		foundValidID := false
-		for _, part := range emptyTextPair.AIMessage.Parts {
-			if toolCall, ok := part.(llms.ToolCall); ok {
-				assert.True(t, strings.HasPrefix(toolCall.ID, "call_"),
-					"Tool call ID should start with 'call_'")
-				assert.Equal(t, 29, len(toolCall.ID),
-					"Tool call ID should be 29 characters (call_ + 24 random chars)")
-				foundValidID = true
-				break
-			}
-		}
-		assert.True(t, foundValidID, "Should find a valid tool call ID")
-	})
-
-	// Test NewBodyPairFromSummarization with fake signature
-	t.Run("NewBodyPairFromSummarization_WithFakeSignature", func(t *testing.T) {
-		summarizationText := "This is a summary of the conversation with reasoning signatures."
-
-		// Test with fake signature but without reasoning message
-		bodyPair := NewBodyPairFromSummarization(summarizationText, ToolCallIDTemplate, true, nil)
-		assert.NotNil(t, bodyPair)
-		assert.Equal(t, Summarization, bodyPair.Type)
-
-		// Check AI message has tool call with fake reasoning signature
-		foundToolCall := false
-		for _, part := range bodyPair.AIMessage.Parts {
-			if toolCall, ok := part.(llms.ToolCall); ok &&
-				toolCall.FunctionCall != nil &&
-				toolCall.FunctionCall.Name == SummarizationToolName {
-				foundToolCall = true
-				assert.NotNil(t, toolCall.Reasoning, "Should have reasoning with fake signature flag")
-				assert.Equal(t, []byte(FakeReasoningSignatureGemini), toolCall.Reasoning.Signature,
-					"Should have the correct fake signature for Gemini")
-				t.Logf("Found summarization tool call with fake signature: %s", toolCall.Reasoning.Signature)
-				break
-			}
-		}
-		assert.True(t, foundToolCall, "Summarization tool call not found")
-
-		// Check validity
-		assert.True(t, bodyPair.IsValid())
-	})
-
-	// Test NewBodyPairFromSummarization with reasoning message
-	t.Run("NewBodyPairFromSummarization_WithReasoningMessage", func(t *testing.T) {
-		summarizationText := "Summary with preserved reasoning"
-
-		// Create a reasoning message like Kimi produces
-		reasoningMsg := &llms.MessageContent{
-			Role: llms.ChatMessageTypeAI,
-			Parts: []llms.ContentPart{
-				llms.TextContent{
-					Text: "Let me analyze this task...",
-					Reasoning: &reasoning.ContentReasoning{
-						Content: "The wp-abilities plugin seems to be the main target here.",
-					},
-				},
-			},
-		}
-
-		// Test with fake signature AND reasoning message
-		bodyPair := NewBodyPairFromSummarization(summarizationText, ToolCallIDTemplate, true, reasoningMsg)
-		assert.NotNil(t, bodyPair)
-		assert.Equal(t, Summarization, bodyPair.Type)
-
-		// Check AI message structure: should have reasoning TextContent BEFORE ToolCall
-		assert.GreaterOrEqual(t, len(bodyPair.AIMessage.Parts), 2,
-			"Should have at least 2 parts: reasoning TextContent + ToolCall")
-
-		// First part should be the reasoning TextContent
-		firstPart, ok := bodyPair.AIMessage.Parts[0].(llms.TextContent)
-		assert.True(t, ok, "First part should be TextContent")
-		assert.Equal(t, "Let me analyze this task...", firstPart.Text)
-		assert.NotNil(t, firstPart.Reasoning, "Should preserve reasoning in TextContent")
-		assert.Equal(t, "The wp-abilities plugin seems to be the main target here.",
-			firstPart.Reasoning.Content)
-
-		// Second part should be the ToolCall with fake signature
-		secondPart, ok := bodyPair.AIMessage.Parts[1].(llms.ToolCall)
-		assert.True(t, ok, "Second part should be ToolCall")
-		assert.Equal(t, SummarizationToolName, secondPart.FunctionCall.Name)
-		assert.NotNil(t, secondPart.Reasoning, "ToolCall should have fake signature")
-		assert.Equal(t, []byte(FakeReasoningSignatureGemini), secondPart.Reasoning.Signature)
-
-		// Check validity
-		assert.True(t, bodyPair.IsValid())
-
-		t.Logf("✓ Successfully created summarization with reasoning message + fake signature")
-	})
+	call, ok := pair.AIMessage.Parts[0].(llms.ToolCall)
+	require.True(t, ok)
+	assert.Regexp(t, chainASTAnthropicID, call.ID)
+	assert.Equal(t, chainASTTool(call.ID, "get_weather", "sunny"), *pair.ToolMessages[1])
 }
 
-func TestContainsToolCallReasoning(t *testing.T) {
-	t.Run("EmptyMessages", func(t *testing.T) {
-		assert.False(t, ContainsToolCallReasoning([]llms.MessageContent{}),
-			"Empty message slice should not contain reasoning")
-	})
+func TestChainAST_NormalizeToolCallIDs_FollowsAForcedRepairThroughAProviderSwitch(t *testing.T) {
+	const banner, stray = 8, 10 // in providerSwitchChain: the AI message of the banner call, and the slot after its tool message
+	chain := func(withReasoning bool) []llms.MessageContent {
+		return slices.Insert(providerSwitchChain(withReasoning), stray, chainASTTool("call_orphan04", "terminal", "late output"))
+	}
+	repaired := func(withReasoning bool, args string) []llms.MessageContent {
+		repaired := chain(withReasoning)
+		repaired[banner].Parts = append(repaired[banner].Parts,
+			llms.ToolCall{ID: "call_orphan04", FunctionCall: &llms.FunctionCall{Name: "terminal", Arguments: "{}"}})
+		return append(repaired,
+			chainASTAI(chainASTCallWith("call_ls05", "terminal", args)),
+			chainASTTool("call_ls05", "terminal", chainASTFallback),
+		)
+	}
+	renamed := []string{"call_nmap01", "call_ssh02", "call_orphan04", "call_sum03", "call_ls05"}
 
-	t.Run("MessagesWithoutReasoning", func(t *testing.T) {
-		messages := []llms.MessageContent{
-			{
-				Role: llms.ChatMessageTypeHuman,
-				Parts: []llms.ContentPart{
-					llms.TextContent{Text: "Hello, how can you help me?"},
-				},
-			},
-			{
-				Role: llms.ChatMessageTypeAI,
-				Parts: []llms.ContentPart{
-					llms.TextContent{Text: "I can answer your questions."},
-					llms.ToolCall{
-						ID:   "call_123",
-						Type: "function",
-						FunctionCall: &llms.FunctionCall{
-							Name:      "get_weather",
-							Arguments: `{"location": "Paris"}`,
-						},
-					},
-				},
-			},
-		}
-		assert.False(t, ContainsToolCallReasoning(messages),
-			"Messages without reasoning should return false")
-	})
+	ast, err := NewChainAST(append(chain(true), chainASTAI(chainASTCallWith("call_ls05", "terminal", "{"))), true)
+	require.NoError(t, err)
+	assert.Equal(t, repaired(true, "{"), ast.Messages())
 
-	t.Run("MessagesWithTextContentReasoningOnly", func(t *testing.T) {
-		messages := []llms.MessageContent{
-			{
-				Role: llms.ChatMessageTypeAI,
-				Parts: []llms.ContentPart{
-					llms.TextContent{
-						Text: "Let me think about this...",
-						Reasoning: &reasoning.ContentReasoning{
-							Signature: []byte("WaUjzkypQ2mUEVM36O2TxuC06KN8..."),
-						},
-					},
-					llms.TextContent{Text: "The answer is 42."},
-				},
-			},
-		}
-		assert.False(t, ContainsToolCallReasoning(messages),
-			"Messages with reasoning ONLY in TextContent should return FALSE (we only check ToolCall.Reasoning)")
-	})
-
-	t.Run("MessagesWithToolCallReasoning", func(t *testing.T) {
-		messages := []llms.MessageContent{
-			{
-				Role: llms.ChatMessageTypeAI,
-				Parts: []llms.ContentPart{
-					llms.ToolCall{
-						ID:   "call_456",
-						Type: "function",
-						FunctionCall: &llms.FunctionCall{
-							Name:      "search",
-							Arguments: `{"query": "test"}`,
-						},
-						Reasoning: &reasoning.ContentReasoning{
-							Signature: []byte(FakeReasoningSignatureGemini),
-						},
-					},
-				},
-			},
-		}
-		assert.True(t, ContainsToolCallReasoning(messages),
-			"Messages with reasoning in ToolCall should return true")
-	})
-
-	t.Run("MultipleMessagesWithMixedContent", func(t *testing.T) {
-		messages := []llms.MessageContent{
-			{
-				Role: llms.ChatMessageTypeHuman,
-				Parts: []llms.ContentPart{
-					llms.TextContent{Text: "Question 1"},
-				},
-			},
-			{
-				Role: llms.ChatMessageTypeAI,
-				Parts: []llms.ContentPart{
-					llms.TextContent{Text: "Answer 1"},
-				},
-			},
-			{
-				Role: llms.ChatMessageTypeHuman,
-				Parts: []llms.ContentPart{
-					llms.TextContent{Text: "Question 2"},
-				},
-			},
-			{
-				Role: llms.ChatMessageTypeAI,
-				Parts: []llms.ContentPart{
-					llms.ToolCall{
-						ID:   "call_789",
-						Type: "function",
-						FunctionCall: &llms.FunctionCall{
-							Name:      "calculate",
-							Arguments: `{"expression": "2+2"}`,
-						},
-						Reasoning: &reasoning.ContentReasoning{
-							Signature: []byte(FakeReasoningSignatureGemini),
-						},
-					},
-				},
-			},
-		}
-		assert.True(t, ContainsToolCallReasoning(messages),
-			"Should detect reasoning even when it's in the last message")
-	})
-}
-
-func TestExtractReasoningMessage(t *testing.T) {
-	t.Run("EmptyMessages", func(t *testing.T) {
-		result := ExtractReasoningMessage([]llms.MessageContent{})
-		assert.Nil(t, result, "Empty message slice should return nil")
-	})
-
-	t.Run("NoReasoningInMessages", func(t *testing.T) {
-		messages := []llms.MessageContent{
-			{
-				Role: llms.ChatMessageTypeHuman,
-				Parts: []llms.ContentPart{
-					llms.TextContent{Text: "Question"},
-				},
-			},
-			{
-				Role: llms.ChatMessageTypeAI,
-				Parts: []llms.ContentPart{
-					llms.TextContent{Text: "Answer without reasoning"},
-					llms.ToolCall{
-						ID:   "call_123",
-						Type: "function",
-						FunctionCall: &llms.FunctionCall{
-							Name:      "search",
-							Arguments: `{"query": "test"}`,
-						},
-					},
-				},
-			},
-		}
-		result := ExtractReasoningMessage(messages)
-		assert.Nil(t, result, "Messages without TextContent reasoning should return nil")
-	})
-
-	t.Run("ExtractReasoningFromTextContent", func(t *testing.T) {
-		messages := []llms.MessageContent{
-			{
-				Role: llms.ChatMessageTypeAI,
-				Parts: []llms.ContentPart{
-					llms.TextContent{
-						Text: "Let me think about this problem...",
-						Reasoning: &reasoning.ContentReasoning{
-							Content: "The wp-abilities plugin seems to be the main target.",
-						},
-					},
-					llms.TextContent{Text: "Here is my answer"},
-				},
-			},
-		}
-
-		result := ExtractReasoningMessage(messages)
-		assert.NotNil(t, result, "Should extract reasoning message")
-		assert.Equal(t, llms.ChatMessageTypeAI, result.Role)
-		assert.Equal(t, 1, len(result.Parts), "Should have only the reasoning part")
-
-		textContent, ok := result.Parts[0].(llms.TextContent)
-		assert.True(t, ok, "Part should be TextContent")
-		assert.Equal(t, "Let me think about this problem...", textContent.Text)
-		assert.NotNil(t, textContent.Reasoning)
-		assert.Equal(t, "The wp-abilities plugin seems to be the main target.",
-			textContent.Reasoning.Content)
-	})
-
-	t.Run("ExtractFirstReasoningMessage", func(t *testing.T) {
-		messages := []llms.MessageContent{
-			{
-				Role: llms.ChatMessageTypeHuman,
-				Parts: []llms.ContentPart{
-					llms.TextContent{Text: "Question 1"},
-				},
-			},
-			{
-				Role: llms.ChatMessageTypeAI,
-				Parts: []llms.ContentPart{
-					llms.TextContent{
-						Text: "First reasoning",
-						Reasoning: &reasoning.ContentReasoning{
-							Content: "First analysis",
-						},
-					},
-				},
-			},
-			{
-				Role: llms.ChatMessageTypeAI,
-				Parts: []llms.ContentPart{
-					llms.TextContent{
-						Text: "Second reasoning",
-						Reasoning: &reasoning.ContentReasoning{
-							Content: "Second analysis",
-						},
-					},
-				},
-			},
-		}
-
-		result := ExtractReasoningMessage(messages)
-		assert.NotNil(t, result, "Should extract first reasoning message")
-
-		textContent, ok := result.Parts[0].(llms.TextContent)
-		assert.True(t, ok)
-		assert.Equal(t, "First reasoning", textContent.Text, "Should extract FIRST reasoning message")
-		assert.Equal(t, "First analysis", textContent.Reasoning.Content)
-	})
-
-	t.Run("SkipEmptyReasoning", func(t *testing.T) {
-		messages := []llms.MessageContent{
-			{
-				Role: llms.ChatMessageTypeAI,
-				Parts: []llms.ContentPart{
-					llms.TextContent{
-						Text:      "Text with empty reasoning",
-						Reasoning: &reasoning.ContentReasoning{
-							// Empty reasoning
-						},
-					},
-				},
-			},
-		}
-
-		result := ExtractReasoningMessage(messages)
-		assert.Nil(t, result, "Should skip empty reasoning and return nil")
-	})
-}
-
-func TestNormalizeToolCallIDs(t *testing.T) {
-	// Generate a valid ID for the "already valid" test case
-	validToolCallID := templates.GenerateFromPattern("call_{r:24:x}", "")
-
-	tests := []struct {
-		name            string
-		chain           []llms.MessageContent
-		newTemplate     string
-		expectChange    bool
-		description     string
-		validateResults func(t *testing.T, ast *ChainAST)
+	steps := []struct {
+		name    string
+		apply   func() error
+		want    []llms.MessageContent
+		renamed []string
 	}{
 		{
-			name:        "Complete format mismatch - Gemini to Anthropic",
-			newTemplate: "toolu_{r:24:b}",
-			chain: []llms.MessageContent{
-				{
-					Role:  llms.ChatMessageTypeSystem,
-					Parts: []llms.ContentPart{llms.TextContent{Text: "You are a helpful assistant."}},
-				},
-				{
-					Role:  llms.ChatMessageTypeHuman,
-					Parts: []llms.ContentPart{llms.TextContent{Text: "What's the weather like?"}},
-				},
-				{
-					Role: llms.ChatMessageTypeAI,
-					Parts: []llms.ContentPart{
-						llms.ToolCall{
-							ID:   "call_abc123def456ghi789", // Gemini/OpenAI format
-							Type: "function",
-							FunctionCall: &llms.FunctionCall{
-								Name:      "get_weather",
-								Arguments: `{"location": "New York"}`,
-							},
-						},
-					},
-				},
-				{
-					Role: llms.ChatMessageTypeTool,
-					Parts: []llms.ContentPart{
-						llms.ToolCallResponse{
-							ToolCallID: "call_abc123def456ghi789",
-							Name:       "get_weather",
-							Content:    "Sunny and 75°F",
-						},
-					},
-				},
-			},
-			expectChange: true,
-			description:  "Should replace IDs that don't match new template",
-			validateResults: func(t *testing.T, ast *ChainAST) {
-				// Verify all tool call IDs now start with "toolu_"
-				for _, section := range ast.Sections {
-					for _, bodyPair := range section.Body {
-						if bodyPair.Type != RequestResponse {
-							continue
-						}
-						for _, part := range bodyPair.AIMessage.Parts {
-							if toolCall, ok := part.(llms.ToolCall); ok {
-								assert.True(t, strings.HasPrefix(toolCall.ID, "toolu_"),
-									"Tool call ID should start with 'toolu_' after normalization")
-								assert.Equal(t, 30, len(toolCall.ID),
-									"Tool call ID should be 30 characters (toolu_ + 24 chars)")
-							}
-						}
+			name:  "a continuation opens a section",
+			apply: func() error { ast.AppendHumanMessage("continue"); return nil },
+			want:  append(repaired(true, "{"), chainASTHuman("continue")),
+		},
+		{
+			name:    "the added call and the fallback are renamed with the rest",
+			apply:   func() error { return ast.NormalizeToolCallIDs("toolu_{r:24:b}") },
+			want:    append(repaired(true, "{"), chainASTHuman("continue")),
+			renamed: renamed,
+		},
+		{
+			name:    "the truncated arguments become an empty object",
+			apply:   func() error { ast.SanitizeToolCallArguments(); return nil },
+			want:    append(repaired(true, "{}"), chainASTHuman("continue")),
+			renamed: renamed,
+		},
+		{
+			name:    "the reasoning is cleared",
+			apply:   ast.ClearReasoning,
+			want:    append(repaired(false, "{}"), chainASTHuman("continue")),
+			renamed: renamed,
+		},
+	}
 
-						// Verify responses also updated
-						for _, toolMsg := range bodyPair.ToolMessages {
-							for _, part := range toolMsg.Parts {
-								if resp, ok := part.(llms.ToolCallResponse); ok {
-									assert.True(t, strings.HasPrefix(resp.ToolCallID, "toolu_"),
-										"Response tool call ID should also start with 'toolu_'")
-								}
-							}
-						}
-					}
-				}
-			},
-		},
-		{
-			name:        "Partial match - length mismatch",
-			newTemplate: "call_{r:24:x}",
-			chain: []llms.MessageContent{
-				{
-					Role:  llms.ChatMessageTypeHuman,
-					Parts: []llms.ContentPart{llms.TextContent{Text: "Test"}},
-				},
-				{
-					Role: llms.ChatMessageTypeAI,
-					Parts: []llms.ContentPart{
-						llms.ToolCall{
-							ID:   "call_abc", // Too short
-							Type: "function",
-							FunctionCall: &llms.FunctionCall{
-								Name:      "test_func",
-								Arguments: `{}`,
-							},
-						},
-					},
-				},
-				{
-					Role: llms.ChatMessageTypeTool,
-					Parts: []llms.ContentPart{
-						llms.ToolCallResponse{
-							ToolCallID: "call_abc",
-							Name:       "test_func",
-							Content:    "result",
-						},
-					},
-				},
-			},
-			expectChange: true,
-			description:  "Should replace IDs with incorrect length",
-			validateResults: func(t *testing.T, ast *ChainAST) {
-				for _, section := range ast.Sections {
-					for _, bodyPair := range section.Body {
-						if bodyPair.Type == RequestResponse {
-							for _, part := range bodyPair.AIMessage.Parts {
-								if toolCall, ok := part.(llms.ToolCall); ok {
-									assert.Equal(t, 29, len(toolCall.ID),
-										"Tool call ID should have correct length after normalization")
-								}
-							}
-						}
-					}
-				}
-			},
-		},
-		{
-			name:        "Already valid format from templates",
-			newTemplate: "call_{r:24:x}",
-			chain: func() []llms.MessageContent {
-				// Create chain with pre-generated valid ID
-				return []llms.MessageContent{
-					{
-						Role:  llms.ChatMessageTypeHuman,
-						Parts: []llms.ContentPart{llms.TextContent{Text: "Test"}},
-					},
-					{
-						Role: llms.ChatMessageTypeAI,
-						Parts: []llms.ContentPart{
-							llms.ToolCall{
-								ID:   validToolCallID,
-								Type: "function",
-								FunctionCall: &llms.FunctionCall{
-									Name:      "test_func",
-									Arguments: `{}`,
-								},
-							},
-						},
-					},
-					{
-						Role: llms.ChatMessageTypeTool,
-						Parts: []llms.ContentPart{
-							llms.ToolCallResponse{
-								ToolCallID: validToolCallID,
-								Name:       "test_func",
-								Content:    "result",
-							},
-						},
-					},
-				}
-			}(),
-			expectChange: false,
-			description:  "Should preserve IDs generated from templates that match",
-			validateResults: func(t *testing.T, ast *ChainAST) {
-				// ID should remain exactly the same as the original
-				originalID := validToolCallID
-				for _, section := range ast.Sections {
-					for _, bodyPair := range section.Body {
-						if bodyPair.Type == RequestResponse {
-							for _, part := range bodyPair.AIMessage.Parts {
-								if toolCall, ok := part.(llms.ToolCall); ok {
-									assert.Equal(t, originalID, toolCall.ID,
-										"Valid ID should not be changed")
-								}
-							}
-							for _, toolMsg := range bodyPair.ToolMessages {
-								for _, part := range toolMsg.Parts {
-									if resp, ok := part.(llms.ToolCallResponse); ok {
-										assert.Equal(t, originalID, resp.ToolCallID,
-											"Valid response ID should not be changed")
-									}
-								}
-							}
-						}
-					}
-				}
-			},
-		},
-		{
-			name:        "Multiple tool calls - mixed validity",
-			newTemplate: "toolu_{r:24:b}",
-			chain: []llms.MessageContent{
-				{
-					Role:  llms.ChatMessageTypeHuman,
-					Parts: []llms.ContentPart{llms.TextContent{Text: "Test multiple"}},
-				},
-				{
-					Role: llms.ChatMessageTypeAI,
-					Parts: []llms.ContentPart{
-						llms.ToolCall{
-							ID:   "call_invalid1", // Invalid for toolu_ template
-							Type: "function",
-							FunctionCall: &llms.FunctionCall{
-								Name:      "func1",
-								Arguments: `{}`,
-							},
-						},
-						llms.ToolCall{
-							ID:   "call_invalid2", // Invalid for toolu_ template
-							Type: "function",
-							FunctionCall: &llms.FunctionCall{
-								Name:      "func2",
-								Arguments: `{}`,
-							},
-						},
-					},
-				},
-				{
-					Role: llms.ChatMessageTypeTool,
-					Parts: []llms.ContentPart{
-						llms.ToolCallResponse{
-							ToolCallID: "call_invalid1",
-							Name:       "func1",
-							Content:    "result1",
-						},
-					},
-				},
-				{
-					Role: llms.ChatMessageTypeTool,
-					Parts: []llms.ContentPart{
-						llms.ToolCallResponse{
-							ToolCallID: "call_invalid2",
-							Name:       "func2",
-							Content:    "result2",
-						},
-					},
-				},
-			},
-			expectChange: true,
-			description:  "Should replace all invalid IDs and update corresponding responses",
-			validateResults: func(t *testing.T, ast *ChainAST) {
-				// Collect all tool call IDs
-				toolCallIDs := make(map[string]bool)
-				for _, section := range ast.Sections {
-					for _, bodyPair := range section.Body {
-						if bodyPair.Type == RequestResponse {
-							for _, part := range bodyPair.AIMessage.Parts {
-								if toolCall, ok := part.(llms.ToolCall); ok {
-									toolCallIDs[toolCall.ID] = true
-									assert.True(t, strings.HasPrefix(toolCall.ID, "toolu_"),
-										"All tool call IDs should start with 'toolu_'")
-								}
-							}
-						}
-					}
-				}
+	var ids map[string]string
+	for _, step := range steps {
+		require.NoError(t, step.apply(), step.name)
+		restored, renames := chainASTUndoRename(t, step.want, ast.Messages())
+		assert.Equal(t, step.want, restored, step.name)
+		assert.ElementsMatch(t, step.renamed, slices.Collect(maps.Keys(renames)), step.name)
+		if ids != nil {
+			assert.Equal(t, ids, renames, "%s: the new ids must stay", step.name)
+		} else if len(renames) > 0 {
+			ids = renames
+		}
+	}
+	for _, id := range ids {
+		assert.Regexp(t, chainASTAnthropicID, id)
+	}
 
-				// Verify all responses match tool calls
-				for _, section := range ast.Sections {
-					for _, bodyPair := range section.Body {
-						for _, toolMsg := range bodyPair.ToolMessages {
-							for _, part := range toolMsg.Parts {
-								if resp, ok := part.(llms.ToolCallResponse); ok {
-									assert.True(t, toolCallIDs[resp.ToolCallID],
-										"Response ID should match one of the tool call IDs")
-								}
-							}
-						}
-					}
-				}
+	reparsed, err := NewChainAST(ast.Messages(), false)
+	require.NoError(t, err, "the chain must parse without force")
+	assertChainASTSizes(t, [][]int{{335, 43, 275, 17}, {275, 22, 20, 233}, {397, 23, 246, 128}, {8, 8}}, reparsed)
+}
 
-				assert.Equal(t, 2, len(toolCallIDs), "Should have 2 unique tool call IDs")
-			},
-		},
+func TestChainAST_ClearReasoning_StripsReasoningAndKeepsContent(t *testing.T) {
+	thought := func() *reasoning.ContentReasoning {
+		return &reasoning.ContentReasoning{Content: "thinking", Signature: []byte("signature")}
+	}
+	call := chainASTCall("tool-1", "get_weather")
+	call.Reasoning = thought()
+
+	tests := []struct {
+		name  string
+		chain []llms.MessageContent
+		want  []llms.MessageContent
+	}{
 		{
-			name:        "Summarization type - should normalize",
-			newTemplate: "toolu_{r:24:b}",
+			name: "reasoning is stripped from the header, the text and the call",
 			chain: []llms.MessageContent{
-				{
-					Role:  llms.ChatMessageTypeHuman,
-					Parts: []llms.ContentPart{llms.TextContent{Text: "Summarize"}},
-				},
-				{
-					Role: llms.ChatMessageTypeAI,
-					Parts: []llms.ContentPart{
-						llms.ToolCall{
-							ID:   "call_summary123", // Invalid format
-							Type: "function",
-							FunctionCall: &llms.FunctionCall{
-								Name:      SummarizationToolName,
-								Arguments: SummarizationToolArgs,
-							},
-						},
-					},
-				},
-				{
-					Role: llms.ChatMessageTypeTool,
-					Parts: []llms.ContentPart{
-						llms.ToolCallResponse{
-							ToolCallID: "call_summary123",
-							Name:       SummarizationToolName,
-							Content:    "Summary content",
-						},
-					},
-				},
+				{Role: llms.ChatMessageTypeSystem, Parts: []llms.ContentPart{llms.TextContent{Text: "system", Reasoning: thought()}}},
+				{Role: llms.ChatMessageTypeHuman, Parts: []llms.ContentPart{llms.TextContent{Text: "question", Reasoning: thought()}}},
+				chainASTAI(llms.TextContent{Text: "answer", Reasoning: thought()}, call),
+				chainASTTool("tool-1", "get_weather", "sunny"),
 			},
-			expectChange: true,
-			description:  "Should normalize summarization tool call IDs",
-			validateResults: func(t *testing.T, ast *ChainAST) {
-				for _, section := range ast.Sections {
-					for _, bodyPair := range section.Body {
-						if bodyPair.Type == Summarization {
-							for _, part := range bodyPair.AIMessage.Parts {
-								if toolCall, ok := part.(llms.ToolCall); ok {
-									assert.True(t, strings.HasPrefix(toolCall.ID, "toolu_"),
-										"Summarization tool call ID should be normalized")
-								}
-							}
-						}
-					}
-				}
+			want: []llms.MessageContent{
+				chainASTSystem("system"),
+				chainASTHuman("question"),
+				chainASTAI(llms.TextContent{Text: "answer"}, chainASTCall("tool-1", "get_weather")),
+				chainASTTool("tool-1", "get_weather", "sunny"),
 			},
 		},
 		{
-			name:         "Empty chain - no errors",
-			newTemplate:  "call_{r:24:x}",
-			chain:        []llms.MessageContent{},
-			expectChange: false,
-			description:  "Should handle empty chain without errors",
-			validateResults: func(t *testing.T, ast *ChainAST) {
-				assert.Equal(t, 0, len(ast.Sections), "Empty chain should have no sections")
-			},
+			name:  "reasoning is stripped across three sections, the note of a tool message included",
+			chain: providerSwitchChain(true),
+			want:  providerSwitchChain(false),
 		},
 		{
-			name:        "Chain with no tool calls - no changes",
-			newTemplate: "call_{r:24:x}",
-			chain: []llms.MessageContent{
-				{
-					Role:  llms.ChatMessageTypeSystem,
-					Parts: []llms.ContentPart{llms.TextContent{Text: "System"}},
-				},
-				{
-					Role:  llms.ChatMessageTypeHuman,
-					Parts: []llms.ContentPart{llms.TextContent{Text: "Hello"}},
-				},
-				{
-					Role:  llms.ChatMessageTypeAI,
-					Parts: []llms.ContentPart{llms.TextContent{Text: "Hi there!"}},
-				},
-			},
-			expectChange: false,
-			description:  "Should handle completion chains without errors",
-			validateResults: func(t *testing.T, ast *ChainAST) {
-				// Should have one section with one completion body pair
-				assert.Equal(t, 1, len(ast.Sections))
-				assert.Equal(t, 1, len(ast.Sections[0].Body))
-				assert.Equal(t, Completion, ast.Sections[0].Body[0].Type)
-			},
+			name:  "an empty chain is left empty",
+			chain: emptyChain(),
+			want:  []llms.MessageContent{},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Logf("Test: %s", tt.description)
+			ast, err := NewChainAST(tt.chain, false)
+			require.NoError(t, err)
 
-			// Create AST from chain
-			ast, err := NewChainAST(tt.chain, true)
-			assert.NoError(t, err)
+			require.NoError(t, ast.ClearReasoning())
 
-			// Capture original IDs before normalization
-			originalIDs := make(map[string]string) // old ID -> old ID (for comparison)
-			for _, section := range ast.Sections {
-				for _, bodyPair := range section.Body {
-					if bodyPair.Type == RequestResponse || bodyPair.Type == Summarization {
-						for _, part := range bodyPair.AIMessage.Parts {
-							if toolCall, ok := part.(llms.ToolCall); ok {
-								originalIDs[toolCall.ID] = toolCall.ID
-							}
-						}
-					}
-				}
-			}
-
-			// Normalize tool call IDs
-			err = ast.NormalizeToolCallIDs(tt.newTemplate)
-			assert.NoError(t, err, "NormalizeToolCallIDs should not return error")
-
-			// Check if IDs changed as expected
-			changesDetected := false
-			for _, section := range ast.Sections {
-				for _, bodyPair := range section.Body {
-					if bodyPair.Type == RequestResponse || bodyPair.Type == Summarization {
-						for _, part := range bodyPair.AIMessage.Parts {
-							if toolCall, ok := part.(llms.ToolCall); ok {
-								if originalID, exists := originalIDs[toolCall.ID]; !exists {
-									// ID was changed
-									changesDetected = true
-									t.Logf("ID changed: %v -> %v", originalID, toolCall.ID)
-								}
-							}
-						}
-					}
-				}
-			}
-
-			if tt.expectChange {
-				assert.True(t, changesDetected || len(originalIDs) == 0,
-					"Expected IDs to change, but they remained the same")
-			}
-
-			// Run custom validation
-			tt.validateResults(t, ast)
-
-			// Verify chain consistency - all tool calls should have matching responses
-			for _, section := range ast.Sections {
-				for _, bodyPair := range section.Body {
-					if bodyPair.Type == RequestResponse || bodyPair.Type == Summarization {
-						toolCallsInfo := bodyPair.GetToolCallsInfo()
-						assert.Empty(t, toolCallsInfo.PendingToolCallIDs,
-							"Should have no pending tool calls after normalization")
-						assert.Empty(t, toolCallsInfo.UnmatchedToolCallIDs,
-							"Should have no unmatched tool calls after normalization")
-
-						// Verify the body pair is still valid
-						assert.True(t, bodyPair.IsValid(),
-							"Body pair should remain valid after normalization")
-					}
-				}
-			}
-
-			// Test that the normalized chain can be re-parsed without errors
-			normalizedMessages := ast.Messages()
-			_, err = NewChainAST(normalizedMessages, false)
-			assert.NoError(t, err, "Normalized chain should be parseable without force")
+			assert.Equal(t, tt.want, ast.Messages())
+			_, err = NewChainAST(ast.Messages(), false)
+			assert.NoError(t, err, "the cleared chain must parse without force")
 		})
 	}
 }
 
-func TestNormalizeToolCallIDs_IntegrationScenario(t *testing.T) {
-	// This test simulates the real-world scenario:
-	// 1. Assistant runs on Gemini provider with tool calls
-	// 2. User switches to Anthropic provider
-	// 3. Chain is restored with normalized tool call IDs
+func TestChainAST_ClearReasoning_SkipsASectionLeftWithoutAHeader(t *testing.T) {
+	ast, err := NewChainAST([]llms.MessageContent{
+		chainASTHuman("question"),
+		chainASTAI(llms.TextContent{Text: "answer", Reasoning: &reasoning.ContentReasoning{Content: "thinking"}}),
+	}, false)
+	require.NoError(t, err)
+	ast.Sections = append([]*ChainSection{{}}, ast.Sections...)
 
-	// Step 1: Create a chain with Gemini-style tool calls
-	geminiTemplate := "call_{r:24:x}"
-	geminiToolCallID1 := templates.GenerateFromPattern(geminiTemplate, "search_weather")
-	geminiToolCallID2 := templates.GenerateFromPattern(geminiTemplate, "search_news")
+	require.NoError(t, ast.ClearReasoning())
 
-	geminiChain := []llms.MessageContent{
-		{
-			Role:  llms.ChatMessageTypeSystem,
-			Parts: []llms.ContentPart{llms.TextContent{Text: "You are a helpful assistant."}},
-		},
-		{
-			Role:  llms.ChatMessageTypeHuman,
-			Parts: []llms.ContentPart{llms.TextContent{Text: "Search for weather and news"}},
-		},
-		{
-			Role: llms.ChatMessageTypeAI,
-			Parts: []llms.ContentPart{
-				llms.TextContent{Text: "I'll search for both."},
-				llms.ToolCall{
-					ID:   geminiToolCallID1,
-					Type: "function",
-					FunctionCall: &llms.FunctionCall{
-						Name:      "search_weather",
-						Arguments: `{"location": "New York"}`,
-					},
-				},
-				llms.ToolCall{
-					ID:   geminiToolCallID2,
-					Type: "function",
-					FunctionCall: &llms.FunctionCall{
-						Name:      "search_news",
-						Arguments: `{"topic": "technology"}`,
-					},
-				},
-			},
-		},
-		{
-			Role: llms.ChatMessageTypeTool,
-			Parts: []llms.ContentPart{
-				llms.ToolCallResponse{
-					ToolCallID: geminiToolCallID1,
-					Name:       "search_weather",
-					Content:    "Weather: Sunny, 75°F",
-				},
-			},
-		},
-		{
-			Role: llms.ChatMessageTypeTool,
-			Parts: []llms.ContentPart{
-				llms.ToolCallResponse{
-					ToolCallID: geminiToolCallID2,
-					Name:       "search_news",
-					Content:    "Tech news: AI advances",
-				},
-			},
-		},
-		{
-			Role:  llms.ChatMessageTypeAI,
-			Parts: []llms.ContentPart{llms.TextContent{Text: "Here are the results."}},
-		},
-	}
-
-	// Step 2: Parse the Gemini chain
-	ast, err := NewChainAST(geminiChain, false)
-	assert.NoError(t, err)
-	assert.NotNil(t, ast)
-
-	// Verify original structure
-	assert.Equal(t, 1, len(ast.Sections))
-	assert.Equal(t, 2, len(ast.Sections[0].Body)) // RequestResponse + Completion
-
-	// Step 3: Normalize to Anthropic format
-	anthropicTemplate := "toolu_{r:24:b}"
-	err = ast.NormalizeToolCallIDs(anthropicTemplate)
-	assert.NoError(t, err)
-
-	// Step 4: Verify all tool call IDs are now in Anthropic format
-	normalizedMessages := ast.Messages()
-
-	// Collect all tool call IDs and response IDs
-	toolCallIDs := make(map[string]bool)
-	responseIDs := make(map[string]bool)
-
-	for _, msg := range normalizedMessages {
-		switch msg.Role {
-		case llms.ChatMessageTypeAI:
-			for _, part := range msg.Parts {
-				if toolCall, ok := part.(llms.ToolCall); ok && toolCall.FunctionCall != nil {
-					toolCallIDs[toolCall.ID] = true
-					// Verify format
-					assert.True(t, strings.HasPrefix(toolCall.ID, "toolu_"),
-						"Tool call ID should start with 'toolu_'")
-					assert.Equal(t, 30, len(toolCall.ID),
-						"Tool call ID should be 30 characters")
-
-					// Verify it's a valid Anthropic ID
-					sample := templates.PatternSample{
-						Value:        toolCall.ID,
-						FunctionName: toolCall.FunctionCall.Name,
-					}
-					err := templates.ValidatePattern(anthropicTemplate, []templates.PatternSample{sample})
-					assert.NoError(t, err, "Tool call ID should be valid for Anthropic template")
-				}
-			}
-		case llms.ChatMessageTypeTool:
-			for _, part := range msg.Parts {
-				if resp, ok := part.(llms.ToolCallResponse); ok {
-					responseIDs[resp.ToolCallID] = true
-					// Verify format
-					assert.True(t, strings.HasPrefix(resp.ToolCallID, "toolu_"),
-						"Response tool call ID should start with 'toolu_'")
-				}
-			}
-		}
-	}
-
-	// Verify we have 2 tool calls and 2 responses
-	assert.Equal(t, 2, len(toolCallIDs), "Should have 2 tool calls")
-	assert.Equal(t, 2, len(responseIDs), "Should have 2 responses")
-
-	// Verify all responses match tool calls
-	for respID := range responseIDs {
-		assert.True(t, toolCallIDs[respID],
-			"Response ID %s should match a tool call ID", respID)
-	}
-
-	// Step 5: Verify the chain can be parsed again without errors
-	_, err = NewChainAST(normalizedMessages, false)
-	assert.NoError(t, err, "Normalized chain should be parseable")
-
-	t.Logf("Successfully normalized %d tool calls from Gemini to Anthropic format", len(toolCallIDs))
+	assert.Equal(t, []llms.MessageContent{chainASTHuman("question"), chainASTAnswer("answer")}, ast.Sections[1].Messages())
 }
 
-func TestClearReasoning(t *testing.T) {
-	// Import reasoning package types for testing
-	reasoningContent := &reasoning.ContentReasoning{
-		Content:   "This is thinking content",
-		Signature: []byte("crypto_signature_data"),
+func TestChainAST_ClearReasoning_LeavesNormalizeToolCallIDsTheSameIDsToReplace(t *testing.T) {
+	ast, err := NewChainAST(providerSwitchChain(true), false)
+	require.NoError(t, err)
+
+	require.NoError(t, ast.ClearReasoning())
+	require.NoError(t, ast.NormalizeToolCallIDs("toolu_{r:24:b}"))
+
+	restored, renames := chainASTUndoRename(t, providerSwitchChain(false), ast.Messages())
+	assert.Equal(t, providerSwitchChain(false), restored)
+	assert.ElementsMatch(t, []string{"call_nmap01", "call_ssh02", "call_sum03"}, slices.Collect(maps.Keys(renames)))
+	for _, id := range renames {
+		assert.Regexp(t, chainASTAnthropicID, id)
 	}
+	_, err = NewChainAST(ast.Messages(), false)
+	assert.NoError(t, err, "the chain must parse without force")
+}
+
+func TestChainAST_ContainsToolCallReasoning_LooksOnlyAtToolCalls(t *testing.T) {
+	signed := &reasoning.ContentReasoning{Signature: []byte("signature")}
+	signedCall := chainASTCall("tool-1", "get_weather")
+	signedCall.Reasoning = signed
 
 	tests := []struct {
-		name            string
-		chain           []llms.MessageContent
-		description     string
-		validateResults func(t *testing.T, ast *ChainAST)
+		name     string
+		messages []llms.MessageContent
+		want     bool
 	}{
 		{
-			name: "TextContent with reasoning",
-			chain: []llms.MessageContent{
-				{
-					Role:  llms.ChatMessageTypeSystem,
-					Parts: []llms.ContentPart{llms.TextContent{Text: "System", Reasoning: reasoningContent}},
-				},
-				{
-					Role:  llms.ChatMessageTypeHuman,
-					Parts: []llms.ContentPart{llms.TextContent{Text: "Question"}},
-				},
-				{
-					Role: llms.ChatMessageTypeAI,
-					Parts: []llms.ContentPart{
-						llms.TextContent{Text: "Answer", Reasoning: reasoningContent},
-					},
-				},
-			},
-			description: "Should clear reasoning from TextContent parts",
-			validateResults: func(t *testing.T, ast *ChainAST) {
-				for _, section := range ast.Sections {
-					// Check header messages
-					if section.Header.SystemMessage != nil {
-						for _, part := range section.Header.SystemMessage.Parts {
-							if tc, ok := part.(llms.TextContent); ok {
-								assert.Nil(t, tc.Reasoning, "System message reasoning should be cleared")
-							}
-						}
-					}
-
-					// Check body pairs
-					for _, bodyPair := range section.Body {
-						if bodyPair.AIMessage != nil {
-							for _, part := range bodyPair.AIMessage.Parts {
-								if tc, ok := part.(llms.TextContent); ok {
-									assert.Nil(t, tc.Reasoning, "AI message reasoning should be cleared")
-								}
-							}
-						}
-					}
-				}
+			name:     "an empty slice has none",
+			messages: []llms.MessageContent{},
+		},
+		{
+			name: "tool calls without reasoning have none",
+			messages: []llms.MessageContent{
+				chainASTHuman("question"),
+				chainASTAI(llms.TextContent{Text: "answer"}, chainASTCall("tool-1", "get_weather")),
 			},
 		},
 		{
-			name: "ToolCall with reasoning",
-			chain: []llms.MessageContent{
-				{
-					Role:  llms.ChatMessageTypeHuman,
-					Parts: []llms.ContentPart{llms.TextContent{Text: "Search for data"}},
-				},
-				{
-					Role: llms.ChatMessageTypeAI,
-					Parts: []llms.ContentPart{
-						llms.ToolCall{
-							ID:   "tool-1",
-							Type: "function",
-							FunctionCall: &llms.FunctionCall{
-								Name:      "search",
-								Arguments: `{"query": "test"}`,
-							},
-							Reasoning: reasoningContent,
-						},
-					},
-				},
-				{
-					Role: llms.ChatMessageTypeTool,
-					Parts: []llms.ContentPart{
-						llms.ToolCallResponse{
-							ToolCallID: "tool-1",
-							Name:       "search",
-							Content:    "results",
-						},
-					},
-				},
-			},
-			description: "Should clear reasoning from ToolCall parts",
-			validateResults: func(t *testing.T, ast *ChainAST) {
-				for _, section := range ast.Sections {
-					for _, bodyPair := range section.Body {
-						if bodyPair.AIMessage != nil {
-							for _, part := range bodyPair.AIMessage.Parts {
-								if toolCall, ok := part.(llms.ToolCall); ok && toolCall.FunctionCall != nil {
-									assert.Nil(t, toolCall.Reasoning, "ToolCall reasoning should be cleared")
-								}
-							}
-						}
-					}
-				}
+			name: "reasoning only on text does not count",
+			messages: []llms.MessageContent{
+				chainASTAI(llms.TextContent{Text: "thinking", Reasoning: signed}, llms.TextContent{Text: "answer"}),
 			},
 		},
 		{
-			name: "Mixed content with reasoning",
-			chain: []llms.MessageContent{
-				{
-					Role:  llms.ChatMessageTypeHuman,
-					Parts: []llms.ContentPart{llms.TextContent{Text: "Analyze this"}},
-				},
-				{
-					Role: llms.ChatMessageTypeAI,
-					Parts: []llms.ContentPart{
-						llms.TextContent{Text: "Let me think", Reasoning: reasoningContent},
-						llms.ToolCall{
-							ID:   "tool-1",
-							Type: "function",
-							FunctionCall: &llms.FunctionCall{
-								Name:      "analyze",
-								Arguments: `{}`,
-							},
-							Reasoning: reasoningContent,
-						},
-					},
-				},
-				{
-					Role: llms.ChatMessageTypeTool,
-					Parts: []llms.ContentPart{
-						llms.ToolCallResponse{
-							ToolCallID: "tool-1",
-							Name:       "analyze",
-							Content:    "analysis complete",
-						},
-					},
-				},
+			name: "reasoning on a call in a later message is found",
+			messages: []llms.MessageContent{
+				chainASTHuman("question"),
+				chainASTAnswer("answer"),
+				chainASTHuman("follow-up"),
+				chainASTAI(signedCall),
 			},
-			description: "Should clear reasoning from both TextContent and ToolCall",
-			validateResults: func(t *testing.T, ast *ChainAST) {
-				for _, section := range ast.Sections {
-					for _, bodyPair := range section.Body {
-						if bodyPair.AIMessage != nil {
-							for _, part := range bodyPair.AIMessage.Parts {
-								switch p := part.(type) {
-								case llms.TextContent:
-									assert.Nil(t, p.Reasoning, "TextContent reasoning should be cleared")
-								case llms.ToolCall:
-									assert.Nil(t, p.Reasoning, "ToolCall reasoning should be cleared")
-								}
-							}
-						}
-					}
-				}
-			},
-		},
-		{
-			name:        "Empty chain - no errors",
-			chain:       []llms.MessageContent{},
-			description: "Should handle empty chain without errors",
-			validateResults: func(t *testing.T, ast *ChainAST) {
-				assert.Equal(t, 0, len(ast.Sections))
-			},
-		},
-		{
-			name: "Chain without reasoning - no changes",
-			chain: []llms.MessageContent{
-				{
-					Role:  llms.ChatMessageTypeHuman,
-					Parts: []llms.ContentPart{llms.TextContent{Text: "Hello"}},
-				},
-				{
-					Role:  llms.ChatMessageTypeAI,
-					Parts: []llms.ContentPart{llms.TextContent{Text: "Hi there"}},
-				},
-			},
-			description: "Should handle chain without reasoning without errors",
-			validateResults: func(t *testing.T, ast *ChainAST) {
-				// Verify chain is still valid
-				assert.Equal(t, 1, len(ast.Sections))
-				messages := ast.Messages()
-				assert.Equal(t, 2, len(messages))
-			},
+			want: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Logf("Test: %s", tt.description)
-
-			// Create AST from chain
-			ast, err := NewChainAST(tt.chain, true)
-			assert.NoError(t, err)
-
-			// Clear reasoning
-			err = ast.ClearReasoning()
-			assert.NoError(t, err, "ClearReasoning should not return error")
-
-			// Run custom validation
-			tt.validateResults(t, ast)
-
-			// Verify the chain can be re-parsed without errors
-			clearedMessages := ast.Messages()
-			_, err = NewChainAST(clearedMessages, false)
-			assert.NoError(t, err, "Cleared chain should be parseable without force")
+			assert.Equal(t, tt.want, ContainsToolCallReasoning(tt.messages))
 		})
 	}
 }
 
-func TestClearReasoning_IntegrationWithNormalize(t *testing.T) {
-	// This test simulates the full scenario:
-	// 1. Chain created with Anthropic (has reasoning signatures and specific tool call IDs)
-	// 2. Switch to Gemini (need to normalize IDs AND clear reasoning)
+func TestChainAST_ExtractReasoningMessage_ReturnsTheFirstReasoningPart(t *testing.T) {
+	first := llms.TextContent{Text: "first", Reasoning: &reasoning.ContentReasoning{Content: "first analysis"}}
+	second := llms.TextContent{Text: "second", Reasoning: &reasoning.ContentReasoning{Content: "second analysis"}}
+	signedOnly := llms.TextContent{Text: "answer", Reasoning: &reasoning.ContentReasoning{Signature: []byte("signature")}}
 
-	anthropicReasoning := &reasoning.ContentReasoning{
-		Content:   "Extended thinking about the problem",
-		Signature: []byte("anthropic_crypto_signature_12345"),
-	}
-
-	anthropicToolCallID := "toolu_ABC123DEF456GHI789JKL"
-
-	// Step 1: Create chain with Anthropic-specific data
-	anthropicChain := []llms.MessageContent{
+	tests := []struct {
+		name     string
+		messages []llms.MessageContent
+		want     *llms.MessageContent
+	}{
 		{
-			Role:  llms.ChatMessageTypeHuman,
-			Parts: []llms.ContentPart{llms.TextContent{Text: "Solve this problem"}},
+			name:     "an empty slice has none",
+			messages: []llms.MessageContent{},
 		},
 		{
-			Role: llms.ChatMessageTypeAI,
-			Parts: []llms.ContentPart{
-				llms.TextContent{
-					Text:      "Let me think about this",
-					Reasoning: anthropicReasoning,
-				},
-				llms.ToolCall{
-					ID:   anthropicToolCallID,
-					Type: "function",
-					FunctionCall: &llms.FunctionCall{
-						Name:      "analyze",
-						Arguments: `{"data": "test"}`,
-					},
-					Reasoning: anthropicReasoning,
-				},
+			name: "a chain without reasoning has none",
+			messages: []llms.MessageContent{
+				chainASTHuman("question"),
+				chainASTAI(llms.TextContent{Text: "answer"}, chainASTCall("tool-1", "get_weather")),
 			},
 		},
 		{
-			Role: llms.ChatMessageTypeTool,
-			Parts: []llms.ContentPart{
-				llms.ToolCallResponse{
-					ToolCallID: anthropicToolCallID,
-					Name:       "analyze",
-					Content:    "Analysis complete",
-				},
+			name: "reasoning left empty does not count",
+			messages: []llms.MessageContent{
+				chainASTAI(llms.TextContent{Text: "answer", Reasoning: &reasoning.ContentReasoning{}}),
 			},
+		},
+		{
+			name:     "a signature without content counts as reasoning",
+			messages: []llms.MessageContent{chainASTAI(signedOnly)},
+			want:     &llms.MessageContent{Role: llms.ChatMessageTypeAI, Parts: []llms.ContentPart{signedOnly}},
+		},
+		{
+			name: "the first reasoning part of an AI message is returned alone",
+			messages: []llms.MessageContent{
+				{Role: llms.ChatMessageTypeHuman, Parts: []llms.ContentPart{
+					llms.TextContent{Text: "question", Reasoning: &reasoning.ContentReasoning{Content: "human analysis"}},
+				}},
+				chainASTAI(llms.TextContent{Text: "plain"}, first, llms.TextContent{Text: "trailing"}),
+				chainASTAI(second),
+			},
+			want: &llms.MessageContent{Role: llms.ChatMessageTypeAI, Parts: []llms.ContentPart{first}},
 		},
 	}
 
-	// Step 2: Parse the chain
-	ast, err := NewChainAST(anthropicChain, false)
-	assert.NoError(t, err)
-
-	// Step 3: Normalize to Gemini format
-	geminiTemplate := "call_{r:24:x}"
-	err = ast.NormalizeToolCallIDs(geminiTemplate)
-	assert.NoError(t, err)
-
-	// Step 4: Clear reasoning signatures
-	err = ast.ClearReasoning()
-	assert.NoError(t, err)
-
-	// Step 5: Verify all changes
-	finalMessages := ast.Messages()
-
-	for _, msg := range finalMessages {
-		if msg.Role == llms.ChatMessageTypeAI {
-			for _, part := range msg.Parts {
-				switch p := part.(type) {
-				case llms.TextContent:
-					assert.Nil(t, p.Reasoning, "TextContent reasoning should be cleared")
-					// Verify text is preserved
-					if p.Text != "" {
-						t.Logf("TextContent preserved: %s", p.Text)
-					}
-				case llms.ToolCall:
-					assert.Nil(t, p.Reasoning, "ToolCall reasoning should be cleared")
-					// Verify ID is normalized
-					if p.FunctionCall != nil {
-						assert.True(t, strings.HasPrefix(p.ID, "call_"),
-							"Tool call ID should be normalized to Gemini format")
-						t.Logf("Normalized tool call ID: %s", p.ID)
-					}
-				}
-			}
-		}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, ExtractReasoningMessage(tt.messages))
+		})
 	}
-
-	// Step 6: Verify chain is still valid and parseable
-	_, err = NewChainAST(finalMessages, false)
-	assert.NoError(t, err, "Final chain should be parseable")
-
-	t.Log("Successfully normalized IDs and cleared reasoning for provider switch")
 }
 
-func TestSanitizeJSONControlChars(t *testing.T) {
+func TestChainAST_SanitizeJSONControlChars_EscapesControlCharsInsideStrings(t *testing.T) {
 	tests := []struct {
 		name  string
 		input string
 		want  string
 	}{
 		{
-			name:  "already valid JSON - no changes",
-			input: `{"input": "hello world"}`,
-			want:  `{"input": "hello world"}`,
-		},
-		{
-			name:  "already valid JSON with escaped newline - no changes",
+			name:  "valid JSON with an escaped newline is returned unchanged",
 			input: `{"input": "line1\nline2"}`,
 			want:  `{"input": "line1\nline2"}`,
 		},
 		{
-			name:  "literal newline inside string value",
-			input: "{\"input\": \"line1\nline2\"}",
-			want:  `{"input": "line1\nline2"}`,
-		},
-		{
-			name:  "literal carriage return inside string value",
+			name:  "a literal carriage return inside a string is escaped",
 			input: "{\"cmd\": \"echo\rtest\"}",
 			want:  `{"cmd": "echo\rtest"}`,
 		},
 		{
-			name:  "literal tab inside string value",
+			name:  "a literal tab inside a string is escaped",
 			input: "{\"v\": \"a\tb\"}",
 			want:  `{"v": "a\tb"}`,
 		},
 		{
-			name:  "literal backspace and form feed inside string value",
+			name:  "a literal backspace and form feed inside a string are escaped",
 			input: "{\"v\": \"a\x08\x0Cb\"}",
 			want:  `{"v": "a\b\fb"}`,
 		},
 		{
-			name:  `other control character (SOH) gets \uXXXX encoding`,
+			name:  "another control character gets a unicode escape",
 			input: "{\"v\": \"a\x01b\"}",
 			want:  `{"v": "a\u0001b"}`,
 		},
 		{
-			name:  "control character outside string - not touched",
-			input: "{\n\"k\": \"v\"}",
-			want:  "{\n\"k\": \"v\"}",
+			name:  "a control character between tokens is left alone",
+			input: "{\n\"k\": \"a\nb\"}",
+			want:  "{\n\"k\": \"a\\nb\"}",
 		},
 		{
-			name:  "multiple string fields, only affected one fixed",
-			input: "{\"a\": \"ok\", \"b\": \"bad\nval\"}",
-			want:  `{"a": "ok", "b": "bad\nval"}`,
+			name:  "a string at the top level is escaped too",
+			input: "\"ls -la\n\"",
+			want:  `"ls -la\n"`,
 		},
 		{
-			name:  "escaped backslash before quote not confused with string end",
-			input: "{\"v\": \"path\\\\dir\"}",
-			want:  `{"v": "path\\dir"}`,
+			name:  "an escaped quote does not end the string",
+			input: "{\"v\": \"a \\\"quote\nb\"}",
+			want:  `{"v": "a \"quote\nb"}`,
 		},
 		{
-			name:  "real-world vLLM crash case: index.html newline in arguments",
+			name:  "an escaped backslash before a quote ends the string",
+			input: "{\"v\": \"a\\\\\", \"w\": \"x\ny\"}",
+			want:  `{"v": "a\\", "w": "x\ny"}`,
+		},
+		{
+			name:  "a newline in the first of two fields, as vLLM received it, is escaped",
 			input: "{\"input\": \"index.html] =\ncurl -s http://example.com\", \"cwd\": \"/work\"}",
 			want:  `{"input": "index.html] =\ncurl -s http://example.com", "cwd": "/work"}`,
 		},
 		{
-			name:  "empty string",
-			input: "",
-			want:  "",
-		},
-		{
-			name:  "plain invalid JSON without control chars - returned as-is",
+			name:  "invalid JSON without control characters is returned unchanged",
 			input: `{broken`,
 			want:  `{broken`,
 		},
@@ -3091,145 +1896,112 @@ func TestSanitizeJSONControlChars(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := SanitizeJSONControlChars(tt.input)
-			assert.Equal(t, tt.want, got)
+			assert.Equal(t, tt.want, SanitizeJSONControlChars(tt.input))
 		})
 	}
 }
 
-func TestSanitizeToolCallArguments(t *testing.T) {
-	makeChain := func(args string) []llms.MessageContent {
-		return []llms.MessageContent{
-			{
-				Role:  llms.ChatMessageTypeSystem,
-				Parts: []llms.ContentPart{llms.TextContent{Text: "system"}},
-			},
-			{
-				Role:  llms.ChatMessageTypeHuman,
-				Parts: []llms.ContentPart{llms.TextContent{Text: "do it"}},
-			},
-			{
-				Role: llms.ChatMessageTypeAI,
-				Parts: []llms.ContentPart{
-					llms.ToolCall{
-						ID:   "call_abc",
-						Type: "function",
-						FunctionCall: &llms.FunctionCall{
-							Name:      "terminal",
-							Arguments: args,
-						},
-					},
-				},
-			},
-			{
-				Role: llms.ChatMessageTypeTool,
-				Parts: []llms.ContentPart{
-					llms.ToolCallResponse{ToolCallID: "call_abc", Name: "terminal", Content: "ok"},
-				},
-			},
-		}
-	}
-
-	getArgs := func(ast *ChainAST) string {
-		for _, section := range ast.Sections {
-			for _, pair := range section.Body {
-				if pair.AIMessage == nil {
-					continue
-				}
-				for _, part := range pair.AIMessage.Parts {
-					if tc, ok := part.(llms.ToolCall); ok && tc.FunctionCall != nil {
-						return tc.FunctionCall.Arguments
-					}
-				}
+func TestChainAST_SanitizeToolCallArguments_LeavesEveryCallWithValidJSON(t *testing.T) {
+	terminal := func(id, args string) llms.ToolCall { return chainASTCallWith(id, "terminal", args) }
+	exchange := func(parts ...llms.ContentPart) []llms.MessageContent {
+		chain := []llms.MessageContent{chainASTHuman("run it"), chainASTAI(parts...)}
+		for _, part := range parts {
+			if call, ok := part.(llms.ToolCall); ok && call.FunctionCall != nil {
+				chain = append(chain, chainASTTool(call.ID, "terminal", "ok"))
 			}
 		}
-		return ""
+		return chain
 	}
 
 	tests := []struct {
-		name     string
-		args     string
-		wantArgs string
+		name  string
+		chain []llms.MessageContent
+		want  []llms.MessageContent
 	}{
 		{
-			name:     "valid JSON - unchanged",
-			args:     `{"input": "ls -la", "cwd": "/work"}`,
-			wantArgs: `{"input": "ls -la", "cwd": "/work"}`,
+			name:  "a valid object is left unchanged",
+			chain: exchange(terminal("call_1", `{"input": "ls -la", "cwd": "/work"}`)),
+			want:  exchange(terminal("call_1", `{"input": "ls -la", "cwd": "/work"}`)),
 		},
 		{
-			name:     "literal newline in argument value - gets escaped",
-			args:     "{\"input\": \"curl -s http://example.com\ncurl -s http://other.com\", \"cwd\": \"/work\"}",
-			wantArgs: `{"input": "curl -s http://example.com\ncurl -s http://other.com", "cwd": "/work"}`,
+			name:  "literal control characters are escaped",
+			chain: exchange(terminal("call_1", "{\"input\": \"a\nb\rc\", \"cwd\": \"/work\"}")),
+			want:  exchange(terminal("call_1", `{"input": "a\nb\rc", "cwd": "/work"}`)),
 		},
 		{
-			name:     "multiple control chars - all escaped",
-			args:     "{\"input\": \"a\nb\rc\", \"cwd\": \"/work\"}",
-			wantArgs: `{"input": "a\nb\rc", "cwd": "/work"}`,
+			name:  "a truncated object is replaced with an empty one",
+			chain: exchange(terminal("call_1", `{`)),
+			want:  exchange(terminal("call_1", `{}`)),
 		},
 		{
-			name:     "already escaped newline in value - unchanged",
-			args:     `{"input": "line1\nline2", "cwd": "/work"}`,
-			wantArgs: `{"input": "line1\nline2", "cwd": "/work"}`,
+			name: "a call without a function is skipped and the broken call after it repaired",
+			chain: exchange(
+				terminal("call_1", `{"input": "ls"}`),
+				llms.ToolCall{ID: "call_nil", Type: "function"},
+				terminal("call_2", "{\"input\": \"a\nb\"}"),
+			),
+			want: exchange(
+				terminal("call_1", `{"input": "ls"}`),
+				llms.ToolCall{ID: "call_nil", Type: "function"},
+				terminal("call_2", `{"input": "a\nb"}`),
+			),
 		},
 		{
-			name:     "nil FunctionCall tool call does not panic",
-			args:     `{}`,
-			wantArgs: `{}`,
+			name: "a call after a completion and a summarization call in a later section are repaired",
+			chain: []llms.MessageContent{
+				chainASTSystem("system"),
+				chainASTHuman("scan"),
+				chainASTAnswer("starting"),
+				chainASTAI(terminal("call_1", "{\"input\": \"a\nb\"}")),
+				chainASTTool("call_1", "terminal", "ok"),
+				chainASTHuman("summarize"),
+				chainASTAI(chainASTCallWith("call_2", "execute_task_and_return_summary", `{"question": "trunc`)),
+				chainASTTool("call_2", "execute_task_and_return_summary", "summary"),
+			},
+			want: []llms.MessageContent{
+				chainASTSystem("system"),
+				chainASTHuman("scan"),
+				chainASTAnswer("starting"),
+				chainASTAI(terminal("call_1", `{"input": "a\nb"}`)),
+				chainASTTool("call_1", "terminal", "ok"),
+				chainASTHuman("summarize"),
+				chainASTAI(chainASTCallWith("call_2", "execute_task_and_return_summary", `{}`)),
+				chainASTTool("call_2", "execute_task_and_return_summary", "summary"),
+			},
 		},
 		{
-			// Simulates a truncated LLM response where only the opening brace was emitted.
-			// This exact pattern was observed with Qwen3 models via LiteLLM and caused
-			// repeated 400 Bad Request errors on subsequent chain calls.
-			name:     "single opening brace (truncated output) - replaced with empty object",
-			args:     `{`,
-			wantArgs: `{}`,
-		},
-		{
-			name:     "partially constructed JSON object - replaced with empty object",
-			args:     `{"input": "ls -la"`,
-			wantArgs: `{}`,
-		},
-		{
-			name:     "empty string - replaced with empty object",
-			args:     ``,
-			wantArgs: `{}`,
-		},
-		{
-			name:     "JSON array instead of object - unchanged (valid JSON)",
-			args:     `[]`,
-			wantArgs: `[]`,
+			name:  "an empty chain is left empty",
+			chain: emptyChain(),
+			want:  []llms.MessageContent{},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			chain := makeChain(tt.args)
-			ast, err := NewChainAST(chain, false)
-			assert.NoError(t, err)
+			ast, err := NewChainAST(tt.chain, false)
+			require.NoError(t, err)
 
 			ast.SanitizeToolCallArguments()
 
-			assert.Equal(t, tt.wantArgs, getArgs(ast))
+			assert.Equal(t, tt.want, ast.Messages())
 		})
 	}
 }
 
-func TestNewBodyPair_DropsMultipleNilFunctionCallToolCalls(t *testing.T) {
-	aiMsg := &llms.MessageContent{
-		Role: llms.ChatMessageTypeAI,
-		Parts: []llms.ContentPart{
-			llms.ToolCall{ID: "a", Type: "function", FunctionCall: nil},
-			llms.ToolCall{ID: "b", Type: "function", FunctionCall: nil},
-			llms.TextContent{Text: "keep me"},
-		},
-	}
+func TestChainAST_SanitizeToolCallArguments_SkipsAPairLeftWithoutItsAIMessage(t *testing.T) {
+	ast, err := NewChainAST([]llms.MessageContent{
+		chainASTHuman("run it"),
+		chainASTAI(chainASTCallWith("call_1", "terminal", "{")),
+		chainASTTool("call_1", "terminal", "ok"),
+	}, false)
+	require.NoError(t, err)
+	ast.Sections[0].Body = append([]*BodyPair{{Type: RequestResponse}}, ast.Sections[0].Body...)
 
-	NewBodyPair(aiMsg, nil)
+	ast.SanitizeToolCallArguments()
 
-	assert.Len(t, aiMsg.Parts, 1, "both nil-FunctionCall tool calls should be removed, text kept")
-	if assert.Len(t, aiMsg.Parts, 1) {
-		txt, ok := aiMsg.Parts[0].(llms.TextContent)
-		assert.True(t, ok, "surviving part should be the TextContent, got %T", aiMsg.Parts[0])
-		assert.Equal(t, "keep me", txt.Text)
-	}
+	assert.Equal(t, []llms.MessageContent{
+		chainASTHuman("run it"),
+		chainASTAI(chainASTCallWith("call_1", "terminal", "{}")),
+		chainASTTool("call_1", "terminal", "ok"),
+	}, ast.Messages())
 }

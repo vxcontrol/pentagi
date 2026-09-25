@@ -1,0 +1,64 @@
+# Mistral catalogue. Prices are dollars per 1M tokens from the vendor model
+# cards and pricing page, read 25.09.2026.
+#
+# Deliberately absent: labs-leanstral-1-5, which the gateway lists and the vendor
+# refuses with "Model labs-leanstral-1-5 is a Labs model. To use Labs models, an
+# admin must enable them in your organization settings" (403, code 1913). Also
+# absent, retired by the vendor: the Magistral, Devstral, Pixtral, Mixtral and
+# Nemo lines, Mistral Medium 3 and 3.1, open-mistral-7b.
+- name: mistral-medium-latest
+  description: Mistral Medium 3.5 - frontier-class multimodal model for agentic and coding work with adjustable reasoning effort.
+  thinking: true
+  context_window: 256000
+  price:
+    input: 1.50
+    output: 7.50
+    cache_read: 0.15
+
+- name: mistral-large-latest
+  description: Mistral Large 3 - open-weight general-purpose multimodal flagship. Cheaper than Medium despite the name. Does not reason.
+  thinking: false
+  context_window: 256000
+  price:
+    input: 0.50
+    output: 1.50
+    cache_read: 0.05
+
+- name: mistral-small-latest
+  description: Mistral Small 4 - hybrid model unifying instruct, reasoning and coding.
+  thinking: true
+  context_window: 256000
+  price:
+    input: 0.15
+    output: 0.60
+    cache_read: 0.015
+
+- name: codestral-latest
+  description: Codestral - code completion and fill-in-the-middle. Does not reason.
+  thinking: false
+  context_window: 128000
+  price:
+    input: 0.30
+    output: 0.90
+    cache_read: 0.03
+
+- name: zai-glm-5-2
+  description: Z.ai GLM 5.2 served by Mistral, public preview. Reasoning model.
+  thinking: true
+  context_window: 1000000
+  max_output_tokens: 128000
+  price:
+    input: 1.40
+    output: 4.40
+    cache_read: 0.14
+
+- name: zai-glm-5-3
+  description: Z.ai GLM 5.3 served by Mistral, public preview. Reasoning model - thinking is always on and cannot be turned off, and the vendor documents no reasoning_effort for it. Function calling, structured outputs, predicted outputs and prefix; text only, no vision
+  thinking: true
+  release_date: 2026-09-15
+  context_window: 1000000
+  max_output_tokens: 128000
+  price:
+    input: 1.40
+    output: 4.40
+    cache_read: 0.14

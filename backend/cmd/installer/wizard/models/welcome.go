@@ -384,7 +384,7 @@ func (m *WelcomeModel) HasScrollableContent() bool {
 		return false
 	}
 	// Content is scrollable if we're not at both top and bottom simultaneously
-	return !(m.viewport.AtTop() && m.viewport.AtBottom())
+	return !m.viewport.AtTop() || !m.viewport.AtBottom()
 }
 
 // BaseScreenModel interface implementation

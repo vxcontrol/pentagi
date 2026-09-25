@@ -29,25 +29,25 @@ ORDER BY updated_at DESC, name ASC;
 SELECT id, user_id, hash, name, path, size, is_dir, created_at, updated_at
 FROM user_resources
 WHERE path NOT LIKE '%/%'
-ORDER BY updated_at DESC, name ASC;
+ORDER BY updated_at DESC, name ASC, id ASC;
 
 -- name: GetAllResourcesInDir :many
 SELECT id, user_id, hash, name, path, size, is_dir, created_at, updated_at
 FROM user_resources
 WHERE (path = sqlc.arg(dir_path) AND is_dir = true)
    OR (path LIKE sqlc.arg(child_prefix) AND path NOT LIKE sqlc.arg(deep_prefix))
-ORDER BY updated_at DESC, name ASC;
+ORDER BY updated_at DESC, name ASC, id ASC;
 
 -- name: GetAllResourcesRecursive :many
 SELECT id, user_id, hash, name, path, size, is_dir, created_at, updated_at
 FROM user_resources
 WHERE path = sqlc.arg(dir_path) OR path LIKE sqlc.arg(child_prefix)
-ORDER BY updated_at DESC, name ASC;
+ORDER BY updated_at DESC, name ASC, id ASC;
 
 -- name: GetAllResourcesAll :many
 SELECT id, user_id, hash, name, path, size, is_dir, created_at, updated_at
 FROM user_resources
-ORDER BY updated_at DESC, name ASC;
+ORDER BY updated_at DESC, name ASC, id ASC;
 
 -- name: GetUserResourceByID :one
 SELECT id, user_id, hash, name, path, size, is_dir, created_at, updated_at

@@ -8,6 +8,9 @@ import { createServer } from 'node:http';
 import { FALLBACK, RULES } from './scenario.mjs';
 
 const PORT = 8080;
+// Holds a flow in Running long enough to reach the controls that exist only then (Stop, the
+// disabled composer): at the default 0 a whole run settles in about 300 ms.
+const DELAY_MS = Number(process.env.MOCK_LLM_DELAY_MS ?? 0);
 
 const readBody = (request) =>
     new Promise((resolve) => {
@@ -113,8 +116,54 @@ const respondCompletion = (response, payload, rule) => {
     response.end();
 };
 
+// Same text in, same vector out: a knowledge document's chunks have to land in pgvector with
+// stable coordinates, or a semantic search over them answers differently on every run.
+const EMBEDDING_DIMENSIONS = 1536;
+
+const embed = (text) => {
+    const vector = new Array(EMBEDDING_DIMENSIONS).fill(0);
+    let hash = 0;
+
+    for (let index = 0; index < text.length; index += 1) {
+        hash = (hash * 31 + text.charCodeAt(index)) % 2147483647;
+        vector[index % EMBEDDING_DIMENSIONS] += ((hash % 2000) - 1000) / 1000;
+    }
+
+    const length = Math.sqrt(vector.reduce((total, value) => total + value * value, 0)) || 1;
+
+    return vector.map((value) => value / length);
+};
+
 createServer(async (request, response) => {
     const { url = '' } = request;
+
+    if (request.method === 'POST' && url.endsWith('/embeddings')) {
+        let payload;
+
+        try {
+            payload = JSON.parse((await readBody(request)) || '{}');
+        } catch (error) {
+            respondError(response, 400, `mock-llm: invalid JSON body: ${error}`);
+
+            return;
+        }
+
+        const input = Array.isArray(payload?.input) ? payload.input : [payload?.input ?? ''];
+
+        console.log(`[mock-llm] embeddings: ${input.length} input(s)`);
+        respondJson(response, 200, {
+            data: input.map((text, index) => ({
+                embedding: embed(String(text)),
+                index,
+                object: 'embedding',
+            })),
+            model: payload?.model ?? 'e2e-mock-embed',
+            object: 'list',
+            usage: { prompt_tokens: input.length, total_tokens: input.length },
+        });
+
+        return;
+    }
 
     if (request.method === 'POST' && url.endsWith('/chat/completions')) {
         // A malformed body must 400, not throw: an uncaught throw in this
@@ -143,6 +192,11 @@ createServer(async (request, response) => {
         const toolNames = toolList.map((tool) => tool?.function?.name ?? tool?.type ?? '?').join(',');
 
         console.log(`[mock-llm] ${rule.label}: ${payload.stream ? 'stream' : 'plain'} tools=[${toolNames}]`);
+
+        if (DELAY_MS > 0) {
+            await new Promise((resolve) => setTimeout(resolve, DELAY_MS));
+        }
+
         respondCompletion(response, payload, rule);
 
         return;

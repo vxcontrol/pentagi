@@ -3,699 +3,383 @@ package state
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
 
-func TestNewState(t *testing.T) {
-	t.Run("create new state from existing env file", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		defer os.RemoveAll(tmpDir)
-
-		envPath := filepath.Join(tmpDir, ".env")
-
-		// Create test .env file
-		envContent := `VAR1=value1
-VAR2=value2
-# Comment
-VAR3=value3`
-		err := os.WriteFile(envPath, []byte(envContent), 0644)
-		if err != nil {
-			t.Fatalf("Failed to create test env file: %v", err)
-		}
-
-		state, err := NewState(envPath)
-		if err != nil {
-			t.Fatalf("Failed to create new state: %v", err)
-		}
-
-		if state == nil {
-			t.Fatal("Expected state to be non-nil")
-		}
-
-		// Check that variables were loaded
-		allVars := state.GetAllVars()
-		if len(allVars) < 3 {
-			t.Errorf("Expected at least 3 variables, got %d", len(allVars))
-		}
-
-		if envVar, exists := state.GetVar("VAR1"); !exists {
-			t.Error("Expected VAR1 to exist")
-		} else if envVar.Value != "value1" {
-			t.Errorf("Expected VAR1 value 'value1', got '%s'", envVar.Value)
-		}
-	})
-
-	t.Run("create state with non-existent env file", func(t *testing.T) {
-		_, err := NewState("/non/existent/file.env")
-		if err == nil {
-			t.Error("Expected error when creating state with non-existent file")
-		}
-	})
-
-	t.Run("create state with directory instead of file", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		defer os.RemoveAll(tmpDir)
-
-		_, err := NewState(tmpDir)
-		if err == nil {
-			t.Error("Expected error when creating state with directory")
-		}
-	})
+// stateEnvFile writes content to .env in a fresh directory, beside which the state keeps .state and .bak.
+func stateEnvFile(t *testing.T, content string) string {
+	t.Helper()
+	envPath := filepath.Join(t.TempDir(), ".env")
+	if err := os.WriteFile(envPath, []byte(content), 0o600); err != nil {
+		t.Fatalf("write env file: %v", err)
+	}
+	return envPath
 }
 
-func TestStateExists(t *testing.T) {
-	tmpDir := t.TempDir()
-	defer os.RemoveAll(tmpDir)
-
-	envPath := filepath.Join(tmpDir, ".env")
-
-	// Create test .env file
-	err := os.WriteFile(envPath, []byte("VAR1=value1"), 0644)
+func stateFixture(t *testing.T, content string) (State, string) {
+	t.Helper()
+	envPath := stateEnvFile(t, content)
+	s, err := NewState(envPath)
 	if err != nil {
-		t.Fatalf("Failed to create test env file: %v", err)
+		t.Fatalf("NewState: %v", err)
 	}
-
-	state, err := NewState(envPath)
-	if err != nil {
-		t.Fatalf("Failed to create state: %v", err)
-	}
-
-	// Initially no state file exists
-	if state.Exists() {
-		t.Error("Expected state to not exist initially")
-	}
-
-	// After setting a variable, state should exist
-	err = state.SetVar("NEW_VAR", "new_value")
-	if err != nil {
-		t.Fatalf("Failed to set variable: %v", err)
-	}
-
-	if !state.Exists() {
-		t.Error("Expected state to exist after setting variable")
-	}
+	return s, envPath
 }
 
-func TestStateStepManagement(t *testing.T) {
-	tmpDir := t.TempDir()
-	defer os.RemoveAll(tmpDir)
-
-	envPath := filepath.Join(tmpDir, ".env")
-
-	err := os.WriteFile(envPath, []byte("VAR1=value1"), 0644)
-	if err != nil {
-		t.Fatalf("Failed to create test env file: %v", err)
+func TestState_NewState_RestoresTheStagedSessionOrFallsBackToTheEnvFile(t *testing.T) {
+	stagingFile := func(t *testing.T, envPath string) string {
+		t.Helper()
+		path := filepath.Join(filepath.Dir(envPath), ".state", ".env.state")
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatalf("MkdirAll: %v", err)
+		}
+		return path
 	}
 
-	state, err := NewState(envPath)
-	if err != nil {
-		t.Fatalf("Failed to create state: %v", err)
+	tests := []struct {
+		name      string
+		setup     func(t *testing.T, envPath string) string // returns the path handed to NewState
+		wantErr   string
+		wantStack []string
+		wantVars  map[string]string
+	}{
+		{
+			name:     "an env file without a staged session is loaded",
+			wantVars: map[string]string{"VAR1": "value1", "VAR2": "value2", "VAR3": "value3"},
+		},
+		{
+			name: "a staged session is restored",
+			setup: func(t *testing.T, envPath string) string {
+				previous, err := NewState(envPath)
+				if err != nil {
+					t.Fatalf("NewState: %v", err)
+				}
+				if err := previous.SetStack([]string{"persistence_test"}); err != nil {
+					t.Fatalf("SetStack: %v", err)
+				}
+				if err := previous.SetVar("PERSISTENT_VAR", "persistent_value"); err != nil {
+					t.Fatalf("SetVar: %v", err)
+				}
+				return envPath
+			},
+			wantStack: []string{"persistence_test"},
+			wantVars:  map[string]string{"VAR1": "value1", "PERSISTENT_VAR": "persistent_value"},
+		},
+		{
+			name: "a corrupted staging file falls back to the env file",
+			setup: func(t *testing.T, envPath string) string {
+				if err := os.WriteFile(stagingFile(t, envPath), []byte("invalid json content"), 0o600); err != nil {
+					t.Fatalf("write staging file: %v", err)
+				}
+				return envPath
+			},
+			wantVars: map[string]string{"VAR1": "value1"},
+		},
+		{
+			name:    "a missing env file is refused",
+			setup:   func(t *testing.T, envPath string) string { return filepath.Join(filepath.Dir(envPath), "absent.env") },
+			wantErr: "failed to stat",
+		},
+		{
+			name:    "a directory in place of the env file is refused",
+			setup:   func(t *testing.T, envPath string) string { return filepath.Dir(envPath) },
+			wantErr: "is a directory",
+		},
+		{
+			name: "a directory in place of the staging file is refused",
+			setup: func(t *testing.T, envPath string) string {
+				if err := os.MkdirAll(stagingFile(t, envPath), 0o755); err != nil {
+					t.Fatalf("MkdirAll: %v", err)
+				}
+				return envPath
+			},
+			wantErr: "is a directory",
+		},
 	}
 
-	// Initially no step
-	if stack := state.GetStack(); len(stack) > 0 {
-		t.Errorf("Expected empty stack initially, got '%s'", stack)
-	}
-
-	// Set step
-	err = state.SetStack([]string{"configure_database"})
-	if err != nil {
-		t.Fatalf("Failed to set step: %v", err)
-	}
-
-	if stack := state.GetStack(); len(stack) < 1 {
-		t.Errorf("Expected step 'configure_database', got '%s'", stack)
-	}
-
-	// Append step
-	err = state.SetStack(append(state.GetStack(), "configure_api"))
-	if err != nil {
-		t.Fatalf("Failed to update step: %v", err)
-	}
-
-	if stack := state.GetStack(); len(stack) < 2 {
-		t.Errorf("Expected step 'configure_api', got '%s'", stack)
-	}
-}
-
-func TestStateVariableManagement(t *testing.T) {
-	tmpDir := t.TempDir()
-	defer os.RemoveAll(tmpDir)
-
-	envPath := filepath.Join(tmpDir, ".env")
-
-	err := os.WriteFile(envPath, []byte("EXISTING_VAR=existing_value"), 0644)
-	if err != nil {
-		t.Fatalf("Failed to create test env file: %v", err)
-	}
-
-	state, err := NewState(envPath)
-	if err != nil {
-		t.Fatalf("Failed to create state: %v", err)
-	}
-
-	t.Run("get existing variable", func(t *testing.T) {
-		envVar, exists := state.GetVar("EXISTING_VAR")
-		if !exists {
-			t.Error("Expected EXISTING_VAR to exist")
-		}
-		if envVar.Value != "existing_value" {
-			t.Errorf("Expected value 'existing_value', got '%s'", envVar.Value)
-		}
-	})
-
-	t.Run("set new variable", func(t *testing.T) {
-		err := state.SetVar("NEW_VAR", "new_value")
-		if err != nil {
-			t.Fatalf("Failed to set new variable: %v", err)
-		}
-
-		envVar, exists := state.GetVar("NEW_VAR")
-		if !exists {
-			t.Error("Expected NEW_VAR to exist")
-		}
-		if envVar.Value != "new_value" {
-			t.Errorf("Expected value 'new_value', got '%s'", envVar.Value)
-		}
-		if !envVar.IsChanged {
-			t.Error("Expected IsChanged to be true for new variable")
-		}
-	})
-
-	t.Run("update existing variable", func(t *testing.T) {
-		err := state.SetVar("EXISTING_VAR", "updated_value")
-		if err != nil {
-			t.Fatalf("Failed to update existing variable: %v", err)
-		}
-
-		envVar, exists := state.GetVar("EXISTING_VAR")
-		if !exists {
-			t.Error("Expected EXISTING_VAR to exist")
-		}
-		if envVar.Value != "updated_value" {
-			t.Errorf("Expected value 'updated_value', got '%s'", envVar.Value)
-		}
-		if !envVar.IsChanged {
-			t.Error("Expected IsChanged to be true for updated variable")
-		}
-	})
-
-	t.Run("get multiple variables", func(t *testing.T) {
-		names := []string{"EXISTING_VAR", "NEW_VAR", "NON_EXISTENT"}
-		vars, present := state.GetVars(names)
-
-		if len(vars) != 3 {
-			t.Errorf("Expected 3 variables in result, got %d", len(vars))
-		}
-		if len(present) != 3 {
-			t.Errorf("Expected 3 presence flags, got %d", len(present))
-		}
-
-		if !present["EXISTING_VAR"] {
-			t.Error("Expected EXISTING_VAR to be present")
-		}
-		if !present["NEW_VAR"] {
-			t.Error("Expected NEW_VAR to be present")
-		}
-		if present["NON_EXISTENT"] {
-			t.Error("Expected NON_EXISTENT to not be present")
-		}
-
-		if vars["EXISTING_VAR"].Value != "updated_value" {
-			t.Errorf("Expected EXISTING_VAR value 'updated_value', got '%s'", vars["EXISTING_VAR"].Value)
-		}
-		if vars["NEW_VAR"].Value != "new_value" {
-			t.Errorf("Expected NEW_VAR value 'new_value', got '%s'", vars["NEW_VAR"].Value)
-		}
-	})
-
-	t.Run("set multiple variables", func(t *testing.T) {
-		vars := map[string]string{
-			"BATCH_VAR1":   "batch_value1",
-			"BATCH_VAR2":   "batch_value2",
-			"EXISTING_VAR": "batch_updated",
-		}
-
-		err := state.SetVars(vars)
-		if err != nil {
-			t.Fatalf("Failed to set multiple variables: %v", err)
-		}
-
-		for name, expectedValue := range vars {
-			envVar, exists := state.GetVar(name)
-			if !exists {
-				t.Errorf("Expected variable %s to exist after SetVars", name)
-				continue
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			path := stateEnvFile(t, "VAR1=value1\nVAR2=value2\n# Comment\nVAR3=value3")
+			if tt.setup != nil {
+				path = tt.setup(t, path)
 			}
-			if envVar.Value != expectedValue {
-				t.Errorf("Variable %s: expected value %s, got %s", name, expectedValue, envVar.Value)
+
+			s, err := NewState(path)
+			if tt.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+					t.Fatalf("NewState() error = %v, want it to mention %q", err, tt.wantErr)
+				}
+				return
 			}
-			if !envVar.IsChanged {
-				t.Errorf("Variable %s: expected IsChanged to be true", name)
+			if err != nil {
+				t.Fatalf("NewState() error = %v", err)
+			}
+
+			if s.GetEnvPath() != path {
+				t.Errorf("GetEnvPath() = %q, want %q", s.GetEnvPath(), path)
+			}
+			if got := s.GetStack(); strings.Join(got, ",") != strings.Join(tt.wantStack, ",") {
+				t.Errorf("GetStack() = %q, want %q", got, tt.wantStack)
+			}
+			for name, value := range tt.wantVars {
+				if envVar, exists := s.GetVar(name); !exists || envVar.Value != value {
+					t.Errorf("GetVar(%s) = %q, %v; want %q", name, envVar.Value, exists, value)
+				}
+			}
+		})
+	}
+}
+
+func TestState_Exists_ReportsTheStagingFile(t *testing.T) {
+	s, _ := stateFixture(t, "VAR1=value1")
+	if s.Exists() {
+		t.Error("Exists() = true before anything was staged")
+	}
+
+	if err := s.SetVar("NEW_VAR", "new_value"); err != nil {
+		t.Fatalf("SetVar: %v", err)
+	}
+	if !s.Exists() {
+		t.Error("Exists() = false after a variable was staged")
+	}
+}
+
+func TestState_SetStack_ReplacesTheWizardStack(t *testing.T) {
+	s, _ := stateFixture(t, "VAR1=value1")
+	if stack := s.GetStack(); len(stack) != 0 {
+		t.Errorf("GetStack() = %q before anything was set, want empty", stack)
+	}
+
+	if err := s.SetStack([]string{"configure_database"}); err != nil {
+		t.Fatalf("SetStack: %v", err)
+	}
+	if got := s.GetStack(); !reflect.DeepEqual(got, []string{"configure_database"}) {
+		t.Errorf("GetStack() = %q, want [configure_database]", got)
+	}
+
+	if err := s.SetStack(append(s.GetStack(), "configure_api")); err != nil {
+		t.Fatalf("SetStack: %v", err)
+	}
+	if got := s.GetStack(); !reflect.DeepEqual(got, []string{"configure_database", "configure_api"}) {
+		t.Errorf("GetStack() = %q, want [configure_database configure_api]", got)
+	}
+}
+
+// TestState_StagesAndResetsVariables: subtests run in order over one state and are keyed by method.
+func TestState_StagesAndResetsVariables(t *testing.T) {
+	s, _ := stateFixture(t, "EXISTING_VAR=existing_value")
+	staged := func(t *testing.T, name, value string) {
+		t.Helper()
+		if envVar, exists := s.GetVar(name); !exists || envVar.Value != value || !envVar.IsChanged {
+			t.Errorf("GetVar(%s) = %+v, %v; want a staged %q", name, envVar, exists, value)
+		}
+	}
+
+	t.Run("get var reads the env file", func(t *testing.T) {
+		if envVar, exists := s.GetVar("EXISTING_VAR"); !exists || envVar.Value != "existing_value" {
+			t.Errorf("GetVar(EXISTING_VAR) = %q, %v; want existing_value", envVar.Value, exists)
+		}
+	})
+
+	t.Run("set var stages a new variable", func(t *testing.T) {
+		if err := s.SetVar("NEW_VAR", "new_value"); err != nil {
+			t.Fatalf("SetVar: %v", err)
+		}
+		staged(t, "NEW_VAR", "new_value")
+	})
+
+	t.Run("set var stages an update", func(t *testing.T) {
+		if err := s.SetVar("EXISTING_VAR", "updated_value"); err != nil {
+			t.Fatalf("SetVar: %v", err)
+		}
+		staged(t, "EXISTING_VAR", "updated_value")
+	})
+
+	t.Run("get vars reports values and presence", func(t *testing.T) {
+		vars, present := s.GetVars([]string{"EXISTING_VAR", "NEW_VAR", "NON_EXISTENT"})
+
+		if len(vars) != 3 || len(present) != 3 {
+			t.Errorf("GetVars() = %d values and %d flags, want 3 and 3", len(vars), len(present))
+		}
+		if !present["EXISTING_VAR"] || !present["NEW_VAR"] || present["NON_EXISTENT"] {
+			t.Errorf("presence = %v, want EXISTING_VAR and NEW_VAR only", present)
+		}
+		if vars["EXISTING_VAR"].Value != "updated_value" || vars["NEW_VAR"].Value != "new_value" {
+			t.Errorf("values = %q, %q; want updated_value, new_value", vars["EXISTING_VAR"].Value, vars["NEW_VAR"].Value)
+		}
+	})
+
+	t.Run("set vars stages every variable", func(t *testing.T) {
+		vars := map[string]string{"BATCH_VAR1": "batch_value1", "BATCH_VAR2": "batch_value2", "EXISTING_VAR": "batch_updated"}
+		if err := s.SetVars(vars); err != nil {
+			t.Fatalf("SetVars: %v", err)
+		}
+		for name, value := range vars {
+			staged(t, name, value)
+		}
+	})
+
+	t.Run("reset var restores the env file value", func(t *testing.T) {
+		if err := s.SetVar("EXISTING_VAR", "modified_again"); err != nil {
+			t.Fatalf("SetVar: %v", err)
+		}
+		if err := s.ResetVar("EXISTING_VAR"); err != nil {
+			t.Fatalf("ResetVar: %v", err)
+		}
+		if envVar, exists := s.GetVar("EXISTING_VAR"); !exists || envVar.Value != "existing_value" {
+			t.Errorf("GetVar(EXISTING_VAR) = %q, %v; want existing_value", envVar.Value, exists)
+		}
+	})
+
+	t.Run("reset vars drops variables the env file lacks", func(t *testing.T) {
+		if err := s.SetVars(map[string]string{"RESET_VAR1": "reset_value1", "RESET_VAR2": "reset_value2", "EXISTING_VAR": "modified_value"}); err != nil {
+			t.Fatalf("SetVars: %v", err)
+		}
+		if err := s.ResetVars([]string{"RESET_VAR1", "RESET_VAR2", "EXISTING_VAR"}); err != nil {
+			t.Fatalf("ResetVars: %v", err)
+		}
+
+		for _, name := range []string{"RESET_VAR1", "RESET_VAR2"} {
+			if _, exists := s.GetVar(name); exists {
+				t.Errorf("%s still exists after ResetVars", name)
 			}
 		}
-	})
-
-	t.Run("reset single variable", func(t *testing.T) {
-		// First modify a variable
-		err := state.SetVar("EXISTING_VAR", "modified_again")
-		if err != nil {
-			t.Fatalf("Failed to modify variable: %v", err)
-		}
-
-		// Verify it was changed
-		envVar, exists := state.GetVar("EXISTING_VAR")
-		if !exists || envVar.Value != "modified_again" {
-			t.Fatalf("Variable was not modified as expected")
-		}
-
-		// Reset it
-		err = state.ResetVar("EXISTING_VAR")
-		if err != nil {
-			t.Fatalf("Failed to reset variable: %v", err)
-		}
-
-		// Verify it was reset to original value
-		envVar, exists = state.GetVar("EXISTING_VAR")
-		if !exists {
-			t.Error("Expected EXISTING_VAR to exist after reset")
-		}
-		if envVar.Value != "existing_value" {
-			t.Errorf("Expected EXISTING_VAR to be reset to 'existing_value', got '%s'", envVar.Value)
+		if envVar, exists := s.GetVar("EXISTING_VAR"); !exists || envVar.Value != "existing_value" {
+			t.Errorf("GetVar(EXISTING_VAR) = %q, %v; want existing_value", envVar.Value, exists)
 		}
 	})
 
-	t.Run("reset multiple variables", func(t *testing.T) {
-		// Set some variables first
-		vars := map[string]string{
-			"RESET_VAR1":   "reset_value1",
-			"RESET_VAR2":   "reset_value2",
-			"EXISTING_VAR": "modified_value",
+	t.Run("reset var of an unknown variable leaves it absent", func(t *testing.T) {
+		if err := s.ResetVar("NON_EXISTENT_VAR"); err != nil {
+			t.Fatalf("ResetVar: %v", err)
 		}
-		err := state.SetVars(vars)
-		if err != nil {
-			t.Fatalf("Failed to set variables: %v", err)
-		}
-
-		// Reset multiple variables
-		names := []string{"RESET_VAR1", "RESET_VAR2", "EXISTING_VAR"}
-		err = state.ResetVars(names)
-		if err != nil {
-			t.Fatalf("Failed to reset variables: %v", err)
-		}
-
-		// RESET_VAR1 and RESET_VAR2 should be deleted (not in original file)
-		if _, exists := state.GetVar("RESET_VAR1"); exists {
-			t.Error("Expected RESET_VAR1 to be deleted after reset")
-		}
-		if _, exists := state.GetVar("RESET_VAR2"); exists {
-			t.Error("Expected RESET_VAR2 to be deleted after reset")
-		}
-
-		// EXISTING_VAR should be reset to original value
-		envVar, exists := state.GetVar("EXISTING_VAR")
-		if !exists {
-			t.Error("Expected EXISTING_VAR to exist after reset")
-		}
-		if envVar.Value != "existing_value" {
-			t.Errorf("Expected EXISTING_VAR to be reset to 'existing_value', got '%s'", envVar.Value)
+		if _, exists := s.GetVar("NON_EXISTENT_VAR"); exists {
+			t.Error("NON_EXISTENT_VAR exists after ResetVar")
 		}
 	})
 
-	t.Run("reset non-existent variable", func(t *testing.T) {
-		err := state.ResetVar("NON_EXISTENT_VAR")
-		if err != nil {
-			t.Errorf("Expected reset of non-existent variable to succeed, got error: %v", err)
-		}
-	})
-
-	t.Run("get all variables", func(t *testing.T) {
-		allVars := state.GetAllVars()
-		if len(allVars) < 2 {
-			t.Errorf("Expected at least 2 variables, got %d", len(allVars))
-		}
-
-		if _, exists := allVars["EXISTING_VAR"]; !exists {
-			t.Error("Expected EXISTING_VAR in GetAllVars result")
-		}
-		if _, exists := allVars["NEW_VAR"]; !exists {
-			t.Error("Expected NEW_VAR in GetAllVars result")
-		}
-	})
-}
-
-func TestStateCommit(t *testing.T) {
-	tmpDir := t.TempDir()
-	defer os.RemoveAll(tmpDir)
-
-	envPath := filepath.Join(tmpDir, ".env")
-
-	originalContent := "ORIGINAL_VAR=original_value"
-	err := os.WriteFile(envPath, []byte(originalContent), 0644)
-	if err != nil {
-		t.Fatalf("Failed to create test env file: %v", err)
-	}
-
-	state, err := NewState(envPath)
-	if err != nil {
-		t.Fatalf("Failed to create state: %v", err)
-	}
-
-	// Make changes
-	err = state.SetStack([]string{"testing_commit"})
-	if err != nil {
-		t.Fatalf("Failed to set step: %v", err)
-	}
-
-	err = state.SetVar("ORIGINAL_VAR", "modified_value")
-	if err != nil {
-		t.Fatalf("Failed to set variable: %v", err)
-	}
-
-	err = state.SetVar("NEW_VAR", "new_value")
-	if err != nil {
-		t.Fatalf("Failed to set new variable: %v", err)
-	}
-
-	// Verify state exists
-	if !state.Exists() {
-		t.Error("Expected state to exist before commit")
-	}
-
-	// Commit changes
-	err = state.Commit()
-	if err != nil {
-		t.Fatalf("Failed to commit state: %v", err)
-	}
-
-	// Verify state file was reloaded and exists
-	if !state.Exists() {
-		t.Error("Expected state to exist after commit")
-	}
-
-	// Verify .env file was updated
-	content, err := os.ReadFile(envPath)
-	if err != nil {
-		t.Fatalf("Failed to read env file after commit: %v", err)
-	}
-
-	contentStr := string(content)
-	if !containsLine(contentStr, "ORIGINAL_VAR=modified_value") {
-		t.Error("Expected ORIGINAL_VAR to be updated in env file")
-	}
-	if !containsLine(contentStr, "NEW_VAR=new_value") {
-		t.Error("Expected NEW_VAR to be added to env file")
-	}
-
-	// Verify backup was created
-	backupDir := filepath.Join(tmpDir, ".bak")
-	entries, err := os.ReadDir(backupDir)
-	if err != nil {
-		t.Fatalf("Failed to read backup directory: %v", err)
-	}
-	if len(entries) == 0 {
-		t.Error("Expected backup file to be created")
-	}
-}
-
-func TestStateReset(t *testing.T) {
-	tmpDir := t.TempDir()
-	defer os.RemoveAll(tmpDir)
-
-	envPath := filepath.Join(tmpDir, ".env")
-
-	originalContent := "ORIGINAL_VAR=original_value"
-	err := os.WriteFile(envPath, []byte(originalContent), 0644)
-	if err != nil {
-		t.Fatalf("Failed to create test env file: %v", err)
-	}
-
-	state, err := NewState(envPath)
-	if err != nil {
-		t.Fatalf("Failed to create state: %v", err)
-	}
-
-	// Make changes
-	err = state.SetStack([]string{"testing_reset"})
-	if err != nil {
-		t.Fatalf("Failed to set step: %v", err)
-	}
-
-	err = state.SetVar("ORIGINAL_VAR", "modified_value")
-	if err != nil {
-		t.Fatalf("Failed to set variable: %v", err)
-	}
-
-	// Verify state exists
-	if !state.Exists() {
-		t.Error("Expected state to exist before reset")
-	}
-
-	// Reset state
-	err = state.Reset()
-	if err != nil {
-		t.Fatalf("Failed to reset state: %v", err)
-	}
-
-	// Verify state file was reloaded and exists
-	if !state.Exists() {
-		t.Error("Expected state to exist after reset")
-	}
-
-	// Verify .env file was NOT changed
-	content, err := os.ReadFile(envPath)
-	if err != nil {
-		t.Fatalf("Failed to read env file after reset: %v", err)
-	}
-
-	if string(content) != originalContent {
-		t.Errorf("Expected env file to remain unchanged after reset, got: %s", string(content))
-	}
-}
-
-func TestStatePersistence(t *testing.T) {
-	tmpDir := t.TempDir()
-	defer os.RemoveAll(tmpDir)
-
-	envPath := filepath.Join(tmpDir, ".env")
-
-	err := os.WriteFile(envPath, []byte("VAR1=value1"), 0644)
-	if err != nil {
-		t.Fatalf("Failed to create test env file: %v", err)
-	}
-
-	// Create first state instance and make changes
-	state1, err := NewState(envPath)
-	if err != nil {
-		t.Fatalf("Failed to create first state: %v", err)
-	}
-
-	err = state1.SetStack([]string{"persistence_test"})
-	if err != nil {
-		t.Fatalf("Failed to set step: %v", err)
-	}
-
-	err = state1.SetVar("PERSISTENT_VAR", "persistent_value")
-	if err != nil {
-		t.Fatalf("Failed to set variable: %v", err)
-	}
-
-	// Create second state instance (should load saved state)
-	state2, err := NewState(envPath)
-	if err != nil {
-		t.Fatalf("Failed to create second state: %v", err)
-	}
-
-	// Verify step was restored
-	if step := state2.GetStack()[0]; step != "persistence_test" {
-		t.Errorf("Expected step 'persistence_test', got '%s'", step)
-	}
-
-	// Verify variable was restored
-	envVar, exists := state2.GetVar("PERSISTENT_VAR")
-	if !exists {
-		t.Error("Expected PERSISTENT_VAR to exist in restored state")
-	}
-	if envVar.Value != "persistent_value" {
-		t.Errorf("Expected value 'persistent_value', got '%s'", envVar.Value)
-	}
-}
-
-func TestStateErrors(t *testing.T) {
-	t.Run("state file is directory", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		defer os.RemoveAll(tmpDir)
-
-		envPath := filepath.Join(tmpDir, ".env")
-
-		err := os.WriteFile(envPath, []byte("VAR1=value1"), 0644)
-		if err != nil {
-			t.Fatalf("Failed to create test env file: %v", err)
-		}
-
-		// Create directory where state file should be
-		stateDir := filepath.Join(tmpDir, ".state")
-		statePath := filepath.Join(stateDir, ".env.state")
-		err = os.MkdirAll(statePath, 0755) // Create directory instead of file
-		if err != nil {
-			t.Fatalf("Failed to create state directory: %v", err)
-		}
-
-		_, err = NewState(envPath)
-		if err == nil {
-			t.Error("Expected error when state file is directory")
-		}
-	})
-
-	t.Run("corrupted state file", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		defer os.RemoveAll(tmpDir)
-
-		envPath := filepath.Join(tmpDir, ".env")
-
-		err := os.WriteFile(envPath, []byte("VAR1=value1"), 0644)
-		if err != nil {
-			t.Fatalf("Failed to create test env file: %v", err)
-		}
-
-		// Create corrupted state file
-		stateDir := filepath.Join(tmpDir, ".state")
-		err = os.MkdirAll(stateDir, 0755)
-		if err != nil {
-			t.Fatalf("Failed to create state directory: %v", err)
-		}
-
-		statePath := filepath.Join(stateDir, ".env.state")
-		err = os.WriteFile(statePath, []byte("invalid json content"), 0644)
-		if err != nil {
-			t.Fatalf("Failed to create corrupted state file: %v", err)
-		}
-
-		// try to reload original env file if state file is corrupted
-		state, err := NewState(envPath)
-		if err != nil {
-			t.Errorf("Expected reload of original env file when state file is corrupted: %v", err)
-		} else {
-			envVar, exist := state.GetVar("VAR1")
-			if !exist {
-				t.Error("Expected VAR1 to exist in restored state")
-			}
-			if envVar.Value != "value1" {
-				t.Errorf("Expected value 'value1', got '%s'", envVar.Value)
+	t.Run("get all vars includes the staged variables", func(t *testing.T) {
+		allVars := s.GetAllVars()
+		want := map[string]string{"EXISTING_VAR": "existing_value", "NEW_VAR": "new_value", "BATCH_VAR1": "batch_value1"}
+		for name, value := range want {
+			if allVars[name].Value != value {
+				t.Errorf("GetAllVars()[%s] = %q, want %q", name, allVars[name].Value, value)
 			}
 		}
 	})
-
-	t.Run("empty state file", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		defer os.RemoveAll(tmpDir)
-
-		envPath := filepath.Join(tmpDir, ".env")
-
-		err := os.WriteFile(envPath, []byte("VAR1=value1"), 0644)
-		if err != nil {
-			t.Fatalf("Failed to create test env file: %v", err)
-		}
-
-		// Create empty state file
-		stateDir := filepath.Join(tmpDir, ".state")
-		err = os.MkdirAll(stateDir, 0755)
-		if err != nil {
-			t.Fatalf("Failed to create state directory: %v", err)
-		}
-
-		statePath := filepath.Join(stateDir, ".env.state")
-		err = os.WriteFile(statePath, []byte(""), 0644)
-		if err != nil {
-			t.Fatalf("Failed to create empty state file: %v", err)
-		}
-
-		state, err := NewState(envPath)
-		if err != nil {
-			t.Errorf("Expected reload of original env file when state file is empty: %v", err)
-		} else {
-			envVar, exist := state.GetVar("VAR1")
-			if !exist {
-				t.Error("Expected VAR1 to exist in restored state")
-			}
-			if envVar.Value != "value1" {
-				t.Errorf("Expected value 'value1', got '%s'", envVar.Value)
-			}
-		}
-	})
-
-	t.Run("reset non-existent state should succeed", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		defer os.RemoveAll(tmpDir)
-
-		envPath := filepath.Join(tmpDir, ".env")
-
-		err := os.WriteFile(envPath, []byte("VAR1=value1"), 0644)
-		if err != nil {
-			t.Fatalf("Failed to create test env file: %v", err)
-		}
-
-		state, err := NewState(envPath)
-		if err != nil {
-			t.Fatalf("Failed to create state: %v", err)
-		}
-
-		// Reset when no state file exists should succeed (idempotent operation)
-		err = state.Reset()
-		if err != nil {
-			t.Errorf("Expected reset of non-existent state to succeed, got error: %v", err)
-		}
-
-		// Multiple resets should also succeed
-		err = state.Reset()
-		if err != nil {
-			t.Errorf("Expected multiple resets to succeed, got error: %v", err)
-		}
-	})
-
-	t.Run("reset after commit should succeed", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		defer os.RemoveAll(tmpDir)
-
-		envPath := filepath.Join(tmpDir, ".env")
-
-		err := os.WriteFile(envPath, []byte("VAR1=value1"), 0644)
-		if err != nil {
-			t.Fatalf("Failed to create test env file: %v", err)
-		}
-
-		state, err := NewState(envPath)
-		if err != nil {
-			t.Fatalf("Failed to create state: %v", err)
-		}
-
-		// Make changes
-		err = state.SetVar("NEW_VAR", "new_value")
-		if err != nil {
-			t.Fatalf("Failed to set variable: %v", err)
-		}
-
-		// Commit (which should reset state internally)
-		err = state.Commit()
-		if err != nil {
-			t.Fatalf("Failed to commit: %v", err)
-		}
-
-		// Additional reset should still succeed
-		err = state.Reset()
-		if err != nil {
-			t.Errorf("Expected reset after commit to succeed, got error: %v", err)
-		}
-	})
 }
 
-func containsLine(content, line string) bool {
-	lines := strings.Split(content, "\n")
-	for _, l := range lines {
-		if strings.TrimSpace(l) == line {
-			return true
-		}
+func TestState_Commit_WritesStagedChangesAndLeavesNothingPending(t *testing.T) {
+	s, envPath := stateFixture(t, "ORIGINAL_VAR=original_value")
+	if s.IsDirty() {
+		t.Error("IsDirty() = true without a staging file")
 	}
-	return false
+
+	if err := s.SetStack([]string{"testing_commit"}); err != nil {
+		t.Fatalf("SetStack: %v", err)
+	}
+	if err := s.SetVar("ORIGINAL_VAR", "modified_value"); err != nil {
+		t.Fatalf("SetVar: %v", err)
+	}
+	if err := s.SetVar("NEW_VAR", "new_value"); err != nil {
+		t.Fatalf("SetVar: %v", err)
+	}
+	if !s.Exists() || !s.IsDirty() {
+		t.Errorf("Exists(), IsDirty() = %v, %v with staged changes; want true, true", s.Exists(), s.IsDirty())
+	}
+
+	if err := s.Commit(); err != nil {
+		t.Fatalf("Commit: %v", err)
+	}
+
+	if !s.Exists() || s.IsDirty() {
+		t.Errorf("Exists(), IsDirty() = %v, %v after Commit; want true, false", s.Exists(), s.IsDirty())
+	}
+	if content, err := os.ReadFile(envPath); err != nil || string(content) != "ORIGINAL_VAR=modified_value\nNEW_VAR=new_value" {
+		t.Errorf("env file = %q, %v; want the staged changes", content, err)
+	}
+	backups, err := os.ReadDir(filepath.Join(filepath.Dir(envPath), ".bak"))
+	if err != nil || len(backups) != 1 {
+		t.Fatalf("backups = %v, %v; want one", backups, err)
+	}
+	if backup, err := os.ReadFile(filepath.Join(filepath.Dir(envPath), ".bak", backups[0].Name())); err != nil || string(backup) != "ORIGINAL_VAR=original_value" {
+		t.Errorf("backup = %q, %v; want the original env file", backup, err)
+	}
+}
+
+func TestState_Reset_DiscardsStagedChangesAndKeepsTheEnvFile(t *testing.T) {
+	tests := []struct {
+		name  string
+		stage bool
+	}{
+		{name: "staged changes are discarded", stage: true},
+		{name: "nothing staged is not an error", stage: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s, envPath := stateFixture(t, "ORIGINAL_VAR=original_value")
+			if tt.stage {
+				if err := s.SetStack([]string{"testing_reset"}); err != nil {
+					t.Fatalf("SetStack: %v", err)
+				}
+				if err := s.SetVar("ORIGINAL_VAR", "modified_value"); err != nil {
+					t.Fatalf("SetVar: %v", err)
+				}
+			}
+
+			if err := s.Reset(); err != nil {
+				t.Fatalf("Reset: %v", err)
+			}
+
+			if envVar, _ := s.GetVar("ORIGINAL_VAR"); envVar.Value != "original_value" || envVar.IsChanged {
+				t.Errorf("GetVar(ORIGINAL_VAR) = %+v, want the unchanged original_value", envVar)
+			}
+			if !s.Exists() || s.IsDirty() {
+				t.Errorf("Exists(), IsDirty() = %v, %v after Reset; want true, false", s.Exists(), s.IsDirty())
+			}
+			if content, err := os.ReadFile(envPath); err != nil || string(content) != "ORIGINAL_VAR=original_value" {
+				t.Errorf("env file = %q, %v; want it untouched", content, err)
+			}
+		})
+	}
+}
+
+func TestState_SetEulaConsent_IsRememberedAcrossSessions(t *testing.T) {
+	s, envPath := stateFixture(t, "VAR1=value1")
+	if s.GetEulaConsent() {
+		t.Fatal("GetEulaConsent() = true before consent was given")
+	}
+
+	if err := s.SetEulaConsent(); err != nil {
+		t.Fatalf("SetEulaConsent: %v", err)
+	}
+
+	next, err := NewState(envPath)
+	if err != nil || !next.GetEulaConsent() {
+		t.Errorf("a new session does not see the consent (%v)", err)
+	}
+}
+
+func TestState_WriteVars_SavesToTheEnvFileWithoutStagedEdits(t *testing.T) {
+	s, envPath := stateFixture(t, "VAR1=value1\n")
+	if err := s.SetVar("VAR1", "typed_in_a_form"); err != nil {
+		t.Fatalf("SetVar: %v", err)
+	}
+
+	if err := s.WriteVars(map[string]string{"PENTAGI_IMAGE": "vxcontrol/pentagi:2.3.4"}); err != nil {
+		t.Fatalf("WriteVars: %v", err)
+	}
+
+	if content, err := os.ReadFile(envPath); err != nil || string(content) != "VAR1=value1\nPENTAGI_IMAGE=vxcontrol/pentagi:2.3.4\n" {
+		t.Errorf("env file = %q, %v; want the written variable and not the staged edit", content, err)
+	}
+	if envVar, _ := s.GetVar("PENTAGI_IMAGE"); envVar.Value != "vxcontrol/pentagi:2.3.4" {
+		t.Errorf("GetVar(PENTAGI_IMAGE) = %q; a later Commit would write the old value back", envVar.Value)
+	}
+	if envVar, _ := s.GetVar("VAR1"); envVar.Value != "typed_in_a_form" || !envVar.IsChanged {
+		t.Errorf("GetVar(VAR1) = %+v; want the staged edit kept for the user to apply", envVar)
+	}
 }

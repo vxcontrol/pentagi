@@ -5,6 +5,7 @@ import type {
     CreateKnowledgeDocumentDocument,
     DeleteKnowledgeDocumentDocument,
     KnowledgeDocumentDocument,
+    RenameKnowledgeDocumentDocument,
 } from '@/graphql/types';
 
 import { ResultType } from '@/graphql/types';
@@ -83,6 +84,109 @@ test.describe('knowledges crud', { tag: '@crud' }, () => {
         });
     });
 
+    test.describe('anonymize', () => {
+        const RAW = 'Contact admin@example.com about host 10.0.0.7';
+        const SCRUBBED = 'Contact <email> about host <ip>';
+
+        test.describe('the anonymizer finds something', () => {
+            test.use({
+                cassette: knowledgesCassette({
+                    mutations: { anonymizeText: [{ data: { anonymizeText: SCRUBBED } as never }] },
+                }),
+            });
+
+            test('replaces the body with what the server returned', async ({ page, pageErrorLog }) => {
+                await openNewKnowledgeForm(page);
+                await typeIntoEditor(page, 'Content', RAW);
+
+                const request = page.waitForRequest(
+                    (candidate) =>
+                        candidate.method() === 'POST' && candidate.postDataJSON()?.operationName === 'anonymizeText',
+                );
+
+                await page.getByRole('button', { name: 'Anonymize' }).click();
+
+                expect((await request).postDataJSON().variables.text).toContain('admin@example.com');
+                await expect(page.getByRole('textbox', { name: 'Content' })).toContainText(SCRUBBED);
+                expectCleanPage(pageErrorLog);
+            });
+        });
+
+        test.describe('the anonymizer finds nothing', () => {
+            const PLAIN = 'Nothing sensitive in this body at all';
+
+            test.use({
+                cassette: knowledgesCassette({
+                    mutations: { anonymizeText: [{ data: { anonymizeText: PLAIN } as never }] },
+                }),
+            });
+
+            test('leaves the body alone and says so', async ({ page }) => {
+                await openNewKnowledgeForm(page);
+                await typeIntoEditor(page, 'Content', PLAIN);
+                await page.getByRole('button', { name: 'Anonymize' }).click();
+
+                await expect(page.getByText('No sensitive data detected')).toBeVisible();
+                await expect(page.getByRole('textbox', { name: 'Content' })).toContainText(PLAIN);
+            });
+        });
+    });
+
+    test.describe('rename', () => {
+        const RENAMED = 'E2E Seed Question, renamed';
+        const renamed: ResultOf<typeof RenameKnowledgeDocumentDocument> = {
+            renameKnowledgeDocument: { ...KNOWLEDGE_DOC, question: RENAMED },
+        };
+
+        test.use({
+            cassette: knowledgesCassette({
+                mutations: {
+                    renameKnowledgeDocument: [
+                        {
+                            data: renamed,
+                            setFlag: 'knowledge-renamed',
+                            variables: { id: '7', question: RENAMED },
+                        },
+                    ],
+                },
+                subscriptions: {
+                    knowledgeDocumentUpdated: [
+                        {
+                            frames: [
+                                {
+                                    payload: {
+                                        data: { knowledgeDocumentUpdated: { ...KNOWLEDGE_DOC, question: RENAMED } },
+                                    },
+                                    whenFlag: 'knowledge-renamed',
+                                },
+                            ],
+                        },
+                    ],
+                },
+            }),
+        });
+
+        test('renames in the row itself and the list keeps the new question', async ({ page, pageErrorLog }) => {
+            await page.goto('/knowledges');
+
+            const row = page.getByRole('row', { name: /E2E Seed Question/ });
+
+            await row.hover();
+            await row.getByRole('button', { name: 'Open menu' }).click();
+            await page.getByRole('menuitem', { name: 'Rename' }).click();
+
+            const editor = page.getByRole('row').getByRole('textbox');
+
+            await expect(editor).toBeFocused();
+            await editor.fill(RENAMED);
+            await editor.press('Enter');
+
+            await expect(page.getByRole('row', { name: new RegExp(RENAMED) })).toBeVisible();
+            await expect(page.getByRole('row').getByRole('textbox')).toHaveCount(0);
+            expectCleanPage(pageErrorLog);
+        });
+    });
+
     test.describe('delete', () => {
         const deleted: ResultOf<typeof DeleteKnowledgeDocumentDocument> = {
             deleteKnowledgeDocument: ResultType.Success,
@@ -145,13 +249,30 @@ test.describe('knowledges crud', { tag: '@crud' }, () => {
         });
     });
 
-    // The backend authz denial (graph/context.go) contains "not found", so a naive match would
-    // mistake it for a missing record and bounce a user who merely lacks access.
+    test.describe('detail not found', () => {
+        test.use({
+            cassette: knowledgesCassette({
+                // Mirrors the backend error presenter's answer to a missing row (graphql_errors.go).
+                queries: {
+                    knowledgeDocument: [{ errors: [{ extensions: { code: 'NOT_FOUND' }, message: 'not found' }] }],
+                },
+            }),
+        });
+
+        test('says the document is gone and returns to the list', async ({ page }) => {
+            await page.goto(`/knowledges/${KNOWLEDGE_DOC.id}`);
+
+            await expect(page.getByText('Knowledge document not found')).toBeVisible();
+            await expect(page).toHaveURL(/\/knowledges$/);
+        });
+    });
+
+    // Mirrors the backend error presenter's answer to a denied permission (graphql_errors.go).
     test.describe('detail authz denial', () => {
         test.use({
             cassette: knowledgesCassette({
                 queries: {
-                    knowledgeDocument: [{ errors: [{ message: "requested permission 'knowledge.read' not found" }] }],
+                    knowledgeDocument: [{ errors: [{ extensions: { code: 'FORBIDDEN' }, message: 'not permitted' }] }],
                 },
             }),
         });

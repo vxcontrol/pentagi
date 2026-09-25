@@ -1,5 +1,5 @@
 simple:
-  model: kimi-k2.5
+  model: kimi-k2.6
   temperature: 0.6
   top_p: 0.95
   n: 1
@@ -10,12 +10,12 @@ simple:
       type: disabled
     tool_choice: auto
   price:
-    input: 0.60
-    output: 3.00
-    cache_read: 0.10
+    input: 0.95
+    output: 4.00
+    cache_read: 0.16
 
 simple_json:
-  model: kimi-k2.5
+  model: kimi-k2.6
   temperature: 0.6
   top_p: 0.95
   n: 1
@@ -27,12 +27,12 @@ simple_json:
       type: disabled
     tool_choice: auto
   price:
-    input: 0.60
-    output: 3.00
-    cache_read: 0.10
+    input: 0.95
+    output: 4.00
+    cache_read: 0.16
 
 primary_agent:
-  model: kimi-k2.5
+  model: kimi-k2.7-code-highspeed
   temperature: 1.0
   top_p: 0.95
   n: 1
@@ -40,14 +40,15 @@ primary_agent:
   extra_body:
     thinking:
       type: enabled
+      keep: all
     tool_choice: auto
   price:
-    input: 0.60
-    output: 3.00
-    cache_read: 0.10
+    input: 1.90
+    output: 8.00
+    cache_read: 0.38
 
 assistant:
-  model: kimi-k2.5
+  model: kimi-k2.7-code-highspeed
   temperature: 1.0
   top_p: 0.95
   n: 1
@@ -55,14 +56,15 @@ assistant:
   extra_body:
     thinking:
       type: enabled
+      keep: all
     tool_choice: auto
   price:
-    input: 0.60
-    output: 3.00
-    cache_read: 0.10
+    input: 1.90
+    output: 8.00
+    cache_read: 0.38
 
 generator:
-  model: kimi-k2.6
+  model: kimi-k2.7-code
   temperature: 1.0
   top_p: 0.95
   n: 1
@@ -75,10 +77,10 @@ generator:
   price:
     input: 0.95
     output: 4.00
-    cache_read: 0.16
+    cache_read: 0.19
 
 refiner:
-  model: kimi-k2.6
+  model: kimi-k2.7-code
   temperature: 1.0
   top_p: 0.95
   n: 1
@@ -91,42 +93,44 @@ refiner:
   price:
     input: 0.95
     output: 4.00
-    cache_read: 0.16
+    cache_read: 0.19
 
 adviser:
-  model: kimi-k2.6
+  model: kimi-k3
   temperature: 1.0
   top_p: 0.95
   n: 1
   max_tokens: 8192
+  presence_penalty: 0
+  frequency_penalty: 0
+  reasoning:
+    effort: max
   extra_body:
+    tool_choice: auto
+  price:
+    input: 3.00
+    output: 15.00
+    cache_read: 0.30
+    cache_write: 3.00
+
+reflector:
+  model: kimi-k2.6
+  temperature: 0.6
+  top_p: 0.95
+  n: 1
+  max_tokens: 4096
+  extra_body:
+    temperature: 0.6
     thinking:
-      type: enabled
-      keep: all
+      type: disabled
     tool_choice: auto
   price:
     input: 0.95
     output: 4.00
     cache_read: 0.16
 
-reflector:
-  model: kimi-k2.5
-  temperature: 0.6
-  top_p: 0.95
-  n: 1
-  max_tokens: 4096
-  extra_body:
-    temperature: 0.6
-    thinking:
-      type: disabled
-    tool_choice: auto
-  price:
-    input: 0.60
-    output: 3.00
-    cache_read: 0.10
-
 searcher:
-  model: kimi-k2.5
+  model: kimi-k2.6
   temperature: 0.6
   top_p: 0.95
   n: 1
@@ -137,12 +141,12 @@ searcher:
       type: disabled
     tool_choice: auto
   price:
-    input: 0.60
-    output: 3.00
-    cache_read: 0.10
+    input: 0.95
+    output: 4.00
+    cache_read: 0.16
 
 enricher:
-  model: kimi-k2.5
+  model: kimi-k2.6
   temperature: 0.6
   top_p: 0.95
   n: 1
@@ -153,12 +157,12 @@ enricher:
       type: disabled
     tool_choice: auto
   price:
-    input: 0.60
-    output: 3.00
-    cache_read: 0.10
+    input: 0.95
+    output: 4.00
+    cache_read: 0.16
 
 coder:
-  model: kimi-k2.6
+  model: kimi-k2.7-code
   temperature: 1.0
   top_p: 0.95
   n: 1
@@ -171,24 +175,9 @@ coder:
   price:
     input: 0.95
     output: 4.00
-    cache_read: 0.16
+    cache_read: 0.19
 
 installer:
-  model: kimi-k2.5
-  temperature: 1.0
-  top_p: 0.95
-  n: 1
-  max_tokens: 16384
-  extra_body:
-    thinking:
-      type: enabled
-    tool_choice: auto
-  price:
-    input: 0.60
-    output: 3.00
-    cache_read: 0.10
-
-pentester:
   model: kimi-k2.6
   temperature: 1.0
   top_p: 0.95
@@ -203,3 +192,19 @@ pentester:
     input: 0.95
     output: 4.00
     cache_read: 0.16
+
+pentester:
+  model: kimi-k2.7-code
+  temperature: 1.0
+  top_p: 0.95
+  n: 1
+  max_tokens: 16384
+  extra_body:
+    thinking:
+      type: enabled
+      keep: all
+    tool_choice: auto
+  price:
+    input: 0.95
+    output: 4.00
+    cache_read: 0.19

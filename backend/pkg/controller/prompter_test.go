@@ -7,203 +7,88 @@ import (
 
 	"pentagi/pkg/database"
 	"pentagi/pkg/templates"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-// fakeQuerier satisfies database.Querier by embedding the interface
-// (so the unused methods stay nil) and overrides only GetUserPrompts.
-// Calling any other method would panic, which is exactly what we want
-// for a unit test that should not touch unrelated DB code.
-type fakeQuerier struct {
+type prompterFakeQuerier struct {
 	database.Querier
+
 	prompts []database.Prompt
 	err     error
 }
 
-func (f *fakeQuerier) GetUserPrompts(ctx context.Context, userID int64) ([]database.Prompt, error) {
-	if f.err != nil {
-		return nil, f.err
-	}
-	return f.prompts, nil
+func (f *prompterFakeQuerier) GetUserPrompts(context.Context, int64) ([]database.Prompt, error) {
+	return f.prompts, f.err
 }
 
-// getDefaultTemplate returns the compiled default body for a prompt
-// type, used to compare overridden vs. preserved prompts in tests.
-func getDefaultTemplate(t *testing.T, pt templates.PromptType) string {
-	t.Helper()
-	body, err := templates.NewDefaultPrompter().GetTemplate(pt)
-	if err != nil {
-		t.Fatalf("default prompter has no template for %q: %v", pt, err)
-	}
-	return body
-}
+func TestPrompter_NewUserPrompter_OverlaysTheUsersPromptsOnTheDefaults(t *testing.T) {
+	dbErr := errors.New("db connection lost")
+	defaults := templates.NewDefaultPrompter()
 
-// loadDefaults returns a fresh PromptsMap of the embedded default templates so
-// each test mutates its own map without leaking state between cases.
-func loadDefaults(t *testing.T) templates.PromptsMap {
-	t.Helper()
-	defaults, err := templates.LoadDefaultPromptsMap()
-	if err != nil {
-		t.Fatalf("LoadDefaultPromptsMap error: %v", err)
-	}
-	return defaults
-}
-
-func TestBuildUserPrompter_NoUserPrompts(t *testing.T) {
-	prompter := buildUserPrompter(loadDefaults(t), nil)
-
-	for _, pt := range []templates.PromptType{
-		templates.PromptTypePrimaryAgent,
-		templates.PromptTypeAssistant,
-	} {
-		got, err := prompter.GetTemplate(pt)
-		if err != nil {
-			t.Fatalf("GetTemplate(%q) error: %v", pt, err)
-		}
-		want := getDefaultTemplate(t, pt)
-		if got != want {
-			t.Errorf("prompt %q: expected default body when user has no overrides, got divergent body", pt)
-		}
-	}
-}
-
-func TestBuildUserPrompter_SingleOverride(t *testing.T) {
-	const customBody = "custom primary agent prompt body"
-	userPrompts := []database.Prompt{
-		{Type: database.PromptTypePrimaryAgent, Prompt: customBody},
-	}
-
-	prompter := buildUserPrompter(loadDefaults(t), userPrompts)
-
-	got, err := prompter.GetTemplate(templates.PromptTypePrimaryAgent)
-	if err != nil {
-		t.Fatalf("GetTemplate(primary_agent) error: %v", err)
-	}
-	if got != customBody {
-		t.Errorf("primary_agent: expected custom body %q, got %q", customBody, got)
-	}
-
-	// Spot-check that an unrelated type still resolves to the default.
-	for _, pt := range []templates.PromptType{
-		templates.PromptTypeAssistant,
-		templates.PromptTypePentester,
-	} {
-		got, err := prompter.GetTemplate(pt)
-		if err != nil {
-			t.Fatalf("GetTemplate(%q) error: %v", pt, err)
-		}
-		if got != getDefaultTemplate(t, pt) {
-			t.Errorf("prompt %q should still match default after a single unrelated override", pt)
-		}
-	}
-}
-
-func TestBuildUserPrompter_PartialOverridesPreserveDefaults(t *testing.T) {
-	overrides := map[database.PromptType]string{
-		database.PromptTypePrimaryAgent: "custom primary",
-		database.PromptTypeCoder:        "custom coder",
-		database.PromptTypeReporter:     "custom reporter",
-	}
-
-	userPrompts := make([]database.Prompt, 0, len(overrides))
-	for pt, body := range overrides {
-		userPrompts = append(userPrompts, database.Prompt{Type: pt, Prompt: body})
-	}
-
-	prompter := buildUserPrompter(loadDefaults(t), userPrompts)
-
-	for pt, want := range overrides {
-		got, err := prompter.GetTemplate(templates.PromptType(pt))
-		if err != nil {
-			t.Fatalf("GetTemplate(%q) error: %v", pt, err)
-		}
-		if got != want {
-			t.Errorf("prompt %q: expected custom body %q, got %q", pt, want, got)
-		}
-	}
-
-	// Types that were not overridden must still match the defaults.
-	for _, pt := range []templates.PromptType{
-		templates.PromptTypeAssistant,
-		templates.PromptTypePentester,
-		templates.PromptTypeSearcher,
-	} {
-		got, err := prompter.GetTemplate(pt)
-		if err != nil {
-			t.Fatalf("GetTemplate(%q) error: %v", pt, err)
-		}
-		if got != getDefaultTemplate(t, pt) {
-			t.Errorf("prompt %q should still match default after partial overrides", pt)
-		}
-	}
-}
-
-func TestBuildUserPrompter_EmptyBodyIsIgnored(t *testing.T) {
-	userPrompts := []database.Prompt{
-		{Type: database.PromptTypePrimaryAgent, Prompt: ""},
-	}
-
-	prompter := buildUserPrompter(loadDefaults(t), userPrompts)
-
-	got, err := prompter.GetTemplate(templates.PromptTypePrimaryAgent)
-	if err != nil {
-		t.Fatalf("GetTemplate(primary_agent) error: %v", err)
-	}
-	if got != getDefaultTemplate(t, templates.PromptTypePrimaryAgent) {
-		t.Errorf("primary_agent: empty user body must not clobber default")
-	}
-}
-
-func TestNewUserPrompter_HappyPath(t *testing.T) {
-	const customAssistant = "custom assistant prompt"
-	const customCoder = "custom coder prompt"
-
-	db := &fakeQuerier{
-		prompts: []database.Prompt{
-			{Type: database.PromptTypeAssistant, Prompt: customAssistant},
-			{Type: database.PromptTypeCoder, Prompt: customCoder},
+	for _, tc := range []struct {
+		name        string
+		prompts     []database.Prompt
+		dbErr       error
+		wantCustom  map[templates.PromptType]string
+		wantDefault []templates.PromptType
+	}{
+		{
+			name:        "no user prompts",
+			wantDefault: []templates.PromptType{templates.PromptTypePrimaryAgent, templates.PromptTypeAssistant},
 		},
-	}
-
-	prompter, err := newUserPrompter(context.Background(), db, 42)
-	if err != nil {
-		t.Fatalf("newUserPrompter error: %v", err)
-	}
-
-	for pt, want := range map[templates.PromptType]string{
-		templates.PromptTypeAssistant: customAssistant,
-		templates.PromptTypeCoder:     customCoder,
+		{
+			name:        "one override",
+			prompts:     []database.Prompt{{Type: database.PromptTypePrimaryAgent, Prompt: "custom primary"}},
+			wantCustom:  map[templates.PromptType]string{templates.PromptTypePrimaryAgent: "custom primary"},
+			wantDefault: []templates.PromptType{templates.PromptTypeAssistant, templates.PromptTypePentester},
+		},
+		{
+			name: "several overrides",
+			prompts: []database.Prompt{
+				{Type: database.PromptTypePrimaryAgent, Prompt: "custom primary"},
+				{Type: database.PromptTypeCoder, Prompt: "custom coder"},
+				{Type: database.PromptTypeReporter, Prompt: "custom reporter"},
+			},
+			wantCustom: map[templates.PromptType]string{
+				templates.PromptTypePrimaryAgent: "custom primary",
+				templates.PromptTypeCoder:        "custom coder",
+				templates.PromptTypeReporter:     "custom reporter",
+			},
+			wantDefault: []templates.PromptType{
+				templates.PromptTypeAssistant, templates.PromptTypePentester, templates.PromptTypeSearcher,
+			},
+		},
+		{
+			name:        "an empty body, which would surface deep in agent rendering",
+			prompts:     []database.Prompt{{Type: database.PromptTypePrimaryAgent, Prompt: ""}},
+			wantDefault: []templates.PromptType{templates.PromptTypePrimaryAgent},
+		},
+		{name: "a database that cannot be read", dbErr: dbErr},
 	} {
-		got, err := prompter.GetTemplate(pt)
-		if err != nil {
-			t.Fatalf("GetTemplate(%q) error: %v", pt, err)
-		}
-		if got != want {
-			t.Errorf("prompt %q: expected custom body %q, got %q", pt, want, got)
-		}
-	}
+		t.Run(tc.name, func(t *testing.T) {
+			prompter, err := newUserPrompter(context.Background(), &prompterFakeQuerier{prompts: tc.prompts, err: tc.dbErr}, 42)
 
-	// Sanity check that an un-customized type still falls back.
-	got, err := prompter.GetTemplate(templates.PromptTypePentester)
-	if err != nil {
-		t.Fatalf("GetTemplate(pentester) error: %v", err)
-	}
-	if got != getDefaultTemplate(t, templates.PromptTypePentester) {
-		t.Errorf("pentester: expected default body when user has no override")
-	}
-}
+			if tc.dbErr != nil {
+				assert.ErrorIs(t, err, tc.dbErr, "a session is not built on defaults the user did not choose")
+				assert.Nil(t, prompter)
 
-func TestNewUserPrompter_DBErrorPropagates(t *testing.T) {
-	sentinel := errors.New("db connection lost")
-	db := &fakeQuerier{err: sentinel}
-
-	prompter, err := newUserPrompter(context.Background(), db, 42)
-	if err == nil {
-		t.Fatalf("expected error, got nil prompter=%v", prompter)
-	}
-	if prompter != nil {
-		t.Errorf("expected nil prompter on DB error, got %v", prompter)
-	}
-	if !errors.Is(err, sentinel) {
-		t.Errorf("expected wrapped sentinel error, got %v", err)
+				return
+			}
+			require.NoError(t, err)
+			for pt, want := range tc.wantCustom {
+				got, err := prompter.GetTemplate(pt)
+				require.NoError(t, err)
+				assert.Equal(t, want, got, "prompt %s", pt)
+			}
+			for _, pt := range tc.wantDefault {
+				got, err := prompter.GetTemplate(pt)
+				require.NoError(t, err)
+				want, err := defaults.GetTemplate(pt)
+				require.NoError(t, err)
+				assert.Equal(t, want, got, "prompt %s keeps its default", pt)
+			}
+		})
 	}
 }

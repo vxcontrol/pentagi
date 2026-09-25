@@ -77,11 +77,7 @@ test.describe('flow assistants', { tag: '@flows' }, () => {
             await expect(picker).toHaveText('New');
             await composer.fill('plan the recon');
 
-            // A brand-new assistant inherits no provider. The only one on offer is also the one the
-            // previously selected assistant used — the case a defaults-sync that ignores the picked
-            // value silently reverts.
-            await page.getByRole('button', { name: 'Select Provider' }).click();
-            await page.getByRole('menuitem', { name: PROVIDER.name }).click();
+            await expect(page.getByRole('button', { name: PROVIDER.name })).toBeVisible();
 
             const request = operationRequest(page, 'createAssistant');
 
@@ -188,7 +184,7 @@ test.describe('flow assistants', { tag: '@flows' }, () => {
             await openPicker(page);
             await page.getByRole('option', { name: new RegExp(RUNNING_ASSISTANT.title) }).click();
 
-            const stop = page.getByRole('button', { name: 'Cancel' });
+            const stop = page.getByRole('button', { name: 'Stop' });
 
             await expect(stop).toBeVisible();
 

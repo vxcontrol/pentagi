@@ -100,7 +100,7 @@ Only the HTTPS probe uses `PROXY_URL`. The lookup resolves locally, and the pull
 
 ## Update Server Scenarios
 
-The installer talks to the PentAGI Cloud API over three calls — `POST /api/v1/proxy/updates/check`, `GET /api/v1/proxy/packages/info` and `GET /api/v1/proxy/packages/download`. Every one of them negotiates TLS and solves a proof-of-work challenge before the request is sent, so there is no local server to point the installer at: these scenarios are exercised in unit tests by substituting the call function with the error the transport would have produced (`cmd/installer/cloud/calls_test.go`, `cmd/installer/cloud/errors_test.go`), and observed in the field the way a support case arrives.
+The installer talks to the PentAGI Cloud API over three calls — `POST /api/v1/proxy/updates/check`, `GET /api/v1/proxy/packages/info` and `GET /api/v1/proxy/packages/download`. Every one of them negotiates TLS and solves a proof-of-work challenge before the request is sent, so there is no local server to point the installer at: these scenarios are exercised in unit tests by substituting the call function with the error the transport would have produced (`cmd/installer/cloud/updates_test.go`, `cmd/installer/cloud/packages_test.go`, `cmd/installer/cloud/errors_test.go`), and observed in the field the way a support case arrives.
 
 A call that produces no answer is classified into one of eight reasons. The distinction is the whole point — a spent allowance and a broken proxy call for opposite reactions, and collapsing them into one "update server unavailable" flag tells the user nothing they can act on.
 

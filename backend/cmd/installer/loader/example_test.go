@@ -19,7 +19,7 @@ DEBUG=false
 # API Settings
 API_KEY=old_key`
 
-	os.WriteFile(envPath, []byte(initialContent), 0644)
+	_ = os.WriteFile(envPath, []byte(initialContent), 0644)
 
 	// Step 1: Load existing .env file
 	envFile, err := LoadEnvFile(envPath)

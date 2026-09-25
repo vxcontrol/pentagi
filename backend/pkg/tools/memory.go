@@ -13,6 +13,7 @@ import (
 	"pentagi/pkg/observability/langfuse"
 
 	"github.com/sirupsen/logrus"
+	"github.com/vxcontrol/cloud/anonymizer"
 	"github.com/vxcontrol/langchaingo/schema"
 	"github.com/vxcontrol/langchaingo/vectorstores"
 	"github.com/vxcontrol/langchaingo/vectorstores/pgvector"
@@ -26,16 +27,23 @@ const (
 )
 
 type memory struct {
-	flowID int64
-	store  *pgvector.Store
-	vslp   VectorStoreLogProvider
+	flowID   int64
+	replacer anonymizer.Replacer
+	store    *pgvector.Store
+	vslp     VectorStoreLogProvider
 }
 
-func NewMemoryTool(flowID int64, store *pgvector.Store, vslp VectorStoreLogProvider) Tool {
+func NewMemoryTool(
+	flowID int64,
+	replacer anonymizer.Replacer,
+	store *pgvector.Store,
+	vslp VectorStoreLogProvider,
+) Tool {
 	return &memory{
-		flowID: flowID,
-		store:  store,
-		vslp:   vslp,
+		flowID:   flowID,
+		replacer: replacer,
+		store:    store,
+		vslp:     vslp,
 	}
 }
 
@@ -64,7 +72,8 @@ func (m *memory) Handle(ctx context.Context, name string, args json.RawMessage) 
 		}
 
 		filters := map[string]any{
-			"flow_id":  strconv.FormatInt(m.flowID, 10),
+			"flow_id": strconv.FormatInt(m.flowID, 10),
+			// Guides, answers and code share this table with memories.
 			"doc_type": memoryVectorStoreDefaultType,
 		}
 		if action.TaskID != nil && *action.TaskID != 0 {
@@ -200,16 +209,16 @@ func (m *memory) Handle(ctx context.Context, name string, args json.RawMessage) 
 				langfuse.WithScoreName("memory_search_result"),
 				langfuse.WithScoreFloatValue(float64(doc.Score)),
 			)
-			buffer.WriteString(fmt.Sprintf("# Retrieved Memory Fact %d Match score: %f\n\n", i+1, doc.Score))
+			fmt.Fprintf(&buffer, "# Retrieved Memory Fact %d Match score: %f\n\n", i+1, doc.Score)
 			if taskID, ok := doc.Metadata["task_id"]; ok {
-				buffer.WriteString(fmt.Sprintf("## Task ID %v\n\n", taskID))
+				fmt.Fprintf(&buffer, "## Task ID %v\n\n", taskID)
 			}
 			if subtaskID, ok := doc.Metadata["subtask_id"]; ok {
-				buffer.WriteString(fmt.Sprintf("## Subtask ID %v\n\n", subtaskID))
+				fmt.Fprintf(&buffer, "## Subtask ID %v\n\n", subtaskID)
 			}
-			buffer.WriteString(fmt.Sprintf("## Tool Name '%s'\n\n", doc.Metadata["tool_name"]))
+			fmt.Fprintf(&buffer, "## Tool Name '%s'\n\n", doc.Metadata["tool_name"])
 			if toolDescription, ok := doc.Metadata["tool_description"]; ok {
-				buffer.WriteString(fmt.Sprintf("## Tool Description\n\n%s\n\n", toolDescription))
+				fmt.Fprintf(&buffer, "## Tool Description\n\n%s\n\n", toolDescription)
 			}
 			buffer.WriteString("## Content\n\n")
 			buffer.WriteString(doc.PageContent)
@@ -222,7 +231,8 @@ func (m *memory) Handle(ctx context.Context, name string, args json.RawMessage) 
 				logger.WithError(err).Error("failed to marshal filters")
 				return "", fmt.Errorf("failed to marshal filters: %w", err)
 			}
-			queriesText := strings.Join(action.Questions, "\n--------------------------------\n")
+			// The vector store tab shows the logged query as is, so it is logged anonymized.
+			queriesText := m.replacer.ReplaceString(strings.Join(action.Questions, "\n--------------------------------\n"))
 			_, _ = m.vslp.PutLog(
 				ctx,
 				agentCtx.ParentAgentType,

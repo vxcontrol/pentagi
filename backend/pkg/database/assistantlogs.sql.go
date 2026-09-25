@@ -240,6 +240,56 @@ func (q *Queries) GetUserFlowAssistantLogs(ctx context.Context, arg GetUserFlowA
 	return items, nil
 }
 
+const saveAssistantLog = `-- name: SaveAssistantLog :exec
+UPDATE assistantlogs
+SET type = $1, message = $2, thinking = $3, result = $4, result_format = $5
+WHERE id = $6
+`
+
+type SaveAssistantLogParams struct {
+	Type         MsglogType         `json:"type"`
+	Message      string             `json:"message"`
+	Thinking     sql.NullString     `json:"thinking"`
+	Result       string             `json:"result"`
+	ResultFormat MsglogResultFormat `json:"result_format"`
+	ID           int64              `json:"id"`
+}
+
+func (q *Queries) SaveAssistantLog(ctx context.Context, arg SaveAssistantLogParams) error {
+	_, err := q.db.ExecContext(ctx, saveAssistantLog,
+		arg.Type,
+		arg.Message,
+		arg.Thinking,
+		arg.Result,
+		arg.ResultFormat,
+		arg.ID,
+	)
+	return err
+}
+
+const saveAssistantLogContent = `-- name: SaveAssistantLogContent :exec
+UPDATE assistantlogs
+SET type = $1, message = $2, thinking = $3
+WHERE id = $4
+`
+
+type SaveAssistantLogContentParams struct {
+	Type     MsglogType     `json:"type"`
+	Message  string         `json:"message"`
+	Thinking sql.NullString `json:"thinking"`
+	ID       int64          `json:"id"`
+}
+
+func (q *Queries) SaveAssistantLogContent(ctx context.Context, arg SaveAssistantLogContentParams) error {
+	_, err := q.db.ExecContext(ctx, saveAssistantLogContent,
+		arg.Type,
+		arg.Message,
+		arg.Thinking,
+		arg.ID,
+	)
+	return err
+}
+
 const updateAssistantLog = `-- name: UpdateAssistantLog :one
 UPDATE assistantlogs
 SET type = $1, message = $2, thinking = $3, result = $4, result_format = $5

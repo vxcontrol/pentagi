@@ -142,7 +142,7 @@ import (
 	"strings"
 )
 
-//go:embed fs/*
+//go:embed all:fs
 var embeddedFS embed.FS
 
 // FileMetadata represents metadata for embedded files

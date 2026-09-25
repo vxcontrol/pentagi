@@ -1,0 +1,159 @@
+# Mistral agent configuration.
+#
+# Strategy: mistral-small-latest for utility and read-heavy agents,
+# mistral-large-latest for execution agents, and mistral-medium-latest for
+# planning and advice.
+#
+# Prices repeat models.yml so a per-agent override carries its own cost.
+
+simple:
+  model: mistral-small-latest
+  temperature: 0.3
+  top_p: 0.9
+  n: 1
+  max_tokens: 8192
+  price:
+    input: 0.15
+    output: 0.60
+    cache_read: 0.015
+
+simple_json:
+  model: mistral-small-latest
+  temperature: 0.3
+  top_p: 0.9
+  n: 1
+  max_tokens: 4096
+  json: true
+  price:
+    input: 0.15
+    output: 0.60
+    cache_read: 0.015
+
+primary_agent:
+  model: mistral-large-latest
+  temperature: 0.7
+  top_p: 0.95
+  n: 1
+  max_tokens: 16384
+  price:
+    input: 0.50
+    output: 1.50
+    cache_read: 0.05
+
+assistant:
+  model: mistral-large-latest
+  temperature: 0.7
+  top_p: 0.95
+  n: 1
+  max_tokens: 16384
+  price:
+    input: 0.50
+    output: 1.50
+    cache_read: 0.05
+
+generator:
+  model: mistral-medium-latest
+  temperature: 0.7
+  top_p: 0.95
+  n: 1
+  max_tokens: 16384
+  reasoning:
+    effort: high
+  price:
+    input: 1.50
+    output: 7.50
+    cache_read: 0.15
+
+refiner:
+  model: mistral-medium-latest
+  temperature: 0.7
+  top_p: 0.95
+  n: 1
+  max_tokens: 16384
+  reasoning:
+    effort: high
+  price:
+    input: 1.50
+    output: 7.50
+    cache_read: 0.15
+
+adviser:
+  model: mistral-medium-latest
+  temperature: 0.7
+  top_p: 0.95
+  n: 1
+  max_tokens: 16384
+  reasoning:
+    effort: high
+  price:
+    input: 1.50
+    output: 7.50
+    cache_read: 0.15
+
+reflector:
+  model: mistral-small-latest
+  temperature: 0.5
+  top_p: 0.9
+  n: 1
+  max_tokens: 8192
+  price:
+    input: 0.15
+    output: 0.60
+    cache_read: 0.015
+
+searcher:
+  model: mistral-small-latest
+  temperature: 0.5
+  top_p: 0.9
+  n: 1
+  max_tokens: 8192
+  price:
+    input: 0.15
+    output: 0.60
+    cache_read: 0.015
+
+enricher:
+  model: mistral-small-latest
+  temperature: 0.5
+  top_p: 0.9
+  n: 1
+  max_tokens: 8192
+  price:
+    input: 0.15
+    output: 0.60
+    cache_read: 0.015
+
+coder:
+  model: mistral-large-latest
+  temperature: 0.4
+  top_p: 0.9
+  n: 1
+  max_tokens: 16384
+  price:
+    input: 0.50
+    output: 1.50
+    cache_read: 0.05
+
+installer:
+  model: mistral-small-latest
+  temperature: 0.4
+  top_p: 0.9
+  n: 1
+  max_tokens: 8192
+  reasoning:
+    effort: high
+  price:
+    input: 0.15
+    output: 0.60
+    cache_read: 0.015
+
+pentester:
+  model: mistral-large-latest
+  temperature: 0.7
+  top_p: 0.95
+  n: 1
+  max_tokens: 16384
+  price:
+    input: 0.50
+    output: 1.50
+    cache_read: 0.05

@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 
-import { mergeHrefWithSearchParams } from './url-params';
+import { getLatestSearchParams, mergeHrefWithSearchParams } from './url-params';
 
 describe('mergeHrefWithSearchParams', () => {
     it('appends incoming params to a path-only href', () => {
@@ -40,5 +40,27 @@ describe('mergeHrefWithSearchParams', () => {
         // what to expect.
         const result = mergeHrefWithSearchParams('/flows/1', new URLSearchParams('q=a b&keep=%23anchor'));
         expect(result).toBe('/flows/1?q=a+b&keep=%23anchor');
+    });
+});
+
+describe('getLatestSearchParams', () => {
+    afterEach(() => {
+        window.history.replaceState(null, '', '/');
+    });
+
+    it('takes the address bar over the snapshot the router handed this render', () => {
+        window.history.replaceState(null, '', '/?at=live');
+
+        const params = getLatestSearchParams(new URLSearchParams('at=stale'));
+
+        expect(params.get('at')).toBe('live');
+    });
+
+    it('reads an empty address bar as no params at all, not as no information', () => {
+        window.history.replaceState(null, '', '/');
+
+        const params = getLatestSearchParams(new URLSearchParams('at=removed'));
+
+        expect(params.has('at')).toBe(false);
     });
 });

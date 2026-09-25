@@ -1,90 +1,58 @@
-# Qwen (Alibaba Cloud DashScope) agent configuration.
+# Qwen Cloud and Alibaba Cloud Model Studio agent configuration.
 #
-# DashScope also resells third-party models (GLM, DeepSeek) through the same
-# endpoint, using the same flat `enable_thinking` extra_body key for every
-# vendor — NOT their native APIs' own thinking syntax (compare glm/config.yml,
-# deepseek/config.yml).
+# Every assigned model is available from both qwen_cloud and dashscope. The
+# catalogue is wider because it is the union of both platforms.
 #
-# Tiers: deepseek-v4-flash-0731 (utility: simple/simple_json/reflector/
-# searcher/enricher) -> qwen3.7-plus (workhorse: primary_agent/assistant/
-# coder/installer/pentester) -> glm-5.2 (adviser) -> deepseek-v4-pro
-# (generator/refiner, flagship-tier planning).
+# Qwen3.6 Flash handles utility calls. DeepSeek V4.1 Flash handles routine tool
+# use, while DeepSeek V4 Pro handles planning and advice.
 #
-# qwen3.8-max was tried for generator/refiner but DROPPED: DashScope's content
-# moderation (InternalError.Algo.DataInspectionFailed) rejects pentest-flavored
-# planning prompts for Qwen models with a hard 400 and no fallback. GLM/DeepSeek
-# on the same endpoint do not trigger this filter for the same input.
-#
-# extra_body keys (flat, top-level, not nested under "thinking"):
-#   - enable_thinking: MUST be false for simple/simple_json, or
-#     reasoning_content leaks into content and corrupts deterministic output.
-#   - preserve_thinking: Qwen-only; never set on glm-5.2/deepseek-v4-*.
-#   - clear_thinking: GLM-only, inverted (false = retain, already default).
-#
-# reasoning.effort is intentionally NOT set: this deployment's LiteLLM proxy
-# 400s on the top-level `reasoning_effort` param for glm-5.2/deepseek-v4-flash
-# -0731 (stale per-model capability table). Fix proxy-side (`drop_params:
-# true`) before reintroducing it. Adaptive reasoning mode doesn't apply here
-# either — Anthropic-only concept in this codebase.
+# Thinking controls are left unset because Qwen Cloud does not let these models
+# disable reasoning while DashScope does. Both gateways apply their defaults.
 
 simple:
-  model: "deepseek-v4-flash-0731"
-  temperature: 0.6
+  model: "qwen3.6-flash"
+  temperature: 0.3
   n: 1
   max_tokens: 8192
-  extra_body:
-    enable_thinking: false
   price:
-    input: 0.2
-    output: 0.4
-    cache_read: 0.04
+    input: 0.25
+    output: 1.5
+    cache_read: 0.05
 
 simple_json:
-  model: "deepseek-v4-flash-0731"
-  temperature: 0.6
+  model: "qwen3.6-flash"
+  temperature: 0.3
   n: 1
   max_tokens: 4096
   json: true
-  extra_body:
-    enable_thinking: false
   price:
-    input: 0.2
-    output: 0.4
-    cache_read: 0.04
+    input: 0.25
+    output: 1.5
+    cache_read: 0.05
 
 primary_agent:
-  model: "qwen3.7-plus"
-  temperature: 1.0
+  model: "deepseek-v4.1-flash"
+  temperature: 0.7
   n: 1
   max_tokens: 16384
-  extra_body:
-    enable_thinking: true
-    preserve_thinking: true
   price:
-    input: 0.4
-    output: 1.6
-    cache_read: 0.08
+    input: 0.15
+    output: 0.6
 
 assistant:
-  model: "qwen3.7-plus"
-  temperature: 1.0
+  model: "deepseek-v4.1-flash"
+  temperature: 0.7
   n: 1
   max_tokens: 16384
-  extra_body:
-    enable_thinking: true
-    preserve_thinking: true
   price:
-    input: 0.4
-    output: 1.6
-    cache_read: 0.08
+    input: 0.15
+    output: 0.6
 
 generator:
   model: "deepseek-v4-pro"
-  temperature: 1.0
+  temperature: 0.7
   n: 1
   max_tokens: 32768
-  extra_body:
-    enable_thinking: true
   price:
     input: 2.4
     output: 4.8
@@ -92,100 +60,77 @@ generator:
 
 refiner:
   model: "deepseek-v4-pro"
-  temperature: 1.0
+  temperature: 0.7
   n: 1
   max_tokens: 20480
-  extra_body:
-    enable_thinking: true
   price:
     input: 2.4
     output: 4.8
     cache_read: 0.2
 
 adviser:
-  model: "glm-5.2"
-  temperature: 1.0
+  model: "deepseek-v4-pro"
+  temperature: 0.7
   n: 1
   max_tokens: 8192
-  extra_body:
-    enable_thinking: true
-    clear_thinking: false
   price:
-    input: 1.4
-    output: 4.4
-    cache_read: 0.28
+    input: 2.4
+    output: 4.8
+    cache_read: 0.2
 
 reflector:
-  model: "deepseek-v4-flash-0731"
-  temperature: 0.7
+  model: "qwen3.6-flash"
+  temperature: 0.3
   n: 1
   max_tokens: 4096
-  extra_body:
-    enable_thinking: true
   price:
-    input: 0.2
-    output: 0.4
-    cache_read: 0.04
+    input: 0.25
+    output: 1.5
+    cache_read: 0.05
 
 searcher:
-  model: "deepseek-v4-flash-0731"
-  temperature: 0.7
+  model: "qwen3.6-flash"
+  temperature: 0.3
   n: 1
   max_tokens: 4096
-  extra_body:
-    enable_thinking: true
   price:
-    input: 0.2
-    output: 0.4
-    cache_read: 0.04
+    input: 0.25
+    output: 1.5
+    cache_read: 0.05
 
 enricher:
-  model: "deepseek-v4-flash-0731"
-  temperature: 0.7
+  model: "qwen3.6-flash"
+  temperature: 0.3
   n: 1
   max_tokens: 4096
-  extra_body:
-    enable_thinking: true
   price:
-    input: 0.2
-    output: 0.4
-    cache_read: 0.04
+    input: 0.25
+    output: 1.5
+    cache_read: 0.05
 
 coder:
-  model: "qwen3.7-plus"
-  temperature: 1.0
+  model: "deepseek-v4.1-flash"
+  temperature: 0.7
   n: 1
   max_tokens: 20480
-  extra_body:
-    enable_thinking: true
-    preserve_thinking: true
   price:
-    input: 0.4
-    output: 1.6
-    cache_read: 0.08
+    input: 0.15
+    output: 0.6
 
 installer:
-  model: "qwen3.7-plus"
+  model: "deepseek-v4.1-flash"
   temperature: 0.7
   n: 1
   max_tokens: 16384
-  extra_body:
-    enable_thinking: true
-    preserve_thinking: true
   price:
-    input: 0.4
-    output: 1.6
-    cache_read: 0.08
+    input: 0.15
+    output: 0.6
 
 pentester:
-  model: "qwen3.7-plus"
-  temperature: 0.8
+  model: "deepseek-v4.1-flash"
+  temperature: 0.7
   n: 1
   max_tokens: 16384
-  extra_body:
-    enable_thinking: true
-    preserve_thinking: true
   price:
-    input: 0.4
-    output: 1.6
-    cache_read: 0.08
+    input: 0.15
+    output: 0.6

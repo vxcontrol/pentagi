@@ -7,7 +7,6 @@
 #   LLM_SERVER_MODEL=            # left empty: model is taken from this file
 #   LLM_SERVER_PROVIDER=         # left empty: no model-name prefix filtering
 #   LLM_SERVER_CONFIG_PATH=/opt/pentagi/conf/custom.provider.yml
-#   LLM_SERVER_LEGACY_REASONING=true     # GLM emits inline <think> reasoning
 #   LLM_SERVER_PRESERVE_REASONING=true   # keep reasoning content in history
 #
 # GLM-5.1 facts (from the model card):

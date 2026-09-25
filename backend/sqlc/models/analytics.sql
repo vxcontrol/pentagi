@@ -1,22 +1,14 @@
--- name: GetFlowsForPeriodLastWeek :many
--- Get flow IDs created in the last week for analytics
+-- name: GetFlowsForPeriod :many
+-- Flows created within the last N whole calendar days in the caller's timezone.
+WITH bounds AS (
+  SELECT ((NOW() AT TIME ZONE sqlc.arg(tz)::text)::date - sqlc.arg(days)::int) AS first_day
+)
 SELECT id, title
 FROM flows
-WHERE created_at >= NOW() - INTERVAL '7 days' AND deleted_at IS NULL AND user_id = $1
-ORDER BY created_at DESC;
-
--- name: GetFlowsForPeriodLastMonth :many
--- Get flow IDs created in the last month for analytics
-SELECT id, title
-FROM flows
-WHERE created_at >= NOW() - INTERVAL '30 days' AND deleted_at IS NULL AND user_id = $1
-ORDER BY created_at DESC;
-
--- name: GetFlowsForPeriodLast3Months :many
--- Get flow IDs created in the last 3 months for analytics
-SELECT id, title
-FROM flows
-WHERE created_at >= NOW() - INTERVAL '90 days' AND deleted_at IS NULL AND user_id = $1
+WHERE created_at >= (((SELECT first_day FROM bounds) - 1)::timestamp AT TIME ZONE sqlc.arg(tz)::text)
+  AND (created_at AT TIME ZONE sqlc.arg(tz)::text)::date >= (SELECT first_day FROM bounds)
+  AND deleted_at IS NULL
+  AND user_id = sqlc.arg(user_id)
 ORDER BY created_at DESC;
 
 -- name: GetTasksForFlow :many

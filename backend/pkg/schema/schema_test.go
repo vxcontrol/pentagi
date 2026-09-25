@@ -8,522 +8,279 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestSchemaValid(t *testing.T) {
+// schemaBadRef carries a $ref with a control character, which gojsonschema refuses to compile.
+var schemaBadRef = Schema{Type: Type{Ref: "not-a-valid-ref-uri\x00"}}
+
+const schemaBadRefError = "invalid control character in URL"
+
+func TestSchema_Valid_RejectsASchemaThatDoesNotCompile(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
 		name    string
 		schema  Schema
-		wantErr bool
+		wantErr string
 	}{
-		{
-			name:    "valid string schema",
-			schema:  Schema{Type: Type{Type: "string"}},
-			wantErr: false,
-		},
-		{
-			name: "valid object schema with properties",
-			schema: Schema{
-				Type: Type{
-					Type:       "object",
-					Properties: map[string]*Type{"name": {Type: "string"}},
-					Required:   []string{"name"},
-				},
-			},
-			wantErr: false,
-		},
-		{
-			name: "valid array schema",
-			schema: Schema{
-				Type: Type{Type: "array", Items: &Type{Type: "string"}},
-			},
-			wantErr: false,
-		},
-		{
-			name: "valid integer with bounds",
-			schema: Schema{
-				Type: Type{Type: "integer", Minimum: 0, Maximum: 100},
-			},
-			wantErr: false,
-		},
-		{
-			name:    "valid boolean",
-			schema:  Schema{Type: Type{Type: "boolean"}},
-			wantErr: false,
-		},
-		{
-			name:    "valid number",
-			schema:  Schema{Type: Type{Type: "number"}},
-			wantErr: false,
-		},
-		{
-			name: "invalid schema with bad ref containing null byte",
-			// Null byte (\x00) in URI should be rejected by gojsonschema validator
-			schema:  Schema{Type: Type{Ref: "not-a-valid-ref-uri\x00"}},
-			wantErr: true,
-		},
+		{name: "a string schema", schema: Schema{Type: Type{Type: "string"}}},
+		{name: "an object with properties and required", schema: Schema{Type: Type{
+			Type:       "object",
+			Properties: map[string]*Type{"name": {Type: "string"}},
+			Required:   []string{"name"},
+		}}},
+		{name: "a ref that is not a uri", schema: schemaBadRef, wantErr: schemaBadRefError},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			err := tt.schema.Valid()
-			if tt.wantErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
+			if tt.wantErr != "" {
+				assert.ErrorContains(t, err, tt.wantErr)
+				return
 			}
+			assert.NoError(t, err)
 		})
 	}
 }
 
-func TestSchemaGetValidator(t *testing.T) {
+func TestSchema_GetValidator_CompilesTheSchema(t *testing.T) {
 	t.Parallel()
 
-	t.Run("valid schema returns validator", func(t *testing.T) {
-		t.Parallel()
-		s := Schema{Type: Type{Type: "string"}}
-		v, err := s.GetValidator()
-		require.NoError(t, err)
-		assert.NotNil(t, v)
-	})
+	v, err := Schema{Type: Type{Type: "string"}}.GetValidator()
+	require.NoError(t, err)
+	assert.NotNil(t, v)
 
-	t.Run("object schema returns validator", func(t *testing.T) {
-		t.Parallel()
-		s := Schema{
-			Type: Type{
-				Type:       "object",
-				Properties: map[string]*Type{"name": {Type: "string"}},
-			},
-		}
-		v, err := s.GetValidator()
-		require.NoError(t, err)
-		assert.NotNil(t, v)
-	})
-
-	t.Run("invalid schema with bad ref (null byte) fails", func(t *testing.T) {
-		t.Parallel()
-		// Null byte in URI should be rejected by the validator
-		s := Schema{
-			Type: Type{Ref: "not-a-valid-ref-uri\x00"},
-		}
-		_, err := s.GetValidator()
-		assert.Error(t, err)
-	})
+	_, err = schemaBadRef.GetValidator()
+	assert.ErrorContains(t, err, schemaBadRefError)
 }
 
-func TestSchemaValidateString(t *testing.T) {
+// Each keyword reaches the compiler only through MarshalJSON, so a row per keyword pins both.
+func TestSchema_ValidateString_EnforcesStringAndArrayKeywords(t *testing.T) {
 	t.Parallel()
 
-	stringSchema := Schema{
-		Type: Type{Type: "string", MinLength: 1, MaxLength: 10},
+	length := Schema{Type: Type{Type: "string", MinLength: 1, MaxLength: 10}}
+	enum := Schema{Type: Type{Type: "string", Enum: []interface{}{"red", "green", "blue"}}}
+	pattern := Schema{Type: Type{Type: "string", Pattern: "^[a-z]+$"}}
+	array := Schema{Type: Type{Type: "array", Items: &Type{Type: "integer"}, MinItems: 1, MaxItems: 3}}
+
+	tests := []struct {
+		name   string
+		schema Schema
+		doc    string
+		valid  bool
+	}{
+		{"a string within its length", length, `"hello"`, true},
+		{"a string over maxLength", length, `"this string is way too long"`, false},
+		{"an empty string under minLength", length, `""`, false},
+		{"an enum member", enum, `"red"`, true},
+		{"a value outside the enum", enum, `"yellow"`, false},
+		{"a string matching the pattern", pattern, `"hello"`, true},
+		{"a string off the pattern", pattern, `"Hello123"`, false},
+		{"an array within its bounds", array, `[1, 2, 3]`, true},
+		{"an empty array under minItems", array, `[]`, false},
+		{"an array over maxItems", array, `[1, 2, 3, 4]`, false},
+		{"an array with a wrong item type", array, `["a", "b"]`, false},
 	}
 
-	t.Run("valid string", func(t *testing.T) {
-		t.Parallel()
-		result, err := stringSchema.ValidateString(`"hello"`)
-		require.NoError(t, err)
-		assert.True(t, result.Valid())
-	})
-
-	t.Run("string too long", func(t *testing.T) {
-		t.Parallel()
-		result, err := stringSchema.ValidateString(`"this string is way too long"`)
-		require.NoError(t, err)
-		assert.False(t, result.Valid())
-	})
-
-	t.Run("empty string fails min length", func(t *testing.T) {
-		t.Parallel()
-		result, err := stringSchema.ValidateString(`""`)
-		require.NoError(t, err)
-		assert.False(t, result.Valid())
-	})
-
-	t.Run("invalid json", func(t *testing.T) {
-		t.Parallel()
-		_, err := stringSchema.ValidateString("not json")
-		assert.Error(t, err)
-	})
-}
-
-func TestSchemaValidateBytes(t *testing.T) {
-	t.Parallel()
-
-	intSchema := Schema{
-		Type: Type{Type: "integer", Minimum: 0, Maximum: 100},
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			result, err := tt.schema.ValidateString(tt.doc)
+			require.NoError(t, err)
+			assert.Equal(t, tt.valid, result.Valid())
+		})
 	}
 
-	t.Run("valid integer", func(t *testing.T) {
+	t.Run("a document that is not json is an error", func(t *testing.T) {
 		t.Parallel()
-		result, err := intSchema.ValidateBytes([]byte("42"))
-		require.NoError(t, err)
-		assert.True(t, result.Valid())
+		_, err := length.ValidateString("not json")
+		assert.ErrorContains(t, err, "invalid character")
 	})
 
-	t.Run("integer out of range", func(t *testing.T) {
+	t.Run("a schema that does not compile is an error", func(t *testing.T) {
 		t.Parallel()
-		result, err := intSchema.ValidateBytes([]byte("200"))
-		require.NoError(t, err)
-		assert.False(t, result.Valid())
-	})
-
-	t.Run("wrong type", func(t *testing.T) {
-		t.Parallel()
-		result, err := intSchema.ValidateBytes([]byte(`"not a number"`))
-		require.NoError(t, err)
-		assert.False(t, result.Valid())
-	})
-
-	t.Run("malformed json", func(t *testing.T) {
-		t.Parallel()
-		_, err := intSchema.ValidateBytes([]byte("{invalid json"))
-		assert.Error(t, err)
+		_, err := schemaBadRef.ValidateString(`"x"`)
+		assert.ErrorContains(t, err, schemaBadRefError)
 	})
 }
 
-func TestSchemaValidateGo(t *testing.T) {
+func TestSchema_ValidateBytes_EnforcesTypeAndBounds(t *testing.T) {
 	t.Parallel()
 
-	objectSchema := Schema{
-		Type: Type{
-			Type: "object",
-			Properties: map[string]*Type{
-				"name": {Type: "string"},
-				"age":  {Type: "integer", Minimum: 0},
+	intSchema := Schema{Type: Type{Type: "integer", Minimum: 0, Maximum: 100}}
+
+	for doc, valid := range map[string]bool{"42": true, "200": false, `"not a number"`: false} {
+		result, err := intSchema.ValidateBytes([]byte(doc))
+		require.NoError(t, err, doc)
+		assert.Equal(t, valid, result.Valid(), doc)
+	}
+
+	_, err := intSchema.ValidateBytes([]byte("{invalid json"))
+	assert.ErrorContains(t, err, "invalid character")
+}
+
+func TestSchema_ValidateGo_EnforcesRequiredAndFieldTypes(t *testing.T) {
+	t.Parallel()
+
+	objectSchema := Schema{Type: Type{
+		Type: "object",
+		Properties: map[string]*Type{
+			"name": {Type: "string"},
+			"age":  {Type: "integer", Minimum: 0},
+		},
+		Required: []string{"name"},
+	}}
+
+	tests := []struct {
+		name  string
+		doc   map[string]interface{}
+		valid bool
+	}{
+		{"a valid object", map[string]interface{}{"name": "Alice", "age": 30}, true},
+		{"a missing required field", map[string]interface{}{"age": 25}, false},
+		{"a field of the wrong type", map[string]interface{}{"name": 12345}, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			result, err := objectSchema.ValidateGo(tt.doc)
+			require.NoError(t, err)
+			assert.Equal(t, tt.valid, result.Valid())
+		})
+	}
+}
+
+func TestSchema_Value_RoundTripsThroughScan(t *testing.T) {
+	t.Parallel()
+
+	original := Schema{Type: Type{
+		Type:       "object",
+		Properties: map[string]*Type{"name": {Type: "string"}},
+		Required:   []string{"name"},
+	}}
+	val, err := original.Value()
+	require.NoError(t, err)
+	require.IsType(t, "", val)
+
+	var scanned Schema
+	require.NoError(t, scanned.Scan(val))
+	assert.Equal(t, "object", scanned.Type.Type)
+	assert.Equal(t, []string{"name"}, scanned.Required)
+}
+
+func TestSchema_Scan_ReadsStringsAndBytesOnly(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		input    interface{}
+		wantType string
+		wantErr  string
+	}{
+		{name: "a json string", input: `{"type":"string"}`, wantType: "string"},
+		{name: "json bytes", input: []byte(`{"type":"integer"}`), wantType: "integer"},
+		{name: "an unsupported type", input: 12345, wantErr: "unsupported type"},
+		{name: "a string that is not json", input: "not valid json", wantErr: "invalid character"},
+		{name: "bytes that are not json", input: []byte("{invalid}"), wantErr: "invalid character"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			var s Schema
+			err := s.Scan(tt.input)
+			if tt.wantErr != "" {
+				assert.ErrorContains(t, err, tt.wantErr)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantType, s.Type.Type)
+		})
+	}
+}
+
+func TestSchema_MarshalJSON_MergesExtPropsAndFillsObjects(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		tp   Type
+		want map[string]interface{}
+	}{
+		{
+			name: "declared fields",
+			tp:   Type{Type: "string", MinLength: 1},
+			want: map[string]interface{}{"type": "string", "minLength": float64(1)},
+		},
+		{
+			name: "an object gets empty properties and required",
+			tp:   Type{Type: "object"},
+			want: map[string]interface{}{"type": "object", "properties": map[string]interface{}{}, "required": []interface{}{}},
+		},
+		{
+			name: "an object keeps its own properties",
+			tp:   Type{Type: "object", Properties: map[string]*Type{"name": {Type: "string"}}, Required: []string{"name"}},
+			want: map[string]interface{}{
+				"type":       "object",
+				"properties": map[string]interface{}{"name": map[string]interface{}{"type": "string"}},
+				"required":   []interface{}{"name"},
 			},
-			Required: []string{"name"},
+		},
+		{
+			name: "extended properties",
+			tp:   Type{Type: "string", ExtProps: map[string]interface{}{"x-custom": "value"}},
+			want: map[string]interface{}{"type": "string", "x-custom": "value"},
 		},
 	}
 
-	t.Run("valid object", func(t *testing.T) {
-		t.Parallel()
-		doc := map[string]interface{}{"name": "Alice", "age": 30}
-		result, err := objectSchema.ValidateGo(doc)
-		require.NoError(t, err)
-		assert.True(t, result.Valid())
-	})
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			data, err := json.Marshal(tt.tp)
+			require.NoError(t, err)
 
-	t.Run("missing required field", func(t *testing.T) {
-		t.Parallel()
-		doc := map[string]interface{}{"age": 25}
-		result, err := objectSchema.ValidateGo(doc)
-		require.NoError(t, err)
-		assert.False(t, result.Valid())
-	})
-
-	t.Run("wrong field type", func(t *testing.T) {
-		t.Parallel()
-		doc := map[string]interface{}{"name": 12345}
-		result, err := objectSchema.ValidateGo(doc)
-		require.NoError(t, err)
-		assert.False(t, result.Valid())
-	})
+			var raw map[string]interface{}
+			require.NoError(t, json.Unmarshal(data, &raw))
+			assert.Equal(t, tt.want, raw)
+		})
+	}
 }
 
-func TestSchemaValueScan(t *testing.T) {
+func TestSchema_UnmarshalJSON_KeepsUnknownKeysAsExtProps(t *testing.T) {
 	t.Parallel()
 
-	t.Run("value and scan round trip", func(t *testing.T) {
-		t.Parallel()
-		original := Schema{
-			Type: Type{
-				Type:       "object",
-				Properties: map[string]*Type{"name": {Type: "string"}},
-				Required:   []string{"name"},
-			},
-		}
-		val, err := original.Value()
-		require.NoError(t, err)
-
-		var scanned Schema
-		switch v := val.(type) {
-		case string:
-			err = scanned.Scan(v)
-		case []byte:
-			err = scanned.Scan(v)
-		default:
-			t.Fatalf("unexpected Value() type: %T", val)
-		}
-		require.NoError(t, err)
-		assert.Equal(t, original.Type.Type, scanned.Type.Type)
-		assert.Contains(t, scanned.Type.Required, "name")
-	})
-
-	t.Run("scan from string", func(t *testing.T) {
-		t.Parallel()
-		var s Schema
-		err := s.Scan(`{"type":"string"}`)
-		require.NoError(t, err)
-		assert.Equal(t, "string", s.Type.Type)
-	})
-
-	t.Run("scan from bytes", func(t *testing.T) {
-		t.Parallel()
-		var s Schema
-		err := s.Scan([]byte(`{"type":"integer"}`))
-		require.NoError(t, err)
-		assert.Equal(t, "integer", s.Type.Type)
-	})
-
-	t.Run("scan unsupported type", func(t *testing.T) {
-		t.Parallel()
-		var s Schema
-		err := s.Scan(12345)
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "unsupported type")
-	})
-
-	t.Run("scan invalid json", func(t *testing.T) {
-		t.Parallel()
-		var s Schema
-		err := s.Scan("not valid json")
-		assert.Error(t, err)
-	})
-}
-
-func TestTypeMarshalJSON(t *testing.T) {
-	t.Parallel()
-
-	t.Run("basic type marshaling", func(t *testing.T) {
-		t.Parallel()
-		tp := Type{Type: "string", MinLength: 1}
-		data, err := json.Marshal(tp)
-		require.NoError(t, err)
-
-		var raw map[string]interface{}
-		require.NoError(t, json.Unmarshal(data, &raw))
-		assert.Equal(t, "string", raw["type"])
-		assert.Equal(t, float64(1), raw["minLength"])
-	})
-
-	t.Run("object type adds empty properties and required", func(t *testing.T) {
-		t.Parallel()
-		tp := Type{Type: "object"}
-		data, err := json.Marshal(tp)
-		require.NoError(t, err)
-
-		var raw map[string]interface{}
-		require.NoError(t, json.Unmarshal(data, &raw))
-		assert.Equal(t, "object", raw["type"])
-		assert.NotNil(t, raw["properties"])
-		assert.NotNil(t, raw["required"])
-	})
-
-	t.Run("object type with existing properties preserves them", func(t *testing.T) {
-		t.Parallel()
-		tp := Type{
-			Type:       "object",
-			Properties: map[string]*Type{"name": {Type: "string"}},
-			Required:   []string{"name"},
-		}
-		data, err := json.Marshal(tp)
-		require.NoError(t, err)
-
-		var raw map[string]interface{}
-		require.NoError(t, json.Unmarshal(data, &raw))
-		props := raw["properties"].(map[string]interface{})
-		assert.Contains(t, props, "name")
-	})
-
-	t.Run("extended properties included", func(t *testing.T) {
-		t.Parallel()
-		tp := Type{
-			Type:     "string",
-			ExtProps: map[string]interface{}{"x-custom": "value"},
-		}
-		data, err := json.Marshal(tp)
-		require.NoError(t, err)
-
-		var raw map[string]interface{}
-		require.NoError(t, json.Unmarshal(data, &raw))
-		assert.Equal(t, "value", raw["x-custom"])
-	})
-}
-
-func TestTypeUnmarshalJSON(t *testing.T) {
-	t.Parallel()
-
-	t.Run("basic type unmarshaling", func(t *testing.T) {
+	t.Run("declared fields", func(t *testing.T) {
 		t.Parallel()
 		var tp Type
-		err := json.Unmarshal([]byte(`{"type":"string","minLength":5}`), &tp)
-		require.NoError(t, err)
+		require.NoError(t, json.Unmarshal([]byte(`{"type":"string","minLength":5}`), &tp))
 		assert.Equal(t, "string", tp.Type)
 		assert.Equal(t, 5, tp.MinLength)
-	})
-
-	t.Run("extended properties extracted", func(t *testing.T) {
-		t.Parallel()
-		var tp Type
-		err := json.Unmarshal([]byte(`{"type":"string","x-custom":"hello","x-other":42}`), &tp)
-		require.NoError(t, err)
-		assert.Equal(t, "string", tp.Type)
-		assert.Equal(t, "hello", tp.ExtProps["x-custom"])
-		assert.Equal(t, float64(42), tp.ExtProps["x-other"])
-	})
-
-	t.Run("no extended properties", func(t *testing.T) {
-		t.Parallel()
-		var tp Type
-		err := json.Unmarshal([]byte(`{"type":"integer","minimum":0}`), &tp)
-		require.NoError(t, err)
 		assert.Empty(t, tp.ExtProps)
+	})
+
+	t.Run("unknown keys", func(t *testing.T) {
+		t.Parallel()
+		var tp Type
+		require.NoError(t, json.Unmarshal([]byte(`{"type":"string","x-custom":"hello","x-other":42}`), &tp))
+		assert.Equal(t, "string", tp.Type)
+		assert.Equal(t, map[string]interface{}{"x-custom": "hello", "x-other": float64(42)}, tp.ExtProps)
 	})
 
 	t.Run("invalid json", func(t *testing.T) {
 		t.Parallel()
 		var tp Type
-		err := json.Unmarshal([]byte("not json"), &tp)
-		assert.Error(t, err)
+		assert.ErrorContains(t, json.Unmarshal([]byte("not json"), &tp), "invalid character")
 	})
 
-	t.Run("marshal unmarshal round trip preserves extprops", func(t *testing.T) {
+	t.Run("a marshal round trip keeps extended properties", func(t *testing.T) {
 		t.Parallel()
-		original := Type{
-			Type:     "string",
-			ExtProps: map[string]interface{}{"x-example": "test"},
-		}
-		data, err := json.Marshal(original)
+		data, err := json.Marshal(Type{Type: "string", ExtProps: map[string]interface{}{"x-example": "test"}})
 		require.NoError(t, err)
 
 		var roundTripped Type
 		require.NoError(t, json.Unmarshal(data, &roundTripped))
 		assert.Equal(t, "string", roundTripped.Type)
 		assert.Equal(t, "test", roundTripped.ExtProps["x-example"])
-	})
-}
-
-func TestSchemaValidateObjectWithEnum(t *testing.T) {
-	t.Parallel()
-
-	enumSchema := Schema{
-		Type: Type{
-			Type: "string",
-			Enum: []interface{}{"red", "green", "blue"},
-		},
-	}
-
-	t.Run("valid enum value", func(t *testing.T) {
-		t.Parallel()
-		result, err := enumSchema.ValidateString(`"red"`)
-		require.NoError(t, err)
-		assert.True(t, result.Valid())
-	})
-
-	t.Run("invalid enum value", func(t *testing.T) {
-		t.Parallel()
-		result, err := enumSchema.ValidateString(`"yellow"`)
-		require.NoError(t, err)
-		assert.False(t, result.Valid())
-	})
-}
-
-func TestSchemaValidateWithPattern(t *testing.T) {
-	t.Parallel()
-
-	patternSchema := Schema{
-		Type: Type{Type: "string", Pattern: "^[a-z]+$"},
-	}
-
-	t.Run("matching pattern", func(t *testing.T) {
-		t.Parallel()
-		result, err := patternSchema.ValidateString(`"hello"`)
-		require.NoError(t, err)
-		assert.True(t, result.Valid())
-	})
-
-	t.Run("non matching pattern", func(t *testing.T) {
-		t.Parallel()
-		result, err := patternSchema.ValidateString(`"Hello123"`)
-		require.NoError(t, err)
-		assert.False(t, result.Valid())
-	})
-}
-
-func TestSchemaValidateArray(t *testing.T) {
-	t.Parallel()
-
-	arraySchema := Schema{
-		Type: Type{
-			Type:     "array",
-			Items:    &Type{Type: "integer"},
-			MinItems: 1,
-			MaxItems: 3,
-		},
-	}
-
-	t.Run("valid array", func(t *testing.T) {
-		t.Parallel()
-		result, err := arraySchema.ValidateString(`[1, 2, 3]`)
-		require.NoError(t, err)
-		assert.True(t, result.Valid())
-	})
-
-	t.Run("empty array fails min items", func(t *testing.T) {
-		t.Parallel()
-		result, err := arraySchema.ValidateString(`[]`)
-		require.NoError(t, err)
-		assert.False(t, result.Valid())
-	})
-
-	t.Run("too many items", func(t *testing.T) {
-		t.Parallel()
-		result, err := arraySchema.ValidateString(`[1, 2, 3, 4]`)
-		require.NoError(t, err)
-		assert.False(t, result.Valid())
-	})
-
-	t.Run("wrong item type", func(t *testing.T) {
-		t.Parallel()
-		result, err := arraySchema.ValidateString(`["a", "b"]`)
-		require.NoError(t, err)
-		assert.False(t, result.Valid())
-	})
-}
-
-func TestScanFromJSON(t *testing.T) {
-	t.Parallel()
-
-	type testStruct struct {
-		Name string `json:"name"`
-	}
-
-	t.Run("scan from string", func(t *testing.T) {
-		t.Parallel()
-		var out testStruct
-		err := scanFromJSON(`{"name":"test"}`, &out)
-		require.NoError(t, err)
-		assert.Equal(t, "test", out.Name)
-	})
-
-	t.Run("scan from bytes", func(t *testing.T) {
-		t.Parallel()
-		var out testStruct
-		err := scanFromJSON([]byte(`{"name":"hello"}`), &out)
-		require.NoError(t, err)
-		assert.Equal(t, "hello", out.Name)
-	})
-
-	t.Run("unsupported type", func(t *testing.T) {
-		t.Parallel()
-		var out testStruct
-		err := scanFromJSON(12345, &out)
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "unsupported type")
-	})
-
-	t.Run("invalid json string", func(t *testing.T) {
-		t.Parallel()
-		var out testStruct
-		err := scanFromJSON("not json", &out)
-		assert.Error(t, err)
-	})
-
-	t.Run("invalid json bytes", func(t *testing.T) {
-		t.Parallel()
-		var out testStruct
-		err := scanFromJSON([]byte("{invalid}"), &out)
-		assert.Error(t, err)
 	})
 }

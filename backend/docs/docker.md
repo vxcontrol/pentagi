@@ -101,10 +101,12 @@ The Docker client is configured through several environment variables defined in
 | `DOCKER_HOST` | `unix:///var/run/docker.sock` | Docker daemon connection |
 | `DOCKER_INSIDE` | `false` | Whether PentAGI communicates with host Docker daemon from containers |
 | `DOCKER_NET_ADMIN` | `false` | Whether PentAGI grants the primary container NET_ADMIN capability for advanced networking. |
-| `DOCKER_SOCKET` | | Explicit socket path on the worker node to bind into worker containers. Empty enables autodetection — see [Worker Docker Access](#worker-docker-access) |
-| `DOCKER_INSIDE_HOST` | | Docker daemon endpoint given **to worker containers**; also disables socket autodetection |
+| `DOCKER_SOCKET` | | Explicit socket path on the worker node to bind into worker containers. Empty enables autodetection only for local legacy setups — see [Worker Docker Access](#worker-docker-access) |
+| `DOCKER_INSIDE_HOST` | | Separate Docker daemon endpoint given **to worker containers**; requires a successful policy preflight before agent use |
 | `DOCKER_INSIDE_TLS_VERIFY` | | TLS verification for the worker container's Docker connection |
 | `DOCKER_INSIDE_CERT_PATH` | | TLS certificate directory **on the worker node**, mounted read-only into worker containers |
+| `DOCKER_INSIDE_POLICY_TESTS` | `false` | Test the sandbox once at startup and log the verdict. Its only effect is whether agents get Docker: a sandbox that fails is turned off, and PentAGI still starts. Off by default, and then startup warns the isolation was never measured |
+| `DOCKER_DEFAULT_IMAGE_FOR_TEST` | `vxcontrol/kali-linux:test` | Worker the startup test runs in, and the image it pulls into the sandbox to prove an agent could |
 | `DOCKER_PORTS_BASE` | `28000` | First host port of this instance's per-flow allocation window |
 | `DOCKER_NETWORK` | | Docker network for container communication (bridge mode) or `host` for host network mode |
 | `DOCKER_PUBLIC_IP` | `0.0.0.0` | Public IP for port binding (bridge mode only) |
@@ -222,9 +224,10 @@ if autodetectSocket {
 
 | `DOCKER_SOCKET` | `DOCKER_INSIDE_HOST` | Result |
 |---|---|---|
-| set | any | That socket is bind-mounted at `/var/run/docker.sock` inside every worker |
-| empty | set | **Nothing is mounted**; autodetection is skipped entirely |
-| empty | empty | Host socket is autodetected and mounted (historical behaviour) |
+| set | empty | That socket is bind-mounted at `/var/run/docker.sock` inside every worker (legacy mode) |
+| set | set | Startup error: the socket could bypass the designated daemon |
+| empty | set | **Nothing is mounted**; autodetection is skipped and the worker must pass the Docker API preflight |
+| empty | empty | Host socket is autodetected only when PentAGI uses a local daemon; a remote `DOCKER_HOST` causes a startup error |
 
 #### Environment injection
 
@@ -256,9 +259,17 @@ Bind-mounting a socket into worker containers has two distinct problems.
 
 **Ordering fragility.** A bind-mount source that does not exist yet is created by Docker as a **directory**. If the worker node reboots and a worker container with `restart: on-failure` starts before the dind daemon has recreated its socket, Docker materialises a directory at `/var/run/docker-dind/docker.sock` — and dind then cannot bind its own socket at that path. The sandbox gets a useless mount and dind fails to start until the directory is removed by hand.
 
-**Blast radius.** A socket bind-mount only avoids that race reliably when it is the **host** daemon's socket, since that one exists before anything else starts. But handing an autonomous agent the host daemon means handing it the host: it can start a privileged container, mount `/`, and take over the node — including PentAGI itself and every other flow's containers.
+**Blast radius.** The mounted socket may belong to the isolated dind daemon or to the worker node's host daemon. The legacy socket path does not run the policy preflight or prove which daemon it reaches. If it is the host daemon's socket, an autonomous agent can start a privileged container, mount `/`, and take over the node — including PentAGI itself and every other flow's containers. Inspect the actual mount source and daemon ID before relying on a socket deployment.
 
 Pointing sandboxes at a hardened dind daemon over TLS avoids both. There is no mount to race on, and the authorization policy on that daemon constrains what the agent may create. See [Worker Node Setup](../../examples/guides/worker_node.md) for a complete configuration.
+
+#### Docker API policy preflight
+
+When `DOCKER_INSIDE=true` and `DOCKER_INSIDE_HOST` names a separate daemon, each new worker checks that daemon **from inside the worker** before PentAGI returns it to an agent. A restored worker is checked before reuse. Successful checks are cached by worker container ID for 30 seconds, so a later preparation rechecks a changed policy. The worker image must contain `sh` and `curl`; the check uses the worker's actual `DOCKER_HOST` and TLS certificate mount, so the certificate files need not exist on the main PentAGI node. Legacy socket mode remains supported as an unverified exception: the preflight does not establish its daemon identity or policy, and an incorrectly chosen socket could grant host Docker access.
+
+The check reads Docker `/version` and `/info`, and rejects an empty daemon ID or one equal to the daemon PentAGI uses to create workers. It then sends fifteen `POST /containers/create` requests drawn from [the full policy test suite](../../examples/guides/worker_node/policy-tests.sh): privileged mode, legacy and structured host bind mounts, `SYS_ADMIN`, device passthrough and device cgroup rules, host PID and IPC namespaces, unconfined seccomp, sysctl injection, `ReadonlyPaths:[]`, `MaskedPaths:[]`, `CgroupParent:"/"`, the combined Phase 7 request, and an API v1.24 downgrade attempt. Each supported request must receive HTTP 403 with an explicit `opa-docker-authz` authorization denial; a Docker response saying API v1.24 is below the daemon's minimum is also safe for the downgrade attempt. A generic HTTP 403, an image-not-found error, or an unreachable endpoint fails the preflight.
+
+The requests use a valid image name with a random tag that is overwhelmingly unlikely to exist, never pull an image, and never call `ContainerStart`. One ordinary `containers/create` request must pass authorization and reach Docker's image lookup; an image-not-found response shows that the policy has not blocked all agent use. If a request is unexpectedly accepted, the preflight deletes the container by its unique probe name, checks that it is absent, and fails; failure to delete is also reported. If the Docker API times out after accepting a request, cleanup can only be best effort, so operators should inspect `pentagi-policy-probe-*` objects after a timeout. A newly launched worker that fails the preflight is discarded. This quick check tests the selected API authorization rules and daemon separation at preparation time. It does not exercise seccomp or kernel enforcement, network reachability from nested containers, or every rule in the full suite; run `policy-tests.sh` separately after changing the worker-node policy.
 
 ### Network Configuration
 
@@ -311,6 +322,7 @@ type DockerClient interface {
     // Utility methods
     Cleanup(ctx context.Context) error
     GetDefaultImage() string
+    VerifyWorkerDockerPolicy(ctx context.Context, containerID string) error
 }
 ```
 
@@ -371,6 +383,7 @@ The `RunContainer` method handles the complete container creation workflow:
 6. **Container Startup**:
    - Creates container with all configurations
    - Starts container
+   - When a separate worker Docker daemon is configured, checks its API policy and daemon identity from inside the worker; discards the worker on failure
    - Updates database status to "running"
 
 ### Example Container Configuration

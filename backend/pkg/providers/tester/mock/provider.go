@@ -25,6 +25,7 @@ type Provider struct {
 	defaultResp    string
 	streamingDelay time.Duration
 	providerConfig *pconfig.ProviderConfig
+	pricesByType   map[pconfig.ProviderOptionsType]pconfig.PriceInfo
 	models         pconfig.ModelsConfig
 	rawConfig      []byte
 
@@ -160,6 +161,17 @@ func (p *Provider) CallEx(
 	chain []llms.MessageContent,
 	streamCb streaming.Callback,
 ) (*llms.ContentResponse, error) {
+	if p.sequence != nil {
+		idx := int(p.sequenceCalls.Add(1)) - 1
+		if idx >= len(p.sequence) {
+			idx = len(p.sequence) - 1
+		}
+		if streamCb != nil {
+			return p.handleStreamingResponse(ctx, p.sequence[idx], streamCb)
+		}
+		return p.handleContentResponse(p.sequence[idx])
+	}
+
 	// Extract content for matching
 	var content string
 	for _, msg := range chain {
@@ -266,14 +278,6 @@ func (p *Provider) CallWithTools(
 	return p.handleContentResponse(respInterface)
 }
 
-// CallWithExtraOptions implements provider.Provider for completeness. The
-// capability test pipeline no longer routes through it for adaptive
-// thinking/reasoning off (those are gated to configs that already produce the
-// behavior via the plain CallWithTools/CallEx path below, so tests should set
-// up the mock's canned response accordingly rather than relying on this
-// method to synthesize it); it is reachable by the CapabilityStructuredOutput
-// path. Uses partial-match lookup like CallEx (CallWithTools only matches
-// exact content, too strict for multi-sentence prompts).
 func (p *Provider) CallWithExtraOptions(
 	ctx context.Context,
 	opt pconfig.ProviderOptionsType,
@@ -285,6 +289,21 @@ func (p *Provider) CallWithExtraOptions(
 	var applied llms.CallOptions
 	for _, o := range extra {
 		o(&applied)
+	}
+
+	if err := applied.ValidateStructuredOutput(); err != nil {
+		return nil, err
+	}
+
+	if p.sequence != nil {
+		idx := int(p.sequenceCalls.Add(1)) - 1
+		if idx >= len(p.sequence) {
+			idx = len(p.sequence) - 1
+		}
+		if streamCb != nil {
+			return p.handleStreamingResponse(ctx, p.sequence[idx], streamCb)
+		}
+		return p.handleContentResponse(p.sequence[idx])
 	}
 
 	var content string
@@ -309,7 +328,7 @@ func (p *Provider) CallWithExtraOptions(
 		}
 	}
 	if respInterface == nil {
-		respInterface = p.defaultResp
+		respInterface = p.synthesizedToolCall(tools)
 	}
 
 	resp, err := p.handleContentResponse(respInterface)
@@ -317,17 +336,8 @@ func (p *Provider) CallWithExtraOptions(
 		return nil, err
 	}
 
-	switch {
-	case applied.Reasoning != nil && applied.Reasoning.IsDisabled():
-		for _, choice := range resp.Choices {
-			choice.Reasoning = nil
-		}
-	case applied.Reasoning != nil && applied.Reasoning.Adaptive:
-		for _, choice := range resp.Choices {
-			if choice.Reasoning.IsEmpty() {
-				choice.Reasoning = &reasoning.ContentReasoning{Content: "mock adaptive reasoning trace"}
-			}
-		}
+	if applied.Reasoning != nil {
+		resp = reasoningApplied(resp, applied.Reasoning)
 	}
 
 	if streamCb == nil {
@@ -360,8 +370,21 @@ func (p *Provider) GetProviderConfig() *pconfig.ProviderConfig {
 	return &pconfig.ProviderConfig{}
 }
 
+// SetPriceInfo pins the price for one agent type. Types left unset keep the default.
+func (p *Provider) SetPriceInfo(opt pconfig.ProviderOptionsType, price pconfig.PriceInfo) {
+	if p.pricesByType == nil {
+		p.pricesByType = make(map[pconfig.ProviderOptionsType]pconfig.PriceInfo)
+	}
+
+	p.pricesByType[opt] = price
+}
+
 // GetPriceInfo implements provider.Provider
 func (p *Provider) GetPriceInfo(opt pconfig.ProviderOptionsType) *pconfig.PriceInfo {
+	if price, ok := p.pricesByType[opt]; ok {
+		return &price
+	}
+
 	return &pconfig.PriceInfo{
 		Input:  0.01,
 		Output: 0.02,
@@ -465,4 +488,35 @@ func (p *Provider) handleStreamingResponse(
 	}
 
 	return contentResp, nil
+}
+
+func (p *Provider) synthesizedToolCall(tools []llms.Tool) any {
+	if len(tools) == 0 {
+		return p.defaultResp
+	}
+	return &llms.ContentResponse{
+		Choices: []*llms.ContentChoice{{
+			ToolCalls: []llms.ToolCall{{
+				FunctionCall: &llms.FunctionCall{
+					Name:      tools[0].Function.Name,
+					Arguments: `{"message": "mock response"}`,
+				},
+			}},
+		}},
+	}
+}
+
+func reasoningApplied(resp *llms.ContentResponse, want *llms.ReasoningConfig) *llms.ContentResponse {
+	out := &llms.ContentResponse{Choices: make([]*llms.ContentChoice, 0, len(resp.Choices))}
+	for _, choice := range resp.Choices {
+		copied := *choice
+		switch {
+		case want.IsDisabled():
+			copied.Reasoning = nil
+		case want.Adaptive && copied.Reasoning.IsEmpty():
+			copied.Reasoning = &reasoning.ContentReasoning{Content: "mock adaptive reasoning trace"}
+		}
+		out.Choices = append(out.Choices, &copied)
+	}
+	return out
 }

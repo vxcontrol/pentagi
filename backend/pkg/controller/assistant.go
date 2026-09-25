@@ -2,10 +2,12 @@ package controller
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"pentagi/pkg/cast"
@@ -54,6 +56,8 @@ type assistantWorker struct {
 	runWG   *sync.WaitGroup
 	input   chan assistantInput
 	logger  *logrus.Entry
+
+	noteOwed atomic.Bool
 }
 
 type newAssistantWorkerCtx struct {
@@ -86,19 +90,55 @@ type assistantWorkerCtx struct {
 
 const assistantInputTimeout = 2 * time.Second
 
+const interruptedRunNote = "The server restarted before the assistant finished this request, " +
+	"so its reply may be incomplete. Send a message to continue."
+
 type assistantInput struct {
 	input     string
 	useAgents bool
-	done      chan error
+	reply     *inputReply
 }
 
-func NewAssistantWorker(ctx context.Context, awc newAssistantWorkerCtx) (AssistantWorker, error) {
-	ctx, span := obs.Observer.NewSpan(ctx, obs.SpanKindInternal, "controller.NewAssistantWorker")
+func reserveAssistant(ctx context.Context, awc newAssistantWorkerCtx) (database.Assistant, error) {
+	ctx, span := obs.Observer.NewSpan(ctx, obs.SpanKindInternal, "controller.reserveAssistant")
+	defer span.End()
+
+	assistant, err := awc.db.CreateAssistant(ctx, database.CreateAssistantParams{
+		Title:              "untitled",
+		Status:             database.AssistantStatusCreated,
+		Model:              "unknown",
+		ModelProviderName:  string(awc.prvname),
+		ModelProviderType:  database.ProviderType(awc.prvtype),
+		Language:           "English",
+		ToolCallIDTemplate: cast.ToolCallIDTemplate,
+		Functions:          []byte("{}"),
+		FlowID:             awc.flowID,
+		UseAgents:          awc.useAgents,
+	})
+	if err != nil {
+		logrus.WithContext(ctx).WithError(err).Error("failed to create assistant in DB")
+		return database.Assistant{}, fmt.Errorf("failed to create assistant in DB: %w", err)
+	}
+
+	logrus.WithContext(ctx).WithFields(logrus.Fields{
+		"flow_id":      awc.flowID,
+		"user_id":      awc.userID,
+		"assistant_id": assistant.ID,
+	}).Info("assistant created in DB")
+
+	return assistant, nil
+}
+
+func buildAssistantWorker(
+	ctx context.Context, assistant database.Assistant, awc newAssistantWorkerCtx,
+) (_ AssistantWorker, retErr error) {
+	ctx, span := obs.Observer.NewSpan(ctx, obs.SpanKindInternal, "controller.buildAssistantWorker")
 	defer span.End()
 
 	logger := logrus.WithContext(ctx).WithFields(logrus.Fields{
 		"flow_id":       awc.flowID,
 		"user_id":       awc.userID,
+		"assistant_id":  assistant.ID,
 		"provider_name": awc.prvname.String(),
 		"provider_type": awc.prvtype.String(),
 	})
@@ -115,25 +155,30 @@ func NewAssistantWorker(ctx context.Context, awc newAssistantWorkerCtx) (Assista
 		return nil, fmt.Errorf("failed to get flow primary container: %w", err)
 	}
 
-	assistant, err := awc.db.CreateAssistant(ctx, database.CreateAssistantParams{
-		Title:              "untitled",
-		Status:             database.AssistantStatusCreated,
-		Model:              "unknown",
-		ModelProviderName:  string(awc.prvname),
-		ModelProviderType:  database.ProviderType(awc.prvtype),
-		Language:           "English",
-		ToolCallIDTemplate: cast.ToolCallIDTemplate,
-		Functions:          []byte("{}"),
-		FlowID:             awc.flowID,
-		UseAgents:          awc.useAgents,
-	})
-	if err != nil {
-		logger.WithError(err).Error("failed to create assistant in DB")
-		return nil, fmt.Errorf("failed to create assistant in DB: %w", err)
-	}
+	pub := awc.subs.NewFlowPublisher(awc.userID, awc.flowID)
 
-	logger = logger.WithField("assistant_id", assistant.ID)
-	logger.Info("assistant created in DB")
+	defer func() {
+		if retErr == nil || errors.Is(retErr, ErrFlowAlreadyStopped) {
+			return
+		}
+
+		// The worker's own context may already be cancelled by the cleanup below.
+		cleanupCtx := context.WithoutCancel(ctx)
+
+		failed, statusErr := awc.db.UpdateAssistantStatus(cleanupCtx, database.UpdateAssistantStatusParams{
+			ID:     assistant.ID,
+			Status: database.AssistantStatusFailed,
+		})
+		if statusErr != nil {
+			if !errors.Is(statusErr, sql.ErrNoRows) {
+				logger.WithError(statusErr).Error("failed to mark the unstarted assistant failed")
+			}
+
+			return
+		}
+
+		pub.AssistantUpdated(cleanupCtx, failed)
+	}()
 
 	ctx, observation := obs.Observer.NewObservation(ctx,
 		langfuse.WithObservationTraceContext(
@@ -158,7 +203,6 @@ func NewAssistantWorker(ctx context.Context, awc newAssistantWorkerCtx) (Assista
 	assistantSpan := observation.Span(langfuse.WithSpanName("prepare assistant worker"))
 	ctx, _ = assistantSpan.Observation(ctx)
 
-	pub := awc.subs.NewFlowPublisher(awc.userID, awc.flowID)
 	aslw, err := awc.aslc.NewFlowAssistantLog(ctx, awc.flowID, assistant.ID, pub)
 	if err != nil {
 		return nil, wrapErrorEndSpan(ctx, assistantSpan, "failed to create flow assistant log worker", err)
@@ -191,7 +235,7 @@ func NewAssistantWorker(ctx context.Context, awc newAssistantWorkerCtx) (Assista
 	logger = logger.WithField("msg_chain_id", msgChainID)
 	logger.Info("assistant provider prepared")
 
-	assistant, err = awc.db.UpdateAssistant(ctx, database.UpdateAssistantParams{
+	updated, err := awc.db.UpdateAssistant(ctx, database.UpdateAssistantParams{
 		Title:              assistantProvider.Title(),
 		Model:              assistantProvider.Model(pconfig.OptionsTypePrimaryAgent),
 		Language:           assistantProvider.Language(),
@@ -202,9 +246,11 @@ func NewAssistantWorker(ctx context.Context, awc newAssistantWorkerCtx) (Assista
 		ID:                 assistant.ID,
 	})
 	if err != nil {
-		logger.WithError(err).Error("failed to create assistant in DB")
-		return nil, fmt.Errorf("failed to create assistant in DB: %w", err)
+		logger.WithError(err).Error("failed to update assistant in DB")
+		return nil, fmt.Errorf("failed to update assistant in DB: %w", err)
 	}
+
+	assistant = updated
 
 	workers, err := getFlowProviderWorkers(ctx, awc.flowID, &awc.flowProviderControllers)
 	if err != nil {
@@ -256,12 +302,27 @@ func NewAssistantWorker(ctx context.Context, awc newAssistantWorkerCtx) (Assista
 		}),
 	}
 
-	pub.AssistantCreated(ctx, assistant)
-
 	aw.wg.Add(1)
 	go aw.worker()
 
+	if err := awc.fw.AddAssistant(ctx, aw); err != nil {
+		aw.cancel()
+		aw.wg.Wait()
+
+		return nil, wrapErrorEndSpan(ctx, assistantSpan, "failed to attach assistant worker", err)
+	}
+
+	pub.AssistantUpdated(ctx, assistant)
+
 	if err := aw.PutInput(ctx, awc.input, awc.useAgents, awc.resources); err != nil {
+		if aw.ctx.Err() != nil || errors.Is(err, context.Canceled) {
+			assistantSpan.End(langfuse.WithSpanStatus("assistant worker stopped or finished by its owner"))
+			return aw, nil
+		}
+
+		aw.cancel()
+		aw.wg.Wait()
+
 		return nil, wrapErrorEndSpan(ctx, assistantSpan, "failed to run assistant worker", err)
 	}
 
@@ -412,6 +473,8 @@ func LoadAssistantWorker(
 		}),
 	}
 
+	isInterrupted := assistant.Status == database.AssistantStatusRunning
+
 	assistant, err = awc.db.UpdateAssistantStatus(ctx, database.UpdateAssistantStatusParams{
 		Status: database.AssistantStatusWaiting,
 		ID:     assistant.ID,
@@ -422,6 +485,13 @@ func LoadAssistantWorker(
 
 	pub.AssistantUpdated(ctx, assistant)
 
+	if isInterrupted {
+		if _, err := aslw.PutFlowAssistantMsg(ctx, database.MsglogTypeReport, "", interruptedRunNote); err != nil {
+			logger.WithError(err).Warn("failed to note the interrupted assistant run")
+			aw.noteOwed.Store(true)
+		}
+	}
+
 	aw.wg.Add(1)
 	go aw.worker()
 
@@ -430,12 +500,28 @@ func LoadAssistantWorker(
 	return aw, nil
 }
 
+func (aw *assistantWorker) noteInterruptedRun(ctx context.Context) {
+	if !aw.noteOwed.Load() {
+		return
+	}
+
+	if _, err := aw.aslw.PutFlowAssistantMsg(ctx, database.MsglogTypeReport, "", interruptedRunNote); err != nil {
+		obs.LogErrorOrCancel(aw.logger, err, "failed to note the interrupted assistant run")
+
+		return
+	}
+
+	aw.noteOwed.Store(false)
+}
+
 func (aw *assistantWorker) worker() {
 	defer aw.wg.Done()
 
 	perform := func(ctx context.Context, input string, useAgents bool) error {
 		aw.runWG.Add(1)
 		defer aw.runWG.Done()
+
+		aw.noteInterruptedRun(ctx)
 
 		_, err := aw.db.UpdateAssistantUseAgents(ctx, database.UpdateAssistantUseAgentsParams{
 			UseAgents: useAgents,
@@ -491,8 +577,21 @@ func (aw *assistantWorker) worker() {
 			if err != nil {
 				obs.LogErrorOrCancel(aw.logger, err, "failed to perform assistant chain")
 			}
-			ain.done <- err
+			if !ain.reply.deliver(err) {
+				aw.reportFailure(err)
+			}
 		}
+	}
+}
+
+func (aw *assistantWorker) reportFailure(err error) {
+	if err == nil || errors.Is(err, context.Canceled) {
+		return
+	}
+
+	msg := fmt.Sprintf("The assistant could not answer: %s", err)
+	if _, putErr := aw.aslw.PutFlowAssistantMsg(aw.ctx, database.MsglogTypeReport, "", msg); putErr != nil {
+		aw.logger.WithError(putErr).Warn("failed to report why the assistant did not answer")
 	}
 }
 
@@ -545,28 +644,31 @@ func (aw *assistantWorker) PutInput(ctx context.Context, input string, useAgents
 		}
 	}
 
-	ain := assistantInput{input: input, useAgents: useAgents, done: make(chan error, 1)}
+	ain := assistantInput{input: input, useAgents: useAgents, reply: newInputReply()}
 	select {
 	case <-aw.ctx.Done():
-		close(ain.done)
 		return fmt.Errorf("assistant %d flow %d stopped: %w", aw.id, aw.flowID, aw.ctx.Err())
 	case <-ctx.Done():
-		close(ain.done)
 		return fmt.Errorf("assistant %d flow %d input processing timeout: %w", aw.id, aw.flowID, ctx.Err())
 	case aw.input <- ain:
 		timer := time.NewTimer(assistantInputTimeout)
 		defer timer.Stop()
 
+		var stopErr error
 		select {
-		case err := <-ain.done:
+		case err := <-ain.reply.done:
 			return err
 		case <-timer.C:
-			return nil // no early error
 		case <-aw.ctx.Done():
-			return fmt.Errorf("assistant %d flow %d stopped: %w", aw.id, aw.flowID, aw.ctx.Err())
+			stopErr = fmt.Errorf("assistant %d flow %d stopped: %w", aw.id, aw.flowID, aw.ctx.Err())
 		case <-ctx.Done():
-			return fmt.Errorf("assistant %d flow %d input processing timeout: %w", aw.id, aw.flowID, ctx.Err())
+			stopErr = fmt.Errorf("assistant %d flow %d input processing timeout: %w", aw.id, aw.flowID, ctx.Err())
 		}
+
+		if isDelivered, err := ain.reply.abandon(); isDelivered {
+			return err
+		}
+		return stopErr
 	}
 }
 
@@ -592,7 +694,7 @@ func (aw *assistantWorker) Finish(ctx context.Context) error {
 }
 
 func (aw *assistantWorker) Stop(ctx context.Context) error {
-	ctx, span := obs.Observer.NewSpan(ctx, obs.SpanKindInternal, "controller.assistantWorker.Stop")
+	_, span := obs.Observer.NewSpan(ctx, obs.SpanKindInternal, "controller.assistantWorker.Stop")
 	defer span.End()
 
 	aw.runST()

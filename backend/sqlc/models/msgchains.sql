@@ -132,10 +132,8 @@ SELECT
   COALESCE(SUM(mc.usage_cost_in), 0.0)::double precision AS total_usage_cost_in,
   COALESCE(SUM(mc.usage_cost_out), 0.0)::double precision AS total_usage_cost_out
 FROM msgchains mc
-LEFT JOIN subtasks s ON mc.subtask_id = s.id
-LEFT JOIN tasks t ON s.task_id = t.id OR mc.task_id = t.id
-INNER JOIN flows f ON (mc.flow_id = f.id OR t.flow_id = f.id)
-WHERE (mc.flow_id = $1 OR t.flow_id = $1) AND f.deleted_at IS NULL;
+INNER JOIN flows f ON f.id = mc.flow_id
+WHERE mc.flow_id = $1 AND f.deleted_at IS NULL;
 
 -- name: GetTaskUsageStats :one
 SELECT
@@ -167,7 +165,7 @@ WHERE mc.subtask_id = $1 AND f.deleted_at IS NULL;
 
 -- name: GetAllFlowsUsageStats :many
 SELECT
-  COALESCE(mc.flow_id, t.flow_id) AS flow_id,
+  mc.flow_id AS flow_id,
   COALESCE(SUM(mc.usage_in), 0)::bigint AS total_usage_in,
   COALESCE(SUM(mc.usage_out), 0)::bigint AS total_usage_out,
   COALESCE(SUM(mc.usage_cache_in), 0)::bigint AS total_usage_cache_in,
@@ -175,12 +173,10 @@ SELECT
   COALESCE(SUM(mc.usage_cost_in), 0.0)::double precision AS total_usage_cost_in,
   COALESCE(SUM(mc.usage_cost_out), 0.0)::double precision AS total_usage_cost_out
 FROM msgchains mc
-LEFT JOIN subtasks s ON mc.subtask_id = s.id
-LEFT JOIN tasks t ON s.task_id = t.id OR mc.task_id = t.id
-INNER JOIN flows f ON (mc.flow_id = f.id OR t.flow_id = f.id)
+INNER JOIN flows f ON f.id = mc.flow_id
 WHERE f.deleted_at IS NULL
-GROUP BY COALESCE(mc.flow_id, t.flow_id)
-ORDER BY COALESCE(mc.flow_id, t.flow_id);
+GROUP BY mc.flow_id
+ORDER BY mc.flow_id;
 
 -- name: GetUsageStatsByProvider :many
 SELECT
@@ -192,9 +188,7 @@ SELECT
   COALESCE(SUM(mc.usage_cost_in), 0.0)::double precision AS total_usage_cost_in,
   COALESCE(SUM(mc.usage_cost_out), 0.0)::double precision AS total_usage_cost_out
 FROM msgchains mc
-LEFT JOIN subtasks s ON mc.subtask_id = s.id
-LEFT JOIN tasks t ON s.task_id = t.id OR mc.task_id = t.id
-INNER JOIN flows f ON (mc.flow_id = f.id OR t.flow_id = f.id)
+INNER JOIN flows f ON f.id = mc.flow_id
 WHERE f.deleted_at IS NULL AND f.user_id = $1
 GROUP BY mc.model_provider
 ORDER BY mc.model_provider;
@@ -210,9 +204,7 @@ SELECT
   COALESCE(SUM(mc.usage_cost_in), 0.0)::double precision AS total_usage_cost_in,
   COALESCE(SUM(mc.usage_cost_out), 0.0)::double precision AS total_usage_cost_out
 FROM msgchains mc
-LEFT JOIN subtasks s ON mc.subtask_id = s.id
-LEFT JOIN tasks t ON s.task_id = t.id OR mc.task_id = t.id
-INNER JOIN flows f ON (mc.flow_id = f.id OR t.flow_id = f.id)
+INNER JOIN flows f ON f.id = mc.flow_id
 WHERE f.deleted_at IS NULL AND f.user_id = $1
 GROUP BY mc.model, mc.model_provider
 ORDER BY mc.model, mc.model_provider;
@@ -227,9 +219,7 @@ SELECT
   COALESCE(SUM(mc.usage_cost_in), 0.0)::double precision AS total_usage_cost_in,
   COALESCE(SUM(mc.usage_cost_out), 0.0)::double precision AS total_usage_cost_out
 FROM msgchains mc
-LEFT JOIN subtasks s ON mc.subtask_id = s.id
-LEFT JOIN tasks t ON s.task_id = t.id OR mc.task_id = t.id
-INNER JOIN flows f ON (mc.flow_id = f.id OR t.flow_id = f.id)
+INNER JOIN flows f ON f.id = mc.flow_id
 WHERE f.deleted_at IS NULL AND f.user_id = $1
 GROUP BY mc.type
 ORDER BY mc.type;
@@ -244,10 +234,8 @@ SELECT
   COALESCE(SUM(mc.usage_cost_in), 0.0)::double precision AS total_usage_cost_in,
   COALESCE(SUM(mc.usage_cost_out), 0.0)::double precision AS total_usage_cost_out
 FROM msgchains mc
-LEFT JOIN subtasks s ON mc.subtask_id = s.id
-LEFT JOIN tasks t ON s.task_id = t.id OR mc.task_id = t.id
-INNER JOIN flows f ON (mc.flow_id = f.id OR t.flow_id = f.id)
-WHERE (mc.flow_id = $1 OR t.flow_id = $1) AND f.deleted_at IS NULL
+INNER JOIN flows f ON f.id = mc.flow_id
+WHERE mc.flow_id = $1 AND f.deleted_at IS NULL
 GROUP BY mc.type
 ORDER BY mc.type;
 
@@ -263,63 +251,56 @@ SELECT
   COALESCE(SUM(mc.usage_cost_in), 0.0)::double precision AS total_usage_cost_in,
   COALESCE(SUM(mc.usage_cost_out), 0.0)::double precision AS total_usage_cost_out
 FROM msgchains mc
-LEFT JOIN subtasks s ON mc.subtask_id = s.id
-LEFT JOIN tasks t ON s.task_id = t.id OR mc.task_id = t.id
-INNER JOIN flows f ON (mc.flow_id = f.id OR t.flow_id = f.id)
-WHERE (mc.flow_id = $1 OR t.flow_id = $1) AND f.deleted_at IS NULL
+INNER JOIN flows f ON f.id = mc.flow_id
+WHERE mc.flow_id = $1 AND f.deleted_at IS NULL
 GROUP BY mc.model, mc.model_provider
 ORDER BY mc.model, mc.model_provider;
 
--- name: GetUsageStatsByDayLastWeek :many
+-- name: GetUsageStatsByDay :many
+-- One dense row per calendar day in the caller's timezone, zeros included.
+WITH bounds AS (
+  SELECT
+    ((NOW() AT TIME ZONE sqlc.arg(tz)::text)::date - sqlc.arg(days)::int) AS first_day,
+    (NOW() AT TIME ZONE sqlc.arg(tz)::text)::date AS last_day
+),
+days AS (
+  SELECT generate_series(b.first_day, b.last_day, INTERVAL '1 day')::date AS day
+  FROM bounds b
+),
+agg AS (
+  SELECT
+    (mc.created_at AT TIME ZONE sqlc.arg(tz)::text)::date AS day,
+    SUM(mc.usage_in)::bigint AS total_usage_in,
+    SUM(mc.usage_out)::bigint AS total_usage_out,
+    SUM(mc.usage_cache_in)::bigint AS total_usage_cache_in,
+    SUM(mc.usage_cache_out)::bigint AS total_usage_cache_out,
+    SUM(mc.usage_cost_in)::double precision AS total_usage_cost_in,
+    SUM(mc.usage_cost_out)::double precision AS total_usage_cost_out
+  FROM msgchains mc
+  INNER JOIN flows f ON f.id = mc.flow_id
+  WHERE f.deleted_at IS NULL
+    AND f.user_id = sqlc.arg(user_id)
+    -- The coarse bounds keep the index; the exact test repeats the grouping
+    -- expression, because an ambiguous local midnight resolves to the later
+    -- instant and would drop the earlier hour of that day.
+    AND mc.created_at >= (((SELECT first_day FROM bounds) - 1)::timestamp AT TIME ZONE sqlc.arg(tz)::text)
+    AND mc.created_at < (((SELECT last_day FROM bounds) + 2)::timestamp AT TIME ZONE sqlc.arg(tz)::text)
+    AND (mc.created_at AT TIME ZONE sqlc.arg(tz)::text)::date
+        BETWEEN (SELECT first_day FROM bounds) AND (SELECT last_day FROM bounds)
+  GROUP BY 1
+)
 SELECT
-  DATE(mc.created_at) AS date,
-  COALESCE(SUM(mc.usage_in), 0)::bigint AS total_usage_in,
-  COALESCE(SUM(mc.usage_out), 0)::bigint AS total_usage_out,
-  COALESCE(SUM(mc.usage_cache_in), 0)::bigint AS total_usage_cache_in,
-  COALESCE(SUM(mc.usage_cache_out), 0)::bigint AS total_usage_cache_out,
-  COALESCE(SUM(mc.usage_cost_in), 0.0)::double precision AS total_usage_cost_in,
-  COALESCE(SUM(mc.usage_cost_out), 0.0)::double precision AS total_usage_cost_out
-FROM msgchains mc
-LEFT JOIN subtasks s ON mc.subtask_id = s.id
-LEFT JOIN tasks t ON s.task_id = t.id OR mc.task_id = t.id
-INNER JOIN flows f ON (mc.flow_id = f.id OR t.flow_id = f.id)
-WHERE mc.created_at >= NOW() - INTERVAL '7 days' AND f.deleted_at IS NULL AND f.user_id = $1
-GROUP BY DATE(mc.created_at)
+  (d.day::timestamp AT TIME ZONE sqlc.arg(tz)::text) AS date,
+  COALESCE(a.total_usage_in, 0)::bigint AS total_usage_in,
+  COALESCE(a.total_usage_out, 0)::bigint AS total_usage_out,
+  COALESCE(a.total_usage_cache_in, 0)::bigint AS total_usage_cache_in,
+  COALESCE(a.total_usage_cache_out, 0)::bigint AS total_usage_cache_out,
+  COALESCE(a.total_usage_cost_in, 0.0)::double precision AS total_usage_cost_in,
+  COALESCE(a.total_usage_cost_out, 0.0)::double precision AS total_usage_cost_out
+FROM days d
+LEFT JOIN agg a ON a.day = d.day
 ORDER BY date DESC;
 
--- name: GetUsageStatsByDayLastMonth :many
-SELECT
-  DATE(mc.created_at) AS date,
-  COALESCE(SUM(mc.usage_in), 0)::bigint AS total_usage_in,
-  COALESCE(SUM(mc.usage_out), 0)::bigint AS total_usage_out,
-  COALESCE(SUM(mc.usage_cache_in), 0)::bigint AS total_usage_cache_in,
-  COALESCE(SUM(mc.usage_cache_out), 0)::bigint AS total_usage_cache_out,
-  COALESCE(SUM(mc.usage_cost_in), 0.0)::double precision AS total_usage_cost_in,
-  COALESCE(SUM(mc.usage_cost_out), 0.0)::double precision AS total_usage_cost_out
-FROM msgchains mc
-LEFT JOIN subtasks s ON mc.subtask_id = s.id
-LEFT JOIN tasks t ON s.task_id = t.id OR mc.task_id = t.id
-INNER JOIN flows f ON (mc.flow_id = f.id OR t.flow_id = f.id)
-WHERE mc.created_at >= NOW() - INTERVAL '30 days' AND f.deleted_at IS NULL AND f.user_id = $1
-GROUP BY DATE(mc.created_at)
-ORDER BY date DESC;
-
--- name: GetUsageStatsByDayLast3Months :many
-SELECT
-  DATE(mc.created_at) AS date,
-  COALESCE(SUM(mc.usage_in), 0)::bigint AS total_usage_in,
-  COALESCE(SUM(mc.usage_out), 0)::bigint AS total_usage_out,
-  COALESCE(SUM(mc.usage_cache_in), 0)::bigint AS total_usage_cache_in,
-  COALESCE(SUM(mc.usage_cache_out), 0)::bigint AS total_usage_cache_out,
-  COALESCE(SUM(mc.usage_cost_in), 0.0)::double precision AS total_usage_cost_in,
-  COALESCE(SUM(mc.usage_cost_out), 0.0)::double precision AS total_usage_cost_out
-FROM msgchains mc
-LEFT JOIN subtasks s ON mc.subtask_id = s.id
-LEFT JOIN tasks t ON s.task_id = t.id OR mc.task_id = t.id
-INNER JOIN flows f ON (mc.flow_id = f.id OR t.flow_id = f.id)
-WHERE mc.created_at >= NOW() - INTERVAL '90 days' AND f.deleted_at IS NULL AND f.user_id = $1
-GROUP BY DATE(mc.created_at)
-ORDER BY date DESC;
 
 -- name: GetUserTotalUsageStats :one
 SELECT
@@ -330,7 +311,5 @@ SELECT
   COALESCE(SUM(mc.usage_cost_in), 0.0)::double precision AS total_usage_cost_in,
   COALESCE(SUM(mc.usage_cost_out), 0.0)::double precision AS total_usage_cost_out
 FROM msgchains mc
-LEFT JOIN subtasks s ON mc.subtask_id = s.id
-LEFT JOIN tasks t ON s.task_id = t.id OR mc.task_id = t.id
-INNER JOIN flows f ON (mc.flow_id = f.id OR t.flow_id = f.id)
+INNER JOIN flows f ON f.id = mc.flow_id
 WHERE f.deleted_at IS NULL AND f.user_id = $1;

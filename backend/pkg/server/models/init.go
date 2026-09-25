@@ -7,8 +7,10 @@ import (
 	"regexp"
 	"strings"
 
+	"pentagi/pkg/password"
+
 	"github.com/go-playground/validator/v10"
-	"github.com/xeipuuv/gojsonschema"
+	"github.com/go-playground/validator/v10/non-standard/validators"
 )
 
 const (
@@ -66,21 +68,12 @@ func templateValidatorString(regexpString string) validator.Func {
 }
 
 func strongPasswordValidatorString() validator.Func {
-	numberRegex := regexp.MustCompile("[0-9]")
-	alphaLRegex := regexp.MustCompile("[a-z]")
-	alphaURegex := regexp.MustCompile("[A-Z]")
-	specRegex := regexp.MustCompile("[!@#$&*]")
 	return func(fl validator.FieldLevel) bool {
 		field := fl.Field()
 
 		switch field.Kind() {
 		case reflect.String:
-			password := fl.Field().String()
-			return len(password) > 15 || (len(password) >= 8 &&
-				numberRegex.MatchString(password) &&
-				alphaLRegex.MatchString(password) &&
-				alphaURegex.MatchString(password) &&
-				specRegex.MatchString(password))
+			return password.IsStrong(field.String())
 		default:
 			return false
 		}
@@ -88,7 +81,7 @@ func strongPasswordValidatorString() validator.Func {
 }
 
 // MaxPasswordBytes is the longest password bcrypt.GenerateFromPassword accepts.
-const MaxPasswordBytes = 72
+const MaxPasswordBytes = password.MaxBytes
 
 func passwordLengthValidatorString() validator.Func {
 	return func(fl validator.FieldLevel) bool {
@@ -96,7 +89,7 @@ func passwordLengthValidatorString() validator.Func {
 
 		switch field.Kind() {
 		case reflect.String:
-			return len(field.String()) <= MaxPasswordBytes
+			return password.FitsHashLimit(field.String())
 		default:
 			return false
 		}
@@ -170,56 +163,6 @@ func deepValidator() validator.Func {
 	}
 }
 
-func getMapKeys(kvmap interface{}) string {
-	kl := []interface{}{}
-	val := reflect.ValueOf(kvmap)
-	if val.Kind() == reflect.Map {
-		for _, e := range val.MapKeys() {
-			v := val.MapIndex(e)
-			kl = append(kl, v.Interface())
-		}
-	}
-	kld, _ := json.Marshal(kl)
-	return string(kld)
-}
-
-func mismatchLenError(tag string, wants, current int) string {
-	return fmt.Sprintf("%s wants len %d but current is %d", tag, wants, current)
-}
-
-func keyIsNotExtistInMap(tag, key string, kvmap interface{}) string {
-	return fmt.Sprintf("%s must present key %s in keys list %s", tag, key, getMapKeys(kvmap))
-}
-
-func keyIsNotExtistInSlice(tag, key string, klist interface{}) string {
-	kld, _ := json.Marshal(klist)
-	return fmt.Sprintf("%s must present key %s in keys list %s", tag, key, string(kld))
-}
-
-func keysAreNotExtistInSlice(tag, lkeys, rkeys interface{}) string {
-	lkeysd, _ := json.Marshal(lkeys)
-	rkeysd, _ := json.Marshal(rkeys)
-	return fmt.Sprintf("%s must all keys present %s in keys list %s", tag, string(lkeysd), string(rkeysd))
-}
-
-func contextError(tag string, id string, ctx interface{}) string {
-	ctxd, _ := json.Marshal(ctx)
-	return fmt.Sprintf("%s with %s ctx %s", tag, id, string(ctxd))
-}
-
-func caughtValidationError(tag string, err error) string {
-	return fmt.Sprintf("%s caught error %s", tag, err.Error())
-}
-
-func caughtSchemaValidationError(tag string, errs []gojsonschema.ResultError) string {
-	var arr []string
-	for _, err := range errs {
-		arr = append(arr, err.String())
-	}
-	errd, _ := json.Marshal(arr)
-	return fmt.Sprintf("%s caught errors %s", tag, string(errd))
-}
-
 func scanFromJSON(input interface{}, output interface{}) error {
 	if v, ok := input.(string); ok {
 		return json.Unmarshal([]byte(v), output)
@@ -244,6 +187,7 @@ func init() {
 	_ = validate.RegisterValidation("realemail", strictEmailValidatorString())
 	_ = validate.RegisterValidation("oauth_min_scope", oauthMinScope())
 	_ = validate.RegisterValidation("valid", deepValidator())
+	_ = validate.RegisterValidation("notblank", validators.NotBlank)
 
 	// Check validation interface for all models
 	_, _ = reflect.ValueOf(Login{}).Interface().(IValid)

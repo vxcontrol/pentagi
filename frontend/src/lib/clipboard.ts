@@ -3,6 +3,8 @@ import { toast } from 'sonner';
 
 import { ResultFormat } from '@/graphql/types';
 
+import { Log } from './log';
+
 export interface CopyableMessage {
     message?: null | string;
     result?: null | string;
@@ -165,5 +167,17 @@ export const copyMessageToClipboard = async (messageData: CopyableMessage): Prom
         toast.success('Copied to clipboard');
     } catch {
         toast.error('Failed to copy to clipboard');
+    }
+};
+
+export const copyToClipboard = async (text: string): Promise<boolean> => {
+    try {
+        await navigator.clipboard.writeText(text);
+
+        return true;
+    } catch (error) {
+        Log.error('Failed to copy to clipboard:', error);
+
+        return false;
     }
 };

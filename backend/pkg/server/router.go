@@ -18,6 +18,7 @@ import (
 	"pentagi/pkg/controller"
 	"pentagi/pkg/database"
 	"pentagi/pkg/database/knowledge"
+	"pentagi/pkg/database/knowledge/vectorstore"
 	"pentagi/pkg/docker"
 	"pentagi/pkg/graph/subscriptions"
 	"pentagi/pkg/providers"
@@ -26,6 +27,7 @@ import (
 	"pentagi/pkg/server/oauth"
 	"pentagi/pkg/server/services"
 	"pentagi/pkg/server/update"
+	"pentagi/pkg/timezone"
 
 	_ "pentagi/pkg/server/docs" // swagger docs
 
@@ -43,7 +45,13 @@ import (
 	"github.com/vxcontrol/langchaingo/vectorstores/pgvector"
 )
 
-const baseURL = "/api/v1"
+const (
+	baseURL = "/api/v1"
+
+	// sessionTimeout is the life of an auth cookie, shared by the handler that
+	// mints it and the one that re-stamps it after a password change.
+	sessionTimeout = 4 * 60 * 60
+)
 
 const corsAllowGoogleOAuth = "https://accounts.google.com"
 
@@ -81,6 +89,29 @@ var frontendRoutes = []string{
 // @description Type "Bearer" followed by a space and JWT token.
 
 // @BasePath /api/v1
+// Deadlines around a connection, not inside a request — RequestTimeout bounds
+// the request itself. Read and write deadlines are deliberately absent: a body
+// or a response may legitimately run for as long as an upload, a download or a
+// subscription socket does.
+const (
+	ReadHeaderTimeout = 15 * time.Second
+	IdleTimeout       = 2 * time.Minute
+)
+
+func newEngine(trustedProxies []string) *gin.Engine {
+	engine := gin.Default()
+	engine.ContextWithFallback = true
+
+	// gin trusts every peer out of the box, so without this ClientIP returns
+	// whatever X-Forwarded-For the caller wrote.
+	if err := engine.SetTrustedProxies(trustedProxies); err != nil {
+		logrus.WithError(err).Error("error setting trusted proxies, falling back to the peer address")
+		_ = engine.SetTrustedProxies(nil)
+	}
+
+	return engine
+}
+
 func NewRouter(
 	db *database.Queries,
 	orm *gorm.DB,
@@ -134,23 +165,14 @@ func NewRouter(
 	embedder := providers.Embedder()
 	var pgStore *pgvector.Store
 	if embedder.IsAvailable() {
-		opts := []pgvector.Option{
-			pgvector.WithEmbedder(embedder),
-			pgvector.WithCollectionName("langchain"),
-		}
-		if cfg.PgxPool != nil {
-			opts = append(opts, pgvector.WithConn(cfg.PgxPool))
-		} else {
-			opts = append(opts, pgvector.WithConnectionURL(cfg.DatabaseURL))
-		}
-		if s, err := pgvector.New(context.Background(), opts...); err == nil {
+		if s, err := pgvector.New(context.Background(),
+			vectorstore.Options(embedder, cfg.PgxPool, cfg.DatabaseURL)...); err == nil {
 			pgStore = &s
 		} else {
 			logrus.WithError(err).Warn("failed to initialise pgvector store for knowledge API; embedding operations will be unavailable")
 		}
 	}
-	var knowledgeStore knowledge.KnowledgeStore
-	knowledgeStore = knowledge.NewKnowledgeStore(db, pgStore, embedder, subscriptions.NewKnowledgePublisher, cfg.EmbeddingMaxTextBytes)
+	var knowledgeStore = knowledge.NewKnowledgeStore(db, pgStore, embedder, subscriptions.NewKnowledgePublisher, cfg.EmbeddingMaxTextBytes)
 
 	// ---- Anonymizer replacer ------------------------------------------------
 	// Shared singleton used by the GraphQL anonymizeText mutation.
@@ -173,17 +195,18 @@ func NewRouter(
 		services.AuthServiceConfig{
 			BaseURL:          baseURL,
 			LoginCallbackURL: oauthLoginCallbackURL,
-			SessionTimeout:   4 * 60 * 60, // 4 hours
+			SessionTimeout:   sessionTimeout,
 			CookiePrefix:     cfg.TenantPrefix(),
 		},
 		orm,
 		oauthClients,
+		userCache,
 	)
-	userService := services.NewUserService(orm, userCache)
+	userService := services.NewUserService(orm, userCache, baseURL, sessionTimeout)
 	roleService := services.NewRoleService(orm)
 	providerService := services.NewProviderService(providers)
 	settingsService := services.NewSettingsService(cfg)
-	flowService := services.NewFlowService(orm, providers, controller, subscriptions)
+	flowService := services.NewFlowService(orm, db, providers, controller, subscriptions)
 	flowFileService := services.NewFlowFileService(orm, cfg.DataDir, cfg.TenantPrefix(), dockerClient, subscriptions)
 	resourceService := services.NewResourceService(orm, cfg.DataDir, subscriptions)
 	taskService := services.NewTaskService(orm)
@@ -199,16 +222,17 @@ func NewRouter(
 	termlogService := services.NewTermlogService(orm)
 	screenshotService := services.NewScreenshotService(orm, cfg.DataDir)
 	promptService := services.NewPromptService(orm)
-	analyticsService := services.NewAnalyticsService(orm)
+	timezones := timezone.NewCatalog(orm.DB())
+	analyticsService := services.NewAnalyticsService(orm, timezones)
 	tokenService := services.NewTokenService(orm, cfg.AuthSalt(), tokenCache, subscriptions)
 	knowledgeService := services.NewKnowledgeService(orm, knowledgeStore)
 	anonymizerService := services.NewAnonymizerService(textReplacer)
 	graphqlService := services.NewGraphqlService(
 		db, cfg, baseURL, cfg.CorsOrigins, tokenCache, providers, controller, subscriptions, knowledgeStore, textReplacer,
-		updates,
+		updates, timezones,
 	)
 
-	router := gin.Default()
+	router := newEngine(cfg.TrustedProxies)
 
 	// Setup Cross-Origin Resource Sharing policy
 	config := cors.DefaultConfig()
@@ -241,6 +265,7 @@ func NewRouter(
 
 	router.Use(gin.Recovery())
 	router.Use(logger.WithGinLogger("pentagi-api"))
+	router.Use(compressionMiddleware())
 
 	// AuthSalt mixes TENANT_ID into the key derivation so a session minted by one
 	// instance is cryptographically invalid on another even when COOKIE_SIGNING_SALT
@@ -252,6 +277,7 @@ func NewRouter(
 
 	api := router.Group(baseURL)
 	api.Use(noCacheMiddleware())
+	api.Use(requestDeadline(RequestTimeout))
 
 	// Special case for local user own password change
 	changePasswordGroup := api.Group("/user")
@@ -276,52 +302,42 @@ func NewRouter(
 			developerGroup.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 		}
 
-		authGroup := publicGroup.Group("/auth")
-		{
-			authGroup.POST("/login", authService.AuthLogin)
-			authGroup.GET("/logout", authService.AuthLogout)
-			authGroup.GET("/authorize", authService.AuthAuthorize)
-			authGroup.GET("/login-callback", authService.AuthLoginGetCallback)
-			authGroup.POST("/login-callback", authService.AuthLoginPostCallback)
-			authGroup.POST("/logout-callback", authService.AuthLogoutCallback)
-		}
+		registerAuthRoutes(publicGroup.Group("/auth"), authService)
 	}
 
 	privateGroup := api.Group("/")
 	privateGroup.Use(authMiddleware.AuthTokenRequired)
-	{
-		setGraphqlGroup(privateGroup, graphqlService)
-
-		setKnowledgeGroup(privateGroup, knowledgeService)
-		setProvidersGroup(privateGroup, providerService)
-		setSettingsGroup(privateGroup, settingsService)
-		setFlowsGroup(privateGroup, flowService)
-		setFlowFilesGroup(privateGroup, flowFileService)
-		setResourcesGroup(privateGroup, resourceService)
-		setTasksGroup(privateGroup, taskService)
-		setSubtasksGroup(privateGroup, subtaskService)
-		setContainersGroup(privateGroup, containerService)
-		setToolcallsGroup(privateGroup, toolcallService)
-		setAssistantsGroup(privateGroup, assistantService)
-		setAgentlogsGroup(privateGroup, agentlogService)
-		setAssistantlogsGroup(privateGroup, assistantlogService)
-		setMsglogsGroup(privateGroup, msglogService)
-		setTermlogsGroup(privateGroup, termlogService)
-		setSearchlogsGroup(privateGroup, searchlogService)
-		setVecstorelogsGroup(privateGroup, vecstorelogService)
-		setScreenshotsGroup(privateGroup, screenshotService)
-		setPromptsGroup(privateGroup, promptService)
-		setAnonymizeGroup(privateGroup, anonymizerService)
-		setAnalyticsGroup(privateGroup, analyticsService)
-	}
 
 	privateUserGroup := api.Group("/")
 	privateUserGroup.Use(authMiddleware.AuthUserRequired)
-	{
-		setRolesGroup(privateGroup, roleService)
-		setUsersGroup(privateGroup, userService)
-		setTokensGroup(privateGroup, tokenService)
-	}
+
+	registerPrivateRoutes(privateGroup, privateUserGroup, privateServices{
+		agentlog:     agentlogService,
+		analytics:    analyticsService,
+		anonymizer:   anonymizerService,
+		assistant:    assistantService,
+		assistantlog: assistantlogService,
+		container:    containerService,
+		flow:         flowService,
+		flowFile:     flowFileService,
+		graphql:      graphqlService,
+		knowledge:    knowledgeService,
+		msglog:       msglogService,
+		prompt:       promptService,
+		provider:     providerService,
+		resource:     resourceService,
+		role:         roleService,
+		screenshot:   screenshotService,
+		searchlog:    searchlogService,
+		settings:     settingsService,
+		subtask:      subtaskService,
+		task:         taskService,
+		termlog:      termlogService,
+		token:        tokenService,
+		toolcall:     toolcallService,
+		user:         userService,
+		vecstorelog:  vecstorelogService,
+	})
 
 	if cfg.StaticURL != nil && cfg.StaticURL.Scheme != "" && cfg.StaticURL.Host != "" {
 		router.NoRoute(func() gin.HandlerFunc {
@@ -406,12 +422,12 @@ func registerStaticFileServer(router *gin.Engine, staticDir string) {
 func setKnowledgeGroup(parent *gin.RouterGroup, svc *services.KnowledgeService) {
 	kg := parent.Group("/knowledge")
 	{
-		kg.GET("/", svc.ListDocuments)
-		kg.GET("/:id", svc.GetDocument)
-		kg.POST("/", svc.CreateDocument)
-		kg.POST("/search", svc.SearchDocuments)
-		kg.PUT("/:id", svc.UpdateDocument)
-		kg.DELETE("/:id", svc.DeleteDocument)
+		kg.GET("/", auth.PrivilegesRequired("knowledge.view"), svc.ListDocuments)
+		kg.GET("/:id", auth.PrivilegesRequired("knowledge.view"), svc.GetDocument)
+		kg.POST("/", auth.PrivilegesRequired("knowledge.create"), svc.CreateDocument)
+		kg.POST("/search", auth.PrivilegesRequired("knowledge.search"), svc.SearchDocuments)
+		kg.PUT("/:id", auth.PrivilegesRequired("knowledge.edit"), svc.UpdateDocument)
+		kg.DELETE("/:id", auth.PrivilegesRequired("knowledge.delete"), svc.DeleteDocument)
 	}
 }
 
@@ -427,6 +443,77 @@ func setSettingsGroup(parent *gin.RouterGroup, svc *services.SettingsService) {
 	{
 		settingsGroup.GET("/", svc.GetSettings)
 	}
+}
+
+type privateServices struct {
+	agentlog     *services.AgentlogService
+	analytics    *services.AnalyticsService
+	anonymizer   *services.AnonymizerService
+	assistant    *services.AssistantService
+	assistantlog *services.AssistantlogService
+	container    *services.ContainerService
+	flow         *services.FlowService
+	flowFile     *services.FlowFileService
+	graphql      *services.GraphqlService
+	knowledge    *services.KnowledgeService
+	msglog       *services.MsglogService
+	prompt       *services.PromptService
+	provider     *services.ProviderService
+	resource     *services.ResourceService
+	role         *services.RoleService
+	screenshot   *services.ScreenshotService
+	searchlog    *services.SearchlogService
+	settings     *services.SettingsService
+	subtask      *services.SubtaskService
+	task         *services.TaskService
+	termlog      *services.TermlogService
+	token        *services.TokenService
+	toolcall     *services.ToolcallService
+	user         *services.UserService
+	vecstorelog  *services.VecstorelogService
+}
+
+func registerAuthRoutes(authGroup *gin.RouterGroup, authService *services.AuthService) {
+	authGroup.POST("/login", authService.AuthLogin)
+	authGroup.POST("/logout", authService.AuthLogout)
+	authGroup.GET("/authorize", authService.AuthAuthorize)
+	authGroup.GET("/login-callback", authService.AuthLoginGetCallback)
+	authGroup.POST("/login-callback", authService.AuthLoginPostCallback)
+	authGroup.POST("/logout-callback", authService.AuthLogoutCallback)
+}
+
+// Anything that administers accounts or credentials belongs on userTier: a bearer
+// token reaching /users or /tokens can mint an administrator and escape its scope.
+func registerPrivateRoutes(tokenTier, userTier *gin.RouterGroup, svc privateServices) {
+	setGraphqlGroup(tokenTier, svc.graphql)
+
+	setKnowledgeGroup(tokenTier, svc.knowledge)
+	setProvidersGroup(tokenTier, svc.provider)
+	setSettingsGroup(tokenTier, svc.settings)
+	setFlowsGroup(tokenTier, svc.flow)
+	setFlowFilesGroup(tokenTier, svc.flowFile)
+	setResourcesGroup(tokenTier, svc.resource)
+	setTasksGroup(tokenTier, svc.task)
+	setSubtasksGroup(tokenTier, svc.subtask)
+	setContainersGroup(tokenTier, svc.container)
+	setToolcallsGroup(tokenTier, svc.toolcall)
+	setAssistantsGroup(tokenTier, svc.assistant)
+	setAgentlogsGroup(tokenTier, svc.agentlog)
+	setAssistantlogsGroup(tokenTier, svc.assistantlog)
+	setMsglogsGroup(tokenTier, svc.msglog)
+	setTermlogsGroup(tokenTier, svc.termlog)
+	setSearchlogsGroup(tokenTier, svc.searchlog)
+	setVecstorelogsGroup(tokenTier, svc.vecstorelog)
+	setScreenshotsGroup(tokenTier, svc.screenshot)
+	setPromptsGroup(tokenTier, svc.prompt)
+	setAnonymizeGroup(tokenTier, svc.anonymizer)
+	setAnalyticsGroup(tokenTier, svc.analytics)
+
+	setCurrentUserGroup(tokenTier, svc.user)
+
+	setRolesGroup(userTier, svc.role)
+	setUsersGroup(userTier, svc.user)
+	setTokensGroup(userTier, svc.token)
 }
 
 func setGraphqlGroup(parent *gin.RouterGroup, svc *services.GraphqlService) {
@@ -696,6 +783,9 @@ func setUsersGroup(parent *gin.RouterGroup, svc *services.UserService) {
 		usersViewGroup.GET("/:hash", svc.GetUser)
 	}
 
+}
+
+func setCurrentUserGroup(parent *gin.RouterGroup, svc *services.UserService) {
 	userViewGroup := parent.Group("/user")
 	{
 		userViewGroup.GET("/", svc.GetCurrentUser)

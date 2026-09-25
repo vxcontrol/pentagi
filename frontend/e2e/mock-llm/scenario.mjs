@@ -90,6 +90,13 @@ export const RULES = [
         ],
     },
     {
+        // The assistant chain has no `done` barrier: answering it the way an agent is answered
+        // feeds back a tool it cannot call, and the backend aborts on "tool 'done' repeated".
+        content: 'Hello from the e2e mock LLM!',
+        label: 'assistant-terminal-answer',
+        match: /submit_flow_input[\s\S]*E2E_TERMINAL_OK|E2E_TERMINAL_OK[\s\S]*submit_flow_input/,
+    },
+    {
         label: 'agent-terminal-done',
         match: /E2E_TERMINAL_OK/,
         toolCalls: [

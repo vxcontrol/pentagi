@@ -1,5 +1,7 @@
 import type { Page } from '@playwright/test';
 
+import { addHours } from 'date-fns';
+
 import type { AuthInfo } from '@/models/info';
 import type { User } from '@/models/user';
 
@@ -128,7 +130,7 @@ const ADMIN_PRIVILEGES = [
 const OAUTH_PROVIDERS = ['google', 'github'];
 
 export const seededAuthInfo = (): AuthInfo => ({
-    expires_at: new Date(CASSETTE_EPOCH.getTime() + 12 * 60 * 60 * 1000).toISOString(),
+    expires_at: addHours(CASSETTE_EPOCH, 12).toISOString(),
     oauth: false,
     privileges: ADMIN_PRIVILEGES,
     providers: OAUTH_PROVIDERS,
@@ -141,11 +143,32 @@ export const authenticatedInfoEntry = (): RestCassetteEntry => ({
     body: { data: seededAuthInfo(), status: 'success' },
 });
 
+export const infoEntryFor = (user: Partial<User>): RestCassetteEntry => {
+    const merged = { ...SEEDED_USER, ...user } as User;
+
+    return {
+        body: {
+            data: { ...seededAuthInfo(), oauth: merged.type === 'oauth', user: merged },
+            status: 'success',
+        },
+    };
+};
+
 export const guestInfoEntry = (): RestCassetteEntry => ({
     body: { data: { providers: OAUTH_PROVIDERS, type: 'guest' }, status: 'success' },
 });
 
+export const seedAuthenticatedAs = async (page: Page, user: Partial<User>): Promise<void> => {
+    const merged = { ...SEEDED_USER, ...user } as User;
+
+    await seedAuthInfo(page, { ...seededAuthInfo(), oauth: merged.type === 'oauth', user: merged });
+};
+
 export const seedAuthenticated = async (page: Page): Promise<void> => {
+    await seedAuthInfo(page, seededAuthInfo());
+};
+
+const seedAuthInfo = async (page: Page, info: AuthInfo): Promise<void> => {
     await page.addInitScript(
         ([key, value, sentinel]) => {
             // Init scripts run on every document, so an unguarded seed would resurrect the session
@@ -157,6 +180,6 @@ export const seedAuthenticated = async (page: Page): Promise<void> => {
             window.sessionStorage.setItem(String(sentinel), '1');
             window.localStorage.setItem(String(key), String(value));
         },
-        [AUTH_STORAGE_KEY, JSON.stringify(seededAuthInfo()), 'e2e-auth-seeded'] as const,
+        [AUTH_STORAGE_KEY, JSON.stringify(info), 'e2e-auth-seeded'] as const,
     );
 };

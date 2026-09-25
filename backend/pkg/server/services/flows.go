@@ -1,11 +1,13 @@
 package services
 
 import (
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"net/http"
 	"slices"
 	"strconv"
+	"time"
 
 	"pentagi/pkg/controller"
 	"pentagi/pkg/database"
@@ -42,11 +44,12 @@ var flowsSQLMappers = map[string]any{
 	"language":            "{{table}}.language",
 	"created_at":          "{{table}}.created_at",
 	"updated_at":          "{{table}}.updated_at",
-	"data":                "({{table}}.status || ' ' || {{table}}.title || ' ' || {{table}}.model || ' ' || {{table}}.model_provider || ' ' || {{table}}.language)",
+	"data":                "({{table}}.status || ' ' || {{table}}.title || ' ' || {{table}}.model || ' ' || {{table}}.model_provider_name || ' ' || {{table}}.language)",
 }
 
 type FlowService struct {
 	db *gorm.DB
+	q  database.Querier
 	pc providers.ProviderController
 	fc controller.FlowController
 	ss subscriptions.SubscriptionsController
@@ -54,12 +57,14 @@ type FlowService struct {
 
 func NewFlowService(
 	db *gorm.DB,
+	q database.Querier,
 	pc providers.ProviderController,
 	fc controller.FlowController,
 	ss subscriptions.SubscriptionsController,
 ) *FlowService {
 	return &FlowService{
 		db: db,
+		q:  q,
 		pc: pc,
 		fc: fc,
 		ss: ss,
@@ -107,7 +112,7 @@ func (s *FlowService) GetFlows(c *gin.Context) {
 		return
 	}
 
-	query.Init("flows", flowsSQLMappers)
+	_ = query.Init("flows", flowsSQLMappers)
 
 	if query.Group != "" {
 		if _, ok := flowsSQLMappers[query.Group]; !ok {
@@ -255,7 +260,7 @@ func (s *FlowService) GetFlowGraph(c *gin.Context) {
 
 	isTasksAdmin := slices.Contains(privs, "tasks.admin")
 	isTasksView := slices.Contains(privs, "tasks.view")
-	if !(resp.UserID == uid && isTasksView) && !(resp.UserID != uid && isTasksAdmin) {
+	if (resp.UserID != uid || !isTasksView) && (resp.UserID == uid || !isTasksAdmin) {
 		response.Success(c, http.StatusOK, resp)
 		return
 	}
@@ -274,7 +279,7 @@ func (s *FlowService) GetFlowGraph(c *gin.Context) {
 
 	isSubtasksAdmin := slices.Contains(privs, "subtasks.admin")
 	isSubtasksView := slices.Contains(privs, "subtasks.view")
-	if !(resp.UserID == uid && isSubtasksView) && !(resp.UserID != uid && isSubtasksAdmin) {
+	if (resp.UserID != uid || !isSubtasksView) && (resp.UserID == uid || !isSubtasksAdmin) {
 		response.Success(c, http.StatusOK, resp)
 		return
 	}
@@ -365,14 +370,14 @@ func (s *FlowService) CreateFlow(c *gin.Context) {
 		return
 	}
 
-	fw, err := s.fc.CreateFlow(c, int64(uid), createFlow.Input, prvname, prvtype, createFlow.Functions, dbResources)
+	flowID, err := s.fc.CreateFlow(c, int64(uid), createFlow.Input, prvname, prvtype, createFlow.Functions, dbResources)
 	if err != nil {
 		logger.FromContext(c).WithError(err).Errorf("error creating flow")
 		response.Error(c, response.ErrInternal, err)
 		return
 	}
 
-	err = s.db.Model(&flow).Where("id = ?", fw.GetFlowID()).Take(&flow).Error
+	err = s.db.Model(&flow).Where("id = ?", flowID).Take(&flow).Error
 	if err != nil {
 		logger.FromContext(c).WithError(err).Errorf("error getting flow by id")
 		response.Error(c, response.ErrInternal, err)
@@ -449,26 +454,37 @@ func (s *FlowService) PatchFlow(c *gin.Context) {
 		return
 	}
 
-	fw, err := s.fc.GetFlow(c, int64(flow.ID))
-	if err != nil {
-		if errors.Is(err, controller.ErrFlowNotFound) {
-			response.ErrorWithLevel(c, response.ErrFlowsNotFound, err, logrus.WarnLevel)
+	var fw controller.FlowWorker
+	if patchFlow.Action != "finish" {
+		fw, err = s.fc.GetFlow(c, int64(flow.ID))
+		if err != nil {
+			if errors.Is(err, controller.ErrFlowNotFound) {
+				response.ErrorWithLevel(c, response.ErrFlowsNotFound, err, logrus.WarnLevel)
+				return
+			}
+			logger.FromContext(c).WithError(err).Errorf("error getting flow by id in flow controller")
+			response.Error(c, response.ErrInternal, err)
 			return
 		}
-		logger.FromContext(c).WithError(err).Errorf("error getting flow by id in flow controller")
-		response.Error(c, response.ErrInternal, err)
-		return
 	}
 
 	switch patchFlow.Action {
 	case "stop":
-		if err := fw.Stop(c); err != nil {
+		if err := s.fc.StopFlow(c, int64(flow.ID)); err != nil {
+			if errors.Is(err, controller.ErrFlowNotFound) || errors.Is(err, controller.ErrFlowNotLoaded) {
+				response.ErrorWithLevel(c, response.ErrFlowsNotFound, err, logrus.WarnLevel)
+				return
+			}
 			logger.FromContext(c).WithError(err).Errorf("error stopping flow")
 			response.Error(c, response.ErrInternal, err)
 			return
 		}
 	case "finish":
-		if err := fw.Finish(c); err != nil {
+		if err := s.fc.FinishFlow(c, int64(flow.ID)); err != nil {
+			if errors.Is(err, controller.ErrFlowNotFound) {
+				response.ErrorWithLevel(c, response.ErrFlowsNotFound, err, logrus.WarnLevel)
+				return
+			}
 			logger.FromContext(c).WithError(err).Errorf("error finishing flow")
 			response.Error(c, response.ErrInternal, err)
 			return
@@ -497,9 +513,37 @@ func (s *FlowService) PatchFlow(c *gin.Context) {
 			return
 		}
 
-		if err := fw.PutInput(c, *patchFlow.Input, prv, dbResources); err != nil {
+		// ErrInputAccepted is the ordinary outcome, not a failure: the worker has
+		// the input and is slower than this request. Answering 5xx for it told the
+		// caller to retry an action that was already running.
+		switch err := fw.PutInput(c, *patchFlow.Input, prv, dbResources); {
+		case err == nil, errors.Is(err, controller.ErrInputAccepted):
+		case errors.Is(err, controller.ErrInputNotAccepted):
+			response.ErrorWithLevel(c, response.ErrFlowsInputNotAccepted, err, logrus.WarnLevel)
+			return
+		default:
 			logger.FromContext(c).WithError(err).Errorf("error sending input to flow")
 			response.Error(c, response.ErrInternal, err)
+			return
+		}
+	case "report":
+		var budget time.Duration
+		if patchFlow.Timeout != nil {
+			budget = time.Duration(*patchFlow.Timeout) * time.Second
+		}
+
+		if err := s.fc.ReportFlow(c, int64(flow.ID), budget); err != nil {
+			switch {
+			case errors.Is(err, controller.ErrFlowNotFound), errors.Is(err, controller.ErrFlowNotLoaded):
+				response.ErrorWithLevel(c, response.ErrFlowsNotFound, err, logrus.WarnLevel)
+			case errors.Is(err, controller.ErrNothingToReport):
+				// Asking for a write-up of a flow that has none left is the
+				// caller getting it wrong, not the server failing.
+				response.ErrorWithLevel(c, response.ErrFlowsInvalidRequest, err, logrus.WarnLevel)
+			default:
+				logger.FromContext(c).WithError(err).Errorf("error reporting flow")
+				response.Error(c, response.ErrInternal, err)
+			}
 			return
 		}
 	case "rename":
@@ -508,7 +552,11 @@ func (s *FlowService) PatchFlow(c *gin.Context) {
 			response.Error(c, response.ErrFlowsInvalidRequest, nil)
 			return
 		}
-		if err := fw.Rename(c, *patchFlow.Name); err != nil {
+		if err := s.fc.RenameFlow(c, int64(flow.ID), *patchFlow.Name); err != nil {
+			if errors.Is(err, controller.ErrFlowNotFound) || errors.Is(err, controller.ErrFlowNotLoaded) {
+				response.ErrorWithLevel(c, response.ErrFlowsNotFound, err, logrus.WarnLevel)
+				return
+			}
 			logger.FromContext(c).WithError(err).Errorf("error renaming flow")
 			response.Error(c, response.ErrInternal, err)
 			return
@@ -617,6 +665,17 @@ func (s *FlowService) DeleteFlow(c *gin.Context) {
 		strconv.FormatUint(flow.ID, 10),
 	).Error; err != nil {
 		logger.FromContext(c).WithError(err).Warnf("failed to clean up memory documents for deleted flow %d", flow.ID)
+	}
+
+	prefs, err := s.q.DeleteFavoriteFlow(c, database.DeleteFavoriteFlowParams{
+		FlowID: int64(flow.ID),
+		UserID: int64(flow.UserID),
+	})
+	switch {
+	case err != nil && !errors.Is(err, sql.ErrNoRows):
+		logger.FromContext(c).WithError(err).Warnf("failed to drop deleted flow %d from favorites", flow.ID)
+	case err == nil && s.ss != nil:
+		s.ss.NewSettingsPublisher(int64(flow.UserID)).SettingsUserUpdated(c, prefs)
 	}
 
 	flowDB, err := convertFlowToDatabase(flow)

@@ -1,10 +1,46 @@
 import { TriangleAlert } from 'lucide-react';
-import { useEffect } from 'react';
+import { useEffect, useSyncExternalStore } from 'react';
 import { useRouteError } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { isChunkLoadError, isDomDesyncError, reloadOnce } from '@/lib/chunk-reload';
+
+const subscribeToConnection = (onChange: () => void) => {
+    window.addEventListener('online', onChange);
+    window.addEventListener('offline', onChange);
+
+    return () => {
+        window.removeEventListener('online', onChange);
+        window.removeEventListener('offline', onChange);
+    };
+};
+
+const isBrowserOnline = () => navigator.onLine;
+
+const describeFailure = ({
+    isChunk,
+    isDesync,
+    isOnline,
+}: {
+    isChunk: boolean;
+    isDesync: boolean;
+    isOnline: boolean;
+}) => {
+    if (isChunk && !isOnline) {
+        return 'You are offline, so this page could not load. It will reload once the connection is back.';
+    }
+
+    if (isChunk) {
+        return 'A new version was likely just deployed. Reloading will load the latest one.';
+    }
+
+    if (isDesync) {
+        return 'The page hit a display glitch. Reloading usually clears it.';
+    }
+
+    return 'The page ran into an unexpected error. Reloading usually clears it.';
+};
 
 /**
  * Root `errorElement` for the data router — replaces React Router's built-in
@@ -17,12 +53,14 @@ function RouteErrorBoundary() {
     const error = useRouteError();
     const isChunk = isChunkLoadError(error);
     const isDesync = isDomDesyncError(error);
+    const isOnline = useSyncExternalStore(subscribeToConnection, isBrowserOnline);
+    const isWaitingForConnection = isChunk && !isOnline;
 
     useEffect(() => {
         if (isChunk || isDesync) {
             reloadOnce();
         }
-    }, [isChunk, isDesync]);
+    }, [isChunk, isDesync, isOnline]);
 
     return (
         <div
@@ -35,16 +73,11 @@ function RouteErrorBoundary() {
                         <TriangleAlert />
                     </EmptyMedia>
                     <EmptyTitle>Something went wrong</EmptyTitle>
-                    <EmptyDescription>
-                        {isChunk
-                            ? 'A new version was likely just deployed. Reloading will load the latest one.'
-                            : isDesync
-                              ? 'The page hit a display glitch. Reloading usually clears it.'
-                              : 'The page ran into an unexpected error. Reloading usually clears it.'}
-                    </EmptyDescription>
+                    <EmptyDescription>{describeFailure({ isChunk, isDesync, isOnline })}</EmptyDescription>
                 </EmptyHeader>
                 <EmptyContent>
                     <Button
+                        disabled={isWaitingForConnection}
                         onClick={() => window.location.reload()}
                         variant="secondary"
                     >

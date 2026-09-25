@@ -47,6 +47,38 @@ export const UPLOADED_FRAGMENT: UserResourceFragmentFragment = entity('UserResou
     userId: '1',
 });
 
+export const NESTED_RESOURCE: RestResourceEntry = {
+    ...makeRestResource(5, 'findings.md', 96, false),
+    path: 'reports/findings.md',
+};
+
+export const NESTED_FOLDER: RestResourceEntry = {
+    ...makeRestResource(6, 'archive', 0, true),
+    path: 'reports/archive',
+};
+
+export const nestedResourcesCassette = (override: Cassette = {}): Cassette =>
+    resourcesCassette(
+        mergeCassettes(
+            {
+                rest: {
+                    'GET /api/v1/resources/': [
+                        {
+                            body: {
+                                data: {
+                                    items: [FOLDER_RESOURCE, FILE_RESOURCE, NESTED_RESOURCE, NESTED_FOLDER],
+                                    total: 4,
+                                },
+                                status: 'success',
+                            },
+                        },
+                    ],
+                },
+            },
+            override,
+        ),
+    );
+
 const seededList: RestResourceList = { items: [FOLDER_RESOURCE, FILE_RESOURCE], total: 2 };
 
 export const emptyResourcesCassette = (): Cassette => ({
@@ -62,18 +94,18 @@ export const COPY_DESTINATION = 'archive/notes.txt';
  *  with HTML, so each entry pins the method as well as the payload. */
 export const resourceWrites = (): Cassette['rest'] => ({
     'DELETE /api/v1/resources/': [
-        { body: { data: {}, status: 'success' }, querySubset: { 'paths[]': FILE_RESOURCE.path } },
+        { body: { data: {}, status: 'success' }, querySubset: { 'paths[]': NESTED_RESOURCE.path } },
     ],
     'POST /api/v1/resources/copy': [
         {
             body: { data: {}, status: 'success' },
-            bodySubset: { destination: COPY_DESTINATION, sources: [FILE_RESOURCE.path] },
+            bodySubset: { destination: COPY_DESTINATION, sources: [NESTED_RESOURCE.path] },
         },
     ],
     'PUT /api/v1/resources/move': [
         {
             body: { data: {}, status: 'success' },
-            bodySubset: { destination: RENAMED_PATH, sources: [FILE_RESOURCE.path] },
+            bodySubset: { destination: RENAMED_PATH, sources: [NESTED_RESOURCE.path] },
         },
     ],
 });

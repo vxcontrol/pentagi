@@ -30,7 +30,7 @@
 #     endpoint.
 #   - `reasoning: {effort: none}` is ALSO not a fix: `pconfig.AgentConfig.
 #     BuildOptions` (pkg/providers/pconfig/config.go) only forwards the typed
-#     constants llms.ReasoningLow/Medium/High/XHigh/Max to llms.WithReasoning;
+#     constants llms.ReasoningMinimal/Low/Medium/High/XHigh/Max to llms.WithReasoning;
 #     the plain string "none" matches none of them, so it silently emits no
 #     CallOption — byte-for-byte the same (and byte-for-byte the same failure)
 #     as omitting `reasoning:` altogether.
@@ -107,9 +107,9 @@ generator:
   reasoning:
     mode: off
   price:
-    input: 2.5
-    output: 15.0
-    cache_read: 0.25
+    input: 2.0
+    output: 12.0
+    cache_read: 0.2
 
 refiner:
   model: gpt-5.6-terra
@@ -118,9 +118,9 @@ refiner:
   reasoning:
     mode: off
   price:
-    input: 2.5
-    output: 15.0
-    cache_read: 0.25
+    input: 2.0
+    output: 12.0
+    cache_read: 0.2
 
 adviser:
   model: gpt-5.6-terra
@@ -129,9 +129,9 @@ adviser:
   reasoning:
     mode: off
   price:
-    input: 2.5
-    output: 15.0
-    cache_read: 0.25
+    input: 2.0
+    output: 12.0
+    cache_read: 0.2
 
 reflector:
   model: gpt-5.4-mini
@@ -173,9 +173,9 @@ coder:
   reasoning:
     mode: off
   price:
-    input: 2.5
-    output: 15.0
-    cache_read: 0.25
+    input: 2.0
+    output: 12.0
+    cache_read: 0.2
 
 installer:
   model: gpt-5.4-mini

@@ -472,6 +472,7 @@ function Knowledges() {
                     empty={{ entityName: 'knowledge documents' }}
                     filterPlaceholder="Filter knowledge documents..."
                     filterValue={filter}
+                    label="Knowledge Documents"
                     onFilterChange={setFilter}
                     onRowClick={(k) => {
                         if (editingKnowledgeId !== k.id) {

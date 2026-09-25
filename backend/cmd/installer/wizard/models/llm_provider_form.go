@@ -6,13 +6,22 @@ import (
 	"slices"
 	"strings"
 
+	"pentagi/cmd/installer/loader"
 	"pentagi/cmd/installer/wizard/controller"
 	"pentagi/cmd/installer/wizard/locale"
 	"pentagi/cmd/installer/wizard/logger"
 	"pentagi/cmd/installer/wizard/styles"
 	"pentagi/cmd/installer/wizard/window"
 
+	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+)
+
+// Anthropic authentication modes shown in the mode selector.
+const (
+	anthropicModeAPIKey    = "api_key"
+	anthropicModeFederated = "federated"
 )
 
 // LLMProviderFormModel represents the LLM Provider configuration form
@@ -22,6 +31,10 @@ type LLMProviderFormModel struct {
 	// screen-specific components
 	providerID   LLMProviderID
 	providerName string
+
+	// Anthropic-only: authentication mode selector (nil list for other providers)
+	modeList     list.Model
+	modeDelegate *BaseListDelegate
 }
 
 // NewLLMProviderFormModel creates a new LLM Provider form model
@@ -33,10 +46,55 @@ func NewLLMProviderFormModel(
 		providerName: c.GetLLMProviderConfig(string(pid)).Name,
 	}
 
-	// create base screen with this model as handler (no list handler needed)
-	m.BaseScreen = NewBaseScreen(c, s, w, m, nil)
+	// Anthropic gets an authentication mode selector (like the Scraper form);
+	// every other provider is a plain field form with no list.
+	var listHandler BaseListHandler
+	if pid == LLMProviderAnthropic {
+		listHandler = m
+	}
+	m.BaseScreen = NewBaseScreen(c, s, w, m, listHandler)
+	if pid == LLMProviderAnthropic {
+		m.initializeModeList(s)
+	}
 
 	return m
+}
+
+// initializeModeList sets up the Anthropic authentication mode selector.
+func (m *LLMProviderFormModel) initializeModeList(styles styles.Styles) {
+	options := []BaseListOption{
+		{Value: anthropicModeAPIKey, Display: locale.LLMAnthropicAuthModeAPIKey},
+		{Value: anthropicModeFederated, Display: locale.LLMAnthropicAuthModeFederated},
+	}
+
+	m.modeDelegate = NewBaseListDelegate(
+		styles.FormLabel.Align(lipgloss.Center),
+		MinMenuWidth-6,
+	)
+	m.modeList = m.GetListHelper().CreateList(options, m.modeDelegate, MinMenuWidth-6, 2)
+
+	config := m.GetController().GetLLMProviderConfig(string(m.providerID))
+	mode := anthropicModeAPIKey
+	if config.AnthropicOrganizationID.Value != "" ||
+		config.AnthropicWorkspaceID.Value != "" ||
+		config.AnthropicServiceAccountID.Value != "" ||
+		config.AnthropicIdentityToken.Value != "" ||
+		config.AnthropicIdentityTokenFile.Value != "" ||
+		config.AnthropicFederationRuleID.Value != "" {
+		mode = anthropicModeFederated
+	}
+	m.GetListHelper().SelectByValue(&m.modeList, mode)
+}
+
+// getAnthropicMode returns the selected Anthropic authentication mode.
+func (m *LLMProviderFormModel) getAnthropicMode() string {
+	if m.providerID != LLMProviderAnthropic {
+		return anthropicModeAPIKey
+	}
+	if v := m.GetListHelper().GetSelectedValue(&m.modeList); v != "" {
+		return v
+	}
+	return anthropicModeAPIKey
 }
 
 // BaseScreenHandler interface implementation
@@ -47,9 +105,28 @@ func (m *LLMProviderFormModel) BuildForm() tea.Cmd {
 
 	// Add fields based on provider type
 	switch m.providerID {
-	case LLMProviderOpenAI, LLMProviderAnthropic, LLMProviderGemini:
+	case LLMProviderOpenAI, LLMProviderGemini:
 		fields = append(fields, m.createBaseURLField(config))
 		fields = append(fields, m.createAPIKeyField(config))
+
+	case LLMProviderAnthropic:
+		fields = append(fields, m.createBaseURLField(config))
+		if m.getAnthropicMode() == anthropicModeFederated {
+			fields = append(fields, m.createAnthropicField(config, "anthropic_org_id",
+				locale.LLMFormFieldAnthropicOrgID, locale.LLMFormAnthropicOrgIDDesc, config.AnthropicOrganizationID, false))
+			fields = append(fields, m.createAnthropicField(config, "anthropic_workspace_id",
+				locale.LLMFormFieldAnthropicWorkspace, locale.LLMFormAnthropicWorkspaceDesc, config.AnthropicWorkspaceID, false))
+			fields = append(fields, m.createAnthropicField(config, "anthropic_service_account_id",
+				locale.LLMFormFieldAnthropicServiceAcc, locale.LLMFormAnthropicServiceAccDesc, config.AnthropicServiceAccountID, false))
+			fields = append(fields, m.createAnthropicField(config, "anthropic_identity_token",
+				locale.LLMFormFieldAnthropicIDToken, locale.LLMFormAnthropicIDTokenDesc, config.AnthropicIdentityToken, true))
+			fields = append(fields, m.createAnthropicField(config, "anthropic_identity_token_file",
+				locale.LLMFormFieldAnthropicIDTokenF, locale.LLMFormAnthropicIDTokenFDesc, config.AnthropicIdentityTokenFile, false))
+			fields = append(fields, m.createAnthropicField(config, "anthropic_federation_rule_id",
+				locale.LLMFormFieldAnthropicFedRule, locale.LLMFormAnthropicFedRuleDesc, config.AnthropicFederationRuleID, false))
+		} else {
+			fields = append(fields, m.createAPIKeyField(config))
+		}
 
 	case LLMProviderBedrock:
 		fields = append(fields, m.createRegionField(config))
@@ -59,6 +136,7 @@ func (m *LLMProviderFormModel) BuildForm() tea.Cmd {
 		fields = append(fields, m.createSecretKeyField(config))
 		fields = append(fields, m.createSessionTokenField(config))
 		fields = append(fields, m.createBaseURLField(config))
+		fields = append(fields, m.createBedrockConfigField(config))
 
 	case LLMProviderOllama:
 		fields = append(fields, m.createBaseURLField(config))
@@ -69,7 +147,7 @@ func (m *LLMProviderFormModel) BuildForm() tea.Cmd {
 		fields = append(fields, m.createPullEnabledField(config))
 		fields = append(fields, m.createLoadModelsEnabledField(config))
 
-	case LLMProviderDeepSeek, LLMProviderGLM, LLMProviderKimi, LLMProviderQwen, LLMProviderMiniMax:
+	case LLMProviderDeepSeek, LLMProviderGLM, LLMProviderKimi, LLMProviderQwen, LLMProviderMiniMax, LLMProviderMistral, LLMProviderXAI:
 		fields = append(fields, m.createBaseURLField(config))
 		fields = append(fields, m.createAPIKeyField(config))
 		fields = append(fields, m.createProviderNameField(config))
@@ -79,8 +157,9 @@ func (m *LLMProviderFormModel) BuildForm() tea.Cmd {
 		fields = append(fields, m.createAPIKeyField(config))
 		fields = append(fields, m.createModelField(config))
 		fields = append(fields, m.createConfigPathField(config))
-		fields = append(fields, m.createLegacyReasoningField(config))
 		fields = append(fields, m.createPreserveReasoningField(config))
+		fields = append(fields, m.createAPITypeField(config))
+		fields = append(fields, m.createAPIVersionField(config))
 		fields = append(fields, m.createProviderNameField(config))
 	}
 
@@ -112,6 +191,37 @@ func (m *LLMProviderFormModel) createAPIKeyField(config *controller.LLMProviderC
 		Description: locale.LLMFormAPIKeyDesc,
 		Required:    true,
 		Masked:      true,
+		Input:       input,
+		Value:       input.Value(),
+	}
+}
+
+func (m *LLMProviderFormModel) createAnthropicField(
+	config *controller.LLMProviderConfig, key, title, description string, envVar loader.EnvVar, masked bool,
+) FormField {
+	input := NewTextInput(m.GetStyles(), m.GetWindow(), envVar)
+
+	return FormField{
+		Key:         key,
+		Title:       title,
+		Description: description,
+		Required:    false,
+		Masked:      masked,
+		Input:       input,
+		Value:       input.Value(),
+	}
+}
+
+func (m *LLMProviderFormModel) createBedrockConfigField(config *controller.LLMProviderConfig) FormField {
+	input := NewTextInput(m.GetStyles(), m.GetWindow(), config.BedrockConfig)
+	input.Placeholder = "/opt/pentagi/conf/bedrock.yml"
+
+	return FormField{
+		Key:         "bedrock_config",
+		Title:       locale.LLMFormFieldBedrockConfig,
+		Description: locale.LLMFormBedrockConfigDesc,
+		Required:    false,
+		Masked:      false,
 		Input:       input,
 		Value:       input.Value(),
 	}
@@ -235,18 +345,32 @@ func (m *LLMProviderFormModel) createConfigPathField(config *controller.LLMProvi
 	}
 }
 
-func (m *LLMProviderFormModel) createLegacyReasoningField(config *controller.LLMProviderConfig) FormField {
-	input := NewBooleanInput(m.GetStyles(), m.GetWindow(), config.LegacyReasoning)
+func (m *LLMProviderFormModel) createAPITypeField(config *controller.LLMProviderConfig) FormField {
+	input := NewTextInput(m.GetStyles(), m.GetWindow(), config.APIType)
+	input.ShowSuggestions = true
+	input.SetSuggestions([]string{"openai", "azure", "azure_ad"})
 
 	return FormField{
-		Key:         "legacy_reasoning",
-		Title:       locale.LLMFormFieldLegacyReasoning,
-		Description: locale.LLMFormLegacyReasoningDesc,
-		Required:    false,
-		Masked:      false,
+		Description: locale.LLMFormAPITypeDesc,
 		Input:       input,
-		Value:       input.Value(),
+		Key:         "api_type",
+		Required:    false,
 		Suggestions: input.AvailableSuggestions(),
+		Title:       locale.LLMFormFieldAPIType,
+		Value:       input.Value(),
+	}
+}
+
+func (m *LLMProviderFormModel) createAPIVersionField(config *controller.LLMProviderConfig) FormField {
+	input := NewTextInput(m.GetStyles(), m.GetWindow(), config.APIVersion)
+
+	return FormField{
+		Description: locale.LLMFormAPIVersionDesc,
+		Input:       input,
+		Key:         "api_version",
+		Required:    false,
+		Title:       locale.LLMFormFieldAPIVersion,
+		Value:       input.Value(),
 	}
 }
 
@@ -367,6 +491,10 @@ func (m *LLMProviderFormModel) GetFormDescription() string {
 		return locale.LLMProviderQwenDesc
 	case LLMProviderMiniMax:
 		return locale.LLMProviderMiniMaxDesc
+	case LLMProviderMistral:
+		return locale.LLMProviderMistralDesc
+	case LLMProviderXAI:
+		return locale.LLMProviderXAIDesc
 	case LLMProviderCustom:
 		return locale.LLMProviderCustomDesc
 	default:
@@ -396,6 +524,10 @@ func (m *LLMProviderFormModel) GetFormName() string {
 		return locale.LLMProviderQwen
 	case LLMProviderMiniMax:
 		return locale.LLMProviderMiniMax
+	case LLMProviderMistral:
+		return locale.LLMProviderMistral
+	case LLMProviderXAI:
+		return locale.LLMProviderXAI
 	case LLMProviderCustom:
 		return locale.LLMProviderCustom
 	default:
@@ -444,12 +576,39 @@ func (m *LLMProviderFormModel) GetCurrentConfiguration() string {
 
 	// Show configured fields (without values for security)
 	switch m.providerID {
-	case LLMProviderOpenAI, LLMProviderAnthropic, LLMProviderGemini:
+	case LLMProviderOpenAI, LLMProviderGemini:
 		if config.BaseURL.Value != "" {
 			sections = append(sections, fmt.Sprintf("• %s: %s",
 				locale.LLMFormFieldBaseURL, m.GetStyles().Info.Render(locale.StatusConfigured)))
 		}
 		if config.APIKey.Value != "" {
+			sections = append(sections, fmt.Sprintf("• %s: %s",
+				locale.LLMFormFieldAPIKey, m.GetStyles().Muted.Render(getMaskedValue(config.APIKey.Value))))
+		}
+
+	case LLMProviderAnthropic:
+		if config.BaseURL.Value != "" {
+			sections = append(sections, fmt.Sprintf("• %s: %s",
+				locale.LLMFormFieldBaseURL, m.GetStyles().Info.Render(locale.StatusConfigured)))
+		}
+		if m.getAnthropicMode() == anthropicModeFederated {
+			sections = append(sections, "• "+locale.LLMAnthropicAuthModeTitle+": "+
+				m.GetStyles().Success.Render(locale.LLMAnthropicAuthModeFederated))
+			showText := func(label string, envVar loader.EnvVar) {
+				if envVar.Value != "" {
+					sections = append(sections, fmt.Sprintf("• %s: %s", label, m.GetStyles().Info.Render(envVar.Value)))
+				}
+			}
+			showText(locale.LLMFormFieldAnthropicOrgID, config.AnthropicOrganizationID)
+			showText(locale.LLMFormFieldAnthropicWorkspace, config.AnthropicWorkspaceID)
+			showText(locale.LLMFormFieldAnthropicServiceAcc, config.AnthropicServiceAccountID)
+			if config.AnthropicIdentityToken.Value != "" {
+				sections = append(sections, fmt.Sprintf("• %s: %s",
+					locale.LLMFormFieldAnthropicIDToken, m.GetStyles().Muted.Render(getMaskedValue(config.AnthropicIdentityToken.Value))))
+			}
+			showText(locale.LLMFormFieldAnthropicIDTokenF, config.AnthropicIdentityTokenFile)
+			showText(locale.LLMFormFieldAnthropicFedRule, config.AnthropicFederationRuleID)
+		} else if config.APIKey.Value != "" {
 			sections = append(sections, fmt.Sprintf("• %s: %s",
 				locale.LLMFormFieldAPIKey, m.GetStyles().Muted.Render(getMaskedValue(config.APIKey.Value))))
 		}
@@ -483,6 +642,10 @@ func (m *LLMProviderFormModel) GetCurrentConfiguration() string {
 			sections = append(sections, fmt.Sprintf("• %s: %s",
 				locale.LLMFormFieldBaseURL, m.GetStyles().Info.Render(locale.StatusConfigured)))
 		}
+		if config.BedrockConfig.Value != "" {
+			sections = append(sections, fmt.Sprintf("• %s: %s",
+				locale.LLMFormFieldBedrockConfig, m.GetStyles().Info.Render(config.BedrockConfig.Value)))
+		}
 
 	case LLMProviderOllama:
 		if config.BaseURL.Value != "" {
@@ -514,7 +677,7 @@ func (m *LLMProviderFormModel) GetCurrentConfiguration() string {
 				locale.LLMFormFieldLoadModelsEnabled, m.GetStyles().Info.Render(config.LoadModelsEnabled.Value)))
 		}
 
-	case LLMProviderDeepSeek, LLMProviderGLM, LLMProviderKimi, LLMProviderQwen, LLMProviderMiniMax:
+	case LLMProviderDeepSeek, LLMProviderGLM, LLMProviderKimi, LLMProviderQwen, LLMProviderMiniMax, LLMProviderMistral, LLMProviderXAI:
 		if config.BaseURL.Value != "" {
 			sections = append(sections, fmt.Sprintf("• %s: %s",
 				locale.LLMFormFieldBaseURL, m.GetStyles().Info.Render(locale.StatusConfigured)))
@@ -545,10 +708,6 @@ func (m *LLMProviderFormModel) GetCurrentConfiguration() string {
 			sections = append(sections, fmt.Sprintf("• %s: %s",
 				locale.LLMFormFieldConfigPath, m.GetStyles().Info.Render(config.HostConfigPath.Value)))
 		}
-		if config.LegacyReasoning.Value != "" {
-			sections = append(sections, fmt.Sprintf("• %s: %s",
-				locale.LLMFormFieldLegacyReasoning, m.GetStyles().Info.Render(config.LegacyReasoning.Value)))
-		}
 		if config.PreserveReasoning.Value != "" {
 			sections = append(sections, fmt.Sprintf("• %s: %s",
 				locale.LLMFormFieldPreserveReasoning, m.GetStyles().Info.Render(config.PreserveReasoning.Value)))
@@ -576,7 +735,11 @@ func (m *LLMProviderFormModel) GetHelpContent() string {
 	case LLMProviderOpenAI:
 		sections = append(sections, locale.LLMFormOpenAIHelp)
 	case LLMProviderAnthropic:
-		sections = append(sections, locale.LLMFormAnthropicHelp)
+		if m.getAnthropicMode() == anthropicModeFederated {
+			sections = append(sections, locale.LLMFormAnthropicFederatedHelp)
+		} else {
+			sections = append(sections, locale.LLMFormAnthropicHelp)
+		}
 	case LLMProviderGemini:
 		sections = append(sections, locale.LLMFormGeminiHelp)
 	case LLMProviderBedrock:
@@ -593,6 +756,10 @@ func (m *LLMProviderFormModel) GetHelpContent() string {
 		sections = append(sections, locale.LLMFormQwenHelp)
 	case LLMProviderMiniMax:
 		sections = append(sections, locale.LLMFormMiniMaxHelp)
+	case LLMProviderMistral:
+		sections = append(sections, locale.LLMFormMistralHelp)
+	case LLMProviderXAI:
+		sections = append(sections, locale.LLMFormXAIHelp)
 	case LLMProviderCustom:
 		sections = append(sections, locale.LLMFormCustomHelp)
 	}
@@ -608,24 +775,32 @@ func (m *LLMProviderFormModel) HandleSave() error {
 	newConfig := &controller.LLMProviderConfig{
 		Name: config.Name,
 		// copy current EnvVar fields - they preserve metadata like Line, IsPresent, etc.
-		BaseURL:                config.BaseURL,
-		APIKey:                 config.APIKey,
-		Model:                  config.Model,
-		DefaultAuth:            config.DefaultAuth,
-		BearerToken:            config.BearerToken,
-		AccessKey:              config.AccessKey,
-		SecretKey:              config.SecretKey,
-		SessionToken:           config.SessionToken,
-		Region:                 config.Region,
-		ConfigPath:             config.ConfigPath,
-		HostConfigPath:         config.HostConfigPath,
-		LegacyReasoning:        config.LegacyReasoning,
-		PreserveReasoning:      config.PreserveReasoning,
-		ProviderName:           config.ProviderName,
-		PullTimeout:            config.PullTimeout,
-		PullEnabled:            config.PullEnabled,
-		LoadModelsEnabled:      config.LoadModelsEnabled,
-		EmbeddedLLMConfigsPath: config.EmbeddedLLMConfigsPath,
+		BaseURL:                    config.BaseURL,
+		APIKey:                     config.APIKey,
+		Model:                      config.Model,
+		DefaultAuth:                config.DefaultAuth,
+		BearerToken:                config.BearerToken,
+		AccessKey:                  config.AccessKey,
+		SecretKey:                  config.SecretKey,
+		SessionToken:               config.SessionToken,
+		Region:                     config.Region,
+		BedrockConfig:              config.BedrockConfig,
+		AnthropicOrganizationID:    config.AnthropicOrganizationID,
+		AnthropicWorkspaceID:       config.AnthropicWorkspaceID,
+		AnthropicServiceAccountID:  config.AnthropicServiceAccountID,
+		AnthropicIdentityToken:     config.AnthropicIdentityToken,
+		AnthropicIdentityTokenFile: config.AnthropicIdentityTokenFile,
+		AnthropicFederationRuleID:  config.AnthropicFederationRuleID,
+		ConfigPath:                 config.ConfigPath,
+		HostConfigPath:             config.HostConfigPath,
+		PreserveReasoning:          config.PreserveReasoning,
+		APIType:                    config.APIType,
+		APIVersion:                 config.APIVersion,
+		ProviderName:               config.ProviderName,
+		PullTimeout:                config.PullTimeout,
+		PullEnabled:                config.PullEnabled,
+		LoadModelsEnabled:          config.LoadModelsEnabled,
+		EmbeddedLLMConfigsPath:     config.EmbeddedLLMConfigsPath,
 	}
 
 	// update field values based on form input
@@ -637,6 +812,20 @@ func (m *LLMProviderFormModel) HandleSave() error {
 			newConfig.BaseURL.Value = value
 		case "api_key":
 			newConfig.APIKey.Value = value
+		case "anthropic_org_id":
+			newConfig.AnthropicOrganizationID.Value = value
+		case "anthropic_workspace_id":
+			newConfig.AnthropicWorkspaceID.Value = value
+		case "anthropic_service_account_id":
+			newConfig.AnthropicServiceAccountID.Value = value
+		case "anthropic_identity_token":
+			newConfig.AnthropicIdentityToken.Value = value
+		case "anthropic_identity_token_file":
+			newConfig.AnthropicIdentityTokenFile.Value = value
+		case "anthropic_federation_rule_id":
+			newConfig.AnthropicFederationRuleID.Value = value
+		case "bedrock_config":
+			newConfig.BedrockConfig.Value = value
 		case "model":
 			newConfig.Model.Value = value
 		case "default_auth":
@@ -679,18 +868,16 @@ func (m *LLMProviderFormModel) HandleSave() error {
 				}
 			}
 			newConfig.HostConfigPath.Value = value
-		case "legacy_reasoning":
-			// validate boolean input
-			if value != "" && value != "true" && value != "false" {
-				return fmt.Errorf("invalid boolean value for legacy reasoning: %s (must be 'true' or 'false')", value)
-			}
-			newConfig.LegacyReasoning.Value = value
 		case "preserve_reasoning":
 			// validate boolean input
 			if value != "" && value != "true" && value != "false" {
 				return fmt.Errorf("invalid boolean value for preserve reasoning: %s (must be 'true' or 'false')", value)
 			}
 			newConfig.PreserveReasoning.Value = value
+		case "api_type":
+			newConfig.APIType.Value = value
+		case "api_version":
+			newConfig.APIVersion.Value = value
 		case "provider_name":
 			newConfig.ProviderName.Value = value
 		case "pull_timeout":
@@ -712,6 +899,13 @@ func (m *LLMProviderFormModel) HandleSave() error {
 
 	// determine if configured based on provider type
 	switch m.providerID {
+	case LLMProviderAnthropic:
+		// API key, or a complete federated identity (mirrors controller.anthropicFederated)
+		federated := newConfig.AnthropicFederationRuleID.Value != "" &&
+			newConfig.AnthropicOrganizationID.Value != "" &&
+			newConfig.AnthropicServiceAccountID.Value != "" &&
+			(newConfig.AnthropicIdentityToken.Value != "" || newConfig.AnthropicIdentityTokenFile.Value != "")
+		newConfig.Configured = newConfig.APIKey.Value != "" || federated
 	case LLMProviderBedrock:
 		// Configured if any of three auth methods is set: DefaultAuth, BearerToken, or AccessKey+SecretKey
 		newConfig.Configured = newConfig.DefaultAuth.Value == "true" ||
@@ -737,8 +931,36 @@ func (m *LLMProviderFormModel) HandleReset() {
 	// reset config to defaults
 	m.GetController().ResetLLMProviderConfig(string(m.providerID))
 
+	// Anthropic: a reset clears the federated fields, so return the selector to API key.
+	if m.providerID == LLMProviderAnthropic {
+		m.GetListHelper().SelectByValue(&m.modeList, anthropicModeAPIKey)
+	}
+
 	// rebuild form with reset values
 	m.BuildForm()
+}
+
+// BaseListHandler interface implementation (Anthropic authentication mode selector)
+
+func (m *LLMProviderFormModel) GetList() *list.Model {
+	return &m.modeList
+}
+
+func (m *LLMProviderFormModel) GetListDelegate() *BaseListDelegate {
+	return m.modeDelegate
+}
+
+func (m *LLMProviderFormModel) OnListSelectionChanged(oldSelection, newSelection string) {
+	// rebuild the form so the fields match the chosen authentication mode
+	m.BuildForm()
+}
+
+func (m *LLMProviderFormModel) GetListTitle() string {
+	return locale.LLMAnthropicAuthModeTitle
+}
+
+func (m *LLMProviderFormModel) GetListDescription() string {
+	return locale.LLMAnthropicAuthModeDesc
 }
 
 func (m *LLMProviderFormModel) OnFieldChanged(fieldIndex int, oldValue, newValue string) {
@@ -746,17 +968,21 @@ func (m *LLMProviderFormModel) OnFieldChanged(fieldIndex int, oldValue, newValue
 }
 
 func (m *LLMProviderFormModel) GetFormFields() []FormField {
-	return m.BaseScreen.fields
+	return m.fields
 }
 
 func (m *LLMProviderFormModel) SetFormFields(fields []FormField) {
-	m.BaseScreen.fields = fields
+	m.fields = fields
 }
 
 // Update method - handle screen-specific input
 func (m *LLMProviderFormModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
+		// handle the Anthropic mode selector first (no-op when there is no list)
+		if cmd := m.HandleListInput(msg); cmd != nil {
+			return m, cmd
+		}
 		// then handle field input
 		if cmd := m.HandleFieldInput(msg); cmd != nil {
 			return m, cmd
@@ -792,6 +1018,10 @@ func (m *LLMProviderFormModel) getDefaultBaseURL() string {
 		return "https://dashscope-us.aliyuncs.com/compatible-mode/v1"
 	case LLMProviderMiniMax:
 		return "https://api.minimax.io/v1"
+	case LLMProviderMistral:
+		return "https://api.mistral.ai/v1"
+	case LLMProviderXAI:
+		return "https://api.x.ai/v1"
 	case LLMProviderCustom:
 		return "http://llm-server:8000"
 	default:
@@ -802,3 +1032,4 @@ func (m *LLMProviderFormModel) getDefaultBaseURL() string {
 // Compile-time interface validation
 var _ BaseScreenModel = (*LLMProviderFormModel)(nil)
 var _ BaseScreenHandler = (*LLMProviderFormModel)(nil)
+var _ BaseListHandler = (*LLMProviderFormModel)(nil)

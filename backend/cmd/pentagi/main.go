@@ -6,11 +6,15 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"strconv"
 	"syscall"
 	"time"
+	// The runtime image is alpine without the tzdata package, so IANA names the
+	// dashboard sends would not resolve unless the binary carries the database.
+	_ "time/tzdata"
 
 	"pentagi/migrations"
 	"pentagi/pkg/config"
@@ -99,8 +103,8 @@ func main() {
 		logrus.ErrorLevel,
 	})
 
-	obs.Observer.StartProcessMetricCollect(attribute.String("component", "server"))
-	obs.Observer.StartGoRuntimeMetricCollect(attribute.String("component", "server"))
+	_ = obs.Observer.StartProcessMetricCollect(attribute.String("component", "server"))
+	_ = obs.Observer.StartGoRuntimeMetricCollect(attribute.String("component", "server"))
 
 	// Create this tenant's schema and repoint DATABASE_URL at it before any
 	// consumer reads the DSN. No-op when TENANT_ID is empty.
@@ -108,7 +112,12 @@ func main() {
 		logrus.WithError(err).Fatal("Tenant schema initialization failed")
 	}
 
-	db, err := sql.Open("postgres", cfg.DatabaseURL)
+	boundedURL, err := database.WithStatementTimeout(cfg.DatabaseURL, database.StatementTimeout)
+	if err != nil {
+		logrus.WithError(err).Fatal("Unable to bound database statements")
+	}
+
+	db, err := sql.Open("postgres", boundedURL)
 	if err != nil {
 		logrus.WithError(err).Fatal("Unable to open database")
 	}
@@ -133,7 +142,7 @@ func main() {
 
 	// Create a shared pgxpool for all pgvector stores so that each executor
 	// reuses pooled connections instead of opening a dedicated pgx.Connect.
-	pgPoolConfig, err := pgxpool.ParseConfig(cfg.DatabaseURL)
+	pgPoolConfig, err := pgxpool.ParseConfig(boundedURL)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to parse pgxpool config")
 	}
@@ -163,9 +172,22 @@ func main() {
 	// Hold an advisory lock so simultaneous boots cannot execute the same
 	// migration set concurrently; the initial migration uses bare CREATE TABLE,
 	// so the loser would otherwise abort on "relation already exists".
-	if err := database.RunMigrations(ctx, db, cfg, func(db *sql.DB) error {
+	// Migrations get a connection of their own, without the statement ceiling:
+	// one of them may legitimately run longer than any request would.
+	migrator, err := sql.Open("postgres", cfg.DatabaseURL)
+	if err != nil {
+		logrus.WithError(err).Fatal("Unable to open database for migrations")
+	}
+
+	migrationErr := database.RunMigrations(ctx, migrator, cfg, func(db *sql.DB) error {
 		return goose.Up(db, "sql")
-	}); err != nil {
+	})
+
+	if err := migrator.Close(); err != nil {
+		logrus.WithError(err).Warn("failed to close the migration connection")
+	}
+
+	if err := migrationErr; err != nil {
 		// Fatal: continuing on a half-migrated schema and then serving traffic is
 		// strictly worse than refusing to start.
 		logrus.WithError(err).Fatal("Schema migration execution failed")
@@ -220,13 +242,20 @@ func main() {
 		listen := net.JoinHostPort(cfg.ServerHost, strconv.Itoa(cfg.ServerPort))
 		logrus.Infof("API server listening on %s", listen)
 
+		srv := &http.Server{
+			Addr:              listen,
+			Handler:           r.Handler(),
+			ReadHeaderTimeout: router.ReadHeaderTimeout,
+			IdleTimeout:       router.IdleTimeout,
+		}
+
 		var startErr error
 		if cfg.ServerUseSSL && cfg.ServerSSLCrt != "" && cfg.ServerSSLKey != "" {
 			logrus.Info("Starting server with TLS enabled")
-			startErr = r.RunTLS(listen, cfg.ServerSSLCrt, cfg.ServerSSLKey)
+			startErr = srv.ListenAndServeTLS(cfg.ServerSSLCrt, cfg.ServerSSLKey)
 		} else {
 			logrus.Info("Starting server without TLS (HTTP only)")
-			startErr = r.Run(listen)
+			startErr = srv.ListenAndServe()
 		}
 
 		if startErr != nil {

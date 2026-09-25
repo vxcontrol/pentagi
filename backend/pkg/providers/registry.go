@@ -10,11 +10,13 @@ import (
 	"pentagi/pkg/providers/glm"
 	"pentagi/pkg/providers/kimi"
 	"pentagi/pkg/providers/minimax"
+	"pentagi/pkg/providers/mistral"
 	"pentagi/pkg/providers/ollama"
 	"pentagi/pkg/providers/openai"
 	"pentagi/pkg/providers/pconfig"
 	"pentagi/pkg/providers/provider"
 	"pentagi/pkg/providers/qwen"
+	"pentagi/pkg/providers/xai"
 )
 
 // registryEntry describes how to construct one provider type. It absorbs the
@@ -55,7 +57,7 @@ var providerRegistry = []registryEntry{
 	{
 		Type:        provider.ProviderAnthropic,
 		Name:        provider.DefaultProviderNameAnthropic,
-		Enabled:     func(c *config.Config) bool { return c.AnthropicAPIKey != "" },
+		Enabled:     anthropic.Configured,
 		NewConfig:   ignoreConfig(anthropic.DefaultProviderConfig),
 		New:         anthropic.New,
 		BuildConfig: fromData(anthropic.BuildProviderConfig),
@@ -92,10 +94,16 @@ var providerRegistry = []registryEntry{
 		Type: provider.ProviderCustom,
 		Name: provider.DefaultProviderNameCustom,
 		Enabled: func(c *config.Config) bool {
-			return c.LLMServerURL != "" && (c.LLMServerModel != "" || c.LLMServerConfig != "")
+			return c.LLMServerURL != "" && c.LLMServerKey != "" && (c.LLMServerModel != "" || c.LLMServerConfig != "")
 		},
-		NewConfig:   custom.DefaultProviderConfig,
-		New:         custom.New,
+		NewConfig: custom.DefaultProviderConfig,
+		New: func(
+			cfg *config.Config,
+			name provider.ProviderName,
+			pc *pconfig.ProviderConfig,
+		) (provider.Provider, error) {
+			return custom.New(cfg, name, pc, EnrichCatalogCapabilities)
+		},
 		BuildConfig: custom.BuildProviderConfig,
 	},
 	{
@@ -113,6 +121,22 @@ var providerRegistry = []registryEntry{
 		NewConfig:   ignoreConfig(glm.DefaultProviderConfig),
 		New:         glm.New,
 		BuildConfig: fromData(glm.BuildProviderConfig),
+	},
+	{
+		Type:        provider.ProviderMistral,
+		Name:        provider.DefaultProviderNameMistral,
+		Enabled:     func(c *config.Config) bool { return c.MistralAPIKey != "" },
+		NewConfig:   ignoreConfig(mistral.DefaultProviderConfig),
+		New:         mistral.New,
+		BuildConfig: fromData(mistral.BuildProviderConfig),
+	},
+	{
+		Type:        provider.ProviderXAI,
+		Name:        provider.DefaultProviderNameXAI,
+		Enabled:     func(c *config.Config) bool { return c.XAIAPIKey != "" },
+		NewConfig:   ignoreConfig(xai.DefaultProviderConfig),
+		New:         xai.New,
+		BuildConfig: fromData(xai.BuildProviderConfig),
 	},
 	{
 		Type:        provider.ProviderKimi,

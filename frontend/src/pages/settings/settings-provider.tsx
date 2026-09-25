@@ -159,6 +159,7 @@ interface FormModelComboboxItemProps<T extends FieldValues = FieldValues> extend
 }
 
 interface ModelOption {
+    maxOutputTokens?: null | number;
     name: string;
     price?: null | { cacheRead: number; cacheWrite: number; input: number; output: number };
     reasoning?: null | {
@@ -166,7 +167,9 @@ interface ModelOption {
         defaultOn?: boolean | null;
         efforts?: null | ReasoningEffort[];
         mode?: ModelReasoningMode | null;
+        rejectsEffortWithTools?: boolean | null;
         supported?: boolean | null;
+        takesNoThinkingDepth?: boolean | null;
     };
     thinking?: boolean | null;
 }
@@ -244,11 +247,11 @@ function FormComboboxItem<T extends FieldValues = FieldValues>({
                                 <CommandEmpty>
                                     <div className="py-2 text-center">
                                         <p className="text-muted-foreground text-sm">No {label.toLowerCase()} found.</p>
-                                        {search && allowCustom && (
+                                        {search.trim() && allowCustom && (
                                             <Button
                                                 className="mt-2"
                                                 onClick={() => {
-                                                    field.onChange(search);
+                                                    field.onChange(search.trim());
                                                     setIsOpen(false);
                                                     setSearch('');
                                                 }}
@@ -488,12 +491,12 @@ function FormModelComboboxItem<T extends FieldValues = FieldValues>({
                                 <CommandEmpty>
                                     <div className="py-2 text-center">
                                         <p className="text-muted-foreground text-sm">No {label.toLowerCase()} found.</p>
-                                        {search && allowCustom && (
+                                        {search.trim() && allowCustom && (
                                             <Button
                                                 className="mt-2"
                                                 onClick={() => {
-                                                    field.onChange(search);
-                                                    onOptionSelect?.({ name: search });
+                                                    field.onChange(search.trim());
+                                                    onOptionSelect?.({ name: search.trim() });
                                                     setIsOpen(false);
                                                     setSearch('');
                                                 }}
@@ -608,7 +611,10 @@ const requiredString = (message: string) =>
         .transform((value) => value ?? '')
         .pipe(z.string().min(1, message));
 
-const agentConfigSchema = z
+// Mirrors the server cap in backend/pkg/providers/pconfig/config.go: a lower value
+export const MAX_REASONING_TOKENS = 32768;
+
+export const agentConfigSchema = z
     .object({
         extraBody: optionalJsonObject,
         frequencyPenalty: optionalNumber,
@@ -617,7 +623,9 @@ const agentConfigSchema = z
         maxTokens: optionalNumber,
         minLength: optionalNumber,
         minP: optionalNumber,
-        model: requiredString('Model is required'),
+        model: requiredString('Model is required').pipe(
+            z.string().refine((value) => value.trim().length > 0, 'Model is required'),
+        ),
         n: optionalNumber,
         presencePenalty: optionalNumber,
         price: z
@@ -647,15 +655,29 @@ const agentConfigSchema = z
         message: 'Min length must not exceed max length',
         path: ['minLength'],
     })
-    .refine((data) => data.reasoning?.maxTokens == null || data.reasoning.maxTokens <= 32000, {
-        message: 'Maximum 32000 tokens',
+    .refine((data) => data.reasoning?.maxTokens == null || data.reasoning.maxTokens <= MAX_REASONING_TOKENS, {
+        message: `Maximum ${MAX_REASONING_TOKENS} tokens`,
         path: ['reasoning', 'maxTokens'],
     })
+    .refine(
+        (data) =>
+            data.reasoning?.mode !== ReasoningMode.Budget ||
+            (data.reasoning.maxTokens != null && data.reasoning.maxTokens > 0),
+        {
+            message: 'Budget mode requires a token budget',
+            path: ['reasoning', 'maxTokens'],
+        },
+    )
     .optional();
 
 const formSchema = z.object({
     agents: z.record(z.string(), agentConfigSchema).optional(),
-    name: requiredString('Provider name is required').pipe(z.string().max(50, 'Maximum 50 characters allowed')),
+    name: requiredString('Provider name is required').pipe(
+        z
+            .string()
+            .refine((value) => value.trim().length > 0, 'Provider name is required')
+            .refine((value) => [...value.trim()].length <= 50, 'Maximum 50 characters allowed'),
+    ),
     type: requiredString('Provider type is required'),
 });
 
@@ -689,6 +711,10 @@ const getReasoningEffort = (effort: null | string | undefined): null | Reasoning
             return ReasoningEffort.Medium;
         }
 
+        case 'minimal': {
+            return ReasoningEffort.Minimal;
+        }
+
         case 'xhigh': {
             return ReasoningEffort.Xhigh;
         }
@@ -719,17 +745,81 @@ const getReasoningMode = (mode: null | string | undefined): null | ReasoningMode
     }
 };
 
+// Mirrors ProviderOptionsType.UsesTools in backend/pkg/providers/pconfig/config.go.
+const agentsCallingWithoutTools = new Set(['adviser', 'reflector', 'simpleJson']);
+
+const isNonReasoningOption = (option: ModelOption | undefined): boolean =>
+    option?.thinking === false && option.reasoning == null;
+
+const refusesLevel = (agentKey: string, capability: ModelOption['reasoning'] | undefined): boolean =>
+    capability?.rejectsEffortWithTools === true && !agentsCallingWithoutTools.has(agentKey);
+
 const reasoningEffortLabel: Record<ReasoningEffort, string> = {
     [ReasoningEffort.High]: 'High',
     [ReasoningEffort.Low]: 'Low',
     [ReasoningEffort.Max]: 'Max',
     [ReasoningEffort.Medium]: 'Medium',
+    [ReasoningEffort.Minimal]: 'Minimal',
     [ReasoningEffort.Xhigh]: 'Extra High',
 };
 
-const defaultReasoningEfforts: ReasoningEffort[] = [ReasoningEffort.Low, ReasoningEffort.Medium, ReasoningEffort.High];
+const isJsonObject = (value: unknown): value is Record<string, unknown> =>
+    typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const pinnedThinkingKey = (extraBody: null | string | undefined): null | string => {
+    if (!extraBody?.trim()) {
+        return null;
+    }
+
+    try {
+        const parsed: unknown = JSON.parse(extraBody);
+
+        if (!isJsonObject(parsed)) {
+            return null;
+        }
+
+        const { thinking } = parsed;
+
+        if (isJsonObject(thinking) && 'type' in thinking) {
+            return 'thinking';
+        }
+
+        return 'enable_thinking' in parsed ? 'enable_thinking' : null;
+    } catch {
+        return null;
+    }
+};
 
 // Gated by the selected model's declared capability (models.yml), not a model-name
+function MaxTokensField({
+    agentKey,
+    control,
+    isLoading,
+    models,
+}: {
+    agentKey: string;
+    control: Control<FormInput>;
+    isLoading: boolean;
+    models: ModelOption[];
+}) {
+    const selectedModel = useWatch({ control, name: `agents.${agentKey}.model` });
+    const ceiling = models.find((model) => model.name === selectedModel)?.maxOutputTokens ?? null;
+
+    return (
+        <FormInputNumberItem
+            control={control}
+            description={ceiling == null ? undefined : `Model ceiling: ${ceiling.toLocaleString('en-US')} tokens`}
+            disabled={isLoading}
+            label="Max Tokens"
+            max={ceiling == null ? undefined : String(ceiling)}
+            min="1"
+            name={`agents.${agentKey}.maxTokens`}
+            placeholder="1000"
+            valueType="integer"
+        />
+    );
+}
+
 // allowlist: adaptive-only models lock to adaptive, and effort options follow the model.
 function ReasoningFields({
     agentKey,
@@ -746,7 +836,13 @@ function ReasoningFields({
 }) {
     const selectedModel = useWatch({ control, name: `agents.${agentKey}.model` });
     const reasoningMode = useWatch({ control, name: `agents.${agentKey}.reasoning.mode` });
-    const capability = models.find((model) => model.name === selectedModel)?.reasoning ?? null;
+    const reasoningEffort = useWatch({ control, name: `agents.${agentKey}.reasoning.effort` });
+    const reasoningMaxTokens = useWatch({ control, name: `agents.${agentKey}.reasoning.maxTokens` });
+    const extraBody = useWatch({ control, name: `agents.${agentKey}.extraBody` });
+    const pinnedThinking = pinnedThinkingKey(extraBody);
+    const option = models.find((model) => model.name === selectedModel);
+    const capability = option?.reasoning ?? null;
+    const isNonReasoning = isNonReasoningOption(option);
     const isAdaptiveOnly = capability?.mode === ModelReasoningMode.AdaptiveOnly;
     const supportsAdaptive = isAdaptiveOnly || capability?.mode === ModelReasoningMode.Adaptive;
     // Off is offered only where the capability confirms a disable actually takes
@@ -754,8 +850,28 @@ function ReasoningFields({
     // model where Off would be a silent no-op keeps the Off option hidden.
     const canDisable = capability != null && capability.cannotDisable !== true;
     const isOff = reasoningMode === ReasoningMode.Off;
-    const allowedEfforts =
-        capability?.efforts && capability.efforts.length > 0 ? capability.efforts : defaultReasoningEfforts;
+    const isLevelRefused = refusesLevel(agentKey, capability);
+    const heldEffort = capability == null && !isNonReasoning ? getReasoningEffort(reasoningEffort) : null;
+    const allowedEfforts = isLevelRefused ? [] : (capability?.efforts ?? (heldEffort ? [heldEffort] : []));
+    const isBudgetRefused = capability?.takesNoThinkingDepth === true;
+    const isBudgetOffered = !isAdaptiveOnly && !isLevelRefused && !isNonReasoning && !isBudgetRefused;
+    // Mirrors ReasoningConfig.EffectiveMode in backend/pkg/providers/pconfig/config.go.
+    const isBudgetImplied =
+        isBudgetOffered && reasoningMode == null && !!reasoningMaxTokens && getReasoningEffort(reasoningEffort) == null;
+    const shownMode =
+        reasoningMode ?? (isAdaptiveOnly ? ReasoningMode.Adaptive : isBudgetImplied ? ReasoningMode.Budget : null);
+
+    useEffect(() => {
+        if (isBudgetImplied) {
+            setValue(`agents.${agentKey}.reasoning.mode` as const, ReasoningMode.Budget);
+        }
+    }, [isBudgetImplied, agentKey, setValue]);
+
+    useEffect(() => {
+        if (reasoningMode === ReasoningMode.Budget && reasoningEffort != null) {
+            setValue(`agents.${agentKey}.reasoning.effort` as const, null);
+        }
+    }, [reasoningMode, reasoningEffort, agentKey, setValue]);
 
     // Reconcile a stale Off when the current model can't disable (e.g. after typing
     // a custom model name): otherwise mode=off is orphaned with no control to clear
@@ -767,12 +883,93 @@ function ReasoningFields({
         }
     }, [isOff, canDisable, models.length, agentKey, setValue]);
 
+    useEffect(() => {
+        if (!isLevelRefused) {
+            return;
+        }
+
+        if (reasoningEffort != null) {
+            setValue(`agents.${agentKey}.reasoning.effort` as const, null);
+        }
+
+        if (reasoningMaxTokens != null) {
+            setValue(`agents.${agentKey}.reasoning.maxTokens` as const, null);
+        }
+
+        if (reasoningMode === ReasoningMode.Budget) {
+            setValue(`agents.${agentKey}.reasoning.mode` as const, null);
+        }
+    }, [isLevelRefused, reasoningEffort, reasoningMaxTokens, reasoningMode, agentKey, setValue]);
+
+    useEffect(() => {
+        if (!isBudgetRefused) {
+            return;
+        }
+
+        if (reasoningMaxTokens != null) {
+            setValue(`agents.${agentKey}.reasoning.maxTokens` as const, null);
+        }
+
+        if (reasoningMode === ReasoningMode.Budget) {
+            setValue(`agents.${agentKey}.reasoning.mode` as const, null);
+        }
+    }, [isBudgetRefused, reasoningMaxTokens, reasoningMode, agentKey, setValue]);
+
+    const { defaultValues } = useFormState({ control });
+    const savedReasoning = defaultValues?.agents?.[agentKey]?.reasoning;
+    const isSavedOffDropped = savedReasoning?.mode === ReasoningMode.Off && !isOff && !canDisable && models.length > 0;
+    const savedEffort = getReasoningEffort(savedReasoning?.effort);
+    const savedLevel =
+        savedReasoning?.mode === ReasoningMode.Off
+            ? null
+            : savedEffort != null
+              ? `Reasoning Effort was ${reasoningEffortLabel[savedEffort]}`
+              : savedReasoning?.maxTokens != null
+                ? `Reasoning Max Tokens was ${savedReasoning.maxTokens}`
+                : null;
+    const droppedLevel = isLevelRefused && reasoningEffort == null && reasoningMaxTokens == null ? savedLevel : null;
+    const droppedBudget =
+        isBudgetRefused && reasoningMaxTokens == null && savedReasoning?.maxTokens != null
+            ? savedReasoning.maxTokens
+            : null;
+
     return (
         <div className="col-span-full p-px">
             <div className="mt-6 flex flex-col gap-4">
                 <h4 className="text-sm font-medium">Reasoning Configuration</h4>
+                {isSavedOffDropped && (
+                    <p
+                        className="text-muted-foreground text-sm"
+                        role="status"
+                    >
+                        {isNonReasoning
+                            ? `Reasoning Mode was Off, but ${selectedModel} does not reason, so it was reset. Save to keep the change.`
+                            : `Reasoning Mode was Off, which ${selectedModel} cannot disable, so it was reset. Save to keep the change.`}
+                    </p>
+                )}
+                {droppedLevel && (
+                    <p
+                        className="text-muted-foreground text-sm"
+                        role="status"
+                    >
+                        {`${droppedLevel}, which ${selectedModel} refuses on requests with function tools, so it was reset. Save to keep the change.`}
+                    </p>
+                )}
+                {droppedBudget != null && (
+                    <p
+                        className="text-muted-foreground text-sm"
+                        role="status"
+                    >
+                        {`Reasoning Max Tokens was ${droppedBudget}, which ${selectedModel} does not take, so it was reset. Save to keep the change.`}
+                    </p>
+                )}
+                {isNonReasoning && (
+                    <p className="text-muted-foreground text-sm">
+                        {`${selectedModel} does not reason, so it has no reasoning settings.`}
+                    </p>
+                )}
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                    {(supportsAdaptive || canDisable) && (
+                    {(supportsAdaptive || canDisable || isBudgetOffered) && (
                         <FormField
                             control={control}
                             name={`agents.${agentKey}.reasoning.mode`}
@@ -781,8 +978,15 @@ function ReasoningFields({
                                     <FormLabel>Reasoning Mode</FormLabel>
                                     <Select
                                         disabled={isLoading || (isAdaptiveOnly && !canDisable)}
-                                        onValueChange={(value) => field.onChange(value !== 'none' ? value : null)}
-                                        value={field.value ?? (isAdaptiveOnly ? ReasoningMode.Adaptive : 'none')}
+                                        onValueChange={(value) => {
+                                            const next = value !== 'none' ? value : null;
+                                            field.onChange(next);
+
+                                            if (next !== ReasoningMode.Budget) {
+                                                setValue(`agents.${agentKey}.reasoning.maxTokens` as const, null);
+                                            }
+                                        }}
+                                        value={shownMode ?? 'none'}
                                     >
                                         <FormControl>
                                             <SelectTrigger>
@@ -794,7 +998,7 @@ function ReasoningFields({
                                             {supportsAdaptive && (
                                                 <SelectItem value={ReasoningMode.Adaptive}>Adaptive</SelectItem>
                                             )}
-                                            {!isAdaptiveOnly && (
+                                            {isBudgetOffered && (
                                                 <SelectItem value={ReasoningMode.Budget}>Budget</SelectItem>
                                             )}
                                             {canDisable && (
@@ -803,11 +1007,15 @@ function ReasoningFields({
                                         </SelectContent>
                                     </Select>
                                     <FormDescription>
-                                        {isAdaptiveOnly
-                                            ? canDisable
-                                                ? 'This model thinks adaptively; choose Off to disable thinking.'
-                                                : 'This model supports only adaptive thinking and cannot be disabled.'
-                                            : 'Adaptive lets the model decide how much to think; budget uses a fixed token budget; off disables thinking.'}
+                                        {pinnedThinking
+                                            ? `Extra Body sets "${pinnedThinking}" for this agent, which overwrites this choice in the request.`
+                                            : isLevelRefused
+                                              ? `${selectedModel} refuses a reasoning effort or budget on requests with function tools, which this agent sends: leave the mode unset or choose Off.`
+                                              : isAdaptiveOnly
+                                                ? canDisable
+                                                    ? 'This model thinks adaptively; choose Off to disable thinking.'
+                                                    : 'This model supports only adaptive thinking and cannot be disabled.'
+                                                : 'Adaptive lets the model decide how much to think; budget uses a fixed token budget; off disables thinking.'}
                                     </FormDescription>
                                     <FormMessage />
                                 </FormItem>
@@ -815,63 +1023,73 @@ function ReasoningFields({
                         />
                     )}
 
-                    <FormField
-                        control={control}
-                        name={`agents.${agentKey}.reasoning.effort`}
-                        render={({ field }) => (
-                            <FormItem>
-                                <FormLabel>Reasoning Effort</FormLabel>
-                                <Select
-                                    disabled={isLoading || isOff}
-                                    onValueChange={(value) => {
-                                        const next = value !== 'none' ? value : null;
-                                        field.onChange(next);
+                    {allowedEfforts.length > 0 && (
+                        <FormField
+                            control={control}
+                            name={`agents.${agentKey}.reasoning.effort`}
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Reasoning Effort</FormLabel>
+                                    <Select
+                                        disabled={isLoading || isOff}
+                                        onValueChange={(value) => {
+                                            const next = value !== 'none' ? value : null;
+                                            field.onChange(next);
 
-                                        // max/xhigh are adaptive-thinking effort levels; selecting one
-                                        // implies adaptive mode so the backend doesn't drop the reasoning.
-                                        if (
-                                            supportsAdaptive &&
-                                            (next === ReasoningEffort.Xhigh || next === ReasoningEffort.Max)
-                                        ) {
-                                            setValue(
-                                                `agents.${agentKey}.reasoning.mode` as const,
-                                                ReasoningMode.Adaptive,
-                                            );
-                                        }
-                                    }}
-                                    value={field.value ?? 'none'}
-                                >
-                                    <FormControl>
-                                        <SelectTrigger>
-                                            <SelectValue placeholder="Select effort level (optional)" />
-                                        </SelectTrigger>
-                                    </FormControl>
-                                    <SelectContent>
-                                        <SelectItem value="none">Not selected</SelectItem>
-                                        {allowedEfforts.map((effort) => (
-                                            <SelectItem
-                                                key={effort}
-                                                value={effort}
-                                            >
-                                                {reasoningEffortLabel[effort]}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                                <FormMessage />
-                            </FormItem>
-                        )}
-                    />
+                                            // max/xhigh are adaptive-thinking effort levels; selecting one
+                                            // implies adaptive mode so the backend doesn't drop the reasoning.
+                                            if (
+                                                supportsAdaptive &&
+                                                (next === ReasoningEffort.Xhigh || next === ReasoningEffort.Max)
+                                            ) {
+                                                setValue(
+                                                    `agents.${agentKey}.reasoning.mode` as const,
+                                                    ReasoningMode.Adaptive,
+                                                );
+                                            } else if (
+                                                getReasoningEffort(next) != null &&
+                                                shownMode === ReasoningMode.Budget
+                                            ) {
+                                                setValue(`agents.${agentKey}.reasoning.mode` as const, null);
+                                                setValue(`agents.${agentKey}.reasoning.maxTokens` as const, null);
+                                            }
+                                        }}
+                                        value={field.value ?? 'none'}
+                                    >
+                                        <FormControl>
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Select effort level (optional)" />
+                                            </SelectTrigger>
+                                        </FormControl>
+                                        <SelectContent>
+                                            <SelectItem value="none">Not selected</SelectItem>
+                                            {allowedEfforts.map((effort) => (
+                                                <SelectItem
+                                                    key={effort}
+                                                    value={effort}
+                                                >
+                                                    {reasoningEffortLabel[effort]}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                    )}
 
-                    <FormInputNumberItem
-                        control={control}
-                        disabled={isLoading || isOff}
-                        label="Reasoning Max Tokens"
-                        min="1"
-                        name={`agents.${agentKey}.reasoning.maxTokens`}
-                        placeholder="1000"
-                        valueType="integer"
-                    />
+                    {isBudgetOffered && (
+                        <FormInputNumberItem
+                            control={control}
+                            disabled={isLoading || shownMode !== ReasoningMode.Budget}
+                            label="Reasoning Max Tokens"
+                            min="1"
+                            name={`agents.${agentKey}.reasoning.maxTokens`}
+                            placeholder="1000"
+                            valueType="integer"
+                        />
+                    )}
                 </div>
             </div>
         </div>
@@ -880,6 +1098,7 @@ function ReasoningFields({
 
 export const transformFormToGraphQL = (
     formData: FormInput,
+    models: ModelOption[] = [],
 ): {
     agents: AgentsConfigInput;
     name: string;
@@ -888,6 +1107,18 @@ export const transformFormToGraphQL = (
     const agents = Object.entries(formData.agents || {})
         .filter(([key, data]) => key !== '__typename' && data?.model)
         .reduce((configs, [key, data]) => {
+            const reasoning = data?.reasoning;
+            const mode = getReasoningMode(reasoning?.mode);
+            const option = models.find(({ name }) => name === data?.model);
+            const capability = option?.reasoning;
+            const isLevelRefused =
+                refusesLevel(key, capability) || (isNonReasoningOption(option) && !agentsCallingWithoutTools.has(key));
+            const isBudgetRefused = capability?.takesNoThinkingDepth === true;
+            const isOffRefused =
+                mode === ReasoningMode.Off &&
+                models.length > 0 &&
+                (capability == null || capability.cannotDisable === true);
+            const sentMode = isOffRefused ? null : mode;
             const config: AgentConfigInput = {
                 extraBody: data?.extraBody?.trim() ? (JSON.parse(data.extraBody) as Record<string, unknown>) : null,
                 frequencyPenalty: data?.frequencyPenalty ?? null,
@@ -914,12 +1145,14 @@ export const transformFormToGraphQL = (
                               output: data.price.output,
                           }
                         : null,
-                reasoning: data?.reasoning
-                    ? {
-                          effort: getReasoningEffort(data?.reasoning.effort),
-                          maxTokens: data?.reasoning.maxTokens ?? null,
-                          mode: getReasoningMode(data?.reasoning.mode),
-                      }
+                reasoning: reasoning
+                    ? isLevelRefused
+                        ? { effort: null, maxTokens: null, mode: sentMode === ReasoningMode.Budget ? null : sentMode }
+                        : {
+                              effort: mode === ReasoningMode.Budget ? null : getReasoningEffort(reasoning.effort),
+                              maxTokens: isBudgetRefused ? null : (reasoning.maxTokens ?? null),
+                              mode: isBudgetRefused && sentMode === ReasoningMode.Budget ? null : sentMode,
+                          }
                     : null,
                 repetitionPenalty: data?.repetitionPenalty ?? null,
                 responseMimeType: data?.responseMimeType ?? null,
@@ -1221,7 +1454,7 @@ function SettingsProvider() {
         schema: formSchema,
     });
 
-    const { control, formState, handleSubmit: handleFormSubmit, reset, setValue, trigger, watch } = form;
+    const { control, getValues, handleSubmit: handleFormSubmit, reset, setValue, trigger, watch } = form;
 
     const { isDirty } = useFormState({ control });
     const seededTypeRef = useRef<null | string>(null);
@@ -1272,8 +1505,11 @@ function SettingsProvider() {
             return [];
         }
 
+        const seen = new Set<string>();
+
         return providerModels
             .map((model) => ({
+                maxOutputTokens: model.maxOutputTokens,
                 name: model.name,
                 price: model.price
                     ? {
@@ -1286,7 +1522,15 @@ function SettingsProvider() {
                 reasoning: model.reasoning ?? null,
                 thinking: model.thinking,
             }))
-            .filter((model) => model.name)
+            .filter((model) => {
+                if (!model.name || seen.has(model.name)) {
+                    return false;
+                }
+
+                seen.add(model.name);
+
+                return true;
+            })
             .sort((a, b) => a.name.localeCompare(b.name));
     }, [data, selectedType]);
 
@@ -1456,7 +1700,7 @@ function SettingsProvider() {
         try {
             setSubmitError(null);
 
-            const mutationData = transformFormToGraphQL(formData);
+            const mutationData = transformFormToGraphQL(formData, availableModels);
 
             if (isNew) {
                 await createProvider({
@@ -1482,15 +1726,26 @@ function SettingsProvider() {
         }
     };
 
+    const reportInvalid = (errors: FieldErrors<FormInput>) => {
+        setSubmitError(
+            `Please fix the following validation errors:\n\n${formatFormErrors(errors as Record<string, unknown>)}`,
+        );
+    };
+
+    const validateAndReport = async (): Promise<boolean> => {
+        let isValid = false;
+
+        await handleFormSubmit(() => {
+            isValid = true;
+        }, reportInvalid)();
+
+        return isValid;
+    };
+
     const onSaveAndLeave = async (): Promise<boolean> => {
         setSubmitError(null);
-        const valid = await trigger();
 
-        if (!valid) {
-            setSubmitError(
-                `Please fix the following validation errors:\n\n${formatFormErrors(formState.errors as Record<string, unknown>)}`,
-            );
-
+        if (!(await validateAndReport())) {
             return false;
         }
 
@@ -1536,16 +1791,10 @@ function SettingsProvider() {
         }
     };
 
-    const handleInvalidSubmit = (errors: FieldErrors<FormInput>) => {
-        setSubmitError(
-            `Please fix the following validation errors:\n\n${formatFormErrors(errors as Record<string, unknown>)}`,
-        );
-    };
-
     const handleFormEvent = async (event: FormEvent<HTMLFormElement>) => {
         setSubmitError(null);
 
-        await handleFormSubmit(handleSubmit, handleInvalidSubmit)(event);
+        await handleFormSubmit(handleSubmit, reportInvalid)(event);
     };
 
     const handleDelete = () => {
@@ -1578,13 +1827,8 @@ function SettingsProvider() {
 
     const handleTest = async () => {
         setSubmitError(null);
-        const isValid = await trigger();
 
-        if (!isValid) {
-            setSubmitError(
-                `Please fix the following validation errors:\n\n${formatFormErrors(formState.errors as Record<string, unknown>)}`,
-            );
-
+        if (!(await validateAndReport())) {
             return;
         }
 
@@ -1592,7 +1836,7 @@ function SettingsProvider() {
             setSubmitError(null);
 
             const formData = watch();
-            const { agents, type } = transformFormToGraphQL(formData);
+            const { agents, type } = transformFormToGraphQL(formData, availableModels);
             const result = await testProvider({
                 variables: {
                     agents,
@@ -1610,13 +1854,8 @@ function SettingsProvider() {
 
     const handleTestAgent = async (agentKey: string) => {
         setSubmitError(null);
-        const isValid = await trigger();
 
-        if (!isValid) {
-            setSubmitError(
-                `Please fix the following validation errors:\n\n${formatFormErrors(formState.errors as Record<string, unknown>)}`,
-            );
-
+        if (!(await validateAndReport())) {
             return;
         }
 
@@ -1625,12 +1864,17 @@ function SettingsProvider() {
             setCurrentAgentKey(agentKey);
             // watch() — not getValues() — because disabled fields must be included in the payload.
             const formData = watch();
-            const { agents, type } = transformFormToGraphQL(formData);
+            const { agents, type } = transformFormToGraphQL(formData, availableModels);
 
             const agent = agents[agentKey as keyof AgentsConfigInput] as AgentConfigInput;
 
             const singleResult = await testAgent({
-                variables: { agent, agentType: agentTypesMap[agentKey] ?? AgentConfigType.Simple, type },
+                variables: {
+                    agent,
+                    agentType: agentTypesMap[agentKey] ?? AgentConfigType.Simple,
+                    simple: agents.simple,
+                    type,
+                },
             });
             setTestResults({ [agentKey]: singleResult.data?.testAgent } as ProviderTestResults);
             setIsTestDialogOpen(true);
@@ -1795,16 +2039,28 @@ function SettingsProvider() {
                                     setValue(`agents.${agentKey}.price.cacheRead` as const, price?.cacheRead ?? null);
                                     setValue(`agents.${agentKey}.price.cacheWrite` as const, price?.cacheWrite ?? null);
 
-                                    // Reset reasoning on model change: adaptive-only models lock
-                                    // to adaptive, others clear the now-stale mode/effort/budget.
                                     setValue(
                                         `agents.${agentKey}.reasoning.mode` as const,
                                         option?.reasoning?.mode === ModelReasoningMode.AdaptiveOnly
                                             ? ReasoningMode.Adaptive
                                             : null,
                                     );
-                                    setValue(`agents.${agentKey}.reasoning.effort` as const, null);
+
+                                    const effort = getValues(`agents.${agentKey}.reasoning.effort` as const);
+                                    const efforts: string[] = option?.reasoning?.efforts ?? [];
+
+                                    setValue(
+                                        `agents.${agentKey}.reasoning.effort` as const,
+                                        effort != null && efforts.includes(effort) ? effort : null,
+                                    );
                                     setValue(`agents.${agentKey}.reasoning.maxTokens` as const, null);
+
+                                    const ceiling = option?.maxOutputTokens ?? null;
+                                    const maxTokens = getValues(`agents.${agentKey}.maxTokens` as const);
+
+                                    if (ceiling != null && maxTokens != null && maxTokens > ceiling) {
+                                        setValue(`agents.${agentKey}.maxTokens` as const, ceiling);
+                                    }
                                 }}
                                 options={availableModels}
                                 placeholder="Select or enter model name"
@@ -1821,14 +2077,11 @@ function SettingsProvider() {
                                 step="0.1"
                             />
 
-                            <FormInputNumberItem
+                            <MaxTokensField
+                                agentKey={agentKey}
                                 control={control}
-                                disabled={isLoading}
-                                label="Max Tokens"
-                                min="1"
-                                name={`agents.${agentKey}.maxTokens`}
-                                placeholder="1000"
-                                valueType="integer"
+                                isLoading={isLoading}
+                                models={availableModels}
                             />
 
                             <FormInputNumberItem

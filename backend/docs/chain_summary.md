@@ -324,13 +324,10 @@ These parameters have default values defined as constants:
 
 | Parameter | Field in SummarizerConfig | Default Constant | Default Value | Description |
 |-----------|---------------------------|------------------|---------------|-------------|
-| Preserve last section | `PreserveLast` | `preserveAllLastSectionPairs` | true | Whether to manage the last section size |
 | Max last section size | `LastSecBytes` | `maxLastSectionByteSize` | 50 KB | Maximum size for the last section |
 | Max single body pair size | `MaxBPBytes` | `maxSingleBodyPairByteSize` | 16 KB | Maximum size for a single body pair |
-| Use QA summarization | `UseQA` | `useQAPairSummarization` | false | Whether to use QA pair summarization |
 | Max QA sections | `MaxQASections` | `maxQAPairSections` | 10 | Maximum QA sections to keep |
 | Max QA byte size | `MaxQABytes` | `maxQAPairByteSize` | 64 KB | Maximum size for QA sections |
-| Summarize human in QA | `SummHumanInQA` | `summarizeHumanMessagesInQAPairs` | false | Whether to summarize human messages in QA pairs |
 | Last section reserve percentage | N/A | `lastSectionReservePercentage` | 25% | Percentage of section size to reserve for future messages |
 | Keep QA sections | `KeepQASections` | `keepMinLastQASections` | 1 | Number of most recent QA sections to preserve without summarization, even if they exceed MaxQABytes |
 
@@ -544,7 +541,7 @@ func summarizeSections(
 
     // Check for any errors
     errs := make([]error, 0, len(ch))
-    for edx := 0; edx < len(ch); edx++ {
+    for len(ch) > 0 {
         errs = append(errs, <-ch)
     }
 

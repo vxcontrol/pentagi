@@ -7,140 +7,84 @@ import (
 	"pentagi/pkg/database"
 )
 
-func TestGetAgentContextEmpty(t *testing.T) {
+func TestContext_GetAgentContext_FindsNoAgentWhereNoneWasPut(t *testing.T) {
 	t.Parallel()
 
-	ctx := t.Context()
-	_, ok := GetAgentContext(ctx)
-	if ok {
-		t.Error("GetAgentContext() on empty context should return false")
+	type contextForeignKey string
+
+	tests := []struct {
+		name string
+		ctx  context.Context
+	}{
+		{name: "an empty context", ctx: t.Context()},
+		{name: "a context holding only other values", ctx: context.WithValue(t.Context(), contextForeignKey("k"), "v")},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got, ok := GetAgentContext(tt.ctx); ok {
+				t.Errorf("GetAgentContext() = %+v, true; want no agent", got)
+			}
+		})
 	}
 }
 
-func TestPutAgentContextFirst(t *testing.T) {
+// The chain is built whole before any row runs, so a context changed by deriving its child fails its own row.
+func TestContext_PutAgentContext_MakesThePreviousCurrentAgentTheParent(t *testing.T) {
 	t.Parallel()
 
-	ctx := t.Context()
-	agent := database.MsgchainTypePrimaryAgent
+	base := t.Context()
+	first := PutAgentContext(base, database.MsgchainTypePrimaryAgent)
+	second := PutAgentContext(first, database.MsgchainTypeSearcher)
+	third := PutAgentContext(second, database.MsgchainTypePentester)
 
-	ctx = PutAgentContext(ctx, agent)
-	agentCtx, ok := GetAgentContext(ctx)
-	if !ok {
-		t.Fatal("GetAgentContext() should return true after PutAgentContext")
-	}
-	if agentCtx.ParentAgentType != agent {
-		t.Errorf("ParentAgentType = %q, want %q", agentCtx.ParentAgentType, agent)
-	}
-	if agentCtx.CurrentAgentType != agent {
-		t.Errorf("CurrentAgentType = %q, want %q", agentCtx.CurrentAgentType, agent)
-	}
-}
-
-func TestPutAgentContextChaining(t *testing.T) {
-	t.Parallel()
-
-	ctx := t.Context()
-	first := database.MsgchainTypePrimaryAgent
-	second := database.MsgchainTypeSearcher
-
-	ctx = PutAgentContext(ctx, first)
-	ctx = PutAgentContext(ctx, second)
-
-	agentCtx, ok := GetAgentContext(ctx)
-	if !ok {
-		t.Fatal("GetAgentContext() should return true")
-	}
-	if agentCtx.ParentAgentType != first {
-		t.Errorf("ParentAgentType = %q, want %q (first agent should become parent)", agentCtx.ParentAgentType, first)
-	}
-	if agentCtx.CurrentAgentType != second {
-		t.Errorf("CurrentAgentType = %q, want %q", agentCtx.CurrentAgentType, second)
-	}
-}
-
-func TestPutAgentContextTripleChaining(t *testing.T) {
-	t.Parallel()
-
-	ctx := t.Context()
-	first := database.MsgchainTypePrimaryAgent
-	second := database.MsgchainTypeSearcher
-	third := database.MsgchainTypePentester
-
-	ctx = PutAgentContext(ctx, first)
-	ctx = PutAgentContext(ctx, second)
-	ctx = PutAgentContext(ctx, third)
-
-	agentCtx, ok := GetAgentContext(ctx)
-	if !ok {
-		t.Fatal("GetAgentContext() should return true")
-	}
-	// After triple chaining: parent = second (promoted from current), current = third
-	if agentCtx.ParentAgentType != second {
-		t.Errorf("ParentAgentType = %q, want %q (previous current should become parent)", agentCtx.ParentAgentType, second)
-	}
-	if agentCtx.CurrentAgentType != third {
-		t.Errorf("CurrentAgentType = %q, want %q", agentCtx.CurrentAgentType, third)
-	}
-}
-
-func TestPutAgentContextIsolation(t *testing.T) {
-	t.Parallel()
-
-	ctx := t.Context()
-	agent := database.MsgchainTypeCoder
-
-	newCtx := PutAgentContext(ctx, agent)
-
-	// Original context should not be affected
-	_, ok := GetAgentContext(ctx)
-	if ok {
-		t.Error("original context should not contain agent context")
+	tests := []struct {
+		name        string
+		ctx         context.Context
+		wantOK      bool
+		wantParent  database.MsgchainType
+		wantCurrent database.MsgchainType
+	}{
+		{name: "the base context keeps no agent", ctx: base, wantOK: false},
+		{
+			name:        "the first agent is its own parent",
+			ctx:         first,
+			wantOK:      true,
+			wantParent:  database.MsgchainTypePrimaryAgent,
+			wantCurrent: database.MsgchainTypePrimaryAgent,
+		},
+		{
+			name:        "the second agent has the first as parent",
+			ctx:         second,
+			wantOK:      true,
+			wantParent:  database.MsgchainTypePrimaryAgent,
+			wantCurrent: database.MsgchainTypeSearcher,
+		},
+		{
+			name:        "the third agent has the second as parent, not the first",
+			ctx:         third,
+			wantOK:      true,
+			wantParent:  database.MsgchainTypeSearcher,
+			wantCurrent: database.MsgchainTypePentester,
+		},
 	}
 
-	// New context should have the agent
-	agentCtx, ok := GetAgentContext(newCtx)
-	if !ok {
-		t.Fatal("new context should contain agent context")
-	}
-	if agentCtx.CurrentAgentType != agent {
-		t.Errorf("CurrentAgentType = %q, want %q", agentCtx.CurrentAgentType, agent)
-	}
-}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 
-func TestPutAgentContextDoesNotMutatePreviousDerivedContext(t *testing.T) {
-	t.Parallel()
-
-	baseCtx := t.Context()
-	first := database.MsgchainTypePrimaryAgent
-	second := database.MsgchainTypeSearcher
-
-	ctx1 := PutAgentContext(baseCtx, first)
-	ctx2 := PutAgentContext(ctx1, second)
-
-	agentCtx1, ok := GetAgentContext(ctx1)
-	if !ok {
-		t.Fatal("ctx1 should contain agent context")
-	}
-	if agentCtx1.ParentAgentType != first || agentCtx1.CurrentAgentType != first {
-		t.Fatalf("ctx1 changed unexpectedly: parent=%q current=%q", agentCtx1.ParentAgentType, agentCtx1.CurrentAgentType)
-	}
-
-	agentCtx2, ok := GetAgentContext(ctx2)
-	if !ok {
-		t.Fatal("ctx2 should contain agent context")
-	}
-	if agentCtx2.ParentAgentType != first || agentCtx2.CurrentAgentType != second {
-		t.Fatalf("ctx2 mismatch: parent=%q current=%q", agentCtx2.ParentAgentType, agentCtx2.CurrentAgentType)
-	}
-}
-
-func TestGetAgentContextIgnoresOtherContextValues(t *testing.T) {
-	t.Parallel()
-
-	type foreignKey string
-	ctx := context.WithValue(t.Context(), foreignKey("k"), "v")
-	_, ok := GetAgentContext(ctx)
-	if ok {
-		t.Error("GetAgentContext() should ignore unrelated context values")
+			got, ok := GetAgentContext(tt.ctx)
+			if ok != tt.wantOK {
+				t.Fatalf("GetAgentContext() ok = %v, want %v", ok, tt.wantOK)
+			}
+			if got.ParentAgentType != tt.wantParent {
+				t.Errorf("ParentAgentType = %q, want %q", got.ParentAgentType, tt.wantParent)
+			}
+			if got.CurrentAgentType != tt.wantCurrent {
+				t.Errorf("CurrentAgentType = %q, want %q", got.CurrentAgentType, tt.wantCurrent)
+			}
+		})
 	}
 }

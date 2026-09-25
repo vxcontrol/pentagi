@@ -208,7 +208,7 @@ The branch is load-bearing for the case the signature allows but no screen has u
 
 The compile-time assertion each screen carries (`var _ BaseScreenModel = (*InstallerUpdateModel)(nil)`) does **not** catch it either, because `RestoreModel` is a runtime type switch and a missing `case` is not a type error.
 
-`TestEveryScreenModelIsRestorable` therefore enumerates both new screens, and that test is the only guard there is. The contract it encodes is "every screen is listed" rather than "list the ones that need it", because the day a screen starts returning something else is not the day anybody remembers this rule.
+`TestTypes_RestoreModel_RestoresTheUpdateScreens` (`models/types_test.go`) therefore enumerates both new screens, and that test is the only guard there is. The contract it encodes is "every screen is listed" rather than "list the ones that need it", because the day a screen starts returning something else is not the day anybody remembers this rule.
 
 Steps 3 and 4 fail just as quietly, which is why they are listed rather than assumed:
 

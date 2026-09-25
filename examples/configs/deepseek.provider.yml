@@ -1,31 +1,29 @@
 simple:
-  model: deepseek-v4-flash
+  model: deepseek-flash
   temperature: 0.3
   top_p: 0.9
   n: 1
   max_tokens: 8192
-  extra_body:
-    thinking:
-      type: disabled
+  reasoning:
+    mode: "off"
   price:
-    input: 0.14
-    output: 0.28
-    cache_read: 0.0028
+    input: 0.30
+    output: 1.20
+    cache_read: 0.006
 
 simple_json:
-  model: deepseek-v4-flash
+  model: deepseek-flash
   temperature: 0.3
   top_p: 0.9
   n: 1
   max_tokens: 4096
   json: true
-  extra_body:
-    thinking:
-      type: disabled
+  reasoning:
+    mode: "off"
   price:
-    input: 0.14
-    output: 0.28
-    cache_read: 0.0028
+    input: 0.30
+    output: 1.20
+    cache_read: 0.006
 
 primary_agent:
   model: deepseek-v4-pro
@@ -33,13 +31,10 @@ primary_agent:
   max_tokens: 16384
   reasoning:
     effort: high
-  extra_body:
-    thinking:
-      type: enabled
   price:
-    input: 1.74
-    output: 3.48
-    cache_read: 0.0145
+    input: 1.32
+    output: 3.96
+    cache_read: 0.044
 
 assistant:
   model: deepseek-v4-pro
@@ -47,13 +42,10 @@ assistant:
   max_tokens: 16384
   reasoning:
     effort: high
-  extra_body:
-    thinking:
-      type: enabled
   price:
-    input: 1.74
-    output: 3.48
-    cache_read: 0.0145
+    input: 1.32
+    output: 3.96
+    cache_read: 0.044
 
 generator:
   model: deepseek-v4-pro
@@ -61,13 +53,10 @@ generator:
   max_tokens: 32768
   reasoning:
     effort: high
-  extra_body:
-    thinking:
-      type: enabled
   price:
-    input: 1.74
-    output: 3.48
-    cache_read: 0.0145
+    input: 1.32
+    output: 3.96
+    cache_read: 0.044
 
 refiner:
   model: deepseek-v4-pro
@@ -75,13 +64,10 @@ refiner:
   max_tokens: 32768
   reasoning:
     effort: high
-  extra_body:
-    thinking:
-      type: enabled
   price:
-    input: 1.74
-    output: 3.48
-    cache_read: 0.0145
+    input: 1.32
+    output: 3.96
+    cache_read: 0.044
 
 adviser:
   model: deepseek-v4-pro
@@ -89,55 +75,49 @@ adviser:
   max_tokens: 16384
   reasoning:
     effort: high
-  extra_body:
-    thinking:
-      type: enabled
   price:
-    input: 1.74
-    output: 3.48
-    cache_read: 0.0145
+    input: 1.32
+    output: 3.96
+    cache_read: 0.044
 
 reflector:
-  model: deepseek-v4-flash
+  model: deepseek-flash
   temperature: 0.5
   top_p: 0.9
   n: 1
   max_tokens: 8192
-  extra_body:
-    thinking:
-      type: disabled
+  reasoning:
+    mode: "off"
   price:
-    input: 0.14
-    output: 0.28
-    cache_read: 0.0028
+    input: 0.30
+    output: 1.20
+    cache_read: 0.006
 
 searcher:
-  model: deepseek-v4-flash
+  model: deepseek-flash
   temperature: 0.5
   top_p: 0.9
   n: 1
   max_tokens: 4096
-  extra_body:
-    thinking:
-      type: disabled
+  reasoning:
+    mode: "off"
   price:
-    input: 0.14
-    output: 0.28
-    cache_read: 0.0028
+    input: 0.30
+    output: 1.20
+    cache_read: 0.006
 
 enricher:
-  model: deepseek-v4-flash
+  model: deepseek-flash
   temperature: 0.5
   top_p: 0.9
   n: 1
   max_tokens: 4096
-  extra_body:
-    thinking:
-      type: disabled
+  reasoning:
+    mode: "off"
   price:
-    input: 0.14
-    output: 0.28
-    cache_read: 0.0028
+    input: 0.30
+    output: 1.20
+    cache_read: 0.006
 
 coder:
   model: deepseek-v4-pro
@@ -145,27 +125,21 @@ coder:
   max_tokens: 20480
   reasoning:
     effort: high
-  extra_body:
-    thinking:
-      type: enabled
   price:
-    input: 1.74
-    output: 3.48
-    cache_read: 0.0145
+    input: 1.32
+    output: 3.96
+    cache_read: 0.044
 
 installer:
-  model: deepseek-v4-flash
+  model: deepseek-flash
   n: 1
   max_tokens: 12288
   reasoning:
     effort: high
-  extra_body:
-    thinking:
-      type: enabled
   price:
-    input: 0.14
-    output: 0.28
-    cache_read: 0.0028
+    input: 0.30
+    output: 1.20
+    cache_read: 0.006
 
 pentester:
   model: deepseek-v4-pro
@@ -173,10 +147,7 @@ pentester:
   max_tokens: 16384
   reasoning:
     effort: high
-  extra_body:
-    thinking:
-      type: enabled
   price:
-    input: 1.74
-    output: 3.48
-    cache_read: 0.0145
+    input: 1.32
+    output: 3.96
+    cache_read: 0.044

@@ -19,6 +19,7 @@
     - [Adding Human Messages](#adding-human-messages)
     - [Working with Tool Calls](#working-with-tool-calls)
   - [Testing Utilities](#testing-utilities)
+    - [Message Builders](#message-builders)
     - [Predefined Test Chains](#predefined-test-chains)
     - [Generating Custom Test Chains](#generating-custom-test-chains)
   - [Message Chain Structure in LLM Providers](#message-chain-structure-in-llm-providers)
@@ -313,73 +314,91 @@ Body pair and section sizes are automatically updated when tool responses are ad
 
 ## Testing Utilities
 
-ChainAST comes with utilities for generating test message chains to validate your code.
+The package tests build their message chains from `pkg/cast/fixtures_test.go`. Every helper there is a function that returns a fresh chain on each call: parsing shares the `Parts` of the input messages with the AST, and `AddToolResponse`, `NormalizeToolCallIDs`, `ClearReasoning` and `SanitizeToolCallArguments` write into those parts, so a chain kept in a shared variable would change under the next test. The file is a `_test.go` file of package `cast`, so only the tests of this package can use it.
+
+### Message Builders
+
+```go
+chainASTSystem(text)             // a system message with one text part
+chainASTHuman(text)              // a human message with one text part
+chainASTAnswer(text)             // an AI message with one text part: a completion
+chainASTText(role, text)         // a message of any role with one text part
+chainASTAI(parts...)             // an AI message with the given parts
+chainASTCall(id, name)           // a "function" tool call with the arguments {}
+chainASTCallWith(id, name, args) // the same call with the given arguments
+chainASTTool(id, name, content)  // a tool message holding one response
+```
 
 ### Predefined Test Chains
 
-Several test chains are available in the package for common scenarios:
-
 ```go
 // Basic chains
-emptyChain              // Empty message chain
-systemOnlyChain         // Only a system message
-humanOnlyChain          // Only a human message
-systemHumanChain        // System + human messages
-basicConversationChain  // System + human + AI response
+emptyChain()             // no messages
+systemOnlyChain()        // only a system message
+humanOnlyChain()         // only a human message
+systemHumanChain()       // system + human messages
+basicConversationChain() // system + human + AI completion
 
 // Tool-related chains
-chainWithTool                  // Chain with a tool call, no response
-chainWithSingleToolResponse    // Chain with a tool call and response
-chainWithMultipleTools         // Chain with multiple tool calls
-chainWithMultipleToolResponses // Chain with multiple tool calls and responses
+chainWithTool()               // a call to get_weather (tool-1) with no response
+chainWithSingleToolResponse() // the same call and its response
+chainWithMultipleTools()      // calls to get_weather (tool-1) and get_time (tool-2), neither answered
 
 // Complex chains
-chainWithMultipleSections      // Multiple conversation turns
-chainWithConsecutiveHumans     // Chain with error: consecutive human messages
-chainWithMissingToolResponse   // Chain with error: missing tool response
-chainWithUnexpectedTool        // Chain with error: unexpected tool message
+chainWithMultipleSections()    // a completion, then a second section with a call and its response
+chainWithMissingToolResponse() // the two calls of chainWithMultipleTools with only tool-1 answered
+chainWithUnexpectedTool()      // a completion followed by a tool message that answers no call
 
 // Summarization chains
-chainWithSummarization         // Chain with summarization as the only body pair
-chainWithSummarizationAndOtherPairs // Chain with summarization followed by other body pairs
+chainWithSummarizationAndOtherPairs() // a summarization pair, a completion, then a call and its response
+
+// Provider switching
+providerSwitchChain(withReasoning) // a scan in three sections, described below
 ```
+
+`providerSwitchChain` is the chain a provider switch is tested against: `NormalizeToolCallIDs` and `ClearReasoning` run on it each on its own and, clearing first, one after the other; `NormalizeToolCallIDs`, `SanitizeToolCallArguments` and `ClearReasoning` run in the order `pkg/providers` runs them on a variant of it that needs a forced repair. Its first section holds a text preamble beside two parallel calls, one with an id already in the Anthropic format (`toolu_…`) and one with an OpenAI-style id, their two responses and a completion; the second section opens with a completion before a call whose tool message carries a text note beside the response; the third holds a summarization pair. With `withReasoning` set, the preamble, the first completion, the note and every call except the one already in the Anthropic format carry reasoning with a signature. Without it the chain is otherwise identical, which is what `ClearReasoning` must turn the first form into; both forms have the same sizes, because reasoning is not counted.
 
 ### Generating Custom Test Chains
 
-For more complex testing, use the chain generators:
+For chains with more sections, pairs and calls than the predefined ones, use the generators:
 
 ```go
-// Simple configuration
-config := DefaultChainConfig()  // Creates a simple chain with system + human + AI
+// A system prompt, one question and its completion
+config := DefaultChainConfig()
 
 // Custom configuration
 config := ChainConfig{
     IncludeSystem:           true,
-    Sections:                3,                 // 3 conversation turns
-    BodyPairsPerSection:     []int{1, 2, 1},    // Number of AI responses per section
-    ToolsForBodyPairs:       []bool{false, true, false}, // Which responses have tool calls
-    ToolCallsPerBodyPair:    []int{0, 2, 0},    // How many tool calls per response
-    IncludeAllToolResponses: true,              // Whether to include responses for all tools
+    Sections:                3,                                      // 3 conversation turns
+    BodyPairsPerSection:     []int{1, 2, 2},                         // AI responses per section
+    ToolsForBodyPairs:       []bool{false, true, false, true, true}, // which responses, counted across the chain, make calls
+    ToolCallsPerBodyPair:    []int{0, 2, 0, 3, 1},                   // how many calls each of those responses makes
+    IncludeAllToolResponses: true,                                   // whether every call gets its response
 }
 
 // Generate chain based on config
 chain := GenerateChain(config)
 
-// For more complex scenarios with missing responses
+// Five sections, a response with three calls in the first, third and fifth and a completion in the
+// others, with the first seven tool responses of the chain dropped
 complexChain := GenerateComplexChain(
-    5,  // Number of sections
-    3,  // Number of tool calls per tool-using response
-    7   // Number of missing tool responses
+    5, // number of sections
+    3, // number of calls per tool-using response
+    7, // number of tool responses to drop, counted from the start of the chain
 )
 ```
 
-The `ChainConfig` struct allows fine-grained control over generated test chains:
-- `IncludeSystem`: Whether to add a system message at the start
-- `Sections`: Number of conversation turns (each with a human message)
-- `BodyPairsPerSection`: Number of AI responses per section
-- `ToolsForBodyPairs`: Which AI responses should include tool calls
-- `ToolCallsPerBodyPair`: Number of tool calls to include in each tool-using response
-- `IncludeAllToolResponses`: Whether to add responses for all tool calls
+The `ChainConfig` struct controls the generated chain:
+- `IncludeSystem`: whether the chain opens with the system message "You are a helpful assistant."
+- `Sections`: the number of conversation turns; turn n opens with the human message "Question n"
+- `BodyPairsPerSection`: the number of AI responses in each section; a section past the end of the slice has one
+- `ToolsForBodyPairs`: which AI responses make tool calls, indexed by the position of the response in the whole chain; a response past the end of the slice is the completion "Response to question n"
+- `ToolCallsPerBodyPair`: how many calls each tool-using response makes, indexed the same way; a response past the end of the slice makes one
+- `IncludeAllToolResponses`: whether every call is followed by its response; without it no call is answered
+
+Calls are numbered `tool-1`, `tool-2`, … across the whole chain. The k-th call of a response is `get_data_k` with the arguments `{"query": "Test query k"}`, and its response, one tool message per call in the order of the calls, reads "Response for tool-N".
+
+`GenerateComplexChain(sections, calls, missing)` gives every section one AI response, a response with `calls` calls in the first, third, fifth… section and a completion in the others, answers every call, and then drops the first `missing` tool messages of the chain.
 
 ## Message Chain Structure in LLM Providers
 
@@ -474,7 +493,7 @@ summaryPair := NewBodyPairFromSummarization(summaryText, tcIDTemplate, addFakeSi
 2. **Defensive Programming**: Always check for errors from ChainAST functions
 3. **Complete Tool Calls**: Ensure all tool calls have corresponding responses before sending to an LLM
 4. **Section Management**: Use sections to organize conversation turns logically
-5. **Testing**: Use the provided generators to test code that manipulates message chains
+5. **Testing**: Use the predefined chains and the generators of `fixtures_test.go` to test the code of this package that manipulates message chains
 6. **Size Management**: Leverage size tracking to maintain efficient context windows
 7. **Reasoning Preservation**: 
    - Use `ContainsToolCallReasoning()` to check if fake signatures are needed (checks only ToolCall.Reasoning)

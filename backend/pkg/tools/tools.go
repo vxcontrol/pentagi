@@ -16,6 +16,8 @@ import (
 
 	"pentagi/pkg/config"
 	"pentagi/pkg/database"
+	"pentagi/pkg/database/knowledge/limits"
+	"pentagi/pkg/database/knowledge/vectorstore"
 	"pentagi/pkg/docker"
 	"pentagi/pkg/flowfiles"
 	"pentagi/pkg/graph/model"
@@ -23,7 +25,6 @@ import (
 	"pentagi/pkg/providers/embeddings"
 	"pentagi/pkg/schema"
 
-	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/client"
 	"github.com/sirupsen/logrus"
 	"github.com/vxcontrol/cloud/anonymizer"
@@ -127,6 +128,8 @@ type TermLogProvider interface {
 		containerID int64,
 		taskID, subtaskID *int64,
 	) (int64, error)
+	ContainerNotRunning(ctx context.Context, containerID int64, taskID, subtaskID *int64) error
+	ContainerRunning(ctx context.Context, containerID int64, taskID, subtaskID *int64) error
 }
 
 type VectorStoreLogProvider interface {
@@ -190,6 +193,7 @@ type flowToolsExecutor struct {
 
 type ContextToolsExecutor interface {
 	Tools() []llms.Tool
+	// Execute returns an error only when the tool produced no result: callers run the tool again on error.
 	Execute(ctx context.Context, streamID int64, id, name, obsName, thinking string, args json.RawMessage) (string, error)
 	IsBarrierFunction(name string) bool
 	IsFunctionExists(name string) bool
@@ -424,20 +428,14 @@ func (fte *flowToolsExecutor) SetEmbedder(embedder embeddings.Embedder) {
 		fte.store = nil
 	}
 
-	opts := []pgvector.Option{
-		pgvector.WithEmbedder(embedder),
-		pgvector.WithCollectionName("langchain"),
+	store, err := pgvector.New(context.Background(),
+		vectorstore.Options(embedder, fte.cfg.PgxPool, fte.cfg.DatabaseURL)...)
+	if err != nil {
+		logrus.WithError(err).WithField("flow_id", fte.flowID).Warn(
+			"failed to open the vector store; memory and knowledge tools are unavailable to this flow")
+		return
 	}
-	if fte.cfg.PgxPool != nil {
-		opts = append(opts, pgvector.WithConn(fte.cfg.PgxPool))
-	} else {
-		opts = append(opts, pgvector.WithConnectionURL(fte.cfg.DatabaseURL))
-	}
-
-	store, err := pgvector.New(context.Background(), opts...)
-	if err == nil {
-		fte.store = &store
-	}
+	fte.store = &store
 }
 
 func (fte *flowToolsExecutor) SetFunctions(functions *Functions) {
@@ -484,12 +482,24 @@ func (fte *flowToolsExecutor) Prepare(ctx context.Context) error {
 	if cnt, err := fte.db.GetFlowPrimaryContainer(ctx, fte.flowID); err == nil {
 		containerName := PrimaryTerminalName(fte.cfg.TenantPrefix(), fte.flowID)
 		// the stored status goes stale when the container is removed outside pentagi
-		if cnt.Status == database.ContainerStatusRunning {
+		isProbed := cnt.Status == database.ContainerStatusRunning ||
+			cnt.Status == database.ContainerStatusFailed && cnt.LocalID.String != ""
+		if isProbed {
 			running, err := fte.docker.IsContainerRunning(ctx, cnt.LocalID.String)
 			if err != nil {
 				return fmt.Errorf("failed to inspect container '%s': %w", containerName, err)
 			}
 			if running {
+				if cnt.Status != database.ContainerStatusRunning {
+					_, err := fte.db.UpdateContainerStatus(ctx, database.UpdateContainerStatusParams{
+						Status: database.ContainerStatusRunning,
+						ID:     cnt.ID,
+					})
+					if err != nil {
+						return fmt.Errorf("failed to mark container '%s' running: %w", containerName, err)
+					}
+				}
+				// Kept rather than replaced: what was installed in it outside /work survives only in this container.
 				fte.primaryID = cnt.ID
 				fte.primaryLID = cnt.LocalID.String
 				if err := fte.syncMissingFiles(ctx); err != nil {
@@ -506,19 +516,9 @@ func (fte *flowToolsExecutor) Prepare(ctx context.Context) error {
 		}
 	}
 
-	// Explicit capability allow-list (CapDrop: ALL below): Docker's default 14
-	// caps minus MKNOD (block-device escape vector), plus SYS_PTRACE (debugging,
-	// not a Docker default) and NET_ADMIN when configured. Never add SYS_ADMIN,
-	// SYS_MODULE, SYS_RAWIO, SYS_BOOT. See "Capability Management" in docker.md
-	// for the full per-capability rationale.
-	capAdd := []string{
-		"CHOWN", "DAC_OVERRIDE", "FSETID", "FOWNER",
-		"NET_RAW", "SETGID", "SETUID", "SETFCAP", "SETPCAP",
-		"NET_BIND_SERVICE", "SYS_CHROOT", "KILL", "AUDIT_WRITE", "SYS_PTRACE",
-	}
-	if fte.cfg.DockerNetAdmin {
-		capAdd = append(capAdd, "NET_ADMIN")
-	}
+	// Shared with the startup sandbox check, so the container it measures is the
+	// container agents get.
+	workerConfig, workerHostConfig := docker.WorkerSpec(fte.cfg, fte.image)
 
 	containerName := PrimaryTerminalName(fte.cfg.TenantPrefix(), fte.flowID)
 	cnt, err := fte.docker.RunContainer(
@@ -526,14 +526,8 @@ func (fte *flowToolsExecutor) Prepare(ctx context.Context) error {
 		containerName,
 		database.ContainerTypePrimary,
 		fte.flowID,
-		&container.Config{
-			Image:      fte.image,
-			Entrypoint: []string{"tail", "-f", "/dev/null"},
-		},
-		&container.HostConfig{
-			CapDrop: []string{"ALL"},
-			CapAdd:  capAdd,
-		},
+		workerConfig,
+		workerHostConfig,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to launch container '%s': %w", containerName, err)
@@ -803,6 +797,7 @@ func (fte *flowToolsExecutor) GetCustomExecutor(cfg CustomExecutorConfig) (Conte
 		subtaskID:   cfg.SubtaskID,
 		mlp:         fte.mlp,
 		tclp:        fte.tclp,
+		replacer:    fte.replacer,
 		vslp:        fte.vslp,
 		db:          fte.db,
 		store:       fte.store,
@@ -892,6 +887,7 @@ func (fte *flowToolsExecutor) GetAssistantExecutor(cfg AssistantExecutorConfig) 
 	} else {
 		memory := NewMemoryTool(
 			fte.flowID,
+			fte.replacer,
 			fte.store,
 			fte.vslp,
 		)
@@ -985,6 +981,7 @@ func (fte *flowToolsExecutor) GetAssistantExecutor(cfg AssistantExecutorConfig) 
 		flowID:      fte.flowID,
 		mlp:         fte.mlp,
 		tclp:        fte.tclp,
+		replacer:    fte.replacer,
 		vslp:        fte.vslp,
 		db:          fte.db,
 		store:       fte.store,
@@ -1033,6 +1030,7 @@ func (fte *flowToolsExecutor) GetPrimaryExecutor(cfg PrimaryExecutorConfig) (Con
 		subtaskID: &cfg.SubtaskID,
 		mlp:       fte.mlp,
 		tclp:      fte.tclp,
+		replacer:  fte.replacer,
 		vslp:      fte.vslp,
 		db:        fte.db,
 		store:     fte.store,
@@ -1110,6 +1108,7 @@ func (fte *flowToolsExecutor) GetInstallerExecutor(cfg InstallerExecutorConfig) 
 		subtaskID: cfg.SubtaskID,
 		mlp:       fte.mlp,
 		tclp:      fte.tclp,
+		replacer:  fte.replacer,
 		vslp:      fte.vslp,
 		db:        fte.db,
 		store:     fte.store,
@@ -1217,6 +1216,7 @@ func (fte *flowToolsExecutor) GetCoderExecutor(cfg CoderExecutorConfig) (Context
 		subtaskID: cfg.SubtaskID,
 		mlp:       fte.mlp,
 		tclp:      fte.tclp,
+		replacer:  fte.replacer,
 		vslp:      fte.vslp,
 		db:        fte.db,
 		store:     fte.store,
@@ -1342,6 +1342,7 @@ func (fte *flowToolsExecutor) GetPentesterExecutor(cfg PentesterExecutorConfig) 
 		subtaskID: cfg.SubtaskID,
 		mlp:       fte.mlp,
 		tclp:      fte.tclp,
+		replacer:  fte.replacer,
 		vslp:      fte.vslp,
 		db:        fte.db,
 		store:     fte.store,
@@ -1442,6 +1443,7 @@ func (fte *flowToolsExecutor) GetSearcherExecutor(cfg SearcherExecutorConfig) (C
 		subtaskID: cfg.SubtaskID,
 		mlp:       fte.mlp,
 		tclp:      fte.tclp,
+		replacer:  fte.replacer,
 		vslp:      fte.vslp,
 		db:        fte.db,
 		store:     fte.store,
@@ -1529,14 +1531,15 @@ func (fte *flowToolsExecutor) GetGeneratorExecutor(cfg GeneratorExecutorConfig) 
 	)
 
 	ce := &customExecutor{
-		userID: fte.userID,
-		flowID: fte.flowID,
-		taskID: &cfg.TaskID,
-		mlp:    fte.mlp,
-		tclp:   fte.tclp,
-		vslp:   fte.vslp,
-		db:     fte.db,
-		store:  fte.store,
+		userID:   fte.userID,
+		flowID:   fte.flowID,
+		taskID:   &cfg.TaskID,
+		mlp:      fte.mlp,
+		tclp:     fte.tclp,
+		replacer: fte.replacer,
+		vslp:     fte.vslp,
+		db:       fte.db,
+		store:    fte.store,
 		definitions: []llms.FunctionDefinition{
 			registryDefinitions[MemoristToolName],
 			registryDefinitions[SearchToolName],
@@ -1598,14 +1601,15 @@ func (fte *flowToolsExecutor) GetRefinerExecutor(cfg RefinerExecutorConfig) (Con
 	)
 
 	ce := &customExecutor{
-		userID: fte.userID,
-		flowID: fte.flowID,
-		taskID: &cfg.TaskID,
-		mlp:    fte.mlp,
-		tclp:   fte.tclp,
-		vslp:   fte.vslp,
-		db:     fte.db,
-		store:  fte.store,
+		userID:   fte.userID,
+		flowID:   fte.flowID,
+		taskID:   &cfg.TaskID,
+		mlp:      fte.mlp,
+		tclp:     fte.tclp,
+		replacer: fte.replacer,
+		vslp:     fte.vslp,
+		db:       fte.db,
+		store:    fte.store,
 		definitions: []llms.FunctionDefinition{
 			registryDefinitions[MemoristToolName],
 			registryDefinitions[SearchToolName],
@@ -1669,6 +1673,7 @@ func (fte *flowToolsExecutor) GetMemoristExecutor(cfg MemoristExecutorConfig) (C
 		subtaskID: cfg.SubtaskID,
 		mlp:       fte.mlp,
 		tclp:      fte.tclp,
+		replacer:  fte.replacer,
 		vslp:      fte.vslp,
 		db:        fte.db,
 		store:     fte.store,
@@ -1690,6 +1695,7 @@ func (fte *flowToolsExecutor) GetMemoristExecutor(cfg MemoristExecutorConfig) (C
 
 	memory := NewMemoryTool(
 		fte.flowID,
+		fte.replacer,
 		fte.store,
 		fte.vslp,
 	)
@@ -1742,6 +1748,7 @@ func (fte *flowToolsExecutor) GetEnricherExecutor(cfg EnricherExecutorConfig) (C
 		subtaskID: cfg.SubtaskID,
 		mlp:       fte.mlp,
 		tclp:      fte.tclp,
+		replacer:  fte.replacer,
 		vslp:      fte.vslp,
 		db:        fte.db,
 		store:     fte.store,
@@ -1763,6 +1770,7 @@ func (fte *flowToolsExecutor) GetEnricherExecutor(cfg EnricherExecutorConfig) (C
 
 	memory := NewMemoryTool(
 		fte.flowID,
+		fte.replacer,
 		fte.store,
 		fte.vslp,
 	)
@@ -1812,6 +1820,7 @@ func (fte *flowToolsExecutor) GetReporterExecutor(cfg ReporterExecutorConfig) (C
 		subtaskID:   cfg.SubtaskID,
 		mlp:         fte.mlp,
 		tclp:        fte.tclp,
+		replacer:    fte.replacer,
 		vslp:        fte.vslp,
 		db:          fte.db,
 		store:       fte.store,
@@ -1835,4 +1844,8 @@ func enrichLogrusFields(flowID int64, taskID, subtaskID *int64, fields logrus.Fi
 	}
 
 	return fields
+}
+
+func boundedContent(replacer anonymizer.Replacer, raw string) string {
+	return limits.TruncateToLimit(replacer.ReplaceString(raw), limits.MaxContentLen)
 }

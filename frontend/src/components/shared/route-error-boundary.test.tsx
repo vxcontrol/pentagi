@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -81,6 +81,42 @@ describe('RouteErrorBoundary', () => {
 
         expect(await screen.findByText(/ran into an unexpected error/i)).toBeInTheDocument();
         expect(reloadSpy).not.toHaveBeenCalled();
+    });
+
+    it('waits for the connection instead of reloading a chunk that failed offline', async () => {
+        let isOnline = false;
+        vi.spyOn(navigator, 'onLine', 'get').mockImplementation(() => isOnline);
+
+        renderWithRouteError(chunkError());
+
+        expect(await screen.findByText(/you are offline/i)).toBeInTheDocument();
+        expect(reloadSpy).not.toHaveBeenCalled();
+
+        isOnline = true;
+        act(() => {
+            window.dispatchEvent(new Event('online'));
+        });
+
+        await waitFor(() => expect(reloadSpy).toHaveBeenCalledTimes(1));
+    });
+
+    it('offers no reload while the connection the chunk needs is still down', async () => {
+        let isOnline = false;
+        vi.spyOn(navigator, 'onLine', 'get').mockImplementation(() => isOnline);
+
+        renderWithRouteError(chunkError());
+
+        const reload = await screen.findByRole('button', { name: /reload/i });
+        expect(reload).toBeDisabled();
+        await userEvent.click(reload);
+        expect(reloadSpy).not.toHaveBeenCalled();
+
+        isOnline = true;
+        act(() => {
+            window.dispatchEvent(new Event('online'));
+        });
+
+        await waitFor(() => expect(reload).toBeEnabled());
     });
 
     it('reloads when the user clicks Reload', async () => {

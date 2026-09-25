@@ -35,7 +35,7 @@ var subtasksSQLMappers = map[string]any{
 	"task_id":     "{{table}}.task_id",
 	"created_at":  "{{table}}.created_at",
 	"updated_at":  "{{table}}.updated_at",
-	"data":        "({{table}}.status || ' ' || {{table}}.title || ' ' || {{table}}.description || ' ' || {{table}}.context || ' ' || {{table}}.result)",
+	"data":        "({{table}}.status || ' ' || {{table}}.title || ' ' || {{table}}.description || ' ' || COALESCE({{table}}.context, '') || ' ' || {{table}}.result)",
 }
 
 type SubtaskService struct {
@@ -103,7 +103,7 @@ func (s *SubtaskService) GetFlowSubtasks(c *gin.Context) {
 		return
 	}
 
-	query.Init("subtasks", subtasksSQLMappers)
+	_ = query.Init("subtasks", subtasksSQLMappers)
 
 	if query.Group != "" {
 		if _, ok := subtasksSQLMappers[query.Group]; !ok {
@@ -203,7 +203,7 @@ func (s *SubtaskService) GetFlowTaskSubtasks(c *gin.Context) {
 		return
 	}
 
-	query.Init("subtasks", subtasksSQLMappers)
+	_ = query.Init("subtasks", subtasksSQLMappers)
 
 	if query.Group != "" {
 		if _, ok := subtasksSQLMappers[query.Group]; !ok {

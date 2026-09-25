@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
+	"github.com/sirupsen/logrus"
 	"github.com/vxcontrol/cloud/anonymizer/patterns"
 	"github.com/vxcontrol/cloud/sdk"
 )
@@ -50,13 +51,29 @@ type Config struct {
 	DockerInsideTLSVerify string `env:"DOCKER_INSIDE_TLS_VERIFY"`
 	DockerInsideCertPath  string `env:"DOCKER_INSIDE_CERT_PATH"`
 
+	// DockerInsidePolicyTests turns on the sandbox policy tests that run inside
+	// each worker before an agent may use it. Off by default: they need a
+	// DOCKER_INSIDE_HOST whose daemon enforces an authorization policy, and on a
+	// deployment without one every worker would be refused. Operators who run the
+	// separate-daemon arrangement of examples/guides/worker_node.md turn it on to
+	// have that arrangement proven rather than assumed.
+	DockerInsidePolicyTests bool `env:"DOCKER_INSIDE_POLICY_TESTS" envDefault:"false"`
+
 	DockerNetwork                string `env:"DOCKER_NETWORK"`
 	DockerPublicIP               string `env:"DOCKER_PUBLIC_IP" envDefault:"0.0.0.0"`
 	DockerWorkDir                string `env:"DOCKER_WORK_DIR"`
 	DockerPortsBase              int    `env:"DOCKER_PORTS_BASE" envDefault:"28000"`
 	DockerDefaultImage           string `env:"DOCKER_DEFAULT_IMAGE" envDefault:"debian:latest"`
 	DockerDefaultImageForPentest string `env:"DOCKER_DEFAULT_IMAGE_FOR_PENTEST" envDefault:"vxcontrol/kali-linux"`
-	TerminalToolTimeout          int    `env:"TERMINAL_TOOL_TIMEOUT" envDefault:"1200"`
+
+	// DockerDefaultImageForTest is the worker the startup sandbox check runs in,
+	// and the image it pulls into the sandbox to prove an agent could. It is a
+	// small image on purpose: the check pays for it on every start.
+	DockerDefaultImageForTest string `env:"DOCKER_DEFAULT_IMAGE_FOR_TEST" envDefault:"vxcontrol/kali-linux:test"`
+	DockerImageSelectionMode  string `env:"DOCKER_IMAGE_SELECTION_MODE" envDefault:"llm"`
+	DockerAllowedImages       string `env:"DOCKER_ALLOWED_IMAGES"`
+	LLMFallbackProvider       string `env:"LLM_FALLBACK_PROVIDER"`
+	TerminalToolTimeout       int    `env:"TERMINAL_TOOL_TIMEOUT" envDefault:"1200"`
 
 	// === API Server Configuration ===
 	ServerPort   int    `env:"SERVER_PORT" envDefault:"8080"`
@@ -69,6 +86,8 @@ type Config struct {
 	StaticURL   *url.URL `env:"STATIC_URL"`
 	StaticDir   string   `env:"STATIC_DIR" envDefault:"./fe"`
 	CorsOrigins []string `env:"CORS_ORIGINS" envDefault:"*"`
+
+	TrustedProxies []string `env:"TRUSTED_PROXIES" envSeparator:","`
 
 	// === Authentication & Session Security ===
 	CookieSigningSalt string `env:"COOKIE_SIGNING_SALT"`
@@ -84,6 +103,15 @@ type Config struct {
 	// === LLM Provider: Anthropic ===
 	AnthropicAPIKey    string `env:"ANTHROPIC_API_KEY"`
 	AnthropicServerURL string `env:"ANTHROPIC_SERVER_URL" envDefault:"https://api.anthropic.com/v1"`
+
+	// Workload Identity Federation, under the names the vendor SDKs read. A
+	// non-empty ANTHROPIC_API_KEY shadows it.
+	AnthropicFederationRuleID  string `env:"ANTHROPIC_FEDERATION_RULE_ID"`
+	AnthropicOrganizationID    string `env:"ANTHROPIC_ORGANIZATION_ID"`
+	AnthropicServiceAccountID  string `env:"ANTHROPIC_SERVICE_ACCOUNT_ID"`
+	AnthropicWorkspaceID       string `env:"ANTHROPIC_WORKSPACE_ID"`
+	AnthropicIdentityTokenFile string `env:"ANTHROPIC_IDENTITY_TOKEN_FILE"`
+	AnthropicIdentityToken     string `env:"ANTHROPIC_IDENTITY_TOKEN"`
 
 	// === Vector Embedding Configuration ===
 	EmbeddingURL           string `env:"EMBEDDING_URL"`
@@ -110,8 +138,9 @@ type Config struct {
 	LLMServerModel             string `env:"LLM_SERVER_MODEL"`
 	LLMServerProvider          string `env:"LLM_SERVER_PROVIDER"`
 	LLMServerConfig            string `env:"LLM_SERVER_CONFIG_PATH"`
-	LLMServerLegacyReasoning   bool   `env:"LLM_SERVER_LEGACY_REASONING" envDefault:"false"`
 	LLMServerPreserveReasoning bool   `env:"LLM_SERVER_PRESERVE_REASONING" envDefault:"false"`
+	LLMServerAPIType           string `env:"LLM_SERVER_API_TYPE"`
+	LLMServerAPIVersion        string `env:"LLM_SERVER_API_VERSION" envDefault:"2024-10-21"`
 
 	// === LLM Provider: Ollama (Local/Remote) ===
 	OllamaServerURL               string `env:"OLLAMA_SERVER_URL"`
@@ -161,6 +190,16 @@ type Config struct {
 	MiniMaxServerURL string `env:"MINIMAX_SERVER_URL" envDefault:"https://api.minimax.io/v1"`
 	MiniMaxProvider  string `env:"MINIMAX_PROVIDER"`
 
+	// === LLM Provider: Mistral ===
+	MistralAPIKey    string `env:"MISTRAL_API_KEY"`
+	MistralServerURL string `env:"MISTRAL_SERVER_URL" envDefault:"https://api.mistral.ai/v1"`
+	MistralProvider  string `env:"MISTRAL_PROVIDER"`
+
+	// === LLM Provider: xAI (Grok) ===
+	XAIAPIKey    string `env:"XAI_API_KEY"`
+	XAIServerURL string `env:"XAI_SERVER_URL" envDefault:"https://api.x.ai/v1"`
+	XAIProvider  string `env:"XAI_PROVIDER"`
+
 	// === Search Engine: DuckDuckGo ===
 	DuckDuckGoEnabled    bool   `env:"DUCKDUCKGO_ENABLED" envDefault:"true"`
 	DuckDuckGoRegion     string `env:"DUCKDUCKGO_REGION"`
@@ -199,8 +238,9 @@ type Config struct {
 
 	// === Search Engine: Perplexity AI ===
 	PerplexityAPIKey      string `env:"PERPLEXITY_API_KEY"`
-	PerplexityModel       string `env:"PERPLEXITY_MODEL" envDefault:"sonar-pro"`
+	PerplexityModel       string `env:"PERPLEXITY_MODEL" envDefault:"sonar"`
 	PerplexityContextSize string `env:"PERPLEXITY_CONTEXT_SIZE" envDefault:"low"`
+	PerplexityTimeout     int    `env:"PERPLEXITY_TIMEOUT"`
 
 	// === Search Engine: SearXNG (Self-Hosted) ===
 	SearxngURL        string `env:"SEARXNG_URL"`
@@ -341,7 +381,14 @@ func ensureInstallationID(config *Config) {
 		config.InstallationID = uuid.New().String()
 	}
 
-	_ = os.WriteFile(installationIDPath, []byte(config.InstallationID), 0644)
+	if err := os.MkdirAll(config.DataDir, 0755); err != nil {
+		logrus.WithError(err).Warn("failed to create the data directory; the installation id will change on every start")
+		return
+	}
+
+	if err := os.WriteFile(installationIDPath, []byte(config.InstallationID), 0644); err != nil {
+		logrus.WithError(err).Warn("failed to store the installation id; it will change on every start")
+	}
 }
 
 func ensureLicenseKey(config *Config) {
@@ -454,6 +501,7 @@ func (c *Config) GetSecretPatterns() []patterns.Pattern {
 		{c.CookieSigningSalt, "Cookie Salt"},
 		{c.OpenAIKey, "OpenAI Key"},
 		{c.AnthropicAPIKey, "Anthropic Key"},
+		{c.AnthropicIdentityToken, "Anthropic Identity Token"},
 		{c.EmbeddingKey, "Embedding Key"},
 		{c.LLMServerKey, "LLM Server Key"},
 		{c.OllamaServerAPIKey, "Ollama Key"},
@@ -467,6 +515,8 @@ func (c *Config) GetSecretPatterns() []patterns.Pattern {
 		{c.KimiAPIKey, "Kimi Key"},
 		{c.QwenAPIKey, "Qwen Key"},
 		{c.MiniMaxAPIKey, "MiniMax Key"},
+		{c.MistralAPIKey, "Mistral Key"},
+		{c.XAIAPIKey, "xAI Key"},
 		{c.GoogleAPIKey, "Google API Key"},
 		{c.GoogleCXKey, "Google CX Key"},
 		{c.OAuthGoogleClientID, "Google Client ID"},

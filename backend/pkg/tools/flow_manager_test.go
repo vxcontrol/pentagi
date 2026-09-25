@@ -8,61 +8,87 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"pentagi/pkg/database"
 )
 
-// mockQuerier satisfies database.Querier by embedding the interface;
-// only the methods used by flow_manager are overridden via function fields.
-type mockQuerier struct {
+// flowManagerDB stands in for the five Querier reads of the flow_manager tools; a read sequence repeats its last entry.
+type flowManagerDB struct {
 	database.Querier
-	getFlowTasksFn        func(ctx context.Context, flowID int64) ([]database.Task, error)
-	getFlowSubtasksFn     func(ctx context.Context, flowID int64) ([]database.Subtask, error)
-	getFlowTaskSubtasksFn func(ctx context.Context, arg database.GetFlowTaskSubtasksParams) ([]database.Subtask, error)
-	getTaskPlannedFn      func(ctx context.Context, taskID int64) ([]database.Subtask, error)
-	getSubtaskMsgLogsFn   func(ctx context.Context, subtaskID sql.NullInt64) ([]database.Msglog, error)
+
+	taskReads   [][]database.Task
+	taskErrs    []error
+	subtasks    []database.Subtask
+	subtasksErr error
+	taskSubs    []database.Subtask
+	taskSubsErr error
+	planReads   [][]database.Subtask
+	planErrs    []error
+	logs        []database.Msglog
+	logsErr     error
+
+	taskN        int
+	planN        int
+	filterTaskID int64
+	planTaskID   int64
+	logSubtaskID sql.NullInt64
 }
 
-func (m *mockQuerier) GetFlowTasks(ctx context.Context, flowID int64) ([]database.Task, error) {
-	if m.getFlowTasksFn != nil {
-		return m.getFlowTasksFn(ctx, flowID)
+func flowManagerSeqErr(errs []error, i int) error {
+	if i < len(errs) {
+		return errs[i]
 	}
-	return nil, nil
+	return nil
 }
 
-func (m *mockQuerier) GetFlowSubtasks(ctx context.Context, flowID int64) ([]database.Subtask, error) {
-	if m.getFlowSubtasksFn != nil {
-		return m.getFlowSubtasksFn(ctx, flowID)
+func (m *flowManagerDB) GetFlowTasks(context.Context, int64) ([]database.Task, error) {
+	i := m.taskN
+	m.taskN++
+	if err := flowManagerSeqErr(m.taskErrs, i); err != nil {
+		return nil, err
 	}
-	return nil, nil
-}
-
-func (m *mockQuerier) GetFlowTaskSubtasks(ctx context.Context, arg database.GetFlowTaskSubtasksParams) ([]database.Subtask, error) {
-	if m.getFlowTaskSubtasksFn != nil {
-		return m.getFlowTaskSubtasksFn(ctx, arg)
+	if len(m.taskReads) == 0 {
+		return nil, nil
 	}
-	return nil, nil
-}
-
-func (m *mockQuerier) GetTaskPlannedSubtasks(ctx context.Context, taskID int64) ([]database.Subtask, error) {
-	if m.getTaskPlannedFn != nil {
-		return m.getTaskPlannedFn(ctx, taskID)
+	if i >= len(m.taskReads) {
+		i = len(m.taskReads) - 1
 	}
-	return nil, nil
+	return m.taskReads[i], nil
 }
 
-func (m *mockQuerier) GetSubtaskMsgLogs(ctx context.Context, subtaskID sql.NullInt64) ([]database.Msglog, error) {
-	if m.getSubtaskMsgLogsFn != nil {
-		return m.getSubtaskMsgLogsFn(ctx, subtaskID)
+func (m *flowManagerDB) GetFlowSubtasks(context.Context, int64) ([]database.Subtask, error) {
+	return m.subtasks, m.subtasksErr
+}
+
+func (m *flowManagerDB) GetFlowTaskSubtasks(_ context.Context, arg database.GetFlowTaskSubtasksParams) ([]database.Subtask, error) {
+	m.filterTaskID = arg.TaskID
+	return m.taskSubs, m.taskSubsErr
+}
+
+func (m *flowManagerDB) GetTaskPlannedSubtasks(_ context.Context, taskID int64) ([]database.Subtask, error) {
+	m.planTaskID = taskID
+	i := m.planN
+	m.planN++
+	if err := flowManagerSeqErr(m.planErrs, i); err != nil {
+		return nil, err
 	}
-	return nil, nil
+	if len(m.planReads) == 0 {
+		return nil, nil
+	}
+	if i >= len(m.planReads) {
+		i = len(m.planReads) - 1
+	}
+	return m.planReads[i], nil
 }
 
-// ------------------------------------------------------------------
-// Helpers
+func (m *flowManagerDB) GetSubtaskMsgLogs(_ context.Context, subtaskID sql.NullInt64) ([]database.Msglog, error) {
+	m.logSubtaskID = subtaskID
+	return m.logs, m.logsErr
+}
 
-func makeTasks(statuses ...database.TaskStatus) []database.Task {
+func flowManagerTasks(statuses ...database.TaskStatus) []database.Task {
 	tasks := make([]database.Task, len(statuses))
 	for i, s := range statuses {
 		tasks[i] = database.Task{ID: int64(i + 1), Status: s, Title: fmt.Sprintf("task-%d", i+1)}
@@ -70,7 +96,7 @@ func makeTasks(statuses ...database.TaskStatus) []database.Task {
 	return tasks
 }
 
-func makeSubtasks(statuses ...database.SubtaskStatus) []database.Subtask {
+func flowManagerSubtasks(statuses ...database.SubtaskStatus) []database.Subtask {
 	subs := make([]database.Subtask, len(statuses))
 	for i, s := range statuses {
 		subs[i] = database.Subtask{ID: int64(i + 1), Status: s, Title: fmt.Sprintf("subtask-%d", i+1), TaskID: 1}
@@ -78,10 +104,46 @@ func makeSubtasks(statuses ...database.SubtaskStatus) []database.Subtask {
 	return subs
 }
 
-// ------------------------------------------------------------------
-// Pure function tests
+func flowManagerStatusArgs(detail string, verbose bool, taskID *int64) string {
+	sb := &strings.Builder{}
+	fmt.Fprintf(sb, `{"detail":%q,"message":"x"`, detail)
+	if verbose {
+		sb.WriteString(`,"verbose":true`)
+	}
+	if taskID != nil {
+		fmt.Fprintf(sb, `,"task_id":%d`, *taskID)
+	}
+	sb.WriteString("}")
+	return sb.String()
+}
 
-func TestInferFlowStatus(t *testing.T) {
+func flowManagerBuildPatchArgs(taskID int64, ops ...SubtaskOperation) string {
+	opsJSON, _ := json.Marshal(ops)
+	return fmt.Sprintf(`{"task_id":%d,"operations":%s,"message":"x"}`, taskID, opsJSON)
+}
+
+func TestFlowManager_StateGuard_IsRecognizableButKeepsTheOriginalMessage(t *testing.T) {
+	t.Parallel()
+
+	inner := errors.New("task is running")
+	err := stateGuard(inner)
+
+	if !errors.Is(err, ErrFlowStateGuard) {
+		t.Error("expected errors.Is(err, ErrFlowStateGuard) to be true")
+	}
+	if err.Error() != "task is running" {
+		t.Errorf("guard must not alter the message, got: %q", err.Error())
+	}
+	unwrapped := errors.Unwrap(err)
+	if unwrapped != inner {
+		t.Errorf("Unwrap should yield the original error, got: %v", unwrapped)
+	}
+	if errors.Is(unwrapped, ErrFlowStateGuard) {
+		t.Error("the unwrapped error must no longer be a state guard")
+	}
+}
+
+func TestFlowManager_InferFlowStatus_ReportsTheMostActiveTaskState(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -94,7 +156,7 @@ func TestInferFlowStatus(t *testing.T) {
 			want: "waiting (ready for next input)",
 		},
 		{
-			name:     "running task takes priority",
+			name:     "running task takes priority over waiting",
 			statuses: []database.TaskStatus{database.TaskStatusWaiting, database.TaskStatusRunning, database.TaskStatusFinished},
 			want:     "running",
 		},
@@ -113,8 +175,7 @@ func TestInferFlowStatus(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			tasks := makeTasks(tt.statuses...)
-			got := inferFlowStatus(tasks)
+			got := inferFlowStatus(flowManagerTasks(tt.statuses...))
 			if got != tt.want {
 				t.Errorf("inferFlowStatus() = %q, want %q", got, tt.want)
 			}
@@ -122,7 +183,7 @@ func TestInferFlowStatus(t *testing.T) {
 	}
 }
 
-func TestTruncateText(t *testing.T) {
+func TestFlowManager_TruncateText_CutsBeyondTheLimitAndMarksTheCut(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -133,7 +194,7 @@ func TestTruncateText(t *testing.T) {
 	}{
 		{name: "shorter than max", input: "hello", maxLen: 10, want: "hello"},
 		{name: "exactly max", input: "hello", maxLen: 5, want: "hello"},
-		{name: "longer than max — appends ellipsis", input: "hello world", maxLen: 5, want: "hello..."},
+		{name: "longer than max appends ellipsis", input: "hello world", maxLen: 5, want: "hello..."},
 		{name: "empty string", input: "", maxLen: 5, want: ""},
 	}
 
@@ -148,323 +209,378 @@ func TestTruncateText(t *testing.T) {
 	}
 }
 
-// ------------------------------------------------------------------
-// flowStatusTool.Handle dispatch
-
-func TestFlowStatusToolHandle(t *testing.T) {
+func TestFlowManager_FlowStatusTool_DispatchesEveryDetailLevel(t *testing.T) {
 	t.Parallel()
-
-	db := &mockQuerier{
-		getFlowTasksFn:    func(_ context.Context, _ int64) ([]database.Task, error) { return nil, nil },
-		getFlowSubtasksFn: func(_ context.Context, _ int64) ([]database.Subtask, error) { return nil, nil },
-	}
-	tool := NewFlowStatusTool(1, db, nil)
 	ctx := context.Background()
 
 	tests := []struct {
-		name    string
-		args    string
-		wantErr bool
-		check   func(t *testing.T, result string)
+		name          string
+		args          string
+		wantErrSubstr string
+		wantSubstr    string
+	}{
+		{name: "malformed arguments are rejected", args: `{bad json}`, wantErrSubstr: "failed to parse get_flow_status args"},
+		{name: "an unknown detail level is rejected", args: `{"detail":"nonexistent","message":"x"}`, wantErrSubstr: `unknown detail level "nonexistent"`},
+		{name: "summary counts the flow", args: flowManagerStatusArgs("summary", false, nil), wantSubstr: "Flow ID: 1"},
+		{name: "tasks lists the tasks", args: flowManagerStatusArgs("tasks", false, nil), wantSubstr: "Tasks for flow 1"},
+		{name: "subtasks lists the whole flow", args: flowManagerStatusArgs("subtasks", false, nil), wantSubstr: "All subtasks for flow 1"},
+		{name: "running shows the active subtask", args: flowManagerStatusArgs("running", false, nil), wantSubstr: "=== Active Subtask ==="},
+		{name: "planned lists the unstarted subtasks", args: flowManagerStatusArgs("planned", false, nil), wantSubstr: "All planned subtasks for flow 1"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			// The fake counts its reads, so each parallel subtest needs its own.
+			db := &flowManagerDB{
+				taskReads: [][]database.Task{flowManagerTasks(database.TaskStatusRunning)},
+				subtasks:  flowManagerSubtasks(database.SubtaskStatusRunning, database.SubtaskStatusCreated),
+			}
+			result, err := NewFlowStatusTool(1, db, nil).Handle(ctx, GetFlowStatusToolName, json.RawMessage(tt.args))
+			if tt.wantErrSubstr != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.wantErrSubstr) {
+					t.Fatalf("expected an error containing %q, got: %v", tt.wantErrSubstr, err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if !strings.Contains(result, tt.wantSubstr) {
+				t.Errorf("expected %q in result, got: %s", tt.wantSubstr, result)
+			}
+		})
+	}
+}
+
+func TestFlowManager_FlowStatusTool_ReportsAFailedReadAsAnError(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dbDown := errors.New("db down")
+	taskID := int64(7)
+	running := []database.Subtask{{ID: 4, Status: database.SubtaskStatusRunning, Title: "s", TaskID: 1}}
+
+	tests := []struct {
+		name string
+		db   *flowManagerDB
+		args string
 	}{
 		{
-			name:    "invalid JSON returns error",
-			args:    `{bad json}`,
-			wantErr: true,
+			name: "summary with a failed task read",
+			db:   &flowManagerDB{taskErrs: []error{dbDown}},
+			args: flowManagerStatusArgs("summary", false, nil),
 		},
 		{
-			name:    "unknown detail returns error",
-			args:    `{"detail":"nonexistent","message":"x"}`,
-			wantErr: true,
+			name: "summary with a failed subtask read",
+			db:   &flowManagerDB{taskReads: [][]database.Task{nil}, subtasksErr: dbDown},
+			args: flowManagerStatusArgs("summary", false, nil),
 		},
 		{
-			name: "summary detail dispatches correctly",
-			args: `{"detail":"summary","message":"x"}`,
-			check: func(t *testing.T, result string) {
-				t.Helper()
-				if !strings.Contains(result, "Flow ID:") {
-					t.Errorf("summary result should contain 'Flow ID:', got: %s", result)
-				}
-			},
+			name: "task list with a failed task read",
+			db:   &flowManagerDB{taskErrs: []error{dbDown}},
+			args: flowManagerStatusArgs("tasks", false, nil),
 		},
 		{
-			name: "tasks detail dispatches correctly",
-			args: `{"detail":"tasks","message":"x"}`,
-			check: func(t *testing.T, result string) {
-				t.Helper()
-				if result == "" {
-					t.Error("tasks result should not be empty")
-				}
-			},
+			name: "flow subtask list with a failed read",
+			db:   &flowManagerDB{subtasksErr: dbDown},
+			args: flowManagerStatusArgs("subtasks", false, nil),
+		},
+		{
+			name: "one task's subtask list with a failed read",
+			db:   &flowManagerDB{taskSubsErr: dbDown},
+			args: flowManagerStatusArgs("subtasks", false, &taskID),
+		},
+		{
+			name: "running chain with a failed subtask read",
+			db:   &flowManagerDB{subtasksErr: dbDown},
+			args: flowManagerStatusArgs("running", false, nil),
+		},
+		{
+			name: "running chain with a failed parent task read",
+			db:   &flowManagerDB{subtasks: running, taskErrs: []error{dbDown}},
+			args: flowManagerStatusArgs("running", false, nil),
+		},
+		{
+			name: "running chain with a failed agent message read",
+			db:   &flowManagerDB{subtasks: running, logsErr: dbDown},
+			args: flowManagerStatusArgs("running", false, nil),
+		},
+		{
+			name: "flow planned list with a failed subtask read",
+			db:   &flowManagerDB{subtasksErr: dbDown},
+			args: flowManagerStatusArgs("planned", false, nil),
+		},
+		{
+			name: "one task's planned list with a failed plan read",
+			db:   &flowManagerDB{planErrs: []error{dbDown}},
+			args: flowManagerStatusArgs("planned", false, &taskID),
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			result, err := tool.Handle(ctx, "get_flow_status", json.RawMessage(tt.args))
-			if (err != nil) != tt.wantErr {
-				t.Fatalf("Handle() error = %v, wantErr %v", err, tt.wantErr)
-			}
-			if tt.check != nil {
-				tt.check(t, result)
+			result, err := NewFlowStatusTool(1, tt.db, nil).Handle(ctx, GetFlowStatusToolName, json.RawMessage(tt.args))
+			if !errors.Is(err, dbDown) {
+				t.Fatalf("expected the read failure to be returned, got err=%v result=%q", err, result)
 			}
 		})
 	}
 }
 
-// ------------------------------------------------------------------
-// buildSummary
-
-func TestBuildSummary(t *testing.T) {
+func TestFlowManager_FlowStatusTool_SummaryCountsWorkAndNamesWhatIsActive(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 
-	t.Run("db error on GetFlowTasks", func(t *testing.T) {
+	t.Run("empty flow emits the no-tasks notice", func(t *testing.T) {
 		t.Parallel()
-		db := &mockQuerier{getFlowTasksFn: func(_ context.Context, _ int64) ([]database.Task, error) {
-			return nil, errors.New("db down")
-		}}
-		_, err := NewFlowStatusTool(1, db, nil).buildSummary(ctx, false)
-		if err == nil {
-			t.Fatal("expected error, got nil")
-		}
-	})
-
-	t.Run("db error on GetFlowSubtasks", func(t *testing.T) {
-		t.Parallel()
-		db := &mockQuerier{
-			getFlowTasksFn:    func(_ context.Context, _ int64) ([]database.Task, error) { return nil, nil },
-			getFlowSubtasksFn: func(_ context.Context, _ int64) ([]database.Subtask, error) { return nil, errors.New("db down") },
-		}
-		_, err := NewFlowStatusTool(1, db, nil).buildSummary(ctx, false)
-		if err == nil {
-			t.Fatal("expected error, got nil")
-		}
-	})
-
-	t.Run("empty tasks emits no-tasks notice", func(t *testing.T) {
-		t.Parallel()
-		db := &mockQuerier{
-			getFlowTasksFn:    func(_ context.Context, _ int64) ([]database.Task, error) { return nil, nil },
-			getFlowSubtasksFn: func(_ context.Context, _ int64) ([]database.Subtask, error) { return nil, nil },
-		}
-		result, err := NewFlowStatusTool(1, db, nil).buildSummary(ctx, false)
+		db := &flowManagerDB{taskReads: [][]database.Task{nil}}
+		result, err := NewFlowStatusTool(1, db, nil).Handle(ctx, GetFlowStatusToolName, json.RawMessage(flowManagerStatusArgs("summary", false, nil)))
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if !strings.Contains(result, "No tasks yet") {
-			t.Errorf("expected 'No tasks yet' in result, got: %s", result)
+			t.Errorf("expected 'No tasks yet', got: %s", result)
 		}
 	})
 
-	t.Run("status counts are correct", func(t *testing.T) {
+	t.Run("counts tasks and subtasks and names the active pair", func(t *testing.T) {
 		t.Parallel()
-		tasks := makeTasks(
-			database.TaskStatusRunning,
-			database.TaskStatusWaiting,
+		tasks := flowManagerTasks(
 			database.TaskStatusFinished,
 			database.TaskStatusFailed,
 			database.TaskStatusCreated,
+			database.TaskStatusWaiting,
+			database.TaskStatusRunning,
 		)
-		subs := makeSubtasks(
+		subs := flowManagerSubtasks(
 			database.SubtaskStatusRunning,
 			database.SubtaskStatusFinished,
 			database.SubtaskStatusFinished,
 		)
-		db := &mockQuerier{
-			getFlowTasksFn:    func(_ context.Context, _ int64) ([]database.Task, error) { return tasks, nil },
-			getFlowSubtasksFn: func(_ context.Context, _ int64) ([]database.Subtask, error) { return subs, nil },
-		}
-		result, err := NewFlowStatusTool(1, db, nil).buildSummary(ctx, false)
+		db := &flowManagerDB{taskReads: [][]database.Task{tasks}, subtasks: subs}
+		result, err := NewFlowStatusTool(1, db, nil).Handle(ctx, GetFlowStatusToolName, json.RawMessage(flowManagerStatusArgs("summary", false, nil)))
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if !strings.Contains(result, "total: 5") {
-			t.Errorf("expected 'total: 5' tasks in result, got: %s", result)
+			t.Errorf("expected 5 tasks counted, got: %s", result)
 		}
 		if !strings.Contains(result, "total: 3") {
-			t.Errorf("expected 'total: 3' subtasks in result, got: %s", result)
+			t.Errorf("expected 3 subtasks counted, got: %s", result)
+		}
+		if !strings.Contains(result, "Active task:") || !strings.Contains(result, "task-5") {
+			t.Errorf("expected running task-5 named active, got: %s", result)
+		}
+		if !strings.Contains(result, "Active subtask:") || !strings.Contains(result, "subtask-1") {
+			t.Errorf("expected running subtask-1 named active, got: %s", result)
 		}
 	})
 
-	t.Run("active task identified and shown", func(t *testing.T) {
+	// The created task and subtask after the waiting ones must not be named active instead.
+	t.Run("a waiting task and subtask are named active", func(t *testing.T) {
 		t.Parallel()
-		tasks := makeTasks(database.TaskStatusFinished, database.TaskStatusRunning)
-		db := &mockQuerier{
-			getFlowTasksFn:    func(_ context.Context, _ int64) ([]database.Task, error) { return tasks, nil },
-			getFlowSubtasksFn: func(_ context.Context, _ int64) ([]database.Subtask, error) { return nil, nil },
-		}
-		result, err := NewFlowStatusTool(1, db, nil).buildSummary(ctx, false)
+		tasks := flowManagerTasks(database.TaskStatusFinished, database.TaskStatusWaiting, database.TaskStatusCreated)
+		subs := flowManagerSubtasks(database.SubtaskStatusFinished, database.SubtaskStatusWaiting, database.SubtaskStatusCreated)
+		db := &flowManagerDB{taskReads: [][]database.Task{tasks}, subtasks: subs}
+		result, err := NewFlowStatusTool(1, db, nil).Handle(ctx, GetFlowStatusToolName, json.RawMessage(flowManagerStatusArgs("summary", false, nil)))
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if !strings.Contains(result, "Active task:") {
-			t.Errorf("expected 'Active task:' in result, got: %s", result)
-		}
-		if !strings.Contains(result, "task-2") {
-			t.Errorf("expected active task 'task-2' in result, got: %s", result)
+		for _, want := range []string{
+			"\nActive task:    ID=2      | waiting  | task-2\n",
+			"\nActive subtask: ID=2      | waiting  | subtask-2\n",
+		} {
+			if !strings.Contains(result, want) {
+				t.Errorf("expected %q in the summary, got: %s", want, result)
+			}
 		}
 	})
 
-	t.Run("summarizer called when output exceeds summaryLimit", func(t *testing.T) {
+	t.Run("verbose adds the active task input and subtask description", func(t *testing.T) {
 		t.Parallel()
-		largeTasks := make([]database.Task, 1)
-		largeTasks[0] = database.Task{ID: 1, Status: database.TaskStatusRunning, Title: strings.Repeat("x", summaryLimit+1)}
-		db := &mockQuerier{
-			getFlowTasksFn:    func(_ context.Context, _ int64) ([]database.Task, error) { return largeTasks, nil },
-			getFlowSubtasksFn: func(_ context.Context, _ int64) ([]database.Subtask, error) { return nil, nil },
-		}
-		summarizerCalled := false
-		summarizer := func(_ context.Context, _ string) (string, error) {
-			summarizerCalled = true
-			return "summarized", nil
-		}
-		result, err := NewFlowStatusTool(1, db, summarizer).buildSummary(ctx, false)
+		tasks := []database.Task{{ID: 1, Status: database.TaskStatusRunning, Title: "t", Input: "task-input-text"}}
+		subs := []database.Subtask{{ID: 1, Status: database.SubtaskStatusRunning, Title: "s", TaskID: 1, Description: "subtask-desc-text"}}
+		db := &flowManagerDB{taskReads: [][]database.Task{tasks}, subtasks: subs}
+		result, err := NewFlowStatusTool(1, db, nil).Handle(ctx, GetFlowStatusToolName, json.RawMessage(flowManagerStatusArgs("summary", true, nil)))
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if !summarizerCalled {
-			t.Error("expected summarizer to be called, but it was not")
+		if !strings.Contains(result, "task-input-text") {
+			t.Errorf("verbose summary should include the active task input, got: %s", result)
 		}
-		if result != "summarized" {
-			t.Errorf("expected summarizer output, got: %s", result)
+		if !strings.Contains(result, "subtask-desc-text") {
+			t.Errorf("verbose summary should include the active subtask description, got: %s", result)
 		}
 	})
 }
 
-// ------------------------------------------------------------------
-// buildTasksList
-
-func TestBuildTasksList(t *testing.T) {
+func TestFlowManager_FlowStatusTool_SummarizesAnOversizedAnswer(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
+	summarizerDown := errors.New("summarizer down")
+
+	bigTask := func(limit int) []database.Task {
+		return []database.Task{{ID: 1, Status: database.TaskStatusRunning, Title: strings.Repeat("x", limit+1)}}
+	}
+	bigSubs := func(limit int, status database.SubtaskStatus) []database.Subtask {
+		return []database.Subtask{{ID: 1, Status: status, Title: strings.Repeat("y", limit+1), TaskID: 1, Description: "d"}}
+	}
 
 	tests := []struct {
-		name       string
-		tasks      []database.Task
-		tasksErr   error
-		verbose    bool
-		wantErr    bool
-		wantSubstr string
+		name string
+		db   func() *flowManagerDB
+		args string
 	}{
 		{
-			name:       "no tasks returns specific message",
-			wantSubstr: "No tasks found",
+			name: "flow summary",
+			db:   func() *flowManagerDB { return &flowManagerDB{taskReads: [][]database.Task{bigTask(summaryLimit)}} },
+			args: flowManagerStatusArgs("summary", false, nil),
 		},
 		{
-			name:     "db error propagated",
-			tasksErr: errors.New("db fail"),
-			wantErr:  true,
+			name: "task list",
+			db:   func() *flowManagerDB { return &flowManagerDB{taskReads: [][]database.Task{bigTask(taskListLimit)}} },
+			args: flowManagerStatusArgs("tasks", false, nil),
 		},
 		{
-			name:       "tasks listed with IDs and titles",
-			tasks:      makeTasks(database.TaskStatusFinished, database.TaskStatusRunning),
-			wantSubstr: "task-1",
-		},
-		{
-			name:    "verbose: result field included when set",
-			verbose: true,
-			tasks: []database.Task{
-				{ID: 1, Status: database.TaskStatusFinished, Title: "t1", Result: "my-result"},
+			name: "subtask list",
+			db: func() *flowManagerDB {
+				return &flowManagerDB{subtasks: bigSubs(subtasksListLimit, database.SubtaskStatusCreated)}
 			},
-			wantSubstr: "my-result",
+			args: flowManagerStatusArgs("subtasks", false, nil),
 		},
 		{
-			name:    "non-verbose: result field NOT included",
-			verbose: false,
-			tasks: []database.Task{
-				{ID: 1, Status: database.TaskStatusFinished, Title: "t1", Result: "secret-result"},
+			name: "running chain",
+			db: func() *flowManagerDB {
+				return &flowManagerDB{subtasks: bigSubs(runningInfoLimit, database.SubtaskStatusRunning)}
 			},
-			wantSubstr: "", // will be checked via absence
+			args: flowManagerStatusArgs("running", false, nil),
+		},
+		{
+			name: "planned list",
+			db: func() *flowManagerDB {
+				return &flowManagerDB{subtasks: bigSubs(plannedListLimit, database.SubtaskStatusCreated)}
+			},
+			args: flowManagerStatusArgs("planned", false, nil),
 		},
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+		t.Run(tt.name+" is replaced by its summary", func(t *testing.T) {
 			t.Parallel()
-			db := &mockQuerier{getFlowTasksFn: func(_ context.Context, _ int64) ([]database.Task, error) {
-				return tt.tasks, tt.tasksErr
-			}}
-			result, err := NewFlowStatusTool(1, db, nil).buildTasksList(ctx, tt.verbose)
-			if (err != nil) != tt.wantErr {
-				t.Fatalf("buildTasksList() error = %v, wantErr %v", err, tt.wantErr)
+			called := false
+			summarizer := func(context.Context, string) (string, error) {
+				called = true
+				return "summarized", nil
 			}
-			if tt.wantErr {
-				return
+			result, err := NewFlowStatusTool(1, tt.db(), summarizer).Handle(ctx, GetFlowStatusToolName, json.RawMessage(tt.args))
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
 			}
-			if tt.wantSubstr != "" && !strings.Contains(result, tt.wantSubstr) {
-				t.Errorf("expected %q in result, got: %s", tt.wantSubstr, result)
+			if !called {
+				t.Error("expected the summarizer to be called for oversized output")
 			}
-			// non-verbose check: result field must not appear
-			if !tt.verbose && len(tt.tasks) > 0 && tt.tasks[0].Result != "" {
-				if strings.Contains(result, tt.tasks[0].Result) {
-					t.Errorf("non-verbose mode should not include result field, got: %s", result)
-				}
+			if result != "summarized" {
+				t.Errorf("expected summarizer output, got: %s", result)
+			}
+		})
+
+		t.Run(tt.name+" with a failed summary is an error", func(t *testing.T) {
+			t.Parallel()
+			summarizer := func(context.Context, string) (string, error) { return "", summarizerDown }
+			result, err := NewFlowStatusTool(1, tt.db(), summarizer).Handle(ctx, GetFlowStatusToolName, json.RawMessage(tt.args))
+			if !errors.Is(err, summarizerDown) {
+				t.Fatalf("expected the summarizer failure to be returned, got err=%v", err)
+			}
+			if result != "" {
+				t.Errorf("a failed summary must not return the oversized answer, got %d bytes", len(result))
 			}
 		})
 	}
 }
 
-// ------------------------------------------------------------------
-// buildSubtasksList
-
-func TestBuildSubtasksList(t *testing.T) {
+func TestFlowManager_FlowStatusTool_TasksShowInputAndResultOnlyWhenVerbose(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 
-	t.Run("without taskID uses GetFlowSubtasks", func(t *testing.T) {
+	t.Run("no tasks returns a specific message", func(t *testing.T) {
 		t.Parallel()
-		flowSubtasksCalled := false
-		db := &mockQuerier{
-			getFlowSubtasksFn: func(_ context.Context, _ int64) ([]database.Subtask, error) {
-				flowSubtasksCalled = true
-				return makeSubtasks(database.SubtaskStatusFinished), nil
-			},
-		}
-		result, err := NewFlowStatusTool(1, db, nil).buildSubtasksList(ctx, nil, false)
+		db := &flowManagerDB{taskReads: [][]database.Task{nil}}
+		result, err := NewFlowStatusTool(1, db, nil).Handle(ctx, GetFlowStatusToolName, json.RawMessage(flowManagerStatusArgs("tasks", false, nil)))
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if !flowSubtasksCalled {
-			t.Error("expected GetFlowSubtasks to be called")
+		if !strings.Contains(result, "No tasks found") {
+			t.Errorf("expected 'No tasks found', got: %s", result)
+		}
+	})
+
+	tasks := []database.Task{{ID: 1, Status: database.TaskStatusFinished, Title: "t1", Input: "the-input", Result: "the-result"}}
+
+	t.Run("verbose includes input and result", func(t *testing.T) {
+		t.Parallel()
+		db := &flowManagerDB{taskReads: [][]database.Task{tasks}}
+		result, err := NewFlowStatusTool(1, db, nil).Handle(ctx, GetFlowStatusToolName, json.RawMessage(flowManagerStatusArgs("tasks", true, nil)))
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !strings.Contains(result, "the-input") || !strings.Contains(result, "the-result") {
+			t.Errorf("verbose tasks should include input and result, got: %s", result)
+		}
+	})
+
+	t.Run("non-verbose hides input and result", func(t *testing.T) {
+		t.Parallel()
+		db := &flowManagerDB{taskReads: [][]database.Task{tasks}}
+		result, err := NewFlowStatusTool(1, db, nil).Handle(ctx, GetFlowStatusToolName, json.RawMessage(flowManagerStatusArgs("tasks", false, nil)))
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if strings.Contains(result, "the-input") || strings.Contains(result, "the-result") {
+			t.Errorf("non-verbose tasks must not include input or result, got: %s", result)
+		}
+		if !strings.Contains(result, "t1") {
+			t.Errorf("expected task title, got: %s", result)
+		}
+	})
+}
+
+func TestFlowManager_FlowStatusTool_SubtasksNarrowToTheTaskAsked(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	t.Run("without task_id lists the whole flow", func(t *testing.T) {
+		t.Parallel()
+		db := &flowManagerDB{subtasks: flowManagerSubtasks(database.SubtaskStatusFinished)}
+		result, err := NewFlowStatusTool(1, db, nil).Handle(ctx, GetFlowStatusToolName, json.RawMessage(flowManagerStatusArgs("subtasks", false, nil)))
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
 		}
 		if !strings.Contains(result, "All subtasks for flow") {
 			t.Errorf("expected flow-level header, got: %s", result)
 		}
 	})
 
-	t.Run("with valid taskID uses GetFlowTaskSubtasks", func(t *testing.T) {
+	t.Run("with task_id narrows to that task", func(t *testing.T) {
 		t.Parallel()
-		taskSubtasksCalled := false
 		taskID := int64(42)
-		db := &mockQuerier{
-			getFlowTaskSubtasksFn: func(_ context.Context, arg database.GetFlowTaskSubtasksParams) ([]database.Subtask, error) {
-				taskSubtasksCalled = true
-				if arg.TaskID != taskID {
-					return nil, fmt.Errorf("unexpected taskID %d", arg.TaskID)
-				}
-				return makeSubtasks(database.SubtaskStatusRunning), nil
-			},
-		}
-		result, err := NewFlowStatusTool(1, db, nil).buildSubtasksList(ctx, &taskID, false)
+		db := &flowManagerDB{taskSubs: flowManagerSubtasks(database.SubtaskStatusRunning)}
+		result, err := NewFlowStatusTool(1, db, nil).Handle(ctx, GetFlowStatusToolName, json.RawMessage(flowManagerStatusArgs("subtasks", false, &taskID)))
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if !taskSubtasksCalled {
-			t.Error("expected GetFlowTaskSubtasks to be called")
+		if db.filterTaskID != taskID {
+			t.Errorf("expected GetFlowTaskSubtasks to be asked for task %d, got %d", taskID, db.filterTaskID)
 		}
 		if !strings.Contains(result, "Subtasks for task 42") {
 			t.Errorf("expected task-level header, got: %s", result)
 		}
 	})
 
-	t.Run("empty subtasks returns no-subtasks message", func(t *testing.T) {
+	t.Run("empty result returns a no-subtasks message", func(t *testing.T) {
 		t.Parallel()
-		db := &mockQuerier{
-			getFlowSubtasksFn: func(_ context.Context, _ int64) ([]database.Subtask, error) { return nil, nil },
-		}
-		result, err := NewFlowStatusTool(1, db, nil).buildSubtasksList(ctx, nil, false)
+		db := &flowManagerDB{subtasks: nil}
+		result, err := NewFlowStatusTool(1, db, nil).Handle(ctx, GetFlowStatusToolName, json.RawMessage(flowManagerStatusArgs("subtasks", false, nil)))
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -473,35 +589,28 @@ func TestBuildSubtasksList(t *testing.T) {
 		}
 	})
 
-	t.Run("db error propagated", func(t *testing.T) {
+	t.Run("verbose adds description and result", func(t *testing.T) {
 		t.Parallel()
-		db := &mockQuerier{
-			getFlowSubtasksFn: func(_ context.Context, _ int64) ([]database.Subtask, error) {
-				return nil, errors.New("db fail")
-			},
+		subs := []database.Subtask{{ID: 1, Status: database.SubtaskStatusRunning, Title: "s", TaskID: 1, Description: "sub-desc", Result: "sub-result"}}
+		db := &flowManagerDB{subtasks: subs}
+		result, err := NewFlowStatusTool(1, db, nil).Handle(ctx, GetFlowStatusToolName, json.RawMessage(flowManagerStatusArgs("subtasks", true, nil)))
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
 		}
-		_, err := NewFlowStatusTool(1, db, nil).buildSubtasksList(ctx, nil, false)
-		if err == nil {
-			t.Fatal("expected error, got nil")
+		if !strings.Contains(result, "sub-desc") || !strings.Contains(result, "sub-result") {
+			t.Errorf("verbose subtasks should include description and result, got: %s", result)
 		}
 	})
 }
 
-// ------------------------------------------------------------------
-// buildRunningInfo
-
-func TestBuildRunningInfo(t *testing.T) {
+func TestFlowManager_FlowStatusTool_RunningShowsTheActiveChain(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 
-	t.Run("no active subtasks — flow is idle", func(t *testing.T) {
+	t.Run("idle flow reports no active subtask", func(t *testing.T) {
 		t.Parallel()
-		db := &mockQuerier{
-			getFlowSubtasksFn: func(_ context.Context, _ int64) ([]database.Subtask, error) {
-				return makeSubtasks(database.SubtaskStatusFinished, database.SubtaskStatusFailed), nil
-			},
-		}
-		result, err := NewFlowStatusTool(1, db, nil).buildRunningInfo(ctx, false)
+		db := &flowManagerDB{subtasks: flowManagerSubtasks(database.SubtaskStatusFinished, database.SubtaskStatusFailed)}
+		result, err := NewFlowStatusTool(1, db, nil).Handle(ctx, GetFlowStatusToolName, json.RawMessage(flowManagerStatusArgs("running", false, nil)))
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -510,49 +619,30 @@ func TestBuildRunningInfo(t *testing.T) {
 		}
 	})
 
-	t.Run("running subtask shows parent task chain", func(t *testing.T) {
+	t.Run("running subtask shows its parent task, input and result", func(t *testing.T) {
 		t.Parallel()
-		tasks := []database.Task{
-			{ID: 1, Status: database.TaskStatusRunning, Title: "main-task"},
-		}
-		subs := []database.Subtask{
-			{ID: 10, Status: database.SubtaskStatusRunning, Title: "active-sub", TaskID: 1},
-		}
-		db := &mockQuerier{
-			getFlowSubtasksFn: func(_ context.Context, _ int64) ([]database.Subtask, error) { return subs, nil },
-			getFlowTasksFn:    func(_ context.Context, _ int64) ([]database.Task, error) { return tasks, nil },
-			getSubtaskMsgLogsFn: func(_ context.Context, _ sql.NullInt64) ([]database.Msglog, error) {
-				return nil, nil
-			},
-		}
-		result, err := NewFlowStatusTool(1, db, nil).buildRunningInfo(ctx, false)
+		tasks := []database.Task{{ID: 1, Status: database.TaskStatusRunning, Title: "main-task", Input: "task-input", Result: "task-result"}}
+		subs := []database.Subtask{{ID: 10, Status: database.SubtaskStatusRunning, Title: "active-sub", TaskID: 1, Result: "sub-result"}}
+		db := &flowManagerDB{taskReads: [][]database.Task{tasks}, subtasks: subs}
+		result, err := NewFlowStatusTool(1, db, nil).Handle(ctx, GetFlowStatusToolName, json.RawMessage(flowManagerStatusArgs("running", false, nil)))
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if !strings.Contains(result, "Active Task") {
-			t.Errorf("expected 'Active Task' section, got: %s", result)
+		for _, want := range []string{"Active Task", "main-task", "task-input", "task-result", "active-sub", "sub-result"} {
+			if !strings.Contains(result, want) {
+				t.Errorf("expected %q in running chain, got: %s", want, result)
+			}
 		}
-		if !strings.Contains(result, "main-task") {
-			t.Errorf("expected parent task title 'main-task', got: %s", result)
-		}
-		if !strings.Contains(result, "active-sub") {
-			t.Errorf("expected subtask title 'active-sub', got: %s", result)
+		if db.logSubtaskID.Int64 != 10 {
+			t.Errorf("expected agent messages to be fetched for subtask 10, got %d", db.logSubtaskID.Int64)
 		}
 	})
 
-	t.Run("waiting subtask shows ask note and submit tool name", func(t *testing.T) {
+	t.Run("waiting subtask shows the ask note and the submit tool", func(t *testing.T) {
 		t.Parallel()
-		subs := []database.Subtask{
-			{ID: 5, Status: database.SubtaskStatusWaiting, Title: "ask-sub", TaskID: 2},
-		}
-		db := &mockQuerier{
-			getFlowSubtasksFn: func(_ context.Context, _ int64) ([]database.Subtask, error) { return subs, nil },
-			getFlowTasksFn:    func(_ context.Context, _ int64) ([]database.Task, error) { return nil, nil },
-			getSubtaskMsgLogsFn: func(_ context.Context, _ sql.NullInt64) ([]database.Msglog, error) {
-				return nil, nil
-			},
-		}
-		result, err := NewFlowStatusTool(1, db, nil).buildRunningInfo(ctx, false)
+		subs := []database.Subtask{{ID: 5, Status: database.SubtaskStatusWaiting, Title: "ask-sub", TaskID: 2}}
+		db := &flowManagerDB{subtasks: subs}
+		result, err := NewFlowStatusTool(1, db, nil).Handle(ctx, GetFlowStatusToolName, json.RawMessage(flowManagerStatusArgs("running", false, nil)))
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -560,115 +650,139 @@ func TestBuildRunningInfo(t *testing.T) {
 			t.Errorf("expected waiting note, got: %s", result)
 		}
 		if !strings.Contains(result, SubmitFlowInputToolName) {
-			t.Errorf("expected SubmitFlowInputToolName in result, got: %s", result)
-		}
-	})
-	t.Run("verbose shows result and execution context", func(t *testing.T) {
-		t.Parallel()
-		subs := []database.Subtask{
-			{ID: 7, Status: database.SubtaskStatusRunning, Title: "verbose-sub", TaskID: 1,
-				Result: "partial-result", Context: "exec-context-data"},
-		}
-		db := &mockQuerier{
-			getFlowSubtasksFn: func(_ context.Context, _ int64) ([]database.Subtask, error) { return subs, nil },
-			getFlowTasksFn:    func(_ context.Context, _ int64) ([]database.Task, error) { return nil, nil },
-			getSubtaskMsgLogsFn: func(_ context.Context, _ sql.NullInt64) ([]database.Msglog, error) {
-				return nil, nil
-			},
-		}
-		result, err := NewFlowStatusTool(1, db, nil).buildRunningInfo(ctx, true)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if !strings.Contains(result, "partial-result") {
-			t.Errorf("verbose: expected subtask result in output, got: %s", result)
-		}
-		if !strings.Contains(result, "exec-context-data") {
-			t.Errorf("verbose: expected execution context in output, got: %s", result)
+			t.Errorf("expected %s named, got: %s", SubmitFlowInputToolName, result)
 		}
 	})
 
-	t.Run("non-verbose hides execution context", func(t *testing.T) {
+	t.Run("execution context shows only when verbose", func(t *testing.T) {
 		t.Parallel()
-		subs := []database.Subtask{
-			{ID: 8, Status: database.SubtaskStatusRunning, Title: "quiet-sub", TaskID: 1,
-				Context: "secret-context"},
-		}
-		db := &mockQuerier{
-			getFlowSubtasksFn: func(_ context.Context, _ int64) ([]database.Subtask, error) { return subs, nil },
-			getFlowTasksFn:    func(_ context.Context, _ int64) ([]database.Task, error) { return nil, nil },
-			getSubtaskMsgLogsFn: func(_ context.Context, _ sql.NullInt64) ([]database.Msglog, error) {
-				return nil, nil
-			},
-		}
-		result, err := NewFlowStatusTool(1, db, nil).buildRunningInfo(ctx, false)
+		subs := []database.Subtask{{ID: 8, Status: database.SubtaskStatusRunning, Title: "s", TaskID: 1, Context: "exec-context-data"}}
+
+		quiet := &flowManagerDB{subtasks: subs}
+		result, err := NewFlowStatusTool(1, quiet, nil).Handle(ctx, GetFlowStatusToolName, json.RawMessage(flowManagerStatusArgs("running", false, nil)))
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if strings.Contains(result, "secret-context") {
-			t.Errorf("non-verbose: execution context should be hidden, got: %s", result)
+		if strings.Contains(result, "exec-context-data") {
+			t.Errorf("non-verbose must hide execution context, got: %s", result)
+		}
+
+		loud := &flowManagerDB{subtasks: subs}
+		result, err = NewFlowStatusTool(1, loud, nil).Handle(ctx, GetFlowStatusToolName, json.RawMessage(flowManagerStatusArgs("running", true, nil)))
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !strings.Contains(result, "exec-context-data") {
+			t.Errorf("verbose must show execution context, got: %s", result)
+		}
+	})
+
+	t.Run("agent messages keep the newest ten, or fifty when verbose", func(t *testing.T) {
+		t.Parallel()
+		subs := []database.Subtask{{ID: 4, Status: database.SubtaskStatusRunning, Title: "s", TaskID: 1}}
+		logs := make([]database.Msglog, 51)
+		for i := range logs {
+			logs[i] = database.Msglog{ID: int64(i + 1), Message: fmt.Sprintf("log-%02d", i+1)}
+		}
+
+		tests := []struct {
+			name    string
+			verbose bool
+			header  string
+			dropped string
+			kept    []string
+		}{
+			{name: "quiet", verbose: false, header: "=== Last 10 agent messages ===", dropped: "log-41", kept: []string{"log-42", "log-51"}},
+			{name: "verbose", verbose: true, header: "=== Last 50 agent messages ===", dropped: "log-01", kept: []string{"log-02", "log-51"}},
+		}
+		for _, tt := range tests {
+			db := &flowManagerDB{subtasks: subs, logs: logs}
+			result, err := NewFlowStatusTool(1, db, nil).Handle(ctx, GetFlowStatusToolName, json.RawMessage(flowManagerStatusArgs("running", tt.verbose, nil)))
+			if err != nil {
+				t.Fatalf("%s: unexpected error: %v", tt.name, err)
+			}
+			if !strings.Contains(result, tt.header) {
+				t.Errorf("%s: expected %q, got: %s", tt.name, tt.header, result)
+			}
+			if strings.Contains(result, tt.dropped) {
+				t.Errorf("%s: %q is older than the limit and must be dropped, got: %s", tt.name, tt.dropped, result)
+			}
+			for _, want := range tt.kept {
+				if !strings.Contains(result, want) {
+					t.Errorf("%s: expected %q within the limit, got: %s", tt.name, want, result)
+				}
+			}
 		}
 	})
 }
 
-func TestBuildPlannedList(t *testing.T) {
+func TestFlowManager_FlowStatusTool_PlannedListsOnlyUnstartedSubtasks(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 
-	t.Run("with taskID uses GetTaskPlannedSubtasks", func(t *testing.T) {
+	t.Run("with task_id reads the task's planned subtasks", func(t *testing.T) {
 		t.Parallel()
-		plannedCalled := false
 		taskID := int64(7)
-		db := &mockQuerier{
-			getTaskPlannedFn: func(_ context.Context, id int64) ([]database.Subtask, error) {
-				plannedCalled = true
-				if id != taskID {
-					return nil, fmt.Errorf("unexpected taskID %d", id)
-				}
-				return makeSubtasks(database.SubtaskStatusCreated), nil
-			},
-		}
-		result, err := NewFlowStatusTool(1, db, nil).buildPlannedList(ctx, &taskID, false)
+		db := &flowManagerDB{planReads: [][]database.Subtask{flowManagerSubtasks(database.SubtaskStatusCreated)}}
+		result, err := NewFlowStatusTool(1, db, nil).Handle(ctx, GetFlowStatusToolName, json.RawMessage(flowManagerStatusArgs("planned", false, &taskID)))
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if !plannedCalled {
-			t.Error("expected GetTaskPlannedSubtasks to be called")
+		if db.planTaskID != taskID {
+			t.Errorf("expected GetTaskPlannedSubtasks for task %d, got %d", taskID, db.planTaskID)
 		}
 		if !strings.Contains(result, "Planned subtasks for task 7") {
 			t.Errorf("expected task-level header, got: %s", result)
 		}
 	})
 
-	t.Run("without taskID filters created subtasks from flow", func(t *testing.T) {
+	t.Run("without task_id filters created subtasks from the flow", func(t *testing.T) {
 		t.Parallel()
 		subs := []database.Subtask{
-			{ID: 1, Status: database.SubtaskStatusCreated, Title: "planned-sub", TaskID: 1},
+			{ID: 1, Status: database.SubtaskStatusCreated, Title: "planned-sub", TaskID: 1, Description: "d"},
 			{ID: 2, Status: database.SubtaskStatusFinished, Title: "done-sub", TaskID: 1},
 		}
-		db := &mockQuerier{
-			getFlowSubtasksFn: func(_ context.Context, _ int64) ([]database.Subtask, error) { return subs, nil },
-		}
-		result, err := NewFlowStatusTool(1, db, nil).buildPlannedList(ctx, nil, false)
+		db := &flowManagerDB{subtasks: subs}
+		result, err := NewFlowStatusTool(1, db, nil).Handle(ctx, GetFlowStatusToolName, json.RawMessage(flowManagerStatusArgs("planned", false, nil)))
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if !strings.Contains(result, "planned-sub") {
-			t.Errorf("expected created subtask 'planned-sub', got: %s", result)
+			t.Errorf("expected the created subtask, got: %s", result)
 		}
 		if strings.Contains(result, "done-sub") {
-			t.Errorf("finished subtask 'done-sub' should not appear in planned list, got: %s", result)
+			t.Errorf("finished subtask must not appear in the planned list, got: %s", result)
 		}
 	})
 
-	t.Run("all subtasks executed returns specific message", func(t *testing.T) {
+	t.Run("verbose expands the description beyond the short preview", func(t *testing.T) {
 		t.Parallel()
-		db := &mockQuerier{
-			getFlowSubtasksFn: func(_ context.Context, _ int64) ([]database.Subtask, error) {
-				return makeSubtasks(database.SubtaskStatusFinished, database.SubtaskStatusFailed), nil
-			},
+		longDesc := strings.Repeat("z", 400)
+		subs := []database.Subtask{{ID: 1, Status: database.SubtaskStatusCreated, Title: "s", TaskID: 1, Description: longDesc}}
+
+		short := &flowManagerDB{subtasks: subs}
+		result, err := NewFlowStatusTool(1, short, nil).Handle(ctx, GetFlowStatusToolName, json.RawMessage(flowManagerStatusArgs("planned", false, nil)))
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
 		}
-		result, err := NewFlowStatusTool(1, db, nil).buildPlannedList(ctx, nil, false)
+		if !strings.Contains(result, "...") || strings.Contains(result, longDesc) {
+			t.Errorf("non-verbose planned should truncate the description to a preview, got len %d", len(result))
+		}
+
+		full := &flowManagerDB{subtasks: subs}
+		result, err = NewFlowStatusTool(1, full, nil).Handle(ctx, GetFlowStatusToolName, json.RawMessage(flowManagerStatusArgs("planned", true, nil)))
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !strings.Contains(result, longDesc) {
+			t.Errorf("verbose planned should include the full description, got: %s", result)
+		}
+	})
+
+	t.Run("all subtasks executed returns a specific message", func(t *testing.T) {
+		t.Parallel()
+		db := &flowManagerDB{subtasks: flowManagerSubtasks(database.SubtaskStatusFinished, database.SubtaskStatusFailed)}
+		result, err := NewFlowStatusTool(1, db, nil).Handle(ctx, GetFlowStatusToolName, json.RawMessage(flowManagerStatusArgs("planned", false, nil)))
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -678,243 +792,313 @@ func TestBuildPlannedList(t *testing.T) {
 	})
 }
 
-// ------------------------------------------------------------------
-// waitForTaskReady — context cancellation
-
-func TestWaitForTaskReadyContextCancelled(t *testing.T) {
-	t.Parallel()
-
-	db := &mockQuerier{
-		getFlowTasksFn: func(_ context.Context, _ int64) ([]database.Task, error) {
-			// Always return no running task so the loop keeps spinning.
-			return makeTasks(database.TaskStatusCreated), nil
-		},
-	}
-	tool := NewSubmitFlowInputTool(1, db, nil)
-	tool.pollInterval = 1 * time.Millisecond
-	tool.pollTimeout = 1 * time.Hour // would hang without ctx cancellation
-
-	ctx, cancel := context.WithCancel(context.Background())
-	// Cancel immediately so the first ticker tick triggers ctx.Done().
-	cancel()
-
-	_, err := tool.waitForTaskReady(ctx)
-	if err == nil {
-		t.Fatal("expected error from cancelled context, got nil")
-	}
-	if !strings.Contains(err.Error(), "context cancelled") {
-		t.Errorf("expected 'context cancelled' in error, got: %v", err)
-	}
-}
-
-// ------------------------------------------------------------------
-// appendSubtaskMsgLogs
-
-func TestAppendSubtaskMsgLogs(t *testing.T) {
+func TestFlowManager_AppendSubtaskMsgLogs_KeepsTheNewestWithinTheLimit(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 
-	t.Run("db error returns error", func(t *testing.T) {
+	t.Run("no logs returns a specific message", func(t *testing.T) {
 		t.Parallel()
-		db := &mockQuerier{
-			getSubtaskMsgLogsFn: func(_ context.Context, _ sql.NullInt64) ([]database.Msglog, error) {
-				return nil, errors.New("db down")
-			},
-		}
-		_, err := NewFlowStatusTool(1, db, nil).appendSubtaskMsgLogs(ctx, 5, 10)
-		if err == nil {
-			t.Fatal("expected error on DB failure, got nil")
-		}
-	})
-
-	t.Run("no logs returns specific message", func(t *testing.T) {
-		t.Parallel()
-		db := &mockQuerier{
-			getSubtaskMsgLogsFn: func(_ context.Context, _ sql.NullInt64) ([]database.Msglog, error) {
-				return nil, nil
-			},
-		}
+		db := &flowManagerDB{logs: nil}
 		result, err := NewFlowStatusTool(1, db, nil).appendSubtaskMsgLogs(ctx, 5, 10)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if !strings.Contains(result, "No agent messages") {
-			t.Errorf("expected 'No agent messages', got: %s", result)
+		if !strings.Contains(result, "No agent messages found for subtask 5") {
+			t.Errorf("expected the empty notice to name subtask 5, got: %s", result)
 		}
 	})
 
-	t.Run("fewer logs than limit — all shown", func(t *testing.T) {
+	t.Run("fewer logs than the limit shows all, including results", func(t *testing.T) {
 		t.Parallel()
-		logs := []database.Msglog{
-			{ID: 1, Message: "msg-alpha"},
+		db := &flowManagerDB{logs: []database.Msglog{
+			{ID: 1, Message: "msg-alpha", Result: "res-alpha"},
 			{ID: 2, Message: "msg-beta"},
-		}
-		db := &mockQuerier{
-			getSubtaskMsgLogsFn: func(_ context.Context, _ sql.NullInt64) ([]database.Msglog, error) {
-				return logs, nil
-			},
-		}
+		}}
 		result, err := NewFlowStatusTool(1, db, nil).appendSubtaskMsgLogs(ctx, 1, 10)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if !strings.Contains(result, "msg-alpha") || !strings.Contains(result, "msg-beta") {
-			t.Errorf("expected all messages in result, got: %s", result)
+			t.Errorf("expected all messages, got: %s", result)
+		}
+		if !strings.Contains(result, "res-alpha") {
+			t.Errorf("expected the message result to be rendered, got: %s", result)
 		}
 	})
 
-	t.Run("more logs than limit — only tail shown", func(t *testing.T) {
+	t.Run("more logs than the limit keeps only the tail", func(t *testing.T) {
 		t.Parallel()
 		logs := make([]database.Msglog, 5)
 		for i := range logs {
 			logs[i] = database.Msglog{ID: int64(i + 1), Message: fmt.Sprintf("msg-%d", i+1)}
 		}
-		db := &mockQuerier{
-			getSubtaskMsgLogsFn: func(_ context.Context, _ sql.NullInt64) ([]database.Msglog, error) {
-				return logs, nil
-			},
-		}
+		db := &flowManagerDB{logs: logs}
 		result, err := NewFlowStatusTool(1, db, nil).appendSubtaskMsgLogs(ctx, 1, 2)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		// Only last 2 (msg-4, msg-5) should appear; msg-1 through msg-3 should not.
 		for _, absent := range []string{"msg-1", "msg-2", "msg-3"} {
 			if strings.Contains(result, absent) {
-				t.Errorf("old message %q should have been dropped by limit, got: %s", absent, result)
+				t.Errorf("message %q should have been dropped by the limit, got: %s", absent, result)
 			}
 		}
 		for _, present := range []string{"msg-4", "msg-5"} {
 			if !strings.Contains(result, present) {
-				t.Errorf("recent message %q should appear in result, got: %s", present, result)
+				t.Errorf("recent message %q should appear, got: %s", present, result)
 			}
 		}
 	})
 
-	t.Run("summarizer called when logs exceed msgLogsLimit", func(t *testing.T) {
+	numLogs := msgLogsLimit/1024 + 2
+	oversized := make([]database.Msglog, numLogs)
+	for i := range oversized {
+		oversized[i] = database.Msglog{ID: int64(i + 1), Message: strings.Repeat("x", 1024)}
+	}
+
+	t.Run("oversized output is handed to the summarizer", func(t *testing.T) {
 		t.Parallel()
-		// Each message is capped to 1024 chars in the output; to exceed msgLogsLimit (16 KB)
-		// we need enough log entries so their combined formatted size exceeds the limit.
-		numLogs := msgLogsLimit/1024 + 2
-		logs := make([]database.Msglog, numLogs)
-		for i := range logs {
-			logs[i] = database.Msglog{ID: int64(i + 1), Message: strings.Repeat("x", 1024)}
-		}
-		db := &mockQuerier{
-			getSubtaskMsgLogsFn: func(_ context.Context, _ sql.NullInt64) ([]database.Msglog, error) {
-				return logs, nil
-			},
-		}
-		summarizerCalled := false
-		summarizer := func(_ context.Context, _ string) (string, error) {
-			summarizerCalled = true
+		db := &flowManagerDB{logs: oversized}
+		called := false
+		summarizer := func(context.Context, string) (string, error) {
+			called = true
 			return "summarized-logs", nil
 		}
 		result, err := NewFlowStatusTool(1, db, summarizer).appendSubtaskMsgLogs(ctx, 1, numLogs+10)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if !summarizerCalled {
-			t.Error("expected summarizer to be called for oversized logs output")
+		if !called {
+			t.Error("expected the summarizer to be called for oversized logs output")
 		}
 		if result != "summarized-logs" {
 			t.Errorf("expected summarizer output, got: %s", result)
 		}
 	})
+
+	t.Run("a failed summary of oversized output is an error", func(t *testing.T) {
+		t.Parallel()
+		summarizerDown := errors.New("summarizer down")
+		db := &flowManagerDB{logs: oversized}
+		summarizer := func(context.Context, string) (string, error) { return "", summarizerDown }
+		result, err := NewFlowStatusTool(1, db, summarizer).appendSubtaskMsgLogs(ctx, 1, numLogs+10)
+		if !errors.Is(err, summarizerDown) {
+			t.Fatalf("expected the summarizer failure to be returned, got err=%v", err)
+		}
+		if result != "" {
+			t.Errorf("a failed summary must not return the oversized list, got %d bytes", len(result))
+		}
+	})
 }
 
-// ------------------------------------------------------------------
-// Text helper methods
-
-func TestGetTextHelpers(t *testing.T) {
+// Subtests are keyed by getInputText, getDescriptionText and getResultText; literal limits make a policy change fail here.
+func TestFlowManager_FlowStatusTool_TextHelpersBoundWhatTheyQuote(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-
-	tool := NewFlowStatusTool(1, &mockQuerier{}, nil)
+	summarizerDown := errors.New("summarizer down")
 
 	tests := []struct {
-		name     string
-		call     func(string) (string, error)
-		limit    int
-		twoLimit int
+		name  string
+		call  func(*flowStatusTool, string) (string, error)
+		limit int
 	}{
 		{
-			name:     "getInputText",
-			call:     func(s string) (string, error) { return tool.getInputText(ctx, s) },
-			limit:    inputLimit,
-			twoLimit: 2 * inputLimit,
+			name:  "task input",
+			call:  func(tl *flowStatusTool, s string) (string, error) { return tl.getInputText(ctx, s) },
+			limit: 8192,
 		},
 		{
-			name:     "getDescriptionText",
-			call:     func(s string) (string, error) { return tool.getDescriptionText(ctx, s) },
-			limit:    descriptionLimit,
-			twoLimit: 2 * descriptionLimit,
+			name:  "subtask description",
+			call:  func(tl *flowStatusTool, s string) (string, error) { return tl.getDescriptionText(ctx, s) },
+			limit: 4096,
 		},
 		{
-			name:     "getResultText",
-			call:     func(s string) (string, error) { return tool.getResultText(ctx, s) },
-			limit:    resultLimit,
-			twoLimit: 2 * resultLimit,
+			name:  "result",
+			call:  func(tl *flowStatusTool, s string) (string, error) { return tl.getResultText(ctx, s) },
+			limit: 8192,
 		},
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name+"/empty returns empty", func(t *testing.T) {
+		t.Run(tt.name+": empty stays empty", func(t *testing.T) {
 			t.Parallel()
-			got, err := tt.call("")
+			got, err := tt.call(NewFlowStatusTool(1, &flowManagerDB{}, nil), "")
 			if err != nil || got != "" {
 				t.Errorf("empty input: got (%q, %v), want (\"\", nil)", got, err)
 			}
 		})
 
-		t.Run(tt.name+"/short text truncated to limit", func(t *testing.T) {
+		t.Run(tt.name+": up to twice the limit is cut and marked, not summarized", func(t *testing.T) {
 			t.Parallel()
-			text := strings.Repeat("a", tt.limit+10)
-			got, err := tt.call(text)
+			called := false
+			tool := NewFlowStatusTool(1, &flowManagerDB{}, func(context.Context, string) (string, error) {
+				called = true
+				return "summarized", nil
+			})
+			got, err := tt.call(tool, strings.Repeat("a", 2*tt.limit))
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			if len(got) > tt.limit+3 { // +3 for "..."
-				t.Errorf("expected text to be truncated to ~%d chars, got len=%d", tt.limit, len(got))
+			if called {
+				t.Error("text of exactly twice the limit must be cut, not summarized")
+			}
+			if want := strings.Repeat("a", tt.limit) + "..."; got != want {
+				t.Errorf("expected %d chars plus a truncation marker, got len=%d ending %q", tt.limit, len(got), got[max(0, len(got)-5):])
 			}
 		})
 
-		t.Run(tt.name+"/oversized text triggers summarizer", func(t *testing.T) {
+		t.Run(tt.name+": beyond twice the limit is summarized", func(t *testing.T) {
 			t.Parallel()
-			summarizerCalled := false
-			toolWithSummarizer := NewFlowStatusTool(1, &mockQuerier{}, func(_ context.Context, _ string) (string, error) {
-				summarizerCalled = true
+			called := false
+			tool := NewFlowStatusTool(1, &flowManagerDB{}, func(context.Context, string) (string, error) {
+				called = true
 				return "summarized", nil
 			})
-			text := strings.Repeat("b", tt.twoLimit+1)
-			// Call the correct method on the tool with summarizer
-			var got string
-			var err error
-			switch tt.name {
-			case "getInputText":
-				got, err = toolWithSummarizer.getInputText(ctx, text)
-			case "getDescriptionText":
-				got, err = toolWithSummarizer.getDescriptionText(ctx, text)
-			case "getResultText":
-				got, err = toolWithSummarizer.getResultText(ctx, text)
-			}
+			got, err := tt.call(tool, strings.Repeat("b", 2*tt.limit+1))
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			if !summarizerCalled {
-				t.Error("expected summarizer to be called for oversized text")
+			if !called {
+				t.Error("expected the summarizer to be called for oversized text")
 			}
 			if got != "summarized" {
 				t.Errorf("expected summarizer output, got: %s", got)
 			}
 		})
+
+		t.Run(tt.name+": a failed summary is an error", func(t *testing.T) {
+			t.Parallel()
+			tool := NewFlowStatusTool(1, &flowManagerDB{}, func(context.Context, string) (string, error) {
+				return "", summarizerDown
+			})
+			got, err := tt.call(tool, strings.Repeat("c", 2*tt.limit+1))
+			if !errors.Is(err, summarizerDown) {
+				t.Fatalf("expected the summarizer failure to be returned, got err=%v", err)
+			}
+			if got != "" {
+				t.Errorf("a failed summary must not return the oversized text, got %d bytes", len(got))
+			}
+		})
 	}
 }
 
-// ------------------------------------------------------------------
-// stopFlowTool.Handle
+// synctest's clock moves only while the bubble waits, so a wait is measured exactly and one with no deadline deadlocks.
+func TestFlowManager_WaitFlowCompletionTool_ReportsHowTheWaitEnded(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	neverFinishes := func(ctx context.Context) error {
+		<-ctx.Done()
+		return ctx.Err()
+	}
 
-func TestStopFlowToolHandle(t *testing.T) {
+	tests := []struct {
+		name          string
+		args          string
+		tasks         []database.Task
+		tasksErr      error
+		handler       func(context.Context) error
+		wantSubstr    string
+		wantErrSubstr string
+		wantWait      time.Duration
+	}{
+		{
+			name:          "malformed arguments are rejected",
+			args:          `{bad}`,
+			wantErrSubstr: "failed to parse wait_flow_completion args",
+		},
+		{
+			name:          "a failed task read is an error",
+			args:          `{"timeout":10,"message":"x"}`,
+			tasksErr:      errors.New("db down"),
+			wantErrSubstr: "failed to check flow status: db down",
+		},
+		{
+			name:       "no tasks yet points at submit_flow_input",
+			args:       `{"timeout":10,"message":"x"}`,
+			tasks:      nil,
+			wantSubstr: "Use submit_flow_input to submit the first task description",
+		},
+		{
+			name:       "nothing running points at get_flow_status",
+			args:       `{"timeout":10,"message":"x"}`,
+			tasks:      flowManagerTasks(database.TaskStatusWaiting),
+			wantSubstr: "not currently running",
+		},
+		{
+			name:       "running task completes within the wait",
+			args:       `{"timeout":10,"message":"x"}`,
+			tasks:      flowManagerTasks(database.TaskStatusRunning),
+			handler:    func(context.Context) error { return nil },
+			wantSubstr: "has completed",
+		},
+		{
+			name:       "default timeout applied when zero, still running reports the elapsed wait",
+			args:       `{"timeout":0,"message":"x"}`,
+			tasks:      flowManagerTasks(database.TaskStatusRunning),
+			handler:    neverFinishes,
+			wantSubstr: "after waiting 1m0s",
+			wantWait:   time.Minute,
+		},
+		{
+			name:       "timeout above the cap is clamped to one hour",
+			args:       `{"timeout":99999,"message":"x"}`,
+			tasks:      flowManagerTasks(database.TaskStatusRunning),
+			handler:    neverFinishes,
+			wantSubstr: "after waiting 1h0m0s",
+			wantWait:   time.Hour,
+		},
+		{
+			name:       "a timeout within the cap is the wait",
+			args:       `{"timeout":10,"message":"x"}`,
+			tasks:      flowManagerTasks(database.TaskStatusRunning),
+			handler:    neverFinishes,
+			wantSubstr: "after waiting 10s",
+			wantWait:   10 * time.Second,
+		},
+		{
+			name:          "wait cancelled surfaces an interruption error",
+			args:          `{"timeout":10,"message":"x"}`,
+			tasks:         flowManagerTasks(database.TaskStatusRunning),
+			handler:       func(context.Context) error { return context.Canceled },
+			wantErrSubstr: "interrupted",
+		},
+		{
+			name:          "other handler error is propagated",
+			args:          `{"timeout":10,"message":"x"}`,
+			tasks:         flowManagerTasks(database.TaskStatusRunning),
+			handler:       func(context.Context) error { return errors.New("boom") },
+			wantErrSubstr: "wait for flow completion failed: boom",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			synctest.Test(t, func(t *testing.T) {
+				db := &flowManagerDB{taskReads: [][]database.Task{tt.tasks}, taskErrs: []error{tt.tasksErr}}
+				tool := NewWaitFlowCompletionTool(1, db, tt.handler)
+				start := time.Now()
+				result, err := tool.Handle(ctx, WaitFlowCompletionToolName, json.RawMessage(tt.args))
+				if waited := time.Since(start); waited != tt.wantWait {
+					t.Errorf("the wait ended after %v, want %v", waited, tt.wantWait)
+				}
+				if tt.wantErrSubstr != "" {
+					if err == nil || !strings.Contains(err.Error(), tt.wantErrSubstr) {
+						t.Fatalf("expected an error containing %q, got: %v", tt.wantErrSubstr, err)
+					}
+					return
+				}
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				if !strings.Contains(result, tt.wantSubstr) {
+					t.Errorf("expected %q in result, got: %s", tt.wantSubstr, result)
+				}
+			})
+		})
+	}
+}
+
+func TestFlowManager_StopFlowTool_ReportsTheStateTheStopReached(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 
@@ -926,69 +1110,70 @@ func TestStopFlowToolHandle(t *testing.T) {
 		handler       func(context.Context, string) error
 		newTasks      []database.Task
 		newTaskErr    error
-		wantErr       bool
 		wantSubstr    string
 		wantErrSubstr string
+		wantReason    string
 	}{
 		{
-			name:    "invalid JSON returns error",
-			args:    `{bad}`,
-			wantErr: true,
+			name:          "malformed arguments are rejected",
+			args:          `{bad}`,
+			wantErrSubstr: "failed to parse stop_flow args",
 		},
 		{
-			name:       "no running tasks — already waiting",
+			name:          "a failed task read is an error",
+			args:          `{"reason":"test","message":"x"}`,
+			tasksErr:      errors.New("db down"),
+			wantErrSubstr: "failed to check flow status: db down",
+		},
+		{
+			name:       "no running task means already waiting",
 			args:       `{"reason":"test","message":"x"}`,
-			tasks:      makeTasks(database.TaskStatusFinished, database.TaskStatusWaiting),
+			tasks:      flowManagerTasks(database.TaskStatusFinished, database.TaskStatusWaiting),
 			wantSubstr: "already in 'waiting' state",
 		},
 		{
-			name:       "running task — handler succeeds — confirms stopped",
-			args:       `{"reason":"test","message":"x"}`,
-			tasks:      makeTasks(database.TaskStatusRunning),
-			handler:    func(_ context.Context, _ string) error { return nil },
-			newTasks:   makeTasks(database.TaskStatusFinished),
-			wantSubstr: "stopped successfully",
+			name:       "stop succeeds and the flow reaches waiting",
+			args:       `{"reason":"cleanup","message":"x"}`,
+			tasks:      flowManagerTasks(database.TaskStatusRunning),
+			handler:    func(context.Context, string) error { return nil },
+			newTasks:   flowManagerTasks(database.TaskStatusFinished),
+			wantSubstr: "stopped successfully (reason: cleanup)",
+			wantReason: "cleanup",
 		},
 		{
-			name:    "running task — handler error — propagated",
-			args:    `{"reason":"test","message":"x"}`,
-			tasks:   makeTasks(database.TaskStatusRunning),
-			handler: func(_ context.Context, _ string) error { return errors.New("stop failed") },
-			wantErr: true,
+			name:          "handler error is propagated",
+			args:          `{"reason":"test","message":"x"}`,
+			tasks:         flowManagerTasks(database.TaskStatusRunning),
+			handler:       func(context.Context, string) error { return errors.New("stop failed") },
+			wantErrSubstr: "failed to stop flow: stop failed",
 		},
 		{
-			name:  "running task — handler deadline exceeded — timeout message",
-			args:  `{"reason":"test","message":"x"}`,
-			tasks: makeTasks(database.TaskStatusRunning),
-			handler: func(_ context.Context, _ string) error {
-				return context.DeadlineExceeded
-			},
-			wantErr:       true,
+			name:          "deadline exceeded reports a timeout",
+			args:          `{"reason":"test","message":"x"}`,
+			tasks:         flowManagerTasks(database.TaskStatusRunning),
+			handler:       func(context.Context, string) error { return context.DeadlineExceeded },
 			wantErrSubstr: "timed out",
 		},
 		{
-			name:  "running task — handler context cancelled — timeout message",
-			args:  `{"reason":"test","message":"x"}`,
-			tasks: makeTasks(database.TaskStatusRunning),
-			handler: func(_ context.Context, _ string) error {
-				return context.Canceled
-			},
-			wantErr:       true,
+			name:          "context cancelled reports a timeout",
+			args:          `{"reason":"test","message":"x"}`,
+			tasks:         flowManagerTasks(database.TaskStatusRunning),
+			handler:       func(context.Context, string) error { return context.Canceled },
 			wantErrSubstr: "timed out",
 		},
 		{
-			name:       "running task — after stop task still running — warns",
+			name:       "stop leaves a task still running warns",
 			args:       `{"reason":"test","message":"x"}`,
-			tasks:      makeTasks(database.TaskStatusRunning),
-			handler:    func(_ context.Context, _ string) error { return nil },
-			newTasks:   makeTasks(database.TaskStatusRunning),
+			tasks:      flowManagerTasks(database.TaskStatusRunning),
+			handler:    func(context.Context, string) error { return nil },
+			newTasks:   flowManagerTasks(database.TaskStatusRunning),
 			wantSubstr: "has not reached 'waiting'",
 		},
 		{
-			name:       "stop succeeds but re-query fails — partial message returned",
+			name:       "stop succeeds but the re-query fails returns a partial message",
 			args:       `{"reason":"test","message":"x"}`,
-			tasks:      makeTasks(database.TaskStatusRunning),
-			handler:    func(_ context.Context, _ string) error { return nil },
+			tasks:      flowManagerTasks(database.TaskStatusRunning),
+			handler:    func(context.Context, string) error { return nil },
 			newTaskErr: errors.New("db fail"),
 			wantSubstr: "Could not verify new status",
 		},
@@ -998,38 +1183,41 @@ func TestStopFlowToolHandle(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			callCount := 0
-			db := &mockQuerier{
-				getFlowTasksFn: func(_ context.Context, _ int64) ([]database.Task, error) {
-					callCount++
-					if callCount == 1 {
-						return tt.tasks, tt.tasksErr
-					}
-					return tt.newTasks, tt.newTaskErr
-				},
+			var reasonSeen string
+			handler := tt.handler
+			if handler != nil {
+				inner := tt.handler
+				handler = func(ctx context.Context, reason string) error {
+					reasonSeen = reason
+					return inner(ctx, reason)
+				}
 			}
-			tool := NewStopFlowTool(1, db, tt.handler)
-			result, err := tool.Handle(ctx, "stop_flow", json.RawMessage(tt.args))
-			if (err != nil) != tt.wantErr {
-				t.Fatalf("Handle() error = %v, wantErr %v", err, tt.wantErr)
+			db := &flowManagerDB{
+				taskReads: [][]database.Task{tt.tasks, tt.newTasks},
+				taskErrs:  []error{tt.tasksErr, tt.newTaskErr},
 			}
-			if tt.wantErr {
-				if tt.wantErrSubstr != "" && (err == nil || !strings.Contains(err.Error(), tt.wantErrSubstr)) {
-					t.Errorf("expected %q in error, got: %v", tt.wantErrSubstr, err)
+			tool := NewStopFlowTool(1, db, handler)
+			result, err := tool.Handle(ctx, StopFlowToolName, json.RawMessage(tt.args))
+			if tt.wantErrSubstr != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.wantErrSubstr) {
+					t.Fatalf("expected an error containing %q, got: %v", tt.wantErrSubstr, err)
 				}
 				return
 			}
-			if tt.wantSubstr != "" && !strings.Contains(result, tt.wantSubstr) {
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if !strings.Contains(result, tt.wantSubstr) {
 				t.Errorf("expected %q in result, got: %s", tt.wantSubstr, result)
+			}
+			if tt.wantReason != "" && reasonSeen != tt.wantReason {
+				t.Errorf("expected the stop reason %q to reach the handler, got %q", tt.wantReason, reasonSeen)
 			}
 		})
 	}
 }
 
-// ------------------------------------------------------------------
-// submitFlowInputTool.Handle
-
-func TestSubmitFlowInputToolHandle(t *testing.T) {
+func TestFlowManager_SubmitFlowInputTool_TellsWhatBecameOfTheInput(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 
@@ -1037,82 +1225,100 @@ func TestSubmitFlowInputToolHandle(t *testing.T) {
 		name          string
 		args          string
 		tasks         []database.Task
+		tasksErr      error
 		subtasks      []database.Subtask
 		handler       func(context.Context, string) error
 		newTasks      []database.Task
-		wantErr       bool
 		wantSubstr    string
 		wantErrSubstr string
+		wantGuard     bool
 	}{
 		{
-			name:    "invalid JSON returns error",
-			args:    `{bad}`,
-			wantErr: true,
+			name:          "malformed arguments are rejected",
+			args:          `{bad}`,
+			wantErrSubstr: "failed to parse submit_flow_input args",
 		},
 		{
-			name:    "empty input returns error",
-			args:    `{"input":"","message":"x"}`,
-			wantErr: true,
+			name:          "empty input is rejected",
+			args:          `{"input":"","message":"x"}`,
+			wantErrSubstr: "input must not be empty",
 		},
 		{
-			name:       "running task blocks submission — returns soft guidance, not error",
+			name:          "a failed task read is an error",
+			args:          `{"input":"hi","message":"x"}`,
+			tasksErr:      errors.New("db down"),
+			handler:       func(context.Context, string) error { return nil }, // a tool that ignores the read fails on its answer, not a nil call
+			wantErrSubstr: "failed to check flow status: db down",
+		},
+		{
+			name:       "running task blocks submission with soft guidance",
 			args:       `{"input":"hello","message":"x"}`,
-			tasks:      makeTasks(database.TaskStatusRunning),
-			wantSubstr: StopFlowToolName,
+			tasks:      flowManagerTasks(database.TaskStatusRunning),
+			wantSubstr: `task "task-1" (ID: 1) is currently running`,
 		},
 		{
-			name:       "waiting subtask — delivered as ask answer",
+			name:       "waiting subtask receives the input as an ask answer",
 			args:       `{"input":"my answer","message":"x"}`,
-			tasks:      makeTasks(database.TaskStatusWaiting),
-			subtasks:   makeSubtasks(database.SubtaskStatusWaiting),
-			handler:    func(_ context.Context, _ string) error { return nil },
+			tasks:      flowManagerTasks(database.TaskStatusWaiting),
+			subtasks:   flowManagerSubtasks(database.SubtaskStatusWaiting),
+			handler:    func(context.Context, string) error { return nil },
 			wantSubstr: "answer to the waiting subtask",
 		},
 		{
-			name:    "idle flow — handler error propagated",
-			args:    `{"input":"do something","message":"x"}`,
-			handler: func(_ context.Context, _ string) error { return errors.New("submit failed") },
-			wantErr: true,
+			name:          "idle flow, handler error is propagated",
+			args:          `{"input":"do something","message":"x"}`,
+			handler:       func(context.Context, string) error { return errors.New("submit failed") },
+			wantErrSubstr: "failed to submit flow input: submit failed",
 		},
 		{
-			name: "idle flow — stale message chain after restart — actionable error",
+			name: "idle flow, a 'not in waiting state' refusal becomes soft guidance",
 			args: `{"input":"do something","message":"x"}`,
-			handler: func(_ context.Context, _ string) error {
+			handler: func(context.Context, string) error {
+				return errors.New("flow is not in 'waiting' state (current: running)")
+			},
+			wantSubstr: "currently active (not in 'waiting' state)",
+		},
+		{
+			name: "idle flow, a 'cannot submit input' refusal becomes soft guidance",
+			args: `{"input":"do something","message":"x"}`,
+			handler: func(context.Context, string) error {
+				return errors.New("cannot submit input: flow is busy")
+			},
+			wantSubstr: "currently active (not in 'waiting' state)",
+		},
+		{
+			name: "idle flow, a stale message chain is a guarded, actionable error",
+			args: `{"input":"do something","message":"x"}`,
+			handler: func(context.Context, string) error {
 				return fmt.Errorf("failed to put flow input: failed to get message chain 63247: sql: no rows in result set")
 			},
-			wantErr:       true,
 			wantErrSubstr: "no longer available in the database",
+			wantGuard:     true,
 		},
 		{
-			name: "idle flow — handler deadline exceeded — timeout message",
-			args: `{"input":"do something","message":"x"}`,
-			handler: func(_ context.Context, _ string) error {
-				return context.DeadlineExceeded
-			},
-			wantErr:       true,
+			name:          "idle flow, deadline exceeded reports a timeout",
+			args:          `{"input":"do something","message":"x"}`,
+			handler:       func(context.Context, string) error { return context.DeadlineExceeded },
 			wantErrSubstr: "timed out",
 		},
 		{
-			name: "idle flow — handler context cancelled — timeout message",
-			args: `{"input":"do something","message":"x"}`,
-			handler: func(_ context.Context, _ string) error {
-				return context.Canceled
-			},
-			wantErr:       true,
+			name:          "idle flow, context cancelled reports a timeout",
+			args:          `{"input":"do something","message":"x"}`,
+			handler:       func(context.Context, string) error { return context.Canceled },
 			wantErrSubstr: "timed out",
 		},
 		{
-			name:       "idle flow — new task now running",
+			name:       "idle flow, a new task is now running",
 			args:       `{"input":"do something","message":"x"}`,
-			handler:    func(_ context.Context, _ string) error { return nil },
+			handler:    func(context.Context, string) error { return nil },
 			newTasks:   []database.Task{{ID: 5, Status: database.TaskStatusRunning, Title: "new-task"}},
-			wantSubstr: "new-task",
+			wantSubstr: `Task "new-task" (ID: 5) is now running`,
 		},
 		{
-			name:       "idle flow — no running task after submit",
+			name:       "idle flow, no running task appears before the poll times out",
 			args:       `{"input":"do something","message":"x"}`,
-			handler:    func(_ context.Context, _ string) error { return nil },
-			newTasks:   makeTasks(database.TaskStatusCreated),
+			handler:    func(context.Context, string) error { return nil },
+			newTasks:   flowManagerTasks(database.TaskStatusCreated),
 			wantSubstr: "generator may still be working",
 		},
 	}
@@ -1120,262 +1326,242 @@ func TestSubmitFlowInputToolHandle(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-
-			taskCallCount := 0
-			db := &mockQuerier{
-				getFlowTasksFn: func(_ context.Context, _ int64) ([]database.Task, error) {
-					taskCallCount++
-					if taskCallCount == 1 {
-						return tt.tasks, nil
-					}
-					return tt.newTasks, nil
-				},
-				getFlowSubtasksFn: func(_ context.Context, _ int64) ([]database.Subtask, error) {
-					return tt.subtasks, nil
-				},
+			db := &flowManagerDB{
+				taskReads: [][]database.Task{tt.tasks, tt.newTasks},
+				taskErrs:  []error{tt.tasksErr},
+				subtasks:  tt.subtasks,
 			}
 			tool := NewSubmitFlowInputTool(1, db, tt.handler)
-			// Shorten polling so tests don't hang.
 			tool.pollInterval = 1 * time.Millisecond
 			tool.pollTimeout = 20 * time.Millisecond
 
-			result, err := tool.Handle(ctx, "submit_flow_input", json.RawMessage(tt.args))
-			if (err != nil) != tt.wantErr {
-				t.Fatalf("Handle() error = %v, wantErr %v", err, tt.wantErr)
+			result, err := tool.Handle(ctx, SubmitFlowInputToolName, json.RawMessage(tt.args))
+			if got := errors.Is(err, ErrFlowStateGuard); got != tt.wantGuard {
+				t.Errorf("state guard = %v, want %v (err: %v)", got, tt.wantGuard, err)
 			}
-			if tt.wantErr {
-				if tt.wantErrSubstr != "" && (err == nil || !strings.Contains(err.Error(), tt.wantErrSubstr)) {
-					t.Errorf("expected %q in error, got: %v", tt.wantErrSubstr, err)
+			if tt.wantErrSubstr != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.wantErrSubstr) {
+					t.Fatalf("expected an error containing %q, got: %v", tt.wantErrSubstr, err)
 				}
 				return
 			}
-			if tt.wantSubstr != "" && !strings.Contains(result, tt.wantSubstr) {
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if !strings.Contains(result, tt.wantSubstr) {
 				t.Errorf("expected %q in result, got: %s", tt.wantSubstr, result)
 			}
 		})
 	}
 }
 
-// ------------------------------------------------------------------
-// patchFlowSubtasksTool.Handle
+func TestFlowManager_SubmitFlowInputTool_StopsWaitingWhenTheContextIsCancelled(t *testing.T) {
+	t.Parallel()
 
-func TestPatchFlowSubtasksToolHandle(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	db := &flowManagerDB{
+		// The guard read sees an idle flow and every poll a task that never runs, so only ctx ends the loop.
+		taskReads: [][]database.Task{nil, flowManagerTasks(database.TaskStatusCreated)},
+	}
+	tool := NewSubmitFlowInputTool(1, db, func(context.Context, string) error {
+		cancel()
+		return nil
+	})
+	tool.pollInterval = 1 * time.Millisecond
+	// Bounds the test if the loop ignores ctx: it would then time out with no error and fail below.
+	tool.pollTimeout = 5 * time.Second
+
+	_, err := tool.Handle(ctx, SubmitFlowInputToolName, json.RawMessage(`{"input":"go","message":"x"}`))
+	if err == nil || !strings.Contains(err.Error(), "context cancelled while waiting for task to start") {
+		t.Fatalf("expected the wait to stop on the cancelled context, got: %v", err)
+	}
+}
+
+// Only refusals caused by the flow's state carry ErrFlowStateGuard.
+func TestFlowManager_PatchFlowSubtasksTool_AppliesOnlyWhatTheFlowStateAllows(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 
 	validOp := SubtaskOperation{Op: SubtaskOpAdd, Title: "new sub", Description: "do thing"}
-	invalidOp := SubtaskOperation{Op: SubtaskOpRemove} // remove without ID
+	invalidOp := SubtaskOperation{Op: SubtaskOpRemove}
 
 	tests := []struct {
-		name        string
-		args        string
-		tasks       []database.Task
-		planned     []database.Subtask
-		allSubtasks []database.Subtask
-		plannedErr  error
-		handler     func(context.Context, int64, SubtaskPatch) error
-		newPlanned  []database.Subtask
-		wantErr     bool
-		wantSubstr  string
+		name       string
+		args       string
+		tasks      []database.Task
+		tasksErr   error
+		planned    []database.Subtask
+		plannedErr error
+		allSubs    []database.Subtask
+		allSubsErr error
+		handler    func(context.Context, int64, SubtaskPatch) error
+		newPlanned []database.Subtask
+		newPlanErr error
+		wantErr    bool
+		wantGuard  bool
+		want       []string // in the error when wantErr, else in the result
+		wantAbsent []string
 	}{
 		{
-			name:    "invalid JSON returns error",
+			name:    "malformed arguments are rejected",
 			args:    `{bad}`,
 			wantErr: true,
+			want:    []string{"failed to parse patch_flow_subtasks args"},
 		},
 		{
-			name:    "task_id zero returns error",
+			name:    "task_id zero is rejected",
 			args:    `{"task_id":0,"operations":[],"message":"x"}`,
 			wantErr: true,
+			want:    []string{"task_id must be a positive integer"},
 		},
 		{
-			name:    "running task blocks patching",
+			name:     "a failed task read is an error",
+			args:     `{"task_id":1,"operations":[],"message":"x"}`,
+			tasksErr: errors.New("db down"),
+			wantErr:  true,
+			want:     []string{"failed to check flow status: db down"},
+		},
+		{
+			name:      "running task blocks patching",
+			args:      `{"task_id":1,"operations":[],"message":"x"}`,
+			tasks:     flowManagerTasks(database.TaskStatusRunning),
+			wantErr:   true,
+			wantGuard: true,
+			want:      []string{`task "task-1" (ID: 1) is currently running; patching is not allowed`},
+		},
+		{
+			name:      "task not in flow is a guarded error",
+			args:      `{"task_id":99,"operations":[],"message":"x"}`,
+			tasks:     flowManagerTasks(database.TaskStatusFinished),
+			wantErr:   true,
+			wantGuard: true,
+			want:      []string{"task ID 99 was not found in this flow"},
+		},
+		{
+			name:    "empty operations leaves the plan unchanged",
 			args:    `{"task_id":1,"operations":[],"message":"x"}`,
-			tasks:   makeTasks(database.TaskStatusRunning),
+			tasks:   flowManagerTasks(database.TaskStatusFinished),
+			planned: flowManagerSubtasks(database.SubtaskStatusCreated),
+			want:    []string{"the subtask plan for task 1 is unchanged"},
+		},
+		{
+			name:       "a failed plan read is an error",
+			args:       flowManagerBuildPatchArgs(1, validOp),
+			tasks:      flowManagerTasks(database.TaskStatusFinished),
+			plannedErr: errors.New("db fail"),
+			wantErr:    true,
+			want:       []string{"failed to get planned subtasks for task 1: db fail"},
+		},
+		{
+			name:    "invalid patch operation is a validation error",
+			args:    flowManagerBuildPatchArgs(1, invalidOp),
+			tasks:   flowManagerTasks(database.TaskStatusFinished),
+			planned: flowManagerSubtasks(database.SubtaskStatusCreated),
 			wantErr: true,
+			want:    []string{"invalid subtask patch"},
 		},
 		{
-			name:    "task not in flow returns error",
-			args:    `{"task_id":99,"operations":[],"message":"x"}`,
-			tasks:   makeTasks(database.TaskStatusFinished),
-			wantErr: true,
-		},
-		{
-			name:       "empty operations returns unchanged message",
-			args:       `{"task_id":1,"operations":[],"message":"x"}`,
-			tasks:      makeTasks(database.TaskStatusFinished),
-			planned:    makeSubtasks(database.SubtaskStatusCreated),
-			wantSubstr: "unchanged",
-		},
-		{
-			name:    "invalid patch operation returns validation error",
-			args:    buildPatchArgs(1, invalidOp),
-			tasks:   makeTasks(database.TaskStatusFinished),
-			planned: makeSubtasks(database.SubtaskStatusCreated),
-			wantErr: true,
-		},
-		{
-			name:       "valid patch applied — reports count and new IDs",
-			args:       buildPatchArgs(1, validOp),
-			tasks:      makeTasks(database.TaskStatusFinished),
-			planned:    makeSubtasks(database.SubtaskStatusCreated),
-			handler:    func(_ context.Context, _ int64, _ SubtaskPatch) error { return nil },
+			name:       "valid patch reports the count and the new IDs",
+			args:       flowManagerBuildPatchArgs(1, validOp),
+			tasks:      flowManagerTasks(database.TaskStatusFinished),
+			planned:    flowManagerSubtasks(database.SubtaskStatusCreated),
+			handler:    func(context.Context, int64, SubtaskPatch) error { return nil },
 			newPlanned: []database.Subtask{{ID: 100, Status: database.SubtaskStatusCreated, Title: "new sub", TaskID: 1}},
-			wantSubstr: "1 operation(s) applied",
+			want:       []string{"1 operation(s) applied", "ID: 100 | new sub"},
 		},
 		{
-			name:        "no planned subtasks + operations + waiting subtask — descriptive error",
-			args:        buildPatchArgs(1, validOp),
-			tasks:       makeTasks(database.TaskStatusFinished),
-			planned:     nil,
-			allSubtasks: []database.Subtask{{ID: 2, Status: database.SubtaskStatusWaiting, Title: "ask-sub", TaskID: 1}},
-			wantErr:     true,
+			name:       "patch applied but the re-query fails returns the count and a partial message",
+			args:       flowManagerBuildPatchArgs(1, validOp),
+			tasks:      flowManagerTasks(database.TaskStatusFinished),
+			planned:    flowManagerSubtasks(database.SubtaskStatusCreated),
+			handler:    func(context.Context, int64, SubtaskPatch) error { return nil },
+			newPlanErr: errors.New("db fail"),
+			want:       []string{"1 operation(s) applied", "Could not retrieve updated subtask list"},
 		},
 		{
-			name:        "no planned subtasks + operations + running subtask — descriptive error",
-			args:        buildPatchArgs(1, validOp),
-			tasks:       makeTasks(database.TaskStatusFinished),
-			planned:     nil,
-			allSubtasks: []database.Subtask{{ID: 3, Status: database.SubtaskStatusRunning, Title: "run-sub", TaskID: 1}},
-			wantErr:     true,
+			name:      "no plan but a waiting subtask is a guarded error naming it",
+			args:      flowManagerBuildPatchArgs(1, validOp),
+			tasks:     flowManagerTasks(database.TaskStatusFinished),
+			allSubs:   []database.Subtask{{ID: 2, Status: database.SubtaskStatusWaiting, Title: "ask-sub", TaskID: 1}},
+			wantErr:   true,
+			wantGuard: true,
+			want:      []string{`(ID: 2, "ask-sub") waiting for user input`},
 		},
 		{
-			name:        "no planned subtasks + operations + no active subtasks — generic error",
-			args:        buildPatchArgs(1, validOp),
-			tasks:       makeTasks(database.TaskStatusFinished),
-			planned:     nil,
-			allSubtasks: makeSubtasks(database.SubtaskStatusFinished),
-			wantErr:     true,
+			name:  "no plan but a running subtask is a guarded error naming it, not another task's subtask",
+			args:  flowManagerBuildPatchArgs(1, validOp),
+			tasks: flowManagerTasks(database.TaskStatusFinished),
+			allSubs: []database.Subtask{
+				{ID: 9, Status: database.SubtaskStatusWaiting, Title: "other-ask", TaskID: 2},
+				{ID: 3, Status: database.SubtaskStatusRunning, Title: "run-sub", TaskID: 1},
+			},
+			wantErr:    true,
+			wantGuard:  true,
+			want:       []string{`(ID: 3, "run-sub") currently running`},
+			wantAbsent: []string{"other-ask"},
 		},
 		{
-			name:    "handler error propagated",
-			args:    buildPatchArgs(1, validOp),
-			tasks:   makeTasks(database.TaskStatusFinished),
-			planned: makeSubtasks(database.SubtaskStatusCreated),
-			handler: func(_ context.Context, _ int64, _ SubtaskPatch) error { return errors.New("patch failed") },
+			name:      "no plan and no active subtasks is a guarded generic error",
+			args:      flowManagerBuildPatchArgs(1, validOp),
+			tasks:     flowManagerTasks(database.TaskStatusFinished),
+			allSubs:   flowManagerSubtasks(database.SubtaskStatusFinished),
+			wantErr:   true,
+			wantGuard: true,
+			want:      []string{"no 'created' subtasks found for task 1"},
+		},
+		{
+			name:       "no plan and a failed subtask read is an unguarded error",
+			args:       flowManagerBuildPatchArgs(1, validOp),
+			tasks:      flowManagerTasks(database.TaskStatusFinished),
+			allSubsErr: errors.New("db fail"),
+			wantErr:    true,
+			want:       []string{"failed to check subtask state for task 1: db fail"},
+		},
+		{
+			name:    "handler error is propagated",
+			args:    flowManagerBuildPatchArgs(1, validOp),
+			tasks:   flowManagerTasks(database.TaskStatusFinished),
+			planned: flowManagerSubtasks(database.SubtaskStatusCreated),
+			handler: func(context.Context, int64, SubtaskPatch) error { return errors.New("patch failed") },
 			wantErr: true,
+			want:    []string{"failed to patch subtasks for task 1: patch failed"},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-
-			plannedCallCount := 0
-			db := &mockQuerier{
-				getFlowTasksFn: func(_ context.Context, _ int64) ([]database.Task, error) {
-					return tt.tasks, nil
-				},
-				getTaskPlannedFn: func(_ context.Context, _ int64) ([]database.Subtask, error) {
-					plannedCallCount++
-					if plannedCallCount == 1 {
-						return tt.planned, tt.plannedErr
-					}
-					return tt.newPlanned, nil
-				},
-				getFlowSubtasksFn: func(_ context.Context, _ int64) ([]database.Subtask, error) {
-					return tt.allSubtasks, nil
-				},
+			db := &flowManagerDB{
+				taskReads:   [][]database.Task{tt.tasks},
+				taskErrs:    []error{tt.tasksErr},
+				planReads:   [][]database.Subtask{tt.planned, tt.newPlanned},
+				planErrs:    []error{tt.plannedErr, tt.newPlanErr},
+				subtasks:    tt.allSubs,
+				subtasksErr: tt.allSubsErr,
 			}
 			tool := NewPatchFlowSubtasksTool(1, db, tt.handler)
-			result, err := tool.Handle(ctx, "patch_flow_subtasks", json.RawMessage(tt.args))
+			result, err := tool.Handle(ctx, PatchFlowSubtasksToolName, json.RawMessage(tt.args))
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("Handle() error = %v, wantErr %v", err, tt.wantErr)
 			}
-			if tt.wantSubstr != "" && !strings.Contains(result, tt.wantSubstr) {
-				t.Errorf("expected %q in result, got: %s", tt.wantSubstr, result)
+			if got := errors.Is(err, ErrFlowStateGuard); got != tt.wantGuard {
+				t.Errorf("state guard = %v, want %v (err: %v)", got, tt.wantGuard, err)
 			}
-		})
-	}
-}
-
-func buildPatchArgs(taskID int64, ops ...SubtaskOperation) string {
-	opsJSON, _ := json.Marshal(ops)
-	return fmt.Sprintf(`{"task_id":%d,"operations":%s,"message":"x"}`, taskID, opsJSON)
-}
-
-// ------------------------------------------------------------------
-// SubtaskPatch.Validate (logic coverage)
-
-func TestSubtaskPatchValidate(t *testing.T) {
-	t.Parallel()
-
-	id := int64(1)
-
-	tests := []struct {
-		name    string
-		ops     []SubtaskOperation
-		wantErr bool
-	}{
-		{
-			name:    "valid add operation",
-			ops:     []SubtaskOperation{{Op: SubtaskOpAdd, Title: "t", Description: "d"}},
-			wantErr: false,
-		},
-		{
-			name:    "add missing title",
-			ops:     []SubtaskOperation{{Op: SubtaskOpAdd, Description: "d"}},
-			wantErr: true,
-		},
-		{
-			name:    "add missing description",
-			ops:     []SubtaskOperation{{Op: SubtaskOpAdd, Title: "t"}},
-			wantErr: true,
-		},
-		{
-			name:    "remove with id",
-			ops:     []SubtaskOperation{{Op: SubtaskOpRemove, ID: &id}},
-			wantErr: false,
-		},
-		{
-			name:    "remove without id",
-			ops:     []SubtaskOperation{{Op: SubtaskOpRemove}},
-			wantErr: true,
-		},
-		{
-			name:    "modify with id and title",
-			ops:     []SubtaskOperation{{Op: SubtaskOpModify, ID: &id, Title: "new title"}},
-			wantErr: false,
-		},
-		{
-			name:    "modify without id",
-			ops:     []SubtaskOperation{{Op: SubtaskOpModify, Title: "t"}},
-			wantErr: true,
-		},
-		{
-			name:    "modify without title or description",
-			ops:     []SubtaskOperation{{Op: SubtaskOpModify, ID: &id}},
-			wantErr: true,
-		},
-		{
-			name:    "reorder with id",
-			ops:     []SubtaskOperation{{Op: SubtaskOpReorder, ID: &id}},
-			wantErr: false,
-		},
-		{
-			name:    "reorder without id",
-			ops:     []SubtaskOperation{{Op: SubtaskOpReorder}},
-			wantErr: true,
-		},
-		{
-			name:    "unknown operation type",
-			ops:     []SubtaskOperation{{Op: "unknown"}},
-			wantErr: true,
-		},
-		{
-			name:    "empty operations list is valid",
-			ops:     []SubtaskOperation{},
-			wantErr: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			patch := SubtaskPatch{Operations: tt.ops}
-			err := patch.Validate()
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Validate() error = %v, wantErr %v", err, tt.wantErr)
+			text := result
+			if err != nil {
+				text = err.Error()
+			}
+			for _, want := range tt.want {
+				if !strings.Contains(text, want) {
+					t.Errorf("expected %q, got: %s", want, text)
+				}
+			}
+			for _, absent := range tt.wantAbsent {
+				if strings.Contains(text, absent) {
+					t.Errorf("did not expect %q, got: %s", absent, text)
+				}
 			}
 		})
 	}

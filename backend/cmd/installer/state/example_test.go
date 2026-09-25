@@ -20,7 +20,7 @@ DATABASE_PASSWORD=old_password
 API_HOST=localhost
 API_PORT=8080`
 
-	os.WriteFile(envPath, []byte(initialContent), 0644)
+	_ = os.WriteFile(envPath, []byte(initialContent), 0644)
 
 	fmt.Println("=== PentAGI Configuration Manager ===")
 	fmt.Println("Starting configuration process...")
@@ -33,23 +33,23 @@ API_PORT=8080`
 
 	// Step 2: Multi-step configuration process
 	fmt.Println("\n--- Step 1: Database Configuration ---")
-	state.SetStack([]string{"configure_database"})
+	_ = state.SetStack([]string{"configure_database"})
 
 	// User makes changes gradually
-	state.SetVar("DATABASE_URL", "postgres://prod-server:5432/pentagidb")
-	state.SetVar("DATABASE_PASSWORD", "secure_prod_password")
-	state.SetVar("DATABASE_POOL_SIZE", "20")
+	_ = state.SetVar("DATABASE_URL", "postgres://prod-server:5432/pentagidb")
+	_ = state.SetVar("DATABASE_PASSWORD", "secure_prod_password")
+	_ = state.SetVar("DATABASE_POOL_SIZE", "20")
 
 	fmt.Printf("Current step: %s\n", state.GetStack()[0])
 	fmt.Printf("Modified variables: %d\n", countChangedVars(state))
 
 	// Step 3: Continue with API configuration
 	fmt.Println("\n--- Step 2: API Configuration ---")
-	state.SetStack([]string{"configure_api"})
+	_ = state.SetStack([]string{"configure_api"})
 
-	state.SetVar("API_HOST", "0.0.0.0")
-	state.SetVar("API_PORT", "443")
-	state.SetVar("API_SSL_ENABLED", "true")
+	_ = state.SetVar("API_HOST", "0.0.0.0")
+	_ = state.SetVar("API_PORT", "443")
+	_ = state.SetVar("API_SSL_ENABLED", "true")
 
 	fmt.Printf("Current step: %s\n", state.GetStack()[0])
 	fmt.Printf("Total modified variables: %d\n", countChangedVars(state))
@@ -102,7 +102,7 @@ func ExampleState_rollbackWorkflow() {
 
 	envPath := filepath.Join(tmpDir, ".env")
 	originalContent := "IMPORTANT_SETTING=production_value"
-	os.WriteFile(envPath, []byte(originalContent), 0644)
+	_ = os.WriteFile(envPath, []byte(originalContent), 0644)
 
 	fmt.Println("=== Configuration Rollback Example ===")
 
@@ -110,9 +110,9 @@ func ExampleState_rollbackWorkflow() {
 
 	// User starts making risky changes
 	fmt.Println("Making risky changes...")
-	state.SetStack([]string{"risky_configuration"})
-	state.SetVar("IMPORTANT_SETTING", "experimental_value")
-	state.SetVar("DANGEROUS_SETTING", "could_break_system")
+	_ = state.SetStack([]string{"risky_configuration"})
+	_ = state.SetVar("IMPORTANT_SETTING", "experimental_value")
+	_ = state.SetVar("DANGEROUS_SETTING", "could_break_system")
 
 	fmt.Printf("Changes pending: %d\n", countChangedVars(state))
 
@@ -150,16 +150,16 @@ func ExampleState_persistenceWorkflow() {
 	defer os.RemoveAll(tmpDir)
 
 	envPath := filepath.Join(tmpDir, ".env")
-	os.WriteFile(envPath, []byte("VAR1=value1"), 0644)
+	_ = os.WriteFile(envPath, []byte("VAR1=value1"), 0644)
 
 	fmt.Println("=== Session Persistence Example ===")
 
 	// Session 1: User starts configuration
 	fmt.Println("Session 1: Starting configuration...")
 	state1, _ := NewState(envPath)
-	state1.SetStack([]string{"partial_configuration"})
-	state1.SetVar("VAR1", "modified_value")
-	state1.SetVar("VAR2", "new_value")
+	_ = state1.SetStack([]string{"partial_configuration"})
+	_ = state1.SetVar("VAR1", "modified_value")
+	_ = state1.SetVar("VAR2", "new_value")
 
 	fmt.Printf("Session 1 - Step: %s, Changes: %d\n",
 		state1.GetStack()[0], countChangedVars(state1))
@@ -175,14 +175,14 @@ func ExampleState_persistenceWorkflow() {
 		state2.GetStack()[0], countChangedVars(state2))
 
 	// Continue from where left off
-	state2.SetStack([]string{"complete_configuration"})
-	state2.SetVar("VAR3", "final_value")
+	_ = state2.SetStack([]string{"complete_configuration"})
+	_ = state2.SetVar("VAR3", "final_value")
 
 	fmt.Printf("Session 2 - Final Step: %s, Changes: %d\n",
 		state2.GetStack()[0], countChangedVars(state2))
 
 	// Commit when ready
-	state2.Commit()
+	_ = state2.Commit()
 	fmt.Println("Configuration completed successfully!")
 
 	// Output:

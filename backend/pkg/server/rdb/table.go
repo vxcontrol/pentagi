@@ -4,6 +4,7 @@ import (
 	"crypto/md5" //nolint:gosec
 	"encoding/hex"
 	"errors"
+	"math"
 	"slices"
 	"strconv"
 	"strings"
@@ -35,7 +36,7 @@ type TableSort struct {
 type TableQuery struct {
 	// Number of page (since 1)
 	Page int `form:"page" json:"page" binding:"min=1,required" default:"1" minimum:"1"`
-	// Amount items per page (min -1, max 1000, -1 means unlimited)
+	// Amount items per page (min -1, max 1000, -1 means unlimited, absent means DefaultPageSize)
 	Size int `form:"pageSize" json:"pageSize" binding:"min=-1,max=1000" default:"5" minimum:"-1" maximum:"1000"`
 	// Type of request
 	Type string `form:"type" json:"type" binding:"oneof=sort filter init page size,required" default:"init" enums:"sort,filter,init,page,size"`
@@ -60,8 +61,14 @@ type TableQuery struct {
 	sqlOrders  []func(*gorm.DB) *gorm.DB             `form:"-" json:"-"`
 }
 
+const DefaultPageSize = 5
+
 // Init is function to set table name and sql mapping to data columns
 func (q *TableQuery) Init(table string, sqlMappers map[string]any) error {
+	if q.Size == 0 {
+		q.Size = DefaultPageSize
+	}
+
 	q.table = table
 	q.sqlFind = func(out any) func(db *gorm.DB) *gorm.DB {
 		return func(db *gorm.DB) *gorm.DB {
@@ -121,7 +128,6 @@ func (q *TableQuery) SetOrders(sqlOrders []func(*gorm.DB) *gorm.DB) {
 	q.sqlOrders = sqlOrders
 }
 
-// Mappers is getter for private field (SQL find funcction to use it in custom query)
 func (q *TableQuery) Find(out any) func(*gorm.DB) *gorm.DB {
 	return q.sqlFind(out)
 }
@@ -174,14 +180,26 @@ func (q *TableQuery) Ordering() func(db *gorm.DB) *gorm.DB {
 	}
 }
 
+func pageOffset(page, size int) int {
+	if page <= 1 || size <= 0 {
+		return 0
+	}
+
+	offset := (page - 1) * size
+	if offset/size != page-1 {
+		return math.MaxInt
+	}
+
+	return offset
+}
+
 // Paginate is function to navigate between pages according with input params
 func (q *TableQuery) Paginate() func(db *gorm.DB) *gorm.DB {
 	return func(db *gorm.DB) *gorm.DB {
 		if q.Page <= 0 && q.Size >= 0 {
 			return db.Limit(q.Size)
 		} else if q.Page > 0 && q.Size >= 0 {
-			offset := (q.Page - 1) * q.Size
-			return db.Offset(offset).Limit(q.Size)
+			return db.Offset(pageOffset(q.Page, q.Size)).Limit(q.Size)
 		}
 		return db
 	}
@@ -302,7 +320,7 @@ func (q *TableQuery) Query(db *gorm.DB, result any,
 	funcs ...func(*gorm.DB) *gorm.DB) (uint64, error) {
 	var total uint64
 	err := ApplyToChainDB(
-		ApplyToChainDB(db.Table(q.Table()), funcs...).Scopes(q.DataFilter()).Count(&total),
+		ApplyToChainDB(db.Table(q.Table()).Model(result), funcs...).Scopes(q.DataFilter()).Count(&total),
 		q.Ordering(),
 		q.Paginate(),
 		q.Find(result),

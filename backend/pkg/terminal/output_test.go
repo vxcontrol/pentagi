@@ -3,8 +3,10 @@ package terminal
 import (
 	"context"
 	"io"
+	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -103,6 +105,26 @@ func TestInteractivePromptContext_CancelledContext(t *testing.T) {
 	require.ErrorIs(t, err, context.Canceled)
 }
 
+func TestOutput_InteractivePromptContext_LeavesLaterLinesForTheNextPrompt(t *testing.T) {
+	stdin, input, err := os.Pipe()
+	require.NoError(t, err)
+	defer stdin.Close()
+	_, err = input.WriteString("first line\nsecond\n")
+	require.NoError(t, err)
+	require.NoError(t, input.Close())
+
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+
+	first, err := InteractivePromptContext(ctx, "A", stdin)
+	require.NoError(t, err)
+	assert.Equal(t, "first line", first)
+
+	second, err := InteractivePromptContext(ctx, "B", stdin)
+	require.NoError(t, err)
+	assert.Equal(t, "second", second)
+}
+
 func TestGetYesNoInputContext_Yes(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -112,6 +134,7 @@ func TestGetYesNoInputContext_Yes(t *testing.T) {
 		{"lowercase yes", "yes\n"},
 		{"uppercase Y", "Y\n"},
 		{"uppercase YES", "YES\n"},
+		{"yes after a rejected answer", "nope\ny\n"},
 	}
 
 	for _, tt := range tests {

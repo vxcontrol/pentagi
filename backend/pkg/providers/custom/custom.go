@@ -2,7 +2,9 @@ package custom
 
 import (
 	"context"
+	"fmt"
 	"os"
+	"strings"
 
 	"pentagi/pkg/config"
 	"pentagi/pkg/providers/pconfig"
@@ -10,6 +12,7 @@ import (
 	"pentagi/pkg/system"
 	"pentagi/pkg/templates"
 
+	"github.com/sirupsen/logrus"
 	"github.com/vxcontrol/langchaingo/llms"
 	"github.com/vxcontrol/langchaingo/llms/openai"
 	"github.com/vxcontrol/langchaingo/llms/streaming"
@@ -57,14 +60,63 @@ type customProvider struct {
 	providerPrefix string
 }
 
+type customAPI struct {
+	apiType openai.APIType
+	version string
+}
+
+func parseCustomAPI(cfg *config.Config) (customAPI, error) {
+	declared := strings.ToLower(strings.TrimSpace(cfg.LLMServerAPIType))
+	if declared == "" {
+		return customAPI{}, nil
+	}
+
+	apiType, known := map[string]openai.APIType{
+		"openai":   openai.APITypeOpenAI,
+		"azure":    openai.APITypeAzure,
+		"azure_ad": openai.APITypeAzureAD,
+	}[declared]
+	if !known {
+		return customAPI{}, fmt.Errorf(
+			"unknown LLM_SERVER_API_TYPE %q for provider %q: expected openai, azure or azure_ad",
+			cfg.LLMServerAPIType, provider.ProviderCustom,
+		)
+	}
+
+	return customAPI{apiType: apiType, version: strings.TrimSpace(cfg.LLMServerAPIVersion)}, nil
+}
+
+func (a customAPI) clientOptions() []openai.Option {
+	if a.apiType == "" {
+		return nil
+	}
+
+	opts := []openai.Option{openai.WithAPIType(a.apiType)}
+	if a.version != "" {
+		opts = append(opts, openai.WithAPIVersion(a.version))
+	}
+
+	return opts
+}
+
+func (a customAPI) isAzure() bool {
+	return a.apiType == openai.APITypeAzure || a.apiType == openai.APITypeAzureAD
+}
+
 func New(
 	cfg *config.Config,
 	providerName provider.ProviderName,
 	providerConfig *pconfig.ProviderConfig,
+	enrich func(pconfig.ModelsConfig) pconfig.ModelsConfig,
 ) (provider.Provider, error) {
 	baseKey := cfg.LLMServerKey
 	baseURL := cfg.LLMServerURL
 	baseModel := cfg.LLMServerModel
+	if baseKey == "" {
+		return nil, fmt.Errorf("missing API key for provider %q, set it in the LLM_SERVER_KEY environment variable",
+			provider.ProviderCustom)
+	}
+
 	httpClient, err := system.GetHTTPClient(cfg)
 	if err != nil {
 		return nil, err
@@ -76,25 +128,36 @@ func New(
 		openai.WithBaseURL(baseURL),
 		openai.WithHTTPClient(httpClient),
 	}
-	if !cfg.LLMServerLegacyReasoning {
-		opts = append(opts,
-			openai.WithUsingReasoningMaxTokens(),
-			openai.WithModernReasoningFormat(),
-		)
-	}
 	if cfg.LLMServerPreserveReasoning {
 		opts = append(opts,
 			openai.WithPreserveReasoningContent(),
 		)
 	}
+
+	api, err := parseCustomAPI(cfg)
+	if err != nil {
+		return nil, err
+	}
+	opts = append(opts, api.clientOptions()...)
 	client, err := openai.New(opts...)
 	if err != nil {
 		return nil, err
 	}
 
-	models, err := provider.LoadModelsFromHTTP(baseURL, baseKey, httpClient, cfg.LLMServerProvider)
-	if err != nil {
-		models = pconfig.ModelsConfig{}
+	models := pconfig.ModelsConfig{}
+	if !api.isAzure() {
+		loaded, err := provider.LoadModelsFromHTTP(baseURL, baseKey, httpClient, cfg.LLMServerProvider)
+		if err != nil {
+			logrus.WithError(err).WithFields(logrus.Fields{
+				"provider": providerName,
+				"url":      baseURL,
+			}).Warn("custom provider could not list its models; model limits and capabilities stay unknown")
+		} else {
+			models = loaded
+		}
+	}
+	if enrich != nil {
+		models = enrich(models)
 	}
 
 	return &customProvider{
@@ -186,7 +249,6 @@ func (p *customProvider) CallWithTools(
 	)
 }
 
-// CallWithExtraOptions: extra is appended last, so it overrides the config.
 func (p *customProvider) CallWithExtraOptions(
 	ctx context.Context,
 	opt pconfig.ProviderOptionsType,

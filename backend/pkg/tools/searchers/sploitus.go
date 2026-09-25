@@ -159,11 +159,11 @@ func (s *sploitus) search(ctx context.Context, query, exploitType, sort string, 
 	// Sploitus API returns 499 (and sometimes 422) when its rate limit is temporarily
 	// exceeded — a transient condition that may clear on retry.
 	if resp.StatusCode == 499 || resp.StatusCode == 422 {
-		return "", Retryable(fmt.Errorf("Sploitus API rate limit exceeded (HTTP %d), please try again later", resp.StatusCode), 0)
+		return "", Retryable(fmt.Errorf("rate limit exceeded for the Sploitus API (HTTP %d), please try again later", resp.StatusCode), 0)
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		err := fmt.Errorf("Sploitus API returned HTTP %d", resp.StatusCode)
+		err := fmt.Errorf("the Sploitus API returned HTTP %d", resp.StatusCode)
 		if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500 {
 			return "", Retryable(err, 0)
 		}
@@ -221,9 +221,9 @@ func formatSploitusResults(query, exploitType string, limit int, resp sploitusRe
 	var sb strings.Builder
 
 	sb.WriteString("# Sploitus Search Results\n\n")
-	sb.WriteString(fmt.Sprintf("**Query:** `%s`  \n", query))
-	sb.WriteString(fmt.Sprintf("**Type:** %s  \n", exploitType))
-	sb.WriteString(fmt.Sprintf("**Total matches on Sploitus:** %d\n\n", resp.ExploitsTotal))
+	fmt.Fprintf(&sb, "**Query:** `%s`  \n", query)
+	fmt.Fprintf(&sb, "**Type:** %s  \n", exploitType)
+	fmt.Fprintf(&sb, "**Total matches on Sploitus:** %d\n\n", resp.ExploitsTotal)
 	sb.WriteString("---\n\n")
 
 	// Ensure limit is positive
@@ -247,13 +247,13 @@ func formatSploitusResults(query, exploitType string, limit int, resp sploitusRe
 	}
 
 	// Track total size to enforce hard limit
-	currentSize := len(sb.String())
+	var currentSize int
 	actualShown := 0
 	truncatedBySize := false
 
 	switch strings.ToLower(exploitType) {
 	case "tools":
-		sb.WriteString(fmt.Sprintf("## Security Tools (showing up to %d)\n\n", len(results)))
+		fmt.Fprintf(&sb, "## Security Tools (showing up to %d)\n\n", len(results))
 		currentSize = len(sb.String())
 
 		for i, item := range results {
@@ -264,18 +264,18 @@ func formatSploitusResults(query, exploitType string, limit int, resp sploitusRe
 			}
 
 			var itemBuilder strings.Builder
-			itemBuilder.WriteString(fmt.Sprintf("### %d. %s\n\n", i+1, item.Title))
+			fmt.Fprintf(&itemBuilder, "### %d. %s\n\n", i+1, item.Title)
 			if item.Href != "" {
-				itemBuilder.WriteString(fmt.Sprintf("**URL:** %s  \n", item.Href))
+				fmt.Fprintf(&itemBuilder, "**URL:** %s  \n", item.Href)
 			}
 			if item.Download != "" {
-				itemBuilder.WriteString(fmt.Sprintf("**Download:** %s  \n", item.Download))
+				fmt.Fprintf(&itemBuilder, "**Download:** %s  \n", item.Download)
 			}
 			if item.Type != "" {
-				itemBuilder.WriteString(fmt.Sprintf("**Source Type:** %s  \n", item.Type))
+				fmt.Fprintf(&itemBuilder, "**Source Type:** %s  \n", item.Type)
 			}
 			if item.ID != "" {
-				itemBuilder.WriteString(fmt.Sprintf("**ID:** %s  \n", item.ID))
+				fmt.Fprintf(&itemBuilder, "**ID:** %s  \n", item.ID)
 			}
 			itemBuilder.WriteString("\n---\n\n")
 
@@ -292,7 +292,7 @@ func formatSploitusResults(query, exploitType string, limit int, resp sploitusRe
 		}
 
 	default: // "exploits" or anything else
-		sb.WriteString(fmt.Sprintf("## Exploits (showing up to %d)\n\n", len(results)))
+		fmt.Fprintf(&sb, "## Exploits (showing up to %d)\n\n", len(results))
 		currentSize = len(sb.String())
 
 		for i, item := range results {
@@ -303,24 +303,24 @@ func formatSploitusResults(query, exploitType string, limit int, resp sploitusRe
 			}
 
 			var itemBuilder strings.Builder
-			itemBuilder.WriteString(fmt.Sprintf("### %d. %s\n\n", i+1, item.Title))
+			fmt.Fprintf(&itemBuilder, "### %d. %s\n\n", i+1, item.Title)
 			if item.Href != "" {
-				itemBuilder.WriteString(fmt.Sprintf("**URL:** %s  \n", item.Href))
+				fmt.Fprintf(&itemBuilder, "**URL:** %s  \n", item.Href)
 			}
 			if item.Score > 0 {
-				itemBuilder.WriteString(fmt.Sprintf("**CVSS Score:** %.1f  \n", item.Score))
+				fmt.Fprintf(&itemBuilder, "**CVSS Score:** %.1f  \n", item.Score)
 			}
 			if item.Type != "" {
-				itemBuilder.WriteString(fmt.Sprintf("**Type:** %s  \n", item.Type))
+				fmt.Fprintf(&itemBuilder, "**Type:** %s  \n", item.Type)
 			}
 			if item.Published != "" {
-				itemBuilder.WriteString(fmt.Sprintf("**Published:** %s  \n", item.Published))
+				fmt.Fprintf(&itemBuilder, "**Published:** %s  \n", item.Published)
 			}
 			if item.ID != "" {
-				itemBuilder.WriteString(fmt.Sprintf("**ID:** %s  \n", item.ID))
+				fmt.Fprintf(&itemBuilder, "**ID:** %s  \n", item.ID)
 			}
 			if item.Language != "" {
-				itemBuilder.WriteString(fmt.Sprintf("**Language:** %s  \n", item.Language))
+				fmt.Fprintf(&itemBuilder, "**Language:** %s  \n", item.Language)
 			}
 
 			// Truncate source if it's too large (hard limit: 50 KB)
@@ -329,7 +329,7 @@ func formatSploitusResults(query, exploitType string, limit int, resp sploitusRe
 				if len(sourcePreview) > maxSourceSize {
 					sourcePreview = sourcePreview[:maxSourceSize] + "\n... [source truncated, exceeded 50 KB limit]"
 				}
-				itemBuilder.WriteString(fmt.Sprintf("\n**Source Preview:**\n```\n%s\n```\n", sourcePreview))
+				fmt.Fprintf(&itemBuilder, "\n**Source Preview:**\n```\n%s\n```\n", sourcePreview)
 			}
 			itemBuilder.WriteString("\n---\n\n")
 
@@ -348,10 +348,8 @@ func formatSploitusResults(query, exploitType string, limit int, resp sploitusRe
 
 	// Add warning if results were truncated due to size limit
 	if truncatedBySize {
-		sb.WriteString(fmt.Sprintf(
-			"\n\n**⚠️ Note:** Results truncated after %d items due to %d bytes size limit. Total shown: %d of %d available.\n",
-			actualShown, maxTotalResultSize, actualShown, len(results),
-		))
+		fmt.Fprintf(&sb, "\n\n**⚠️ Note:** Results truncated after %d items due to %d bytes size limit. Total shown: %d of %d available.\n",
+			actualShown, maxTotalResultSize, actualShown, len(results))
 	}
 
 	return sb.String()

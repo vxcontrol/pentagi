@@ -24,7 +24,7 @@ func (t *Tester) flush() error {
 	if err != nil {
 		return fmt.Errorf("failed to start transaction: %w", err)
 	}
-	defer tx.Rollback(t.ctx)
+	defer func() { _ = tx.Rollback(t.ctx) }()
 
 	result, err := tx.Exec(t.ctx, fmt.Sprintf("DELETE FROM %s", t.embeddingTableName))
 	if err != nil {

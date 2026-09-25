@@ -4,7 +4,7 @@ SELECT
 FROM screenshots s
 INNER JOIN flows f ON s.flow_id = f.id
 WHERE s.flow_id = $1 AND f.deleted_at IS NULL
-ORDER BY s.created_at DESC;
+ORDER BY s.created_at ASC, s.id ASC;
 
 -- name: GetUserFlowScreenshots :many
 SELECT
@@ -13,7 +13,7 @@ FROM screenshots s
 INNER JOIN flows f ON s.flow_id = f.id
 INNER JOIN users u ON f.user_id = u.id
 WHERE s.flow_id = $1 AND f.user_id = $2 AND f.deleted_at IS NULL
-ORDER BY s.created_at DESC;
+ORDER BY s.created_at ASC, s.id ASC;
 
 -- name: GetTaskScreenshots :many
 SELECT
@@ -22,7 +22,7 @@ FROM screenshots s
 INNER JOIN flows f ON s.flow_id = f.id
 INNER JOIN tasks t ON s.task_id = t.id
 WHERE s.task_id = $1 AND f.deleted_at IS NULL
-ORDER BY s.created_at DESC;
+ORDER BY s.created_at ASC, s.id ASC;
 
 -- name: GetSubtaskScreenshots :many
 SELECT
@@ -31,7 +31,7 @@ FROM screenshots s
 INNER JOIN flows f ON s.flow_id = f.id
 INNER JOIN subtasks st ON s.subtask_id = st.id
 WHERE s.subtask_id = $1 AND f.deleted_at IS NULL
-ORDER BY s.created_at DESC;
+ORDER BY s.created_at ASC, s.id ASC;
 
 -- name: GetScreenshot :one
 SELECT

@@ -1,6 +1,6 @@
 // Package openaicompat is the shared implementation for the OpenAI-compatible
 // providers that differ only in constants and credentials (deepseek, glm, kimi,
-// qwen, minimax). The native OpenAI provider is intentionally NOT built on this:
+// qwen, minimax, mistral, xai). The native OpenAI provider is intentionally NOT built on this:
 // it has no model-prefix support and no reasoning-preservation option.
 package openaicompat
 
@@ -27,6 +27,12 @@ type Spec struct {
 	ServerURL          string
 	Prefix             string // LiteLLM model-name prefix (empty disables prefixing)
 	PreserveReasoning  bool   // adds openai.WithPreserveReasoningContent() for thinking models
+	LegacyMaxTokens    bool
+	// StructuredOutputFallback adds openai.WithStructuredOutputFallback(): a vendor
+	// without json_schema (DeepSeek and Z.ai GLM with json_object, MiniMax M-series
+	// with no response_format) gets the schema in the prompt and the answer is
+	// validated locally.
+	StructuredOutputFallback bool
 }
 
 // Provider implements provider.Provider over an OpenAI-compatible endpoint.
@@ -39,6 +45,7 @@ type Provider struct {
 	prefix             string
 	agentModel         string
 	toolCallIDTemplate string
+	legacyMaxTokens    bool
 }
 
 // New builds an OpenAI-compatible provider from spec. The caller supplies the
@@ -67,6 +74,9 @@ func New(
 	if spec.PreserveReasoning {
 		opts = append(opts, openai.WithPreserveReasoningContent())
 	}
+	if spec.StructuredOutputFallback {
+		opts = append(opts, openai.WithStructuredOutputFallback())
+	}
 
 	client, err := openai.New(opts...)
 	if err != nil {
@@ -82,6 +92,7 @@ func New(
 		prefix:             spec.Prefix,
 		agentModel:         spec.Model,
 		toolCallIDTemplate: spec.ToolCallIDTemplate,
+		legacyMaxTokens:    spec.LegacyMaxTokens,
 	}, nil
 }
 
@@ -130,7 +141,7 @@ func (p *Provider) Call(
 ) (string, error) {
 	return provider.WrapGenerateFromSinglePrompt(
 		ctx, p, opt, p.llm, prompt,
-		p.providerConfig.GetOptionsForType(opt)...,
+		p.optionsFor(opt)...,
 	)
 }
 
@@ -144,7 +155,7 @@ func (p *Provider) CallEx(
 		ctx, p, opt, p.llm.GenerateContent, chain,
 		append([]llms.CallOption{
 			llms.WithStreamingFunc(streamCb),
-		}, p.providerConfig.GetOptionsForType(opt)...)...,
+		}, p.optionsFor(opt)...)...,
 	)
 }
 
@@ -160,12 +171,10 @@ func (p *Provider) CallWithTools(
 		append([]llms.CallOption{
 			llms.WithTools(tools),
 			llms.WithStreamingFunc(streamCb),
-		}, p.providerConfig.GetOptionsForType(opt)...)...,
+		}, p.optionsFor(opt)...)...,
 	)
 }
 
-// CallWithExtraOptions: extra is appended last, so it overrides the config.
-// Shared by deepseek/glm/kimi/qwen/minimax.
 func (p *Provider) CallWithExtraOptions(
 	ctx context.Context,
 	opt pconfig.ProviderOptionsType,
@@ -178,10 +187,19 @@ func (p *Provider) CallWithExtraOptions(
 	if len(tools) > 0 {
 		options = append(options, llms.WithTools(tools))
 	}
-	options = append(options, p.providerConfig.GetOptionsForType(opt)...)
+	options = append(options, p.optionsFor(opt)...)
 	options = append(options, extra...)
 
 	return provider.WrapGenerateContent(ctx, p, opt, p.llm.GenerateContent, chain, options...)
+}
+
+func (p *Provider) optionsFor(opt pconfig.ProviderOptionsType) []llms.CallOption {
+	options := p.providerConfig.GetOptionsForType(opt)
+	if p.legacyMaxTokens {
+		options = append(options, openai.WithLegacyMaxTokensField())
+	}
+
+	return options
 }
 
 func (p *Provider) GetUsage(info map[string]any) pconfig.CallUsage {

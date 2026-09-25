@@ -28,6 +28,8 @@ services:
     container_name: pentagi-e2e-mock-llm
     restart: unless-stopped
     command: ["node", "/app/server.mjs"]
+    environment:
+      - MOCK_LLM_DELAY_MS=${MOCK_LLM_DELAY_MS:-0}
     volumes:
       - ./frontend/e2e/mock-llm:/app:ro
     networks:
@@ -53,7 +55,15 @@ services:
       # the mock never checks it.
       - LLM_SERVER_KEY=e2e-dummy-key
       - LLM_SERVER_MODEL=e2e-mock
-      - EMBEDDING_PROVIDER=none
+      # The mock answers /embeddings too, so knowledge documents — which are refused outright
+      # without an embedder — stay reachable on this stack.
+      - EMBEDDING_PROVIDER=openai
+      - EMBEDDING_URL=http://mock-llm:8080/v1
+      - EMBEDDING_KEY=e2e-dummy-key
+      - EMBEDDING_MODEL=e2e-mock-embed
+      - COOKIE_SIGNING_SALT=e2e-throwaway-salt
+      # Sandbox ports come from this base, and every instance owns [base, base+2000).
+      - DOCKER_PORTS_BASE=30000
     # The base service has no healthcheck, so `up --wait` would return before
     # goose migrations finish and the API serves. The runtime image is alpine —
     # probe with busybox wget, not curl.

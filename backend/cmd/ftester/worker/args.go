@@ -367,7 +367,6 @@ func getStructTypeForFunction(funcName string) (reflect.Type, error) {
 	return reflect.TypeOf(structType).Elem(), nil
 }
 
-// IsToolAvailableForCall checks if a tool is available for call from the command line
 func isToolAvailableForCall(toolName string) bool {
 	toolsMapping := tools.GetToolsByType()
 	availableTools := map[string]struct{}{}

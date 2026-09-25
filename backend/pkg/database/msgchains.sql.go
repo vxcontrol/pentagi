@@ -95,7 +95,7 @@ func (q *Queries) CreateMsgChain(ctx context.Context, arg CreateMsgChainParams) 
 
 const getAllFlowsUsageStats = `-- name: GetAllFlowsUsageStats :many
 SELECT
-  COALESCE(mc.flow_id, t.flow_id) AS flow_id,
+  mc.flow_id AS flow_id,
   COALESCE(SUM(mc.usage_in), 0)::bigint AS total_usage_in,
   COALESCE(SUM(mc.usage_out), 0)::bigint AS total_usage_out,
   COALESCE(SUM(mc.usage_cache_in), 0)::bigint AS total_usage_cache_in,
@@ -103,12 +103,10 @@ SELECT
   COALESCE(SUM(mc.usage_cost_in), 0.0)::double precision AS total_usage_cost_in,
   COALESCE(SUM(mc.usage_cost_out), 0.0)::double precision AS total_usage_cost_out
 FROM msgchains mc
-LEFT JOIN subtasks s ON mc.subtask_id = s.id
-LEFT JOIN tasks t ON s.task_id = t.id OR mc.task_id = t.id
-INNER JOIN flows f ON (mc.flow_id = f.id OR t.flow_id = f.id)
+INNER JOIN flows f ON f.id = mc.flow_id
 WHERE f.deleted_at IS NULL
-GROUP BY COALESCE(mc.flow_id, t.flow_id)
-ORDER BY COALESCE(mc.flow_id, t.flow_id)
+GROUP BY mc.flow_id
+ORDER BY mc.flow_id
 `
 
 type GetAllFlowsUsageStatsRow struct {
@@ -308,10 +306,8 @@ SELECT
   COALESCE(SUM(mc.usage_cost_in), 0.0)::double precision AS total_usage_cost_in,
   COALESCE(SUM(mc.usage_cost_out), 0.0)::double precision AS total_usage_cost_out
 FROM msgchains mc
-LEFT JOIN subtasks s ON mc.subtask_id = s.id
-LEFT JOIN tasks t ON s.task_id = t.id OR mc.task_id = t.id
-INNER JOIN flows f ON (mc.flow_id = f.id OR t.flow_id = f.id)
-WHERE (mc.flow_id = $1 OR t.flow_id = $1) AND f.deleted_at IS NULL
+INNER JOIN flows f ON f.id = mc.flow_id
+WHERE mc.flow_id = $1 AND f.deleted_at IS NULL
 `
 
 type GetFlowUsageStatsRow struct {
@@ -789,25 +785,58 @@ func (q *Queries) GetTaskUsageStats(ctx context.Context, taskID sql.NullInt64) (
 	return i, err
 }
 
-const getUsageStatsByDayLast3Months = `-- name: GetUsageStatsByDayLast3Months :many
+const getUsageStatsByDay = `-- name: GetUsageStatsByDay :many
+WITH bounds AS (
+  SELECT
+    ((NOW() AT TIME ZONE $1::text)::date - $2::int) AS first_day,
+    (NOW() AT TIME ZONE $1::text)::date AS last_day
+),
+days AS (
+  SELECT generate_series(b.first_day, b.last_day, INTERVAL '1 day')::date AS day
+  FROM bounds b
+),
+agg AS (
+  SELECT
+    (mc.created_at AT TIME ZONE $1::text)::date AS day,
+    SUM(mc.usage_in)::bigint AS total_usage_in,
+    SUM(mc.usage_out)::bigint AS total_usage_out,
+    SUM(mc.usage_cache_in)::bigint AS total_usage_cache_in,
+    SUM(mc.usage_cache_out)::bigint AS total_usage_cache_out,
+    SUM(mc.usage_cost_in)::double precision AS total_usage_cost_in,
+    SUM(mc.usage_cost_out)::double precision AS total_usage_cost_out
+  FROM msgchains mc
+  INNER JOIN flows f ON f.id = mc.flow_id
+  WHERE f.deleted_at IS NULL
+    AND f.user_id = $3
+    -- The coarse bounds keep the index; the exact test repeats the grouping
+    -- expression, because an ambiguous local midnight resolves to the later
+    -- instant and would drop the earlier hour of that day.
+    AND mc.created_at >= (((SELECT first_day FROM bounds) - 1)::timestamp AT TIME ZONE $1::text)
+    AND mc.created_at < (((SELECT last_day FROM bounds) + 2)::timestamp AT TIME ZONE $1::text)
+    AND (mc.created_at AT TIME ZONE $1::text)::date
+        BETWEEN (SELECT first_day FROM bounds) AND (SELECT last_day FROM bounds)
+  GROUP BY 1
+)
 SELECT
-  DATE(mc.created_at) AS date,
-  COALESCE(SUM(mc.usage_in), 0)::bigint AS total_usage_in,
-  COALESCE(SUM(mc.usage_out), 0)::bigint AS total_usage_out,
-  COALESCE(SUM(mc.usage_cache_in), 0)::bigint AS total_usage_cache_in,
-  COALESCE(SUM(mc.usage_cache_out), 0)::bigint AS total_usage_cache_out,
-  COALESCE(SUM(mc.usage_cost_in), 0.0)::double precision AS total_usage_cost_in,
-  COALESCE(SUM(mc.usage_cost_out), 0.0)::double precision AS total_usage_cost_out
-FROM msgchains mc
-LEFT JOIN subtasks s ON mc.subtask_id = s.id
-LEFT JOIN tasks t ON s.task_id = t.id OR mc.task_id = t.id
-INNER JOIN flows f ON (mc.flow_id = f.id OR t.flow_id = f.id)
-WHERE mc.created_at >= NOW() - INTERVAL '90 days' AND f.deleted_at IS NULL AND f.user_id = $1
-GROUP BY DATE(mc.created_at)
+  (d.day::timestamp AT TIME ZONE $1::text) AS date,
+  COALESCE(a.total_usage_in, 0)::bigint AS total_usage_in,
+  COALESCE(a.total_usage_out, 0)::bigint AS total_usage_out,
+  COALESCE(a.total_usage_cache_in, 0)::bigint AS total_usage_cache_in,
+  COALESCE(a.total_usage_cache_out, 0)::bigint AS total_usage_cache_out,
+  COALESCE(a.total_usage_cost_in, 0.0)::double precision AS total_usage_cost_in,
+  COALESCE(a.total_usage_cost_out, 0.0)::double precision AS total_usage_cost_out
+FROM days d
+LEFT JOIN agg a ON a.day = d.day
 ORDER BY date DESC
 `
 
-type GetUsageStatsByDayLast3MonthsRow struct {
+type GetUsageStatsByDayParams struct {
+	Tz     string `json:"tz"`
+	Days   int32  `json:"days"`
+	UserID int64  `json:"user_id"`
+}
+
+type GetUsageStatsByDayRow struct {
 	Date               time.Time `json:"date"`
 	TotalUsageIn       int64     `json:"total_usage_in"`
 	TotalUsageOut      int64     `json:"total_usage_out"`
@@ -817,133 +846,16 @@ type GetUsageStatsByDayLast3MonthsRow struct {
 	TotalUsageCostOut  float64   `json:"total_usage_cost_out"`
 }
 
-func (q *Queries) GetUsageStatsByDayLast3Months(ctx context.Context, userID int64) ([]GetUsageStatsByDayLast3MonthsRow, error) {
-	rows, err := q.db.QueryContext(ctx, getUsageStatsByDayLast3Months, userID)
+// One dense row per calendar day in the caller's timezone, zeros included.
+func (q *Queries) GetUsageStatsByDay(ctx context.Context, arg GetUsageStatsByDayParams) ([]GetUsageStatsByDayRow, error) {
+	rows, err := q.db.QueryContext(ctx, getUsageStatsByDay, arg.Tz, arg.Days, arg.UserID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []GetUsageStatsByDayLast3MonthsRow
+	var items []GetUsageStatsByDayRow
 	for rows.Next() {
-		var i GetUsageStatsByDayLast3MonthsRow
-		if err := rows.Scan(
-			&i.Date,
-			&i.TotalUsageIn,
-			&i.TotalUsageOut,
-			&i.TotalUsageCacheIn,
-			&i.TotalUsageCacheOut,
-			&i.TotalUsageCostIn,
-			&i.TotalUsageCostOut,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const getUsageStatsByDayLastMonth = `-- name: GetUsageStatsByDayLastMonth :many
-SELECT
-  DATE(mc.created_at) AS date,
-  COALESCE(SUM(mc.usage_in), 0)::bigint AS total_usage_in,
-  COALESCE(SUM(mc.usage_out), 0)::bigint AS total_usage_out,
-  COALESCE(SUM(mc.usage_cache_in), 0)::bigint AS total_usage_cache_in,
-  COALESCE(SUM(mc.usage_cache_out), 0)::bigint AS total_usage_cache_out,
-  COALESCE(SUM(mc.usage_cost_in), 0.0)::double precision AS total_usage_cost_in,
-  COALESCE(SUM(mc.usage_cost_out), 0.0)::double precision AS total_usage_cost_out
-FROM msgchains mc
-LEFT JOIN subtasks s ON mc.subtask_id = s.id
-LEFT JOIN tasks t ON s.task_id = t.id OR mc.task_id = t.id
-INNER JOIN flows f ON (mc.flow_id = f.id OR t.flow_id = f.id)
-WHERE mc.created_at >= NOW() - INTERVAL '30 days' AND f.deleted_at IS NULL AND f.user_id = $1
-GROUP BY DATE(mc.created_at)
-ORDER BY date DESC
-`
-
-type GetUsageStatsByDayLastMonthRow struct {
-	Date               time.Time `json:"date"`
-	TotalUsageIn       int64     `json:"total_usage_in"`
-	TotalUsageOut      int64     `json:"total_usage_out"`
-	TotalUsageCacheIn  int64     `json:"total_usage_cache_in"`
-	TotalUsageCacheOut int64     `json:"total_usage_cache_out"`
-	TotalUsageCostIn   float64   `json:"total_usage_cost_in"`
-	TotalUsageCostOut  float64   `json:"total_usage_cost_out"`
-}
-
-func (q *Queries) GetUsageStatsByDayLastMonth(ctx context.Context, userID int64) ([]GetUsageStatsByDayLastMonthRow, error) {
-	rows, err := q.db.QueryContext(ctx, getUsageStatsByDayLastMonth, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []GetUsageStatsByDayLastMonthRow
-	for rows.Next() {
-		var i GetUsageStatsByDayLastMonthRow
-		if err := rows.Scan(
-			&i.Date,
-			&i.TotalUsageIn,
-			&i.TotalUsageOut,
-			&i.TotalUsageCacheIn,
-			&i.TotalUsageCacheOut,
-			&i.TotalUsageCostIn,
-			&i.TotalUsageCostOut,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const getUsageStatsByDayLastWeek = `-- name: GetUsageStatsByDayLastWeek :many
-SELECT
-  DATE(mc.created_at) AS date,
-  COALESCE(SUM(mc.usage_in), 0)::bigint AS total_usage_in,
-  COALESCE(SUM(mc.usage_out), 0)::bigint AS total_usage_out,
-  COALESCE(SUM(mc.usage_cache_in), 0)::bigint AS total_usage_cache_in,
-  COALESCE(SUM(mc.usage_cache_out), 0)::bigint AS total_usage_cache_out,
-  COALESCE(SUM(mc.usage_cost_in), 0.0)::double precision AS total_usage_cost_in,
-  COALESCE(SUM(mc.usage_cost_out), 0.0)::double precision AS total_usage_cost_out
-FROM msgchains mc
-LEFT JOIN subtasks s ON mc.subtask_id = s.id
-LEFT JOIN tasks t ON s.task_id = t.id OR mc.task_id = t.id
-INNER JOIN flows f ON (mc.flow_id = f.id OR t.flow_id = f.id)
-WHERE mc.created_at >= NOW() - INTERVAL '7 days' AND f.deleted_at IS NULL AND f.user_id = $1
-GROUP BY DATE(mc.created_at)
-ORDER BY date DESC
-`
-
-type GetUsageStatsByDayLastWeekRow struct {
-	Date               time.Time `json:"date"`
-	TotalUsageIn       int64     `json:"total_usage_in"`
-	TotalUsageOut      int64     `json:"total_usage_out"`
-	TotalUsageCacheIn  int64     `json:"total_usage_cache_in"`
-	TotalUsageCacheOut int64     `json:"total_usage_cache_out"`
-	TotalUsageCostIn   float64   `json:"total_usage_cost_in"`
-	TotalUsageCostOut  float64   `json:"total_usage_cost_out"`
-}
-
-func (q *Queries) GetUsageStatsByDayLastWeek(ctx context.Context, userID int64) ([]GetUsageStatsByDayLastWeekRow, error) {
-	rows, err := q.db.QueryContext(ctx, getUsageStatsByDayLastWeek, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []GetUsageStatsByDayLastWeekRow
-	for rows.Next() {
-		var i GetUsageStatsByDayLastWeekRow
+		var i GetUsageStatsByDayRow
 		if err := rows.Scan(
 			&i.Date,
 			&i.TotalUsageIn,
@@ -977,9 +889,7 @@ SELECT
   COALESCE(SUM(mc.usage_cost_in), 0.0)::double precision AS total_usage_cost_in,
   COALESCE(SUM(mc.usage_cost_out), 0.0)::double precision AS total_usage_cost_out
 FROM msgchains mc
-LEFT JOIN subtasks s ON mc.subtask_id = s.id
-LEFT JOIN tasks t ON s.task_id = t.id OR mc.task_id = t.id
-INNER JOIN flows f ON (mc.flow_id = f.id OR t.flow_id = f.id)
+INNER JOIN flows f ON f.id = mc.flow_id
 WHERE f.deleted_at IS NULL AND f.user_id = $1
 GROUP BY mc.model, mc.model_provider
 ORDER BY mc.model, mc.model_provider
@@ -1040,10 +950,8 @@ SELECT
   COALESCE(SUM(mc.usage_cost_in), 0.0)::double precision AS total_usage_cost_in,
   COALESCE(SUM(mc.usage_cost_out), 0.0)::double precision AS total_usage_cost_out
 FROM msgchains mc
-LEFT JOIN subtasks s ON mc.subtask_id = s.id
-LEFT JOIN tasks t ON s.task_id = t.id OR mc.task_id = t.id
-INNER JOIN flows f ON (mc.flow_id = f.id OR t.flow_id = f.id)
-WHERE (mc.flow_id = $1 OR t.flow_id = $1) AND f.deleted_at IS NULL
+INNER JOIN flows f ON f.id = mc.flow_id
+WHERE mc.flow_id = $1 AND f.deleted_at IS NULL
 GROUP BY mc.model, mc.model_provider
 ORDER BY mc.model, mc.model_provider
 `
@@ -1103,9 +1011,7 @@ SELECT
   COALESCE(SUM(mc.usage_cost_in), 0.0)::double precision AS total_usage_cost_in,
   COALESCE(SUM(mc.usage_cost_out), 0.0)::double precision AS total_usage_cost_out
 FROM msgchains mc
-LEFT JOIN subtasks s ON mc.subtask_id = s.id
-LEFT JOIN tasks t ON s.task_id = t.id OR mc.task_id = t.id
-INNER JOIN flows f ON (mc.flow_id = f.id OR t.flow_id = f.id)
+INNER JOIN flows f ON f.id = mc.flow_id
 WHERE f.deleted_at IS NULL AND f.user_id = $1
 GROUP BY mc.model_provider
 ORDER BY mc.model_provider
@@ -1162,9 +1068,7 @@ SELECT
   COALESCE(SUM(mc.usage_cost_in), 0.0)::double precision AS total_usage_cost_in,
   COALESCE(SUM(mc.usage_cost_out), 0.0)::double precision AS total_usage_cost_out
 FROM msgchains mc
-LEFT JOIN subtasks s ON mc.subtask_id = s.id
-LEFT JOIN tasks t ON s.task_id = t.id OR mc.task_id = t.id
-INNER JOIN flows f ON (mc.flow_id = f.id OR t.flow_id = f.id)
+INNER JOIN flows f ON f.id = mc.flow_id
 WHERE f.deleted_at IS NULL AND f.user_id = $1
 GROUP BY mc.type
 ORDER BY mc.type
@@ -1221,10 +1125,8 @@ SELECT
   COALESCE(SUM(mc.usage_cost_in), 0.0)::double precision AS total_usage_cost_in,
   COALESCE(SUM(mc.usage_cost_out), 0.0)::double precision AS total_usage_cost_out
 FROM msgchains mc
-LEFT JOIN subtasks s ON mc.subtask_id = s.id
-LEFT JOIN tasks t ON s.task_id = t.id OR mc.task_id = t.id
-INNER JOIN flows f ON (mc.flow_id = f.id OR t.flow_id = f.id)
-WHERE (mc.flow_id = $1 OR t.flow_id = $1) AND f.deleted_at IS NULL
+INNER JOIN flows f ON f.id = mc.flow_id
+WHERE mc.flow_id = $1 AND f.deleted_at IS NULL
 GROUP BY mc.type
 ORDER BY mc.type
 `
@@ -1279,9 +1181,7 @@ SELECT
   COALESCE(SUM(mc.usage_cost_in), 0.0)::double precision AS total_usage_cost_in,
   COALESCE(SUM(mc.usage_cost_out), 0.0)::double precision AS total_usage_cost_out
 FROM msgchains mc
-LEFT JOIN subtasks s ON mc.subtask_id = s.id
-LEFT JOIN tasks t ON s.task_id = t.id OR mc.task_id = t.id
-INNER JOIN flows f ON (mc.flow_id = f.id OR t.flow_id = f.id)
+INNER JOIN flows f ON f.id = mc.flow_id
 WHERE f.deleted_at IS NULL AND f.user_id = $1
 `
 

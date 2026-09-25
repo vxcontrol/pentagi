@@ -444,11 +444,11 @@ func (m *SummarizerFormModel) OnFieldChanged(fieldIndex int, oldValue, newValue 
 }
 
 func (m *SummarizerFormModel) GetFormFields() []FormField {
-	return m.BaseScreen.fields
+	return m.fields
 }
 
 func (m *SummarizerFormModel) SetFormFields(fields []FormField) {
-	m.BaseScreen.fields = fields
+	m.fields = fields
 }
 
 // Update method - handle screen-specific input

@@ -1,9 +1,14 @@
 import type { ResultOf } from '@graphql-typed-document-node/core';
 
-import type { CreateApiTokenDocument, DeleteApiTokenDocument } from '@/graphql/types';
+import { differenceInSeconds } from 'date-fns';
+
+import type { CreateApiTokenDocument, DeleteApiTokenDocument, UpdateApiTokenDocument } from '@/graphql/types';
+
+import { TokenStatus } from '@/graphql/types';
 
 import { CASSETTE_EPOCH } from '../../fixtures/backend.ts';
 import { expect, test } from '../../fixtures/test.ts';
+import { clipboardWrites, recordClipboardWrites } from '../../helpers/clipboard.ts';
 import { expectCleanPage } from '../../helpers/errors.ts';
 import {
     apiTokensCassette,
@@ -43,9 +48,10 @@ test.describe('api tokens crud', { tag: '@crud' }, () => {
 
         // The picker's date and the pinned clock together fix what the form must put on the wire.
         const EXPIRES_AT = new Date('2026-01-20T00:00:00Z');
-        const EXPECTED_TTL = Math.ceil((EXPIRES_AT.getTime() - CASSETTE_EPOCH.getTime()) / 1000);
+        const EXPECTED_TTL = differenceInSeconds(EXPIRES_AT, CASSETTE_EPOCH);
 
         test('creates a token through the inline row and reveals the secret', async ({ page, pageErrorLog }) => {
+            await recordClipboardWrites(page);
             await page.goto('/settings/api-tokens');
 
             await expect(page.getByRole('row', { name: /E2E seed token/ })).toBeVisible();
@@ -82,10 +88,80 @@ test.describe('api tokens crud', { tag: '@crud' }, () => {
             await expect(dialog.getByText('API Token Created')).toBeVisible();
             await expect(dialog.getByText(CREATED_TOKEN_SECRET)).toBeVisible();
 
+            await dialog.getByRole('button', { name: 'Copy Token' }).click();
+
+            await expect(page.getByText('Token copied to clipboard')).toBeVisible();
+            expect(await clipboardWrites(page)).toEqual([CREATED_TOKEN_SECRET]);
+
             await page.keyboard.press('Escape');
 
             await expect(dialog).toBeHidden();
             await expect(page.getByRole('row', { name: /E2E created token/ })).toBeVisible();
+            expectCleanPage(pageErrorLog);
+        });
+    });
+
+    test.describe('clipboard', () => {
+        test.use({ cassette: apiTokensCassette() });
+
+        test('copies the token id from the row menu', async ({ page, pageErrorLog }) => {
+            await recordClipboardWrites(page);
+            await page.goto('/settings/api-tokens');
+
+            await page
+                .getByRole('row', { name: /E2E seed token/ })
+                .getByRole('button', { name: 'Open menu' })
+                .click();
+            await page.getByRole('menuitem', { name: 'Copy Token ID' }).click();
+
+            await expect(page.getByText('Token ID copied to clipboard')).toBeVisible();
+            expect(await clipboardWrites(page)).toEqual([SEED_TOKEN.tokenId]);
+            expectCleanPage(pageErrorLog);
+        });
+    });
+
+    test.describe('update', () => {
+        const revoked = { ...SEED_TOKEN, name: 'E2E renamed token', status: TokenStatus.Revoked };
+        const updated: ResultOf<typeof UpdateApiTokenDocument> = { updateAPIToken: revoked };
+
+        test.use({
+            cassette: apiTokensCassette({
+                mutations: {
+                    updateAPIToken: [
+                        {
+                            data: updated,
+                            setFlag: 'token-updated',
+                            variables: {
+                                input: { name: 'E2E renamed token', status: TokenStatus.Revoked },
+                                tokenId: SEED_TOKEN.tokenId,
+                            },
+                        },
+                    ],
+                },
+                queries: {
+                    apiTokens: [
+                        { data: tokensList(SEED_TOKEN) },
+                        { data: tokensList(revoked), whenFlag: 'token-updated' },
+                    ],
+                },
+            }),
+        });
+
+        test('renames a token and revokes it from the inline edit row', async ({ page, pageErrorLog }) => {
+            await page.goto('/settings/api-tokens');
+
+            const row = page.getByRole('row', { name: /E2E seed token/ });
+
+            await row.hover();
+            await row.getByRole('button', { name: 'Open menu' }).click();
+            await page.getByRole('menuitem', { name: 'Edit' }).click();
+
+            await page.getByPlaceholder('Token name (optional)').fill('E2E renamed token');
+            await page.getByRole('combobox', { name: 'Token status' }).click();
+            await page.getByRole('option', { name: 'revoked' }).click();
+            await page.getByRole('button', { name: 'Submit' }).click();
+
+            await expect(page.getByRole('row', { name: /E2E renamed token/ })).toContainText('revoked');
             expectCleanPage(pageErrorLog);
         });
     });

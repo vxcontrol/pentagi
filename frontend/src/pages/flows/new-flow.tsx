@@ -26,7 +26,7 @@ function NewFlow() {
 
     const handleSubmit = async (values: FlowFormValues) => {
         if (isLoading) {
-            return;
+            return false;
         }
 
         setIsLoading(true);
@@ -34,9 +34,13 @@ function NewFlow() {
         try {
             const flowId = flowType === 'automation' ? await createFlow(values) : await createFlowWithAssistant(values);
 
-            if (flowId) {
-                navigate(routes.flow(flowId, { tab: flowType }));
+            if (!flowId) {
+                return false;
             }
+
+            navigate(routes.flow(flowId, { tab: flowType }));
+
+            return true;
         } finally {
             setIsLoading(false);
         }

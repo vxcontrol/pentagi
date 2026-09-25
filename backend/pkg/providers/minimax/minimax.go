@@ -74,5 +74,8 @@ func New(
 		APIKey:             cfg.MiniMaxAPIKey,
 		ServerURL:          cfg.MiniMaxServerURL,
 		Prefix:             cfg.MiniMaxProvider,
+		PreserveReasoning:  true,
+		// MiniMax takes no response_format, so the schema goes in the prompt.
+		StructuredOutputFallback: true,
 	}, httpClient, models, providerName, providerConfig)
 }

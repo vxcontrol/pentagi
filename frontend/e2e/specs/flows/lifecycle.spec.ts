@@ -2,6 +2,7 @@ import type { ResultOf } from '@graphql-typed-document-node/core';
 
 import type {
     AddFavoriteFlowDocument,
+    DeleteFavoriteFlowDocument,
     DeleteFlowDocument,
     FinishFlowDocument,
     RenameFlowDocument,
@@ -148,6 +149,91 @@ test.describe('flow lifecycle', { tag: '@flows' }, () => {
             await expect(star).toHaveAttribute('aria-pressed', 'true');
             await expect(page.getByText('Favorite Flows')).toBeVisible();
             await expect(star).toHaveAttribute('aria-pressed', 'true');
+            expectCleanPage(pageErrorLog);
+        });
+    });
+
+    test.describe('unfavorite', () => {
+        const unfavorited: ResultOf<typeof DeleteFavoriteFlowDocument> = { deleteFavoriteFlow: ResultType.Success };
+
+        test.use({
+            cassette: flowsCassette({
+                mutations: {
+                    deleteFavoriteFlow: [
+                        { data: unfavorited, setFlag: 'flow-unfavorited', variables: { flowId: '5' } },
+                    ],
+                },
+                queries: {
+                    settingsUser: [
+                        {
+                            data: {
+                                settingsUser: entity('UserPreferences', { favoriteFlows: ['5'], id: '1' }),
+                            },
+                        },
+                    ],
+                },
+                subscriptions: {
+                    settingsUserUpdated: [
+                        {
+                            frames: [
+                                {
+                                    delayMs: 400,
+                                    payload: {
+                                        data: {
+                                            settingsUserUpdated: entity('UserPreferences', {
+                                                favoriteFlows: [],
+                                                id: '1',
+                                            }),
+                                        },
+                                    },
+                                    whenFlag: 'flow-unfavorited',
+                                },
+                            ],
+                        },
+                    ],
+                },
+            }),
+        });
+
+        test('clears the star, and the group it was listed under goes with it', async ({ page, pageErrorLog }) => {
+            await openFlowA(page);
+
+            const star = page.locator('header').getByRole('button', { name: 'Toggle favorite' });
+
+            await expect(star).toHaveAttribute('aria-pressed', 'true');
+            await expect(page.getByText('Favorite Flows')).toBeVisible();
+
+            await star.click();
+
+            await expect(star).toHaveAttribute('aria-pressed', 'false');
+            await expect(page.getByText('Favorite Flows')).toBeHidden();
+            expectCleanPage(pageErrorLog);
+        });
+    });
+
+    test.describe('a flow owned by someone else', () => {
+        test.use({
+            cassette: flowsCassette({
+                queries: { flows: [{ data: { flows: [FLOW_A, makeFlow('6', 'E2E Beta', StatusType.Running, '2')] } }] },
+            }),
+        });
+
+        test('offers no favorite star, because adding one is refused', async ({ page, pageErrorLog }) => {
+            await page.goto('/flows');
+
+            const mine = page.getByRole('row', { name: /E2E Alpha/ });
+            const theirs = page.getByRole('row', { name: /E2E Beta/ });
+
+            await expect(theirs).toBeVisible();
+            await mine.hover();
+            await expect(mine.getByRole('button', { name: 'Toggle favorite' })).toBeVisible();
+
+            await theirs.hover();
+            await expect(theirs.getByRole('button', { name: 'Toggle favorite' })).toHaveCount(0);
+
+            await theirs.click({ button: 'right' });
+            await expect(page.getByRole('menuitem', { name: 'View' })).toBeVisible();
+            await expect(page.getByRole('menuitem', { name: /favorites/ })).toHaveCount(0);
             expectCleanPage(pageErrorLog);
         });
     });

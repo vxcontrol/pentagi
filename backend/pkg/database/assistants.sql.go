@@ -449,7 +449,7 @@ func (q *Queries) UpdateAssistantModel(ctx context.Context, arg UpdateAssistantM
 const updateAssistantStatus = `-- name: UpdateAssistantStatus :one
 UPDATE assistants
 SET status = $1
-WHERE id = $2
+WHERE id = $2 AND deleted_at IS NULL
 RETURNING id, status, title, model, model_provider_name, language, functions, trace_id, flow_id, use_agents, msgchain_id, created_at, updated_at, deleted_at, model_provider_type, tool_call_id_template
 `
 

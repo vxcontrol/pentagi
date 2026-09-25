@@ -14,9 +14,11 @@ import Gemini from './gemini';
 import GLM from './glm';
 import Kimi from './kimi';
 import MiniMax from './minimax';
+import Mistral from './mistral';
 import Ollama from './ollama';
 import OpenAi from './open-ai';
 import Qwen from './qwen';
+import XAI from './xai';
 
 interface ProviderIconConfig {
     className: string;
@@ -38,9 +40,11 @@ export const providerIcons: Record<ProviderType, ProviderIconConfig> = {
     [ProviderType.Glm]: { className: 'text-violet-500', icon: GLM },
     [ProviderType.Kimi]: { className: 'text-sky-500', icon: Kimi },
     [ProviderType.Minimax]: { className: 'text-red-500', icon: MiniMax },
+    [ProviderType.Mistral]: { className: 'text-orange-500', icon: Mistral },
     [ProviderType.Ollama]: { className: 'text-blue-500', icon: Ollama },
     [ProviderType.Openai]: { className: 'text-blue-500', icon: OpenAi },
     [ProviderType.Qwen]: { className: 'text-orange-500', icon: Qwen },
+    [ProviderType.Xai]: { className: 'text-foreground', icon: XAI },
 };
 const defaultProviderIcon: ProviderIconConfig = { className: 'text-blue-500', icon: Custom };
 

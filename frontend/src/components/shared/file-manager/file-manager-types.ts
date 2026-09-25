@@ -209,11 +209,6 @@ export interface FileManagerProps {
     enableSelection?: boolean;
     files: FileNode[];
     /**
-     * Initial sort applied on first render when no value is loaded from
-     * `sortStorageKey`. Defaults to `null` (no sort, insertion order preserved).
-     */
-    initialSorting?: FileManagerSortState;
-    /**
      * Group directories before files at every tree level when a sort is active.
      * Default: `true` — matches Finder/Explorer behaviour. Set to `false` to mix
      * directories and files together by the chosen sort criterion.
@@ -224,21 +219,6 @@ export interface FileManagerProps {
     isLoading?: boolean;
     /** Localizable user-facing strings. */
     labels?: FileManagerLabels;
-    /**
-     * Fires whenever the focused row changes (roving tabindex). The path is `null`
-     * until the user actually focuses a row via click or keyboard navigation —
-     * it does NOT auto-fall back to the first visible row, so callers can
-     * distinguish "user picked something" from "tree just rendered".
-     *
-     * Use it to implement context-aware actions (e.g. "Upload here" defaulting
-     * to the focused directory, or its parent for files). The supplied callback
-     * is read through a ref, so it does not need to be memoized.
-     *
-     * Emitted values may reference paths that no longer exist in `files` (e.g.
-     * the focused row was deleted by an external mutation); consumers should
-     * validate against their own data before using the path.
-     */
-    onActiveRowChange?: (path: null | string) => void;
     /**
      * Optional handler for files dragged in from outside the page (e.g. the
      * desktop / OS file explorer). When provided, dropping files onto a
@@ -290,28 +270,10 @@ export interface FileManagerProps {
      * mutating it will desync the manager's internal state.
      */
     onSelectionChange?: (selectedPaths: ReadonlySet<string>) => void;
-    /**
-     * Fires whenever the active sort changes (header click). The supplied
-     * callback is read through a ref, so it does not need to be memoized.
-     */
-    onSortingChange?: (sorting: FileManagerSortState) => void;
     /** Synthetic top-level groups (e.g. Uploads / Container). When omitted, root is flat. */
     rootGroups?: FileManagerRootGroup[];
     /** Search query and matching empty state. Provide `query` to enable filtering. */
     search?: FileManagerSearchConfig;
-    /**
-     * Controlled sort state. When set, the manager renders this value and
-     * delegates updates to `onSortingChange` (it does NOT update its own
-     * state and ignores `sortStorageKey`). Pass `null` to render with no sort.
-     */
-    sorting?: FileManagerSortState;
-    /**
-     * When set, the active sort is persisted to `localStorage` under this key
-     * across page reloads. Ignored in controlled mode (when `sorting` is set).
-     * Pass a route-scoped key (e.g. `getTableStorageKey('/flows/files')`)
-     * to avoid collisions across pages.
-     */
-    sortStorageKey?: string;
 }
 
 export interface FileManagerRootGroup {

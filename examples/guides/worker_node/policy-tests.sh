@@ -456,9 +456,14 @@ if need_image "$IMG_NMAP"; then
     "$HTTP_PORT/tcp +open|$SSH_PORT/tcp +open|$DIND_TLS_PORT/tcp +open" \
     $TARGET_NET "$IMG_NMAP" -Pn -sT -p"$SSH_PORT,$HTTP_PORT,$DIND_TLS_PORT,$OUTER_TLS_PORT" "$TARGET_IP"
 
+  # Deliberately NOT $HTTP_PORT: that service is usually a published container
+  # port, and a raw SYN sent from the host network namespace does not traverse
+  # the DNAT rule that a connect() goes through, so nmap reports it "filtered"
+  # on a perfectly healthy node. $SSH_PORT is a host-native listener, so the
+  # result reflects whether raw sockets work, which is what this test is for.
   expect_contains "nmap SYN scan works (raw sockets / CAP_NET_RAW)" \
-    "$HTTP_PORT/tcp +open" \
-    $TARGET_NET "$IMG_NMAP" -Pn -sS -p"$HTTP_PORT" "$TARGET_IP"
+    "$SSH_PORT/tcp +open" \
+    $TARGET_NET "$IMG_NMAP" -Pn -sS -p"$SSH_PORT" "$TARGET_IP"
 
   expect_contains "nmap service/version detection (-sV)" \
     "$HTTP_PORT/tcp +open|service|VERSION|http" \

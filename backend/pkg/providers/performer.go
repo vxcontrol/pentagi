@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -26,9 +27,12 @@ import (
 )
 
 const (
-	maxRetriesToCallSimpleChain    = 3
-	maxRetriesToCallAgentChain     = 3
-	maxRetriesToCallFunction       = 3
+	maxRetriesToCallSimpleChain = 3
+	maxRetriesToCallAgentChain  = 3
+	maxRetriesToCallFunction    = 3
+	// repeatEchoLimit caps the previous tool answer quoted back on a repeat, so
+	// echoing it cannot re-inflate a chain that is already being summarized.
+	repeatEchoLimit                = 4096
 	maxReflectorCallsPerChain      = 3
 	maxGeneralAgentChainIterations = 100
 	maxLimitedAgentChainIterations = 20
@@ -36,6 +40,12 @@ const (
 	maxSoftDetectionsBeforeAbort   = 4
 	delayBetweenRetries            = 5 * time.Second
 )
+
+// ErrAgentModelCall marks failures while obtaining a usable model response.
+// Persistence and tool execution errors deliberately do not carry this marker:
+// callers may fall back from an optional model step only when the saved plan is
+// still trustworthy.
+var ErrAgentModelCall = errors.New("agent model call failed")
 
 type callResult struct {
 	streamID  int64
@@ -107,7 +117,7 @@ func (fp *flowProvider) performAgentChain(
 		if iteration >= maxCallsLimit {
 			msg := fmt.Sprintf("agent chain exceeded maximum iterations (%d)", maxCallsLimit)
 			logger.WithField("iteration", iteration).Error(msg)
-			return errors.New(msg)
+			return fmt.Errorf("%w: %s", ErrAgentModelCall, msg)
 		}
 
 		var result *callResult
@@ -125,6 +135,18 @@ func (fp *flowProvider) performAgentChain(
 				),
 			}
 		} else {
+			if summarizer != nil {
+				if compacted, done := compactChainForWindow(
+					ctx, fp, optAgentType, chain, executor.Tools(), summarizerHandler, fp.tcIDTemplate,
+				); done {
+					chain = compacted
+					if err := fp.updateMsgChain(ctx, optAgentType, chainID, chain, rollLastUpdateTime()); err != nil {
+						obs.LogErrorOrCancel(logger, err, "failed to update msg chain")
+						return err
+					}
+				}
+			}
+
 			result, err = fp.callWithRetries(ctx, optAgentType, chainID, taskID, subtaskID, chain, executor, executionContext)
 			if err != nil {
 				obs.LogErrorOrCancel(logger, err, "failed to call agent chain")
@@ -144,8 +166,8 @@ func (fp *flowProvider) performAgentChain(
 			} else {
 				// Build AI message with reasoning for reflector (universal pattern)
 				reflectorMsg := llms.MessageContent{Role: llms.ChatMessageTypeAI}
-				if result.content != "" || !result.thinking.IsEmpty() {
-					reflectorMsg.Parts = append(reflectorMsg.Parts, llms.TextPartWithReasoning(result.content, result.thinking))
+				if part, ok := aiResponsePart(result.content, result.thinking); ok {
+					reflectorMsg.Parts = append(reflectorMsg.Parts, part)
 				}
 				result, err = fp.performReflector(
 					ctx, optAgentType, chainID, taskID, subtaskID,
@@ -170,8 +192,8 @@ func (fp *flowProvider) performAgentChain(
 
 		msg := llms.MessageContent{Role: llms.ChatMessageTypeAI}
 		// Universal pattern: preserve content with or without reasoning (works for all providers thanks to deduplication)
-		if result.content != "" || !result.thinking.IsEmpty() {
-			msg.Parts = append(msg.Parts, llms.TextPartWithReasoning(result.content, result.thinking))
+		if part, ok := aiResponsePart(result.content, result.thinking); ok {
+			msg.Parts = append(msg.Parts, part)
 		}
 		for _, toolCall := range result.funcCalls {
 			msg.Parts = append(msg.Parts, toolCall)
@@ -305,7 +327,7 @@ func (fp *flowProvider) execToolCall(
 			return "", errors.New(errMsg)
 		}
 
-		response := fmt.Sprintf("tool call '%s' is repeating, please try another tool", funcName)
+		response := repeatingToolResponse(funcName, len(detector.funcCalls), detector.lastResponse)
 
 		_, observation := obs.Observer.NewObservation(ctx)
 		observation.Event(
@@ -364,9 +386,10 @@ func (fp *flowProvider) execToolCall(
 			funcArgs, err = fp.fixToolCallArgs(ctx, funcName, funcArgs, funcSchema, funcExecErr)
 			if err != nil {
 				obs.LogErrorOrCancel(logger, err, "failed to fix tool call args")
-				return "", fmt.Errorf("failed to fix tool call args: %w", err)
+				return "", correctorFailure(ctx, err, funcName, funcExecErr)
 			}
 		} else {
+			detector.lastResponse = response
 			break
 		}
 	}
@@ -481,7 +504,10 @@ func (fp *flowProvider) callWithRetries(
 			)
 			if err != nil {
 				msg := fmt.Sprintf("failed to call agent chain: max retries reached, %d", idx)
-				return nil, fmt.Errorf(msg+": %w", errors.Join(append(errs, err)...))
+				// The final reflector failure determines whether fallback is safe.
+				// Earlier model errors are context, not causes: joining them here
+				// would make a later database failure look like a model refusal.
+				return nil, fmt.Errorf("%s; prior attempts: %v: %w", msg, errors.Join(errs...), err)
 			}
 
 			return reflectorResult, nil
@@ -523,13 +549,33 @@ func (fp *flowProvider) callWithRetries(
 		}
 
 		resp, err = fp.CallWithTools(ctx, optAgentType, chain, executor.Tools(), streamCb)
+		if err != nil {
+			err = fmt.Errorf("%w: %w", ErrAgentModelCall, err)
+		}
+		if isDeterministicError(err) {
+			return nil, fmt.Errorf("failed to call agent chain: %w", errors.Join(append(errs, err)...))
+		}
 		if err == nil {
 			err = fillResult(resp)
+			if err != nil {
+				err = fmt.Errorf("%w: %w", ErrAgentModelCall, err)
+			}
 		}
 		if err == nil {
 			break
 		} else {
 			errs = append(errs, err)
+
+			// Saying "will retry" for a call the loop is about to abandon is
+			// what makes this line unreadable in a log. The wrapped ctx.Err() is
+			// the same error the select below would return one statement later,
+			// which matters: the provider replaces a cancellation with a bare
+			// message of its own, and the controllers that unwind a stopped flow
+			// test for context.Canceled with errors.Is.
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				return nil, fmt.Errorf("context canceled while waiting for retry: %w", ctxErr)
+			}
+
 			logger.WithFields(logrus.Fields{
 				"retry_iteration": idx,
 				"error":           err.Error()[:min(200, len(err.Error()))],
@@ -545,7 +591,7 @@ func (fp *flowProvider) callWithRetries(
 	}
 
 	if fp.streamCb != nil && result.streamID != 0 {
-		fp.streamCb(ctx, &StreamMessageChunk{
+		_ = fp.streamCb(ctx, &StreamMessageChunk{
 			Type:     StreamMessageChunkTypeUpdate,
 			MsgType:  msgType,
 			Content:  result.content,
@@ -576,8 +622,8 @@ func (fp *flowProvider) performReflector(
 	defer span.End()
 
 	var (
-		optAgentType = pconfig.OptionsTypeReflector
 		msgChainType = database.MsgchainTypeReflector
+		optAgentType = agentByChain[msgChainType]
 	)
 
 	logger := logrus.WithContext(ctx).WithFields(enrichLogrusFields(fp.flowID, taskID, subtaskID, logrus.Fields{
@@ -602,7 +648,7 @@ func (fp *flowProvider) performReflector(
 			}),
 		)
 		logger.WithField("content", content[:min(1000, len(content))]).Warn(msg)
-		return nil, errors.New(msg)
+		return nil, fmt.Errorf("%w: %s", ErrAgentModelCall, msg)
 	}
 
 	logger.WithField("content", content[:min(1000, len(content))]).Warn("got message instead of tool call")
@@ -696,7 +742,7 @@ func (fp *flowProvider) performReflector(
 	}
 
 	// don't update duration delta for reflector because it's already included in the performAgentChain
-	if err := fp.updateMsgChainUsage(ctx, chainID, optAgentType, result.info, 0); err != nil {
+	if err := fp.updateMsgChainUsage(ctx, chainID, optOriginType, result.info, 0); err != nil {
 		logger.WithError(err).Error("failed to update msg chain usage")
 		opts = append(opts,
 			langfuse.WithAgentStatus(err.Error()),
@@ -707,8 +753,8 @@ func (fp *flowProvider) performReflector(
 
 	// preserve reasoning in reflector response using universal pattern
 	reflectorMsg := llms.MessageContent{Role: llms.ChatMessageTypeAI}
-	if result.content != "" || !result.thinking.IsEmpty() {
-		reflectorMsg.Parts = append(reflectorMsg.Parts, llms.TextPartWithReasoning(result.content, result.thinking))
+	if part, ok := aiResponsePart(result.content, result.thinking); ok {
+		reflectorMsg.Parts = append(reflectorMsg.Parts, part)
 	}
 	chain = append(chain, reflectorMsg)
 	if len(result.funcCalls) == 0 {
@@ -716,7 +762,7 @@ func (fp *flowProvider) performReflector(
 		// This blocks recursive performReflector calls after caller reflector was invoked.
 		if isReflectorRetry(ctx) {
 			logger.Error("reflector recursion detected: cannot recursively call reflector after caller reflector")
-			return nil, errors.New("reflector recursion detected: LLM returned no tool calls after reflector advice")
+			return nil, fmt.Errorf("%w: reflector recursion detected: LLM returned no tool calls after reflector advice", ErrAgentModelCall)
 		}
 
 		return fp.performReflector(ctx, optOriginType, chainID, taskID, subtaskID, chain, executor,
@@ -751,7 +797,7 @@ func (fp *flowProvider) performCallerReflector(
 	// This blocks repeated calls to performCallerReflector after reflector advice failed.
 	if isReflectorRetry(ctx) {
 		logger.Error("reflector recursion detected: caller reflector already invoked in this chain")
-		return nil, errors.New("reflector recursion detected: cannot invoke caller reflector again after reflector advice failed")
+		return nil, fmt.Errorf("%w: reflector recursion detected: cannot invoke caller reflector again after reflector advice failed", ErrAgentModelCall)
 	}
 
 	// Mark context to prevent any further reflector recursion.
@@ -857,8 +903,8 @@ func (fp *flowProvider) processAssistantResult(
 
 	// Preserve reasoning for assistant responses using universal pattern
 	msg := llms.MessageContent{Role: llms.ChatMessageTypeAI}
-	if result.content != "" || !result.thinking.IsEmpty() {
-		msg.Parts = append(msg.Parts, llms.TextPartWithReasoning(result.content, result.thinking))
+	if part, ok := aiResponsePart(result.content, result.thinking); ok {
+		msg.Parts = append(msg.Parts, part)
 	}
 	chain = append(chain, msg)
 	durationDelta += time.Since(processAssistantResultStartTime).Seconds()
@@ -987,8 +1033,8 @@ func (fp *flowProvider) storeAgentResponseToGraphiti(
 	content, err := templates.RenderPrompt("agent_response", tmpl, map[string]any{
 		"AgentType": string(agentType),
 		"Response":  result.content,
-		"TaskID":    taskID,
-		"SubtaskID": subtaskID,
+		"TaskID":    templateScopeID(taskID),
+		"SubtaskID": templateScopeID(subtaskID),
 	})
 	if err != nil {
 		logrus.WithError(err).Warn("failed to render agent response template for graphiti")
@@ -1094,8 +1140,8 @@ func (fp *flowProvider) storeToolExecutionToGraphiti(
 		"AgentType":   string(agentType),
 		"Status":      status,
 		"Result":      response,
-		"TaskID":      taskID,
-		"SubtaskID":   subtaskID,
+		"TaskID":      templateScopeID(taskID),
+		"SubtaskID":   templateScopeID(subtaskID),
 	})
 	if err != nil {
 		logrus.WithError(err).Warn("failed to render tool execution template for graphiti")
@@ -1148,4 +1194,32 @@ func (fp *flowProvider) storeToolExecutionToGraphiti(
 	storeEvaluator.End(
 		langfuse.WithEvaluatorStatus("success"),
 	)
+}
+
+// templateScopeID keeps a missing id out of the graphiti templates: text/template prints a nil
+// pointer as "<nil>", and an assistant turn has no task, a generator or refiner run no subtask.
+func templateScopeID(id *int64) string {
+	if id == nil {
+		return "-"
+	}
+	return strconv.FormatInt(*id, 10)
+}
+
+func aiResponsePart(content string, thinking *reasoning.ContentReasoning) (llms.ContentPart, bool) {
+	if !thinking.IsEmpty() {
+		return llms.TextPartWithReasoning(content, thinking), true
+	}
+
+	if content != "" {
+		return llms.TextPart(content), true
+	}
+
+	return nil, false
+}
+
+func correctorFailure(ctx context.Context, correctorErr error, funcName string, funcExecErr error) error {
+	if errors.Is(correctorErr, context.Canceled) || ctx.Err() != nil {
+		return correctorErr
+	}
+	return fmt.Errorf("failed to exec function '%s' and could not correct its arguments: %w", funcName, funcExecErr)
 }

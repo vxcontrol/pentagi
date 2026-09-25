@@ -3,10 +3,10 @@
 // editor (and its tiptap chunk) into their eager bundle. The DOM-facing decoration side lives in
 // markdown-editor-variable-highlight.ts, which reuses VARIABLE_RE / variableUseRegex from here.
 
+import { escapeRegExp } from '@/lib/utils/regex';
+
 // `[^{}]` keeps the scan linear (no catastrophic backtracking); Go actions never nest braces.
 export const VARIABLE_RE = /\{\{[^{}]*\}\}/g;
-
-const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 // Tests whether a single `{{ … }}` block references `variable` (`.Name` on a word boundary). Always used
 // block-first — extract `{{ … }}` blocks with the linear VARIABLE_RE, THEN probe each — never a lazy

@@ -400,11 +400,11 @@ func (m *LangfuseFormModel) OnFieldChanged(fieldIndex int, oldValue, newValue st
 }
 
 func (m *LangfuseFormModel) GetFormFields() []FormField {
-	return m.BaseScreen.fields
+	return m.fields
 }
 
 func (m *LangfuseFormModel) SetFormFields(fields []FormField) {
-	m.BaseScreen.fields = fields
+	m.fields = fields
 }
 
 // BaseListHandler interface implementation

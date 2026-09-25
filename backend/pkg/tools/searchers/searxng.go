@@ -152,30 +152,30 @@ func (s *searxng) formatResults(results []SearxngResult, query string) string {
 	}
 
 	var builder strings.Builder
-	builder.WriteString(fmt.Sprintf("# Searxng Search Results\n\n## Query: %s\n\n", query))
+	fmt.Fprintf(&builder, "# Searxng Search Results\n\n## Query: %s\n\n", query)
 	builder.WriteString("Results from Searxng meta search engine (aggregated from multiple search engines):\n\n")
 
 	for i, result := range results {
-		builder.WriteString(fmt.Sprintf("### %d. %s\n\n", i+1, result.Title))
+		fmt.Fprintf(&builder, "### %d. %s\n\n", i+1, result.Title)
 
 		if result.URL != "" {
-			builder.WriteString(fmt.Sprintf("**URL:** [%s](%s)\n\n", result.URL, result.URL))
+			fmt.Fprintf(&builder, "**URL:** [%s](%s)\n\n", result.URL, result.URL)
 		}
 
 		if result.Content != "" {
-			builder.WriteString(fmt.Sprintf("**Content:** %s\n\n", result.Content))
+			fmt.Fprintf(&builder, "**Content:** %s\n\n", result.Content)
 		}
 
 		if result.Author != "" {
-			builder.WriteString(fmt.Sprintf("**Author:** %s\n\n", result.Author))
+			fmt.Fprintf(&builder, "**Author:** %s\n\n", result.Author)
 		}
 
 		if resultPublished := result.PublishedDate; resultPublished != "" {
-			builder.WriteString(fmt.Sprintf("**Published:** %s\n\n", resultPublished))
+			fmt.Fprintf(&builder, "**Published:** %s\n\n", resultPublished)
 		}
 
 		if result.Engine != "" {
-			builder.WriteString(fmt.Sprintf("**Source Engine:** %s\n\n", result.Engine))
+			fmt.Fprintf(&builder, "**Source Engine:** %s\n\n", result.Engine)
 		}
 
 		builder.WriteString("---\n\n")

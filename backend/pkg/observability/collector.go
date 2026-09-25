@@ -71,7 +71,7 @@ func startProcessMetricCollect(meter otelmetric.Meter, attrs []attribute.KeyValu
 
 func startGoRuntimeMetricCollect(meter otelmetric.Meter, attrs []attribute.KeyValue) error {
 	var (
-		lastUpdate         time.Time = time.Now()
+		lastUpdate         = time.Now()
 		mx                 sync.Mutex
 		procRuntimeMemStat runtime.MemStats
 	)
@@ -89,47 +89,47 @@ func startGoRuntimeMetricCollect(meter otelmetric.Meter, attrs []attribute.KeyVa
 		return &procRuntimeMemStat
 	}
 
-	meter.Int64ObservableGauge("go_cgo_calls",
+	_, _ = meter.Int64ObservableGauge("go_cgo_calls",
 		otelmetric.WithInt64Callback(func(ctx context.Context, m otelmetric.Int64Observer) error {
 			m.Observe(runtime.NumCgoCall(), otelmetric.WithAttributes(attrs...))
 			return nil
 		}))
-	meter.Int64ObservableGauge("go_goroutines",
+	_, _ = meter.Int64ObservableGauge("go_goroutines",
 		otelmetric.WithInt64Callback(func(ctx context.Context, m otelmetric.Int64Observer) error {
 			m.Observe(int64(runtime.NumGoroutine()), otelmetric.WithAttributes(attrs...))
 			return nil
 		}))
-	meter.Int64ObservableGauge("go_heap_objects_bytes",
+	_, _ = meter.Int64ObservableGauge("go_heap_objects_bytes",
 		otelmetric.WithInt64Callback(func(ctx context.Context, m otelmetric.Int64Observer) error {
 			m.Observe(int64(getMemStats().HeapInuse), otelmetric.WithAttributes(attrs...))
 			return nil
 		}))
-	meter.Int64ObservableGauge("go_heap_objects_counter",
+	_, _ = meter.Int64ObservableGauge("go_heap_objects_counter",
 		otelmetric.WithInt64Callback(func(ctx context.Context, m otelmetric.Int64Observer) error {
 			m.Observe(int64(getMemStats().HeapObjects), otelmetric.WithAttributes(attrs...))
 			return nil
 		}))
-	meter.Int64ObservableGauge("go_stack_inuse_bytes",
+	_, _ = meter.Int64ObservableGauge("go_stack_inuse_bytes",
 		otelmetric.WithInt64Callback(func(ctx context.Context, m otelmetric.Int64Observer) error {
 			m.Observe(int64(getMemStats().StackInuse), otelmetric.WithAttributes(attrs...))
 			return nil
 		}))
-	meter.Int64ObservableGauge("go_stack_sys_bytes",
+	_, _ = meter.Int64ObservableGauge("go_stack_sys_bytes",
 		otelmetric.WithInt64Callback(func(ctx context.Context, m otelmetric.Int64Observer) error {
 			m.Observe(int64(getMemStats().StackSys), otelmetric.WithAttributes(attrs...))
 			return nil
 		}))
-	meter.Int64ObservableGauge("go_total_allocs_bytes",
+	_, _ = meter.Int64ObservableGauge("go_total_allocs_bytes",
 		otelmetric.WithInt64Callback(func(ctx context.Context, m otelmetric.Int64Observer) error {
 			m.Observe(int64(getMemStats().TotalAlloc), otelmetric.WithAttributes(attrs...))
 			return nil
 		}))
-	meter.Int64ObservableGauge("go_heap_allocs_bytes",
+	_, _ = meter.Int64ObservableGauge("go_heap_allocs_bytes",
 		otelmetric.WithInt64Callback(func(ctx context.Context, m otelmetric.Int64Observer) error {
 			m.Observe(int64(getMemStats().HeapAlloc), otelmetric.WithAttributes(attrs...))
 			return nil
 		}))
-	meter.Int64ObservableGauge("go_pause_gc_total_nanosec",
+	_, _ = meter.Int64ObservableGauge("go_pause_gc_total_nanosec",
 		otelmetric.WithInt64Callback(func(ctx context.Context, m otelmetric.Int64Observer) error {
 			m.Observe(int64(getMemStats().PauseTotalNs), otelmetric.WithAttributes(attrs...))
 			return nil
@@ -142,7 +142,7 @@ func startDumperMetricCollect(stats Dumper, meter otelmetric.Meter, attrs []attr
 	var (
 		err        error
 		lastStats  map[string]float64
-		lastUpdate time.Time = time.Now()
+		lastUpdate = time.Now()
 		mx         sync.Mutex
 	)
 

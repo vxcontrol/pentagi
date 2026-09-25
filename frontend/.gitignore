@@ -29,3 +29,11 @@ test-results/
 e2e/playwright-report/
 e2e/blob-report/
 e2e/.auth/
+e2e/.tier2-sandboxes
+e2e/.tier2-sandbox-volumes
+
+# vitest junit reporter output
+test-report.xml
+
+# Raw captures from the shared stand: real pentest data, never committed
+e2e/fixtures/captures/

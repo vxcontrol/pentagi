@@ -656,16 +656,3 @@ export const generatePDFFromMarkdownNew = async (content: string, fileName: stri
         throw error;
     }
 };
-
-export const generatePDFBlobNew = async (content: string): Promise<Blob> => {
-    try {
-        ensureFonts(content);
-
-        const doc = <PDFReportDocument content={content} />;
-
-        return await pdf(doc).toBlob();
-    } catch (error) {
-        Log.error('Failed to generate PDF blob:', error);
-        throw error;
-    }
-};

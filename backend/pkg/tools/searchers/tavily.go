@@ -179,10 +179,10 @@ func (t *tavily) buildTavilyResult(ctx context.Context, result *tavilySearchResu
 
 	isRawContentExists := false
 	for i, result := range result.Results {
-		writer.WriteString(fmt.Sprintf("## %d. %s\n\n", i+1, result.Title))
-		writer.WriteString(fmt.Sprintf("* URL %s\n", result.URL))
-		writer.WriteString(fmt.Sprintf("* Match score %3.3f\n\n", result.Score))
-		writer.WriteString(fmt.Sprintf("### Short content\n\n%s\n\n", result.Content))
+		fmt.Fprintf(&writer, "## %d. %s\n\n", i+1, result.Title)
+		fmt.Fprintf(&writer, "* URL %s\n", result.URL)
+		fmt.Fprintf(&writer, "* Match score %3.3f\n\n", result.Score)
+		fmt.Fprintf(&writer, "### Short content\n\n%s\n\n", result.Content)
 		if result.RawContent != nil {
 			isRawContentExists = true
 		}
@@ -197,7 +197,7 @@ func (t *tavily) buildTavilyResult(ctx context.Context, result *tavilySearchResu
 			if err != nil {
 				writer.WriteString(t.getRawContentFromResults(result.Results))
 			} else {
-				writer.WriteString(fmt.Sprintf("### Summarized Content\n\n%s\n\n", summarizedContents))
+				fmt.Fprintf(&writer, "### Summarized Content\n\n%s\n\n", summarizedContents)
 			}
 		}
 	} else {
@@ -213,7 +213,7 @@ func (t *tavily) getRawContentFromResults(results []tavilyResult) string {
 		if result.RawContent != nil {
 			rawContent := *result.RawContent
 			rawContent = rawContent[:min(len(rawContent), maxRawContentLength)]
-			writer.WriteString(fmt.Sprintf("### Raw content for %d. %s\n\n%s\n\n", i+1, result.Title, rawContent))
+			fmt.Fprintf(&writer, "### Raw content for %d. %s\n\n%s\n\n", i+1, result.Title, rawContent)
 		}
 	}
 	return writer.String()

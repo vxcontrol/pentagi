@@ -23,61 +23,52 @@ import (
 
 // Constants for Perplexity API
 const (
-	perplexityURL         = "https://api.perplexity.ai/chat/completions"
-	perplexityTimeout     = 60 * time.Second
-	perplexityModel       = "sonar-pro"
-	perplexityTemperature = 0.5
-	perplexityTopP        = 0.9
-	perplexityMaxTokens   = 4000
+	perplexityURL = "https://api.perplexity.ai/chat/completions"
+	// A single web-grounded completion, not an agent run: sonar answers in
+	// seconds, but a large search_context_size plus synthesis can take longer,
+	// so the ceiling is generous. PERPLEXITY_TIMEOUT overrides it.
+	defaultPerplexityTimeout = 120 * time.Second
+	// The Sonar model chat/completions serves when PERPLEXITY_MODEL is unset.
+	defaultPerplexityModel = "sonar"
+	// search_context_size when PERPLEXITY_CONTEXT_SIZE is unset.
+	defaultPerplexityContextSize = "low"
 )
 
-// Message - structure for Perplexity API message
-type Message struct {
+type chatRequest struct {
+	Model            string            `json:"model"`
+	Messages         []chatMessage     `json:"messages"`
+	WebSearchOptions *webSearchOptions `json:"web_search_options,omitempty"`
+}
+
+type chatMessage struct {
 	Role    string `json:"role"`
 	Content string `json:"content"`
 }
 
-// CompletionRequest - request to Perplexity API
-type CompletionRequest struct {
-	Messages               []Message `json:"messages"`
-	Model                  string    `json:"model"`
-	MaxTokens              int       `json:"max_tokens"`
-	Temperature            float64   `json:"temperature"`
-	TopP                   float64   `json:"top_p"`
-	SearchContextSize      string    `json:"search_context_size"`
-	SearchDomainFilter     []string  `json:"search_domain_filter,omitempty"`
-	ReturnImages           bool      `json:"return_images"`
-	ReturnRelatedQuestions bool      `json:"return_related_questions"`
-	SearchRecencyFilter    string    `json:"search_recency_filter,omitempty"`
-	TopK                   int       `json:"top_k,omitempty"`
-	Stream                 bool      `json:"stream"`
-	PresencePenalty        float64   `json:"presence_penalty,omitempty"`
-	FrequencyPenalty       float64   `json:"frequency_penalty,omitempty"`
+type webSearchOptions struct {
+	SearchContextSize string `json:"search_context_size,omitempty"`
 }
 
-// CompletionResponse - response from Perplexity API
-type CompletionResponse struct {
-	ID        string    `json:"id"`
-	Model     string    `json:"model"`
-	Created   int       `json:"created"`
-	Object    string    `json:"object"`
-	Choices   []Choice  `json:"choices"`
-	Usage     Usage     `json:"usage"`
-	Citations *[]string `json:"citations,omitempty"`
+type chatResponse struct {
+	ID      string       `json:"id"`
+	Model   string       `json:"model"`
+	Choices []chatChoice `json:"choices"`
+	// Perplexity returns sources both as a flat list of URLs (citations) and,
+	// on newer responses, as structured search_results carrying titles. Either
+	// may be present; both are read and merged.
+	Citations     []string           `json:"citations"`
+	SearchResults []chatSearchResult `json:"search_results"`
 }
 
-// Choice - choice from Perplexity API response
-type Choice struct {
-	Index        int     `json:"index"`
-	FinishReason string  `json:"finish_reason"`
-	Message      Message `json:"message"`
+type chatChoice struct {
+	Message      chatMessage `json:"message"`
+	FinishReason string      `json:"finish_reason"`
 }
 
-// Usage - information about used tokens
-type Usage struct {
-	PromptTokens     int `json:"prompt_tokens"`
-	CompletionTokens int `json:"completion_tokens"`
-	TotalTokens      int `json:"total_tokens"`
+type chatSearchResult struct {
+	Title string `json:"title"`
+	URL   string `json:"url"`
+	Date  string `json:"date"`
 }
 
 // perplexity - structure for working with Perplexity API
@@ -141,25 +132,11 @@ func (p *perplexity) search(ctx context.Context, query string) (string, error) {
 
 	client.Timeout = p.timeout()
 
-	// Creating message for the request
-	messages := []Message{
-		{
-			Role:    "user",
-			Content: query,
-		},
-	}
-
 	// Forming the request
-	reqPayload := CompletionRequest{
-		Messages:               messages,
-		Model:                  p.model(),
-		SearchContextSize:      p.contextSize(),
-		MaxTokens:              p.maxTokens(),
-		Temperature:            p.temperature(),
-		TopP:                   p.topP(),
-		ReturnImages:           false,
-		ReturnRelatedQuestions: false,
-		Stream:                 false,
+	reqPayload := chatRequest{
+		Model:            p.model(),
+		Messages:         []chatMessage{{Role: "user", Content: query}},
+		WebSearchOptions: &webSearchOptions{SearchContextSize: p.contextSize()},
 	}
 
 	// Serializing the request
@@ -181,6 +158,13 @@ func (p *perplexity) search(ctx context.Context, query string) (string, error) {
 	// Sending the request
 	resp, err := client.Do(req)
 	if err != nil {
+		// Our own budget running out is not a transient the way a 502 is: asking
+		// again spends the budget a second time to fail the same way. Fall
+		// through to the next engine instead.
+		if errors.Is(err, context.DeadlineExceeded) {
+			return "", Fatal(fmt.Errorf("failed to send request: %w", err))
+		}
+
 		return "", Retryable(fmt.Errorf("failed to send request: %w", err), 0)
 	}
 	defer resp.Body.Close()
@@ -189,6 +173,9 @@ func (p *perplexity) search(ctx context.Context, query string) (string, error) {
 	// retryable/fatal classification is decided here from the status code.
 	if resp.StatusCode != http.StatusOK {
 		baseErr := p.handleErrorResponse(resp.StatusCode)
+		if detail := readErrorDetail(resp.Body); detail != "" {
+			baseErr = fmt.Errorf("%w: %s", baseErr, detail)
+		}
 		if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500 {
 			return "", Retryable(baseErr, 0)
 		}
@@ -202,13 +189,17 @@ func (p *perplexity) search(ctx context.Context, query string) (string, error) {
 	}
 
 	// Deserializing the response
-	var response CompletionResponse
+	var response chatResponse
 	if err := json.Unmarshal(body, &response); err != nil {
 		return "", Fatal(fmt.Errorf("failed to unmarshal response: %w", err))
 	}
 
 	// Forming the result
 	result := p.formatResponse(ctx, &response, query)
+	if result == "" {
+		return "", Fatal(fmt.Errorf("the completion carries no answer"))
+	}
+
 	return result, nil
 }
 
@@ -240,25 +231,52 @@ func (p *perplexity) handleErrorResponse(statusCode int) error {
 	}
 }
 
-// formatResponse formats the API response into readable text
-func (p *perplexity) formatResponse(ctx context.Context, response *CompletionResponse, query string) string {
-	var builder strings.Builder
-
-	// Checking for response choices
-	if len(response.Choices) == 0 {
-		return "No response received from Perplexity API"
+func answerAndCitations(response *chatResponse) (string, []string) {
+	var answer strings.Builder
+	for _, choice := range response.Choices {
+		answer.WriteString(choice.Message.Content)
 	}
 
-	// Getting the response content
-	content := response.Choices[0].Message.Content
+	var citations []string
+	seen := make(map[string]struct{})
+	addCitation := func(url string) {
+		if url == "" {
+			return
+		}
+		if _, ok := seen[url]; ok {
+			return
+		}
+		seen[url] = struct{}{}
+		citations = append(citations, url)
+	}
+
+	// search_results first: they carry the same URLs in the same order as
+	// citations but are the newer, richer field. citations backfills anything a
+	// response reports only there.
+	for _, result := range response.SearchResults {
+		addCitation(result.URL)
+	}
+	for _, url := range response.Citations {
+		addCitation(url)
+	}
+
+	return answer.String(), citations
+}
+
+func (p *perplexity) formatResponse(ctx context.Context, response *chatResponse, query string) string {
+	content, citations := answerAndCitations(response)
+	if content == "" {
+		return ""
+	}
+
+	var builder strings.Builder
 	builder.WriteString("# Answer\n\n")
 	builder.WriteString(content)
 
-	// Adding citations if available and within maxResults limit
-	if response.Citations != nil && len(*response.Citations) > 0 {
+	if len(citations) > 0 {
 		builder.WriteString("\n\n# Citations\n\n")
-		for i, citation := range *response.Citations {
-			builder.WriteString(fmt.Sprintf("%d. %s\n", i+1, citation))
+		for i, citation := range citations {
+			fmt.Fprintf(&builder, "%d. %s\n", i+1, citation)
 		}
 	}
 
@@ -266,7 +284,7 @@ func (p *perplexity) formatResponse(ctx context.Context, response *CompletionRes
 	if len(rawContent) > maxRawContentLength {
 		// Check if summarizer is available
 		if p.summarizer != nil {
-			summarizePrompt, err := p.getSummarizePrompt(query, rawContent, response.Citations)
+			summarizePrompt, err := p.getSummarizePrompt(query, rawContent, citations)
 			if err == nil {
 				if summarizedContent, err := p.summarizer(ctx, summarizePrompt); err == nil {
 					return summarizedContent
@@ -281,7 +299,7 @@ func (p *perplexity) formatResponse(ctx context.Context, response *CompletionRes
 }
 
 // getSummarizePrompt creates a prompt for summarizing Perplexity search results
-func (p *perplexity) getSummarizePrompt(query string, content string, citations *[]string) (string, error) {
+func (p *perplexity) getSummarizePrompt(query string, content string, citations []string) (string, error) {
 	templateText := `<instructions>
 TASK: Summarize Perplexity search results for the following user query:
 
@@ -330,11 +348,11 @@ The summary MUST provide complete answers to the user's query, preserving all re
 		"Query":        query,
 		"MaxLength":    maxRawContentLength,
 		"Content":      content,
-		"HasCitations": citations != nil && len(*citations) > 0,
+		"HasCitations": len(citations) > 0,
 	}
 
-	if citations != nil && len(*citations) > 0 {
-		templateContext["Citations"] = *citations
+	if len(citations) > 0 {
+		templateContext["Citations"] = citations
 	}
 
 	tmpl, err := template.New("summarize").Funcs(funcMap).Parse(templateText)
@@ -350,7 +368,6 @@ The summary MUST provide complete answers to the user's query, preserving all re
 	return buf.String(), nil
 }
 
-// isAvailable checks the availability of the API
 func (p *perplexity) IsAvailable() bool {
 	return p.apiKey() != ""
 }
@@ -363,34 +380,67 @@ func (p *perplexity) apiKey() string {
 	return p.cfg.PerplexityAPIKey
 }
 
+// model returns the model to send, verbatim. Perplexity names its own models
+// bare (sonar, sonar-pro, ...); the value is passed through untouched so an
+// operator pointing PERPLEXITY at a gateway can still use that gateway's own
+// naming. An unset value falls back to the default.
 func (p *perplexity) model() string {
-	if p.cfg == nil || p.cfg.PerplexityModel == "" {
-		return perplexityModel
+	if p.cfg == nil {
+		return defaultPerplexityModel
 	}
 
-	return p.cfg.PerplexityModel
+	if configured := strings.TrimSpace(p.cfg.PerplexityModel); configured != "" {
+		return configured
+	}
+
+	return defaultPerplexityModel
 }
 
-func (p *perplexity) contextSize() string {
-	if p.cfg == nil {
+// readErrorDetail returns the API's own explanation of a rejected request, or
+// an empty string when the body carries none.
+func readErrorDetail(r io.Reader) string {
+	body, err := io.ReadAll(io.LimitReader(r, 8192))
+	if err != nil || len(body) == 0 {
 		return ""
+	}
+
+	var payload struct {
+		Error struct {
+			Message string `json:"message"`
+			Type    string `json:"type"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(body, &payload); err == nil && payload.Error.Message != "" {
+		return payload.Error.Message
+	}
+
+	text := strings.TrimSpace(string(body))
+	if strings.HasPrefix(text, "<") {
+		return ""
+	}
+	if line, _, found := strings.Cut(text, "\n"); found {
+		text = strings.TrimSpace(line)
+	}
+	if runes := []rune(text); len(runes) > maxErrorDetailRunes {
+		text = string(runes[:maxErrorDetailRunes]) + "…"
+	}
+	return text
+}
+
+const maxErrorDetailRunes = 200
+
+func (p *perplexity) contextSize() string {
+	if p.cfg == nil || p.cfg.PerplexityContextSize == "" {
+		return defaultPerplexityContextSize
 	}
 
 	return p.cfg.PerplexityContextSize
 }
 
-func (p *perplexity) temperature() float64 {
-	return perplexityTemperature
-}
-
-func (p *perplexity) topP() float64 {
-	return perplexityTopP
-}
-
-func (p *perplexity) maxTokens() int {
-	return perplexityMaxTokens
-}
-
 func (p *perplexity) timeout() time.Duration {
-	return perplexityTimeout
+	if p.cfg == nil || p.cfg.PerplexityTimeout <= 0 {
+		return defaultPerplexityTimeout
+	}
+
+	return time.Duration(p.cfg.PerplexityTimeout) * time.Second
 }

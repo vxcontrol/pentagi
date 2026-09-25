@@ -28,11 +28,11 @@ vi.mock('@/providers/knowledges-provider', () => ({
 // The layout shell and the form drag in the header/editor tree; the branching under test sits
 // above them in Knowledge itself, so stub them to a marker.
 vi.mock('@/features/knowledges/knowledge-layout', () => ({
-    KnowledgeLayout: ({ children }: { children: React.ReactNode }) => <div data-testid="layout">{children}</div>,
+    KnowledgeLayout: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
 vi.mock('@/features/knowledges/knowledge-form', async (importOriginal) => ({
     ...(await importOriginal<Record<string, unknown>>()),
-    KnowledgeForm: () => <div data-testid="form" />,
+    KnowledgeForm: () => <div />,
 }));
 
 const { default: Knowledge } = await import('./knowledge');

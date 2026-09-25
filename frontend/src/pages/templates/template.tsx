@@ -45,9 +45,25 @@ import { routes } from '@/lib/routes';
 import { cn } from '@/lib/utils';
 import { type Template, useTemplates } from '@/providers/templates-provider';
 
-const formSchema = z.object({
-    text: z.string().trim().min(1, { message: 'Text is required' }),
-    title: z.string().trim().min(1, { message: 'Title is required' }),
+// Mirrors the limits in backend/pkg/graph/context.go.
+const MAX_TEMPLATE_TITLE_LENGTH = 255;
+const MAX_TEMPLATE_TEXT_LENGTH = 65536;
+
+export const formSchema = z.object({
+    text: z
+        .string()
+        .trim()
+        .min(1, { message: 'Text is required' })
+        .refine((value) => [...value].length <= MAX_TEMPLATE_TEXT_LENGTH, {
+            message: `Text must not exceed ${MAX_TEMPLATE_TEXT_LENGTH} characters`,
+        }),
+    title: z
+        .string()
+        .trim()
+        .min(1, { message: 'Title is required' })
+        .refine((value) => [...value].length <= MAX_TEMPLATE_TITLE_LENGTH, {
+            message: `Title must not exceed ${MAX_TEMPLATE_TITLE_LENGTH} characters`,
+        }),
 });
 
 type FormValues = z.infer<typeof formSchema>;

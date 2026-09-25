@@ -156,6 +156,10 @@ services:
       CLICKHOUSE_DB: ${LANGFUSE_CLICKHOUSE_DB:-default}
       CLICKHOUSE_USER: ${LANGFUSE_CLICKHOUSE_USER:-clickhouse}
       CLICKHOUSE_PASSWORD: ${LANGFUSE_CLICKHOUSE_PASSWORD:-clickhouse}
+    ulimits:
+      nofile:
+        hard: 262144
+        soft: 262144
     volumes:
       - langfuse-clickhouse-data:/var/lib/clickhouse
       - langfuse-clickhouse-logs:/var/log/clickhouse-server

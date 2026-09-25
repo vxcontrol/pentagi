@@ -4,218 +4,108 @@ import (
 	"testing"
 
 	"pentagi/pkg/templates"
+
+	"github.com/stretchr/testify/assert"
 )
 
-func TestFallbackHeuristicDetection(t *testing.T) {
-	testCases := []struct {
+func TestAgents_FallbackHeuristicDetection_BuildsThePatternTheSamplesShare(t *testing.T) {
+	t.Parallel()
+
+	samples := func(values ...string) []templates.PatternSample {
+		out := make([]templates.PatternSample, 0, len(values))
+		for _, value := range values {
+			out = append(out, templates.PatternSample{Value: value})
+		}
+		return out
+	}
+
+	tests := []struct {
 		name     string
 		samples  []templates.PatternSample
 		expected string
 	}{
-		{
-			name: "anthropic_tool_ids",
-			samples: []templates.PatternSample{
-				{Value: "toolu_013wc5CxNCjWGN2rsAR82rJK"},
-				{Value: "toolu_9ZxY8WvU7tS6rQ5pO4nM3lK2"},
-				{Value: "toolu_aBcDeFgHiJkLmNoPqRsTuVwX"},
-			},
-			expected: "toolu_{r:24:b}",
-		},
-		{
-			name: "openai_call_ids",
-			samples: []templates.PatternSample{
-				{Value: "call_Z8ofZnYOCeOnpu0h2auwOgeR"},
-				{Value: "call_aBc123XyZ456MnO789PqR012"},
-				{Value: "call_XyZ9AbC8dEf7GhI6jKl5MnO4"},
-			},
-			expected: "call_{r:24:b}", // Contains all: digits, lower, upper = base62
-		},
-		{
-			name: "hex_ids",
-			samples: []templates.PatternSample{
-				{Value: "chatcmpl-tool-23c5c0da71854f9bbd8774f7d0113a69"},
-				{Value: "chatcmpl-tool-456789abcdef0123456789abcdef0123"},
-				{Value: "chatcmpl-tool-fedcba9876543210fedcba9876543210"},
-			},
-			expected: "chatcmpl-tool-{r:32:h}",
-		},
-		{
-			name: "mixed_pattern",
-			samples: []templates.PatternSample{
-				{Value: "prefix_1234_abcdefgh_suffix"},
-				{Value: "prefix_5678_zyxwvuts_suffix"},
-				{Value: "prefix_9012_qponmlkj_suffix"},
-			},
-			expected: "prefix_{r:4:d}_{r:8:l}_suffix",
-		},
-		{
-			name: "short_ids",
-			samples: []templates.PatternSample{
-				{Value: "qGGHVb8Pm"},
-				{Value: "c9nzLUf4t"},
-				{Value: "XyZ9AbC8d"},
-			},
-			expected: "{r:9:b}",
-		},
-		{
-			name: "only_digits",
-			samples: []templates.PatternSample{
-				{Value: "id_1234567890"},
-				{Value: "id_9876043210"},
-				{Value: "id_5551235555"},
-			},
-			expected: "id_{r:10:d}",
-		},
-		{
-			name: "uppercase_only",
-			samples: []templates.PatternSample{
-				{Value: "KEY_ABCDEFGH"},
-				{Value: "KEY_ZYXWVUTS"},
-				{Value: "KEY_QPONMLKJ"},
-			},
-			expected: "KEY_{r:8:u}",
-		},
-		{
-			name:     "empty_samples",
-			samples:  []templates.PatternSample{},
-			expected: "",
-		},
-		{
-			name: "single_sample",
-			samples: []templates.PatternSample{
-				{Value: "test_123abc"},
-			},
-			expected: "test_123abc", // All literal when single sample
-		},
+		{"anthropic tool ids", samples(
+			"toolu_013wc5CxNCjWGN2rsAR82rJK", "toolu_9ZxY8WvU7tS6rQ5pO4nM3lK2", "toolu_aBcDeFgHiJkLmNoPqRsTuVwX",
+		), "toolu_{r:24:b}"},
+		{"openai call ids", samples(
+			"call_Z8ofZnYOCeOnpu0h2auwOgeR", "call_aBc123XyZ456MnO789PqR012", "call_XyZ9AbC8dEf7GhI6jKl5MnO4",
+		), "call_{r:24:b}"},
+		{"hex ids", samples(
+			"chatcmpl-tool-23c5c0da71854f9bbd8774f7d0113a69",
+			"chatcmpl-tool-456789abcdef0123456789abcdef0123",
+			"chatcmpl-tool-fedcba9876543210fedcba9876543210",
+		), "chatcmpl-tool-{r:32:h}"},
+		{"literals between random runs", samples(
+			"prefix_1234_abcdefgh_suffix", "prefix_5678_zyxwvuts_suffix", "prefix_9012_qponmlkj_suffix",
+		), "prefix_{r:4:d}_{r:8:l}_suffix"},
+		{"short ids with no literal part", samples("qGGHVb8Pm", "c9nzLUf4t", "XyZ9AbC8d"), "{r:9:b}"},
+		{"digits only", samples("id_1234567890", "id_9876043210", "id_5551235555"), "id_{r:10:d}"},
+		{"upper case only", samples("KEY_ABCDEFGH", "KEY_ZYXWVUTS", "KEY_QPONMLKJ"), "KEY_{r:8:u}"},
+		{"no samples", samples(), ""},
+		{"a single sample is all literal", samples("test_123abc"), "test_123abc"},
 	}
 
-	for _, tc := range testCases {
+	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			result := fallbackHeuristicDetection(tc.samples)
-			if result != tc.expected {
-				t.Errorf("Expected pattern '%s', got '%s'", tc.expected, result)
-			}
+			t.Parallel()
+
+			assert.Equal(t, tc.expected, fallbackHeuristicDetection(tc.samples))
 		})
 	}
 }
 
-func TestDetermineMinimalCharset(t *testing.T) {
-	testCases := []struct {
+func TestAgents_DetermineMinimalCharset_PicksTheNarrowestClassOfTheCharacters(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
 		name     string
-		chars    []byte
+		chars    string
 		expected string
 	}{
-		{
-			name:     "only_digits",
-			chars:    []byte{'1', '2', '3', '4', '5'},
-			expected: "d",
-		},
-		{
-			name:     "only_lowercase",
-			chars:    []byte{'a', 'b', 'c', 'd', 'e'},
-			expected: "l",
-		},
-		{
-			name:     "only_uppercase",
-			chars:    []byte{'A', 'B', 'C', 'D', 'E'},
-			expected: "u",
-		},
-		{
-			name:     "alpha_mixed",
-			chars:    []byte{'a', 'B', 'c', 'D', 'e'},
-			expected: "a",
-		},
-		{
-			name:     "hex_lowercase",
-			chars:    []byte{'0', '1', 'a', 'b', 'f'},
-			expected: "h",
-		},
-		{
-			name:     "hex_uppercase",
-			chars:    []byte{'0', '1', 'A', 'B', 'F'},
-			expected: "H",
-		},
-		{
-			name:     "base62",
-			chars:    []byte{'0', '9', 'a', 'z', 'A', 'Z'},
-			expected: "b",
-		},
-		{
-			name:     "alnum_with_all_types",
-			chars:    []byte{'0', 'a', 'Z'},
-			expected: "b", // has all three: digit, lower, upper = base62
-		},
-		{
-			name:     "alnum_digit_lower_only",
-			chars:    []byte{'0', '5', 'a', 'z'},
-			expected: "x", // digit + lower but no upper = alnum
-		},
-		{
-			name:     "digit_upper_only",
-			chars:    []byte{'0', '5', 'A', 'Z'},
-			expected: "x", // digit + upper but no lower = alnum
-		},
+		{"digits", "12345", "d"},
+		{"lower case", "abcde", "l"},
+		{"upper case", "ABCDE", "u"},
+		{"mixed case letters", "aBcDe", "a"},
+		{"lower case hex", "01abf", "h"},
+		{"upper case hex", "01ABF", "H"},
+		{"digits and both cases", "09azAZ", "b"},
+		{"digits and lower case beyond hex", "05az", "x"},
+		{"digits and upper case beyond hex", "05AZ", "x"},
 	}
 
-	for _, tc := range testCases {
+	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			result := determineMinimalCharset(tc.chars)
-			if result != tc.expected {
-				t.Errorf("Expected charset '%s', got '%s'", tc.expected, result)
-			}
+			t.Parallel()
+
+			assert.Equal(t, tc.expected, determineMinimalCharset([]byte(tc.chars)))
 		})
 	}
 }
 
-func TestDetermineCommonCharset(t *testing.T) {
-	testCases := []struct {
+func TestAgents_DetermineCommonCharset_CoversEveryPosition(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
 		name     string
-		chars    [][]byte
+		chars    []string
 		expected string
 	}{
-		{
-			name: "all digits across positions",
-			chars: [][]byte{
-				{'1', '2', '3'},
-				{'4', '5', '6'},
-				{'7', '8', '9'},
-			},
-			expected: "d",
-		},
-		{
-			name: "hex lowercase across positions",
-			chars: [][]byte{
-				{'a', 'b', 'c'},
-				{'d', 'e', 'f'},
-				{'0', '1', '2'},
-			},
-			expected: "h",
-		},
-		{
-			name: "base62 across positions",
-			chars: [][]byte{
-				{'a', 'B', 'c'},
-				{'D', 'e', 'F'},
-				{'0', '1', '2'},
-			},
-			expected: "b",
-		},
-		{
-			name: "only lowercase across positions",
-			chars: [][]byte{
-				{'a', 'b', 'c'},
-				{'x', 'y', 'z'},
-			},
-			expected: "l", // x, y, z are not hex (> 'f'), so it's lowercase, not hex
-		},
+		{"digits at every position", []string{"123", "456", "789"}, "d"},
+		{"lower case hex across positions", []string{"abc", "def", "012"}, "h"},
+		{"both cases and digits across positions", []string{"aBc", "DeF", "012"}, "b"},
+		{"lower case beyond hex", []string{"abc", "xyz"}, "l"},
 	}
 
-	for _, tc := range testCases {
+	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			result := determineCommonCharset(tc.chars)
-			if result != tc.expected {
-				t.Errorf("Expected charset '%s', got '%s'", tc.expected, result)
+			t.Parallel()
+
+			positions := make([][]byte, 0, len(tc.chars))
+			for _, chars := range tc.chars {
+				positions = append(positions, []byte(chars))
 			}
+
+			assert.Equal(t, tc.expected, determineCommonCharset(positions))
 		})
 	}
 }

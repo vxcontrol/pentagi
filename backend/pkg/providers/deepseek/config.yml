@@ -1,46 +1,41 @@
 # DeepSeek V4 agent configuration.
 #
-# Strategy: prefer deepseek-v4-flash (12x cheaper) for the "workhorse" agents,
+# Strategy: prefer deepseek-flash (4x cheaper) for the "workhorse" agents,
 # reserve deepseek-v4-pro for complex multi-step reasoning (planning, mentor,
 # code generation, vulnerability analysis, orchestration).
 #
 # Hyperparameters note:
-# - v4-pro agents with `reasoning.effort` set MUST NOT specify temperature/top_p
-#   (langchaingo nullifies them, and DeepSeek silently ignores them in thinking
-#   mode together with presence_penalty/frequency_penalty).
-# - v4-flash utility agents explicitly disable thinking via extra_body to keep
-#   them fast and cheap.
-# - All thinking-enabled agents also pass extra_body.thinking.type explicitly
-#   as a defensive measure against future DeepSeek default changes.
+# - flash utility agents disable thinking via reasoning.mode "off"; langchaingo
+#   turns that into DeepSeek's thinking.type=disabled wire.
+# - thinking-enabled agents set reasoning.effort; thinking runs by default on
+#   these models, so no explicit enable toggle is sent.
 
 simple:
-  model: deepseek-v4-flash
+  model: deepseek-flash
   temperature: 0.3
   top_p: 0.9
   n: 1
   max_tokens: 8192
-  extra_body:
-    thinking:
-      type: disabled
+  reasoning:
+    mode: "off"
   price:
-    input: 0.14
-    output: 0.28
-    cache_read: 0.0028
+    input: 0.30
+    output: 1.20
+    cache_read: 0.006
 
 simple_json:
-  model: deepseek-v4-flash
+  model: deepseek-flash
   temperature: 0.3
   top_p: 0.9
   n: 1
   max_tokens: 4096
   json: true
-  extra_body:
-    thinking:
-      type: disabled
+  reasoning:
+    mode: "off"
   price:
-    input: 0.14
-    output: 0.28
-    cache_read: 0.0028
+    input: 0.30
+    output: 1.20
+    cache_read: 0.006
 
 primary_agent:
   model: deepseek-v4-pro
@@ -48,13 +43,10 @@ primary_agent:
   max_tokens: 16384
   reasoning:
     effort: high
-  extra_body:
-    thinking:
-      type: enabled
   price:
-    input: 0.435
-    output: 0.87
-    cache_read: 0.003625
+    input: 1.32
+    output: 3.96
+    cache_read: 0.044
 
 assistant:
   model: deepseek-v4-pro
@@ -62,13 +54,10 @@ assistant:
   max_tokens: 16384
   reasoning:
     effort: high
-  extra_body:
-    thinking:
-      type: enabled
   price:
-    input: 0.435
-    output: 0.87
-    cache_read: 0.003625
+    input: 1.32
+    output: 3.96
+    cache_read: 0.044
 
 generator:
   model: deepseek-v4-pro
@@ -76,13 +65,10 @@ generator:
   max_tokens: 32768
   reasoning:
     effort: high
-  extra_body:
-    thinking:
-      type: enabled
   price:
-    input: 0.435
-    output: 0.87
-    cache_read: 0.003625
+    input: 1.32
+    output: 3.96
+    cache_read: 0.044
 
 refiner:
   model: deepseek-v4-pro
@@ -90,13 +76,10 @@ refiner:
   max_tokens: 32768
   reasoning:
     effort: high
-  extra_body:
-    thinking:
-      type: enabled
   price:
-    input: 0.435
-    output: 0.87
-    cache_read: 0.003625
+    input: 1.32
+    output: 3.96
+    cache_read: 0.044
 
 adviser:
   model: deepseek-v4-pro
@@ -104,55 +87,49 @@ adviser:
   max_tokens: 16384
   reasoning:
     effort: high
-  extra_body:
-    thinking:
-      type: enabled
   price:
-    input: 0.435
-    output: 0.87
-    cache_read: 0.003625
+    input: 1.32
+    output: 3.96
+    cache_read: 0.044
 
 reflector:
-  model: deepseek-v4-flash
+  model: deepseek-flash
   temperature: 0.5
   top_p: 0.9
   n: 1
   max_tokens: 8192
-  extra_body:
-    thinking:
-      type: disabled
+  reasoning:
+    mode: "off"
   price:
-    input: 0.14
-    output: 0.28
-    cache_read: 0.0028
+    input: 0.30
+    output: 1.20
+    cache_read: 0.006
 
 searcher:
-  model: deepseek-v4-flash
+  model: deepseek-flash
   temperature: 0.5
   top_p: 0.9
   n: 1
   max_tokens: 4096
-  extra_body:
-    thinking:
-      type: disabled
+  reasoning:
+    mode: "off"
   price:
-    input: 0.14
-    output: 0.28
-    cache_read: 0.0028
+    input: 0.30
+    output: 1.20
+    cache_read: 0.006
 
 enricher:
-  model: deepseek-v4-flash
+  model: deepseek-flash
   temperature: 0.5
   top_p: 0.9
   n: 1
   max_tokens: 4096
-  extra_body:
-    thinking:
-      type: disabled
+  reasoning:
+    mode: "off"
   price:
-    input: 0.14
-    output: 0.28
-    cache_read: 0.0028
+    input: 0.30
+    output: 1.20
+    cache_read: 0.006
 
 coder:
   model: deepseek-v4-pro
@@ -160,27 +137,21 @@ coder:
   max_tokens: 20480
   reasoning:
     effort: high
-  extra_body:
-    thinking:
-      type: enabled
   price:
-    input: 0.435
-    output: 0.87
-    cache_read: 0.003625
+    input: 1.32
+    output: 3.96
+    cache_read: 0.044
 
 installer:
-  model: deepseek-v4-flash
+  model: deepseek-flash
   n: 1
   max_tokens: 12288
   reasoning:
     effort: high
-  extra_body:
-    thinking:
-      type: enabled
   price:
-    input: 0.14
-    output: 0.28
-    cache_read: 0.0028
+    input: 0.30
+    output: 1.20
+    cache_read: 0.006
 
 pentester:
   model: deepseek-v4-pro
@@ -188,10 +159,7 @@ pentester:
   max_tokens: 16384
   reasoning:
     effort: high
-  extra_body:
-    thinking:
-      type: enabled
   price:
-    input: 0.435
-    output: 0.87
-    cache_read: 0.003625
+    input: 1.32
+    output: 3.96
+    cache_read: 0.044

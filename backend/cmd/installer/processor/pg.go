@@ -3,12 +3,15 @@ package processor
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
 	"pentagi/pkg/config"
 	"pentagi/pkg/database"
+	"pentagi/pkg/password"
 
 	_ "github.com/lib/pq"
 	"golang.org/x/crypto/bcrypt"
@@ -33,8 +36,28 @@ const (
 	EnvPostgreSQLDatabase = "PENTAGI_POSTGRES_DB"
 )
 
+var (
+	errPasswordTooLong = fmt.Errorf("password is longer than the %d bytes bcrypt hashes", password.MaxBytes)
+	errPasswordTooWeak = errors.New("password does not meet the password policy")
+)
+
+func checkPasswordPolicy(newPassword string) error {
+	switch {
+	case !password.FitsHashLimit(newPassword):
+		return errPasswordTooLong
+	case !password.IsStrong(newPassword):
+		return errPasswordTooWeak
+	default:
+		return nil
+	}
+}
+
 // performPasswordReset updates the admin password in PostgreSQL
 func (p *processor) performPasswordReset(ctx context.Context, newPassword string, state *operationState) error {
+	if err := checkPasswordPolicy(newPassword); err != nil {
+		return err
+	}
+
 	// get database configuration from state
 	dbUser := DefaultPostgreSQLUser
 	if envVar, ok := p.state.GetVar(EnvPostgreSQLUser); ok && envVar.Value != "" {
@@ -108,15 +131,9 @@ func (p *processor) performPasswordReset(ctx context.Context, newPassword string
 		return fmt.Errorf("failed to hash password: %w", err)
 	}
 
-	query := `UPDATE users SET password = $1, status = 'active' WHERE mail = $2`
-	result, err := db.ExecContext(ctx, query, string(hashedPassword), AdminEmail)
+	rowsAffected, err := resetAdminPassword(ctx, db, string(hashedPassword))
 	if err != nil {
-		return fmt.Errorf("failed to update password: %w", err)
-	}
-
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("failed to get rows affected: %w", err)
+		return err
 	}
 
 	if rowsAffected == 0 {
@@ -126,4 +143,42 @@ func (p *processor) performPasswordReset(ctx context.Context, newPassword string
 	p.appendLog(fmt.Sprintf("Password updated for %s", AdminEmail), ProductStackPentagi, state)
 
 	return nil
+}
+
+func resetAdminPassword(ctx context.Context, db *sql.DB, hashedPassword string) (int64, error) {
+	hasGenerations, err := usersHaveSessionGeneration(ctx, db)
+	if err != nil {
+		return 0, err
+	}
+
+	query := `UPDATE users SET password = $1, status = 'active', session_generation = session_generation + 1 WHERE mail = $2`
+	if !hasGenerations {
+		query = `UPDATE users SET password = $1, status = 'active' WHERE mail = $2`
+	}
+	result, err := db.ExecContext(ctx, query, hashedPassword, AdminEmail)
+	if err != nil {
+		return 0, fmt.Errorf("failed to update password: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	return rowsAffected, nil
+}
+
+func usersHaveSessionGeneration(ctx context.Context, db *sql.DB) (bool, error) {
+	rows, err := db.QueryContext(ctx, `SELECT * FROM users LIMIT 0`)
+	if err != nil {
+		return false, fmt.Errorf("failed to read the users columns: %w", err)
+	}
+	defer rows.Close()
+
+	columns, err := rows.Columns()
+	if err != nil {
+		return false, fmt.Errorf("failed to read the users columns: %w", err)
+	}
+
+	return slices.Contains(columns, "session_generation"), nil
 }

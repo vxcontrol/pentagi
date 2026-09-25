@@ -3,11 +3,13 @@ package response
 // general
 
 var ErrInternal = NewHttpError(500, "Internal", "internal server error")
+var ErrRequestTimeout = NewHttpError(504, "RequestTimeout", "the server took too long to answer; the action may still be running")
 var ErrInternalDBNotFound = NewHttpError(500, "Internal.DBNotFound", "db not found")
 var ErrInternalServiceNotFound = NewHttpError(500, "Internal.ServiceNotFound", "service not found")
 var ErrInternalDBEncryptorNotFound = NewHttpError(500, "Internal.DBEncryptorNotFound", "DBEncryptor not found")
 var ErrNotPermitted = NewHttpError(403, "NotPermitted", "action not permitted")
 var ErrAuthRequired = NewHttpError(403, "AuthRequired", "auth required")
+var ErrAuthUnavailable = NewHttpError(503, "AuthUnavailable", "the credentials could not be checked right now")
 var ErrLocalUserRequired = NewHttpError(403, "LocalUserRequired", "local user required")
 var ErrPrivilegesRequired = NewHttpError(403, "PrivilegesRequired", "some privileges required")
 var ErrAdminRequired = NewHttpError(403, "AdminRequired", "admin required")
@@ -22,6 +24,7 @@ var ErrAuthInvalidAuthorizationState = NewHttpError(400, "Auth.InvalidAuthorizat
 var ErrAuthInvalidSwitchServiceHash = NewHttpError(400, "Auth.InvalidSwitchServiceHash", "invalid switch service hash input data")
 var ErrAuthInvalidAuthorizationNonce = NewHttpError(400, "Auth.InvalidAuthorizationNonce", "invalid authorization nonce data")
 var ErrAuthInvalidCredentials = NewHttpError(401, "Auth.InvalidCredentials", "invalid login or password")
+var ErrAuthTooManyAttempts = NewHttpError(429, "Auth.TooManyAttempts", "too many login attempts")
 var ErrAuthInvalidUserData = NewHttpError(500, "Auth.InvalidUserData", "invalid user data")
 var ErrAuthInactiveUser = NewHttpError(403, "Auth.InactiveUser", "user is inactive")
 var ErrAuthExchangeTokenFail = NewHttpError(403, "Auth.ExchangeTokenFail", "error on exchanging token")
@@ -113,6 +116,12 @@ var ErrFlowsInvalidRequest = NewHttpError(400, "Flows.InvalidRequest", "invalid 
 var ErrFlowsNotFound = NewHttpError(404, "Flows.NotFound", "flow not found")
 var ErrFlowsInvalidData = NewHttpError(500, "Flows.InvalidData", "invalid flow data")
 
+// ErrFlowsInputNotAccepted answers a caller whose input never reached the
+// worker. It is separate from a generic failure because it is the one case
+// where sending the same input again cannot duplicate anything.
+var ErrFlowsInputNotAccepted = NewHttpError(503, "Flows.InputNotAccepted",
+	"the flow was busy and did not take the input; it was not started, so it is safe to send again")
+
 // flow files
 
 var ErrFlowFilesInvalidRequest = NewHttpError(400, "FlowFiles.InvalidRequest", "invalid flow file request data")
@@ -146,6 +155,7 @@ var ErrResourcesNotFound = NewHttpError(404, "Resources.NotFound", "resource not
 var ErrResourcesAlreadyExists = NewHttpError(409, "Resources.AlreadyExists", "resource already exists")
 var ErrResourcesInvalidData = NewHttpError(400, "Resources.InvalidData", "invalid resource data")
 var ErrResourcesConflict = NewHttpError(409, "Resources.Conflict", "resource conflict: use force=true to merge")
+var ErrResourcesSharedPath = NewHttpError(400, "Resources.SharedPath", "requested resources share a virtual path, download them separately")
 
 // knowledge
 

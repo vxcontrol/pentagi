@@ -1,949 +1,341 @@
 package providers
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
-	"slices"
 	"strings"
-	"sync"
-	"sync/atomic"
 	"testing"
 
-	"pentagi/pkg/cast"
-	"pentagi/pkg/config"
+	"pentagi/pkg/templates"
+	"pentagi/pkg/tools"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/vxcontrol/langchaingo/llms"
 )
 
-var (
-	// basicChain represents a basic conversation with system, human, and AI messages
-	basicChain = []llms.MessageContent{
-		{
-			Role:  llms.ChatMessageTypeSystem,
-			Parts: []llms.ContentPart{llms.TextContent{Text: "You are a helpful assistant."}},
-		},
-		{
-			Role:  llms.ChatMessageTypeHuman,
-			Parts: []llms.ContentPart{llms.TextContent{Text: "Hello, how are you?"}},
-		},
-		{
-			Role:  llms.ChatMessageTypeAI,
-			Parts: []llms.ContentPart{llms.TextContent{Text: "I'm doing well! How can I help you today?"}},
-		},
-	}
-
-	// chainStartingWithHuman represents a conversation without system message, starting with human
-	chainStartingWithHuman = []llms.MessageContent{
-		{
-			Role:  llms.ChatMessageTypeHuman,
-			Parts: []llms.ContentPart{llms.TextContent{Text: "Hey there, can you help me?"}},
-		},
-		{
-			Role:  llms.ChatMessageTypeAI,
-			Parts: []llms.ContentPart{llms.TextContent{Text: "Of course! What do you need assistance with?"}},
-		},
-	}
-
-	// chainWithOnlySystem represents a conversation with only a system message
-	chainWithOnlySystem = []llms.MessageContent{
-		{
-			Role:  llms.ChatMessageTypeSystem,
-			Parts: []llms.ContentPart{llms.TextContent{Text: "You are an AI assistant that provides helpful information."}},
-		},
-	}
-
-	// chainWithToolCall represents a conversation where AI called a tool
-	chainWithToolCall = []llms.MessageContent{
-		{
-			Role:  llms.ChatMessageTypeSystem,
-			Parts: []llms.ContentPart{llms.TextContent{Text: "You are a helpful assistant."}},
-		},
-		{
-			Role:  llms.ChatMessageTypeHuman,
-			Parts: []llms.ContentPart{llms.TextContent{Text: "What's the weather like?"}},
-		},
-		{
-			Role: llms.ChatMessageTypeAI,
-			Parts: []llms.ContentPart{
-				llms.ToolCall{
-					ID:   "tool-1",
-					Type: "function",
-					FunctionCall: &llms.FunctionCall{
-						Name:      "get_weather",
-						Arguments: `{"location": "New York"}`,
-					},
-				},
-			},
-		},
-	}
-
-	// chainWithToolResponse represents a conversation with a tool call that has been responded to
-	chainWithToolResponse = []llms.MessageContent{
-		{
-			Role:  llms.ChatMessageTypeSystem,
-			Parts: []llms.ContentPart{llms.TextContent{Text: "You are a helpful assistant."}},
-		},
-		{
-			Role:  llms.ChatMessageTypeHuman,
-			Parts: []llms.ContentPart{llms.TextContent{Text: "What's the weather like?"}},
-		},
-		{
-			Role: llms.ChatMessageTypeAI,
-			Parts: []llms.ContentPart{
-				llms.ToolCall{
-					ID:   "tool-1",
-					Type: "function",
-					FunctionCall: &llms.FunctionCall{
-						Name:      "get_weather",
-						Arguments: `{"location": "New York"}`,
-					},
-				},
-			},
-		},
-		{
-			Role: llms.ChatMessageTypeTool,
-			Parts: []llms.ContentPart{
-				llms.ToolCallResponse{
-					ToolCallID: "tool-1",
-					Name:       "get_weather",
-					Content:    "The weather in New York is sunny with a high of 75°F.",
-				},
-			},
-		},
-	}
-
-	// chainWithMultipleToolCalls represents a conversation with multiple tool calls
-	chainWithMultipleToolCalls = []llms.MessageContent{
-		{
-			Role:  llms.ChatMessageTypeSystem,
-			Parts: []llms.ContentPart{llms.TextContent{Text: "You are a helpful assistant."}},
-		},
-		{
-			Role:  llms.ChatMessageTypeHuman,
-			Parts: []llms.ContentPart{llms.TextContent{Text: "What's the weather and time in New York?"}},
-		},
-		{
-			Role: llms.ChatMessageTypeAI,
-			Parts: []llms.ContentPart{
-				llms.ToolCall{
-					ID:   "tool-1",
-					Type: "function",
-					FunctionCall: &llms.FunctionCall{
-						Name:      "get_weather",
-						Arguments: `{"location": "New York"}`,
-					},
-				},
-				llms.ToolCall{
-					ID:   "tool-2",
-					Type: "function",
-					FunctionCall: &llms.FunctionCall{
-						Name:      "get_time",
-						Arguments: `{"location": "New York"}`,
-					},
-				},
-			},
-		},
-	}
-
-	// incompleteChainWithMultipleToolCalls represents a conversation with multiple tool calls where only one has a response
-	incompleteChainWithMultipleToolCalls = []llms.MessageContent{
-		{
-			Role:  llms.ChatMessageTypeSystem,
-			Parts: []llms.ContentPart{llms.TextContent{Text: "You are a helpful assistant."}},
-		},
-		{
-			Role:  llms.ChatMessageTypeHuman,
-			Parts: []llms.ContentPart{llms.TextContent{Text: "What's the weather and time in New York?"}},
-		},
-		{
-			Role: llms.ChatMessageTypeAI,
-			Parts: []llms.ContentPart{
-				llms.ToolCall{
-					ID:   "tool-1",
-					Type: "function",
-					FunctionCall: &llms.FunctionCall{
-						Name:      "get_weather",
-						Arguments: `{"location": "New York"}`,
-					},
-				},
-				llms.ToolCall{
-					ID:   "tool-2",
-					Type: "function",
-					FunctionCall: &llms.FunctionCall{
-						Name:      "get_time",
-						Arguments: `{"location": "New York"}`,
-					},
-				},
-			},
-		},
-		{
-			Role: llms.ChatMessageTypeTool,
-			Parts: []llms.ContentPart{
-				llms.ToolCallResponse{
-					ToolCallID: "tool-1",
-					Name:       "get_weather",
-					Content:    "The weather in New York is sunny with a high of 75°F.",
-				},
-			},
-		},
-	}
+const (
+	// helpersFallback is what a tool call nobody answered is padded with.
+	helpersFallback = "the call was not handled, please try again"
+	helpersWeather  = "The weather in New York is sunny with a high of 75°F."
+	// helpersNotFound is the start of the executor's answer to a call of a tool that does not exist.
+	helpersNotFound = "function 'execute_task_and_return_summary' not found in available tools list"
 )
 
-// Helper to clone a chain to avoid modifying test fixtures
-func cloneChain(chain []llms.MessageContent) []llms.MessageContent {
-	b, _ := json.Marshal(chain)
-	var cloned []llms.MessageContent
-	_ = json.Unmarshal(b, &cloned)
-	return cloned
+func helpersText(role llms.ChatMessageType, text ...string) llms.MessageContent {
+	msg := llms.MessageContent{Role: role}
+	for _, part := range text {
+		msg.Parts = append(msg.Parts, llms.TextContent{Text: part})
+	}
+
+	return msg
 }
 
-func newFlowProvider() *flowProvider {
-	return &flowProvider{
-		mx:              &sync.RWMutex{},
-		cfg:             &config.Config{DataDir: "testdata"},
-		summarizerCache: newSummarizerCache(),
-		callCounter:     &atomic.Int64{},
-		maxGACallsLimit: maxGeneralAgentChainIterations,
-		maxLACallsLimit: maxLimitedAgentChainIterations,
-		buildMonitor: func() *executionMonitor {
-			return &executionMonitor{
-				enabled: false,
-			}
-		},
+func helpersToolCall(id, name, args string) llms.ToolCall {
+	return llms.ToolCall{ID: id, Type: "function", FunctionCall: &llms.FunctionCall{Name: name, Arguments: args}}
+}
+
+func helpersToolResult(id, name, content string) llms.MessageContent {
+	return llms.MessageContent{
+		Role:  llms.ChatMessageTypeTool,
+		Parts: []llms.ContentPart{llms.ToolCallResponse{ToolCallID: id, Name: name, Content: content}},
 	}
 }
 
-func findUnrespondedToolCalls(chain []llms.MessageContent) ([]llms.ToolCall, error) {
-	if len(chain) == 0 {
-		return nil, nil
-	}
+// helpersChain builds a fresh chain per call, so a row that rewrites it cannot leak into another.
+func helpersChain(kind string, tail ...llms.MessageContent) []llms.MessageContent {
+	system := helpersText(llms.ChatMessageTypeSystem, "You are a helpful assistant.")
+	weatherCall := helpersToolCall("tool-1", "get_weather", `{"location": "New York"}`)
+	timeCall := helpersToolCall("tool-2", "get_time", `{"location": "New York"}`)
 
-	var lastAIMsg llms.MessageContent
-	var lastAIMsgIdx int
-	for i := len(chain) - 1; i >= 0; i-- {
-		if chain[i].Role == llms.ChatMessageTypeAI {
-			lastAIMsg = chain[i]
-			lastAIMsgIdx = i
-			break
+	var chain []llms.MessageContent
+	switch kind {
+	case "basic":
+		chain = []llms.MessageContent{
+			system,
+			helpersText(llms.ChatMessageTypeHuman, "Hello, how are you?"),
+			helpersText(llms.ChatMessageTypeAI, "I'm doing well! How can I help you today?"),
 		}
-	}
-
-	if lastAIMsg.Role != llms.ChatMessageTypeAI {
-		return nil, nil // No AI message found
-	}
-
-	var toolCalls []llms.ToolCall
-	for _, part := range lastAIMsg.Parts {
-		toolCall, ok := part.(llms.ToolCall)
-		if !ok || toolCall.FunctionCall == nil {
-			continue
+	case "one call":
+		chain = []llms.MessageContent{
+			system,
+			helpersText(llms.ChatMessageTypeHuman, "What's the weather like?"),
+			{Role: llms.ChatMessageTypeAI, Parts: []llms.ContentPart{weatherCall}},
 		}
-		toolCalls = append(toolCalls, toolCall)
-	}
-
-	if len(toolCalls) == 0 {
-		return nil, nil // No tool calls in the AI message
-	}
-
-	respondedToolCalls := make(map[string]bool)
-	for i := lastAIMsgIdx + 1; i < len(chain); i++ {
-		if chain[i].Role != llms.ChatMessageTypeTool {
-			continue
+	case "two calls":
+		chain = []llms.MessageContent{
+			system,
+			helpersText(llms.ChatMessageTypeHuman, "What's the weather and time in New York?"),
+			{Role: llms.ChatMessageTypeAI, Parts: []llms.ContentPart{weatherCall, timeCall}},
 		}
-
-		for _, part := range chain[i].Parts {
-			toolResponse, ok := part.(llms.ToolCallResponse)
-			if !ok {
-				continue
-			}
-			respondedToolCalls[toolResponse.ToolCallID] = true
-		}
+	default:
+		panic("unknown chain " + kind)
 	}
 
-	var unrespondedToolCalls []llms.ToolCall
-	for _, toolCall := range toolCalls {
-		if !respondedToolCalls[toolCall.ID] {
-			unrespondedToolCalls = append(unrespondedToolCalls, toolCall)
-		}
-	}
-
-	return unrespondedToolCalls, nil
+	return append(chain, tail...)
 }
 
-func TestUpdateMsgChainResult(t *testing.T) {
-	provider := newFlowProvider()
+func TestHelpers_UpdateMsgChainResult_PutsTheResultWhereTheChainExpectsIt(t *testing.T) {
+	fp := newFlowProvider()
+
+	const (
+		help  = "I need help with my code."
+		clock = "The current time in New York is 3:45 PM."
+	)
+	system := helpersText(llms.ChatMessageTypeSystem, "You are a helpful assistant.")
 
 	tests := []struct {
-		name          string
-		chain         []llms.MessageContent
-		toolName      string
-		input         string
-		expectedChain []llms.MessageContent
-		expectError   bool
+		name     string
+		chain    []llms.MessageContent
+		toolName string
+		input    string
+		want     []llms.MessageContent
 	}{
 		{
-			name:        "Empty chain",
-			chain:       []llms.MessageContent{},
-			toolName:    "ask_user",
-			input:       "Hello!",
-			expectError: false,
-			expectedChain: []llms.MessageContent{
-				{
-					Role:  llms.ChatMessageTypeHuman,
-					Parts: []llms.ContentPart{llms.TextContent{Text: "Hello!"}},
-				},
+			name:     "an empty chain becomes the human message",
+			chain:    []llms.MessageContent{},
+			toolName: "ask_user",
+			input:    "Hello!",
+			want:     []llms.MessageContent{helpersText(llms.ChatMessageTypeHuman, "Hello!")},
+		},
+		{
+			name:     "a lone system message is followed by the human message",
+			chain:    helpersChain("basic")[:1],
+			toolName: "ask_user",
+			input:    "Hello!",
+			want:     []llms.MessageContent{system, helpersText(llms.ChatMessageTypeHuman, "Hello!")},
+		},
+		{
+			name:     "a trailing human message takes the result as another part",
+			chain:    helpersChain("basic")[:2],
+			toolName: "ask_user",
+			input:    " " + help,
+			want: []llms.MessageContent{
+				system,
+				helpersText(llms.ChatMessageTypeHuman, "Hello, how are you?", " "+help),
 			},
 		},
 		{
-			name:        "System message as last message",
-			chain:       cloneChain(basicChain)[:1], // Just the system message
-			toolName:    "ask_user",
-			input:       "Hello!",
-			expectError: false,
-			expectedChain: []llms.MessageContent{
-				{
-					Role:  llms.ChatMessageTypeSystem,
-					Parts: []llms.ContentPart{llms.TextContent{Text: "You are a helpful assistant."}},
-				},
-				{
-					Role:  llms.ChatMessageTypeHuman,
-					Parts: []llms.ContentPart{llms.TextContent{Text: "Hello!"}},
-				},
-			},
+			name:     "a trailing answer is followed by the human message",
+			chain:    helpersChain("basic"),
+			toolName: "ask_user",
+			input:    help,
+			want:     helpersChain("basic", helpersText(llms.ChatMessageTypeHuman, help)),
 		},
 		{
-			name:        "Human message as last message",
-			chain:       cloneChain(basicChain)[:2], // System + Human
-			toolName:    "ask_user",
-			input:       " I need help with my code.",
-			expectError: false,
-			expectedChain: []llms.MessageContent{
-				{
-					Role:  llms.ChatMessageTypeSystem,
-					Parts: []llms.ContentPart{llms.TextContent{Text: "You are a helpful assistant."}},
-				},
-				{
-					Role: llms.ChatMessageTypeHuman,
-					Parts: []llms.ContentPart{
-						llms.TextContent{Text: "Hello, how are you?"},
-						llms.TextContent{Text: " I need help with my code."},
-					},
-				},
-			},
+			name:     "the pending call of the named tool gets the result",
+			chain:    helpersChain("one call"),
+			toolName: "get_weather",
+			input:    helpersWeather,
+			want:     helpersChain("one call", helpersToolResult("tool-1", "get_weather", helpersWeather)),
 		},
 		{
-			name:        "AI message as last message",
-			chain:       cloneChain(basicChain), // Full basic chain
-			toolName:    "ask_user",
-			input:       "I need help with my code.",
-			expectError: false,
-			expectedChain: []llms.MessageContent{
-				{
-					Role:  llms.ChatMessageTypeSystem,
-					Parts: []llms.ContentPart{llms.TextContent{Text: "You are a helpful assistant."}},
-				},
-				{
-					Role:  llms.ChatMessageTypeHuman,
-					Parts: []llms.ContentPart{llms.TextContent{Text: "Hello, how are you?"}},
-				},
-				{
-					Role:  llms.ChatMessageTypeAI,
-					Parts: []llms.ContentPart{llms.TextContent{Text: "I'm doing well! How can I help you today?"}},
-				},
-				{
-					Role:  llms.ChatMessageTypeHuman,
-					Parts: []llms.ContentPart{llms.TextContent{Text: "I need help with my code."}},
-				},
-			},
+			name:     "a result for another tool pads the pending call and follows as a human message",
+			chain:    helpersChain("one call"),
+			toolName: "wrong_tool",
+			input:    "This is a response to a wrong tool.",
+			want: helpersChain("one call",
+				helpersToolResult("tool-1", "get_weather", helpersFallback),
+				helpersText(llms.ChatMessageTypeHuman, "This is a response to a wrong tool."),
+			),
 		},
 		{
-			name:        "Tool call without response",
-			chain:       cloneChain(chainWithToolCall),
-			toolName:    "get_weather",
-			input:       "The weather in New York is sunny with a high of 75°F.",
-			expectError: false,
-			expectedChain: []llms.MessageContent{
-				{
-					Role:  llms.ChatMessageTypeSystem,
-					Parts: []llms.ContentPart{llms.TextContent{Text: "You are a helpful assistant."}},
-				},
-				{
-					Role:  llms.ChatMessageTypeHuman,
-					Parts: []llms.ContentPart{llms.TextContent{Text: "What's the weather like?"}},
-				},
-				{
-					Role: llms.ChatMessageTypeAI,
-					Parts: []llms.ContentPart{
-						llms.ToolCall{
-							ID:   "tool-1",
-							Type: "function",
-							FunctionCall: &llms.FunctionCall{
-								Name:      "get_weather",
-								Arguments: `{"location": "New York"}`,
-							},
-						},
-					},
-				},
-				{
-					Role: llms.ChatMessageTypeTool,
-					Parts: []llms.ContentPart{
-						llms.ToolCallResponse{
-							ToolCallID: "tool-1",
-							Name:       "get_weather",
-							Content:    "The weather in New York is sunny with a high of 75°F.",
-						},
-					},
-				},
-			},
+			name:     "an answered call has its result replaced",
+			chain:    helpersChain("one call", helpersToolResult("tool-1", "get_weather", helpersWeather)),
+			toolName: "get_weather",
+			input:    "Updated: The weather in New York is rainy.",
+			want: helpersChain("one call",
+				helpersToolResult("tool-1", "get_weather", "Updated: The weather in New York is rainy.")),
 		},
 		{
-			name:        "Tool call with wrong tool name",
-			chain:       cloneChain(chainWithToolCall),
-			toolName:    "wrong_tool",
-			input:       "This is a response to a wrong tool.",
-			expectError: false,
-			expectedChain: []llms.MessageContent{
-				{
-					Role:  llms.ChatMessageTypeSystem,
-					Parts: []llms.ContentPart{llms.TextContent{Text: "You are a helpful assistant."}},
-				},
-				{
-					Role:  llms.ChatMessageTypeHuman,
-					Parts: []llms.ContentPart{llms.TextContent{Text: "What's the weather like?"}},
-				},
-				{
-					Role: llms.ChatMessageTypeAI,
-					Parts: []llms.ContentPart{
-						llms.ToolCall{
-							ID:   "tool-1",
-							Type: "function",
-							FunctionCall: &llms.FunctionCall{
-								Name:      "get_weather",
-								Arguments: `{"location": "New York"}`,
-							},
-						},
-					},
-				},
-				{
-					Role: llms.ChatMessageTypeTool,
-					Parts: []llms.ContentPart{
-						llms.ToolCallResponse{
-							ToolCallID: "tool-1",
-							Name:       "get_weather",
-							Content:    cast.FallbackResponseContent,
-						},
-					},
-				},
-				{
-					Role:  llms.ChatMessageTypeHuman,
-					Parts: []llms.ContentPart{llms.TextContent{Text: "This is a response to a wrong tool."}},
-				},
-			},
+			name:     "the first of two pending calls gets the result and the second is padded",
+			chain:    helpersChain("two calls"),
+			toolName: "get_weather",
+			input:    helpersWeather,
+			want: helpersChain("two calls",
+				helpersToolResult("tool-1", "get_weather", helpersWeather),
+				helpersToolResult("tool-2", "get_time", helpersFallback),
+			),
 		},
 		{
-			name:        "Update existing tool response",
-			chain:       cloneChain(chainWithToolResponse),
-			toolName:    "get_weather",
-			input:       "Updated: The weather in New York is rainy.",
-			expectError: false,
-			expectedChain: []llms.MessageContent{
-				{
-					Role:  llms.ChatMessageTypeSystem,
-					Parts: []llms.ContentPart{llms.TextContent{Text: "You are a helpful assistant."}},
-				},
-				{
-					Role:  llms.ChatMessageTypeHuman,
-					Parts: []llms.ContentPart{llms.TextContent{Text: "What's the weather like?"}},
-				},
-				{
-					Role: llms.ChatMessageTypeAI,
-					Parts: []llms.ContentPart{
-						llms.ToolCall{
-							ID:   "tool-1",
-							Type: "function",
-							FunctionCall: &llms.FunctionCall{
-								Name:      "get_weather",
-								Arguments: `{"location": "New York"}`,
-							},
-						},
-					},
-				},
-				{
-					Role: llms.ChatMessageTypeTool,
-					Parts: []llms.ContentPart{
-						llms.ToolCallResponse{
-							ToolCallID: "tool-1",
-							Name:       "get_weather",
-							Content:    "Updated: The weather in New York is rainy.",
-						},
-					},
-				},
-			},
+			name:     "the second of two pending calls gets the result and the first is padded",
+			chain:    helpersChain("two calls"),
+			toolName: "get_time",
+			input:    clock,
+			want: helpersChain("two calls",
+				helpersToolResult("tool-1", "get_weather", helpersFallback),
+				helpersToolResult("tool-2", "get_time", clock),
+			),
 		},
 		{
-			name:        "Multiple tool calls - respond to first tool",
-			chain:       cloneChain(chainWithMultipleToolCalls),
-			toolName:    "get_weather",
-			input:       "The weather in New York is sunny with a high of 75°F.",
-			expectError: false,
-			expectedChain: []llms.MessageContent{
-				{
-					Role:  llms.ChatMessageTypeSystem,
-					Parts: []llms.ContentPart{llms.TextContent{Text: "You are a helpful assistant."}},
-				},
-				{
-					Role:  llms.ChatMessageTypeHuman,
-					Parts: []llms.ContentPart{llms.TextContent{Text: "What's the weather and time in New York?"}},
-				},
-				{
-					Role: llms.ChatMessageTypeAI,
-					Parts: []llms.ContentPart{
-						llms.ToolCall{
-							ID:   "tool-1",
-							Type: "function",
-							FunctionCall: &llms.FunctionCall{
-								Name:      "get_weather",
-								Arguments: `{"location": "New York"}`,
-							},
-						},
-						llms.ToolCall{
-							ID:   "tool-2",
-							Type: "function",
-							FunctionCall: &llms.FunctionCall{
-								Name:      "get_time",
-								Arguments: `{"location": "New York"}`,
-							},
-						},
-					},
-				},
-				{
-					Role: llms.ChatMessageTypeTool,
-					Parts: []llms.ContentPart{
-						llms.ToolCallResponse{
-							ToolCallID: "tool-1",
-							Name:       "get_weather",
-							Content:    "The weather in New York is sunny with a high of 75°F.",
-						},
-					},
-				},
-				{
-					Role: llms.ChatMessageTypeTool,
-					Parts: []llms.ContentPart{
-						llms.ToolCallResponse{
-							ToolCallID: "tool-2",
-							Name:       "get_time",
-							Content:    cast.FallbackResponseContent,
-						},
-					},
-				},
-			},
-		},
-		{
-			name:        "Multiple tool calls - respond to second tool",
-			chain:       cloneChain(chainWithMultipleToolCalls),
-			toolName:    "get_time",
-			input:       "The current time in New York is 3:45 PM.",
-			expectError: false,
-			expectedChain: []llms.MessageContent{
-				{
-					Role:  llms.ChatMessageTypeSystem,
-					Parts: []llms.ContentPart{llms.TextContent{Text: "You are a helpful assistant."}},
-				},
-				{
-					Role:  llms.ChatMessageTypeHuman,
-					Parts: []llms.ContentPart{llms.TextContent{Text: "What's the weather and time in New York?"}},
-				},
-				{
-					Role: llms.ChatMessageTypeAI,
-					Parts: []llms.ContentPart{
-						llms.ToolCall{
-							ID:   "tool-1",
-							Type: "function",
-							FunctionCall: &llms.FunctionCall{
-								Name:      "get_weather",
-								Arguments: `{"location": "New York"}`,
-							},
-						},
-						llms.ToolCall{
-							ID:   "tool-2",
-							Type: "function",
-							FunctionCall: &llms.FunctionCall{
-								Name:      "get_time",
-								Arguments: `{"location": "New York"}`,
-							},
-						},
-					},
-				},
-				{
-					Role: llms.ChatMessageTypeTool,
-					Parts: []llms.ContentPart{
-						llms.ToolCallResponse{
-							ToolCallID: "tool-1",
-							Name:       "get_weather",
-							Content:    cast.FallbackResponseContent,
-						},
-					},
-				},
-				{
-					Role: llms.ChatMessageTypeTool,
-					Parts: []llms.ContentPart{
-						llms.ToolCallResponse{
-							ToolCallID: "tool-2",
-							Name:       "get_time",
-							Content:    "The current time in New York is 3:45 PM.",
-						},
-					},
-				},
-			},
-		},
-		{
-			name:        "Tool message as last message without matching tool",
-			chain:       cloneChain(incompleteChainWithMultipleToolCalls),
-			toolName:    "ask_user",
-			input:       "I want to know more about the weather there.",
-			expectError: false,
-			expectedChain: []llms.MessageContent{
-				{
-					Role:  llms.ChatMessageTypeSystem,
-					Parts: []llms.ContentPart{llms.TextContent{Text: "You are a helpful assistant."}},
-				},
-				{
-					Role:  llms.ChatMessageTypeHuman,
-					Parts: []llms.ContentPart{llms.TextContent{Text: "What's the weather and time in New York?"}},
-				},
-				{
-					Role: llms.ChatMessageTypeAI,
-					Parts: []llms.ContentPart{
-						llms.ToolCall{
-							ID:   "tool-1",
-							Type: "function",
-							FunctionCall: &llms.FunctionCall{
-								Name:      "get_weather",
-								Arguments: `{"location": "New York"}`,
-							},
-						},
-						llms.ToolCall{
-							ID:   "tool-2",
-							Type: "function",
-							FunctionCall: &llms.FunctionCall{
-								Name:      "get_time",
-								Arguments: `{"location": "New York"}`,
-							},
-						},
-					},
-				},
-				{
-					Role: llms.ChatMessageTypeTool,
-					Parts: []llms.ContentPart{
-						llms.ToolCallResponse{
-							ToolCallID: "tool-1",
-							Name:       "get_weather",
-							Content:    "The weather in New York is sunny with a high of 75°F.",
-						},
-					},
-				},
-				{
-					Role: llms.ChatMessageTypeTool,
-					Parts: []llms.ContentPart{
-						llms.ToolCallResponse{
-							ToolCallID: "tool-2",
-							Name:       "get_time",
-							Content:    cast.FallbackResponseContent,
-						},
-					},
-				},
-				{
-					Role:  llms.ChatMessageTypeHuman,
-					Parts: []llms.ContentPart{llms.TextContent{Text: "I want to know more about the weather there."}},
-				},
-			},
+			name: "a result for no pending call follows the padded calls as a human message",
+			chain: helpersChain("two calls",
+				helpersToolResult("tool-1", "get_weather", helpersWeather)),
+			toolName: "ask_user",
+			input:    "I want to know more about the weather there.",
+			want: helpersChain("two calls",
+				helpersToolResult("tool-1", "get_weather", helpersWeather),
+				helpersToolResult("tool-2", "get_time", helpersFallback),
+				helpersText(llms.ChatMessageTypeHuman, "I want to know more about the weather there."),
+			),
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			resultChain, err := provider.updateMsgChainResult(tt.chain, tt.toolName, tt.input)
+			got, err := fp.updateMsgChainResult(tt.chain, tt.toolName, tt.input)
 
-			if tt.expectError {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-				assert.Equal(t, tt.expectedChain, resultChain)
-			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }
 
-func TestFindUnrespondedToolCalls(t *testing.T) {
+func TestHelpers_EnsureChainConsistency_AnswersEveryPendingToolCall(t *testing.T) {
+	fp := newFlowProvider()
+
 	tests := []struct {
-		name          string
-		chain         []llms.MessageContent
-		expectedCalls int
-		expectedNames []string
-		expectedHasAI bool
+		name  string
+		chain []llms.MessageContent
+		want  []llms.MessageContent
 	}{
 		{
-			name:          "Empty chain",
-			chain:         []llms.MessageContent{},
-			expectedCalls: 0,
-			expectedHasAI: false,
+			name:  "an empty chain stays empty",
+			chain: []llms.MessageContent{},
+			want:  []llms.MessageContent{},
 		},
 		{
-			name:          "Chain without AI message",
-			chain:         cloneChain(basicChain)[:2], // System + Human
-			expectedCalls: 0,
-			expectedHasAI: false,
+			name:  "a chain with no pending call is left alone",
+			chain: helpersChain("basic"),
+			want:  helpersChain("basic"),
 		},
 		{
-			name:          "Chain with AI message but no tool calls",
-			chain:         cloneChain(basicChain),
-			expectedCalls: 0,
-			expectedHasAI: true,
+			name:  "a pending call is padded",
+			chain: helpersChain("one call"),
+			want:  helpersChain("one call", helpersToolResult("tool-1", "get_weather", helpersFallback)),
 		},
 		{
-			name:          "Chain with tool call but no response",
-			chain:         cloneChain(chainWithToolCall),
-			expectedCalls: 1,
-			expectedNames: []string{"get_weather"},
-			expectedHasAI: true,
+			name:  "every pending call is padded in order",
+			chain: helpersChain("two calls"),
+			want: helpersChain("two calls",
+				helpersToolResult("tool-1", "get_weather", helpersFallback),
+				helpersToolResult("tool-2", "get_time", helpersFallback),
+			),
 		},
 		{
-			name:          "Chain with tool call and response",
-			chain:         cloneChain(chainWithToolResponse),
-			expectedCalls: 0,
-			expectedHasAI: true,
-		},
-		{
-			name:          "Chain with multiple tool calls and no responses",
-			chain:         cloneChain(chainWithMultipleToolCalls),
-			expectedCalls: 2,
-			expectedNames: []string{"get_weather", "get_time"},
-			expectedHasAI: true,
-		},
-		{
-			name:          "Chain with multiple tool calls and one response",
-			chain:         cloneChain(incompleteChainWithMultipleToolCalls),
-			expectedCalls: 1,
-			expectedNames: []string{"get_time"},
-			expectedHasAI: true,
+			name:  "only the call still pending is padded",
+			chain: helpersChain("two calls", helpersToolResult("tool-1", "get_weather", helpersWeather)),
+			want: helpersChain("two calls",
+				helpersToolResult("tool-1", "get_weather", helpersWeather),
+				helpersToolResult("tool-2", "get_time", helpersFallback),
+			),
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			toolCalls, err := findUnrespondedToolCalls(tt.chain)
+			got, err := fp.ensureChainConsistency(tt.chain)
 
-			assert.NoError(t, err)
-			assert.Equal(t, tt.expectedCalls, len(toolCalls))
-
-			if tt.expectedCalls > 0 {
-				foundNames := make([]string, 0, len(toolCalls))
-				for _, call := range toolCalls {
-					if call.FunctionCall != nil {
-						foundNames = append(foundNames, call.FunctionCall.Name)
-					}
-				}
-
-				for _, expectedName := range tt.expectedNames {
-					found := slices.Contains(foundNames, expectedName)
-					assert.True(t, found, "Expected to find tool call named '%s'", expectedName)
-				}
-			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }
 
-func TestEnsureChainConsistency(t *testing.T) {
-	provider := newFlowProvider()
+// A row's cached answer is set after its first call, the way execToolCall stores what the tool said.
+func TestHelpers_RepeatingDetector_FlagsTheThirdIdenticalCallInARow(t *testing.T) {
+	search := helpersToolCall("test-id", "search", `{"query":"test"}`)
 
 	tests := []struct {
-		name             string
-		chain            []llms.MessageContent
-		expectedAdded    int
-		expectConsistent bool
+		name       string
+		calls      []llms.ToolCall
+		cached     string
+		want       []bool
+		wantLen    int
+		wantCached string
 	}{
 		{
-			name:             "Empty chain",
-			chain:            []llms.MessageContent{},
-			expectedAdded:    0,
-			expectConsistent: true,
+			name:    "a call without a function is ignored",
+			calls:   []llms.ToolCall{{ID: "test", Type: "function"}},
+			want:    []bool{false},
+			wantLen: 0,
 		},
 		{
-			name:             "Already consistent chain",
-			chain:            cloneChain(basicChain),
-			expectedAdded:    0,
-			expectConsistent: true,
+			name:    "the first call is not a repeat",
+			calls:   []llms.ToolCall{search},
+			want:    []bool{false},
+			wantLen: 1,
 		},
 		{
-			name:             "Chain with tool call but no response",
-			chain:            cloneChain(chainWithToolCall),
-			expectedAdded:    1,
-			expectConsistent: false,
+			name:       "two identical calls stay below the threshold and keep the cached answer",
+			calls:      []llms.ToolCall{search, search},
+			cached:     helpersNotFound,
+			want:       []bool{false, false},
+			wantLen:    2,
+			wantCached: helpersNotFound,
 		},
 		{
-			name:             "Chain with multiple tool calls and no responses",
-			chain:            cloneChain(chainWithMultipleToolCalls),
-			expectedAdded:    2,
-			expectConsistent: false,
+			name:    "the third identical call is a repeat",
+			calls:   []llms.ToolCall{search, search, search},
+			want:    []bool{false, false, true},
+			wantLen: 3,
 		},
 		{
-			name:             "Chain with multiple tool calls and one response",
-			chain:            cloneChain(incompleteChainWithMultipleToolCalls),
-			expectedAdded:    1,
-			expectConsistent: false,
+			name:    "every identical call past the threshold is a repeat and counted",
+			calls:   []llms.ToolCall{search, search, search, search, search, search, search},
+			want:    []bool{false, false, true, true, true, true, true},
+			wantLen: 7,
 		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			originalLen := len(tt.chain)
-			resultChain, err := provider.ensureChainConsistency(tt.chain)
-
-			assert.NoError(t, err)
-			assert.Equal(t, originalLen+tt.expectedAdded, len(resultChain))
-
-			// Verify all tool calls have responses
-			if tt.expectedAdded > 0 {
-				// Find all tool calls
-				toolCalls, err := findUnrespondedToolCalls(resultChain)
-				assert.NoError(t, err)
-				assert.Empty(t, toolCalls, "There should be no unresponded tool calls after ensuring consistency")
-
-				// Check the last messages are tool responses with the default content
-				if !tt.expectConsistent {
-					for i := range tt.expectedAdded {
-						idx := originalLen + i
-						assert.Equal(t, llms.ChatMessageTypeTool, resultChain[idx].Role)
-
-						for _, part := range resultChain[idx].Parts {
-							if resp, ok := part.(llms.ToolCallResponse); ok {
-								assert.Equal(t, cast.FallbackResponseContent, resp.Content)
-							}
-						}
-					}
-				}
-			}
-		})
-	}
-}
-
-// makeToolCall is a helper to create a ToolCall with the given function name and arguments.
-func makeToolCall(name, args string) llms.ToolCall {
-	return llms.ToolCall{
-		ID:   "test-id",
-		Type: "function",
-		FunctionCall: &llms.FunctionCall{
-			Name:      name,
-			Arguments: args,
-		},
-	}
-}
-
-// maxSoftDetectionsBeforeAbort mirrors the constant in performer.go.
-// Keep in sync with performer.go:maxSoftDetectionsBeforeAbort.
-const testMaxSoftDetectionsBeforeAbort = 4
-
-func TestRepeatingDetector(t *testing.T) {
-	tests := []struct {
-		name             string
-		calls            []llms.ToolCall
-		expectedDetected []bool // expected detect() return for each call
-		expectedLen      int    // expected len(funcCalls) after all calls
-	}{
 		{
-			name: "nil function call returns false",
+			name: "another tool with the same arguments starts a new run and clears the cached answer",
 			calls: []llms.ToolCall{
-				{ID: "test", Type: "function", FunctionCall: nil},
+				search, search, helpersToolCall("test-id", "browse", `{"query":"test"}`),
 			},
-			expectedDetected: []bool{false},
-			expectedLen:      0,
+			cached:  helpersNotFound,
+			want:    []bool{false, false, false},
+			wantLen: 1,
 		},
 		{
-			name: "first call returns false",
+			name: "other arguments start a new run and clear the cached answer",
 			calls: []llms.ToolCall{
-				makeToolCall("search", `{"query":"test"}`),
+				helpersToolCall("test-id", "search", `{"query":"test","limit":"10"}`),
+				helpersToolCall("test-id", "search", `{"query":"test","limit":"10"}`),
+				helpersToolCall("test-id", "search", `{"query":"different","limit":"20"}`),
 			},
-			expectedDetected: []bool{false},
-			expectedLen:      1,
+			cached:  helpersNotFound,
+			want:    []bool{false, false, false},
+			wantLen: 1,
 		},
 		{
-			name: "two identical calls below threshold",
+			name: "the message field does not tell calls apart",
 			calls: []llms.ToolCall{
-				makeToolCall("search", `{"query":"test"}`),
-				makeToolCall("search", `{"query":"test"}`),
+				helpersToolCall("test-id", "search", `{"query":"test","message":"first attempt"}`),
+				helpersToolCall("test-id", "search", `{"query":"test","message":"second attempt"}`),
+				helpersToolCall("test-id", "search", `{"query":"test","message":"third attempt"}`),
 			},
-			expectedDetected: []bool{false, false},
-			expectedLen:      2,
+			want:    []bool{false, false, true},
+			wantLen: 3,
 		},
 		{
-			name: "three identical calls triggers detection",
+			// Five keys, so unsorted map order would almost never make three calls agree.
+			name: "key order does not tell calls apart",
 			calls: []llms.ToolCall{
-				makeToolCall("search", `{"query":"test"}`),
-				makeToolCall("search", `{"query":"test"}`),
-				makeToolCall("search", `{"query":"test"}`),
+				helpersToolCall("test-id", "search", `{"a":"1","b":"2","c":"3","d":"4","e":"5"}`),
+				helpersToolCall("test-id", "search", `{"e":"5","d":"4","c":"3","b":"2","a":"1"}`),
+				helpersToolCall("test-id", "search", `{"c":"3","a":"1","e":"5","b":"2","d":"4"}`),
 			},
-			expectedDetected: []bool{false, false, true},
-			expectedLen:      3,
+			want:    []bool{false, false, true},
+			wantLen: 3,
 		},
 		{
-			name: "different call resets funcCalls",
+			name: "arguments that are not JSON are compared as sent",
 			calls: []llms.ToolCall{
-				makeToolCall("search", `{"query":"test"}`),
-				makeToolCall("search", `{"query":"test"}`),
-				makeToolCall("browse", `{"url":"http://example.com"}`),
+				helpersToolCall("test-id", "search", "not valid json"),
+				helpersToolCall("test-id", "search", "not valid json"),
+				helpersToolCall("test-id", "search", "other text"),
 			},
-			expectedDetected: []bool{false, false, false},
-			expectedLen:      1,
-		},
-		{
-			name: "same name different args resets funcCalls",
-			calls: []llms.ToolCall{
-				makeToolCall("search", `{"query":"test","limit":"10"}`),
-				makeToolCall("search", `{"query":"test","limit":"10"}`),
-				makeToolCall("search", `{"query":"different","limit":"20"}`),
-			},
-			expectedDetected: []bool{false, false, false},
-			expectedLen:      1,
-		},
-		{
-			name: "six identical calls still below escalation threshold",
-			calls: func() []llms.ToolCall {
-				tc := makeToolCall("search", `{"query":"test"}`)
-				return []llms.ToolCall{tc, tc, tc, tc, tc, tc}
-			}(),
-			expectedDetected: []bool{false, false, true, true, true, true},
-			expectedLen:      6,
-		},
-		{
-			name: "seven identical calls reaches escalation threshold",
-			calls: func() []llms.ToolCall {
-				tc := makeToolCall("search", `{"query":"test"}`)
-				return []llms.ToolCall{tc, tc, tc, tc, tc, tc, tc}
-			}(),
-			expectedDetected: []bool{false, false, true, true, true, true, true},
-			expectedLen:      7,
-		},
-		{
-			name: "message field stripped treats calls as identical",
-			calls: []llms.ToolCall{
-				makeToolCall("search", `{"query":"test","message":"first attempt"}`),
-				makeToolCall("search", `{"query":"test","message":"second attempt"}`),
-				makeToolCall("search", `{"query":"test","message":"third attempt"}`),
-			},
-			expectedDetected: []bool{false, false, true},
-			expectedLen:      3,
-		},
-		{
-			name: "different JSON key order treated as identical",
-			calls: []llms.ToolCall{
-				makeToolCall("search", `{"query":"test","limit":"10"}`),
-				makeToolCall("search", `{"limit":"10","query":"test"}`),
-				makeToolCall("search", `{"query":"test","limit":"10"}`),
-			},
-			expectedDetected: []bool{false, false, true},
-			expectedLen:      3,
+			want:    []bool{false, false, false},
+			wantLen: 1,
 		},
 	}
 
@@ -952,237 +344,155 @@ func TestRepeatingDetector(t *testing.T) {
 			detector := &repeatingDetector{}
 
 			for i, call := range tt.calls {
-				detected := detector.detect(call)
-				assert.Equal(t, tt.expectedDetected[i], detected,
-					"call %d: expected detect=%v, got %v", i, tt.expectedDetected[i], detected)
-			}
-
-			assert.Equal(t, tt.expectedLen, len(detector.funcCalls),
-				"expected funcCalls length %d, got %d", tt.expectedLen, len(detector.funcCalls))
-		})
-	}
-}
-
-func TestRepeatingDetectorEscalationThreshold(t *testing.T) {
-	// This test validates the escalation math used in performer.go:
-	// len(detector.funcCalls) >= RepeatingToolCallThreshold + maxSoftDetectionsBeforeAbort
-	// With threshold=3 and maxSoftDetections=4, abort triggers at len >= 7
-
-	detector := &repeatingDetector{}
-	tc := makeToolCall("search", `{"query":"test"}`)
-
-	for i := 0; i < 7; i++ {
-		detector.detect(tc)
-	}
-
-	assert.Equal(t, 7, len(detector.funcCalls))
-	assert.True(t, len(detector.funcCalls) >= RepeatingToolCallThreshold+testMaxSoftDetectionsBeforeAbort,
-		"7 calls should reach escalation threshold: %d >= %d+%d",
-		len(detector.funcCalls), RepeatingToolCallThreshold, testMaxSoftDetectionsBeforeAbort)
-
-	// Verify 6 calls is below threshold
-	detector2 := &repeatingDetector{}
-	for i := 0; i < 6; i++ {
-		detector2.detect(tc)
-	}
-
-	assert.Equal(t, 6, len(detector2.funcCalls))
-	assert.False(t, len(detector2.funcCalls) >= RepeatingToolCallThreshold+testMaxSoftDetectionsBeforeAbort,
-		"6 calls should NOT reach escalation threshold: %d < %d+%d",
-		len(detector2.funcCalls), RepeatingToolCallThreshold, 4)
-}
-
-func TestClearCallArguments(t *testing.T) {
-	tests := []struct {
-		name         string
-		input        llms.FunctionCall
-		expectedName string
-		expectedArgs string
-	}{
-		{
-			name: "strips message field",
-			input: llms.FunctionCall{
-				Name:      "search",
-				Arguments: `{"cmd":"ls","message":"please run this"}`,
-			},
-			expectedName: "search",
-			expectedArgs: "cmd: ls\n",
-		},
-		{
-			name: "sorts keys alphabetically",
-			input: llms.FunctionCall{
-				Name:      "execute",
-				Arguments: `{"z_param":"1","a_param":"2","m_param":"3"}`,
-			},
-			expectedName: "execute",
-			expectedArgs: "a_param: 2\nm_param: 3\nz_param: 1\n",
-		},
-		{
-			name: "invalid JSON returns original",
-			input: llms.FunctionCall{
-				Name:      "search",
-				Arguments: "not valid json",
-			},
-			expectedName: "search",
-			expectedArgs: "not valid json",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			detector := &repeatingDetector{}
-			result := detector.clearCallArguments(&tt.input)
-
-			assert.Equal(t, tt.expectedName, result.Name)
-			assert.Equal(t, tt.expectedArgs, result.Arguments)
-		})
-	}
-}
-
-func TestExecutionMonitorDetector_ShouldInvokeAdviser(t *testing.T) {
-	tests := []struct {
-		name      string
-		threshold struct{ same, total int }
-		calls     []string
-		expected  []bool
-	}{
-		{
-			name:      "trigger on same tool limit",
-			threshold: struct{ same, total int }{5, 10},
-			calls:     []string{"tool1", "tool1", "tool1", "tool1", "tool1"},
-			expected:  []bool{false, false, false, false, true},
-		},
-		{
-			name:      "trigger on total tool limit",
-			threshold: struct{ same, total int }{5, 10},
-			calls:     []string{"tool1", "tool2", "tool3", "tool4", "tool5", "tool6", "tool7", "tool8", "tool9", "tool10"},
-			expected:  []bool{false, false, false, false, false, false, false, false, false, true},
-		},
-		{
-			name:      "reset after different tool",
-			threshold: struct{ same, total int }{3, 10},
-			calls:     []string{"tool1", "tool1", "tool2", "tool1", "tool1"},
-			expected:  []bool{false, false, false, false, false},
-		},
-		{
-			name:      "mixed tools reaching total limit",
-			threshold: struct{ same, total int }{5, 10},
-			calls:     []string{"tool1", "tool2", "tool1", "tool3", "tool1", "tool2", "tool3", "tool4", "tool5", "tool6"},
-			expected:  []bool{false, false, false, false, false, false, false, false, false, true},
-		},
-		{
-			name:      "disabled detector",
-			threshold: struct{ same, total int }{5, 10},
-			calls:     []string{"tool1", "tool1", "tool1", "tool1", "tool1", "tool1"},
-			expected:  []bool{false, false, false, false, false, false},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			emd := &executionMonitor{
-				enabled:        tt.name != "disabled detector",
-				sameThreshold:  tt.threshold.same,
-				totalThreshold: tt.threshold.total,
-			}
-
-			for i, call := range tt.calls {
-				result := emd.shouldInvokeMentor(mockToolCall(call))
-				if result != tt.expected[i] {
-					t.Errorf("call %d (%s): expected %v, got %v", i, call, tt.expected[i], result)
+				assert.Equal(t, tt.want[i], detector.detect(call), "call %d", i)
+				if i == 0 && tt.cached != "" {
+					detector.lastResponse = tt.cached
 				}
 			}
+
+			assert.Len(t, detector.funcCalls, tt.wantLen)
+			assert.Equal(t, tt.wantCached, detector.lastResponse)
 		})
 	}
 }
 
-func TestExecutionMonitorDetector_Reset(t *testing.T) {
-	emd := &executionMonitor{
-		enabled:        true,
-		sameThreshold:  5,
-		totalThreshold: 10,
-		sameToolCount:  3,
-		totalCallCount: 7,
-		lastToolName:   "tool1",
-	}
-
-	emd.reset()
-
-	if emd.sameToolCount != 0 {
-		t.Errorf("expected sameToolCount to be 0 after reset, got %d", emd.sameToolCount)
-	}
-	if emd.totalCallCount != 0 {
-		t.Errorf("expected totalCallCount to be 0 after reset, got %d", emd.totalCallCount)
-	}
-	if emd.lastToolName != "" {
-		t.Errorf("expected lastToolName to be empty after reset, got %s", emd.lastToolName)
-	}
-}
-
-func TestExecutionMonitorDetector_SameToolSequence(t *testing.T) {
-	emd := &executionMonitor{
-		enabled:        true,
-		sameThreshold:  3,
-		totalThreshold: 100,
-	}
-
-	// First 2 calls should not trigger
-	if emd.shouldInvokeMentor(mockToolCall("search")) {
-		t.Error("first call should not trigger adviser")
-	}
-	if emd.shouldInvokeMentor(mockToolCall("search")) {
-		t.Error("second call should not trigger adviser")
-	}
-
-	// Third call should trigger on same tool threshold
-	if !emd.shouldInvokeMentor(mockToolCall("search")) {
-		t.Error("third identical call should trigger adviser")
-	}
-
-	// After reset, same tool should not trigger immediately
-	emd.reset()
-	if emd.shouldInvokeMentor(mockToolCall("search")) {
-		t.Error("first call after reset should not trigger adviser")
-	}
-}
-
-func TestExecutionMonitorDetector_TotalCallsSequence(t *testing.T) {
-	emd := &executionMonitor{
-		enabled:        true,
-		sameThreshold:  100,
-		totalThreshold: 5,
-	}
-
-	tools := []string{"tool1", "tool2", "tool3", "tool4", "tool5"}
-
-	// First 4 calls should not trigger
-	for i := 0; i < 4; i++ {
-		if emd.shouldInvokeMentor(mockToolCall(tools[i])) {
-			t.Errorf("call %d should not trigger adviser", i)
-		}
-	}
-
-	// Fifth call should trigger on total threshold
-	if !emd.shouldInvokeMentor(mockToolCall(tools[4])) {
-		t.Error("fifth call should trigger adviser on total threshold")
-	}
-
-	// After reset, counter should restart
-	emd.reset()
-	if emd.totalCallCount != 0 {
-		t.Error("total count should be 0 after reset")
-	}
-}
-
-func mockToolCall(name string) llms.ToolCall {
-	return llms.ToolCall{FunctionCall: &llms.FunctionCall{Name: name}}
-}
-
-func TestWrapToolCallIDTemplateError(t *testing.T) {
+func TestHelpers_RepeatingToolResponse_QuotesWhatTheToolAnswered(t *testing.T) {
 	t.Parallel()
 
-	// Mirror the real upstream wrap chain so the test traps regressions in
-	// substring detection if the inner wraps ever change.
+	long := strings.Repeat("x", 8192)
+
+	tests := []struct {
+		name     string
+		funcName string
+		repeats  int
+		previous string
+		want     string
+		contains []string
+		excludes []string
+		quoted   int
+	}{
+		{
+			name:     "the answer is quoted with the count and a remedy",
+			funcName: "execute_task_and_return_summary",
+			repeats:  4,
+			previous: helpersNotFound,
+			contains: []string{helpersNotFound, "4 times", "Alter the arguments"},
+		},
+		{
+			name:     "with nothing to quote the notice names the tool",
+			funcName: "web_search",
+			repeats:  3,
+			want:     "tool call 'web_search' is repeating, please try another tool",
+		},
+		{
+			name:     "a long answer is quoted up to 4096 bytes",
+			funcName: "terminal",
+			repeats:  3,
+			previous: long,
+			excludes: []string{long},
+			quoted:   4096,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := repeatingToolResponse(tt.funcName, tt.repeats, tt.previous)
+
+			if tt.want != "" {
+				assert.Equal(t, tt.want, got)
+			}
+			for _, want := range tt.contains {
+				assert.Contains(t, got, want)
+			}
+			for _, banned := range tt.excludes {
+				assert.NotContains(t, got, banned)
+			}
+			if tt.quoted > 0 {
+				assert.Equal(t, tt.quoted, strings.Count(got, "x"), "bytes of the answer quoted back")
+			}
+		})
+	}
+}
+
+func TestHelpers_ShouldInvokeMentor_FiresAtTheSameToolOrTheTotalThreshold(t *testing.T) {
+	tests := []struct {
+		name        string
+		disabled    bool
+		same, total int
+		calls       []string
+		want        []bool
+	}{
+		{
+			name:  "the same tool reaching its limit",
+			same:  5,
+			total: 10,
+			calls: []string{"tool1", "tool1", "tool1", "tool1", "tool1"},
+			want:  []bool{false, false, false, false, true},
+		},
+		{
+			name:  "distinct tools reaching the total limit",
+			same:  5,
+			total: 10,
+			calls: []string{"tool1", "tool2", "tool3", "tool4", "tool5", "tool6", "tool7", "tool8", "tool9", "tool10"},
+			want:  []bool{false, false, false, false, false, false, false, false, false, true},
+		},
+		{
+			name:  "another tool restarts the same-tool count",
+			same:  3,
+			total: 10,
+			calls: []string{"tool1", "tool1", "tool2", "tool1", "tool1"},
+			want:  []bool{false, false, false, false, false},
+		},
+		{
+			name:  "interleaved tools reaching the total limit",
+			same:  5,
+			total: 10,
+			calls: []string{"tool1", "tool2", "tool1", "tool3", "tool1", "tool2", "tool3", "tool4", "tool5", "tool6"},
+			want:  []bool{false, false, false, false, false, false, false, false, false, true},
+		},
+		{
+			name:     "a disabled monitor never fires",
+			disabled: true,
+			same:     5,
+			total:    10,
+			calls:    []string{"tool1", "tool1", "tool1", "tool1", "tool1", "tool1"},
+			want:     []bool{false, false, false, false, false, false},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			monitor := &executionMonitor{enabled: !tt.disabled, sameThreshold: tt.same, totalThreshold: tt.total}
+
+			for i, call := range tt.calls {
+				assert.Equal(t, tt.want[i], monitor.shouldInvokeMentor(helpersToolCall("", call, "")), "call %d (%s)", i, call)
+			}
+		})
+	}
+}
+
+func TestHelpers_Reset_StartsTheCountsAgain(t *testing.T) {
+	monitor := &executionMonitor{enabled: true, sameThreshold: 3, totalThreshold: 5}
+	search := helpersToolCall("", "search", "")
+
+	monitor.shouldInvokeMentor(search)
+	monitor.shouldInvokeMentor(search)
+	require.True(t, monitor.shouldInvokeMentor(search), "the third identical call reaches the threshold")
+
+	monitor.reset()
+
+	assert.Zero(t, monitor.sameToolCount)
+	assert.Zero(t, monitor.totalCallCount)
+	assert.Empty(t, monitor.lastToolName)
+	assert.False(t, monitor.shouldInvokeMentor(search), "the first call after a reset must not fire")
+}
+
+func TestHelpers_WrapToolCallIDTemplateError_TellsTheOperatorTheModelCannotCallTools(t *testing.T) {
+	t.Parallel()
+
+	// Wrapped as the tool call ID sampling in provider/agents.go wraps an Ollama refusal.
 	ollamaErr := fmt.Errorf(
 		"all sample collection attempts failed: %w",
 		fmt.Errorf("failed to call LLM: %w",
@@ -1199,12 +509,12 @@ func TestWrapToolCallIDTemplateError(t *testing.T) {
 		wantNotContain []string
 	}{
 		{
-			name:    "nil error passes through",
+			name:    "no error passes through",
 			input:   nil,
 			wantNil: true,
 		},
 		{
-			name:  "ollama tools error gets actionable hint",
+			name:  "a model without tools gets an actionable hint",
 			input: ollamaErr,
 			wantContains: []string{
 				"failed to determine tool call ID template",
@@ -1215,23 +525,18 @@ func TestWrapToolCallIDTemplateError(t *testing.T) {
 				"does not support tools",
 			},
 			wantNotContain: []string{
-				// The hint must not name specific model tags as
-				// tool-capable, because Ollama model capabilities are
-				// not verified by PentAGI and any concrete list ages
-				// poorly.
+				// PentAGI does not verify Ollama capabilities, so no model tag is named as tool-capable.
 				"llama3.1",
 				"qwen2.5",
 				"mistral-nemo",
-				// The helper is shared by both the flow and assistant
-				// provider paths, so the message must not imply this
-				// is a flow-only failure mode.
+				// The flow and the assistant paths share the helper.
 				"flow execution",
 				"flow creation",
 			},
 			wantUnwrapsTo: ollamaErr,
 		},
 		{
-			name:  "non-tools error keeps existing wrap",
+			name:  "any other error keeps the plain wrap",
 			input: genericErr,
 			wantContains: []string{
 				"failed to determine tool call ID template",
@@ -1254,22 +559,40 @@ func TestWrapToolCallIDTemplateError(t *testing.T) {
 				assert.Nil(t, got)
 				return
 			}
-			if !assert.NotNil(t, got) {
-				return
-			}
+			require.NotNil(t, got)
+
 			msg := got.Error()
 			for _, want := range tc.wantContains {
-				assert.Truef(t, strings.Contains(msg, want),
-					"expected error message to contain %q; got %q", want, msg)
+				assert.Contains(t, msg, want)
 			}
 			for _, banned := range tc.wantNotContain {
-				assert.Falsef(t, strings.Contains(msg, banned),
-					"expected error message NOT to contain %q; got %q", banned, msg)
+				assert.NotContains(t, msg, banned)
 			}
-			if tc.wantUnwrapsTo != nil {
-				assert.True(t, errors.Is(got, tc.wantUnwrapsTo),
-					"expected wrapped error to unwrap to original via errors.Is")
-			}
+			assert.ErrorIs(t, got, tc.wantUnwrapsTo)
+		})
+	}
+}
+
+func TestHelpers_ToolCallIDTemplateOrDefault_NeverYieldsAnEmptyTemplate(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		detected string
+		want     string
+	}{
+		{name: "an empty detection falls back to the default", detected: "", want: "call_{r:24:x}"},
+		{name: "a detected pattern is kept", detected: "toolu_{r:24:b}", want: "toolu_{r:24:b}"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := toolCallIDTemplateOrDefault(tt.detected)
+
+			assert.Equal(t, tt.want, got)
+			assert.NotEmpty(t, templates.GenerateFromPattern(got, tools.AdviceToolName), "the template must yield an ID")
 		})
 	}
 }

@@ -1,17 +1,62 @@
-# GLM-5.x Series - Latest generation (200K context, 128K max output, hybrid thinking)
+# GLM-5.x Series - Latest generation (128K max output; context is 1M on 5.3, 5.3-Flash, 5.3-FlashX and 5.2, 200K on 5.1 and 5)
+- name: glm-5.3
+  description: GLM-5.3 - Current flagship for coding and long-horizon agentic work, 1M context, 128K max output. Thinking is always on and cannot be turned off; reasoning_effort accepts only low, high and max, with max the default.
+  thinking: true
+  reasoning:
+    efforts: [low, high, max]
+  release_date: 2026-08-18
+  context_window: 1048576
+  max_output_tokens: 131072
+  price:
+    input: 1.40
+    output: 4.40
+    cache_read: 0.26
+
+- name: glm-5.3-flash
+  description: GLM-5.3-Flash - Natively multimodal sibling of 5.3 taking video, image, text and file input, 1M context, 128K max output. Thinking is always on and cannot be turned off; reasoning_effort accepts only low, high and max, with max the default.
+  thinking: true
+  reasoning:
+    efforts: [low, high, max]
+  release_date: 2026-08-26
+  context_window: 1048576
+  max_output_tokens: 131072
+  price:
+    input: 0.15
+    output: 0.50
+    cache_read: 0.03
+
+- name: glm-5.3-flashx
+  description: GLM-5.3-FlashX - High-speed version of GLM-5.3-Flash delivering up to 200 tokens per second, with the same native multimodal input, 1M context, 128K max output and always-on thinking.
+  thinking: true
+  reasoning:
+    efforts: [low, high, max]
+  release_date: 2026-08-26
+  context_window: 1048576
+  max_output_tokens: 131072
+  price:
+    input: 0.37
+    output: 1.25
+    cache_read: 0.075
+
 - name: glm-5.2
-  description: GLM-5.2 - Newest flagship (improves on GLM-5.1), 200K context, hybrid thinking; supports reasoning_effort (high/max).
+  description: GLM-5.2 - Previous flagship (improves on GLM-5.1), 1M context, hybrid thinking. reasoning_effort takes seven values but they collapse onto two levels - low and medium map to high, xhigh maps to max - while none and minimal stop thinking.
   thinking: true
   reasoning:
     efforts: [high, max]
+  release_date: 2026-06-16
+  context_window: 1048576
+  max_output_tokens: 131072
   price:
     input: 1.40
     output: 4.40
     cache_read: 0.26
 
 - name: glm-5.1
-  description: GLM-5.1 - Latest flagship designed for long-horizon tasks (8h sustained autonomous execution), Claude Opus 4.6-aligned coding, 200K context, hybrid thinking. Best for planning, mentor, and complex agentic engineering
+  description: GLM-5.1 - Legacy flagship designed for long-horizon tasks (8h sustained autonomous execution), Claude Opus 4.6-aligned coding, 200K context, hybrid thinking.
   thinking: true
+  release_date: 2026-04-07
+  context_window: 204800
+  max_output_tokens: 131072
   price:
     input: 1.40
     output: 4.40
@@ -20,23 +65,21 @@
 - name: glm-5
   description: GLM-5 - Foundation model for Agentic Engineering (MoE 744B/40B active), Claude Opus 4.5-level coding (SWE-bench Verified 77.8), 200K context, hybrid thinking. Cost-effective alternative to 5.1 for heavy reasoning
   thinking: true
+  release_date: 2026-02-12
+  context_window: 204800
+  max_output_tokens: 131072
   price:
     input: 1.00
     output: 3.20
     cache_read: 0.20
 
-- name: glm-5-turbo
-  description: GLM-5-Turbo - OpenClaw-native model optimized for tool invocation, instruction following, scheduled/persistent tasks, and long-chain execution. 200K context, hybrid thinking. Ideal for orchestrator and assistant roles
-  thinking: true
-  price:
-    input: 1.20
-    output: 4.00
-    cache_read: 0.24
-
 # GLM-4.7 Series - Premium with Interleaved Thinking
 - name: glm-4.7
   description: GLM-4.7 - Premium with enhanced programming, stable multi-step reasoning/execution, better complex agent task performance, 200K context, preserved thinking across multi-turn
   thinking: true
+  release_date: 2025-12-22
+  context_window: 204800
+  max_output_tokens: 131072
   price:
     input: 0.60
     output: 2.20
@@ -45,14 +88,19 @@
 - name: glm-4.7-flashx
   description: GLM-4.7-FlashX - Paid high-speed version with priority GPU access, 200K context, hybrid thinking, best price/performance for batch utility tasks
   thinking: true
+  context_window: 204800
+  max_output_tokens: 131072
   price:
     input: 0.07
     output: 0.40
     cache_read: 0.01
 
 - name: glm-4.7-flash
-  description: GLM-4.7-Flash - Free ~30B SOTA model, 200K context, hybrid thinking, 1 concurrent request limit, ideal for prototyping
+  description: GLM-4.7-Flash - Free lightweight member of the 4.7 line, 200K context, hybrid thinking, low latency, ideal for prototyping
   thinking: true
+  release_date: 2026-01-19
+  context_window: 204800
+  max_output_tokens: 131072
   price:
     input: 0.00
     output: 0.00
@@ -62,6 +110,9 @@
 - name: glm-4.6
   description: GLM-4.6 - Balanced model with 200K context, auto-thinking, streaming tool calls support, 30% token efficient
   thinking: true
+  release_date: 2025-09-30
+  context_window: 204800
+  max_output_tokens: 131072
   price:
     input: 0.60
     output: 2.20
@@ -71,6 +122,9 @@
 - name: glm-4.5
   description: GLM-4.5 - First unified model with reasoning/coding/agent capabilities, MoE 355B/32B active, 128K context, auto-thinking
   thinking: true
+  release_date: 2025-07-28
+  context_window: 131072
+  max_output_tokens: 98304
   price:
     input: 0.60
     output: 2.20
@@ -79,6 +133,9 @@
 - name: glm-4.5-x
   description: GLM-4.5-X - Ultra-fast premium with lowest latency, 128K context, auto-thinking. Most expensive for real-time critical operations
   thinking: true
+  release_date: 2025-07-28
+  context_window: 131072
+  max_output_tokens: 98304
   price:
     input: 2.20
     output: 8.90
@@ -87,6 +144,9 @@
 - name: glm-4.5-air
   description: GLM-4.5-Air - Cost-effective lightweight MoE 106B/12B active, 128K context, auto-thinking, best price/quality ratio for utility agents and continuous monitoring
   thinking: true
+  release_date: 2025-07-28
+  context_window: 131072
+  max_output_tokens: 98304
   price:
     input: 0.20
     output: 1.10
@@ -95,6 +155,9 @@
 - name: glm-4.5-airx
   description: GLM-4.5-AirX - Accelerated Air version with priority GPU access, 128K context, auto-thinking, balanced speed and cost
   thinking: true
+  release_date: 2025-07-28
+  context_window: 131072
+  max_output_tokens: 98304
   price:
     input: 1.10
     output: 4.50
@@ -103,15 +166,21 @@
 - name: glm-4.5-flash
   description: GLM-4.5-Flash - Free model with reasoning/coding/agents support, 128K context, auto-thinking, function calling enabled
   thinking: true
+  release_date: 2025-07-28
+  context_window: 131072
+  max_output_tokens: 98304
   price:
     input: 0.00
     output: 0.00
     cache_read: 0.00
 
 # GLM-4 Legacy - Dense Architecture (no thinking)
+
 - name: glm-4-32b-0414-128k
   description: GLM-4-32B - Ultra-budget dense 32B model, 128K context, NO thinking mode, max output 16K. Cheapest for high-volume parsing/structured tasks without reasoning
   thinking: false
+  context_window: 131072
+  max_output_tokens: 16384
   price:
     input: 0.10
     output: 0.10

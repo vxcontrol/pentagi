@@ -155,6 +155,14 @@ describe('formSchema', () => {
         expect(result.error?.issues.find((i) => i.path[0] === 'question')?.message).toBe('Question is required');
     });
 
+    it.each([
+        ['question', 2048],
+        ['content', 65536],
+    ] as const)('counts %s length in code points, the way the endpoint does', (field, max) => {
+        expect(formSchema.safeParse({ ...valid, [field]: '\u{1f511}'.repeat(max) }).success).toBe(true);
+        expect(formSchema.safeParse({ ...valid, [field]: '\u{1f511}'.repeat(max + 1) }).success).toBe(false);
+    });
+
     it('enforces the question max-length message', () => {
         const result = formSchema.safeParse({ ...valid, question: 'x'.repeat(2049) });
 

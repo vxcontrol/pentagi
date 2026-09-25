@@ -198,7 +198,7 @@ PostgreSQL enums are migrated explicitly and generated as Go string types in `mo
 | `MSGLOG_RESULT_FORMAT` | `plain`, `markdown`, `terminal` |
 | `TERMLOG_TYPE` | `stdin`, `stdout`, `stderr` |
 | `VECSTORE_ACTION_TYPE` | `retrieve`, `store` |
-| `PROVIDER_TYPE` | `openai`, `anthropic`, `gemini`, `bedrock`, `ollama`, `custom`, `deepseek`, `glm`, `kimi`, `qwen`, `minimax` |
+| `PROVIDER_TYPE` | `openai`, `anthropic`, `gemini`, `bedrock`, `ollama`, `custom`, `deepseek`, `glm`, `kimi`, `qwen`, `minimax`, `mistral`, `xai` |
 | `SEARCHENGINE_TYPE` | `google`, `tavily`, `firecrawl`, `traversaal`, `browser`, `duckduckgo`, `perplexity`, `searxng`, `sploitus` |
 | `PROMPT_TYPE` | Agent/system prompt keys from `primary_agent` through `task_assignment_wrapper` (full list in `models.go`) |
 

@@ -450,3 +450,22 @@ func validatePathComponent(component string) error {
 	}
 	return nil
 }
+
+// DedupeByPathPreferringOwner keeps one item per virtual path, and uid's own row
+// wins when several owners hold that path.
+func DedupeByPathPreferringOwner[T any, ID comparable](items []T, uid ID, owned func(T) (string, ID)) []T {
+	index := make(map[string]int, len(items))
+	out := make([]T, 0, len(items))
+	for _, item := range items {
+		itemPath, itemOwner := owned(item)
+		if i, seen := index[itemPath]; seen {
+			if _, chosenOwner := owned(out[i]); chosenOwner != uid && itemOwner == uid {
+				out[i] = item
+			}
+			continue
+		}
+		index[itemPath] = len(out)
+		out = append(out, item)
+	}
+	return out
+}

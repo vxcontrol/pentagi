@@ -5,6 +5,7 @@ export const getGitHash = () => {
         return execSync('git rev-parse HEAD').toString().trim();
     } catch (e) {
         console.error('Failed to get git hash', e);
+
         return '';
     }
 };

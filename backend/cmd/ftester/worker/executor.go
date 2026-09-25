@@ -267,6 +267,7 @@ func (te *toolExecutor) GetTool(ctx context.Context, funcName string) (tools.Too
 	case tools.SearchInMemoryToolName:
 		return tools.NewMemoryTool(
 			te.flowID,
+			te.replacer,
 			te.store,
 			te.proxies.GetVectorStoreLogProvider(),
 		), nil

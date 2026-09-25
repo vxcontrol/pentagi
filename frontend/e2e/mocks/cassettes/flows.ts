@@ -32,6 +32,7 @@ import type { Cassette } from '../cassette.ts';
 
 import { RECONNECTED_FLAG } from '../../helpers/reconnect.ts';
 import { entity, mergeCassettes } from '../cassette.ts';
+import { SIGNED_IN_USER_ID } from './base';
 import { baseQueries, baseRest } from './base.ts';
 
 const T = '2026-01-15T11:30:00Z';
@@ -48,7 +49,12 @@ const terminal = (id: string) =>
         type: TerminalType.Primary,
     });
 
-export const makeFlow = (id: string, title: string, status: StatusType = StatusType.Running): FlowFragmentFragment =>
+export const makeFlow = (
+    id: string,
+    title: string,
+    status: StatusType = StatusType.Running,
+    userId = SIGNED_IN_USER_ID,
+): FlowFragmentFragment =>
     entity('Flow', {
         createdAt: T,
         id,
@@ -57,6 +63,7 @@ export const makeFlow = (id: string, title: string, status: StatusType = StatusT
         terminals: [terminal(id)],
         title,
         updatedAt: T,
+        userId,
     });
 
 export const makeMessage = (
@@ -310,26 +317,58 @@ const TABS_SCREENSHOT = entity('Screenshot', {
     url: TABS_SCREENSHOT_URL,
 });
 
+export const TABS_SCREENSHOT_NEWER_NAME = 'dashboard-after-login';
+export const TABS_SCREENSHOT_NEWER_URL = 'https://e2e.invalid/dashboard-after-login';
+export const TABS_SCREENSHOT_NEWEST_NAME = 'settings-page';
+export const TABS_SCREENSHOT_NEWEST_URL = 'https://e2e.invalid/settings-page';
+
+// Ids run 71, 70, 72 against ascending timestamps so that no ordering agrees with the server's but
+// its own: id ascending, id descending and newest-first all reorder these three differently.
+const TABS_SCREENSHOT_NEWER = entity('Screenshot', {
+    createdAt: '2026-01-15T11:45:00Z',
+    flowId: '5',
+    id: '70',
+    name: TABS_SCREENSHOT_NEWER_NAME,
+    subtaskId: null,
+    taskId: '11',
+    url: TABS_SCREENSHOT_NEWER_URL,
+});
+
+const TABS_SCREENSHOT_NEWEST = entity('Screenshot', {
+    createdAt: '2026-01-15T12:00:00Z',
+    flowId: '5',
+    id: '72',
+    name: TABS_SCREENSHOT_NEWEST_NAME,
+    subtaskId: null,
+    taskId: '11',
+    url: TABS_SCREENSHOT_NEWEST_URL,
+});
+
 // The file manager groups by path prefix (uploads/resources/container), so a file
 // seeded outside those roots renders nowhere.
 export const TABS_FILE_NAME = 'scan-report.txt';
+export const TABS_FILE_PATH = `uploads/${TABS_FILE_NAME}`;
+export const TABS_RESOURCE_FILE_NAME = 'wordlist.txt';
+export const TABS_RESOURCE_FILE_PATH = `resources/${TABS_RESOURCE_FILE_NAME}`;
 
 const flowFiles: ResultOf<typeof FlowFilesDocument> = {
     flowFiles: [
         entity('FlowFile', {
+            flowId: '5',
             id: '1',
             isDir: false,
             modifiedAt: T,
             name: TABS_FILE_NAME,
-            path: `uploads/${TABS_FILE_NAME}`,
+            path: TABS_FILE_PATH,
             size: 2048,
         }),
         entity('FlowFile', {
+            flowId: '5',
             id: '2',
             isDir: false,
             modifiedAt: T,
-            name: 'wordlist.txt',
-            path: 'resources/wordlist.txt',
+            name: TABS_RESOURCE_FILE_NAME,
+            path: TABS_RESOURCE_FILE_PATH,
             size: 512,
         }),
     ],
@@ -347,7 +386,7 @@ const flowTabsData: ResultOf<typeof FlowDocument> = {
     agentLogs: [TABS_AGENT_LOG],
     flow: FLOW_A,
     messageLogs: [],
-    screenshots: [TABS_SCREENSHOT],
+    screenshots: [TABS_SCREENSHOT, TABS_SCREENSHOT_NEWER, TABS_SCREENSHOT_NEWEST],
     searchLogs: [TABS_SEARCH_LOG],
     tasks: [TABS_TASK],
     terminalLogs: [],
@@ -412,8 +451,19 @@ export const STREAMED = {
 
 const streamedFrame = (payload: Record<string, unknown>) => ({ delayMs: 60, payload: { data: payload } });
 
+export const STREAMED_SCREENSHOT_ID = '73';
+export const STREAMED_SCREENSHOT_NAME = 'streamed-shot';
+export const STREAMED_SCREENSHOT_URL = 'https://e2e.invalid/streamed-shot';
+export const STREAMED_FILE_SIZE = 9999;
+export const STREAMED_FILE_SIZE_RENDERED = '9.8 KB';
+
 export const livePanelsCassette = (): Cassette =>
     mergeCassettes(flowTabsCassette(), {
+        rest: {
+            [`GET /api/v1/flows/5/screenshots/${STREAMED_SCREENSHOT_ID}/file`]: [
+                { body: PNG_1X1, contentType: 'image/png' },
+            ],
+        },
         subscriptions: {
             agentLogAdded: [
                 {
@@ -429,6 +479,42 @@ export const livePanelsCassette = (): Cassette =>
                                 subtaskId: null,
                                 task: STREAMED.agent,
                                 taskId: '11',
+                            }),
+                        }),
+                    ],
+                    variables: { flowId: '5' },
+                },
+            ],
+            flowFileUpdated: [
+                {
+                    frames: [
+                        streamedFrame({
+                            flowFileUpdated: entity('FlowFile', {
+                                flowId: '5',
+                                id: '1',
+                                isDir: false,
+                                modifiedAt: T,
+                                name: TABS_FILE_NAME,
+                                path: `uploads/${TABS_FILE_NAME}`,
+                                size: STREAMED_FILE_SIZE,
+                            }),
+                        }),
+                    ],
+                    variables: { flowId: '5' },
+                },
+            ],
+            screenshotAdded: [
+                {
+                    frames: [
+                        streamedFrame({
+                            screenshotAdded: entity('Screenshot', {
+                                createdAt: '2026-01-15T12:00:00Z',
+                                flowId: '5',
+                                id: STREAMED_SCREENSHOT_ID,
+                                name: STREAMED_SCREENSHOT_NAME,
+                                subtaskId: null,
+                                taskId: '11',
+                                url: STREAMED_SCREENSHOT_URL,
                             }),
                         }),
                     ],
@@ -533,22 +619,29 @@ export const flowReportCassette = (): Cassette =>
         subscriptions: { messageLogAdded: [{ frames: [], variables: { flowId: '5' } }] },
     });
 
-export const flowTabsCassette = (): Cassette =>
-    flowsCassette({
-        queries: {
-            flow: [{ data: flowTabsData, variables: { id: '5' } }],
-            flowFiles: [{ data: flowFiles, variables: { flowId: '5' } }],
-            flowStatsByFlow: [{ data: flowStatsByFlow, variables: { flowId: '5' } }],
-            toolcallsStatsByFlow: [{ data: toolcallsStatsByFlow, variables: { flowId: '5' } }],
-            toolcallsStatsByFunctionForFlow: [{ data: toolcallsStatsByFunctionForFlow, variables: { flowId: '5' } }],
-            usageStatsByAgentTypeForFlow: [{ data: usageStatsByAgentTypeForFlow, variables: { flowId: '5' } }],
-            usageStatsByFlow: [{ data: usageStatsByFlow, variables: { flowId: '5' } }],
-            usageStatsByModelAgentsForFlow: [{ data: usageStatsByModelAgentsForFlow, variables: { flowId: '5' } }],
-        },
-        rest: {
-            [`GET /api/v1/flows/5/screenshots/${TABS_SCREENSHOT_ID}/file`]: [
-                { body: PNG_1X1, contentType: 'image/png' },
-            ],
-        },
-        subscriptions: { messageLogAdded: [{ frames: [], variables: { flowId: '5' } }] },
-    });
+export const flowTabsCassette = (override: Cassette = {}): Cassette =>
+    mergeCassettes(
+        flowsCassette({
+            queries: {
+                flow: [{ data: flowTabsData, variables: { id: '5' } }],
+                flowFiles: [{ data: flowFiles, variables: { flowId: '5' } }],
+                flowStatsByFlow: [{ data: flowStatsByFlow, variables: { flowId: '5' } }],
+                toolcallsStatsByFlow: [{ data: toolcallsStatsByFlow, variables: { flowId: '5' } }],
+                toolcallsStatsByFunctionForFlow: [
+                    { data: toolcallsStatsByFunctionForFlow, variables: { flowId: '5' } },
+                ],
+                usageStatsByAgentTypeForFlow: [{ data: usageStatsByAgentTypeForFlow, variables: { flowId: '5' } }],
+                usageStatsByFlow: [{ data: usageStatsByFlow, variables: { flowId: '5' } }],
+                usageStatsByModelAgentsForFlow: [{ data: usageStatsByModelAgentsForFlow, variables: { flowId: '5' } }],
+            },
+            rest: {
+                [`GET /api/v1/flows/5/screenshots/${TABS_SCREENSHOT_ID}/file`]: [
+                    { body: PNG_1X1, contentType: 'image/png' },
+                ],
+                'GET /api/v1/flows/5/screenshots/70/file': [{ body: PNG_1X1, contentType: 'image/png' }],
+                'GET /api/v1/flows/5/screenshots/72/file': [{ body: PNG_1X1, contentType: 'image/png' }],
+            },
+            subscriptions: { messageLogAdded: [{ frames: [], variables: { flowId: '5' } }] },
+        }),
+        override,
+    );

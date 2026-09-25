@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+
+	"pentagi/pkg/database/knowledge/limits"
+	"pentagi/pkg/graph/model"
 )
 
 // FileOp is a type alias (not a distinct type) for String: it shares the
@@ -31,7 +34,7 @@ type FileAction struct {
 	Action  FileOp `json:"action" jsonschema:"required,type=string,enum=read_file,enum=write_file,enum=edit_file" jsonschema_description:"'read_file' reads the file (no other field needed). 'write_file' overwrites it with 'content' (the whole file). 'edit_file' applies the patch in 'diff' (existing content elsewhere is untouched)."`
 	Content string `json:"content,omitempty" jsonschema_description:"write_file only: the complete new file content (not a diff, not a partial update)."`
 	Diff    String `json:"diff,omitempty" jsonschema:"type=string" jsonschema_description:"edit_file only: unified-diff hunk(s) - '@@ -old +new @@' header, then ' '/'-'/'+' lines. Always keep at least one unchanged context line so the location is unambiguous; context/removed lines must match the file's current content verbatim (read_file first). Header line numbers are only a hint - the line text is what must match."`
-	Path    String `json:"path" jsonschema:"required,type=string" jsonschema_description:"Absolute path to the file"`
+	Path    String `json:"path" jsonschema:"required,type=string" jsonschema_description:"Absolute path to the file, taken literally. This field is not run through a shell, so command substitutions, variables and globs would become part of the filename - resolve them with the terminal tool first and pass the result."`
 	Message string `json:"message" jsonschema:"required,title=File action message" jsonschema_description:"Engagement-log entry — a 1-2 short sentence running commentary describing what you are reading, writing, or editing and why. Written in the engagement language declared by your system prompt."`
 }
 
@@ -56,8 +59,8 @@ type SubtaskInfo struct {
 }
 
 type SubtaskList struct {
-	Subtasks []SubtaskInfo `json:"subtasks" jsonschema:"required,title=Subtasks to complete" jsonschema_description:"Ordered list of subtasks produced by decomposing the task. Each subtask's title and description are engagement-log plan entries (see SubtaskInfo) — written in the engagement language declared by your system prompt."`
-	Message  string        `json:"message" jsonschema:"required,title=Subtask generation result" jsonschema_description:"Engagement-log entry — a 1-2 short sentence running commentary on the generation result and the main goal of the plan. Written in the engagement language declared by your system prompt."`
+	Subtasks SubtaskInfos `json:"subtasks" jsonschema:"required,title=Subtasks to complete" jsonschema_description:"Ordered list of subtasks produced by decomposing the task. Each subtask's title and description are engagement-log plan entries (see SubtaskInfo) — written in the engagement language declared by your system prompt."`
+	Message  string       `json:"message" jsonschema:"required,title=Subtask generation result" jsonschema_description:"Engagement-log entry — a 1-2 short sentence running commentary on the generation result and the main goal of the plan. Written in the engagement language declared by your system prompt."`
 }
 
 // SubtaskOperationType defines the type of operation to perform on a subtask.
@@ -87,14 +90,86 @@ type SubtaskInfoPatch struct {
 
 // SubtaskPatch is the delta-based refinement output for modifying subtask lists
 type SubtaskPatch struct {
-	Operations []SubtaskOperation `json:"operations" jsonschema:"required" jsonschema_description:"List of operations to apply to the current subtask list. Empty array means no changes needed. Each operation's title/description, when present, is an engagement-log plan entry (see operations)."`
-	Message    string             `json:"message" jsonschema:"required,title=Refinement summary" jsonschema_description:"Engagement-log entry — a 1-2 short sentence running commentary on the changes made and the justification for the modifications. Written in the engagement language declared by your system prompt."`
+	Operations SubtaskOperations `json:"operations" jsonschema:"required" jsonschema_description:"List of operations to apply to the current subtask list. Empty array means no changes needed. Each operation's title/description, when present, is an engagement-log plan entry (see operations)."`
+	Message    string            `json:"message" jsonschema:"required,title=Refinement summary" jsonschema_description:"Engagement-log entry — a 1-2 short sentence running commentary on the changes made and the justification for the modifications. Written in the engagement language declared by your system prompt."`
 }
 
 type TaskResult struct {
-	Success Bool   `json:"success" jsonschema:"title=Execution result,type=boolean" jsonschema_description:"True if the task was executed successfully and its objective was reached"`
+	// Success is a pointer so an omitted field is distinguishable from false.
+	// It decides whether the task is recorded as finished or failed, and a model
+	// that leaves it out must be asked again rather than have a failure assumed.
+	Success *Bool  `json:"success" jsonschema:"title=Execution result,type=boolean" jsonschema_description:"True if the task was executed successfully and its objective was reached"`
 	Result  string `json:"result" jsonschema:"required,title=Task result description" jsonschema_description:"Engagement-log closing entry — fully detailed write-up of the task/subtask outcome (what was achieved or why it failed). Written in the engagement language declared by your system prompt."`
 	Message string `json:"message" jsonschema:"required,title=Task result message" jsonschema_description:"Engagement-log closing summary — a concise 1-2 sentence recap of the outcome and the path taken to reach the goal. Written in the engagement language declared by your system prompt."`
+}
+
+const (
+	toolCallFieldEnd     = `</parameter>`
+	toolCallMessageStart = `<parameter name="message">`
+	toolCallFieldStart   = `<parameter name=`
+)
+
+// splitLeakedMessage recovers a message a model wrote inside the result after closing the field as markup.
+// The message tag must follow the closing tag with only whitespace between them; anything else is a quotation.
+func splitLeakedMessage(result, message string) (string, string) {
+	if message != "" {
+		return result, message
+	}
+
+	end := strings.Index(result, toolCallFieldEnd)
+	if end < 0 {
+		return result, message
+	}
+
+	rest := result[end+len(toolCallFieldEnd):]
+	start := strings.Index(rest, toolCallMessageStart)
+	if start < 0 || strings.TrimSpace(rest[:start]) != "" {
+		return result, message
+	}
+
+	return strings.TrimRight(result[:end], " \t\r\n"), strings.TrimSpace(rest[start+len(toolCallMessageStart):])
+}
+
+func (t *TaskResult) UnmarshalJSON(data []byte) error {
+	type plain TaskResult
+
+	var parsed plain
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		return err
+	}
+
+	*t = TaskResult(parsed)
+	t.Result, t.Message = splitLeakedMessage(t.Result, t.Message)
+
+	return nil
+}
+
+func (d *Done) UnmarshalJSON(data []byte) error {
+	type plain Done
+
+	var parsed plain
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		return err
+	}
+
+	*d = Done(parsed)
+	d.Result, d.Message = splitLeakedMessage(d.Result, d.Message)
+
+	return nil
+}
+
+func (s *SearchResult) UnmarshalJSON(data []byte) error {
+	type plain SearchResult
+
+	var parsed plain
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		return err
+	}
+
+	*s = SearchResult(parsed)
+	s.Result, s.Message = splitLeakedMessage(s.Result, s.Message)
+
+	return nil
 }
 
 type AskUser struct {
@@ -102,7 +177,8 @@ type AskUser struct {
 }
 
 type Done struct {
-	Success Bool   `json:"success" jsonschema:"title=Execution result,type=boolean" jsonschema_description:"True if the subtask was executed successfully and its objective was reached"`
+	// Success is a pointer for the reason TaskResult.Success is.
+	Success *Bool  `json:"success" jsonschema:"title=Execution result,type=boolean" jsonschema_description:"True if the subtask was executed successfully and its objective was reached"`
 	Result  string `json:"result" jsonschema:"required,title=Subtask result description" jsonschema_description:"Engagement-log closing entry — fully detailed write-up of the subtask outcome (what was achieved or why it failed). Written in the engagement language declared by your system prompt."`
 	Message string `json:"message" jsonschema:"required,title=Subtask result message" jsonschema_description:"Engagement-log closing summary — a concise 1-2 sentence recap of the subtask outcome. Written in the engagement language declared by your system prompt."`
 }
@@ -199,44 +275,44 @@ type SearchInMemoryAction struct {
 }
 
 type SearchGuideAction struct {
-	Questions Strings `json:"questions" jsonschema:"required,type=array,minItems=1,maxItems=5" jsonschema_description:"Technical-channel payload — 1 to 5 detailed, context-rich semantic queries for the team's guide vector store. Must be a real JSON array of strings, e.g. [\"query 1\",\"query 2\"] - NOT a JSON-encoded string containing an array. ALWAYS written in English regardless of the engagement language: the store is indexed in English and shared across all engagements, so non-English queries will fail to retrieve relevant guides. Each query should include scenario context, objectives, and specific intent. Note: The 'Type' field acts as a strict filter."`
-	Type      String  `json:"type" jsonschema:"required,type=string,enum=install,enum=configure,enum=use,enum=pentest,enum=development,enum=other" jsonschema_description:"The specific type of guide you need. This required field acts as a strict filter to enhance the relevance of search results by narrowing down the scope to the specified guide type."`
-	Message   string  `json:"message" jsonschema:"required,title=Guide search message" jsonschema_description:"Engagement-log entry — a 1-2 short sentence running commentary summarizing the queries and the type of guide needed. Written in the engagement language declared by your system prompt."`
+	Questions Strings   `json:"questions" jsonschema:"required,type=array,minItems=1,maxItems=5" jsonschema_description:"Technical-channel payload — 1 to 5 detailed, context-rich semantic queries for the team's guide vector store. Must be a real JSON array of strings, e.g. [\"query 1\",\"query 2\"] - NOT a JSON-encoded string containing an array. ALWAYS written in English regardless of the engagement language: the store is indexed in English and shared across all engagements, so non-English queries will fail to retrieve relevant guides. Each query should include scenario context, objectives, and specific intent. Note: The 'Type' field acts as a strict filter."`
+	Type      GuideType `json:"type" jsonschema:"required,type=string,enum=install,enum=configure,enum=use,enum=pentest,enum=development,enum=other" jsonschema_description:"The specific type of guide you need. This required field acts as a strict filter to enhance the relevance of search results by narrowing down the scope to the specified guide type."`
+	Message   string    `json:"message" jsonschema:"required,title=Guide search message" jsonschema_description:"Engagement-log entry — a 1-2 short sentence running commentary summarizing the queries and the type of guide needed. Written in the engagement language declared by your system prompt."`
 }
 
 type StoreGuideAction struct {
-	Guide    string `json:"guide" jsonschema:"required" jsonschema_description:"Technical-channel payload — ready guide in markdown format that will be stored in the team's vector store for future retrieval. ALWAYS written in English regardless of the engagement language: the store is indexed in English and shared across all engagements; non-English content becomes unreachable to future searches. Anonymize all sensitive data (IPs, domains, credentials, paths) using descriptive placeholders."`
-	Question string `json:"question" jsonschema:"required" jsonschema_description:"Technical-channel payload — question that was used to prepare this guide; co-indexed with the guide. Always written in English; never translated."`
-	Type     String `json:"type" jsonschema:"required,type=string,enum=install,enum=configure,enum=use,enum=pentest,enum=development,enum=other" jsonschema_description:"Type of the guide to store; it will be used as a hard filter for search"`
-	Message  string `json:"message" jsonschema:"required,title=Store guide message" jsonschema_description:"Engagement-log entry — a 1-2 short sentence running commentary summarizing the guide. Written in the engagement language declared by your system prompt."`
+	Guide    string    `json:"guide" jsonschema:"required" jsonschema_description:"Technical-channel payload — ready guide in markdown format that will be stored in the team's vector store for future retrieval. ALWAYS written in English regardless of the engagement language: the store is indexed in English and shared across all engagements; non-English content becomes unreachable to future searches. Anonymize all sensitive data (IPs, domains, credentials, paths) using descriptive placeholders."`
+	Question string    `json:"question" jsonschema:"required" jsonschema_description:"Technical-channel payload — question that was used to prepare this guide; co-indexed with the guide. Always written in English; never translated."`
+	Type     GuideType `json:"type" jsonschema:"required,type=string,enum=install,enum=configure,enum=use,enum=pentest,enum=development,enum=other" jsonschema_description:"Type of the guide to store; it will be used as a hard filter for search"`
+	Message  string    `json:"message" jsonschema:"required,title=Store guide message" jsonschema_description:"Engagement-log entry — a 1-2 short sentence running commentary summarizing the guide. Written in the engagement language declared by your system prompt."`
 }
 
 type SearchAnswerAction struct {
-	Questions Strings `json:"questions" jsonschema:"required,type=array,minItems=1,maxItems=5" jsonschema_description:"Technical-channel payload — 1 to 5 detailed, context-rich semantic queries for the team's answer vector store. Must be a real JSON array of strings, e.g. [\"query 1\",\"query 2\"] - NOT a JSON-encoded string containing an array. ALWAYS written in English regardless of the engagement language: the store is indexed in English and shared across all engagements, so non-English queries will fail to retrieve relevant answers. Each query should include the context, what you want to find, what you intend to do with the information, and why you need it. Note: The 'Type' field acts as a strict filter."`
-	Type      String  `json:"type" jsonschema:"required,type=string,enum=guide,enum=vulnerability,enum=code,enum=tool,enum=other" jsonschema_description:"The specific type of information or answer you are seeking. This required field acts as a strict filter to enhance the relevance of search results by narrowing down the scope to the specified type."`
-	Message   string  `json:"message" jsonschema:"required,title=Answer search message" jsonschema_description:"Engagement-log entry — a 1-2 short sentence running commentary summarizing the queries and the type of answer needed. Written in the engagement language declared by your system prompt."`
+	Questions Strings    `json:"questions" jsonschema:"required,type=array,minItems=1,maxItems=5" jsonschema_description:"Technical-channel payload — 1 to 5 detailed, context-rich semantic queries for the team's answer vector store. Must be a real JSON array of strings, e.g. [\"query 1\",\"query 2\"] - NOT a JSON-encoded string containing an array. ALWAYS written in English regardless of the engagement language: the store is indexed in English and shared across all engagements, so non-English queries will fail to retrieve relevant answers. Each query should include the context, what you want to find, what you intend to do with the information, and why you need it. Note: The 'Type' field acts as a strict filter."`
+	Type      AnswerType `json:"type" jsonschema:"required,type=string,enum=guide,enum=vulnerability,enum=code,enum=tool,enum=other" jsonschema_description:"The specific type of information or answer you are seeking. This required field acts as a strict filter to enhance the relevance of search results by narrowing down the scope to the specified type."`
+	Message   string     `json:"message" jsonschema:"required,title=Answer search message" jsonschema_description:"Engagement-log entry — a 1-2 short sentence running commentary summarizing the queries and the type of answer needed. Written in the engagement language declared by your system prompt."`
 }
 
 type StoreAnswerAction struct {
-	Answer   string `json:"answer" jsonschema:"required" jsonschema_description:"Technical-channel payload — ready answer in markdown format that will be stored in the team's vector store for future retrieval. ALWAYS written in English regardless of the engagement language: the store is indexed in English and shared across all engagements; non-English content becomes unreachable to future searches. Anonymize all sensitive data (IPs, domains, credentials) using descriptive placeholders."`
-	Question string `json:"question" jsonschema:"required" jsonschema_description:"Technical-channel payload — question that was used to prepare this answer; co-indexed with the answer. Always written in English; never translated."`
-	Type     String `json:"type" jsonschema:"required,type=string,enum=guide,enum=vulnerability,enum=code,enum=tool,enum=other" jsonschema_description:"Type of the search query and answer to store; it will be used as a hard filter for search"`
-	Message  string `json:"message" jsonschema:"required,title=Store answer message" jsonschema_description:"Engagement-log entry — a 1-2 short sentence running commentary summarizing the answer. Written in the engagement language declared by your system prompt."`
+	Answer   string     `json:"answer" jsonschema:"required" jsonschema_description:"Technical-channel payload — ready answer in markdown format that will be stored in the team's vector store for future retrieval. ALWAYS written in English regardless of the engagement language: the store is indexed in English and shared across all engagements; non-English content becomes unreachable to future searches. Anonymize all sensitive data (IPs, domains, credentials) using descriptive placeholders."`
+	Question string     `json:"question" jsonschema:"required" jsonschema_description:"Technical-channel payload — question that was used to prepare this answer; co-indexed with the answer. Always written in English; never translated."`
+	Type     AnswerType `json:"type" jsonschema:"required,type=string,enum=guide,enum=vulnerability,enum=code,enum=tool,enum=other" jsonschema_description:"Type of the search query and answer to store; it will be used as a hard filter for search"`
+	Message  string     `json:"message" jsonschema:"required,title=Store answer message" jsonschema_description:"Engagement-log entry — a 1-2 short sentence running commentary summarizing the answer. Written in the engagement language declared by your system prompt."`
 }
 
 type SearchCodeAction struct {
-	Questions Strings `json:"questions" jsonschema:"required,type=array,minItems=1,maxItems=5" jsonschema_description:"Technical-channel payload — 1 to 5 detailed, context-rich semantic queries for the team's code vector store. Must be a real JSON array of strings, e.g. [\"query 1\",\"query 2\"] - NOT a JSON-encoded string containing an array. ALWAYS written in English regardless of the engagement language: the store is indexed in English and shared across all engagements, so non-English queries will fail to retrieve relevant code samples. Each query should include the context, what you intend to achieve with the code, and the functionality or content that should be included."`
-	Lang      string  `json:"lang" jsonschema:"required" jsonschema_description:"The programming language of the code samples you need. Use the standard markdown code block language name (e.g., 'python', 'bash', 'golang'). This required field narrows down the search to code samples in the desired language."`
-	Message   string  `json:"message" jsonschema:"required,title=Code search message" jsonschema_description:"Engagement-log entry — a 1-2 short sentence running commentary summarizing the queries and the programming language of the code samples. Written in the engagement language declared by your system prompt."`
+	Questions Strings  `json:"questions" jsonschema:"required,type=array,minItems=1,maxItems=5" jsonschema_description:"Technical-channel payload — 1 to 5 detailed, context-rich semantic queries for the team's code vector store. Must be a real JSON array of strings, e.g. [\"query 1\",\"query 2\"] - NOT a JSON-encoded string containing an array. ALWAYS written in English regardless of the engagement language: the store is indexed in English and shared across all engagements, so non-English queries will fail to retrieve relevant code samples. Each query should include the context, what you intend to achieve with the code, and the functionality or content that should be included."`
+	Lang      CodeLang `json:"lang" jsonschema:"required" jsonschema_description:"The programming language of the code samples you need. Use the standard markdown code block language name (e.g., 'python', 'bash', 'golang'). This required field narrows down the search to code samples in the desired language."`
+	Message   string   `json:"message" jsonschema:"required,title=Code search message" jsonschema_description:"Engagement-log entry — a 1-2 short sentence running commentary summarizing the queries and the programming language of the code samples. Written in the engagement language declared by your system prompt."`
 }
 
 type StoreCodeAction struct {
-	Code        string `json:"code" jsonschema:"required" jsonschema_description:"Ready code sample that will be stored for future retrieval (raw source code, not a localized message). Anonymize all sensitive data (IPs, domains, credentials, API keys) using descriptive placeholders."`
-	Question    string `json:"question" jsonschema:"required" jsonschema_description:"Technical-channel payload — question that was used to prepare or to write this code; co-indexed with the code in the team's vector store. Always written in English; never translated."`
-	Lang        string `json:"lang" jsonschema:"required" jsonschema_description:"Programming language of the code sample; use markdown code block language name like python or bash or golang etc."`
-	Explanation string `json:"explanation" jsonschema:"required" jsonschema_description:"Technical-channel payload — fully detailed explanation of the code sample (what it does, how it works, why it is useful, libraries/tools used). ALWAYS written in English; the explanation is co-indexed with the code in the team's vector store and shared across all engagements; non-English content becomes unreachable to future searches."`
-	Description string `json:"description" jsonschema:"required" jsonschema_description:"Technical-channel payload — short description of the code sample as a summary of the explanation; co-indexed in the team's vector store. Always written in English; never translated."`
-	Message     string `json:"message" jsonschema:"required,title=Store code message" jsonschema_description:"Engagement-log entry — a 1-2 short sentence running commentary summarizing the code sample. Written in the engagement language declared by your system prompt."`
+	Code        string   `json:"code" jsonschema:"required" jsonschema_description:"Ready code sample that will be stored for future retrieval (raw source code, not a localized message). Anonymize all sensitive data (IPs, domains, credentials, API keys) using descriptive placeholders."`
+	Question    string   `json:"question" jsonschema:"required" jsonschema_description:"Technical-channel payload — question that was used to prepare or to write this code; co-indexed with the code in the team's vector store. Always written in English; never translated."`
+	Lang        CodeLang `json:"lang" jsonschema:"required" jsonschema_description:"Programming language of the code sample; use markdown code block language name like python or bash or golang etc."`
+	Explanation string   `json:"explanation" jsonschema:"required" jsonschema_description:"Technical-channel payload — fully detailed explanation of the code sample (what it does, how it works, why it is useful, libraries/tools used). ALWAYS written in English; the explanation is co-indexed with the code in the team's vector store and shared across all engagements; non-English content becomes unreachable to future searches."`
+	Description string   `json:"description" jsonschema:"required" jsonschema_description:"Technical-channel payload — short description of the code sample as a summary of the explanation; co-indexed in the team's vector store. Always written in English; never translated."`
+	Message     string   `json:"message" jsonschema:"required,title=Store code message" jsonschema_description:"Engagement-log entry — a 1-2 short sentence running commentary summarizing the code sample. Written in the engagement language declared by your system prompt."`
 }
 
 type MaintenanceAction struct {
@@ -309,12 +385,32 @@ type WaitFlowCompletionAction struct {
 
 // PatchFlowSubtasksAction defines arguments for the patch_flow_subtasks tool.
 type PatchFlowSubtasksAction struct {
-	TaskID     int64              `json:"task_id" jsonschema:"required,type=integer" jsonschema_description:"ID of the task whose subtask plan to modify. Obtain this from get_flow_status with detail='tasks'."`
-	Operations []SubtaskOperation `json:"operations" jsonschema:"required" jsonschema_description:"Delta operations to apply: add (insert new subtask at a position), remove (delete by ID), modify (update title/description), reorder (move to different position). Empty array returns the current plan unchanged. Each operation's title/description, when present, is an engagement-log plan entry (see operations)."`
-	Message    string             `json:"message" jsonschema:"required,title=Patch summary" jsonschema_description:"Engagement-log entry — a 1-2 short sentence running commentary describing what changes are being made to the plan. Written in the engagement language declared by your system prompt."`
+	TaskID     int64             `json:"task_id" jsonschema:"required,type=integer" jsonschema_description:"ID of the task whose subtask plan to modify. Obtain this from get_flow_status with detail='tasks'."`
+	Operations SubtaskOperations `json:"operations" jsonschema:"required" jsonschema_description:"Delta operations to apply: add (insert new subtask at a position), remove (delete by ID), modify (update title/description), reorder (move to different position). Empty array returns the current plan unchanged. Each operation's title/description, when present, is an engagement-log plan entry (see operations)."`
+	Message    string            `json:"message" jsonschema:"required,title=Patch summary" jsonschema_description:"Engagement-log entry — a 1-2 short sentence running commentary describing what changes are being made to the plan. Written in the engagement language declared by your system prompt."`
 }
 
 // ValidateSubtaskPatch validates the operations in a SubtaskPatch
+// Validate reports an omitted success flag. Decoding cannot: a missing JSON
+// field leaves the zero value and returns no error, which would record finished
+// work as failed. The message names the field so the tool-call fixer can ask
+// for it again.
+func (tr TaskResult) Validate() error {
+	if tr.Success == nil {
+		return fmt.Errorf("success is required: state explicitly whether the objective was reached")
+	}
+
+	return nil
+}
+
+func (d Done) Validate() error {
+	if d.Success == nil {
+		return fmt.Errorf("success is required: state explicitly whether the objective was reached")
+	}
+
+	return nil
+}
+
 func (sp SubtaskPatch) Validate() error {
 	for i, op := range sp.Operations {
 		switch op.Op {
@@ -345,6 +441,222 @@ func (sp SubtaskPatch) Validate() error {
 		}
 	}
 	return nil
+}
+
+// DoubleEncodedListError is a list argument the model sent as a JSON STRING
+// containing JSON, whose contents then failed to parse.
+//
+// Typed so a caller can tell this apart from a schema violation: the outer
+// document conforms, the field really is a string, and what is wrong is one
+// level of nesting. Nothing branches on the type today -- the fixer receives
+// only the message -- so it is the message that has to carry that.
+type DoubleEncodedListError struct {
+	// Field is the argument that arrived wrapped, so the refusal can name it.
+	Field string
+	// Cause is what the unwrapped text failed on, kept for the log.
+	Cause error
+}
+
+func (e *DoubleEncodedListError) Error() string {
+	return fmt.Sprintf(
+		"%s arrived as a string containing JSON, and that JSON does not parse: %s",
+		e.Field, e.Cause,
+	)
+}
+
+func (e *DoubleEncodedListError) Unwrap() error { return e.Cause }
+
+// SubtaskInfos is []SubtaskInfo that also accepts the array as a JSON string,
+// for the same reason Bool accepts a quoted boolean: models send it that way
+// often enough to matter.
+//
+// The generator gets ONE attempt -- its chain is not a turn loop -- so a plan
+// refused on its quotation marks is a task that never exists. A plan wrapped in
+// a string is a serialisation slip, not a wrong plan.
+type SubtaskInfos []SubtaskInfo
+
+func (l *SubtaskInfos) UnmarshalJSON(data []byte) error {
+	// A bare JSON "null" unmarshals into a nil slice with no error by default,
+	// which would silently mask a required field being omitted - treat it as
+	// invalid instead, consistent with Strings above.
+	if trimmed := strings.TrimSpace(string(data)); trimmed == "null" {
+		return fmt.Errorf("invalid subtasks value: expected a JSON array, got: null")
+	}
+
+	var direct []SubtaskInfo
+
+	// The error from the ordinary path is what the caller needs when the payload
+	// is an array whose CONTENTS are wrong: it names the offending element and
+	// field. Reporting "must be a list" for those would contradict the arguments
+	// logged beside it, and that text is what the tool-call fixer is given.
+	directErr := json.Unmarshal(data, &direct)
+	if directErr == nil {
+		*l = direct
+
+		return nil
+	}
+
+	return unwrapStringEncodedList(data, "subtasks", directErr, (*[]SubtaskInfo)(l))
+}
+
+// SubtaskOperations is the same leniency for the refiner's operation list.
+type SubtaskOperations []SubtaskOperation
+
+func (o *SubtaskOperations) UnmarshalJSON(data []byte) error {
+	// A bare JSON "null" unmarshals into a nil slice with no error by default,
+	// which would silently mask a required field being omitted - treat it as
+	// invalid instead, consistent with Strings above.
+	if trimmed := strings.TrimSpace(string(data)); trimmed == "null" {
+		return fmt.Errorf("invalid operations value: expected a JSON array, got: null")
+	}
+
+	var direct []SubtaskOperation
+
+	// The error from the ordinary path is what the caller needs when the payload
+	// is an array whose CONTENTS are wrong: it names the offending element and
+	// field. Reporting "must be a list" for those would contradict the arguments
+	// logged beside it, and that text is what the tool-call fixer is given.
+	directErr := json.Unmarshal(data, &direct)
+	if directErr == nil {
+		*o = direct
+
+		return nil
+	}
+
+	return unwrapStringEncodedList(data, "operations", directErr, (*[]SubtaskOperation)(o))
+}
+
+// unwrapStringEncodedList is the tail both lenient list unmarshallers share: the
+// payload is known not to parse as an array, so the remaining possibilities are
+// a list wrapped in a JSON string, leaked tool-call markup, or a genuinely wrong
+// argument. directErr is what to report when the value is not a string at all.
+func unwrapStringEncodedList[T any](data []byte, field string, directErr error, out *[]T) error {
+	var wrapped string
+	if err := json.Unmarshal(data, &wrapped); err != nil {
+		return directErr
+	}
+
+	wrapped = strings.TrimSpace(wrapped)
+	if wrapped == "null" {
+		return fmt.Errorf("invalid %s value: expected a JSON array, got: null", field)
+	}
+	if strings.Contains(wrapped, toolCallFieldStart) {
+		return &LeakedMarkupListError{Field: field}
+	}
+
+	var direct []T
+	err := json.Unmarshal([]byte(wrapped), &direct)
+	if err == nil {
+		*out = direct
+
+		return nil
+	}
+
+	// Escaping for one nesting level instead of two is a serialisation slip, not
+	// a wrong plan, and the generator gets one attempt. Repair before refusing.
+	if repaired := repairJSONStringEscapes(wrapped); repaired != wrapped {
+		if json.Unmarshal([]byte(repaired), &direct) == nil {
+			*out = direct
+
+			return nil
+		}
+	}
+
+	return &DoubleEncodedListError{Field: field, Cause: err}
+}
+
+// repairJSONStringEscapes doubles a backslash that begins no legal JSON escape.
+// A model that escaped for one nesting level instead of two sends a literal
+// `FLAG\{...\}`, `\xff` or `C:\users`; JSON rejects all three, and the
+// backslash is text the model meant to keep. A trailing `\` before the closing
+// quote is the same slip and is what turns the next quote into "invalid
+// character '\"' after object key:value pair".
+//
+// Only run this on text a first parse has already rejected: doubling inside a
+// payload that was correct would corrupt it.
+func repairJSONStringEscapes(s string) string {
+	var b strings.Builder
+	b.Grow(len(s) + len(s)/8)
+
+	inString := false
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if !inString {
+			if c == '"' {
+				inString = true
+			}
+			b.WriteByte(c)
+
+			continue
+		}
+		if c == '"' {
+			inString = false
+			b.WriteByte(c)
+
+			continue
+		}
+		if c != '\\' {
+			b.WriteByte(c)
+
+			continue
+		}
+		if i+1 >= len(s) {
+			b.WriteString(`\\`)
+
+			continue
+		}
+
+		switch next := s[i+1]; next {
+		case '"', '\\', '/', 'b', 'f', 'n', 'r', 't':
+			b.WriteByte(c)
+			b.WriteByte(next)
+			i++
+		case 'u':
+			if i+6 <= len(s) && isHex4(s[i+2:i+6]) {
+				b.WriteString(s[i : i+6])
+				i += 5
+
+				continue
+			}
+			b.WriteString(`\\`)
+		default:
+			b.WriteString(`\\`)
+		}
+	}
+
+	return b.String()
+}
+
+func isHex4(s string) bool {
+	if len(s) != 4 {
+		return false
+	}
+	for i := 0; i < 4; i++ {
+		c := s[i]
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') && (c < 'A' || c > 'F') {
+			return false
+		}
+	}
+
+	return true
+}
+
+// LeakedMarkupListError is a list argument whose value is the model's own
+// tool-call markup rather than data -- Anthropic's `<parameter name="...">`
+// emitted inside the JSON string. Nothing in it is a recoverable list, so the
+// message has to tell the fixer what shape to send instead of what failed to
+// parse.
+type LeakedMarkupListError struct {
+	// Field is the argument that arrived as markup, so the refusal can name it.
+	Field string
+}
+
+func (e *LeakedMarkupListError) Error() string {
+	return fmt.Sprintf(
+		"%s contains tool-call markup instead of data: send %s as a JSON array of objects, "+
+			"not as text containing <parameter name=\"...\"> tags",
+		e.Field, e.Field,
+	)
 }
 
 type Bool bool
@@ -548,3 +860,59 @@ func (s *Strings) MarshalJSON() ([]byte, error) {
 	}
 	return json.Marshal([]string(*s))
 }
+
+// GuideType is a KnowledgeGuideType decoded from LLM-generated tool-call arguments.
+type GuideType model.KnowledgeGuideType
+
+func (t *GuideType) UnmarshalJSON(data []byte) error {
+	var raw String
+	if err := raw.UnmarshalJSON(data); err != nil {
+		return err
+	}
+	gt := model.KnowledgeGuideType(strings.ToLower(strings.TrimSpace(raw.String())))
+	if !gt.IsValid() {
+		gt = model.KnowledgeGuideTypeOther
+	}
+	*t = GuideType(gt)
+	return nil
+}
+
+type CodeLang string
+
+func (l *CodeLang) UnmarshalJSON(data []byte) error {
+	var raw String
+	if err := raw.UnmarshalJSON(data); err != nil {
+		return err
+	}
+	*l = CodeLang(limits.CanonicalCodeLang(raw.String()))
+
+	return nil
+}
+
+func (l CodeLang) MarshalJSON() ([]byte, error) { return json.Marshal(string(l)) }
+
+func (l CodeLang) String() string { return string(l) }
+
+func (t GuideType) MarshalJSON() ([]byte, error) { return json.Marshal(string(t)) }
+
+func (t GuideType) String() string { return string(t) }
+
+// AnswerType is the KnowledgeAnswerType counterpart of GuideType.
+type AnswerType model.KnowledgeAnswerType
+
+func (t *AnswerType) UnmarshalJSON(data []byte) error {
+	var raw String
+	if err := raw.UnmarshalJSON(data); err != nil {
+		return err
+	}
+	at := model.KnowledgeAnswerType(strings.ToLower(strings.TrimSpace(raw.String())))
+	if !at.IsValid() {
+		at = model.KnowledgeAnswerTypeOther
+	}
+	*t = AnswerType(at)
+	return nil
+}
+
+func (t AnswerType) MarshalJSON() ([]byte, error) { return json.Marshal(string(t)) }
+
+func (t AnswerType) String() string { return string(t) }

@@ -124,11 +124,21 @@ func WrapGenerateFromSinglePrompt(
 	prompt string,
 	options ...llms.CallOption,
 ) (string, error) {
-	ctx, observation := obs.Observer.NewObservation(ctx)
-	modelWithPrefix := provider.ModelWithPrefix(opt)
+	limits := ModelLimitsFor(provider, opt)
+	options = capOutputTokens(options, limits.MaxOutputTokens)
+	ctx, options = adaptiveOptions(ctx, provider, opt, options)
+
 	messages := []llms.MessageContent{
 		llms.TextParts(llms.ChatMessageTypeHuman, prompt),
 	}
+
+	options, windowErr := fitWithinWindow(provider.Model(opt), messages, options, limits.ContextWindow)
+	if windowErr != nil {
+		return "", windowErr
+	}
+
+	ctx, observation := obs.Observer.NewObservation(ctx)
+	modelWithPrefix := provider.ModelWithPrefix(opt)
 	metadata := buildMetadata(provider, opt, messages, options...)
 	generation := observation.Generation(
 		langfuse.WithGenerationName(fmt.Sprintf("%s-generation", provider.Type().String())),
@@ -252,6 +262,15 @@ func WrapGenerateContent(
 	messages []llms.MessageContent,
 	options ...llms.CallOption,
 ) (*llms.ContentResponse, error) {
+	limits := ModelLimitsFor(provider, opt)
+	options = capOutputTokens(options, limits.MaxOutputTokens)
+	ctx, options = adaptiveOptions(ctx, provider, opt, options)
+
+	options, windowErr := fitWithinWindow(provider.Model(opt), messages, options, limits.ContextWindow)
+	if windowErr != nil {
+		return nil, windowErr
+	}
+
 	ctx, observation := obs.Observer.NewObservation(ctx)
 	modelWithPrefix := provider.ModelWithPrefix(opt)
 	metadata := buildMetadata(provider, opt, messages, options...)
@@ -374,10 +393,11 @@ func isTooManyRequestsError(err error) bool {
 	}
 
 	errStr := strings.ToLower(err.Error())
-	if strings.Contains(errStr, "statuscode: 429") {
+	if strings.Contains(errStr, "statuscode: 429") || strings.Contains(errStr, "status code: 429") {
 		return true
 	}
-	if strings.Contains(errStr, "toomanyrequests") || strings.Contains(errStr, "too many requests") {
+	if strings.Contains(errStr, "toomanyrequests") || strings.Contains(errStr, "too many requests") ||
+		strings.Contains(errStr, "rate limit exceeded") {
 		return true
 	}
 
@@ -399,4 +419,16 @@ func extractToolsFromOptions(options ...llms.CallOption) []llms.Tool {
 	}
 
 	return opts.Tools
+}
+
+func adaptiveOptions(
+	ctx context.Context,
+	provider Provider,
+	opt pconfig.ProviderOptionsType,
+	options []llms.CallOption,
+) (context.Context, []llms.CallOption) {
+	if provider == nil {
+		return ctx, options
+	}
+	return provider.GetProviderConfig().PrepareAdaptiveCallOptions(ctx, provider.GetModels(), opt, options)
 }

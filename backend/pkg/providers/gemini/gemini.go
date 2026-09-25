@@ -10,6 +10,7 @@ import (
 	"pentagi/pkg/config"
 	"pentagi/pkg/providers/pconfig"
 	"pentagi/pkg/providers/provider"
+	"pentagi/pkg/system"
 	"pentagi/pkg/templates"
 
 	"github.com/vxcontrol/langchaingo/httputil"
@@ -21,9 +22,7 @@ import (
 //go:embed config.yml models.yml
 var configFS embed.FS
 
-const GeminiAgentModel = "gemini-2.5-flash"
-
-const defaultGeminiHost = "generativelanguage.googleapis.com"
+const GeminiAgentModel = "gemini-3.1-flash-lite"
 
 const GeminiToolCallIDTemplate = "{r:8:x}"
 
@@ -83,17 +82,12 @@ func New(
 		return nil, fmt.Errorf("failed to parse Gemini server URL: %w", err)
 	}
 
-	// always use custom transport to ensure API key injection and URL rewriting
-	customTransport := &httputil.ApiKeyTransport{
-		Transport: http.DefaultTransport,
-		APIKey:    cfg.GeminiAPIKey,
-		BaseURL:   cfg.GeminiServerURL,
-		ProxyURL:  cfg.ProxyURL,
+	httpClient, err := newHTTPClient(cfg)
+	if err != nil {
+		return nil, err
 	}
 
-	opts = append(opts, googleai.WithHTTPClient(&http.Client{
-		Transport: customTransport,
-	}))
+	opts = append(opts, googleai.WithHTTPClient(httpClient))
 
 	models, err := DefaultModels()
 	if err != nil {
@@ -111,6 +105,21 @@ func New(
 		providerName:   providerName,
 		providerConfig: providerConfig,
 	}, nil
+}
+
+func newHTTPClient(cfg *config.Config) (*http.Client, error) {
+	httpClient, err := system.GetHTTPClient(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create HTTP client: %w", err)
+	}
+
+	httpClient.Transport = &httputil.ApiKeyTransport{
+		Transport: httpClient.Transport,
+		APIKey:    cfg.GeminiAPIKey,
+		BaseURL:   cfg.GeminiServerURL,
+	}
+
+	return httpClient, nil
 }
 
 func (p *geminiProvider) Type() provider.ProviderType {
@@ -193,7 +202,6 @@ func (p *geminiProvider) CallWithTools(
 	)
 }
 
-// CallWithExtraOptions: extra is appended last, so it overrides the config.
 func (p *geminiProvider) CallWithExtraOptions(
 	ctx context.Context,
 	opt pconfig.ProviderOptionsType,

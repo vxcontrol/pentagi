@@ -1,20 +1,24 @@
 # Mixed vLLM Provider Configuration
-# Qwen3.6-27B-FP8 for lightweight / coding agents; DeepSeek-V4-Flash for planning & reasoning agents
+# Qwen3.8-27B-FP8 for lightweight / coding agents; DeepSeek-V4-Flash for planning & reasoning agents
 #
-# Qwen3.6-27B-FP8 (official Qwen recommendations for vLLM):
+# Qwen3.8-27B-FP8 (official Qwen recommendations for vLLM):
 # - Thinking mode enabled by default (no extra_body needed)
 # - General tasks: temp=1.0, top_p=0.95, top_k=20, min_p=0.0, pp=1.5, rp=1.0
 # - Precise coding: temp=0.6, top_p=0.95, top_k=20, min_p=0.0, pp=0.0, rp=1.0
 # - Non-thinking: temp=0.7, top_p=0.8 (+ enable_thinking: false via extra_body)
 #
-# DeepSeek-V4-Flash (official HF README for local deploy):
-# - Sampling: temperature=1.0, top_p=1.0 (unified; ignored when thinking is enabled)
-# - Default: thinking enabled, reasoning_effort=high (Think High)
-# - Think Max: reasoning_effort=max; context window should be >= 384K
-# - Control via reasoning.effort (top-level reasoning_effort) + extra_body.thinking
+# DeepSeek-V4-Flash on vLLM (0731 tokenizer; confirmed on vLLM 0.28.0):
+# - Default is Non-think. Cloud extra_body.thinking.type is ignored.
+# - The nested "reasoning":{"effort":...} object is ignored; PentAGI sends reasoning.effort
+#   as the top-level reasoning_effort this server reads.
+# - Enable Think High via extra_body.chat_template_kwargs plus reasoning.effort for
+#   PentAGI/ctester.
+# - Sampling: temperature=1.0, top_p=1.0 (0731 agentic: top_p=0.95 also fine)
+# - Think Max (reasoning_effort=max) needs --max-model-len >= 384K; do not use it
+#   on a 160K context server.
 
 simple:
-  model: "Qwen/Qwen3.6-27B-FP8"
+  model: "Qwen/Qwen3.8-27B-FP8"
   temperature: 0.7
   top_k: 20
   top_p: 0.8
@@ -28,7 +32,7 @@ simple:
       enable_thinking: false
 
 simple_json:
-  model: "Qwen/Qwen3.6-27B-FP8"
+  model: "Qwen/Qwen3.8-27B-FP8"
   temperature: 0.7
   top_k: 20
   top_p: 0.8
@@ -50,6 +54,10 @@ primary_agent:
   max_tokens: 32768
   reasoning:
     effort: high
+  extra_body:
+    chat_template_kwargs:
+      thinking: true
+      reasoning_effort: high
 
 assistant:
   model: "DeepSeek-V4-Flash"
@@ -59,6 +67,10 @@ assistant:
   max_tokens: 32768
   reasoning:
     effort: high
+  extra_body:
+    chat_template_kwargs:
+      thinking: true
+      reasoning_effort: high
 
 generator:
   model: "DeepSeek-V4-Flash"
@@ -67,7 +79,11 @@ generator:
   n: 1
   max_tokens: 32768
   reasoning:
-    effort: max
+    effort: high
+  extra_body:
+    chat_template_kwargs:
+      thinking: true
+      reasoning_effort: high
 
 refiner:
   model: "DeepSeek-V4-Flash"
@@ -76,7 +92,11 @@ refiner:
   n: 1
   max_tokens: 32768
   reasoning:
-    effort: max
+    effort: high
+  extra_body:
+    chat_template_kwargs:
+      thinking: true
+      reasoning_effort: high
 
 adviser:
   model: "DeepSeek-V4-Flash"
@@ -85,10 +105,14 @@ adviser:
   n: 1
   max_tokens: 32768
   reasoning:
-    effort: max
+    effort: high
+  extra_body:
+    chat_template_kwargs:
+      thinking: true
+      reasoning_effort: high
 
 reflector:
-  model: "Qwen/Qwen3.6-27B-FP8"
+  model: "Qwen/Qwen3.8-27B-FP8"
   temperature: 1.0
   top_k: 20
   top_p: 0.95
@@ -102,7 +126,7 @@ reflector:
       enable_thinking: false
 
 searcher:
-  model: "Qwen/Qwen3.6-27B-FP8"
+  model: "Qwen/Qwen3.8-27B-FP8"
   temperature: 0.7
   top_k: 20
   top_p: 0.8
@@ -116,7 +140,7 @@ searcher:
       enable_thinking: false
 
 enricher:
-  model: "Qwen/Qwen3.6-27B-FP8"
+  model: "Qwen/Qwen3.8-27B-FP8"
   temperature: 0.7
   top_k: 20
   top_p: 0.8
@@ -130,7 +154,7 @@ enricher:
       enable_thinking: false
 
 coder:
-  model: "Qwen/Qwen3.6-27B-FP8"
+  model: "Qwen/Qwen3.8-27B-FP8"
   temperature: 0.6
   top_k: 20
   top_p: 0.95
@@ -141,7 +165,7 @@ coder:
   max_tokens: 32768
 
 installer:
-  model: "Qwen/Qwen3.6-27B-FP8"
+  model: "Qwen/Qwen3.8-27B-FP8"
   temperature: 0.6
   top_k: 20
   top_p: 0.95
@@ -152,12 +176,14 @@ installer:
   max_tokens: 32768
 
 pentester:
-  model: "Qwen/Qwen3.6-27B-FP8"
-  temperature: 0.6
-  top_k: 20
-  top_p: 0.95
-  min_p: 0.0
-  presence_penalty: 0.0
-  repetition_penalty: 1.0
+  model: "DeepSeek-V4-Flash"
+  temperature: 1.0
+  top_p: 1.0
   n: 1
   max_tokens: 32768
+  reasoning:
+    effort: high
+  extra_body:
+    chat_template_kwargs:
+      thinking: true
+      reasoning_effort: high

@@ -49,41 +49,35 @@ func enabledInternalCfg() *config.Config {
 	}
 }
 
-func TestInternalIsAvailable(t *testing.T) {
-	fetcher := &fakeFetcher{}
+func TestInternal_IsAvailable_NeedsTheFlagAFetcherAndAnAvailableLinkEngine(t *testing.T) {
 	sum := SummarizeHandler(func(_ context.Context, s string) (string, error) { return s, nil })
 	link := &fakeLinkSearcher{available: true}
 
-	t.Run("disabled by config", func(t *testing.T) {
-		e := NewInternal(&config.Config{WebSearchInternalEnabled: false}, fetcher, []Searcher{link}, sum)
-		if e.IsAvailable() {
-			t.Error("internal engine must be unavailable when WEB_SEARCH_INTERNAL_ENABLED=false")
-		}
-	})
-	t.Run("no fetcher", func(t *testing.T) {
-		e := NewInternal(enabledInternalCfg(), nil, []Searcher{link}, sum)
-		if e.IsAvailable() {
-			t.Error("internal engine must be unavailable without a page fetcher")
-		}
-	})
-	t.Run("no available link engine", func(t *testing.T) {
-		e := NewInternal(enabledInternalCfg(), fetcher, []Searcher{&fakeLinkSearcher{available: false}}, sum)
-		if e.IsAvailable() {
-			t.Error("internal engine must be unavailable when no link engine is available")
-		}
-	})
-	t.Run("fully configured", func(t *testing.T) {
-		e := NewInternal(enabledInternalCfg(), fetcher, []Searcher{link}, sum)
-		if !e.IsAvailable() {
-			t.Error("internal engine should be available when enabled + fetcher + link engine present")
-		}
-		if e.Engine() != database.SearchengineTypeBrowser {
-			t.Errorf("Engine() = %q, want browser (attribution)", e.Engine())
-		}
-	})
+	for _, tt := range []struct {
+		name    string
+		cfg     *config.Config
+		fetcher PageFetcher
+		links   []Searcher
+		want    bool
+	}{
+		{"disabled by config", &config.Config{WebSearchInternalEnabled: false}, &fakeFetcher{}, []Searcher{link}, false},
+		{"no fetcher", enabledInternalCfg(), nil, []Searcher{link}, false},
+		{"no available link engine", enabledInternalCfg(), &fakeFetcher{}, []Searcher{&fakeLinkSearcher{available: false}}, false},
+		{"fully configured", enabledInternalCfg(), &fakeFetcher{}, []Searcher{link}, true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := NewInternal(tt.cfg, tt.fetcher, tt.links, sum).IsAvailable(); got != tt.want {
+				t.Errorf("IsAvailable() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+
+	if got := NewInternal(enabledInternalCfg(), &fakeFetcher{}, []Searcher{link}, sum).Engine(); got != database.SearchengineTypeBrowser {
+		t.Errorf("Engine() = %q, want browser (attribution)", got)
+	}
 }
 
-func TestInternalAnalyzeSummarizesBoundedContent(t *testing.T) {
+func TestInternal_Analyze_SummarizesBoundedPagesAndListsTheirSources(t *testing.T) {
 	link := &fakeLinkSearcher{available: true, output: "1. https://a.example\n2. https://b.example\n"}
 	fetcher := &fakeFetcher{pages: map[string]string{
 		"https://a.example": strings.Repeat("A", 100), // longer than MaxSiteBytes=20
@@ -104,8 +98,7 @@ func TestInternalAnalyzeSummarizesBoundedContent(t *testing.T) {
 	if !strings.Contains(got, "SYNTHESIZED ANSWER") {
 		t.Errorf("result = %q, want it to contain the summarizer output", got)
 	}
-	// The fetched source URLs must be appended as a numbered Sources section, in fetch
-	// order, matching the [Source N] ids the summarizer was given.
+	// Numbered in fetch order, matching the [Source N] ids the summarizer was given.
 	if !strings.Contains(got, "### Sources") {
 		t.Errorf("result = %q, want an appended '### Sources' section", got)
 	}
@@ -113,7 +106,6 @@ func TestInternalAnalyzeSummarizesBoundedContent(t *testing.T) {
 		!strings.Contains(got, "2. [b.example](https://b.example)") {
 		t.Errorf("result = %q, want the fetched URLs as numbered markdown links in fetch order", got)
 	}
-	// Per-site markdown must be truncated to MaxSiteBytes (20).
 	if strings.Contains(captured, strings.Repeat("A", 21)) {
 		t.Error("page A markdown was not truncated to the per-site byte limit")
 	}
@@ -122,25 +114,7 @@ func TestInternalAnalyzeSummarizesBoundedContent(t *testing.T) {
 	}
 }
 
-func TestAppendSources(t *testing.T) {
-	if got := appendSources("answer", nil); got != "answer" {
-		t.Errorf("appendSources with no URLs = %q, want the answer unchanged", got)
-	}
-
-	// Each source is rendered as a numbered markdown link whose text is the URL host.
-	got := appendSources("answer\n\n", []string{
-		"https://github.com/vxcontrol/pentagi",
-		"https://pentagi.com/get-started",
-	})
-	want := "answer\n\n### Sources\n\n" +
-		"1. [github.com](https://github.com/vxcontrol/pentagi)\n" +
-		"2. [pentagi.com](https://pentagi.com/get-started)\n"
-	if got != want {
-		t.Errorf("appendSources = %q, want %q", got, want)
-	}
-}
-
-func TestInternalRespectsMaxSites(t *testing.T) {
+func TestInternal_Analyze_StopsFetchingAtMaxSites(t *testing.T) {
 	cfg := enabledInternalCfg()
 	cfg.WebSearchInternalMaxSites = 1
 	link := &fakeLinkSearcher{available: true, output: "https://a.example https://b.example https://c.example"}
@@ -158,52 +132,102 @@ func TestInternalRespectsMaxSites(t *testing.T) {
 	}
 }
 
-func TestInternalAllPagesFailIsRetryable(t *testing.T) {
-	link := &fakeLinkSearcher{available: true, output: "https://a.example https://b.example"}
-	fetcher := &fakeFetcher{errs: map[string]error{
-		"https://a.example": errors.New("boom"),
-		"https://b.example": errors.New("boom"),
-	}}
-	sum := SummarizeHandler(func(_ context.Context, s string) (string, error) { return s, nil })
+func TestInternal_Analyze_RetriesOnlyTransientFailures(t *testing.T) {
+	fetchErr := errors.New("page unreachable")
+	llmErr := errors.New("llm down")
+	linkErr := Fatal(errors.New("link engine broke"))
+	echo := SummarizeHandler(func(_ context.Context, s string) (string, error) { return s, nil })
 
-	e := NewInternal(enabledInternalCfg(), fetcher, []Searcher{link}, sum)
-	_, err := e.Handle(context.Background(), Request{Query: "q"})
-	if err == nil {
-		t.Fatal("expected an error when every page fails to fetch")
-	}
-	if !IsRetryable(err) {
-		t.Errorf("error = %v, want retryable when all pages fail", err)
+	for _, tt := range []struct {
+		name      string
+		link      *fakeLinkSearcher
+		fetcher   *fakeFetcher
+		sum       SummarizeHandler
+		retryable bool
+		cause     error
+		reason    string
+	}{
+		{
+			name:      "every page failing to fetch is retryable",
+			link:      &fakeLinkSearcher{available: true, output: "https://a.example https://b.example"},
+			fetcher:   &fakeFetcher{errs: map[string]error{"https://a.example": fetchErr, "https://b.example": fetchErr}},
+			sum:       echo,
+			retryable: true,
+			cause:     fetchErr,
+			reason:    "all pages failed to fetch",
+		},
+		{
+			name:      "a failed summary is retryable",
+			link:      &fakeLinkSearcher{available: true, output: "https://a.example"},
+			fetcher:   &fakeFetcher{pages: map[string]string{"https://a.example": "content"}},
+			sum:       func(context.Context, string) (string, error) { return "", llmErr },
+			retryable: true,
+			cause:     llmErr,
+			reason:    "summarization failed",
+		},
+		{
+			name:    "the link engine's own error is passed on",
+			link:    &fakeLinkSearcher{available: true, err: linkErr},
+			fetcher: &fakeFetcher{},
+			sum:     echo,
+			cause:   linkErr,
+		},
+		{
+			name:    "links without a url are fatal",
+			link:    &fakeLinkSearcher{available: true, output: "nothing to follow here"},
+			fetcher: &fakeFetcher{},
+			sum:     echo,
+			reason:  "no usable URLs",
+		},
+		{
+			name:    "pages without content are fatal",
+			link:    &fakeLinkSearcher{available: true, output: "https://a.example"},
+			fetcher: &fakeFetcher{pages: map[string]string{"https://a.example": "  \n"}},
+			sum:     echo,
+			reason:  "no readable content",
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			e := NewInternal(enabledInternalCfg(), tt.fetcher, []Searcher{tt.link}, tt.sum)
+
+			got, err := e.Handle(t.Context(), Request{Query: "q"})
+
+			if got != "" || err == nil {
+				t.Fatalf("Handle() = %q, %v; want no result and an error", got, err)
+			}
+			if IsRetryable(err) != tt.retryable || IsFatal(err) == tt.retryable {
+				t.Errorf("Handle() error = %v, want retryable=%v", err, tt.retryable)
+			}
+			if tt.cause != nil && !errors.Is(err, tt.cause) {
+				t.Errorf("Handle() error = %v, want it to carry %v", err, tt.cause)
+			}
+			if !strings.Contains(err.Error(), tt.reason) {
+				t.Errorf("Handle() error = %v, want it to say %q", err, tt.reason)
+			}
+		})
 	}
 }
 
-func TestInternalSummarizerFailureIsRetryable(t *testing.T) {
-	link := &fakeLinkSearcher{available: true, output: "https://a.example"}
-	fetcher := &fakeFetcher{pages: map[string]string{"https://a.example": "content"}}
-	sum := SummarizeHandler(func(_ context.Context, _ string) (string, error) { return "", errors.New("llm down") })
+func TestInternal_AppendSources_ListsEachSourceHostAsANumberedLink(t *testing.T) {
+	if got := appendSources("answer", nil); got != "answer" {
+		t.Errorf("appendSources with no URLs = %q, want the answer unchanged", got)
+	}
 
-	e := NewInternal(enabledInternalCfg(), fetcher, []Searcher{link}, sum)
-	_, err := e.Handle(context.Background(), Request{Query: "q"})
-	if err == nil || !IsRetryable(err) {
-		t.Fatalf("expected a retryable error on summarizer failure, got %v", err)
+	got := appendSources("answer\n\n", []string{
+		"https://github.com/vxcontrol/pentagi",
+		"https://pentagi.com/get-started",
+	})
+	want := "answer\n\n### Sources\n\n" +
+		"1. [github.com](https://github.com/vxcontrol/pentagi)\n" +
+		"2. [pentagi.com](https://pentagi.com/get-started)\n"
+	if got != want {
+		t.Errorf("appendSources = %q, want %q", got, want)
 	}
 }
 
-func TestInternalLinkDiscoveryErrorPropagates(t *testing.T) {
-	link := &fakeLinkSearcher{available: true, err: Fatal(errors.New("link engine broke"))}
-	fetcher := &fakeFetcher{}
-	sum := SummarizeHandler(func(_ context.Context, s string) (string, error) { return s, nil })
-
-	e := NewInternal(enabledInternalCfg(), fetcher, []Searcher{link}, sum)
-	_, err := e.Handle(context.Background(), Request{Query: "q"})
-	if err == nil || !IsFatal(err) {
-		t.Fatalf("expected the link engine's fatal error to propagate, got %v", err)
-	}
-}
-
-func TestDedupeURLs(t *testing.T) {
+func TestInternal_DedupeURLs_DropsTrailingPunctuationAndRepeats(t *testing.T) {
 	in := []string{"https://a.com", "https://a.com", "https://b.com.", "https://a.com,"}
 	got := dedupeURLs(in)
-	// Trailing punctuation stripped, duplicates removed.
 	want := []string{"https://a.com", "https://b.com"}
 	if len(got) != len(want) {
 		t.Fatalf("dedupeURLs = %v, want %v", got, want)

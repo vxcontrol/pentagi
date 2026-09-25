@@ -365,7 +365,7 @@ Key test patterns from `terminal_test.go`:
 - **Command Output**: Verify content appears in `View()`
 - **Interactive Input**: Simulate key sequences via `Update()`
 - **Resource Cleanup**: Manual finalizer calls for verification
-- **Concurrent Access**: Multiple goroutines with same terminal
+- **Concurrent Access**: `Execute` refuses a second command while one runs
 - **Error Handling**: Invalid commands and process failures
 
 ## Concurrency and Threading

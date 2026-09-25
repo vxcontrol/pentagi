@@ -18,6 +18,7 @@ describe('isNotFoundError', () => {
         'connection refused',
         'internal server error',
         "requested permission 'flows.read' not found",
+        'requested permission "knowledge.view" not found',
         'not authorized to access this token',
         'no permissions granted',
         'privileges are not set',

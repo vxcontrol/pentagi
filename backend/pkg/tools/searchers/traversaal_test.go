@@ -10,121 +10,102 @@ import (
 	"pentagi/pkg/database"
 )
 
-const testTraversaalAPIKey = "test-key"
-
-func testTraversaalConfig() *config.Config {
-	return &config.Config{TraversaalAPIKey: testTraversaalAPIKey}
-}
-
-func TestTraversaalHandle(t *testing.T) {
-	var seenRequest bool
-	var receivedMethod string
-	var receivedContentType string
-	var receivedAPIKey string
-	var receivedBody []byte
-
-	mockMux := http.NewServeMux()
-	mockMux.HandleFunc("/live/predict", func(w http.ResponseWriter, r *http.Request) {
-		seenRequest = true
-		receivedMethod = r.Method
-		receivedContentType = r.Header.Get("Content-Type")
-		receivedAPIKey = r.Header.Get("x-api-key")
-
-		var err error
-		receivedBody, err = io.ReadAll(r.Body)
-		if err != nil {
-			t.Errorf("failed to read request body: %v", err)
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"data":{"response_text":"answer text","web_url":["https://a.com","https://b.com"]}}`))
-	})
-
-	proxy, err := newTestProxy("api-ares.traversaal.ai", mockMux)
-	if err != nil {
-		t.Fatalf("failed to create proxy: %v", err)
-	}
-	defer proxy.Close()
-
-	cfg := &config.Config{
-		TraversaalAPIKey:    testTraversaalAPIKey,
-		ProxyURL:            proxy.URL(),
-		ExternalSSLCAPath:   proxy.CACertPath(),
-		ExternalSSLInsecure: false,
-	}
-
-	trav := NewTraversaal(cfg)
-
-	got, err := trav.Handle(
-		t.Context(),
-		Request{Query: "test query"},
-	)
-	if err != nil {
-		t.Fatalf("Handle() unexpected error: %v", err)
-	}
+func TestTraversaal_Handle_PostsTheQueryAndReturnsItsOutcome(t *testing.T) {
+	up := &searchersUpstream{}
+	p := newTestProxy(t, "api-ares.traversaal.ai", up)
+	trav := NewTraversaal(&config.Config{TraversaalAPIKey: "test-key", ProxyURL: p.URL(), ExternalSSLCAPath: p.CACertPath()})
 	if trav.Engine() != database.SearchengineTypeTraversaal {
 		t.Errorf("Engine() = %q, want %q", trav.Engine(), database.SearchengineTypeTraversaal)
 	}
 
-	// Verify mock handler was called
-	if !seenRequest {
-		t.Fatal("request was not intercepted by proxy - mock handler was not called")
-	}
+	for _, tt := range []struct {
+		name          string
+		status        int
+		body          string
+		wantRetryable bool
+	}{
+		{
+			name:   "an answer is returned with numbered links",
+			status: http.StatusOK,
+			body:   `{"data":{"response_text":"answer text","web_url":["https://a.com","https://b.com"]}}`,
+		},
+		{name: "an upstream 502 is retryable", status: http.StatusBadGateway, wantRetryable: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			up.reset(tt.status, tt.body)
 
-	// Verify request was built correctly
-	if receivedMethod != http.MethodPost {
-		t.Errorf("request method = %q, want POST", receivedMethod)
-	}
-	if receivedContentType != "application/json" {
-		t.Errorf("Content-Type = %q, want application/json", receivedContentType)
-	}
-	if receivedAPIKey != testTraversaalAPIKey {
-		t.Errorf("x-api-key = %q, want %q", receivedAPIKey, testTraversaalAPIKey)
-	}
-	if !strings.Contains(string(receivedBody), `"query":"test query"`) {
-		t.Errorf("request body = %q, expected to contain query", string(receivedBody))
-	}
+			got, err := trav.Handle(t.Context(), Request{Query: "test query"})
 
-	// Verify response was parsed correctly
-	if !strings.Contains(got, "# Answer") {
-		t.Errorf("result missing '# Answer' section: %q", got)
-	}
-	if !strings.Contains(got, "# Links") {
-		t.Errorf("result missing '# Links' section: %q", got)
-	}
-	if !strings.Contains(got, "answer text") {
-		t.Errorf("result missing expected text 'answer text': %q", got)
-	}
-	if !strings.Contains(got, "https://a.com") {
-		t.Errorf("result missing expected link 'https://a.com': %q", got)
-	}
-	if !strings.Contains(got, "https://b.com") {
-		t.Errorf("result missing expected link 'https://b.com': %q", got)
+			if up.hits != 1 {
+				t.Fatalf("upstream saw %d requests, want 1", up.hits)
+			}
+			if up.method != http.MethodPost || up.path != "/live/predict" {
+				t.Errorf("request = %s %s, want POST /live/predict", up.method, up.path)
+			}
+			if ct := up.header.Get("Content-Type"); ct != "application/json" {
+				t.Errorf("Content-Type = %q, want application/json", ct)
+			}
+			if key := up.header.Get("x-api-key"); key != "test-key" {
+				t.Errorf("x-api-key = %q, want test-key", key)
+			}
+			if want := `{"query":"test query"}`; string(up.payload) != want {
+				t.Errorf("request body = %s, want %s", up.payload, want)
+			}
+
+			if tt.wantRetryable {
+				if got != "" || !IsRetryable(err) {
+					t.Fatalf("Handle() = %q, %v; want no result and a RetryableError", got, err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("Handle() unexpected error: %v", err)
+			}
+			if want := "# Answer\n\nanswer text\n\n# Links\n\n1. https://a.com\n2. https://b.com\n"; got != want {
+				t.Errorf("Handle() = %q, want %q", got, want)
+			}
+		})
 	}
 }
 
-func TestTraversaalIsAvailable(t *testing.T) {
+func TestTraversaal_ParseHTTPResponse_ClassifiesTheFailure(t *testing.T) {
+	trav := &traversaal{}
+
+	for _, tt := range []struct {
+		name       string
+		status     int
+		body       string
+		errContain string
+		retryable  bool
+	}{
+		{"a server error is retryable", http.StatusInternalServerError, "", "unexpected status code: 500", true},
+		{"a rejected key is fatal", http.StatusUnauthorized, "", "unexpected status code: 401", false},
+		{"an undecodable body is fatal", http.StatusOK, "{invalid json", "failed to decode response body", false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			resp := &http.Response{StatusCode: tt.status, Body: io.NopCloser(strings.NewReader(tt.body))}
+
+			_, err := trav.parseHTTPResponse(resp)
+
+			if err == nil || !strings.Contains(err.Error(), tt.errContain) {
+				t.Fatalf("parseHTTPResponse() error = %v, want it to contain %q", err, tt.errContain)
+			}
+			if IsRetryable(err) != tt.retryable || IsFatal(err) == tt.retryable {
+				t.Errorf("parseHTTPResponse() error = %T, want retryable=%v", err, tt.retryable)
+			}
+		})
+	}
+}
+
+func TestTraversaal_IsAvailable_RequiresAnAPIKey(t *testing.T) {
 	tests := []struct {
 		name string
 		cfg  *config.Config
 		want bool
 	}{
-		{
-			name: "available when API key is set",
-			cfg:  testTraversaalConfig(),
-			want: true,
-		},
-		{
-			name: "unavailable when API key is empty",
-			cfg:  &config.Config{},
-			want: false,
-		},
-		{
-			name: "unavailable when nil config",
-			cfg:  nil,
-			want: false,
-		},
+		{"available when API key is set", &config.Config{TraversaalAPIKey: "test-key"}, true},
+		{"unavailable when API key is empty", &config.Config{}, false},
+		{"unavailable when nil config", nil, false},
 	}
 
 	for _, tt := range tests {
@@ -135,77 +116,4 @@ func TestTraversaalIsAvailable(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestTraversaalParseHTTPResponse_StatusAndDecodeErrors(t *testing.T) {
-	trav := &traversaal{}
-
-	t.Run("status error", func(t *testing.T) {
-		resp := &http.Response{
-			StatusCode: http.StatusInternalServerError,
-			Body:       io.NopCloser(strings.NewReader("")),
-		}
-		_, err := trav.parseHTTPResponse(resp)
-		if err == nil || !strings.Contains(err.Error(), "unexpected status code") {
-			t.Fatalf("expected status code error, got: %v", err)
-		}
-	})
-
-	t.Run("decode error", func(t *testing.T) {
-		resp := &http.Response{
-			StatusCode: http.StatusOK,
-			Body:       io.NopCloser(strings.NewReader("{invalid json")),
-		}
-		_, err := trav.parseHTTPResponse(resp)
-		if err == nil || !strings.Contains(err.Error(), "failed to decode response body") {
-			t.Fatalf("expected decode error, got: %v", err)
-		}
-	})
-}
-
-func TestTraversaalHandle_ReturnsTypedError(t *testing.T) {
-	t.Run("upstream 502 returns a retryable error", func(t *testing.T) {
-		var seenRequest bool
-		mockMux := http.NewServeMux()
-		mockMux.HandleFunc("/live/predict", func(w http.ResponseWriter, r *http.Request) {
-			seenRequest = true
-			w.WriteHeader(http.StatusBadGateway)
-		})
-
-		proxy, err := newTestProxy("api-ares.traversaal.ai", mockMux)
-		if err != nil {
-			t.Fatalf("failed to create proxy: %v", err)
-		}
-		defer proxy.Close()
-
-		trav := &traversaal{
-			cfg: &config.Config{
-				TraversaalAPIKey:    testTraversaalAPIKey,
-				ProxyURL:            proxy.URL(),
-				ExternalSSLCAPath:   proxy.CACertPath(),
-				ExternalSSLInsecure: false,
-			},
-		}
-
-		result, err := trav.Handle(
-			t.Context(),
-			Request{Query: "q"},
-		)
-
-		// Verify mock handler was called (request was intercepted)
-		if !seenRequest {
-			t.Error("request was not intercepted by proxy - mock handler was not called")
-		}
-
-		// The error is now surfaced (not swallowed) and classified. A 502 is retryable.
-		if err == nil {
-			t.Fatal("Handle() expected an error, got nil")
-		}
-		if result != "" {
-			t.Errorf("Handle() result = %q, want empty on error", result)
-		}
-		if !IsRetryable(err) {
-			t.Errorf("Handle() error = %v, want a RetryableError", err)
-		}
-	})
 }

@@ -3,6 +3,7 @@ package graph
 import (
 	"pentagi/pkg/graph/model"
 	"pentagi/pkg/server/update"
+	"pentagi/pkg/version"
 )
 
 // versionInfoFromStatus is the GraphQL shape of what the update service knows.
@@ -13,6 +14,7 @@ import (
 // badge treats "no version named" as a verdict of its own.
 func versionInfoFromStatus(status update.Status) *model.VersionInfo {
 	info := &model.VersionInfo{
+		Build:    version.GetBuildRevision(),
 		Current:  status.Current,
 		State:    updateStateFromStatus(status.State),
 		Strategy: status.Strategy,

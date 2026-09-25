@@ -100,10 +100,6 @@ type ProcessorFilesCheckMsg struct {
 
 type OperationOption func(c *operationState)
 
-func withID(id string) OperationOption {
-	return func(c *operationState) { c.id = id }
-}
-
 func withOperation(operation ProcessorOperation) OperationOption {
 	return func(c *operationState) { c.operation = operation }
 }

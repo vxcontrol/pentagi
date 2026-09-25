@@ -385,7 +385,32 @@ sudo env MAX_AGE_HOURS=1 /usr/local/bin/dind-cleanup  # run manually with an ove
 
 ### Verify Isolation
 
-`dind-policy-tests` is a full test suite that exercises the authorization policy and the seccomp profile from inside a container wired exactly like a real PentAGI worker. Run it once after setup and after every policy change.
+There are two ways to check the isolation, and you want both.
+
+**PentAGI's own sandbox test — you must turn it on.** It ships inside the `pentagi` binary and needs no file from this directory. It is **off by default**, because it needs the separate-daemon arrangement this guide describes and most deployments do not run one. On a worker node set up as below:
+
+```
+DOCKER_INSIDE_POLICY_TESTS=true
+```
+
+The test runs **once, at startup, and nowhere else** — never when a flow starts, so it costs a running deployment nothing. PentAGI launches one worker exactly the way a flow launches one (same capabilities, same network, same injected `DOCKER_*`, same read-only certificate mount; only the image differs), runs the checks inside it, and removes it. It takes a few seconds, and the image is cached after the first run.
+
+The image is `DOCKER_DEFAULT_IMAGE_FOR_TEST`, which defaults to `vxcontrol/kali-linux:test` — a ~170 MB image carrying a Docker client and curl, kept small because the check pays for it on every start. Pulling that image **into the sandbox** is itself one of the checks: it is what every agent depends on.
+
+The checks are the negative half of `policy-tests.sh` — 27 host-escape requests that must be refused — plus 7 positive ones that must succeed (pull, create, start, run, exec, volume, network) and one ordinary create that must pass authorization, so a plugin that simply denies everything fails too. None of the negative requests can do anything even if the policy lets them through: each names an object that does not exist.
+
+**Its only effect is whether agents get Docker at all.** PentAGI never refuses to start over this. There are four outcomes:
+
+| configuration | sandbox | log |
+|---|---|---|
+| `DOCKER_INSIDE=false` | off | nothing — this is what you asked for |
+| `DOCKER_INSIDE=true`, no `DOCKER_INSIDE_HOST` | **turned off** | `error` — a worker would get whichever daemon could be autodetected |
+| `DOCKER_INSIDE=true`, host set, tests off | on | `warning` — enabled but never measured |
+| `DOCKER_INSIDE=true`, host set, tests on | on if it passes, **off if it does not** | `info` with the daemon id, or `error` naming the failed checks |
+
+When the sandbox is turned off, the log says which check decided it and links this guide, so the arrangement can be fixed and the deployment restarted. Until then PentAGI keeps running and agents work without Docker access.
+
+**The standalone suite below is wider and manual.** `dind-policy-tests` also exercises the seccomp profile, the capability bounding set and realistic agent workloads from inside a container wired exactly like a real PentAGI worker — including the positive cases that prove the policy is not so tight that agents stop working. Run it once after setup and after every policy change. It is not needed for the built-in tests above.
 
 The suite probes a plaintext HTTP service on the node. Install Python on the host first if it is not already present, then start a throwaway server bound to `${PRIVATE_IP}:8080`:
 
@@ -879,6 +904,7 @@ DOCKER_SOCKET=                                          # empty: mount no socket
 DOCKER_INSIDE_HOST=tcp://${PRIVATE_IP}:3376
 DOCKER_INSIDE_TLS_VERIFY=1
 DOCKER_INSIDE_CERT_PATH=/etc/docker/dind/certs/client   # path on the WORKER node
+DOCKER_INSIDE_POLICY_TESTS=true                         # prove the above on every worker; off by default
 
 ## Browser scraper on the worker node (Basic Auth in the URL; TLS is self-signed)
 SCRAPER_PUBLIC_URL=https://${SCRAPER_USERNAME}:${SCRAPER_PASSWORD}@${PRIVATE_IP}:9443/

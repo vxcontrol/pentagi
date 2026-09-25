@@ -1,4 +1,5 @@
 overrides:
+  js-yaml: ^4.3.1
   marked: ^18.0.5
 allowBuilds:
   '@swc/core': true

@@ -94,7 +94,7 @@ func (s *ScreenshotService) GetScreenshots(c *gin.Context) {
 		return
 	}
 
-	query.Init("screenshots", screenshotsSQLMappers)
+	_ = query.Init("screenshots", screenshotsSQLMappers)
 
 	if query.Group != "" {
 		if _, ok := screenshotsSQLMappers[query.Group]; !ok {
@@ -184,7 +184,7 @@ func (s *ScreenshotService) GetFlowScreenshots(c *gin.Context) {
 		return
 	}
 
-	query.Init("screenshots", screenshotsSQLMappers)
+	_ = query.Init("screenshots", screenshotsSQLMappers)
 
 	if query.Group != "" {
 		if _, ok := screenshotsSQLMappers[query.Group]; !ok {

@@ -36,7 +36,7 @@ func paramsString(cmd ansi.Cmd, params ansi.Params) string {
 		s.WriteByte(mark)
 	}
 	params.ForEach(-1, func(i, p int, more bool) {
-		s.WriteString(fmt.Sprintf("%d", p))
+		fmt.Fprintf(&s, "%d", p)
 		if i < len(params)-1 {
 			if more {
 				s.WriteByte(':')

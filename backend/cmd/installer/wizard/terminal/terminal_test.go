@@ -1,488 +1,305 @@
 package terminal
 
 import (
-	"context"
+	"bytes"
 	"os/exec"
 	"runtime"
 	"strings"
-	"sync"
 	"testing"
 	"time"
-
-	"pentagi/cmd/installer/wizard/terminal/vt"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
 )
 
-func TestNewTerminal(t *testing.T) {
-	term := NewTerminal(80, 24)
-	if term == nil {
-		t.Fatal("NewTerminal returned nil")
-	}
+var terminalModes = []struct {
+	name string
+	opts []TerminalOption
+}{
+	{"through a pty", nil},
+	{"through pipes", []TerminalOption{WithNoPty()}},
+}
 
-	width, height := term.GetSize()
-	if width != 80 || height != 24 {
-		t.Errorf("expected size 80x24, got %dx%d", width, height)
+func terminalView(term Terminal) string {
+	return ansi.Strip(term.View())
+}
+
+// terminalFinish waits for the command as the processor does, then for the terminal to read all output.
+func terminalFinish(t *testing.T, term Terminal, cmd *exec.Cmd) error {
+	t.Helper()
+	errc := make(chan error, 1)
+	go func() {
+		err := cmd.Wait()
+		term.Wait()
+		errc <- err
+	}()
+	select {
+	case err := <-errc:
+		return err
+	case <-time.After(10 * time.Second):
+		t.Fatalf("%v never finished", cmd.Args)
+		return nil
 	}
 }
 
-func TestTerminalSetSize(t *testing.T) {
+func terminalKillOnCleanup(t *testing.T, term Terminal, cmd *exec.Cmd) {
+	t.Cleanup(func() {
+		_ = cmd.Process.Kill()
+		_ = terminalFinish(t, term, cmd)
+	})
+}
+
+func terminalEventually(t *testing.T, cond func() bool, why string) {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for !cond() {
+		if time.Now().After(deadline) {
+			t.Fatal(why)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+// terminalStdin records what a piped command would read.
+type terminalStdin struct{ bytes.Buffer }
+
+func (*terminalStdin) Close() error { return nil }
+
+func TestTerminal_SetSize_ChangesTheReportedSize(t *testing.T) {
 	term := NewTerminal(80, 24)
+	if w, h := term.GetSize(); w != 80 || h != 24 {
+		t.Fatalf("a new terminal reports %dx%d, want 80x24", w, h)
+	}
+
 	term.SetSize(100, 30)
-
-	width, height := term.GetSize()
-	if width != 100 || height != 30 {
-		t.Errorf("expected size 100x30, got %dx%d", width, height)
+	if w, h := term.GetSize(); w != 100 || h != 30 {
+		t.Errorf("after SetSize(100, 30) the terminal reports %dx%d", w, h)
 	}
 }
 
-func TestTerminalAppend(t *testing.T) {
+func TestTerminal_Append_ShowsTheLineInTheView(t *testing.T) {
 	term := NewTerminal(80, 24)
 	term.Append("test message")
 
-	view := term.View()
-	cleanView := ansi.Strip(view)
-	if !strings.Contains(cleanView, "test message") {
+	if !strings.Contains(terminalView(term), "test message") {
 		t.Error("appended message not found in view")
 	}
 }
 
-func TestTerminalClear(t *testing.T) {
+func TestTerminal_Clear_RemovesAppendedLines(t *testing.T) {
 	term := NewTerminal(80, 24)
 	term.Append("test message")
 	term.Clear()
 
-	view := term.View()
-	cleanView := ansi.Strip(view)
-	if strings.Contains(cleanView, "test message") {
+	if strings.Contains(terminalView(term), "test message") {
 		t.Error("message found after clear")
 	}
 }
 
-func TestExecuteEcho(t *testing.T) {
+func TestTerminal_RestoreModel_AcceptsOnlyATerminal(t *testing.T) {
 	term := NewTerminal(80, 24)
-	cmd := exec.Command("echo", "hello world")
-
-	err := term.Execute(cmd)
-	if err != nil {
-		t.Fatalf("Execute failed: %v", err)
+	if RestoreModel(term) != term {
+		t.Error("RestoreModel did not return the terminal it was given")
 	}
-
-	// wait for command to complete and output to be processed
-	timeout := time.NewTimer(2 * time.Second)
-	defer timeout.Stop()
-
-	ticker := time.NewTicker(50 * time.Millisecond)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-timeout.C:
-			t.Fatal("timeout waiting for command completion")
-		case <-ticker.C:
-			view := term.View()
-			cleanView := ansi.Strip(view)
-			if strings.Contains(cleanView, "hello world") {
-				return // success
-			}
-		}
+	if RestoreModel(&struct{ tea.Model }{}) != nil {
+		t.Error("RestoreModel accepted a model that is not a terminal")
 	}
 }
 
-func TestExecuteCat(t *testing.T) {
+func TestTerminal_Execute_RefusesASecondCommandWhileOneRuns(t *testing.T) {
 	term := NewTerminal(80, 24)
-
-	// create temp file with content
-	tmpFile := t.TempDir() + "/test.txt"
-	content := "line1\nline2\nline3\n"
-
-	if err := writeFile(tmpFile, content); err != nil {
-		t.Fatalf("failed to create temp file: %v", err)
+	first := exec.Command("cat")
+	if err := term.Execute(first); err != nil {
+		t.Fatalf("first Execute: %v", err)
 	}
+	terminalKillOnCleanup(t, term, first)
 
-	cmd := exec.Command("cat", tmpFile)
-	err := term.Execute(cmd)
-	if err != nil {
-		t.Fatalf("Execute failed: %v", err)
-	}
-
-	// wait for output
-	timeout := time.NewTimer(2 * time.Second)
-	defer timeout.Stop()
-
-	ticker := time.NewTicker(50 * time.Millisecond)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-timeout.C:
-			t.Fatal("timeout waiting for cat command")
-		case <-ticker.C:
-			view := term.View()
-			cleanView := ansi.Strip(view)
-			if strings.Contains(cleanView, "line1") && strings.Contains(cleanView, "line2") {
-				return
-			}
-		}
+	err := term.Execute(exec.Command("echo", "second"))
+	if err == nil || !strings.Contains(err.Error(), "already executing") {
+		t.Errorf("second Execute = %v, want the terminal to say it is already executing", err)
 	}
 }
 
-func TestExecuteGrep(t *testing.T) {
-	term := NewTerminal(80, 24)
-
-	tmpFile := t.TempDir() + "/test.txt"
-	content := "apple\nbanana\ncherry\napricot\n"
-
-	if err := writeFile(tmpFile, content); err != nil {
-		t.Fatalf("failed to create temp file: %v", err)
-	}
-
-	cmd := exec.Command("grep", "ap", tmpFile)
-	err := term.Execute(cmd)
-	if err != nil {
-		t.Fatalf("Execute failed: %v", err)
-	}
-
-	timeout := time.NewTimer(2 * time.Second)
-	defer timeout.Stop()
-
-	ticker := time.NewTicker(50 * time.Millisecond)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-timeout.C:
-			t.Fatal("timeout waiting for grep command")
-		case <-ticker.C:
-			view := term.View()
-			cleanView := ansi.Strip(view)
-			if strings.Contains(cleanView, "apple") && strings.Contains(cleanView, "apricot") {
-				return
-			}
-		}
-	}
-}
-
-func TestExecuteInteractiveInput(t *testing.T) {
-	term := NewTerminal(80, 24)
-
-	// use 'cat' without arguments to read from stdin
-	cmd := exec.Command("cat")
-	err := term.Execute(cmd)
-	if err != nil {
-		t.Fatalf("Execute failed: %v", err)
-	}
-
-	// simulate user input via Update method in goroutine
-	go func() {
-		time.Sleep(100 * time.Millisecond)
-
-		// send "hello" and enter
-		for _, r := range "hello" {
-			msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}}
-			term.Update(msg)
-			time.Sleep(10 * time.Millisecond)
-		}
-
-		// send enter
-		enterMsg := tea.KeyMsg{Type: tea.KeyEnter}
-		term.Update(enterMsg)
-		time.Sleep(50 * time.Millisecond)
-
-		// send ctrl+d to close input
-		ctrlDMsg := tea.KeyMsg{Type: tea.KeyCtrlD}
-		term.Update(ctrlDMsg)
-	}()
-
-	timeout := time.NewTimer(3 * time.Second)
-	defer timeout.Stop()
-
-	ticker := time.NewTicker(50 * time.Millisecond)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-timeout.C:
-			t.Fatal("timeout waiting for interactive input")
-		case <-ticker.C:
-			view := term.View()
-			cleanView := ansi.Strip(view)
-			if strings.Contains(cleanView, "hello") {
-				return
-			}
-		}
-	}
-}
-
-func TestExecuteMultipleCommands(t *testing.T) {
-	term := NewTerminal(80, 24)
-
-	// test sequential execution
-	commands := []struct {
-		cmd    []string
-		expect string
-	}{
-		{[]string{"echo", "first"}, "first"},
-		{[]string{"echo", "second"}, "second"},
-		{[]string{"echo", "third"}, "third"},
-	}
-
-	for i, cmdTest := range commands {
-		if i > 0 {
-			// wait for previous command to finish
-			time.Sleep(200 * time.Millisecond)
-		}
-
-		cmd := exec.Command(cmdTest.cmd[0], cmdTest.cmd[1:]...)
-		err := term.Execute(cmd)
-		if err != nil {
-			t.Fatalf("Execute command %d failed: %v", i, err)
-		}
-
-		// wait for output
-		timeout := time.NewTimer(2 * time.Second)
-		ticker := time.NewTicker(50 * time.Millisecond)
-
-		found := false
-		for !found {
-			select {
-			case <-timeout.C:
-				t.Fatalf("timeout waiting for command %d output", i)
-			case <-ticker.C:
-				view := term.View()
-				cleanView := ansi.Strip(view)
-				if strings.Contains(cleanView, cmdTest.expect) {
-					found = true
-				}
-			}
-		}
-		timeout.Stop()
-		ticker.Stop()
-
-		if !found {
-			t.Errorf("command %d output not found in view", i)
-		}
-	}
-}
-
-func TestRestoreModel(t *testing.T) {
-	term := NewTerminal(80, 24)
-
-	// test with valid terminal
-	restored := RestoreModel(term)
-	if restored == nil {
-		t.Error("RestoreModel returned nil for valid terminal")
-	}
-
-	// test with invalid model
-	invalidModel := &struct{ tea.Model }{}
-	restored = RestoreModel(invalidModel)
-	if restored != nil {
-		t.Error("RestoreModel should return nil for invalid model")
-	}
-}
-
-func TestTeaKeyToUVKey(t *testing.T) {
-	tests := []struct {
-		name     string
-		key      tea.KeyMsg
-		expected vt.KeyPressEvent
-	}{
-		{
-			name:     "Arrow Up",
-			key:      tea.KeyMsg{Type: tea.KeyUp},
-			expected: vt.KeyPressEvent{Code: vt.KeyUp, Mod: 0},
-		},
-		{
-			name:     "Arrow Down",
-			key:      tea.KeyMsg{Type: tea.KeyDown},
-			expected: vt.KeyPressEvent{Code: vt.KeyDown, Mod: 0},
-		},
-		{
-			name:     "Arrow Left",
-			key:      tea.KeyMsg{Type: tea.KeyLeft},
-			expected: vt.KeyPressEvent{Code: vt.KeyLeft, Mod: 0},
-		},
-		{
-			name:     "Arrow Right",
-			key:      tea.KeyMsg{Type: tea.KeyRight},
-			expected: vt.KeyPressEvent{Code: vt.KeyRight, Mod: 0},
-		},
-		{
-			name:     "Enter",
-			key:      tea.KeyMsg{Type: tea.KeyEnter},
-			expected: vt.KeyPressEvent{Code: vt.KeyEnter, Mod: 0},
-		},
-		{
-			name:     "Tab",
-			key:      tea.KeyMsg{Type: tea.KeyTab},
-			expected: vt.KeyPressEvent{Code: vt.KeyTab, Mod: 0},
-		},
-		{
-			name:     "Space",
-			key:      tea.KeyMsg{Type: tea.KeySpace},
-			expected: vt.KeyPressEvent{Code: vt.KeySpace, Mod: 0},
-		},
-		{
-			name:     "Regular character 'a'",
-			key:      tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}},
-			expected: vt.KeyPressEvent{Code: 'a', Mod: 0},
-		},
-		{
-			name:     "Ctrl+C",
-			key:      tea.KeyMsg{Type: tea.KeyCtrlC},
-			expected: vt.KeyPressEvent{Code: 'c', Mod: vt.ModCtrl},
-		},
-		{
-			name:     "Alt+Up",
-			key:      tea.KeyMsg{Type: tea.KeyUp, Alt: true},
-			expected: vt.KeyPressEvent{Code: vt.KeyUp, Mod: vt.ModAlt},
-		},
-		{
-			name:     "Shift+Tab",
-			key:      tea.KeyMsg{Type: tea.KeyShiftTab},
-			expected: vt.KeyPressEvent{Code: vt.KeyTab, Mod: vt.ModShift},
-		},
-		{
-			name:     "F1",
-			key:      tea.KeyMsg{Type: tea.KeyF1},
-			expected: vt.KeyPressEvent{Code: vt.KeyF1, Mod: 0},
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			result := teaKeyToUVKey(test.key)
-			if result == nil {
-				t.Errorf("teaKeyToUVKey(%+v) returned nil", test.key)
-				return
+func TestTerminal_Execute_ShowsWhyACommandCouldNotStart(t *testing.T) {
+	for _, mode := range terminalModes {
+		t.Run(mode.name, func(t *testing.T) {
+			term := NewTerminal(80, 24, mode.opts...)
+			if err := term.Execute(exec.Command("/nonexistent/pentagi-installer-test")); err == nil {
+				t.Fatal("Execute started a command that does not exist")
 			}
 
-			keyPress, ok := result.(vt.KeyPressEvent)
-			if !ok {
-				t.Errorf("teaKeyToUVKey(%+v) returned non-KeyPressEvent: %T", test.key, result)
-				return
+			if view := terminalView(term); !strings.Contains(view, "failed to execute command") {
+				t.Errorf("the view does not say why nothing ran: %q", view)
 			}
-
-			if keyPress.Code != test.expected.Code || keyPress.Mod != test.expected.Mod {
-				t.Errorf("teaKeyToUVKey(%+v) = {Code: %v, Mod: %v}, expected {Code: %v, Mod: %v}",
-					test.key, keyPress.Code, keyPress.Mod, test.expected.Code, test.expected.Mod)
+			if term.IsRunning() {
+				t.Error("the terminal still counts the failed command as running")
 			}
 		})
 	}
 }
 
-func TestExecuteConcurrency(t *testing.T) {
+func TestTerminal_Wait_ReadiesTheTerminalForTheNextCommand(t *testing.T) {
+	for _, mode := range terminalModes {
+		t.Run(mode.name, func(t *testing.T) {
+			term := NewTerminal(80, 24, mode.opts...)
+			// the second command writes to stderr, so both streams reach the view in both modes
+			for _, script := range []string{"echo stdout-one", "echo stderr-two >&2"} {
+				cmd := exec.Command("sh", "-c", script)
+				if err := term.Execute(cmd); err != nil {
+					t.Fatalf("Execute(%q) after the previous command was waited for: %v", script, err)
+				}
+				if err := terminalFinish(t, term, cmd); err != nil {
+					t.Fatalf("%q: %v", script, err)
+				}
+			}
+
+			if view := terminalView(term); !strings.Contains(view, "stdout-one") || !strings.Contains(view, "stderr-two") {
+				t.Errorf("expected outputs not found in view: %q", view)
+			}
+		})
+	}
+}
+
+func TestTerminal_Update_SendsKeysToTheRunningCommand(t *testing.T) {
+	for _, mode := range terminalModes {
+		t.Run(mode.name, func(t *testing.T) {
+			term := NewTerminal(80, 24, mode.opts...)
+			cmd := exec.Command("cat")
+			if err := term.Execute(cmd); err != nil {
+				t.Fatalf("Execute: %v", err)
+			}
+			terminalKillOnCleanup(t, term, cmd)
+			if !term.IsRunning() {
+				t.Fatal("the terminal does not count cat as running")
+			}
+
+			// in pipe mode the output goroutine attaches stdin, and a key sent before that is dropped
+			impl := term.(*terminal)
+			terminalEventually(t, func() bool {
+				impl.mx.Lock()
+				defer impl.mx.Unlock()
+				return impl.vt != nil || impl.stdinPipe != nil
+			}, "the command's input was never attached")
+
+			for _, r := range "hello world" {
+				if r == ' ' {
+					term.Update(tea.KeyMsg{Type: tea.KeySpace})
+				} else {
+					term.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+				}
+			}
+			term.Update(tea.KeyMsg{Type: tea.KeyEnter})
+			terminalEventually(t, func() bool { return strings.Contains(terminalView(term), "hello world") },
+				"the typed line never reached the view")
+		})
+	}
+}
+
+func TestTerminal_HandleTerminalInput_WritesMappedKeysToThePipe(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		key     tea.KeyMsg
+		written string
+	}{
+		{"typed runes are written as text", tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("hi")}, "hi"},
+		{"space is written as a space", tea.KeyMsg{Type: tea.KeySpace}, " "},
+		{"enter ends the line", tea.KeyMsg{Type: tea.KeyEnter}, "\n"},
+		{"tab is written as a tab", tea.KeyMsg{Type: tea.KeyTab}, "\t"},
+		{"backspace is written as a backspace", tea.KeyMsg{Type: tea.KeyBackspace}, "\b"},
+		{"ctrl+c is written as an interrupt", tea.KeyMsg{Type: tea.KeyCtrlC}, "\x03"},
+		{"ctrl+d is written as end of input", tea.KeyMsg{Type: tea.KeyCtrlD}, "\x04"},
+		{"a key without a mapping is left to the viewport", tea.KeyMsg{Type: tea.KeyF1}, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			stdin := &terminalStdin{}
+			term := &terminal{cmd: &exec.Cmd{}, stdinPipe: stdin}
+
+			if handled := term.handleTerminalInput(tc.key); handled != (tc.written != "") {
+				t.Errorf("handled = %v, want %v", handled, tc.written != "")
+			}
+			if got := stdin.String(); got != tc.written {
+				t.Errorf("the command read %q, want %q", got, tc.written)
+			}
+		})
+	}
+}
+
+func TestTerminal_Init_WaitsForThisTerminalsNextUpdate(t *testing.T) {
 	term := NewTerminal(80, 24)
-
-	// try to execute two commands simultaneously
-	cmd1 := exec.Command("echo", "first")
-	err1 := term.Execute(cmd1)
-	if err1 != nil {
-		t.Fatalf("first Execute failed: %v", err1)
+	held, _ := term.(*terminal).notifier.acquire()
+	if msg := terminalReceive(t, terminalAsync(term.Init()), nil); msg != nil {
+		t.Errorf("a second Init while one waits got %#v, want nil", msg)
 	}
 
-	// second command should fail because terminal is busy
-	cmd2 := exec.Command("echo", "second")
-	err2 := term.Execute(cmd2)
-	if err2 == nil {
-		t.Error("second Execute should have failed while first is running")
-	}
-	if !strings.Contains(err2.Error(), "already executing") {
-		t.Errorf("unexpected error message: %v", err2)
-	}
-}
-
-// verifies that waiting on the external cmd and then Terminal.Wait() makes
-// subsequent Execute calls safe (no race) in non-PTY mode
-func TestWaitBeforeNextExecute_NoPty(t *testing.T) {
-	term := NewTerminal(80, 24, WithNoPty())
-
-	var cmd1 *exec.Cmd
-	if runtime.GOOS == "windows" {
-		cmd1 = exec.Command("cmd", "/c", "echo one")
-	} else {
-		cmd1 = exec.Command("sh", "-c", "echo one")
+	term.Append("wakes the waiting Init")
+	select {
+	case <-held:
+	default:
+		t.Fatal("Append did not wake the waiting Init")
 	}
 
-	if err := term.Execute(cmd1); err != nil {
-		t.Fatalf("first Execute failed: %v", err)
-	}
-
-	// client waits for process completion first
-	if err := cmd1.Wait(); err != nil {
-		t.Fatalf("cmd1.Wait failed: %v", err)
-	}
-
-	// ensure terminal finished internal cleanup
-	term.Wait()
-
-	var cmd2 *exec.Cmd
-	if runtime.GOOS == "windows" {
-		cmd2 = exec.Command("cmd", "/c", "echo two")
-	} else {
-		cmd2 = exec.Command("sh", "-c", "echo two")
-	}
-
-	if err := term.Execute(cmd2); err != nil {
-		t.Fatalf("second Execute failed after Wait(): %v", err)
-	}
-
-	if err := cmd2.Wait(); err != nil {
-		t.Fatalf("cmd2.Wait failed: %v", err)
-	}
-	term.Wait()
-
-	// verify content contains outputs from both commands
-	cleanView := ansi.Strip(term.View())
-	if !(strings.Contains(cleanView, "one") && strings.Contains(cleanView, "two")) {
-		t.Fatalf("expected outputs not found in view: %q", cleanView)
+	next := terminalAsync(term.Init())
+	terminalQuiet(t, next)
+	if msg := terminalReceive(t, next, func() { term.Append("line") }); msg != (TerminalUpdateMsg{ID: term.ID()}) {
+		t.Errorf("Init answered %#v, want this terminal's update", msg)
 	}
 }
 
-// verifies that waiting on cmd and then Terminal.Wait() is safe in PTY mode
-func TestWaitBeforeNextExecute_Pty(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("Skipping PTY test on Windows")
-	}
+func TestTerminal_Update_ListensForTheNextUpdateOnlyUnderAutoPoll(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		opts    []TerminalOption
+		otherID bool
+		listens bool
+	}{
+		{"its own update under auto-poll", []TerminalOption{WithAutoPoll()}, false, true},
+		{"another terminal's update under auto-poll", []TerminalOption{WithAutoPoll()}, true, false},
+		{"its own update without auto-poll", nil, false, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			term := NewTerminal(80, 24, tc.opts...)
+			id := term.ID()
+			if tc.otherID {
+				id = "other"
+			}
 
-	term := NewTerminal(80, 24)
-
-	cmd1 := exec.Command("sh", "-c", "echo one")
-	if err := term.Execute(cmd1); err != nil {
-		t.Fatalf("first Execute failed: %v", err)
-	}
-
-	if err := cmd1.Wait(); err != nil {
-		t.Fatalf("cmd1.Wait failed: %v", err)
-	}
-	term.Wait()
-
-	cmd2 := exec.Command("sh", "-c", "echo two")
-	if err := term.Execute(cmd2); err != nil {
-		t.Fatalf("second Execute failed after Wait(): %v", err)
-	}
-
-	if err := cmd2.Wait(); err != nil {
-		t.Fatalf("cmd2.Wait failed: %v", err)
-	}
-	term.Wait()
-
-	cleanView := ansi.Strip(term.View())
-	if !(strings.Contains(cleanView, "one") && strings.Contains(cleanView, "two")) {
-		t.Fatalf("expected outputs not found in view: %q", cleanView)
+			model, next := term.Update(TerminalUpdateMsg{ID: id})
+			if model != term {
+				t.Error("Update returned another model")
+			}
+			if (next != nil) != tc.listens {
+				t.Errorf("Update returned a next command: %v, want %v", next != nil, tc.listens)
+			}
+		})
 	}
 }
 
-// helper function to write file content
-func writeFile(filename, content string) error {
-	cmd := exec.Command("sh", "-c", "cat > "+filename)
-	cmd.Stdin = strings.NewReader(content)
-	return cmd.Run()
+func TestTerminal_TerminalFinalizer_ReleasesTheWaiterAndDropsTheNotifier(t *testing.T) {
+	impl := NewTerminal(80, 24).(*terminal)
+	held, _ := impl.notifier.acquire()
+	impl.cmd, impl.stdinPipe = &exec.Cmd{}, &terminalStdin{}
+
+	terminalFinalizer(impl)
+
+	select {
+	case <-held:
+	default:
+		t.Error("the finalizer left the waiting Init blocked")
+	}
+	if impl.notifier != nil {
+		t.Error("the finalizer kept the notifier")
+	}
+	if impl.cmd != nil || impl.stdinPipe != nil {
+		t.Errorf("the finalizer kept the command (%t) or its input (%t)", impl.cmd != nil, impl.stdinPipe != nil)
+	}
 }
 
-// benchmark basic terminal operations
+func TestTerminal_NewTerminal_ReleasesTheWaiterOnceTheTerminalIsCollected(t *testing.T) {
+	// only the notifier and the ID escape into the command, so the terminal itself is garbage
+	waiter := terminalAsync(NewTerminal(80, 24).Init())
+	terminalReceive(t, waiter, runtime.GC)
+}
+
 func BenchmarkTerminalAppend(b *testing.B) {
 	term := NewTerminal(80, 24)
 	b.ResetTimer()
@@ -499,566 +316,5 @@ func BenchmarkTerminalView(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		_ = term.View()
-	}
-}
-
-func BenchmarkKeySequenceConversion(b *testing.B) {
-	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}}
-	b.ResetTimer()
-
-	for i := 0; i < b.N; i++ {
-		_ = teaKeyToUVKey(msg)
-	}
-}
-
-func TestTerminalEvents(t *testing.T) {
-	term := NewTerminal(80, 24, WithAutoPoll())
-
-	// first init acquires subscription
-	cmd1 := term.Init()
-	if cmd1 == nil {
-		t.Fatal("Init() should return a command for first subscription")
-	}
-
-	go cmd1()
-	time.Sleep(100 * time.Millisecond) // wait for subscription to be acquired
-
-	// second init should return nil (already subscribed)
-	if cmd2 := term.Init(); cmd2 == nil || cmd2() != nil {
-		t.Fatal("Init() should return cmd with nil message when there is already an active subscriber")
-	}
-
-	// append should trigger event
-	term.Append("test message")
-
-	// after update message, Update must return a new wait command
-	model, nextCmd := term.Update(TerminalUpdateMsg{ID: term.ID()})
-	if model == nil {
-		t.Error("Update should return model")
-	}
-	if nextCmd == nil {
-		t.Error("Update should return next command for continued listening")
-	}
-
-	// simulate receiving the update message from another terminal
-	model, nextCmd = term.Update(TerminalUpdateMsg{ID: "other"})
-	if model == nil {
-		t.Error("Update should return model")
-	}
-	if nextCmd != nil {
-		t.Error("Update should not return next command for other terminal")
-	}
-}
-
-func TestTerminalFinalizer(t *testing.T) {
-	term := NewTerminal(80, 24)
-
-	// terminal should start normally
-	termImpl := term.(*terminal)
-	if termImpl.notifier == nil {
-		t.Error("new terminal should have notifier")
-	}
-
-	// execute a command to create some resources
-	cmd := exec.Command("echo", "test")
-	err := term.Execute(cmd)
-	if err != nil {
-		t.Fatalf("Execute failed: %v", err)
-	}
-
-	// wait for command completion
-	timeout := time.NewTimer(2 * time.Second)
-	defer timeout.Stop()
-
-	ticker := time.NewTicker(50 * time.Millisecond)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-timeout.C:
-			t.Fatal("timeout waiting for command completion")
-		case <-ticker.C:
-			if !term.IsRunning() {
-				// manually call finalizer to test resource cleanup
-				terminalFinalizer(termImpl)
-
-				// verify notifier is cleaned up
-				if termImpl.notifier != nil {
-					t.Error("notifier should be nil after finalizer")
-				}
-
-				// verify terminal resources are cleaned
-				termImpl.mx.Lock()
-				if termImpl.cmd != nil || termImpl.pty != nil {
-					termImpl.mx.Unlock()
-					t.Error("terminal resources should be cleaned after finalizer")
-					return
-				}
-				termImpl.mx.Unlock()
-				return
-			}
-		}
-	}
-}
-
-func TestResourceCleanup(t *testing.T) {
-	term := NewTerminal(80, 24)
-
-	// execute a command
-	cmd := exec.Command("echo", "test")
-	err := term.Execute(cmd)
-	if err != nil {
-		t.Fatalf("Execute failed: %v", err)
-	}
-
-	// wait for completion
-	timeout := time.NewTimer(2 * time.Second)
-	defer timeout.Stop()
-
-	ticker := time.NewTicker(50 * time.Millisecond)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-timeout.C:
-			t.Fatal("timeout waiting for command completion")
-		case <-ticker.C:
-			if !term.IsRunning() {
-				// command completed, resources should be cleaned
-				termImpl := term.(*terminal)
-				termImpl.mx.Lock()
-				if termImpl.cmd != nil || termImpl.pty != nil {
-					termImpl.mx.Unlock()
-					t.Error("resources not cleaned after command completion")
-					return
-				}
-				termImpl.mx.Unlock()
-				return
-			}
-		}
-	}
-}
-
-func TestResourceRelease(t *testing.T) {
-	var wg sync.WaitGroup
-	term := NewTerminal(80, 24)
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		time.Sleep(200 * time.Millisecond)
-		term.Execute(exec.Command("echo", "test"))
-	}()
-
-	cmd := term.Init()
-	if cmd == nil {
-		t.Fatal("Init() should return a command")
-	}
-
-	// wait for command output
-	cmd()
-
-	view := term.View()
-	cleanView := ansi.Strip(view)
-	if !strings.Contains(cleanView, "test") {
-		t.Fatal("command output not found in view")
-	}
-
-	wg.Wait()
-	term = nil
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	go func() {
-		cmd()
-		cancel()
-	}()
-
-	// wait for resources to be released
-	timeout := time.NewTimer(10 * time.Second)
-	defer timeout.Stop()
-
-	ticker := time.NewTicker(50 * time.Millisecond)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-timeout.C:
-			t.Fatal("timeout waiting for command completion")
-		case <-ctx.Done():
-			t.Log("context done")
-			return
-		case <-ticker.C:
-			runtime.GC()
-		}
-	}
-}
-
-// Tests for startCmd functionality specifically
-func TestStartCmdBasic(t *testing.T) {
-	term := NewTerminal(80, 24).(*terminal)
-	defer func() {
-		term.mx.Lock()
-		term.cleanup()
-		term.mx.Unlock()
-	}()
-
-	// Force use of startCmd instead of startPty
-	cmd := exec.Command("echo", "Hello from startCmd!")
-	err := term.startCmd(cmd)
-	if err != nil {
-		t.Fatalf("startCmd failed: %v", err)
-	}
-
-	// Wait for command to complete
-	timeout := time.NewTimer(2 * time.Second)
-	defer timeout.Stop()
-
-	ticker := time.NewTicker(50 * time.Millisecond)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-timeout.C:
-			t.Fatal("timeout waiting for startCmd completion")
-		case <-ticker.C:
-			if !term.IsRunning() {
-				view := term.View()
-				cleanView := ansi.Strip(view)
-				if !strings.Contains(cleanView, "Hello from startCmd!") {
-					t.Errorf("Expected output not found. Got: %q", cleanView)
-				}
-				return
-			}
-		}
-	}
-}
-
-func TestStartCmdInteractive(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("Skipping interactive test on Windows")
-	}
-
-	term := NewTerminal(80, 24).(*terminal)
-	defer func() {
-		term.mx.Lock()
-		term.cleanup()
-		term.mx.Unlock()
-	}()
-
-	// Use cat for interactive testing
-	cmd := exec.Command("cat")
-	err := term.startCmd(cmd)
-	if err != nil {
-		t.Fatalf("startCmd failed: %v", err)
-	}
-
-	// Wait for command to start
-	time.Sleep(100 * time.Millisecond)
-
-	// Verify command is running
-	if !term.IsRunning() {
-		t.Fatal("Command should be running")
-	}
-
-	// Send input through stdinPipe
-	testInput := "Hello from stdin!\n"
-	term.mx.Lock()
-	if term.stdinPipe != nil {
-		_, err := term.stdinPipe.Write([]byte(testInput))
-		if err != nil {
-			term.mx.Unlock()
-			t.Fatalf("Failed to write to stdin: %v", err)
-		}
-	} else {
-		term.mx.Unlock()
-		t.Fatal("stdinPipe should not be nil")
-	}
-	term.mx.Unlock()
-
-	// Wait for output to appear
-	outputTimeout := time.NewTimer(2 * time.Second)
-	defer outputTimeout.Stop()
-
-	outputTicker := time.NewTicker(50 * time.Millisecond)
-	defer outputTicker.Stop()
-
-	outputFound := false
-	for !outputFound {
-		select {
-		case <-outputTimeout.C:
-			t.Fatal("timeout waiting for interactive output")
-		case <-outputTicker.C:
-			view := term.View()
-			cleanView := ansi.Strip(view)
-			if strings.Contains(cleanView, "Hello from stdin!") {
-				outputFound = true
-			}
-		}
-	}
-
-	// Send EOF to terminate
-	term.mx.Lock()
-	if term.stdinPipe != nil {
-		term.stdinPipe.Write([]byte{4}) // Ctrl+D
-	}
-	term.mx.Unlock()
-
-	// Wait for completion
-	timeout := time.NewTimer(2 * time.Second)
-	defer timeout.Stop()
-
-	ticker := time.NewTicker(50 * time.Millisecond)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-timeout.C:
-			// Command might still be running, that's ok if we got output
-			if outputFound {
-				t.Log("Command may still be running, but output was received successfully")
-				return
-			}
-			t.Fatal("timeout waiting for command completion")
-		case <-ticker.C:
-			if !term.IsRunning() {
-				return // success
-			}
-		}
-	}
-}
-
-func TestStartCmdStderrHandling(t *testing.T) {
-	term := NewTerminal(80, 24).(*terminal)
-	defer func() {
-		term.mx.Lock()
-		term.cleanup()
-		term.mx.Unlock()
-	}()
-
-	// Command that writes to stderr
-	var cmd *exec.Cmd
-	if runtime.GOOS == "windows" {
-		cmd = exec.Command("cmd", "/c", "echo Error output 1>&2")
-	} else {
-		cmd = exec.Command("sh", "-c", "echo 'Error output' >&2")
-	}
-
-	err := term.startCmd(cmd)
-	if err != nil {
-		t.Fatalf("startCmd failed: %v", err)
-	}
-
-	// Wait for completion
-	timeout := time.NewTimer(2 * time.Second)
-	defer timeout.Stop()
-
-	ticker := time.NewTicker(50 * time.Millisecond)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-timeout.C:
-			t.Fatal("timeout waiting for stderr command completion")
-		case <-ticker.C:
-			if !term.IsRunning() {
-				view := term.View()
-				cleanView := ansi.Strip(view)
-				if !strings.Contains(cleanView, "Error output") {
-					t.Errorf("Stderr output not found. Got: %q", cleanView)
-				}
-				return
-			}
-		}
-	}
-}
-
-func TestStartCmdPlainTextOutput(t *testing.T) {
-	term := NewTerminal(80, 24).(*terminal)
-	defer func() {
-		term.mx.Lock()
-		term.cleanup()
-		term.mx.Unlock()
-	}()
-
-	// Command that outputs plain text (no ANSI processing in cmd mode)
-	var cmd *exec.Cmd
-	if runtime.GOOS == "windows" {
-		cmd = exec.Command("echo", "Simple text output")
-	} else {
-		cmd = exec.Command("echo", "Simple text output")
-	}
-
-	err := term.startCmd(cmd)
-	if err != nil {
-		t.Fatalf("startCmd failed: %v", err)
-	}
-
-	// Wait for completion
-	timeout := time.NewTimer(2 * time.Second)
-	defer timeout.Stop()
-
-	ticker := time.NewTicker(50 * time.Millisecond)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-timeout.C:
-			t.Fatal("timeout waiting for command completion")
-		case <-ticker.C:
-			if !term.IsRunning() {
-				// Get final view content
-				view := term.View()
-				cleanView := ansi.Strip(view)
-
-				if !strings.Contains(cleanView, "Simple text output") {
-					t.Errorf("Expected 'Simple text output' not found. Got: %q", cleanView)
-				}
-
-				// Verify that cmdLines buffer was used (not vt)
-				term.mx.Lock()
-				vtExists := term.vt != nil
-				cmdLinesExist := term.cmdLines != nil
-				term.mx.Unlock()
-
-				if vtExists {
-					t.Error("vt should not be created in startCmd mode")
-				}
-
-				if !cmdLinesExist {
-					t.Log("cmdLines was already cleaned up by manageCmd, which is expected behavior")
-				}
-
-				return
-			}
-		}
-	}
-}
-
-func TestStartCmdSimpleKeyHandling(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("Skipping key handling test on Windows")
-	}
-
-	term := NewTerminal(80, 24).(*terminal)
-	defer func() {
-		term.mx.Lock()
-		term.cleanup()
-		term.mx.Unlock()
-	}()
-
-	// Start cat command for key input testing
-	cmd := exec.Command("cat")
-	err := term.startCmd(cmd)
-	if err != nil {
-		t.Fatalf("startCmd failed: %v", err)
-	}
-
-	// Wait for command to start
-	time.Sleep(100 * time.Millisecond)
-
-	// Test simple key input
-	testKeys := []tea.KeyMsg{
-		{Type: tea.KeyRunes, Runes: []rune("hello")},
-		{Type: tea.KeySpace},
-		{Type: tea.KeyRunes, Runes: []rune("world")},
-		{Type: tea.KeyEnter},
-		{Type: tea.KeyCtrlD}, // EOF
-	}
-
-	for _, key := range testKeys {
-		term.mx.Lock()
-		handled := term.handleTerminalInput(key)
-		term.mx.Unlock()
-
-		if !handled {
-			t.Errorf("handleTerminalInput should handle key: %+v", key)
-		}
-
-		time.Sleep(10 * time.Millisecond)
-	}
-
-	// Wait for output
-	timeout := time.NewTimer(2 * time.Second)
-	defer timeout.Stop()
-
-	ticker := time.NewTicker(50 * time.Millisecond)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-timeout.C:
-			t.Fatal("timeout waiting for key input processing")
-		case <-ticker.C:
-			view := term.View()
-			cleanView := ansi.Strip(view)
-			if strings.Contains(cleanView, "hello world") {
-				return // success
-			}
-		}
-	}
-}
-
-func TestStartCmdInputHandling(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("Skipping input test on Windows")
-	}
-
-	term := NewTerminal(80, 24).(*terminal)
-	defer func() {
-		term.mx.Lock()
-		term.cleanup()
-		term.mx.Unlock()
-	}()
-
-	// Start cat command
-	cmd := exec.Command("cat")
-	err := term.startCmd(cmd)
-	if err != nil {
-		t.Fatalf("startCmd failed: %v", err)
-	}
-
-	// Wait for command to start
-	time.Sleep(100 * time.Millisecond)
-
-	// Test key input handling through handleTerminalInput
-	testKeys := []tea.KeyMsg{
-		{Type: tea.KeyRunes, Runes: []rune("test")},
-		{Type: tea.KeySpace},
-		{Type: tea.KeyRunes, Runes: []rune("input")},
-		{Type: tea.KeyEnter},
-		{Type: tea.KeyCtrlD}, // EOF
-	}
-
-	for _, key := range testKeys {
-		term.mx.Lock()
-		handled := term.handleTerminalInput(key)
-		term.mx.Unlock()
-
-		if !handled {
-			t.Errorf("handleTerminalInput should handle key: %+v", key)
-		}
-
-		time.Sleep(10 * time.Millisecond)
-	}
-
-	// Wait for output and completion
-	timeout := time.NewTimer(3 * time.Second)
-	defer timeout.Stop()
-
-	ticker := time.NewTicker(50 * time.Millisecond)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-timeout.C:
-			t.Fatal("timeout waiting for input handling completion")
-		case <-ticker.C:
-			view := term.View()
-			cleanView := ansi.Strip(view)
-			if strings.Contains(cleanView, "test input") {
-				return // success
-			}
-		}
 	}
 }

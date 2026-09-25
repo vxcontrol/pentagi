@@ -1,13 +1,15 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const LOCAL_USER = { mail: 'me@example.com', name: 'Test User', type: 'local' };
+const auth = vi.hoisted(() => ({
+    value: { user: { mail: 'me@example.com', name: 'Test User', type: 'local' } } as { user: Record<string, unknown> },
+}));
 
 vi.mock('@/providers/user-provider', () => ({
-    useUser: () => ({
-        authInfo: { user: { mail: 'me@example.com', name: 'Test User', type: 'local' } },
-        logout: vi.fn(),
-    }),
+    useUser: () => ({ authInfo: auth.value, logout: vi.fn() }),
 }));
 vi.mock('@/hooks/use-theme', () => ({ useTheme: () => ({ setTheme: vi.fn(), theme: 'system' }) }));
 vi.mock('@/providers/favorites-provider', () => ({
@@ -21,8 +23,9 @@ vi.mock('@/providers/version-info-provider', () => ({
     useVersionInfo: () => ({
         isLoading: false,
         versionInfo: {
+            build: 'b1d7c0de',
             checkedAt: null,
-            current: '2.1.0-93e99748',
+            current: '2.1.0',
             failedAt: null,
             latest: '2.4.0',
             state: 'update_available',
@@ -38,7 +41,7 @@ import { MainSidebar } from './main-sidebar';
 function FromProbe() {
     const location = useLocation();
 
-    return <span data-testid="from">{(location.state as null | { from?: string })?.from ?? 'none'}</span>;
+    return <span data-slot="probe-origin">{(location.state as null | { from?: string })?.from ?? 'none'}</span>;
 }
 
 function renderSidebar() {
@@ -65,6 +68,39 @@ function renderSidebar() {
     );
 }
 
+beforeEach(() => {
+    auth.value = { user: { ...LOCAL_USER } };
+});
+
+describe('MainSidebar account badge', () => {
+    const openMenu = async (name: RegExp) => {
+        const user = userEvent.setup();
+
+        renderSidebar();
+        await user.click(screen.getByRole('button', { name }));
+    };
+
+    it('calls a local account local', async () => {
+        await openMenu(/Test User/);
+
+        expect(screen.getByText('Local')).toBeInTheDocument();
+    });
+
+    it('names the provider a federated account came from', async () => {
+        auth.value = { user: { mail: 'gh@example.com', name: 'GH', provider: 'github', type: 'oauth' } };
+        await openMenu(/GH/);
+
+        expect(screen.getByText('GitHub')).toBeInTheDocument();
+    });
+
+    it('falls back to the kind of account when the record names no provider', async () => {
+        auth.value = { user: { mail: 'x@example.com', name: 'X', type: 'oauth' } };
+        await openMenu(/x@example.com/);
+
+        expect(screen.getByText('OAuth')).toBeInTheDocument();
+    });
+});
+
 describe('MainSidebar version badge', () => {
     it('shows the running version under the product name, with the update indicator', () => {
         renderSidebar();
@@ -82,7 +118,7 @@ describe('MainSidebar settings entry points', () => {
 
         await user.click(screen.getByRole('link', { name: 'Settings' }));
 
-        expect(screen.getByTestId('from')).toHaveTextContent('/dashboard');
+        expect(screen.getByTestId('probe-origin')).toHaveTextContent('/dashboard');
     });
 
     it('the Profile menu item carries the current path as the return origin', async () => {
@@ -92,6 +128,20 @@ describe('MainSidebar settings entry points', () => {
         await user.click(screen.getByRole('button', { name: /Test User/ }));
         await user.click(screen.getByRole('menuitem', { name: 'Profile' }));
 
-        expect(screen.getByTestId('from')).toHaveTextContent('/dashboard');
+        expect(screen.getByTestId('probe-origin')).toHaveTextContent('/dashboard');
+    });
+});
+
+describe('MainSidebar rows that carry an action', () => {
+    it('marks the row so its label keeps clear of the action button', () => {
+        renderSidebar();
+
+        expect(screen.getByRole('link', { name: 'Flows' }).closest('li')).toHaveAttribute('data-has-action', 'true');
+    });
+
+    it('leaves a row without an action unmarked, so its label spans the full width', () => {
+        renderSidebar();
+
+        expect(screen.getByRole('link', { name: 'Dashboard' }).closest('li')).not.toHaveAttribute('data-has-action');
     });
 });

@@ -5,7 +5,7 @@ import { z } from 'zod';
 import type { OverwriteOutcome } from '@/components/shared/overwrite';
 import type { RestResourceList } from '@/features/resources/resources-rest';
 
-import { pluralizeItems } from '@/features/resources/resources-utils';
+import { pluralizeItems } from '@/components/shared/file-manager';
 import { api, getApiErrorMessage, getApiErrorStatusCode } from '@/lib/axios';
 
 import { FLOW_FILES_PROMOTE_API_PATH } from './flow-files-constants';

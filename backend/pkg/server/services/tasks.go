@@ -100,7 +100,7 @@ func (s *TaskService) GetFlowTasks(c *gin.Context) {
 		return
 	}
 
-	query.Init("tasks", tasksSQLMappers)
+	_ = query.Init("tasks", tasksSQLMappers)
 
 	if query.Group != "" {
 		if _, ok := tasksSQLMappers[query.Group]; !ok {
@@ -285,7 +285,7 @@ func (s *TaskService) GetFlowTaskGraph(c *gin.Context) {
 
 	isSubtasksAdmin := slices.Contains(privs, "subtasks.admin")
 	isSubtasksView := slices.Contains(privs, "subtasks.view")
-	if !(flow.UserID == uid && isSubtasksView) && !(flow.UserID != uid && isSubtasksAdmin) {
+	if (flow.UserID != uid || !isSubtasksView) && (flow.UserID == uid || !isSubtasksAdmin) {
 		response.Success(c, http.StatusOK, resp)
 		return
 	}

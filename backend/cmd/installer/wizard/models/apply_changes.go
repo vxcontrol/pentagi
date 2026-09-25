@@ -221,7 +221,7 @@ func (m *ApplyChangesFormModel) HandleSave() error {
 
 func (m *ApplyChangesFormModel) HandleReset() {
 	// reset current changes
-	m.GetController().Reset()
+	_ = m.GetController().Reset()
 }
 
 func (m *ApplyChangesFormModel) OnFieldChanged(fieldIndex int, oldValue, newValue string) {
@@ -229,11 +229,11 @@ func (m *ApplyChangesFormModel) OnFieldChanged(fieldIndex int, oldValue, newValu
 }
 
 func (m *ApplyChangesFormModel) GetFormFields() []FormField {
-	return m.BaseScreen.fields
+	return m.fields
 }
 
 func (m *ApplyChangesFormModel) SetFormFields(fields []FormField) {
-	m.BaseScreen.fields = fields
+	m.fields = fields
 }
 
 func (m *ApplyChangesFormModel) getChangesCount() int {

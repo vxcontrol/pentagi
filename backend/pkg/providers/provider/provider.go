@@ -22,17 +22,13 @@ func (p ProviderType) String() string {
 
 // ReasoningProvider maps the provider type to the langchaingo reasoning.Provider
 // consumed ONLY by capability introspection for the settings UI (CannotDisable /
-// Supported hints via llms.ReasoningSupportFor / reasoning.ResolveOff) — it has no
-// effect on the actual wire call, which each provider builds independently.
+// Supported hints via llms.ReasoningSupportFor / reasoning.ResolveOff) and by the
+// save-time check against what the door refuses — it has no effect on the actual
+// wire call, which each provider builds independently.
 //
-// DeepSeek/GLM/Kimi/Qwen/MiniMax/Custom are folded into reasoning.ProviderOpenAI
-// as a best-effort approximation, not because they share OpenAI's real disable
-// semantics: GLM/Kimi/DeepSeek's actual thinking on/off switch is their own
-// extra_body toggle (see BuildOptions' reasoning-block comment), and Custom can
-// front literally any backend behind LLM_SERVER_URL. So the resulting hint may
-// say "reasoning can be disabled via effort=none" for a model whose real API
-// ignores that field entirely and only obeys extra_body. Treat this mapping as
-// a rough default for the UI, not a guarantee of correct wire behavior.
+// Every OpenAI-compatible door, Custom included, maps to reasoning.ProviderOpenAI,
+// so the hints and the save-time check follow the model name, not whatever backend
+// Custom fronts behind LLM_SERVER_URL.
 func (p ProviderType) ReasoningProvider() reasoning.Provider {
 	switch p {
 	case ProviderAnthropic:
@@ -41,9 +37,12 @@ func (p ProviderType) ReasoningProvider() reasoning.Provider {
 		return reasoning.ProviderBedrock
 	case ProviderGemini:
 		return reasoning.ProviderGoogleAI
-	case ProviderOpenAI, ProviderDeepSeek, ProviderGLM, ProviderKimi, ProviderQwen, ProviderMiniMax, ProviderCustom:
+	case ProviderOpenAI, ProviderDeepSeek, ProviderGLM, ProviderKimi, ProviderQwen, ProviderMiniMax,
+		ProviderMistral, ProviderXAI, ProviderCustom:
 		return reasoning.ProviderOpenAI
-	default: // ProviderOllama and anything unrecognized
+	case ProviderOllama:
+		return reasoning.ProviderOllama
+	default:
 		return reasoning.ProviderUnknown
 	}
 }
@@ -60,6 +59,8 @@ const (
 	ProviderKimi      ProviderType = "kimi"
 	ProviderQwen      ProviderType = "qwen"
 	ProviderMiniMax   ProviderType = "minimax"
+	ProviderMistral   ProviderType = "mistral"
+	ProviderXAI       ProviderType = "xai"
 )
 
 // AllProviderTypes enumerates every supported provider type; keep it in sync with
@@ -76,6 +77,8 @@ var AllProviderTypes = ProvidersListTypes{
 	ProviderKimi,
 	ProviderQwen,
 	ProviderMiniMax,
+	ProviderMistral,
+	ProviderXAI,
 }
 
 type ProviderName string
@@ -96,6 +99,8 @@ const (
 	DefaultProviderNameKimi      ProviderName = ProviderName(ProviderKimi)
 	DefaultProviderNameQwen      ProviderName = ProviderName(ProviderQwen)
 	DefaultProviderNameMiniMax   ProviderName = ProviderName(ProviderMiniMax)
+	DefaultProviderNameMistral   ProviderName = ProviderName(ProviderMistral)
+	DefaultProviderNameXAI       ProviderName = ProviderName(ProviderXAI)
 )
 
 type Provider interface {
@@ -120,11 +125,8 @@ type Provider interface {
 		tools []llms.Tool,
 		streamCb streaming.Callback,
 	) (*llms.ContentResponse, error)
-	// CallWithExtraOptions is CallWithTools with extra appended after the
-	// agent's own configured options, so it always wins. Lets a caller force a
-	// wire behavior (e.g. adaptive thinking, reasoning off, structured output)
-	// the agent's static config doesn't already request — used by the
-	// provider tester, but not limited to it.
+	// A reasoning option in extra cannot replace the thinking of an agent
+	// that uses adaptive thinking.
 	CallWithExtraOptions(
 		ctx context.Context,
 		opt pconfig.ProviderOptionsType,

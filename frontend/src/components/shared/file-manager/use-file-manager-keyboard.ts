@@ -1,8 +1,10 @@
 import { type KeyboardEvent as ReactKeyboardEvent, useCallback } from 'react';
 
+import { clamp } from '@/lib/clamp';
+
 import type { FileManagerInternalNode, FileNode } from './file-manager-types';
 
-import { clamp, collectSubtreePaths, findNodeByPath } from './file-manager-utils';
+import { collectSubtreePaths, findNodeByPath } from './file-manager-utils';
 
 interface UseFileManagerKeyboardNavigationArgs {
     expandedPaths: Set<string>;

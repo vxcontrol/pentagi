@@ -67,16 +67,14 @@ func (q *Queries) CreateToolcall(ctx context.Context, arg CreateToolcallParams) 
 
 const getAllFlowsToolcallsStats = `-- name: GetAllFlowsToolcallsStats :many
 SELECT
-  COALESCE(tc.flow_id, t.flow_id) AS flow_id,
+  tc.flow_id AS flow_id,
   COALESCE(COUNT(CASE WHEN tc.status IN ('finished', 'failed') THEN 1 END), 0)::bigint AS total_count,
   COALESCE(SUM(CASE WHEN tc.status IN ('finished', 'failed') THEN tc.duration_seconds ELSE 0 END), 0.0)::double precision AS total_duration_seconds
 FROM toolcalls tc
-LEFT JOIN subtasks s ON tc.subtask_id = s.id
-LEFT JOIN tasks t ON s.task_id = t.id OR tc.task_id = t.id
-INNER JOIN flows f ON (tc.flow_id = f.id OR t.flow_id = f.id)
+INNER JOIN flows f ON f.id = tc.flow_id
 WHERE f.deleted_at IS NULL
-GROUP BY COALESCE(tc.flow_id, t.flow_id)
-ORDER BY COALESCE(tc.flow_id, t.flow_id)
+GROUP BY tc.flow_id
+ORDER BY tc.flow_id
 `
 
 type GetAllFlowsToolcallsStatsRow struct {
@@ -220,12 +218,8 @@ SELECT
   COALESCE(COUNT(CASE WHEN tc.status IN ('finished', 'failed') THEN 1 END), 0)::bigint AS total_count,
   COALESCE(SUM(CASE WHEN tc.status IN ('finished', 'failed') THEN tc.duration_seconds ELSE 0 END), 0.0)::double precision AS total_duration_seconds
 FROM toolcalls tc
-LEFT JOIN tasks t ON tc.task_id = t.id
-LEFT JOIN subtasks s ON tc.subtask_id = s.id
-INNER JOIN flows f ON tc.flow_id = f.id
-WHERE tc.flow_id = $1 AND f.deleted_at IS NULL 
-  AND (tc.task_id IS NULL OR t.id IS NOT NULL)
-  AND (tc.subtask_id IS NULL OR s.id IS NOT NULL)
+INNER JOIN flows f ON f.id = tc.flow_id
+WHERE tc.flow_id = $1 AND f.deleted_at IS NULL
 `
 
 type GetFlowToolcallsStatsRow struct {
@@ -338,124 +332,65 @@ func (q *Queries) GetTaskToolcallsStats(ctx context.Context, taskID sql.NullInt6
 	return i, err
 }
 
-const getToolcallsStatsByDayLast3Months = `-- name: GetToolcallsStatsByDayLast3Months :many
+const getToolcallsStatsByDay = `-- name: GetToolcallsStatsByDay :many
+WITH bounds AS (
+  SELECT
+    ((NOW() AT TIME ZONE $1::text)::date - $2::int) AS first_day,
+    (NOW() AT TIME ZONE $1::text)::date AS last_day
+),
+days AS (
+  SELECT generate_series(b.first_day, b.last_day, INTERVAL '1 day')::date AS day
+  FROM bounds b
+),
+agg AS (
+  SELECT
+    (tc.created_at AT TIME ZONE $1::text)::date AS day,
+    COUNT(CASE WHEN tc.status IN ('finished', 'failed') THEN 1 END)::bigint AS total_count,
+    SUM(CASE WHEN tc.status IN ('finished', 'failed') THEN tc.duration_seconds ELSE 0 END)::double precision AS total_duration_seconds
+  FROM toolcalls tc
+  INNER JOIN flows f ON f.id = tc.flow_id
+  WHERE f.deleted_at IS NULL
+    AND f.user_id = $3
+    -- The coarse bounds keep the index; the exact test repeats the grouping
+    -- expression, because an ambiguous local midnight resolves to the later
+    -- instant and would drop the earlier hour of that day.
+    AND tc.created_at >= (((SELECT first_day FROM bounds) - 1)::timestamp AT TIME ZONE $1::text)
+    AND tc.created_at < (((SELECT last_day FROM bounds) + 2)::timestamp AT TIME ZONE $1::text)
+    AND (tc.created_at AT TIME ZONE $1::text)::date
+        BETWEEN (SELECT first_day FROM bounds) AND (SELECT last_day FROM bounds)
+  GROUP BY 1
+)
 SELECT
-  DATE(tc.created_at) AS date,
-  COALESCE(COUNT(CASE WHEN tc.status IN ('finished', 'failed') THEN 1 END), 0)::bigint AS total_count,
-  COALESCE(SUM(CASE WHEN tc.status IN ('finished', 'failed') THEN tc.duration_seconds ELSE 0 END), 0.0)::double precision AS total_duration_seconds
-FROM toolcalls tc
-LEFT JOIN subtasks s ON tc.subtask_id = s.id
-LEFT JOIN tasks t ON s.task_id = t.id OR tc.task_id = t.id
-INNER JOIN flows f ON (tc.flow_id = f.id OR t.flow_id = f.id)
-WHERE tc.created_at >= NOW() - INTERVAL '90 days' AND f.deleted_at IS NULL AND f.user_id = $1
-GROUP BY DATE(tc.created_at)
+  (d.day::timestamp AT TIME ZONE $1::text) AS date,
+  COALESCE(a.total_count, 0)::bigint AS total_count,
+  COALESCE(a.total_duration_seconds, 0.0)::double precision AS total_duration_seconds
+FROM days d
+LEFT JOIN agg a ON a.day = d.day
 ORDER BY date DESC
 `
 
-type GetToolcallsStatsByDayLast3MonthsRow struct {
+type GetToolcallsStatsByDayParams struct {
+	Tz     string `json:"tz"`
+	Days   int32  `json:"days"`
+	UserID int64  `json:"user_id"`
+}
+
+type GetToolcallsStatsByDayRow struct {
 	Date                 time.Time `json:"date"`
 	TotalCount           int64     `json:"total_count"`
 	TotalDurationSeconds float64   `json:"total_duration_seconds"`
 }
 
-// Get toolcalls stats by day for the last 3 months
-func (q *Queries) GetToolcallsStatsByDayLast3Months(ctx context.Context, userID int64) ([]GetToolcallsStatsByDayLast3MonthsRow, error) {
-	rows, err := q.db.QueryContext(ctx, getToolcallsStatsByDayLast3Months, userID)
+// One dense row per calendar day in the caller's timezone, zeros included.
+func (q *Queries) GetToolcallsStatsByDay(ctx context.Context, arg GetToolcallsStatsByDayParams) ([]GetToolcallsStatsByDayRow, error) {
+	rows, err := q.db.QueryContext(ctx, getToolcallsStatsByDay, arg.Tz, arg.Days, arg.UserID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []GetToolcallsStatsByDayLast3MonthsRow
+	var items []GetToolcallsStatsByDayRow
 	for rows.Next() {
-		var i GetToolcallsStatsByDayLast3MonthsRow
-		if err := rows.Scan(&i.Date, &i.TotalCount, &i.TotalDurationSeconds); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const getToolcallsStatsByDayLastMonth = `-- name: GetToolcallsStatsByDayLastMonth :many
-SELECT
-  DATE(tc.created_at) AS date,
-  COALESCE(COUNT(CASE WHEN tc.status IN ('finished', 'failed') THEN 1 END), 0)::bigint AS total_count,
-  COALESCE(SUM(CASE WHEN tc.status IN ('finished', 'failed') THEN tc.duration_seconds ELSE 0 END), 0.0)::double precision AS total_duration_seconds
-FROM toolcalls tc
-LEFT JOIN subtasks s ON tc.subtask_id = s.id
-LEFT JOIN tasks t ON s.task_id = t.id OR tc.task_id = t.id
-INNER JOIN flows f ON (tc.flow_id = f.id OR t.flow_id = f.id)
-WHERE tc.created_at >= NOW() - INTERVAL '30 days' AND f.deleted_at IS NULL AND f.user_id = $1
-GROUP BY DATE(tc.created_at)
-ORDER BY date DESC
-`
-
-type GetToolcallsStatsByDayLastMonthRow struct {
-	Date                 time.Time `json:"date"`
-	TotalCount           int64     `json:"total_count"`
-	TotalDurationSeconds float64   `json:"total_duration_seconds"`
-}
-
-// Get toolcalls stats by day for the last month
-func (q *Queries) GetToolcallsStatsByDayLastMonth(ctx context.Context, userID int64) ([]GetToolcallsStatsByDayLastMonthRow, error) {
-	rows, err := q.db.QueryContext(ctx, getToolcallsStatsByDayLastMonth, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []GetToolcallsStatsByDayLastMonthRow
-	for rows.Next() {
-		var i GetToolcallsStatsByDayLastMonthRow
-		if err := rows.Scan(&i.Date, &i.TotalCount, &i.TotalDurationSeconds); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const getToolcallsStatsByDayLastWeek = `-- name: GetToolcallsStatsByDayLastWeek :many
-SELECT
-  DATE(tc.created_at) AS date,
-  COALESCE(COUNT(CASE WHEN tc.status IN ('finished', 'failed') THEN 1 END), 0)::bigint AS total_count,
-  COALESCE(SUM(CASE WHEN tc.status IN ('finished', 'failed') THEN tc.duration_seconds ELSE 0 END), 0.0)::double precision AS total_duration_seconds
-FROM toolcalls tc
-LEFT JOIN subtasks s ON tc.subtask_id = s.id
-LEFT JOIN tasks t ON s.task_id = t.id OR tc.task_id = t.id
-INNER JOIN flows f ON (tc.flow_id = f.id OR t.flow_id = f.id)
-WHERE tc.created_at >= NOW() - INTERVAL '7 days' AND f.deleted_at IS NULL AND f.user_id = $1
-GROUP BY DATE(tc.created_at)
-ORDER BY date DESC
-`
-
-type GetToolcallsStatsByDayLastWeekRow struct {
-	Date                 time.Time `json:"date"`
-	TotalCount           int64     `json:"total_count"`
-	TotalDurationSeconds float64   `json:"total_duration_seconds"`
-}
-
-// Get toolcalls stats by day for the last week
-func (q *Queries) GetToolcallsStatsByDayLastWeek(ctx context.Context, userID int64) ([]GetToolcallsStatsByDayLastWeekRow, error) {
-	rows, err := q.db.QueryContext(ctx, getToolcallsStatsByDayLastWeek, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []GetToolcallsStatsByDayLastWeekRow
-	for rows.Next() {
-		var i GetToolcallsStatsByDayLastWeekRow
+		var i GetToolcallsStatsByDayRow
 		if err := rows.Scan(&i.Date, &i.TotalCount, &i.TotalDurationSeconds); err != nil {
 			return nil, err
 		}
@@ -477,9 +412,7 @@ SELECT
   COALESCE(SUM(CASE WHEN tc.status IN ('finished', 'failed') THEN tc.duration_seconds ELSE 0 END), 0.0)::double precision AS total_duration_seconds,
   COALESCE(AVG(CASE WHEN tc.status IN ('finished', 'failed') THEN tc.duration_seconds ELSE NULL END), 0.0)::double precision AS avg_duration_seconds
 FROM toolcalls tc
-LEFT JOIN subtasks s ON tc.subtask_id = s.id
-LEFT JOIN tasks t ON s.task_id = t.id OR tc.task_id = t.id
-INNER JOIN flows f ON (tc.flow_id = f.id OR t.flow_id = f.id)
+INNER JOIN flows f ON f.id = tc.flow_id
 WHERE f.deleted_at IS NULL AND f.user_id = $1
 GROUP BY tc.name
 ORDER BY total_duration_seconds DESC
@@ -528,10 +461,8 @@ SELECT
   COALESCE(SUM(CASE WHEN tc.status IN ('finished', 'failed') THEN tc.duration_seconds ELSE 0 END), 0.0)::double precision AS total_duration_seconds,
   COALESCE(AVG(CASE WHEN tc.status IN ('finished', 'failed') THEN tc.duration_seconds ELSE NULL END), 0.0)::double precision AS avg_duration_seconds
 FROM toolcalls tc
-LEFT JOIN subtasks s ON tc.subtask_id = s.id
-LEFT JOIN tasks t ON s.task_id = t.id OR tc.task_id = t.id
-INNER JOIN flows f ON (tc.flow_id = f.id OR t.flow_id = f.id)
-WHERE (tc.flow_id = $1 OR t.flow_id = $1) AND f.deleted_at IS NULL
+INNER JOIN flows f ON f.id = tc.flow_id
+WHERE tc.flow_id = $1 AND f.deleted_at IS NULL
 GROUP BY tc.name
 ORDER BY total_duration_seconds DESC
 `
@@ -577,12 +508,8 @@ SELECT
   COALESCE(COUNT(CASE WHEN tc.status IN ('finished', 'failed') THEN 1 END), 0)::bigint AS total_count,
   COALESCE(SUM(CASE WHEN tc.status IN ('finished', 'failed') THEN tc.duration_seconds ELSE 0 END), 0.0)::double precision AS total_duration_seconds
 FROM toolcalls tc
-LEFT JOIN subtasks s ON tc.subtask_id = s.id
-LEFT JOIN tasks t ON s.task_id = t.id OR tc.task_id = t.id
-INNER JOIN flows f ON (tc.flow_id = f.id OR t.flow_id = f.id)
+INNER JOIN flows f ON f.id = tc.flow_id
 WHERE f.deleted_at IS NULL AND f.user_id = $1
-  AND (tc.task_id IS NULL OR t.id IS NOT NULL)
-  AND (tc.subtask_id IS NULL OR s.id IS NOT NULL)
 `
 
 type GetUserTotalToolcallsStatsRow struct {

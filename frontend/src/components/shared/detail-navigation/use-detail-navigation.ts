@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useDebounce } from 'use-debounce';
 
+import { useControllable } from '@/hooks/use-controllable';
 import { useLatestRef } from '@/hooks/use-latest-ref';
 import { useTableQueryFilterReader } from '@/hooks/use-table-query-filter';
 import { mergeHrefWithSearchParams } from '@/lib/url-params';
@@ -76,12 +77,6 @@ export interface DetailNavigationController<T extends { id: string }> {
     isSearchActive: boolean;
     isSheetOpen: boolean;
 
-    /**
-     * `true` iff the raw `items` array is empty (pre-filter). The convenience
-     * `<DetailNavigationToolbar>` uses this to render `null` on a fresh detail
-     * mount when the provider's list hasn't arrived yet.
-     */
-    itemsEmpty: boolean;
     /** ID of the next filtered sibling, or `null` at the end / off-subset. */
     nextId: null | string;
     openSheet: () => void;
@@ -129,8 +124,6 @@ interface UseDetailNavigationOptions<T extends { id: string }> {
      * caller owns it. `onOpenChange` always fires so a fully-controlled
      * consumer can observe every set.
      *
-     * Mirrors the `useControllable` pattern from
-     * `@/components/ui/autocomplete.tsx`.
      */
     open?: boolean;
 
@@ -253,26 +246,7 @@ export function useDetailNavigation<T extends { id: string }>({
         sortFn,
     });
 
-    // Controlled-mode sheet state (mirrors `useControllable` from
-    // `components/ui/autocomplete.tsx:27-46`). When `open` is provided the
-    // caller owns the state; otherwise the controller owns it.
-    // `onOpenChange` fires on every set so fully-controlled consumers can
-    // observe transitions.
-    const onOpenChangeRef = useLatestRef(onOpenChange);
-    const [internalOpen, setInternalOpen] = useState(defaultOpen ?? false);
-    const isOpenControlled = open !== undefined;
-    const isSheetOpen = isOpenControlled ? open : internalOpen;
-
-    const setSheetOpen = useCallback(
-        (next: boolean) => {
-            if (!isOpenControlled) {
-                setInternalOpen(next);
-            }
-
-            onOpenChangeRef.current?.(next);
-        },
-        [isOpenControlled, onOpenChangeRef],
-    );
+    const [isSheetOpen, setSheetOpen] = useControllable<boolean>(open, defaultOpen ?? false, onOpenChange);
     const openSheet = useCallback(() => setSheetOpen(true), [setSheetOpen]);
     const closeSheet = useCallback(() => setSheetOpen(false), [setSheetOpen]);
 
@@ -329,7 +303,6 @@ export function useDetailNavigation<T extends { id: string }>({
 
     const normalizedCurrentId = currentId != null ? String(currentId) : null;
     const hasEntries = filteredItems.length > 0;
-    const itemsEmpty = items.length === 0;
     const isSearchActive = debouncedSearchQuery.length > 0;
 
     return useMemo<DetailNavigationController<T>>(
@@ -351,7 +324,6 @@ export function useDetailNavigation<T extends { id: string }>({
             hasEntries,
             isSearchActive,
             isSheetOpen,
-            itemsEmpty,
             nextId,
             openSheet,
             positionLabel,
@@ -380,7 +352,6 @@ export function useDetailNavigation<T extends { id: string }>({
             hasEntries,
             isSearchActive,
             isSheetOpen,
-            itemsEmpty,
             nextId,
             openSheet,
             positionLabel,

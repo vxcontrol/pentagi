@@ -48,6 +48,7 @@ export function FileDropZone({
                     : 'border-muted-foreground/25 hover:border-muted-foreground/40',
                 className,
             )}
+            data-slot="file-drop-zone"
         >
             <UploadCloudIcon
                 className={cn(

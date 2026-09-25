@@ -32,7 +32,7 @@ export function isDomDesyncError(error: unknown): boolean {
 // Hard-reload, debounced so the two recovery paths (vite:preloadError and the route
 // error boundary) firing for one failure can't double-reload. Returns true if it reloaded.
 export function reloadOnce(): boolean {
-    if (Date.now() - lastReloadAt() < RELOAD_DEBOUNCE_MS) {
+    if (!navigator.onLine || Date.now() - lastReloadAt() < RELOAD_DEBOUNCE_MS) {
         return false;
     }
 

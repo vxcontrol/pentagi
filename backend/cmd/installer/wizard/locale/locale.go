@@ -458,6 +458,8 @@ const (
 	LLMProviderKimi          = "Kimi Moonshot AI"
 	LLMProviderQwen          = "Qwen Alibaba Cloud"
 	LLMProviderMiniMax       = "MiniMax"
+	LLMProviderMistral       = "Mistral AI"
+	LLMProviderXAI           = "xAI Grok"
 	LLMProviderCustom        = "Custom"
 	LLMProviderOpenAIDesc    = "Industry-leading GPT models with excellent general performance"
 	LLMProviderAnthropicDesc = "Claude models with superior reasoning and safety features"
@@ -469,6 +471,8 @@ const (
 	LLMProviderKimiDesc      = "Moonshot AI's long-context models for document analysis"
 	LLMProviderQwenDesc      = "Alibaba Cloud's Qwen models for multilingual tasks"
 	LLMProviderMiniMaxDesc   = "MiniMax's M-series models for agentic reasoning and long-context tasks"
+	LLMProviderMistralDesc   = "Mistral AI's Medium, Small and Ministral models through the Mistral chat API"
+	LLMProviderXAIDesc       = "xAI's Grok models through the xAI chat API"
 	LLMProviderCustomDesc    = "Custom OpenAI-compatible endpoint for maximum flexibility"
 )
 
@@ -510,13 +514,19 @@ Cost: Mid-range pricing with excellent value for reasoning-heavy security workfl
 
 Setup: Get your API key from https://console.anthropic.com/`
 
+	LLMFormAnthropicFederatedHelp = `Federated (Enterprise) authentication uses a workload identity token instead of a static API key.
+
+PentAGI presents a short-lived identity token (inline via the Identity Token field, or read at runtime from the Identity Token File) together with the Organization, Workspace, Service Account and Federation Rule that map it to Anthropic access.
+
+Use this when your organization issues federated credentials (for example from a cloud workload identity provider) rather than a long-lived API key. All four IDs plus one of the two token fields are required for federated auth to be considered configured.
+
+Switch back to "API Key" for the standard console API key.`
+
 	LLMFormGeminiHelp = `Google Gemini combines multimodal capabilities with advanced reasoning, perfect for comprehensive security assessments.
 
 Default PentAGI Models:
-• Gemini 2.5 Pro: Advanced reasoning model for deep vulnerability analysis and complex exploit development
-• Gemini 2.5 Flash: High-performance model balancing speed and intelligence for most security testing tasks
-• Gemini 2.0 Flash Lite: Cost-effective model for rapid scanning and information gathering operations
-• Reasoning capabilities with step-by-step analysis for thorough penetration testing
+• gemini-3.5-flash-lite: planning, the primary agent loop, code, and other tool-using agents
+• gemini-3.1-flash-lite: simple output, JSON, reflection, search and enrichment
 
 Key Advantages:
 • Multimodal support enables analysis of screenshots, network diagrams, and security documentation
@@ -588,7 +598,7 @@ Setup options: Local installation from https://10.10.10.10:11434 or cloud regist
 	LLMFormDeepSeekHelp = `DeepSeek provides advanced AI models with strong reasoning capabilities and multilingual support.
 
 Default PentAGI Models:
-• deepseek-v4-flash: Cost-efficient general-purpose model for dialogue, code generation, and tool calling
+• deepseek-flash: Cost-efficient general-purpose model for dialogue, code generation, and tool calling
 • deepseek-v4-pro: Higher-tier reasoning model for complex logic, mathematical reasoning, and security analysis
 • Cost-effective pricing with competitive performance compared to leading models
 
@@ -600,7 +610,7 @@ Key Advantages:
 
 LiteLLM Integration:
 • Set Provider Name to 'deepseek' when using LiteLLM proxy
-• Enables model prefix (e.g., deepseek/deepseek-v4-flash) without modifying config.yml
+• Enables model prefix (e.g., deepseek/deepseek-flash) without modifying config.yml
 • Optional for direct DeepSeek API usage
 
 Best for: Teams requiring multilingual support, cost-conscious deployments, Chinese language security testing
@@ -655,7 +665,7 @@ Alternative API Endpoints:
 
 LiteLLM Integration:
 • Set Provider Name to 'moonshot' when using LiteLLM proxy
-• Enables model prefix (e.g., moonshot/kimi-k2.5) without modifying config.yml
+• Enables model prefix (e.g., moonshot/kimi-k2.6) without modifying config.yml
 • Optional for direct Kimi API usage
 
 Best for: Large codebase analysis, document-heavy assessments, teams needing extended context for security research
@@ -718,6 +728,39 @@ Cost: Competitive per-token pricing across the M-series
 
 Setup: Get your API key from https://platform.minimax.io/`
 
+	LLMFormMistralHelp = `Mistral AI serves its models through an OpenAI-compatible chat API.
+
+Default PentAGI Models:
+• mistral-medium-latest: planning and advice
+• mistral-large-latest: primary and execution agents
+• mistral-small-latest: utility and read-heavy agents
+
+API Endpoint:
+• https://api.mistral.ai/v1 (default)
+
+LiteLLM Integration:
+• Set Provider Name to 'mistral' when using a LiteLLM proxy
+• Enables model prefix (e.g., mistral/mistral-small-latest) without modifying config.yml
+• Optional for direct Mistral API usage
+
+Setup: Get your API key from https://console.mistral.ai/`
+
+	LLMFormXAIHelp = `xAI serves its Grok models through an OpenAI-compatible chat API.
+
+Default PentAGI Models:
+• grok-4.3: planning, the primary agent loop, code, and other tool-using agents
+• grok-4.20-0309-non-reasoning: simple output, JSON, reflection, and enrichment
+
+API Endpoint:
+• https://api.x.ai/v1 (default)
+
+LiteLLM Integration:
+• Set Provider Name to 'xai' when using a LiteLLM proxy
+• Enables model prefix (e.g., xai/grok-4.3) without modifying config.yml
+• Optional for direct xAI API usage
+
+Setup: Get your API key from https://console.x.ai/`
+
 	LLMFormCustomHelp = `Configure any OpenAI-compatible API endpoint for maximum flexibility and integration with existing infrastructure.
 
 Ready-to-use Configurations:
@@ -757,7 +800,8 @@ const (
 	LLMFormFieldRegion            = "Region"
 	LLMFormFieldModel             = "Model"
 	LLMFormFieldConfigPath        = "Config Path"
-	LLMFormFieldLegacyReasoning   = "Legacy Reasoning"
+	LLMFormFieldAPIType           = "API Type"
+	LLMFormFieldAPIVersion        = "API Version"
 	LLMFormFieldPreserveReasoning = "Preserve Reasoning"
 	LLMFormFieldProviderName      = "Provider Name"
 	LLMFormFieldPullTimeout       = "Model Pull Timeout"
@@ -773,13 +817,36 @@ const (
 	LLMFormRegionDesc             = "AWS region for Bedrock service"
 	LLMFormModelDesc              = "Default model to use for this provider"
 	LLMFormConfigPathDesc         = "Path to configuration file (optional)"
-	LLMFormLegacyReasoningDesc    = "Enable legacy reasoning mode (true/false)"
+	LLMFormAPITypeDesc            = "Address convention: azure or azure_ad for an Azure OpenAI deployment, empty for a plain OpenAI-compatible endpoint"
+	LLMFormAPIVersionDesc         = "api-version an Azure deployment requires; ignored by a plain endpoint"
 	LLMFormPreserveReasoningDesc  = "Preserve reasoning content in multi-turn conversations (required by some providers)"
 	LLMFormProviderNameDesc       = "Provider name prefix for model names (useful for LiteLLM proxy)"
 	LLMFormPullTimeoutDesc        = "Timeout in seconds for downloading models (default: 600)"
 	LLMFormPullEnabledDesc        = "Automatically download required models on startup"
 	LLMFormLoadModelsEnabledDesc  = "Load available models list from Ollama server"
 	LLMFormOllamaAPIKeyDesc       = "Ollama Cloud API key (optional, leave empty for local Ollama server)"
+
+	// Bedrock config file
+	LLMFormFieldBedrockConfig = "Config Path"
+	LLMFormBedrockConfigDesc  = "Path to an AWS Bedrock config file on the host (optional)"
+
+	// Anthropic authentication mode (API key vs federated / enterprise)
+	LLMAnthropicAuthModeTitle       = "Authentication"
+	LLMAnthropicAuthModeDesc        = "Choose how PentAGI authenticates to Anthropic"
+	LLMAnthropicAuthModeAPIKey      = "API Key"
+	LLMAnthropicAuthModeFederated   = "Federated (Enterprise)"
+	LLMFormFieldAnthropicOrgID      = "Organization ID"
+	LLMFormAnthropicOrgIDDesc       = "Anthropic organization the requests belong to"
+	LLMFormFieldAnthropicWorkspace  = "Workspace ID"
+	LLMFormAnthropicWorkspaceDesc   = "Anthropic workspace to scope usage and limits to"
+	LLMFormFieldAnthropicServiceAcc = "Service Account ID"
+	LLMFormAnthropicServiceAccDesc  = "Service account the federated identity authenticates as"
+	LLMFormFieldAnthropicIDToken    = "Identity Token"
+	LLMFormAnthropicIDTokenDesc     = "Federated identity token (use this or the token file, not both)"
+	LLMFormFieldAnthropicIDTokenF   = "Identity Token File"
+	LLMFormAnthropicIDTokenFDesc    = "Path to a file holding the federated identity token, read at runtime"
+	LLMFormFieldAnthropicFedRule    = "Federation Rule ID"
+	LLMFormAnthropicFedRuleDesc     = "Federation rule that maps the identity token to Anthropic access"
 )
 
 // LLM Provider Form status messages
@@ -1401,6 +1468,9 @@ Examples:
 	ServerSettingsCORSOrigins     = "CORS Origins"
 	ServerSettingsCORSOriginsDesc = "Comma-separated list of allowed origins (e.g., https://localhost:8443,https://localhost)"
 
+	ServerSettingsTrustedProxies     = "Trusted Proxies"
+	ServerSettingsTrustedProxiesDesc = "Comma-separated proxy IPs/CIDRs whose X-Forwarded-For is trusted (empty: trust none)"
+
 	ServerSettingsProxyURL     = "HTTP/HTTPS Proxy"
 	ServerSettingsProxyURLDesc = "Proxy for outbound requests to LLMs and external tools (not used for Docker API access)"
 
@@ -1500,6 +1570,10 @@ Examples:
 • https://example.com/pentagi/ (with base path)`
 
 	ServerSettingsCORSOriginsHelp = `Comma-separated allowed origins for browser access.`
+
+	ServerSettingsTrustedProxiesHelp = `Comma-separated list of proxy IP addresses or CIDR ranges whose X-Forwarded-For / X-Real-IP headers PentAGI will trust when determining a client's real IP.
+
+Set this only when PentAGI sits behind a reverse proxy or load balancer you control. Leave empty to trust none. Example: 10.0.0.0/8,172.16.0.0/12`
 
 	ServerSettingsProxyURLHelp = `HTTP or HTTPS proxy for outbound requests to LLM providers and external tools. Not used for Docker API communication.`
 
@@ -1602,6 +1676,8 @@ Task Planning (⚠️  BETA):
 	ToolsAIAgentsSettingMaxLimitedToolCallsDesc = "Maximum tool calls for Searcher, Enricher, Memorist, etc."
 	ToolsAIAgentsSettingTaskPlanning            = "Enable Task Planning (beta)"
 	ToolsAIAgentsSettingTaskPlanningDesc        = "Generate structured execution plans for specialist agents"
+	ToolsAIAgentsSettingLLMFallbackProvider     = "LLM Fallback Provider"
+	ToolsAIAgentsSettingLLMFallbackProviderDesc = "Provider to retry an agent call on when the primary fails (empty: none)"
 
 	// help content
 	ToolsAIAgentsSettingsHelp = `AI Agents Settings define how agents collaborate, interact with users, and handle execution control.
@@ -1667,6 +1743,8 @@ Get API keys from:
 	ToolsSearchEnginesSploitusDesc             = "Enable Sploitus search for exploits and vulnerabilities (no API key required)"
 	ToolsSearchEnginesPerplexityKey            = "Perplexity API Key"
 	ToolsSearchEnginesPerplexityKeyDesc        = "API key for Perplexity AI search"
+	ToolsSearchEnginesPerplexityTimeout        = "Perplexity Timeout"
+	ToolsSearchEnginesPerplexityTimeoutDesc    = "Perplexity request timeout in seconds (empty: 120)"
 	ToolsSearchEnginesTavilyKey                = "Tavily API Key"
 	ToolsSearchEnginesTavilyKeyDesc            = "API key for Tavily search service"
 	ToolsSearchEnginesFirecrawlKey             = "Firecrawl API Key"
@@ -1797,6 +1875,14 @@ Configuration combines based on scenario: enable both capabilities for full pent
 	ToolsDockerDefaultImageDesc           = "Default Docker image for general tasks"
 	ToolsDockerDefaultImageForPentest     = "Pentesting Image"
 	ToolsDockerDefaultImageForPentestDesc = "Default Docker image for security testing tasks"
+	ToolsDockerDefaultImageForTest        = "Sandbox Self-Test Image"
+	ToolsDockerDefaultImageForTestDesc    = "Small image the startup sandbox isolation check runs in"
+	ToolsDockerImageSelectionMode         = "Image Selection Mode"
+	ToolsDockerImageSelectionModeDesc     = "How the worker image is chosen: 'llm' (agent picks) or 'fixed' (always the pentest image)"
+	ToolsDockerAllowedImages              = "Allowed Images"
+	ToolsDockerAllowedImagesDesc          = "Comma-separated allow-list the agent may pick from (empty: any image)"
+	ToolsDockerInsidePolicyTests          = "Sandbox Isolation Self-Test"
+	ToolsDockerInsidePolicyTestsDesc      = "Verify at startup that the sandbox daemon is separate and refuses host escapes"
 
 	// TLS connection settings (optional)
 	ToolsDockerHost          = "Docker Host"
@@ -1876,6 +1962,25 @@ Should contain basic utilities and tools for general-purpose tasks. Default: deb
 
 Recommended images include Kali Linux, Parrot Security, or custom security-focused containers. Default: vxcontrol/kali-linux`
 
+	ToolsDockerDefaultImageForTestHelp = `Sandbox Self-Test Image is the small image the startup isolation check runs in and pulls into the sandbox to prove an agent could. Kept small because the check pays for it on every start.
+
+Only used when Docker Access and its Isolation Self-Test are enabled. Default: vxcontrol/kali-linux:test`
+
+	ToolsDockerImageSelectionModeHelp = `Image Selection Mode controls how a worker's container image is chosen.
+
+• llm — the agent picks the image for each task (default)
+• fixed — always use the Pentesting Image, skipping the model's choice
+
+Use 'fixed' to pin every worker to one vetted image.`
+
+	ToolsDockerAllowedImagesHelp = `Allowed Images is a comma-separated allow-list the agent may pick from when Image Selection Mode is 'llm'. A choice outside the list falls back to the Pentesting Image.
+
+Leave empty to allow any image. Example: debian:latest,vxcontrol/kali-linux`
+
+	ToolsDockerInsidePolicyTestsHelp = `Sandbox Isolation Self-Test checks at startup that the sandbox Docker daemon is separate from PentAGI's own and refuses host-escape requests, before any agent is given Docker access.
+
+Only meaningful when Docker Access is enabled. Recommended on any deployment where agents reach a Docker daemon.`
+
 	ToolsDockerHostHelp = `Docker Host uses for start primary worker containers and overrides default Docker daemon connection. Supports Unix sockets and TCP connections.
 
 Examples:
@@ -1929,18 +2034,6 @@ Choose carefully as changing providers requires reindexing all stored data.`
 	EmbedderFormMaxTextBytes     = "Max Text Bytes"
 	EmbedderFormMaxTextBytesDesc = "Maximum number of bytes per text chunk sent to the embedding API (e.g. 8192)"
 
-	EmbedderFormHelpTitle   = "Embedding Configuration"
-	EmbedderFormHelpContent = `Configure text vectorization for semantic search and knowledge storage.
-
-If no specific embedding settings are configured, the system will use OpenAI embeddings with the API key from LLM Providers.
-
-Change providers carefully - different embedders produce incompatible vectors requiring database reindexing.`
-
-	EmbedderFormHelpOpenAI      = "OpenAI: Most reliable option with excellent quality. Requires API key from LLM Providers if not set here."
-	EmbedderFormHelpOllama      = "Ollama: Local embeddings, no API key needed. Requires Ollama server running."
-	EmbedderFormHelpHuggingFace = "HuggingFace: Open source models with API key required."
-	EmbedderFormHelpGoogleAI    = "Google AI: Quality embeddings, requires API key."
-
 	// Provider names and descriptions
 	EmbedderProviderDefault         = "Default (OpenAI)"
 	EmbedderProviderDefaultDesc     = "Use OpenAI embeddings with API key from LLM Providers configuration"
@@ -1955,7 +2048,7 @@ Change providers carefully - different embedders produce incompatible vectors re
 	EmbedderProviderHuggingFace     = "HuggingFace"
 	EmbedderProviderHuggingFaceDesc = "HuggingFace inference API for embedding models"
 	EmbedderProviderGoogleAI        = "Google AI"
-	EmbedderProviderGoogleAIDesc    = "Google AI embedding models (embedding-001)"
+	EmbedderProviderGoogleAIDesc    = "Google AI embedding models (gemini-embedding-001)"
 	EmbedderProviderVoyageAI        = "VoyageAI"
 	EmbedderProviderVoyageAIDesc    = "VoyageAI embedding API"
 	EmbedderProviderDisabled        = "Disabled"
@@ -1968,7 +2061,7 @@ Change providers carefully - different embedders produce incompatible vectors re
 	EmbedderURLPlaceholderJina        = "https://api.jina.ai/v1"
 	EmbedderURLPlaceholderHuggingFace = "https://api-inference.huggingface.co"
 	EmbedderURLPlaceholderGoogleAI    = "Not supported - uses default endpoint"
-	EmbedderURLPlaceholderVoyageAI    = "Not supported - uses default endpoint"
+	EmbedderURLPlaceholderVoyageAI    = "https://api.voyageai.com/v1"
 
 	EmbedderAPIKeyPlaceholderOllama      = "Not required for local models"
 	EmbedderAPIKeyPlaceholderMistral     = "Mistral API key"
@@ -2021,14 +2114,20 @@ You must flush or reindex your entire knowledge base using the etester utility:
 	EmbedderHelpAttentionSuffix = `Only change providers if absolutely necessary.`
 
 	// Provider help texts
-	EmbedderHelpDefault = `Default mode uses OpenAI embeddings with the API key configured in LLM Providers.
+	EmbedderHelpOpenAIKeyRule = `When the embedder has no API Key, it uses the OpenAI key from LLM Providers, and only with the OpenAI server set there: its API Endpoint URL must be empty or name that server. An embedder API Key goes to the API Endpoint URL, or to api.openai.com when the URL is empty. Any other endpoint needs its own API Key; a local server that checks no key accepts any non-empty value.`
 
-This is the recommended option for most users as it requires no additional configuration if you already have OpenAI set up.`
+	EmbedderHelpDefault = `Default mode uses OpenAI embeddings with the server and API key configured for OpenAI in LLM Providers, and needs nothing more if OpenAI is set up there.
+
+An API Endpoint URL or API Key left from another embedding provider still applies in this mode; choose OpenAI to see or clear them.
+
+` + EmbedderHelpOpenAIKeyRule
 
 	EmbedderHelpOpenAI = `Direct OpenAI API access for embedding generation.
 
 Get your API key from:
 https://platform.openai.com/api-keys
+
+` + EmbedderHelpOpenAIKeyRule + `
 
 Recommended models:
 • text-embedding-3-small (cost-effective, 1536 dimensions)
@@ -2052,8 +2151,7 @@ Start with: ollama pull nomic-embed-text`
 Get your API key from:
 https://console.mistral.ai/
 
-Uses Mistral's embedding model with fixed configuration.
-No model selection required - uses the default embedding model.`
+Leave the Model Name empty to use mistral-embed.`
 
 	EmbedderHelpJina = `Jina AI embedding API with specialized models.
 
@@ -2247,7 +2345,7 @@ This operation requires PentAGI to be running and will update the password in th
 Enter your new password twice to confirm and press Enter to apply the change.
 
 Password requirements:
-• Minimum 5 characters
+• 16+ characters, or 8-15 with a lowercase letter, an uppercase letter, a digit and one of !@#$&*
 • Both password fields must match`
 
 	// Form fields
@@ -2265,7 +2363,8 @@ Password requirements:
 
 	// Validation errors
 	ResetPasswordErrorEmptyPassword = "Password cannot be empty"
-	ResetPasswordErrorShortPassword = "Password must be at least 5 characters long"
+	ResetPasswordErrorWeakPassword  = "Password must be 16+ characters, or 8-15 with a lowercase letter, an uppercase letter, a digit and one of !@#$&*"
+	ResetPasswordErrorLongPassword  = "Password must not exceed 72 bytes"
 	ResetPasswordErrorMismatch      = "Passwords do not match"
 
 	// Help content
@@ -2419,6 +2518,12 @@ const (
 	EnvDesc_OPEN_AI_SERVER_URL                = "OpenAI Server URL"
 	EnvDesc_ANTHROPIC_API_KEY                 = "Anthropic API Key"
 	EnvDesc_ANTHROPIC_SERVER_URL              = "Anthropic Server URL"
+	EnvDesc_ANTHROPIC_ORGANIZATION_ID         = "Anthropic Organization ID"
+	EnvDesc_ANTHROPIC_WORKSPACE_ID            = "Anthropic Workspace ID"
+	EnvDesc_ANTHROPIC_SERVICE_ACCOUNT_ID      = "Anthropic Service Account ID"
+	EnvDesc_ANTHROPIC_IDENTITY_TOKEN          = "Anthropic Identity Token"
+	EnvDesc_ANTHROPIC_IDENTITY_TOKEN_FILE     = "Anthropic Identity Token File"
+	EnvDesc_ANTHROPIC_FEDERATION_RULE_ID      = "Anthropic Federation Rule ID"
 	EnvDesc_GEMINI_API_KEY                    = "Google Gemini API Key"
 	EnvDesc_GEMINI_SERVER_URL                 = "Gemini Server URL"
 	EnvDesc_BEDROCK_DEFAULT_AUTH              = "AWS Bedrock Use Default Credential Chain"
@@ -2428,6 +2533,7 @@ const (
 	EnvDesc_BEDROCK_SESSION_TOKEN             = "AWS Bedrock Session Token"
 	EnvDesc_BEDROCK_REGION                    = "AWS Bedrock Region"
 	EnvDesc_BEDROCK_SERVER_URL                = "AWS Bedrock Custom Endpoint URL"
+	EnvDesc_BEDROCK_CONFIG_PATH               = "AWS Bedrock Config Path"
 	EnvDesc_OLLAMA_SERVER_URL                 = "Ollama Server URL"
 	EnvDesc_OLLAMA_SERVER_API_KEY             = "Ollama Server API Key (Cloud)"
 	EnvDesc_OLLAMA_SERVER_MODEL               = "Ollama Default Model"
@@ -2450,13 +2556,21 @@ const (
 	EnvDesc_MINIMAX_API_KEY                   = "MiniMax API Key"
 	EnvDesc_MINIMAX_SERVER_URL                = "MiniMax Server URL"
 	EnvDesc_MINIMAX_PROVIDER                  = "MiniMax Provider Name Prefix (for LiteLLM, e.g., 'minimax')"
+	EnvDesc_MISTRAL_API_KEY                   = "Mistral API Key"
+	EnvDesc_MISTRAL_SERVER_URL                = "Mistral Server URL"
+	EnvDesc_MISTRAL_PROVIDER                  = "Mistral Provider Name Prefix (for LiteLLM, e.g., 'mistral')"
+	EnvDesc_XAI_API_KEY                       = "xAI API Key"
+	EnvDesc_XAI_SERVER_URL                    = "xAI Server URL"
+	EnvDesc_XAI_PROVIDER                      = "xAI Provider Name Prefix (for LiteLLM, e.g., 'xai')"
 	EnvDesc_LLM_SERVER_URL                    = "Custom LLM Server URL"
 	EnvDesc_LLM_SERVER_KEY                    = "Custom LLM API Key"
 	EnvDesc_LLM_SERVER_MODEL                  = "Custom LLM Model"
 	EnvDesc_LLM_SERVER_CONFIG_PATH            = "Custom LLM Container Config Path"
-	EnvDesc_LLM_SERVER_LEGACY_REASONING       = "Custom LLM Legacy Reasoning"
 	EnvDesc_LLM_SERVER_PRESERVE_REASONING     = "Custom LLM Preserve Reasoning Content"
+	EnvDesc_LLM_SERVER_API_TYPE               = "Custom LLM Address Convention"
+	EnvDesc_LLM_SERVER_API_VERSION            = "Custom LLM Azure API Version"
 	EnvDesc_LLM_SERVER_PROVIDER               = "Custom LLM Provider Name"
+	EnvDesc_LLM_FALLBACK_PROVIDER             = "LLM Fallback Provider"
 
 	EnvDesc_LANGFUSE_LISTEN_IP   = "Langfuse Listen IP"
 	EnvDesc_LANGFUSE_LISTEN_PORT = "Langfuse Listen Port"
@@ -2546,6 +2660,10 @@ const (
 	EnvDesc_DOCKER_WORK_DIR                  = "Docker Work Directory"
 	EnvDesc_DOCKER_DEFAULT_IMAGE             = "Docker Default Image"
 	EnvDesc_DOCKER_DEFAULT_IMAGE_FOR_PENTEST = "Docker Pentest Image"
+	EnvDesc_DOCKER_DEFAULT_IMAGE_FOR_TEST    = "Docker Sandbox Self-Test Image"
+	EnvDesc_DOCKER_IMAGE_SELECTION_MODE      = "Docker Image Selection Mode"
+	EnvDesc_DOCKER_ALLOWED_IMAGES            = "Docker Allowed Images"
+	EnvDesc_DOCKER_INSIDE_POLICY_TESTS       = "Docker Sandbox Isolation Self-Test"
 	EnvDesc_DOCKER_HOST                      = "Docker Host"
 	EnvDesc_DOCKER_TLS_VERIFY                = "Docker TLS Verify"
 	EnvDesc_DOCKER_CERT_PATH                 = "Docker Certificate Path"
@@ -2560,6 +2678,7 @@ const (
 	EnvDesc_PENTAGI_LISTEN_PORT               = "PentAGI Server Port"
 	EnvDesc_PUBLIC_URL                        = "PentAGI Public URL"
 	EnvDesc_CORS_ORIGINS                      = "PentAGI CORS Origins"
+	EnvDesc_TRUSTED_PROXIES                   = "PentAGI Trusted Proxies"
 	EnvDesc_COOKIE_SIGNING_SALT               = "PentAGI Cookie Signing Salt"
 	EnvDesc_DATABASE_EXTENSIONS_SCHEMA        = "PostgreSQL Extensions Schema"
 	EnvDesc_DATABASE_SEARCH_PATH_VIA_OPTIONS  = "PostgreSQL Search Path via Options"
@@ -2585,6 +2704,7 @@ const (
 
 	EnvDesc_PERPLEXITY_MODEL        = "Perplexity Model"
 	EnvDesc_PERPLEXITY_CONTEXT_SIZE = "Perplexity Context Size"
+	EnvDesc_PERPLEXITY_TIMEOUT      = "Perplexity Timeout"
 
 	EnvDesc_SEARXNG_URL        = "Searxng Search URL"
 	EnvDesc_SEARXNG_CATEGORIES = "Searxng Search Categories"

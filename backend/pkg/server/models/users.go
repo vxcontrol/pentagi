@@ -81,6 +81,7 @@ type User struct {
 	RoleID                 uint64     `form:"role_id" json:"role_id" validate:"min=0,numeric,required" gorm:"type:BIGINT;NOT NULL;default:2"`
 	PasswordChangeRequired bool       `form:"password_change_required" json:"password_change_required" gorm:"type:BOOL;NOT NULL;default:false"`
 	Provider               *string    `form:"provider,omitempty" json:"provider,omitempty" validate:"omitempty" gorm:"type:TEXT"`
+	SessionGeneration      uint64     `form:"-" json:"-" validate:"min=0,numeric" gorm:"type:BIGINT;NOT NULL;default:1"`
 	CreatedAt              time.Time  `form:"created_at" json:"created_at" validate:"omitempty" gorm:"type:TIMESTAMPTZ;NOT NULL;default:CURRENT_TIMESTAMP"`
 }
 
@@ -103,7 +104,7 @@ func (u User) Validate(db *gorm.DB) {
 
 // UserPassword is model to contain user information
 type UserPassword struct {
-	Password string `form:"password" json:"password" validate:"passlen,required" gorm:"column:password;type:TEXT"`
+	Password string `form:"password" json:"password" validate:"stpass,passlen,required" gorm:"column:password;type:TEXT"`
 	User     `form:"" json:""`
 }
 
@@ -189,7 +190,6 @@ func (p Password) Validate(db *gorm.DB) {
 	}
 }
 
-// UserRole is model to contain user information linked with user role
 // nolint:lll
 type UserRole struct {
 	Role Role `form:"role,omitempty" json:"role,omitempty" gorm:"association_autoupdate:false;association_autocreate:false"`

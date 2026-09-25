@@ -10,7 +10,7 @@ import { useAppForm } from '@/hooks/use-app-form';
 import { api, resolveApiErrorMessage } from '@/lib/axios';
 import { useUser } from '@/providers/user-provider';
 
-const nameChangeSchema = z.object({
+const nameChangeFormSchema = z.object({
     name: z
         .string()
         .trim()
@@ -28,7 +28,7 @@ interface NameChangeFormProps {
     onSuccess?: () => void;
 }
 
-type NameChangeFormValues = z.infer<typeof nameChangeSchema>;
+type NameChangeFormValues = z.infer<typeof nameChangeFormSchema>;
 
 export function NameChangeForm({ onCancel, onSuccess }: NameChangeFormProps) {
     const [error, setError] = useState<null | string>(null);
@@ -38,7 +38,7 @@ export function NameChangeForm({ onCancel, onSuccess }: NameChangeFormProps) {
         defaultValues: {
             name: authInfo?.user?.name ?? '',
         },
-        schema: nameChangeSchema,
+        schema: nameChangeFormSchema,
     });
 
     const handleSubmit = async (values: NameChangeFormValues) => {

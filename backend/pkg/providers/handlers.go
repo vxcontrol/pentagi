@@ -14,7 +14,6 @@ import (
 	"pentagi/pkg/docker"
 	obs "pentagi/pkg/observability"
 	"pentagi/pkg/observability/langfuse"
-	"pentagi/pkg/providers/pconfig"
 	"pentagi/pkg/schema"
 	"pentagi/pkg/templates"
 	"pentagi/pkg/tools"
@@ -225,8 +224,8 @@ func (fp *flowProvider) GetAskAdviceHandler(ctx context.Context, taskID, subtask
 			langfuse.WithEvaluatorLevel(langfuse.ObservationLevelDebug),
 		)
 
-		opt := pconfig.OptionsTypeAdviser
 		msgChainType := database.MsgchainTypeAdviser
+		opt := agentByChain[msgChainType]
 		advice, err := fp.performSimpleChain(ctx, taskID, subtaskID, opt, msgChainType, systemAdviserTmpl, userAdviserTmpl)
 		if err != nil {
 			return "", wrapError(ctx, "failed to get advice", err)
@@ -626,7 +625,7 @@ func (fp *flowProvider) GetPentesterHandler(ctx context.Context, taskID, subtask
 				"FileToolName":            tools.FileToolName,
 				"SummarizationToolName":   cast.SummarizationToolName,
 				"SummarizedContentPrefix": strings.ReplaceAll(csum.SummarizedContentPrefix, "\n", "\\n"),
-				"IsDefaultDockerImage":    strings.HasPrefix(strings.ToLower(fp.image), pentestDockerImage),
+				"IsDefaultDockerImage":    fp.isPentestImage(),
 				"DockerImage":             fp.image,
 				"Cwd":                     docker.WorkFolderPathInContainer,
 				"ContainerPorts":          fp.getContainerPortsDescription(),
@@ -923,8 +922,8 @@ func (fp *flowProvider) GetSummarizeResultHandler(taskID, subtaskID *int64) tool
 			)
 		}
 
-		opt := pconfig.OptionsTypeSimple
 		msgChainType := database.MsgchainTypeSummarizer
+		opt := agentByChain[msgChainType]
 		summary, err := fp.performSimpleChain(ctx, taskID, subtaskID, opt, msgChainType, systemSummarizerTmpl, result)
 		if err != nil {
 			return "", wrapErrorEndAgentSpan(ctx, summarizerAgent, "failed to get summary", err)
@@ -987,8 +986,8 @@ func (fp *flowProvider) fixToolCallArgs(
 		return nil, wrapErrorEndAgentSpan(ctx, toolCallFixerAgent, "failed to get system tool call fixer template", err)
 	}
 
-	opt := pconfig.OptionsTypeSimpleJSON
 	msgChainType := database.MsgchainTypeToolCallFixer
+	opt := agentByChain[msgChainType]
 	toolCallFixerResult, err := fp.performSimpleChain(ctx, nil, nil, opt, msgChainType, systemToolCallFixerTmpl, userToolCallFixerTmpl)
 	if err != nil {
 		return nil, wrapErrorEndAgentSpan(ctx, toolCallFixerAgent, "failed to get tool call fixer result", err)

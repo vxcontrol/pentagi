@@ -164,7 +164,7 @@ The overview screen holds no `ProcessorModel` and starts no operation — `NewUp
 
 **Adding a screen takes four registrations, and the second one has no symptom when it is missing.** A `ScreenID` constant in [`types.go`](../../cmd/installer/wizard/models/types.go); a branch in `models.RestoreModel` in the same file; registration in `registry.initScreens` ([`registry.go`](../../cmd/installer/wizard/registry/registry.go)); and the locale strings, plus a hotkey caption in `app.initHotkeysLocale` if the screen uses a combination the map does not already have.
 
-What a missing `RestoreModel` branch costs is worth stating precisely, because the obvious answer is wrong. `app.forwardMsgToCurrentModel` calls `app.currentModel.Update(msg)` and reassigns `app.currentModel` only when `RestoreModel` returns non-nil — but every screen here has a pointer receiver and returns itself, so the mutation has already happened in place and the returned `tea.Cmd` is propagated either way. Nothing freezes today; the skipped step is a reassignment of a pointer the app already holds. The branch is load-bearing for the case the type allows but nobody has written yet: a screen whose `Update` returns a *different* model, which would then be dropped with no error anywhere. `installer_update_test.go` asserts every screen's presence in `RestoreModel` for that reason — the contract is "every screen is listed" rather than "list the ones that need it", because the day a screen starts returning something else is not the day anybody remembers this rule.
+What a missing `RestoreModel` branch costs is worth stating precisely, because the obvious answer is wrong. `app.forwardMsgToCurrentModel` calls `app.currentModel.Update(msg)` and reassigns `app.currentModel` only when `RestoreModel` returns non-nil — but every screen here has a pointer receiver and returns itself, so the mutation has already happened in place and the returned `tea.Cmd` is propagated either way. Nothing freezes today; the skipped step is a reassignment of a pointer the app already holds. The branch is load-bearing for the case the type allows but nobody has written yet: a screen whose `Update` returns a *different* model, which would then be dropped with no error anywhere. `TestTypes_RestoreModel_RestoresTheUpdateScreens` (`models/types_test.go`) asserts the two update screens' presence in `RestoreModel` for that reason — the contract is "every screen is listed" rather than "list the ones that need it", because the day a screen starts returning something else is not the day anybody remembers this rule.
 
 ## The message chain
 
@@ -393,7 +393,7 @@ Choose integration method based on screen requirements:
 ## Testing & Debugging
 
 ### Processor Model Testing
-Processor model behavior can be tested independently of wizard integration (see [`logic_test.go`](../../cmd/installer/processor/logic_test.go) and [`mock_test.go`](../../cmd/installer/processor/mock_test.go) for current mock patterns).
+Processor model behavior can be tested independently of wizard integration (see [`logic_test.go`](../../cmd/installer/processor/logic_test.go) and [`fixtures_test.go`](../../cmd/installer/processor/fixtures_test.go) for current mock patterns).
 
 ### Debug Features
 - **Ctrl+T toggle**: Switch to message-based mode for debugging

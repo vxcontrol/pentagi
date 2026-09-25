@@ -11,7 +11,7 @@ import { useAppForm } from '@/hooks/use-app-form';
 import { api, resolveApiErrorMessage } from '@/lib/axios';
 import { useUser } from '@/providers/user-provider';
 
-const emailChangeSchema = z.object({
+const emailChangeFormSchema = z.object({
     currentPassword: z.string().min(1, { message: 'Current password is required' }),
     newEmail: z
         .string()
@@ -34,7 +34,7 @@ interface EmailChangeFormProps {
     onSuccess?: () => void;
 }
 
-type EmailChangeFormValues = z.infer<typeof emailChangeSchema>;
+type EmailChangeFormValues = z.infer<typeof emailChangeFormSchema>;
 
 export function EmailChangeForm({ onCancel, onSuccess }: EmailChangeFormProps) {
     const [error, setError] = useState<null | string>(null);
@@ -45,7 +45,7 @@ export function EmailChangeForm({ onCancel, onSuccess }: EmailChangeFormProps) {
             currentPassword: '',
             newEmail: '',
         },
-        schema: emailChangeSchema,
+        schema: emailChangeFormSchema,
     });
 
     const handleSubmit = async (values: EmailChangeFormValues) => {

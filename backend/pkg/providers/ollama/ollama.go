@@ -17,8 +17,10 @@ import (
 	"pentagi/pkg/templates"
 
 	"github.com/ollama/ollama/api"
+	ollamamodel "github.com/ollama/ollama/types/model"
 	"github.com/vxcontrol/langchaingo/llms"
 	"github.com/vxcontrol/langchaingo/llms/ollama"
+	"github.com/vxcontrol/langchaingo/llms/reasoning"
 	"github.com/vxcontrol/langchaingo/llms/streaming"
 )
 
@@ -72,7 +74,7 @@ func newOllamaClient(serverURL string, httpClient *http.Client) (*api.Client, er
 	return api.NewClient(parsedURL, httpClient), nil
 }
 
-func loadAvailableModelsFromServer(client *api.Client) (pconfig.ModelsConfig, error) {
+func loadAvailableModelsFromServer(client *api.Client, serverURL string) (pconfig.ModelsConfig, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultAPICallTimeout)
 	defer cancel()
 
@@ -81,16 +83,35 @@ func loadAvailableModelsFromServer(client *api.Client) (pconfig.ModelsConfig, er
 		return nil, err
 	}
 
+	cloud := isCloudServer(serverURL)
+
 	var models pconfig.ModelsConfig
 	for _, model := range response.Models {
 		modelConfig := pconfig.ModelConfig{
-			Name:  model.Name,
-			Price: nil, // ollama is free local inference, no pricing
+			Name:     model.Name,
+			Thinking: thinkingCapability(model.Name, model.Capabilities),
+		}
+		if cloud {
+			modelConfig.Price = cloudPriceFor(model.Name)
 		}
 		models = append(models, modelConfig)
 	}
 
 	return models, nil
+}
+
+func thinkingCapability(name string, declared []ollamamodel.Capability) *bool {
+	var thinking bool
+	if len(declared) > 0 {
+		thinking = slices.Contains(declared, ollamamodel.CapabilityThinking)
+	} else {
+		thinking = reasoning.IsReasoningModel(name)
+	}
+	if !thinking {
+		return nil
+	}
+
+	return &thinking
 }
 
 func getConfigModelsList(baseModel string, providerConfig *pconfig.ProviderConfig) []string {
@@ -108,6 +129,25 @@ func getConfigModelsList(baseModel string, providerConfig *pconfig.ProviderConfi
 	}
 
 	slices.Sort(models)
+
+	return models
+}
+
+func catalogFromConfig(baseModel, serverURL string, providerConfig *pconfig.ProviderConfig) pconfig.ModelsConfig {
+	cloud := isCloudServer(serverURL)
+
+	names := getConfigModelsList(baseModel, providerConfig)
+	models := make(pconfig.ModelsConfig, 0, len(names))
+	for _, name := range names {
+		modelConfig := pconfig.ModelConfig{
+			Name:     name,
+			Thinking: thinkingCapability(name, nil),
+		}
+		if cloud {
+			modelConfig.Price = cloudPriceFor(name)
+		}
+		models = append(models, modelConfig)
+	}
 
 	return models
 }
@@ -193,22 +233,23 @@ func New(
 	if cfg.OllamaServerAPIKey != "" {
 		options = append(options, ollama.WithAPIKey(cfg.OllamaServerAPIKey))
 	}
+	if isCloudServer(serverURL) {
+		options = append(options, ollama.WithCloudStructuredOutputFallback())
+	}
 
 	client, err := ollama.New(options...)
 	if err != nil {
 		return nil, err
 	}
 
-	availableModels := pconfig.ModelsConfig{
-		{
-			Name: baseModel,
-		},
-	}
+	var availableModels pconfig.ModelsConfig
 	if cfg.OllamaServerLoadModelsEnabled {
-		availableModels, err = loadAvailableModelsFromServer(apiClient)
+		availableModels, err = loadAvailableModelsFromServer(apiClient, serverURL)
 		if err != nil {
 			return nil, err
 		}
+	} else {
+		availableModels = catalogFromConfig(baseModel, serverURL, providerConfig)
 	}
 
 	return &ollamaProvider{
@@ -237,7 +278,22 @@ func (p *ollamaProvider) GetProviderConfig() *pconfig.ProviderConfig {
 }
 
 func (p *ollamaProvider) GetPriceInfo(opt pconfig.ProviderOptionsType) *pconfig.PriceInfo {
-	return p.providerConfig.GetPriceInfoForType(opt)
+	if price := p.providerConfig.GetPriceInfoForType(opt); price != nil {
+		return price
+	}
+
+	model := p.model
+	if agent := p.providerConfig.AgentConfigForType(opt); agent != nil && agent.Model != "" {
+		model = agent.Model
+	}
+
+	for _, available := range p.models {
+		if available.Name == model {
+			return available.Price
+		}
+	}
+
+	return nil
 }
 
 func (p *ollamaProvider) GetModels() pconfig.ModelsConfig {
@@ -300,7 +356,6 @@ func (p *ollamaProvider) CallWithTools(
 	)
 }
 
-// CallWithExtraOptions: extra is appended last, so it overrides the config.
 func (p *ollamaProvider) CallWithExtraOptions(
 	ctx context.Context,
 	opt pconfig.ProviderOptionsType,

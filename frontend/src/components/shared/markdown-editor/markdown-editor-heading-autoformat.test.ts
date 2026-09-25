@@ -602,6 +602,8 @@ describe('re-entrancy & inert nodes', () => {
         expect(liveHeadings(editor)).toBe(0);
         expect(editor.state.doc.textContent).toBe('# Title trailing');
         expect(editor.getMarkdown().trimEnd()).toBe('`# Title` trailing');
+
+        editor.destroy();
     });
 
     it('an empty paragraph is skipped without throwing during the scan', () => {

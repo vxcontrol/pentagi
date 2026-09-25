@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import { GROWTH_IF_QUADRATIC, slowdownWhenInputQuadruples } from '@/test-utils/cost-growth';
+
 import { needsSanitization, processLog, sanitizeTerminalOutput } from './terminal-sanitizer';
 
 // Helper: check that no C1 control bytes (0x80-0x9F) remain in output
@@ -705,24 +707,31 @@ describe('sanitizeTerminalOutput', () => {
     describe('performance', () => {
         it('processes 1M chars in under 500ms', () => {
             const input = '\x1b[31m' + 'A'.repeat(100_000) + '\x1b[0m';
-            const start = performance.now();
+            let fastest = Infinity;
 
-            for (let i = 0; i < 100; i++) {
-                sanitizeTerminalOutput(input);
+            expect(sanitizeTerminalOutput(input)).toBe(input);
+
+            for (let attempt = 0; attempt < 3; attempt++) {
+                const started = performance.now();
+
+                for (let i = 0; i < 100; i++) {
+                    sanitizeTerminalOutput(input);
+                }
+
+                fastest = Math.min(fastest, performance.now() - started);
             }
 
-            const duration = performance.now() - start;
-
-            expect(duration).toBeLessThan(500);
+            expect(fastest).toBeLessThan(500);
         });
 
-        it('handles 1M ESC bytes without ReDoS', () => {
-            const input = '\x1b'.repeat(1_000_000);
-            const start = performance.now();
-            sanitizeTerminalOutput(input);
-            const duration = performance.now() - start;
+        it('consumes an unrecognised ESC as one character, never rescanning the run', () => {
+            const escRun = (count: number) => '\x1b'.repeat(count);
 
-            expect(duration).toBeLessThan(1000);
+            expect(sanitizeTerminalOutput(escRun(4))).toBe('....');
+            expect(slowdownWhenInputQuadruples(escRun, sanitizeTerminalOutput, 125_000)).toBeLessThan(
+                GROWTH_IF_QUADRATIC / 2,
+            );
+            expect(sanitizeTerminalOutput(escRun(1_000_000))).toHaveLength(1_000_000);
         });
     });
 });

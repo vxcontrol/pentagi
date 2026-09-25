@@ -558,8 +558,6 @@ export const dedupeOverlappingPaths = (paths: Iterable<string>): string[] => {
     return result;
 };
 
-export const clamp = (min: number, value: number, max: number): number => Math.max(min, Math.min(value, max));
-
 export const getCheckboxState = (isAllSelected: boolean, isSomeSelected: boolean): 'indeterminate' | boolean => {
     if (isAllSelected) {
         return true;
@@ -598,8 +596,9 @@ export const collectSubtreePaths = (node: FileManagerInternalNode): string[] => 
     return result;
 };
 
-/** Default English pluralization for "N item" / "N items". Override via `labels.pluralizeItems`. */
-export const pluralizeItemsEnglish = (count: number): string => `${count} ${count === 1 ? 'item' : 'items'}`;
+export const pluralizeItems = (count: number): string => (count === 1 ? 'item' : 'items');
+
+export const pluralizeItemsEnglish = (count: number): string => `${count} ${pluralizeItems(count)}`;
 
 /**
  * Recursively sum every file's `size` inside a node's subtree. Synthetic group
@@ -625,9 +624,72 @@ const sumSubtreeBytes = (node: FileManagerInternalNode): number => {
     return node.size ?? 0;
 };
 
+const isSubtreeFullySelected = (node: FileManagerInternalNode, selectedPaths: ReadonlySet<string>): boolean => {
+    if (node.isGroupRoot || !selectedPaths.has(node.path)) {
+        return false;
+    }
+
+    return node.children.every((child) => isSubtreeFullySelected(child, selectedPaths));
+};
+
+interface ResolveActionPathsArgs {
+    selectedPaths: ReadonlySet<string>;
+    tree: readonly FileManagerInternalNode[];
+}
+
+/**
+ * Paths a bulk action (or a drag) should carry. Move, copy and delete are
+ * recursive on the server, so a directory may only stand in for its descendants
+ * when every one of them is selected.
+ *
+ * Pass the full tree, never the visible one: a search filter hides descendants
+ * without deselecting them, and they would pass for "all selected".
+ */
+export const resolveActionPaths = ({ selectedPaths, tree }: ResolveActionPathsArgs): string[] => {
+    if (selectedPaths.size === 0) {
+        return [];
+    }
+
+    const paths: string[] = [];
+
+    const walk = (nodes: readonly FileManagerInternalNode[]): void => {
+        for (const node of nodes) {
+            if (isSubtreeFullySelected(node, selectedPaths)) {
+                paths.push(node.path);
+
+                continue;
+            }
+
+            walk(node.children);
+        }
+    };
+
+    walk(tree);
+
+    return paths;
+};
+
+const countSubtreeNodes = (node: FileManagerInternalNode): number =>
+    node.children.reduce((total, child) => total + countSubtreeNodes(child), 1);
+
+/** How many rows an action on `paths` will touch, descendants included. */
+export const countAffectedEntries = (tree: readonly FileManagerInternalNode[], paths: Iterable<string>): number => {
+    let total = 0;
+
+    for (const path of paths) {
+        const node = findNodeByPath(tree, path);
+
+        if (node) {
+            total += countSubtreeNodes(node);
+        }
+    }
+
+    return total;
+};
+
 /**
  * Cumulative byte total for the bulk-bar size summary. Walks `paths` (which the
- * caller is expected to have already deduped via `dedupeOverlappingPaths`) and
+ * caller is expected to have already resolved via `resolveActionPaths`) and
  * adds each entry's contribution: a file pulls its own `size`, a directory pulls
  * the recursive sum of its descendants.
  *

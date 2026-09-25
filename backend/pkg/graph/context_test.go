@@ -2,429 +2,464 @@ package graph
 
 import (
 	"context"
+	"errors"
+	"strconv"
 	"strings"
 	"testing"
+
+	"pentagi/pkg/database"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-// --- UserID ---
-
-func TestGetUserID_Found(t *testing.T) {
+func TestContext_GetUserID_ReturnsTheStoredIDOrNotFound(t *testing.T) {
 	t.Parallel()
 
-	ctx := SetUserID(t.Context(), 42)
-	id, err := GetUserID(ctx)
-	require.NoError(t, err)
-	assert.Equal(t, uint64(42), id)
-}
-
-func TestGetUserID_Missing(t *testing.T) {
-	t.Parallel()
-
-	_, err := GetUserID(t.Context())
-	require.EqualError(t, err, "user ID not found")
-}
-
-func TestGetUserID_WrongType(t *testing.T) {
-	t.Parallel()
-
-	ctx := context.WithValue(t.Context(), UserIDKey, "not-a-uint64")
-	_, err := GetUserID(ctx)
-	require.EqualError(t, err, "user ID not found")
-}
-
-func TestSetUserID_Roundtrip(t *testing.T) {
-	t.Parallel()
-
-	ctx := SetUserID(t.Context(), 99)
-	id, err := GetUserID(ctx)
-	require.NoError(t, err)
-	assert.Equal(t, uint64(99), id)
-}
-
-// --- UserType ---
-
-func TestGetUserType_Found(t *testing.T) {
-	t.Parallel()
-
-	ctx := SetUserType(t.Context(), "local")
-	ut, err := GetUserType(ctx)
-	require.NoError(t, err)
-	assert.Equal(t, "local", ut)
-}
-
-func TestGetUserType_Missing(t *testing.T) {
-	t.Parallel()
-
-	_, err := GetUserType(t.Context())
-	require.EqualError(t, err, "user type not found")
-}
-
-func TestGetUserType_WrongType(t *testing.T) {
-	t.Parallel()
-
-	ctx := context.WithValue(t.Context(), UserTypeKey, 123)
-	_, err := GetUserType(ctx)
-	require.EqualError(t, err, "user type not found")
-}
-
-func TestSetUserType_Roundtrip(t *testing.T) {
-	t.Parallel()
-
-	ctx := SetUserType(t.Context(), "oauth")
-	ut, err := GetUserType(ctx)
-	require.NoError(t, err)
-	assert.Equal(t, "oauth", ut)
-}
-
-// --- UserPermissions ---
-
-func TestGetUserPermissions_Found(t *testing.T) {
-	t.Parallel()
-
-	perms := []string{"flows.read", "flows.admin"}
-	ctx := SetUserPermissions(t.Context(), perms)
-	got, err := GetUserPermissions(ctx)
-	require.NoError(t, err)
-	assert.Equal(t, perms, got)
-}
-
-func TestGetUserPermissions_Missing(t *testing.T) {
-	t.Parallel()
-
-	_, err := GetUserPermissions(t.Context())
-	require.EqualError(t, err, "user permissions not found")
-}
-
-func TestGetUserPermissions_WrongType(t *testing.T) {
-	t.Parallel()
-
-	ctx := context.WithValue(t.Context(), UserPermissions, "not-a-slice")
-	_, err := GetUserPermissions(ctx)
-	require.EqualError(t, err, "user permissions not found")
-}
-
-func TestSetUserPermissions_Roundtrip(t *testing.T) {
-	t.Parallel()
-
-	perms := []string{"a.read", "b.write"}
-	ctx := SetUserPermissions(t.Context(), perms)
-	got, err := GetUserPermissions(ctx)
-	require.NoError(t, err)
-	assert.Equal(t, perms, got)
-}
-
-// --- validateUserType ---
-
-func TestValidateUserType(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
+	for _, tt := range []struct {
 		name    string
 		ctx     context.Context
-		allowed []string
-		wantOK  bool
+		want    uint64
 		wantErr string
 	}{
-		{
-			name:    "allowed type",
-			ctx:     SetUserType(t.Context(), "local"),
-			allowed: []string{"local", "oauth"},
-			wantOK:  true,
-			wantErr: "",
-		},
-		{
-			name:    "type missing from context",
-			ctx:     t.Context(),
-			allowed: []string{"local"},
-			wantOK:  false,
-			wantErr: "unauthorized: invalid user type: user type not found",
-		},
-		{
-			name:    "unsupported type",
-			ctx:     SetUserType(t.Context(), "apikey"),
-			allowed: []string{"local", "oauth"},
-			wantOK:  false,
-			wantErr: "unauthorized: invalid user type: apikey",
-		},
-		{
-			name:    "oauth type allowed",
-			ctx:     SetUserType(t.Context(), "oauth"),
-			allowed: []string{"local", "oauth"},
-			wantOK:  true,
-			wantErr: "",
-		},
-		{
-			name:    "single allowed type matches",
-			ctx:     SetUserType(t.Context(), "local"),
-			allowed: []string{"local"},
-			wantOK:  true,
-			wantErr: "",
-		},
-		{
-			name:    "empty allowed list",
-			ctx:     SetUserType(t.Context(), "local"),
-			allowed: []string{},
-			wantOK:  false,
-			wantErr: "unauthorized: invalid user type: local",
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			ok, err := validateUserType(tc.ctx, tc.allowed...)
-
-			assert.Equal(t, tc.wantOK, ok, "ok value mismatch")
-
-			if tc.wantErr != "" {
-				require.EqualError(t, err, tc.wantErr)
-			} else {
-				require.NoError(t, err)
-			}
-		})
-	}
-}
-
-// --- validatePermission ---
-
-func TestValidatePermission(t *testing.T) {
-	t.Parallel()
-
-	makeCtx := func(uid uint64, perms []string) context.Context {
-		ctx := SetUserID(t.Context(), uid)
-		return SetUserPermissions(ctx, perms)
-	}
-
-	tests := []struct {
-		name      string
-		ctx       context.Context
-		perm      string
-		wantUID   int64
-		wantAdmin bool
-		wantErr   string
-	}{
-		{
-			name:      "exact permission match",
-			ctx:       makeCtx(1, []string{"flows.read"}),
-			perm:      "flows.read",
-			wantUID:   1,
-			wantAdmin: false,
-			wantErr:   "",
-		},
-		{
-			name:      "admin permission via wildcard",
-			ctx:       makeCtx(2, []string{"flows.admin"}),
-			perm:      "flows.read",
-			wantUID:   2,
-			wantAdmin: true,
-			wantErr:   "",
-		},
-		{
-			name:      "admin permission for write",
-			ctx:       makeCtx(3, []string{"tasks.admin"}),
-			perm:      "tasks.write",
-			wantUID:   3,
-			wantAdmin: true,
-			wantErr:   "",
-		},
-		{
-			name:      "admin permission for delete",
-			ctx:       makeCtx(4, []string{"users.admin"}),
-			perm:      "users.delete",
-			wantUID:   4,
-			wantAdmin: true,
-			wantErr:   "",
-		},
-		{
-			name:      "multiple permissions with admin",
-			ctx:       makeCtx(5, []string{"flows.read", "tasks.admin", "users.write"}),
-			perm:      "tasks.read",
-			wantUID:   5,
-			wantAdmin: true,
-			wantErr:   "",
-		},
-		{
-			name:      "multiple permissions exact match",
-			ctx:       makeCtx(6, []string{"flows.read", "tasks.write", "users.admin"}),
-			perm:      "flows.read",
-			wantUID:   6,
-			wantAdmin: false,
-			wantErr:   "",
-		},
-		{
-			name:    "user ID missing",
-			ctx:     SetUserPermissions(t.Context(), []string{"flows.read"}),
-			perm:    "flows.read",
-			wantErr: "unauthorized: invalid user: user ID not found",
-		},
-		{
-			name:    "permissions missing",
-			ctx:     SetUserID(t.Context(), 3),
-			perm:    "flows.read",
-			wantErr: "unauthorized: invalid user permissions: user permissions not found",
-		},
-		{
-			name:    "permission not found",
-			ctx:     makeCtx(4, []string{"other.read"}),
-			perm:    "flows.read",
-			wantErr: "requested permission 'flows.read' not found",
-		},
-		{
-			name:    "empty permissions list",
-			ctx:     makeCtx(7, []string{}),
-			perm:    "flows.read",
-			wantErr: "requested permission 'flows.read' not found",
-		},
-		{
-			name:      "permission without dot separator",
-			ctx:       makeCtx(8, []string{"admin"}),
-			perm:      "admin",
-			wantUID:   8,
-			wantAdmin: true,
-			wantErr:   "",
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			uid, admin, err := validatePermission(tc.ctx, tc.perm)
-
-			if tc.wantErr != "" {
-				require.EqualError(t, err, tc.wantErr)
-				assert.Equal(t, int64(0), uid, "uid should be 0 on error")
-				assert.False(t, admin, "admin should be false on error")
-			} else {
-				require.NoError(t, err)
-				assert.Equal(t, tc.wantUID, uid)
-				assert.Equal(t, tc.wantAdmin, admin)
-			}
-		})
-	}
-}
-
-func TestPermAdminRegexp(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name     string
-		input    string
-		expected string
-	}{
-		{"flows.read to flows.admin", "flows.read", "flows.admin"},
-		{"tasks.write to tasks.admin", "tasks.write", "tasks.admin"},
-		{"users.delete to users.admin", "users.delete", "users.admin"},
-		{"assistants.create to assistants.admin", "assistants.create", "assistants.admin"},
-		{"no dot separator", "admin", "admin"},
-		{"multiple dots", "system.flows.read", "system.flows.admin"},
-		{"uppercase action no match", "flows.READ", "flows.READ"},
-		{"numbers in resource", "task123.read", "task123.admin"},
-	}
-
-	for _, tt := range tests {
+		{name: "an id set by SetUserID", ctx: SetUserID(context.Background(), 42), want: 42},
+		{name: "a zero id is still an id", ctx: SetUserID(context.Background(), 0), want: 0},
+		{name: "no id in the context", ctx: context.Background(), wantErr: "user ID not found"},
+		{name: "a value of another type", ctx: context.WithValue(context.Background(), UserIDKey, "not-a-uint64"), wantErr: "user ID not found"},
+	} {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			result := permAdminRegexp.ReplaceAllString(tt.input, "$1.admin")
-			assert.Equal(t, tt.expected, result)
+			got, err := GetUserID(tt.ctx)
+			if tt.wantErr != "" {
+				require.EqualError(t, err, tt.wantErr)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }
 
-func TestValidatePermission_ZeroUserID(t *testing.T) {
+func TestContext_GetUserType_ReturnsTheStoredTypeOrNotFound(t *testing.T) {
 	t.Parallel()
 
-	ctx := SetUserID(t.Context(), 0)
-	ctx = SetUserPermissions(ctx, []string{"flows.read"})
+	for _, tt := range []struct {
+		name    string
+		ctx     context.Context
+		want    string
+		wantErr string
+	}{
+		{name: "a type set by SetUserType", ctx: SetUserType(context.Background(), "local"), want: "local"},
+		{name: "no type in the context", ctx: context.Background(), wantErr: "user type not found"},
+		{name: "a value of another type", ctx: context.WithValue(context.Background(), UserTypeKey, 123), wantErr: "user type not found"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 
-	uid, admin, err := validatePermission(ctx, "flows.read")
-	require.NoError(t, err)
-	assert.Equal(t, int64(0), uid)
-	assert.False(t, admin)
+			got, err := GetUserType(tt.ctx)
+			if tt.wantErr != "" {
+				require.EqualError(t, err, tt.wantErr)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
 }
 
-func TestValidatePermission_LargeUserID(t *testing.T) {
+func TestContext_GetUserPermissions_ReturnsTheStoredSliceOrNotFound(t *testing.T) {
 	t.Parallel()
 
-	ctx := SetUserID(t.Context(), 9223372036854775807) // max int64
-	ctx = SetUserPermissions(ctx, []string{"flows.read"})
+	for _, tt := range []struct {
+		name    string
+		ctx     context.Context
+		want    []string
+		wantErr string
+	}{
+		{
+			name: "permissions set by SetUserPermissions",
+			ctx:  SetUserPermissions(context.Background(), []string{"flows.read", "flows.admin"}),
+			want: []string{"flows.read", "flows.admin"},
+		},
+		{name: "an empty slice stays empty", ctx: SetUserPermissions(context.Background(), []string{}), want: []string{}},
+		{name: "a nil slice stays nil", ctx: SetUserPermissions(context.Background(), nil), want: nil},
+		{name: "no permissions in the context", ctx: context.Background(), wantErr: "user permissions not found"},
+		{
+			name:    "a value of another type",
+			ctx:     context.WithValue(context.Background(), UserPermissions, "not-a-slice"),
+			wantErr: "user permissions not found",
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 
-	uid, admin, err := validatePermission(ctx, "flows.read")
-	require.NoError(t, err)
-	assert.Equal(t, int64(9223372036854775807), uid)
-	assert.False(t, admin)
+			got, err := GetUserPermissions(tt.ctx)
+			if tt.wantErr != "" {
+				require.EqualError(t, err, tt.wantErr)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
 }
 
-func TestGetUserID_ZeroValue(t *testing.T) {
+func TestContext_ValidateUserType_AllowsOnlyTheListedSessionTypes(t *testing.T) {
 	t.Parallel()
 
-	ctx := SetUserID(t.Context(), 0)
-	id, err := GetUserID(ctx)
-	require.NoError(t, err)
-	assert.Equal(t, uint64(0), id)
+	for _, tt := range []struct {
+		name         string
+		ctx          context.Context
+		allowed      []string
+		wantOK       bool
+		wantSentinel error
+		wantIn       string
+	}{
+		{name: "allowed type", ctx: SetUserType(context.Background(), "local"), allowed: []string{"local", "oauth"}, wantOK: true},
+		{name: "allowed type later in the list", ctx: SetUserType(context.Background(), "oauth"), allowed: []string{"local", "oauth"}, wantOK: true},
+		{
+			name:         "type missing from context",
+			ctx:          context.Background(),
+			allowed:      []string{"local"},
+			wantSentinel: ErrUnauthenticated,
+			wantIn:       "user type not found",
+		},
+		{
+			name:         "unsupported type",
+			ctx:          SetUserType(context.Background(), "apikey"),
+			allowed:      []string{"local", "oauth"},
+			wantSentinel: ErrForbidden,
+			wantIn:       "apikey",
+		},
+		{
+			name:         "empty allowed list",
+			ctx:          SetUserType(context.Background(), "local"),
+			allowed:      []string{},
+			wantSentinel: ErrForbidden,
+			wantIn:       "local",
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			ok, err := validateUserType(tt.ctx, tt.allowed...)
+
+			assert.Equal(t, tt.wantOK, ok, "ok value mismatch")
+			if tt.wantSentinel == nil {
+				require.NoError(t, err)
+				return
+			}
+			require.ErrorIs(t, err, tt.wantSentinel)
+			assert.Contains(t, err.Error(), tt.wantIn)
+		})
+	}
 }
 
-func TestGetUserPermissions_EmptySlice(t *testing.T) {
+func TestContext_ValidatePermission_GrantsTheExactPermissionOrItsAdmin(t *testing.T) {
 	t.Parallel()
 
-	ctx := SetUserPermissions(t.Context(), []string{})
-	perms, err := GetUserPermissions(ctx)
-	require.NoError(t, err)
-	assert.Equal(t, []string{}, perms)
-	assert.Len(t, perms, 0)
+	for _, tt := range []struct {
+		name         string
+		ctx          context.Context
+		perm         string
+		wantUID      int64
+		wantAdmin    bool
+		wantErr      string
+		wantSentinel error
+	}{
+		{name: "exact permission match", ctx: graphUserContext(1, "flows.read"), perm: "flows.read", wantUID: 1},
+		{name: "the resource's admin grants the action", ctx: graphUserContext(2, "flows.admin"), perm: "flows.delete", wantUID: 2, wantAdmin: true},
+		{
+			name:      "an admin grant later in the list",
+			ctx:       graphUserContext(5, "flows.read", "tasks.admin", "users.write"),
+			perm:      "tasks.subscribe",
+			wantUID:   5,
+			wantAdmin: true,
+		},
+		{
+			name:    "another resource's admin does not widen an exact grant",
+			ctx:     graphUserContext(6, "flows.read", "tasks.write", "users.admin"),
+			perm:    "flows.read",
+			wantUID: 6,
+		},
+		{name: "permission without dot separator", ctx: graphUserContext(8, "admin"), perm: "admin", wantUID: 8, wantAdmin: true},
+		{
+			name:      "a dotted resource keeps every segment before the action",
+			ctx:       graphUserContext(9, "settings.providers.admin"),
+			perm:      "settings.providers.edit",
+			wantUID:   9,
+			wantAdmin: true,
+		},
+		{name: "digits in the resource are kept", ctx: graphUserContext(10, "task123.admin"), perm: "task123.read", wantUID: 10, wantAdmin: true},
+		{name: "a zero user id is returned as is", ctx: graphUserContext(0, "flows.read"), perm: "flows.read", wantUID: 0},
+		{
+			name:    "the largest int64 user id survives the conversion",
+			ctx:     graphUserContext(9223372036854775807, "flows.read"),
+			perm:    "flows.read",
+			wantUID: 9223372036854775807,
+		},
+		{
+			name:         "user ID missing",
+			ctx:          SetUserPermissions(context.Background(), []string{"flows.read"}),
+			perm:         "flows.read",
+			wantErr:      "invalid user: user ID not found",
+			wantSentinel: ErrUnauthenticated,
+		},
+		{
+			name:         "permissions missing",
+			ctx:          SetUserID(context.Background(), 3),
+			perm:         "flows.read",
+			wantErr:      "invalid user permissions: user permissions not found",
+			wantSentinel: ErrUnauthenticated,
+		},
+		{
+			name:         "permission not found",
+			ctx:          graphUserContext(4, "other.read"),
+			perm:         "flows.read",
+			wantErr:      `requested permission "flows.read" not found`,
+			wantSentinel: ErrForbidden,
+		},
+		{
+			name:         "empty permissions list",
+			ctx:          graphUserContext(7),
+			perm:         "flows.read",
+			wantErr:      `requested permission "flows.read" not found`,
+			wantSentinel: ErrForbidden,
+		},
+		{
+			name:         "an upper-case action is not widened to admin",
+			ctx:          graphUserContext(11, "flows.admin"),
+			perm:         "flows.READ",
+			wantErr:      `requested permission "flows.READ" not found`,
+			wantSentinel: ErrForbidden,
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			uid, admin, err := validatePermission(tt.ctx, tt.perm)
+
+			if tt.wantErr != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.wantErr)
+				assert.ErrorIs(t, err, tt.wantSentinel, "the presenter classifies by sentinel, not by prose")
+				assert.Equal(t, int64(0), uid, "uid should be 0 on error")
+				assert.False(t, admin, "admin should be false on error")
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantUID, uid)
+			assert.Equal(t, tt.wantAdmin, admin)
+		})
+	}
 }
 
-func TestGetUserPermissions_NilSlice(t *testing.T) {
+func TestContext_ValidatePermissionWithFlowID_RefusesAnotherUsersFlowUnlessAdmin(t *testing.T) {
 	t.Parallel()
 
-	ctx := SetUserPermissions(t.Context(), nil)
-	perms, err := GetUserPermissions(ctx)
-	require.NoError(t, err)
-	assert.Nil(t, perms)
+	for _, tt := range []struct {
+		name    string
+		perm    string
+		wantUID int64
+		wantErr error
+	}{
+		{name: "another user's flow is refused", perm: "flows.view", wantErr: ErrForbidden},
+		{name: "an admin passes on another user's flow", perm: "flows.admin", wantUID: 1},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			uid, err := validatePermissionWithFlowID(graphUserContext(1, tt.perm), "flows.view", 5, &graphDB{flowOwner: 2})
+
+			if tt.wantErr != nil {
+				require.ErrorIs(t, err, tt.wantErr)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantUID, uid)
+		})
+	}
 }
 
-func TestValidateKnowledgeFieldLengths(t *testing.T) {
-	tests := []struct {
+func TestContext_ValidateUserResources_RefusesAnotherUsersResourceUnlessAdmin(t *testing.T) {
+	t.Parallel()
+
+	for _, tt := range []struct {
+		name    string
+		isAdmin bool
+		wantErr error
+	}{
+		{name: "another user's resource is refused", wantErr: ErrForbidden},
+		{name: "an admin gets another user's resource", isAdmin: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			db := &graphDB{resources: []database.UserResource{{ID: 7, UserID: 2}}}
+
+			got, err := validateUserResources(context.Background(), db, 1, tt.isAdmin, []int64{7})
+
+			if tt.wantErr != nil {
+				require.ErrorIs(t, err, tt.wantErr)
+				return
+			}
+			require.NoError(t, err)
+			require.Len(t, got, 1)
+			assert.Equal(t, int64(7), got[0].ID)
+		})
+	}
+}
+
+func TestContext_ParseFlowID_ReadsTheNumberAndNamesABadGroupID(t *testing.T) {
+	t.Parallel()
+
+	for _, tt := range []struct {
+		name    string
+		groupID string
+		want    int64
+		wantErr string
+	}{
+		{name: "a flow id", groupID: "flow-42", want: 42},
+		{name: "a zero flow id", groupID: "flow-0", want: 0},
+		{name: "an id past the int32 range", groupID: "flow-9999999999", want: 9999999999},
+		{name: "no number after the prefix", groupID: "flow-", wantErr: "invalid flow ID"},
+		{name: "letters after the prefix", groupID: "flow-abc", wantErr: "invalid flow ID"},
+		{name: "a number past the int64 range", groupID: "flow-99999999999999999999", wantErr: "invalid flow ID"},
+		{name: "no separator", groupID: "invalid", wantErr: "invalid groupId format"},
+		{name: "an empty group id", groupID: "", wantErr: "invalid groupId format"},
+		{name: "another prefix", groupID: "group-42", wantErr: "invalid groupId format"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := parseFlowID(tt.groupID)
+
+			if tt.wantErr == "" {
+				require.NoError(t, err)
+				assert.Equal(t, tt.want, got)
+				return
+			}
+			require.ErrorContains(t, err, tt.wantErr)
+			var numErr *strconv.NumError
+			assert.False(t, errors.As(err, &numErr),
+				"the door classifies a bare number-parsing error as an unreadable argument and drops this message")
+			assert.Contains(t, err.Error(), strconv.Quote(tt.groupID))
+			assert.NotContains(t, err.Error(), "strconv")
+		})
+	}
+}
+
+func TestContext_ValidateKnowledgeFieldLengths_RefusesTheFieldOverItsLimit(t *testing.T) {
+	t.Parallel()
+
+	for _, tt := range []struct {
 		name        string
 		content     string
 		question    *string
 		description *string
 		codeLang    *string
-		wantErr     bool
+		wantErr     string
 	}{
-		{name: "all empty/nil is valid", content: ""},
-		{name: "all fields at their max is valid",
-			content:     strings.Repeat("a", maxKnowledgeContentLen),
-			question:    strOfLen(maxKnowledgeQuestionLen),
-			description: strOfLen(maxKnowledgeDescriptionLen),
-			codeLang:    strOfLen(maxKnowledgeCodeLangLen),
+		{name: "every field empty or absent"},
+		{
+			name:        "every field at its limit in multibyte runes",
+			content:     strings.Repeat("я", maxKnowledgeContentLen),
+			question:    strPtr(strings.Repeat("я", maxKnowledgeQuestionLen)),
+			description: strPtr(strings.Repeat("я", maxKnowledgeDescriptionLen)),
+			codeLang:    strPtr(strings.Repeat("я", maxKnowledgeCodeLangLen)),
 		},
-		{name: "content one over max", content: strings.Repeat("a", maxKnowledgeContentLen+1), wantErr: true},
-		{name: "question one over max", question: strOfLen(maxKnowledgeQuestionLen + 1), wantErr: true},
-		{name: "description one over max", description: strOfLen(maxKnowledgeDescriptionLen + 1), wantErr: true},
-		{name: "code language one over max", codeLang: strOfLen(maxKnowledgeCodeLangLen + 1), wantErr: true},
-		{name: "nil optionals with content at max", content: strings.Repeat("a", maxKnowledgeContentLen)},
-	}
-
-	for _, tt := range tests {
+		{name: "content one over", content: strings.Repeat("a", maxKnowledgeContentLen+1), wantErr: "content must not exceed"},
+		{name: "question one over", question: strPtr(strings.Repeat("a", maxKnowledgeQuestionLen+1)), wantErr: "question must not exceed"},
+		{
+			name:        "description one over",
+			description: strPtr(strings.Repeat("a", maxKnowledgeDescriptionLen+1)),
+			wantErr:     "description must not exceed",
+		},
+		{name: "code language one over", codeLang: strPtr(strings.Repeat("a", maxKnowledgeCodeLangLen+1)), wantErr: "code language must not exceed"},
+	} {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := validateKnowledgeFieldLengths(tt.content, tt.question, tt.description, tt.codeLang)
-			if tt.wantErr && err == nil {
-				t.Fatalf("expected an error, got nil")
+
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+				return
 			}
-			if !tt.wantErr && err != nil {
-				t.Fatalf("expected no error, got %v", err)
-			}
+			require.NoError(t, err)
 		})
 	}
 }
 
-func strOfLen(n int) *string {
-	s := strings.Repeat("a", n)
-	return &s
+func TestContext_ValidateKnowledgeSearch_BoundsTheLimitAndValidatesTheQuery(t *testing.T) {
+	t.Parallel()
+
+	intPtr := func(v int) *int { return &v }
+
+	for _, tt := range []struct {
+		name    string
+		query   string
+		limit   *int
+		wantLim int
+		wantErr string
+	}{
+		{name: "no limit means the store default", query: "ports", wantLim: 0},
+		{name: "explicit zero limit means the store default", query: "ports", limit: intPtr(0), wantLim: 0},
+		{name: "limit at the max", query: "ports", limit: intPtr(100), wantLim: 100},
+		{name: "limit one over the max", query: "ports", limit: intPtr(101), wantErr: "limit must not exceed 100"},
+		{name: "limit one below zero", query: "ports", limit: intPtr(-1), wantErr: "limit must not be negative"},
+		{name: "a blank query", query: "   ", limit: intPtr(10), wantErr: "question is required"},
+		{name: "a query one over the max", query: strings.Repeat("a", maxKnowledgeQuestionLen+1), limit: intPtr(10), wantErr: "question must not exceed"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			lim, err := validateKnowledgeSearch(tt.query, tt.limit)
+
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantLim, lim)
+		})
+	}
+}
+
+func TestContext_ValidateFlowTemplateFields_TrimsAndBoundsTitleAndText(t *testing.T) {
+	t.Parallel()
+
+	longTitle, longText := strings.Repeat("я", 255), strings.Repeat("я", 65536)
+
+	for _, tt := range []struct {
+		name      string
+		title     string
+		text      string
+		wantTitle string
+		wantText  string
+		wantErr   string
+	}{
+		{name: "padded values are stored trimmed", title: "  Padded  ", text: "  body  ", wantTitle: "Padded", wantText: "body"},
+		{name: "whitespace-only title", title: "\t\n  ", text: "body", wantErr: "title is required"},
+		{name: "whitespace-only text", title: "title", text: " \t\n", wantErr: "text is required"},
+		{name: "multibyte title at the limit", title: longTitle, text: "body", wantTitle: longTitle, wantText: "body"},
+		{name: "title one over the limit", title: strings.Repeat("a", 256), text: "body", wantErr: "title must not exceed 255 characters"},
+		{name: "multibyte text at the limit", title: "title", text: longText, wantTitle: "title", wantText: longText},
+		{name: "text one over the limit", title: "title", text: strings.Repeat("a", 65537), wantErr: "text must not exceed 65536 characters"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			gotTitle, gotText, err := validateFlowTemplateFields(tt.title, tt.text)
+
+			if tt.wantErr != "" {
+				require.EqualError(t, err, tt.wantErr)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantTitle, gotTitle)
+			assert.Equal(t, tt.wantText, gotText)
+		})
+	}
 }

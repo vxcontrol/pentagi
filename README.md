@@ -36,6 +36,8 @@
     - [Kimi](#kimi-provider-configuration)
     - [Qwen](#qwen-provider-configuration)
     - [MiniMax](#minimax-provider-configuration)
+    - [Mistral](#mistral-provider-configuration)
+    - [xAI (Grok)](#xai-grok-provider-configuration)
 - [Advanced Setup](#advanced-setup)
   - [Langfuse Integration](#langfuse-integration)
   - [Monitoring and Observability](#monitoring-and-observability)
@@ -75,7 +77,7 @@ You can watch the video **PentAGI overview**:
 - Persistent Storage. All commands and outputs are stored in PostgreSQL with [pgvector](https://hub.docker.com/r/vxcontrol/pgvector) extension.
 - Scalable Architecture. Microservices-based design supporting horizontal scaling.
 - Self-Hosted Solution. Complete control over your deployment and data.
-- Flexible Authentication. Support for 10+ LLM providers ([OpenAI](https://platform.openai.com/), [Anthropic](https://www.anthropic.com/), [Google AI/Gemini](https://ai.google.dev/), [AWS Bedrock](https://aws.amazon.com/bedrock/), [Ollama](https://ollama.com/), [DeepSeek](https://www.deepseek.com/en/), [GLM](https://z.ai/), [Kimi](https://platform.moonshot.ai/), [Qwen](https://www.alibabacloud.com/en/), [MiniMax](https://www.minimax.io/), Custom) plus aggregators ([OpenRouter](https://openrouter.ai/), [DeepInfra](https://deepinfra.com/), [Atlas Cloud](https://www.atlascloud.ai/), [OpenCode Go plan](https://opencode.ai/en/go)). For production local deployments, see our [vLLM + Qwen3.5-27B-FP8 guide](examples/guides/vllm-qwen35-27b-fp8.md).
+- Flexible Authentication. Support for 10+ LLM providers ([OpenAI](https://platform.openai.com/), [Anthropic](https://www.anthropic.com/), [Google AI/Gemini](https://ai.google.dev/), [AWS Bedrock](https://aws.amazon.com/bedrock/), [Ollama](https://ollama.com/), [DeepSeek](https://www.deepseek.com/en/), [GLM](https://z.ai/), [Kimi](https://platform.moonshot.ai/), [Qwen](https://www.alibabacloud.com/en/), [MiniMax](https://www.minimax.io/), [Mistral](https://mistral.ai/), [xAI](https://x.ai/), Custom) plus aggregators ([OpenRouter](https://openrouter.ai/), [DeepInfra](https://deepinfra.com/), [Atlas Cloud](https://www.atlascloud.ai/), [OpenCode Go plan](https://opencode.ai/en/go)). For production local deployments, see our [vLLM + Qwen3.5-27B-FP8 guide](examples/guides/vllm-qwen35-27b-fp8.md).
 - API Token Authentication. Secure Bearer token system for programmatic access to REST and GraphQL APIs.
 - Quick Deployment. Easy setup through [Docker Compose](https://docs.docker.com/compose/) with comprehensive environment configuration.
 
@@ -635,7 +637,7 @@ The installer requires appropriate privileges to interact with the Docker API fo
 The installer will:
 1. **System Checks**: Verify Docker, network connectivity, and system requirements
 2. **Environment Setup**: Create and configure `.env` file with optimal defaults
-3. **Provider Configuration**: Set up LLM providers (OpenAI, Anthropic, Gemini, Bedrock, Ollama, DeepSeek, GLM, Kimi, Qwen, MiniMax, Custom)
+3. **Provider Configuration**: Set up LLM providers (OpenAI, Anthropic, Gemini, Bedrock, Ollama, DeepSeek, GLM, Kimi, Qwen, MiniMax, Mistral, xAI, Custom)
 4. **Search Engines**: Configure DuckDuckGo, Google, Tavily, Firecrawl, Traversaal, Perplexity, Sploitus, Searxng, and the optional internal browser-analytics fallback engine
 5. **Security Hardening**: Generate secure credentials and configure SSL certificates
 6. **Deployment**: Start PentAGI with docker-compose
@@ -682,6 +684,7 @@ DOCKER_SOCKET=                                          # mount no socket
 DOCKER_INSIDE_HOST=tcp://10.0.0.5:3376                  # hardened dind endpoint
 DOCKER_INSIDE_TLS_VERIFY=1
 DOCKER_INSIDE_CERT_PATH=/etc/docker/dind/certs/client   # path on the worker node
+DOCKER_INSIDE_POLICY_TESTS=true                         # prove it on every worker; off by default
 ```
 
 PentAGI injects these into every worker container as `DOCKER_HOST`, `DOCKER_TLS_VERIFY` and `DOCKER_CERT_PATH` (the `_INSIDE_` segment is dropped) and bind-mounts the certificate directory read-only at the same path, so `docker` works inside the sandbox with no further setup.
@@ -766,6 +769,10 @@ BEDROCK_DEFAULT_AUTH=true                        # Option 1: Use AWS SDK default
 # QWEN_API_KEY=your_qwen_key                     # Qwen (Alibaba Cloud, multimodal)
 # MINIMAX_API_KEY=your_minimax_key               # MiniMax
 
+# Optional: European and US providers
+# MISTRAL_API_KEY=your_mistral_key               # Mistral
+# XAI_API_KEY=your_xai_key                       # xAI (Grok)
+
 # Optional: Local LLM provider (zero-cost inference)
 OLLAMA_SERVER_URL=http://localhost:11434
 OLLAMA_SERVER_MODEL=your_model_name
@@ -783,7 +790,7 @@ FIRECRAWL_API_KEY=your_firecrawl_key
 FIRECRAWL_API_URL=
 TRAVERSAAL_API_KEY=your_traversaal_key
 PERPLEXITY_API_KEY=your_perplexity_key
-PERPLEXITY_MODEL=sonar-pro
+PERPLEXITY_MODEL=
 PERPLEXITY_CONTEXT_SIZE=medium
 
 # Searxng meta search engine (aggregates results from multiple sources)
@@ -1438,16 +1445,9 @@ When using custom LLM providers with the `LLM_SERVER_*` variables, you can fine-
 | `LLM_SERVER_MODEL`              |         | Default model to use (can be overridden in provider config)                             |
 | `LLM_SERVER_CONFIG_PATH`        |         | Path to the YAML configuration file for agent-specific models                           |
 | `LLM_SERVER_PROVIDER`           |         | Provider name prefix for model names (e.g., `openrouter`, `deepseek` for LiteLLM proxy) |
-| `LLM_SERVER_LEGACY_REASONING`   | `false` | Controls reasoning format in API requests                                               |
 | `LLM_SERVER_PRESERVE_REASONING` | `false` | Preserve reasoning content in multi-turn conversations (required by some providers)     |
 
 The `LLM_SERVER_PROVIDER` setting is particularly useful when using **LiteLLM proxy**, which adds a provider prefix to model names. For example, when connecting to Moonshot API through LiteLLM, models like `kimi-2.5` become `moonshot/kimi-2.5`. By setting `LLM_SERVER_PROVIDER=moonshot`, you can use the same provider configuration file for both direct API access and LiteLLM proxy access without modifications.
-
-The `LLM_SERVER_LEGACY_REASONING` setting affects how reasoning parameters are sent to the LLM:
-- `false` (default): Uses modern format where reasoning is sent as a structured object with `max_tokens` parameter
-- `true`: Uses legacy format with string-based `reasoning_effort` parameter
-
-This setting is important when working with different LLM providers as they may expect different reasoning formats in their API requests. If you encounter reasoning-related errors with custom providers, try changing this setting.
 
 The `LLM_SERVER_PRESERVE_REASONING` setting controls whether reasoning content is preserved in multi-turn conversations:
 - `false` (default): Reasoning content is not preserved in conversation history
@@ -1493,7 +1493,7 @@ PentAGI supports Ollama for both local LLM inference (zero-cost, enhanced privac
 
 #### Ollama Cloud Configuration
 
-Ollama Cloud provides managed inference with a generous free tier and scalable paid plans.
+Ollama Cloud provides managed inference with a free tier and paid plans. Paid usage is billed from included or purchased credits at each model's published per-token rate; off-peak discounts apply to selected DeepSeek models.
 
 **Free Tier Setup (Single Model)**
 
@@ -1506,7 +1506,7 @@ OLLAMA_SERVER_MODEL=gpt-oss:120b  # Example: OpenAI OSS 120B model
 
 **Paid Tier Setup (Multi-Model with Pre-built Configuration)**
 
-For paid tiers supporting multiple concurrent models, use the pre-built Ollama Cloud configuration:
+For paid tiers supporting concurrent requests and pay-as-you-go credits, use the pre-built Ollama Cloud configuration:
 
 ```bash
 # Using pre-built Ollama Cloud configuration (included in Docker image)
@@ -1516,13 +1516,11 @@ OLLAMA_SERVER_CONFIG_PATH=/opt/pentagi/conf/ollama-cloud.provider.yml
 ```
 
 The pre-built `ollama-cloud.provider.yml` configuration includes optimized model assignments for all agent types:
-- **Simple/Assistant**: `nemotron-3-super:cloud` - Fast general-purpose model
-- **Primary Agent**: `qwen3-coder-next:cloud` - Advanced reasoning with high effort mode
-- **Coder/Pentester**: `qwen3-coder-next:cloud` - Specialized coding models
-- **Searcher**: `qwen3.5:397b-cloud` - Large context for information gathering
-- **Refiner/Refactor**: `glm-5:cloud` - High-quality text refinement
-- **Adviser/Enricher**: `minimax-m2.7:cloud` - Efficient advisory tasks
-- **Installer**: `devstral-2:123b-cloud` - Installation and setup tasks
+- **Simple/Reflector/Enricher**: `minimax-m2.7:cloud` - Reliable low-latency utility model
+- **Simple JSON/Primary Agent/Assistant/Pentester/Searcher**: `deepseek-v4.1-flash:cloud` - Efficient long-context model at the same input/output rate as MiniMax M2.7
+- **Generator/Adviser**: `kimi-k3:cloud` - Flagship long-horizon planning and knowledge-work model
+- **Refiner**: `glm-5.3:cloud` - Flagship coding and agentic model
+- **Coder/Installer**: `kimi-k2.7-code:cloud` - Coding-specialized long-context model
 
 **Custom Configuration (Advanced)**
 
@@ -1544,15 +1542,13 @@ The `PENTAGI_OLLAMA_SERVER_CONFIG_PATH` environment variable maps your host conf
 
 ```yaml
 primary_agent:
-  model: "qwen3-coder-next:cloud"
+  model: "deepseek-v4-flash:cloud"
   temperature: 1.0
-  top_p: 0.9
+  top_p: 0.95
   max_tokens: 32768
-  reasoning:
-    effort: high
 
 coder:
-  model: "qwen3-coder:32b"
+  model: "kimi-k2.7-code:cloud"
   temperature: 1.0
   max_tokens: 20480
 ```
@@ -1796,7 +1792,16 @@ ANTHROPIC_SERVER_URL=https://api.anthropic.com/v1
 # Using with proxy for secure environments
 ANTHROPIC_API_KEY=your_anthropic_api_key
 PROXY_URL=http://your-proxy:8080
+
+# Workload Identity Federation instead of a long-lived key (leave ANTHROPIC_API_KEY empty)
+ANTHROPIC_FEDERATION_RULE_ID=fdrl_...
+ANTHROPIC_ORGANIZATION_ID=00000000-0000-0000-0000-000000000000
+ANTHROPIC_SERVICE_ACCOUNT_ID=svac_...
+ANTHROPIC_WORKSPACE_ID=wrkspc_...
+ANTHROPIC_IDENTITY_TOKEN_FILE=/var/run/secrets/anthropic.com/token
 ```
+
+With [Workload Identity Federation](https://platform.claude.com/docs/en/manage-claude/workload-identity-federation), PentAGI exchanges the identity token your platform issues (Kubernetes, GitHub Actions, cloud IAM, any OIDC issuer) for a short-lived Claude API token and refreshes it on its own. The token file is re-read on every exchange and must be mounted into the pentagi container. A token carrying a `jti` claim, as Kubernetes and GitHub Actions tokens do, can be exchanged only once, so the file must hold a new token before each refresh: rotate it well within the lifetime of the minted token. `ANTHROPIC_IDENTITY_TOKEN` takes the token itself where the platform injects it as a variable, but it is read once and cannot be rotated, so it suits only runs shorter than the identity token's lifetime. A set `ANTHROPIC_API_KEY` wins over federation. See [backend/docs/config.md](backend/docs/config.md#workload-identity-federation) for every variable.
 
 > [!NOTE]
 > **Google Vertex AI for Claude models**
@@ -1880,70 +1885,37 @@ PROXY_URL=http://your-proxy:8080
 
 #### Supported Models
 
-PentAGI supports 9 Gemini models with tool calling, streaming, thinking modes, and context caching. Models marked with `*` are used in default configuration.
+PentAGI lists 14 Gemini model IDs that responded through the tested API endpoint. Availability in the catalogue does not mean a model is suitable for every agent role: the saved-chain results below determine the bundled defaults. Models marked with `*` are used in `config.yml`; the [full replay matrix](MODEL_REPLAY_RESULTS.md) describes role and outcome limits.
 
-**Gemini 3.5 Series - Latest Stable Flash (May 2026)**
+| Model ID | Thinking | Context | Price (Input/Output/Cache) | Saved-chain result |
+| --- | --- | --- | --- | --- |
+| `gemini-3.8-flash` | ✅ | 1M | $0.75/$3.75/$0.075 | API responds; 10/10 saved generator calls were content-filtered |
+| `gemini-3.7-flash` | ✅ | 1M | $0.75/$3.75/$0.075 | API responds; 10/10 saved generator calls were content-filtered; former default |
+| `gemini-3.6-flash` | ✅ | 1M | $0.75/$3.75/$0.075 | API responds; 10/10 saved generator calls returned text without a tool |
+| `gemini-3.5-flash` | ✅ | 1M | $1.5/$9/$0.15 | API responds; 10/10 saved generator calls returned text without a tool |
+| `gemini-3.5-flash-lite`* | ✅ | 1M | $0.3/$2.5/$0.03 | Complex-role default; eight direct plans and two after a safe `memorist` continuation |
+| `gemini-3.1-pro-preview` | ✅ | 1M | $2/$12/$0.2 | API responds; 10/10 saved generator calls returned text without a tool |
+| `gemini-3.1-pro-preview-customtools` | ✅ | 1M | $2/$12/$0.2 | API responds; 10/10 saved generator calls returned text without a tool |
+| `gemini-3.1-flash-lite`* | ✅ | 1M | $0.25/$1.5/$0.025 | Simple-role default; direct plan on all ten saved generator chains |
+| `gemini-3-flash-preview` | ✅ | 1M | $0.5/$3/$0.05 | API responds; three direct plans and five generator timeouts |
+| `gemini-2.5-pro` | ✅ | 1M | $1.25/$10/$0.125 | API responds; ten direct plans, but four role-smoke provider errors |
+| `gemini-2.5-flash` | ✅ | 1M | $0.3/$2.5/$0.03 | Ten direct plans; access is limited for new API projects |
+| `gemini-2.5-flash-lite` | ✅ | 1M | $0.1/$0.4/$0.01 | API responds; five of ten generator answers were empty |
+| `gemma-4-31b-it` | ✅ | 256K | Free/Free/Free | API responds; seven direct plans and three generator timeouts |
+| `gemma-4-26b-a4b-it` | ✅ | 256K | Free/Free/Free | Direct plan on all ten saved generator chains |
 
-| Model ID                              | Thinking | Context | Price (Input/Output/Cache) | Use Case                                        |
-| ------------------------------------- | -------- | ------- | -------------------------- | ----------------------------------------------- |
-| `gemini-3.5-flash`*                   | ✅        | 1M      | $1.50/$9.00/$0.15          | Most intelligent Flash model with sustained frontier performance on agentic and coding tasks, superior search and grounding |
-
-**Gemini 3.1 Series - Stable Flash-Lite + Pro Preview (Feb-May 2026)**
-
-| Model ID                              | Thinking | Context | Price (Input/Output/Cache) | Use Case                                        |
-| ------------------------------------- | -------- | ------- | -------------------------- | ----------------------------------------------- |
-| `gemini-3.1-pro-preview`*             | ✅        | 1M      | $2.00/$12.00/$0.20         | Latest flagship with refined thinking, improved token efficiency, optimized for software engineering and agentic workflows |
-| `gemini-3.1-pro-preview-customtools`  | ✅        | 1M      | $2.00/$12.00/$0.20         | Custom tools endpoint optimized for bash and custom tools (view_file, search_code) prioritization |
-| `gemini-3.1-flash-lite`*              | ✅        | 1M      | $0.25/$1.50/$0.025         | Most cost-efficient stable multimodal model, frontier-class performance for high-volume agentic tasks and low-latency applications |
-
-**Gemini 2.5 Series - Advanced Thinking Models (active until October 16, 2026)**
-
-| Model ID                                 | Thinking | Context | Price (Input/Output/Cache) | Use Case                                        |
-| ---------------------------------------- | -------- | ------- | -------------------------- | ----------------------------------------------- |
-| `gemini-2.5-pro`                         | ✅        | 1M      | $1.25/$10.00/$0.125        | State-of-the-art for complex coding and reasoning, sophisticated threat modeling |
-| `gemini-2.5-flash`                       | ✅        | 1M      | $0.30/$2.50/$0.03          | First hybrid reasoning model with thinking budgets, best price-performance for large-scale assessments |
-| `gemini-2.5-flash-lite`                  | ✅        | 1M      | $0.10/$0.40/$0.01          | Smallest and most cost-effective for at-scale usage, high-throughput scanning |
-
-**Gemma 4 Open-Source Models (Apache 2.0, Free Tier)**
-
-| Model ID                              | Thinking | Context | Price (Input/Output/Cache) | Use Case                                        |
-| ------------------------------------- | -------- | ------- | -------------------------- | ----------------------------------------------- |
-| `gemma-4-31b-it`                      | ✅        | 256K    | Free/Free/Free             | Largest open-source Gemma 4 dense model (~31B params), multimodal text+image, 140+ languages, on-premises security operations |
-| `gemma-4-26b-a4b-it`                  | ✅        | 256K    | Free/Free/Free             | MoE architecture (~26B total / ~3.8B active params), highly efficient inference on consumer GPUs for on-premises high-throughput scanning |
-
-**Prices**: Per 1M tokens (Standard Paid tier). Context window is input token limit.
-
-> [!NOTE]
-> **Gemini 2.5 Series Shutdown**
->
-> `gemini-2.5-pro`, `gemini-2.5-flash`, and `gemini-2.5-flash-lite` will be **shut down on October 16, 2026**. Recommended migrations:
->
-> - `gemini-2.5-pro` → `gemini-3.1-pro-preview` (same $2.00 input pricing tier)
-> - `gemini-2.5-flash` → `gemini-3.5-flash` (improved frontier capabilities)
-> - `gemini-2.5-flash-lite` → `gemini-3.1-flash-lite` (same $0.25 input pricing)
+**Prices**: Per 1M tokens. Google [limits Gemini 2.5 access for new projects](https://ai.google.dev/gemini-api/docs/models/gemini-2.5-pro), so PentAGI uses the tested 3.1 Flash-Lite as its fallback and simple-role default. Existing custom 2.5 configurations remain usable where the project has access.
 
 **Default Model Assignments (config.yml)**:
-- **`gemini-3.1-pro-preview`** - `primary_agent`, `assistant`, `generator`, `refiner`, `adviser`, `coder`, `pentester`
-- **`gemini-3.5-flash`** - `reflector`, `searcher`, `enricher`, `installer`
-- **`gemini-3.1-flash-lite`** - `simple`, `simple_json`
+- **`gemini-3.1-flash-lite`** - `simple`, `simple_json`, `reflector`, `searcher`, `enricher`
+- **`gemini-3.5-flash-lite`** - `primary_agent`, `assistant`, `generator`, `refiner`, `adviser`, `coder`, `installer`, `pentester`
 
-**Key Features**:
-- **Extended Thinking**: Step-by-step reasoning for complex security analysis (all Gemini 3.x, 2.5 series, and Gemma 4 with toggleable thinking)
-- **Context Caching**: Significant cost reduction on repeated context (10% of input price for most models)
-- **Ultra-Long Context**: 1M tokens for Gemini chat models, 256K tokens for Gemma 4 open-source models
-- **Multimodal Support**: Text, image, video, audio, and PDF processing for comprehensive assessments
-- **Tool Calling**: Seamless integration with 20+ pentesting tools via function calling
-- **Streaming**: Real-time response streaming for interactive security workflows
-- **Code Execution**: Built-in code execution for offensive tool testing and exploit validation
-- **Search Grounding**: Google Search integration for threat intelligence and CVE research
-- **File Search**: Document retrieval and RAG capabilities for knowledge-based assessments
-- **Batch API**: 50% cost reduction for non-real-time batch processing
-- **Custom Tools Endpoint**: Dedicated `gemini-3.1-pro-preview-customtools` route for tool-heavy agentic workflows that prefer registered tools over bash
+Both default models passed a basic API/configuration smoke for every role. [Google reports stronger agentic and coding performance for 3.5 Flash-Lite than 3.1 Flash-Lite](https://blog.google/innovation-and-ai/models-and-research/gemini-models/gemini-3-6-flash-3-5-flash-lite-3-5-flash-cyber/); PentAGI's saved production chains cover generator and reflector only, so the smoke does not establish semantic quality or multi-turn reliability for other roles. On two saved generator chains, 3.5 Flash-Lite first chose the allowed `memorist` tool and called `subtask_list` after a synthetic tool response; no real tool was executed in that continuation.
 
 **Reasoning Effort Levels**:
-- **High**: Maximum thinking depth for complex multi-step analysis (generator)
-- **Medium**: Balanced reasoning for general agentic tasks (primary_agent, assistant, refiner, adviser)
-- **Low**: Efficient thinking for focused tasks (coder, installer, pentester)
+- **High**: Deeper reasoning for planning and review (`primary_agent`, `generator`, `refiner`, `adviser`)
+- **Medium**: Balanced reasoning for execution roles (`assistant`, `coder`, `installer`, `pentester`)
+- **Not set**: No thinking setting is sent and the model's own default applies (`simple`, `simple_json`, `reflector`, `searcher`, `enricher`)
 
 ### AWS Bedrock Provider Configuration
 
@@ -2107,14 +2079,14 @@ DEEPSEEK_PROVIDER=deepseek  # Adds prefix to model names (deepseek/deepseek-v4-f
 
 #### Supported Models
 
-PentAGI supports 2 DeepSeek V4 models with tool calling, streaming, hybrid thinking/non-thinking modes, and context caching. Both models support thinking mode by default and can be switched to non-thinking mode via `extra_body`. Models marked with `*` are used in default configuration.
+PentAGI supports 2 DeepSeek V4 models with tool calling, streaming, hybrid thinking/non-thinking modes, and context caching. Both models think by default and switch to non-thinking mode with `reasoning.mode: off`. Models marked with `*` are used in default configuration.
 
 | Model ID              | Thinking | Max Output | Context | Price (Input/Output/Cache) | Use Case                                             |
 | --------------------- | -------- | ---------- | ------- | -------------------------- | ---------------------------------------------------- |
 | `deepseek-v4-flash`*  | ✅ hybrid | 384K       | 1M      | $0.14/$0.28/$0.0028        | Utility agents, general dialogue, fast tool calling  |
 | `deepseek-v4-pro`*    | ✅ hybrid | 384K       | 1M      | $1.74/$3.48/$0.0145        | Advanced reasoning, complex logic, security analysis |
 
-**Prices**: Per 1M tokens. Cache pricing applies to prompt tokens served from cache (input cache hit, reduced to 1/10 of launch price since 2026-04-26). Both models support hybrid thinking — `thinking` mode is enabled by default; pass `extra_body.thinking.type: disabled` to switch to non-thinking mode for faster/cheaper responses.
+**Prices**: Per 1M tokens. Cache pricing applies to prompt tokens served from cache (input cache hit, reduced to 1/10 of launch price since 2026-04-26). Both models support hybrid thinking — `thinking` mode is enabled by default; set `reasoning.mode: off` (Reasoning Mode Off in the UI) to switch to non-thinking mode for faster/cheaper responses.
 
 > **Pricing Note (deepseek-v4-pro)**: The 75% promotional discount on `deepseek-v4-pro` officially ended on 2026-05-31 15:59 UTC. The prices above reflect the standard post-promotional pricing. If you have legacy configurations using the discounted prices ($0.435/$0.87/$0.003625), update them to the current rates for accurate cost tracking.
 
@@ -2138,10 +2110,10 @@ Strategy: prefer `deepseek-v4-flash` (12x cheaper input, 12x cheaper output) as 
 | Reflector / Searcher / Enricher             | `deepseek-v4-flash`  | Disabled | —                | 4096       | 0.5         | 0.9   |
 | Simple / Simple JSON                        | `deepseek-v4-flash`  | Disabled | —                | 2048       | 0.3         | 0.9   |
 
-> **Note**: When thinking mode is enabled, DeepSeek silently ignores `temperature`, `top_p`, `presence_penalty`, and `frequency_penalty`. The langchaingo client automatically nullifies `temperature`/`top_p` when `reasoning_effort` is set, so they appear as "(auto)" in the table above. All thinking-enabled agents also explicitly pass `extra_body.thinking.type: enabled` as defensive coding against future provider default changes.
+> **Note**: DeepSeek ignores `presence_penalty` and `frequency_penalty` on both models. While thinking runs, `temperature` has no effect and langchaingo drops it, but `top_p` is sent and applied (values below 0.95 are raised to 0.95); in non-thinking mode `top_p` is fixed at 1.0, so langchaingo drops it and sends `temperature` instead. The thinking agents leave both unset, shown as "(auto)" in the table above.
 
 **Key Features**:
-- **Hybrid Thinking Modes**: Switch between thinking (deep reasoning) and non-thinking (fast) modes via `extra_body.thinking.type`
+- **Hybrid Thinking Modes**: Switch between thinking (deep reasoning) and non-thinking (fast) modes via `reasoning.mode`
 - **Automatic Prompt Caching**: Significant cost reduction on repeated context via cache-hit pricing (1/10 of launch price)
 - **Extended Thinking**: Reinforcement learning CoT for complex security analysis (both V4 models)
 - **Strong Coding**: Optimized for code generation and exploit development
@@ -2186,16 +2158,18 @@ GLM_PROVIDER=zai  # Adds prefix to model names (zai/glm-4) for LiteLLM
 
 #### Supported Models
 
-PentAGI supports 14 GLM models with tool calling, streaming, hybrid thinking modes, and prompt caching. Models marked with `*` are used in default configuration. Thinking is controlled via `extra_body.thinking.type` ("enabled"/"disabled"); unlike Kimi, GLM is permissive about temperature in either mode.
+PentAGI supports 16 GLM models with tool calling, streaming, reasoning controls, and prompt caching. Models marked with `*` are used in the default configuration. GLM-5.3, GLM-5.3-Flash, and GLM-5.3-FlashX always reason and accept `low`, `high`, or `max` effort.
 
-**GLM-5.x Series - Latest Generation (200K context, 128K max output)**
+**GLM-5.x Series - Latest Generation**
 
 | Model ID         | Thinking | Context | Max Output | Price (Input/Output/Cache) | Use Case                                                            |
 | ---------------- | -------- | ------- | ---------- | -------------------------- | ------------------------------------------------------------------- |
-| `glm-5.2`*       | ✅ Hybrid | 200K    | 128K       | $1.40/$4.40/$0.26          | Newest flagship, improves on GLM-5.1. Supports explicit `reasoning_effort` (high/max) (generator/refiner/adviser/coder/pentester default) |
+| `glm-5.3`*       | ✅ Always | 1M      | 128K       | $1.40/$4.40/$0.26          | Current flagship for complex software engineering, agent tasks, and vulnerability research |
+| `glm-5.3-flash`* | ✅ Always | 1M      | 128K       | $0.15/$0.50/$0.03          | Cost-efficient native multimodal model for utility and latency-sensitive agents |
+| `glm-5.3-flashx` | ✅ Always | 1M      | 128K       | $0.37/$1.25/$0.075         | Accelerated GLM-5.3-Flash endpoint delivering up to 200 output tokens per second |
+| `glm-5.2`        | ✅ Hybrid | 1M      | 128K       | $1.40/$4.40/$0.26          | Previous flagship for long-horizon engineering tasks |
 | `glm-5.1`        | ✅ Hybrid | 200K    | 128K       | $1.40/$4.40/$0.26          | Long-horizon tasks: 8h sustained autonomous execution, Claude Opus 4.6-aligned coding |
 | `glm-5`          | ✅ Hybrid | 200K    | 128K       | $1.00/$3.20/$0.20          | Foundation for Agentic Engineering, MoE 744B/40B active, Claude Opus 4.5-level coding |
-| `glm-5-turbo`*   | ✅ Hybrid | 200K    | 128K       | $1.20/$4.00/$0.24          | OpenClaw-native: optimized for tool invocation, persistent tasks, long-chain execution (primary_agent/assistant default) |
 
 **GLM-4.7 Series - Premium with Interleaved Thinking**
 
@@ -2217,7 +2191,7 @@ PentAGI supports 14 GLM models with tool calling, streaming, hybrid thinking mod
 | ---------------- | -------- | ------- | ---------- | -------------------------- | ------------------------------------------------- |
 | `glm-4.5`        | ✅ Auto   | 128K    | 96K        | $0.60/$2.20/$0.11          | Unified, MoE 355B/32B active                      |
 | `glm-4.5-x`      | ✅ Auto   | 128K    | 96K        | $2.20/$8.90/$0.45          | Ultra-fast premium, lowest latency                |
-| `glm-4.5-air`*   | ✅ Auto   | 128K    | 96K        | $0.20/$1.10/$0.03          | Cost-effective MoE 106B/12B (simple/simple_json/reflector/searcher/enricher/installer default) |
+| `glm-4.5-air`    | ✅ Auto   | 128K    | 96K        | $0.20/$1.10/$0.03          | Cost-effective MoE 106B/12B |
 | `glm-4.5-airx`   | ✅ Auto   | 128K    | 96K        | $1.10/$4.50/$0.22          | Accelerated Air with priority GPU                 |
 | `glm-4.5-flash`  | ✅ Auto   | 128K    | 96K        | Free/Free/Free             | Free with reasoning/coding/agents support         |
 
@@ -2231,26 +2205,24 @@ PentAGI supports 14 GLM models with tool calling, streaming, hybrid thinking mod
 
 **Default Agent Configuration**:
 
-Strategy: `glm-5.2` (newest flagship, $1.40 input) for critical reasoning, `glm-5-turbo` (OpenClaw-native, agent-optimized) for orchestration, `glm-4.5-air` (cheap MoE with hybrid thinking and reliable RPM) for all utility/installer agents. `glm-4.7-flashx` is avoided as default due to lower RPM limits causing frequent 429 errors at high frequency.
+Strategy: `glm-5.3` for critical reasoning and `glm-5.3-flash` for inexpensive utility and latency-sensitive work. `glm-5.3-flashx` remains selectable but is not a default because not every compatible gateway deploys it.
 
 | Agent Role                          | Default Model | Thinking | Temperature | Top P | Max Output |
 | ----------------------------------- | ------------- | -------- | ----------- | ----- | ---------- |
-| Generator / Refiner                 | `glm-5.2`     | Enabled  | 1.0         | 0.95  | 32768      |
-| Coder                               | `glm-5.2`     | Enabled  | 1.0         | 0.95  | 20480      |
-| Adviser / Pentester                 | `glm-5.2`     | Enabled  | 1.0         | 0.95  | 16384      |
-| Primary Agent / Assistant           | `glm-5-turbo` | Enabled  | 1.0         | 0.95  | 16384      |
-| Installer                           | `glm-4.5-air` | Enabled  | 1.0         | 0.95  | 16384      |
-| Simple / Reflector                  | `glm-4.5-air` | Disabled | 0.6         | 0.9   | 8192       |
-| Searcher / Enricher / Simple JSON   | `glm-4.5-air` | Disabled | 0.6         | 0.9   | 4096       |
+| Generator / Refiner                 | `glm-5.3`       | Max      | 1.0         | 0.95  | 32768      |
+| Coder                               | `glm-5.3`       | Max      | 1.0         | 0.95  | 20480      |
+| Adviser / Pentester                 | `glm-5.3`       | Max      | 1.0         | 0.95  | 16384      |
+| Primary Agent                       | `glm-5.3`       | High     | 1.0         | 0.95  | 16384      |
+| Assistant / Installer               | `glm-5.3-flash` | High     | 1.0         | 0.95  | 16384      |
+| Simple / Reflector                  | `glm-5.3-flash` | Low      | 1.0         | 0.95  | 8192       |
+| Searcher / Enricher / Simple JSON   | `glm-5.3-flash` | Low      | 1.0         | 0.95  | 4096       |
 
-Generator, refiner, and adviser additionally set `reasoning.effort: max`, which layers `llms.WithReasoning(ReasoningMax, 0)` on top of `extra_body.thinking.type=enabled` — this `reasoning_effort` parameter is only supported by `glm-5.2`.
-
-> **Note on temperature**: GLM accepts both `1.0` and `0.6` in either thinking/non-thinking mode (per Z.AI docs). langchaingo's `IsReasoningModel` matches `glm-4.5*`/`glm-4.6*`/`glm-4.7*` prefixes and force-overrides temperature to 1.0 in `createChatRequest` — this is harmless for GLM (unlike Kimi) but means temperature values for those models in YAML are advisory. `glm-5`/`glm-5.1`/`glm-5.2`/`glm-5-turbo` are not matched, so explicit values pass through unchanged.
+All default roles use Z.AI's recommended `temperature: 1.0` and `top_p: 0.95`. The full provider replay passed 288 of 289 cases; the sole failure was a transient gateway timeout and its focused retry passed.
 
 **Thinking Modes**:
-- **Hybrid** (GLM-5.x, GLM-4.7): Explicit toggle via `extra_body.thinking.type`
+- **Always on** (GLM-5.3, GLM-5.3-Flash, GLM-5.3-FlashX): Cannot be disabled; `reasoning.effort` accepts `low`, `high`, or `max`
+- **Hybrid** (GLM-5.2 and earlier GLM-5.x, GLM-4.7): Explicit toggle via `reasoning.mode`
 - **Auto** (GLM-4.6, GLM-4.5 series): Model automatically determines when reasoning is needed
-- **Reasoning Effort** (GLM-5.2 only): supports an explicit `reasoning_effort` parameter (`high`/`max`) on top of hybrid thinking, for finer control over reasoning depth than the other GLM-5.x models
 - **Preserved Thinking** (Z.AI Coding capability): all thinking-enabled agents in PentAGI also pass `extra_body.thinking.clear_thinking: false` so that `reasoning_content` from previous assistant turns is retained across the conversation. This is required on the standard API endpoint (`/api/paas/v4`) — on the Coding Plan endpoint it would be enabled by default. Improves reasoning continuity and cache hit rates in multi-turn tool call chains.
 - All thinking-enabled agents also pass `extra_body.tool_choice: auto` defensively
 
@@ -2292,83 +2264,61 @@ KIMI_SERVER_URL=https://api.moonshot.cn/v1  # China
 # With LiteLLM proxy
 KIMI_API_KEY=your_litellm_key
 KIMI_SERVER_URL=http://litellm-proxy:4000
-KIMI_PROVIDER=moonshot  # Adds prefix to model names (moonshot/kimi-k2.5) for LiteLLM
+KIMI_PROVIDER=moonshot  # Adds prefix to model names (moonshot/kimi-k3) for LiteLLM
 ```
 
 #### Supported Models
 
-PentAGI supports 11 Kimi/Moonshot models with tool calling, streaming, hybrid thinking modes, and multimodal capabilities (text/image/video for K2.x). All `kimi-k2-*` legacy models (turbo-preview, 0905-preview, 0711-preview, thinking, thinking-turbo) were deprecated by Moonshot on 2026-05-25 and are NOT included. Models marked with `*` are used in default configuration.
+PentAGI supports the four current Kimi models with tool calling, streaming, context caching, and multimodal input. Kimi K2.5, the older K2 series, `kimi-latest`, `kimi-thinking-preview`, and all Moonshot V1 models are retired and not included. Models marked with `*` are used in the default configuration.
 
 **Kimi K3 - Flagship (Always Reasoning)**
 
 | Model ID   | Thinking | Multimodal | Context | Price (Input Miss / Output / Cache Hit) | Use Case                                                |
 | ---------- | -------- | ---------- | ------- | --------------------------------------- | ------------------------------------------------------- |
-| `kimi-k3`* | ✅ always | ❌          | 1M      | $3.00 / $15.00 / $0.30                  | Flagship for long-horizon coding and end-to-end knowledge work. Always reasons — no `thinking` toggle, depth set via top-level `reasoning_effort` (currently `max` only) (generator/refiner/adviser default) |
+| `kimi-k3`* | ✅ always | ✅          | 1M      | $3.00 / $15.00 / $0.30                  | Flagship for long-horizon coding and knowledge work; used by adviser with `reasoning_effort: max` |
 
 **Kimi K2.7 Code Series - Coding-Focused**
 
 | Model ID                    | Thinking | Multimodal | Context | Price (Input Miss / Output / Cache Hit) | Use Case                                                |
 | ---------------------------- | -------- | ---------- | ------- | --------------------------------------- | ------------------------------------------------------- |
-| `kimi-k2.7-code`*            | ✅ hybrid | ✅          | 256K    | $0.95 / $4.00 / $0.19                   | Coding-focused, higher success rates on long-context programming tasks (coder/pentester default) |
-| `kimi-k2.7-code-highspeed`*  | ✅ hybrid | ✅          | 256K    | $1.90 / $8.00 / $0.38                   | Same model as `kimi-k2.7-code` with higher output throughput (~180-260 tokens/s) (primary_agent/assistant default) |
+| `kimi-k2.7-code`*            | ✅ always | ✅          | 256K    | $0.95 / $4.00 / $0.19                   | Coding-focused model used by generator, refiner, coder, and pentester |
+| `kimi-k2.7-code-highspeed`*  | ✅ always | ✅          | 256K    | $1.90 / $8.00 / $0.38                   | Same model as `kimi-k2.7-code` with higher output throughput (~180-260 tokens/s) (primary_agent/assistant default) |
 
-**Kimi K2.x Series - Multimodal Flagship**
+**Kimi K2.6 - Multimodal Model**
 
 | Model ID         | Thinking | Multimodal | Context | Price (Input Miss / Output / Cache Hit) | Use Case                                                |
 | ---------------- | -------- | ---------- | ------- | --------------------------------------- | ------------------------------------------------------- |
-| `kimi-k2.6`      | ✅ hybrid | ✅          | 256K    | $0.95 / $4.00 / $0.16                   | Latest multimodal flagship: native architecture, stronger code, improved instruction compliance (not used by default config) |
-| `kimi-k2.5`*     | ✅ hybrid | ✅          | 256K    | $0.60 / $3.00 / $0.10                   | Previous-gen: 36% cheaper input than K2.6 (simple/simple_json/reflector/searcher/enricher/installer default) |
+| `kimi-k2.6`*     | ✅ hybrid | ✅          | 256K    | $0.95 / $4.00 / $0.16                   | Utility and installer model with optional thinking |
 
-**Moonshot V1 Series - Generation Models (Flexible Parameters)**
-
-| Model ID            | Thinking | Multimodal | Context | Price (Input / Output) | Use Case                                       |
-| ------------------- | -------- | ---------- | ------- | ---------------------- | ---------------------------------------------- |
-| `moonshot-v1-8k`    | ❌        | ❌          | 8K      | $0.20 / $2.00          | Short text generation, ultra-cheap             |
-| `moonshot-v1-32k`   | ❌        | ❌          | 32K     | $1.00 / $3.00          | Long text generation                           |
-| `moonshot-v1-128k`  | ❌        | ❌          | 128K    | $2.00 / $5.00          | Very long context                              |
-
-**Moonshot V1 Vision Series - Image Understanding**
-
-| Model ID                          | Thinking | Multimodal | Context | Price (Input / Output) | Use Case                                |
-| --------------------------------- | -------- | ---------- | ------- | ---------------------- | --------------------------------------- |
-| `moonshot-v1-8k-vision-preview`   | ❌        | ✅          | 8K      | $0.20 / $2.00          | Vision + short context                  |
-| `moonshot-v1-32k-vision-preview`  | ❌        | ✅          | 32K     | $1.00 / $3.00          | Vision + medium context                 |
-| `moonshot-v1-128k-vision-preview` | ❌        | ✅          | 128K    | $2.00 / $5.00          | Vision + long context                   |
-
-**Prices**: Per 1M tokens. Cache pricing applies to prompt tokens served from automatic context cache (only Kimi K3/K2.7/K2.x models support cache).
+**Prices**: Per 1M tokens. K3 cache writes cost $3.00 with the default five-minute TTL or $6.00 with a one-hour TTL; cache hits cost $0.30. K2.7 and K2.6 table prices distinguish cache misses from cache hits.
 
 > **CRITICAL — Kimi parameter constraints per model family**: API returns `invalid_request_error` for any deviation:
 > - `kimi-k3`: always reasons, no `thinking` param at all; reasoning depth is set via the top-level `reasoning_effort` field (`low`/`high`/`max`, default `max`) — PentAGI pins it to `max` for all agents using this model. `temperature` MUST be `1.0`, `top_p` MUST be `0.95`, `n` MUST be `1`, `presence_penalty`/`frequency_penalty` MUST be `0`. Do not switch effort per call — it invalidates the prefix cache.
 > - `kimi-k2.7-code` / `kimi-k2.7-code-highspeed`: `thinking` may be omitted; if set explicitly, only `{"type":"enabled","keep":"all"}` is accepted (`type: disabled` is rejected). `reasoning_effort` is not supported. `temperature` MUST be `1.0`, `top_p` MUST be `0.95`, `n` MUST be `1`; `tool_choice: required` is not supported (use `auto`).
 > - `kimi-k2.6`: thinking mode needs `temperature=1.0`, `top_p=0.95`, `n=1`, `thinking.keep="all"`; non-thinking mode needs `temperature=0.6`, `top_p=0.95`, `n=1`.
-> - `kimi-k2.5`: thinking mode needs `temperature=1.0`, `top_p=0.95`, `n=1` (no `keep` support); non-thinking mode needs `temperature=0.6`, `top_p=0.95`, `n=1`.
 > - All Kimi models: `presence_penalty=0`, `frequency_penalty=0`, `tool_choice` in `{auto, none}`.
->
-> Moonshot V1 models use standard OpenAI-compatible parameters with no such constraints.
 
 **Default Agent Configuration**:
 
-Strategy: `kimi-k2.5` for utility/orchestration, `kimi-k2.7-code-highspeed` for the primary/assistant loop, `kimi-k3` (always-thinking flagship) for critical reasoning (generator/refiner/adviser), `kimi-k2.7-code` for coder/pentester. `kimi-k2.6` is not used in the default configuration. All `kimi-k2.x`/`k2.7` agents are configured with the API-required fixed parameters (temp/top_p/n) and explicit `extra_body.thinking.type`. For thinking-enabled agents, `extra_body.thinking.keep: "all"` is set (where supported) to preserve historical `reasoning_content` in multi-turn tool call chains (without it Moonshot returns "thinking is enabled but reasoning_content is missing").
+Strategy: `kimi-k2.6` handles utility and installer work, `kimi-k2.7-code-highspeed` serves the primary/assistant loop, `kimi-k2.7-code` serves tool-heavy generator/refiner/coder/pentester roles, and `kimi-k3` handles adviser reasoning. This configuration passed all 294 conformance cases.
 
-| Agent Role                                   | Default Model              | Thinking             | Temperature | Top P | Max Output |
+| Agent Role                                   | Default Model               | Thinking              | Temperature | Top P | Max Output |
 | -------------------------------------------- | --------------------------- | --------------------- | ----------- | ----- | ---------- |
-| Generator / Refiner                          | `kimi-k3`                   | Always (effort=max)   | 1.0         | 0.95  | 32768      |
 | Adviser (mentor/planner)                     | `kimi-k3`                   | Always (effort=max)   | 1.0         | 0.95  | 8192       |
+| Generator / Refiner                          | `kimi-k2.7-code`            | Always (keep=all)     | 1.0         | 0.95  | 32768      |
 | Coder                                        | `kimi-k2.7-code`            | Enabled (keep=all)    | 1.0         | 0.95  | 20480      |
 | Pentester                                    | `kimi-k2.7-code`            | Enabled (keep=all)    | 1.0         | 0.95  | 16384      |
 | Primary Agent / Assistant                    | `kimi-k2.7-code-highspeed`  | Enabled (keep=all)    | 1.0         | 0.95  | 16384      |
-| Installer                                    | `kimi-k2.5`                 | Enabled               | 1.0         | 0.95  | 16384      |
-| Reflector / Searcher / Enricher              | `kimi-k2.5`                 | Disabled              | 0.6         | 0.95  | 4096       |
-| Simple                                       | `kimi-k2.5`                 | Disabled              | 0.6         | 0.95  | 8192       |
-| Simple JSON                                  | `kimi-k2.5`                 | Disabled              | 0.6         | 0.95  | 4096       |
-
-> **Note**: for `kimi-k2.5` non-thinking agents, PentAGI also duplicates `temperature: 0.6` into `extra_body` as a workaround — langchaingo's `IsReasoningModel` matches the substring `2.5` and force-overrides temperature to `1.0`, and `extra_body` bypasses that override.
+| Installer                                    | `kimi-k2.6`                 | Enabled               | 1.0         | 0.95  | 16384      |
+| Reflector / Searcher / Enricher              | `kimi-k2.6`                 | Disabled              | 0.6         | 0.95  | 4096       |
+| Simple                                       | `kimi-k2.6`                 | Disabled              | 0.6         | 0.95  | 8192       |
+| Simple JSON                                  | `kimi-k2.6`                 | Disabled              | 0.6         | 0.95  | 4096       |
 
 **Key Features**:
 - **Always-On Reasoning Flagship**: `kimi-k3` never disables thinking and offers a 1M token context for the most demanding long-horizon coding and knowledge work
 - **Ultra-Long Context**: Up to 256K tokens (K2.7/K2.x) or 1M tokens (K3) for comprehensive codebase/documentation analysis
-- **Native Multimodal**: K2.7/K2.6/K2.5 support text + image + video input out of the box
-- **Hybrid Thinking**: K2.7/K2.6/K2.5 toggle between thinking and non-thinking via `extra_body.thinking.type`
+- **Native Multimodal**: K3, K2.7, and K2.6 support text, image, and video input
+- **Hybrid Thinking**: K2.6 can toggle between thinking and non-thinking via `reasoning.mode`; K3 and K2.7 always reason
 - **Preserved Thinking** (K2.7, K2.6): `thinking.keep: "all"` preserves historical `reasoning_content` across turns — required for multi-turn tool call chains
 - **Automatic Context Caching**: K3/K2.7/K2.x models cache repeated prefixes
 - **Tool Calling**: Full function-calling support for K3, K2.7, K2.x, and Moonshot V1
@@ -2381,67 +2331,85 @@ Strategy: `kimi-k2.5` for utility/orchestration, `kimi-k2.7-code-highspeed` for 
 
 ### Qwen Provider Configuration
 
-PentAGI integrates with Qwen from Alibaba Cloud Model Studio (DashScope), providing powerful multilingual models with reasoning capabilities and context caching support.
+PentAGI uses one OpenAI-compatible door for both Qwen Cloud and Alibaba Cloud Model Studio (DashScope). The bundled catalogue is the union of their agent-capable Chat Completions models, while the default role configuration uses only model IDs available on both platforms.
 
 #### Configuration Variables
 
 | Variable           | Default Value                                          | Description                                         |
 | ------------------ | ------------------------------------------------------ | --------------------------------------------------- |
-| `QWEN_API_KEY`     |                                                        | Qwen API key for authentication                     |
-| `QWEN_SERVER_URL`  | `https://dashscope-us.aliyuncs.com/compatible-mode/v1` | Qwen API endpoint URL (international)               |
-| `QWEN_PROVIDER`    |                                                        | Provider prefix for LiteLLM integration (optional)  |
+| `QWEN_API_KEY`     |                                                        | Qwen Cloud, DashScope, or gateway API key           |
+| `QWEN_SERVER_URL`  | `https://dashscope-us.aliyuncs.com/compatible-mode/v1` | Direct API or OpenAI-compatible gateway base URL    |
+| `QWEN_PROVIDER`    |                                                        | Gateway route prefix: `qwen_cloud` or `dashscope`   |
 
 #### Configuration Examples
 
 ```bash
-# Direct API usage (Global/US endpoint)
+# Direct Alibaba Cloud Model Studio usage (Global/US endpoint)
 QWEN_API_KEY=your_qwen_api_key
 QWEN_SERVER_URL=https://dashscope-us.aliyuncs.com/compatible-mode/v1
+QWEN_PROVIDER=
 
 # Alternative endpoints
 QWEN_SERVER_URL=https://dashscope-intl.aliyuncs.com/compatible-mode/v1  # International (Singapore)
 QWEN_SERVER_URL=https://dashscope.aliyuncs.com/compatible-mode/v1       # Chinese Mainland (Beijing)
 
-# With LiteLLM proxy
+# Qwen Cloud through LiteLLM
 QWEN_API_KEY=your_litellm_key
 QWEN_SERVER_URL=http://litellm-proxy:4000
-QWEN_PROVIDER=dashscope  # Adds prefix to model names (dashscope/qwen-plus) for LiteLLM
+QWEN_PROVIDER=qwen_cloud
+
+# Alibaba Cloud through LiteLLM
+QWEN_PROVIDER=dashscope
 ```
 
 #### Supported Models
 
-PentAGI supports 33 Qwen models curated for agent workflows: text reasoning, code generation, and vision-language (browser screenshots). All models are non-snapshot main aliases with tool calling, streaming, thinking modes, and context caching. Models marked with `*` are used in default configuration.
+PentAGI ships 50 text, reasoning, coding, and vision-language catalogue entries available from at least one of the two platforms. Image generation, video, speech, realtime, translation-only, embedding, reranking, and decision APIs use different protocols or billing units and are not exposed as PentAGI chat models. Prices below are Alibaba Cloud international list rates per 1M tokens where Alibaba offers the model; Qwen Cloud can bill differently.
+
+**Cross-platform model IDs used for portable configuration**
+
+| Availability | Models |
+| ------------ | ------ |
+| Qwen Cloud and DashScope | `qwen3.8-max`, `qwen3.8-flash`, `qwen3.7-plus`, `qwen3.7-max`, `qwen3.6-flash`, `deepseek-v4.1-flash`, `deepseek-v4-pro` |
+| Qwen Cloud only | `deepseek-v4-pro-0813` |
+| DashScope only | All other entries in the bundled catalogue |
 
 **Flagship Models (Top-tier Reasoning)**
 
 | Model ID                     | Thinking | Intl | Global/US | China | Price (Input/Output/Cache) | Use Case                                                |
 | ---------------------------- | -------- | ---- | --------- | ----- | -------------------------- | ------------------------------------------------------- |
-| `qwen3.7-max`*               | ✅        | ✅    | ✅         | ✅     | $2.50/$7.50/$0.50          | Next-gen flagship for agent-centric era (generator/refiner/adviser default) |
+| `qwen3.8-max`                | ✅        | —    | —         | —     | $2.00/$6.00/$0.25          | Newest flagship succeeding Qwen3.7-Max                  |
+| `qwen3.8-omni-flash`         | ✅        | ✅    | ✅         | ✅     | $0.15/$0.47/—              | Current multimodal Omni tier                            |
+| `qwen3.7-max`                | ✅        | ✅    | ✅         | ✅     | $2.50/$7.50/$0.50          | Next-gen flagship for agent-centric era                 |
 | `qwen3.6-max-preview`        | ✅        | ✅    | ✅         | ✅     | $1.30/$7.80/$0.13          | Preview Max with enhanced vibe coding & front-end skills |
 | `qwen3-max`                  | ✅        | ✅    | ✅         | ✅     | $1.20/$6.00/$0.24          | Previous-gen flagship with agent programming upgrades   |
+| `qwen-max`                   | ❌        | ✅    | ✅         | ✅     | $1.60/$6.40/—              | Legacy 32K text flagship                                |
 | `qwen-plus`                  | ✅        | ✅    | ✅         | ✅     | $0.40/$4.00/$0.08          | Qwen3-backbone Plus with switchable thinking modes      |
 
 **Balanced Plus Models (Mid-tier)**
 
 | Model ID                     | Thinking | Intl | Global/US | China | Price (Input/Output/Cache) | Use Case                                                |
 | ---------------------------- | -------- | ---- | --------- | ----- | -------------------------- | ------------------------------------------------------- |
-| `qwen3.6-plus`*              | ✅        | ✅    | ✅         | ✅     | $0.50/$3.00/$0.05          | Native VL Plus with agentic coding (primary/assistant/pentester default) |
+| `qwen3.7-plus`               | ✅        | —    | —         | —     | $0.40/$1.60/$0.08          | Cost-efficient tier of the Qwen3.7 generation           |
+| `qwen3.6-plus`               | ✅        | ✅    | ✅         | ✅     | $0.50/$3.00/$0.05          | Native VL Plus with agentic coding                      |
 | `qwen3.5-plus`               | ✅        | ✅    | ✅         | ✅     | $0.40/$2.40/$0.04          | Previous-gen native VL with strong multimodal capabilities |
 
 **Fast Flash Models (Cost-optimized)**
 
 | Model ID                     | Thinking | Intl | Global/US | China | Price (Input/Output/Cache) | Use Case                                                |
 | ---------------------------- | -------- | ---- | --------- | ----- | -------------------------- | ------------------------------------------------------- |
-| `qwen3.6-flash`              | ✅        | ✅    | ✅         | ✅     | $0.25/$1.50/$0.025         | Latest Flash with significant agentic-coding boost      |
-| `qwen3.5-flash`*             | ✅        | ✅    | ✅         | ✅     | $0.10/$0.40/$0.01          | Ultra-fast lightweight (simple/reflector/searcher/enricher default) |
+| `qwen3.8-flash`              | ✅        | —    | —         | —     | $0.15/$0.47/$0.016         | Cost-efficient tier of the Qwen3.8 generation           |
+| `qwen3.7-flash`              | ✅        | —    | —         | —     | $0.03/$0.13/$0.02          | Low-latency tier of the Qwen3.7 generation              |
+| `qwen3.6-flash`*             | ✅        | ✅    | ✅         | ✅     | $0.25/$1.50/$0.05          | Shared utility model                                    |
+| `qwen3.5-flash`              | ✅        | ✅    | ✅         | ✅     | $0.10/$0.40/$0.01          | Ultra-fast lightweight                                  |
 | `qwen-flash`                 | ✅        | ✅    | ✅         | ✅     | $0.05/$0.40/$0.01          | Qwen3-series Flash with 1M context, tiered pricing      |
 
 **Code-Specialized Models**
 
 | Model ID                     | Thinking | Intl | Global/US | China | Price (Input/Output/Cache) | Use Case                                                |
 | ---------------------------- | -------- | ---- | --------- | ----- | -------------------------- | ------------------------------------------------------- |
-| `qwen3-coder-plus`*          | ❌        | ✅    | ✅         | ✅     | $1.00/$5.00/$0.20          | Strong coding agent with autonomous programming (coder default) |
-| `qwen3-coder-flash`*         | ❌        | ✅    | ✅         | ✅     | $0.30/$1.50/$0.06          | Fast code-gen with multi-turn tool stability (installer default) |
+| `qwen3-coder-plus`           | ❌        | ✅    | ✅         | ✅     | $1.00/$5.00/$0.20          | Strong coding agent with autonomous programming         |
+| `qwen3-coder-flash`          | ❌        | ✅    | ✅         | ✅     | $0.30/$1.50/$0.06          | Fast code-gen with multi-turn tool stability            |
 | `qwen3-coder-next`           | ❌        | ✅    | ✅         | ✅     | $0.30/$1.50/—              | Open-source code generation, SOTA at same scale         |
 
 **Vision-Language Models (Browser & Screenshot Analysis)**
@@ -2451,6 +2419,18 @@ PentAGI supports 33 Qwen models curated for agent workflows: text reasoning, cod
 | `qwen3-vl-plus`              | ✅        | ✅    | ✅         | ✅     | $0.20/$1.60/$0.04          | VL with visual agent capabilities, ultra-long video understanding |
 | `qwen3-vl-flash`             | ✅        | ✅    | ✅         | ✅     | $0.05/$0.40/$0.01          | Small VL with 2D/3D localization for browser triage     |
 | `qvq-max`                    | ✅        | ✅    | ✅         | ✅     | $1.20/$4.80/—              | Visual reasoning with chain-of-thought                  |
+| `qwen3-vl-235b-a22b-thinking` | ✅        | —    | —         | —     | $0.40/$4.00/—              | Open-source 235B MoE VL (~22B active) with reasoning    |
+| `qwen3-vl-235b-a22b-instruct` | ❌        | —    | —         | —     | $0.40/$1.60/—              | Open-source 235B MoE VL (~22B active), instruction-following |
+| `qwen3-vl-32b-instruct`      | ❌        | —    | —         | —     | $0.16/$0.64/—              | Open-source 32B dense VL, instruction-following         |
+| `qwen3-vl-30b-a3b-thinking`  | ✅        | —    | —         | —     | $0.20/$2.40/—              | Open-source 30B MoE VL (~3B active) with reasoning      |
+| `qwen3-vl-30b-a3b-instruct`  | ❌        | —    | —         | —     | $0.20/$0.80/—              | Open-source 30B MoE VL (~3B active), instruction-following |
+
+**Open-Source Qwen3.8 Series**
+
+| Model ID                     | Thinking | Intl | Global/US | China | Price (Input/Output/Cache) | Use Case                                                |
+| ---------------------------- | -------- | ---- | --------- | ----- | -------------------------- | ------------------------------------------------------- |
+| `qwen3.8-2.4t-a95b`          | ✅        | —    | —         | —     | $2.00/$6.00/—              | Open-source 3.8 flagship, always reasons                |
+| `qwen3.8-27b`                | ✅        | —    | —         | —     | $0.50/$3.00/$0.10          | Dense open-weight 3.8 tier, hybrid thinking, 1M context |
 
 **Open-Source Qwen3.6 Series**
 
@@ -2481,30 +2461,42 @@ PentAGI supports 33 Qwen models curated for agent workflows: text reasoning, cod
 | ------------------------------------- | -------- | ---- | --------- | ----- | -------------------------- | ------------------------------------------------------- |
 | `qwen3-next-80b-a3b-thinking`         | ✅        | ✅    | ✅         | ✅     | $0.15/$1.20/—              | Next-gen 80B MoE (~3B active) thinking-only             |
 | `qwen3-next-80b-a3b-instruct`         | ❌        | ✅    | ✅         | ✅     | $0.15/$1.20/—              | Next-gen 80B MoE instruction-following                  |
-| `qwen3-235b-a22b`                     | ✅        | ✅    | ✅         | ✅     | $0.70/$8.40/—              | Dual-mode 235B MoE (~22B active)                        |
-| `qwen3-32b`                           | ✅        | ✅    | ✅         | ✅     | $0.16/$0.64/—              | Versatile 32B dense dual-mode                           |
-| `qwen3-30b-a3b`                       | ✅        | ✅    | ✅         | ✅     | $0.20/$2.40/—              | Efficient 30B MoE (~3B active)                          |
-| `qwen3-14b`                           | ✅        | ✅    | ✅         | ✅     | $0.35/$4.20/—              | Medium 14B dense performance-cost balance               |
-| `qwen3-8b`                            | ✅        | ✅    | ✅         | ✅     | $0.18/$2.10/—              | Compact 8B dense efficiency                             |
-| `qwen3-4b`                            | ✅        | ✅    | ✅         | ✅     | $0.11/$1.26/—              | Lightweight 4B dense for simple tasks                   |
-| `qwen3-1.7b`                          | ✅        | ✅    | ✅         | ✅     | $0.11/$1.26/—              | Ultra-compact 1.7B basic checks                         |
-| `qwen3-0.6b`                          | ✅        | ✅    | ✅         | ✅     | $0.11/$1.26/—              | Smallest 0.6B for edge monitoring                       |
+| `qwen3-235b-a22b-thinking-2507`       | ✅        | —    | —         | —     | $0.23/$2.30/—              | 235B MoE (~22B active) thinking variant                 |
+| `qwen3-30b-a3b-thinking-2507`         | ✅        | —    | —         | —     | $0.20/$2.40/—              | 30B MoE (~3B active) thinking variant                   |
+| `qwen3-30b-a3b-instruct-2507`         | ❌        | —    | —         | —     | $0.20/$0.80/—              | 30B MoE (~3B active) non-thinking variant               |
 
-**Prices**: Per 1M tokens. Cache pricing reflects implicit cache hit (when available); MoE/dense open-source models do not expose cache pricing. Tiered models (Max/Plus) show lowest-tier pricing (typically ≤32k or ≤256k input); larger contexts incur higher rates per Alibaba Cloud pricing.
+**Third-Party Models**
+
+These models share the OpenAI-compatible Qwen door. Availability differs by platform; the cross-platform table above is authoritative for portable role configuration.
+
+| Model ID                              | Thinking | Context | Price (Input/Output/Cache) | Use Case                                                |
+| ------------------------------------- | -------- | ------- | -------------------------- | ------------------------------------------------------- |
+| `glm-5.3-prime`                       | ✅        | 1M      | $2.80/$8.80/—              | DashScope priority GLM route |
+| `glm-5.2-fast-preview`                | ✅        | 1M      | $2.80/$8.80/—              | DashScope high-throughput GLM 5.2 route |
+| `glm-5.2`                             | ✅        | 1M      | $1.40/$4.40/$0.28          | Zhipu AI GLM flagship route |
+| `deepseek-v4.1-flash`*                | ✅        | 1M      | $0.15/$0.60/—              | Current shared low-latency DeepSeek model |
+| `deepseek-v4-pro`*                    | ✅        | 1M      | $2.40/$4.80/$0.20          | Shared model for security and tool-heavy roles |
+| `deepseek-v4-pro-0813`                | ✅        | 1M      | $2.40/$4.80/$0.20          | Qwen Cloud-only V4 Pro snapshot |
+| `deepseek-v4-flash-0731`              | ✅        | 1M      | $0.44/$1.32/$0.088         | Legacy DashScope Flash snapshot |
+| `kimi-k3`                             | ✅        | 1M      | $3.00/$15.00/$0.30         | Current Kimi flagship on DashScope |
+| `kimi-k2.7-code`                      | ✅        | 262K    | $0.95/$4.00/$0.19          | Moonshot coding model, thinking always on, 16K output ceiling |
+
+**Prices**: Per 1M tokens. Cache pricing reflects implicit cache hit (when available); MoE/dense open-source models do not expose cache pricing. Tiered models (Max/Plus) show lowest-tier pricing (typically ≤32k or ≤256k input); larger contexts incur higher rates per Alibaba Cloud pricing. `deepseek-v4-flash-0731` shows the busy-hours rate; idle hours bill half.
 
 **Region Availability**:
 - **Intl** (International): Singapore region (`dashscope-intl.aliyuncs.com`)
 - **Global/US**: US Virginia region (`dashscope-us.aliyuncs.com`)
 - **China**: Chinese Mainland Beijing region (`dashscope.aliyuncs.com`)
+- **—**: availability in that region is not recorded here
 
 **Default Agent Configuration**:
-| Agent Role                                       | Default Model        | Tier      |
-| ------------------------------------------------ | -------------------- | --------- |
-| Generator / Refiner / Adviser (planning, mentor) | `qwen3.7-max`        | Flagship  |
-| Primary / Assistant / Pentester                  | `qwen3.6-plus`       | Balanced  |
-| Coder (exploit development)                      | `qwen3-coder-plus`   | Code+     |
-| Installer (env setup)                            | `qwen3-coder-flash`  | Code Fast |
-| Simple / Reflector / Searcher / Enricher         | `qwen3.5-flash`      | Fast      |
+| Agent Role                                                                   | Default Model       | Tier      |
+| ---------------------------------------------------------------------------- | ------------------- | --------- |
+| `simple`, `simple_json`, `reflector`, `searcher`, `enricher`                 | `qwen3.6-flash`     | Utility   |
+| `primary_agent`, `assistant`, `coder`, `installer`, `pentester`              | `deepseek-v4.1-flash` | Workhorse |
+| `generator`, `refiner`, `adviser`                                            | `deepseek-v4-pro`   | Planning  |
+
+The role configuration must run unchanged behind `qwen_cloud/` and `dashscope/`. Qwen 3.6 Flash handles utility calls, DeepSeek V4.1 Flash provides the lower-cost workhorse tier, and DeepSeek V4 Pro remains on planning and advice. Thinking controls are left at provider defaults because Qwen Cloud does not accept the same disable operation that DashScope supports.
 
 **Key Features**:
 - **Agent-Centric Design**: Qwen3.7-Max is purpose-built for long-horizon autonomous execution and tool invocation
@@ -2515,9 +2507,9 @@ PentAGI supports 33 Qwen models curated for agent workflows: text reasoning, cod
 - **Tool Calling**: Seamless integration with 20+ pentesting tools via function calling
 - **Streaming**: Real-time response streaming for interactive workflows
 - **Multilingual**: Strong Chinese, English, and multi-language support
-- **Open-Source Variants**: Dense and MoE models from 0.6B to 480B for on-premises/air-gapped deployments
+- **Open-Source Variants**: Dense and MoE models from 27B to 2.4T for on-premises/air-gapped deployments
 
-**LiteLLM Integration**: Set `QWEN_PROVIDER=dashscope` to enable model name prefixing when using default PentAGI configurations with LiteLLM proxy. Leave empty for direct API usage.
+**LiteLLM Integration**: Set `QWEN_PROVIDER=qwen_cloud` for Qwen Cloud routes or `QWEN_PROVIDER=dashscope` for Alibaba Cloud routes. Leave it empty for direct DashScope API usage.
 
 #### Alternative Integrations
 
@@ -2566,15 +2558,101 @@ MINIMAX_PROVIDER=minimax  # Adds prefix to model names (minimax/MiniMax-M3) for 
 
 #### Supported Models
 
-PentAGI ships 3 MiniMax models with tool calling, JSON output, and streaming. `MiniMax-M3` is the default for all agent types.
+PentAGI ships 3 MiniMax models with tool calling, JSON output, and streaming. `MiniMax-M3` is the default catalogue model; the bundled agent configuration uses `MiniMax-M2.7` for roles where conformance testing showed more reliable context retention and unified-diff generation.
 
-| Model ID                 | Context | Price (Input/Output, ≤512K context) | Use Case                                                                                            |
+| Model ID                 | Context | Price (Input/Output, ≤512K context) | Use Case                                                                                             |
 | ------------------------ | ------- | ------------------------------------ | --------------------------------------------------------------------------------------------------- |
-| `MiniMax-M3`*            | ~1M     | $0.30/$1.20 (2x above 512K tokens)   | Latest flagship for agentic reasoning, tool use, code generation, and long-context tasks (default)  |
-| `MiniMax-M2.7`           | 204K    | $0.30/$1.20                          | Previous-generation model with strong reasoning and coding                                          |
-| `MiniMax-M2.7-highspeed` | 204K    | $0.60/$2.40                          | Low-latency variant of M2.7 for fast-response scenarios                                             |
+| `MiniMax-M3`*            | ~1M     | $0.30/$1.20 (2x above 512K tokens)   | Latest flagship for agentic reasoning, tool use, code generation, and long-context tasks            |
+| `MiniMax-M2.7`           | 204K    | $0.30/$1.20                          | Reliable reasoning and coding model used by stateful and diff-producing agents                       |
+| `MiniMax-M2.7-highspeed` | 204K    | $0.60/$2.40                          | Low-latency variant of M2.7 for fast-response scenarios                                              |
 
 **LiteLLM Integration**: Set `MINIMAX_PROVIDER=minimax` to enable model name prefixing when using default PentAGI configurations with LiteLLM proxy. Leave empty for direct API usage.
+
+### Mistral Provider Configuration
+
+PentAGI talks to Mistral through the OpenAI-compatible `https://api.mistral.ai/v1` endpoint: the
+Medium/Large/Small line, the Ministral small models, Codestral for code, and one Z.ai model Mistral
+serves itself.
+
+#### Configuration Variables
+
+| Variable             | Default Value               | Description                                        |
+| -------------------- | --------------------------- | -------------------------------------------------- |
+| `MISTRAL_API_KEY`    |                             | Mistral API key for authentication                 |
+| `MISTRAL_SERVER_URL` | `https://api.mistral.ai/v1` | Mistral API endpoint URL                           |
+| `MISTRAL_PROVIDER`   |                             | Provider prefix for LiteLLM integration (optional) |
+
+#### Configuration Examples
+
+```bash
+# Direct API usage
+MISTRAL_API_KEY=your_mistral_api_key
+MISTRAL_SERVER_URL=https://api.mistral.ai/v1
+
+# With LiteLLM proxy
+MISTRAL_API_KEY=your_litellm_key
+MISTRAL_SERVER_URL=http://litellm-proxy:4000
+MISTRAL_PROVIDER=mistral  # Adds prefix to model names (mistral/mistral-small-latest) for LiteLLM
+```
+
+#### Supported Models
+
+PentAGI ships 6 Mistral models. The default configuration uses `mistral-small-latest` for utility and read-heavy agents, `mistral-large-latest` for primary and execution agents, and `mistral-medium-latest` for planning and advice. Small, Medium, and Large each have a 256K-token context window.
+
+| Model ID                | Price (Input/Output) | Reasons | Use Case                                                                 |
+| ----------------------- | -------------------- | ------- | ------------------------------------------------------------------------ |
+| `mistral-small-latest`* | $0.15/$0.60          | yes     | Hybrid instruct/reasoning/coding model for utility and read-heavy agents |
+| `mistral-medium-latest` | $1.50/$7.50          | yes     | Frontier-class multimodal model for planning and advice                  |
+| `mistral-large-latest`  | $0.50/$1.50          | no      | General-purpose model for primary, assistant, coding, and pentesting     |
+| `codestral-latest`      | $0.30/$0.90          | no      | Code completion and fill-in-the-middle                                   |
+| `zai-glm-5-2`           | $1.40/$4.40          | yes     | Z.ai GLM 5.2 served by Mistral, public preview                           |
+| `zai-glm-5-3`           | $1.40/$4.40          | yes     | Z.ai GLM 5.3 served by Mistral, public preview; thinking cannot be turned off |
+
+**LiteLLM Integration**: Set `MISTRAL_PROVIDER=mistral` to enable model name prefixing when using default PentAGI configurations with LiteLLM proxy. Leave empty for direct API usage.
+
+### xAI (Grok) Provider Configuration
+
+PentAGI talks to xAI through the OpenAI-compatible `https://api.x.ai/v1` endpoint: the Grok 4.x line with large context windows, plus a coding model.
+
+#### Configuration Variables
+
+| Variable         | Default Value           | Description                                        |
+| ---------------- | ----------------------- | -------------------------------------------------- |
+| `XAI_API_KEY`    |                         | xAI API key for authentication                     |
+| `XAI_SERVER_URL` | `https://api.x.ai/v1`   | xAI API endpoint URL                               |
+| `XAI_PROVIDER`   |                         | Provider prefix for LiteLLM integration (optional) |
+
+#### Configuration Examples
+
+```bash
+# Direct API usage
+XAI_API_KEY=your_xai_api_key
+XAI_SERVER_URL=https://api.x.ai/v1
+
+# With LiteLLM proxy
+XAI_API_KEY=your_litellm_key
+XAI_SERVER_URL=http://litellm-proxy:4000
+XAI_PROVIDER=xai  # Adds prefix to model names (xai/grok-4.3) for LiteLLM
+```
+
+#### Supported Models
+
+PentAGI lists seven xAI Chat Completions model IDs that responded through the tested API. Catalogue availability does not imply suitability as an agent default. The bundled configuration uses `grok-4.3` for tool-heavy roles, including `searcher`, and `grok-4.20-0309-non-reasoning` for `simple`, `simple_json`, `reflector`, and `enricher`; the exact bindings are in `backend/pkg/providers/xai/config.yml`. In saved generator chains, `grok-4.3` called `subtask_list` directly on all nine, whereas `grok-4.6` returned text without a tool call on all nine. The [full replay matrix](MODEL_REPLAY_RESULTS.md) records outcomes and limitations. The Responses-only multi-agent model is not listed because PentAGI agents supply their own client-side tools.
+
+| Model ID | Context | Price (Input/Output) | Reasons | Saved-chain result |
+| --- | --- | --- | --- | --- |
+| `grok-4.7` | 500K | $2.00/$6.00 | yes | API responds; generator/reflector refusals make it unsuitable as a default |
+| `grok-4.6` | 500K | $2.00/$6.00 | yes | API responds; all nine saved generator requests returned text without a tool |
+| `grok-4.5` | 500K | $2.00/$6.00 | yes | API responds; eight of nine generator requests explicitly refused |
+| `grok-4.3`* | 1M | $1.25/$2.50 | yes | Direct plan on all nine saved generator chains; tool-role default and fallback |
+| `grok-4.20-0309-reasoning` | 1M | $1.25/$2.50 | yes | Four direct plans, three more after safe tool continuation, two pending |
+| `grok-4.20-0309-non-reasoning`* | 1M | $1.25/$2.50 | no | Utility-role default; six plans after safe tool continuation, three pending |
+| `grok-build-0.1` | 256K | $1.00/$2.00 | yes | Coding model; five plans after safe tool continuation, four pending |
+
+> Note: prices are for prompts under 200K tokens; at or above that threshold xAI applies the higher long-context rate to every token in the request.
+
+**LiteLLM Integration**: Set `XAI_PROVIDER=xai` to enable model name prefixing when using default PentAGI configurations with LiteLLM proxy. Leave empty for direct API usage.
+
 
 ## Advanced Setup
 
@@ -2730,7 +2808,7 @@ PentAGI enables its client only when both `GRAPHITI_ENABLED=true` and `GRAPHITI_
 | Preset | Credentials and endpoint | Shipped main model |
 | --- | --- | --- |
 | `openai` | `OPEN_AI_KEY`, `OPEN_AI_SERVER_URL` | `openai/gpt-5-mini` |
-| `gemini` | `GEMINI_API_KEY`, `GEMINI_SERVER_URL` | `gemini/gemini-2.5-flash-lite` |
+| `gemini` | `GEMINI_API_KEY`, `GEMINI_SERVER_URL` | `gemini/gemini-3.5-flash-lite` |
 | `custom` | `LLM_SERVER_KEY`, `LLM_SERVER_URL` | `Qwen/Qwen3.6-27B-FP8` |
 | `litellm` | `GRAPHITI_LITELLM_API_KEY`, `GRAPHITI_LITELLM_BASE_URL` | `openrouter/openai/gpt-oss-20b` |
 
@@ -2924,10 +3002,19 @@ PentAGI allows you to configure Docker image selection for executing various tas
 | `PENTAGI_IMAGE`                    | `vxcontrol/pentagi:latest` | Docker image used for the main PentAGI application service |
 | `DOCKER_DEFAULT_IMAGE`             | `debian:latest`        | Default Docker image for general tasks and ambiguous cases  |
 | `DOCKER_DEFAULT_IMAGE_FOR_PENTEST` | `vxcontrol/kali-linux` | Default Docker image for security/penetration testing tasks |
+| `DOCKER_ALLOWED_IMAGES`            | empty                  | Comma-separated allow-list the selected image must belong to |
+| `DOCKER_IMAGE_SELECTION_MODE`      | `llm`                  | `llm` lets the model pick the image, `fixed` always uses the pentest image |
 
 `PENTAGI_IMAGE` changes the image used by the main `pentagi` service in `docker-compose.yml`. The `DOCKER_DEFAULT_IMAGE` and `DOCKER_DEFAULT_IMAGE_FOR_PENTEST` variables only affect automatic worker image selection for task execution inside PentAGI. They do not rewrite the rest of the Compose stack, so services such as `pgvector`, `scraper`, and the optional `graphiti` stack still use the image references defined in the compose files.
 
-When `DOCKER_DEFAULT_IMAGE` and `DOCKER_DEFAULT_IMAGE_FOR_PENTEST` are set, AI agents will be limited to the image choices you specify. This is particularly useful for:
+`DOCKER_DEFAULT_IMAGE` and `DOCKER_DEFAULT_IMAGE_FOR_PENTEST` are suggestions the model receives in the image selection prompt, not limits: on their own they do not stop a model from answering with some other image. Two settings turn them into limits:
+
+- **`DOCKER_ALLOWED_IMAGES`** restricts the choice. An answer outside the list is discarded and the pentest image is used instead. An entry without a tag admits any tag of that repository, so `vxcontrol/kali-linux` also admits `vxcontrol/kali-linux:2026.1`. While the list is empty the model may pick any image, which is the default behaviour.
+- **`DOCKER_IMAGE_SELECTION_MODE=fixed`** removes the choice altogether: the flow always runs in `DOCKER_DEFAULT_IMAGE_FOR_PENTEST` and no model call is made. Use it when weaker or local models answer with the wrong environment.
+
+Regardless of these settings, an answer that is not a usable image reference never reaches Docker: the flow falls back to the pentest image and the rejected answer is logged.
+
+Restricting the choice is useful for:
 
 - **Security Enforcement**: Restricting usage to only verified and trusted images
 - **Environment Standardization**: Using corporate or customized images across all operations
@@ -3249,16 +3336,16 @@ docker exec -it pentagi /opt/pentagi/bin/ctester -config /opt/pentagi/conf/openc
 docker exec -it pentagi /opt/pentagi/bin/ctester -config /opt/pentagi/conf/deepinfra.provider.yml
 
 # Test with DeepSeek configuration
-docker exec -it pentagi /opt/pentagi/bin/ctester -provider deepseek
+docker exec -it pentagi /opt/pentagi/bin/ctester -type deepseek
 
 # Test with GLM configuration
-docker exec -it pentagi /opt/pentagi/bin/ctester -provider glm
+docker exec -it pentagi /opt/pentagi/bin/ctester -type glm
 
 # Test with Kimi configuration
-docker exec -it pentagi /opt/pentagi/bin/ctester -provider kimi
+docker exec -it pentagi /opt/pentagi/bin/ctester -type kimi
 
 # Test with Qwen configuration
-docker exec -it pentagi /opt/pentagi/bin/ctester -provider qwen
+docker exec -it pentagi /opt/pentagi/bin/ctester -type qwen
 
 # Test with DeepSeek configuration file for custom provider
 docker exec -it pentagi /opt/pentagi/bin/ctester -config /opt/pentagi/conf/deepseek.provider.yml
@@ -3305,7 +3392,6 @@ LLM_SERVER_KEY=your_api_key
 LLM_SERVER_MODEL=                                # Leave empty, as models are specified in the config
 LLM_SERVER_CONFIG_PATH=/opt/pentagi/conf/openrouter.provider.yml  # or deepinfra.provider.ymll or opencode.provider.ymll or custom-openai.provider.yml or novita.provider.yml or atlas.provider.yml or orcarouter.provider.yml or xai.provider.yml
 LLM_SERVER_PROVIDER=                             # Provider name for LiteLLM proxy (e.g., openrouter, deepseek, moonshot, novita, opencode, orcarouter, xai)
-LLM_SERVER_LEGACY_REASONING=false                # Controls reasoning format, for OpenAI must be true (default: false)
 LLM_SERVER_PRESERVE_REASONING=false              # Preserve reasoning content in multi-turn conversations (required by Moonshot, default: false)
 
 # For OpenAI (official API)
@@ -3355,10 +3441,10 @@ KIMI_API_KEY=                                    # Kimi API key
 KIMI_SERVER_URL=https://api.moonshot.ai/v1       # Kimi API endpoint (international)
 KIMI_PROVIDER=                                   # Optional: LiteLLM prefix (e.g., 'moonshot')
 
-# For Qwen (Alibaba Cloud DashScope)
-QWEN_API_KEY=                                    # Qwen API key
-QWEN_SERVER_URL=https://dashscope-us.aliyuncs.com/compatible-mode/v1  # Qwen API endpoint (US)
-QWEN_PROVIDER=                                   # Optional: LiteLLM prefix (e.g., 'dashscope')
+# For Qwen Cloud or Alibaba Cloud Model Studio
+QWEN_API_KEY=                                    # Direct provider or gateway API key
+QWEN_SERVER_URL=https://dashscope-us.aliyuncs.com/compatible-mode/v1  # Direct DashScope or gateway URL
+QWEN_PROVIDER=                                   # Gateway prefix: 'qwen_cloud' or 'dashscope'; empty for direct DashScope
 
 # For Ollama (local inference) use variables above
 OLLAMA_SERVER_URL=http://localhost:11434
@@ -3379,7 +3465,6 @@ LLM_SERVER_URL=https://api.openai.com/v1
 LLM_SERVER_KEY=your_openai_api_key
 LLM_SERVER_MODEL=                                # Leave empty, models are specified in config
 LLM_SERVER_CONFIG_PATH=/opt/pentagi/conf/custom-openai.provider.yml
-LLM_SERVER_LEGACY_REASONING=true                 # Required for OpenAI reasoning format
 ```
 
 This configuration uses the pre-built `custom-openai.provider.yml` file that maps all agent types to models available for unverified organizations, using `o3-mini` instead of models like `o1`, `o3`, and `o4-mini`.
@@ -3390,9 +3475,6 @@ You can test this configuration using:
 # Test with custom OpenAI configuration for unverified accounts
 docker exec -it pentagi /opt/pentagi/bin/ctester -config /opt/pentagi/conf/custom-openai.provider.yml
 ```
-
-> [!NOTE]
-> The `LLM_SERVER_LEGACY_REASONING=true` setting is crucial for OpenAI compatibility as it ensures reasoning parameters are sent in the format expected by OpenAI's API.
 
 #### Using LiteLLM Proxy
 
@@ -3420,7 +3502,7 @@ When using LiteLLM proxy, set the corresponding `*_PROVIDER` variable to enable 
 
 - `deepseek` - for DeepSeek models (`DEEPSEEK_PROVIDER=deepseek` → `deepseek/deepseek-v4-flash`)
 - `zai` - for GLM models (`GLM_PROVIDER=zai` → `zai/glm-4`)
-- `moonshot` - for Kimi models (`KIMI_PROVIDER=moonshot` → `moonshot/kimi-k2.5`)
+- `moonshot` - for Kimi models (`KIMI_PROVIDER=moonshot` → `moonshot/kimi-k3`)
 - `dashscope` - for Qwen models (`QWEN_PROVIDER=dashscope` → `dashscope/qwen-plus`)
 - `openai`, `anthropic`, `gemini` - for major cloud providers
 - `opencode` - for OpenCode Go plan
@@ -3630,13 +3712,13 @@ Each provider has specific limitations and supported features:
 
 - **OpenAI**: Supports all configuration options
 - **Ollama**: Does not support `EMBEDDING_KEY` as it uses local models
-- **Mistral**: Does not support `EMBEDDING_MODEL` or custom HTTP client
-- **Jina**: Does not support custom HTTP client
+- **Mistral**: Supports all configuration options
+- **Jina**: Supports all configuration options
 - **HuggingFace**: Requires `EMBEDDING_KEY` and supports all other options
 - **GoogleAI**: Does not support `EMBEDDING_URL`, requires `EMBEDDING_KEY`
 - **VoyageAI**: Supports all configuration options
 
-If `EMBEDDING_URL` and `EMBEDDING_KEY` are not specified, the system will attempt to use the corresponding LLM provider settings (e.g., `OPEN_AI_KEY` when `EMBEDDING_PROVIDER=openai`).
+If `EMBEDDING_URL` and `EMBEDDING_KEY` are both left empty, the system uses the corresponding LLM provider's server and key together (e.g., `OPEN_AI_SERVER_URL` and `OPEN_AI_KEY` when `EMBEDDING_PROVIDER=openai`). A key set in `EMBEDDING_KEY` without `EMBEDDING_URL` goes to the provider's public endpoint, and an `EMBEDDING_URL` set without a key receives the LLM provider's key only when it is that provider's own server. So an OpenAI-compatible endpoint of another vendor needs its key in `EMBEDDING_KEY`, and a keyless local server (LocalAI, vLLM, TEI) takes any non-empty value there. Whenever the Mistral embedder uses `MISTRAL_SERVER_URL`, it also names the model the way that server expects: `MISTRAL_PROVIDER=mistral` turns `mistral-embed` into `mistral/mistral-embed`, and a model that already starts with `mistral/` is sent as is.
 
 ### Why Consistent Embedding Providers Matter
 
@@ -4033,21 +4115,21 @@ source ./scripts/version.sh
 docker build \
   --build-arg PACKAGE_VER=$PACKAGE_VER \
   --build-arg PACKAGE_REV=$PACKAGE_REV \
-  -t pentagi:$PACKAGE_VER .
+  -t pentagi:$PACKAGE_VERSION_FULL .
 
 # Multi-platform build
 docker buildx build \
   --platform linux/amd64,linux/arm64 \
   --build-arg PACKAGE_VER=$PACKAGE_VER \
   --build-arg PACKAGE_REV=$PACKAGE_REV \
-  -t pentagi:$PACKAGE_VER .
+  -t pentagi:$PACKAGE_VERSION_FULL .
 
 # Build and push
 docker buildx build \
   --platform linux/amd64,linux/arm64 \
   --build-arg PACKAGE_VER=$PACKAGE_VER \
   --build-arg PACKAGE_REV=$PACKAGE_REV \
-  -t myregistry/pentagi:$PACKAGE_VER \
+  -t myregistry/pentagi:$PACKAGE_VERSION_FULL \
   --push .
 ```
 
@@ -4061,14 +4143,14 @@ docker buildx build \
 docker build `
   --build-arg PACKAGE_VER=$env:PACKAGE_VER `
   --build-arg PACKAGE_REV=$env:PACKAGE_REV `
-  -t pentagi:$env:PACKAGE_VER .
+  -t pentagi:$env:PACKAGE_VERSION_FULL .
 
 # Multi-platform build
 docker buildx build `
   --platform linux/amd64,linux/arm64 `
   --build-arg PACKAGE_VER=$env:PACKAGE_VER `
   --build-arg PACKAGE_REV=$env:PACKAGE_REV `
-  -t pentagi:$env:PACKAGE_VER .
+  -t pentagi:$env:PACKAGE_VERSION_FULL .
 ```
 
 #### Quick build without version
@@ -4082,7 +4164,7 @@ docker build -t pentagi:dev .
 > [!NOTE]
 > - The build scripts automatically determine version from git tags
 > - Release builds (on tag commit) have no revision suffix
-> - Development builds (after tag) include commit hash as revision (e.g., `1.1.0-bc6e800`)
+> - Development builds (after tag) include commit hash as revision (e.g., `1.1.0-ce.hbc6e800`); the edition is `ce` for Community and `ee` for Enterprise, and a release build is `1.1.0-ce`
 > - To use the built image locally, update the image name in `docker-compose.yml` or use the `build` option
 
 ## Credits

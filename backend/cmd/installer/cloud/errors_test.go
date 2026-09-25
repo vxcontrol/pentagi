@@ -10,7 +10,7 @@ import (
 	"github.com/vxcontrol/cloud/sdk"
 )
 
-func TestClassify(t *testing.T) {
+func TestErrors_Classify_MapsSDKErrorsToActionableReasons(t *testing.T) {
 	tests := []struct {
 		name           string
 		err            error
@@ -18,20 +18,10 @@ func TestClassify(t *testing.T) {
 		wantRetryAfter time.Duration
 	}{
 		{name: "no error", err: nil},
-
+		{name: "forbidden", err: sdk.ErrForbidden, wantReason: FailureForbidden},
+		{name: "blocked client", err: sdk.ErrBlocked, wantReason: FailureForbidden},
 		{
-			name:       "forbidden",
-			err:        sdk.ErrForbidden,
-			wantReason: FailureForbidden,
-		},
-		{
-			name:       "blocked client",
-			err:        sdk.ErrBlocked,
-			wantReason: FailureForbidden,
-		},
-		{
-			// A tier without access to the endpoint is not an exhausted allowance: there
-			// is no reset to wait for, so it must not be presented as "try again later".
+			// A tier without access has no reset to wait for, so it must not read as "try again later".
 			name:       "quota blocked is a permission problem, not a wait",
 			err:        &sdk.QuotaError{Err: sdk.ErrQuotaBlocked, Scope: sdk.QuotaScopeBlocked},
 			wantReason: FailureForbidden,
@@ -52,50 +42,15 @@ func TestClassify(t *testing.T) {
 			wantReason:     FailureRateLimited,
 			wantRetryAfter: 42 * time.Second,
 		},
-		{
-			name:       "not found is an answer",
-			err:        sdk.ErrNotFound,
-			wantReason: FailureNotFound,
-		},
-		{
-			name:       "malformed request is ours to fix",
-			err:        sdk.ErrBadRequest,
-			wantReason: FailureRejected,
-		},
-		{
-			name:       "server side failure",
-			err:        sdk.ErrServerInternal,
-			wantReason: FailureServerError,
-		},
-		{
-			name:       "bad gateway",
-			err:        sdk.ErrBadGateway,
-			wantReason: FailureServerError,
-		},
-		{
-			// The SDK does not retry a timed-out challenge, so the user has to be told
-			// this was a budget rather than a broken network.
-			name:       "proof of work budget",
-			err:        sdk.ErrExperimentTimeout,
-			wantReason: FailureTimeout,
-		},
-		{
-			name:       "caller deadline",
-			err:        context.DeadlineExceeded,
-			wantReason: FailureTimeout,
-		},
-		{
-			name:       "anything else is a reachability problem",
-			err:        errors.New("dial tcp: no route to host"),
-			wantReason: FailureUnreachable,
-		},
-		{
-			// Errors arrive wrapped by the call layer, so classification has to see
-			// through the wrapping rather than compare at the top level.
-			name:       "wrapped errors are still classified",
-			err:        fmt.Errorf("update check failed: %w", sdk.ErrForbidden),
-			wantReason: FailureForbidden,
-		},
+		{name: "not found is an answer", err: sdk.ErrNotFound, wantReason: FailureNotFound},
+		{name: "malformed request is ours to fix", err: sdk.ErrBadRequest, wantReason: FailureRejected},
+		{name: "server side failure", err: sdk.ErrServerInternal, wantReason: FailureServerError},
+		{name: "bad gateway", err: sdk.ErrBadGateway, wantReason: FailureServerError},
+		// The SDK does not retry a timed-out challenge, so this is a budget, not a broken network.
+		{name: "proof of work budget", err: sdk.ErrExperimentTimeout, wantReason: FailureTimeout},
+		{name: "caller deadline", err: context.DeadlineExceeded, wantReason: FailureTimeout},
+		{name: "anything else is a reachability problem", err: errors.New("dial tcp: no route to host"), wantReason: FailureUnreachable},
+		{name: "wrapped errors are still classified", err: fmt.Errorf("update check failed: %w", sdk.ErrForbidden), wantReason: FailureForbidden},
 	}
 
 	for _, tt := range tests {
@@ -125,10 +80,8 @@ func TestClassify(t *testing.T) {
 	}
 }
 
-// TestRetryableMatchesWhatWaitingCanFix guards the property the interface acts on. Telling
-// a user to wait out a forbidden endpoint wastes their time; not telling them about a
-// quota that resets in an hour wastes the license.
-func TestRetryableMatchesWhatWaitingCanFix(t *testing.T) {
+// Waiting out a forbidden endpoint wastes the user's time; hiding a quota reset wastes the license.
+func TestErrors_Retryable_MatchesWhatWaitingCanFix(t *testing.T) {
 	retryable := map[FailureReason]bool{
 		FailureUnreachable:   true,
 		FailureTimeout:       true,

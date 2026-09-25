@@ -11,6 +11,7 @@ import (
 	"pentagi/pkg/server/rdb"
 	"pentagi/pkg/server/response"
 
+	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/gorm"
 	"golang.org/x/crypto/bcrypt"
@@ -39,14 +40,18 @@ var usersSQLMappers = map[string]any{
 }
 
 type UserService struct {
-	db        *gorm.DB
-	userCache *auth.UserCache
+	db             *gorm.DB
+	userCache      *auth.UserCache
+	baseURL        string
+	sessionTimeout int
 }
 
-func NewUserService(db *gorm.DB, userCache *auth.UserCache) *UserService {
+func NewUserService(db *gorm.DB, userCache *auth.UserCache, baseURL string, sessionTimeout int) *UserService {
 	return &UserService{
-		db:        db,
-		userCache: userCache,
+		db:             db,
+		userCache:      userCache,
+		baseURL:        baseURL,
+		sessionTimeout: sessionTimeout,
 	}
 }
 
@@ -172,13 +177,60 @@ func (s *UserService) ChangePasswordCurrentUser(c *gin.Context) {
 		"password_change_required": false,
 	}
 
-	if err = s.db.Model(&user).Scopes(scope).Updates(updates).Error; err != nil {
-		logger.FromContext(c).WithError(err).Errorf("error updating password for current user")
+	if err = s.changePassword(c, uid, updates); err != nil {
+		logger.FromContext(c).WithError(err).Errorf("error changing password for current user")
 		response.Error(c, response.ErrInternal, err)
 		return
 	}
 
 	response.Success(c, http.StatusOK, struct{}{})
+}
+
+func (s *UserService) changePassword(c *gin.Context, userID uint64, updates map[string]any) error {
+	tx := s.db.Begin()
+	if err := tx.Error; err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	if err := tx.Model(&models.User{}).Where("id = ?", userID).Updates(updates).Error; err != nil {
+		return err
+	}
+
+	generation, err := auth.RevokeSessions(tx, nil, userID)
+	if err != nil {
+		return err
+	}
+
+	session := sessions.Default(c)
+	sessionUID, ok := session.Get("uid").(uint64)
+	isOwnSession := ok && sessionUID == userID
+	previous := session.Get("sgn")
+	if isOwnSession {
+		session.Set("sgn", generation)
+		// Saving without these options puts a second cookie at the store's
+		// default path, and the stale one wins.
+		session.Options(sessionOptions(c.Request, s.baseURL, s.sessionTimeout))
+		if err := session.Save(); err != nil {
+			return err
+		}
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		if isOwnSession {
+			session.Set("sgn", previous)
+			if saveErr := session.Save(); saveErr != nil {
+				logger.FromContext(c).WithError(saveErr).
+					Error("failed to restore the session cookie after the password change was rolled back")
+			}
+		}
+		return err
+	}
+	if s.userCache != nil {
+		s.userCache.Invalidate(userID)
+	}
+
+	return nil
 }
 
 // ChangeEmailCurrentUser is a function to update account email
@@ -345,7 +397,7 @@ func (s *UserService) GetUsers(c *gin.Context) {
 		return db
 	}
 
-	query.Init("users", usersSQLMappers)
+	_ = query.Init("users", usersSQLMappers)
 
 	if query.Group != "" {
 		if _, ok := usersSQLMappers[query.Group]; !ok {
@@ -415,7 +467,7 @@ func (s *UserService) GetUsers(c *gin.Context) {
 func (s *UserService) GetUser(c *gin.Context) {
 	var (
 		err  error
-		hash string = c.Param("hash")
+		hash = c.Param("hash")
 		resp models.UserRolePrivileges
 	)
 
@@ -580,7 +632,7 @@ func (s *UserService) CreateUser(c *gin.Context) {
 		return
 	}
 
-	s.userCache.Invalidate(resp.User.ID)
+	s.userCache.Invalidate(resp.ID)
 
 	response.Success(c, http.StatusCreated, resp)
 }
@@ -667,7 +719,7 @@ func (s *UserService) PatchUser(c *gin.Context) {
 			"password":                 string(encPassword),
 			"password_change_required": false,
 		}
-		err = s.db.Model(&existingUser).Updates(updates).Error
+		err = s.changePassword(c, existingUser.ID, updates)
 	} else {
 		updates := map[string]any{
 			"name":   user.Name,
@@ -707,7 +759,7 @@ func (s *UserService) PatchUser(c *gin.Context) {
 		return
 	}
 
-	s.userCache.Invalidate(resp.User.ID)
+	s.userCache.Invalidate(resp.ID)
 
 	response.Success(c, http.StatusOK, resp)
 }
@@ -725,7 +777,7 @@ func (s *UserService) PatchUser(c *gin.Context) {
 func (s *UserService) DeleteUser(c *gin.Context) {
 	var (
 		err  error
-		hash string = c.Param("hash")
+		hash = c.Param("hash")
 		user models.UserRole
 	)
 

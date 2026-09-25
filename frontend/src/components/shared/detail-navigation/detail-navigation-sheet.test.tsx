@@ -49,7 +49,7 @@ const LocationReadout = () => {
     const { pathname, search } = useLocation();
 
     return (
-        <span data-testid="location">
+        <span data-slot="probe-location">
             {pathname}
             {search}
         </span>
@@ -257,7 +257,7 @@ describe('DetailNavigationSheet — selection', () => {
         await waitFor(() => {
             expect(screen.queryByRole('listbox', { name: 'Items' })).not.toBeInTheDocument();
         });
-        expect(screen.getByTestId('location').textContent).toContain('/items/a');
+        expect(screen.getByTestId('probe-location').textContent).toContain('/items/a');
     });
 
     it('narrows the listbox to filtered items', async () => {

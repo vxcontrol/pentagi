@@ -206,46 +206,61 @@ func (t *terminal) startCmd(cmd *exec.Cmd) error {
 	// initialize command lines buffer
 	t.cmdLines = []string{}
 
-	// set up pipes for stdout and stderr
-	stdoutPipe, err := cmd.StdoutPipe()
+	// Use os.Pipe instead of cmd.StdoutPipe/StderrPipe/StdinPipe.
+	// Callers (processor, tests) invoke cmd.Wait() while we still read output;
+	// exec.Cmd closes StdoutPipe/StderrPipe descriptors in Wait, which races
+	// with our scanners ("file already closed") and can drop command output.
+	stdoutR, stdoutW, err := os.Pipe()
 	if err != nil {
 		return fmt.Errorf("failed to create stdout pipe: %w", err)
 	}
-
-	stderrPipe, err := cmd.StderrPipe()
+	stderrR, stderrW, err := os.Pipe()
 	if err != nil {
-		stdoutPipe.Close()
+		_ = stdoutR.Close()
+		_ = stdoutW.Close()
 		return fmt.Errorf("failed to create stderr pipe: %w", err)
 	}
-
-	// set up stdin pipe for interactive commands
-	stdinPipe, err := cmd.StdinPipe()
+	stdinR, stdinW, err := os.Pipe()
 	if err != nil {
-		stdoutPipe.Close()
-		stderrPipe.Close()
+		_ = stdoutR.Close()
+		_ = stdoutW.Close()
+		_ = stderrR.Close()
+		_ = stderrW.Close()
 		return fmt.Errorf("failed to create stdin pipe: %w", err)
 	}
 
-	// store pipes for cleanup and input handling
+	cmd.Stdout = stdoutW
+	cmd.Stderr = stderrW
+	cmd.Stdin = stdinR
 	t.cmd = cmd
 
-	// start the command
 	if err := cmd.Start(); err != nil {
-		stdoutPipe.Close()
-		stderrPipe.Close()
-		stdinPipe.Close()
+		_ = stdoutR.Close()
+		_ = stdoutW.Close()
+		_ = stderrR.Close()
+		_ = stderrW.Close()
+		_ = stdinR.Close()
+		_ = stdinW.Close()
 		return fmt.Errorf("failed to start command: %w", err)
 	}
 
-	// start managing the command output
-	go t.manageCmd(stdoutPipe, stderrPipe, stdinPipe)
+	// Close parent write ends so readers see EOF when the child exits.
+	// Close parent copy of stdin read end (child retains its own fd).
+	_ = stdoutW.Close()
+	_ = stderrW.Close()
+	_ = stdinR.Close()
+
+	// Add before starting the goroutine: if Wait() runs after Execute returns but
+	// before the goroutine schedules wg.Add, Wait would return early and the next
+	// Execute would see a still-busy terminal (or miss command output).
+	t.wg.Add(1)
+	go t.manageCmd(stdoutR, stderrR, stdinW)
 
 	return nil
 }
 
 // manageCmd manages command pipes and their output
 func (t *terminal) manageCmd(stdoutPipe, stderrPipe io.ReadCloser, stdinPipe io.WriteCloser) {
-	t.wg.Add(1)
 	defer t.wg.Done()
 
 	defer func() {

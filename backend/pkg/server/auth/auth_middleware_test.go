@@ -1,337 +1,189 @@
-package auth_test
+package auth
 
 import (
-	"bytes"
-	"io"
-	"math/rand"
+	"errors"
+	"fmt"
 	"net/http"
-	"net/http/cookiejar"
-	"net/http/httptest"
-	"net/url"
-	"strconv"
+	"strings"
 	"testing"
 	"time"
 
-	"pentagi/pkg/server/auth"
-	"pentagi/pkg/server/models"
-
-	"github.com/gin-contrib/sessions"
-	"github.com/gin-contrib/sessions/cookie"
-	"github.com/gin-gonic/gin"
-	"github.com/jinzhu/gorm"
-	_ "github.com/jinzhu/gorm/dialects/sqlite"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func TestAuthTokenProtoRequiredAuthWithCookie(t *testing.T) {
-	db := setupTestDB(t)
-	defer db.Close()
+func TestAuthMiddleware_TryUserCookieAuthentication_AdmitsOnlyALiveSessionOfAnActiveUser(t *testing.T) {
+	cases := []struct {
+		name       string
+		expiresIn  time.Duration // zero sends no session cookie
+		privileges []string
+		change     string // applied to the store after the login
+		wantReason string // empty when the session is admitted
+		wantCPT    string
+	}{
+		{name: "a session without the automation privilege", expiresIn: 5 * time.Minute,
+			privileges: []string{"some.permission"}},
+		{name: "a session holding the automation privilege among others", expiresIn: 5 * time.Minute,
+			privileges: []string{"some.permission", "pentagi.automation"}, wantCPT: "automation"},
+		{name: "a session granting no privileges", expiresIn: 5 * time.Minute},
+		{name: "no session cookie", wantReason: "cookie claim invalid"},
+		{name: "a session past its expiry", expiresIn: -time.Second, privileges: []string{"some.permission"},
+			wantReason: "session expired"},
+		{name: "a hash changed since the login", expiresIn: 5 * time.Minute, privileges: []string{"some.permission"},
+			change:     "UPDATE users SET hash = 'modified_hash' WHERE id = 1",
+			wantReason: "user hash mismatch - session invalid for this installation"},
+		{name: "a blocked user", expiresIn: 5 * time.Minute, privileges: []string{"some.permission"},
+			change: "UPDATE users SET status = 'blocked' WHERE id = 1", wantReason: "user has been blocked"},
+		{name: "a user not activated yet", expiresIn: 5 * time.Minute, privileges: []string{"some.permission"},
+			change: "UPDATE users SET status = 'created' WHERE id = 1", wantReason: "user is not ready"},
+		{name: "a deleted user", expiresIn: 5 * time.Minute, privileges: []string{"some.permission"},
+			change: "DELETE FROM users WHERE id = 1", wantReason: "user has been deleted"},
+	}
 
-	tokenCache := auth.NewTokenCache(db)
-	userCache := auth.NewUserCache(db)
-	authMiddleware := auth.NewAuthMiddleware("/base/url", "test", tokenCache, userCache)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			db := setupTestDB(t)
+			server := newTestServer(t, NewAuthMiddleware("/base/url", "test", NewTokenCache(db), NewUserCache(db)).AuthUserRequired)
+			if tc.expiresIn != 0 {
+				server.Authorize(t, tc.expiresIn, tc.privileges...)
+			}
+			if tc.change != "" {
+				require.NoError(t, db.Exec(tc.change).Error)
+			}
 
-	t.Run("test URL", func(t *testing.T) {
-		server := newTestServer(t, "/test", db, authMiddleware.AuthTokenRequired)
-		defer server.Close()
+			got := server.Call(t, "")
 
-		assert.False(t, server.CallAndGetStatus(t))
-
-		server.SetSessionCheckFunc(func(t *testing.T, c *gin.Context) {
-			t.Helper()
-			assert.Equal(t, "", c.GetString("cpt"))
+			if tc.wantReason != "" {
+				assert.Equal(t, http.StatusForbidden, got.status)
+				assert.Equal(t, tc.wantReason, got.reason)
+				assert.Nil(t, got.seen)
+				return
+			}
+			assert.Equal(t, http.StatusOK, got.status)
+			require.NotNil(t, got.seen)
+			assert.Equal(t, authIdentity{
+				UID: 1, RID: 2, SGN: 1, UHash: "testhash", TID: "local", CPT: tc.wantCPT, UName: "User 1",
+				Prm: tc.privileges,
+			}, got.seen.withoutClock())
+			assert.Equal(t, int64(300), got.seen.EXP-got.seen.GTM)
 		})
-
-		server.Authorize(t, []string{})
-		assert.True(t, server.CallAndGetStatus(t))
-
-		server.Authorize(t, []string{"wrong.permission"})
-		assert.True(t, server.CallAndGetStatus(t))
-
-		server.SetSessionCheckFunc(func(t *testing.T, c *gin.Context) {
-			t.Helper()
-			assert.Equal(t, "automation", c.GetString("cpt"))
-		})
-
-		server.Authorize(t, []string{auth.PrivilegeAutomation})
-		assert.True(t, server.CallAndGetStatus(t))
-
-		server.Authorize(t, []string{"wrong.permission", auth.PrivilegeAutomation})
-		assert.True(t, server.CallAndGetStatus(t))
-	})
+	}
 }
 
-func TestAuthTokenProtoRequiredAuthWithToken(t *testing.T) {
+func TestAuthMiddleware_TryUserCookieAuthentication_RereadsAGenerationNewerThanTheCache(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
+	userCache := NewUserCache(db)
+	server := newTestServer(t, NewAuthMiddleware("/base/url", "test", NewTokenCache(db), userCache).AuthUserRequired)
 
-	tokenCache := auth.NewTokenCache(db)
-	userCache := auth.NewUserCache(db)
-	authMiddleware := auth.NewAuthMiddleware("/base/url", "test", tokenCache, userCache)
+	require.NoError(t, db.Exec("UPDATE users SET session_generation = 0 WHERE id = 1").Error)
+	_, err := userCache.GetUser(1)
+	require.NoError(t, err)
+	require.NoError(t, db.Exec("UPDATE users SET session_generation = 1 WHERE id = 1").Error)
 
-	server := newTestServer(t, "/test", db, authMiddleware.AuthTokenRequired)
-	defer server.Close()
+	server.Authorize(t, 5*time.Minute, "some.permission")
 
-	server.Authorize(t, []string{auth.PrivilegeAutomation})
-	token := server.GetToken(t)
-	require.NotEmpty(t, token)
-
-	server.Unauthorize(t)
-	assert.False(t, server.CallAndGetStatus(t))
-
-	assert.False(t, server.CallAndGetStatus(t, token))
-	assert.False(t, server.CallAndGetStatus(t, "not a bearer "+token))
-	assert.False(t, server.CallAndGetStatus(t, "Bearer"+token))
-	assert.False(t, server.CallAndGetStatus(t, "Bearer not_a_token"))
-
-	server.SetSessionCheckFunc(func(t *testing.T, c *gin.Context) {
-		t.Helper()
-		assert.Equal(t, uint64(1), c.GetUint64("uid"))
-		assert.Equal(t, uint64(2), c.GetUint64("rid"))
-		assert.NotNil(t, c.GetStringSlice("prm"))
-
-		// gtm and exp should now be set for API tokens
-		gtm := c.GetInt64("gtm")
-		assert.Greater(t, gtm, int64(0), "GTM should be set")
-
-		exp := c.GetInt64("exp")
-		assert.Greater(t, exp, gtm, "EXP should be greater than GTM")
-
-		// uuid will be empty for invalid hash (test uses "123" which is not valid MD5)
-		assert.NotNil(t, c.GetString("uuid"))
-
-		assert.Equal(t, "automation", c.GetString("cpt"))
-		assert.Empty(t, c.GetString("uname"))
-	})
-
-	assert.True(t, server.CallAndGetStatus(t, "Bearer "+token))
+	assert.Equal(t, http.StatusOK, server.Call(t, "").status,
+		"a cookie minted from the row after an installer reset must not wait out the cached generation")
 }
 
-func TestAuthRequiredAuthWithCookie(t *testing.T) {
-	db := setupTestDB(t)
-	defer db.Close()
-
-	tokenCache := auth.NewTokenCache(db)
-	userCache := auth.NewUserCache(db)
-	authMiddleware := auth.NewAuthMiddleware("/base/url", "test", tokenCache, userCache)
-
-	server := newTestServer(t, "/test", db, authMiddleware.AuthUserRequired)
-	defer server.Close()
-
-	server.SetSessionCheckFunc(func(t *testing.T, c *gin.Context) {
-		t.Helper()
-		assert.Equal(t, uint64(1), c.GetUint64("uid"))
-		assert.Equal(t, uint64(2), c.GetUint64("rid"))
-		assert.NotNil(t, c.GetStringSlice("prm"))
-		assert.NotNil(t, c.GetInt64("gtm"))
-		assert.NotNil(t, c.GetInt64("exp"))
-		assert.Empty(t, c.GetString("uuid"))
-		assert.Equal(t, "User 1", c.GetString("uname"))
-	})
-
-	assert.False(t, server.CallAndGetStatus(t))
-
-	server.Authorize(t, []string{"some.permission"})
-	assert.True(t, server.CallAndGetStatus(t))
-}
-
-type testServer struct {
-	testEndpoint     string
-	client           *http.Client
-	calls            map[string]struct{}
-	sessionCheckFunc func(t *testing.T, c *gin.Context)
-	db               *gorm.DB
-	*httptest.Server
-}
-
-func newTestServer(t *testing.T, testEndpoint string, db *gorm.DB, middlewares ...gin.HandlerFunc) *testServer {
-	t.Helper()
-
-	server := &testServer{
-		db: db,
+// A cookie is always sent: an uncheckable header falls through to it, a refused token does not.
+func TestAuthMiddleware_TryProtoTokenAuthentication_AdmitsOnlyALiveTokenOfAnUnblockedUser(t *testing.T) {
+	admitted := map[string]struct {
+		identity authIdentity
+		lifetime int64
+	}{
+		"token": {authIdentity{
+			UID: 1, RID: 2, UHash: "testhash", TID: "api", CPT: "automation", Prm: []string{"pentagi.automation"},
+		}, 3600},
+		"cookie": {authIdentity{
+			UID: 1, RID: 2, SGN: 1, UHash: "testhash", TID: "local", UName: "User 1", Prm: []string{"some.permission"},
+		}, 300},
 	}
 
-	router := gin.New()
-	globalSalt := "test"
-	cookieStore := cookie.NewStore(auth.MakeCookieStoreKey(globalSalt)...)
-	router.Use(sessions.Sessions("auth", cookieStore))
-
-	server.calls = map[string]struct{}{}
-
-	if testEndpoint == "" {
-		testEndpoint = "/test"
+	cases := []struct {
+		name       string
+		salt       string // the middleware's, and the one the token is signed under
+		header     string // {token} stands for the issued token
+		change     string
+		admittedAs string
+		wantReason string
+	}{
+		{name: "a live token", salt: "test", header: "Bearer {token}", admittedAs: "token"},
+		{name: "no authorization header", salt: "test", header: "", admittedAs: "cookie"},
+		{name: "a token without the bearer scheme", salt: "test", header: "{token}", admittedAs: "cookie"},
+		{name: "the bearer scheme without its space", salt: "test", header: "Bearer{token}", admittedAs: "cookie"},
+		{name: "a token under the default salt", salt: "salt", header: "Bearer {token}", admittedAs: "cookie"},
+		{name: "a token under an empty salt", salt: "", header: "Bearer {token}", admittedAs: "cookie"},
+		{name: "a token that fails validation", salt: "test", header: "Bearer not_a_token",
+			wantReason: "token is invalid"},
+		{name: "a revoked token", salt: "test", header: "Bearer {token}",
+			change: "UPDATE api_tokens SET status = 'revoked'", wantReason: "token has been revoked"},
+		{name: "a deleted token", salt: "test", header: "Bearer {token}",
+			change: "UPDATE api_tokens SET deleted_at = CURRENT_TIMESTAMP", wantReason: "token not found in database"},
+		{name: "a hash changed since the token was issued", salt: "test", header: "Bearer {token}",
+			change:     "UPDATE users SET hash = 'different_hash' WHERE id = 1",
+			wantReason: "user hash mismatch - token invalid for this installation"},
+		{name: "a blocked user", salt: "test", header: "Bearer {token}",
+			change: "UPDATE users SET status = 'blocked' WHERE id = 1", wantReason: "user has been blocked"},
+		{name: "a deleted user", salt: "test", header: "Bearer {token}",
+			change: "DELETE FROM users WHERE id = 1", wantReason: "user has been deleted"},
 	}
-	server.testEndpoint = testEndpoint
 
-	router.GET("/auth", func(c *gin.Context) {
-		t.Helper()
-		privs, _ := c.GetQueryArray("privileges")
-		expString, ok := c.GetQuery("expiration")
-		assert.True(t, ok)
-		exp, err := strconv.Atoi(expString)
-		assert.NoError(t, err)
-		setTestSession(t, c, privs, exp)
-	})
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			db := setupTestDB(t)
+			token := authIssueToken(t, db, tc.salt, 1, "testhash")
+			server := newTestServer(t, NewAuthMiddleware("/base/url", tc.salt, NewTokenCache(db), NewUserCache(db)).AuthTokenRequired)
+			server.Authorize(t, 5*time.Minute, "some.permission")
+			if tc.change != "" {
+				require.NoError(t, db.Exec(tc.change).Error)
+			}
 
-	authRoutes := router.Group("")
-	for _, middleware := range middlewares {
-		authRoutes.Use(middleware)
-	}
+			got := server.Call(t, strings.ReplaceAll(tc.header, "{token}", token))
 
-	authRoutes.GET(server.testEndpoint, func(c *gin.Context) {
-		t.Helper()
-
-		id, _ := c.GetQuery("id")
-		require.NotEmpty(t, id)
-
-		if server.sessionCheckFunc != nil {
-			server.sessionCheckFunc(t, c)
-		}
-		server.calls[id] = struct{}{}
-	})
-
-	authRoutes.GET("/auth_token", func(c *gin.Context) {
-		t.Helper()
-
-		tokenID, err := auth.GenerateTokenID()
-		require.NoError(t, err)
-		uhash := "testhash"
-		uid := uint64(1)
-		rid := uint64(2)
-		ttl := uint64(3600)
-		claims := auth.MakeAPITokenClaims(tokenID, uhash, uid, rid, ttl)
-		token, err := auth.MakeAPIToken(globalSalt, claims)
-		require.NoError(t, err)
-
-		db.Create(&models.APIToken{
-			TokenID: tokenID,
-			UserID:  uid,
-			RoleID:  rid,
-			TTL:     ttl,
-			Status:  models.TokenStatusActive,
+			if tc.wantReason != "" {
+				assert.Equal(t, http.StatusForbidden, got.status)
+				assert.Equal(t, tc.wantReason, got.reason)
+				assert.Nil(t, got.seen)
+				return
+			}
+			want := admitted[tc.admittedAs]
+			assert.Equal(t, http.StatusOK, got.status)
+			require.NotNil(t, got.seen)
+			assert.Equal(t, want.identity, got.seen.withoutClock())
+			assert.InDelta(t, want.lifetime, got.seen.EXP-got.seen.GTM, 60)
 		})
-
-		c.Writer.Write([]byte(token))
-	})
-
-	server.Server = httptest.NewServer(router)
-	server.client = server.Client()
-	jar, err := cookiejar.New(nil)
-	require.NoError(t, err)
-	server.client.Jar = jar
-
-	return server
-}
-
-func (s *testServer) Authorize(t *testing.T, privileges []string) {
-	t.Helper()
-	request, err := http.NewRequest(http.MethodGet, s.URL+"/auth", nil)
-	require.NoError(t, err)
-	query := url.Values{}
-	for _, p := range privileges {
-		query.Add("privileges", p)
 	}
-	query.Add("expiration", strconv.Itoa(5*60))
-	request.URL.RawQuery = query.Encode()
-
-	resp, err := s.client.Do(request)
-	require.NoError(t, err)
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
 }
 
-func (s *testServer) GetToken(t *testing.T) string {
-	t.Helper()
-	request, err := http.NewRequest(http.MethodGet, s.URL+"/auth_token", nil)
-	require.NoError(t, err)
+func TestAuthMiddleware_AuthUserRequired_RefusesAnAPIToken(t *testing.T) {
+	db := setupTestDB(t)
+	token := authIssueToken(t, db, "test", 1, "testhash")
+	server := newTestServer(t, NewAuthMiddleware("/base/url", "test", NewTokenCache(db), NewUserCache(db)).AuthUserRequired)
 
-	resp, err := s.client.Do(request)
-	require.NoError(t, err)
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	token, err := io.ReadAll(resp.Body)
-	require.NoError(t, err)
-	return string(token)
+	got := server.Call(t, "Bearer "+token)
+
+	assert.Equal(t, http.StatusForbidden, got.status, "a leaked API token must not reach the password and e-mail change")
+	assert.Equal(t, "cookie claim invalid", got.reason)
 }
 
-func (s *testServer) SetSessionCheckFunc(f func(t *testing.T, c *gin.Context)) {
-	s.sessionCheckFunc = f
-}
-
-func (s *testServer) Unauthorize(t *testing.T) {
-	t.Helper()
-	request, err := http.NewRequest(http.MethodGet, s.URL+"/auth", nil)
-	require.NoError(t, err)
-	query := url.Values{}
-	query.Add("expiration", strconv.Itoa(-1))
-	request.URL.RawQuery = query.Encode()
-
-	resp, err := s.client.Do(request)
-	require.NoError(t, err)
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-}
-
-func (s *testServer) TestCall(t *testing.T, token ...string) (string, bool) {
-	t.Helper()
-	id := strconv.Itoa(rand.Int())
-
-	request, err := http.NewRequest(http.MethodGet, s.URL+s.testEndpoint+"?id="+id, nil)
-	require.NoError(t, err)
-	if len(token) == 1 {
-		request.Header.Add("Authorization", token[0])
+func TestAuthMiddleware_LevelForAuthFailure_BlamesTheServerOnlyForABackendFailure(t *testing.T) {
+	cases := []struct {
+		name string
+		err  error
+		want logrus.Level
+	}{
+		{"a refused credential", errors.New("user has been blocked"), logrus.WarnLevel},
+		{"a session cookie missing claims", errCookieClaimInvalid, logrus.WarnLevel},
+		{"a session past its expiry", errSessionExpired, logrus.WarnLevel},
+		{"a hash left over from a password change", fmt.Errorf("%w - session invalid", errUserHashMismatch), logrus.WarnLevel},
+		{"a store that cannot answer", fmt.Errorf("%w: checking user status: %w", errAuthBackend, errors.New("dial tcp: refused")), logrus.ErrorLevel},
 	}
 
-	resp, err := s.client.Do(request)
-	require.NoError(t, err)
-
-	assert.True(t, resp.StatusCode == http.StatusOK ||
-		resp.StatusCode == http.StatusForbidden)
-
-	return id, resp.StatusCode == http.StatusOK
-}
-
-func (s *testServer) TestCallWithData(t *testing.T, data string) (string, bool) {
-	t.Helper()
-	id := strconv.Itoa(rand.Int())
-
-	request, err := http.NewRequest(http.MethodGet, s.URL+s.testEndpoint+"?id="+id, bytes.NewBufferString(data))
-	require.NoError(t, err)
-
-	resp, err := s.client.Do(request)
-	require.NoError(t, err)
-
-	assert.True(t, resp.StatusCode == http.StatusOK ||
-		resp.StatusCode == http.StatusForbidden)
-
-	return id, resp.StatusCode == http.StatusOK
-}
-
-func (s *testServer) Called(id string) bool {
-	_, ok := s.calls[id]
-	return ok
-}
-
-func (s *testServer) CallAndGetStatus(t *testing.T, token ...string) bool {
-	t.Helper()
-	id, ok := s.TestCall(t, token...)
-	assert.Equal(t, ok, s.Called(id))
-	return ok
-}
-
-func setTestSession(t *testing.T, c *gin.Context, privileges []string, expires int) {
-	t.Helper()
-	session := sessions.Default(c)
-	session.Set("uid", uint64(1))
-	session.Set("uhash", "testhash")
-	session.Set("rid", uint64(2))
-	session.Set("tid", models.UserTypeLocal.String())
-	session.Set("prm", privileges)
-	session.Set("gtm", time.Now().Unix())
-	session.Set("exp", time.Now().Add(time.Duration(expires)*time.Second).Unix())
-	session.Set("uuid", "uuid1")
-	session.Set("uname", "User 1")
-	session.Options(sessions.Options{
-		HttpOnly: true,
-		MaxAge:   expires,
-	})
-	require.NoError(t, session.Save())
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, levelForAuthFailure(tc.err))
+		})
+	}
 }

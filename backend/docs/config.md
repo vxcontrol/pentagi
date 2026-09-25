@@ -37,6 +37,7 @@ This document serves as a comprehensive guide to the configuration system in Pen
   - [LLM Provider Settings](#llm-provider-settings)
     - [OpenAI](#openai)
     - [Anthropic](#anthropic)
+      - [Workload Identity Federation](#workload-identity-federation)
     - [Ollama LLM Provider](#ollama-llm-provider)
     - [Google AI (Gemini) LLM Provider](#google-ai-gemini-llm-provider)
     - [AWS Bedrock LLM Provider](#aws-bedrock-llm-provider)
@@ -45,6 +46,8 @@ This document serves as a comprehensive guide to the configuration system in Pen
     - [Kimi LLM Provider](#kimi-llm-provider)
     - [Qwen LLM Provider](#qwen-llm-provider)
     - [MiniMax LLM Provider](#minimax-llm-provider)
+    - [Mistral LLM Provider](#mistral-llm-provider)
+    - [xAI (Grok) LLM Provider](#xai-grok-llm-provider)
     - [Custom LLM Provider](#custom-llm-provider)
     - [Usage Details](#usage-details-6)
   - [Embedding Settings](#embedding-settings)
@@ -426,6 +429,8 @@ These settings control how PentAGI interacts with Docker, which is used for term
 | DockerInsideHost             | `DOCKER_INSIDE_HOST`               | *(none)*               | Docker daemon endpoint given to worker containers; also disables host-socket autodetection. See [Worker Docker Access](#worker-docker-access-docker_inside_) |
 | DockerInsideTLSVerify        | `DOCKER_INSIDE_TLS_VERIFY`         | *(none)*               | TLS verification for the worker container's Docker connection |
 | DockerInsideCertPath         | `DOCKER_INSIDE_CERT_PATH`          | *(none)*               | TLS certificate directory **on the worker node**, mounted read-only into worker containers |
+| DockerInsidePolicyTests      | `DOCKER_INSIDE_POLICY_TESTS`       | `false`                | Test the sandbox once at startup: the daemon must be separate from PentAGI's and must refuse host-escape requests. Its only effect is whether agents get Docker — a failure turns the sandbox off and PentAGI still starts. Off by default |
+| DockerDefaultImageForTest    | `DOCKER_DEFAULT_IMAGE_FOR_TEST`    | `vxcontrol/kali-linux:test` | Worker the startup test runs in, and the image it pulls into the sandbox |
 | DockerNetwork                | `DOCKER_NETWORK`                   | *(none)*               | Docker network name for bridge mode, or `host` for host network mode. See network modes below. |
 | DockerPublicIP               | `DOCKER_PUBLIC_IP`                 | `0.0.0.0`              | Public IP address for Docker containers' port bindings (bridge mode only) |
 | DockerWorkDir                | `DOCKER_WORK_DIR`                  | *(none)*               | Custom working directory inside Docker containers |
@@ -443,11 +448,12 @@ They are read only when `DOCKER_INSIDE=true`; with it disabled the sandbox gets 
 
 | `DOCKER_SOCKET` | `DOCKER_INSIDE_HOST` | Result |
 | --- | --- | --- |
-| set | any | That socket is bind-mounted at `/var/run/docker.sock` — historical behaviour, an explicit socket always wins. |
-| empty | set | **Nothing is mounted.** The sandbox reaches Docker over `DOCKER_INSIDE_HOST` instead. |
-| empty | empty | The host socket is autodetected and mounted — historical behaviour. |
+| set | empty | That socket is bind-mounted at `/var/run/docker.sock`; this legacy mode does not run the worker policy preflight. |
+| set | set | Configuration error: the socket could bypass the designated worker daemon. |
+| empty | set | **Nothing is mounted.** The sandbox reaches `DOCKER_INSIDE_HOST` and must pass the Docker API policy preflight before agent use. |
+| empty | empty | A local Docker host keeps historical socket autodetection; with a remote `DOCKER_HOST`, initialization fails until a worker endpoint or explicit socket is configured. |
 
-The middle row is the point of the feature: mounting the host socket into a sandbox gives an autonomous agent control of the daemon running PentAGI itself, including every other flow's containers. Designating a separate endpoint — a DinD sidecar, a remote daemon, a socket proxy — keeps that authority out of the sandbox.
+The separate-endpoint row is the point of the feature: mounting the host socket into a sandbox can give an autonomous agent control of the daemon running PentAGI itself, including every other flow's containers. A designated worker daemon must be distinct from the orchestration daemon and enforce the [Docker API policy checked at worker startup](docker.md#docker-api-policy-preflight). An explicit socket remains an unverified legacy exception.
 
 **What is injected.** Every non-empty `DOCKER_INSIDE_*` value is passed into the container as an environment variable with the `_INSIDE_` segment removed, so the Docker CLI inside picks it up with no extra configuration:
 
@@ -574,6 +580,14 @@ These settings control the HTTP and GraphQL server that forms the backend API of
 | ServerUseSSL | `SERVER_USE_SSL`     | `false`       | Enable SSL for the HTTP server   |
 | ServerSSLKey | `SERVER_SSL_KEY`     | *(none)*      | Path to SSL key file             |
 | ServerSSLCrt | `SERVER_SSL_CRT`     | *(none)*      | Path to SSL certificate file     |
+
+| Option         | Environment Variable | Default Value | Description                                                        |
+| -------------- | -------------------- | ------------- | ------------------------------------------------------------------ |
+| TrustedProxies | `TRUSTED_PROXIES`    | *(none)*      | Comma-separated proxies whose `X-Forwarded-For` the server believes |
+
+Left empty behind a reverse proxy, every request is attributed to the proxy's own
+address, so the per-address login rate limit becomes a single budget shared by all
+users. Set it to the addresses or CIDRs of the proxies in front of PentAGI.
 
 ### Usage Details
 
@@ -791,6 +805,27 @@ These settings control the integration with various Large Language Model (LLM) p
 | AnthropicAPIKey    | `ANTHROPIC_API_KEY`    | *(none)*                       | API key for Anthropic Claude services |
 | AnthropicServerURL | `ANTHROPIC_SERVER_URL` | `https://api.anthropic.com/v1` | Server URL for Anthropic API requests |
 
+#### Workload Identity Federation
+
+Instead of a long-lived key, the Anthropic provider can exchange a short-lived identity token issued by your identity provider (AWS, Google Cloud, Azure, GitHub Actions, Kubernetes, any OIDC issuer) for a Claude API access token, refreshed before it expires. The variables are the ones the vendor SDKs read; see [Workload Identity Federation](https://platform.claude.com/docs/en/manage-claude/workload-identity-federation) for creating the service account, issuer and rule.
+
+| Option                     | Environment Variable            | Default Value | Description                                                                                  |
+| -------------------------- | ------------------------------- | ------------- | -------------------------------------------------------------------------------------------- |
+| AnthropicFederationRuleID  | `ANTHROPIC_FEDERATION_RULE_ID`  | *(none)*      | Federation rule to exchange under (`fdrl_...`)                                               |
+| AnthropicOrganizationID    | `ANTHROPIC_ORGANIZATION_ID`     | *(none)*      | Anthropic organization UUID                                                                  |
+| AnthropicServiceAccountID  | `ANTHROPIC_SERVICE_ACCOUNT_ID`  | *(none)*      | Service account the minted token acts as (`svac_...`)                                        |
+| AnthropicWorkspaceID       | `ANTHROPIC_WORKSPACE_ID`        | *(none)*      | Workspace to scope the token to; required when the rule covers more than one workspace       |
+| AnthropicIdentityTokenFile | `ANTHROPIC_IDENTITY_TOKEN_FILE` | *(none)*      | Path to the identity token, re-read on every exchange; takes precedence over the token below |
+| AnthropicIdentityToken     | `ANTHROPIC_IDENTITY_TOKEN`      | *(none)*      | The identity token itself; read once, so only for runs shorter than its lifetime             |
+
+Federation is used only while `ANTHROPIC_API_KEY` is empty: a non-empty key shadows it, and the server log says so at startup. A partial federation config leaves the provider disabled and the log names the missing variables. The token file path is read inside the pentagi container, so mount the file there. The exchange goes to `ANTHROPIC_SERVER_URL` + `/oauth/token`, so federation works against the Anthropic API itself and not through a gateway.
+
+Every provider, flow and settings test that uses the same federation rule, organization, service account, workspace and server URL shares one access token, exchanged once and refreshed the way the vendor SDKs do: from two minutes before it expires a failed exchange keeps serving the cached token and logs a warning that names the time calls start to fail, and from 30 seconds before it the call fails. Both points move closer for a token that lives only a few minutes, so it is not exchanged again on every call.
+
+An identity token that carries a `jti` claim, as Kubernetes service-account and GitHub Actions tokens do, can be exchanged only once; presenting it again is refused with `jti_reused`. The token file must therefore hold a new token before each refresh, so the platform has to rotate it well within the lifetime of the minted token: the rule's `token_lifetime_seconds`, capped at twice the remaining lifetime of the identity token. A Kubernetes projected token is rotated at 80% of its `expirationSeconds`, about 48 minutes by default, which is too slow for a rule that mints ten-minute tokens.
+
+`ANTHROPIC_IDENTITY_TOKEN` is read once at startup and cannot be rotated: once the identity token expires, and after its first exchange if it carries `jti`, the provider cannot mint a new access token. It suits only runs shorter than the identity token's lifetime, the server log warns about it at startup and names the expiry, and a long-running server needs the token file.
+
 **Note on Google Vertex AI**: PentAGI does not currently expose a dedicated Vertex AI configuration path for Anthropic Claude in `.env`. The variables above target the direct Anthropic API. To run Claude through a non-Anthropic-hosted backend, use one of:
 
 - **AWS Bedrock**: see the [AWS Bedrock LLM Provider](#aws-bedrock-llm-provider) section below and configure the `BEDROCK_*` variables.
@@ -846,7 +881,7 @@ There is no `VERTEX_API_KEY` or `GOOGLE_APPLICATION_CREDENTIALS` variable wired 
 | DeepSeekServerURL | `DEEPSEEK_SERVER_URL` | `https://api.deepseek.com` | DeepSeek API endpoint URL                                |
 | DeepSeekProvider  | `DEEPSEEK_PROVIDER`   | *(none)*                   | Provider name prefix for LiteLLM integration (optional)  |
 
-**LiteLLM Integration**: Set `DEEPSEEK_PROVIDER=deepseek` to enable model prefixing (e.g., `deepseek/deepseek-v4-flash`) when using LiteLLM proxy with default PentAGI configs.
+**LiteLLM Integration**: Set `DEEPSEEK_PROVIDER=deepseek` to enable model prefixing (e.g., `deepseek/deepseek-flash`) when using LiteLLM proxy with default PentAGI configs.
 
 ### GLM LLM Provider
 
@@ -875,22 +910,22 @@ There is no `VERTEX_API_KEY` or `GOOGLE_APPLICATION_CREDENTIALS` variable wired 
 - International: `https://api.moonshot.ai/v1` (default)
 - China: `https://api.moonshot.cn/v1`
 
-**LiteLLM Integration**: Set `KIMI_PROVIDER=moonshot` to enable model prefixing (e.g., `moonshot/kimi-k2.5`) when using LiteLLM proxy with default PentAGI configs.
+**LiteLLM Integration**: Set `KIMI_PROVIDER=moonshot` to enable model prefixing (e.g., `moonshot/kimi-k2.6`) when using LiteLLM proxy with default PentAGI configs.
 
 ### Qwen LLM Provider
 
 | Option          | Environment Variable | Default Value                                          | Description                                              |
 | --------------- | -------------------- | ------------------------------------------------------ | -------------------------------------------------------- |
-| QwenAPIKey      | `QWEN_API_KEY`       | *(none)*                                               | Qwen API key for authentication                          |
-| QwenServerURL   | `QWEN_SERVER_URL`    | `https://dashscope-us.aliyuncs.com/compatible-mode/v1` | Qwen API endpoint URL (international)                    |
-| QwenProvider    | `QWEN_PROVIDER`      | *(none)*                                               | Provider name prefix for LiteLLM integration (optional)  |
+| QwenAPIKey      | `QWEN_API_KEY`       | *(none)*                                               | Qwen Cloud, DashScope, or gateway API key                |
+| QwenServerURL   | `QWEN_SERVER_URL`    | `https://dashscope-us.aliyuncs.com/compatible-mode/v1` | Direct DashScope or OpenAI-compatible gateway URL        |
+| QwenProvider    | `QWEN_PROVIDER`      | *(none)*                                               | Gateway model prefix: `qwen_cloud` or `dashscope`        |
 
 **Alternative Endpoints**:
 - US: `https://dashscope-us.aliyuncs.com/compatible-mode/v1` (default)
 - Singapore: `https://dashscope-intl.aliyuncs.com/compatible-mode/v1`
 - China: `https://dashscope.aliyuncs.com/compatible-mode/v1`
 
-**LiteLLM Integration**: Set `QWEN_PROVIDER=dashscope` to enable model prefixing (e.g., `dashscope/qwen-plus`) when using LiteLLM proxy with default PentAGI configs.
+**LiteLLM Integration**: Set `QWEN_PROVIDER=qwen_cloud` for Qwen Cloud routes or `QWEN_PROVIDER=dashscope` for Alibaba Cloud routes. The bundled role configuration uses only model IDs shared by both platforms.
 
 ### MiniMax LLM Provider
 
@@ -902,6 +937,26 @@ There is no `VERTEX_API_KEY` or `GOOGLE_APPLICATION_CREDENTIALS` variable wired 
 
 **LiteLLM Integration**: Set `MINIMAX_PROVIDER=minimax` to enable model prefixing (e.g., `minimax/MiniMax-M3`) when using LiteLLM proxy with default PentAGI configs.
 
+### Mistral LLM Provider
+
+| Option           | Environment Variable | Default Value                | Description                                             |
+| ---------------- | -------------------- | ---------------------------- | ------------------------------------------------------- |
+| MistralAPIKey    | `MISTRAL_API_KEY`    | *(none)*                     | Mistral API key for authentication                      |
+| MistralServerURL | `MISTRAL_SERVER_URL` | `https://api.mistral.ai/v1`  | Mistral API endpoint URL                                |
+| MistralProvider  | `MISTRAL_PROVIDER`   | *(none)*                     | Provider name prefix for LiteLLM integration (optional) |
+
+**LiteLLM Integration**: Set `MISTRAL_PROVIDER=mistral` to enable model prefixing (e.g., `mistral/mistral-medium-latest`) when using LiteLLM proxy with default PentAGI configs.
+
+### xAI (Grok) LLM Provider
+
+| Option       | Environment Variable | Default Value          | Description                                             |
+| ------------ | -------------------- | ---------------------- | ------------------------------------------------------- |
+| XAIAPIKey    | `XAI_API_KEY`        | *(none)*               | xAI API key for authentication                          |
+| XAIServerURL | `XAI_SERVER_URL`     | `https://api.x.ai/v1`  | xAI API endpoint URL                                    |
+| XAIProvider  | `XAI_PROVIDER`       | *(none)*               | Provider name prefix for LiteLLM integration (optional) |
+
+**LiteLLM Integration**: Set `XAI_PROVIDER=xai` to enable model prefixing (e.g., `xai/grok-4.3`) when using LiteLLM proxy with default PentAGI configs.
+
 ### Custom LLM Provider
 
 | Option                     | Environment Variable            | Default Value | Description                                                                  |
@@ -911,8 +966,9 @@ There is no `VERTEX_API_KEY` or `GOOGLE_APPLICATION_CREDENTIALS` variable wired 
 | LLMServerModel             | `LLM_SERVER_MODEL`              | *(none)*      | Model name for custom LLM provider                                           |
 | LLMServerConfig            | `LLM_SERVER_CONFIG_PATH`        | *(none)*      | Path to config file for custom LLM provider options                          |
 | LLMServerProvider          | `LLM_SERVER_PROVIDER`           | *(none)*      | Provider name prefix for model names (useful for LiteLLM proxy)              |
-| LLMServerLegacyReasoning   | `LLM_SERVER_LEGACY_REASONING`   | `false`       | Controls reasoning format in API requests                                    |
 | LLMServerPreserveReasoning | `LLM_SERVER_PRESERVE_REASONING` | `false`       | Preserve reasoning content in multi-turn conversations (required by some providers) |
+| LLMServerAPIType           | `LLM_SERVER_API_TYPE`           | *(none)*      | `azure` or `azure_ad` to talk to an Azure OpenAI deployment; empty for a plain OpenAI-compatible endpoint |
+| LLMServerAPIVersion        | `LLM_SERVER_API_VERSION`        | `2024-10-21`  | Azure OpenAI API version, used only when `LLM_SERVER_API_TYPE` names an Azure mode |
 
 ### Usage Details
 
@@ -1019,20 +1075,6 @@ The LLM provider settings are used in `pkg/providers` modules to initialize and 
   }
   ```
 
-- **LLMServerLegacyReasoning**: Controls the reasoning format used in API requests to custom LLM providers:
-  ```go
-  // Used in custom provider to determine reasoning format
-  if cfg.LLMServerLegacyReasoning {
-      // Uses legacy string-based reasoning_effort parameter
-  } else {
-      // Uses modern structured reasoning object with max_tokens
-  }
-  ```
-  - `false` (default): Uses modern format where reasoning is sent as a structured object with `max_tokens` parameter
-  - `true`: Uses legacy format with string-based `reasoning_effort` parameter
-
-This setting is important when working with different LLM providers as they may expect different reasoning formats in their API requests. If you encounter reasoning-related errors with custom providers, try changing this setting.
-
 - **LLMServerPreserveReasoning**: Controls whether reasoning content is preserved and sent back in multi-turn conversations:
   ```go
   // Used in custom provider to preserve reasoning content
@@ -1045,58 +1087,64 @@ This setting is important when working with different LLM providers as they may 
 
 This setting is required by some LLM providers (e.g., Moonshot) that return errors like "thinking is enabled but reasoning_content is missing in assistant tool call message" when reasoning content is not included in multi-turn conversations. Enable this setting if your provider requires reasoning content to be preserved across conversation turns.
 
-The provider registration is managed in `pkg/providers/providers.go`:
+Provider registration is table-driven. `pkg/providers/registry.go` holds one entry per
+provider type and `pkg/providers/providers.go` walks it; nothing enumerates providers by hand:
 
 ```go
-// Provider registration based on available credentials
-if cfg.OpenAIKey != "" {
-    p, err := openai.New(cfg, defaultConfigs[provider.ProviderOpenAI])
-    if err != nil {
-        return nil, fmt.Errorf("failed to create openai provider: %w", err)
-    }
-    providers[provider.DefaultProviderNameOpenAI] = p
+// pkg/providers/registry.go
+type registryEntry struct {
+    Type        provider.ProviderType
+    Name        provider.ProviderName
+    Enabled     func(*config.Config) bool
+    NewConfig   func(*config.Config) (*pconfig.ProviderConfig, error)
+    New         func(*config.Config, provider.ProviderName, *pconfig.ProviderConfig) (provider.Provider, error)
+    BuildConfig func(*config.Config, []byte) (*pconfig.ProviderConfig, error)
 }
 
-if cfg.AnthropicAPIKey != "" {
-    p, err := anthropic.New(cfg, defaultConfigs[provider.ProviderAnthropic])
-    if err != nil {
-        return nil, fmt.Errorf("failed to create anthropic provider: %w", err)
-    }
-    providers[provider.DefaultProviderNameAnthropic] = p
-}
-
-if cfg.GeminiAPIKey != "" {
-    p, err := gemini.New(cfg, defaultConfigs[provider.ProviderGemini])
-    if err != nil {
-        return nil, fmt.Errorf("failed to create gemini provider: %w", err)
-    }
-    providers[provider.DefaultProviderNameGemini] = p
-}
-
-if cfg.BedrockAccessKey != "" && cfg.BedrockSecretKey != "" {
-    p, err := bedrock.New(cfg, defaultConfigs[provider.ProviderBedrock])
-    if err != nil {
-        return nil, fmt.Errorf("failed to create bedrock provider: %w", err)
-    }
-    providers[provider.DefaultProviderNameBedrock] = p
-}
-
-if cfg.OllamaServerURL != "" {
-    p, err := ollama.New(cfg, defaultConfigs[provider.ProviderOllama])
-    if err != nil {
-        return nil, fmt.Errorf("failed to create ollama provider: %w", err)
-    }
-    providers[provider.DefaultProviderNameOllama] = p
-}
-
-if cfg.LLMServerURL != "" && (cfg.LLMServerModel != "" || cfg.LLMServerConfig != "") {
-    p, err := custom.New(cfg, defaultConfigs[provider.ProviderCustom])
-    if err != nil {
-        return nil, fmt.Errorf("failed to create custom provider: %w", err)
-    }
-    providers[provider.DefaultProviderNameCustom] = p
+var providerRegistry = []registryEntry{
+    {
+        Type:        provider.ProviderOpenAI,
+        Name:        provider.DefaultProviderNameOpenAI,
+        Enabled:     func(c *config.Config) bool { return c.OpenAIKey != "" },
+        NewConfig:   ignoreConfig(openai.DefaultProviderConfig),
+        New:         openai.New,
+        BuildConfig: fromData(openai.BuildProviderConfig),
+    },
+    // ... one entry per provider type
 }
 ```
+
+`Enabled` is where the credential gate lives — a deployment without a given key simply ends
+up with fewer providers rather than a failed startup:
+
+```go
+// pkg/providers/providers.go
+for _, e := range providerRegistry {
+    if !e.Enabled(cfg) {
+        continue
+    }
+
+    p, err := e.New(cfg, e.Name, defaultConfigs[e.Type])
+    if err != nil {
+        return nil, fmt.Errorf("failed to create %s provider: %w", e.Type, err)
+    }
+
+    providers[e.Name] = p
+}
+```
+
+`defaultConfigs` comes from the same table: `buildDefaultConfigs` calls every entry's
+`NewConfig` beforehand, and a config that fails to load aborts startup unless that provider
+is disabled anyway, in which case the reason is recorded and reported later. `BuildConfig`
+is the same construction from stored bytes, used through `entryForType` when a user-defined
+provider or a provider test rebuilds one at request time.
+
+An entry may also wrap its constructor. The custom provider's does, to hand the transport the
+same catalogue enrichment the picker sees — its models come from the gateway at runtime, so
+the reasoning metadata the bundled `models.yml` files carry has to be folded in on the way.
+
+Adding a provider is therefore adding one entry; the full checklist is in the repository root
+`CLAUDE.md` under "Adding a New LLM Provider".
 
 These settings are critical for:
 - Connecting to various LLM providers for AI capabilities
@@ -1699,7 +1747,7 @@ These settings control the integration with various search engines used for web 
 | Option                | Environment Variable      | Default Value | Description                                                  |
 | --------------------- | ------------------------- | ------------- | ------------------------------------------------------------ |
 | PerplexityAPIKey      | `PERPLEXITY_API_KEY`      | *(none)*      | API key for Perplexity search engine                         |
-| PerplexityModel       | `PERPLEXITY_MODEL`        | `sonar-pro`   | Model to use for Perplexity search                           |
+| PerplexityModel       | `PERPLEXITY_MODEL`        | `sonar`       | Model sent to the Perplexity chat/completions API (`sonar`, `sonar-pro`, …); passed through verbatim |
 | PerplexityContextSize | `PERPLEXITY_CONTEXT_SIZE` | `low`         | Context size for Perplexity search (`low`, `medium`, `high`) |
 
 ### Searxng Search

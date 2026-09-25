@@ -1,19 +1,10 @@
 import type { FileNode } from '@/components/shared/file-manager';
 import type { OverwriteConflict } from '@/components/shared/overwrite';
 
+import { getBaseName } from '@/lib/file-paths';
+
 import { CONTAINER_PATH_PREFIX, RESOURCES_PATH_PREFIX } from './flow-files-constants';
 
-const splitName = (path: string): string => path.split('/').pop() ?? path;
-
-/**
- * Convert an absolute container path (`/work/foo.txt`) into the cache-relative
- * path under which the Pull endpoint stores it (`container/work/foo.txt`).
- *
- * Mirrors the server-side `SanitizeContainerCachePath` normalisation:
- * leading slashes are stripped, the rest is appended verbatim under the
- * synthetic `container/` group prefix used in flow file paths. An empty
- * result is impossible: pulling the literal `/` is rejected by the backend.
- */
 const containerPathToCachePath = (containerPath: string): string => {
     const rel = containerPath.replace(/^\/+/, '');
 
@@ -47,7 +38,7 @@ export const findPullConflicts = (
         if (cachedPaths.has(cachePath)) {
             conflicts.push({
                 destination: cachePath,
-                destinationName: splitName(cachePath),
+                destinationName: getBaseName(cachePath),
             });
         }
     }
@@ -93,7 +84,7 @@ export const findAttachConflicts = (
         if (flowResourcePaths.has(destination)) {
             conflicts.push({
                 destination,
-                destinationName: splitName(resourcePath),
+                destinationName: getBaseName(resourcePath),
             });
         }
     }

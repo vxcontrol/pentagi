@@ -90,4 +90,31 @@ describe('PasswordChangeForm', () => {
         expect(await screen.findByText('Current password is incorrect')).toBeInTheDocument();
         expect(screen.queryByText('invalid current password')).not.toBeInTheDocument();
     });
+    it.each([
+        ['\u{1f511}\u{1f511}\u{1f511}\u{1f511}\u{1f511}\u{1f511}\u{1f511}\u{1f511}', 'eight emoji'],
+        ['abcdefghijklmno', 'fifteen ascii characters'],
+    ])('refuses %s (%s) the way the endpoint does', async (password) => {
+        const user = userEvent.setup();
+        render(<PasswordChangeForm />);
+
+        await user.type(screen.getByPlaceholderText('Enter your current password'), 'Oldpass0!');
+        await user.type(screen.getByPlaceholderText('Enter your new password'), password);
+        await user.type(screen.getByPlaceholderText('Confirm your new password'), password);
+        await user.click(screen.getByRole('button', { name: 'Update Password' }));
+
+        expect(await screen.findByText(/Password must be either longer than 15 characters/)).toBeInTheDocument();
+        expect(put).not.toHaveBeenCalled();
+    });
+
+    it('accepts sixteen code points of free-form text', async () => {
+        const user = userEvent.setup();
+        render(<PasswordChangeForm />);
+
+        await user.type(screen.getByPlaceholderText('Enter your current password'), 'Oldpass0!');
+        await user.type(screen.getByPlaceholderText('Enter your new password'), 'abcdefghijklmnop');
+        await user.type(screen.getByPlaceholderText('Confirm your new password'), 'abcdefghijklmnop');
+        await user.click(screen.getByRole('button', { name: 'Update Password' }));
+
+        await waitFor(() => expect(put).toHaveBeenCalled());
+    });
 });

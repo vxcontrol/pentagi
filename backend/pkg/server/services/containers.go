@@ -36,7 +36,7 @@ var containersSQLMappers = map[string]any{
 	"flow_id":    "{{table}}.flow_id",
 	"created_at": "{{table}}.created_at",
 	"updated_at": "{{table}}.updated_at",
-	"data":       "({{table}}.type || ' ' || {{table}}.name || ' ' || {{table}}.status || ' ' || {{table}}.local_id || ' ' || {{table}}.local_dir)",
+	"data":       "({{table}}.type || ' ' || {{table}}.name || ' ' || {{table}}.status || ' ' || COALESCE({{table}}.local_id, '') || ' ' || COALESCE({{table}}.local_dir, ''))",
 }
 
 type ContainerService struct {
@@ -93,7 +93,7 @@ func (s *ContainerService) GetContainers(c *gin.Context) {
 		return
 	}
 
-	query.Init("containers", containersSQLMappers)
+	_ = query.Init("containers", containersSQLMappers)
 
 	if query.Group != "" {
 		if _, ok := containersSQLMappers[query.Group]; !ok {
@@ -183,7 +183,7 @@ func (s *ContainerService) GetFlowContainers(c *gin.Context) {
 		return
 	}
 
-	query.Init("containers", containersSQLMappers)
+	_ = query.Init("containers", containersSQLMappers)
 
 	if query.Group != "" {
 		if _, ok := containersSQLMappers[query.Group]; !ok {

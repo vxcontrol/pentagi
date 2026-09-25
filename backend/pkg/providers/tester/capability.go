@@ -3,7 +3,7 @@ package tester
 import (
 	"pentagi/pkg/providers/pconfig"
 	"pentagi/pkg/providers/provider"
-	"pentagi/pkg/providers/tester/testdata"
+	"pentagi/pkg/providers/tester/cases"
 )
 
 // capabilitySupported reports whether opt's agent config, exactly as loaded
@@ -17,11 +17,11 @@ import (
 // (e.g. via CallWithExtraOptions) would test a call that can never happen in
 // production, so it is deliberately not done here: pass or fail, the result
 // wouldn't say anything about a flow that will ever actually run.
-func capabilitySupported(prv provider.Provider, opt pconfig.ProviderOptionsType, capability testdata.TestCapability) bool {
+func capabilitySupported(prv provider.Provider, opt pconfig.ProviderOptionsType, capability cases.TestCapability) bool {
 	switch capability {
-	case testdata.CapabilityNone:
+	case cases.CapabilityNone:
 		return true
-	case testdata.CapabilityStructuredOutput:
+	case cases.CapabilityStructuredOutput:
 		// Deliberate exception to the "only test a call PentAGI already
 		// makes" rule above: AgentConfig.BuildOptions doesn't wire
 		// llms.WithStructuredOutput yet, but that wiring is landing soon for
@@ -41,14 +41,9 @@ func capabilitySupported(prv provider.Provider, opt pconfig.ProviderOptionsType,
 	}
 
 	switch capability {
-	case testdata.CapabilityAdaptiveThinking:
-		// Same gate PrepareAdaptiveCallOptions uses to decide whether to
-		// append llms.WithAdaptiveReasoning for this opt: either the agent
-		// explicitly chose adaptive mode, or its assigned model only supports
-		// adaptive thinking (e.g. Claude Opus 4.7/4.8), in which case PentAGI
-		// forces it on regardless of what the agent's reasoning config says.
+	case cases.CapabilityAdaptiveThinking:
 		return prv.GetProviderConfig().UsesAdaptiveThinking(prv.GetModels(), opt)
-	case testdata.CapabilityReasoningOff:
+	case cases.CapabilityReasoningOff:
 		// Same gate AgentConfig.BuildOptions uses to decide whether to append
 		// llms.WithReasoningDisabled: only when this agent's own config sets
 		// reasoning mode to off. If it doesn't, PentAGI never sends a disable

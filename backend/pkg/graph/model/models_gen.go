@@ -200,10 +200,13 @@ type DefaultProvidersConfig struct {
 	Kimi      *ProviderConfig `json:"kimi,omitempty"`
 	Qwen      *ProviderConfig `json:"qwen,omitempty"`
 	Minimax   *ProviderConfig `json:"minimax,omitempty"`
+	Mistral   *ProviderConfig `json:"mistral,omitempty"`
+	Xai       *ProviderConfig `json:"xai,omitempty"`
 }
 
 type Flow struct {
 	ID        int64       `json:"id"`
+	UserID    int64       `json:"userId"`
 	Title     string      `json:"title"`
 	Status    StatusType  `json:"status"`
 	Terminals []*Terminal `json:"terminals,omitempty"`
@@ -228,6 +231,7 @@ type FlowExecutionStats struct {
 
 type FlowFile struct {
 	ID         string    `json:"id"`
+	FlowID     int64     `json:"flowId"`
 	Name       string    `json:"name"`
 	Path       string    `json:"path"`
 	Size       int       `json:"size"`
@@ -318,12 +322,14 @@ type ModelAgentsUsageStats struct {
 }
 
 type ModelConfig struct {
-	Name        string              `json:"name"`
-	Description *string             `json:"description,omitempty"`
-	ReleaseDate *time.Time          `json:"releaseDate,omitempty"`
-	Thinking    *bool               `json:"thinking,omitempty"`
-	Reasoning   *ModelReasoningInfo `json:"reasoning,omitempty"`
-	Price       *ModelPrice         `json:"price,omitempty"`
+	Name            string              `json:"name"`
+	Description     *string             `json:"description,omitempty"`
+	ReleaseDate     *time.Time          `json:"releaseDate,omitempty"`
+	Thinking        *bool               `json:"thinking,omitempty"`
+	Reasoning       *ModelReasoningInfo `json:"reasoning,omitempty"`
+	Price           *ModelPrice         `json:"price,omitempty"`
+	ContextWindow   *int                `json:"contextWindow,omitempty"`
+	MaxOutputTokens *int                `json:"maxOutputTokens,omitempty"`
 }
 
 type ModelPrice struct {
@@ -334,11 +340,13 @@ type ModelPrice struct {
 }
 
 type ModelReasoningInfo struct {
-	Mode          *ModelReasoningMode `json:"mode,omitempty"`
-	Efforts       []ReasoningEffort   `json:"efforts,omitempty"`
-	Supported     *bool               `json:"supported,omitempty"`
-	CannotDisable *bool               `json:"cannotDisable,omitempty"`
-	DefaultOn     *bool               `json:"defaultOn,omitempty"`
+	Mode                   *ModelReasoningMode `json:"mode,omitempty"`
+	Efforts                []ReasoningEffort   `json:"efforts,omitempty"`
+	Supported              *bool               `json:"supported,omitempty"`
+	CannotDisable          *bool               `json:"cannotDisable,omitempty"`
+	DefaultOn              *bool               `json:"defaultOn,omitempty"`
+	RejectsEffortWithTools *bool               `json:"rejectsEffortWithTools,omitempty"`
+	TakesNoThinkingDepth   *bool               `json:"takesNoThinkingDepth,omitempty"`
 }
 
 type ModelUsageStats struct {
@@ -417,6 +425,8 @@ type ProvidersModelsList struct {
 	Kimi      []*ModelConfig `json:"kimi,omitempty"`
 	Qwen      []*ModelConfig `json:"qwen,omitempty"`
 	Minimax   []*ModelConfig `json:"minimax,omitempty"`
+	Mistral   []*ModelConfig `json:"mistral,omitempty"`
+	Xai       []*ModelConfig `json:"xai,omitempty"`
 }
 
 type ProvidersReadinessStatus struct {
@@ -431,6 +441,8 @@ type ProvidersReadinessStatus struct {
 	Kimi      bool `json:"kimi"`
 	Qwen      bool `json:"qwen"`
 	Minimax   bool `json:"minimax"`
+	Mistral   bool `json:"mistral"`
+	Xai       bool `json:"xai"`
 }
 
 type Query struct {
@@ -649,6 +661,7 @@ type VectorStoreLog struct {
 
 type VersionInfo struct {
 	Current   string      `json:"current"`
+	Build     string      `json:"build"`
 	State     UpdateState `json:"state"`
 	Latest    *string     `json:"latest,omitempty"`
 	Strategy  string      `json:"strategy"`
@@ -1205,6 +1218,8 @@ const (
 	ProviderTypeKimi      ProviderType = "kimi"
 	ProviderTypeQwen      ProviderType = "qwen"
 	ProviderTypeMinimax   ProviderType = "minimax"
+	ProviderTypeMistral   ProviderType = "mistral"
+	ProviderTypeXai       ProviderType = "xai"
 )
 
 var AllProviderType = []ProviderType{
@@ -1219,11 +1234,13 @@ var AllProviderType = []ProviderType{
 	ProviderTypeKimi,
 	ProviderTypeQwen,
 	ProviderTypeMinimax,
+	ProviderTypeMistral,
+	ProviderTypeXai,
 }
 
 func (e ProviderType) IsValid() bool {
 	switch e {
-	case ProviderTypeOpenai, ProviderTypeAnthropic, ProviderTypeGemini, ProviderTypeBedrock, ProviderTypeOllama, ProviderTypeCustom, ProviderTypeDeepseek, ProviderTypeGlm, ProviderTypeKimi, ProviderTypeQwen, ProviderTypeMinimax:
+	case ProviderTypeOpenai, ProviderTypeAnthropic, ProviderTypeGemini, ProviderTypeBedrock, ProviderTypeOllama, ProviderTypeCustom, ProviderTypeDeepseek, ProviderTypeGlm, ProviderTypeKimi, ProviderTypeQwen, ProviderTypeMinimax, ProviderTypeMistral, ProviderTypeXai:
 		return true
 	}
 	return false
@@ -1253,11 +1270,12 @@ func (e ProviderType) MarshalGQL(w io.Writer) {
 type ReasoningEffort string
 
 const (
-	ReasoningEffortXhigh  ReasoningEffort = "xhigh"
-	ReasoningEffortMax    ReasoningEffort = "max"
-	ReasoningEffortHigh   ReasoningEffort = "high"
-	ReasoningEffortMedium ReasoningEffort = "medium"
-	ReasoningEffortLow    ReasoningEffort = "low"
+	ReasoningEffortXhigh   ReasoningEffort = "xhigh"
+	ReasoningEffortMax     ReasoningEffort = "max"
+	ReasoningEffortHigh    ReasoningEffort = "high"
+	ReasoningEffortMedium  ReasoningEffort = "medium"
+	ReasoningEffortLow     ReasoningEffort = "low"
+	ReasoningEffortMinimal ReasoningEffort = "minimal"
 )
 
 var AllReasoningEffort = []ReasoningEffort{
@@ -1266,11 +1284,12 @@ var AllReasoningEffort = []ReasoningEffort{
 	ReasoningEffortHigh,
 	ReasoningEffortMedium,
 	ReasoningEffortLow,
+	ReasoningEffortMinimal,
 }
 
 func (e ReasoningEffort) IsValid() bool {
 	switch e {
-	case ReasoningEffortXhigh, ReasoningEffortMax, ReasoningEffortHigh, ReasoningEffortMedium, ReasoningEffortLow:
+	case ReasoningEffortXhigh, ReasoningEffortMax, ReasoningEffortHigh, ReasoningEffortMedium, ReasoningEffortLow, ReasoningEffortMinimal:
 		return true
 	}
 	return false

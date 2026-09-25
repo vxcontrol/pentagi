@@ -18,7 +18,6 @@ type TaskController interface {
 type taskController struct {
 	mx      *sync.Mutex
 	tasks   map[int64]TaskWorker
-	updater FlowUpdater
 	flowCtx *FlowContext
 }
 

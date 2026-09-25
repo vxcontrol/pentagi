@@ -122,7 +122,7 @@ func (t *traversaal) parseHTTPResponse(resp *http.Response) (string, error) {
 	writer.WriteString("\n\n# Links\n\n")
 
 	for i, resultLink := range respBody.Data.Links {
-		writer.WriteString(fmt.Sprintf("%d. %s\n", i+1, resultLink))
+		fmt.Fprintf(&writer, "%d. %s\n", i+1, resultLink)
 	}
 
 	return writer.String(), nil

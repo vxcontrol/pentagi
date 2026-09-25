@@ -1,3 +1,9 @@
+# Bundled Gemini defaults use gemini-3.1-flash-lite for simple, JSON,
+# reflection, search, and enrichment; complex agent roles use the newer
+# gemini-3.5-flash-lite. The latter produced subtask_list on eight of ten
+# saved generator chains immediately and after a safe memorist continuation
+# on the other two. Both models passed a synthetic API/config smoke for each
+# role option class; other production roles were not replayed.
 simple:
   model: gemini-3.1-flash-lite
   temperature: 1.0
@@ -6,7 +12,7 @@ simple:
   max_tokens: 8192
   price:
     input: 0.25
-    output: 1.5
+    output: 1.50
     cache_read: 0.025
 
 simple_json:
@@ -18,24 +24,24 @@ simple_json:
   json: true
   price:
     input: 0.25
-    output: 1.5
+    output: 1.50
     cache_read: 0.025
 
 primary_agent:
-  model: gemini-3.1-pro-preview
+  model: gemini-3.5-flash-lite
   temperature: 1.0
   top_p: 0.95
   n: 1
   max_tokens: 16384
   reasoning:
-    effort: medium
+    effort: high
   price:
-    input: 2.0
-    output: 12.0
-    cache_read: 0.2
+    input: 0.30
+    output: 2.50
+    cache_read: 0.03
 
 assistant:
-  model: gemini-3.1-pro-preview
+  model: gemini-3.5-flash-lite
   temperature: 1.0
   top_p: 0.95
   n: 1
@@ -43,117 +49,117 @@ assistant:
   reasoning:
     effort: medium
   price:
-    input: 2.0
-    output: 12.0
-    cache_read: 0.2
+    input: 0.30
+    output: 2.50
+    cache_read: 0.03
 
 generator:
-  model: gemini-3.1-pro-preview
+  model: gemini-3.5-flash-lite
   temperature: 1.0
   top_p: 0.95
   n: 1
   max_tokens: 32768
   reasoning:
-    effort: medium
+    effort: high
   price:
-    input: 2.0
-    output: 12.0
-    cache_read: 0.2
+    input: 0.30
+    output: 2.50
+    cache_read: 0.03
 
 refiner:
-  model: gemini-3.1-pro-preview
+  model: gemini-3.5-flash-lite
   temperature: 1.0
   top_p: 0.95
   n: 1
   max_tokens: 20480
   reasoning:
-    effort: medium
+    effort: high
   price:
-    input: 2.0
-    output: 12.0
-    cache_read: 0.2
+    input: 0.30
+    output: 2.50
+    cache_read: 0.03
 
 adviser:
-  model: gemini-3.1-pro-preview
+  model: gemini-3.5-flash-lite
   temperature: 1.0
   top_p: 0.95
   n: 1
   max_tokens: 8192
   reasoning:
-    effort: medium
+    effort: high
   price:
-    input: 2.0
-    output: 12.0
-    cache_read: 0.2
+    input: 0.30
+    output: 2.50
+    cache_read: 0.03
 
 reflector:
-  model: gemini-3.5-flash-lite
+  model: gemini-3.1-flash-lite
   temperature: 1.0
   top_p: 0.95
   n: 1
   max_tokens: 8192
   price:
-    input: 0.3
-    output: 2.5
-    cache_read: 0.03
+    input: 0.25
+    output: 1.50
+    cache_read: 0.025
 
 searcher:
-  model: gemini-3.5-flash-lite
+  model: gemini-3.1-flash-lite
   temperature: 1.0
   top_p: 0.95
   n: 1
   max_tokens: 8192
   price:
-    input: 0.3
-    output: 2.5
-    cache_read: 0.03
+    input: 0.25
+    output: 1.50
+    cache_read: 0.025
 
 enricher:
-  model: gemini-3.5-flash-lite
+  model: gemini-3.1-flash-lite
   temperature: 1.0
   top_p: 0.95
   n: 1
   max_tokens: 8192
   price:
-    input: 0.3
-    output: 2.5
-    cache_read: 0.03
+    input: 0.25
+    output: 1.50
+    cache_read: 0.025
 
 coder:
-  model: gemini-3.6-flash
+  model: gemini-3.5-flash-lite
   temperature: 1.0
   top_p: 0.95
   n: 1
   max_tokens: 20480
   reasoning:
-    effort: low
+    effort: medium
   price:
-    input: 1.5
-    output: 7.5
-    cache_read: 0.15
+    input: 0.30
+    output: 2.50
+    cache_read: 0.03
 
 installer:
-  model: gemini-3.6-flash
+  model: gemini-3.5-flash-lite
   temperature: 1.0
   top_p: 0.95
   n: 1
   max_tokens: 16384
   reasoning:
-    effort: low
+    effort: medium
   price:
-    input: 1.5
-    output: 7.5
-    cache_read: 0.15
+    input: 0.30
+    output: 2.50
+    cache_read: 0.03
 
 pentester:
-  model: gemini-3.6-flash
+  model: gemini-3.5-flash-lite
   temperature: 1.0
   top_p: 0.95
   n: 1
   max_tokens: 8192
   reasoning:
-    effort: low
+    effort: medium
   price:
-    input: 1.5
-    output: 7.5
-    cache_read: 0.15
+    input: 0.30
+    output: 2.50
+    cache_read: 0.03

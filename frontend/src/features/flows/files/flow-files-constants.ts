@@ -19,7 +19,6 @@ export const FLOW_FILES_PULL_API_PATH = (flowId: string) => `/flows/${flowId}/fi
 export const FLOW_FILES_CONTAINER_API_PATH = (flowId: string) => `/flows/${flowId}/files/container`;
 export const FLOW_FILES_ATTACH_RESOURCES_API_PATH = (flowId: string) => `/flows/${flowId}/files/resources`;
 export const FLOW_FILES_PROMOTE_API_PATH = (flowId: string) => `/flows/${flowId}/files/to-resources`;
-export const RESOURCES_LIST_API_PATH = '/resources/';
 
 export const UPLOADS_TARGET_DIRECTORY = '/work/uploads';
 export const CONTAINER_TARGET_DIRECTORY = 'container/';

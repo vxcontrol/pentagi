@@ -82,6 +82,8 @@ func (t *terminal) startPty(cmd *exec.Cmd) error {
 		t.tty = nil
 	}
 
+	// Add before starting the goroutine — see startCmd / Terminal.Wait race note.
+	t.wg.Add(1)
 	go t.managePty()
 
 	return nil
@@ -89,7 +91,6 @@ func (t *terminal) startPty(cmd *exec.Cmd) error {
 
 // managePty manages the pseudoterminal and its output
 func (t *terminal) managePty() {
-	t.wg.Add(1)
 	defer t.wg.Done()
 
 	defer func() {

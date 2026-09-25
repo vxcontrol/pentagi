@@ -2,17 +2,17 @@ package tester
 
 import (
 	"pentagi/pkg/providers/pconfig"
-	"pentagi/pkg/providers/tester/testdata"
+	"pentagi/pkg/providers/tester/cases"
 )
 
 // testConfig holds private configuration for test execution
 type testConfig struct {
 	agentTypes      []pconfig.ProviderOptionsType
-	groups          []testdata.TestGroup
+	groups          []cases.TestGroup
 	streamingMode   bool
 	verbose         bool
 	parallelWorkers int
-	customRegistry  *testdata.TestRegistry
+	customRegistry  *cases.TestRegistry
 }
 
 // TestOption configures test execution
@@ -26,7 +26,7 @@ func WithAgentTypes(types ...pconfig.ProviderOptionsType) TestOption {
 }
 
 // WithGroups filters tests to specific groups
-func WithGroups(groups ...testdata.TestGroup) TestOption {
+func WithGroups(groups ...cases.TestGroup) TestOption {
 	return func(c *testConfig) {
 		c.groups = groups
 	}
@@ -56,7 +56,7 @@ func WithParallelWorkers(workers int) TestOption {
 }
 
 // WithCustomRegistry sets a custom test registry
-func WithCustomRegistry(registry *testdata.TestRegistry) TestOption {
+func WithCustomRegistry(registry *cases.TestRegistry) TestOption {
 	return func(c *testConfig) {
 		c.customRegistry = registry
 	}
@@ -66,7 +66,7 @@ func WithCustomRegistry(registry *testdata.TestRegistry) TestOption {
 func defaultConfig() *testConfig {
 	return &testConfig{
 		agentTypes:      pconfig.AllAgentTypes,
-		groups:          []testdata.TestGroup{testdata.TestGroupBasic, testdata.TestGroupAdvanced, testdata.TestGroupKnowledge},
+		groups:          []cases.TestGroup{cases.TestGroupBasic, cases.TestGroupAdvanced, cases.TestGroupJSON, cases.TestGroupKnowledge},
 		streamingMode:   true,
 		verbose:         false,
 		parallelWorkers: 4,

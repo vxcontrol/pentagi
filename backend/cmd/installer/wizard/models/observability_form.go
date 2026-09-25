@@ -333,11 +333,11 @@ func (m *ObservabilityFormModel) OnFieldChanged(fieldIndex int, oldValue, newVal
 }
 
 func (m *ObservabilityFormModel) GetFormFields() []FormField {
-	return m.BaseScreen.fields
+	return m.fields
 }
 
 func (m *ObservabilityFormModel) SetFormFields(fields []FormField) {
-	m.BaseScreen.fields = fields
+	m.fields = fields
 }
 
 // BaseListHandler interface implementation

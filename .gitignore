@@ -7,6 +7,11 @@
 
 backend/tmp
 backend/build
+backend/data
+# locally built helper binaries (cmd/ctester, cmd/etester, cmd/ftester)
+backend/ctester
+backend/etester
+backend/ftester
 backend/vendor
 backend/cmd/installer/**/log.json
 
@@ -25,6 +30,7 @@ skills-lock.json
 
 build/*
 data/*
+neo4j/*
 .bak/*
 !.gitkeep
 .claude/
@@ -34,7 +40,7 @@ data/*
 *.swp
 *.swo
 *~
+__pycache__/
 
 # OS
 Thumbs.db
-

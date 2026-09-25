@@ -6,6 +6,7 @@ import {
     FileManager,
     type FileManagerBulkAction,
     type FileNode,
+    pluralizeItems,
 } from '@/components/shared/file-manager';
 import { OverwriteButtons, OverwriteDialog, useOverwrite } from '@/components/shared/overwrite';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -33,7 +34,6 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 
 import { findPullConflicts } from './flow-files-conflicts';
 import { CONTAINER_DEFAULT_PATH, CONTAINER_PATH_PREFIX } from './flow-files-constants';
-import { pluralizeItems } from './flow-files-utils';
 import { useFlowContainerFiles } from './use-flow-container-files';
 import { useFlowFilesPull } from './use-flow-files-pull';
 

@@ -1,8 +1,11 @@
 package main
 
 import (
+	"errors"
 	"fmt"
+	"io"
 	"os"
+	"strings"
 	"text/tabwriter"
 	"time"
 )
@@ -24,8 +27,8 @@ func PrintAgentResults(result AgentTestResult) {
 				name = fmt.Sprintf("Streaming %s", name)
 			}
 			fmt.Printf("[%s] %s (%.3fs)\n", status, name, float64(test.LatencyMs)/1000)
-			if !test.Success && test.Error != nil {
-				fmt.Printf("    Error: %v\n", test.Error)
+			if note := failureText(test); !test.Success && note != "" {
+				fmt.Printf("    Error: %s\n", note)
 			}
 		}
 	}
@@ -43,8 +46,8 @@ func PrintAgentResults(result AgentTestResult) {
 				name = fmt.Sprintf("Streaming %s", name)
 			}
 			fmt.Printf("[%s] %s (%.3fs)\n", status, name, float64(test.LatencyMs)/1000)
-			if !test.Success && test.Error != nil {
-				fmt.Printf("    Error: %v\n", test.Error)
+			if note := failureText(test); !test.Success && note != "" {
+				fmt.Printf("    Error: %s\n", note)
 			}
 		}
 	} else if result.SkippedAdvanced {
@@ -69,8 +72,8 @@ func PrintAgentResults(result AgentTestResult) {
 			fmt.Printf("[%s] %s (%s) (%.3fs)\n", status, test.Name, test.Capability, float64(test.LatencyMs)/1000)
 			if test.Unsupported {
 				fmt.Printf("    Not supported by this model/provider: %v\n", test.Error)
-			} else if !test.Success && test.Error != nil {
-				fmt.Printf("    Error: %v\n", test.Error)
+			} else if note := failureText(test); !test.Success && note != "" {
+				fmt.Printf("    Error: %s\n", note)
 			}
 		}
 	}
@@ -95,12 +98,13 @@ func PrintSummaryReport(results []AgentTestResult) {
 	fmt.Fprintln(w, "Agent\tModel\tReasoning\tSuccess Rate\tAvg Latency\t")
 	fmt.Fprintln(w, "-----\t-----\t----------\t-----------\t-----------\t")
 
-	var totalSuccess, totalTests int
+	var totalSuccess, totalTests, totalFiltered int
 	var totalLatency time.Duration
 
 	for _, result := range results {
 		success := result.TotalSuccess
 		total := result.TotalTests
+		totalFiltered += result.TotalFiltered
 		var successRate float64
 		if total > 0 {
 			successRate = float64(success) / float64(total) * 100
@@ -125,8 +129,27 @@ func PrintSummaryReport(results []AgentTestResult) {
 		overallSuccessRate := float64(totalSuccess) / float64(totalTests) * 100
 		overallAvgLatency := totalLatency / time.Duration(totalTests)
 		fmt.Printf("\nTotal: %d/%d (%.2f%%) successful tests\n", totalSuccess, totalTests, overallSuccessRate)
+		if totalFiltered > 0 {
+			fmt.Printf("Refused by a vendor's content filter: %d of the failed tests\n", totalFiltered)
+		}
 		fmt.Printf("Overall average latency: %.3fs\n", overallAvgLatency.Seconds())
 	}
+}
+
+type errWriter struct {
+	dst io.Writer
+	err error
+}
+
+func (ew *errWriter) Write(p []byte) (int, error) {
+	if ew.err != nil {
+		return 0, ew.err
+	}
+
+	n, err := ew.dst.Write(p)
+	ew.err = err
+
+	return n, err
 }
 
 // WriteReportToFile writes the test results to a report file in Markdown format
@@ -135,35 +158,45 @@ func WriteReportToFile(results []AgentTestResult, filePath string) error {
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+
+	return writeReport(file, results)
+}
+
+func writeReport(dst io.WriteCloser, results []AgentTestResult) (err error) {
+	defer func() {
+		err = errors.Join(err, dst.Close())
+	}()
+
+	w := &errWriter{dst: dst}
 
 	// Write header
-	file.WriteString("# LLM Agent Testing Report\n\n")
-	file.WriteString(fmt.Sprintf("Generated: %s\n\n", time.Now().UTC().Format(time.RFC1123)))
+	_, _ = io.WriteString(w, "# LLM Agent Testing Report\n\n")
+	fmt.Fprintf(w, "Generated: %s\n\n", time.Now().UTC().Format(time.RFC1123))
 
 	// Create a table for overall results
-	file.WriteString("## Overall Results\n\n")
-	file.WriteString("| Agent | Model | Reasoning | Success Rate | Average Latency |\n")
-	file.WriteString("|-------|-------|-----------|--------------|-----------------|\n")
+	_, _ = io.WriteString(w, "## Overall Results\n\n")
+	_, _ = io.WriteString(w, "| Agent | Model | Reasoning | Success Rate | Average Latency |\n")
+	_, _ = io.WriteString(w, "|-------|-------|-----------|--------------|-----------------|\n")
 
-	var totalSuccess, totalTests int
+	var totalSuccess, totalTests, totalFiltered int
 	var totalLatency time.Duration
 
 	for _, result := range results {
 		success := result.TotalSuccess
 		total := result.TotalTests
+		totalFiltered += result.TotalFiltered
 		var successRate float64
 		if total > 0 {
 			successRate = float64(success) / float64(total) * 100
 		}
-		file.WriteString(fmt.Sprintf("| %s | %s | %t | %d/%d (%.2f%%) | %.3fs |\n",
+		fmt.Fprintf(w, "| %s | %s | %t | %d/%d (%.2f%%) | %.3fs |\n",
 			result.AgentType,
 			result.ModelName,
 			result.Reasoning,
 			success,
 			total,
 			successRate,
-			result.AverageLatency.Seconds()))
+			result.AverageLatency.Seconds())
 
 		totalSuccess += success
 		totalTests += total
@@ -174,76 +207,65 @@ func WriteReportToFile(results []AgentTestResult, filePath string) error {
 	if totalTests > 0 {
 		overallSuccessRate := float64(totalSuccess) / float64(totalTests) * 100
 		overallAvgLatency := totalLatency / time.Duration(totalTests)
-		file.WriteString(fmt.Sprintf("\n**Total**: %d/%d (%.2f%%) successful tests\n",
-			totalSuccess, totalTests, overallSuccessRate))
-		file.WriteString(fmt.Sprintf("**Overall average latency**: %.3fs\n\n", overallAvgLatency.Seconds()))
+		fmt.Fprintf(w, "\n**Total**: %d/%d (%.2f%%) successful tests\n",
+			totalSuccess, totalTests, overallSuccessRate)
+		if totalFiltered > 0 {
+			fmt.Fprintf(w, "**Refused by a vendor's content filter**: %d of the failed tests\n", totalFiltered)
+		}
+		fmt.Fprintf(w, "**Overall average latency**: %.3fs\n\n", overallAvgLatency.Seconds())
 	}
 
 	// Write detailed results for each agent
-	file.WriteString("## Detailed Results\n\n")
+	_, _ = io.WriteString(w, "## Detailed Results\n\n")
 
 	for _, result := range results {
-		file.WriteString(fmt.Sprintf("### %s (%s)\n\n", result.AgentType, result.ModelName))
+		fmt.Fprintf(w, "### %s (%s)\n\n", result.AgentType, result.ModelName)
 
 		// Basic tests
 		if len(result.BasicTests) > 0 {
-			file.WriteString("#### Basic Tests\n\n")
-			file.WriteString("| Test | Result | Latency | Error |\n")
-			file.WriteString("|------|--------|---------|-------|\n")
+			_, _ = io.WriteString(w, "#### Basic Tests\n\n")
+			_, _ = io.WriteString(w, "| Test | Result | Latency | Error |\n")
+			_, _ = io.WriteString(w, "|------|--------|---------|-------|\n")
 
 			for _, test := range result.BasicTests {
-				status := "✅ Pass"
-				errorMsg := ""
-				if !test.Success {
-					status = "❌ Fail"
-					if test.Error != nil {
-						errorMsg = TruncateString(EscapeMarkdown(test.Error.Error()), 150)
-					}
-				}
+				status, errorMsg := rowStatus(test)
 				name := test.Name
 				if test.Streaming {
 					name = fmt.Sprintf("Streaming %s", name)
 				}
 
-				file.WriteString(fmt.Sprintf("| %s | %s | %.3fs | %s |\n",
+				fmt.Fprintf(w, "| %s | %s | %.3fs | %s |\n",
 					name,
 					status,
 					float64(test.LatencyMs)/1000,
-					errorMsg))
+					errorMsg)
 			}
-			file.WriteString("\n")
+			_, _ = io.WriteString(w, "\n")
 		}
 
 		// Advanced tests
 		if len(result.AdvancedTests) > 0 {
-			file.WriteString("#### Advanced Tests\n\n")
-			file.WriteString("| Test | Result | Latency | Error |\n")
-			file.WriteString("|------|--------|---------|-------|\n")
+			_, _ = io.WriteString(w, "#### Advanced Tests\n\n")
+			_, _ = io.WriteString(w, "| Test | Result | Latency | Error |\n")
+			_, _ = io.WriteString(w, "|------|--------|---------|-------|\n")
 
 			for _, test := range result.AdvancedTests {
-				status := "✅ Pass"
-				errorMsg := ""
-				if !test.Success {
-					status = "❌ Fail"
-					if test.Error != nil {
-						errorMsg = TruncateString(EscapeMarkdown(test.Error.Error()), 150)
-					}
-				}
+				status, errorMsg := rowStatus(test)
 				name := test.Name
 				if test.Streaming {
 					name = fmt.Sprintf("Streaming %s", name)
 				}
 
-				file.WriteString(fmt.Sprintf("| %s | %s | %.3fs | %s |\n",
+				fmt.Fprintf(w, "| %s | %s | %.3fs | %s |\n",
 					name,
 					status,
 					float64(test.LatencyMs)/1000,
-					errorMsg))
+					errorMsg)
 			}
-			file.WriteString("\n")
+			_, _ = io.WriteString(w, "\n")
 		} else if result.SkippedAdvanced {
-			file.WriteString("#### Advanced Tests\n\n")
-			file.WriteString(fmt.Sprintf("*%s*\n\n", result.SkippedReason))
+			_, _ = io.WriteString(w, "#### Advanced Tests\n\n")
+			fmt.Fprintf(w, "*%s*\n\n", result.SkippedReason)
 		}
 
 		// Capability tests (adaptive thinking / reasoning off / structured
@@ -251,34 +273,21 @@ func WriteReportToFile(results []AgentTestResult, filePath string) error {
 		// the capability at all, distinguished from "attempted but rejected"
 		// (Unsupported) and from a genuine failure.
 		if len(result.CapabilityTests) > 0 {
-			file.WriteString("#### Capability Tests\n\n")
-			file.WriteString("| Test | Capability | Result | Latency | Note |\n")
-			file.WriteString("|------|------------|--------|---------|------|\n")
+			_, _ = io.WriteString(w, "#### Capability Tests\n\n")
+			_, _ = io.WriteString(w, "| Test | Capability | Result | Latency | Note |\n")
+			_, _ = io.WriteString(w, "|------|------------|--------|---------|------|\n")
 
 			for _, test := range result.CapabilityTests {
-				status := "✅ Pass"
-				note := ""
-				switch {
-				case test.Unsupported:
-					status = "⊘ Not Supported"
-					if test.Error != nil {
-						note = TruncateString(EscapeMarkdown(test.Error.Error()), 150)
-					}
-				case !test.Success:
-					status = "❌ Fail"
-					if test.Error != nil {
-						note = TruncateString(EscapeMarkdown(test.Error.Error()), 150)
-					}
-				}
+				status, note := rowStatus(test)
 
-				file.WriteString(fmt.Sprintf("| %s | %s | %s | %.3fs | %s |\n",
+				fmt.Fprintf(w, "| %s | %s | %s | %.3fs | %s |\n",
 					test.Name,
 					test.Capability,
 					status,
 					float64(test.LatencyMs)/1000,
-					note))
+					note)
 			}
-			file.WriteString("\n")
+			_, _ = io.WriteString(w, "\n")
 		}
 
 		// Summary
@@ -286,11 +295,50 @@ func WriteReportToFile(results []AgentTestResult, filePath string) error {
 		if result.TotalTests > 0 {
 			successRate = float64(result.TotalSuccess) / float64(result.TotalTests) * 100
 		}
-		file.WriteString(fmt.Sprintf("**Summary**: %d/%d (%.2f%%) successful tests\n\n",
-			result.TotalSuccess, result.TotalTests, successRate))
-		file.WriteString(fmt.Sprintf("**Average latency**: %.3fs\n\n", result.AverageLatency.Seconds()))
-		file.WriteString("---\n\n")
+		fmt.Fprintf(w, "**Summary**: %d/%d (%.2f%%) successful tests\n\n",
+			result.TotalSuccess, result.TotalTests, successRate)
+		if result.TotalFiltered > 0 {
+			fmt.Fprintf(w, "**Refused by the vendor's content filter**: %d of the failed tests\n\n", result.TotalFiltered)
+		}
+		fmt.Fprintf(w, "**Average latency**: %.3fs\n\n", result.AverageLatency.Seconds())
+		_, _ = io.WriteString(w, "---\n\n")
 	}
 
-	return nil
+	return w.err
+}
+
+func rowStatus(test TestResult) (status, note string) {
+	switch {
+	case test.Unsupported:
+		if test.Error != nil {
+			note = TruncateString(EscapeMarkdown(test.Error.Error()), 150)
+		}
+		return "⊘ Not Supported", note
+	case test.Success:
+		return "✅ Pass", ""
+	default:
+		return failureStatus(test), TruncateString(EscapeMarkdown(failureText(test)), 150)
+	}
+}
+
+func failureStatus(test TestResult) string {
+	if test.ContentFiltered {
+		return "⛔ Filtered"
+	}
+	return "❌ Fail"
+}
+
+func failureText(test TestResult) string {
+	var text string
+	if test.Error != nil {
+		text = test.Error.Error()
+	}
+	if test.StopReason != "" && !strings.Contains(text, test.StopReason) {
+		if text != "" {
+			text += "; "
+		}
+		text += "stop reason: " + test.StopReason
+	}
+
+	return text
 }

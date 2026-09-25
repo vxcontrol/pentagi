@@ -105,7 +105,7 @@ func (m *ProcessorOperationFormModel) BuildForm() tea.Cmd {
 }
 
 func (m *ProcessorOperationFormModel) GetFormTitle() string {
-	return fmt.Sprintf(locale.ProcessorOperationFormTitle, m.operationInfo.title)
+	return m.operationInfo.title
 }
 
 func (m *ProcessorOperationFormModel) GetFormDescription() string {
@@ -113,7 +113,7 @@ func (m *ProcessorOperationFormModel) GetFormDescription() string {
 }
 
 func (m *ProcessorOperationFormModel) GetFormName() string {
-	return fmt.Sprintf(locale.ProcessorOperationFormName, m.operationInfo.title)
+	return m.operationInfo.title
 }
 
 func (m *ProcessorOperationFormModel) GetFormSummary() string {
@@ -191,11 +191,11 @@ func (m *ProcessorOperationFormModel) OnFieldChanged(fieldIndex int, oldValue, n
 }
 
 func (m *ProcessorOperationFormModel) GetFormFields() []FormField {
-	return m.BaseScreen.fields
+	return m.fields
 }
 
 func (m *ProcessorOperationFormModel) SetFormFields(fields []FormField) {
-	m.BaseScreen.fields = fields
+	m.fields = fields
 }
 
 // getOperationInfo returns localized information for the operation
@@ -613,7 +613,7 @@ func (m *ProcessorOperationFormModel) renderPlannedActions() string {
 		add(locale.PlannedWillUpdate, locale.ProcessorComponentObservability, c.ObservabilityInstalled && !c.ObservabilityIsUpToDate)
 		add(locale.PlannedWillUpdate, locale.ProcessorComponentLangfuse, c.LangfuseInstalled && !c.LangfuseIsUpToDate)
 		add(locale.PlannedWillUpdate, locale.ProcessorComponentPentagi, c.PentagiInstalled && !c.PentagiIsUpToDate)
-		if !(c.PentagiInstalled || c.LangfuseInstalled || c.ObservabilityInstalled) {
+		if !c.PentagiInstalled && !c.LangfuseInstalled && !c.ObservabilityInstalled {
 			return "" // nothing to show
 		}
 	case processor.ProcessorOperationDownload:

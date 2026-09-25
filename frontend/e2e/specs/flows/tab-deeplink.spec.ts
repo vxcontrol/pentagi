@@ -68,3 +68,55 @@ test.describe('flow tab deep link', { tag: '@flows' }, () => {
         });
     });
 });
+
+test.describe('flow side panel tab', { tag: '@flows' }, () => {
+    test.use({ cassette: flowsCassette() });
+
+    test('a link naming a side tab opens it in the two-panel layout', async ({ page, pageErrorLog }) => {
+        await page.setViewportSize({ height: 800, width: 1440 });
+        await page.goto('/flows/5?tab=screenshots');
+
+        await expectSelectedTab(page, 'Screenshots');
+        await expect(page, 'the link is read, not rewritten').toHaveURL(/[?&]tab=screenshots/);
+        expectCleanPage(pageErrorLog);
+    });
+
+    test('a side pick lives in the address and survives a reload', async ({ page, pageErrorLog }) => {
+        await page.setViewportSize({ height: 800, width: 1440 });
+        await page.goto('/flows/5?tab=assistant');
+
+        await page.getByRole('tab', { name: 'Searches' }).click();
+
+        await expect(page).toHaveURL(/[?&]side=tools/);
+        await expectSelectedTab(page, 'Searches');
+
+        await page.reload();
+
+        await expectSelectedTab(page, 'Searches');
+        await expectSelectedTab(page, 'Assistant');
+        expectCleanPage(pageErrorLog);
+    });
+
+    test('the strip and the address still agree after crossing the two-panel boundary twice', async ({
+        page,
+        pageErrorLog,
+    }) => {
+        await page.setViewportSize({ height: 800, width: 1100 });
+        await page.goto('/flows/5');
+
+        await page.getByRole('tab', { name: 'Screenshots' }).click();
+        await expect(page).toHaveURL(/[?&]tab=screenshots/);
+
+        await page.setViewportSize({ height: 800, width: 1440 });
+        await expectSelectedTab(page, 'Screenshots');
+
+        await page.getByRole('tab', { name: 'Assistant' }).click();
+        await expect(page).toHaveURL(/[?&]tab=assistant/);
+        await expectSelectedTab(page, 'Screenshots');
+
+        await page.setViewportSize({ height: 800, width: 1100 });
+
+        await expectSelectedTab(page, 'Assistant');
+        expectCleanPage(pageErrorLog);
+    });
+});

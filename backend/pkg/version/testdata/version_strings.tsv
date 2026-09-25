@@ -1,0 +1,9 @@
+		ce
+	abc1234	ce.habc1234
+develop		ce
+develop	abc1234	ce.habc1234
+ce		ce
+ce	abc1234	ce.habc1234
+2.1.0		2.1.0-ce
+2.1.0	abc1234	2.1.0-ce.habc1234
+2.1.0	0123456	2.1.0-ce.h0123456

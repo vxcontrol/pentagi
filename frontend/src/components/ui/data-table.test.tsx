@@ -41,6 +41,28 @@ afterEach(() => {
     localStorage.clear();
 });
 
+describe('DataTable — scroll region', () => {
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
+    it('names the region it scrolls in after its label', () => {
+        vi.spyOn(Element.prototype, 'scrollWidth', 'get').mockReturnValue(743);
+        vi.spyOn(Element.prototype, 'clientWidth', 'get').mockReturnValue(606);
+
+        render(
+            <DataTable<Row>
+                columns={COLUMNS}
+                data={ROWS}
+                label="Rows"
+            />,
+            { wrapper: Wrapper },
+        );
+
+        expect(screen.getByRole('region', { name: 'Rows' })).toContainElement(screen.getByRole('table'));
+    });
+});
+
 describe('DataTable — controlled filter projection', () => {
     it('projects `filterValue` into the visible rows when a `filterColumn` is set', () => {
         render(
@@ -49,6 +71,7 @@ describe('DataTable — controlled filter projection', () => {
                 data={ROWS}
                 filterColumn="name"
                 filterValue="Bravo"
+                label="Rows"
                 onFilterChange={() => {
                     /* no-op */
                 }}
@@ -68,6 +91,7 @@ describe('DataTable — controlled filter projection', () => {
                 data={ROWS}
                 filterColumn="name"
                 filterValue=""
+                label="Rows"
                 onFilterChange={() => {
                     /* no-op */
                 }}
@@ -91,6 +115,7 @@ describe('DataTable — controlled filter projection', () => {
                 filterColumn="name"
                 filterPlaceholder="Filter name..."
                 filterValue=""
+                label="Rows"
                 onFilterChange={onFilterChange}
             />,
             { wrapper: Wrapper },
@@ -120,6 +145,7 @@ describe('DataTable — controlled filter projection', () => {
                 filterColumn="name"
                 filterPlaceholder="Filter..."
                 filterValue="Alpha"
+                label="Rows"
                 onFilterChange={onFilterChange}
             />,
             { wrapper: Wrapper },
@@ -168,6 +194,7 @@ describe('DataTable — controlled filter projection', () => {
                 filterColumn="name"
                 filterPlaceholder="Filter..."
                 filterValue={value}
+                label="Rows"
                 onFilterChange={(next) => {
                     emitted.push(next);
                     setValue(next);
@@ -385,6 +412,7 @@ describe('DataTable — controlled filter projection', () => {
                         filterColumn="name"
                         filterPlaceholder="Agent filter..."
                         filterValue={agent}
+                        label="Rows"
                         onFilterChange={(next) => {
                             emittedAgent.push(next);
                             setAgent(next);
@@ -396,6 +424,7 @@ describe('DataTable — controlled filter projection', () => {
                         filterColumn="name"
                         filterPlaceholder="Tool filter..."
                         filterValue={tool}
+                        label="Rows"
                         onFilterChange={(next) => {
                             emittedTool.push(next);
                             setTool(next);
@@ -503,6 +532,7 @@ describe('DataTable — uncontrolled filter is still routed through the same inp
                 data={ROWS}
                 filterColumn="name"
                 filterPlaceholder="Filter..."
+                label="Rows"
             />,
             { wrapper: Wrapper },
         );
@@ -526,6 +556,7 @@ describe('DataTable — does not render the filter input when `filterColumn` is 
             <DataTable<Row>
                 columns={COLUMNS}
                 data={ROWS}
+                label="Rows"
             />,
             { wrapper: Wrapper },
         );
@@ -554,6 +585,7 @@ describe('DataTable — sorting state persists to storage', () => {
                     },
                 ]}
                 data={ROWS}
+                label="Rows"
             />,
             { wrapper: Wrapper },
         );
@@ -576,6 +608,7 @@ describe('DataTable — controlled pageIndex reconciliation', () => {
             <DataTable<Row>
                 columns={COLUMNS}
                 data={ROWS}
+                label="Rows"
                 onPageChange={onPageChange}
                 pageIndex={9}
             />,
@@ -604,6 +637,7 @@ describe('DataTable — controlled pageIndex reconciliation', () => {
             <DataTable<Row>
                 columns={COLUMNS}
                 data={manyRows}
+                label="Rows"
                 onPageChange={onPageChange}
                 pageIndex={1}
             />,
@@ -654,6 +688,7 @@ describe('DataTable — controlled pageIndex reconciliation', () => {
             <DataTable<Row>
                 columns={COLUMNS}
                 data={manyRows}
+                label="Rows"
                 onPageChange={onPageChange}
                 pageIndex={1}
             />,
@@ -669,6 +704,7 @@ describe('DataTable — controlled pageIndex reconciliation', () => {
             <DataTable<Row>
                 columns={COLUMNS}
                 data={manyRows}
+                label="Rows"
                 onPageChange={onPageChange}
                 pageIndex={0}
             />,
@@ -691,6 +727,7 @@ describe('DataTable — empty results', () => {
             <DataTable<Row>
                 columns={COLUMNS}
                 data={[]}
+                label="Rows"
             />,
             { wrapper: Wrapper },
         );
@@ -704,6 +741,7 @@ describe('DataTable — empty results', () => {
             <DataTable<Row>
                 columns={COLUMNS}
                 data={[]}
+                label="Rows"
             />,
             { wrapper: Wrapper },
         );
@@ -719,6 +757,7 @@ describe('DataTable — empty results', () => {
                 columns={COLUMNS}
                 data={[]}
                 empty={{ entityName: 'flows' }}
+                label="Rows"
             />,
             { wrapper: Wrapper },
         );
@@ -739,6 +778,7 @@ describe('DataTable — empty results', () => {
                 empty={{ entityName: 'flows' }}
                 filterColumn="name"
                 filterPlaceholder="Filter..."
+                label="Rows"
             />,
             { wrapper: Wrapper },
         );
@@ -761,6 +801,7 @@ describe('DataTable — empty results', () => {
                 data={ROWS}
                 filterColumn="name"
                 filterValue=""
+                label="Rows"
                 onFilterChange={() => {
                     /* no-op */
                 }}
@@ -784,6 +825,7 @@ describe('DataTable — empty results', () => {
                 data={ROWS}
                 filterColumn="name"
                 filterValue=""
+                label="Rows"
                 onFilterChange={() => {
                     /* no-op */
                 }}
@@ -801,6 +843,7 @@ describe('DataTable — empty results', () => {
                 data={ROWS}
                 filterColumn="name"
                 filterValue=""
+                label="Rows"
                 onFilterChange={() => {
                     /* no-op */
                 }}
@@ -842,6 +885,7 @@ describe('DataTable — multi-column search', () => {
                 columns={MULTI_COLUMNS}
                 data={MULTI_ROWS}
                 filterPlaceholder="Filter..."
+                label="Rows"
             />,
             { wrapper: Wrapper },
         );
@@ -873,6 +917,7 @@ describe('DataTable — multi-column search', () => {
                 columns={MULTI_COLUMNS}
                 data={accentedRows}
                 filterPlaceholder="Filter..."
+                label="Rows"
             />,
             { wrapper: Wrapper },
         );
@@ -894,6 +939,7 @@ describe('DataTable — multi-column search', () => {
                 columns={MULTI_COLUMNS}
                 data={MULTI_ROWS}
                 filterPlaceholder="Filter..."
+                label="Rows"
             />,
             { wrapper: Wrapper },
         );
@@ -918,6 +964,7 @@ describe('DataTable — multi-column search', () => {
             <DataTable<MultiRow>
                 columns={MULTI_COLUMNS}
                 data={MULTI_ROWS}
+                label="Rows"
             />,
             { wrapper: Wrapper },
         );
@@ -936,6 +983,7 @@ describe('DataTable — multi-column search', () => {
                 columns={MULTI_COLUMNS}
                 data={MULTI_ROWS}
                 filterPlaceholder="Filter..."
+                label="Rows"
             />,
             { wrapper: Wrapper },
         );
@@ -968,6 +1016,7 @@ describe('DataTable — multi-column search', () => {
             <DataTable<MultiRow>
                 columns={MULTI_COLUMNS}
                 data={MULTI_ROWS}
+                label="Rows"
             />,
             { wrapper: Wrapper },
         );
@@ -990,6 +1039,7 @@ describe('DataTable — multi-column search', () => {
                 data={MULTI_ROWS}
                 filterColumn={['name', 'role']}
                 filterPlaceholder="Filter..."
+                label="Rows"
             />,
             { wrapper: Wrapper },
         );
@@ -1021,6 +1071,7 @@ describe('DataTable — multi-column search', () => {
             <DataTable<MultiRow>
                 columns={PLAIN_COLUMNS}
                 data={MULTI_ROWS}
+                label="Rows"
             />,
             { wrapper: Wrapper },
         );
@@ -1035,6 +1086,7 @@ describe('DataTable — multi-column search', () => {
                 columns={MULTI_COLUMNS}
                 data={MULTI_ROWS}
                 filterColumn="name"
+                label="Rows"
             />,
             { wrapper: Wrapper },
         );
@@ -1067,6 +1119,7 @@ describe('DataTable — sort state is exposed to assistive technology', () => {
             <DataTable<Row>
                 columns={SORTABLE_COLUMNS}
                 data={ROWS}
+                label="Rows"
             />,
             { wrapper: Wrapper },
         );
@@ -1090,6 +1143,7 @@ describe('DataTable — sort state is exposed to assistive technology', () => {
             <DataTable<Row>
                 columns={SORTABLE_COLUMNS}
                 data={ROWS}
+                label="Rows"
             />,
             { wrapper: Wrapper },
         );
@@ -1187,6 +1241,7 @@ describe('DataTable — virtualization', () => {
                 data={VIRTUAL_ROWS}
                 initialPageSize={100}
                 isVirtualized
+                label="Rows"
             />,
             { wrapper: Wrapper },
         );
@@ -1204,6 +1259,7 @@ describe('DataTable — virtualization', () => {
                 data={VIRTUAL_ROWS}
                 initialPageSize={100}
                 isVirtualized
+                label="Rows"
             />,
             { wrapper: Wrapper },
         );
@@ -1236,6 +1292,7 @@ describe('DataTable — virtualization', () => {
                 data={VIRTUAL_ROWS}
                 initialPageSize={100}
                 isVirtualized
+                label="Rows"
                 renderRowContextMenu={(row) => <div>menu for {row.name}</div>}
             />,
             { wrapper: Wrapper },
@@ -1257,6 +1314,7 @@ describe('DataTable — virtualization', () => {
                 data={fewRows}
                 initialPageSize={100}
                 isVirtualized
+                label="Rows"
             />,
             { wrapper: Wrapper },
         );
@@ -1277,6 +1335,7 @@ describe('DataTable — virtualization', () => {
                 data={VIRTUAL_ROWS}
                 initialPageSize={100}
                 isVirtualized
+                label="Rows"
                 renderSubComponent={({ row }) => <div>expanded {row.original.name}</div>}
             />,
             { wrapper: Wrapper },

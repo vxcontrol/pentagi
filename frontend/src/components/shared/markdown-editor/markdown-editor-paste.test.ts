@@ -2,6 +2,8 @@ import { Editor } from '@tiptap/core';
 import { Slice } from '@tiptap/pm/model';
 import { beforeAll, describe, expect, it } from 'vitest';
 
+import { GROWTH_IF_QUADRATIC, slowdownWhenInputQuadruples } from '@/test-utils/cost-growth';
+
 import { createMarkdownExtensions } from './markdown-editor-extensions';
 import { shouldParseMarkdownOnPaste } from './markdown-editor-paste';
 import { setupEditorJsdom } from './markdown-editor-test-setup';
@@ -60,12 +62,11 @@ describe('shouldParseMarkdownOnPaste — markdown-parse plain text, defer rich s
     });
 
     it('scans the markdown cues in linear time on a large bracket-heavy paste (ReDoS guard)', () => {
-        const evil = '[x]'.repeat(50_000);
-        const started = performance.now();
+        const brackets = (count: number) => '[x]'.repeat(count);
+        const decide = (text: string) => shouldParseMarkdownOnPaste(text, '<span>x</span>', false);
 
-        shouldParseMarkdownOnPaste(evil, '<span>x</span>', false);
-
-        expect(performance.now() - started).toBeLessThan(150);
+        expect(decide(brackets(50_000))).toBe(false);
+        expect(slowdownWhenInputQuadruples(brackets, decide, 50_000)).toBeLessThan(GROWTH_IF_QUADRATIC / 2);
     });
 });
 

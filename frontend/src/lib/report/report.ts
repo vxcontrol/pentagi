@@ -1,3 +1,4 @@
+import { format } from 'date-fns';
 import GithubSlugger from 'github-slugger';
 
 import type { FlowFragmentFragment, TaskFragmentFragment } from '@/graphql/types';
@@ -151,17 +152,7 @@ export const generateFileName = (flow: FlowFragmentFragment): string => {
         .slice(0, 150)
         .replace(/_+$/, '');
 
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
-    const hours = String(now.getHours()).padStart(2, '0');
-    const minutes = String(now.getMinutes()).padStart(2, '0');
-    const seconds = String(now.getSeconds()).padStart(2, '0');
-
-    const datetime = `${year}${month}${day}${hours}${minutes}${seconds}`;
-
-    return `report_flow_${flowId}_${flowTitle}_${datetime}`;
+    return `report_flow_${flowId}_${flowTitle}_${format(new Date(), 'yyyyMMddHHmmss')}`;
 };
 
 export const downloadTextFile = (content: string, fileName: string, mimeType = 'text/plain'): void => {
@@ -185,18 +176,6 @@ export const downloadTextFile = (content: string, fileName: string, mimeType = '
     }
 };
 
-export const copyToClipboard = async (text: string): Promise<boolean> => {
-    try {
-        await navigator.clipboard.writeText(text);
-
-        return true;
-    } catch (error) {
-        Log.error('Failed to copy to clipboard:', error);
-
-        return false;
-    }
-};
-
 // Lazy-load the PDF generator so @react-pdf/renderer (~1.5 MB) is fetched
 // only when the user actually triggers a PDF export, not on every page that
 // imports report utilities (flow.tsx, flow-report.tsx).
@@ -204,10 +183,4 @@ export const generatePDFFromMarkdown = async (content: string, fileName: string)
     const { generatePDFFromMarkdownNew } = await import('./report-pdf');
 
     return generatePDFFromMarkdownNew(content, fileName);
-};
-
-export const generatePDFBlob = async (content: string): Promise<Blob> => {
-    const { generatePDFBlobNew } = await import('./report-pdf');
-
-    return generatePDFBlobNew(content);
 };

@@ -6,8 +6,12 @@ import (
 	"fmt"
 	"regexp"
 	"slices"
+	"strconv"
+	"strings"
+	"unicode/utf8"
 
 	"pentagi/pkg/database"
+	"pentagi/pkg/database/knowledge/limits"
 	"pentagi/pkg/flowfiles"
 	"pentagi/pkg/graph/model"
 )
@@ -67,11 +71,11 @@ func SetUserPermissions(ctx context.Context, userPermissions []string) context.C
 func validateUserType(ctx context.Context, userTypes ...string) (bool, error) {
 	userType, err := GetUserType(ctx)
 	if err != nil {
-		return false, fmt.Errorf("unauthorized: invalid user type: %v", err)
+		return false, fmt.Errorf("%w: invalid user type: %v", ErrUnauthenticated, err)
 	}
 
 	if !slices.Contains(userTypes, userType) {
-		return false, fmt.Errorf("unauthorized: invalid user type: %s", userType)
+		return false, fmt.Errorf("%w: session type %q is not allowed here", ErrForbidden, userType)
 	}
 
 	return true, nil
@@ -80,12 +84,12 @@ func validateUserType(ctx context.Context, userTypes ...string) (bool, error) {
 func validatePermission(ctx context.Context, perm string) (int64, bool, error) {
 	uid, err := GetUserID(ctx)
 	if err != nil {
-		return 0, false, fmt.Errorf("unauthorized: invalid user: %v", err)
+		return 0, false, fmt.Errorf("%w: invalid user: %v", ErrUnauthenticated, err)
 	}
 
 	privs, err := GetUserPermissions(ctx)
 	if err != nil {
-		return 0, false, fmt.Errorf("unauthorized: invalid user permissions: %v", err)
+		return 0, false, fmt.Errorf("%w: invalid user permissions: %v", ErrUnauthenticated, err)
 	}
 
 	permAdmin := permAdminRegexp.ReplaceAllString(perm, "$1.admin")
@@ -97,7 +101,7 @@ func validatePermission(ctx context.Context, perm string) (int64, bool, error) {
 		return int64(uid), false, nil
 	}
 
-	return 0, false, fmt.Errorf("requested permission '%s' not found", perm)
+	return 0, false, fmt.Errorf("%w: requested permission %q not found", ErrForbidden, perm)
 }
 
 func validatePermissionWithFlowID(
@@ -117,7 +121,7 @@ func validatePermissionWithFlowID(
 	}
 
 	if !admin && flow.UserID != int64(uid) {
-		return 0, fmt.Errorf("not permitted")
+		return 0, fmt.Errorf("%w: flow belongs to another user", ErrForbidden)
 	}
 
 	return uid, nil
@@ -154,7 +158,7 @@ func validateUserResources(
 			return nil, fmt.Errorf("resource %d not found", id)
 		}
 		if !isAdmin && r.UserID != uid {
-			return nil, fmt.Errorf("resource %d not accessible", id)
+			return nil, fmt.Errorf("%w: resource %d belongs to another user", ErrForbidden, id)
 		}
 		result = append(result, r)
 	}
@@ -162,46 +166,100 @@ func validateUserResources(
 	return result, nil
 }
 
-// Knowledge-document field limits. MUST stay in sync with the REST request models
-// (server/models/knowledge.go `validate` tags) and the frontend zod schema.
 const (
-	maxKnowledgeContentLen     = 65536
-	maxKnowledgeQuestionLen    = 2048
-	maxKnowledgeDescriptionLen = 1000
-	maxKnowledgeCodeLangLen    = 100
+	maxKnowledgeContentLen     = limits.MaxContentLen
+	maxKnowledgeQuestionLen    = limits.MaxQuestionLen
+	maxKnowledgeDescriptionLen = limits.MaxDescriptionLen
+	maxKnowledgeCodeLangLen    = limits.MaxCodeLangLen
 )
 
 // maxAPITokenNameLen MUST stay in sync with the REST model (server/models/api_tokens.go
 // `validate` tag) and the frontend tokenNameSchema.
 const maxAPITokenNameLen = 100
 
+func validateKnowledgeQuestion(question *string) error {
+	if question == nil {
+		return nil
+	}
+	return limits.ValidateQuestion(*question)
+}
+
+func validateKnowledgeSearch(query string, limit *int) (int, error) {
+	if err := limits.ValidateQuestion(query); err != nil {
+		return 0, err
+	}
+
+	if limit == nil {
+		return 0, nil
+	}
+	if *limit < 0 {
+		return 0, fmt.Errorf("limit must not be negative")
+	}
+	if *limit > limits.MaxSearchLimit {
+		return 0, fmt.Errorf("limit must not exceed %d", limits.MaxSearchLimit)
+	}
+
+	return *limit, nil
+}
+
 func validateKnowledgeFieldLengths(content string, question, description, codeLang *string) error {
-	if len(content) > maxKnowledgeContentLen {
-		return fmt.Errorf("content must not exceed %d characters", maxKnowledgeContentLen)
+	if err := limits.ValidateContentLen(content); err != nil {
+		return err
 	}
-	if question != nil && len(*question) > maxKnowledgeQuestionLen {
-		return fmt.Errorf("question must not exceed %d characters", maxKnowledgeQuestionLen)
+	if question != nil {
+		if err := limits.ValidateQuestionLen(*question); err != nil {
+			return err
+		}
 	}
-	if description != nil && len(*description) > maxKnowledgeDescriptionLen {
-		return fmt.Errorf("description must not exceed %d characters", maxKnowledgeDescriptionLen)
+	if description != nil {
+		if err := limits.ValidateDescriptionLen(*description); err != nil {
+			return err
+		}
 	}
-	if codeLang != nil && len(*codeLang) > maxKnowledgeCodeLangLen {
-		return fmt.Errorf("code language must not exceed %d characters", maxKnowledgeCodeLangLen)
+	if codeLang != nil {
+		if err := limits.ValidateCodeLangLen(*codeLang); err != nil {
+			return err
+		}
 	}
 	return nil
 }
 
-func convertFlowFiles(files flowfiles.Files) []*model.FlowFile {
+// MUST stay in sync with the frontend zod schema (pages/templates/template.tsx).
+const (
+	maxFlowTemplateTitleLen = 255
+	maxFlowTemplateTextLen  = 65536
+)
+
+func validateFlowTemplateFields(title, text string) (string, string, error) {
+	title, text = strings.TrimSpace(title), strings.TrimSpace(text)
+
+	if title == "" {
+		return "", "", fmt.Errorf("title is required")
+	}
+	if text == "" {
+		return "", "", fmt.Errorf("text is required")
+	}
+	if utf8.RuneCountInString(title) > maxFlowTemplateTitleLen {
+		return "", "", fmt.Errorf("title must not exceed %d characters", maxFlowTemplateTitleLen)
+	}
+	if utf8.RuneCountInString(text) > maxFlowTemplateTextLen {
+		return "", "", fmt.Errorf("text must not exceed %d characters", maxFlowTemplateTextLen)
+	}
+	return title, text, nil
+}
+
+func convertFlowFiles(files flowfiles.Files, flowID int64) []*model.FlowFile {
 	converted := make([]*model.FlowFile, 0, len(files.Files))
 	for _, file := range files.Files {
-		converted = append(converted, convertFlowFile(file))
+		converted = append(converted, convertFlowFile(file, flowID))
 	}
 
 	return converted
 }
 
-func convertFlowFile(file flowfiles.File) *model.FlowFile {
+func convertFlowFile(file flowfiles.File, flowID int64) *model.FlowFile {
 	return &model.FlowFile{
+		FlowID:     flowID,
 		ID:         file.ID,
 		Name:       file.Name,
 		Path:       file.Path,
@@ -209,4 +267,17 @@ func convertFlowFile(file flowfiles.File) *model.FlowFile {
 		IsDir:      file.IsDir,
 		ModifiedAt: file.ModifiedAt,
 	}
+}
+
+// parseFlowID extracts the int64 flow ID from a groupID string like "flow-42".
+func parseFlowID(groupID string) (int64, error) {
+	parts := strings.SplitN(groupID, "-", 2)
+	if len(parts) != 2 || parts[0] != "flow" {
+		return 0, fmt.Errorf("invalid groupId format: %q (expected \"flow-<number>\")", groupID)
+	}
+	id, err := strconv.ParseInt(parts[1], 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("invalid flow ID in groupId %q (expected \"flow-<number>\")", groupID)
+	}
+	return id, nil
 }

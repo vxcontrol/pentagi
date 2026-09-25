@@ -176,7 +176,6 @@ func (p *openaiProvider) CallWithTools(
 	)
 }
 
-// CallWithExtraOptions: extra is appended last, so it overrides the config.
 func (p *openaiProvider) CallWithExtraOptions(
 	ctx context.Context,
 	opt pconfig.ProviderOptionsType,

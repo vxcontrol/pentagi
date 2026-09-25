@@ -4,123 +4,106 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"fmt"
 	"testing"
 
 	"pentagi/pkg/database"
 	"pentagi/pkg/graph/model"
 	"pentagi/pkg/graph/subscriptions"
+	"pentagi/pkg/providers/embeddings"
 
-	"github.com/vxcontrol/langchaingo/schema"
-	"github.com/vxcontrol/langchaingo/vectorstores"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-// ============================================================================
-// Mocks
-// ============================================================================
-
-// --- mockDB -----------------------------------------------------------------
-
-// mockDB embeds database.Querier (nil) so the compiler sees a full
-// implementation. Only knowledge-related methods are overridden; any accidental
-// call to another method will panic at runtime (acceptable in unit tests).
+// mockDB embeds a nil Querier so an unstubbed query panics; its writes refuse a done context as the driver does.
 type mockDB struct {
-	database.Querier // nil — panics if an unexpected method is called
+	database.Querier
 
-	insertKnowledge     func(ctx context.Context, arg database.InsertKnowledgeDocumentParams) (string, error)
-	getKnowledge        func(ctx context.Context, uuid string) (database.GetKnowledgeDocumentRow, error)
-	getUserKnowledge    func(ctx context.Context, arg database.GetUserKnowledgeDocumentParams) (database.GetUserKnowledgeDocumentRow, error)
-	listAll             func(ctx context.Context) ([]database.ListAllKnowledgeDocumentsRow, error)
-	listFlow            func(ctx context.Context, flowID sql.NullString) ([]database.ListFlowKnowledgeDocumentsRow, error)
-	listUser            func(ctx context.Context, userID sql.NullString) ([]database.ListUserKnowledgeDocumentsRow, error)
-	updateKnowledge     func(ctx context.Context, arg database.UpdateKnowledgeDocumentParams) (database.UpdateKnowledgeDocumentRow, error)
-	updateKnowledgeMeta func(ctx context.Context, arg database.UpdateKnowledgeDocumentMetadataParams) (database.UpdateKnowledgeDocumentMetadataRow, error)
-	deleteKnowledge     func(ctx context.Context, uuid sql.NullString) error
-	deleteUserKnowledge func(ctx context.Context, arg database.DeleteUserKnowledgeDocumentParams) error
-	searchKnowledge     func(ctx context.Context, arg database.SearchKnowledgeDocumentsParams) ([]database.SearchKnowledgeDocumentsRow, error)
-	searchUserKnowledge func(ctx context.Context, arg database.SearchUserKnowledgeDocumentsParams) ([]database.SearchUserKnowledgeDocumentsRow, error)
+	insertKnowledge     func(arg database.InsertKnowledgeDocumentParams) (string, error)
+	getKnowledge        func(uuid string) (database.GetKnowledgeDocumentRow, error)
+	getUserKnowledge    func(arg database.GetUserKnowledgeDocumentParams) (database.GetUserKnowledgeDocumentRow, error)
+	listAll             func() ([]database.ListAllKnowledgeDocumentsRow, error)
+	listFlow            func(flowID sql.NullString) ([]database.ListFlowKnowledgeDocumentsRow, error)
+	listUser            func(userID sql.NullString) ([]database.ListUserKnowledgeDocumentsRow, error)
+	updateKnowledge     func(arg database.UpdateKnowledgeDocumentParams) (database.UpdateKnowledgeDocumentRow, error)
+	updateKnowledgeMeta func(arg database.UpdateKnowledgeDocumentMetadataParams) (database.UpdateKnowledgeDocumentMetadataRow, error)
+	deleteKnowledge     func(uuid sql.NullString) error
+	deleteUserKnowledge func(arg database.DeleteUserKnowledgeDocumentParams) error
+	searchKnowledge     func(arg database.SearchKnowledgeDocumentsParams) ([]database.SearchKnowledgeDocumentsRow, error)
+	searchUserKnowledge func(arg database.SearchUserKnowledgeDocumentsParams) ([]database.SearchUserKnowledgeDocumentsRow, error)
 }
 
 func (m *mockDB) InsertKnowledgeDocument(ctx context.Context, arg database.InsertKnowledgeDocumentParams) (string, error) {
-	return m.insertKnowledge(ctx, arg)
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	return m.insertKnowledge(arg)
 }
-func (m *mockDB) GetKnowledgeDocument(ctx context.Context, uuid string) (database.GetKnowledgeDocumentRow, error) {
-	return m.getKnowledge(ctx, uuid)
+func (m *mockDB) GetKnowledgeDocument(_ context.Context, uuid string) (database.GetKnowledgeDocumentRow, error) {
+	return m.getKnowledge(uuid)
 }
-func (m *mockDB) GetUserKnowledgeDocument(ctx context.Context, arg database.GetUserKnowledgeDocumentParams) (database.GetUserKnowledgeDocumentRow, error) {
-	return m.getUserKnowledge(ctx, arg)
+func (m *mockDB) GetUserKnowledgeDocument(_ context.Context, arg database.GetUserKnowledgeDocumentParams) (database.GetUserKnowledgeDocumentRow, error) {
+	return m.getUserKnowledge(arg)
 }
-func (m *mockDB) ListAllKnowledgeDocuments(ctx context.Context) ([]database.ListAllKnowledgeDocumentsRow, error) {
-	return m.listAll(ctx)
+func (m *mockDB) ListAllKnowledgeDocuments(context.Context) ([]database.ListAllKnowledgeDocumentsRow, error) {
+	return m.listAll()
 }
-func (m *mockDB) ListFlowKnowledgeDocuments(ctx context.Context, cmetadata sql.NullString) ([]database.ListFlowKnowledgeDocumentsRow, error) {
-	return m.listFlow(ctx, cmetadata)
+func (m *mockDB) ListFlowKnowledgeDocuments(_ context.Context, flowID sql.NullString) ([]database.ListFlowKnowledgeDocumentsRow, error) {
+	return m.listFlow(flowID)
 }
-func (m *mockDB) ListUserKnowledgeDocuments(ctx context.Context, cmetadata sql.NullString) ([]database.ListUserKnowledgeDocumentsRow, error) {
-	return m.listUser(ctx, cmetadata)
+func (m *mockDB) ListUserKnowledgeDocuments(_ context.Context, userID sql.NullString) ([]database.ListUserKnowledgeDocumentsRow, error) {
+	return m.listUser(userID)
 }
 func (m *mockDB) UpdateKnowledgeDocument(ctx context.Context, arg database.UpdateKnowledgeDocumentParams) (database.UpdateKnowledgeDocumentRow, error) {
-	return m.updateKnowledge(ctx, arg)
+	if err := ctx.Err(); err != nil {
+		return database.UpdateKnowledgeDocumentRow{}, err
+	}
+	return m.updateKnowledge(arg)
 }
 func (m *mockDB) UpdateKnowledgeDocumentMetadata(ctx context.Context, arg database.UpdateKnowledgeDocumentMetadataParams) (database.UpdateKnowledgeDocumentMetadataRow, error) {
-	return m.updateKnowledgeMeta(ctx, arg)
+	if err := ctx.Err(); err != nil {
+		return database.UpdateKnowledgeDocumentMetadataRow{}, err
+	}
+	return m.updateKnowledgeMeta(arg)
 }
 func (m *mockDB) DeleteKnowledgeDocument(ctx context.Context, uuid sql.NullString) error {
-	return m.deleteKnowledge(ctx, uuid)
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return m.deleteKnowledge(uuid)
 }
 func (m *mockDB) DeleteUserKnowledgeDocument(ctx context.Context, arg database.DeleteUserKnowledgeDocumentParams) error {
-	return m.deleteUserKnowledge(ctx, arg)
-}
-func (m *mockDB) SearchKnowledgeDocuments(ctx context.Context, arg database.SearchKnowledgeDocumentsParams) ([]database.SearchKnowledgeDocumentsRow, error) {
-	if m.searchKnowledge != nil {
-		return m.searchKnowledge(ctx, arg)
+	if err := ctx.Err(); err != nil {
+		return err
 	}
-	return nil, nil
+	return m.deleteUserKnowledge(arg)
 }
-func (m *mockDB) SearchUserKnowledgeDocuments(ctx context.Context, arg database.SearchUserKnowledgeDocumentsParams) ([]database.SearchUserKnowledgeDocumentsRow, error) {
-	if m.searchUserKnowledge != nil {
-		return m.searchUserKnowledge(ctx, arg)
-	}
-	return nil, nil
+func (m *mockDB) SearchKnowledgeDocuments(_ context.Context, arg database.SearchKnowledgeDocumentsParams) ([]database.SearchKnowledgeDocumentsRow, error) {
+	return m.searchKnowledge(arg)
 }
-
-// --- mockVectorStore --------------------------------------------------------
-
-type mockVectorStore struct {
-	similaritySearchFn func(ctx context.Context, query string, numDocuments int, options ...vectorstores.Option) ([]schema.Document, error)
-	addDocumentsFn     func(ctx context.Context, docs []schema.Document, options ...vectorstores.Option) ([]string, error)
+func (m *mockDB) SearchUserKnowledgeDocuments(_ context.Context, arg database.SearchUserKnowledgeDocumentsParams) ([]database.SearchUserKnowledgeDocumentsRow, error) {
+	return m.searchUserKnowledge(arg)
 }
 
-func (m *mockVectorStore) SimilaritySearch(ctx context.Context, query string, numDocuments int, options ...vectorstores.Option) ([]schema.Document, error) {
-	return m.similaritySearchFn(ctx, query, numDocuments, options...)
-}
-func (m *mockVectorStore) AddDocuments(ctx context.Context, docs []schema.Document, options ...vectorstores.Option) ([]string, error) {
-	return m.addDocumentsFn(ctx, docs, options...)
-}
-
-// --- mockEmbedder -----------------------------------------------------------
-
+// mockEmbedder records what it embeds and answers [0.1,0.2,0.3] unless vectors or err say otherwise.
 type mockEmbedder struct {
-	available        bool
-	embedDocumentsFn func(ctx context.Context, texts []string) ([][]float32, error)
-	embedQueryFn     func(ctx context.Context, text string) ([]float32, error)
+	unavailable bool
+	vectors     [][]float32
+	err         error
+	embedded    []string
 }
 
-func (m *mockEmbedder) IsAvailable() bool { return m.available }
-func (m *mockEmbedder) EmbedDocuments(ctx context.Context, texts []string) ([][]float32, error) {
-	if m.embedDocumentsFn != nil {
-		return m.embedDocumentsFn(ctx, texts)
+func (m *mockEmbedder) IsAvailable() bool { return !m.unavailable }
+func (m *mockEmbedder) EmbedDocuments(_ context.Context, texts []string) ([][]float32, error) {
+	m.embedded = append(m.embedded, texts...)
+	if m.err != nil || m.vectors != nil {
+		return m.vectors, m.err
 	}
 	return [][]float32{{0.1, 0.2, 0.3}}, nil
 }
-func (m *mockEmbedder) EmbedQuery(ctx context.Context, text string) ([]float32, error) {
-	if m.embedQueryFn != nil {
-		return m.embedQueryFn(ctx, text)
-	}
+func (m *mockEmbedder) EmbedQuery(context.Context, string) ([]float32, error) {
 	return []float32{0.1, 0.2, 0.3}, nil
 }
-
-// --- mockPublisher ----------------------------------------------------------
 
 type mockPublisher struct {
 	createdDocs []*model.KnowledgeDocument
@@ -141,13 +124,16 @@ func (m *mockPublisher) KnowledgeDocumentDeleted(_ context.Context, doc *model.K
 	m.deletedDocs = append(m.deletedDocs, doc)
 }
 
-// ============================================================================
-// Helpers
-// ============================================================================
+// newPublisherFactory hands every caller one publisher, which keeps the id of the last caller.
+func newPublisherFactory(pub *mockPublisher) PublisherFactory {
+	return func(userID int64) subscriptions.KnowledgePublisher {
+		pub.userID = userID
+		return pub
+	}
+}
 
 func ptr[T any](v T) *T { return &v }
 
-// makeRow builds a synthetic knowledge row used across multiple tests.
 func makeRow(id, document, cmetadata string) database.GetKnowledgeDocumentRow {
 	return database.GetKnowledgeDocumentRow{
 		ID:        id,
@@ -156,2241 +142,1257 @@ func makeRow(id, document, cmetadata string) database.GetKnowledgeDocumentRow {
 	}
 }
 
-func makeListAllRow(id, document, cmetadata string) database.ListAllKnowledgeDocumentsRow {
-	return database.ListAllKnowledgeDocumentsRow{
-		ID:        id,
-		Document:  document,
-		Cmetadata: sql.NullString{String: cmetadata, Valid: true},
-	}
-}
-
-func makeListFlowRow(id, document, cmetadata string) database.ListFlowKnowledgeDocumentsRow {
-	return database.ListFlowKnowledgeDocumentsRow{
-		ID:        id,
-		Document:  document,
-		Cmetadata: sql.NullString{String: cmetadata, Valid: true},
-	}
-}
-
-func makeListUserRow(id, document, cmetadata string) database.ListUserKnowledgeDocumentsRow {
-	return database.ListUserKnowledgeDocumentsRow{
-		ID:        id,
-		Document:  document,
-		Cmetadata: sql.NullString{String: cmetadata, Valid: true},
-	}
-}
-
-func makeSearchRow(id, document, cmetadata string, score float64) database.SearchKnowledgeDocumentsRow {
+func makeSearchRow(id, cmetadata string, score float64) database.SearchKnowledgeDocumentsRow {
 	return database.SearchKnowledgeDocumentsRow{
 		ID:        id,
-		Document:  document,
+		Document:  "content of " + id,
 		Cmetadata: sql.NullString{String: cmetadata, Valid: true},
 		Score:     score,
 	}
 }
 
-func makeUserSearchRow(id, document, cmetadata string, score float64) database.SearchUserKnowledgeDocumentsRow {
-	return database.SearchUserKnowledgeDocumentsRow{
-		ID:        id,
-		Document:  document,
-		Cmetadata: sql.NullString{String: cmetadata, Valid: true},
-		Score:     score,
-	}
-}
-
-// newPublisherFactory returns a PublisherFactory backed by a single shared publisher.
-func newPublisherFactory(pub *mockPublisher) PublisherFactory {
-	return func(userID int64) subscriptions.KnowledgePublisher {
-		pub.userID = userID
-		return pub
-	}
-}
-
-// ============================================================================
-// Tests: pure helper functions
-// ============================================================================
-
-func TestParseMeta(t *testing.T) {
-	t.Run("empty string returns zero value", func(t *testing.T) {
-		m := parseMeta("")
-		if m.DocType != "" || m.UserID != 0 || m.Question != "" {
-			t.Fatal("expected zero-value meta for empty input")
-		}
-	})
-
-	t.Run("valid JSON parses all fields including user_id", func(t *testing.T) {
-		raw := `{"doc_type":"guide","user_id":42,"flow_id":7,"question":"q","guide_type":"pentest","manual":true,"part_size":100,"total_size":200}`
-		m := parseMeta(raw)
-		if m.DocType != "guide" {
-			t.Fatalf("DocType: want guide, got %s", m.DocType)
-		}
-		if m.UserID != 42 {
-			t.Fatalf("UserID: want 42, got %d", m.UserID)
-		}
-		if m.FlowID == nil || *m.FlowID != 7 {
-			t.Fatal("FlowID mismatch")
-		}
-		if m.Question != "q" {
-			t.Fatal("Question mismatch")
-		}
-		if m.GuideType != "pentest" {
-			t.Fatal("GuideType mismatch")
-		}
-		if !m.Manual {
-			t.Fatal("Manual should be true")
-		}
-		if m.PartSize != 100 || m.TotalSize != 200 {
-			t.Fatal("sizes mismatch")
-		}
-	})
-
-	t.Run("invalid JSON returns zero value without panic", func(t *testing.T) {
-		m := parseMeta("not-json")
-		if m.DocType != "" {
-			t.Fatal("expected empty DocType for invalid JSON")
-		}
-	})
-
-	t.Run("partial JSON fills only present fields", func(t *testing.T) {
-		m := parseMeta(`{"doc_type":"code","code_lang":"python"}`)
-		if m.DocType != "code" || m.CodeLang != "python" {
-			t.Fatal("partial JSON mismatch")
-		}
-		if m.UserID != 0 {
-			t.Fatal("UserID should be zero")
-		}
-	})
-}
-
-func TestNullStr(t *testing.T) {
-	t.Run("valid NullString returns inner string", func(t *testing.T) {
-		ns := sql.NullString{String: "hello", Valid: true}
-		if got := nullStr(ns); got != "hello" {
-			t.Fatalf("want hello, got %s", got)
-		}
-	})
-
-	t.Run("invalid NullString returns empty JSON object", func(t *testing.T) {
-		ns := sql.NullString{}
-		if got := nullStr(ns); got != "{}" {
-			t.Fatalf("want {}, got %s", got)
-		}
-	})
-}
-
-func TestNsOf(t *testing.T) {
-	ns := nsOf("test")
-	if !ns.Valid || ns.String != "test" {
-		t.Fatal("nsOf must return valid NullString with given value")
-	}
-}
-
-func TestFormatVector(t *testing.T) {
-	cases := []struct {
-		name  string
-		input []float32
-		want  string
+// Driven through ListDocuments, the entry that hands rowToModel both NULL-able metadata and withContent.
+func TestKnowledge_RowToModel_ReadsStoredMetadataIntoTheDocument(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		row         database.GetKnowledgeDocumentRow
+		hideContent bool
+		want        model.KnowledgeDocument
 	}{
-		{"empty", []float32{}, "[]"},
-		{"single", []float32{1.0}, "[1]"},
-		{"multiple", []float32{1.0, 2.0, 3.0}, "[1,2,3]"},
-		{"precision", []float32{0.5}, "[0.5]"},
-	}
-	for _, tc := range cases {
+		{
+			name: "every stored field reaches the document",
+			row: makeRow("doc-1", "text", `{"doc_type":"guide","user_id":42,"flow_id":7,"task_id":8,"subtask_id":9,`+
+				`"question":"q","description":"d","guide_type":"pentest","manual":true,"part_size":100,"total_size":200}`),
+			want: model.KnowledgeDocument{
+				DocType: model.KnowledgeDocTypeGuide, Question: "q", Description: ptr("d"), UserID: 42,
+				FlowID: ptr(int64(7)), TaskID: ptr(int64(8)), SubtaskID: ptr(int64(9)),
+				GuideType: ptr(model.KnowledgeGuideTypePentest), PartSize: 100, TotalSize: 200, Manual: true,
+			},
+		},
+		{
+			name:        "the content is left out when not asked for",
+			row:         makeRow("doc-1", "text", `{"doc_type":"answer","answer_type":"code"}`),
+			hideContent: true,
+			want:        model.KnowledgeDocument{DocType: model.KnowledgeDocTypeAnswer, AnswerType: ptr(model.KnowledgeAnswerTypeCode)},
+		},
+		{
+			name: "an answer keeps its answer type",
+			row:  makeRow("doc-1", "text", `{"doc_type":"answer","answer_type":"vulnerability"}`),
+			want: model.KnowledgeDocument{DocType: model.KnowledgeDocTypeAnswer, AnswerType: ptr(model.KnowledgeAnswerTypeVulnerability)},
+		},
+		{
+			name: "code keeps its language and nothing absent is invented",
+			row:  makeRow("doc-1", "text", `{"doc_type":"code","code_lang":"python"}`),
+			want: model.KnowledgeDocument{DocType: model.KnowledgeDocTypeCode, CodeLang: ptr("python")},
+		},
+		{
+			name: "an unknown doc type reads as an answer",
+			row:  makeRow("doc-1", "text", `{"doc_type":"memory"}`),
+			want: model.KnowledgeDocument{DocType: model.KnowledgeDocTypeAnswer},
+		},
+		{
+			name: "a row without metadata reads as a bare answer",
+			row:  database.GetKnowledgeDocumentRow{ID: "doc-1", Document: "text"},
+			want: model.KnowledgeDocument{DocType: model.KnowledgeDocTypeAnswer},
+		},
+		{
+			name: "unreadable metadata reads as a bare answer",
+			row:  makeRow("doc-1", "text", `not-json`),
+			want: model.KnowledgeDocument{DocType: model.KnowledgeDocTypeAnswer},
+		},
+		{
+			name: "a guide type stored in another case reads as the enum value",
+			row:  makeRow("doc-1", "text", `{"doc_type":"guide","guide_type":"Install"}`),
+			want: model.KnowledgeDocument{DocType: model.KnowledgeDocTypeGuide, GuideType: ptr(model.KnowledgeGuideTypeInstall)},
+		},
+		{
+			name: "a guide type outside the enum reads as other",
+			row:  makeRow("doc-1", "text", `{"doc_type":"guide","guide_type":"sorcery"}`),
+			want: model.KnowledgeDocument{DocType: model.KnowledgeDocTypeGuide, GuideType: ptr(model.KnowledgeGuideTypeOther)},
+		},
+		{
+			name: "an answer type stored in another case reads as the enum value",
+			row:  makeRow("doc-1", "text", `{"doc_type":"answer","answer_type":"Tool"}`),
+			want: model.KnowledgeDocument{DocType: model.KnowledgeDocTypeAnswer, AnswerType: ptr(model.KnowledgeAnswerTypeTool)},
+		},
+		{
+			name: "an answer type outside the enum reads as other",
+			row:  makeRow("doc-1", "text", `{"doc_type":"answer","answer_type":"rumour"}`),
+			want: model.KnowledgeDocument{DocType: model.KnowledgeDocTypeAnswer, AnswerType: ptr(model.KnowledgeAnswerTypeOther)},
+		},
+	} {
 		t.Run(tc.name, func(t *testing.T) {
-			got := formatVector(tc.input)
-			if got != tc.want {
-				t.Fatalf("want %q, got %q", tc.want, got)
+			db := &mockDB{listAll: func() ([]database.ListAllKnowledgeDocumentsRow, error) {
+				return []database.ListAllKnowledgeDocumentsRow{database.ListAllKnowledgeDocumentsRow(tc.row)}, nil
+			}}
+
+			docs, err := NewKnowledgeStore(db, nil, nil, nil, 0).ListDocuments(t.Context(), nil, !tc.hideContent)
+			require.NoError(t, err)
+
+			want := tc.want
+			want.ID = "doc-1"
+			if !tc.hideContent {
+				want.Content = "text"
 			}
+			assert.Equal(t, []*model.KnowledgeDocument{&want}, docs)
 		})
 	}
 }
 
-func TestMetaToJSON(t *testing.T) {
-	t.Run("serialises correctly", func(t *testing.T) {
-		m := knowledgeMeta{DocType: "answer", UserID: 5, Question: "test?"}
-		nm, err := metaToJSON(m)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if !nm.Valid {
-			t.Fatal("expected valid NullRawMessage")
-		}
-		parsed := parseMeta(string(nm.RawMessage))
-		if parsed.DocType != "answer" || parsed.UserID != 5 || parsed.Question != "test?" {
-			t.Fatal("round-trip mismatch")
-		}
-	})
-}
-
-func TestMetaToModelDoc(t *testing.T) {
-	t.Run("doc_type answer", func(t *testing.T) {
-		doc := metaToModelDoc("uuid1", "content", knowledgeMeta{DocType: "answer"})
-		if doc.DocType != model.KnowledgeDocTypeAnswer {
-			t.Fatal("wrong doc type")
-		}
-		if doc.ID != "uuid1" || doc.Content != "content" {
-			t.Fatal("id/content mismatch")
-		}
-	})
-
-	t.Run("doc_type guide", func(t *testing.T) {
-		doc := metaToModelDoc("", "", knowledgeMeta{DocType: "guide"})
-		if doc.DocType != model.KnowledgeDocTypeGuide {
-			t.Fatal("wrong doc type")
-		}
-	})
-
-	t.Run("doc_type code", func(t *testing.T) {
-		doc := metaToModelDoc("", "", knowledgeMeta{DocType: "code"})
-		if doc.DocType != model.KnowledgeDocTypeCode {
-			t.Fatal("wrong doc type")
-		}
-	})
-
-	t.Run("unknown doc_type defaults to answer", func(t *testing.T) {
-		doc := metaToModelDoc("", "", knowledgeMeta{DocType: "memory"})
-		if doc.DocType != model.KnowledgeDocTypeAnswer {
-			t.Fatal("expected answer fallback")
-		}
-	})
-
-	t.Run("optional guide fields", func(t *testing.T) {
-		gt := "pentest"
-		doc := metaToModelDoc("", "", knowledgeMeta{
-			DocType:     "guide",
-			GuideType:   gt,
-			Description: "desc",
-		})
-		if doc.GuideType == nil || string(*doc.GuideType) != gt {
-			t.Fatal("GuideType mismatch")
-		}
-		if doc.Description == nil || *doc.Description != "desc" {
-			t.Fatal("Description mismatch")
-		}
-	})
-
-	t.Run("optional answer fields", func(t *testing.T) {
-		doc := metaToModelDoc("", "", knowledgeMeta{DocType: "answer", AnswerType: "vulnerability"})
-		if doc.AnswerType == nil || string(*doc.AnswerType) != "vulnerability" {
-			t.Fatal("AnswerType mismatch")
-		}
-	})
-
-	t.Run("optional code fields", func(t *testing.T) {
-		doc := metaToModelDoc("", "", knowledgeMeta{DocType: "code", CodeLang: "python"})
-		if doc.CodeLang == nil || *doc.CodeLang != "python" {
-			t.Fatal("CodeLang mismatch")
-		}
-	})
-
-	t.Run("flow/task/subtask IDs", func(t *testing.T) {
-		fid, tid, sid := int64(1), int64(2), int64(3)
-		doc := metaToModelDoc("", "", knowledgeMeta{
-			FlowID: &fid, TaskID: &tid, SubtaskID: &sid,
-		})
-		if doc.FlowID == nil || *doc.FlowID != 1 {
-			t.Fatal("FlowID mismatch")
-		}
-		if doc.TaskID == nil || *doc.TaskID != 2 {
-			t.Fatal("TaskID mismatch")
-		}
-		if doc.SubtaskID == nil || *doc.SubtaskID != 3 {
-			t.Fatal("SubtaskID mismatch")
-		}
-	})
-
-	t.Run("sizes and manual flag", func(t *testing.T) {
-		doc := metaToModelDoc("", "", knowledgeMeta{PartSize: 50, TotalSize: 100, Manual: true})
-		if doc.PartSize != 50 || doc.TotalSize != 100 || !doc.Manual {
-			t.Fatal("sizes/manual mismatch")
-		}
-	})
-
-	t.Run("user_id propagated to model", func(t *testing.T) {
-		doc := metaToModelDoc("", "", knowledgeMeta{UserID: 77})
-		if doc.UserID != 77 {
-			t.Fatalf("UserID: want 77, got %d", doc.UserID)
-		}
-	})
-
-	t.Run("zero user_id stays zero in model", func(t *testing.T) {
-		doc := metaToModelDoc("", "", knowledgeMeta{})
-		if doc.UserID != 0 {
-			t.Fatalf("UserID: want 0, got %d", doc.UserID)
-		}
-	})
-}
-
-func TestRowToModel(t *testing.T) {
-	cmetaJSON := `{"doc_type":"guide","question":"how?","part_size":10,"total_size":20}`
-
-	t.Run("withContent=true includes document text", func(t *testing.T) {
-		doc := rowToModel("id1", "text content", cmetaJSON, true)
-		if doc.Content != "text content" {
-			t.Fatal("expected content to be included")
-		}
-	})
-
-	t.Run("withContent=false blanks document text", func(t *testing.T) {
-		doc := rowToModel("id1", "text content", cmetaJSON, false)
-		if doc.Content != "" {
-			t.Fatalf("expected empty content, got %q", doc.Content)
-		}
-	})
-
-	t.Run("cmetadata parsed into model fields", func(t *testing.T) {
-		doc := rowToModel("id2", "", cmetaJSON, true)
-		if doc.DocType != model.KnowledgeDocTypeGuide {
-			t.Fatal("DocType mismatch")
-		}
-		if doc.Question != "how?" {
-			t.Fatal("Question mismatch")
-		}
-		if doc.PartSize != 10 || doc.TotalSize != 20 {
-			t.Fatal("sizes mismatch")
-		}
-	})
-
-	t.Run("empty cmetadata yields defaults", func(t *testing.T) {
-		doc := rowToModel("id3", "x", "{}", true)
-		if doc.DocType != model.KnowledgeDocTypeAnswer {
-			t.Fatal("expected default answer type")
-		}
-		if doc.GuideType != nil || doc.AnswerType != nil || doc.CodeLang != nil {
-			t.Fatal("optional fields should be nil for empty meta")
-		}
-	})
-}
-
-// ============================================================================
-// Tests: applyGoFilters
-// ============================================================================
-
-func TestApplyGoFilters(t *testing.T) {
-	guide := &model.KnowledgeDocument{DocType: model.KnowledgeDocTypeGuide, GuideType: ptr(model.KnowledgeGuideTypePentest)}
+func TestKnowledge_ApplyGoFilters_KeepsDocumentsMatchingEveryFilter(t *testing.T) {
+	pentest := &model.KnowledgeDocument{DocType: model.KnowledgeDocTypeGuide, GuideType: ptr(model.KnowledgeGuideTypePentest)}
+	install := &model.KnowledgeDocument{DocType: model.KnowledgeDocTypeGuide, GuideType: ptr(model.KnowledgeGuideTypeInstall)}
 	answer := &model.KnowledgeDocument{DocType: model.KnowledgeDocTypeAnswer, AnswerType: ptr(model.KnowledgeAnswerTypeVulnerability)}
 	code := &model.KnowledgeDocument{DocType: model.KnowledgeDocTypeCode, CodeLang: ptr("python")}
-	manualDoc := &model.KnowledgeDocument{DocType: model.KnowledgeDocTypeAnswer, Manual: true}
+	manual := &model.KnowledgeDocument{DocType: model.KnowledgeDocTypeAnswer, Manual: true}
+	all := []*model.KnowledgeDocument{pentest, install, answer, code, manual}
 
-	all := []*model.KnowledgeDocument{guide, answer, code, manualDoc}
-
-	t.Run("nil filter returns all", func(t *testing.T) {
-		got := applyGoFilters(all, nil)
-		if len(got) != 4 {
-			t.Fatalf("want 4, got %d", len(got))
-		}
-	})
-
-	t.Run("empty filter returns all", func(t *testing.T) {
-		got := applyGoFilters(all, &model.KnowledgeFilter{})
-		if len(got) != 4 {
-			t.Fatalf("want 4, got %d", len(got))
-		}
-	})
-
-	t.Run("single docType filter", func(t *testing.T) {
-		got := applyGoFilters(all, &model.KnowledgeFilter{DocTypes: []model.KnowledgeDocType{model.KnowledgeDocTypeGuide}})
-		if len(got) != 1 || got[0] != guide {
-			t.Fatal("expected only guide")
-		}
-	})
-
-	t.Run("multiple docType filter", func(t *testing.T) {
-		got := applyGoFilters(all, &model.KnowledgeFilter{DocTypes: []model.KnowledgeDocType{model.KnowledgeDocTypeGuide, model.KnowledgeDocTypeCode}})
-		if len(got) != 2 {
-			t.Fatalf("want 2, got %d", len(got))
-		}
-	})
-
-	t.Run("guideType filter excludes non-matching guide", func(t *testing.T) {
-		otherGuide := &model.KnowledgeDocument{DocType: model.KnowledgeDocTypeGuide, GuideType: ptr(model.KnowledgeGuideTypeInstall)}
-		got := applyGoFilters([]*model.KnowledgeDocument{guide, otherGuide}, &model.KnowledgeFilter{
-			GuideTypes: []model.KnowledgeGuideType{model.KnowledgeGuideTypePentest},
+	for _, tc := range []struct {
+		name   string
+		filter *model.KnowledgeFilter
+		want   []*model.KnowledgeDocument
+	}{
+		{name: "no filter keeps everything", filter: nil, want: all},
+		{name: "an empty filter keeps everything", filter: &model.KnowledgeFilter{}, want: all},
+		{
+			name:   "one doc type",
+			filter: &model.KnowledgeFilter{DocTypes: []model.KnowledgeDocType{model.KnowledgeDocTypeGuide}},
+			want:   []*model.KnowledgeDocument{pentest, install},
+		},
+		{
+			name:   "several doc types",
+			filter: &model.KnowledgeFilter{DocTypes: []model.KnowledgeDocType{model.KnowledgeDocTypeGuide, model.KnowledgeDocTypeCode}},
+			want:   []*model.KnowledgeDocument{pentest, install, code},
+		},
+		{
+			name:   "a guide type drops other guides and documents without one",
+			filter: &model.KnowledgeFilter{GuideTypes: []model.KnowledgeGuideType{model.KnowledgeGuideTypePentest}},
+			want:   []*model.KnowledgeDocument{pentest},
+		},
+		{
+			name:   "an answer type",
+			filter: &model.KnowledgeFilter{AnswerTypes: []model.KnowledgeAnswerType{model.KnowledgeAnswerTypeVulnerability}},
+			want:   []*model.KnowledgeDocument{answer},
+		},
+		{name: "a code language", filter: &model.KnowledgeFilter{CodeLangs: []string{"python"}}, want: []*model.KnowledgeDocument{code}},
+		{name: "manual documents only", filter: &model.KnowledgeFilter{Manual: ptr(true)}, want: []*model.KnowledgeDocument{manual}},
+		{
+			name:   "generated documents only",
+			filter: &model.KnowledgeFilter{Manual: ptr(false)},
+			want:   []*model.KnowledgeDocument{pentest, install, answer, code},
+		},
+		{
+			name:   "filters combine",
+			filter: &model.KnowledgeFilter{DocTypes: []model.KnowledgeDocType{model.KnowledgeDocTypeAnswer}, Manual: ptr(false)},
+			want:   []*model.KnowledgeDocument{answer},
+		},
+		{name: "nothing matches", filter: &model.KnowledgeFilter{CodeLangs: []string{"rust"}}, want: []*model.KnowledgeDocument{}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, applyGoFilters(all, tc.filter))
 		})
-		if len(got) != 1 || got[0] != guide {
-			t.Fatal("expected only pentest guide")
-		}
-	})
-
-	t.Run("guideType filter excludes docs without guideType", func(t *testing.T) {
-		got := applyGoFilters([]*model.KnowledgeDocument{answer, guide}, &model.KnowledgeFilter{
-			GuideTypes: []model.KnowledgeGuideType{model.KnowledgeGuideTypePentest},
-		})
-		if len(got) != 1 || got[0] != guide {
-			t.Fatal("answer without guideType must be excluded")
-		}
-	})
-
-	t.Run("answerType filter", func(t *testing.T) {
-		got := applyGoFilters(all, &model.KnowledgeFilter{
-			AnswerTypes: []model.KnowledgeAnswerType{model.KnowledgeAnswerTypeVulnerability},
-		})
-		if len(got) != 1 || got[0] != answer {
-			t.Fatal("expected only vulnerability answer")
-		}
-	})
-
-	t.Run("codeLangs filter", func(t *testing.T) {
-		got := applyGoFilters(all, &model.KnowledgeFilter{CodeLangs: []string{"python"}})
-		if len(got) != 1 || got[0] != code {
-			t.Fatal("expected only python code")
-		}
-	})
-
-	t.Run("manual=true filter", func(t *testing.T) {
-		got := applyGoFilters(all, &model.KnowledgeFilter{Manual: ptr(true)})
-		if len(got) != 1 || got[0] != manualDoc {
-			t.Fatal("expected only manual doc")
-		}
-	})
-
-	t.Run("manual=false filter excludes manual docs", func(t *testing.T) {
-		got := applyGoFilters(all, &model.KnowledgeFilter{Manual: ptr(false)})
-		if len(got) != 3 {
-			t.Fatalf("want 3 non-manual docs, got %d", len(got))
-		}
-	})
-
-	t.Run("combined filters", func(t *testing.T) {
-		got := applyGoFilters(all, &model.KnowledgeFilter{
-			DocTypes: []model.KnowledgeDocType{model.KnowledgeDocTypeAnswer},
-			Manual:   ptr(false),
-		})
-		if len(got) != 1 || got[0] != answer {
-			t.Fatal("expected only non-manual answer")
-		}
-	})
-
-	t.Run("no match returns empty slice", func(t *testing.T) {
-		got := applyGoFilters(all, &model.KnowledgeFilter{CodeLangs: []string{"rust"}})
-		if len(got) != 0 {
-			t.Fatal("expected empty result")
-		}
-	})
+	}
 }
 
-// ============================================================================
-// Tests: passesSearchFilter
-// ============================================================================
+func TestKnowledge_PassesSearchFilter_KeepsDocumentsMatchingEveryFilter(t *testing.T) {
+	guide := &model.KnowledgeDocument{DocType: model.KnowledgeDocTypeGuide, GuideType: ptr(model.KnowledgeGuideTypePentest), FlowID: ptr(int64(10))}
+	answer := &model.KnowledgeDocument{DocType: model.KnowledgeDocTypeAnswer, AnswerType: ptr(model.KnowledgeAnswerTypeVulnerability), Manual: true}
+	code := &model.KnowledgeDocument{DocType: model.KnowledgeDocTypeCode, CodeLang: ptr("python")}
 
-func TestPassesSearchFilter(t *testing.T) {
-	flowID10 := int64(10)
-	guide := &model.KnowledgeDocument{
-		DocType:   model.KnowledgeDocTypeGuide,
-		GuideType: ptr(model.KnowledgeGuideTypePentest),
-		FlowID:    &flowID10,
+	docTypes := func(types ...model.KnowledgeDocType) *model.KnowledgeFilter {
+		return &model.KnowledgeFilter{DocTypes: types}
 	}
-	answer := &model.KnowledgeDocument{
-		DocType:    model.KnowledgeDocTypeAnswer,
-		AnswerType: ptr(model.KnowledgeAnswerTypeVulnerability),
-		Manual:     true,
+	guideTypes := func(types ...model.KnowledgeGuideType) *model.KnowledgeFilter {
+		return &model.KnowledgeFilter{GuideTypes: types}
 	}
-	code := &model.KnowledgeDocument{
-		DocType:  model.KnowledgeDocTypeCode,
-		CodeLang: ptr("python"),
+	answerTypes := func(types ...model.KnowledgeAnswerType) *model.KnowledgeFilter {
+		return &model.KnowledgeFilter{AnswerTypes: types}
 	}
 
-	t.Run("nil filter passes everything", func(t *testing.T) {
-		if !passesSearchFilter(guide, nil) {
-			t.Fatal("nil filter must pass all documents")
-		}
-	})
-
-	t.Run("empty filter passes everything", func(t *testing.T) {
-		if !passesSearchFilter(answer, &model.KnowledgeFilter{}) {
-			t.Fatal("empty filter must pass all documents")
-		}
-	})
-
-	t.Run("matching docType passes", func(t *testing.T) {
-		f := &model.KnowledgeFilter{DocTypes: []model.KnowledgeDocType{model.KnowledgeDocTypeGuide}}
-		if !passesSearchFilter(guide, f) {
-			t.Fatal("matching docType must pass")
-		}
-	})
-
-	t.Run("non-matching docType blocks", func(t *testing.T) {
-		f := &model.KnowledgeFilter{DocTypes: []model.KnowledgeDocType{model.KnowledgeDocTypeCode}}
-		if passesSearchFilter(guide, f) {
-			t.Fatal("non-matching docType must block")
-		}
-	})
-
-	t.Run("multiple docTypes: match passes", func(t *testing.T) {
-		f := &model.KnowledgeFilter{DocTypes: []model.KnowledgeDocType{model.KnowledgeDocTypeGuide, model.KnowledgeDocTypeCode}}
-		if !passesSearchFilter(guide, f) {
-			t.Fatal("doc matching one of multiple types must pass")
-		}
-	})
-
-	t.Run("matching guideType passes", func(t *testing.T) {
-		f := &model.KnowledgeFilter{GuideTypes: []model.KnowledgeGuideType{model.KnowledgeGuideTypePentest}}
-		if !passesSearchFilter(guide, f) {
-			t.Fatal("matching guideType must pass")
-		}
-	})
-
-	t.Run("non-matching guideType blocks", func(t *testing.T) {
-		f := &model.KnowledgeFilter{GuideTypes: []model.KnowledgeGuideType{model.KnowledgeGuideTypeInstall}}
-		if passesSearchFilter(guide, f) {
-			t.Fatal("non-matching guideType must block")
-		}
-	})
-
-	t.Run("doc without guideType is blocked by guideType filter", func(t *testing.T) {
-		f := &model.KnowledgeFilter{GuideTypes: []model.KnowledgeGuideType{model.KnowledgeGuideTypePentest}}
-		if passesSearchFilter(answer, f) {
-			t.Fatal("doc without guideType must be blocked when guideType filter is set")
-		}
-	})
-
-	t.Run("matching answerType passes", func(t *testing.T) {
-		f := &model.KnowledgeFilter{AnswerTypes: []model.KnowledgeAnswerType{model.KnowledgeAnswerTypeVulnerability}}
-		if !passesSearchFilter(answer, f) {
-			t.Fatal("matching answerType must pass")
-		}
-	})
-
-	t.Run("non-matching answerType blocks", func(t *testing.T) {
-		f := &model.KnowledgeFilter{AnswerTypes: []model.KnowledgeAnswerType{model.KnowledgeAnswerTypeCode}}
-		if passesSearchFilter(answer, f) {
-			t.Fatal("non-matching answerType must block")
-		}
-	})
-
-	t.Run("matching codeLang passes", func(t *testing.T) {
-		f := &model.KnowledgeFilter{CodeLangs: []string{"python"}}
-		if !passesSearchFilter(code, f) {
-			t.Fatal("matching codeLang must pass")
-		}
-	})
-
-	t.Run("non-matching codeLang blocks", func(t *testing.T) {
-		f := &model.KnowledgeFilter{CodeLangs: []string{"go"}}
-		if passesSearchFilter(code, f) {
-			t.Fatal("non-matching codeLang must block")
-		}
-	})
-
-	t.Run("manual=true filter passes manual doc", func(t *testing.T) {
-		f := &model.KnowledgeFilter{Manual: ptr(true)}
-		if !passesSearchFilter(answer, f) {
-			t.Fatal("manual=true filter must pass manual doc")
-		}
-	})
-
-	t.Run("manual=true filter blocks non-manual doc", func(t *testing.T) {
-		f := &model.KnowledgeFilter{Manual: ptr(true)}
-		if passesSearchFilter(guide, f) {
-			t.Fatal("manual=true filter must block non-manual doc")
-		}
-	})
-
-	t.Run("manual=false filter passes non-manual doc", func(t *testing.T) {
-		f := &model.KnowledgeFilter{Manual: ptr(false)}
-		if !passesSearchFilter(guide, f) {
-			t.Fatal("manual=false filter must pass non-manual doc")
-		}
-	})
-
-	t.Run("manual=false filter blocks manual doc", func(t *testing.T) {
-		f := &model.KnowledgeFilter{Manual: ptr(false)}
-		if passesSearchFilter(answer, f) {
-			t.Fatal("manual=false filter must block manual doc")
-		}
-	})
-
-	t.Run("flowID match passes", func(t *testing.T) {
-		f := &model.KnowledgeFilter{FlowID: ptr(int64(10))}
-		if !passesSearchFilter(guide, f) {
-			t.Fatal("matching flowID must pass")
-		}
-	})
-
-	t.Run("flowID mismatch blocks", func(t *testing.T) {
-		f := &model.KnowledgeFilter{FlowID: ptr(int64(99))}
-		if passesSearchFilter(guide, f) {
-			t.Fatal("non-matching flowID must block")
-		}
-	})
-
-	t.Run("flowID filter blocks doc without flowID", func(t *testing.T) {
-		f := &model.KnowledgeFilter{FlowID: ptr(int64(10))}
-		if passesSearchFilter(answer, f) {
-			t.Fatal("doc without flowID must be blocked when flowID filter is set")
-		}
-	})
-
-	t.Run("combined filters all match", func(t *testing.T) {
-		f := &model.KnowledgeFilter{
-			DocTypes:   []model.KnowledgeDocType{model.KnowledgeDocTypeGuide},
-			GuideTypes: []model.KnowledgeGuideType{model.KnowledgeGuideTypePentest},
-			FlowID:     ptr(int64(10)),
-		}
-		if !passesSearchFilter(guide, f) {
-			t.Fatal("all-matching combined filter must pass")
-		}
-	})
-
-	t.Run("combined filters partial mismatch blocks", func(t *testing.T) {
-		f := &model.KnowledgeFilter{
-			DocTypes: []model.KnowledgeDocType{model.KnowledgeDocTypeGuide},
-			FlowID:   ptr(int64(99)), // wrong flowID
-		}
-		if passesSearchFilter(guide, f) {
-			t.Fatal("partial mismatch in combined filter must block")
-		}
-	})
+	for _, tc := range []struct {
+		name   string
+		doc    *model.KnowledgeDocument
+		filter *model.KnowledgeFilter
+		want   bool
+	}{
+		{"no filter passes", guide, nil, true},
+		{"an empty filter passes", answer, &model.KnowledgeFilter{}, true},
+		{"a matching doc type passes", guide, docTypes(model.KnowledgeDocTypeGuide), true},
+		{"another doc type blocks", guide, docTypes(model.KnowledgeDocTypeCode), false},
+		{"one of several doc types passes", guide, docTypes(model.KnowledgeDocTypeGuide, model.KnowledgeDocTypeCode), true},
+		{"a matching guide type passes", guide, guideTypes(model.KnowledgeGuideTypePentest), true},
+		{"another guide type blocks", guide, guideTypes(model.KnowledgeGuideTypeInstall), false},
+		{"a document without a guide type is blocked by one", answer, guideTypes(model.KnowledgeGuideTypePentest), false},
+		{"a matching answer type passes", answer, answerTypes(model.KnowledgeAnswerTypeVulnerability), true},
+		{"another answer type blocks", answer, answerTypes(model.KnowledgeAnswerTypeCode), false},
+		{"a document without an answer type is blocked by one", code, answerTypes(model.KnowledgeAnswerTypeCode), false},
+		{"a matching code language passes", code, &model.KnowledgeFilter{CodeLangs: []string{"python"}}, true},
+		{"another code language blocks", code, &model.KnowledgeFilter{CodeLangs: []string{"go"}}, false},
+		{"a document without a code language is blocked by one", guide, &model.KnowledgeFilter{CodeLangs: []string{"go"}}, false},
+		{"manual only passes a manual document", answer, &model.KnowledgeFilter{Manual: ptr(true)}, true},
+		{"manual only blocks a generated document", guide, &model.KnowledgeFilter{Manual: ptr(true)}, false},
+		{"generated only passes a generated document", guide, &model.KnowledgeFilter{Manual: ptr(false)}, true},
+		{"generated only blocks a manual document", answer, &model.KnowledgeFilter{Manual: ptr(false)}, false},
+		{"the same flow passes", guide, &model.KnowledgeFilter{FlowID: ptr(int64(10))}, true},
+		{"another flow blocks", guide, &model.KnowledgeFilter{FlowID: ptr(int64(99))}, false},
+		{"a document without a flow is blocked by a flow", answer, &model.KnowledgeFilter{FlowID: ptr(int64(10))}, false},
+		{
+			"filters that all match pass", guide,
+			&model.KnowledgeFilter{
+				DocTypes:   []model.KnowledgeDocType{model.KnowledgeDocTypeGuide},
+				GuideTypes: []model.KnowledgeGuideType{model.KnowledgeGuideTypePentest},
+				FlowID:     ptr(int64(10)),
+			},
+			true,
+		},
+		{
+			"one mismatching filter blocks the rest", guide,
+			&model.KnowledgeFilter{DocTypes: []model.KnowledgeDocType{model.KnowledgeDocTypeGuide}, FlowID: ptr(int64(99))},
+			false,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, passesSearchFilter(tc.doc, tc.filter))
+		})
+	}
 }
 
-// ============================================================================
-// Tests: SearchDocuments / SearchUserDocuments
-// ============================================================================
+// Rows are keyed by entry: userID 0 drives SearchDocuments, any other SearchUserDocuments.
+func TestKnowledge_DoSearch_AsksTheScopedQueryAndKeepsWhatPassesTheFilter(t *testing.T) {
+	type hit struct {
+		ID    string
+		Score float64
+	}
 
-func TestSearchDocuments(t *testing.T) {
-	ctx := context.Background()
-
-	t.Run("embedder unavailable returns error", func(t *testing.T) {
-		ks := &knowledgeStore{embedder: &mockEmbedder{available: false}}
-		_, err := ks.SearchDocuments(ctx, "query", nil, 5)
-		if err == nil {
-			t.Fatal("expected error when embedder unavailable")
-		}
-	})
-
-	t.Run("nil embedder returns error", func(t *testing.T) {
-		ks := &knowledgeStore{embedder: nil}
-		_, err := ks.SearchDocuments(ctx, "query", nil, 5)
-		if err == nil {
-			t.Fatal("expected error when embedder is nil")
-		}
-	})
-
-	t.Run("EmbedDocuments error propagates", func(t *testing.T) {
-		ks := &knowledgeStore{
-			embedder: &mockEmbedder{
-				available: true,
-				embedDocumentsFn: func(_ context.Context, _ []string) ([][]float32, error) {
-					return nil, errors.New("embed error")
+	for _, tc := range []struct {
+		name         string
+		userID       int64
+		maxBytes     int
+		filter       *model.KnowledgeFilter
+		limit        int
+		vectors      [][]float32
+		found        []database.SearchKnowledgeDocumentsRow
+		wantUserID   sql.NullString
+		wantLim      int32
+		wantEmbedded string
+		wantVector   string
+		want         []hit
+	}{
+		{
+			name:  "everyone's documents come back with their ids and scores",
+			limit: 7,
+			found: []database.SearchKnowledgeDocumentsRow{
+				makeSearchRow("uuid-1", `{"doc_type":"answer"}`, 0.95),
+				makeSearchRow("uuid-2", `{"doc_type":"guide"}`, 0.80),
+			},
+			wantLim:      7,
+			wantEmbedded: "test query",
+			wantVector:   "[0.1,0.2,0.3]",
+			want:         []hit{{"uuid-1", 0.95}, {"uuid-2", 0.80}},
+		},
+		{name: "a limit of zero asks for the default", limit: 0, wantLim: 10, wantEmbedded: "test query", wantVector: "[0.1,0.2,0.3]"},
+		{name: "a query past the embedding limit is cut before embedding", maxBytes: 4, limit: 5, wantLim: 5, wantEmbedded: "test", wantVector: "[0.1,0.2,0.3]"},
+		{name: "an empty query vector is asked as an empty literal", vectors: [][]float32{{}}, limit: 5, wantLim: 5, wantEmbedded: "test query", wantVector: "[]"},
+		{
+			name:   "a doc type filter drops what the query found",
+			filter: &model.KnowledgeFilter{DocTypes: []model.KnowledgeDocType{model.KnowledgeDocTypeGuide}},
+			limit:  10,
+			found: []database.SearchKnowledgeDocumentsRow{
+				makeSearchRow("g1", `{"doc_type":"guide"}`, 0.9),
+				makeSearchRow("a1", `{"doc_type":"answer"}`, 0.8),
+			},
+			wantLim:      10,
+			wantEmbedded: "test query",
+			wantVector:   "[0.1,0.2,0.3]",
+			want:         []hit{{"g1", 0.9}},
+		},
+		{
+			name:   "a flow filter drops other flows",
+			filter: &model.KnowledgeFilter{FlowID: ptr(int64(10))},
+			limit:  10,
+			found: []database.SearchKnowledgeDocumentsRow{
+				makeSearchRow("f10", `{"doc_type":"answer","flow_id":10}`, 0.9),
+				makeSearchRow("f20", `{"doc_type":"answer","flow_id":20}`, 0.8),
+			},
+			wantLim:      10,
+			wantEmbedded: "test query",
+			wantVector:   "[0.1,0.2,0.3]",
+			want:         []hit{{"f10", 0.9}},
+		},
+		{
+			name:         "a user's search is scoped to that user",
+			userID:       42,
+			limit:        3,
+			found:        []database.SearchKnowledgeDocumentsRow{makeSearchRow("uuid-u1", `{"doc_type":"answer","user_id":42}`, 0.88)},
+			wantUserID:   sql.NullString{String: "42", Valid: true},
+			wantLim:      3,
+			wantEmbedded: "test query",
+			wantVector:   "[0.1,0.2,0.3]",
+			want:         []hit{{"uuid-u1", 0.88}},
+		},
+		{
+			name:   "a user's search applies the filter too",
+			userID: 42,
+			filter: &model.KnowledgeFilter{CodeLangs: []string{"go"}},
+			limit:  10,
+			found: []database.SearchKnowledgeDocumentsRow{
+				makeSearchRow("c1", `{"doc_type":"code","code_lang":"go"}`, 0.9),
+				makeSearchRow("c2", `{"doc_type":"code","code_lang":"python"}`, 0.7),
+			},
+			wantUserID:   sql.NullString{String: "42", Valid: true},
+			wantLim:      10,
+			wantEmbedded: "test query",
+			wantVector:   "[0.1,0.2,0.3]",
+			want:         []hit{{"c1", 0.9}},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var asked []database.SearchUserKnowledgeDocumentsParams
+			db := &mockDB{
+				searchKnowledge: func(arg database.SearchKnowledgeDocumentsParams) ([]database.SearchKnowledgeDocumentsRow, error) {
+					asked = append(asked, database.SearchUserKnowledgeDocumentsParams{Embedding: arg.Embedding, MaxDistance: arg.MaxDistance, Lim: arg.Lim})
+					return tc.found, nil
 				},
-			},
-		}
-		_, err := ks.SearchDocuments(ctx, "query", nil, 5)
-		if err == nil {
-			t.Fatal("expected error from EmbedDocuments")
-		}
-	})
-
-	t.Run("embedder returning empty vectors is an error", func(t *testing.T) {
-		ks := &knowledgeStore{
-			embedder: &mockEmbedder{
-				available: true,
-				embedDocumentsFn: func(_ context.Context, _ []string) ([][]float32, error) {
-					return [][]float32{}, nil
+				searchUserKnowledge: func(arg database.SearchUserKnowledgeDocumentsParams) ([]database.SearchUserKnowledgeDocumentsRow, error) {
+					asked = append(asked, arg)
+					rows := make([]database.SearchUserKnowledgeDocumentsRow, 0, len(tc.found))
+					for _, row := range tc.found {
+						rows = append(rows, database.SearchUserKnowledgeDocumentsRow(row))
+					}
+					return rows, nil
 				},
-			},
-		}
-		_, err := ks.SearchDocuments(ctx, "query", nil, 5)
-		if err == nil {
-			t.Fatal("expected error for empty vectors")
-		}
-	})
-
-	t.Run("returns results with correct IDs and scores", func(t *testing.T) {
-		db := &mockDB{
-			searchKnowledge: func(_ context.Context, _ database.SearchKnowledgeDocumentsParams) ([]database.SearchKnowledgeDocumentsRow, error) {
-				return []database.SearchKnowledgeDocumentsRow{
-					makeSearchRow("uuid-1", "content1", `{"doc_type":"answer"}`, 0.95),
-					makeSearchRow("uuid-2", "content2", `{"doc_type":"guide"}`, 0.80),
-				}, nil
-			},
-		}
-		ks := &knowledgeStore{db: db, embedder: &mockEmbedder{available: true}}
-		results, err := ks.SearchDocuments(ctx, "test query", nil, 5)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if len(results) != 2 {
-			t.Fatalf("want 2 results, got %d", len(results))
-		}
-		// Critical: IDs must be populated (this was the original bug)
-		if results[0].Document.ID != "uuid-1" {
-			t.Fatalf("ID mismatch: want uuid-1, got %q", results[0].Document.ID)
-		}
-		if results[1].Document.ID != "uuid-2" {
-			t.Fatalf("ID mismatch: want uuid-2, got %q", results[1].Document.ID)
-		}
-		if results[0].Score != 0.95 {
-			t.Fatalf("score mismatch: want 0.95, got %f", results[0].Score)
-		}
-		if results[1].Score != 0.80 {
-			t.Fatalf("score mismatch: want 0.80, got %f", results[1].Score)
-		}
-	})
-
-	t.Run("correct params passed to db (threshold, limit, vector literal)", func(t *testing.T) {
-		var gotParams database.SearchKnowledgeDocumentsParams
-		db := &mockDB{
-			searchKnowledge: func(_ context.Context, arg database.SearchKnowledgeDocumentsParams) ([]database.SearchKnowledgeDocumentsRow, error) {
-				gotParams = arg
-				return nil, nil
-			},
-		}
-		ks := &knowledgeStore{db: db, embedder: &mockEmbedder{available: true}}
-		_, err := ks.SearchDocuments(ctx, "q", nil, 7)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if gotParams.MaxDistance != float64(1.0-defaultSearchThreshold) {
-			t.Fatalf("distance threshold: want %f, got %f", float64(1.0-defaultSearchThreshold), gotParams.MaxDistance)
-		}
-		if gotParams.Lim != 7 {
-			t.Fatalf("limit: want 7, got %d", gotParams.Lim)
-		}
-		vec, ok := gotParams.Embedding.(string)
-		if !ok || len(vec) < 2 || vec[0] != '[' {
-			t.Fatalf("vector literal format wrong: %v", gotParams.Embedding)
-		}
-	})
-
-	t.Run("default limit applied when limit<=0", func(t *testing.T) {
-		var gotLimit int32
-		db := &mockDB{
-			searchKnowledge: func(_ context.Context, arg database.SearchKnowledgeDocumentsParams) ([]database.SearchKnowledgeDocumentsRow, error) {
-				gotLimit = arg.Lim
-				return nil, nil
-			},
-		}
-		ks := &knowledgeStore{db: db, embedder: &mockEmbedder{available: true}}
-		_, err := ks.SearchDocuments(ctx, "q", nil, 0)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if gotLimit != int32(defaultSearchLimit) {
-			t.Fatalf("default limit: want %d, got %d", defaultSearchLimit, gotLimit)
-		}
-	})
-
-	t.Run("go filter by docType applied after db fetch", func(t *testing.T) {
-		db := &mockDB{
-			searchKnowledge: func(_ context.Context, _ database.SearchKnowledgeDocumentsParams) ([]database.SearchKnowledgeDocumentsRow, error) {
-				return []database.SearchKnowledgeDocumentsRow{
-					makeSearchRow("g1", "", `{"doc_type":"guide"}`, 0.9),
-					makeSearchRow("a1", "", `{"doc_type":"answer"}`, 0.8),
-				}, nil
-			},
-		}
-		ks := &knowledgeStore{db: db, embedder: &mockEmbedder{available: true}}
-		results, err := ks.SearchDocuments(ctx, "q",
-			&model.KnowledgeFilter{DocTypes: []model.KnowledgeDocType{model.KnowledgeDocTypeGuide}}, 10)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if len(results) != 1 || results[0].Document.ID != "g1" {
-			t.Fatalf("go filter should have kept only guide doc, got %d results", len(results))
-		}
-	})
-
-	t.Run("go filter by flowID applied after db fetch", func(t *testing.T) {
-		db := &mockDB{
-			searchKnowledge: func(_ context.Context, _ database.SearchKnowledgeDocumentsParams) ([]database.SearchKnowledgeDocumentsRow, error) {
-				return []database.SearchKnowledgeDocumentsRow{
-					makeSearchRow("f10", "", `{"doc_type":"answer","flow_id":10}`, 0.9),
-					makeSearchRow("f20", "", `{"doc_type":"answer","flow_id":20}`, 0.8),
-				}, nil
-			},
-		}
-		ks := &knowledgeStore{db: db, embedder: &mockEmbedder{available: true}}
-		results, err := ks.SearchDocuments(ctx, "q",
-			&model.KnowledgeFilter{FlowID: ptr(int64(10))}, 10)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if len(results) != 1 || results[0].Document.ID != "f10" {
-			t.Fatalf("flowID filter: expected f10, got %d results", len(results))
-		}
-	})
-
-	t.Run("db error propagates", func(t *testing.T) {
-		db := &mockDB{
-			searchKnowledge: func(_ context.Context, _ database.SearchKnowledgeDocumentsParams) ([]database.SearchKnowledgeDocumentsRow, error) {
-				return nil, errors.New("db error")
-			},
-		}
-		ks := &knowledgeStore{db: db, embedder: &mockEmbedder{available: true}}
-		_, err := ks.SearchDocuments(ctx, "q", nil, 5)
-		if err == nil {
-			t.Fatal("expected error from db")
-		}
-	})
-}
-
-func TestSearchUserDocuments(t *testing.T) {
-	ctx := context.Background()
-	const userID = int64(42)
-
-	t.Run("calls SearchUserKnowledgeDocuments with correct userID", func(t *testing.T) {
-		var gotParams database.SearchUserKnowledgeDocumentsParams
-		db := &mockDB{
-			searchUserKnowledge: func(_ context.Context, arg database.SearchUserKnowledgeDocumentsParams) ([]database.SearchUserKnowledgeDocumentsRow, error) {
-				gotParams = arg
-				return []database.SearchUserKnowledgeDocumentsRow{
-					makeUserSearchRow("uuid-u1", "content", `{"doc_type":"answer","user_id":42}`, 0.88),
-				}, nil
-			},
-		}
-		ks := &knowledgeStore{db: db, embedder: &mockEmbedder{available: true}}
-
-		results, err := ks.SearchUserDocuments(ctx, userID, "query", nil, 3)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if len(results) != 1 {
-			t.Fatalf("want 1 result, got %d", len(results))
-		}
-		if results[0].Document.ID != "uuid-u1" {
-			t.Fatalf("ID mismatch: want uuid-u1, got %q", results[0].Document.ID)
-		}
-		if results[0].Score != 0.88 {
-			t.Fatalf("score mismatch: want 0.88, got %f", results[0].Score)
-		}
-		if gotParams.UserID.String != "42" {
-			t.Fatalf("userID param: want 42, got %q", gotParams.UserID.String)
-		}
-		if gotParams.Lim != 3 {
-			t.Fatalf("limit: want 3, got %d", gotParams.Lim)
-		}
-	})
-
-	// SECURITY: the user_id must always be sent to the database layer so the
-	// database can enforce ownership — it must never be omitted or zero.
-	t.Run("SECURITY: userID is always sent to DB", func(t *testing.T) {
-		var capturedUserID string
-		db := &mockDB{
-			searchUserKnowledge: func(_ context.Context, arg database.SearchUserKnowledgeDocumentsParams) ([]database.SearchUserKnowledgeDocumentsRow, error) {
-				capturedUserID = arg.UserID.String
-				return nil, nil
-			},
-		}
-		ks := &knowledgeStore{db: db, embedder: &mockEmbedder{available: true}}
-		_, err := ks.SearchUserDocuments(ctx, userID, "q", nil, 5)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if capturedUserID != "42" {
-			t.Fatalf("SECURITY: user_id must always be passed to DB, got %q", capturedUserID)
-		}
-	})
-
-	t.Run("go filter applied for user search", func(t *testing.T) {
-		db := &mockDB{
-			searchUserKnowledge: func(_ context.Context, _ database.SearchUserKnowledgeDocumentsParams) ([]database.SearchUserKnowledgeDocumentsRow, error) {
-				return []database.SearchUserKnowledgeDocumentsRow{
-					makeUserSearchRow("c1", "", `{"doc_type":"code","code_lang":"go"}`, 0.9),
-					makeUserSearchRow("c2", "", `{"doc_type":"code","code_lang":"python"}`, 0.7),
-				}, nil
-			},
-		}
-		ks := &knowledgeStore{db: db, embedder: &mockEmbedder{available: true}}
-		results, err := ks.SearchUserDocuments(ctx, userID, "q",
-			&model.KnowledgeFilter{CodeLangs: []string{"go"}}, 10)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if len(results) != 1 || results[0].Document.ID != "c1" {
-			t.Fatalf("codeLang filter: expected c1 only, got %d results", len(results))
-		}
-	})
-
-	t.Run("db error propagates", func(t *testing.T) {
-		db := &mockDB{
-			searchUserKnowledge: func(_ context.Context, _ database.SearchUserKnowledgeDocumentsParams) ([]database.SearchUserKnowledgeDocumentsRow, error) {
-				return nil, errors.New("db error")
-			},
-		}
-		ks := &knowledgeStore{db: db, embedder: &mockEmbedder{available: true}}
-		_, err := ks.SearchUserDocuments(ctx, userID, "q", nil, 5)
-		if err == nil {
-			t.Fatal("expected error from db")
-		}
-	})
-}
-
-// ============================================================================
-// Tests: ListDocuments / ListUserDocuments
-// ============================================================================
-
-func TestListDocuments(t *testing.T) {
-	ctx := context.Background()
-
-	t.Run("no filter calls ListAll", func(t *testing.T) {
-		called := false
-		db := &mockDB{
-			listAll: func(_ context.Context) ([]database.ListAllKnowledgeDocumentsRow, error) {
-				called = true
-				return []database.ListAllKnowledgeDocumentsRow{
-					makeListAllRow("u1", "text", `{"doc_type":"answer"}`),
-				}, nil
-			},
-		}
-		ks := &knowledgeStore{db: db}
-		docs, err := ks.ListDocuments(ctx, nil, true)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if !called {
-			t.Fatal("ListAllKnowledgeDocuments was not called")
-		}
-		if len(docs) != 1 || docs[0].ID != "u1" {
-			t.Fatal("unexpected result")
-		}
-	})
-
-	t.Run("flowID filter calls ListFlow with correct id", func(t *testing.T) {
-		var gotFlowID string
-		db := &mockDB{
-			listFlow: func(_ context.Context, flowID sql.NullString) ([]database.ListFlowKnowledgeDocumentsRow, error) {
-				gotFlowID = flowID.String
-				return nil, nil
-			},
-		}
-		ks := &knowledgeStore{db: db}
-		_, err := ks.ListDocuments(ctx, &model.KnowledgeFilter{FlowID: ptr(int64(99))}, true)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if gotFlowID != "99" {
-			t.Fatalf("expected flow_id=99, got %q", gotFlowID)
-		}
-	})
-
-	t.Run("withContent=false blanks document text", func(t *testing.T) {
-		db := &mockDB{
-			listAll: func(_ context.Context) ([]database.ListAllKnowledgeDocumentsRow, error) {
-				return []database.ListAllKnowledgeDocumentsRow{
-					makeListAllRow("u1", "secret text", `{"doc_type":"answer"}`),
-				}, nil
-			},
-		}
-		ks := &knowledgeStore{db: db}
-		docs, err := ks.ListDocuments(ctx, nil, false)
-		if err != nil || docs[0].Content != "" {
-			t.Fatal("content should be empty when withContent=false")
-		}
-	})
-
-	t.Run("db error is wrapped and returned", func(t *testing.T) {
-		db := &mockDB{
-			listAll: func(_ context.Context) ([]database.ListAllKnowledgeDocumentsRow, error) {
-				return nil, errors.New("db gone")
-			},
-		}
-		ks := &knowledgeStore{db: db}
-		_, err := ks.ListDocuments(ctx, nil, true)
-		if err == nil || !errors.Is(err, fmt.Errorf("knowledge: list all: %w", errors.New("db gone"))) {
-			if err == nil {
-				t.Fatal("expected error")
 			}
-		}
-	})
+			embedder := &mockEmbedder{vectors: tc.vectors}
+			ks := NewKnowledgeStore(db, nil, embedder, nil, tc.maxBytes)
 
-	t.Run("go filters applied after db fetch", func(t *testing.T) {
-		db := &mockDB{
-			listAll: func(_ context.Context) ([]database.ListAllKnowledgeDocumentsRow, error) {
-				return []database.ListAllKnowledgeDocumentsRow{
-					makeListAllRow("g1", "", `{"doc_type":"guide"}`),
-					makeListAllRow("a1", "", `{"doc_type":"answer"}`),
-				}, nil
-			},
-		}
-		ks := &knowledgeStore{db: db}
-		docs, err := ks.ListDocuments(ctx, &model.KnowledgeFilter{DocTypes: []model.KnowledgeDocType{model.KnowledgeDocTypeGuide}}, false)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if len(docs) != 1 || docs[0].ID != "g1" {
-			t.Fatal("go filter should have excluded the answer doc")
-		}
-	})
-}
+			var results []*model.KnowledgeDocumentWithScore
+			var err error
+			if tc.userID == 0 {
+				results, err = ks.SearchDocuments(t.Context(), "test query", tc.filter, tc.limit)
+			} else {
+				results, err = ks.SearchUserDocuments(t.Context(), tc.userID, "test query", tc.filter, tc.limit)
+			}
+			require.NoError(t, err)
 
-func TestListUserDocuments(t *testing.T) {
-	ctx := context.Background()
-	const userID = int64(5)
-	const otherUserID = int64(9)
+			require.Len(t, asked, 1)
+			assert.Equal(t, tc.wantUserID, asked[0].UserID, "the admin query carries no user, a user's query always carries theirs")
+			assert.Equal(t, tc.wantLim, asked[0].Lim)
+			assert.InDelta(t, 0.8, asked[0].MaxDistance, 1e-6, "a similarity threshold of 0.2 is a cosine distance below 0.8")
+			assert.Equal(t, tc.wantVector, asked[0].Embedding)
+			assert.Equal(t, []string{tc.wantEmbedded}, embedder.embedded)
 
-	t.Run("no filter calls ListUserKnowledgeDocuments with correct userID", func(t *testing.T) {
-		var gotUserID string
-		db := &mockDB{
-			listUser: func(_ context.Context, uid sql.NullString) ([]database.ListUserKnowledgeDocumentsRow, error) {
-				gotUserID = uid.String
-				return nil, nil
-			},
-		}
-		ks := &knowledgeStore{db: db}
-		_, err := ks.ListUserDocuments(ctx, userID, nil, true)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if gotUserID != "5" {
-			t.Fatalf("expected userID=5, got %q", gotUserID)
-		}
-	})
-
-	// SECURITY: flowID path must enforce user_id ownership in Go
-	t.Run("SECURITY flowID filter excludes documents from other users", func(t *testing.T) {
-		db := &mockDB{
-			listFlow: func(_ context.Context, _ sql.NullString) ([]database.ListFlowKnowledgeDocumentsRow, error) {
-				return []database.ListFlowKnowledgeDocumentsRow{
-					makeListFlowRow("own", "", fmt.Sprintf(`{"doc_type":"guide","user_id":%d}`, userID)),
-					makeListFlowRow("other", "", fmt.Sprintf(`{"doc_type":"guide","user_id":%d}`, otherUserID)),
-				}, nil
-			},
-		}
-		ks := &knowledgeStore{db: db}
-		docs, err := ks.ListUserDocuments(ctx, userID, &model.KnowledgeFilter{FlowID: ptr(int64(1))}, true)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if len(docs) != 1 || docs[0].ID != "own" {
-			t.Fatalf("security violation: expected only own doc, got %d docs", len(docs))
-		}
-	})
-
-	// SECURITY: user_id=0 (no user_id in cmetadata) should be excluded when
-	// userID filter is active via the flow path
-	t.Run("SECURITY doc without user_id is excluded for non-zero userID via flow path", func(t *testing.T) {
-		db := &mockDB{
-			listFlow: func(_ context.Context, _ sql.NullString) ([]database.ListFlowKnowledgeDocumentsRow, error) {
-				return []database.ListFlowKnowledgeDocumentsRow{
-					// no user_id key → UserID=0 after parse
-					makeListFlowRow("missing", "", `{"doc_type":"answer"}`),
-					makeListFlowRow("correct", "", fmt.Sprintf(`{"doc_type":"answer","user_id":%d}`, userID)),
-				}, nil
-			},
-		}
-		ks := &knowledgeStore{db: db}
-		docs, err := ks.ListUserDocuments(ctx, userID, &model.KnowledgeFilter{FlowID: ptr(int64(1))}, true)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if len(docs) != 1 || docs[0].ID != "correct" {
-			t.Fatalf("doc with missing user_id must be excluded, got %d docs", len(docs))
-		}
-	})
-
-	t.Run("db error propagates", func(t *testing.T) {
-		db := &mockDB{
-			listUser: func(_ context.Context, _ sql.NullString) ([]database.ListUserKnowledgeDocumentsRow, error) {
-				return nil, errors.New("db error")
-			},
-		}
-		ks := &knowledgeStore{db: db}
-		_, err := ks.ListUserDocuments(ctx, userID, nil, true)
-		if err == nil {
-			t.Fatal("expected error")
-		}
-	})
-}
-
-// ============================================================================
-// Tests: GetDocument / GetUserDocument
-// ============================================================================
-
-func TestGetDocument(t *testing.T) {
-	ctx := context.Background()
-
-	t.Run("success returns correctly mapped document", func(t *testing.T) {
-		db := &mockDB{
-			getKnowledge: func(_ context.Context, uuid string) (database.GetKnowledgeDocumentRow, error) {
-				return makeRow(uuid, "content", `{"doc_type":"code","code_lang":"go"}`), nil
-			},
-		}
-		ks := &knowledgeStore{db: db}
-		doc, err := ks.GetDocument(ctx, "abc123")
-		if err != nil {
-			t.Fatal(err)
-		}
-		if doc.ID != "abc123" || doc.Content != "content" {
-			t.Fatal("id/content mismatch")
-		}
-		if doc.DocType != model.KnowledgeDocTypeCode {
-			t.Fatal("DocType mismatch")
-		}
-		if doc.CodeLang == nil || *doc.CodeLang != "go" {
-			t.Fatal("CodeLang mismatch")
-		}
-	})
-
-	t.Run("db error is wrapped and returned", func(t *testing.T) {
-		db := &mockDB{
-			getKnowledge: func(_ context.Context, _ string) (database.GetKnowledgeDocumentRow, error) {
-				return database.GetKnowledgeDocumentRow{}, errors.New("not found")
-			},
-		}
-		ks := &knowledgeStore{db: db}
-		_, err := ks.GetDocument(ctx, "xyz")
-		if err == nil {
-			t.Fatal("expected error")
-		}
-	})
-}
-
-func TestGetUserDocument(t *testing.T) {
-	ctx := context.Background()
-	const userID = int64(7)
-
-	t.Run("passes correct uuid and userID to db", func(t *testing.T) {
-		var gotParams database.GetUserKnowledgeDocumentParams
-		db := &mockDB{
-			getUserKnowledge: func(_ context.Context, arg database.GetUserKnowledgeDocumentParams) (database.GetUserKnowledgeDocumentRow, error) {
-				gotParams = arg
-				return database.GetUserKnowledgeDocumentRow{
-					ID:        arg.Uuid,
-					Document:  "doc",
-					Cmetadata: sql.NullString{String: `{"doc_type":"guide"}`, Valid: true},
-				}, nil
-			},
-		}
-		ks := &knowledgeStore{db: db}
-		doc, err := ks.GetUserDocument(ctx, userID, "doc-uuid")
-		if err != nil {
-			t.Fatal(err)
-		}
-		if gotParams.Uuid != "doc-uuid" {
-			t.Fatalf("uuid mismatch: %q", gotParams.Uuid)
-		}
-		if gotParams.UserID.String != "7" {
-			t.Fatalf("userID param mismatch: %q", gotParams.UserID.String)
-		}
-		if doc.ID != "doc-uuid" {
-			t.Fatal("document ID mismatch")
-		}
-	})
-
-	// SECURITY: if the DB row is not found (wrong owner), an error is returned
-	t.Run("SECURITY db not-found error propagates (ownership enforced at DB level)", func(t *testing.T) {
-		db := &mockDB{
-			getUserKnowledge: func(_ context.Context, _ database.GetUserKnowledgeDocumentParams) (database.GetUserKnowledgeDocumentRow, error) {
-				return database.GetUserKnowledgeDocumentRow{}, errors.New("sql: no rows")
-			},
-		}
-		ks := &knowledgeStore{db: db}
-		_, err := ks.GetUserDocument(ctx, userID, "not-my-doc")
-		if err == nil {
-			t.Fatal("SECURITY: accessing another user's document must return error")
-		}
-	})
-}
-
-// ============================================================================
-// Tests: DeleteDocument / DeleteUserDocument
-// ============================================================================
-
-func TestDeleteDocument(t *testing.T) {
-	ctx := context.Background()
-	const userID = int64(10)
-
-	t.Run("success: fetches doc, deletes it and publishes event", func(t *testing.T) {
-		pub := &mockPublisher{}
-		db := &mockDB{
-			getKnowledge: func(_ context.Context, uuid string) (database.GetKnowledgeDocumentRow, error) {
-				return makeRow(uuid, "content", `{"doc_type":"answer"}`), nil
-			},
-			deleteKnowledge: func(_ context.Context, _ sql.NullString) error { return nil },
-		}
-		ks := &knowledgeStore{db: db, newKnp: newPublisherFactory(pub)}
-
-		err := ks.DeleteDocument(ctx, userID, "doc1")
-		if err != nil {
-			t.Fatal(err)
-		}
-		if len(pub.deletedDocs) != 1 || pub.deletedDocs[0].ID != "doc1" {
-			t.Fatal("KnowledgeDocumentDeleted event not published or wrong doc")
-		}
-		if pub.userID != userID {
-			t.Fatalf("publisher userID mismatch: want %d, got %d", userID, pub.userID)
-		}
-	})
-
-	t.Run("GetDocument error prevents deletion and no event", func(t *testing.T) {
-		pub := &mockPublisher{}
-		db := &mockDB{
-			getKnowledge: func(_ context.Context, _ string) (database.GetKnowledgeDocumentRow, error) {
-				return database.GetKnowledgeDocumentRow{}, errors.New("not found")
-			},
-		}
-		ks := &knowledgeStore{db: db, newKnp: newPublisherFactory(pub)}
-
-		err := ks.DeleteDocument(ctx, userID, "ghost")
-		if err == nil {
-			t.Fatal("expected error")
-		}
-		if len(pub.deletedDocs) != 0 {
-			t.Fatal("no event should be published when fetch fails")
-		}
-	})
-
-	t.Run("delete db error propagates and no event", func(t *testing.T) {
-		pub := &mockPublisher{}
-		db := &mockDB{
-			getKnowledge: func(_ context.Context, uuid string) (database.GetKnowledgeDocumentRow, error) {
-				return makeRow(uuid, "", `{}`), nil
-			},
-			deleteKnowledge: func(_ context.Context, _ sql.NullString) error {
-				return errors.New("db delete error")
-			},
-		}
-		ks := &knowledgeStore{db: db, newKnp: newPublisherFactory(pub)}
-
-		err := ks.DeleteDocument(ctx, userID, "d1")
-		if err == nil {
-			t.Fatal("expected error")
-		}
-		if len(pub.deletedDocs) != 0 {
-			t.Fatal("no event when delete fails")
-		}
-	})
-}
-
-func TestDeleteUserDocument(t *testing.T) {
-	ctx := context.Background()
-	const userID = int64(3)
-
-	t.Run("success: ownership-checked fetch, delete and event", func(t *testing.T) {
-		pub := &mockPublisher{}
-		var gotDelParams database.DeleteUserKnowledgeDocumentParams
-		db := &mockDB{
-			getUserKnowledge: func(_ context.Context, arg database.GetUserKnowledgeDocumentParams) (database.GetUserKnowledgeDocumentRow, error) {
-				return database.GetUserKnowledgeDocumentRow{
-					ID:        arg.Uuid,
-					Document:  "doc",
-					Cmetadata: sql.NullString{String: `{"doc_type":"answer"}`, Valid: true},
-				}, nil
-			},
-			deleteUserKnowledge: func(_ context.Context, arg database.DeleteUserKnowledgeDocumentParams) error {
-				gotDelParams = arg
-				return nil
-			},
-		}
-		ks := &knowledgeStore{db: db, newKnp: newPublisherFactory(pub)}
-
-		err := ks.DeleteUserDocument(ctx, userID, "my-doc")
-		if err != nil {
-			t.Fatal(err)
-		}
-		// Ownership enforced: correct uuid and userID sent to DB
-		if gotDelParams.Uuid.String != "my-doc" {
-			t.Fatalf("uuid param: want my-doc, got %q", gotDelParams.Uuid.String)
-		}
-		if gotDelParams.UserID.String != "3" {
-			t.Fatalf("user_id param: want 3, got %q", gotDelParams.UserID.String)
-		}
-		if len(pub.deletedDocs) != 1 {
-			t.Fatal("event not published")
-		}
-	})
-
-	// SECURITY: GetUserDocument returns error → no delete, no event
-	t.Run("SECURITY: fetching another user's doc aborts deletion", func(t *testing.T) {
-		pub := &mockPublisher{}
-		db := &mockDB{
-			getUserKnowledge: func(_ context.Context, _ database.GetUserKnowledgeDocumentParams) (database.GetUserKnowledgeDocumentRow, error) {
-				return database.GetUserKnowledgeDocumentRow{}, errors.New("not found")
-			},
-		}
-		ks := &knowledgeStore{db: db, newKnp: newPublisherFactory(pub)}
-
-		err := ks.DeleteUserDocument(ctx, userID, "other-doc")
-		if err == nil {
-			t.Fatal("SECURITY: must fail when doc does not belong to user")
-		}
-		if len(pub.deletedDocs) != 0 {
-			t.Fatal("no event should be emitted on failure")
-		}
-	})
-
-	t.Run("db delete failure propagates, no event", func(t *testing.T) {
-		pub := &mockPublisher{}
-		db := &mockDB{
-			getUserKnowledge: func(_ context.Context, arg database.GetUserKnowledgeDocumentParams) (database.GetUserKnowledgeDocumentRow, error) {
-				return database.GetUserKnowledgeDocumentRow{
-					ID:        arg.Uuid,
-					Document:  "",
-					Cmetadata: sql.NullString{Valid: false},
-				}, nil
-			},
-			deleteUserKnowledge: func(_ context.Context, _ database.DeleteUserKnowledgeDocumentParams) error {
-				return errors.New("constraint violation")
-			},
-		}
-		ks := &knowledgeStore{db: db, newKnp: newPublisherFactory(pub)}
-
-		err := ks.DeleteUserDocument(ctx, userID, "doc")
-		if err == nil {
-			t.Fatal("expected error from db delete")
-		}
-		if len(pub.deletedDocs) != 0 {
-			t.Fatal("no event on failure")
-		}
-	})
-}
-
-// ============================================================================
-// Tests: CreateDocument
-// ============================================================================
-
-func TestCreateDocument(t *testing.T) {
-	ctx := context.Background()
-	const userID = int64(11)
-
-	// insertOK returns a mockDB whose InsertKnowledgeDocument returns a fixed id.
-	insertOK := func(id string) *mockDB {
-		return &mockDB{
-			insertKnowledge: func(_ context.Context, _ database.InsertKnowledgeDocumentParams) (string, error) {
-				return id, nil
-			},
-		}
+			var got []hit
+			for _, result := range results {
+				got = append(got, hit{result.Document.ID, result.Score})
+				assert.Equal(t, "content of "+result.Document.ID, result.Document.Content, "a match is read with its content")
+			}
+			assert.Equal(t, tc.want, got)
+		})
 	}
+}
 
-	t.Run("embedder nil returns error", func(t *testing.T) {
-		ks := &knowledgeStore{db: insertOK("id"), embedder: nil}
-		_, err := ks.CreateDocument(ctx, userID, model.CreateKnowledgeDocumentInput{
-			DocType: model.KnowledgeDocTypeAnswer, Content: "x", Question: "q",
-		})
-		if err == nil {
-			t.Fatal("expected error when embedder is nil")
-		}
-	})
+// Rows are keyed by entry: userID 0 drives SearchDocuments, any other SearchUserDocuments.
+func TestKnowledge_DoSearch_FailsWhenAnyStepFails(t *testing.T) {
+	errEmbed := errors.New("embedding failed")
+	errQuery := errors.New("query failed")
 
-	t.Run("embedder unavailable returns error", func(t *testing.T) {
-		ks := &knowledgeStore{db: insertOK("id"), embedder: &mockEmbedder{available: false}}
-		_, err := ks.CreateDocument(ctx, userID, model.CreateKnowledgeDocumentInput{
-			DocType: model.KnowledgeDocTypeAnswer, Content: "x", Question: "q",
-		})
-		if err == nil {
-			t.Fatal("expected error when embedder unavailable")
-		}
-	})
-
-	t.Run("EmbedDocuments error propagates", func(t *testing.T) {
-		ks := &knowledgeStore{
-			db: insertOK("id"),
-			embedder: &mockEmbedder{
-				available: true,
-				embedDocumentsFn: func(_ context.Context, _ []string) ([][]float32, error) {
-					return nil, errors.New("embed error")
+	for _, tc := range []struct {
+		name     string
+		userID   int64
+		embedder embeddings.Embedder
+		wantIs   error
+		wantText string
+	}{
+		{name: "no embedder is configured", embedder: nil, wantText: "embedding provider is not available"},
+		{name: "the embedder is unavailable", embedder: &mockEmbedder{unavailable: true}, wantText: "embedding provider is not available"},
+		{name: "the query cannot be embedded", embedder: &mockEmbedder{err: errEmbed}, wantIs: errEmbed, wantText: "embed query"},
+		{name: "the embedder returns no vector", embedder: &mockEmbedder{vectors: [][]float32{}}, wantText: "embedder returned no vectors for query"},
+		{name: "the admin query fails", embedder: &mockEmbedder{}, wantIs: errQuery, wantText: "similarity search (admin)"},
+		{name: "a user's query fails", userID: 42, embedder: &mockEmbedder{}, wantIs: errQuery, wantText: "similarity search (user 42)"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			db := &mockDB{
+				searchKnowledge: func(database.SearchKnowledgeDocumentsParams) ([]database.SearchKnowledgeDocumentsRow, error) {
+					return nil, errQuery
 				},
-			},
-		}
-		_, err := ks.CreateDocument(ctx, userID, model.CreateKnowledgeDocumentInput{
-			DocType: model.KnowledgeDocTypeGuide, Content: "c", Question: "q",
-		})
-		if err == nil {
-			t.Fatal("expected error from EmbedDocuments")
-		}
-	})
-
-	t.Run("embedder returning empty vectors is an error", func(t *testing.T) {
-		ks := &knowledgeStore{
-			db: insertOK("id"),
-			embedder: &mockEmbedder{
-				available: true,
-				embedDocumentsFn: func(_ context.Context, _ []string) ([][]float32, error) {
-					return [][]float32{}, nil // empty slice
+				searchUserKnowledge: func(database.SearchUserKnowledgeDocumentsParams) ([]database.SearchUserKnowledgeDocumentsRow, error) {
+					return nil, errQuery
 				},
-			},
-		}
-		_, err := ks.CreateDocument(ctx, userID, model.CreateKnowledgeDocumentInput{
-			DocType: model.KnowledgeDocTypeAnswer, Content: "c", Question: "q",
+			}
+			ks := NewKnowledgeStore(db, nil, tc.embedder, nil, 0)
+
+			var err error
+			if tc.userID == 0 {
+				_, err = ks.SearchDocuments(t.Context(), "q", nil, 5)
+			} else {
+				_, err = ks.SearchUserDocuments(t.Context(), tc.userID, "q", nil, 5)
+			}
+
+			assert.ErrorContains(t, err, tc.wantText)
+			if tc.wantIs != nil {
+				assert.ErrorIs(t, err, tc.wantIs)
+			}
 		})
-		if err == nil {
-			t.Fatal("expected error for empty vectors")
-		}
+	}
+}
+
+func TestKnowledge_ListDocuments_ReadsEveryDocumentOrOneFlowThenFilters(t *testing.T) {
+	errList := errors.New("list failed")
+
+	for _, tc := range []struct {
+		name     string
+		filter   *model.KnowledgeFilter
+		rows     []database.GetKnowledgeDocumentRow
+		err      error
+		wantFlow sql.NullString
+		wantIDs  []string
+		wantErr  string
+	}{
+		{
+			name:    "without a flow every document is listed",
+			rows:    []database.GetKnowledgeDocumentRow{makeRow("u1", "text", `{"doc_type":"answer"}`)},
+			wantIDs: []string{"u1"},
+		},
+		{
+			name:     "a flow filter lists that flow",
+			filter:   &model.KnowledgeFilter{FlowID: ptr(int64(99))},
+			rows:     []database.GetKnowledgeDocumentRow{makeRow("f1", "text", `{"doc_type":"answer","flow_id":99}`)},
+			wantFlow: sql.NullString{String: "99", Valid: true},
+			wantIDs:  []string{"f1"},
+		},
+		{
+			name:   "the doc type filter applies after the query",
+			filter: &model.KnowledgeFilter{DocTypes: []model.KnowledgeDocType{model.KnowledgeDocTypeGuide}},
+			rows: []database.GetKnowledgeDocumentRow{
+				makeRow("g1", "", `{"doc_type":"guide"}`),
+				makeRow("a1", "", `{"doc_type":"answer"}`),
+			},
+			wantIDs: []string{"g1"},
+		},
+		{name: "a failed list is reported", err: errList, wantErr: "knowledge: list all"},
+		{
+			name:     "a failed flow list is reported",
+			filter:   &model.KnowledgeFilter{FlowID: ptr(int64(99))},
+			err:      errList,
+			wantFlow: sql.NullString{String: "99", Valid: true},
+			wantErr:  "knowledge: list by flow",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var askedFlow sql.NullString
+			db := &mockDB{
+				listAll: func() ([]database.ListAllKnowledgeDocumentsRow, error) {
+					var rows []database.ListAllKnowledgeDocumentsRow
+					for _, row := range tc.rows {
+						rows = append(rows, database.ListAllKnowledgeDocumentsRow(row))
+					}
+					return rows, tc.err
+				},
+				listFlow: func(flowID sql.NullString) ([]database.ListFlowKnowledgeDocumentsRow, error) {
+					askedFlow = flowID
+					var rows []database.ListFlowKnowledgeDocumentsRow
+					for _, row := range tc.rows {
+						rows = append(rows, database.ListFlowKnowledgeDocumentsRow(row))
+					}
+					return rows, tc.err
+				},
+			}
+
+			docs, err := NewKnowledgeStore(db, nil, nil, nil, 0).ListDocuments(t.Context(), tc.filter, false)
+
+			assert.Equal(t, tc.wantFlow, askedFlow)
+			if tc.wantErr != "" {
+				assert.ErrorIs(t, err, errList)
+				assert.ErrorContains(t, err, tc.wantErr)
+				return
+			}
+			require.NoError(t, err)
+			var ids []string
+			for _, doc := range docs {
+				ids = append(ids, doc.ID)
+			}
+			assert.Equal(t, tc.wantIDs, ids)
+		})
+	}
+}
+
+func TestKnowledge_ListUserDocuments_ReadsOnlyTheUsersDocuments(t *testing.T) {
+	errList := errors.New("list failed")
+
+	for _, tc := range []struct {
+		name     string
+		filter   *model.KnowledgeFilter
+		rows     []database.GetKnowledgeDocumentRow
+		err      error
+		wantUser sql.NullString
+		wantFlow sql.NullString
+		wantIDs  []string
+		wantErr  string
+	}{
+		{
+			name:     "without a flow the user's own query is asked",
+			rows:     []database.GetKnowledgeDocumentRow{makeRow("own", "", `{"doc_type":"answer","user_id":5}`)},
+			wantUser: sql.NullString{String: "5", Valid: true},
+			wantIDs:  []string{"own"},
+		},
+		{
+			name:   "a flow filter keeps only documents the user owns",
+			filter: &model.KnowledgeFilter{FlowID: ptr(int64(1))},
+			rows: []database.GetKnowledgeDocumentRow{
+				makeRow("own", "", `{"doc_type":"guide","user_id":5}`),
+				makeRow("other", "", `{"doc_type":"guide","user_id":9}`),
+				makeRow("ownerless", "", `{"doc_type":"answer"}`),
+			},
+			wantFlow: sql.NullString{String: "1", Valid: true},
+			wantIDs:  []string{"own"},
+		},
+		{name: "a failed list is reported", err: errList, wantUser: sql.NullString{String: "5", Valid: true}, wantErr: "knowledge: list user docs"},
+		{
+			name:     "a failed flow list is reported",
+			filter:   &model.KnowledgeFilter{FlowID: ptr(int64(1))},
+			err:      errList,
+			wantFlow: sql.NullString{String: "1", Valid: true},
+			wantErr:  "knowledge: list by flow (user)",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var askedUser, askedFlow sql.NullString
+			db := &mockDB{
+				listUser: func(userID sql.NullString) ([]database.ListUserKnowledgeDocumentsRow, error) {
+					askedUser = userID
+					var rows []database.ListUserKnowledgeDocumentsRow
+					for _, row := range tc.rows {
+						rows = append(rows, database.ListUserKnowledgeDocumentsRow(row))
+					}
+					return rows, tc.err
+				},
+				listFlow: func(flowID sql.NullString) ([]database.ListFlowKnowledgeDocumentsRow, error) {
+					askedFlow = flowID
+					var rows []database.ListFlowKnowledgeDocumentsRow
+					for _, row := range tc.rows {
+						rows = append(rows, database.ListFlowKnowledgeDocumentsRow(row))
+					}
+					return rows, tc.err
+				},
+			}
+
+			docs, err := NewKnowledgeStore(db, nil, nil, nil, 0).ListUserDocuments(t.Context(), 5, tc.filter, true)
+
+			assert.Equal(t, tc.wantUser, askedUser)
+			assert.Equal(t, tc.wantFlow, askedFlow)
+			if tc.wantErr != "" {
+				assert.ErrorIs(t, err, errList)
+				assert.ErrorContains(t, err, tc.wantErr)
+				return
+			}
+			require.NoError(t, err)
+			var ids []string
+			for _, doc := range docs {
+				ids = append(ids, doc.ID)
+			}
+			assert.Equal(t, tc.wantIDs, ids)
+		})
+	}
+}
+
+func TestKnowledge_GetDocument_ReadsTheWholeDocument(t *testing.T) {
+	t.Run("the row is read with its content", func(t *testing.T) {
+		db := &mockDB{getKnowledge: func(uuid string) (database.GetKnowledgeDocumentRow, error) {
+			return makeRow(uuid, "content", `{"doc_type":"code","code_lang":"go"}`), nil
+		}}
+
+		doc, err := NewKnowledgeStore(db, nil, nil, nil, 0).GetDocument(t.Context(), "abc123")
+
+		require.NoError(t, err)
+		assert.Equal(t, &model.KnowledgeDocument{
+			ID: "abc123", Content: "content", DocType: model.KnowledgeDocTypeCode, CodeLang: ptr("go"),
+		}, doc)
 	})
 
-	t.Run("db insert error propagates", func(t *testing.T) {
-		db := &mockDB{
-			insertKnowledge: func(_ context.Context, _ database.InsertKnowledgeDocumentParams) (string, error) {
-				return "", errors.New("constraint error")
-			},
-		}
-		ks := &knowledgeStore{
-			db:       db,
-			embedder: &mockEmbedder{available: true},
-			newKnp:   newPublisherFactory(&mockPublisher{}),
-		}
-		_, err := ks.CreateDocument(ctx, userID, model.CreateKnowledgeDocumentInput{
-			DocType: model.KnowledgeDocTypeAnswer, Content: "c", Question: "q",
-		})
-		if err == nil {
-			t.Fatal("expected error from db insert")
-		}
+	t.Run("a missing document is reported", func(t *testing.T) {
+		db := &mockDB{getKnowledge: func(string) (database.GetKnowledgeDocumentRow, error) {
+			return database.GetKnowledgeDocumentRow{}, sql.ErrNoRows
+		}}
+
+		_, err := NewKnowledgeStore(db, nil, nil, nil, 0).GetDocument(t.Context(), "xyz")
+
+		assert.ErrorIs(t, err, sql.ErrNoRows)
+		assert.ErrorContains(t, err, "knowledge: get document xyz")
+	})
+}
+
+func TestKnowledge_GetUserDocument_ReadsOnlyTheUsersDocument(t *testing.T) {
+	t.Run("the uuid and the user reach the query", func(t *testing.T) {
+		var asked database.GetUserKnowledgeDocumentParams
+		db := &mockDB{getUserKnowledge: func(arg database.GetUserKnowledgeDocumentParams) (database.GetUserKnowledgeDocumentRow, error) {
+			asked = arg
+			return database.GetUserKnowledgeDocumentRow(makeRow(arg.Uuid, "doc", `{"doc_type":"guide","guide_type":"use"}`)), nil
+		}}
+
+		doc, err := NewKnowledgeStore(db, nil, nil, nil, 0).GetUserDocument(t.Context(), 7, "doc-uuid")
+
+		require.NoError(t, err)
+		assert.Equal(t, database.GetUserKnowledgeDocumentParams{Uuid: "doc-uuid", UserID: sql.NullString{String: "7", Valid: true}}, asked)
+		assert.Equal(t, &model.KnowledgeDocument{
+			ID: "doc-uuid", Content: "doc", DocType: model.KnowledgeDocTypeGuide, GuideType: ptr(model.KnowledgeGuideTypeUse),
+		}, doc)
 	})
 
-	t.Run("success: all fields set, manual=true, user_id present, event published", func(t *testing.T) {
-		pub := &mockPublisher{}
-		var gotParams database.InsertKnowledgeDocumentParams
-		db := &mockDB{
-			insertKnowledge: func(_ context.Context, arg database.InsertKnowledgeDocumentParams) (string, error) {
-				gotParams = arg
+	t.Run("another user's document is not found", func(t *testing.T) {
+		db := &mockDB{getUserKnowledge: func(database.GetUserKnowledgeDocumentParams) (database.GetUserKnowledgeDocumentRow, error) {
+			return database.GetUserKnowledgeDocumentRow{}, sql.ErrNoRows
+		}}
+
+		_, err := NewKnowledgeStore(db, nil, nil, nil, 0).GetUserDocument(t.Context(), 7, "not-my-doc")
+
+		assert.ErrorIs(t, err, sql.ErrNoRows)
+		assert.ErrorContains(t, err, "knowledge: get user document not-my-doc")
+	})
+}
+
+func TestKnowledge_DeleteDocument_DeletesAndAnnouncesOnlyWhatItFound(t *testing.T) {
+	errDelete := errors.New("delete failed")
+
+	for _, tc := range []struct {
+		name       string
+		getErr     error
+		deleteErr  error
+		wantDelete bool
+		wantErr    error
+	}{
+		{name: "the document is deleted and announced", wantDelete: true},
+		{name: "a missing document is neither deleted nor announced", getErr: sql.ErrNoRows, wantErr: sql.ErrNoRows},
+		{name: "a failed delete is not announced", deleteErr: errDelete, wantDelete: true, wantErr: errDelete},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var deleted []sql.NullString
+			db := &mockDB{
+				getKnowledge: func(uuid string) (database.GetKnowledgeDocumentRow, error) {
+					return makeRow(uuid, "content", `{"doc_type":"answer"}`), tc.getErr
+				},
+				deleteKnowledge: func(uuid sql.NullString) error {
+					deleted = append(deleted, uuid)
+					return tc.deleteErr
+				},
+			}
+			pub := &mockPublisher{}
+
+			err := NewKnowledgeStore(db, nil, nil, newPublisherFactory(pub), 0).DeleteDocument(t.Context(), 10, "doc1")
+
+			if tc.wantDelete {
+				assert.Equal(t, []sql.NullString{{String: "doc1", Valid: true}}, deleted)
+			} else {
+				assert.Empty(t, deleted)
+			}
+			if tc.wantErr != nil {
+				assert.ErrorIs(t, err, tc.wantErr)
+				assert.Empty(t, pub.deletedDocs)
+				return
+			}
+			require.NoError(t, err)
+			require.Len(t, pub.deletedDocs, 1)
+			assert.Equal(t, "doc1", pub.deletedDocs[0].ID)
+			assert.Equal(t, int64(10), pub.userID, "the event is scoped to the caller")
+		})
+	}
+}
+
+func TestKnowledge_DeleteUserDocument_DeletesOnlyTheUsersDocument(t *testing.T) {
+	errDelete := errors.New("constraint violation")
+
+	for _, tc := range []struct {
+		name       string
+		getErr     error
+		deleteErr  error
+		wantDelete bool
+		wantErr    error
+	}{
+		{name: "the user's document is deleted and announced", wantDelete: true},
+		{name: "another user's document is neither deleted nor announced", getErr: sql.ErrNoRows, wantErr: sql.ErrNoRows},
+		{name: "a failed delete is not announced", deleteErr: errDelete, wantDelete: true, wantErr: errDelete},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var askedGet database.GetUserKnowledgeDocumentParams
+			var deleted []database.DeleteUserKnowledgeDocumentParams
+			db := &mockDB{
+				getUserKnowledge: func(arg database.GetUserKnowledgeDocumentParams) (database.GetUserKnowledgeDocumentRow, error) {
+					askedGet = arg
+					return database.GetUserKnowledgeDocumentRow(makeRow(arg.Uuid, "doc", `{"doc_type":"answer"}`)), tc.getErr
+				},
+				deleteUserKnowledge: func(arg database.DeleteUserKnowledgeDocumentParams) error {
+					deleted = append(deleted, arg)
+					return tc.deleteErr
+				},
+			}
+			pub := &mockPublisher{}
+
+			err := NewKnowledgeStore(db, nil, nil, newPublisherFactory(pub), 0).DeleteUserDocument(t.Context(), 3, "my-doc")
+
+			owner := sql.NullString{String: "3", Valid: true}
+			assert.Equal(t, database.GetUserKnowledgeDocumentParams{Uuid: "my-doc", UserID: owner}, askedGet)
+			if tc.wantDelete {
+				assert.Equal(t, []database.DeleteUserKnowledgeDocumentParams{
+					{Uuid: sql.NullString{String: "my-doc", Valid: true}, UserID: owner},
+				}, deleted)
+			} else {
+				assert.Empty(t, deleted)
+			}
+			if tc.wantErr != nil {
+				assert.ErrorIs(t, err, tc.wantErr)
+				assert.Empty(t, pub.deletedDocs)
+				return
+			}
+			require.NoError(t, err)
+			require.Len(t, pub.deletedDocs, 1)
+			assert.Equal(t, "my-doc", pub.deletedDocs[0].ID)
+		})
+	}
+}
+
+func TestKnowledge_CreateDocument_StoresATrimmedManualDocumentAndAnnouncesIt(t *testing.T) {
+	for _, tc := range []struct {
+		name         string
+		maxBytes     int
+		input        model.CreateKnowledgeDocumentInput
+		wantEmbedded string
+		wantMeta     knowledgeMeta
+		want         model.KnowledgeDocument
+	}{
+		{
+			name: "code with a description",
+			input: model.CreateKnowledgeDocumentInput{
+				DocType: model.KnowledgeDocTypeCode, Content: "  func main() {}  ", Question: "how to main?",
+				Description: ptr("a Go main"), CodeLang: ptr("go"),
+			},
+			wantEmbedded: "func main() {}",
+			wantMeta: knowledgeMeta{
+				DocType: "code", UserID: 11, Question: "how to main?", Description: "a Go main", CodeLang: "go",
+				PartSize: 14, TotalSize: 14, Manual: true,
+			},
+			want: model.KnowledgeDocument{
+				DocType: model.KnowledgeDocTypeCode, Content: "func main() {}", Question: "how to main?",
+				Description: ptr("a Go main"), UserID: 11, CodeLang: ptr("go"), PartSize: 14, TotalSize: 14, Manual: true,
+			},
+		},
+		{
+			name:         "an answer leaves the optional fields unset",
+			input:        model.CreateKnowledgeDocumentInput{DocType: model.KnowledgeDocTypeAnswer, Content: "c", Question: "q", AnswerType: ptr(model.KnowledgeAnswerTypeOther)},
+			wantEmbedded: "c",
+			wantMeta:     knowledgeMeta{DocType: "answer", UserID: 11, Question: "q", AnswerType: "other", PartSize: 1, TotalSize: 1, Manual: true},
+			want: model.KnowledgeDocument{
+				DocType: model.KnowledgeDocTypeAnswer, Content: "c", Question: "q", UserID: 11,
+				AnswerType: ptr(model.KnowledgeAnswerTypeOther), PartSize: 1, TotalSize: 1, Manual: true,
+			},
+		},
+		{
+			name:         "a guide keeps its guide type",
+			input:        model.CreateKnowledgeDocumentInput{DocType: model.KnowledgeDocTypeGuide, Content: "steps", Question: "q", GuideType: ptr(model.KnowledgeGuideTypeInstall)},
+			wantEmbedded: "steps",
+			wantMeta:     knowledgeMeta{DocType: "guide", UserID: 11, Question: "q", GuideType: "install", PartSize: 5, TotalSize: 5, Manual: true},
+			want: model.KnowledgeDocument{
+				DocType: model.KnowledgeDocTypeGuide, Content: "steps", Question: "q", UserID: 11,
+				GuideType: ptr(model.KnowledgeGuideTypeInstall), PartSize: 5, TotalSize: 5, Manual: true,
+			},
+		},
+		{
+			name:         "content past the embedding limit is embedded cut and stored whole",
+			maxBytes:     4,
+			input:        model.CreateKnowledgeDocumentInput{DocType: model.KnowledgeDocTypeAnswer, Content: "  trimmed  ", Question: "q", AnswerType: ptr(model.KnowledgeAnswerTypeTool)},
+			wantEmbedded: "trim",
+			wantMeta:     knowledgeMeta{DocType: "answer", UserID: 11, Question: "q", AnswerType: "tool", PartSize: 7, TotalSize: 7, Manual: true},
+			want: model.KnowledgeDocument{
+				DocType: model.KnowledgeDocTypeAnswer, Content: "trimmed", Question: "q", UserID: 11,
+				AnswerType: ptr(model.KnowledgeAnswerTypeTool), PartSize: 7, TotalSize: 7, Manual: true,
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var stored []database.InsertKnowledgeDocumentParams
+			db := &mockDB{insertKnowledge: func(arg database.InsertKnowledgeDocumentParams) (string, error) {
+				stored = append(stored, arg)
 				return "new-uuid", nil
-			},
-		}
-		ks := &knowledgeStore{db: db, embedder: &mockEmbedder{available: true}, newKnp: newPublisherFactory(pub)}
+			}}
+			embedder := &mockEmbedder{}
+			pub := &mockPublisher{}
 
-		input := model.CreateKnowledgeDocumentInput{
-			DocType:     model.KnowledgeDocTypeCode,
-			Content:     "  func main() {}  ", // surrounding spaces trimmed
-			Question:    "how to main?",
-			Description: ptr("a Go main"),
-			CodeLang:    ptr("go"),
-		}
-		doc, err := ks.CreateDocument(ctx, userID, input)
-		if err != nil {
-			t.Fatal(err)
-		}
+			doc, err := NewKnowledgeStore(db, nil, embedder, newPublisherFactory(pub), tc.maxBytes).CreateDocument(t.Context(), 11, tc.input)
+			require.NoError(t, err)
 
-		// Returned document
-		if doc.ID != "new-uuid" {
-			t.Fatalf("id mismatch: %q", doc.ID)
-		}
-		if doc.Content != "func main() {}" {
-			t.Fatalf("content not trimmed: %q", doc.Content)
-		}
-		if !doc.Manual {
-			t.Fatal("manual must be true for manually created docs")
-		}
-		if doc.UserID != userID {
-			t.Fatalf("doc.UserID: want %d, got %d", userID, doc.UserID)
-		}
-		if doc.CodeLang == nil || *doc.CodeLang != "go" {
-			t.Fatal("code_lang missing from returned doc")
-		}
+			require.Len(t, stored, 1)
+			assert.Equal(t, sql.NullString{String: tc.want.Content, Valid: true}, stored[0].Document)
+			assert.Equal(t, "[0.1,0.2,0.3]", stored[0].Embedding)
+			assert.Equal(t, tc.wantMeta, parseMeta(string(stored[0].Cmetadata)))
+			assert.Equal(t, []string{tc.wantEmbedded}, embedder.embedded)
 
-		// Persisted document text (trimmed) and embedding literal
-		if gotParams.Document.String != "func main() {}" {
-			t.Fatalf("persisted document not trimmed: %q", gotParams.Document.String)
-		}
-		emb, ok := gotParams.Embedding.(string)
-		if !ok || emb == "" || emb[0] != '[' {
-			t.Fatalf("embedding must be a vector literal, got %v", gotParams.Embedding)
-		}
-
-		// Metadata stored in pgvector cmetadata
-		meta := parseMeta(string(gotParams.Cmetadata))
-		if meta.UserID != userID {
-			t.Fatalf("user_id in metadata: want %d, got %d", userID, meta.UserID)
-		}
-		if !meta.Manual {
-			t.Fatal("manual flag must be true in metadata")
-		}
-		if meta.CodeLang != "go" {
-			t.Fatal("code_lang missing from metadata")
-		}
-		if meta.Description != "a Go main" {
-			t.Fatalf("description missing from metadata: %q", meta.Description)
-		}
-
-		// Event
-		if len(pub.createdDocs) != 1 || pub.createdDocs[0].ID != "new-uuid" {
-			t.Fatal("KnowledgeDocumentCreated event not published correctly")
-		}
-		if pub.userID != userID {
-			t.Fatalf("publisher userID: want %d, got %d", userID, pub.userID)
-		}
-	})
-
-	t.Run("content is trimmed of whitespace", func(t *testing.T) {
-		var gotParams database.InsertKnowledgeDocumentParams
-		db := &mockDB{
-			insertKnowledge: func(_ context.Context, arg database.InsertKnowledgeDocumentParams) (string, error) {
-				gotParams = arg
-				return "id", nil
-			},
-		}
-		ks := &knowledgeStore{db: db, embedder: &mockEmbedder{available: true}, newKnp: newPublisherFactory(&mockPublisher{})}
-		_, err := ks.CreateDocument(ctx, userID, model.CreateKnowledgeDocumentInput{
-			DocType: model.KnowledgeDocTypeAnswer, Content: "  trimmed  ", Question: "q",
+			want := tc.want
+			want.ID = "new-uuid"
+			assert.Equal(t, &want, doc)
+			assert.Equal(t, []*model.KnowledgeDocument{doc}, pub.createdDocs)
+			assert.Equal(t, int64(11), pub.userID)
 		})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if gotParams.Document.String != "trimmed" {
-			t.Fatalf("expected trimmed content, got %q", gotParams.Document.String)
-		}
-	})
-
-	t.Run("optional fields absent means nil in model", func(t *testing.T) {
-		ks := &knowledgeStore{db: insertOK("id"), embedder: &mockEmbedder{available: true}, newKnp: newPublisherFactory(&mockPublisher{})}
-		doc, err := ks.CreateDocument(ctx, userID, model.CreateKnowledgeDocumentInput{
-			DocType: model.KnowledgeDocTypeAnswer, Content: "c", Question: "q",
-		})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if doc.Description != nil || doc.GuideType != nil || doc.AnswerType != nil || doc.CodeLang != nil {
-			t.Fatal("optional fields should be nil when not provided")
-		}
-	})
+	}
 }
 
-// ============================================================================
-// Tests: UpdateDocument / UpdateUserDocument
-// ============================================================================
-
-func TestUpdateDocument(t *testing.T) {
-	ctx := context.Background()
-	const userID = int64(20)
-
-	existingMeta := `{"doc_type":"guide","guide_type":"pentest","question":"old q","part_size":5,"total_size":5}`
-	successDB := func(overrideGet ...func(string) (database.GetKnowledgeDocumentRow, error)) *mockDB {
-		getFn := func(uuid string) (database.GetKnowledgeDocumentRow, error) {
-			return makeRow(uuid, "old content", existingMeta), nil
-		}
-		if len(overrideGet) > 0 {
-			getFn = overrideGet[0]
-		}
-		return &mockDB{
-			getKnowledge: func(_ context.Context, uuid string) (database.GetKnowledgeDocumentRow, error) {
-				return getFn(uuid)
-			},
-			updateKnowledge: func(_ context.Context, arg database.UpdateKnowledgeDocumentParams) (database.UpdateKnowledgeDocumentRow, error) {
-				return database.UpdateKnowledgeDocumentRow{
-					ID:        arg.Uuid.String,
-					Document:  arg.Document.String,
-					Cmetadata: sql.NullString{String: existingMeta, Valid: true},
-				}, nil
-			},
-		}
+func TestKnowledge_CreateDocument_RefusesWithoutAnnouncing(t *testing.T) {
+	errEmbed := errors.New("embedding failed")
+	errInsert := errors.New("constraint error")
+	answer := model.CreateKnowledgeDocumentInput{
+		DocType: model.KnowledgeDocTypeAnswer, Content: "c", Question: "q", AnswerType: ptr(model.KnowledgeAnswerTypeOther),
 	}
 
-	t.Run("embedder nil returns error", func(t *testing.T) {
-		ks := &knowledgeStore{
-			db:       successDB(),
-			embedder: nil,
-		}
-		_, err := ks.UpdateDocument(ctx, userID, "id1", model.UpdateKnowledgeDocumentInput{Content: "new"})
-		if err == nil {
-			t.Fatal("expected error when embedder is nil")
-		}
-	})
-
-	t.Run("embedder unavailable returns error", func(t *testing.T) {
-		ks := &knowledgeStore{
-			db:       successDB(),
-			embedder: &mockEmbedder{available: false},
-		}
-		_, err := ks.UpdateDocument(ctx, userID, "id1", model.UpdateKnowledgeDocumentInput{Content: "new"})
-		if err == nil {
-			t.Fatal("expected error when embedder unavailable")
-		}
-	})
-
-	t.Run("EmbedDocuments error propagates", func(t *testing.T) {
-		ks := &knowledgeStore{
-			db: successDB(),
-			embedder: &mockEmbedder{
-				available: true,
-				embedDocumentsFn: func(_ context.Context, _ []string) ([][]float32, error) {
-					return nil, errors.New("embed error")
-				},
-			},
-		}
-		_, err := ks.UpdateDocument(ctx, userID, "id1", model.UpdateKnowledgeDocumentInput{Content: "new"})
-		if err == nil {
-			t.Fatal("expected error from EmbedDocuments")
-		}
-	})
-
-	t.Run("embedder returning empty vectors is an error", func(t *testing.T) {
-		ks := &knowledgeStore{
-			db: successDB(),
-			embedder: &mockEmbedder{
-				available: true,
-				embedDocumentsFn: func(_ context.Context, _ []string) ([][]float32, error) {
-					return [][]float32{}, nil
-				},
-			},
-		}
-		_, err := ks.UpdateDocument(ctx, userID, "id1", model.UpdateKnowledgeDocumentInput{Content: "new"})
-		if err == nil {
-			t.Fatal("expected error for empty vectors")
-		}
-	})
-
-	t.Run("db update error propagates", func(t *testing.T) {
-		db := &mockDB{
-			getKnowledge: func(_ context.Context, uuid string) (database.GetKnowledgeDocumentRow, error) {
-				return makeRow(uuid, "old", existingMeta), nil
-			},
-			updateKnowledge: func(_ context.Context, _ database.UpdateKnowledgeDocumentParams) (database.UpdateKnowledgeDocumentRow, error) {
-				return database.UpdateKnowledgeDocumentRow{}, errors.New("constraint error")
-			},
-		}
-		ks := &knowledgeStore{
-			db:       db,
-			embedder: &mockEmbedder{available: true},
-		}
-		_, err := ks.UpdateDocument(ctx, userID, "id1", model.UpdateKnowledgeDocumentInput{Content: "new"})
-		if err == nil {
-			t.Fatal("expected error from db update")
-		}
-	})
-
-	t.Run("success: metadata merged, embedding computed, event published", func(t *testing.T) {
-		pub := &mockPublisher{}
-		var gotParams database.UpdateKnowledgeDocumentParams
-
-		db := &mockDB{
-			getKnowledge: func(_ context.Context, uuid string) (database.GetKnowledgeDocumentRow, error) {
-				return makeRow(uuid, "old content", `{"doc_type":"guide","guide_type":"pentest","question":"original"}`), nil
-			},
-			updateKnowledge: func(_ context.Context, arg database.UpdateKnowledgeDocumentParams) (database.UpdateKnowledgeDocumentRow, error) {
-				gotParams = arg
-				return database.UpdateKnowledgeDocumentRow{
-					ID:       arg.Uuid.String,
-					Document: arg.Document.String,
-					Cmetadata: sql.NullString{
-						String: `{"doc_type":"guide","guide_type":"pentest","question":"new q"}`,
-						Valid:  true,
-					},
-				}, nil
-			},
-		}
-		ks := &knowledgeStore{
-			db:       db,
-			embedder: &mockEmbedder{available: true},
-			newKnp:   newPublisherFactory(pub),
-		}
-
-		doc, err := ks.UpdateDocument(ctx, userID, "doc-id", model.UpdateKnowledgeDocumentInput{
-			Content:  "new content",
-			Question: ptr("new q"),
-		})
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		// Correct uuid passed to update
-		if gotParams.Uuid.String != "doc-id" {
-			t.Fatalf("uuid mismatch: %q", gotParams.Uuid.String)
-		}
-		// New content passed
-		if gotParams.Document.String != "new content" {
-			t.Fatalf("document mismatch: %q", gotParams.Document.String)
-		}
-		// Embedding formatted as vector literal
-		if gotParams.Embedding == "" || gotParams.Embedding[0] != '[' {
-			t.Fatalf("embedding format wrong: %q", gotParams.Embedding)
-		}
-
-		// Updated doc returned
-		if doc.ID != "doc-id" {
-			t.Fatal("doc ID mismatch")
-		}
-		// Event published
-		if len(pub.updatedDocs) != 1 {
-			t.Fatal("KnowledgeDocumentUpdated event not published")
-		}
-		if pub.userID != userID {
-			t.Fatalf("publisher userID: want %d, got %d", userID, pub.userID)
-		}
-	})
-}
-
-func TestUpdateDocumentDocTypeChange(t *testing.T) {
-	ctx := context.Background()
-	const userID = int64(20)
-
-	// buildDB returns a mockDB whose updateKnowledge echoes back the stored
-	// cmetadata so that the returned document reflects what was actually written.
-	buildDB := func(initialMeta string) (*mockDB, *string) {
-		stored := new(string)
-		return &mockDB{
-			getKnowledge: func(_ context.Context, uuid string) (database.GetKnowledgeDocumentRow, error) {
-				return makeRow(uuid, "old", initialMeta), nil
-			},
-			updateKnowledge: func(_ context.Context, arg database.UpdateKnowledgeDocumentParams) (database.UpdateKnowledgeDocumentRow, error) {
-				*stored = string(arg.Cmetadata.RawMessage)
-				return database.UpdateKnowledgeDocumentRow{
-					ID:       arg.Uuid.String,
-					Document: arg.Document.String,
-					Cmetadata: sql.NullString{
-						String: string(arg.Cmetadata.RawMessage),
-						Valid:  true,
-					},
-				}, nil
-			},
-		}, stored
-	}
-	newKS := func(db *mockDB) *knowledgeStore {
-		return &knowledgeStore{
-			db:       db,
-			embedder: &mockEmbedder{available: true},
-			newKnp:   newPublisherFactory(&mockPublisher{}),
-		}
-	}
-
-	t.Run("guide→answer: clears GuideType, sets AnswerType from input", func(t *testing.T) {
-		db, stored := buildDB(`{"doc_type":"guide","guide_type":"pentest","question":"q"}`)
-		ks := newKS(db)
-
-		doc, err := ks.UpdateDocument(ctx, userID, "id1", model.UpdateKnowledgeDocumentInput{
-			Content:    "new content",
-			DocType:    ptr(model.KnowledgeDocTypeAnswer),
-			AnswerType: ptr(model.KnowledgeAnswerTypeVulnerability),
-		})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if doc.DocType != model.KnowledgeDocTypeAnswer {
-			t.Fatalf("DocType: want answer, got %s", doc.DocType)
-		}
-		if doc.GuideType != nil {
-			t.Fatalf("GuideType must be cleared after doc_type change, got %v", *doc.GuideType)
-		}
-		if doc.AnswerType == nil || *doc.AnswerType != model.KnowledgeAnswerTypeVulnerability {
-			t.Fatal("AnswerType mismatch")
-		}
-
-		meta := parseMeta(*stored)
-		if meta.GuideType != "" {
-			t.Fatalf("stored guide_type must be empty, got %q", meta.GuideType)
-		}
-		if meta.AnswerType != "vulnerability" {
-			t.Fatalf("stored answer_type: want vulnerability, got %q", meta.AnswerType)
-		}
-	})
-
-	t.Run("answer→code: clears AnswerType, sets CodeLang from input", func(t *testing.T) {
-		db, stored := buildDB(`{"doc_type":"answer","answer_type":"vulnerability","question":"q"}`)
-		ks := newKS(db)
-
-		doc, err := ks.UpdateDocument(ctx, userID, "id2", model.UpdateKnowledgeDocumentInput{
-			Content:  "code here",
-			DocType:  ptr(model.KnowledgeDocTypeCode),
-			CodeLang: ptr("python"),
-		})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if doc.DocType != model.KnowledgeDocTypeCode {
-			t.Fatalf("DocType: want code, got %s", doc.DocType)
-		}
-		if doc.AnswerType != nil {
-			t.Fatalf("AnswerType must be cleared after doc_type change, got %v", *doc.AnswerType)
-		}
-		if doc.CodeLang == nil || *doc.CodeLang != "python" {
-			t.Fatal("CodeLang mismatch")
-		}
-
-		meta := parseMeta(*stored)
-		if meta.AnswerType != "" {
-			t.Fatalf("stored answer_type must be empty, got %q", meta.AnswerType)
-		}
-		if meta.CodeLang != "python" {
-			t.Fatalf("stored code_lang: want python, got %q", meta.CodeLang)
-		}
-	})
-
-	t.Run("code→guide: clears CodeLang, sets GuideType from input", func(t *testing.T) {
-		db, stored := buildDB(`{"doc_type":"code","code_lang":"go","question":"q"}`)
-		ks := newKS(db)
-
-		doc, err := ks.UpdateDocument(ctx, userID, "id3", model.UpdateKnowledgeDocumentInput{
-			Content:   "guide text",
-			DocType:   ptr(model.KnowledgeDocTypeGuide),
-			GuideType: ptr(model.KnowledgeGuideTypePentest),
-		})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if doc.DocType != model.KnowledgeDocTypeGuide {
-			t.Fatalf("DocType: want guide, got %s", doc.DocType)
-		}
-		if doc.CodeLang != nil {
-			t.Fatalf("CodeLang must be cleared after doc_type change, got %v", *doc.CodeLang)
-		}
-		if doc.GuideType == nil || *doc.GuideType != model.KnowledgeGuideTypePentest {
-			t.Fatal("GuideType mismatch")
-		}
-
-		meta := parseMeta(*stored)
-		if meta.CodeLang != "" {
-			t.Fatalf("stored code_lang must be empty, got %q", meta.CodeLang)
-		}
-		if meta.GuideType != "pentest" {
-			t.Fatalf("stored guide_type: want pentest, got %q", meta.GuideType)
-		}
-	})
-
-	t.Run("guide→answer: clears GuideType even without AnswerType in input", func(t *testing.T) {
-		db, stored := buildDB(`{"doc_type":"guide","guide_type":"install","question":"q"}`)
-		ks := newKS(db)
-
-		doc, err := ks.UpdateDocument(ctx, userID, "id4", model.UpdateKnowledgeDocumentInput{
-			Content: "new",
-			DocType: ptr(model.KnowledgeDocTypeAnswer),
-			// AnswerType intentionally omitted
-		})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if doc.GuideType != nil {
-			t.Fatalf("GuideType must be nil after switching away from guide, got %v", *doc.GuideType)
-		}
-		if doc.AnswerType != nil {
-			t.Fatalf("AnswerType should be nil when not supplied, got %v", *doc.AnswerType)
-		}
-
-		meta := parseMeta(*stored)
-		if meta.GuideType != "" {
-			t.Fatalf("stored guide_type must be empty, got %q", meta.GuideType)
-		}
-	})
-
-	t.Run("same DocType: sub-type fields preserved without clearing", func(t *testing.T) {
-		db, stored := buildDB(`{"doc_type":"guide","guide_type":"pentest","question":"q"}`)
-		ks := newKS(db)
-
-		doc, err := ks.UpdateDocument(ctx, userID, "id5", model.UpdateKnowledgeDocumentInput{
-			Content: "updated guide",
-			DocType: ptr(model.KnowledgeDocTypeGuide), // same type
-			// GuideType not passed — should remain "pentest" from existing
-		})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if doc.GuideType == nil || *doc.GuideType != model.KnowledgeGuideTypePentest {
-			t.Fatal("GuideType must be preserved when DocType is unchanged and no new GuideType supplied")
-		}
-
-		meta := parseMeta(*stored)
-		if meta.GuideType != "pentest" {
-			t.Fatalf("stored guide_type must remain pentest, got %q", meta.GuideType)
-		}
-	})
-
-	t.Run("DocType nil: existing sub-type fields preserved", func(t *testing.T) {
-		db, stored := buildDB(`{"doc_type":"code","code_lang":"rust","question":"q"}`)
-		ks := newKS(db)
-
-		doc, err := ks.UpdateDocument(ctx, userID, "id6", model.UpdateKnowledgeDocumentInput{
-			Content: "updated code",
-			// DocType nil — no type change
-		})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if doc.DocType != model.KnowledgeDocTypeCode {
-			t.Fatalf("DocType should stay code, got %s", doc.DocType)
-		}
-		if doc.CodeLang == nil || *doc.CodeLang != "rust" {
-			t.Fatal("CodeLang must be preserved when DocType is not provided")
-		}
-
-		meta := parseMeta(*stored)
-		if meta.CodeLang != "rust" {
-			t.Fatalf("stored code_lang must remain rust, got %q", meta.CodeLang)
-		}
-	})
-
-	t.Run("same DocType with new sub-type: updates sub-type", func(t *testing.T) {
-		db, stored := buildDB(`{"doc_type":"answer","answer_type":"vulnerability","question":"q"}`)
-		ks := newKS(db)
-
-		doc, err := ks.UpdateDocument(ctx, userID, "id7", model.UpdateKnowledgeDocumentInput{
-			Content:    "updated",
-			DocType:    ptr(model.KnowledgeDocTypeAnswer),
-			AnswerType: ptr(model.KnowledgeAnswerTypeCode),
-		})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if doc.AnswerType == nil || *doc.AnswerType != model.KnowledgeAnswerTypeCode {
-			t.Fatal("AnswerType should be updated")
-		}
-
-		meta := parseMeta(*stored)
-		if meta.AnswerType != "code" {
-			t.Fatalf("stored answer_type: want code, got %q", meta.AnswerType)
-		}
-	})
-}
-
-func TestUpdateDocumentSizeCalculation(t *testing.T) {
-	ctx := context.Background()
-	const userID = int64(20)
-
-	buildDB := func(existingContent, existingMeta string) (*mockDB, *string) {
-		stored := new(string)
-		return &mockDB{
-			getKnowledge: func(_ context.Context, uuid string) (database.GetKnowledgeDocumentRow, error) {
-				row := makeRow(uuid, existingContent, existingMeta)
-				return row, nil
-			},
-			updateKnowledge: func(_ context.Context, arg database.UpdateKnowledgeDocumentParams) (database.UpdateKnowledgeDocumentRow, error) {
-				*stored = string(arg.Cmetadata.RawMessage)
-				return database.UpdateKnowledgeDocumentRow{
-					ID:       arg.Uuid.String,
-					Document: arg.Document.String,
-					Cmetadata: sql.NullString{
-						String: string(arg.Cmetadata.RawMessage),
-						Valid:  true,
-					},
-				}, nil
-			},
-		}, stored
-	}
-	newKS := func(db *mockDB) *knowledgeStore {
-		return &knowledgeStore{
-			db:       db,
-			embedder: &mockEmbedder{available: true},
-			newKnp:   newPublisherFactory(&mockPublisher{}),
-		}
-	}
-
-	t.Run("single-chunk doc: sizes equal new content length", func(t *testing.T) {
-		// part_size == total_size == len(old content) = 10
-		db, stored := buildDB("0123456789", `{"doc_type":"answer","part_size":10,"total_size":10}`)
-		ks := newKS(db)
-
-		_, err := ks.UpdateDocument(ctx, userID, "id", model.UpdateKnowledgeDocumentInput{
-			Content: "hello", // 5 chars, delta = -5
-		})
-		if err != nil {
-			t.Fatal(err)
-		}
-		meta := parseMeta(*stored)
-		if meta.PartSize != 5 {
-			t.Fatalf("PartSize: want 5, got %d", meta.PartSize)
-		}
-		if meta.TotalSize != 5 {
-			t.Fatalf("TotalSize: want 5, got %d", meta.TotalSize)
-		}
-	})
-
-	t.Run("multi-chunk doc: TotalSize adjusted by delta, PartSize adjusted independently", func(t *testing.T) {
-		// 3 chunks: this chunk is 100 chars, total document is 300 chars
-		db, stored := buildDB(
-			string(make([]byte, 100)),
-			`{"doc_type":"guide","part_size":100,"total_size":300}`,
-		)
-		ks := newKS(db)
-
-		newContent := string(make([]byte, 80)) // 80 chars, delta = -20
-		_, err := ks.UpdateDocument(ctx, userID, "id", model.UpdateKnowledgeDocumentInput{
-			Content: newContent,
-		})
-		if err != nil {
-			t.Fatal(err)
-		}
-		meta := parseMeta(*stored)
-		if meta.PartSize != 80 {
-			t.Fatalf("PartSize: want 80 (100-20), got %d", meta.PartSize)
-		}
-		if meta.TotalSize != 280 {
-			t.Fatalf("TotalSize: want 280 (300-20), got %d", meta.TotalSize)
-		}
-	})
-
-	t.Run("multi-chunk doc: content grows, TotalSize increases", func(t *testing.T) {
-		db, stored := buildDB(
-			string(make([]byte, 50)),
-			`{"doc_type":"code","part_size":50,"total_size":150}`,
-		)
-		ks := newKS(db)
-
-		newContent := string(make([]byte, 70)) // delta = +20
-		_, err := ks.UpdateDocument(ctx, userID, "id", model.UpdateKnowledgeDocumentInput{
-			Content: newContent,
-		})
-		if err != nil {
-			t.Fatal(err)
-		}
-		meta := parseMeta(*stored)
-		if meta.PartSize != 70 {
-			t.Fatalf("PartSize: want 70, got %d", meta.PartSize)
-		}
-		if meta.TotalSize != 170 {
-			t.Fatalf("TotalSize: want 170 (150+20), got %d", meta.TotalSize)
-		}
-	})
-
-	t.Run("zero existing sizes fall back to new content length", func(t *testing.T) {
-		// legacy doc without size metadata
-		db, stored := buildDB("old", `{"doc_type":"answer"}`)
-		ks := newKS(db)
-
-		_, err := ks.UpdateDocument(ctx, userID, "id", model.UpdateKnowledgeDocumentInput{
-			Content: "new content",
-		})
-		if err != nil {
-			t.Fatal(err)
-		}
-		meta := parseMeta(*stored)
-		if meta.PartSize != len("new content") {
-			t.Fatalf("PartSize: want %d, got %d", len("new content"), meta.PartSize)
-		}
-		if meta.TotalSize != len("new content") {
-			t.Fatalf("TotalSize: want %d, got %d", len("new content"), meta.TotalSize)
-		}
-	})
-}
-
-func TestUpdateDocumentPreservesOriginalOwner(t *testing.T) {
-	// SECURITY: when an admin (userID=1) updates a document that belongs to
-	// user 99, the stored user_id in cmetadata must remain 99, not be replaced
-	// by 1. The admin's identity is used only for event scoping.
-	ctx := context.Background()
-	const adminID = int64(1)
-	const originalOwner = int64(99)
-
-	originalMeta := fmt.Sprintf(`{"doc_type":"answer","user_id":%d,"question":"q"}`, originalOwner)
-
-	var storedMeta string
-	db := &mockDB{
-		getKnowledge: func(_ context.Context, uuid string) (database.GetKnowledgeDocumentRow, error) {
-			return makeRow(uuid, "old", originalMeta), nil
+	for _, tc := range []struct {
+		name       string
+		embedder   embeddings.Embedder
+		insertErr  error
+		input      model.CreateKnowledgeDocumentInput
+		wantIs     error
+		wantText   string
+		wantInsert bool
+	}{
+		{name: "no embedder is configured", embedder: nil, input: answer, wantText: "embedding provider is not available"},
+		{name: "the embedder is unavailable", embedder: &mockEmbedder{unavailable: true}, input: answer, wantText: "embedding provider is not available"},
+		{
+			name:     "the content cannot be embedded",
+			embedder: &mockEmbedder{err: errEmbed},
+			input:    model.CreateKnowledgeDocumentInput{DocType: model.KnowledgeDocTypeGuide, Content: "c", Question: "q", GuideType: ptr(model.KnowledgeGuideTypeUse)},
+			wantIs:   errEmbed,
+			wantText: "knowledge: compute embedding",
 		},
-		updateKnowledge: func(_ context.Context, arg database.UpdateKnowledgeDocumentParams) (database.UpdateKnowledgeDocumentRow, error) {
-			storedMeta = string(arg.Cmetadata.RawMessage)
-			return database.UpdateKnowledgeDocumentRow{
-				ID:       arg.Uuid.String,
-				Document: arg.Document.String,
-				Cmetadata: sql.NullString{
-					String: string(arg.Cmetadata.RawMessage),
-					Valid:  true,
-				},
-			}, nil
+		{name: "the embedder returns no vector", embedder: &mockEmbedder{vectors: [][]float32{}}, input: answer, wantText: "knowledge: embedder returned no vectors"},
+		{name: "the insert fails", embedder: &mockEmbedder{}, insertErr: errInsert, input: answer, wantIs: errInsert, wantText: "knowledge: create document", wantInsert: true},
+		{
+			name:     "an answer without an answer type",
+			embedder: &mockEmbedder{},
+			input:    model.CreateKnowledgeDocumentInput{DocType: model.KnowledgeDocTypeAnswer, Content: "c", Question: "q"},
+			wantIs:   ErrInvalidDocument,
+			wantText: "answer document requires answer type",
 		},
-	}
-	pub := &mockPublisher{}
-	ks := &knowledgeStore{
-		db:       db,
-		embedder: &mockEmbedder{available: true},
-		newKnp:   newPublisherFactory(pub),
-	}
+		{
+			name:     "a guide without a guide type",
+			embedder: &mockEmbedder{},
+			input:    model.CreateKnowledgeDocumentInput{DocType: model.KnowledgeDocTypeGuide, Content: "c", Question: "q"},
+			wantIs:   ErrInvalidDocument,
+			wantText: "guide document requires guide type",
+		},
+		{
+			name:     "code without a language",
+			embedder: &mockEmbedder{},
+			input:    model.CreateKnowledgeDocumentInput{DocType: model.KnowledgeDocTypeCode, Content: "c", Question: "q"},
+			wantIs:   ErrInvalidDocument,
+			wantText: "code document requires code language",
+		},
+		{
+			name:     "code whose language is only spaces",
+			embedder: &mockEmbedder{},
+			input:    model.CreateKnowledgeDocumentInput{DocType: model.KnowledgeDocTypeCode, Content: "c", Question: "q", CodeLang: ptr("   ")},
+			wantIs:   ErrInvalidDocument,
+			wantText: "code document requires code language",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			inserted := false
+			db := &mockDB{insertKnowledge: func(database.InsertKnowledgeDocumentParams) (string, error) {
+				inserted = true
+				return "id", tc.insertErr
+			}}
+			pub := &mockPublisher{}
 
-	doc, err := ks.UpdateDocument(ctx, adminID, "doc", model.UpdateKnowledgeDocumentInput{Content: "new"})
-	if err != nil {
-		t.Fatal(err)
-	}
+			_, err := NewKnowledgeStore(db, nil, tc.embedder, newPublisherFactory(pub), 0).CreateDocument(t.Context(), 11, tc.input)
 
-	// The returned document must carry the original owner, not the admin
-	if doc.UserID != originalOwner {
-		t.Fatalf("SECURITY: doc.UserID should be original owner %d, got %d", originalOwner, doc.UserID)
-	}
-
-	// The cmetadata written to DB must also preserve the original owner
-	parsed := parseMeta(storedMeta)
-	if parsed.UserID != originalOwner {
-		t.Fatalf("SECURITY: cmetadata user_id should be %d, got %d", originalOwner, parsed.UserID)
-	}
-
-	// Publisher is still scoped to the admin who performed the update
-	if pub.userID != adminID {
-		t.Fatalf("publisher userID should be admin %d, got %d", adminID, pub.userID)
+			assert.ErrorContains(t, err, tc.wantText)
+			if tc.wantIs != nil {
+				assert.ErrorIs(t, err, tc.wantIs)
+			}
+			assert.Equal(t, tc.wantInsert, inserted)
+			assert.Empty(t, pub.createdDocs, "subscribers were told about a document that was refused")
+		})
 	}
 }
 
-func TestUpdateUserDocument(t *testing.T) {
-	ctx := context.Background()
-	const userID = int64(30)
-
-	existingMeta := `{"doc_type":"answer","answer_type":"tool","question":"q"}`
-
-	t.Run("success uses GetUserDocument (ownership check)", func(t *testing.T) {
-		pub := &mockPublisher{}
-		var fetchedUUID, fetchedUserID string
-
-		db := &mockDB{
-			getUserKnowledge: func(_ context.Context, arg database.GetUserKnowledgeDocumentParams) (database.GetUserKnowledgeDocumentRow, error) {
-				fetchedUUID = arg.Uuid
-				fetchedUserID = arg.UserID.String
-				return database.GetUserKnowledgeDocumentRow{
-					ID:        arg.Uuid,
-					Document:  "old",
-					Cmetadata: sql.NullString{String: existingMeta, Valid: true},
-				}, nil
+// Rows are keyed by entry: UpdateDocument unless userScoped, then UpdateUserDocument. The caller is always user 20.
+func TestKnowledge_DoUpdate_MergesTheInputIntoTheStoredDocument(t *testing.T) {
+	for _, tc := range []struct {
+		name         string
+		userScoped   bool
+		maxBytes     int
+		content      string
+		cmetadata    string
+		input        model.UpdateKnowledgeDocumentInput
+		wantEmbedded string
+		wantMeta     knowledgeMeta
+	}{
+		{
+			name:      "the question and description are replaced and everything else is kept",
+			content:   "old content",
+			cmetadata: `{"doc_type":"guide","guide_type":"pentest","question":"original","description":"old","flow_id":1,"task_id":2,"subtask_id":3}`,
+			input:     model.UpdateKnowledgeDocumentInput{Content: "new content", Question: ptr("new q"), Description: ptr("new")},
+			wantMeta: knowledgeMeta{
+				DocType: "guide", GuideType: "pentest", Question: "new q", Description: "new",
+				FlowID: ptr(int64(1)), TaskID: ptr(int64(2)), SubtaskID: ptr(int64(3)), PartSize: 11, TotalSize: 11,
 			},
-			updateKnowledge: func(_ context.Context, arg database.UpdateKnowledgeDocumentParams) (database.UpdateKnowledgeDocumentRow, error) {
-				return database.UpdateKnowledgeDocumentRow{
-					ID:       arg.Uuid.String,
-					Document: arg.Document.String,
-					Cmetadata: sql.NullString{
-						String: existingMeta,
-						Valid:  true,
-					},
-				}, nil
+		},
+		{
+			name:      "guide to answer drops the guide type and takes the answer type",
+			content:   "old",
+			cmetadata: `{"doc_type":"guide","guide_type":"pentest","question":"q"}`,
+			input: model.UpdateKnowledgeDocumentInput{
+				Content: "new content", DocType: ptr(model.KnowledgeDocTypeAnswer), AnswerType: ptr(model.KnowledgeAnswerTypeVulnerability),
 			},
-		}
-		ks := &knowledgeStore{
-			db:       db,
-			embedder: &mockEmbedder{available: true},
-			newKnp:   newPublisherFactory(pub),
-		}
-
-		_, err := ks.UpdateUserDocument(ctx, userID, "my-doc", model.UpdateKnowledgeDocumentInput{Content: "updated"})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if fetchedUUID != "my-doc" {
-			t.Fatal("wrong uuid fetched")
-		}
-		if fetchedUserID != "30" {
-			t.Fatalf("wrong userID passed to GetUserDocument: %q", fetchedUserID)
-		}
-	})
-
-	// SECURITY: if GetUserDocument fails (wrong owner), update is blocked
-	t.Run("SECURITY: wrong owner causes update to fail", func(t *testing.T) {
-		db := &mockDB{
-			getUserKnowledge: func(_ context.Context, _ database.GetUserKnowledgeDocumentParams) (database.GetUserKnowledgeDocumentRow, error) {
-				return database.GetUserKnowledgeDocumentRow{}, errors.New("not found")
+			wantMeta: knowledgeMeta{DocType: "answer", AnswerType: "vulnerability", Question: "q", PartSize: 11, TotalSize: 11},
+		},
+		{
+			name:      "answer to code drops the answer type and takes the language",
+			content:   "old",
+			cmetadata: `{"doc_type":"answer","answer_type":"vulnerability","question":"q"}`,
+			input:     model.UpdateKnowledgeDocumentInput{Content: "code here", DocType: ptr(model.KnowledgeDocTypeCode), CodeLang: ptr("python")},
+			wantMeta:  knowledgeMeta{DocType: "code", CodeLang: "python", Question: "q", PartSize: 9, TotalSize: 9},
+		},
+		{
+			name:      "code to guide drops the language and takes the guide type",
+			content:   "old",
+			cmetadata: `{"doc_type":"code","code_lang":"go","question":"q"}`,
+			input: model.UpdateKnowledgeDocumentInput{
+				Content: "guide text", DocType: ptr(model.KnowledgeDocTypeGuide), GuideType: ptr(model.KnowledgeGuideTypePentest),
 			},
-		}
-		ks := &knowledgeStore{
-			db:       db,
-			embedder: &mockEmbedder{available: true},
-		}
-		_, err := ks.UpdateUserDocument(ctx, userID, "not-my-doc", model.UpdateKnowledgeDocumentInput{Content: "evil update"})
-		if err == nil {
-			t.Fatal("SECURITY: update of another user's document must be rejected")
-		}
-	})
+			wantMeta: knowledgeMeta{DocType: "guide", GuideType: "pentest", Question: "q", PartSize: 10, TotalSize: 10},
+		},
+		{
+			name:      "the same doc type keeps the stored sub-type",
+			content:   "old",
+			cmetadata: `{"doc_type":"guide","guide_type":"pentest","question":"q"}`,
+			input:     model.UpdateKnowledgeDocumentInput{Content: "updated guide", DocType: ptr(model.KnowledgeDocTypeGuide)},
+			wantMeta:  knowledgeMeta{DocType: "guide", GuideType: "pentest", Question: "q", PartSize: 13, TotalSize: 13},
+		},
+		{
+			name:      "no doc type keeps the stored sub-type",
+			content:   "old",
+			cmetadata: `{"doc_type":"code","code_lang":"rust","question":"q"}`,
+			input:     model.UpdateKnowledgeDocumentInput{Content: "updated code"},
+			wantMeta:  knowledgeMeta{DocType: "code", CodeLang: "rust", Question: "q", PartSize: 12, TotalSize: 12},
+		},
+		{
+			name:      "the same doc type with a new sub-type takes it",
+			content:   "old",
+			cmetadata: `{"doc_type":"answer","answer_type":"vulnerability","question":"q"}`,
+			input: model.UpdateKnowledgeDocumentInput{
+				Content: "updated", DocType: ptr(model.KnowledgeDocTypeAnswer), AnswerType: ptr(model.KnowledgeAnswerTypeCode),
+			},
+			wantMeta: knowledgeMeta{DocType: "answer", AnswerType: "code", Question: "q", PartSize: 7, TotalSize: 7},
+		},
+		{
+			name:      "a single chunk takes the new length as both sizes",
+			content:   "0123456789",
+			cmetadata: `{"doc_type":"answer","answer_type":"other","part_size":10,"total_size":10}`,
+			input:     model.UpdateKnowledgeDocumentInput{Content: "hello"},
+			wantMeta:  knowledgeMeta{DocType: "answer", AnswerType: "other", PartSize: 5, TotalSize: 5},
+		},
+		{
+			name:      "a shrinking chunk shrinks the whole document by the same amount",
+			content:   string(make([]byte, 100)),
+			cmetadata: `{"doc_type":"guide","guide_type":"use","part_size":100,"total_size":300}`,
+			input:     model.UpdateKnowledgeDocumentInput{Content: string(make([]byte, 80))},
+			wantMeta:  knowledgeMeta{DocType: "guide", GuideType: "use", PartSize: 80, TotalSize: 280},
+		},
+		{
+			name:      "a growing chunk grows the whole document by the same amount",
+			content:   string(make([]byte, 50)),
+			cmetadata: `{"doc_type":"code","code_lang":"go","part_size":50,"total_size":150}`,
+			input:     model.UpdateKnowledgeDocumentInput{Content: string(make([]byte, 70))},
+			wantMeta:  knowledgeMeta{DocType: "code", CodeLang: "go", PartSize: 70, TotalSize: 170},
+		},
+		{
+			name:      "a document stored without sizes takes the new length",
+			content:   "old",
+			cmetadata: `{"doc_type":"answer","answer_type":"other"}`,
+			input:     model.UpdateKnowledgeDocumentInput{Content: "new content"},
+			wantMeta:  knowledgeMeta{DocType: "answer", AnswerType: "other", PartSize: 11, TotalSize: 11},
+		},
+		{
+			name:      "the stored owner is kept when someone else updates it",
+			content:   "old",
+			cmetadata: `{"doc_type":"answer","answer_type":"other","user_id":99,"question":"q"}`,
+			input:     model.UpdateKnowledgeDocumentInput{Content: "new"},
+			wantMeta:  knowledgeMeta{DocType: "answer", AnswerType: "other", UserID: 99, Question: "q", PartSize: 3, TotalSize: 3},
+		},
+		{
+			name:         "content past the embedding limit is embedded cut and stored whole",
+			maxBytes:     3,
+			content:      "old",
+			cmetadata:    `{"doc_type":"answer","answer_type":"other"}`,
+			input:        model.UpdateKnowledgeDocumentInput{Content: "new content"},
+			wantEmbedded: "new",
+			wantMeta:     knowledgeMeta{DocType: "answer", AnswerType: "other", PartSize: 11, TotalSize: 11},
+		},
+		{
+			name:       "a user's update reads the document through the ownership check",
+			userScoped: true,
+			content:    "old",
+			cmetadata:  `{"doc_type":"answer","answer_type":"tool","question":"q","user_id":20}`,
+			input:      model.UpdateKnowledgeDocumentInput{Content: "updated"},
+			wantMeta:   knowledgeMeta{DocType: "answer", AnswerType: "tool", Question: "q", UserID: 20, PartSize: 7, TotalSize: 7},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var fetched []any
+			var written []database.UpdateKnowledgeDocumentParams
+			db := &mockDB{
+				getKnowledge: func(uuid string) (database.GetKnowledgeDocumentRow, error) {
+					fetched = append(fetched, uuid)
+					return makeRow(uuid, tc.content, tc.cmetadata), nil
+				},
+				getUserKnowledge: func(arg database.GetUserKnowledgeDocumentParams) (database.GetUserKnowledgeDocumentRow, error) {
+					fetched = append(fetched, arg)
+					return database.GetUserKnowledgeDocumentRow(makeRow(arg.Uuid, tc.content, tc.cmetadata)), nil
+				},
+				updateKnowledge: func(arg database.UpdateKnowledgeDocumentParams) (database.UpdateKnowledgeDocumentRow, error) {
+					written = append(written, arg)
+					return database.UpdateKnowledgeDocumentRow{
+						ID:        arg.Uuid.String,
+						Document:  arg.Document.String,
+						Cmetadata: sql.NullString{String: string(arg.Cmetadata.RawMessage), Valid: arg.Cmetadata.Valid},
+					}, nil
+				},
+			}
+			embedder := &mockEmbedder{}
+			pub := &mockPublisher{}
+			ks := NewKnowledgeStore(db, nil, embedder, newPublisherFactory(pub), tc.maxBytes)
+
+			var doc *model.KnowledgeDocument
+			var err error
+			if tc.userScoped {
+				doc, err = ks.UpdateUserDocument(t.Context(), 20, "doc-id", tc.input)
+			} else {
+				doc, err = ks.UpdateDocument(t.Context(), 20, "doc-id", tc.input)
+			}
+			require.NoError(t, err)
+
+			if tc.userScoped {
+				assert.Equal(t, []any{database.GetUserKnowledgeDocumentParams{Uuid: "doc-id", UserID: sql.NullString{String: "20", Valid: true}}}, fetched)
+			} else {
+				assert.Equal(t, []any{"doc-id"}, fetched)
+			}
+			require.Len(t, written, 1)
+			assert.Equal(t, sql.NullString{String: "doc-id", Valid: true}, written[0].Uuid)
+			assert.Equal(t, sql.NullString{String: tc.input.Content, Valid: true}, written[0].Document)
+			assert.Equal(t, "[0.1,0.2,0.3]", written[0].Embedding)
+			assert.True(t, written[0].Cmetadata.Valid, "an invalid metadata value would be written as NULL")
+			assert.Equal(t, tc.wantMeta, parseMeta(string(written[0].Cmetadata.RawMessage)))
+			wantEmbedded := tc.input.Content
+			if tc.wantEmbedded != "" {
+				wantEmbedded = tc.wantEmbedded
+			}
+			assert.Equal(t, []string{wantEmbedded}, embedder.embedded)
+
+			assert.Equal(t, "doc-id", doc.ID)
+			assert.Equal(t, tc.input.Content, doc.Content)
+			assert.Equal(t, tc.wantMeta, metaFromDoc(doc), "the document handed back is the one written")
+			assert.Equal(t, []*model.KnowledgeDocument{doc}, pub.updatedDocs)
+			assert.Equal(t, int64(20), pub.userID, "the event is scoped to the caller, not the owner")
+		})
+	}
 }
 
-func TestRenameDocument(t *testing.T) {
-	ctx := context.Background()
-	const userID = int64(7)
+// Rows are keyed by entry: UpdateDocument unless userScoped, then UpdateUserDocument.
+func TestKnowledge_DoUpdate_RefusesWithoutAnnouncing(t *testing.T) {
+	errEmbed := errors.New("embedding failed")
+	errWrite := errors.New("constraint error")
+	guide := `{"doc_type":"guide","guide_type":"pentest","question":"q"}`
 
-	t.Run("metadata-only: question updated, content preserved, no embedder needed", func(t *testing.T) {
-		pub := &mockPublisher{}
-		var gotMeta database.UpdateKnowledgeDocumentMetadataParams
+	for _, tc := range []struct {
+		name       string
+		userScoped bool
+		getErr     error
+		writeErr   error
+		embedder   embeddings.Embedder
+		cmetadata  string
+		input      model.UpdateKnowledgeDocumentInput
+		wantIs     error
+		wantText   string
+		wantWrite  bool
+	}{
+		{name: "no embedder is configured", embedder: nil, cmetadata: guide, wantText: "embedding provider is not available"},
+		{name: "the embedder is unavailable", embedder: &mockEmbedder{unavailable: true}, cmetadata: guide, wantText: "embedding provider is not available"},
+		{name: "the content cannot be embedded", embedder: &mockEmbedder{err: errEmbed}, cmetadata: guide, wantIs: errEmbed, wantText: "knowledge: compute embedding"},
+		{name: "the embedder returns no vector", embedder: &mockEmbedder{vectors: [][]float32{}}, cmetadata: guide, wantText: "knowledge: embedder returned no vectors"},
+		{name: "the write fails", embedder: &mockEmbedder{}, writeErr: errWrite, cmetadata: guide, wantIs: errWrite, wantText: "knowledge: update document doc-id", wantWrite: true},
+		{
+			name:      "a type change that leaves no sub-type",
+			embedder:  &mockEmbedder{},
+			cmetadata: `{"doc_type":"guide","guide_type":"install","question":"q"}`,
+			input:     model.UpdateKnowledgeDocumentInput{DocType: ptr(model.KnowledgeDocTypeAnswer)},
+			wantIs:    ErrInvalidDocument,
+			wantText:  "answer document requires answer type",
+		},
+		{name: "a missing document", embedder: &mockEmbedder{}, getErr: sql.ErrNoRows, cmetadata: guide, wantIs: sql.ErrNoRows, wantText: "knowledge: get document doc-id"},
+		{
+			name:       "another user's document",
+			userScoped: true,
+			embedder:   &mockEmbedder{},
+			getErr:     sql.ErrNoRows,
+			cmetadata:  guide,
+			wantIs:     sql.ErrNoRows,
+			wantText:   "knowledge: get user document doc-id",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			written := false
+			db := &mockDB{
+				getKnowledge: func(uuid string) (database.GetKnowledgeDocumentRow, error) {
+					return makeRow(uuid, "old", tc.cmetadata), tc.getErr
+				},
+				getUserKnowledge: func(arg database.GetUserKnowledgeDocumentParams) (database.GetUserKnowledgeDocumentRow, error) {
+					return database.GetUserKnowledgeDocumentRow(makeRow(arg.Uuid, "old", tc.cmetadata)), tc.getErr
+				},
+				updateKnowledge: func(database.UpdateKnowledgeDocumentParams) (database.UpdateKnowledgeDocumentRow, error) {
+					written = true
+					return database.UpdateKnowledgeDocumentRow{}, tc.writeErr
+				},
+			}
+			pub := &mockPublisher{}
+			ks := NewKnowledgeStore(db, nil, tc.embedder, newPublisherFactory(pub), 0)
+			input := tc.input
+			input.Content = "new"
 
-		db := &mockDB{
-			getKnowledge: func(_ context.Context, uuid string) (database.GetKnowledgeDocumentRow, error) {
-				return makeRow(uuid, "PRESERVED CONTENT", `{"doc_type":"answer","answer_type":"vulnerability","question":"original","user_id":"7","manual":true}`), nil
-			},
-			updateKnowledgeMeta: func(_ context.Context, arg database.UpdateKnowledgeDocumentMetadataParams) (database.UpdateKnowledgeDocumentMetadataRow, error) {
-				gotMeta = arg
-				return database.UpdateKnowledgeDocumentMetadataRow{
-					ID:        arg.Uuid.String,
-					Document:  "PRESERVED CONTENT", // text untouched, not re-embedded
-					Cmetadata: sql.NullString{String: string(arg.Cmetadata.RawMessage), Valid: true},
-				}, nil
-			},
-			// updateKnowledge intentionally nil — the re-embed path must NOT run.
-		}
-		ks := &knowledgeStore{
-			db:       db,
-			embedder: nil, // rename must not require a configured embedder
-			newKnp:   newPublisherFactory(pub),
-		}
+			var err error
+			if tc.userScoped {
+				_, err = ks.UpdateUserDocument(t.Context(), 20, "doc-id", input)
+			} else {
+				_, err = ks.UpdateDocument(t.Context(), 20, "doc-id", input)
+			}
 
-		doc, err := ks.RenameDocument(ctx, userID, "doc-id", "  RENAMED  ")
-		if err != nil {
-			t.Fatalf("rename must not need an embedder: %v", err)
-		}
-		if doc.Content != "PRESERVED CONTENT" {
-			t.Fatalf("content must be preserved, got %q", doc.Content)
-		}
-		if doc.Question != "RENAMED" {
-			t.Fatalf("question: want RENAMED (trimmed), got %q", doc.Question)
-		}
-		meta := parseMeta(string(gotMeta.Cmetadata.RawMessage))
-		if meta.Question != "RENAMED" {
-			t.Fatalf("stored question: want RENAMED, got %q", meta.Question)
-		}
-		if meta.DocType != "answer" || meta.AnswerType != "vulnerability" {
-			t.Fatalf("other metadata not preserved: %+v", meta)
-		}
-		if len(pub.updatedDocs) != 1 {
-			t.Fatal("KnowledgeDocumentUpdated event not published")
-		}
-	})
-
-	t.Run("admin: get error propagates (missing document)", func(t *testing.T) {
-		db := &mockDB{
-			getKnowledge: func(_ context.Context, _ string) (database.GetKnowledgeDocumentRow, error) {
-				return database.GetKnowledgeDocumentRow{}, errors.New("not found")
-			},
-			// updateKnowledgeMeta intentionally nil — must not be reached.
-		}
-		ks := &knowledgeStore{db: db, embedder: nil}
-		if _, err := ks.RenameDocument(ctx, userID, "missing", "x"); err == nil {
-			t.Fatal("expected error when document does not exist")
-		}
-	})
+			assert.ErrorContains(t, err, tc.wantText)
+			if tc.wantIs != nil {
+				assert.ErrorIs(t, err, tc.wantIs)
+			}
+			assert.Equal(t, tc.wantWrite, written)
+			assert.Empty(t, pub.updatedDocs)
+		})
+	}
 }
 
-func TestRenameUserDocument(t *testing.T) {
-	ctx := context.Background()
-	const userID = int64(30)
-
-	t.Run("uses GetUserDocument for ownership, then metadata-only update", func(t *testing.T) {
-		pub := &mockPublisher{}
-		var fetchedUserID string
-		var metaUpdated bool
-
-		db := &mockDB{
-			getUserKnowledge: func(_ context.Context, arg database.GetUserKnowledgeDocumentParams) (database.GetUserKnowledgeDocumentRow, error) {
-				fetchedUserID = arg.UserID.String
-				return database.GetUserKnowledgeDocumentRow{
-					ID:        arg.Uuid,
-					Document:  "kept",
-					Cmetadata: sql.NullString{String: `{"doc_type":"answer","question":"old","user_id":"30"}`, Valid: true},
-				}, nil
+// Rows are keyed by entry: RenameDocument unless userScoped, then RenameUserDocument. No embedder is configured.
+func TestKnowledge_DoRename_ReplacesOnlyTheQuestion(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		userScoped bool
+		cmetadata  string
+		question   string
+		wantMeta   knowledgeMeta
+	}{
+		{
+			name: "every other stored field is kept and the question is trimmed",
+			cmetadata: `{"doc_type":"answer","answer_type":"vulnerability","question":"original","user_id":7,"manual":true,` +
+				`"flow_id":1,"task_id":2,"subtask_id":3,"description":"d","part_size":17,"total_size":17}`,
+			question: "  RENAMED  ",
+			wantMeta: knowledgeMeta{
+				DocType: "answer", AnswerType: "vulnerability", Question: "RENAMED", UserID: 7, Manual: true,
+				FlowID: ptr(int64(1)), TaskID: ptr(int64(2)), SubtaskID: ptr(int64(3)), Description: "d", PartSize: 17, TotalSize: 17,
 			},
-			updateKnowledgeMeta: func(_ context.Context, arg database.UpdateKnowledgeDocumentMetadataParams) (database.UpdateKnowledgeDocumentMetadataRow, error) {
-				metaUpdated = true
-				return database.UpdateKnowledgeDocumentMetadataRow{
-					ID:        arg.Uuid.String,
-					Document:  "kept",
-					Cmetadata: sql.NullString{String: string(arg.Cmetadata.RawMessage), Valid: true},
-				}, nil
-			},
-			// re-embed path (updateKnowledge) intentionally nil — must not run.
-		}
-		ks := &knowledgeStore{db: db, embedder: nil, newKnp: newPublisherFactory(pub)}
+		},
+		{
+			name:       "a user's rename reads the document through the ownership check",
+			userScoped: true,
+			cmetadata:  `{"doc_type":"answer","question":"old","user_id":30}`,
+			question:   "new title",
+			wantMeta:   knowledgeMeta{DocType: "answer", Question: "new title", UserID: 30},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var fetched []any
+			var written []database.UpdateKnowledgeDocumentMetadataParams
+			db := &mockDB{
+				getKnowledge: func(uuid string) (database.GetKnowledgeDocumentRow, error) {
+					fetched = append(fetched, uuid)
+					return makeRow(uuid, "PRESERVED CONTENT", tc.cmetadata), nil
+				},
+				getUserKnowledge: func(arg database.GetUserKnowledgeDocumentParams) (database.GetUserKnowledgeDocumentRow, error) {
+					fetched = append(fetched, arg)
+					return database.GetUserKnowledgeDocumentRow(makeRow(arg.Uuid, "PRESERVED CONTENT", tc.cmetadata)), nil
+				},
+				updateKnowledgeMeta: func(arg database.UpdateKnowledgeDocumentMetadataParams) (database.UpdateKnowledgeDocumentMetadataRow, error) {
+					written = append(written, arg)
+					return database.UpdateKnowledgeDocumentMetadataRow{
+						ID:        arg.Uuid.String,
+						Document:  "PRESERVED CONTENT",
+						Cmetadata: sql.NullString{String: string(arg.Cmetadata.RawMessage), Valid: arg.Cmetadata.Valid},
+					}, nil
+				},
+			}
+			pub := &mockPublisher{}
+			ks := NewKnowledgeStore(db, nil, nil, newPublisherFactory(pub), 0)
 
-		doc, err := ks.RenameUserDocument(ctx, userID, "my-doc", "new title")
-		if err != nil {
-			t.Fatal(err)
-		}
-		if fetchedUserID != "30" {
-			t.Fatalf("ownership: GetUserDocument must receive userID 30, got %q", fetchedUserID)
-		}
-		if !metaUpdated {
-			t.Fatal("metadata update not called")
-		}
-		if doc.Content != "kept" || doc.Question != "new title" {
-			t.Fatalf("unexpected doc: content=%q question=%q", doc.Content, doc.Question)
-		}
-	})
+			var doc *model.KnowledgeDocument
+			var err error
+			if tc.userScoped {
+				doc, err = ks.RenameUserDocument(t.Context(), 30, "doc-id", tc.question)
+			} else {
+				doc, err = ks.RenameDocument(t.Context(), 30, "doc-id", tc.question)
+			}
+			require.NoError(t, err, "a rename must not need an embedder")
 
-	// SECURITY: a non-owner's rename is blocked at GetUserDocument — no write happens.
-	t.Run("SECURITY: wrong owner blocks rename, no metadata write", func(t *testing.T) {
-		var metaCalled bool
-		db := &mockDB{
-			getUserKnowledge: func(_ context.Context, _ database.GetUserKnowledgeDocumentParams) (database.GetUserKnowledgeDocumentRow, error) {
-				return database.GetUserKnowledgeDocumentRow{}, errors.New("not found")
-			},
-			updateKnowledgeMeta: func(_ context.Context, _ database.UpdateKnowledgeDocumentMetadataParams) (database.UpdateKnowledgeDocumentMetadataRow, error) {
-				metaCalled = true
-				return database.UpdateKnowledgeDocumentMetadataRow{}, nil
-			},
-		}
-		ks := &knowledgeStore{db: db, embedder: nil}
+			if tc.userScoped {
+				assert.Equal(t, []any{database.GetUserKnowledgeDocumentParams{Uuid: "doc-id", UserID: sql.NullString{String: "30", Valid: true}}}, fetched)
+			} else {
+				assert.Equal(t, []any{"doc-id"}, fetched)
+			}
+			require.Len(t, written, 1)
+			assert.Equal(t, sql.NullString{String: "doc-id", Valid: true}, written[0].Uuid)
+			assert.True(t, written[0].Cmetadata.Valid, "an invalid metadata value would be written as NULL")
+			assert.Equal(t, tc.wantMeta, parseMeta(string(written[0].Cmetadata.RawMessage)))
 
-		if _, err := ks.RenameUserDocument(ctx, userID, "not-my-doc", "evil rename"); err == nil {
-			t.Fatal("SECURITY: rename of another user's document must be rejected")
-		}
-		if metaCalled {
-			t.Fatal("SECURITY: metadata must NOT be written when the ownership check fails")
-		}
-	})
+			assert.Equal(t, "PRESERVED CONTENT", doc.Content)
+			assert.Equal(t, tc.wantMeta.Question, doc.Question)
+			assert.Equal(t, []*model.KnowledgeDocument{doc}, pub.updatedDocs)
+			assert.Equal(t, int64(30), pub.userID)
+		})
+	}
+}
+
+// Rows are keyed by entry: RenameDocument unless userScoped, then RenameUserDocument.
+func TestKnowledge_DoRename_RefusesWithoutAnnouncing(t *testing.T) {
+	errWrite := errors.New("write failed")
+
+	for _, tc := range []struct {
+		name       string
+		userScoped bool
+		getErr     error
+		writeErr   error
+		wantIs     error
+		wantText   string
+		wantWrite  bool
+	}{
+		{name: "a missing document", getErr: sql.ErrNoRows, wantIs: sql.ErrNoRows, wantText: "knowledge: get document doc-id"},
+		{name: "another user's document", userScoped: true, getErr: sql.ErrNoRows, wantIs: sql.ErrNoRows, wantText: "knowledge: get user document doc-id"},
+		{name: "the write fails", writeErr: errWrite, wantIs: errWrite, wantText: "knowledge: rename document doc-id", wantWrite: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			written := false
+			db := &mockDB{
+				getKnowledge: func(uuid string) (database.GetKnowledgeDocumentRow, error) {
+					return makeRow(uuid, "kept", `{"doc_type":"answer","question":"old"}`), tc.getErr
+				},
+				getUserKnowledge: func(arg database.GetUserKnowledgeDocumentParams) (database.GetUserKnowledgeDocumentRow, error) {
+					return database.GetUserKnowledgeDocumentRow(makeRow(arg.Uuid, "kept", `{"doc_type":"answer","question":"old"}`)), tc.getErr
+				},
+				updateKnowledgeMeta: func(database.UpdateKnowledgeDocumentMetadataParams) (database.UpdateKnowledgeDocumentMetadataRow, error) {
+					written = true
+					return database.UpdateKnowledgeDocumentMetadataRow{}, tc.writeErr
+				},
+			}
+			pub := &mockPublisher{}
+			ks := NewKnowledgeStore(db, nil, nil, newPublisherFactory(pub), 0)
+
+			var err error
+			if tc.userScoped {
+				_, err = ks.RenameUserDocument(t.Context(), 30, "doc-id", "evil rename")
+			} else {
+				_, err = ks.RenameDocument(t.Context(), 30, "doc-id", "evil rename")
+			}
+
+			assert.ErrorIs(t, err, tc.wantIs)
+			assert.ErrorContains(t, err, tc.wantText)
+			assert.Equal(t, tc.wantWrite, written)
+			assert.Empty(t, pub.updatedDocs)
+		})
+	}
 }

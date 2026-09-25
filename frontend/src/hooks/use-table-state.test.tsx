@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 
 import { act, renderHook, waitFor } from '@testing-library/react';
-import { MemoryRouter, useLocation } from 'react-router-dom';
+import { BrowserRouter, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { useTableState } from './use-table-state';
@@ -30,9 +30,9 @@ const useStateWithLocation = (options: { debounceMs?: number } = {}): RenderResu
 };
 
 const renderWithRouter = (initialEntries: string[], options?: { debounceMs?: number }) => {
-    const Wrapper = ({ children }: { children: ReactNode }) => (
-        <MemoryRouter initialEntries={initialEntries}>{children}</MemoryRouter>
-    );
+    window.history.replaceState(null, '', initialEntries[0]);
+
+    const Wrapper = ({ children }: { children: ReactNode }) => <BrowserRouter>{children}</BrowserRouter>;
 
     return renderHook(() => useStateWithLocation(options), { wrapper: Wrapper });
 };
@@ -189,10 +189,9 @@ describe('useTableState — atomic `update` (race regression)', () => {
     });
 
     it('coalescence resolves replace conflict in favour of push (intentional history wins)', async () => {
-        // setFilter requests replace, setPage requests push. The merged
-        // navigation should push, so back-button can step out of the new
-        // filter+page combination.
         const { result } = renderWithRouter(['/flows']);
+        const depthBefore = window.history.length;
+
         act(() => {
             result.current.setFilter('alpha'); // replace
             result.current.setPage(5); // push
@@ -200,9 +199,22 @@ describe('useTableState — atomic `update` (race regression)', () => {
         await waitFor(() => {
             expect(new URLSearchParams(result.current.search).get('q')).toBe('alpha');
         });
-        // History assertion is implicit — we can't easily inspect the entry
-        // stack from `MemoryRouter`, but the merged URL has both params
-        // which proves coalescence happened.
+
+        expect(window.history.length).toBe(depthBefore + 1);
+    });
+
+    it('leaves the history where it was when every update in the batch asked to replace', async () => {
+        const { result } = renderWithRouter(['/flows']);
+        const depthBefore = window.history.length;
+
+        act(() => {
+            result.current.setFilter('beta');
+        });
+        await waitFor(() => {
+            expect(new URLSearchParams(result.current.search).get('q')).toBe('beta');
+        });
+
+        expect(window.history.length).toBe(depthBefore);
     });
 });
 
@@ -260,16 +272,14 @@ describe('useTableState — `?page=1` canonicalization', () => {
 
 describe('useTableState — setPage replace option', () => {
     it('setPage(n, { replace: true }) writes the URL without leaving a history entry the user can step back onto', async () => {
-        // Out-of-range clamping calls `setPage(lastPage, { replace: true })`
-        // — without `replace`, pressing back from the clamped URL would land
-        // on the original out-of-range URL and re-trigger the clamp,
-        // trapping the back-button. We can't directly assert "no history
-        // entry" from `MemoryRouter`, but we can confirm the option flows
-        // through to a successful URL write so the call site contract holds.
         const { result } = renderWithRouter(['/flows?page=999']);
+        const entriesBefore = window.history.length;
+
         act(() => result.current.setPage(78, { replace: true }));
         await waitFor(() => {
             expect(new URLSearchParams(result.current.search).get('page')).toBe('79');
         });
+
+        expect(window.history.length).toBe(entriesBefore);
     });
 });

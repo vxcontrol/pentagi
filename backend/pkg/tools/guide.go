@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"pentagi/pkg/database"
+	"pentagi/pkg/database/knowledge/limits"
 	"pentagi/pkg/graph/model"
 	obs "pentagi/pkg/observability"
 	"pentagi/pkg/observability/langfuse"
@@ -183,9 +184,9 @@ func (g *guide) Handle(ctx context.Context, name string, args json.RawMessage) (
 				langfuse.WithScoreName("guide_search_result"),
 				langfuse.WithScoreFloatValue(float64(doc.Score)),
 			)
-			buffer.WriteString(fmt.Sprintf("# Document %d Match score: %f\n\n", i+1, doc.Score))
-			buffer.WriteString(fmt.Sprintf("## Original Guide Type: %s\n\n", doc.Metadata["guide_type"]))
-			buffer.WriteString(fmt.Sprintf("## Original Guide Question\n\n%s\n\n", doc.Metadata["question"]))
+			fmt.Fprintf(&buffer, "# Document %d Match score: %f\n\n", i+1, doc.Score)
+			fmt.Fprintf(&buffer, "## Original Guide Type: %s\n\n", doc.Metadata["guide_type"])
+			fmt.Fprintf(&buffer, "## Original Guide Question\n\n%s\n\n", doc.Metadata["question"])
 			buffer.WriteString("## Content\n\n")
 			buffer.WriteString(doc.PageContent)
 			buffer.WriteString("\n\n")
@@ -197,7 +198,7 @@ func (g *guide) Handle(ctx context.Context, name string, args json.RawMessage) (
 				logger.WithError(err).Error("failed to marshal filters")
 				return "", fmt.Errorf("failed to marshal filters: %w", err)
 			}
-			queriesText := strings.Join(action.Questions, "\n--------------------------------\n")
+			queriesText := g.replacer.ReplaceString(strings.Join(action.Questions, "\n--------------------------------\n"))
 			_, _ = g.vslp.PutLog(
 				ctx,
 				agentCtx.ParentAgentType,
@@ -220,13 +221,18 @@ func (g *guide) Handle(ctx context.Context, name string, args json.RawMessage) (
 			return "", fmt.Errorf("failed to unmarshal %s store guide action arguments: %w", name, err)
 		}
 
+		action.Question = limits.FillBlankQuestion(action.Question, action.Guide, "Untitled guide")
+		if strings.TrimSpace(string(action.Type)) == "" {
+			action.Type = GuideType(model.KnowledgeGuideTypeOther)
+		}
+
 		guide := fmt.Sprintf("Question:\n%s\n\nGuide:\n%s", action.Question, action.Guide)
 
 		// Anonymize before anything else so all downstream paths (including error
 		// branches that emit langfuse events) only ever expose the anonymized form.
 		var (
-			anonymizedGuide     = g.replacer.ReplaceString(guide)
-			anonymizedQuestion  = g.replacer.ReplaceString(action.Question)
+			anonymizedGuide     = boundedContent(g.replacer, guide)
+			anonymizedQuestion  = limits.TruncateToLimit(g.replacer.ReplaceString(action.Question), limits.MaxQuestionLen)
 			anonymizedGuideOnly = g.replacer.ReplaceString(action.Guide) // used in slow-path embedding text
 		)
 
@@ -376,9 +382,9 @@ func (g *guide) Handle(ctx context.Context, name string, args json.RawMessage) (
 				agentCtx.ParentAgentType,
 				agentCtx.CurrentAgentType,
 				filtersData,
-				action.Question,
+				anonymizedQuestion,
 				database.VecstoreActionTypeStore,
-				guide,
+				anonymizedGuide,
 				g.taskID,
 				g.subtaskID,
 			)

@@ -49,7 +49,7 @@ test.describe('flow interrupt', { tag: '@flows' }, () => {
         test('stops a running flow from the composer and hands the input back', async ({ page, pageErrorLog }) => {
             await openFlowA(page);
 
-            const stop = page.getByRole('button', { name: 'Cancel' });
+            const stop = page.getByRole('button', { name: 'Stop' });
 
             await expect(stop, 'a running flow offers Stop, not Submit').toBeVisible();
             await expect(page.getByRole('button', { name: 'Submit' })).toBeHidden();

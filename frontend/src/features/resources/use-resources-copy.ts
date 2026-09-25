@@ -4,10 +4,10 @@ import { z } from 'zod';
 
 import type { OverwriteOutcome } from '@/components/shared/overwrite';
 
+import { pluralizeItems } from '@/components/shared/file-manager';
 import { api, getApiErrorMessage, getApiErrorStatusCode } from '@/lib/axios';
 
 import { RESOURCES_COPY_API_PATH } from './resources-constants';
-import { pluralizeItems } from './resources-utils';
 
 export const resourcesCopyFormSchema = z.object({
     destination: z

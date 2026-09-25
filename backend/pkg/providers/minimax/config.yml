@@ -50,7 +50,7 @@ assistant:
     cache_read: 0.06
 
 generator:
-  model: MiniMax-M3
+  model: MiniMax-M2.7
   temperature: 1.0
   top_p: 0.95
   top_k: 40
@@ -60,9 +60,10 @@ generator:
     input: 0.30
     output: 1.20
     cache_read: 0.06
+    cache_write: 0.375
 
 refiner:
-  model: MiniMax-M3
+  model: MiniMax-M2.7
   temperature: 1.0
   top_p: 0.95
   top_k: 40
@@ -72,9 +73,10 @@ refiner:
     input: 0.30
     output: 1.20
     cache_read: 0.06
+    cache_write: 0.375
 
 adviser:
-  model: MiniMax-M3
+  model: MiniMax-M2.7
   temperature: 1.0
   top_p: 0.95
   top_k: 40
@@ -84,6 +86,7 @@ adviser:
     input: 0.30
     output: 1.20
     cache_read: 0.06
+    cache_write: 0.375
 
 reflector:
   model: MiniMax-M3
@@ -110,7 +113,7 @@ searcher:
     cache_read: 0.06
 
 enricher:
-  model: MiniMax-M3
+  model: MiniMax-M2.7
   temperature: 1.0
   top_p: 0.95
   top_k: 40
@@ -120,9 +123,10 @@ enricher:
     input: 0.30
     output: 1.20
     cache_read: 0.06
+    cache_write: 0.375
 
 coder:
-  model: MiniMax-M3
+  model: MiniMax-M2.7
   temperature: 1.0
   top_p: 0.95
   top_k: 40
@@ -132,6 +136,7 @@ coder:
     input: 0.30
     output: 1.20
     cache_read: 0.06
+    cache_write: 0.375
 
 installer:
   model: MiniMax-M3
@@ -146,7 +151,7 @@ installer:
     cache_read: 0.06
 
 pentester:
-  model: MiniMax-M3
+  model: MiniMax-M2.7
   temperature: 1.0
   top_p: 0.95
   top_k: 40
@@ -156,3 +161,4 @@ pentester:
     input: 0.30
     output: 1.20
     cache_read: 0.06
+    cache_write: 0.375

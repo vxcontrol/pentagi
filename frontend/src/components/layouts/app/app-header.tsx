@@ -18,7 +18,7 @@ export function AppHeader({ children, className }: { children: ReactNode; classN
     return (
         <header
             className={cn(
-                'bg-background sticky top-0 z-10 flex h-12 w-full shrink-0 items-center gap-2 border-b transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12',
+                'bg-background sticky top-0 z-10 flex h-12 w-full shrink-0 items-center gap-2 border-b transition-[width,height] ease-linear',
                 className,
             )}
         >

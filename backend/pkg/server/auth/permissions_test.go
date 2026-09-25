@@ -1,36 +1,44 @@
-package auth_test
+package auth
 
 import (
-	"pentagi/pkg/server/auth"
+	"net/http"
 	"testing"
+	"time"
 
-	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func TestPrivilegesRequired(t *testing.T) {
+func TestPermissions_PrivilegesRequired_DemandsEveryListedPrivilege(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
+	middleware := NewAuthMiddleware("/base/url", "test", NewTokenCache(db), NewUserCache(db))
+	server := newTestServer(t, middleware.AuthTokenRequired, PrivilegesRequired("priv1", "priv2"))
 
-	tokenCache := auth.NewTokenCache(db)
-	userCache := auth.NewUserCache(db)
-	authMiddleware := auth.NewAuthMiddleware("/base/url", "test", tokenCache, userCache)
-	server := newTestServer(t, "/test", db, authMiddleware.AuthTokenRequired, auth.PrivilegesRequired("priv1", "priv2"))
-	defer server.Close()
+	cases := []struct {
+		name       string
+		privileges []string
+		wantReason string
+	}{
+		{"none of the listed privileges", []string{"some.permission"}, "'priv1' is not set"},
+		{"one of the two", []string{"priv1"}, "'priv2' is not set"},
+		{"both of them", []string{"priv1", "priv2"}, ""},
+	}
 
-	server.SetSessionCheckFunc(func(t *testing.T, c *gin.Context) {
-		t.Helper()
-		assert.Equal(t, uint64(1), c.GetUint64("uid"))
-	})
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			server.Authorize(t, 5*time.Minute, tc.privileges...)
 
-	assert.False(t, server.CallAndGetStatus(t))
+			got := server.Call(t, "")
 
-	server.Authorize(t, []string{"some.permission"})
-	assert.False(t, server.CallAndGetStatus(t))
-
-	server.Authorize(t, []string{"priv1"})
-	assert.False(t, server.CallAndGetStatus(t))
-
-	server.Authorize(t, []string{"priv1", "priv2"})
-	assert.True(t, server.CallAndGetStatus(t))
+			if tc.wantReason != "" {
+				assert.Equal(t, http.StatusForbidden, got.status)
+				assert.Equal(t, tc.wantReason, got.reason)
+				assert.Nil(t, got.seen)
+				return
+			}
+			assert.Equal(t, http.StatusOK, got.status)
+			require.NotNil(t, got.seen)
+			assert.Equal(t, uint64(1), got.seen.UID)
+		})
+	}
 }

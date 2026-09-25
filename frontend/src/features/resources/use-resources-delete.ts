@@ -3,10 +3,11 @@ import { toast } from 'sonner';
 
 import type { FileNode } from '@/components/shared/file-manager';
 
+import { pluralizeItems } from '@/components/shared/file-manager';
 import { api, getApiErrorMessage } from '@/lib/axios';
 
 import { RESOURCES_API_PATH } from './resources-constants';
-import { buildPathsQuery, pluralizeItems } from './resources-utils';
+import { buildPathsQuery } from './resources-utils';
 
 interface UseResourcesDeleteParams {
     onAfterDelete?: () => void;

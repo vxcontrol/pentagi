@@ -1,7 +1,6 @@
 package langfuse
 
 import (
-	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -10,154 +9,109 @@ import (
 	"github.com/vxcontrol/langchaingo/llms/reasoning"
 )
 
-// TestConvertInput tests various input conversion scenarios
-func TestConvertInput(t *testing.T) {
+func TestConverter_ConvertInput_TranslatesAChainToOpenAIMessages(t *testing.T) {
 	tests := []struct {
 		name     string
 		input    any
 		validate func(t *testing.T, result any)
 	}{
 		{
-			name:  "nil input",
-			input: nil,
-			validate: func(t *testing.T, result any) {
-				assert.Nil(t, result)
-			},
+			name:     "a nil input stays nil",
+			input:    nil,
+			validate: func(t *testing.T, result any) { assert.Nil(t, result) },
+		},
+		{
+			name:     "a value of another type passes through",
+			input:    "plain string",
+			validate: func(t *testing.T, result any) { assert.Equal(t, "plain string", result) },
+		},
+		{
+			name:     "an empty chain",
+			input:    []*llms.MessageContent{},
+			validate: func(t *testing.T, result any) { assert.Equal(t, []any{}, result) },
 		},
 		{
 			name: "simple text message",
 			input: []*llms.MessageContent{
-				{
-					Role: llms.ChatMessageTypeHuman,
-					Parts: []llms.ContentPart{
-						llms.TextContent{Text: "Hello"},
-					},
-				},
+				{Role: llms.ChatMessageTypeHuman, Parts: []llms.ContentPart{llms.TextContent{Text: "Hello"}}},
 			},
 			validate: func(t *testing.T, result any) {
-				messages := result.([]any)
-				msg := messages[0].(map[string]any)
+				msg := result.([]any)[0].(map[string]any)
 				assert.Equal(t, "user", msg["role"])
 				assert.Equal(t, "Hello", msg["content"])
 			},
 		},
 		{
-			name: "message with tools",
-			input: []*llms.MessageContent{
-				{
-					Role: llms.ChatMessageTypeAI,
-					Parts: []llms.ContentPart{
-						llms.TextContent{Text: "Let me search"},
-						llms.ToolCall{
-							ID: "call_001",
-							FunctionCall: &llms.FunctionCall{
-								Name:      "search",
-								Arguments: `{"query":"test"}`,
-							},
-						},
-					},
-				},
-			},
+			name: "several text parts are joined with spaces",
+			input: []*llms.MessageContent{{
+				Role:  llms.ChatMessageTypeAI,
+				Parts: []llms.ContentPart{llms.TextContent{Text: "Hello"}, llms.TextContent{Text: "World"}, llms.TextContent{Text: "!"}},
+			}},
 			validate: func(t *testing.T, result any) {
-				messages := result.([]any)
-				msg := messages[0].(map[string]any)
+				assert.Equal(t, "Hello World !", result.([]any)[0].(map[string]any)["content"])
+			},
+		},
+		{
+			name: "message with tools",
+			input: []*llms.MessageContent{{
+				Role: llms.ChatMessageTypeAI,
+				Parts: []llms.ContentPart{
+					llms.TextContent{Text: "Let me search"},
+					llms.ToolCall{ID: "call_001", FunctionCall: &llms.FunctionCall{Name: "search", Arguments: `{"query":"test"}`}},
+				},
+			}},
+			validate: func(t *testing.T, result any) {
+				msg := result.([]any)[0].(map[string]any)
 				assert.Equal(t, "assistant", msg["role"])
 				assert.Equal(t, "Let me search", msg["content"])
-
-				toolCalls := msg["tool_calls"].([]any)
-				require.Len(t, toolCalls, 1)
-
-				tc := toolCalls[0].(map[string]any)
-				assert.Equal(t, "call_001", tc["id"])
-				assert.Equal(t, "function", tc["type"])
-
-				fn := tc["function"].(map[string]any)
-				assert.Equal(t, "search", fn["name"])
-				assert.Equal(t, `{"query":"test"}`, fn["arguments"])
+				assert.Equal(t, []any{map[string]any{
+					"id":       "call_001",
+					"type":     "function",
+					"function": map[string]any{"name": "search", "arguments": `{"query":"test"}`},
+				}}, msg["tool_calls"])
 			},
 		},
 		{
 			name: "tool response with simple content",
 			input: []*llms.MessageContent{
 				{
-					Role: llms.ChatMessageTypeAI,
-					Parts: []llms.ContentPart{
-						llms.ToolCall{
-							ID: "call_001",
-							FunctionCall: &llms.FunctionCall{
-								Name:      "get_status",
-								Arguments: `{}`,
-							},
-						},
-					},
+					Role:  llms.ChatMessageTypeAI,
+					Parts: []llms.ContentPart{llms.ToolCall{ID: "call_001", FunctionCall: &llms.FunctionCall{Name: "get_status", Arguments: `{}`}}},
 				},
 				{
-					Role: llms.ChatMessageTypeTool,
-					Parts: []llms.ContentPart{
-						llms.ToolCallResponse{
-							ToolCallID: "call_001",
-							Content:    `{"status": "ok"}`,
-						},
-					},
+					Role:  llms.ChatMessageTypeTool,
+					Parts: []llms.ContentPart{llms.ToolCallResponse{ToolCallID: "call_001", Content: `{"status": "ok"}`}},
 				},
 			},
 			validate: func(t *testing.T, result any) {
 				messages := result.([]any)
 				require.Len(t, messages, 2)
-
-				toolMsg := messages[1].(map[string]any)
-				assert.Equal(t, "tool", toolMsg["role"])
-				assert.Equal(t, "call_001", toolMsg["tool_call_id"])
-				assert.Equal(t, "get_status", toolMsg["name"])
-
-				// Simple content (1-2 keys) is parsed as object, not string
-				// (Langfuse can decide how to display it)
-				content := toolMsg["content"]
-				assert.NotNil(t, content, "Content should not be nil")
-
-				// Can be either string or parsed object
-				switch v := content.(type) {
-				case string:
-					assert.Contains(t, v, "status")
-				case map[string]any:
-					assert.Contains(t, v, "status")
-				default:
-					t.Errorf("Unexpected content type: %T", content)
-				}
+				assert.Equal(t, map[string]any{
+					"role":         "tool",
+					"tool_call_id": "call_001",
+					"name":         "get_status",
+					"content":      map[string]any{"status": "ok"},
+				}, messages[1])
 			},
 		},
 		{
 			name: "tool response with rich content",
 			input: []*llms.MessageContent{
 				{
-					Role: llms.ChatMessageTypeAI,
-					Parts: []llms.ContentPart{
-						llms.ToolCall{
-							ID: "call_002",
-							FunctionCall: &llms.FunctionCall{
-								Name:      "search_db",
-								Arguments: `{}`,
-							},
-						},
-					},
+					Role:  llms.ChatMessageTypeAI,
+					Parts: []llms.ContentPart{llms.ToolCall{ID: "call_002", FunctionCall: &llms.FunctionCall{Name: "search_db", Arguments: `{}`}}},
 				},
 				{
 					Role: llms.ChatMessageTypeTool,
-					Parts: []llms.ContentPart{
-						llms.ToolCallResponse{
-							ToolCallID: "call_002",
-							Content:    `{"results": [{"id": 1, "name": "John"}], "count": 1, "page": 1}`,
-						},
-					},
+					Parts: []llms.ContentPart{llms.ToolCallResponse{
+						ToolCallID: "call_002",
+						Content:    `{"results": [{"id": 1, "name": "John"}], "count": 1, "page": 1}`,
+					}},
 				},
 			},
 			validate: func(t *testing.T, result any) {
-				messages := result.([]any)
-				toolMsg := messages[1].(map[string]any)
-
-				// Rich content (3+ keys or nested) becomes object
-				content, ok := toolMsg["content"].(map[string]any)
-				assert.True(t, ok, "Rich content should be object")
+				content, ok := result.([]any)[1].(map[string]any)["content"].(map[string]any)
+				require.True(t, ok, "rich content should be an object")
 				assert.Contains(t, content, "results")
 				assert.Contains(t, content, "count")
 				assert.Contains(t, content, "page")
@@ -165,301 +119,228 @@ func TestConvertInput(t *testing.T) {
 		},
 		{
 			name: "multimodal message",
+			input: []*llms.MessageContent{{
+				Role: llms.ChatMessageTypeHuman,
+				Parts: []llms.ContentPart{
+					llms.TextContent{Text: "What's this?"},
+					llms.ImageURLContent{URL: "https://example.com/image.jpg", Detail: "high"},
+				},
+			}},
+			validate: func(t *testing.T, result any) {
+				assert.Equal(t, []any{
+					map[string]any{"type": "text", "text": "What's this?"},
+					map[string]any{"type": "image_url", "image_url": map[string]any{"url": "https://example.com/image.jpg", "detail": "high"}},
+				}, result.([]any)[0].(map[string]any)["content"])
+			},
+		},
+		{
+			name: "a whole conversation keeps every role, the tool name and the thinking",
 			input: []*llms.MessageContent{
+				{Role: llms.ChatMessageTypeSystem, Parts: []llms.ContentPart{llms.TextContent{Text: "You are a security analyst."}}},
+				{Role: llms.ChatMessageTypeHuman, Parts: []llms.ContentPart{llms.TextContent{Text: "Check CVE-2024-1234"}}},
 				{
-					Role: llms.ChatMessageTypeHuman,
+					Role: llms.ChatMessageTypeAI,
 					Parts: []llms.ContentPart{
-						llms.TextContent{Text: "What's this?"},
-						llms.ImageURLContent{
-							URL:    "https://example.com/image.jpg",
-							Detail: "high",
-						},
+						llms.TextContent{Text: "I'll search for that vulnerability."},
+						llms.ToolCall{ID: "call_001", FunctionCall: &llms.FunctionCall{Name: "search_cve", Arguments: `{"cve_id":"CVE-2024-1234"}`}},
 					},
+				},
+				{
+					Role: llms.ChatMessageTypeTool,
+					Parts: []llms.ContentPart{llms.ToolCallResponse{
+						ToolCallID: "call_001",
+						Content:    `{"severity":"high","description":"SQL injection","cvss_score":8.5,"exploit_available":true}`,
+					}},
+				},
+				{
+					Role: llms.ChatMessageTypeAI,
+					Parts: []llms.ContentPart{llms.TextContent{
+						Text:      "This is a high-severity SQL injection vulnerability with CVSS 8.5. Exploit is available.",
+						Reasoning: &reasoning.ContentReasoning{Content: "The high CVSS score combined with exploit availability makes this critical."},
+					}},
 				},
 			},
 			validate: func(t *testing.T, result any) {
 				messages := result.([]any)
-				msg := messages[0].(map[string]any)
+				require.Len(t, messages, 5)
 
-				content := msg["content"].([]any)
-				require.Len(t, content, 2)
+				roles := make([]any, len(messages))
+				for i, message := range messages {
+					roles[i] = message.(map[string]any)["role"]
+				}
+				assert.Equal(t, []any{"system", "user", "assistant", "tool", "assistant"}, roles)
+				assert.Equal(t, []any{map[string]any{
+					"id":       "call_001",
+					"type":     "function",
+					"function": map[string]any{"name": "search_cve", "arguments": `{"cve_id":"CVE-2024-1234"}`},
+				}}, messages[2].(map[string]any)["tool_calls"])
 
-				// Text part
-				text := content[0].(map[string]any)
-				assert.Equal(t, "text", text["type"])
-				assert.Equal(t, "What's this?", text["text"])
+				toolMsg := messages[3].(map[string]any)
+				assert.Equal(t, "search_cve", toolMsg["name"])
+				assert.Equal(t, "high", toolMsg["content"].(map[string]any)["severity"])
 
-				// Image part
-				img := content[1].(map[string]any)
-				assert.Equal(t, "image_url", img["type"])
+				assert.Equal(t, []any{map[string]any{
+					"type":    "thinking",
+					"content": "The high CVSS score combined with exploit availability makes this critical.",
+				}}, messages[4].(map[string]any)["thinking"])
 			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := convertInput(tt.input, nil)
-			tt.validate(t, result)
+			tt.validate(t, convertInput(tt.input, nil))
 		})
 	}
 }
 
-// TestConvertOutput tests output conversion scenarios
-func TestConvertOutput(t *testing.T) {
+func TestConverter_ConvertOutput_TranslatesChoicesAndMessages(t *testing.T) {
 	tests := []struct {
 		name     string
 		output   any
 		validate func(t *testing.T, result any)
 	}{
 		{
-			name:   "nil output",
-			output: nil,
-			validate: func(t *testing.T, result any) {
-				assert.Nil(t, result)
-			},
+			name:     "a nil output stays nil",
+			output:   nil,
+			validate: func(t *testing.T, result any) { assert.Nil(t, result) },
 		},
 		{
-			name: "simple text response",
-			output: &llms.ContentChoice{
-				Content: "The answer is 42",
-			},
+			name:   "simple text response",
+			output: &llms.ContentChoice{Content: "The answer is 42"},
 			validate: func(t *testing.T, result any) {
-				msg := result.(map[string]any)
-				assert.Equal(t, "assistant", msg["role"])
-				assert.Equal(t, "The answer is 42", msg["content"])
+				assert.Equal(t, map[string]any{"role": "assistant", "content": "The answer is 42"}, result)
 			},
 		},
 		{
 			name: "response with tool calls",
 			output: &llms.ContentChoice{
-				Content: "Let me check",
-				ToolCalls: []llms.ToolCall{
-					{
-						ID: "call_123",
-						FunctionCall: &llms.FunctionCall{
-							Name:      "check_status",
-							Arguments: `{"id":"123"}`,
-						},
-					},
-				},
+				Content:   "Let me check",
+				ToolCalls: []llms.ToolCall{{ID: "call_123", FunctionCall: &llms.FunctionCall{Name: "check_status", Arguments: `{"id":"123"}`}}},
 			},
 			validate: func(t *testing.T, result any) {
-				msg := result.(map[string]any)
-				assert.Equal(t, "assistant", msg["role"])
-				assert.Equal(t, "Let me check", msg["content"])
-
-				toolCalls := msg["tool_calls"].([]any)
-				require.Len(t, toolCalls, 1)
+				assert.Equal(t, map[string]any{
+					"role":    "assistant",
+					"content": "Let me check",
+					"tool_calls": []any{map[string]any{
+						"id":       "call_123",
+						"type":     "function",
+						"function": map[string]any{"name": "check_status", "arguments": `{"id":"123"}`},
+					}},
+				}, result)
 			},
 		},
 		{
 			name: "response with reasoning",
 			output: &llms.ContentChoice{
-				Content: "The answer is correct",
-				Reasoning: &reasoning.ContentReasoning{
-					Content: "Step-by-step analysis...",
-				},
+				Content:   "The answer is correct",
+				Reasoning: &reasoning.ContentReasoning{Content: "Step-by-step analysis..."},
 			},
 			validate: func(t *testing.T, result any) {
-				msg := result.(map[string]any)
-
-				thinking := msg["thinking"].([]any)
-				require.Len(t, thinking, 1)
-
-				th := thinking[0].(map[string]any)
-				assert.Equal(t, "thinking", th["type"])
-				assert.Equal(t, "Step-by-step analysis...", th["content"])
+				assert.Equal(t, []any{map[string]any{"type": "thinking", "content": "Step-by-step analysis..."}}, result.(map[string]any)["thinking"])
 			},
 		},
 		{
-			name: "multiple choices array",
-			output: []llms.ContentChoice{
-				{Content: "Option 1"},
-				{Content: "Option 2"},
+			name: "a message keeps its thinking",
+			output: &llms.MessageContent{
+				Role: llms.ChatMessageTypeAI,
+				Parts: []llms.ContentPart{llms.TextContent{
+					Text:      "The answer is correct",
+					Reasoning: &reasoning.ContentReasoning{Content: "Step 1: ...\nStep 2: ..."},
+				}},
 			},
 			validate: func(t *testing.T, result any) {
-				choices := result.([]any)
-				require.Len(t, choices, 2)
+				assert.Equal(t, []any{map[string]any{"type": "thinking", "content": "Step 1: ...\nStep 2: ..."}}, result.(map[string]any)["thinking"])
+			},
+		},
+		{
+			name:   "multiple choices array",
+			output: []llms.ContentChoice{{Content: "Option 1"}, {Content: "Option 2"}},
+			validate: func(t *testing.T, result any) {
+				assert.Equal(t, []any{
+					map[string]any{"role": "assistant", "content": "Option 1"},
+					map[string]any{"role": "assistant", "content": "Option 2"},
+				}, result)
 			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := convertOutput(tt.output)
-			tt.validate(t, result)
+			tt.validate(t, convertOutput(tt.output))
 		})
 	}
 }
 
-// TestRoleMapping tests role conversion
-func TestRoleMapping(t *testing.T) {
+func TestConverter_MapRole_FollowsOpenAIRoleNames(t *testing.T) {
 	tests := []struct {
+		name     string
 		input    llms.ChatMessageType
 		expected string
 	}{
-		{llms.ChatMessageTypeHuman, "user"},
-		{llms.ChatMessageTypeAI, "assistant"},
-		{llms.ChatMessageTypeSystem, "system"},
-		{llms.ChatMessageTypeTool, "tool"},
-		{llms.ChatMessageTypeGeneric, "assistant"},
-	}
-
-	for _, tt := range tests {
-		t.Run(string(tt.input), func(t *testing.T) {
-			result := mapRole(tt.input)
-			assert.Equal(t, tt.expected, result)
-		})
-	}
-}
-
-// TestToolContentParsing tests rich vs simple tool content detection
-func TestToolContentParsing(t *testing.T) {
-	tests := []struct {
-		name       string
-		content    string
-		expectType string // "string" or "object"
-	}{
-		{
-			name:       "simple 1 key",
-			content:    `{"status": "ok"}`,
-			expectType: "string",
-		},
-		{
-			name:       "simple 2 keys",
-			content:    `{"status": "ok", "code": 200}`,
-			expectType: "string",
-		},
-		{
-			name:       "rich 3+ keys",
-			content:    `{"status": "ok", "code": 200, "message": "Success"}`,
-			expectType: "object",
-		},
-		{
-			name:       "rich nested array",
-			content:    `{"results": [{"id": 1}], "count": 1}`,
-			expectType: "object",
-		},
-		{
-			name:       "rich nested object",
-			content:    `{"data": {"id": 1}, "meta": {}}`,
-			expectType: "object",
-		},
-		{
-			name:       "invalid json stays string",
-			content:    `not valid json`,
-			expectType: "string",
-		},
+		{"human becomes user", llms.ChatMessageTypeHuman, "user"},
+		{"ai becomes assistant", llms.ChatMessageTypeAI, "assistant"},
+		{"system stays system", llms.ChatMessageTypeSystem, "system"},
+		{"tool stays tool", llms.ChatMessageTypeTool, "tool"},
+		{"generic falls back to assistant", llms.ChatMessageTypeGeneric, "assistant"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := parseToolContent(tt.content)
-
-			if tt.expectType == "object" {
-				_, ok := result.(map[string]any)
-				assert.True(t, ok, "Expected object but got %T", result)
-			} else {
-				// Can be string or parsed simple object
-				// Both are acceptable for simple content
-			}
+			assert.Equal(t, tt.expected, mapRole(tt.input))
 		})
 	}
 }
 
-// TestThinkingExtraction tests reasoning extraction
-func TestThinkingExtraction(t *testing.T) {
-	input := &llms.MessageContent{
-		Role: llms.ChatMessageTypeAI,
-		Parts: []llms.ContentPart{
-			llms.TextContent{
-				Text: "The answer is correct",
-				Reasoning: &reasoning.ContentReasoning{
-					Content: "Step 1: ...\nStep 2: ...",
-				},
-			},
+func TestConverter_ParseToolContent_ParsesJSONAndKeepsTheRestAsText(t *testing.T) {
+	tests := []struct {
+		name    string
+		content string
+		want    any
+	}{
+		{name: "a one-key object", content: `{"status": "ok"}`, want: map[string]any{"status": "ok"}},
+		{
+			name:    "a three-key object",
+			content: `{"status": "ok", "code": 200, "message": "Success"}`,
+			want:    map[string]any{"status": "ok", "code": float64(200), "message": "Success"},
 		},
+		{
+			name:    "a nested array",
+			content: `{"results": [{"id": 1}], "count": 1}`,
+			want:    map[string]any{"results": []any{map[string]any{"id": float64(1)}}, "count": float64(1)},
+		},
+		{name: "invalid json stays a string", content: `not valid json`, want: "not valid json"},
 	}
 
-	result := convertMessage(input)
-	msg := result.(map[string]any)
-
-	thinking := msg["thinking"].([]any)
-	require.Len(t, thinking, 1)
-
-	th := thinking[0].(map[string]any)
-	assert.Equal(t, "thinking", th["type"])
-	assert.Contains(t, th["content"], "Step 1")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, parseToolContent(tt.content))
+		})
+	}
 }
 
-// TestJoinTextParts tests multiple text parts joining
-func TestJoinTextParts(t *testing.T) {
-	parts := []string{"Hello", "World", "!"}
-	result := joinTextParts(parts)
-	assert.Equal(t, "Hello World !", result)
+func TestConverter_ConvertToolCallToOpenAI_DropsCallsWithoutAFunction(t *testing.T) {
+	assert.Nil(t, convertToolCallToOpenAI(&llms.ToolCall{ID: "call_001"}))
+
+	result := convertToolCallToOpenAI(&llms.ToolCall{
+		ID:           "call_001",
+		FunctionCall: &llms.FunctionCall{Name: "test", Arguments: "invalid json{"},
+	})
+	require.NotNil(t, result)
+	assert.Equal(t, "invalid json{", result.(map[string]any)["function"].(map[string]any)["arguments"], "arguments that are not json are kept verbatim")
 }
 
-// TestEdgeCases tests edge cases and error handling
-func TestEdgeCases(t *testing.T) {
-	t.Run("empty message chain", func(t *testing.T) {
-		result := convertInput([]*llms.MessageContent{}, nil)
-		messages := result.([]any)
-		assert.Len(t, messages, 0)
-	})
-
-	t.Run("tool call without function call", func(t *testing.T) {
-		tc := &llms.ToolCall{
-			ID:           "call_001",
-			FunctionCall: nil,
-		}
-		result := convertToolCallToOpenAI(tc)
-		assert.Nil(t, result)
-	})
-
-	t.Run("invalid tool arguments json", func(t *testing.T) {
-		tc := &llms.ToolCall{
-			ID: "call_001",
-			FunctionCall: &llms.FunctionCall{
-				Name:      "test",
-				Arguments: "invalid json{",
-			},
-		}
-		result := convertToolCallToOpenAI(tc)
-		require.NotNil(t, result)
-
-		// Should still work, keeping invalid json as string
-		msg := result.(map[string]any)
-		fn := msg["function"].(map[string]any)
-		assert.Equal(t, "invalid json{", fn["arguments"])
-	})
-
-	t.Run("pass-through unknown types", func(t *testing.T) {
-		input := "plain string"
-		result := convertInput(input, nil)
-		assert.Equal(t, input, result)
-	})
-}
-
-// BenchmarkConvertInput benchmarks conversion performance
 func BenchmarkConvertInput(b *testing.B) {
 	input := []*llms.MessageContent{
 		{
-			Role: llms.ChatMessageTypeHuman,
-			Parts: []llms.ContentPart{
-				llms.TextContent{Text: "Test message"},
-			},
+			Role:  llms.ChatMessageTypeHuman,
+			Parts: []llms.ContentPart{llms.TextContent{Text: "Test message"}},
 		},
 		{
 			Role: llms.ChatMessageTypeAI,
 			Parts: []llms.ContentPart{
 				llms.TextContent{Text: "Response"},
-				llms.ToolCall{
-					ID: "call_001",
-					FunctionCall: &llms.FunctionCall{
-						Name:      "test",
-						Arguments: `{"key":"value"}`,
-					},
-				},
+				llms.ToolCall{ID: "call_001", FunctionCall: &llms.FunctionCall{Name: "test", Arguments: `{"key":"value"}`}},
 			},
 		},
 	}
@@ -468,95 +349,4 @@ func BenchmarkConvertInput(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		_ = convertInput(input, nil)
 	}
-}
-
-// TestRealWorldScenario tests a complete conversation flow
-func TestRealWorldScenario(t *testing.T) {
-	// Simulate a real penetration testing conversation
-	input := []*llms.MessageContent{
-		{
-			Role: llms.ChatMessageTypeSystem,
-			Parts: []llms.ContentPart{
-				llms.TextContent{Text: "You are a security analyst."},
-			},
-		},
-		{
-			Role: llms.ChatMessageTypeHuman,
-			Parts: []llms.ContentPart{
-				llms.TextContent{Text: "Check CVE-2024-1234"},
-			},
-		},
-		{
-			Role: llms.ChatMessageTypeAI,
-			Parts: []llms.ContentPart{
-				llms.TextContent{Text: "I'll search for that vulnerability."},
-				llms.ToolCall{
-					ID: "call_001",
-					FunctionCall: &llms.FunctionCall{
-						Name:      "search_cve",
-						Arguments: `{"cve_id":"CVE-2024-1234"}`,
-					},
-				},
-			},
-		},
-		{
-			Role: llms.ChatMessageTypeTool,
-			Parts: []llms.ContentPart{
-				llms.ToolCallResponse{
-					ToolCallID: "call_001",
-					Content:    `{"severity":"high","description":"SQL injection","cvss_score":8.5,"exploit_available":true}`,
-				},
-			},
-		},
-		{
-			Role: llms.ChatMessageTypeAI,
-			Parts: []llms.ContentPart{
-				llms.TextContent{
-					Text: "This is a high-severity SQL injection vulnerability with CVSS 8.5. Exploit is available.",
-					Reasoning: &reasoning.ContentReasoning{
-						Content: "The high CVSS score combined with exploit availability makes this critical.",
-					},
-				},
-			},
-		},
-	}
-
-	result := convertInput(input, nil)
-	require.NotNil(t, result)
-
-	// Verify structure
-	messages := result.([]any)
-	require.Len(t, messages, 5)
-
-	// Verify system message
-	systemMsg := messages[0].(map[string]any)
-	assert.Equal(t, "system", systemMsg["role"])
-
-	// Verify user message
-	userMsg := messages[1].(map[string]any)
-	assert.Equal(t, "user", userMsg["role"])
-
-	// Verify assistant with tool call
-	assistantMsg := messages[2].(map[string]any)
-	assert.Equal(t, "assistant", assistantMsg["role"])
-	assert.NotNil(t, assistantMsg["tool_calls"])
-
-	// Verify tool response (should be rich object due to 4+ keys)
-	toolMsg := messages[3].(map[string]any)
-	assert.Equal(t, "tool", toolMsg["role"])
-	assert.Equal(t, "search_cve", toolMsg["name"])
-	content, ok := toolMsg["content"].(map[string]any)
-	assert.True(t, ok, "Tool response with 4+ keys should be object")
-	assert.Equal(t, "high", content["severity"])
-
-	// Verify final assistant message with thinking
-	finalMsg := messages[4].(map[string]any)
-	assert.Equal(t, "assistant", finalMsg["role"])
-	thinking := finalMsg["thinking"].([]any)
-	require.Len(t, thinking, 1)
-
-	// Log the full conversation in JSON for inspection
-	jsonData, err := json.MarshalIndent(messages, "", "  ")
-	require.NoError(t, err)
-	t.Logf("Full conversation:\n%s", string(jsonData))
 }

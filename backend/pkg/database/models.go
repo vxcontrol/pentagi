@@ -433,6 +433,8 @@ const (
 	ProviderTypeKimi      ProviderType = "kimi"
 	ProviderTypeQwen      ProviderType = "qwen"
 	ProviderTypeMinimax   ProviderType = "minimax"
+	ProviderTypeMistral   ProviderType = "mistral"
+	ProviderTypeXai       ProviderType = "xai"
 )
 
 func (e *ProviderType) Scan(src interface{}) error {
@@ -1122,6 +1124,7 @@ type User struct {
 	PasswordChangeRequired bool           `json:"password_change_required"`
 	Provider               sql.NullString `json:"provider"`
 	CreatedAt              sql.NullTime   `json:"created_at"`
+	SessionGeneration      int64          `json:"session_generation"`
 }
 
 type UserPreference struct {

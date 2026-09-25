@@ -3,6 +3,9 @@ package anthropic
 import (
 	"context"
 	"embed"
+	"fmt"
+	"net/http"
+	"strings"
 
 	"pentagi/pkg/config"
 	"pentagi/pkg/providers/pconfig"
@@ -18,7 +21,7 @@ import (
 //go:embed config.yml models.yml
 var configFS embed.FS
 
-const AnthropicAgentModel = "claude-sonnet-4-20250514"
+const AnthropicAgentModel = "claude-sonnet-4-6"
 
 const AnthropicToolCallIDTemplate = "toolu_{r:24:b}"
 
@@ -56,6 +59,105 @@ func DefaultModels() (pconfig.ModelsConfig, error) {
 	return pconfig.LoadModelsConfigData(configData)
 }
 
+// Configured reports whether the environment names a credential the door can
+// authenticate with: an API key, or a complete federation config. The token file
+// is not opened here, so a projected volume may be mounted after startup.
+func Configured(cfg *config.Config) bool {
+	if cfg.AnthropicAPIKey != "" {
+		return true
+	}
+
+	_, _, missing := federation(cfg)
+	return len(missing) == 0
+}
+
+// CredentialsNotice explains why the environment's federation variables will
+// not be used or will stop working, or returns an empty string when there is
+// nothing to explain.
+func CredentialsNotice(cfg *config.Config) string {
+	if !federationRequested(cfg) {
+		return ""
+	}
+
+	if cfg.AnthropicAPIKey != "" {
+		return "anthropic: ANTHROPIC_API_KEY is set, so the federation variables are ignored; unset the key to federate"
+	}
+
+	_, identity, missing := federation(cfg)
+	if len(missing) > 0 {
+		return "anthropic provider disabled: federation is missing " + strings.Join(missing, ", ")
+	}
+
+	return identity.notice(clock())
+}
+
+func federationRequested(cfg *config.Config) bool {
+	return cfg.AnthropicFederationRuleID != "" || cfg.AnthropicOrganizationID != "" ||
+		cfg.AnthropicServiceAccountID != "" || cfg.AnthropicIdentityTokenFile != "" ||
+		cfg.AnthropicIdentityToken != ""
+}
+
+// federation also returns the variables the config still lacks. The token file
+// wins over a literal token: it is re-read on every exchange, so it follows a
+// rotating projected token.
+func federation(cfg *config.Config) (federationIdentity, identityToken, []string) {
+	var missing []string
+	for _, required := range []struct{ value, name string }{
+		{cfg.AnthropicFederationRuleID, "ANTHROPIC_FEDERATION_RULE_ID"},
+		{cfg.AnthropicOrganizationID, "ANTHROPIC_ORGANIZATION_ID"},
+		{cfg.AnthropicServiceAccountID, "ANTHROPIC_SERVICE_ACCOUNT_ID"},
+	} {
+		if required.value == "" {
+			missing = append(missing, required.name)
+		}
+	}
+
+	var identity identityToken
+	switch {
+	case cfg.AnthropicIdentityTokenFile != "":
+		identity = identityToken{file: cfg.AnthropicIdentityTokenFile}
+	case strings.TrimSpace(cfg.AnthropicIdentityToken) != "":
+		identity = literalIdentityToken(cfg.AnthropicIdentityToken)
+	default:
+		missing = append(missing, "ANTHROPIC_IDENTITY_TOKEN_FILE or ANTHROPIC_IDENTITY_TOKEN")
+	}
+
+	baseURL := strings.TrimSuffix(cfg.AnthropicServerURL, "/")
+	if baseURL == "" {
+		baseURL = defaultBaseURL
+	}
+
+	return federationIdentity{
+		ruleID:           cfg.AnthropicFederationRuleID,
+		organizationID:   cfg.AnthropicOrganizationID,
+		serviceAccountID: cfg.AnthropicServiceAccountID,
+		workspaceID:      cfg.AnthropicWorkspaceID,
+		baseURL:          baseURL,
+	}, identity, missing
+}
+
+// Only a non-empty key shadows federation, here and in Configured and
+// CredentialsNotice: docker-compose exports ANTHROPIC_API_KEY even when unset.
+func credentials(cfg *config.Config, client *http.Client) ([]anthropic.Option, error) {
+	if cfg.AnthropicAPIKey != "" {
+		return []anthropic.Option{anthropic.WithToken(cfg.AnthropicAPIKey), anthropic.WithHTTPClient(client)}, nil
+	}
+
+	id, identity, missing := federation(cfg)
+	if len(missing) > 0 {
+		return nil, fmt.Errorf("anthropic: set ANTHROPIC_API_KEY or complete the federation config (missing %s)",
+			strings.Join(missing, ", "))
+	}
+
+	// Not the library's WithFederation: it caches per client, so every door would present the identity
+	// token again, and waits on the exchange deaf to the caller's context. The public WithToken and
+	// WithHTTPClient suffice to put the shared bearer on every request; the placeholder key never leaves.
+	return []anthropic.Option{
+		anthropic.WithToken("federated"),
+		anthropic.WithHTTPClient(federatedDoer{client: client, source: sharedSource(id, identity)}),
+	}, nil
+}
+
 type anthropicProvider struct {
 	llm            *anthropic.LLM
 	models         pconfig.ModelsConfig
@@ -79,11 +181,14 @@ func New(
 		return nil, err
 	}
 
-	client, err := anthropic.New(
-		anthropic.WithToken(cfg.AnthropicAPIKey),
+	options, err := credentials(cfg, httpClient)
+	if err != nil {
+		return nil, err
+	}
+
+	client, err := anthropic.New(append(options,
 		anthropic.WithModel(AnthropicAgentModel),
 		anthropic.WithBaseURL(baseURL),
-		anthropic.WithHTTPClient(httpClient),
 		// Enable prompt caching for cost optimization (90% savings on cached reads)
 		anthropic.WithDefaultCacheStrategy(anthropic.CacheStrategy{
 			CacheTools:    true,
@@ -91,7 +196,7 @@ func New(
 			CacheMessages: true,
 			TTL:           "5m",
 		}),
-	)
+	)...)
 	if err != nil {
 		return nil, err
 	}
@@ -148,12 +253,9 @@ func (p *anthropicProvider) Call(
 	opt pconfig.ProviderOptionsType,
 	prompt string,
 ) (string, error) {
-	ctx, options := p.providerConfig.PrepareAdaptiveCallOptions(
-		ctx, p.models, opt, p.providerConfig.GetOptionsForType(opt),
-	)
 	return provider.WrapGenerateFromSinglePrompt(
 		ctx, p, opt, p.llm, prompt,
-		options...,
+		p.providerConfig.GetOptionsForType(opt)...,
 	)
 }
 
@@ -163,12 +265,11 @@ func (p *anthropicProvider) CallEx(
 	chain []llms.MessageContent,
 	streamCb streaming.Callback,
 ) (*llms.ContentResponse, error) {
-	ctx, options := p.providerConfig.PrepareAdaptiveCallOptions(ctx, p.models, opt, append([]llms.CallOption{
-		llms.WithStreamingFunc(streamCb),
-	}, p.providerConfig.GetOptionsForType(opt)...))
 	return provider.WrapGenerateContent(
 		ctx, p, opt, p.llm.GenerateContent, chain,
-		options...,
+		append([]llms.CallOption{
+			llms.WithStreamingFunc(streamCb),
+		}, p.providerConfig.GetOptionsForType(opt)...)...,
 	)
 }
 
@@ -179,18 +280,15 @@ func (p *anthropicProvider) CallWithTools(
 	tools []llms.Tool,
 	streamCb streaming.Callback,
 ) (*llms.ContentResponse, error) {
-	ctx, options := p.providerConfig.PrepareAdaptiveCallOptions(ctx, p.models, opt, append([]llms.CallOption{
-		llms.WithTools(tools),
-		llms.WithStreamingFunc(streamCb),
-	}, p.providerConfig.GetOptionsForType(opt)...))
 	return provider.WrapGenerateContent(
 		ctx, p, opt, p.llm.GenerateContent, chain,
-		options...,
+		append([]llms.CallOption{
+			llms.WithTools(tools),
+			llms.WithStreamingFunc(streamCb),
+		}, p.providerConfig.GetOptionsForType(opt)...)...,
 	)
 }
 
-// CallWithExtraOptions: extra wins over both the config and the auto-adaptive
-// append below, since it's appended last.
 func (p *anthropicProvider) CallWithExtraOptions(
 	ctx context.Context,
 	opt pconfig.ProviderOptionsType,
@@ -199,13 +297,11 @@ func (p *anthropicProvider) CallWithExtraOptions(
 	streamCb streaming.Callback,
 	extra ...llms.CallOption,
 ) (*llms.ContentResponse, error) {
-	base := []llms.CallOption{llms.WithStreamingFunc(streamCb)}
+	options := []llms.CallOption{llms.WithStreamingFunc(streamCb)}
 	if len(tools) > 0 {
-		base = append(base, llms.WithTools(tools))
+		options = append(options, llms.WithTools(tools))
 	}
-	base = append(base, p.providerConfig.GetOptionsForType(opt)...)
-
-	ctx, options := p.providerConfig.PrepareAdaptiveCallOptions(ctx, p.models, opt, base)
+	options = append(options, p.providerConfig.GetOptionsForType(opt)...)
 	options = append(options, extra...)
 
 	return provider.WrapGenerateContent(ctx, p, opt, p.llm.GenerateContent, chain, options...)

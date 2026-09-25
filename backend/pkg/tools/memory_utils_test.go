@@ -1,297 +1,125 @@
 package tools
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/vxcontrol/langchaingo/schema"
 )
 
-func TestMergeAndDeduplicateDocs_EmptyInput(t *testing.T) {
+// Metadata is compared too: search_in_memory takes each fact's task and subtask headers from it.
+func TestMemoryUtils_MergeAndDeduplicateDocs_KeepsTheBestCopyOfEachFactInScoreOrder(t *testing.T) {
 	t.Parallel()
 
-	result := MergeAndDeduplicateDocs([]schema.Document{}, 10)
-
-	if len(result) != 0 {
-		t.Errorf("MergeAndDeduplicateDocs with empty input should return empty slice, got %d items", len(result))
-	}
-}
-
-func TestMergeAndDeduplicateDocs_NoDuplicates(t *testing.T) {
-	t.Parallel()
-
-	docs := []schema.Document{
-		{PageContent: "content1", Score: 0.9, Metadata: map[string]any{"id": 1}},
-		{PageContent: "content2", Score: 0.8, Metadata: map[string]any{"id": 2}},
-		{PageContent: "content3", Score: 0.7, Metadata: map[string]any{"id": 3}},
+	doc := func(content string, score float32, metadata map[string]any) schema.Document {
+		return schema.Document{PageContent: content, Score: score, Metadata: metadata}
 	}
 
-	result := MergeAndDeduplicateDocs(docs, 10)
-
-	if len(result) != 3 {
-		t.Errorf("Expected 3 documents, got %d", len(result))
-	}
-
-	// Check sorting by score (descending)
-	if result[0].Score != 0.9 {
-		t.Errorf("First document should have highest score 0.9, got %f", result[0].Score)
-	}
-	if result[1].Score != 0.8 {
-		t.Errorf("Second document should have score 0.8, got %f", result[1].Score)
-	}
-	if result[2].Score != 0.7 {
-		t.Errorf("Third document should have score 0.7, got %f", result[2].Score)
-	}
-}
-
-func TestMergeAndDeduplicateDocs_WithDuplicates(t *testing.T) {
-	t.Parallel()
-
-	docs := []schema.Document{
-		{PageContent: "duplicate content", Score: 0.5, Metadata: map[string]any{"id": 1}},
-		{PageContent: "unique content", Score: 0.8, Metadata: map[string]any{"id": 2}},
-		{PageContent: "duplicate content", Score: 0.9, Metadata: map[string]any{"id": 3}}, // Higher score
-		{PageContent: "another unique", Score: 0.7, Metadata: map[string]any{"id": 4}},
-		{PageContent: "duplicate content", Score: 0.3, Metadata: map[string]any{"id": 5}}, // Lower score
-	}
-
-	result := MergeAndDeduplicateDocs(docs, 10)
-
-	// Should have 3 unique documents
-	if len(result) != 3 {
-		t.Errorf("Expected 3 unique documents after deduplication, got %d", len(result))
-	}
-
-	// Find the "duplicate content" document
-	var duplicateDoc *schema.Document
-	for i := range result {
-		if result[i].PageContent == "duplicate content" {
-			duplicateDoc = &result[i]
-			break
-		}
-	}
-
-	if duplicateDoc == nil {
-		t.Fatal("Duplicate content document not found in result")
-	}
-
-	// Should keep the one with highest score (0.9)
-	if duplicateDoc.Score != 0.9 {
-		t.Errorf("Duplicate document should have max score 0.9, got %f", duplicateDoc.Score)
-	}
-
-	// Should keep metadata from the document with highest score
-	if duplicateDoc.Metadata["id"] != 3 {
-		t.Errorf("Duplicate document should have metadata from doc with id=3, got %v", duplicateDoc.Metadata["id"])
-	}
-}
-
-func TestMergeAndDeduplicateDocs_SortingByScore(t *testing.T) {
-	t.Parallel()
-
-	docs := []schema.Document{
-		{PageContent: "content1", Score: 0.3, Metadata: map[string]any{}},
-		{PageContent: "content2", Score: 0.9, Metadata: map[string]any{}},
-		{PageContent: "content3", Score: 0.1, Metadata: map[string]any{}},
-		{PageContent: "content4", Score: 0.7, Metadata: map[string]any{}},
-		{PageContent: "content5", Score: 0.5, Metadata: map[string]any{}},
-	}
-
-	result := MergeAndDeduplicateDocs(docs, 10)
-
-	// Check that results are sorted in descending order
-	for i := 0; i < len(result)-1; i++ {
-		if result[i].Score < result[i+1].Score {
-			t.Errorf("Documents not sorted properly: result[%d].Score (%f) < result[%d].Score (%f)",
-				i, result[i].Score, i+1, result[i+1].Score)
-		}
-	}
-
-	// Verify exact order
-	expectedScores := []float32{0.9, 0.7, 0.5, 0.3, 0.1}
-	for i, expectedScore := range expectedScores {
-		if result[i].Score != expectedScore {
-			t.Errorf("result[%d].Score = %f, want %f", i, result[i].Score, expectedScore)
-		}
-	}
-}
-
-func TestMergeAndDeduplicateDocs_LimitEnforcement(t *testing.T) {
-	t.Parallel()
-
-	docs := []schema.Document{
-		{PageContent: "content1", Score: 0.9, Metadata: map[string]any{}},
-		{PageContent: "content2", Score: 0.8, Metadata: map[string]any{}},
-		{PageContent: "content3", Score: 0.7, Metadata: map[string]any{}},
-		{PageContent: "content4", Score: 0.6, Metadata: map[string]any{}},
-		{PageContent: "content5", Score: 0.5, Metadata: map[string]any{}},
-		{PageContent: "content6", Score: 0.4, Metadata: map[string]any{}},
-		{PageContent: "content7", Score: 0.3, Metadata: map[string]any{}},
-	}
-
-	maxDocs := 3
-	result := MergeAndDeduplicateDocs(docs, maxDocs)
-
-	// Should return exactly maxDocs documents
-	if len(result) != maxDocs {
-		t.Errorf("Expected exactly %d documents, got %d", maxDocs, len(result))
-	}
-
-	// Should return documents with highest scores
-	expectedScores := []float32{0.9, 0.8, 0.7}
-	for i, expectedScore := range expectedScores {
-		if result[i].Score != expectedScore {
-			t.Errorf("result[%d].Score = %f, want %f (should select top scoring documents)",
-				i, result[i].Score, expectedScore)
-		}
-	}
-}
-
-func TestMergeAndDeduplicateDocs_MetadataPreservation(t *testing.T) {
-	t.Parallel()
-
-	docs := []schema.Document{
-		{
-			PageContent: "same content",
-			Score:       0.5,
-			Metadata:    map[string]any{"source": "query1", "timestamp": "2023-01-01"},
-		},
-		{
-			PageContent: "same content",
-			Score:       0.9,
-			Metadata:    map[string]any{"source": "query2", "timestamp": "2023-01-02"},
-		},
-		{
-			PageContent: "same content",
-			Score:       0.3,
-			Metadata:    map[string]any{"source": "query3", "timestamp": "2023-01-03"},
-		},
-	}
-
-	result := MergeAndDeduplicateDocs(docs, 10)
-
-	if len(result) != 1 {
-		t.Fatalf("Expected 1 deduplicated document, got %d", len(result))
-	}
-
-	// Should preserve metadata from document with highest score (0.9)
-	if result[0].Metadata["source"] != "query2" {
-		t.Errorf("Expected metadata from document with highest score, got source=%v", result[0].Metadata["source"])
-	}
-	if result[0].Metadata["timestamp"] != "2023-01-02" {
-		t.Errorf("Expected timestamp from document with highest score, got %v", result[0].Metadata["timestamp"])
-	}
-}
-
-func TestHashContent_Consistency(t *testing.T) {
-	t.Parallel()
-
-	content := "test content for hashing"
-
-	hash1 := hashContent(content)
-	hash2 := hashContent(content)
-
-	if hash1 != hash2 {
-		t.Errorf("hashContent should be deterministic: hash1=%s, hash2=%s", hash1, hash2)
-	}
-
-	// Different content should produce different hash
-	differentContent := "different test content"
-	hash3 := hashContent(differentContent)
-
-	if hash1 == hash3 {
-		t.Error("Different content should produce different hashes")
-	}
-
-	// Hash should be non-empty hex string
-	if len(hash1) != 64 { // SHA256 produces 64 hex characters
-		t.Errorf("Expected hash length 64, got %d", len(hash1))
-	}
-}
-
-func TestMergeAndDeduplicateDocs_ZeroMaxDocs(t *testing.T) {
-	t.Parallel()
-
-	docs := []schema.Document{
-		{PageContent: "content1", Score: 0.9, Metadata: map[string]any{}},
-		{PageContent: "content2", Score: 0.8, Metadata: map[string]any{}},
-	}
-
-	result := MergeAndDeduplicateDocs(docs, 0)
-
-	if len(result) != 0 {
-		t.Errorf("With maxDocs=0, expected empty result, got %d documents", len(result))
-	}
-}
-
-func TestMergeAndDeduplicateDocs_ComplexScenario(t *testing.T) {
-	t.Parallel()
-
-	// Simulate multiple queries with overlapping results
-	docs := []schema.Document{
-		// From query 1
-		{PageContent: "result A", Score: 0.85, Metadata: map[string]any{"query": 1}},
-		{PageContent: "result B", Score: 0.75, Metadata: map[string]any{"query": 1}},
-		{PageContent: "result C", Score: 0.65, Metadata: map[string]any{"query": 1}},
-
-		// From query 2 (some overlap)
-		{PageContent: "result A", Score: 0.90, Metadata: map[string]any{"query": 2}}, // Duplicate with higher score
-		{PageContent: "result D", Score: 0.80, Metadata: map[string]any{"query": 2}},
-		{PageContent: "result E", Score: 0.70, Metadata: map[string]any{"query": 2}},
-
-		// From query 3 (some overlap)
-		{PageContent: "result B", Score: 0.60, Metadata: map[string]any{"query": 3}}, // Duplicate with lower score
-		{PageContent: "result F", Score: 0.88, Metadata: map[string]any{"query": 3}},
-		{PageContent: "result C", Score: 0.72, Metadata: map[string]any{"query": 3}}, // Duplicate with higher score
-	}
-
-	result := MergeAndDeduplicateDocs(docs, 5)
-
-	// Should have at most 5 unique documents
-	if len(result) > 5 {
-		t.Errorf("Expected at most 5 documents, got %d", len(result))
-	}
-
-	// Verify deduplication and score selection
-	contentToMaxScore := map[string]float32{
-		"result A": 0.90, // Max from query 2
-		"result B": 0.75, // Max from query 1
-		"result C": 0.72, // Max from query 3
-		"result D": 0.80,
-		"result E": 0.70,
-		"result F": 0.88,
-	}
-
-	for _, doc := range result {
-		expectedScore, exists := contentToMaxScore[doc.PageContent]
-		if !exists {
-			t.Errorf("Unexpected document content: %s", doc.PageContent)
-			continue
-		}
-		if doc.Score != expectedScore {
-			t.Errorf("Document '%s' has score %f, expected %f (max score)",
-				doc.PageContent, doc.Score, expectedScore)
-		}
-	}
-
-	// Verify sorting (top 5 by score should be: F(0.88), A(0.90), D(0.80), B(0.75), C(0.72))
-	// After sorting descending: A(0.90), F(0.88), D(0.80), B(0.75), C(0.72)
-	expectedOrder := []struct {
-		content string
-		score   float32
+	cases := map[string]struct {
+		docs    []schema.Document
+		maxDocs int
+		want    []schema.Document
 	}{
-		{"result A", 0.90},
-		{"result F", 0.88},
-		{"result D", 0.80},
-		{"result B", 0.75},
-		{"result C", 0.72},
+		"no documents": {
+			docs:    []schema.Document{},
+			maxDocs: 10,
+		},
+		"distinct contents are all kept, best score first": {
+			docs: []schema.Document{
+				doc("content1", 0.3, map[string]any{"id": 1}),
+				doc("content2", 0.9, map[string]any{"id": 2}),
+				doc("content3", 0.1, map[string]any{"id": 3}),
+				doc("content4", 0.7, map[string]any{"id": 4}),
+				doc("content5", 0.5, map[string]any{"id": 5}),
+			},
+			maxDocs: 10,
+			want: []schema.Document{
+				doc("content2", 0.9, map[string]any{"id": 2}),
+				doc("content4", 0.7, map[string]any{"id": 4}),
+				doc("content5", 0.5, map[string]any{"id": 5}),
+				doc("content1", 0.3, map[string]any{"id": 1}),
+				doc("content3", 0.1, map[string]any{"id": 3}),
+			},
+		},
+		"a repeated content keeps its best-scored copy and that copy's metadata": {
+			docs: []schema.Document{
+				doc("duplicate content", 0.5, map[string]any{"id": 1}),
+				doc("unique content", 0.8, map[string]any{"id": 2}),
+				doc("duplicate content", 0.9, map[string]any{"id": 3}),
+				doc("another unique", 0.7, map[string]any{"id": 4}),
+				doc("duplicate content", 0.3, map[string]any{"id": 5}),
+			},
+			maxDocs: 10,
+			want: []schema.Document{
+				doc("duplicate content", 0.9, map[string]any{"id": 3}),
+				doc("unique content", 0.8, map[string]any{"id": 2}),
+				doc("another unique", 0.7, map[string]any{"id": 4}),
+			},
+		},
+		"more distinct contents than the limit": {
+			docs: []schema.Document{
+				doc("content1", 0.9, map[string]any{}),
+				doc("content2", 0.8, map[string]any{}),
+				doc("content3", 0.7, map[string]any{}),
+				doc("content4", 0.6, map[string]any{}),
+				doc("content5", 0.5, map[string]any{}),
+				doc("content6", 0.4, map[string]any{}),
+				doc("content7", 0.3, map[string]any{}),
+			},
+			maxDocs: 3,
+			want: []schema.Document{
+				doc("content1", 0.9, map[string]any{}),
+				doc("content2", 0.8, map[string]any{}),
+				doc("content3", 0.7, map[string]any{}),
+			},
+		},
+		"a limit of zero": {
+			docs: []schema.Document{
+				doc("content1", 0.9, map[string]any{}),
+				doc("content2", 0.8, map[string]any{}),
+			},
+			maxDocs: 0,
+		},
+		"facts of several questions overlapping": {
+			docs: []schema.Document{
+				doc("result A", 0.85, map[string]any{"query": 1}),
+				doc("result B", 0.75, map[string]any{"query": 1}),
+				doc("result C", 0.65, map[string]any{"query": 1}),
+				doc("result A", 0.90, map[string]any{"query": 2}),
+				doc("result D", 0.80, map[string]any{"query": 2}),
+				doc("result E", 0.70, map[string]any{"query": 2}),
+				doc("result B", 0.60, map[string]any{"query": 3}),
+				doc("result F", 0.88, map[string]any{"query": 3}),
+				doc("result C", 0.72, map[string]any{"query": 3}),
+			},
+			maxDocs: 5,
+			want: []schema.Document{
+				doc("result A", 0.90, map[string]any{"query": 2}),
+				doc("result F", 0.88, map[string]any{"query": 3}),
+				doc("result D", 0.80, map[string]any{"query": 2}),
+				doc("result B", 0.75, map[string]any{"query": 1}),
+				doc("result C", 0.72, map[string]any{"query": 3}),
+			},
+		},
 	}
 
-	for i, expected := range expectedOrder {
-		if result[i].PageContent != expected.content {
-			t.Errorf("result[%d] content = %s, want %s", i, result[i].PageContent, expected.content)
-		}
-		if result[i].Score != expected.score {
-			t.Errorf("result[%d] score = %f, want %f", i, result[i].Score, expected.score)
-		}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			got := MergeAndDeduplicateDocs(tc.docs, tc.maxDocs)
+
+			if len(got) != len(tc.want) {
+				t.Fatalf("got %d documents, want %d: %v", len(got), len(tc.want), got)
+			}
+			for i, want := range tc.want {
+				if got[i].PageContent != want.PageContent || got[i].Score != want.Score ||
+					!reflect.DeepEqual(got[i].Metadata, want.Metadata) {
+					t.Errorf("document %d = %q %v %v, want %q %v %v", i,
+						got[i].PageContent, got[i].Score, got[i].Metadata,
+						want.PageContent, want.Score, want.Metadata)
+				}
+			}
+		})
 	}
 }

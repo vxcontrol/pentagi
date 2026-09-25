@@ -1,9 +1,11 @@
 package embeddings
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"pentagi/pkg/config"
 	"pentagi/pkg/observability/langfuse"
@@ -15,10 +17,11 @@ import (
 	"github.com/vxcontrol/langchaingo/embeddings/voyageai"
 	"github.com/vxcontrol/langchaingo/llms/googleai"
 	hgclient "github.com/vxcontrol/langchaingo/llms/huggingface"
-	"github.com/vxcontrol/langchaingo/llms/mistral"
 	"github.com/vxcontrol/langchaingo/llms/ollama"
 	"github.com/vxcontrol/langchaingo/llms/openai"
 )
+
+const mistralEmbeddingBaseURL = "https://api.mistral.ai/v1"
 
 type constructor func(cfg *config.Config, httpClient *http.Client) (embeddings.Embedder, error)
 
@@ -80,6 +83,25 @@ func New(cfg *config.Config) (Embedder, error) {
 	return &embedder{e}, nil
 }
 
+func embeddingServer(embeddingURL, embeddingKey, chatURL, chatKey, vendorURL string) (serverURL, key string) {
+	chatServer := cmp.Or(chatURL, vendorURL)
+
+	switch {
+	case embeddingKey != "":
+		return cmp.Or(embeddingURL, vendorURL), embeddingKey
+	case embeddingURL == "":
+		return chatServer, chatKey
+	case isSameServer(embeddingURL, chatServer):
+		return embeddingURL, chatKey
+	default:
+		return embeddingURL, ""
+	}
+}
+
+func isSameServer(a, b string) bool {
+	return strings.TrimRight(a, "/") == strings.TrimRight(b, "/")
+}
+
 func newOpenAI(cfg *config.Config, httpClient *http.Client) (embeddings.Embedder, error) {
 	model, provider := cfg.EmbeddingModel, "openai"
 	if model == "" {
@@ -91,17 +113,13 @@ func newOpenAI(cfg *config.Config, httpClient *http.Client) (embeddings.Embedder
 		"strip_new_lines": cfg.EmbeddingStripNewLines,
 		"batch_size":      cfg.EmbeddingBatchSize,
 	}
-	if cfg.EmbeddingURL != "" {
-		opts = append(opts, openai.WithBaseURL(cfg.EmbeddingURL))
-		metadata["url"] = cfg.EmbeddingURL
-	} else if cfg.OpenAIServerURL != "" {
-		opts = append(opts, openai.WithBaseURL(cfg.OpenAIServerURL))
-		metadata["url"] = cfg.OpenAIServerURL
+	baseURL, key := embeddingServer(cfg.EmbeddingURL, cfg.EmbeddingKey, cfg.OpenAIServerURL, cfg.OpenAIKey, "")
+	if baseURL != "" {
+		opts = append(opts, openai.WithBaseURL(baseURL))
+		metadata["url"] = baseURL
 	}
-	if cfg.EmbeddingKey != "" {
-		opts = append(opts, openai.WithToken(cfg.EmbeddingKey))
-	} else if cfg.OpenAIKey != "" {
-		opts = append(opts, openai.WithToken(cfg.OpenAIKey))
+	if key != "" {
+		opts = append(opts, openai.WithToken(key))
 	}
 	if cfg.EmbeddingModel != "" {
 		opts = append(opts, openai.WithEmbeddingModel(cfg.EmbeddingModel))
@@ -134,7 +152,6 @@ func newOpenAI(cfg *config.Config, httpClient *http.Client) (embeddings.Embedder
 }
 
 func newOllama(cfg *config.Config, httpClient *http.Client) (embeddings.Embedder, error) {
-	// EmbeddingKey is not supported for ollama
 	model, provider := cfg.EmbeddingModel, "ollama"
 
 	var opts []ollama.Option
@@ -142,9 +159,13 @@ func newOllama(cfg *config.Config, httpClient *http.Client) (embeddings.Embedder
 		"strip_new_lines": cfg.EmbeddingStripNewLines,
 		"batch_size":      cfg.EmbeddingBatchSize,
 	}
-	if cfg.EmbeddingURL != "" {
-		opts = append(opts, ollama.WithServerURL(cfg.EmbeddingURL))
-		metadata["url"] = cfg.EmbeddingURL
+	serverURL, key := embeddingServer(cfg.EmbeddingURL, "", cfg.OllamaServerURL, cfg.OllamaServerAPIKey, "")
+	if serverURL != "" {
+		opts = append(opts, ollama.WithServerURL(serverURL))
+		metadata["url"] = serverURL
+	}
+	if key != "" {
+		opts = append(opts, ollama.WithAPIKey(key))
 	}
 	if cfg.EmbeddingModel != "" {
 		opts = append(opts, ollama.WithModel(cfg.EmbeddingModel))
@@ -176,25 +197,37 @@ func newOllama(cfg *config.Config, httpClient *http.Client) (embeddings.Embedder
 	}, nil
 }
 
-func newMistral(cfg *config.Config, _ *http.Client) (embeddings.Embedder, error) {
-	// EmbeddingModel is not supported for mistral
-	// Custom HTTP client is not supported for mistral
-	model, provider := "mistral-embed", "mistral"
+func newMistral(cfg *config.Config, httpClient *http.Client) (embeddings.Embedder, error) {
+	model, provider := cfg.EmbeddingModel, "mistral"
+	if model == "" {
+		model = "mistral-embed"
+	}
 
-	var opts []mistral.Option
+	baseURL, key := embeddingServer(
+		cfg.EmbeddingURL, cfg.EmbeddingKey, cfg.MistralServerURL, cfg.MistralAPIKey, mistralEmbeddingBaseURL,
+	)
+	prefix := cfg.MistralProvider
+	if prefix != "" && isSameServer(baseURL, cmp.Or(cfg.MistralServerURL, mistralEmbeddingBaseURL)) {
+		model = prefix + "/" + strings.TrimPrefix(model, prefix+"/")
+	}
+
+	opts := []openai.Option{
+		openai.WithBaseURL(baseURL),
+		openai.WithEmbeddingModel(model),
+	}
 	metadata := langfuse.Metadata{
 		"strip_new_lines": cfg.EmbeddingStripNewLines,
 		"batch_size":      cfg.EmbeddingBatchSize,
+		"url":             baseURL,
 	}
-	if cfg.EmbeddingURL != "" {
-		opts = append(opts, mistral.WithEndpoint(cfg.EmbeddingURL))
-		metadata["url"] = cfg.EmbeddingURL
+	if key != "" {
+		opts = append(opts, openai.WithToken(key))
 	}
-	if cfg.EmbeddingKey != "" {
-		opts = append(opts, mistral.WithAPIKey(cfg.EmbeddingKey))
+	if httpClient != nil {
+		opts = append(opts, openai.WithHTTPClient(httpClient))
 	}
 
-	client, err := mistral.New(opts...)
+	client, err := openai.New(opts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create mistral client: %w", err)
 	}
@@ -218,7 +251,6 @@ func newMistral(cfg *config.Config, _ *http.Client) (embeddings.Embedder, error)
 }
 
 func newJina(cfg *config.Config, httpClient *http.Client) (embeddings.Embedder, error) {
-	// Custom HTTP client is not supported for jina
 	model, provider := cfg.EmbeddingModel, "jina"
 	if model == "" {
 		model = "jina-embeddings-v2-small-en"
@@ -243,6 +275,9 @@ func newJina(cfg *config.Config, httpClient *http.Client) (embeddings.Embedder, 
 	if cfg.EmbeddingModel != "" {
 		opts = append(opts, jina.WithModel(cfg.EmbeddingModel))
 	}
+	if httpClient != nil {
+		opts = append(opts, jina.WithClient(httpClient))
+	}
 
 	e, err := jina.NewJina(opts...)
 	if err != nil {
@@ -258,7 +293,6 @@ func newJina(cfg *config.Config, httpClient *http.Client) (embeddings.Embedder, 
 }
 
 func newHuggingface(cfg *config.Config, httpClient *http.Client) (embeddings.Embedder, error) {
-	// Custom HTTP client is not supported for huggingface
 	model, provider := cfg.EmbeddingModel, "huggingface"
 	if model == "" {
 		model = "BAAI/bge-small-en-v1.5"
@@ -278,6 +312,9 @@ func newHuggingface(cfg *config.Config, httpClient *http.Client) (embeddings.Emb
 	}
 	if cfg.EmbeddingModel != "" {
 		opts = append(opts, hgclient.WithModel(cfg.EmbeddingModel))
+	}
+	if httpClient != nil {
+		opts = append(opts, hgclient.WithHTTPClient(httpClient))
 	}
 
 	client, err := hgclient.New(opts...)
@@ -313,7 +350,7 @@ func newGoogleAI(cfg *config.Config, httpClient *http.Client) (embeddings.Embedd
 	// EmbeddingURL is not supported for googleai
 	model, provider := cfg.EmbeddingModel, "googleai"
 	if model == "" {
-		model = "embedding-001"
+		model = "gemini-embedding-001"
 	}
 
 	var opts []googleai.Option
@@ -324,9 +361,7 @@ func newGoogleAI(cfg *config.Config, httpClient *http.Client) (embeddings.Embedd
 	if cfg.EmbeddingKey != "" {
 		opts = append(opts, googleai.WithAPIKey(cfg.EmbeddingKey))
 	}
-	if cfg.EmbeddingModel != "" {
-		opts = append(opts, googleai.WithDefaultEmbeddingModel(cfg.EmbeddingModel))
-	}
+	opts = append(opts, googleai.WithDefaultEmbeddingModel(model))
 	if httpClient != nil {
 		opts = append(opts, googleai.WithHTTPClient(httpClient))
 	}
@@ -355,7 +390,6 @@ func newGoogleAI(cfg *config.Config, httpClient *http.Client) (embeddings.Embedd
 }
 
 func newVoyageAI(cfg *config.Config, httpClient *http.Client) (embeddings.Embedder, error) {
-	// EmbeddingURL client is not supported for voyageai
 	model, provider := cfg.EmbeddingModel, "voyageai"
 	if model == "" {
 		model = "voyage-4"
@@ -370,6 +404,10 @@ func newVoyageAI(cfg *config.Config, httpClient *http.Client) (embeddings.Embedd
 		voyageai.WithStripNewLines(cfg.EmbeddingStripNewLines),
 		voyageai.WithBatchSize(cfg.EmbeddingBatchSize),
 	)
+	if cfg.EmbeddingURL != "" {
+		opts = append(opts, voyageai.WithBaseURL(cfg.EmbeddingURL))
+		metadata["url"] = cfg.EmbeddingURL
+	}
 	if cfg.EmbeddingKey != "" {
 		opts = append(opts, voyageai.WithToken(cfg.EmbeddingKey))
 	}

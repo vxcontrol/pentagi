@@ -478,9 +478,9 @@ func (d *duckduckgo) formatSearchResults(results []searchResult) string {
 	var builder strings.Builder
 
 	for i, result := range results {
-		builder.WriteString(fmt.Sprintf("# %d. %s\n\n", i+1, result.Title))
-		builder.WriteString(fmt.Sprintf("## URL\n%s\n\n", result.URL))
-		builder.WriteString(fmt.Sprintf("## Description\n\n%s\n\n", result.Description))
+		fmt.Fprintf(&builder, "# %d. %s\n\n", i+1, result.Title)
+		fmt.Fprintf(&builder, "## URL\n%s\n\n", result.URL)
+		fmt.Fprintf(&builder, "## Description\n\n%s\n\n", result.Description)
 
 		if i < len(results)-1 {
 			builder.WriteString("---\n\n")
@@ -490,7 +490,6 @@ func (d *duckduckgo) formatSearchResults(results []searchResult) string {
 	return builder.String()
 }
 
-// isAvailable checks if the DuckDuckGo search client is properly configured
 func (d *duckduckgo) IsAvailable() bool {
 	// DuckDuckGo is a free search engine that doesn't require API keys or additional configuration.
 	// We only need to check if it's enabled in the settings according to the user config.

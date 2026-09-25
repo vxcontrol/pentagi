@@ -1,88 +1,174 @@
 package gemini
 
 import (
+	"context"
+	"crypto/x509"
+	"encoding/json"
+	"encoding/pem"
+	"errors"
+	"fmt"
+	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
-	"sync"
 	"testing"
+	"time"
 
 	"pentagi/pkg/config"
 	"pentagi/pkg/providers/pconfig"
 	"pentagi/pkg/providers/provider"
 
-	"github.com/vxcontrol/langchaingo/httputil"
+	"github.com/vxcontrol/langchaingo/llms"
 )
 
-func TestConfigLoading(t *testing.T) {
-	cfg := &config.Config{
-		GeminiAPIKey:    "test-key",
-		GeminiServerURL: "https://generativelanguage.googleapis.com",
+func geminiWriteCAFile(t *testing.T, srv *httptest.Server) string {
+	t.Helper()
+
+	cert := srv.Certificate()
+	if cert == nil {
+		t.Fatal("test server has no certificate")
 	}
+
+	path := filepath.Join(t.TempDir(), "ca.pem")
+	body := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: cert.Raw})
+	if err := os.WriteFile(path, body, 0o600); err != nil {
+		t.Fatalf("write CA file: %v", err)
+	}
+
+	return path
+}
+
+func geminiNew(t *testing.T) (provider.Provider, *pconfig.ProviderConfig) {
+	t.Helper()
 
 	providerConfig, err := DefaultProviderConfig()
 	if err != nil {
 		t.Fatalf("Failed to create provider config: %v", err)
 	}
 
-	prov, err := New(cfg, provider.DefaultProviderNameGemini, providerConfig)
+	prov, err := New(&config.Config{
+		GeminiAPIKey:    "test-key",
+		GeminiServerURL: "https://generativelanguage.googleapis.com",
+	}, provider.DefaultProviderNameGemini, providerConfig)
 	if err != nil {
 		t.Fatalf("Failed to create provider: %v", err)
 	}
 
-	rawConfig := prov.GetRawConfig()
-	if len(rawConfig) == 0 {
-		t.Fatal("Raw config should not be empty")
+	return prov, providerConfig
+}
+
+func TestGemini_BundledRolesUseTheReplayedModelsAndPrices(t *testing.T) {
+	cfg, err := DefaultProviderConfig()
+	if err != nil {
+		t.Fatalf("load bundled config: %v", err)
 	}
 
-	providerConfig = prov.GetProviderConfig()
-	if providerConfig == nil {
-		t.Fatal("Provider config should not be nil")
+	wantModels := map[pconfig.ProviderOptionsType]string{
+		pconfig.OptionsTypeSimple:       "gemini-3.1-flash-lite",
+		pconfig.OptionsTypeSimpleJSON:   "gemini-3.1-flash-lite",
+		pconfig.OptionsTypePrimaryAgent: "gemini-3.5-flash-lite",
+		pconfig.OptionsTypeAssistant:    "gemini-3.5-flash-lite",
+		pconfig.OptionsTypeGenerator:    "gemini-3.5-flash-lite",
+		pconfig.OptionsTypeRefiner:      "gemini-3.5-flash-lite",
+		pconfig.OptionsTypeAdviser:      "gemini-3.5-flash-lite",
+		pconfig.OptionsTypeReflector:    "gemini-3.1-flash-lite",
+		pconfig.OptionsTypeSearcher:     "gemini-3.1-flash-lite",
+		pconfig.OptionsTypeEnricher:     "gemini-3.1-flash-lite",
+		pconfig.OptionsTypeCoder:        "gemini-3.5-flash-lite",
+		pconfig.OptionsTypeInstaller:    "gemini-3.5-flash-lite",
+		pconfig.OptionsTypePentester:    "gemini-3.5-flash-lite",
+	}
+	if len(wantModels) != len(pconfig.AllAgentTypes) {
+		t.Fatalf("test covers %d bundled roles, want %d", len(wantModels), len(pconfig.AllAgentTypes))
 	}
 
-	for _, agentType := range pconfig.AllAgentTypes {
-		model := prov.Model(agentType)
-		if model == "" {
-			t.Errorf("Agent type %v should have a model assigned", agentType)
+	for _, role := range pconfig.AllAgentTypes {
+		wantModel, ok := wantModels[role]
+		if !ok {
+			t.Errorf("missing expected model for %s", role)
+			continue
 		}
-	}
-
-	for _, agentType := range pconfig.AllAgentTypes {
-		priceInfo := prov.GetPriceInfo(agentType)
-		if priceInfo == nil {
-			t.Errorf("Agent type %v should have price information", agentType)
-		} else {
-			if priceInfo.Input <= 0 || priceInfo.Output <= 0 {
-				t.Errorf("Agent type %v should have positive input (%f) and output (%f) prices",
-					agentType, priceInfo.Input, priceInfo.Output)
-			}
+		options := llms.CallOptions{}
+		for _, option := range cfg.GetOptionsForType(role) {
+			option(&options)
+		}
+		if got := options.GetModel(); got != wantModel {
+			t.Errorf("%s model = %q, want %q", role, got, wantModel)
+		}
+		wantInput, wantOutput, wantCacheRead := 0.25, 1.50, 0.025
+		if wantModel == "gemini-3.5-flash-lite" {
+			wantInput, wantOutput, wantCacheRead = 0.30, 2.50, 0.03
+		}
+		if got := cfg.GetPriceInfoForType(role); got == nil ||
+			got.Input != wantInput || got.Output != wantOutput || got.CacheRead != wantCacheRead {
+			t.Errorf("%s price = %+v, want %s catalogue price", role, got, wantModel)
 		}
 	}
 }
 
-func TestProviderType(t *testing.T) {
-	cfg := &config.Config{
-		GeminiAPIKey:    "test-key",
-		GeminiServerURL: "https://generativelanguage.googleapis.com",
-	}
-
-	providerConfig, err := DefaultProviderConfig()
-	if err != nil {
-		t.Fatalf("Failed to create provider config: %v", err)
-	}
-
-	prov, err := New(cfg, provider.DefaultProviderNameGemini, providerConfig)
-	if err != nil {
-		t.Fatalf("Failed to create provider: %v", err)
-	}
+func TestGemini_New_BuildsTheDoorWithAPricedModelForEveryAgent(t *testing.T) {
+	prov, providerConfig := geminiNew(t)
 
 	if prov.Type() != provider.ProviderGemini {
 		t.Errorf("Expected provider type %v, got %v", provider.ProviderGemini, prov.Type())
 	}
+	if prov.Name() != provider.DefaultProviderNameGemini {
+		t.Errorf("Expected provider name %v, got %v", provider.DefaultProviderNameGemini, prov.Name())
+	}
+	if len(prov.GetRawConfig()) == 0 {
+		t.Fatal("Raw config should not be empty")
+	}
+	if prov.GetProviderConfig() != providerConfig {
+		t.Fatal("Provider config should be the one New was given")
+	}
+
+	for _, agentType := range pconfig.AllAgentTypes {
+		if prov.Model(agentType) == "" {
+			t.Errorf("Agent type %v should have a model assigned", agentType)
+		}
+
+		priceInfo := prov.GetPriceInfo(agentType)
+		if priceInfo == nil {
+			t.Errorf("Agent type %v should have price information", agentType)
+		} else if priceInfo.Input <= 0 || priceInfo.Output <= 0 {
+			t.Errorf("Agent type %v should have positive input (%f) and output (%f) prices",
+				agentType, priceInfo.Input, priceInfo.Output)
+		}
+	}
 }
 
-func TestModelsLoading(t *testing.T) {
+func TestGemini_New_RefusesAnUnparsableServerURL(t *testing.T) {
+	providerConfig, err := DefaultProviderConfig()
+	if err != nil {
+		t.Fatalf("Failed to create provider config: %v", err)
+	}
+
+	_, err = New(&config.Config{GeminiAPIKey: "test-key", GeminiServerURL: "://invalid-url"},
+		provider.DefaultProviderNameGemini, providerConfig)
+	if err == nil || !strings.Contains(err.Error(), "failed to parse Gemini server URL") {
+		t.Fatalf("Expected the server URL parse error, got %v", err)
+	}
+}
+
+func TestGemini_GetUsage_ReadsInt32TokenCounts(t *testing.T) {
+	prov, _ := geminiNew(t)
+
+	usage := prov.GetUsage(map[string]any{
+		"PromptTokens":     int32(100),
+		"CompletionTokens": int32(50),
+	})
+	if usage.Input != 100 {
+		t.Errorf("Expected input tokens 100, got %d", usage.Input)
+	}
+	if usage.Output != 50 {
+		t.Errorf("Expected output tokens 50, got %d", usage.Output)
+	}
+}
+
+func TestGemini_DefaultModels_ShipsANonEmptyPricedCatalogue(t *testing.T) {
 	models, err := DefaultModels()
 	if err != nil {
 		t.Fatalf("Failed to load models: %v", err)
@@ -114,14 +200,23 @@ func TestModelsLoading(t *testing.T) {
 	}
 }
 
-func TestGeminiSpecificFeatures(t *testing.T) {
+func TestGemini_DefaultModels_ListsTheCurrentModelsAndTheDefaultOne(t *testing.T) {
 	models, err := DefaultModels()
 	if err != nil {
 		t.Fatalf("Failed to load models: %v", err)
 	}
 
-	// Test that we have current Gemini models
-	expectedModels := []string{"gemini-2.5-flash", "gemini-2.5-pro", "gemini-3.5-flash", "gemini-3.1-pro-preview"}
+	expectedModels := []string{
+		"gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash",
+		"gemini-3.5-flash", "gemini-3.5-flash-lite",
+		"gemini-3.1-pro-preview", "gemini-3.1-pro-preview-customtools",
+		"gemini-3.1-flash-lite", "gemini-3-flash-preview",
+		"gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.5-flash-lite",
+		"gemma-4-31b-it", "gemma-4-26b-a4b-it",
+	}
+	if len(models) != len(expectedModels) {
+		t.Errorf("catalogue has %d models, want %d", len(models), len(expectedModels))
+	}
 	for _, expectedModel := range expectedModels {
 		found := false
 		for _, model := range models {
@@ -135,340 +230,211 @@ func TestGeminiSpecificFeatures(t *testing.T) {
 		}
 	}
 
-	// Test default agent model
-	if GeminiAgentModel != "gemini-2.5-flash" {
-		t.Errorf("Expected default agent model to be gemini-2.5-flash, got %s", GeminiAgentModel)
+	if GeminiAgentModel != "gemini-3.1-flash-lite" {
+		t.Errorf("Expected default agent model to be gemini-3.1-flash-lite, got %s", GeminiAgentModel)
 	}
 }
 
-func TestGetUsage(t *testing.T) {
-	cfg := &config.Config{
-		GeminiAPIKey:    "test-key",
-		GeminiServerURL: "https://generativelanguage.googleapis.com",
-	}
-
-	providerConfig, err := DefaultProviderConfig()
-	if err != nil {
-		t.Fatalf("Failed to create provider config: %v", err)
-	}
-
-	prov, err := New(cfg, provider.DefaultProviderNameGemini, providerConfig)
-	if err != nil {
-		t.Fatalf("Failed to create provider: %v", err)
-	}
-
-	// Test usage parsing with Google AI format
-	usageInfo := map[string]any{
-		"PromptTokens":     int32(100),
-		"CompletionTokens": int32(50),
-	}
-
-	usage := prov.GetUsage(usageInfo)
-	if usage.Input != 100 {
-		t.Errorf("Expected input tokens 100, got %d", usage.Input)
-	}
-	if usage.Output != 50 {
-		t.Errorf("Expected output tokens 50, got %d", usage.Output)
-	}
-
-	// Test with missing usage info
-	emptyInfo := map[string]any{}
-	usage = prov.GetUsage(emptyInfo)
-	if !usage.IsZero() {
-		t.Errorf("Expected zero tokens with empty usage info, got %s", usage.String())
-	}
-}
-
-func TestAPIKeyTransportRoundTrip(t *testing.T) {
-	tests := []struct {
-		name             string
-		serverURL        string
-		apiKey           string
-		requestURL       string
-		requestQuery     string
-		expectedScheme   string
-		expectedHost     string
-		expectedPath     string
-		expectedQueryKey string
-	}{
-		{
-			name:             "no custom server, adds API key to query only (no auth header for default host)",
-			serverURL:        "",
-			apiKey:           "test-api-key-123",
-			requestURL:       "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent",
-			requestQuery:     "",
-			expectedScheme:   "https",
-			expectedHost:     "generativelanguage.googleapis.com",
-			expectedPath:     "/v1beta/models/gemini-pro:generateContent",
-			expectedQueryKey: "test-api-key-123",
-		},
-		{
-			name:             "custom server URL replaces base URL",
-			serverURL:        "https://proxy.example.com/gemini",
-			apiKey:           "my-key",
-			requestURL:       "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent",
-			requestQuery:     "",
-			expectedScheme:   "https",
-			expectedHost:     "proxy.example.com",
-			expectedPath:     "/gemini/v1beta/models/gemini-pro:generateContent",
-			expectedQueryKey: "my-key",
-		},
-		{
-			name:             "custom server URL with trailing slash replaces base URL",
-			serverURL:        "https://proxy.example.com/gemini/",
-			apiKey:           "my-key",
-			requestURL:       "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent",
-			requestQuery:     "",
-			expectedScheme:   "https",
-			expectedHost:     "proxy.example.com",
-			expectedPath:     "/gemini/v1beta/models/gemini-pro:generateContent",
-			expectedQueryKey: "my-key",
-		},
-		{
-			name:             "preserves existing query parameters",
-			serverURL:        "https://proxy.example.com",
-			apiKey:           "api-key",
-			requestURL:       "https://generativelanguage.googleapis.com/v1/models",
-			requestQuery:     "foo=bar&baz=qux",
-			expectedScheme:   "https",
-			expectedHost:     "proxy.example.com",
-			expectedPath:     "/v1/models",
-			expectedQueryKey: "api-key",
-		},
-		{
-			name:             "does not override existing API key in query",
-			serverURL:        "",
-			apiKey:           "new-key",
-			requestURL:       "https://generativelanguage.googleapis.com/v1/models",
-			requestQuery:     "key=existing-key",
-			expectedScheme:   "https",
-			expectedHost:     "generativelanguage.googleapis.com",
-			expectedPath:     "/v1/models",
-			expectedQueryKey: "existing-key", // should keep existing
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			var capturedReq *http.Request
-			mockRT := &mockRoundTripper{
-				roundTripFunc: func(req *http.Request) (*http.Response, error) {
-					capturedReq = req
-					return &http.Response{
-						StatusCode: 200,
-						Body:       http.NoBody,
-						Header:     make(http.Header),
-					}, nil
-				},
-			}
-
-			transport := &httputil.ApiKeyTransport{
-				Transport: mockRT,
-				APIKey:    tt.apiKey,
-				BaseURL:   tt.serverURL,
-				ProxyURL:  "",
-			}
-
-			reqURL := tt.requestURL
-			if tt.requestQuery != "" {
-				reqURL += "?" + tt.requestQuery
-			}
-			req, err := http.NewRequest("POST", reqURL, nil)
-			if err != nil {
-				t.Fatalf("Failed to create request: %v", err)
-			}
-
-			_, err = transport.RoundTrip(req)
-			if err != nil {
-				t.Fatalf("RoundTrip failed: %v", err)
-			}
-
-			if capturedReq == nil {
-				t.Fatal("Request was not captured")
-			}
-
-			if capturedReq.URL.Scheme != tt.expectedScheme {
-				t.Errorf("Expected scheme %s, got %s", tt.expectedScheme, capturedReq.URL.Scheme)
-			}
-
-			if capturedReq.URL.Host != tt.expectedHost {
-				t.Errorf("Expected host %s, got %s", tt.expectedHost, capturedReq.URL.Host)
-			}
-
-			if capturedReq.URL.Path != tt.expectedPath {
-				t.Errorf("Expected path %s, got %s", tt.expectedPath, capturedReq.URL.Path)
-			}
-
-			queryKey := capturedReq.URL.Query().Get("key")
-			if queryKey != tt.expectedQueryKey {
-				t.Errorf("Expected query key %s, got %s", tt.expectedQueryKey, queryKey)
-			}
-
-			// verify original query parameters are preserved
-			if tt.requestQuery != "" {
-				originalQuery, _ := url.ParseQuery(tt.requestQuery)
-				for k, v := range originalQuery {
-					if k == "key" {
-						continue // key may be added by transport
-					}
-					capturedValues := capturedReq.URL.Query()[k]
-					if len(capturedValues) != len(v) {
-						t.Errorf("Query parameter %s: expected %v, got %v", k, v, capturedValues)
-					}
-				}
-			}
-		})
-	}
-}
-
-// mockRoundTripper is a mock implementation of http.RoundTripper for testing
-type mockRoundTripper struct {
-	roundTripFunc func(*http.Request) (*http.Response, error)
-}
-
-func (m *mockRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
-	return m.roundTripFunc(req)
-}
-
-func TestAPIKeyTransportWithMockServer(t *testing.T) {
-	// track received requests
-	var receivedRequests []*http.Request
-	var mu sync.Mutex
-
-	// create test HTTP server
-	testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		mu.Lock()
-		receivedRequests = append(receivedRequests, r.Clone(r.Context()))
-		mu.Unlock()
-
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
+func TestGemini_NewHTTPClient_AppliesTheConfiguredTimeout(t *testing.T) {
+	released := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
+		<-released
 	}))
-	defer testServer.Close()
+	t.Cleanup(func() {
+		close(released)
+		srv.Close()
+	})
 
-	// parse test server URL
-	serverURL, err := url.Parse(testServer.URL)
+	client, err := newHTTPClient(&config.Config{
+		HTTPClientTimeout: 1,
+		GeminiServerURL:   srv.URL,
+	})
 	if err != nil {
-		t.Fatalf("Failed to parse test server URL: %v", err)
+		t.Fatalf("build client: %v", err)
 	}
 
-	// create transport with custom server
-	transport := &httputil.ApiKeyTransport{
-		Transport: http.DefaultTransport,
-		APIKey:    "test-api-key-789",
-		BaseURL:   testServer.URL,
-		ProxyURL:  "",
-	}
+	failed := make(chan error, 1)
+	go func() {
+		resp, err := client.Get(srv.URL) //nolint:noctx
+		if resp != nil {
+			_ = resp.Body.Close()
+		}
+		failed <- err
+	}()
 
-	// create HTTP client with our transport
-	client := &http.Client{Transport: transport}
-
-	// make request to Google API endpoint (will be redirected to test server)
-	req, err := http.NewRequest("GET", "https://generativelanguage.googleapis.com/v1beta/models/test", nil)
-	if err != nil {
-		t.Fatalf("Failed to create request: %v", err)
-	}
-
-	resp, err := client.Do(req)
-	if err != nil {
-		t.Fatalf("Request failed: %v", err)
-	}
-	defer resp.Body.Close()
-
-	// verify request was received by test server
-	mu.Lock()
-	defer mu.Unlock()
-
-	if len(receivedRequests) != 1 {
-		t.Fatalf("Expected 1 request, got %d", len(receivedRequests))
-	}
-
-	capturedReq := receivedRequests[0]
-
-	// verify URL was rewritten to test server
-	if capturedReq.Host != serverURL.Host {
-		t.Errorf("Expected host %s, got %s", serverURL.Host, capturedReq.Host)
-	}
-
-	// verify API key was added
-	if key := capturedReq.URL.Query().Get("key"); key != "test-api-key-789" {
-		t.Errorf("Expected API key test-api-key-789, got %s", key)
-	}
-
-	// verify original path was preserved
-	if !strings.Contains(capturedReq.URL.Path, "/v1beta/models/test") {
-		t.Errorf("Expected path to contain /v1beta/models/test, got %s", capturedReq.URL.Path)
+	select {
+	case err := <-failed:
+		var netErr net.Error
+		if !errors.As(err, &netErr) || !netErr.Timeout() {
+			t.Fatalf("a hung response must be cut off by the configured timeout, got %v", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("request outlived the configured timeout, so it never reached the client")
 	}
 }
 
-func TestGeminiProviderWithProxyConfiguration(t *testing.T) {
-	// create provider config
-	providerConfig, err := DefaultProviderConfig()
+func TestGemini_NewHTTPClient_TrustsTheConfiguredCA(t *testing.T) {
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	caPath := geminiWriteCAFile(t, srv)
+
+	trusting, err := newHTTPClient(&config.Config{
+		HTTPClientTimeout: 5,
+		ExternalSSLCAPath: caPath,
+		GeminiServerURL:   srv.URL,
+	})
 	if err != nil {
-		t.Fatalf("Failed to create provider config: %v", err)
+		t.Fatalf("build client with CA: %v", err)
 	}
 
-	// test provider creation with proxy settings
-	testCases := []struct {
-		name      string
-		proxyURL  string
-		serverURL string
-		wantErr   bool
+	resp, err := trusting.Get(srv.URL) //nolint:noctx
+	if err != nil {
+		t.Fatalf("a certificate signed by the configured CA must be accepted: %v", err)
+	}
+	_ = resp.Body.Close()
+
+	plain, err := newHTTPClient(&config.Config{
+		HTTPClientTimeout: 5,
+		GeminiServerURL:   srv.URL,
+	})
+	if err != nil {
+		t.Fatalf("build client without CA: %v", err)
+	}
+
+	resp, err = plain.Get(srv.URL) //nolint:noctx
+	if err == nil {
+		_ = resp.Body.Close()
+	}
+	var unknownAuthority x509.UnknownAuthorityError
+	if !errors.As(err, &unknownAuthority) {
+		t.Fatalf("without the configured CA the same certificate must be rejected as signed by an unknown authority, got %v", err)
+	}
+}
+
+func TestGemini_NewHTTPClient_InjectsTheKeyAndRewritesTheBase(t *testing.T) {
+	var (
+		gotPath string
+		gotKey  string
+	)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		gotKey = r.URL.Query().Get("key")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	client, err := newHTTPClient(&config.Config{
+		HTTPClientTimeout: 5,
+		GeminiAPIKey:      "gemini-key",
+		GeminiServerURL:   srv.URL,
+	})
+	if err != nil {
+		t.Fatalf("build client: %v", err)
+	}
+
+	resp, err := client.Get("https://generativelanguage.googleapis.com/v1beta/models") //nolint:noctx
+	if err != nil {
+		t.Fatalf("request: %v", err)
+	}
+	_ = resp.Body.Close()
+
+	if gotPath != "/v1beta/models" {
+		t.Fatalf("request path %q lost the original path during the base URL rewrite", gotPath)
+	}
+	if gotKey != "gemini-key" {
+		t.Fatalf("api key reached the wire as %q", gotKey)
+	}
+}
+
+func geminiThinkingCall(t *testing.T, configured string, asked int) map[string]any {
+	t.Helper()
+
+	var body map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(raw, &body)
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"candidates":[{"content":{"parts":[{"text":"ok"}],"role":"model"},`+
+			`"finishReason":"STOP","index":0}],`+
+			`"usageMetadata":{"promptTokenCount":1,"candidatesTokenCount":1,"totalTokenCount":2}}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	providerConfig, err := BuildProviderConfig(fmt.Appendf(nil,
+		"simple:\n  model: gemini-3-pro\n%s  reasoning:\n    mode: budget\n    max_tokens: %d\n", configured, asked))
+	if err != nil {
+		t.Fatalf("config: %v", err)
+	}
+	prov, err := New(&config.Config{GeminiAPIKey: "k", GeminiServerURL: srv.URL},
+		provider.DefaultProviderNameGemini, providerConfig)
+	if err != nil {
+		t.Fatalf("provider: %v", err)
+	}
+	if _, err := prov.CallEx(context.Background(), pconfig.OptionsTypeSimple,
+		[]llms.MessageContent{llms.TextParts(llms.ChatMessageTypeHuman, "hi")}, nil); err != nil {
+		t.Fatalf("call: %v", err)
+	}
+
+	generation, _ := body["generationConfig"].(map[string]any)
+	if generation == nil {
+		t.Fatalf("no generation config reached the wire; body=%v", body)
+	}
+	return generation
+}
+
+func TestGemini_CallEx_KeepsTheThinkingBudgetUnderTheOutputCap(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		configured  string
+		asked       float64
+		wantAsIs    bool
+		wantClamped bool
 	}{
-		{
-			name:      "valid configuration without proxy",
-			proxyURL:  "",
-			serverURL: "https://generativelanguage.googleapis.com",
-			wantErr:   false,
-		},
-		{
-			name:      "valid configuration with proxy",
-			proxyURL:  "http://proxy.example.com:8080",
-			serverURL: "https://generativelanguage.googleapis.com",
-			wantErr:   false,
-		},
-		{
-			name:      "valid configuration with custom server and proxy",
-			proxyURL:  "http://localhost:8888",
-			serverURL: "https://litellm.proxy.com/v1",
-			wantErr:   false,
-		},
-		{
-			name:      "invalid server URL",
-			proxyURL:  "",
-			serverURL: "://invalid-url",
-			wantErr:   true,
-		},
-	}
-
-	for _, tc := range testCases {
+		{name: "a budget under an explicit cap", configured: "  max_tokens: 2048\n", asked: 1024, wantAsIs: true},
+		{name: "a budget over an explicit cap", configured: "  max_tokens: 2048\n", asked: 4096, wantClamped: true},
+		{name: "no cap configured at all", asked: 4096},
+		{name: "a budget larger than any model takes", asked: 32000, wantClamped: true},
+	} {
 		t.Run(tc.name, func(t *testing.T) {
-			cfg := &config.Config{
-				GeminiAPIKey:    "test-key-" + tc.name,
-				GeminiServerURL: tc.serverURL,
-				ProxyURL:        tc.proxyURL,
+			generation := geminiThinkingCall(t, tc.configured, int(tc.asked))
+			thinking, _ := generation["thinkingConfig"].(map[string]any)
+			budget, hasBudget := thinking["thinkingBudget"].(float64)
+			limit, hasLimit := generation["maxOutputTokens"].(float64)
+			if !hasBudget || !hasLimit {
+				t.Fatalf("budget %v and output cap %v must both reach the wire", thinking, generation)
 			}
 
-			prov, err := New(cfg, provider.DefaultProviderNameGemini, providerConfig)
-
-			if tc.wantErr {
-				if err == nil {
-					t.Error("Expected error but got nil")
-				}
-				return
+			if budget <= 0 {
+				t.Errorf("budget on the wire = %v, which asks for no thinking at all", budget)
 			}
-
-			if err != nil {
-				t.Fatalf("Unexpected error: %v", err)
+			if budget >= limit {
+				t.Errorf("budget %v is not below the output cap %v, which the API rejects", budget, limit)
 			}
-
-			if prov == nil {
-				t.Fatal("Provider should not be nil")
+			if strings.Contains(tc.configured, "max_tokens") && limit < 2048 {
+				t.Errorf("output cap on the wire = %v, below the 2048 the operator configured", limit)
 			}
-
-			if prov.Type() != provider.ProviderGemini {
-				t.Errorf("Expected provider type Gemini, got %v", prov.Type())
+			if tc.wantAsIs && budget != tc.asked {
+				t.Errorf("budget on the wire = %v, want the %v asked for: it fits under the cap untouched", budget, tc.asked)
+			}
+			if tc.wantClamped && budget >= tc.asked {
+				t.Errorf("budget on the wire = %v, want less than the %v asked for: it does not fit", budget, tc.asked)
 			}
 		})
+	}
+}
+
+func TestGemini_CallEx_KeepsTopPBesideTheThinkingBudget(t *testing.T) {
+	generation := geminiThinkingCall(t, "  top_p: 0.3\n", 2048)
+
+	if got := generation["topP"]; got != 0.3 {
+		t.Errorf("topP = %v, want 0.3: this door takes sampling alongside thinking", got)
+	}
+	thinking, _ := generation["thinkingConfig"].(map[string]any)
+	if budget, _ := thinking["thinkingBudget"].(float64); budget <= 0 {
+		t.Errorf("thinking config on the wire = %v: sampling survived, but the thinking it rides with did not", thinking)
 	}
 }

@@ -7,6 +7,8 @@ const MAX_BYTES = 72;
 const AT_LIMIT = 'a'.repeat(MAX_BYTES);
 const OVER_LIMIT = 'a'.repeat(MAX_BYTES + 1);
 const MULTIBYTE_OVER_LIMIT = 'é'.repeat(40);
+const NEXT_PASSWORD = 'NextPass1!e2e';
+const WHOAMI = '/api/v1/user/';
 
 const changePassword = (
     api: APIRequestContext,
@@ -130,6 +132,60 @@ test.describe('account password at the trust boundary', { tag: '@real' }, () => 
             await admin.delete(`/api/v1/users/${hash}`);
             await admin.dispose();
             await victim.dispose();
+        }
+    });
+
+    test('a session captured earlier stops working after a logout or a password change', async ({ baseURL }) => {
+        const admin = await apiRequest.newContext({ baseURL, ignoreHTTPSErrors: true });
+        const stale = await apiRequest.newContext({ baseURL, ignoreHTTPSErrors: true });
+        const active = await apiRequest.newContext({ baseURL, ignoreHTTPSErrors: true });
+
+        expect((await login(admin, ADMIN_USER, ADMIN_PASSWORD)).status(), 'seeded admin credentials').toBe(200);
+
+        const mail = `e2e-revoke-${Date.now()}@pentagi.com`;
+        const created = await admin.post('/api/v1/users/', {
+            data: {
+                mail,
+                name: `e2erevoke${Date.now()}`,
+                password: INITIAL_PASSWORD,
+                role_id: 2,
+                status: 'active',
+                type: 'local',
+            },
+        });
+
+        expect(created.status(), 'throwaway user created').toBe(201);
+
+        const hash = (await created.json()).data.hash as string;
+
+        try {
+            expect((await login(stale, mail, INITIAL_PASSWORD)).status()).toBe(200);
+            expect((await login(active, mail, INITIAL_PASSWORD)).status()).toBe(200);
+            expect((await stale.get(WHOAMI)).status(), 'both sessions start out valid').toBe(200);
+
+            await active.post('/api/v1/auth/logout');
+
+            expect((await stale.get(WHOAMI)).status(), 'the logout has to reach the copy it never held').toBe(403);
+
+            expect((await login(stale, mail, INITIAL_PASSWORD)).status()).toBe(200);
+            expect((await login(active, mail, INITIAL_PASSWORD)).status()).toBe(200);
+
+            expect(
+                (
+                    await changePassword(active, { current_password: INITIAL_PASSWORD, password: NEXT_PASSWORD })
+                ).status(),
+            ).toBe(200);
+
+            expect((await stale.get(WHOAMI)).status(), 'a password change ends the other sessions').toBe(403);
+            expect(
+                (await active.get(WHOAMI)).status(),
+                'and keeps the one doing the changing, whose cookie is re-stamped',
+            ).toBe(200);
+        } finally {
+            await admin.delete(`/api/v1/users/${hash}`);
+            await admin.dispose();
+            await stale.dispose();
+            await active.dispose();
         }
     });
 });

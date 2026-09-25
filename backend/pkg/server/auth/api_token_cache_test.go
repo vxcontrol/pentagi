@@ -1,10 +1,11 @@
-package auth_test
+package auth
 
 import (
+	"slices"
+	"sync"
 	"testing"
 	"time"
 
-	"pentagi/pkg/server/auth"
 	"pentagi/pkg/server/models"
 
 	"github.com/jinzhu/gorm"
@@ -12,311 +13,157 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestTokenCache_GetStatus(t *testing.T) {
-	db := setupTestDB(t)
-	defer db.Close()
-
-	cache := auth.NewTokenCache(db)
-	tokenID := "testtoken1"
-
-	// Insert test token
-	token := models.APIToken{
-		TokenID: tokenID,
-		UserID:  1,
-		RoleID:  2,
-		TTL:     3600,
-		Status:  models.TokenStatusActive,
+func TestAPITokenCache_GetStatus_GrantsTheTokenRolePlusAutomation(t *testing.T) {
+	cases := []struct {
+		name string
+		role uint64
+		want []string
+	}{
+		{"an admin token", 1, apiTokenCacheAdminRole},
+		{"a user token", 2, apiTokenCacheUserRole},
 	}
-	err := db.Create(&token).Error
-	require.NoError(t, err)
 
-	// Test: Get status (should hit database)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			db := setupTestDB(t)
+			authStoreToken(t, db, "roletoken1", 1, tc.role)
+
+			status, privileges, err := NewTokenCache(db).GetStatus("roletoken1")
+
+			require.NoError(t, err)
+			assert.Equal(t, models.TokenStatusActive, status)
+			assert.ElementsMatch(t, tc.want, privileges)
+		})
+	}
+}
+
+// What a token of role 1 and of role 2 is granted, sorted.
+var (
+	apiTokenCacheAdminRole = []string{
+		"flows.admin", "flows.create", "flows.delete", "flows.edit", "flows.view", "pentagi.automation",
+		"roles.view", "settings.tokens.admin", "settings.tokens.create", "settings.tokens.delete",
+		"settings.tokens.edit", "settings.tokens.view", "users.create", "users.delete", "users.edit", "users.view",
+	}
+	apiTokenCacheUserRole = []string{
+		"flows.create", "flows.delete", "flows.edit", "flows.view", "pentagi.automation", "roles.view",
+		"settings.tokens.create", "settings.tokens.delete", "settings.tokens.edit", "settings.tokens.view",
+	}
+)
+
+type apiTokenCacheRead struct {
+	status     models.TokenStatus
+	privileges []string
+	err        error
+}
+
+func apiTokenCacheGet(cache *TokenCache, tokenID string) apiTokenCacheRead {
 	status, privileges, err := cache.GetStatus(tokenID)
-	require.NoError(t, err)
-	assert.Equal(t, models.TokenStatusActive, status)
-	assert.NotEmpty(t, privileges)
-	assert.Contains(t, privileges, auth.PrivilegeAutomation)
-	assert.Contains(t, privileges, "flows.create")
-	assert.Contains(t, privileges, "settings.tokens.view")
-
-	// Test: Get status again (should hit cache)
-	status, privileges, err = cache.GetStatus(tokenID)
-	require.NoError(t, err)
-	assert.Equal(t, models.TokenStatusActive, status)
-	assert.NotEmpty(t, privileges)
-	assert.Contains(t, privileges, auth.PrivilegeAutomation)
-
-	// Test: Non-existent token
-	_, _, err = cache.GetStatus("nonexistent")
-	assert.Error(t, err)
-	assert.Equal(t, gorm.ErrRecordNotFound, err)
+	return apiTokenCacheRead{status: status, privileges: slices.Sorted(slices.Values(privileges)), err: err}
 }
 
-func TestTokenCache_Invalidate(t *testing.T) {
-	db := setupTestDB(t)
-	defer db.Close()
+var (
+	apiTokenCacheActive   = apiTokenCacheRead{status: models.TokenStatusActive, privileges: apiTokenCacheUserRole}
+	apiTokenCacheAdmin    = apiTokenCacheRead{status: models.TokenStatusActive, privileges: apiTokenCacheAdminRole}
+	apiTokenCacheRevoked  = apiTokenCacheRead{status: models.TokenStatusRevoked, privileges: apiTokenCacheUserRole}
+	apiTokenCacheNotFound = apiTokenCacheRead{err: gorm.ErrRecordNotFound}
+)
 
-	cache := auth.NewTokenCache(db)
-	tokenID := "testtoken2"
-
-	// Insert test token
-	token := models.APIToken{
-		TokenID: tokenID,
-		UserID:  1,
-		RoleID:  2,
-		TTL:     3600,
-		Status:  models.TokenStatusActive,
-	}
-	err := db.Create(&token).Error
-	require.NoError(t, err)
-
-	// Get status to populate cache
-	status, privileges, err := cache.GetStatus(tokenID)
-	require.NoError(t, err)
-	assert.Equal(t, models.TokenStatusActive, status)
-	assert.NotEmpty(t, privileges)
-
-	// Update token in database
-	db.Model(&token).Update("status", models.TokenStatusRevoked)
-
-	// Status should still be active (from cache)
-	status, privileges, err = cache.GetStatus(tokenID)
-	require.NoError(t, err)
-	assert.Equal(t, models.TokenStatusActive, status)
-	assert.NotEmpty(t, privileges)
-
-	// Invalidate cache
-	cache.Invalidate(tokenID)
-
-	// Status should now be revoked (from database)
-	status, privileges, err = cache.GetStatus(tokenID)
-	require.NoError(t, err)
-	assert.Equal(t, models.TokenStatusRevoked, status)
-	assert.NotEmpty(t, privileges)
+// A stored token revoked, or moved to another role, after it was cached, and a missing token stored after its absence was.
+var apiTokenCacheEntries = []struct {
+	name          string
+	stored        bool
+	change        string
+	before, after apiTokenCacheRead
+}{
+	{"a stored token", true, "UPDATE api_tokens SET status = 'revoked'", apiTokenCacheActive, apiTokenCacheRevoked},
+	{"a token moved to another role", true, "UPDATE api_tokens SET role_id = 1", apiTokenCacheActive, apiTokenCacheAdmin},
+	{"a missing token", false, "INSERT INTO api_tokens (token_id, user_id, role_id, ttl) VALUES ('cachetoken', 1, 2, 3600)",
+		apiTokenCacheNotFound, apiTokenCacheActive},
 }
 
-func TestTokenCache_InvalidateUser(t *testing.T) {
-	db := setupTestDB(t)
-	defer db.Close()
+func TestAPITokenCache_GetStatus_ServesTheCachedEntryUntilInvalidated(t *testing.T) {
+	for _, tc := range apiTokenCacheEntries {
+		t.Run(tc.name, func(t *testing.T) {
+			db := setupTestDB(t)
+			if tc.stored {
+				authStoreToken(t, db, "cachetoken", 1, 2)
+			}
+			cache := NewTokenCache(db)
 
-	cache := auth.NewTokenCache(db)
-	userID := uint64(1)
+			require.Equal(t, tc.before, apiTokenCacheGet(cache, "cachetoken"))
+			require.NoError(t, db.Exec(tc.change).Error)
+			assert.Equal(t, tc.before, apiTokenCacheGet(cache, "cachetoken"), "the store changed under a cached entry")
 
-	// Insert multiple tokens for user
-	tokens := []models.APIToken{
-		{
-			TokenID: "token1",
-			UserID:  userID,
-			RoleID:  2,
-			TTL:     3600,
-			Status:  models.TokenStatusActive,
-		},
-		{
-			TokenID: "token2",
-			UserID:  userID,
-			RoleID:  2,
-			TTL:     3600,
-			Status:  models.TokenStatusActive,
-		},
+			cache.Invalidate("cachetoken")
+			assert.Equal(t, tc.after, apiTokenCacheGet(cache, "cachetoken"))
+		})
 	}
+}
 
-	for _, token := range tokens {
-		err := db.Create(&token).Error
+func TestAPITokenCache_GetStatus_RereadsAnEntryPastItsTTL(t *testing.T) {
+	for _, tc := range apiTokenCacheEntries {
+		t.Run(tc.name, func(t *testing.T) {
+			db := setupTestDB(t)
+			if tc.stored {
+				authStoreToken(t, db, "cachetoken", 1, 2)
+			}
+			cache := NewTokenCache(db)
+			cache.SetTTL(50 * time.Millisecond)
+
+			require.Equal(t, tc.before, apiTokenCacheGet(cache, "cachetoken"))
+			require.NoError(t, db.Exec(tc.change).Error)
+			time.Sleep(100 * time.Millisecond)
+
+			assert.Equal(t, tc.after, apiTokenCacheGet(cache, "cachetoken"))
+		})
+	}
+}
+
+func TestAPITokenCache_GetStatus_ServesConcurrentReaders(t *testing.T) {
+	db := setupTestDB(t)
+	cache := NewTokenCache(db)
+
+	tokenIDs := make([]string, 10)
+	for i := range tokenIDs {
+		tokenID, err := GenerateTokenID()
 		require.NoError(t, err)
+		authStoreToken(t, db, tokenID, 1, 2)
+		tokenIDs[i] = tokenID
+		require.Equal(t, apiTokenCacheActive, apiTokenCacheGet(cache, tokenID))
 	}
 
-	// Populate cache
-	for _, token := range tokens {
-		_, _, err := cache.GetStatus(token.TokenID)
-		require.NoError(t, err)
+	reads := make(chan apiTokenCacheRead, len(tokenIDs)*100)
+	var wg sync.WaitGroup
+	for _, tokenID := range tokenIDs {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for range 100 {
+				reads <- apiTokenCacheGet(cache, tokenID)
+			}
+		}()
 	}
+	authWaitOrFail(t, &wg, "concurrent token reads")
+	close(reads)
 
-	// Update tokens in database
-	db.Model(&models.APIToken{}).Where("user_id = ?", userID).Update("status", models.TokenStatusRevoked)
-
-	// Invalidate all user tokens
-	cache.InvalidateUser(userID)
-
-	// All tokens should now show revoked status
-	for _, token := range tokens {
-		status, privileges, err := cache.GetStatus(token.TokenID)
-		require.NoError(t, err)
-		assert.Equal(t, models.TokenStatusRevoked, status)
-		assert.NotEmpty(t, privileges)
+	for read := range reads {
+		require.Equal(t, apiTokenCacheActive, read)
 	}
 }
 
-func TestTokenCache_Expiration(t *testing.T) {
+func TestAPITokenCache_InvalidateUser_DropsEveryTokenOfTheUser(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
+	cache := NewTokenCache(db)
 
-	// Create cache with very short TTL for testing
-	cache := auth.NewTokenCache(db)
-	cache.SetTTL(300 * time.Millisecond)
-
-	tokenID := "testtoken3"
-
-	// Insert test token
-	token := models.APIToken{
-		TokenID: tokenID,
-		UserID:  1,
-		RoleID:  2,
-		TTL:     3600,
-		Status:  models.TokenStatusActive,
+	for _, tokenID := range []string{"usertoken1", "usertoken2"} {
+		authStoreToken(t, db, tokenID, 1, 2)
+		require.Equal(t, apiTokenCacheActive, apiTokenCacheGet(cache, tokenID))
 	}
-	err := db.Create(&token).Error
-	require.NoError(t, err)
+	require.NoError(t, db.Exec("UPDATE api_tokens SET status = 'revoked' WHERE user_id = 1").Error)
 
-	// Get status to populate cache
-	status, privileges, err := cache.GetStatus(tokenID)
-	require.NoError(t, err)
-	assert.Equal(t, models.TokenStatusActive, status)
-	assert.NotEmpty(t, privileges)
+	cache.InvalidateUser(1)
 
-	// Update token in database
-	db.Model(&token).Update("status", models.TokenStatusRevoked)
-
-	// Wait for cache to expire
-	time.Sleep(500 * time.Millisecond)
-
-	// Status should now be revoked (cache expired, reading from DB)
-	status, privileges, err = cache.GetStatus(tokenID)
-	require.NoError(t, err)
-	assert.Equal(t, models.TokenStatusRevoked, status)
-	assert.NotEmpty(t, privileges)
-}
-
-func TestTokenCache_PrivilegesByRole(t *testing.T) {
-	db := setupTestDB(t)
-	defer db.Close()
-
-	cache := auth.NewTokenCache(db)
-
-	// Test Admin token (role_id = 1)
-	adminTokenID := "admin_token"
-	adminToken := models.APIToken{
-		TokenID: adminTokenID,
-		UserID:  1,
-		RoleID:  1,
-		TTL:     3600,
-		Status:  models.TokenStatusActive,
+	for _, tokenID := range []string{"usertoken1", "usertoken2"} {
+		assert.Equal(t, apiTokenCacheRevoked, apiTokenCacheGet(cache, tokenID), tokenID)
 	}
-	err := db.Create(&adminToken).Error
-	require.NoError(t, err)
-
-	status, adminPrivs, err := cache.GetStatus(adminTokenID)
-	require.NoError(t, err)
-	assert.Equal(t, models.TokenStatusActive, status)
-	assert.NotEmpty(t, adminPrivs)
-	assert.Contains(t, adminPrivs, auth.PrivilegeAutomation)
-	assert.Contains(t, adminPrivs, "users.create")
-	assert.Contains(t, adminPrivs, "users.delete")
-	assert.Contains(t, adminPrivs, "settings.tokens.admin")
-
-	// Test User token (role_id = 2)
-	userTokenID := "user_token"
-	userToken := models.APIToken{
-		TokenID: userTokenID,
-		UserID:  2,
-		RoleID:  2,
-		TTL:     3600,
-		Status:  models.TokenStatusActive,
-	}
-	err = db.Create(&userToken).Error
-	require.NoError(t, err)
-
-	status, userPrivs, err := cache.GetStatus(userTokenID)
-	require.NoError(t, err)
-	assert.Equal(t, models.TokenStatusActive, status)
-	assert.NotEmpty(t, userPrivs)
-	assert.Contains(t, userPrivs, auth.PrivilegeAutomation)
-	assert.Contains(t, userPrivs, "flows.create")
-	assert.Contains(t, userPrivs, "settings.tokens.view")
-
-	// User should NOT have admin privileges
-	assert.NotContains(t, userPrivs, "users.create")
-	assert.NotContains(t, userPrivs, "users.delete")
-	assert.NotContains(t, userPrivs, "settings.tokens.admin")
-
-	// Admin should have more privileges than User
-	assert.Greater(t, len(adminPrivs), len(userPrivs))
-}
-
-func TestTokenCache_NegativeCaching(t *testing.T) {
-	db := setupTestDB(t)
-	defer db.Close()
-
-	cache := auth.NewTokenCache(db)
-	nonExistentTokenID := "nonexistent"
-
-	// First call - should hit database and cache the "not found"
-	_, _, err := cache.GetStatus(nonExistentTokenID)
-	require.Error(t, err)
-	assert.Equal(t, gorm.ErrRecordNotFound, err)
-
-	// Second call - should return from cache without hitting DB
-	// We can verify this by checking error is still the same
-	_, _, err = cache.GetStatus(nonExistentTokenID)
-	require.Error(t, err)
-	assert.Equal(t, gorm.ErrRecordNotFound, err, "Should return cached not found error")
-
-	// Now create the token in DB
-	token := models.APIToken{
-		TokenID: nonExistentTokenID,
-		UserID:  1,
-		RoleID:  2,
-		TTL:     3600,
-		Status:  models.TokenStatusActive,
-	}
-	err = db.Create(&token).Error
-	require.NoError(t, err)
-
-	// Should still return cached "not found" until invalidated
-	_, _, err = cache.GetStatus(nonExistentTokenID)
-	require.Error(t, err)
-	assert.Equal(t, gorm.ErrRecordNotFound, err, "Should still return cached not found")
-
-	// Invalidate cache
-	cache.Invalidate(nonExistentTokenID)
-
-	// Now should find the token
-	status, privileges, err := cache.GetStatus(nonExistentTokenID)
-	require.NoError(t, err)
-	assert.Equal(t, models.TokenStatusActive, status)
-	assert.NotEmpty(t, privileges)
-}
-
-func TestTokenCache_NegativeCachingExpiration(t *testing.T) {
-	db := setupTestDB(t)
-	defer db.Close()
-
-	cache := auth.NewTokenCache(db)
-	cache.SetTTL(300 * time.Millisecond)
-
-	nonExistentTokenID := "temp_nonexistent"
-
-	// First call - cache the "not found"
-	_, _, err := cache.GetStatus(nonExistentTokenID)
-	require.Error(t, err)
-	assert.Equal(t, gorm.ErrRecordNotFound, err)
-
-	// Create token in DB
-	token := models.APIToken{
-		TokenID: nonExistentTokenID,
-		UserID:  1,
-		RoleID:  2,
-		TTL:     3600,
-		Status:  models.TokenStatusActive,
-	}
-	err = db.Create(&token).Error
-	require.NoError(t, err)
-
-	// Wait for cache to expire
-	time.Sleep(500 * time.Millisecond)
-
-	// Now should find the token (cache expired)
-	status, privileges, err := cache.GetStatus(nonExistentTokenID)
-	require.NoError(t, err)
-	assert.Equal(t, models.TokenStatusActive, status)
-	assert.NotEmpty(t, privileges)
 }

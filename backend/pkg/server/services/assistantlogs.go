@@ -91,7 +91,7 @@ func (s *AssistantlogService) GetAssistantlogs(c *gin.Context) {
 		return
 	}
 
-	query.Init("assistantlogs", assistantlogsSQLMappers)
+	_ = query.Init("assistantlogs", assistantlogsSQLMappers)
 
 	if query.Group != "" {
 		if _, ok := assistantlogsSQLMappers[query.Group]; !ok {
@@ -181,7 +181,7 @@ func (s *AssistantlogService) GetFlowAssistantlogs(c *gin.Context) {
 		return
 	}
 
-	query.Init("assistantlogs", assistantlogsSQLMappers)
+	_ = query.Init("assistantlogs", assistantlogsSQLMappers)
 
 	if query.Group != "" {
 		if _, ok := assistantlogsSQLMappers[query.Group]; !ok {

@@ -29,10 +29,10 @@ primary_agent:
   reasoning:
     max_tokens: 2048
   price:
-    input: 3.0
-    output: 15.0
-    cache_read: 0.3
-    cache_write: 3.75
+    input: 3.3
+    output: 16.5
+    cache_read: 0.33
+    cache_write: 4.125
 
 # Assistant - main working agent with multimodal capabilities
 assistant:
@@ -43,10 +43,10 @@ assistant:
   reasoning:
     max_tokens: 1024
   price:
-    input: 3.0
-    output: 15.0
-    cache_read: 0.3
-    cache_write: 3.75
+    input: 3.3
+    output: 16.5
+    cache_read: 0.33
+    cache_write: 4.125
 
 # Generator - maximum quality for creative tasks
 generator:
@@ -57,10 +57,10 @@ generator:
   reasoning:
     max_tokens: 4096
   price:
-    input: 3.0
-    output: 15.0
-    cache_read: 0.3
-    cache_write: 3.75
+    input: 3.3
+    output: 16.5
+    cache_read: 0.33
+    cache_write: 4.125
 
 # Refiner - refinement and improvement with reasoning
 refiner:
@@ -71,10 +71,10 @@ refiner:
   reasoning:
     max_tokens: 2048
   price:
-    input: 3.0
-    output: 15.0
-    cache_read: 0.3
-    cache_write: 3.75
+    input: 3.3
+    output: 16.5
+    cache_read: 0.33
+    cache_write: 4.125
 
 # Adviser - strategic planning with world-class intelligence
 adviser:
@@ -86,10 +86,10 @@ adviser:
     mode: adaptive
     effort: high
   price:
-    input: 5.0
-    output: 25.0
-    cache_read: 0.5
-    cache_write: 6.25
+    input: 5.5
+    output: 27.5
+    cache_read: 0.55
+    cache_write: 6.875
 
 # Reflector - result analysis with efficiency
 reflector:
@@ -100,10 +100,10 @@ reflector:
   reasoning:
     max_tokens: 1024
   price:
-    input: 1.0
-    output: 5.0
-    cache_read: 0.1
-    cache_write: 1.25
+    input: 1.1
+    output: 5.5
+    cache_read: 0.11
+    cache_write: 1.375
 
 # Searcher - information retrieval, high-frequency calls
 searcher:
@@ -114,10 +114,10 @@ searcher:
   reasoning:
     max_tokens: 1024
   price:
-    input: 1.0
-    output: 5.0
-    cache_read: 0.1
-    cache_write: 1.25
+    input: 1.1
+    output: 5.5
+    cache_read: 0.11
+    cache_write: 1.375
 
 # Enricher - data enrichment with long-context efficiency
 enricher:
@@ -128,10 +128,10 @@ enricher:
   reasoning:
     max_tokens: 1024
   price:
-    input: 1.0
-    output: 5.0
-    cache_read: 0.1
-    cache_write: 1.25
+    input: 1.1
+    output: 5.5
+    cache_read: 0.11
+    cache_write: 1.375
 
 # Coder - code generation with industry-leading coding capabilities
 coder:
@@ -142,10 +142,10 @@ coder:
   reasoning:
     max_tokens: 2048
   price:
-    input: 3.0
-    output: 15.0
-    cache_read: 0.3
-    cache_write: 3.75
+    input: 3.3
+    output: 16.5
+    cache_read: 0.33
+    cache_write: 4.125
 
 # Installer - installation and configuration with extensive software knowledge
 installer:
@@ -156,10 +156,10 @@ installer:
   reasoning:
     max_tokens: 1024
   price:
-    input: 3.0
-    output: 15.0
-    cache_read: 0.3
-    cache_write: 3.75
+    input: 3.3
+    output: 16.5
+    cache_read: 0.33
+    cache_write: 4.125
 
 # Pentester - security testing with multimodal and thinking capabilities
 pentester:
@@ -170,7 +170,7 @@ pentester:
   reasoning:
     max_tokens: 1024
   price:
-    input: 3.0
-    output: 15.0
-    cache_read: 0.3
-    cache_write: 3.75
+    input: 3.3
+    output: 16.5
+    cache_read: 0.33
+    cache_write: 4.125

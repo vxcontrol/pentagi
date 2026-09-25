@@ -18,6 +18,8 @@ interface DetailNavigationButtonsProps<T extends { id: string }> {
     size?: 'default' | 'sm';
 }
 
+const RESERVED_LABEL = '999/999';
+
 /**
  * Prev / Position / Next button cluster bound to a `DetailNavigationController`.
  * Stateless: the controller owns navigation, `isSheetOpen`, and the
@@ -36,7 +38,7 @@ export function DetailNavigationButtons<T extends { id: string }>({
     const isSm = size === 'sm';
     const sideButtonSize = isSm ? 'size-7' : 'size-8';
     const middleHeight = isSm ? 'h-7' : 'h-8';
-    const widestLabel = `${controller.total}/${controller.total}`;
+    const labelWidth = Math.max(`${controller.total}/${controller.total}`.length, RESERVED_LABEL.length);
 
     return (
         <div className="flex items-center">
@@ -69,7 +71,7 @@ export function DetailNavigationButtons<T extends { id: string }>({
                         type="button"
                         variant="outline"
                     >
-                        <span style={{ minWidth: `${widestLabel.length}ch` }}>{controller.positionLabel}</span>
+                        <span style={{ minWidth: `${labelWidth}ch` }}>{controller.positionLabel}</span>
                     </Button>
                 </TooltipTrigger>
                 <TooltipContent>Show all matching {lowerTitle}</TooltipContent>

@@ -6,12 +6,9 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"crypto/md5"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
-	"mime/multipart"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -26,12 +23,13 @@ import (
 	"pentagi/pkg/database"
 	"pentagi/pkg/docker"
 	"pentagi/pkg/flowfiles"
-	graphmodel "pentagi/pkg/graph/model"
+	"pentagi/pkg/graph/model"
 	"pentagi/pkg/graph/subscriptions"
-	"pentagi/pkg/providers/pconfig"
 	"pentagi/pkg/resources"
 	"pentagi/pkg/server/models"
+	"pentagi/pkg/version"
 
+	cerrdefs "github.com/containerd/errdefs"
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/sqlite"
@@ -41,244 +39,34 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// ── sanitizeFlowFileName ─────────────────────────────────────────────────────
+var (
+	_ subscriptions.FlowPublisher           = (*captureFlowPublisher)(nil)
+	_ subscriptions.ResourcePublisher       = (*captureResourcePublisherForFlow)(nil)
+	_ subscriptions.SubscriptionsController = (*flowFileCaptureSubscriptions)(nil)
+	_ docker.DockerClient                   = (*fakeDockerClient)(nil)
+)
 
-func TestSanitizeFlowFileName(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    string
-		expected string
-		wantErr  bool
-	}{
-		{"plain name", "report.txt", "report.txt", false},
-		{"strips parent traversal", "../report.txt", "report.txt", false},
-		{"normalizes windows separators", `nested\brief.md`, "brief.md", false},
-		{"strips absolute path", "/etc/passwd", "passwd", false},
-		{"strips deep traversal", "../../etc/shadow", "shadow", false},
-		{"trims whitespace", "  wordlist.txt  ", "wordlist.txt", false},
-		{"rejects empty", "   ", "", true},
-		{"rejects dot-only", ".", "", true},
-		{"rejects root slash", "/", "", true},
-		{"rejects control characters", "bad\nname.txt", "", true},
-		{"rejects unsupported header characters", `bad"name.txt`, "", true},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := flowfiles.SanitizeFileName(tt.input)
-			if tt.wantErr {
-				require.Error(t, err)
-				return
-			}
-			require.NoError(t, err)
-			assert.Equal(t, tt.expected, got)
-		})
-	}
-}
-
-func TestSanitizeContainerCachePath(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    string
-		expected string
-		wantErr  bool
-	}{
-		{"absolute directory", "/etc/nginx/conf/", "etc/nginx/conf", false},
-		{"absolute file", "/etc/nginx/nginx.conf", "etc/nginx/nginx.conf", false},
-		{"relative file", "var/log/app.log", "var/log/app.log", false},
-		{"normalizes traversal", "../../etc/shadow", "etc/shadow", false},
-		{"rejects empty", "   ", "", true},
-		{"rejects root", "/", "", true},
-		{"rejects bad component", "/etc/bad\nname", "", true},
-		{"rejects unsupported component", `/etc/bad"name`, "", true},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := flowfiles.SanitizeContainerCachePath(tt.input)
-			if tt.wantErr {
-				require.Error(t, err)
-				return
-			}
-			require.NoError(t, err)
-			assert.Equal(t, tt.expected, got)
-		})
-	}
-}
-
-// ── directory helpers ─────────────────────────────────────────────────────────
-
-func TestFlowFileService_Dirs(t *testing.T) {
-	svc := NewFlowFileService(nil, "/data", "", nil, nil)
-	assert.Equal(t, "/data/flow-42-data", svc.flowDataDir(42))
-	assert.Equal(t, "/data/flow-42-data/uploads", svc.flowUploadsDir(42))
-	assert.Equal(t, "/data/flow-42-data/container", svc.flowContainerDir(42))
-	assert.Equal(t, "/data/flow-42-data/resources", flowfiles.FlowResourcesDir("/data", 42))
-}
-
-func TestMaxUploadFileSize(t *testing.T) {
-	const expectedMaxMB = 300
-	assert.Equal(t, int64(expectedMaxMB*1024*1024), int64(flowfiles.MaxUploadFileSize))
-}
-
-// ── resolveCachedPath ─────────────────────────────────────────────────────────
-
-func TestResolveCachedPath(t *testing.T) {
-	svc := NewFlowFileService(nil, "/data", "", nil, nil)
-
-	tests := []struct {
-		name    string
-		input   string
-		want    string
-		wantErr bool
-	}{
-		{"uploads file", "uploads/report.txt", "/data/flow-1-data/uploads/report.txt", false},
-		{"container file", "container/conf/nginx.conf", "/data/flow-1-data/container/conf/nginx.conf", false},
-		{"container top-level", "container/conf", "/data/flow-1-data/container/conf", false},
-		{"resources file", "resources/creds/passwords.txt", "/data/flow-1-data/resources/creds/passwords.txt", false},
-		{"empty path", "", "", true},
-		{"wrong prefix", "tmp/evil.sh", "", true},
-		{"absolute path", "/etc/passwd", "", true},
-		{"path traversal", "uploads/../../etc/passwd", "", true},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := svc.resolveCachedPath(1, tt.input)
-			if tt.wantErr {
-				require.Error(t, err)
-				return
-			}
-			require.NoError(t, err)
-			assert.Equal(t, tt.want, got)
-		})
-	}
-}
-
-// ── listDirEntries ────────────────────────────────────────────────────────────
-
-func TestListDirEntries_Basic(t *testing.T) {
-	dir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "a.txt"), []byte("a"), 0644))
-	require.NoError(t, os.Mkdir(filepath.Join(dir, "sub"), 0755))
-	require.NoError(t, os.WriteFile(filepath.Join(dir, ".upload-temp"), []byte("tmp"), 0644))
-	require.NoError(t, os.Mkdir(filepath.Join(dir, ".pull-temp"), 0755))
-	_ = os.Symlink(filepath.Join(dir, "a.txt"), filepath.Join(dir, "link.txt"))
-
-	entries, err := flowfiles.ListDirEntries(dir, "uploads")
-	require.NoError(t, err)
-	require.Len(t, entries, 2) // a.txt + sub; link.txt excluded
-
-	names := make([]string, len(entries))
-	for i, e := range entries {
-		names[i] = e.Name
-	}
-	assert.Contains(t, names, "a.txt")
-	assert.Contains(t, names, "sub")
-	assert.NotContains(t, names, ".upload-temp")
-	assert.NotContains(t, names, ".pull-temp")
-	assert.NotContains(t, names, "link.txt")
-
-	for _, e := range entries {
-		if e.Name == "sub" {
-			assert.True(t, e.IsDir)
-			assert.Equal(t, "uploads/sub", e.Path)
-		} else {
-			assert.False(t, e.IsDir)
-			assert.Equal(t, "uploads/a.txt", e.Path)
-		}
-	}
-}
-
-func TestListDirEntries_MissingDir(t *testing.T) {
-	entries, err := flowfiles.ListDirEntries("/nonexistent/path", "uploads")
-	require.NoError(t, err)
-	assert.Empty(t, entries)
-}
-
-func TestListDirEntriesRecursive_PreservesNestedPaths(t *testing.T) {
-	dir := t.TempDir()
-	require.NoError(t, os.MkdirAll(filepath.Join(dir, "etc", "nginx", "conf"), 0755))
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "etc", "nginx", "nginx.conf"), []byte("nginx"), 0644))
-	require.NoError(t, os.Mkdir(filepath.Join(dir, ".pull-temp"), 0755))
-	require.NoError(t, os.WriteFile(filepath.Join(dir, ".pull-temp", "tmp.txt"), []byte("tmp"), 0644))
-
-	entries, err := flowfiles.ListDirEntriesRecursive(dir, "container")
-	require.NoError(t, err)
-
-	paths := make([]string, len(entries))
-	for i, entry := range entries {
-		paths[i] = entry.Path
-	}
-	assert.Contains(t, paths, "container/etc")
-	assert.Contains(t, paths, "container/etc/nginx")
-	assert.Contains(t, paths, "container/etc/nginx/conf")
-	assert.Contains(t, paths, "container/etc/nginx/nginx.conf")
-	assert.NotContains(t, paths, "container/.pull-temp")
-	assert.NotContains(t, paths, "container/.pull-temp/tmp.txt")
-}
-
-// ── listFlowFiles ─────────────────────────────────────────────────────────────
-
-func TestFlowFileService_ListFlowFiles_BothSources(t *testing.T) {
-	dataDir := t.TempDir()
-	svc := NewFlowFileService(nil, dataDir, "", nil, nil)
-
-	uploadsDir := filepath.Join(dataDir, "flow-7-data", "uploads")
-	containerDir := filepath.Join(dataDir, "flow-7-data", "container")
-	resourcesDir := filepath.Join(dataDir, "flow-7-data", "resources")
-	require.NoError(t, os.MkdirAll(uploadsDir, 0755))
-	require.NoError(t, os.MkdirAll(containerDir, 0755))
-	require.NoError(t, os.MkdirAll(filepath.Join(resourcesDir, "creds"), 0755))
-
-	require.NoError(t, os.WriteFile(filepath.Join(uploadsDir, "wordlist.txt"), []byte("words"), 0644))
-	require.NoError(t, os.MkdirAll(filepath.Join(containerDir, "etc", "nginx", "conf"), 0755))
-	require.NoError(t, os.WriteFile(filepath.Join(containerDir, "etc", "nginx", "nginx.conf"), []byte("nginx"), 0644))
-	require.NoError(t, os.WriteFile(filepath.Join(resourcesDir, "creds", "passwords.txt"), []byte("secret"), 0644))
-
-	files, err := svc.listFlowFiles(7)
-	require.NoError(t, err)
-
-	paths := make([]string, len(files))
-	for i, f := range files {
-		paths[i] = f.Path
-	}
-	assert.Contains(t, paths, "uploads/wordlist.txt")
-	assert.Contains(t, paths, "container/etc/nginx/conf")
-	assert.Contains(t, paths, "container/etc/nginx/nginx.conf")
-	assert.Contains(t, paths, "resources/creds")
-	assert.Contains(t, paths, "resources/creds/passwords.txt")
-}
-
-func TestFlowFileService_ListFlowFiles_EmptyDirs(t *testing.T) {
-	svc := NewFlowFileService(nil, t.TempDir(), "", nil, nil)
-	files, err := svc.listFlowFiles(999)
-	require.NoError(t, err)
-	assert.Empty(t, files)
-}
-
-func TestConvertModelFlowFile_PreservesID(t *testing.T) {
-	file := models.FlowFile{
+func TestFlowFiles_ConvertModelFlowFile_CopiesEveryField(t *testing.T) {
+	modelFile := convertModelFlowFile(models.FlowFile{
 		ID:         "flow-file-id",
-		Name:       "report.md",
-		Path:       "uploads/report.md",
+		Name:       "reports",
+		Path:       "uploads/reports",
 		Size:       42,
-		IsDir:      false,
-		ModifiedAt: time.Now(),
-	}
+		IsDir:      true,
+		ModifiedAt: time.Date(2024, 3, 4, 5, 6, 7, 0, time.UTC),
+	})
 
-	modelFile := convertModelFlowFile(file)
-
-	require.NotNil(t, modelFile)
-	assert.Equal(t, file.ID, modelFile.ID)
-	assert.Equal(t, file.Name, modelFile.Name)
-	assert.Equal(t, file.Path, modelFile.Path)
-	assert.Equal(t, int(file.Size), modelFile.Size)
-	assert.Equal(t, file.IsDir, modelFile.IsDir)
-	assert.Equal(t, file.ModifiedAt, modelFile.ModifiedAt)
+	assert.Equal(t, &model.FlowFile{
+		ID:         "flow-file-id",
+		Name:       "reports",
+		Path:       "uploads/reports",
+		Size:       42,
+		IsDir:      true,
+		ModifiedAt: time.Date(2024, 3, 4, 5, 6, 7, 0, time.UTC),
+	}, modelFile)
 }
 
-func TestConvertContainerFiles(t *testing.T) {
+func TestFlowFiles_ConvertContainerFiles_JoinsTheBasePathAndSortsByName(t *testing.T) {
 	mtime := time.Now()
 	files := convertContainerFiles("/work", []container.PathStat{
 		{
@@ -308,200 +96,11 @@ func TestConvertContainerFiles(t *testing.T) {
 	assert.Equal(t, int64(10), files[1].Size)
 }
 
-// ── localEntryExists ─────────────────────────────────────────────────────────
-
-func TestLocalEntryExists(t *testing.T) {
-	dir := t.TempDir()
-	p := filepath.Join(dir, "f.txt")
-
-	exists, err := flowfiles.LocalEntryExists(p)
-	require.NoError(t, err)
-	assert.False(t, exists)
-
-	require.NoError(t, os.WriteFile(p, []byte("x"), 0644))
-
-	exists, err = flowfiles.LocalEntryExists(p)
-	require.NoError(t, err)
-	assert.True(t, exists)
-}
-
-// ── isWithinDir ───────────────────────────────────────────────────────────────
-
-func TestIsWithinDir(t *testing.T) {
-	assert.True(t, flowfiles.IsWithinDir("/data/flow-1/uploads/file.txt", "/data/flow-1/uploads"))
-	assert.True(t, flowfiles.IsWithinDir("/data/flow-1/uploads/sub/file.txt", "/data/flow-1/uploads"))
-	assert.False(t, flowfiles.IsWithinDir("/data/flow-1/../evil.txt", "/data/flow-1/uploads"))
-	assert.False(t, flowfiles.IsWithinDir("/data/flow-2/uploads/file.txt", "/data/flow-1/uploads"))
-}
-
-func TestResolvePulledStagedTarget(t *testing.T) {
-	t.Run("full cache path archive", func(t *testing.T) {
-		stagingDir := t.TempDir()
-		target := filepath.Join(stagingDir, "etc", "nginx", "nginx.conf")
-		require.NoError(t, os.MkdirAll(filepath.Dir(target), 0755))
-		require.NoError(t, os.WriteFile(target, []byte("nginx"), 0644))
-
-		assert.Equal(t, target, flowfiles.ResolvePulledStagedTarget(stagingDir, "etc/nginx/nginx.conf"))
-	})
-
-	t.Run("basename archive", func(t *testing.T) {
-		stagingDir := t.TempDir()
-		target := filepath.Join(stagingDir, "nginx.conf")
-		require.NoError(t, os.WriteFile(target, []byte("nginx"), 0644))
-
-		assert.Equal(t, target, flowfiles.ResolvePulledStagedTarget(stagingDir, "etc/nginx/nginx.conf"))
-	})
-}
-
-// ── extractTar ────────────────────────────────────────────────────────────────
-
-func buildTar(entries []tarTestEntry) *bytes.Buffer {
-	var buf bytes.Buffer
-	tw := tar.NewWriter(&buf)
-	for _, e := range entries {
-		hdr := &tar.Header{
-			Name:     e.name,
-			Typeflag: e.typeflag,
-			Mode:     0644,
-			Size:     int64(len(e.content)),
-			Linkname: e.linkname,
-		}
-		if e.typeflag == tar.TypeDir {
-			hdr.Mode = 0755
-		}
-		_ = tw.WriteHeader(hdr)
-		if len(e.content) > 0 {
-			_, _ = tw.Write([]byte(e.content))
-		}
-	}
-	tw.Close()
-	return &buf
-}
-
-type tarTestEntry struct {
-	name     string
-	typeflag byte
-	content  string
-	linkname string
-}
-
-func TestExtractTar_RegularFiles(t *testing.T) {
-	destDir := t.TempDir()
-
-	buf := buildTar([]tarTestEntry{
-		{name: "dir/", typeflag: tar.TypeDir},
-		{name: "dir/file.txt", typeflag: tar.TypeReg, content: "hello"},
-	})
-
-	require.NoError(t, flowfiles.ExtractTar(buf, destDir))
-
-	data, err := os.ReadFile(filepath.Join(destDir, "dir", "file.txt"))
-	require.NoError(t, err)
-	assert.Equal(t, "hello", string(data))
-}
-
-func TestExtractTar_SkipsSymlinks(t *testing.T) {
-	destDir := t.TempDir()
-
-	buf := buildTar([]tarTestEntry{
-		{name: "link.txt", typeflag: tar.TypeSymlink, linkname: "/etc/passwd"},
-	})
-
-	require.NoError(t, flowfiles.ExtractTar(buf, destDir))
-
-	_, err := os.Lstat(filepath.Join(destDir, "link.txt"))
-	assert.True(t, os.IsNotExist(err), "symlink must not be created in cache")
-}
-
-func TestExtractTar_PathTraversal(t *testing.T) {
-	destDir := t.TempDir()
-
-	buf := buildTar([]tarTestEntry{
-		{name: "../../evil.txt", typeflag: tar.TypeReg, content: "evil"},
-	})
-
-	require.NoError(t, flowfiles.ExtractTar(buf, destDir))
-
-	// evil.txt must NOT appear outside destDir
-	evilPath := filepath.Join(filepath.Dir(destDir), "evil.txt")
-	_, err := os.Lstat(evilPath)
-	assert.True(t, os.IsNotExist(err), "path traversal file must not be created")
-}
-
-func TestExtractTar_RejectsTooManyFiles(t *testing.T) {
-	destDir := t.TempDir()
-	entries := make([]tarTestEntry, 0, flowfiles.MaxPullFiles+1)
-	for i := 0; i < flowfiles.MaxPullFiles+1; i++ {
-		entries = append(entries, tarTestEntry{
-			name:     filepath.Join("many", "file-"+strconv.Itoa(i)+".txt"),
-			typeflag: tar.TypeReg,
-			content:  "x",
-		})
-	}
-
-	err := flowfiles.ExtractTar(buildTar(entries), destDir)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "maximum file count")
-}
-
-// ── zipDirectory ─────────────────────────────────────────────────────────────
-
-func TestZipDirectory(t *testing.T) {
-	src := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(src, "a.txt"), []byte("hello"), 0644))
-	require.NoError(t, os.MkdirAll(filepath.Join(src, "sub"), 0755))
-	require.NoError(t, os.WriteFile(filepath.Join(src, "sub", "b.txt"), []byte("world"), 0644))
-
-	var buf bytes.Buffer
-	require.NoError(t, flowfiles.ZipDirectory(&buf, src))
-
-	zr, err := zip.NewReader(bytes.NewReader(buf.Bytes()), int64(buf.Len()))
-	require.NoError(t, err)
-
-	contents := make(map[string]string)
-	for _, f := range zr.File {
-		rc, err := f.Open()
-		require.NoError(t, err)
-		data, _ := io.ReadAll(rc)
-		rc.Close()
-		contents[f.Name] = string(data)
-	}
-	assert.Equal(t, "hello", contents["a.txt"])
-	assert.Equal(t, "world", contents["sub/b.txt"])
-}
-
-func TestZipDirectory_ExcludesSymlinks(t *testing.T) {
-	src := t.TempDir()
-	target := filepath.Join(src, "real.txt")
-	link := filepath.Join(src, "link.txt")
-	require.NoError(t, os.WriteFile(target, []byte("real"), 0644))
-	if err := os.Symlink(target, link); err != nil {
-		t.Skipf("symlink creation not available: %v", err)
-	}
-
-	var buf bytes.Buffer
-	require.NoError(t, flowfiles.ZipDirectory(&buf, src))
-
-	zr, err := zip.NewReader(bytes.NewReader(buf.Bytes()), int64(buf.Len()))
-	require.NoError(t, err)
-
-	names := make([]string, len(zr.File))
-	for i, f := range zr.File {
-		names[i] = f.Name
-	}
-	assert.Contains(t, names, "real.txt")
-	assert.NotContains(t, names, "link.txt")
-}
-
-// ── primaryContainerName ─────────────────────────────────────────────────────
-
-func TestPrimaryContainerName(t *testing.T) {
+func TestFlowFiles_PrimaryContainerName_NamesTheFlowsTerminal(t *testing.T) {
 	assert.Equal(t, "pentagi-terminal-42", primaryContainerName("", 42))
 }
 
-// ── sorting ───────────────────────────────────────────────────────────────────
-
-func TestSortFlowFiles(t *testing.T) {
+func TestFlowFiles_SortFlowFiles_PutsTheNewestFirstAndBreaksTiesByName(t *testing.T) {
 	now := time.Now()
 	files := []models.FlowFile{
 		{Name: "b.txt", ModifiedAt: now.Add(-2 * time.Hour)},
@@ -510,15 +109,12 @@ func TestSortFlowFiles(t *testing.T) {
 	}
 	sortFlowFiles(files)
 
-	// Newer first; ties broken alphabetically.
 	assert.Equal(t, "a.txt", files[0].Name)
 	assert.Equal(t, "c.txt", files[1].Name)
 	assert.Equal(t, "b.txt", files[2].Name)
 }
 
-// ── pure helpers ─────────────────────────────────────────────────────────────
-
-func TestShellQuote(t *testing.T) {
+func TestFlowFiles_ShellQuote_QuotesForAPOSIXShell(t *testing.T) {
 	tests := []struct {
 		name  string
 		input string
@@ -537,7 +133,7 @@ func TestShellQuote(t *testing.T) {
 	}
 }
 
-func TestParseFlowIDParam(t *testing.T) {
+func TestFlowFiles_ParseFlowIDParam_AcceptsOnlyAnUnsignedInteger(t *testing.T) {
 	tests := []struct {
 		name    string
 		param   string
@@ -559,7 +155,7 @@ func TestParseFlowIDParam(t *testing.T) {
 
 			got, err := parseFlowIDParam(c)
 			if tt.wantErr {
-				require.Error(t, err)
+				require.ErrorIs(t, err, strconv.ErrSyntax)
 				return
 			}
 			require.NoError(t, err)
@@ -568,7 +164,7 @@ func TestParseFlowIDParam(t *testing.T) {
 	}
 }
 
-func TestCleanupPendingUploads(t *testing.T) {
+func TestFlowFiles_CleanupPendingUploads_RemovesOnlyUncommittedTempFiles(t *testing.T) {
 	dir := t.TempDir()
 	keep := filepath.Join(dir, "keep.txt")
 	tmp1 := filepath.Join(dir, "tmp1.txt")
@@ -591,158 +187,55 @@ func TestCleanupPendingUploads(t *testing.T) {
 	assert.NoError(t, err, "non-pending files must not be touched")
 }
 
-func TestFlowScopeForFiles(t *testing.T) {
+func TestFlowFiles_FlowScopeForFiles_GrantsByPrivilegeAndOwnership(t *testing.T) {
+	const caller = 42
+
 	tests := []struct {
 		name        string
 		privs       []string
 		writeAccess bool
-		wantNil     bool
-		wantSQL     string
+		wantDenied  bool
+		wantForeign bool // the scope also reaches a flow another user owns
 	}{
-		{
-			name:    "admin bypasses uid filter on read",
-			privs:   []string{"flow_files.admin"},
-			wantSQL: "id = ?",
-		},
-		{
-			name:        "admin bypasses uid filter on write",
-			privs:       []string{"flow_files.admin"},
-			writeAccess: true,
-			wantSQL:     "id = ?",
-		},
-		{
-			name:        "upload privilege grants write to own flow",
-			privs:       []string{"flow_files.upload"},
-			writeAccess: true,
-			wantSQL:     "id = ? AND user_id = ?",
-		},
-		{
-			name:    "view privilege grants read to own flow",
-			privs:   []string{"flow_files.view"},
-			wantSQL: "id = ? AND user_id = ?",
-		},
-		{
-			name:        "view privilege does not grant write",
-			privs:       []string{"flow_files.view"},
-			writeAccess: true,
-			wantNil:     true,
-		},
-		{
-			name:    "upload privilege does not grant read",
-			privs:   []string{"flow_files.upload"},
-			wantNil: true,
-		},
-		{
-			name:        "no privileges denies access",
-			privs:       []string{},
-			wantNil:     true,
-			writeAccess: true,
-		},
+		{name: "admin reaches any flow on read", privs: []string{"flow_files.admin"}, wantForeign: true},
+		{name: "admin reaches any flow on write", privs: []string{"flow_files.admin"}, writeAccess: true, wantForeign: true},
+		{name: "upload privilege writes to the caller's own flow only", privs: []string{"flow_files.upload"}, writeAccess: true},
+		{name: "view privilege reads the caller's own flow only", privs: []string{"flow_files.view"}},
+		{name: "view privilege does not grant write", privs: []string{"flow_files.view"}, writeAccess: true, wantDenied: true},
+		{name: "upload privilege does not grant read", privs: []string{"flow_files.upload"}, wantDenied: true},
+		{name: "no privileges denies access", privs: []string{}, writeAccess: true, wantDenied: true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			scope := flowScopeForFiles(tt.privs, 1, 42, tt.writeAccess)
-			if tt.wantNil {
-				assert.Nil(t, scope)
+			if tt.wantDenied {
+				assert.Nil(t, flowScopeForFiles(tt.privs, caller, 1, tt.writeAccess))
 				return
 			}
-			require.NotNil(t, scope)
+
+			db := setupFlowFileServiceTestDB(t)
+			seedFlow(t, db, 1, caller)
+			seedFlow(t, db, 2, 7)
+
+			reaches := func(flowID uint64) bool {
+				scope := flowScopeForFiles(tt.privs, caller, flowID, tt.writeAccess)
+				require.NotNil(t, scope)
+
+				var flow models.Flow
+				err := db.Model(&flow).Scopes(scope).Take(&flow).Error
+				if gorm.IsRecordNotFoundError(err) {
+					return false
+				}
+				require.NoError(t, err)
+				assert.Equal(t, flowID, flow.ID)
+
+				return true
+			}
+
+			assert.True(t, reaches(1), "the caller's own flow")
+			assert.Equal(t, tt.wantForeign, reaches(2), "another user's flow")
 		})
 	}
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Test infrastructure for FlowFileService HTTP handlers.
-// ─────────────────────────────────────────────────────────────────────────────
-
-func setupFlowFileServiceTestDB(t *testing.T) *gorm.DB {
-	t.Helper()
-
-	db, err := gorm.Open("sqlite3", ":memory:")
-	require.NoError(t, err)
-	db.LogMode(false)
-
-	require.NoError(t, db.Exec(`
-		CREATE TABLE flows (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			user_id INTEGER NOT NULL,
-			status TEXT NOT NULL DEFAULT 'created',
-			title TEXT NOT NULL DEFAULT 'untitled',
-			model TEXT NOT NULL DEFAULT '',
-			model_provider_name TEXT NOT NULL DEFAULT '',
-			model_provider_type TEXT NOT NULL DEFAULT 'openai',
-			language TEXT NOT NULL DEFAULT 'english',
-			functions TEXT NOT NULL DEFAULT '{}',
-			tool_call_id_template TEXT NOT NULL DEFAULT '',
-			trace_id TEXT,
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			deleted_at DATETIME
-		)
-	`).Error)
-
-	require.NoError(t, db.Exec(`
-		CREATE TABLE user_resources (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			user_id INTEGER NOT NULL,
-			hash TEXT NOT NULL DEFAULT '',
-			name TEXT NOT NULL,
-			path TEXT NOT NULL,
-			size INTEGER NOT NULL DEFAULT 0,
-			is_dir BOOLEAN NOT NULL DEFAULT FALSE,
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			UNIQUE(user_id, path)
-		)
-	`).Error)
-
-	t.Cleanup(func() {
-		require.NoError(t, db.Close())
-	})
-
-	return db
-}
-
-func seedFlow(t *testing.T, db *gorm.DB, id, userID uint64) {
-	t.Helper()
-
-	require.NoError(t, db.Exec(
-		`INSERT INTO flows (id, user_id, model, model_provider_name, tool_call_id_template, trace_id) VALUES (?, ?, 'gpt', 'openai', 'tcid', '')`,
-		id, userID,
-	).Error)
-}
-
-func seedUserResource(t *testing.T, db *gorm.DB, rec models.UserResource) models.UserResource {
-	t.Helper()
-
-	require.NoError(t, db.Create(&rec).Error)
-	return rec
-}
-
-func md5HexForFlowFiles(content string) string {
-	sum := md5.Sum([]byte(content))
-	return hex.EncodeToString(sum[:])
-}
-
-// newFlowFileTestContext creates a gin test context with the path param,
-// uid, prm and request body pre-populated.
-func newFlowFileTestContext(
-	method, target string,
-	body io.Reader,
-	privs []string,
-	uid, flowID uint64,
-) (*gin.Context, *httptest.ResponseRecorder) {
-	gin.SetMode(gin.TestMode)
-	w := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(w)
-	c.Set("uid", uid)
-	c.Set("prm", privs)
-	c.Params = gin.Params{
-		{Key: "flowID", Value: strconv.FormatUint(flowID, 10)},
-	}
-	c.Request = httptest.NewRequest(method, target, body)
-	return c, w
 }
 
 func decodeFlowFilesResponse(t *testing.T, w *httptest.ResponseRecorder) models.FlowFiles {
@@ -757,383 +250,86 @@ func decodeFlowFilesResponse(t *testing.T, w *httptest.ResponseRecorder) models.
 	return resp.Data
 }
 
-func decodeContainerFilesResponse(t *testing.T, w *httptest.ResponseRecorder) models.ContainerFiles {
-	t.Helper()
-
-	var resp struct {
-		Status string                `json:"status"`
-		Data   models.ContainerFiles `json:"data"`
-	}
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	require.Equal(t, "success", resp.Status)
-	return resp.Data
+type tarTestEntry struct {
+	name     string
+	typeflag byte
+	content  string
+	linkname string
 }
 
-// flowFileMultipartBody builds a multipart body for upload tests.
-type flowFileUploadFile struct {
-	name    string
-	content string
-}
-
-func flowFileMultipartBody(t *testing.T, files []flowFileUploadFile, fieldName string) (*bytes.Buffer, string) {
-	t.Helper()
-
-	var body bytes.Buffer
-	writer := multipart.NewWriter(&body)
-	for _, file := range files {
-		part, err := writer.CreateFormFile(fieldName, file.name)
-		require.NoError(t, err)
-		_, err = part.Write([]byte(file.content))
-		require.NoError(t, err)
-	}
-	require.NoError(t, writer.Close())
-	return &body, writer.FormDataContentType()
-}
-
-// rawFlowFileMultipartBody writes the multipart wire format byte for byte, the
-// way a hostile client would. multipart.Writer percent-encodes CR and LF in a
-// filename, so a body built with it can never carry those bytes to the handler;
-// only a hand-written body actually exercises the defence against them.
-func rawFlowFileMultipartBody(fileName, content string) (*bytes.Buffer, string) {
-	const boundary = "pentagitestboundary"
-
-	var body bytes.Buffer
-	fmt.Fprintf(&body, "--%s\r\n", boundary)
-	fmt.Fprintf(&body, "Content-Disposition: form-data; name=\"files\"; filename=\"%s\"\r\n", fileName)
-	body.WriteString("Content-Type: application/octet-stream\r\n\r\n")
-	body.WriteString(content)
-	fmt.Fprintf(&body, "\r\n--%s--\r\n", boundary)
-
-	return &body, "multipart/form-data; boundary=" + boundary
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Subscription capture for handler tests.
-// ─────────────────────────────────────────────────────────────────────────────
-
-type flowFileEvent struct {
-	channel string // "flow" or "resource"
-	action  string // "added", "updated", "deleted"
-	path    string
-	id      string
-}
-
-type flowFileCaptureSubscriptions struct {
-	mu     sync.Mutex
-	events []flowFileEvent
-}
-
-func (s *flowFileCaptureSubscriptions) NewFlowSubscriber(int64, int64) subscriptions.FlowSubscriber {
-	return nil
-}
-func (s *flowFileCaptureSubscriptions) NewFlowPublisher(int64, int64) subscriptions.FlowPublisher {
-	return &captureFlowPublisher{events: s}
-}
-func (s *flowFileCaptureSubscriptions) NewResourceSubscriber(int64) subscriptions.ResourceSubscriber {
-	return nil
-}
-func (s *flowFileCaptureSubscriptions) NewResourcePublisher(int64) subscriptions.ResourcePublisher {
-	return &captureResourcePublisherForFlow{events: s}
-}
-func (s *flowFileCaptureSubscriptions) NewProviderSubscriber(int64) subscriptions.ProviderSubscriber {
-	return nil
-}
-func (s *flowFileCaptureSubscriptions) NewProviderPublisher(int64) subscriptions.ProviderPublisher {
-	return nil
-}
-func (s *flowFileCaptureSubscriptions) NewAPITokenSubscriber(int64) subscriptions.APITokenSubscriber {
-	return nil
-}
-func (s *flowFileCaptureSubscriptions) NewAPITokenPublisher(int64) subscriptions.APITokenPublisher {
-	return nil
-}
-func (s *flowFileCaptureSubscriptions) NewSettingsSubscriber(int64) subscriptions.SettingsSubscriber {
-	return nil
-}
-func (s *flowFileCaptureSubscriptions) NewSettingsPublisher(int64) subscriptions.SettingsPublisher {
-	return nil
-}
-func (s *flowFileCaptureSubscriptions) NewFlowTemplateSubscriber(int64) subscriptions.FlowTemplateSubscriber {
-	return nil
-}
-func (s *flowFileCaptureSubscriptions) NewFlowTemplatePublisher(int64) subscriptions.FlowTemplatePublisher {
-	return nil
-}
-func (s *flowFileCaptureSubscriptions) NewKnowledgeSubscriber(int64) subscriptions.KnowledgeSubscriber {
-	return nil
-}
-func (s *flowFileCaptureSubscriptions) NewKnowledgePublisher(int64) subscriptions.KnowledgePublisher {
-	return nil
-}
-
-func (s *flowFileCaptureSubscriptions) record(e flowFileEvent) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.events = append(s.events, e)
-}
-
-func (s *flowFileCaptureSubscriptions) snapshot() []flowFileEvent {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	out := make([]flowFileEvent, len(s.events))
-	copy(out, s.events)
-	return out
-}
-
-// captureFlowPublisher records FlowFile events; all other methods are no-ops.
-type captureFlowPublisher struct {
-	flowID int64
-	userID int64
-	events *flowFileCaptureSubscriptions
-}
-
-func (p *captureFlowPublisher) GetFlowID() int64   { return p.flowID }
-func (p *captureFlowPublisher) SetFlowID(id int64) { p.flowID = id }
-func (p *captureFlowPublisher) GetUserID() int64   { return p.userID }
-func (p *captureFlowPublisher) SetUserID(id int64) { p.userID = id }
-func (p *captureFlowPublisher) FlowCreated(_ context.Context, _ database.Flow, _ []database.Container) {
-}
-func (p *captureFlowPublisher) FlowDeleted(_ context.Context, _ database.Flow, _ []database.Container) {
-}
-func (p *captureFlowPublisher) FlowUpdated(_ context.Context, _ database.Flow, _ []database.Container) {
-}
-func (p *captureFlowPublisher) TaskCreated(_ context.Context, _ database.Task, _ []database.Subtask) {
-}
-func (p *captureFlowPublisher) TaskUpdated(_ context.Context, _ database.Task, _ []database.Subtask) {
-}
-func (p *captureFlowPublisher) AssistantCreated(_ context.Context, _ database.Assistant) {}
-func (p *captureFlowPublisher) AssistantUpdated(_ context.Context, _ database.Assistant) {}
-func (p *captureFlowPublisher) AssistantDeleted(_ context.Context, _ database.Assistant) {}
-func (p *captureFlowPublisher) FlowFileAdded(_ context.Context, file *graphmodel.FlowFile) {
-	p.events.record(flowFileEvent{channel: "flow", action: "added", path: file.Path, id: file.ID})
-}
-func (p *captureFlowPublisher) FlowFileUpdated(_ context.Context, file *graphmodel.FlowFile) {
-	p.events.record(flowFileEvent{channel: "flow", action: "updated", path: file.Path, id: file.ID})
-}
-func (p *captureFlowPublisher) FlowFileDeleted(_ context.Context, file *graphmodel.FlowFile) {
-	p.events.record(flowFileEvent{channel: "flow", action: "deleted", path: file.Path, id: file.ID})
-}
-func (p *captureFlowPublisher) ScreenshotAdded(_ context.Context, _ database.Screenshot) {}
-func (p *captureFlowPublisher) TerminalLogAdded(_ context.Context, _ database.Termlog)   {}
-func (p *captureFlowPublisher) MessageLogAdded(_ context.Context, _ database.Msglog)     {}
-func (p *captureFlowPublisher) MessageLogUpdated(_ context.Context, _ database.Msglog)   {}
-func (p *captureFlowPublisher) AgentLogAdded(_ context.Context, _ database.Agentlog)     {}
-func (p *captureFlowPublisher) SearchLogAdded(_ context.Context, _ database.Searchlog)   {}
-func (p *captureFlowPublisher) VectorStoreLogAdded(_ context.Context, _ database.Vecstorelog) {
-}
-func (p *captureFlowPublisher) ToolCallLogAdded(_ context.Context, _ database.Toolcall) {
-}
-func (p *captureFlowPublisher) ToolCallLogUpdated(_ context.Context, _ database.Toolcall) {
-}
-func (p *captureFlowPublisher) AssistantLogAdded(_ context.Context, _ database.Assistantlog) {}
-func (p *captureFlowPublisher) AssistantLogUpdated(_ context.Context, _ database.Assistantlog, _ bool) {
-}
-func (p *captureFlowPublisher) KnowledgeDocumentCreated(_ context.Context, _ *graphmodel.KnowledgeDocument) {
-}
-
-var _ subscriptions.FlowPublisher = (*captureFlowPublisher)(nil)
-var _ pconfig.ProviderConfig = pconfig.ProviderConfig{} // ensure pconfig import is referenced
-
-// captureResourcePublisherForFlow records Resource events emitted by
-// AddResourceFromFlow.  Distinct from captureResourcePublisher used by
-// resources_test.go to avoid coupling between test files.
-type captureResourcePublisherForFlow struct {
-	userID int64
-	events *flowFileCaptureSubscriptions
-}
-
-func (p *captureResourcePublisherForFlow) GetUserID() int64   { return p.userID }
-func (p *captureResourcePublisherForFlow) SetUserID(id int64) { p.userID = id }
-func (p *captureResourcePublisherForFlow) ResourceAdded(_ context.Context, r *graphmodel.UserResource) {
-	p.events.record(flowFileEvent{channel: "resource", action: "added", path: r.Path})
-}
-func (p *captureResourcePublisherForFlow) ResourceUpdated(_ context.Context, r *graphmodel.UserResource) {
-	p.events.record(flowFileEvent{channel: "resource", action: "updated", path: r.Path})
-}
-func (p *captureResourcePublisherForFlow) ResourceDeleted(_ context.Context, r *graphmodel.UserResource) {
-	p.events.record(flowFileEvent{channel: "resource", action: "deleted", path: r.Path})
-}
-
-var _ subscriptions.ResourcePublisher = (*captureResourcePublisherForFlow)(nil)
-var _ subscriptions.SubscriptionsController = (*flowFileCaptureSubscriptions)(nil)
-
-// ─────────────────────────────────────────────────────────────────────────────
-// fakeDockerClient: a minimal in-memory DockerClient stub for handler tests.
-// ─────────────────────────────────────────────────────────────────────────────
-
-type copyToCall struct {
-	containerID string
-	dstPath     string
-	body        []byte
-	options     client.CopyToContainerOptions
-}
-
-type fakeDockerClient struct {
-	mu sync.Mutex
-
-	// IsContainerRunning behaviour.
-	running    bool
-	runningErr error
-
-	// ContainerStatPath behaviour (single-path fallback).
-	statPath    container.PathStat
-	statPathErr error
-
-	// ListContainerDir behaviour (single-path fallback).
-	listDir    []container.PathStat
-	listDirErr error
-
-	// Per-path overrides for multi-path tests; take precedence over the
-	// single-value fields above when the queried path has an entry here.
-	statPathMap      map[string]container.PathStat
-	statPathErrMap   map[string]error
-	listDirMap       map[string][]container.PathStat
-	listDirFailMap   map[string][]docker.ContainerEntryError
-	listDirErrMap    map[string]error
-	listDirTruncated map[string]bool
-
-	// CopyFromContainer behaviour.
-	copyFromBody    []byte
-	copyFromStat    container.PathStat
-	copyFromErr     error
-	copyFromBodyMap map[string][]byte // per-path override; takes precedence over copyFromBody
-	copyFromErrMap  map[string]error  // per-path override; takes precedence over copyFromErr
-	copyFromCount   int               // total number of CopyFromContainer calls
-
-	// CopyToContainer behaviour.
-	copyToErr   error
-	copyToCalls []copyToCall
-
-	// Exec behaviour.
-	execCreateID    string
-	execCreateErr   error
-	execAttachOut   string
-	execAttachErr   error
-	execInspectCode int
-	execInspectErr  error
-	execCommands    []string
-}
-
-func (f *fakeDockerClient) RunContainer(_ context.Context, _ string, _ database.ContainerType,
-	_ int64, _ *container.Config, _ *container.HostConfig) (database.Container, error) {
-	return database.Container{}, nil
-}
-func (f *fakeDockerClient) StopContainer(_ context.Context, _ string, _ int64) error   { return nil }
-func (f *fakeDockerClient) RemoveContainer(_ context.Context, _ string, _ int64) error { return nil }
-func (f *fakeDockerClient) IsContainerRunning(_ context.Context, _ string) (bool, error) {
-	return f.running, f.runningErr
-}
-func (f *fakeDockerClient) ContainerExecCreate(_ context.Context, _ string, opts client.ExecCreateOptions) (client.ExecCreateResult, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	if len(opts.Cmd) > 0 {
-		f.execCommands = append(f.execCommands, strings.Join(opts.Cmd, " "))
-	}
-	if f.execCreateErr != nil {
-		return client.ExecCreateResult{}, f.execCreateErr
-	}
-	id := f.execCreateID
-	if id == "" {
-		id = "exec-id"
-	}
-	return client.ExecCreateResult{ID: id}, nil
-}
-func (f *fakeDockerClient) ContainerExecAttach(_ context.Context, _ string, _ client.ExecAttachOptions) (client.HijackedResponse, error) {
-	if f.execAttachErr != nil {
-		return client.HijackedResponse{}, f.execAttachErr
-	}
-	pr, pw := net.Pipe()
-	go func() {
-		_, _ = pw.Write([]byte(f.execAttachOut))
-		_ = pw.Close()
-	}()
-	return client.HijackedResponse{Conn: pr, Reader: bufio.NewReader(pr)}, nil
-}
-func (f *fakeDockerClient) ContainerExecInspect(_ context.Context, _ string) (client.ExecInspectResult, error) {
-	if f.execInspectErr != nil {
-		return client.ExecInspectResult{}, f.execInspectErr
-	}
-	return client.ExecInspectResult{ExitCode: f.execInspectCode}, nil
-}
-func (f *fakeDockerClient) ContainerStatPath(_ context.Context, _ string, p string) (container.PathStat, error) {
-	if f.statPathErrMap != nil {
-		if err, ok := f.statPathErrMap[p]; ok {
-			return container.PathStat{}, err
-		}
-	}
-	if f.statPathMap != nil {
-		if stat, ok := f.statPathMap[p]; ok {
-			return stat, nil
-		}
-	}
-	return f.statPath, f.statPathErr
-}
-func (f *fakeDockerClient) ListContainerDir(_ context.Context, _ string, p string) (docker.ContainerDirListing, error) {
-	if f.listDirErrMap != nil {
-		if err, ok := f.listDirErrMap[p]; ok {
-			return docker.ContainerDirListing{}, err
-		}
-	}
-	if f.listDirFailMap != nil {
-		if fails, ok := f.listDirFailMap[p]; ok {
-			return docker.ContainerDirListing{Files: f.listDirMap[p], Failures: fails, Truncated: f.listDirTruncated[p]}, nil
-		}
-	}
-	if f.listDirMap != nil {
-		if dir, ok := f.listDirMap[p]; ok {
-			return docker.ContainerDirListing{Files: dir, Truncated: f.listDirTruncated[p]}, nil
-		}
-	}
-	return docker.ContainerDirListing{Files: f.listDir}, f.listDirErr
-}
-func (f *fakeDockerClient) CopyToContainer(_ context.Context, containerID string, dstPath string, content io.Reader, options client.CopyToContainerOptions) error {
-	body, _ := io.ReadAll(content)
-	f.mu.Lock()
-	f.copyToCalls = append(f.copyToCalls, copyToCall{
-		containerID: containerID,
-		dstPath:     dstPath,
-		body:        body,
-		options:     options,
-	})
-	f.mu.Unlock()
-	return f.copyToErr
-}
-func (f *fakeDockerClient) CopyFromContainer(_ context.Context, _ string, containerPath string) (io.ReadCloser, container.PathStat, error) {
-	f.mu.Lock()
-	f.copyFromCount++
-	f.mu.Unlock()
-
-	if f.copyFromErrMap != nil {
-		if err, ok := f.copyFromErrMap[containerPath]; ok {
-			return nil, container.PathStat{}, err
-		}
-	}
-	if f.copyFromErr != nil {
-		return nil, container.PathStat{}, f.copyFromErr
-	}
-	if f.copyFromBodyMap != nil {
-		if body, ok := f.copyFromBodyMap[containerPath]; ok {
-			return io.NopCloser(bytes.NewReader(body)), f.copyFromStat, nil
-		}
-	}
-	return io.NopCloser(bytes.NewReader(f.copyFromBody)), f.copyFromStat, nil
-}
-func (f *fakeDockerClient) Cleanup(_ context.Context) error { return nil }
-func (f *fakeDockerClient) GetDefaultImage() string         { return "test-image" }
-
-var _ docker.DockerClient = (*fakeDockerClient)(nil)
-
-// buildContainerTar packages files into a TAR stream that mimics
-// docker's CopyFromContainer output for the given root entry.
+// buildContainerTar packages entries the way docker's CopyFromContainer streams them.
 func buildContainerTar(entries []tarTestEntry) []byte {
-	return buildTar(entries).Bytes()
+	var buf bytes.Buffer
+	tw := tar.NewWriter(&buf)
+	for _, e := range entries {
+		hdr := &tar.Header{
+			Name:     e.name,
+			Typeflag: e.typeflag,
+			Mode:     0644,
+			Size:     int64(len(e.content)),
+			Linkname: e.linkname,
+		}
+		if e.typeflag == tar.TypeDir {
+			hdr.Mode = 0755
+		}
+		_ = tw.WriteHeader(hdr)
+		if len(e.content) > 0 {
+			_, _ = tw.Write([]byte(e.content))
+		}
+	}
+	tw.Close()
+	return buf.Bytes()
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// GetFlowFiles handler tests.
-// ─────────────────────────────────────────────────────────────────────────────
+func flowFilesTarNames(t *testing.T, archive []byte) []string {
+	t.Helper()
 
-func TestFlowFileService_GetFlowFilesScenarios(t *testing.T) {
+	names := []string{}
+	tr := tar.NewReader(bytes.NewReader(archive))
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			return names
+		}
+		require.NoError(t, err)
+		names = append(names, hdr.Name)
+	}
+}
+
+// flowFilesTree maps every entry under root to its content; a directory's key
+// ends in a slash.
+func flowFilesTree(t *testing.T, root string) map[string]string {
+	t.Helper()
+
+	tree := map[string]string{}
+	require.NoError(t, filepath.Walk(root, func(p string, info os.FileInfo, err error) error {
+		require.NoError(t, err)
+		rel, err := filepath.Rel(root, p)
+		require.NoError(t, err)
+		switch {
+		case rel == ".":
+		case info.IsDir():
+			tree[filepath.ToSlash(rel)+"/"] = ""
+		default:
+			data, err := os.ReadFile(p)
+			require.NoError(t, err)
+			tree[filepath.ToSlash(rel)] = string(data)
+		}
+		return nil
+	}))
+
+	return tree
+}
+
+func flowFilesContainerPathsQuery(n int) string {
+	parts := make([]string, n)
+	for i := range parts {
+		parts[i] = "paths[]=/p" + strconv.Itoa(i)
+	}
+	return strings.Join(parts, "&")
+}
+
+func TestFlowFiles_GetFlowFiles_ListsTheFlowCacheToPermittedCallers(t *testing.T) {
 	type seedFile struct {
 		dir     string // "uploads", "container/<sub>", "resources/<sub>"
 		name    string
@@ -1221,6 +417,15 @@ func TestFlowFileService_GetFlowFilesScenarios(t *testing.T) {
 				"resources/creds/p.txt",
 			},
 		},
+		{
+			name:              "a flow with no cache directories lists nothing",
+			seedFlow:          &struct{ id, userID uint64 }{1, 1},
+			flowID:            1,
+			uid:               1,
+			privs:             []string{"flow_files.view"},
+			wantStatus:        http.StatusOK,
+			wantResponsePaths: []string{},
+		},
 	}
 
 	for _, tt := range tests {
@@ -1259,135 +464,185 @@ func TestFlowFileService_GetFlowFilesScenarios(t *testing.T) {
 	}
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// UploadFlowFiles handler tests.
-// ─────────────────────────────────────────────────────────────────────────────
-
-func TestFlowFileService_UploadFlowFilesScenarios(t *testing.T) {
+func TestFlowFiles_UploadFlowFiles_StoresEachFileUnderUploadsOnly(t *testing.T) {
 	tests := []struct {
-		name              string
-		flowOwner         uint64
-		uid               uint64
-		flowID            uint64
-		privs             []string
-		files             []flowFileUploadFile
-		fieldName         string
-		seedExisting      []string // pre-existing file names in uploads dir
-		nonMultipart      bool
-		wantStatus        int
-		wantResponsePaths []string
-		wantPushed        []string // basenames pushed to container
-		dockerRunning     bool
+		name          string
+		flowOwner     uint64 // 0: the caller
+		noFlow        bool
+		privs         []string // nil: flow_files.upload
+		files         []uploadTestFile
+		fieldName     string
+		rawFileName   string // sent unescaped, with "payload" as content
+		nonMultipart  bool
+		seedExisting  []string // names already under uploads/, holding "old"
+		dockerRunning bool
+		wantStatus    int
+		wantStored    map[string]string // name under uploads/ -> content
+		wantPushed    []string          // tar entries streamed to /work
 	}{
 		{
-			name:              "upload single file with files field",
-			flowOwner:         1,
-			uid:               1,
-			flowID:            1,
-			privs:             []string{"flow_files.upload"},
-			files:             []flowFileUploadFile{{name: "report.txt", content: "r"}},
-			wantStatus:        http.StatusOK,
-			wantResponsePaths: []string{"uploads/report.txt"},
+			name:          "a plain name is stored as sent and pushed to the running container",
+			files:         []uploadTestFile{{name: "report.txt", content: "r"}},
+			dockerRunning: true,
+			wantStatus:    http.StatusOK,
+			wantStored:    map[string]string{"report.txt": "r"},
+			wantPushed:    []string{"uploads", "uploads/report.txt"}, // the directory header, then the file
 		},
 		{
-			name:              "upload via singular file field works as fallback",
-			flowOwner:         1,
-			uid:               1,
-			flowID:            1,
-			privs:             []string{"flow_files.upload"},
-			files:             []flowFileUploadFile{{name: "report.txt", content: "r"}},
-			fieldName:         "file",
-			wantStatus:        http.StatusOK,
-			wantResponsePaths: []string{"uploads/report.txt"},
+			name:       "the singular file field works as a fallback",
+			files:      []uploadTestFile{{name: "report.txt", content: "r"}},
+			fieldName:  "file",
+			wantStatus: http.StatusOK,
+			wantStored: map[string]string{"report.txt": "r"},
 		},
 		{
-			name:              "upload multiple files",
-			flowOwner:         1,
-			uid:               1,
-			flowID:            1,
-			privs:             []string{"flow_files.upload"},
-			files:             []flowFileUploadFile{{name: "a.txt", content: "a"}, {name: "b.txt", content: "b"}},
-			wantStatus:        http.StatusOK,
-			wantResponsePaths: []string{"uploads/a.txt", "uploads/b.txt"},
+			name:       "several files are stored in one request",
+			files:      []uploadTestFile{{name: "a.txt", content: "a"}, {name: "b.txt", content: "b"}},
+			wantStatus: http.StatusOK,
+			wantStored: map[string]string{"a.txt": "a", "b.txt": "b"},
 		},
 		{
-			name:              "admin can upload to other user's flow",
-			flowOwner:         2,
-			uid:               1,
-			flowID:            1,
-			privs:             []string{"flow_files.admin"},
-			files:             []flowFileUploadFile{{name: "report.txt", content: "r"}},
-			wantStatus:        http.StatusOK,
-			wantResponsePaths: []string{"uploads/report.txt"},
+			name:       "admin can upload to another user's flow",
+			flowOwner:  2,
+			privs:      []string{"flow_files.admin"},
+			files:      []uploadTestFile{{name: "report.txt", content: "r"}},
+			wantStatus: http.StatusOK,
+			wantStored: map[string]string{"report.txt": "r"},
 		},
 		{
 			name:       "view privilege cannot upload",
-			flowOwner:  1,
-			uid:        1,
-			flowID:     1,
 			privs:      []string{"flow_files.view"},
-			files:      []flowFileUploadFile{{name: "report.txt", content: "r"}},
+			files:      []uploadTestFile{{name: "report.txt", content: "r"}},
 			wantStatus: http.StatusForbidden,
 		},
 		{
+			name:       "missing flow returns not found",
+			noFlow:     true,
+			files:      []uploadTestFile{{name: "report.txt", content: "r"}},
+			wantStatus: http.StatusNotFound,
+		},
+		{
 			name:         "non-multipart body returns bad request",
-			flowOwner:    1,
-			uid:          1,
-			flowID:       1,
-			privs:        []string{"flow_files.upload"},
 			nonMultipart: true,
 			wantStatus:   http.StatusBadRequest,
 		},
 		{
 			name:       "empty multipart returns bad request",
-			flowOwner:  1,
-			uid:        1,
-			flowID:     1,
-			privs:      []string{"flow_files.upload"},
-			files:      nil,
 			wantStatus: http.StatusBadRequest,
 		},
 		{
-			// a name that survives multipart encoding intact, so the rejection
-			// comes from the handler's own validation rather than from the MIME
-			// parser choking on the header
-			name:       "invalid filename returns bad request",
-			flowOwner:  1,
-			uid:        1,
-			flowID:     1,
-			privs:      []string{"flow_files.upload"},
-			files:      []flowFileUploadFile{{name: "bad*name.txt", content: "x"}},
-			wantStatus: http.StatusBadRequest,
-		},
-		{
-			name:         "upload duplicate of existing file returns conflict",
-			flowOwner:    1,
-			uid:          1,
-			flowID:       1,
-			privs:        []string{"flow_files.upload"},
+			name:         "a name already in uploads conflicts and keeps the old file",
 			seedExisting: []string{"report.txt"},
-			files:        []flowFileUploadFile{{name: "report.txt", content: "new"}},
+			files:        []uploadTestFile{{name: "report.txt", content: "new"}},
 			wantStatus:   http.StatusConflict,
 		},
 		{
-			name:       "missing flow returns not found",
-			uid:        1,
-			flowID:     99,
-			privs:      []string{"flow_files.upload"},
-			files:      []flowFileUploadFile{{name: "report.txt", content: "r"}},
-			wantStatus: http.StatusNotFound,
+			name:       "parent traversal is reduced to basename",
+			files:      []uploadTestFile{{name: "../report.txt", content: "payload"}},
+			wantStatus: http.StatusOK,
+			wantStored: map[string]string{"report.txt": "payload"},
 		},
 		{
-			name:              "successful upload pushes file to running container",
-			flowOwner:         1,
-			uid:               1,
-			flowID:            1,
-			privs:             []string{"flow_files.upload"},
-			files:             []flowFileUploadFile{{name: "report.txt", content: "r"}},
-			dockerRunning:     true,
-			wantStatus:        http.StatusOK,
-			wantResponsePaths: []string{"uploads/report.txt"},
-			wantPushed:        []string{"report.txt"},
+			name:       "deep parent traversal targeting /etc/passwd is reduced to basename",
+			files:      []uploadTestFile{{name: "../../etc/passwd", content: "payload"}},
+			wantStatus: http.StatusOK,
+			wantStored: map[string]string{"passwd": "payload"},
+		},
+		{
+			name:       "absolute unix path is reduced to basename",
+			files:      []uploadTestFile{{name: "/etc/shadow", content: "payload"}},
+			wantStatus: http.StatusOK,
+			wantStored: map[string]string{"shadow": "payload"},
+		},
+		{
+			name:       "windows-style backslash separators are reduced to basename",
+			files:      []uploadTestFile{{name: `nested\..\evil.txt`, content: "payload"}},
+			wantStatus: http.StatusOK,
+			wantStored: map[string]string{"evil.txt": "payload"},
+		},
+		{
+			name:       "double-slash and dotdot mix collapses to basename",
+			files:      []uploadTestFile{{name: "..//..//.//attack.bin", content: "payload"}},
+			wantStatus: http.StatusOK,
+			wantStored: map[string]string{"attack.bin": "payload"},
+		},
+		{
+			name:       "leading dot file is preserved verbatim",
+			files:      []uploadTestFile{{name: ".env", content: "payload"}},
+			wantStatus: http.StatusOK,
+			wantStored: map[string]string{".env": "payload"},
+		},
+		{
+			name:       "literal parent directory is rejected",
+			files:      []uploadTestFile{{name: "..", content: "payload"}},
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:       "literal current directory is rejected",
+			files:      []uploadTestFile{{name: ".", content: "payload"}},
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:       "lone slash is rejected",
+			files:      []uploadTestFile{{name: "/", content: "payload"}},
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:       "embedded NUL byte is rejected",
+			files:      []uploadTestFile{{name: "evil\x00.txt", content: "payload"}},
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:       "newline in filename arrives percent-encoded and stays inside uploads",
+			files:      []uploadTestFile{{name: "evil\nname.txt", content: "payload"}},
+			wantStatus: http.StatusOK,
+			wantStored: map[string]string{"evil%0Aname.txt": "payload"},
+		},
+		{
+			name:       "carriage return in filename arrives percent-encoded and stays inside uploads",
+			files:      []uploadTestFile{{name: "evil\rname.txt", content: "payload"}},
+			wantStatus: http.StatusOK,
+			wantStored: map[string]string{"evil%0Dname.txt": "payload"},
+		},
+		{
+			name:        "a raw line feed in the filename is rejected",
+			rawFileName: "evil\nname.txt",
+			wantStatus:  http.StatusBadRequest,
+		},
+		{
+			name:        "a raw carriage return in the filename is rejected",
+			rawFileName: "evil\rname.txt",
+			wantStatus:  http.StatusBadRequest,
+		},
+		{
+			name:       "DEL control character is rejected",
+			files:      []uploadTestFile{{name: "evil\x7fname.txt", content: "payload"}},
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:       "windows reserved colon is rejected",
+			files:      []uploadTestFile{{name: "con:1.txt", content: "payload"}},
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:       "wildcard star is rejected",
+			files:      []uploadTestFile{{name: "evil*.txt", content: "payload"}},
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:       "redirection chevrons are rejected",
+			files:      []uploadTestFile{{name: "evil<>name.txt", content: "payload"}},
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:       "filename longer than MaxFileNameLength is rejected",
+			files:      []uploadTestFile{{name: strings.Repeat("a", flowfiles.MaxFileNameLength+1) + ".txt", content: "payload"}},
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:       "blank filename is rejected",
+			files:      []uploadTestFile{{name: "   ", content: "payload"}},
+			wantStatus: http.StatusBadRequest,
 		},
 	}
 
@@ -1399,315 +654,90 @@ func TestFlowFileService_UploadFlowFilesScenarios(t *testing.T) {
 			fakeDocker := &fakeDockerClient{running: tt.dockerRunning}
 			svc := NewFlowFileService(db, dataDir, "", fakeDocker, ss)
 
-			if tt.flowOwner != 0 {
-				seedFlow(t, db, tt.flowID, tt.flowOwner)
+			if !tt.noFlow {
+				owner := tt.flowOwner
+				if owner == 0 {
+					owner = 1
+				}
+				seedFlow(t, db, 1, owner)
 			}
+			want := map[string]string{}
 			for _, name := range tt.seedExisting {
-				dir := filepath.Join(dataDir, fmt.Sprintf("flow-%d-data", tt.flowID), "uploads")
+				dir := filepath.Join(dataDir, "flow-1-data", "uploads")
 				require.NoError(t, os.MkdirAll(dir, 0755))
 				require.NoError(t, os.WriteFile(filepath.Join(dir, name), []byte("old"), 0644))
-			}
-
-			fieldName := tt.fieldName
-			if fieldName == "" {
-				fieldName = "files"
+				want["flow-1-data/uploads/"+name] = "old"
 			}
 
 			var body io.Reader
 			var contentType string
-			if tt.nonMultipart {
-				body = bytes.NewBufferString(`{"hello":"world"}`)
-				contentType = "application/json"
-			} else {
-				buf, ct := flowFileMultipartBody(t, tt.files, fieldName)
-				body = buf
-				contentType = ct
+			switch {
+			case tt.nonMultipart:
+				body, contentType = bytes.NewBufferString(`{"hello":"world"}`), "application/json"
+			case tt.rawFileName != "":
+				body, contentType = rawMultipartUpload("files", tt.rawFileName, "payload")
+			default:
+				fieldName := tt.fieldName
+				if fieldName == "" {
+					fieldName = "files"
+				}
+				body, contentType = multipartUploadBodyWithField(t, tt.files, fieldName)
+			}
+			privs := tt.privs
+			if privs == nil {
+				privs = []string{"flow_files.upload"}
 			}
 
-			c, w := newFlowFileTestContext(http.MethodPost, "/flows/1/files/", body, tt.privs, tt.uid, tt.flowID)
+			c, w := newFlowFileTestContext(http.MethodPost, "/flows/1/files/", body, privs, 1, 1)
 			c.Request.Header.Set("Content-Type", contentType)
-
 			svc.UploadFlowFiles(c)
 
 			require.Equal(t, tt.wantStatus, w.Code)
-			if tt.wantStatus == http.StatusOK {
-				resp := decodeFlowFilesResponse(t, w)
-				paths := make([]string, len(resp.Files))
-				for i, f := range resp.Files {
-					paths[i] = f.Path
-				}
-				assert.ElementsMatch(t, tt.wantResponsePaths, paths)
 
-				addedEvents := []string{}
-				for _, ev := range ss.snapshot() {
-					if ev.channel == "flow" && ev.action == "added" {
-						addedEvents = append(addedEvents, ev.path)
-					}
-				}
-				assert.ElementsMatch(t, tt.wantResponsePaths, addedEvents)
-
-				if tt.wantPushed != nil {
-					pushed := []string{}
-					for _, call := range fakeDocker.copyToCalls {
-						pushed = append(pushed, call.dstPath)
-					}
-					assert.NotEmpty(t, pushed, "expected at least one CopyToContainer call")
+			stored := map[string]string{}
+			for p, content := range flowFilesTree(t, dataDir) {
+				assert.True(t, strings.HasPrefix(p, "flow-1-data/"), "%q escaped the flow data directory", p)
+				if !strings.HasSuffix(p, "/") {
+					stored[p] = content
 				}
 			}
-		})
-	}
-}
+			wantPaths := []string{}
+			wantEvents := []string{}
+			for name, content := range tt.wantStored {
+				want["flow-1-data/uploads/"+name] = content
+				wantPaths = append(wantPaths, "uploads/"+name)
+				wantEvents = append(wantEvents, "flow added uploads/"+name)
+			}
+			assert.Equal(t, want, stored, "regular files under the data directory")
 
-// TestFlowFileService_UploadFlowFilesPathTraversalSecurity exercises the upload
-// handler end-to-end with malicious multipart filenames. The contract is:
-//
-//   - For each "sanitisable" filename, the handler MUST accept the upload
-//     and store the file at flow-{id}-data/uploads/<basename>, with no
-//     entries appearing outside that directory anywhere on disk.
-//   - For each "unsafe-by-construction" filename, the handler MUST reject
-//     the upload (400) and not write anything to the local cache.
-//   - At no point may a request escape flow-{id}-data/uploads/, even if the
-//     filename embeds traversal segments, absolute paths, NUL bytes, or
-//     Windows-style separators.
-//
-// Control characters are sent through a hand-written multipart body: an
-// attacker writes the wire format directly, and multipart.Writer would
-// percent-encode CR and LF instead of transmitting them.
-//
-// The directory tree of the entire dataDir is enumerated after each request
-// and any unexpected entry fails the test, ensuring the protection chain
-// (SanitizeFileName + filepath.Join + LocalEntryExists) is intact.
-func TestFlowFileService_UploadFlowFilesPathTraversalSecurity(t *testing.T) {
-	tests := []struct {
-		name              string
-		uploadName        string
-		rawHeader         bool // write the filename to the wire verbatim
-		wantStatus        int
-		wantStoredAs      string // basename expected on disk under uploads/, empty if rejected
-		wantContentInFile string
-	}{
-		{
-			name:              "parent traversal is reduced to basename",
-			uploadName:        "../report.txt",
-			wantStatus:        http.StatusOK,
-			wantStoredAs:      "report.txt",
-			wantContentInFile: "payload",
-		},
-		{
-			name:              "deep parent traversal targeting /etc/passwd is reduced to basename",
-			uploadName:        "../../etc/passwd",
-			wantStatus:        http.StatusOK,
-			wantStoredAs:      "passwd",
-			wantContentInFile: "payload",
-		},
-		{
-			name:              "absolute unix path is reduced to basename",
-			uploadName:        "/etc/shadow",
-			wantStatus:        http.StatusOK,
-			wantStoredAs:      "shadow",
-			wantContentInFile: "payload",
-		},
-		{
-			name:              "windows-style backslash separators are reduced to basename",
-			uploadName:        `nested\..\evil.txt`,
-			wantStatus:        http.StatusOK,
-			wantStoredAs:      "evil.txt",
-			wantContentInFile: "payload",
-		},
-		{
-			name:              "double-slash and dotdot mix collapses to basename",
-			uploadName:        "..//..//.//attack.bin",
-			wantStatus:        http.StatusOK,
-			wantStoredAs:      "attack.bin",
-			wantContentInFile: "payload",
-		},
-		{
-			name:              "leading dot file is preserved verbatim",
-			uploadName:        ".env",
-			wantStatus:        http.StatusOK,
-			wantStoredAs:      ".env",
-			wantContentInFile: "payload",
-		},
-		{
-			name:       "literal parent directory is rejected",
-			uploadName: "..",
-			wantStatus: http.StatusBadRequest,
-		},
-		{
-			name:       "literal current directory is rejected",
-			uploadName: ".",
-			wantStatus: http.StatusBadRequest,
-		},
-		{
-			name:       "lone slash is rejected",
-			uploadName: "/",
-			wantStatus: http.StatusBadRequest,
-		},
-		{
-			// what multipart.Writer transmits for a filename containing a
-			// newline: the encoding must be stored as the literal text it is,
-			// never decoded back into a control character
-			name:              "percent-encoded newline is stored verbatim",
-			uploadName:        "evil%0Aname.txt",
-			wantStatus:        http.StatusOK,
-			wantStoredAs:      "evil%0Aname.txt",
-			wantContentInFile: "payload",
-		},
-		{
-			name:       "embedded NUL byte is rejected",
-			uploadName: "evil\x00.txt",
-			rawHeader:  true,
-			wantStatus: http.StatusBadRequest,
-		},
-		{
-			name:       "newline in filename is rejected",
-			uploadName: "evil\nname.txt",
-			rawHeader:  true,
-			wantStatus: http.StatusBadRequest,
-		},
-		{
-			name:       "carriage return in filename is rejected",
-			uploadName: "evil\rname.txt",
-			rawHeader:  true,
-			wantStatus: http.StatusBadRequest,
-		},
-		{
-			name:       "DEL control character is rejected",
-			uploadName: "evil\x7fname.txt",
-			rawHeader:  true,
-			wantStatus: http.StatusBadRequest,
-		},
-		{
-			name:       "windows reserved colon is rejected",
-			uploadName: "con:1.txt",
-			wantStatus: http.StatusBadRequest,
-		},
-		{
-			name:       "wildcard star is rejected",
-			uploadName: "evil*.txt",
-			wantStatus: http.StatusBadRequest,
-		},
-		{
-			name:       "redirection chevrons are rejected",
-			uploadName: "evil<>name.txt",
-			wantStatus: http.StatusBadRequest,
-		},
-		{
-			name:       "filename longer than MaxFileNameLength is rejected",
-			uploadName: strings.Repeat("a", flowfiles.MaxFileNameLength+1) + ".txt",
-			wantStatus: http.StatusBadRequest,
-		},
-		{
-			name:       "blank filename is rejected",
-			uploadName: "   ",
-			wantStatus: http.StatusBadRequest,
-		},
-	}
+			events := []string{}
+			for _, ev := range ss.snapshot() {
+				events = append(events, ev.channel+" "+ev.action+" "+ev.path)
+			}
+			assert.ElementsMatch(t, wantEvents, events)
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			db := setupFlowFileServiceTestDB(t)
-			dataDir := t.TempDir()
-			ss := &flowFileCaptureSubscriptions{}
-			svc := NewFlowFileService(db, dataDir, "", nil, ss)
-			seedFlow(t, db, 1, 1)
-
-			var body io.Reader
-			var contentType string
-			if tt.rawHeader {
-				body, contentType = rawFlowFileMultipartBody(tt.uploadName, "payload")
+			if tt.wantPushed == nil {
+				assert.Empty(t, fakeDocker.copyToCalls)
 			} else {
-				body, contentType = flowFileMultipartBody(t,
-					[]flowFileUploadFile{{name: tt.uploadName, content: "payload"}},
-					"files",
-				)
+				require.Len(t, fakeDocker.copyToCalls, 1)
+				assert.Equal(t, "/work", fakeDocker.copyToCalls[0].dstPath)
+				assert.Equal(t, tt.wantPushed, flowFilesTarNames(t, fakeDocker.copyToCalls[0].body))
 			}
 
-			c, w := newFlowFileTestContext(http.MethodPost, "/flows/1/files/", body,
-				[]string{"flow_files.upload"}, 1, 1)
-			c.Request.Header.Set("Content-Type", contentType)
-
-			svc.UploadFlowFiles(c)
-
-			require.Equal(t, tt.wantStatus, w.Code, "unexpected status for upload of %q", tt.uploadName)
-
-			// Walk dataDir and capture every entry's relative path so we can
-			// prove no file ever escaped flow-1-data/uploads/.
-			seenPaths := []string{}
-			require.NoError(t, filepath.Walk(dataDir, func(p string, info os.FileInfo, err error) error {
-				require.NoError(t, err)
-				rel, err := filepath.Rel(dataDir, p)
-				require.NoError(t, err)
-				if rel == "." {
-					return nil
-				}
-				seenPaths = append(seenPaths, filepath.ToSlash(rel))
-				return nil
-			}))
-
-			// No entry must live outside flow-1-data/.
-			for _, p := range seenPaths {
-				assert.True(t,
-					p == "flow-1-data" || strings.HasPrefix(p, "flow-1-data/"),
-					"file %q escaped the flow data directory", p)
-			}
-
-			if tt.wantStatus == http.StatusOK {
-				require.NotEmpty(t, tt.wantStoredAs, "test bug: success scenario must declare wantStoredAs")
-				expectedRel := "flow-1-data/uploads/" + tt.wantStoredAs
-				absExpected := filepath.Join(dataDir, "flow-1-data", "uploads", tt.wantStoredAs)
-
-				// File must exist at the basename location with the original payload.
-				data, err := os.ReadFile(absExpected)
-				require.NoError(t, err, "expected sanitised file %q on disk", expectedRel)
-				assert.Equal(t, tt.wantContentInFile, string(data))
-
-				// Only one regular file must have been created (besides directories).
-				regularFiles := []string{}
-				for _, p := range seenPaths {
-					info, err := os.Lstat(filepath.Join(dataDir, filepath.FromSlash(p)))
-					require.NoError(t, err)
-					if info.Mode().IsRegular() {
-						regularFiles = append(regularFiles, p)
-					}
-				}
-				assert.Equal(t, []string{expectedRel}, regularFiles,
-					"the upload must have produced exactly one regular file at the sanitised location")
-
-				// Subscription event must reference the sanitised path, never
-				// the raw user-supplied name.
-				events := ss.snapshot()
-				require.Len(t, events, 1)
-				assert.Equal(t, "flow", events[0].channel)
-				assert.Equal(t, "added", events[0].action)
-				assert.Equal(t, "uploads/"+tt.wantStoredAs, events[0].path)
-				assert.NotContains(t, events[0].path, "..", "event path must not contain traversal segments")
-				assert.NotContains(t, events[0].path, "\\", "event path must not contain windows separators")
+			if tt.wantStatus != http.StatusOK {
 				return
 			}
-
-			// Rejected request: nothing should have been published, and
-			// uploads/ either doesn't exist or is empty.
-			assert.Empty(t, ss.snapshot(), "rejected upload must not emit any subscription events")
-			uploadsDir := filepath.Join(dataDir, "flow-1-data", "uploads")
-			if entries, err := os.ReadDir(uploadsDir); err == nil {
-				for _, e := range entries {
-					if !strings.HasPrefix(e.Name(), ".upload-") {
-						t.Errorf("unexpected file %q persisted after rejected upload", e.Name())
-					}
-				}
-			} else {
-				assert.True(t, os.IsNotExist(err))
+			resp := decodeFlowFilesResponse(t, w)
+			paths := make([]string, len(resp.Files))
+			for i, f := range resp.Files {
+				paths[i] = f.Path
 			}
+			assert.ElementsMatch(t, wantPaths, paths)
 		})
 	}
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// DeleteFlowFile handler tests.
-// ─────────────────────────────────────────────────────────────────────────────
-
-func TestFlowFileService_DeleteFlowFileScenarios(t *testing.T) {
+func TestFlowFiles_DeleteFlowFile_RemovesFromTheCacheAndTheContainer(t *testing.T) {
 	type seedFile struct {
 		relPath string
 		content string
@@ -1732,13 +762,9 @@ func TestFlowFileService_DeleteFlowFileScenarios(t *testing.T) {
 		wantDeletedPaths  []string // additional paths expected in "deleted" events (for bulk tests)
 		wantFilesGone     []string // relative paths inside flow data dir that must be absent
 		wantFilesExist    []string // relative paths that must still exist (fail-safe atomicity)
-		wantContainerExec bool     // assert at least one exec with "rm -rf"
-		wantNoExec        bool     // assert zero exec calls
-		wantSingleExec    bool     // assert exactly one exec call
-		wantExecContains  string   // exec command must contain this substring
+		wantExec          []string // every docker exec command, in order; nil: none
 		wantResponseTotal int      // > 0: verify response Total and Files length
 	}{
-		// ── single-path via ?path= (existing behaviour) ───────────────────────
 		{
 			name:            "delete uploaded file",
 			flowOwner:       1,
@@ -1777,17 +803,15 @@ func TestFlowFileService_DeleteFlowFileScenarios(t *testing.T) {
 		{
 			name:      "delete uploads file invokes container exec when running",
 			flowOwner: 1, uid: 1, flowID: 1,
-			privs:             []string{"flow_files.upload"},
-			seedFlow:          true,
-			seedFiles:         []seedFile{{relPath: "uploads/report.txt", content: "r"}},
-			queryPath:         "uploads/report.txt",
-			dockerRunning:     true,
-			wantStatus:        http.StatusOK,
-			wantDeletedPath:   "uploads/report.txt",
-			wantContainerExec: true,
+			privs:           []string{"flow_files.upload"},
+			seedFlow:        true,
+			seedFiles:       []seedFile{{relPath: "uploads/report.txt", content: "r"}},
+			queryPath:       "uploads/report.txt",
+			dockerRunning:   true,
+			wantStatus:      http.StatusOK,
+			wantDeletedPath: "uploads/report.txt",
+			wantExec:        []string{"sh -c rm -rf -- '/work/uploads/report.txt'"},
 		},
-
-		// ── single-path: access control ──────────────────────────────────────
 		{
 			name:      "view privilege cannot delete",
 			flowOwner: 1, uid: 1, flowID: 1,
@@ -1804,8 +828,6 @@ func TestFlowFileService_DeleteFlowFileScenarios(t *testing.T) {
 			queryPath:  "uploads/report.txt",
 			wantStatus: http.StatusNotFound,
 		},
-
-		// ── single-path: invalid input ────────────────────────────────────────
 		{
 			name:      "missing path returns bad request",
 			flowOwner: 1, uid: 1, flowID: 1,
@@ -1838,11 +860,7 @@ func TestFlowFileService_DeleteFlowFileScenarios(t *testing.T) {
 			queryPath:  "uploads/missing.txt",
 			wantStatus: http.StatusNotFound,
 		},
-
-		// ── paths[] parameter ─────────────────────────────────────────────────
-
 		{
-			// Verifies the paths[] param works independently without the singular path= param.
 			name:      "only paths[] param used deletes single file",
 			flowOwner: 1, uid: 1, flowID: 1,
 			privs:           []string{"flow_files.upload"},
@@ -1854,7 +872,6 @@ func TestFlowFileService_DeleteFlowFileScenarios(t *testing.T) {
 			wantFilesGone:   []string{"uploads/report.txt"},
 		},
 		{
-			// Both uploads/a.txt and uploads/b.txt are deleted in one request.
 			name:      "batch delete two uploads files via paths[]",
 			flowOwner: 1, uid: 1, flowID: 1,
 			privs:    []string{"flow_files.upload"},
@@ -1870,7 +887,6 @@ func TestFlowFileService_DeleteFlowFileScenarios(t *testing.T) {
 			wantResponseTotal: 2,
 		},
 		{
-			// path= and paths[]= are combined; both files are deleted.
 			name:      "path and paths[] combined delete two files",
 			flowOwner: 1, uid: 1, flowID: 1,
 			privs:    []string{"flow_files.upload"},
@@ -1886,7 +902,26 @@ func TestFlowFileService_DeleteFlowFileScenarios(t *testing.T) {
 			wantResponseTotal: 2,
 		},
 		{
-			// Same path sent twice in paths[]; must be treated as a single deletion.
+			name:      "absolute path in the batch refuses the whole request",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs:          []string{"flow_files.upload"},
+			seedFlow:       true,
+			seedFiles:      []seedFile{{relPath: "uploads/report.txt", content: "r"}},
+			rawQuery:       "paths[]=uploads/report.txt&paths[]=/etc/passwd",
+			wantStatus:     http.StatusBadRequest,
+			wantFilesExist: []string{"uploads/report.txt"},
+		},
+		{
+			name:      "parent traversal in the batch refuses the whole request",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs:          []string{"flow_files.upload"},
+			seedFlow:       true,
+			seedFiles:      []seedFile{{relPath: "uploads/report.txt", content: "r"}},
+			rawQuery:       "paths[]=uploads/report.txt&paths[]=../../etc/shadow",
+			wantStatus:     http.StatusBadRequest,
+			wantFilesExist: []string{"uploads/report.txt"},
+		},
+		{
 			name:      "duplicate paths[] entries deduplicated",
 			flowOwner: 1, uid: 1, flowID: 1,
 			privs:             []string{"flow_files.upload"},
@@ -1899,10 +934,6 @@ func TestFlowFileService_DeleteFlowFileScenarios(t *testing.T) {
 			wantResponseTotal: 1,
 		},
 		{
-			// uploads/dir covers uploads/dir/file.txt; DeduplicatePaths reduces the
-			// list to just uploads/dir.  The file disappears as part of recursive removal.
-			// After directory expansion the response and subscription must report BOTH
-			// the directory entry and its nested file.
 			name:      "paths[] parent covers child - child not separately processed",
 			flowOwner: 1, uid: 1, flowID: 1,
 			privs:    []string{"flow_files.upload"},
@@ -1918,11 +949,7 @@ func TestFlowFileService_DeleteFlowFileScenarios(t *testing.T) {
 			wantFilesGone:     []string{"uploads/dir", "uploads/dir/file.txt"},
 			wantResponseTotal: 2, // dir entry + nested file
 		},
-
 		{
-			// Deletes a directory that contains nested sub-directories and files.
-			// The response and subscription must enumerate every removed entry,
-			// not just the top-level directory handle.
 			name:      "directory deletion reports all nested files and dirs in response",
 			flowOwner: 1, uid: 1, flowID: 1,
 			privs:    []string{"flow_files.upload"},
@@ -1945,7 +972,6 @@ func TestFlowFileService_DeleteFlowFileScenarios(t *testing.T) {
 			wantResponseTotal: 4, // dir + 1 file + sub-dir + 1 nested file
 		},
 		{
-			// Verifies the response contains file metadata for every deleted entry.
 			name:      "response contains metadata for all deleted files",
 			flowOwner: 1, uid: 1, flowID: 1,
 			privs:    []string{"flow_files.upload"},
@@ -1959,10 +985,7 @@ func TestFlowFileService_DeleteFlowFileScenarios(t *testing.T) {
 			wantDeletedPaths:  []string{"uploads/a.txt", "resources/creds/p.txt"},
 			wantResponseTotal: 2,
 		},
-
-		// ── Docker exec: batch optimisation ──────────────────────────────────
 		{
-			// Two uploads paths must result in exactly one Docker exec call.
 			name:      "single Docker exec issued for two uploads paths",
 			flowOwner: 1, uid: 1, flowID: 1,
 			privs:    []string{"flow_files.upload"},
@@ -1975,8 +998,7 @@ func TestFlowFileService_DeleteFlowFileScenarios(t *testing.T) {
 			dockerRunning:    true,
 			wantStatus:       http.StatusOK,
 			wantDeletedPaths: []string{"uploads/a.txt", "uploads/b.txt"},
-			wantSingleExec:   true,
-			wantExecContains: "rm -rf",
+			wantExec:         []string{"sh -c rm -rf -- '/work/uploads/a.txt' '/work/uploads/b.txt'"},
 		},
 		{
 			// container/ paths are host-only and must never be sent to the container.
@@ -1992,25 +1014,21 @@ func TestFlowFileService_DeleteFlowFileScenarios(t *testing.T) {
 			dockerRunning:   true,
 			wantStatus:      http.StatusOK,
 			wantDeletedPath: "container/etc",
-			wantNoExec:      true,
 		},
 		{
 			// resources/ paths are mirrored in the container; exec must be triggered.
 			name:      "resources path triggers Docker exec",
 			flowOwner: 1, uid: 1, flowID: 1,
-			privs:             []string{"flow_files.upload"},
-			seedFlow:          true,
-			seedFiles:         []seedFile{{relPath: "resources/creds/p.txt", content: "p"}},
-			rawQuery:          "paths[]=resources/creds/p.txt",
-			dockerRunning:     true,
-			wantStatus:        http.StatusOK,
-			wantDeletedPath:   "resources/creds/p.txt",
-			wantContainerExec: true,
+			privs:           []string{"flow_files.upload"},
+			seedFlow:        true,
+			seedFiles:       []seedFile{{relPath: "resources/creds/p.txt", content: "p"}},
+			rawQuery:        "paths[]=resources/creds/p.txt",
+			dockerRunning:   true,
+			wantStatus:      http.StatusOK,
+			wantDeletedPath: "resources/creds/p.txt",
+			wantExec:        []string{"sh -c rm -rf -- '/work/resources/creds/p.txt'"},
 		},
 		{
-			// Mixed uploads + container + resources: single exec, containing only the
-			// two mirrored paths (/work/uploads/... and /work/resources/...); the
-			// container path is excluded from the exec command.
 			name:      "mixed namespaces produce single exec with only mirrored paths",
 			flowOwner: 1, uid: 1, flowID: 1,
 			privs:    []string{"flow_files.upload"},
@@ -2026,13 +1044,9 @@ func TestFlowFileService_DeleteFlowFileScenarios(t *testing.T) {
 			wantStatus:       http.StatusOK,
 			wantDeletedPaths: []string{"uploads/a.txt", "container/etc", "resources/creds/p.txt"},
 			wantFilesGone:    []string{"uploads/a.txt", "container/etc", "resources/creds/p.txt"},
-			wantSingleExec:   true,
-			wantExecContains: "/work/uploads/a.txt",
+			wantExec:         []string{"sh -c rm -rf -- '/work/uploads/a.txt' '/work/resources/creds/p.txt'"},
 		},
-
-		// ── access control ────────────────────────────────────────────────────
 		{
-			// flow_files.admin bypasses the uid ownership filter.
 			name:      "admin can delete from other user flow",
 			flowOwner: 2, uid: 1, flowID: 1,
 			privs:           []string{"flow_files.admin"},
@@ -2042,10 +1056,7 @@ func TestFlowFileService_DeleteFlowFileScenarios(t *testing.T) {
 			wantStatus:      http.StatusOK,
 			wantDeletedPath: "uploads/report.txt",
 		},
-
-		// ── input validation: batch edge cases ───────────────────────────────
 		{
-			// All paths[] values consist of whitespace only; after trimming none remain.
 			name:      "all whitespace paths[] values return bad request",
 			flowOwner: 1, uid: 1, flowID: 1,
 			privs:      []string{"flow_files.upload"},
@@ -2054,8 +1065,6 @@ func TestFlowFileService_DeleteFlowFileScenarios(t *testing.T) {
 			wantStatus: http.StatusBadRequest,
 		},
 		{
-			// First path is valid; second has an unsupported prefix.
-			// Validation is fail-fast: the first file must NOT be deleted.
 			name:      "invalid prefix in second paths[] fails atomically",
 			flowOwner: 1, uid: 1, flowID: 1,
 			privs:    []string{"flow_files.upload"},
@@ -2068,8 +1077,6 @@ func TestFlowFileService_DeleteFlowFileScenarios(t *testing.T) {
 			wantFilesExist: []string{"uploads/a.txt"},
 		},
 		{
-			// First path exists; second path does not.
-			// Validation is fail-fast: the first file must NOT be deleted.
 			name:      "missing file in second paths[] fails atomically",
 			flowOwner: 1, uid: 1, flowID: 1,
 			privs:    []string{"flow_files.upload"},
@@ -2081,11 +1088,8 @@ func TestFlowFileService_DeleteFlowFileScenarios(t *testing.T) {
 			wantStatus:     http.StatusNotFound,
 			wantFilesExist: []string{"uploads/a.txt"},
 		},
-
-		// ── Docker error handling ─────────────────────────────────────────────
 		{
-			// ContainerExecCreate fails; the handler must return 500 and must NOT
-			// delete the local cache entry (container and cache would diverge otherwise).
+			// the cache keeps the file, or it would diverge from the container
 			name:      "exec create failure returns 500 and preserves local file",
 			flowOwner: 1, uid: 1, flowID: 1,
 			privs:          []string{"flow_files.upload"},
@@ -2096,10 +1100,9 @@ func TestFlowFileService_DeleteFlowFileScenarios(t *testing.T) {
 			execCreateErr:  fmt.Errorf("docker daemon unreachable"),
 			wantStatus:     http.StatusInternalServerError,
 			wantFilesExist: []string{"uploads/report.txt"},
+			wantExec:       []string{"sh -c rm -rf -- '/work/uploads/report.txt'"},
 		},
 		{
-			// rm exits with a non-zero code; the handler must return 500 and must NOT
-			// delete the local cache entry.
 			name:      "exec non-zero exit code returns 500 and preserves local file",
 			flowOwner: 1, uid: 1, flowID: 1,
 			privs:           []string{"flow_files.upload"},
@@ -2110,6 +1113,7 @@ func TestFlowFileService_DeleteFlowFileScenarios(t *testing.T) {
 			execInspectCode: 1,
 			wantStatus:      http.StatusInternalServerError,
 			wantFilesExist:  []string{"uploads/report.txt"},
+			wantExec:        []string{"sh -c rm -rf -- '/work/uploads/report.txt'"},
 		},
 	}
 
@@ -2142,7 +1146,6 @@ func TestFlowFileService_DeleteFlowFileScenarios(t *testing.T) {
 				require.NoError(t, os.WriteFile(abs, []byte(f.content), 0644))
 			}
 
-			// Build request URL.
 			target := "/flows/1/files/"
 			switch {
 			case tt.rawQuery != "":
@@ -2156,22 +1159,18 @@ func TestFlowFileService_DeleteFlowFileScenarios(t *testing.T) {
 
 			require.Equal(t, tt.wantStatus, w.Code)
 
-			// ── success assertions ────────────────────────────────────────────
 			if tt.wantStatus == http.StatusOK {
-				// Existing: check queryPath is gone (single-path tests).
 				if tt.queryPath != "" {
 					abs := filepath.Join(dataDir, fmt.Sprintf("flow-%d-data", tt.flowID), filepath.FromSlash(tt.queryPath))
 					_, err := os.Lstat(abs)
 					assert.True(t, os.IsNotExist(err), "deleted file/dir must be gone from cache: %s", tt.queryPath)
 				}
-				// New: check every explicitly listed gone path.
 				for _, gone := range tt.wantFilesGone {
 					abs := filepath.Join(dataDir, fmt.Sprintf("flow-%d-data", tt.flowID), filepath.FromSlash(gone))
 					_, err := os.Lstat(abs)
 					assert.True(t, os.IsNotExist(err), "expected %q to be gone from cache", gone)
 				}
 
-				// Subscription events.
 				deleted := make([]string, 0)
 				for _, ev := range ss.snapshot() {
 					if ev.channel == "flow" && ev.action == "deleted" {
@@ -2185,33 +1184,15 @@ func TestFlowFileService_DeleteFlowFileScenarios(t *testing.T) {
 					assert.Contains(t, deleted, p, "expected deleted event for %q", p)
 				}
 
-				// Response body total.
 				if tt.wantResponseTotal > 0 {
 					resp := decodeFlowFilesResponse(t, w)
 					assert.Equal(t, uint64(tt.wantResponseTotal), resp.Total, "response Total mismatch")
 					assert.Len(t, resp.Files, tt.wantResponseTotal, "response Files length mismatch")
 				}
-
-				// Existing Docker exec check.
-				if tt.wantContainerExec {
-					assert.NotEmpty(t, fakeDocker.execCommands, "expected docker exec to be invoked")
-					assert.Contains(t, fakeDocker.execCommands[0], "rm -rf")
-				}
 			}
 
-			// ── exec count assertions (checked regardless of status) ──────────
-			if tt.wantNoExec {
-				assert.Empty(t, fakeDocker.execCommands, "expected no docker exec call")
-			}
-			if tt.wantSingleExec {
-				assert.Len(t, fakeDocker.execCommands, 1, "expected exactly one docker exec call")
-			}
-			if tt.wantExecContains != "" {
-				require.NotEmpty(t, fakeDocker.execCommands, "exec must have been called to check its content")
-				assert.Contains(t, fakeDocker.execCommands[0], tt.wantExecContains)
-			}
+			assert.Equal(t, tt.wantExec, fakeDocker.execCommands)
 
-			// ── atomicity / fail-safe: files that must still exist ────────────
 			for _, exists := range tt.wantFilesExist {
 				abs := filepath.Join(dataDir, fmt.Sprintf("flow-%d-data", tt.flowID), filepath.FromSlash(exists))
 				_, err := os.Lstat(abs)
@@ -2221,11 +1202,7 @@ func TestFlowFileService_DeleteFlowFileScenarios(t *testing.T) {
 	}
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// DownloadFlowFile handler tests.
-// ─────────────────────────────────────────────────────────────────────────────
-
-func TestFlowFileService_DownloadFlowFileScenarios(t *testing.T) {
+func TestFlowFiles_DownloadFlowFile_ServesAFileOrAZip(t *testing.T) {
 	tests := []struct {
 		name             string
 		flowOwner        uint64
@@ -2241,7 +1218,6 @@ func TestFlowFileService_DownloadFlowFileScenarios(t *testing.T) {
 		wantDispContains string
 		wantZipEntries   map[string]string
 	}{
-		// ── single-path: existing behaviour (backward compatibility) ──────────
 		{
 			name:      "download regular uploaded file",
 			flowOwner: 1, uid: 1, flowID: 1,
@@ -2269,7 +1245,7 @@ func TestFlowFileService_DownloadFlowFileScenarios(t *testing.T) {
 			wantStatus:       http.StatusOK,
 			wantContentType:  "application/zip",
 			wantDispContains: "etc.zip",
-			// Single dir → ZipDirectory → paths relative to dir root.
+			// a lone directory is zipped relative to itself
 			wantZipEntries: map[string]string{"nginx/nginx.conf": "nginx"},
 		},
 		{
@@ -2285,8 +1261,6 @@ func TestFlowFileService_DownloadFlowFileScenarios(t *testing.T) {
 			wantStatus: http.StatusOK,
 			wantBody:   "admin",
 		},
-
-		// ── access control ────────────────────────────────────────────────────
 		{
 			name:      "non-admin cannot download other user's file",
 			flowOwner: 2, uid: 1, flowID: 1,
@@ -2301,8 +1275,6 @@ func TestFlowFileService_DownloadFlowFileScenarios(t *testing.T) {
 			queryPath:  "uploads/report.txt",
 			wantStatus: http.StatusForbidden,
 		},
-
-		// ── single-path: invalid input ────────────────────────────────────────
 		{
 			name:      "empty path returns bad request",
 			flowOwner: 1, uid: 1, flowID: 1,
@@ -2334,11 +1306,7 @@ func TestFlowFileService_DownloadFlowFileScenarios(t *testing.T) {
 			},
 			wantStatus: http.StatusNotFound,
 		},
-
-		// ── paths[] parameter ─────────────────────────────────────────────────
-
 		{
-			// Single file via paths[] must produce a direct file attachment.
 			name:      "single file via paths[] downloaded as direct attachment",
 			flowOwner: 1, uid: 1, flowID: 1,
 			privs:    []string{"flow_files.view"},
@@ -2353,8 +1321,6 @@ func TestFlowFileService_DownloadFlowFileScenarios(t *testing.T) {
 			wantDispContains: "report.txt",
 		},
 		{
-			// Single directory via paths[] must produce a backward-compat ZIP with
-			// paths relative to the directory root (not the flow data dir).
 			name:      "single directory via paths[] uses dir-relative zip paths",
 			flowOwner: 1, uid: 1, flowID: 1,
 			privs:    []string{"flow_files.view"},
@@ -2370,7 +1336,6 @@ func TestFlowFileService_DownloadFlowFileScenarios(t *testing.T) {
 			wantZipEntries:   map[string]string{"nginx/nginx.conf": "nginx"},
 		},
 		{
-			// Two regular files → ZIP with cache-relative paths as entry names.
 			name:      "two files via paths[] packaged into zip with cache-relative paths",
 			flowOwner: 1, uid: 1, flowID: 1,
 			privs:    []string{"flow_files.view"},
@@ -2390,7 +1355,6 @@ func TestFlowFileService_DownloadFlowFileScenarios(t *testing.T) {
 			},
 		},
 		{
-			// path= and paths[]= are combined; result is a multi-entry ZIP.
 			name:      "path= and paths[] combined produce multi-entry zip",
 			flowOwner: 1, uid: 1, flowID: 1,
 			privs:    []string{"flow_files.view"},
@@ -2411,8 +1375,6 @@ func TestFlowFileService_DownloadFlowFileScenarios(t *testing.T) {
 			},
 		},
 		{
-			// File and directory combined: directory contents use their full
-			// cache-relative paths inside the ZIP.
 			name:      "file and directory via paths[] combined in zip",
 			flowOwner: 1, uid: 1, flowID: 1,
 			privs:    []string{"flow_files.view"},
@@ -2433,8 +1395,6 @@ func TestFlowFileService_DownloadFlowFileScenarios(t *testing.T) {
 			},
 		},
 		{
-			// Parent directory covers child file via DeduplicatePaths; result is a
-			// single-directory ZIP using dir-relative paths (backward compat).
 			name:      "paths[] parent covers child - single dir zip returned",
 			flowOwner: 1, uid: 1, flowID: 1,
 			privs:    []string{"flow_files.view"},
@@ -2450,7 +1410,6 @@ func TestFlowFileService_DownloadFlowFileScenarios(t *testing.T) {
 			wantZipEntries:   map[string]string{"file.txt": "content"},
 		},
 		{
-			// Sending the same path twice must result in a single entry in the ZIP.
 			name:      "duplicate paths in paths[] produce single-file download",
 			flowOwner: 1, uid: 1, flowID: 1,
 			privs:    []string{"flow_files.view"},
@@ -2464,8 +1423,6 @@ func TestFlowFileService_DownloadFlowFileScenarios(t *testing.T) {
 			wantBody:         "payload",
 			wantDispContains: "report.txt",
 		},
-
-		// ── paths[]: invalid input ─────────────────────────────────────────────
 		{
 			name:      "whitespace-only paths[] returns bad request",
 			flowOwner: 1, uid: 1, flowID: 1,
@@ -2488,8 +1445,18 @@ func TestFlowFileService_DownloadFlowFileScenarios(t *testing.T) {
 			wantStatus: http.StatusBadRequest,
 		},
 		{
-			// First path is valid; second does not exist.
-			// Validation is fail-fast: request returns 404 before any download.
+			name:      "absolute path in the batch refuses the whole request",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs:    []string{"flow_files.view"},
+			rawQuery: "paths[]=uploads/a.txt&paths[]=/etc/passwd",
+			setupFile: func(t *testing.T, dataDir string, flowID uint64) {
+				dir := filepath.Join(dataDir, fmt.Sprintf("flow-%d-data", flowID), "uploads")
+				require.NoError(t, os.MkdirAll(dir, 0755))
+				require.NoError(t, os.WriteFile(filepath.Join(dir, "a.txt"), []byte("x"), 0644))
+			},
+			wantStatus: http.StatusBadRequest,
+		},
+		{
 			name:      "missing file in batch returns not found",
 			flowOwner: 1, uid: 1, flowID: 1,
 			privs:    []string{"flow_files.view"},
@@ -2502,7 +1469,6 @@ func TestFlowFileService_DownloadFlowFileScenarios(t *testing.T) {
 			wantStatus: http.StatusNotFound,
 		},
 		{
-			// Symlink in the batch must abort with 404 (no partial download).
 			name:      "symlink in paths[] batch returns not found",
 			flowOwner: 1, uid: 1, flowID: 1,
 			privs:    []string{"flow_files.view"},
@@ -2554,8 +1520,7 @@ func TestFlowFileService_DownloadFlowFileScenarios(t *testing.T) {
 				assert.Contains(t, w.Header().Get("Content-Disposition"), tt.wantDispContains)
 			}
 			if tt.wantZipEntries != nil {
-				// A streamed ZIP download must not buffer the whole archive, so it
-				// must not carry a Content-Length computed from a full buffer.
+				// a streamed archive is never buffered, so it has no Content-Length
 				assert.Empty(t, w.Header().Get("Content-Length"))
 				zr, err := zip.NewReader(bytes.NewReader(w.Body.Bytes()), int64(w.Body.Len()))
 				require.NoError(t, err)
@@ -2576,11 +1541,7 @@ func TestFlowFileService_DownloadFlowFileScenarios(t *testing.T) {
 	}
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// PullFlowFiles handler tests.
-// ─────────────────────────────────────────────────────────────────────────────
-
-func TestFlowFileService_PullFlowFilesScenarios(t *testing.T) {
+func TestFlowFiles_PullFlowFiles_ReportsEachPathSyncedFromTheContainer(t *testing.T) {
 	tests := []struct {
 		name                       string
 		flowOwner                  uint64
@@ -2598,9 +1559,9 @@ func TestFlowFileService_PullFlowFilesScenarios(t *testing.T) {
 		wantResponsePaths          []string // for multi-file response (ordered)
 		wantEventChannel           string   // "added" | "updated" (checked when set, single-event tests)
 		wantEventCount             int      // > 0: assert total event count
-		wantCopyFromCount          int      // > 0: assert exact CopyFromContainer call count
+		wantCopyFromCount          int      // checked when > 0 or wantNoCopy
+		wantNoCopy                 bool
 	}{
-		// ── single-path: existing behaviour (backward compatibility) ──────────
 		{
 			name:      "pull new file",
 			flowOwner: 1, uid: 1, flowID: 1,
@@ -2639,6 +1600,20 @@ func TestFlowFileService_PullFlowFilesScenarios(t *testing.T) {
 			wantStatus:       http.StatusOK,
 			wantResponsePath: "container/etc/nginx.conf",
 			wantEventChannel: "updated",
+		},
+		{
+			name:      "a path the daemon does not have answers not found, as the listing door does",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs: []string{"flow_files.upload", "containers.view"},
+			body:  models.PullFlowFilesRequest{Path: "/etc/gone.conf"},
+			dockerSetup: func(d *fakeDockerClient) {
+				d.running = true
+				d.copyFromErr = fmt.Errorf(
+					"Error response from daemon: lstat /etc/gone.conf: no such file or directory: %w",
+					cerrdefs.ErrNotFound,
+				)
+			},
+			wantStatus: http.StatusNotFound,
 		},
 		{
 			name:      "missing flow_files privilege",
@@ -2730,6 +1705,19 @@ func TestFlowFileService_PullFlowFilesScenarios(t *testing.T) {
 			wantStatus: http.StatusInternalServerError,
 		},
 		{
+			name:      "a symlink cannot be pulled and is a client error",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs: []string{"flow_files.upload", "containers.view"},
+			body:  models.PullFlowFilesRequest{Path: "/etc/mtab"},
+			dockerSetup: func(d *fakeDockerClient) {
+				d.running = true
+				d.copyFromBody = buildContainerTar([]tarTestEntry{
+					{name: "mtab", typeflag: tar.TypeSymlink, linkname: "/proc/self/mounts"},
+				})
+			},
+			wantStatus: http.StatusBadRequest,
+		},
+		{
 			name:      "archive missing expected entry returns internal",
 			flowOwner: 1, uid: 1, flowID: 1,
 			privs: []string{"flow_files.upload", "containers.view"},
@@ -2742,12 +1730,8 @@ func TestFlowFileService_PullFlowFilesScenarios(t *testing.T) {
 			},
 			wantStatus: http.StatusInternalServerError,
 		},
-
 		{
-			// /etc covers /etc/nginx.conf; DeduplicatePaths reduces the list to just /etc.
-			// Only one CopyFromContainer call is made for /etc/, not a separate one for nginx.conf.
-			// Docker returns a directory TAR (entries under "etc/"), so the response includes
-			// both the directory entry and all nested files.
+			// /etc covers /etc/nginx.conf, so only /etc is copied
 			name:      "parent path covers child path - single docker call, directory contents listed",
 			flowOwner: 1, uid: 1, flowID: 1,
 			privs: []string{"flow_files.upload", "containers.view"},
@@ -2757,7 +1741,6 @@ func TestFlowFileService_PullFlowFilesScenarios(t *testing.T) {
 			dockerSetup: func(d *fakeDockerClient) {
 				d.running = true
 				d.copyFromBodyMap = map[string][]byte{
-					// Docker returns a directory TAR with entries under "etc/".
 					"/etc": buildContainerTar([]tarTestEntry{
 						{name: "etc/", typeflag: tar.TypeDir},
 						{name: "etc/nginx.conf", typeflag: tar.TypeReg, content: "nginx"},
@@ -2765,16 +1748,13 @@ func TestFlowFileService_PullFlowFilesScenarios(t *testing.T) {
 				}
 			},
 			wantStatus: http.StatusOK,
-			// Response: the directory itself + all nested files, sorted by path.
 			wantResponsePaths: []string{
 				"container/etc",
 				"container/etc/nginx.conf",
 			},
 			wantCopyFromCount: 1, // /etc/nginx.conf is covered → no separate pull
 		},
-
 		{
-			// Two files supplied via the paths array; both are pulled and returned.
 			name:      "two files via paths array pulled and returned",
 			flowOwner: 1, uid: 1, flowID: 1,
 			privs: []string{"flow_files.upload", "containers.view"},
@@ -2798,7 +1778,6 @@ func TestFlowFileService_PullFlowFilesScenarios(t *testing.T) {
 			wantCopyFromCount: 2,
 		},
 		{
-			// path and paths combined; both files are pulled.
 			name:      "path and paths combined pull both files",
 			flowOwner: 1, uid: 1, flowID: 1,
 			privs: []string{"flow_files.upload", "containers.view"},
@@ -2822,7 +1801,6 @@ func TestFlowFileService_PullFlowFilesScenarios(t *testing.T) {
 			wantEventCount:    2,
 		},
 		{
-			// Same path in both path and paths[0]: deduplicated to a single pull.
 			name:      "duplicate path in path and paths deduplicated to single operation",
 			flowOwner: 1, uid: 1, flowID: 1,
 			privs: []string{"flow_files.upload", "containers.view"},
@@ -2841,7 +1819,6 @@ func TestFlowFileService_PullFlowFilesScenarios(t *testing.T) {
 			wantCopyFromCount: 1,
 		},
 		{
-			// All paths are whitespace-only: combined list is empty after dedup → 400.
 			name:      "whitespace-only paths returns bad request",
 			flowOwner: 1, uid: 1, flowID: 1,
 			privs: []string{"flow_files.upload", "containers.view"},
@@ -2853,8 +1830,6 @@ func TestFlowFileService_PullFlowFilesScenarios(t *testing.T) {
 			wantStatus:  http.StatusBadRequest,
 		},
 		{
-			// Second path exists in cache without force=true.
-			// Phase 1 detects the conflict before any docker operation; neither file is pulled.
 			name:      "second path already exists without force fails fast in phase 1",
 			flowOwner: 1, uid: 1, flowID: 1,
 			privs: []string{"flow_files.upload", "containers.view"},
@@ -2864,10 +1839,9 @@ func TestFlowFileService_PullFlowFilesScenarios(t *testing.T) {
 			seedExistingContainerFiles: []string{"etc/hosts"},
 			dockerSetup:                func(d *fakeDockerClient) { d.running = true },
 			wantStatus:                 http.StatusConflict,
-			wantCopyFromCount:          0, // no docker calls; validation failed in phase 1
+			wantNoCopy:                 true,
 		},
 		{
-			// force=true overwrites all existing cache entries in the batch.
 			name:      "force overwrites multiple existing cache entries",
 			flowOwner: 1, uid: 1, flowID: 1,
 			privs: []string{"flow_files.upload", "containers.view"},
@@ -2893,9 +1867,6 @@ func TestFlowFileService_PullFlowFilesScenarios(t *testing.T) {
 			wantEventCount:    2,
 		},
 		{
-			// First copy succeeds; second copy fails.
-			// The first file is committed to cache (partial success is expected when
-			// docker errors occur in phase 2).
 			name:      "second container copy fails returns internal",
 			flowOwner: 1, uid: 1, flowID: 1,
 			privs: []string{"flow_files.upload", "containers.view"},
@@ -2916,8 +1887,6 @@ func TestFlowFileService_PullFlowFilesScenarios(t *testing.T) {
 			wantStatus: http.StatusInternalServerError,
 		},
 		{
-			// /var/log/app.log and /etc/nginx.conf are given in that order.
-			// Sorted by cache path, /etc comes before /var alphabetically.
 			name:      "response sorted by cache path regardless of input order",
 			flowOwner: 1, uid: 1, flowID: 1,
 			privs: []string{"flow_files.upload", "containers.view"},
@@ -2942,8 +1911,6 @@ func TestFlowFileService_PullFlowFilesScenarios(t *testing.T) {
 			},
 		},
 		{
-			// One path is new (added event), one path exists with force (updated event).
-			// Verify both event types are published.
 			name:      "added and updated events both published in batch",
 			flowOwner: 1, uid: 1, flowID: 1,
 			privs: []string{"flow_files.upload", "containers.view"},
@@ -3012,20 +1979,15 @@ func TestFlowFileService_PullFlowFilesScenarios(t *testing.T) {
 			svc.PullFlowFiles(c)
 
 			require.Equal(t, tt.wantStatus, w.Code)
+			if tt.wantCopyFromCount > 0 || tt.wantNoCopy {
+				assert.Equal(t, tt.wantCopyFromCount, fakeDocker.copyFromCount, "unexpected CopyFromContainer call count")
+			}
 			if tt.wantStatus != http.StatusOK {
-				// Even on error, verify docker call count if specified.
-				if tt.wantCopyFromCount >= 0 && tt.wantCopyFromCount != fakeDocker.copyFromCount {
-					// Only assert when explicitly set (non-zero).
-					if tt.wantCopyFromCount > 0 {
-						assert.Equal(t, tt.wantCopyFromCount, fakeDocker.copyFromCount, "unexpected CopyFromContainer call count")
-					}
-				}
 				return
 			}
 
 			resp := decodeFlowFilesResponse(t, w)
 
-			// Path assertions.
 			if len(tt.wantResponsePaths) > 0 {
 				paths := make([]string, len(resp.Files))
 				for i, f := range resp.Files {
@@ -3037,7 +1999,6 @@ func TestFlowFileService_PullFlowFilesScenarios(t *testing.T) {
 				assert.Equal(t, tt.wantResponsePath, resp.Files[0].Path)
 			}
 
-			// Event assertions.
 			events := ss.snapshot()
 			if tt.wantEventCount > 0 {
 				assert.Len(t, events, tt.wantEventCount, "unexpected subscription event count")
@@ -3050,20 +2011,38 @@ func TestFlowFileService_PullFlowFilesScenarios(t *testing.T) {
 					assert.Equal(t, tt.wantResponsePath, events[0].path)
 				}
 			}
-
-			// Docker call count assertion.
-			if tt.wantCopyFromCount > 0 {
-				assert.Equal(t, tt.wantCopyFromCount, fakeDocker.copyFromCount, "unexpected CopyFromContainer call count")
-			}
 		})
 	}
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// GetFlowContainerFiles handler tests.
-// ─────────────────────────────────────────────────────────────────────────────
+// flowFilesDaemonDetail carries what must not leave a release build: a container id
+// and the daemon's address.
+const flowFilesDaemonDetail = "Error response from daemon: container 9f8e7d6c5b4a on tcp://10.0.0.5:2376 lstat failed"
 
-func TestFlowFileService_GetFlowContainerFilesScenarios(t *testing.T) {
+func flowFilesDaemonDetailDockerSetup(d *fakeDockerClient) {
+	d.running = true
+	d.statPathMap = map[string]container.PathStat{"/work": {Mode: os.ModeDir | 0755}}
+	d.listDirMap = map[string][]container.PathStat{"/work": {{Name: "readme", Mode: 0644, Size: 1}}}
+	d.listDirFailMap = map[string][]docker.ContainerEntryError{
+		"/work": {{Name: "secret", Path: "/work/secret", Err: fmt.Errorf("%s", flowFilesDaemonDetail)}},
+	}
+}
+
+// flowFilesReadAndFailedDockerSetup makes /work/x fail inside the /work listing
+// while a stat of /work/x itself succeeds.
+func flowFilesReadAndFailedDockerSetup(d *fakeDockerClient) {
+	d.running = true
+	d.statPathMap = map[string]container.PathStat{
+		"/work":   {Mode: os.ModeDir | 0755},
+		"/work/x": {Name: "x", Mode: 0644, Size: 1},
+	}
+	d.listDirMap = map[string][]container.PathStat{"/work": {}}
+	d.listDirFailMap = map[string][]docker.ContainerEntryError{
+		"/work": {{Name: "x", Path: "/work/x", Err: fmt.Errorf("stat: no such file")}},
+	}
+}
+
+func TestFlowFiles_GetFlowContainerFiles_ListsReadableEntriesAndSurfacesFailures(t *testing.T) {
 	tests := []struct {
 		name             string
 		flowOwner        uint64
@@ -3079,8 +2058,11 @@ func TestFlowFileService_GetFlowContainerFilesScenarios(t *testing.T) {
 		wantFileNames    []string // expected file names in sorted order (nil = don't check)
 		wantTotal        uint64   // > 0: verify response Total
 		wantFailureNames []string // expected Failures[].Name (nil = don't check)
+		wantFailureTexts []string // expected Failures[].Message (nil = don't check)
+		wantTruncated    bool
+		wantErrorCode    string // when set, the "code" of the error body
+		build            string // "release" or "develop" sets version.PackageVer for the row; empty keeps it
 	}{
-		// ── single-path: existing behaviour (backward compatibility) ──────────
 		{
 			name:      "default path lists work directory when no param given",
 			flowOwner: 1, uid: 1, flowID: 1,
@@ -3126,8 +2108,6 @@ func TestFlowFileService_GetFlowContainerFilesScenarios(t *testing.T) {
 			wantPathInResp: "/etc/passwd",
 			wantFileNames:  []string{"passwd"},
 		},
-
-		// ── access control ────────────────────────────────────────────────────
 		{
 			name:      "missing flow_files privilege returns forbidden",
 			flowOwner: 1, uid: 1, flowID: 1,
@@ -3160,8 +2140,6 @@ func TestFlowFileService_GetFlowContainerFilesScenarios(t *testing.T) {
 			privs:      []string{"flow_files.view", "containers.view"},
 			wantStatus: http.StatusNotFound,
 		},
-
-		// ── infrastructure errors ─────────────────────────────────────────────
 		{
 			name:      "docker client not configured returns internal error",
 			flowOwner: 1, uid: 1, flowID: 1,
@@ -3189,6 +2167,34 @@ func TestFlowFileService_GetFlowContainerFilesScenarios(t *testing.T) {
 			wantStatus: http.StatusInternalServerError,
 		},
 		{
+			name:      "a path the daemon does not have answers not found, not a server fault",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs:     []string{"flow_files.view", "containers.view"},
+			queryPath: "/wrok",
+			dockerSetup: func(d *fakeDockerClient) {
+				d.running = true
+				d.statPathErr = fmt.Errorf(
+					"Error response from daemon: lstat /wrok: no such file or directory: %w",
+					cerrdefs.ErrNotFound,
+				)
+			},
+			wantStatus:    http.StatusNotFound,
+			wantErrorCode: "FlowFiles.NotFound",
+		},
+		{
+			name:      "a directory listing the daemon reports missing answers not found",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs:     []string{"flow_files.view", "containers.view"},
+			queryPath: "/work/gone",
+			dockerSetup: func(d *fakeDockerClient) {
+				d.running = true
+				d.statPath = container.PathStat{Mode: os.ModeDir | 0755}
+				d.listDirErr = fmt.Errorf("Error response from daemon: %w", cerrdefs.ErrNotFound)
+			},
+			wantStatus:    http.StatusNotFound,
+			wantErrorCode: "FlowFiles.NotFound",
+		},
+		{
 			name:      "list dir error returns internal error",
 			flowOwner: 1, uid: 1, flowID: 1,
 			privs: []string{"flow_files.view", "containers.view"},
@@ -3199,12 +2205,7 @@ func TestFlowFileService_GetFlowContainerFilesScenarios(t *testing.T) {
 			},
 			wantStatus: http.StatusInternalServerError,
 		},
-
-		// ── paths[] parameter ─────────────────────────────────────────────────
-
 		{
-			// Single path delivered via paths[] instead of path= must behave
-			// identically, including the Path field in the response.
 			name:      "single paths[] behaves like single path=",
 			flowOwner: 1, uid: 1, flowID: 1,
 			privs:    []string{"flow_files.view", "containers.view"},
@@ -3221,10 +2222,6 @@ func TestFlowFileService_GetFlowContainerFilesScenarios(t *testing.T) {
 			wantFileNames:  []string{"passwd"},
 		},
 		{
-			// A per-entry stat failure (dangling symlink, a file removed
-			// mid-listing, a transient /proc pid) must degrade to a partial
-			// listing — HTTP 200 with the readable files plus the failure
-			// surfaced in Failures — not a 500 that blanks the whole directory.
 			name:      "per-entry stat failure returns partial listing not 500",
 			flowOwner: 1, uid: 1, flowID: 1,
 			privs:     []string{"flow_files.view", "containers.view"},
@@ -3251,8 +2248,7 @@ func TestFlowFileService_GetFlowContainerFilesScenarios(t *testing.T) {
 			wantFailureNames: []string{"dangling"},
 		},
 		{
-			// Two directories are queried; results are merged and sorted by name.
-			// The response Path must be empty because there is no single "current dir".
+			// several paths have no single current directory, so Path is empty
 			name:      "two directories via paths[] returns combined sorted listing",
 			flowOwner: 1, uid: 1, flowID: 1,
 			privs:    []string{"flow_files.view", "containers.view"},
@@ -3279,7 +2275,6 @@ func TestFlowFileService_GetFlowContainerFilesScenarios(t *testing.T) {
 			wantTotal:      3,
 		},
 		{
-			// path= and paths[]= are combined; merged listing is sorted.
 			name:      "path= and paths[] combined returns merged sorted listing",
 			flowOwner: 1, uid: 1, flowID: 1,
 			privs:    []string{"flow_files.view", "containers.view"},
@@ -3300,8 +2295,6 @@ func TestFlowFileService_GetFlowContainerFilesScenarios(t *testing.T) {
 			wantFileNames:  []string{"hosts", "log"},
 		},
 		{
-			// Sending the same path twice must result in a single stat + list call.
-			// The response contains each file only once.
 			name:      "duplicate paths in paths[] deduplicated",
 			flowOwner: 1, uid: 1, flowID: 1,
 			privs:    []string{"flow_files.view", "containers.view"},
@@ -3319,8 +2312,6 @@ func TestFlowFileService_GetFlowContainerFilesScenarios(t *testing.T) {
 			wantTotal:      1,
 		},
 		{
-			// All paths[] values are whitespace only: the combined list is empty
-			// after trimming even though params were explicitly provided → 400.
 			name:      "whitespace-only paths[] values return bad request",
 			flowOwner: 1, uid: 1, flowID: 1,
 			privs: []string{"flow_files.view", "containers.view"},
@@ -3331,8 +2322,6 @@ func TestFlowFileService_GetFlowContainerFilesScenarios(t *testing.T) {
 			wantStatus: http.StatusBadRequest,
 		},
 		{
-			// A regular file and a directory are combined in a single request.
-			// The file entry and the directory contents appear together, sorted.
 			name:      "mix of file and directory in paths[] combined in response",
 			flowOwner: 1, uid: 1, flowID: 1,
 			privs:    []string{"flow_files.view", "containers.view"},
@@ -3352,8 +2341,6 @@ func TestFlowFileService_GetFlowContainerFilesScenarios(t *testing.T) {
 			wantFileNames:  []string{"passwd", "log"},
 		},
 		{
-			// Docker API returns the same entry twice from a single ListContainerDir
-			// call (unexpected but possible). The response must deduplicate by path.
 			name:      "output deduplicated when Docker API returns duplicate entries",
 			flowOwner: 1, uid: 1, flowID: 1,
 			privs:    []string{"flow_files.view", "containers.view"},
@@ -3372,9 +2359,6 @@ func TestFlowFileService_GetFlowContainerFilesScenarios(t *testing.T) {
 			wantTotal:      1,
 		},
 		{
-			// First path succeeds; second path's stat call fails. The readable path
-			// is still served (HTTP 200) and the bad path is surfaced as a failure —
-			// one bad path no longer blanks the whole multi-path request.
 			name:      "second path stat error in batch: good path served, bad path a failure",
 			flowOwner: 1, uid: 1, flowID: 1,
 			privs:    []string{"flow_files.view", "containers.view"},
@@ -3396,9 +2380,6 @@ func TestFlowFileService_GetFlowContainerFilesScenarios(t *testing.T) {
 			wantFailureNames: []string{"etc"},
 		},
 		{
-			// First path directory listing succeeds; second path's listing fails at
-			// the directory level. The readable path is still served (HTTP 200) and
-			// the failed path is surfaced as a failure, not a 500.
 			name:      "second path list dir error in batch: good path served, bad path a failure",
 			flowOwner: 1, uid: 1, flowID: 1,
 			privs:    []string{"flow_files.view", "containers.view"},
@@ -3420,10 +2401,116 @@ func TestFlowFileService_GetFlowContainerFilesScenarios(t *testing.T) {
 			wantFileNames:    []string{"uploads"},
 			wantFailureNames: []string{"etc"},
 		},
+		{
+			name:      "a path read by one query is never also a failure of another",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs:            []string{"flow_files.view", "containers.view"},
+			rawQuery:         "paths[]=/work&paths[]=/work/x",
+			dockerSetup:      flowFilesReadAndFailedDockerSetup,
+			wantStatus:       http.StatusOK,
+			wantFileNames:    []string{"x"},
+			wantFailureNames: []string{},
+		},
+		{
+			name:      "a path read by one query is never also a failure of an earlier one",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs:            []string{"flow_files.view", "containers.view"},
+			rawQuery:         "paths[]=/work/x&paths[]=/work",
+			dockerSetup:      flowFilesReadAndFailedDockerSetup,
+			wantStatus:       http.StatusOK,
+			wantFileNames:    []string{"x"},
+			wantFailureNames: []string{},
+		},
+		{
+			name:      "every entry failing still answers 200 with the failures",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs:    []string{"flow_files.view", "containers.view"},
+			rawQuery: "paths[]=/work",
+			dockerSetup: func(d *fakeDockerClient) {
+				d.running = true
+				d.statPathMap = map[string]container.PathStat{"/work": {Mode: os.ModeDir | 0755}}
+				d.listDirMap = map[string][]container.PathStat{"/work": {}}
+				d.listDirFailMap = map[string][]docker.ContainerEntryError{
+					"/work": {
+						{Name: "a", Path: "/work/a", Err: fmt.Errorf("stat: gone")},
+						{Name: "b", Path: "/work/b", Err: fmt.Errorf("stat: gone")},
+					},
+				}
+			},
+			wantStatus:       http.StatusOK,
+			wantPathInResp:   "/work",
+			wantFileNames:    []string{},
+			wantFailureNames: []string{"a", "b"},
+		},
+		{
+			name:      "a truncated listing says so",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs:    []string{"flow_files.view", "containers.view"},
+			rawQuery: "paths[]=/big",
+			dockerSetup: func(d *fakeDockerClient) {
+				d.running = true
+				d.statPathMap = map[string]container.PathStat{"/big": {Mode: os.ModeDir | 0755}}
+				d.listDirMap = map[string][]container.PathStat{"/big": {{Name: "f", Mode: 0644, Size: 1}}}
+				d.listDirTruncated = map[string]bool{"/big": true}
+			},
+			wantStatus:     http.StatusOK,
+			wantPathInResp: "/big",
+			wantFileNames:  []string{"f"},
+			wantTruncated:  true,
+		},
+		{
+			name:      "a release build hides the daemon's error text",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs:            []string{"flow_files.view", "containers.view"},
+			rawQuery:         "paths[]=/work",
+			dockerSetup:      flowFilesDaemonDetailDockerSetup,
+			build:            "release",
+			wantStatus:       http.StatusOK,
+			wantPathInResp:   "/work",
+			wantFileNames:    []string{"readme"},
+			wantFailureTexts: []string{"entry could not be read"},
+		},
+		{
+			name:      "develop mode shows the daemon's error text",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs:            []string{"flow_files.view", "containers.view"},
+			rawQuery:         "paths[]=/work",
+			dockerSetup:      flowFilesDaemonDetailDockerSetup,
+			build:            "develop",
+			wantStatus:       http.StatusOK,
+			wantPathInResp:   "/work",
+			wantFileNames:    []string{"readme"},
+			wantFailureTexts: []string{flowFilesDaemonDetail},
+		},
+		{
+			name:      "more paths than the cap are refused",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs:       []string{"flow_files.view", "containers.view"},
+			rawQuery:    flowFilesContainerPathsQuery(maxContainerListPaths + 1),
+			dockerSetup: func(d *fakeDockerClient) { d.running = true },
+			wantStatus:  http.StatusBadRequest,
+		},
+		{
+			name:      "exactly the cap of paths is served",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs:       []string{"flow_files.view", "containers.view"},
+			rawQuery:    flowFilesContainerPathsQuery(maxContainerListPaths),
+			dockerSetup: func(d *fakeDockerClient) { d.running = true },
+			wantStatus:  http.StatusOK,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			if tt.build != "" {
+				previous := version.PackageVer
+				t.Cleanup(func() { version.PackageVer = previous })
+				version.PackageVer = ""
+				if tt.build == "release" {
+					version.PackageVer = "1.0.0"
+				}
+			}
+
 			db := setupFlowFileServiceTestDB(t)
 			dataDir := t.TempDir()
 
@@ -3454,10 +2541,18 @@ func TestFlowFileService_GetFlowContainerFilesScenarios(t *testing.T) {
 
 			require.Equal(t, tt.wantStatus, w.Code)
 			if tt.wantStatus != http.StatusOK {
+				if tt.wantErrorCode != "" {
+					var body struct {
+						Code string `json:"code"`
+					}
+					require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
+					assert.Equal(t, tt.wantErrorCode, body.Code)
+				}
 				return
 			}
 			resp := decodeContainerFilesResponse(t, w)
 			assert.Equal(t, tt.wantPathInResp, resp.Path)
+			assert.Equal(t, tt.wantTruncated, resp.Truncated)
 
 			if tt.wantFileNames != nil {
 				names := make([]string, len(resp.Files))
@@ -3477,15 +2572,18 @@ func TestFlowFileService_GetFlowContainerFilesScenarios(t *testing.T) {
 				}
 				assert.ElementsMatch(t, tt.wantFailureNames, names)
 			}
+			if tt.wantFailureTexts != nil {
+				texts := make([]string, len(resp.Failures))
+				for i, f := range resp.Failures {
+					texts[i] = f.Message
+				}
+				assert.Equal(t, tt.wantFailureTexts, texts)
+			}
 		})
 	}
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// AddResourcesToFlow handler tests.
-// ─────────────────────────────────────────────────────────────────────────────
-
-func TestFlowFileService_AddResourcesToFlowScenarios(t *testing.T) {
+func TestFlowFiles_AddResourcesToFlow_CopiesPermittedResourcesIntoTheFlow(t *testing.T) {
 	type seedRes struct {
 		userID  uint64
 		path    string
@@ -3640,11 +2738,9 @@ func TestFlowFileService_AddResourcesToFlowScenarios(t *testing.T) {
 				if userID == 0 {
 					userID = tt.uid
 				}
-				hash := md5HexForFlowFiles(r.content)
-				blobPath := resources.BlobPath(dataDir, hash)
-				require.NoError(t, os.MkdirAll(filepath.Dir(blobPath), 0755))
-				require.NoError(t, os.WriteFile(blobPath, []byte(r.content), 0644))
-				seedUserResource(t, db, models.UserResource{
+				hash := md5HexForService(r.content)
+				writeResourceBlob(t, dataDir, hash, r.content)
+				seedResource(t, db, models.UserResource{
 					UserID: userID,
 					Hash:   hash,
 					Name:   filepath.Base(r.path),
@@ -3698,11 +2794,7 @@ func TestFlowFileService_AddResourcesToFlowScenarios(t *testing.T) {
 	}
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// AddResourceFromFlow handler tests.
-// ─────────────────────────────────────────────────────────────────────────────
-
-func TestFlowFileService_AddResourceFromFlowScenarios(t *testing.T) {
+func TestFlowFiles_AddResourceFromFlow_PromotesCacheEntriesToResources(t *testing.T) {
 	type sourceFile struct {
 		relPath string
 		content string
@@ -3724,6 +2816,39 @@ func TestFlowFileService_AddResourceFromFlowScenarios(t *testing.T) {
 		wantEventChannel  string   // "added" | "updated"
 	}{
 		{
+			name:      "force does not replace a file on the way to the destination",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs:       []string{"resources.upload", "flow_files.view"},
+			sourceFiles: []sourceFile{{relPath: "uploads/report.txt", content: "payload"}},
+			existingResource: &models.UserResource{
+				Hash: md5HexForService("irreplaceable"), Name: "victim.txt", Path: "victim.txt", Size: 13,
+			},
+			body: map[string]any{
+				"source":      "uploads/report.txt",
+				"destination": "victim.txt/report.txt",
+				"force":       true,
+			},
+			wantStatus: http.StatusConflict,
+		},
+		{
+			name:      "force does not replace a file above a multi-source destination",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs: []string{"resources.upload", "flow_files.view"},
+			sourceFiles: []sourceFile{
+				{relPath: "uploads/a.txt", content: "a"},
+				{relPath: "uploads/b.txt", content: "b"},
+			},
+			existingResource: &models.UserResource{
+				Hash: md5HexForService("irreplaceable"), Name: "victim.txt", Path: "victim.txt", Size: 13,
+			},
+			body: map[string]any{
+				"sources":     []string{"uploads/a.txt", "uploads/b.txt"},
+				"destination": "victim.txt/batch",
+				"force":       true,
+			},
+			wantStatus: http.StatusConflict,
+		},
+		{
 			name:      "promote uploaded file to new resource",
 			flowOwner: 1, uid: 1, flowID: 1,
 			privs:       []string{"resources.upload", "flow_files.view"},
@@ -3735,6 +2860,17 @@ func TestFlowFileService_AddResourceFromFlowScenarios(t *testing.T) {
 			wantStatus:        http.StatusOK,
 			wantResourcePaths: []string{"promoted/report.txt"},
 			wantEventChannel:  "added",
+		},
+		{
+			name:      "a traversal source refuses the request instead of narrowing it",
+			flowOwner: 1, uid: 1, flowID: 1,
+			privs:       []string{"resources.upload", "flow_files.view"},
+			sourceFiles: []sourceFile{{relPath: "uploads/report.txt", content: "payload"}},
+			body: map[string]any{
+				"sources":     []string{"uploads/report.txt", "/etc/passwd"},
+				"destination": "promoted",
+			},
+			wantStatus: http.StatusBadRequest,
 		},
 		{
 			name:      "promote container file to user resources",
@@ -3755,7 +2891,7 @@ func TestFlowFileService_AddResourceFromFlowScenarios(t *testing.T) {
 			privs:       []string{"resources.upload", "flow_files.view"},
 			sourceFiles: []sourceFile{{relPath: "uploads/report.txt", content: "new"}},
 			existingResource: &models.UserResource{
-				Hash: md5HexForFlowFiles("old"), Name: "report.txt", Path: "promoted/report.txt", Size: 3,
+				Hash: md5HexForService("old"), Name: "report.txt", Path: "promoted/report.txt", Size: 3,
 			},
 			body: map[string]any{
 				"source":      "uploads/report.txt",
@@ -3772,7 +2908,7 @@ func TestFlowFileService_AddResourceFromFlowScenarios(t *testing.T) {
 			privs:       []string{"resources.upload", "flow_files.view"},
 			sourceFiles: []sourceFile{{relPath: "uploads/report.txt", content: "new"}},
 			existingResource: &models.UserResource{
-				Hash: md5HexForFlowFiles("old"), Name: "report.txt", Path: "promoted/report.txt", Size: 3,
+				Hash: md5HexForService("old"), Name: "report.txt", Path: "promoted/report.txt", Size: 3,
 			},
 			body: map[string]any{
 				"source":      "uploads/report.txt",
@@ -3873,7 +3009,6 @@ func TestFlowFileService_AddResourceFromFlowScenarios(t *testing.T) {
 			},
 			wantStatus: http.StatusBadRequest,
 		},
-		// ── directory promotion ───────────────────────────────────────────────
 		{
 			name:      "promote container directory with nested files to resources",
 			flowOwner: 1, uid: 1, flowID: 1,
@@ -3923,7 +3058,7 @@ func TestFlowFileService_AddResourceFromFlowScenarios(t *testing.T) {
 				{relPath: "uploads/data/report.txt", content: "new content"},
 			},
 			existingResource: &models.UserResource{
-				Hash: md5HexForFlowFiles("old content"), Name: "report.txt",
+				Hash: md5HexForService("old content"), Name: "report.txt",
 				Path: "promoted/data/report.txt", Size: 11,
 			},
 			body: map[string]any{
@@ -3940,7 +3075,7 @@ func TestFlowFileService_AddResourceFromFlowScenarios(t *testing.T) {
 				{relPath: "container/results/output.txt", content: "updated"},
 			},
 			existingResource: &models.UserResource{
-				Hash: md5HexForFlowFiles("original"), Name: "output.txt",
+				Hash: md5HexForService("original"), Name: "output.txt",
 				Path: "archive/results/output.txt", Size: 8,
 			},
 			body: map[string]any{
@@ -3988,8 +3123,6 @@ func TestFlowFileService_AddResourceFromFlowScenarios(t *testing.T) {
 			},
 			wantEventChannel: "added",
 		},
-
-		// ── multi-source (sources []) tests ──────────────────────────────────
 		{
 			name:      "multi-source: two files promoted to a common base directory",
 			flowOwner: 1, uid: 1, flowID: 1,
@@ -4018,7 +3151,6 @@ func TestFlowFileService_AddResourceFromFlowScenarios(t *testing.T) {
 				{relPath: "uploads/b.txt", content: "bbb"},
 			},
 			body: map[string]any{
-				// 'source' and 'sources' both provide uploads/a.txt → dedup to one
 				"source":      "uploads/a.txt",
 				"sources":     []string{"uploads/a.txt", "uploads/b.txt"},
 				"destination": "merged",
@@ -4082,7 +3214,7 @@ func TestFlowFileService_AddResourceFromFlowScenarios(t *testing.T) {
 				{relPath: "uploads/b.txt", content: "new-b"},
 			},
 			existingResource: &models.UserResource{
-				Hash: md5HexForFlowFiles("old-a"), Name: "a.txt", Path: "out/a.txt", Size: 5,
+				Hash: md5HexForService("old-a"), Name: "a.txt", Path: "out/a.txt", Size: 5,
 			},
 			body: map[string]any{
 				"sources":     []string{"uploads/a.txt", "uploads/b.txt"},
@@ -4105,10 +3237,9 @@ func TestFlowFileService_AddResourceFromFlowScenarios(t *testing.T) {
 				{relPath: "uploads/extra.txt", content: "extra"}, // second source makes multiSource=true
 			},
 			existingResource: &models.UserResource{
-				Hash: md5HexForFlowFiles("old"), Name: "a.txt", Path: "out/a.txt", Size: 3,
+				Hash: md5HexForService("old"), Name: "a.txt", Path: "out/a.txt", Size: 3,
 			},
 			body: map[string]any{
-				// two sources → multiSource=true → "out" + "/" + "a.txt" = "out/a.txt" → conflict
 				"sources":     []string{"uploads/a.txt", "uploads/extra.txt"},
 				"destination": "out",
 			},
@@ -4192,11 +3323,9 @@ func TestFlowFileService_AddResourceFromFlowScenarios(t *testing.T) {
 				existing := *tt.existingResource
 				existing.UserID = tt.uid
 				if existing.Hash != "" {
-					blobPath := resources.BlobPath(dataDir, existing.Hash)
-					require.NoError(t, os.MkdirAll(filepath.Dir(blobPath), 0755))
-					require.NoError(t, os.WriteFile(blobPath, []byte("old"), 0644))
+					writeResourceBlob(t, dataDir, existing.Hash, "old")
 				}
-				seedUserResource(t, db, existing)
+				seedResource(t, db, existing)
 			}
 
 			var bodyReader io.Reader
@@ -4214,12 +3343,21 @@ func TestFlowFileService_AddResourceFromFlowScenarios(t *testing.T) {
 
 			require.Equal(t, tt.wantStatus, w.Code)
 			if tt.wantStatus != http.StatusOK {
+				var rows []models.UserResource
+				require.NoError(t, db.Find(&rows).Error)
+				assert.Empty(t, ss.snapshot())
+				if tt.existingResource == nil {
+					assert.Empty(t, rows, "a refused promotion must write nothing")
+					return
+				}
+				require.Len(t, rows, 1, "a refused promotion must write nothing")
+				assert.Equal(t, tt.existingResource.Path, rows[0].Path)
+				assert.Equal(t, tt.existingResource.Hash, rows[0].Hash)
+				assert.False(t, rows[0].IsDir)
 				return
 			}
 
 			list := decodeResourceListResponse(t, w)
-			// Response always carries at least every expected path; ancestor
-			// directory entries pushed by ensureResourceDirs may add extras.
 			assert.GreaterOrEqual(t, list.Total, uint64(len(tt.wantResourcePaths)))
 			itemsByPath := make(map[string]models.ResourceEntry, len(list.Items))
 			for _, item := range list.Items {
@@ -4247,4 +3385,311 @@ func TestFlowFileService_AddResourceFromFlowScenarios(t *testing.T) {
 			}
 		})
 	}
+}
+
+func decodeContainerFilesResponse(t *testing.T, w *httptest.ResponseRecorder) models.ContainerFiles {
+	t.Helper()
+
+	var resp struct {
+		Status string                `json:"status"`
+		Data   models.ContainerFiles `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	require.Equal(t, "success", resp.Status)
+	return resp.Data
+}
+
+type flowFileCaptureSubscriptions struct {
+	mu     sync.Mutex
+	events []flowFileEvent
+}
+
+func (s *flowFileCaptureSubscriptions) NewFlowSubscriber(int64, int64) subscriptions.FlowSubscriber {
+	return nil
+}
+func (s *flowFileCaptureSubscriptions) NewFlowPublisher(int64, int64) subscriptions.FlowPublisher {
+	return &captureFlowPublisher{events: s}
+}
+func (s *flowFileCaptureSubscriptions) NewResourceSubscriber(int64) subscriptions.ResourceSubscriber {
+	return nil
+}
+func (s *flowFileCaptureSubscriptions) NewResourcePublisher(int64) subscriptions.ResourcePublisher {
+	return &captureResourcePublisherForFlow{events: s}
+}
+func (s *flowFileCaptureSubscriptions) NewProviderSubscriber(int64) subscriptions.ProviderSubscriber {
+	return nil
+}
+func (s *flowFileCaptureSubscriptions) NewProviderPublisher(int64) subscriptions.ProviderPublisher {
+	return nil
+}
+func (s *flowFileCaptureSubscriptions) NewAPITokenSubscriber(int64) subscriptions.APITokenSubscriber {
+	return nil
+}
+func (s *flowFileCaptureSubscriptions) NewAPITokenPublisher(int64) subscriptions.APITokenPublisher {
+	return nil
+}
+func (s *flowFileCaptureSubscriptions) NewSettingsSubscriber(int64) subscriptions.SettingsSubscriber {
+	return nil
+}
+func (s *flowFileCaptureSubscriptions) NewSettingsPublisher(int64) subscriptions.SettingsPublisher {
+	return nil
+}
+func (s *flowFileCaptureSubscriptions) NewFlowTemplateSubscriber(int64) subscriptions.FlowTemplateSubscriber {
+	return nil
+}
+func (s *flowFileCaptureSubscriptions) NewFlowTemplatePublisher(int64) subscriptions.FlowTemplatePublisher {
+	return nil
+}
+func (s *flowFileCaptureSubscriptions) NewKnowledgeSubscriber(int64) subscriptions.KnowledgeSubscriber {
+	return nil
+}
+func (s *flowFileCaptureSubscriptions) NewKnowledgePublisher(int64) subscriptions.KnowledgePublisher {
+	return nil
+}
+
+func (s *flowFileCaptureSubscriptions) record(e flowFileEvent) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.events = append(s.events, e)
+}
+
+func (s *flowFileCaptureSubscriptions) snapshot() []flowFileEvent {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make([]flowFileEvent, len(s.events))
+	copy(out, s.events)
+	return out
+}
+
+type fakeDockerClient struct {
+	mu sync.Mutex
+
+	running    bool
+	runningErr error
+
+	statPath    container.PathStat
+	statPathErr error
+
+	listDir    []container.PathStat
+	listDirErr error
+
+	// A path with an entry in a *Map field is answered from it, not from the single-value field.
+	statPathMap      map[string]container.PathStat
+	statPathErrMap   map[string]error
+	listDirMap       map[string][]container.PathStat
+	listDirFailMap   map[string][]docker.ContainerEntryError
+	listDirErrMap    map[string]error
+	listDirTruncated map[string]bool
+
+	copyFromBody    []byte
+	copyFromStat    container.PathStat
+	copyFromErr     error
+	copyFromBodyMap map[string][]byte
+	copyFromErrMap  map[string]error
+	copyFromCount   int
+
+	copyToErr   error
+	copyToCalls []copyToCall
+
+	execCreateID    string
+	execCreateErr   error
+	execAttachOut   string
+	execAttachErr   error
+	execInspectCode int
+	execInspectErr  error
+	execCommands    []string
+}
+
+func (f *fakeDockerClient) RunContainer(_ context.Context, _ string, _ database.ContainerType,
+	_ int64, _ *container.Config, _ *container.HostConfig) (database.Container, error) {
+	return database.Container{}, nil
+}
+func (f *fakeDockerClient) StopContainer(_ context.Context, _ string, _ int64) error   { return nil }
+func (f *fakeDockerClient) RemoveContainer(_ context.Context, _ string, _ int64) error { return nil }
+func (f *fakeDockerClient) IsContainerRunning(_ context.Context, _ string) (bool, error) {
+	return f.running, f.runningErr
+}
+func (f *fakeDockerClient) KillFlowCommands(_ context.Context, _ string) error {
+	return nil
+}
+func (f *fakeDockerClient) ContainerExecCreate(_ context.Context, _ string, opts client.ExecCreateOptions) (client.ExecCreateResult, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if len(opts.Cmd) > 0 {
+		f.execCommands = append(f.execCommands, strings.Join(opts.Cmd, " "))
+	}
+	if f.execCreateErr != nil {
+		return client.ExecCreateResult{}, f.execCreateErr
+	}
+	id := f.execCreateID
+	if id == "" {
+		id = "exec-id"
+	}
+	return client.ExecCreateResult{ID: id}, nil
+}
+func (f *fakeDockerClient) ContainerExecAttach(_ context.Context, _ string, _ client.ExecAttachOptions) (client.HijackedResponse, error) {
+	if f.execAttachErr != nil {
+		return client.HijackedResponse{}, f.execAttachErr
+	}
+	pr, pw := net.Pipe()
+	go func() {
+		_, _ = pw.Write([]byte(f.execAttachOut))
+		_ = pw.Close()
+	}()
+	return client.HijackedResponse{Conn: pr, Reader: bufio.NewReader(pr)}, nil
+}
+func (f *fakeDockerClient) ContainerExecInspect(_ context.Context, _ string) (client.ExecInspectResult, error) {
+	if f.execInspectErr != nil {
+		return client.ExecInspectResult{}, f.execInspectErr
+	}
+	return client.ExecInspectResult{ExitCode: f.execInspectCode}, nil
+}
+func (f *fakeDockerClient) ContainerStatPath(_ context.Context, _ string, p string) (container.PathStat, error) {
+	if f.statPathErrMap != nil {
+		if err, ok := f.statPathErrMap[p]; ok {
+			return container.PathStat{}, err
+		}
+	}
+	if f.statPathMap != nil {
+		if stat, ok := f.statPathMap[p]; ok {
+			return stat, nil
+		}
+	}
+	return f.statPath, f.statPathErr
+}
+func (f *fakeDockerClient) ListContainerDir(_ context.Context, _ string, p string) (docker.ContainerDirListing, error) {
+	if f.listDirErrMap != nil {
+		if err, ok := f.listDirErrMap[p]; ok {
+			return docker.ContainerDirListing{}, err
+		}
+	}
+	if f.listDirFailMap != nil {
+		if fails, ok := f.listDirFailMap[p]; ok {
+			return docker.ContainerDirListing{Files: f.listDirMap[p], Failures: fails, Truncated: f.listDirTruncated[p]}, nil
+		}
+	}
+	if f.listDirMap != nil {
+		if dir, ok := f.listDirMap[p]; ok {
+			return docker.ContainerDirListing{Files: dir, Truncated: f.listDirTruncated[p]}, nil
+		}
+	}
+	return docker.ContainerDirListing{Files: f.listDir}, f.listDirErr
+}
+func (f *fakeDockerClient) CopyToContainer(_ context.Context, containerID string, dstPath string, content io.Reader, options client.CopyToContainerOptions) error {
+	body, _ := io.ReadAll(content)
+	f.mu.Lock()
+	f.copyToCalls = append(f.copyToCalls, copyToCall{
+		containerID: containerID,
+		dstPath:     dstPath,
+		body:        body,
+		options:     options,
+	})
+	f.mu.Unlock()
+	return f.copyToErr
+}
+func (f *fakeDockerClient) CopyFromContainer(_ context.Context, _ string, containerPath string) (io.ReadCloser, container.PathStat, error) {
+	f.mu.Lock()
+	f.copyFromCount++
+	f.mu.Unlock()
+
+	if f.copyFromErrMap != nil {
+		if err, ok := f.copyFromErrMap[containerPath]; ok {
+			return nil, container.PathStat{}, err
+		}
+	}
+	if f.copyFromErr != nil {
+		return nil, container.PathStat{}, f.copyFromErr
+	}
+	if f.copyFromBodyMap != nil {
+		if body, ok := f.copyFromBodyMap[containerPath]; ok {
+			return io.NopCloser(bytes.NewReader(body)), f.copyFromStat, nil
+		}
+	}
+	return io.NopCloser(bytes.NewReader(f.copyFromBody)), f.copyFromStat, nil
+}
+func (f *fakeDockerClient) Cleanup(_ context.Context) error                        { return nil }
+func (f *fakeDockerClient) GetDefaultImage() string                                { return "test-image" }
+func (f *fakeDockerClient) VerifyWorkerDockerPolicy(context.Context, string) error { return nil }
+
+type flowFileEvent struct {
+	channel string // "flow" or "resource"
+	action  string // "added", "updated", "deleted"
+	path    string
+	id      string
+}
+
+// captureFlowPublisher records FlowFile events; all other methods are no-ops.
+type captureFlowPublisher struct {
+	flowID int64
+	userID int64
+	events *flowFileCaptureSubscriptions
+}
+
+func (p *captureFlowPublisher) GetFlowID() int64   { return p.flowID }
+func (p *captureFlowPublisher) SetFlowID(id int64) { p.flowID = id }
+func (p *captureFlowPublisher) GetUserID() int64   { return p.userID }
+func (p *captureFlowPublisher) SetUserID(id int64) { p.userID = id }
+func (p *captureFlowPublisher) FlowCreated(_ context.Context, _ database.Flow, _ []database.Container) {
+}
+func (p *captureFlowPublisher) FlowDeleted(_ context.Context, _ database.Flow, _ []database.Container) {
+}
+func (p *captureFlowPublisher) FlowUpdated(_ context.Context, _ database.Flow, _ []database.Container) {
+}
+func (p *captureFlowPublisher) TaskCreated(_ context.Context, _ database.Task, _ []database.Subtask) {
+}
+func (p *captureFlowPublisher) TaskUpdated(_ context.Context, _ database.Task, _ []database.Subtask) {
+}
+func (p *captureFlowPublisher) AssistantCreated(_ context.Context, _ database.Assistant) {}
+func (p *captureFlowPublisher) AssistantUpdated(_ context.Context, _ database.Assistant) {}
+func (p *captureFlowPublisher) AssistantDeleted(_ context.Context, _ database.Assistant) {}
+func (p *captureFlowPublisher) FlowFileAdded(_ context.Context, file *model.FlowFile) {
+	p.events.record(flowFileEvent{channel: "flow", action: "added", path: file.Path, id: file.ID})
+}
+func (p *captureFlowPublisher) FlowFileUpdated(_ context.Context, file *model.FlowFile) {
+	p.events.record(flowFileEvent{channel: "flow", action: "updated", path: file.Path, id: file.ID})
+}
+func (p *captureFlowPublisher) FlowFileDeleted(_ context.Context, file *model.FlowFile) {
+	p.events.record(flowFileEvent{channel: "flow", action: "deleted", path: file.Path, id: file.ID})
+}
+func (p *captureFlowPublisher) ScreenshotAdded(_ context.Context, _ database.Screenshot) {}
+func (p *captureFlowPublisher) TerminalLogAdded(_ context.Context, _ database.Termlog)   {}
+func (p *captureFlowPublisher) MessageLogAdded(_ context.Context, _ database.Msglog)     {}
+func (p *captureFlowPublisher) MessageLogUpdated(_ context.Context, _ database.Msglog)   {}
+func (p *captureFlowPublisher) AgentLogAdded(_ context.Context, _ database.Agentlog)     {}
+func (p *captureFlowPublisher) SearchLogAdded(_ context.Context, _ database.Searchlog)   {}
+func (p *captureFlowPublisher) VectorStoreLogAdded(_ context.Context, _ database.Vecstorelog) {
+}
+func (p *captureFlowPublisher) ToolCallLogAdded(_ context.Context, _ database.Toolcall) {
+}
+func (p *captureFlowPublisher) ToolCallLogUpdated(_ context.Context, _ database.Toolcall) {
+}
+func (p *captureFlowPublisher) AssistantLogAdded(_ context.Context, _ database.Assistantlog) {}
+func (p *captureFlowPublisher) AssistantLogUpdated(_ context.Context, _ database.Assistantlog, _ bool) {
+}
+func (p *captureFlowPublisher) KnowledgeDocumentCreated(_ context.Context, _ *model.KnowledgeDocument) {
+}
+
+// captureResourcePublisherForFlow records the Resource events AddResourceFromFlow emits.
+type captureResourcePublisherForFlow struct {
+	userID int64
+	events *flowFileCaptureSubscriptions
+}
+
+func (p *captureResourcePublisherForFlow) GetUserID() int64   { return p.userID }
+func (p *captureResourcePublisherForFlow) SetUserID(id int64) { p.userID = id }
+func (p *captureResourcePublisherForFlow) ResourceAdded(_ context.Context, r *model.UserResource) {
+	p.events.record(flowFileEvent{channel: "resource", action: "added", path: r.Path})
+}
+func (p *captureResourcePublisherForFlow) ResourceUpdated(_ context.Context, r *model.UserResource) {
+	p.events.record(flowFileEvent{channel: "resource", action: "updated", path: r.Path})
+}
+func (p *captureResourcePublisherForFlow) ResourceDeleted(_ context.Context, r *model.UserResource) {
+	p.events.record(flowFileEvent{channel: "resource", action: "deleted", path: r.Path})
+}
+
+type copyToCall struct {
+	containerID string
+	dstPath     string
+	body        []byte
+	options     client.CopyToContainerOptions
 }

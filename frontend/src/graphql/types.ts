@@ -212,9 +212,11 @@ export enum ProviderType {
     Glm = 'glm',
     Kimi = 'kimi',
     Minimax = 'minimax',
+    Mistral = 'mistral',
     Ollama = 'ollama',
     Openai = 'openai',
     Qwen = 'qwen',
+    Xai = 'xai',
 }
 
 export type ReasoningConfigInput = {
@@ -228,6 +230,7 @@ export enum ReasoningEffort {
     Low = 'low',
     Max = 'max',
     Medium = 'medium',
+    Minimal = 'minimal',
     Xhigh = 'xhigh',
 }
 
@@ -324,6 +327,7 @@ export type SettingsFragmentFragment = {
 
 export type VersionInfoFragmentFragment = {
     current: string;
+    build: string;
     state: UpdateState;
     latest: string | null;
     strategy: string;
@@ -333,6 +337,7 @@ export type VersionInfoFragmentFragment = {
 
 export type FlowFragmentFragment = {
     id: string;
+    userId: string;
     title: string;
     status: StatusType;
     createdAt: string;
@@ -409,6 +414,7 @@ export type ScreenshotFragmentFragment = {
 
 export type FlowFileFragmentFragment = {
     id: string;
+    flowId: string;
     name: string;
     path: string;
     size: number;
@@ -521,12 +527,15 @@ export type ProviderTestResultFragmentFragment = {
 export type ModelConfigFragmentFragment = {
     name: string;
     thinking: boolean | null;
+    maxOutputTokens: number | null;
     reasoning: {
         mode: ModelReasoningMode | null;
         efforts: Array<ReasoningEffort> | null;
         supported: boolean | null;
         cannotDisable: boolean | null;
         defaultOn: boolean | null;
+        rejectsEffortWithTools: boolean | null;
+        takesNoThinkingDepth: boolean | null;
     } | null;
     price: { input: number; output: number; cacheRead: number; cacheWrite: number } | null;
 };
@@ -757,6 +766,8 @@ export type SettingsProvidersQuery = {
             kimi: boolean;
             qwen: boolean;
             minimax: boolean;
+            mistral: boolean;
+            xai: boolean;
         };
         default: {
             openai: ProviderConfigFragmentFragment;
@@ -770,6 +781,8 @@ export type SettingsProvidersQuery = {
             kimi: ProviderConfigFragmentFragment | null;
             qwen: ProviderConfigFragmentFragment | null;
             minimax: ProviderConfigFragmentFragment | null;
+            mistral: ProviderConfigFragmentFragment | null;
+            xai: ProviderConfigFragmentFragment | null;
         };
         userDefined: Array<ProviderConfigFragmentFragment> | null;
         models: {
@@ -784,6 +797,8 @@ export type SettingsProvidersQuery = {
             kimi: Array<ModelConfigFragmentFragment> | null;
             qwen: Array<ModelConfigFragmentFragment> | null;
             minimax: Array<ModelConfigFragmentFragment> | null;
+            mistral: Array<ModelConfigFragmentFragment> | null;
+            xai: Array<ModelConfigFragmentFragment> | null;
         };
     };
 };
@@ -888,6 +903,7 @@ export type UsageStatsTotalQuery = { usageStatsTotal: UsageStatsFragmentFragment
 
 export type UsageStatsByPeriodQueryVariables = Exact<{
     period: UsageStatsPeriod;
+    timezone?: string | null | undefined;
 }>;
 
 export type UsageStatsByPeriodQuery = { usageStatsByPeriod: Array<DailyUsageStatsFragmentFragment> };
@@ -932,6 +948,7 @@ export type ToolcallsStatsTotalQuery = { toolcallsStatsTotal: ToolcallsStatsFrag
 
 export type ToolcallsStatsByPeriodQueryVariables = Exact<{
     period: UsageStatsPeriod;
+    timezone?: string | null | undefined;
 }>;
 
 export type ToolcallsStatsByPeriodQuery = { toolcallsStatsByPeriod: Array<DailyToolcallsStatsFragmentFragment> };
@@ -960,6 +977,7 @@ export type FlowsStatsTotalQuery = { flowsStatsTotal: FlowsStatsFragmentFragment
 
 export type FlowsStatsByPeriodQueryVariables = Exact<{
     period: UsageStatsPeriod;
+    timezone?: string | null | undefined;
 }>;
 
 export type FlowsStatsByPeriodQuery = { flowsStatsByPeriod: Array<DailyFlowsStatsFragmentFragment> };
@@ -972,6 +990,7 @@ export type FlowStatsByFlowQuery = { flowStatsByFlow: FlowStatsFragmentFragment 
 
 export type FlowsExecutionStatsByPeriodQueryVariables = Exact<{
     period: UsageStatsPeriod;
+    timezone?: string | null | undefined;
 }>;
 
 export type FlowsExecutionStatsByPeriodQuery = {
@@ -1144,6 +1163,7 @@ export type TestAgentMutationVariables = Exact<{
     type: ProviderType;
     agentType: AgentConfigType;
     agent: AgentConfigInput;
+    simple?: AgentConfigInput | null | undefined;
 }>;
 
 export type TestAgentMutation = { testAgent: AgentTestResultFragmentFragment };
@@ -1361,15 +1381,7 @@ export type TaskUpdatedSubscriptionVariables = Exact<{
     flowId: string | number;
 }>;
 
-export type TaskUpdatedSubscription = {
-    taskUpdated: {
-        id: string;
-        status: StatusType;
-        result: string;
-        updatedAt: string;
-        subtasks: Array<SubtaskFragmentFragment> | null;
-    };
-};
+export type TaskUpdatedSubscription = { taskUpdated: TaskFragmentFragment };
 
 export type ProviderCreatedSubscriptionVariables = Exact<{ [key: string]: never }>;
 
@@ -1467,6 +1479,7 @@ export const VersionInfoFragmentFragmentDoc = {
                 kind: 'SelectionSet',
                 selections: [
                     { kind: 'Field', name: { kind: 'Name', value: 'current' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'build' } },
                     { kind: 'Field', name: { kind: 'Name', value: 'state' } },
                     { kind: 'Field', name: { kind: 'Name', value: 'latest' } },
                     { kind: 'Field', name: { kind: 'Name', value: 'strategy' } },
@@ -1526,6 +1539,7 @@ export const FlowFragmentFragmentDoc = {
                 kind: 'SelectionSet',
                 selections: [
                     { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'userId' } },
                     { kind: 'Field', name: { kind: 'Name', value: 'title' } },
                     { kind: 'Field', name: { kind: 'Name', value: 'status' } },
                     {
@@ -1732,6 +1746,7 @@ export const FlowFileFragmentFragmentDoc = {
                 kind: 'SelectionSet',
                 selections: [
                     { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'flowId' } },
                     { kind: 'Field', name: { kind: 'Name', value: 'name' } },
                     { kind: 'Field', name: { kind: 'Name', value: 'path' } },
                     { kind: 'Field', name: { kind: 'Name', value: 'size' } },
@@ -2165,6 +2180,7 @@ export const ModelConfigFragmentFragmentDoc = {
                 selections: [
                     { kind: 'Field', name: { kind: 'Name', value: 'name' } },
                     { kind: 'Field', name: { kind: 'Name', value: 'thinking' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'maxOutputTokens' } },
                     {
                         kind: 'Field',
                         name: { kind: 'Name', value: 'reasoning' },
@@ -2176,6 +2192,8 @@ export const ModelConfigFragmentFragmentDoc = {
                                 { kind: 'Field', name: { kind: 'Name', value: 'supported' } },
                                 { kind: 'Field', name: { kind: 'Name', value: 'cannotDisable' } },
                                 { kind: 'Field', name: { kind: 'Name', value: 'defaultOn' } },
+                                { kind: 'Field', name: { kind: 'Name', value: 'rejectsEffortWithTools' } },
+                                { kind: 'Field', name: { kind: 'Name', value: 'takesNoThinkingDepth' } },
                             ],
                         },
                     },
@@ -3472,6 +3490,7 @@ export const FlowsDocument = {
                 kind: 'SelectionSet',
                 selections: [
                     { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'userId' } },
                     { kind: 'Field', name: { kind: 'Name', value: 'title' } },
                     { kind: 'Field', name: { kind: 'Name', value: 'status' } },
                     {
@@ -3602,6 +3621,7 @@ export const VersionInfoDocument = {
                 kind: 'SelectionSet',
                 selections: [
                     { kind: 'Field', name: { kind: 'Name', value: 'current' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'build' } },
                     { kind: 'Field', name: { kind: 'Name', value: 'state' } },
                     { kind: 'Field', name: { kind: 'Name', value: 'latest' } },
                     { kind: 'Field', name: { kind: 'Name', value: 'strategy' } },
@@ -3645,6 +3665,8 @@ export const SettingsProvidersDocument = {
                                             { kind: 'Field', name: { kind: 'Name', value: 'kimi' } },
                                             { kind: 'Field', name: { kind: 'Name', value: 'qwen' } },
                                             { kind: 'Field', name: { kind: 'Name', value: 'minimax' } },
+                                            { kind: 'Field', name: { kind: 'Name', value: 'mistral' } },
+                                            { kind: 'Field', name: { kind: 'Name', value: 'xai' } },
                                         ],
                                     },
                                 },
@@ -3787,6 +3809,32 @@ export const SettingsProvidersDocument = {
                                             {
                                                 kind: 'Field',
                                                 name: { kind: 'Name', value: 'minimax' },
+                                                selectionSet: {
+                                                    kind: 'SelectionSet',
+                                                    selections: [
+                                                        {
+                                                            kind: 'FragmentSpread',
+                                                            name: { kind: 'Name', value: 'providerConfigFragment' },
+                                                        },
+                                                    ],
+                                                },
+                                            },
+                                            {
+                                                kind: 'Field',
+                                                name: { kind: 'Name', value: 'mistral' },
+                                                selectionSet: {
+                                                    kind: 'SelectionSet',
+                                                    selections: [
+                                                        {
+                                                            kind: 'FragmentSpread',
+                                                            name: { kind: 'Name', value: 'providerConfigFragment' },
+                                                        },
+                                                    ],
+                                                },
+                                            },
+                                            {
+                                                kind: 'Field',
+                                                name: { kind: 'Name', value: 'xai' },
                                                 selectionSet: {
                                                     kind: 'SelectionSet',
                                                     selections: [
@@ -3952,6 +4000,32 @@ export const SettingsProvidersDocument = {
                                             {
                                                 kind: 'Field',
                                                 name: { kind: 'Name', value: 'minimax' },
+                                                selectionSet: {
+                                                    kind: 'SelectionSet',
+                                                    selections: [
+                                                        {
+                                                            kind: 'FragmentSpread',
+                                                            name: { kind: 'Name', value: 'modelConfigFragment' },
+                                                        },
+                                                    ],
+                                                },
+                                            },
+                                            {
+                                                kind: 'Field',
+                                                name: { kind: 'Name', value: 'mistral' },
+                                                selectionSet: {
+                                                    kind: 'SelectionSet',
+                                                    selections: [
+                                                        {
+                                                            kind: 'FragmentSpread',
+                                                            name: { kind: 'Name', value: 'modelConfigFragment' },
+                                                        },
+                                                    ],
+                                                },
+                                            },
+                                            {
+                                                kind: 'Field',
+                                                name: { kind: 'Name', value: 'xai' },
                                                 selectionSet: {
                                                     kind: 'SelectionSet',
                                                     selections: [
@@ -4195,6 +4269,7 @@ export const SettingsProvidersDocument = {
                 selections: [
                     { kind: 'Field', name: { kind: 'Name', value: 'name' } },
                     { kind: 'Field', name: { kind: 'Name', value: 'thinking' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'maxOutputTokens' } },
                     {
                         kind: 'Field',
                         name: { kind: 'Name', value: 'reasoning' },
@@ -4206,6 +4281,8 @@ export const SettingsProvidersDocument = {
                                 { kind: 'Field', name: { kind: 'Name', value: 'supported' } },
                                 { kind: 'Field', name: { kind: 'Name', value: 'cannotDisable' } },
                                 { kind: 'Field', name: { kind: 'Name', value: 'defaultOn' } },
+                                { kind: 'Field', name: { kind: 'Name', value: 'rejectsEffortWithTools' } },
+                                { kind: 'Field', name: { kind: 'Name', value: 'takesNoThinkingDepth' } },
                             ],
                         },
                     },
@@ -5282,6 +5359,7 @@ export const FlowDocument = {
                 kind: 'SelectionSet',
                 selections: [
                     { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'userId' } },
                     { kind: 'Field', name: { kind: 'Name', value: 'title' } },
                     { kind: 'Field', name: { kind: 'Name', value: 'status' } },
                     {
@@ -5572,6 +5650,7 @@ export const FlowFilesDocument = {
                 kind: 'SelectionSet',
                 selections: [
                     { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'flowId' } },
                     { kind: 'Field', name: { kind: 'Name', value: 'name' } },
                     { kind: 'Field', name: { kind: 'Name', value: 'path' } },
                     { kind: 'Field', name: { kind: 'Name', value: 'size' } },
@@ -5898,6 +5977,7 @@ export const FlowReportDocument = {
                 kind: 'SelectionSet',
                 selections: [
                     { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'userId' } },
                     { kind: 'Field', name: { kind: 'Name', value: 'title' } },
                     { kind: 'Field', name: { kind: 'Name', value: 'status' } },
                     {
@@ -6006,6 +6086,11 @@ export const UsageStatsByPeriodDocument = {
                         type: { kind: 'NamedType', name: { kind: 'Name', value: 'UsageStatsPeriod' } },
                     },
                 },
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'timezone' } },
+                    type: { kind: 'NamedType', name: { kind: 'Name', value: 'String' } },
+                },
             ],
             selectionSet: {
                 kind: 'SelectionSet',
@@ -6018,6 +6103,11 @@ export const UsageStatsByPeriodDocument = {
                                 kind: 'Argument',
                                 name: { kind: 'Name', value: 'period' },
                                 value: { kind: 'Variable', name: { kind: 'Name', value: 'period' } },
+                            },
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'timezone' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'timezone' } },
                             },
                         ],
                         selectionSet: {
@@ -6527,6 +6617,11 @@ export const ToolcallsStatsByPeriodDocument = {
                         type: { kind: 'NamedType', name: { kind: 'Name', value: 'UsageStatsPeriod' } },
                     },
                 },
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'timezone' } },
+                    type: { kind: 'NamedType', name: { kind: 'Name', value: 'String' } },
+                },
             ],
             selectionSet: {
                 kind: 'SelectionSet',
@@ -6539,6 +6634,11 @@ export const ToolcallsStatsByPeriodDocument = {
                                 kind: 'Argument',
                                 name: { kind: 'Name', value: 'period' },
                                 value: { kind: 'Variable', name: { kind: 'Name', value: 'period' } },
+                            },
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'timezone' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'timezone' } },
                             },
                         ],
                         selectionSet: {
@@ -6795,6 +6895,11 @@ export const FlowsStatsByPeriodDocument = {
                         type: { kind: 'NamedType', name: { kind: 'Name', value: 'UsageStatsPeriod' } },
                     },
                 },
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'timezone' } },
+                    type: { kind: 'NamedType', name: { kind: 'Name', value: 'String' } },
+                },
             ],
             selectionSet: {
                 kind: 'SelectionSet',
@@ -6807,6 +6912,11 @@ export const FlowsStatsByPeriodDocument = {
                                 kind: 'Argument',
                                 name: { kind: 'Name', value: 'period' },
                                 value: { kind: 'Variable', name: { kind: 'Name', value: 'period' } },
+                            },
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'timezone' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'timezone' } },
                             },
                         ],
                         selectionSet: {
@@ -6924,6 +7034,11 @@ export const FlowsExecutionStatsByPeriodDocument = {
                         type: { kind: 'NamedType', name: { kind: 'Name', value: 'UsageStatsPeriod' } },
                     },
                 },
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'timezone' } },
+                    type: { kind: 'NamedType', name: { kind: 'Name', value: 'String' } },
+                },
             ],
             selectionSet: {
                 kind: 'SelectionSet',
@@ -6936,6 +7051,11 @@ export const FlowsExecutionStatsByPeriodDocument = {
                                 kind: 'Argument',
                                 name: { kind: 'Name', value: 'period' },
                                 value: { kind: 'Variable', name: { kind: 'Name', value: 'period' } },
+                            },
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'timezone' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'timezone' } },
                             },
                         ],
                         selectionSet: {
@@ -7848,6 +7968,7 @@ export const CreateFlowDocument = {
                 kind: 'SelectionSet',
                 selections: [
                     { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'userId' } },
                     { kind: 'Field', name: { kind: 'Name', value: 'title' } },
                     { kind: 'Field', name: { kind: 'Name', value: 'status' } },
                     {
@@ -8222,6 +8343,7 @@ export const CreateAssistantDocument = {
                 kind: 'SelectionSet',
                 selections: [
                     { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'userId' } },
                     { kind: 'Field', name: { kind: 'Name', value: 'title' } },
                     { kind: 'Field', name: { kind: 'Name', value: 'status' } },
                     {
@@ -8512,6 +8634,11 @@ export const TestAgentDocument = {
                         type: { kind: 'NamedType', name: { kind: 'Name', value: 'AgentConfigInput' } },
                     },
                 },
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'simple' } },
+                    type: { kind: 'NamedType', name: { kind: 'Name', value: 'AgentConfigInput' } },
+                },
             ],
             selectionSet: {
                 kind: 'SelectionSet',
@@ -8534,6 +8661,11 @@ export const TestAgentDocument = {
                                 kind: 'Argument',
                                 name: { kind: 'Name', value: 'agent' },
                                 value: { kind: 'Variable', name: { kind: 'Name', value: 'agent' } },
+                            },
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'simple' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'simple' } },
                             },
                         ],
                         selectionSet: {
@@ -10733,6 +10865,7 @@ export const FlowFileAddedDocument = {
                 kind: 'SelectionSet',
                 selections: [
                     { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'flowId' } },
                     { kind: 'Field', name: { kind: 'Name', value: 'name' } },
                     { kind: 'Field', name: { kind: 'Name', value: 'path' } },
                     { kind: 'Field', name: { kind: 'Name', value: 'size' } },
@@ -10786,6 +10919,7 @@ export const FlowFileUpdatedDocument = {
                 kind: 'SelectionSet',
                 selections: [
                     { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'flowId' } },
                     { kind: 'Field', name: { kind: 'Name', value: 'name' } },
                     { kind: 'Field', name: { kind: 'Name', value: 'path' } },
                     { kind: 'Field', name: { kind: 'Name', value: 'size' } },
@@ -10839,6 +10973,7 @@ export const FlowFileDeletedDocument = {
                 kind: 'SelectionSet',
                 selections: [
                     { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'flowId' } },
                     { kind: 'Field', name: { kind: 'Name', value: 'name' } },
                     { kind: 'Field', name: { kind: 'Name', value: 'path' } },
                     { kind: 'Field', name: { kind: 'Name', value: 'size' } },
@@ -11024,6 +11159,7 @@ export const FlowCreatedDocument = {
                 kind: 'SelectionSet',
                 selections: [
                     { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'userId' } },
                     { kind: 'Field', name: { kind: 'Name', value: 'title' } },
                     { kind: 'Field', name: { kind: 'Name', value: 'status' } },
                     {
@@ -11106,6 +11242,7 @@ export const FlowDeletedDocument = {
                 kind: 'SelectionSet',
                 selections: [
                     { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'userId' } },
                     { kind: 'Field', name: { kind: 'Name', value: 'title' } },
                     { kind: 'Field', name: { kind: 'Name', value: 'status' } },
                     {
@@ -11188,6 +11325,7 @@ export const FlowUpdatedDocument = {
                 kind: 'SelectionSet',
                 selections: [
                     { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'userId' } },
                     { kind: 'Field', name: { kind: 'Name', value: 'title' } },
                     { kind: 'Field', name: { kind: 'Name', value: 'status' } },
                     {
@@ -11323,25 +11461,7 @@ export const TaskUpdatedDocument = {
                         ],
                         selectionSet: {
                             kind: 'SelectionSet',
-                            selections: [
-                                { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                                { kind: 'Field', name: { kind: 'Name', value: 'status' } },
-                                { kind: 'Field', name: { kind: 'Name', value: 'result' } },
-                                {
-                                    kind: 'Field',
-                                    name: { kind: 'Name', value: 'subtasks' },
-                                    selectionSet: {
-                                        kind: 'SelectionSet',
-                                        selections: [
-                                            {
-                                                kind: 'FragmentSpread',
-                                                name: { kind: 'Name', value: 'subtaskFragment' },
-                                            },
-                                        ],
-                                    },
-                                },
-                                { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
-                            ],
+                            selections: [{ kind: 'FragmentSpread', name: { kind: 'Name', value: 'taskFragment' } }],
                         },
                     },
                 ],
@@ -11360,6 +11480,32 @@ export const TaskUpdatedDocument = {
                     { kind: 'Field', name: { kind: 'Name', value: 'description' } },
                     { kind: 'Field', name: { kind: 'Name', value: 'result' } },
                     { kind: 'Field', name: { kind: 'Name', value: 'taskId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
+                ],
+            },
+        },
+        {
+            kind: 'FragmentDefinition',
+            name: { kind: 'Name', value: 'taskFragment' },
+            typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Task' } },
+            selectionSet: {
+                kind: 'SelectionSet',
+                selections: [
+                    { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'title' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'status' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'input' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'result' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'flowId' } },
+                    {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'subtasks' },
+                        selectionSet: {
+                            kind: 'SelectionSet',
+                            selections: [{ kind: 'FragmentSpread', name: { kind: 'Name', value: 'subtaskFragment' } }],
+                        },
+                    },
                     { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
                     { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } },
                 ],

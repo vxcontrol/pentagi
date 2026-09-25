@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-func TestClassifyHTTPStatus(t *testing.T) {
+func TestErrors_ClassifyHTTPStatus_RetriesRateLimitsAndServerErrorsOnly(t *testing.T) {
 	tests := []struct {
 		name      string
 		status    int
@@ -43,7 +43,7 @@ func TestClassifyHTTPStatus(t *testing.T) {
 	}
 }
 
-func TestRetryableAndFatalWrapping(t *testing.T) {
+func TestErrors_Retryable_KeepsItsKindCauseAndDelay(t *testing.T) {
 	base := errors.New("root cause")
 
 	r := Retryable(fmt.Errorf("wrap: %w", base), 5*time.Second)
@@ -60,6 +60,10 @@ func TestRetryableAndFatalWrapping(t *testing.T) {
 	if !errors.As(r, &re) || re.RetryAfter != 5*time.Second {
 		t.Errorf("RetryAfter not preserved, got %+v", re)
 	}
+}
+
+func TestErrors_Fatal_KeepsItsKindAndCause(t *testing.T) {
+	base := errors.New("root cause")
 
 	f := Fatal(fmt.Errorf("wrap: %w", base))
 	if !IsFatal(f) {
@@ -73,11 +77,30 @@ func TestRetryableAndFatalWrapping(t *testing.T) {
 	}
 }
 
-func TestNotConfiguredIsNeitherRetryableNorFatal(t *testing.T) {
-	if IsRetryable(ErrNotConfigured) {
-		t.Error("ErrNotConfigured must not be retryable")
-	}
-	if IsFatal(ErrNotConfigured) {
-		t.Error("ErrNotConfigured must not be a FatalError type (it is a distinct sentinel)")
+func TestErrors_ErrNotConfigured_EveryEngineRefusesWithoutConfig(t *testing.T) {
+	for _, tt := range []struct {
+		name   string
+		engine Searcher
+	}{
+		{"duckduckgo refuses", NewDuckDuckGo(nil)},
+		{"firecrawl refuses", NewFirecrawl(nil, nil)},
+		{"google refuses", NewGoogle(nil)},
+		{"the internal engine refuses", NewInternal(nil, nil, nil, nil)},
+		{"perplexity refuses", NewPerplexity(nil, nil)},
+		{"searxng refuses", NewSearxng(nil, nil)},
+		{"sploitus refuses", NewSploitus(nil)},
+		{"tavily refuses", NewTavily(nil, nil)},
+		{"traversaal refuses", NewTraversaal(nil)},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := tt.engine.Handle(t.Context(), Request{Query: "q", MaxResults: 5})
+			if !errors.Is(err, ErrNotConfigured) || got != "" {
+				t.Fatalf("Handle() = %q, %v; want no result and ErrNotConfigured", got, err)
+			}
+			// The orchestrator retries only a RetryableError; an unconfigured engine is passed over at once.
+			if IsRetryable(err) || IsFatal(err) {
+				t.Errorf("ErrNotConfigured must be neither retryable nor fatal, got %T", err)
+			}
+		})
 	}
 }

@@ -14,3 +14,8 @@ frontend/ssl
 !**/.env.example
 **/.DS_Store
 **/Thumbs.db
+
+# locally built helper binaries; the image builds its own
+backend/ctester
+backend/etester
+backend/ftester

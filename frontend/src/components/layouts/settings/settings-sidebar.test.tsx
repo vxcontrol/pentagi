@@ -7,8 +7,9 @@ vi.mock('@/providers/version-info-provider', () => ({
     useVersionInfo: () => ({
         isLoading: false,
         versionInfo: {
+            build: 'b1d7c0de',
             checkedAt: null,
-            current: '2.1.0-93e99748',
+            current: '2.1.0',
             failedAt: null,
             latest: null,
             state: 'up_to_date',
@@ -44,10 +45,13 @@ function renderSidebar(entry: { pathname: string; state?: unknown }) {
 const backToApp = () => screen.getByRole('link', { name: /Back to App/ });
 
 describe('SettingsSidebar version', () => {
-    it('names the product and the running version at the bottom of the menu', () => {
+    it('names the section and the running version in the header', () => {
         renderSidebar({ pathname: '/settings/account' });
 
-        expect(screen.getByRole('button', { name: /PentAGI v2\.1\.0/ })).toHaveTextContent('PentAGI v2.1.0');
+        const header = screen.getByRole('button', { name: /Settings v2\.1\.0/ });
+
+        expect(header).toHaveTextContent('Settings');
+        expect(header).toHaveTextContent('v2.1.0');
     });
 });
 

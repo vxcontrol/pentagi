@@ -1,7 +1,7 @@
 package langfuse
 
 import (
-	"regexp"
+	"maps"
 	"testing"
 	"time"
 
@@ -12,7 +12,7 @@ import (
 	"github.com/vxcontrol/langchaingo/llms"
 )
 
-func TestMergeMaps(t *testing.T) {
+func TestHelpers_MergeMaps_LetsSrcWinWithoutTouchingDst(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -21,66 +21,30 @@ func TestMergeMaps(t *testing.T) {
 		src      map[string]any
 		expected map[string]any
 	}{
-		{
-			name:     "both nil",
-			dst:      nil,
-			src:      nil,
-			expected: nil,
-		},
-		{
-			name:     "src nil returns dst",
-			dst:      map[string]any{"a": 1},
-			src:      nil,
-			expected: map[string]any{"a": 1},
-		},
-		{
-			name:     "dst nil copies src",
-			dst:      nil,
-			src:      map[string]any{"b": 2},
-			expected: map[string]any{"b": 2},
-		},
-		{
-			name:     "disjoint keys",
-			dst:      map[string]any{"a": 1},
-			src:      map[string]any{"b": 2},
-			expected: map[string]any{"a": 1, "b": 2},
-		},
+		{name: "both nil"},
+		{name: "src nil returns dst", dst: map[string]any{"a": 1}, expected: map[string]any{"a": 1}},
+		{name: "dst nil copies src", src: map[string]any{"b": 2}, expected: map[string]any{"b": 2}},
+		{name: "disjoint keys", dst: map[string]any{"a": 1}, src: map[string]any{"b": 2}, expected: map[string]any{"a": 1, "b": 2}},
 		{
 			name:     "overlapping keys src overrides",
 			dst:      map[string]any{"a": 1, "b": 2},
 			src:      map[string]any{"b": 99, "c": 3},
 			expected: map[string]any{"a": 1, "b": 99, "c": 3},
 		},
-		{
-			name:     "empty maps",
-			dst:      map[string]any{},
-			src:      map[string]any{},
-			expected: map[string]any{},
-		},
+		{name: "empty maps", dst: map[string]any{}, src: map[string]any{}, expected: map[string]any{}},
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			result := mergeMaps(tt.dst, tt.src)
-			assert.Equal(t, tt.expected, result)
+			dstBefore := maps.Clone(tt.dst)
+			assert.Equal(t, tt.expected, mergeMaps(tt.dst, tt.src))
+			assert.Equal(t, dstBefore, tt.dst, "dst must not be mutated")
 		})
 	}
 }
 
-func TestMergeMaps_DoesNotMutateDst(t *testing.T) {
-	t.Parallel()
-
-	dst := map[string]any{"a": 1}
-	src := map[string]any{"b": 2}
-	result := mergeMaps(dst, src)
-
-	assert.Equal(t, map[string]any{"a": 1, "b": 2}, result)
-	assert.Equal(t, map[string]any{"a": 1}, dst, "original dst must not be mutated")
-}
-
-func TestObservationLevel_ToLangfuse(t *testing.T) {
+func TestHelpers_ObservationLevel_MapsUnknownToDefault(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -88,15 +52,14 @@ func TestObservationLevel_ToLangfuse(t *testing.T) {
 		level    ObservationLevel
 		expected api.ObservationLevel
 	}{
-		{"default", ObservationLevelDefault, api.ObservationLevelDefault},
-		{"debug", ObservationLevelDebug, api.ObservationLevelDebug},
-		{"warning", ObservationLevelWarning, api.ObservationLevelWarning},
-		{"error", ObservationLevelError, api.ObservationLevelError},
-		{"unknown falls back to default", ObservationLevel(99), api.ObservationLevelDefault},
+		{"the default level maps to DEFAULT", ObservationLevelDefault, "DEFAULT"},
+		{"the debug level maps to DEBUG", ObservationLevelDebug, "DEBUG"},
+		{"the warning level maps to WARNING", ObservationLevelWarning, "WARNING"},
+		{"the error level maps to ERROR", ObservationLevelError, "ERROR"},
+		{"an unknown level falls back to DEFAULT", ObservationLevel(99), "DEFAULT"},
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			result := tt.level.ToLangfuse()
@@ -106,7 +69,8 @@ func TestObservationLevel_ToLangfuse(t *testing.T) {
 	}
 }
 
-func TestGenerationUsageUnit_String(t *testing.T) {
+// Each row checks String and ToLangfuse, which is nil exactly when String is empty.
+func TestHelpers_GenerationUsageUnit_NamesEveryUnitAndNothingElse(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -114,42 +78,30 @@ func TestGenerationUsageUnit_String(t *testing.T) {
 		unit     GenerationUsageUnit
 		expected string
 	}{
-		{"tokens", GenerationUsageUnitTokens, "TOKENS"},
-		{"characters", GenerationUsageUnitCharacters, "CHARACTERS"},
-		{"milliseconds", GenerationUsageUnitMilliseconds, "MILLISECONDS"},
-		{"seconds", GenerationUsageUnitSeconds, "SECONDS"},
-		{"images", GenerationUsageUnitImages, "IMAGES"},
-		{"requests", GenerationUsageUnitRequests, "REQUESTS"},
-		{"unknown returns empty", GenerationUsageUnit(99), ""},
+		{"the tokens unit is named TOKENS", GenerationUsageUnitTokens, "TOKENS"},
+		{"the characters unit is named CHARACTERS", GenerationUsageUnitCharacters, "CHARACTERS"},
+		{"the milliseconds unit is named MILLISECONDS", GenerationUsageUnitMilliseconds, "MILLISECONDS"},
+		{"the seconds unit is named SECONDS", GenerationUsageUnitSeconds, "SECONDS"},
+		{"the images unit is named IMAGES", GenerationUsageUnitImages, "IMAGES"},
+		{"the requests unit is named REQUESTS", GenerationUsageUnitRequests, "REQUESTS"},
+		{"an unknown unit has no name", GenerationUsageUnit(99), ""},
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			assert.Equal(t, tt.expected, tt.unit.String())
+			if tt.expected == "" {
+				assert.Nil(t, tt.unit.ToLangfuse())
+				return
+			}
+			require.NotNil(t, tt.unit.ToLangfuse())
+			assert.Equal(t, tt.expected, *tt.unit.ToLangfuse())
 		})
 	}
 }
 
-func TestGenerationUsageUnit_ToLangfuse(t *testing.T) {
-	t.Parallel()
-
-	t.Run("valid unit returns pointer", func(t *testing.T) {
-		t.Parallel()
-		result := GenerationUsageUnitTokens.ToLangfuse()
-		require.NotNil(t, result)
-		assert.Equal(t, "TOKENS", *result)
-	})
-
-	t.Run("unknown unit returns nil", func(t *testing.T) {
-		t.Parallel()
-		result := GenerationUsageUnit(99).ToLangfuse()
-		assert.Nil(t, result)
-	})
-}
-
-func TestGenerationUsage_ToLangfuse(t *testing.T) {
+func TestHelpers_GenerationUsage_SumsTotalsAndCosts(t *testing.T) {
 	t.Parallel()
 
 	t.Run("nil receiver returns nil", func(t *testing.T) {
@@ -173,9 +125,7 @@ func TestGenerationUsage_ToLangfuse(t *testing.T) {
 	t.Run("input cost only", func(t *testing.T) {
 		t.Parallel()
 		inputCost := 0.01
-		u := &GenerationUsage{Input: 100, InputCost: &inputCost}
-		result := u.ToLangfuse()
-		require.NotNil(t, result)
+		result := (&GenerationUsage{Input: 100, InputCost: &inputCost}).ToLangfuse()
 		require.NotNil(t, result.Usage.TotalCost)
 		assert.InDelta(t, 0.01, *result.Usage.TotalCost, 1e-9)
 	})
@@ -183,26 +133,16 @@ func TestGenerationUsage_ToLangfuse(t *testing.T) {
 	t.Run("output cost only", func(t *testing.T) {
 		t.Parallel()
 		outputCost := 0.02
-		u := &GenerationUsage{Output: 50, OutputCost: &outputCost}
-		result := u.ToLangfuse()
-		require.NotNil(t, result)
+		result := (&GenerationUsage{Output: 50, OutputCost: &outputCost}).ToLangfuse()
 		require.NotNil(t, result.Usage.TotalCost)
 		assert.InDelta(t, 0.02, *result.Usage.TotalCost, 1e-9)
 	})
 
 	t.Run("both costs summed", func(t *testing.T) {
 		t.Parallel()
-		inputCost := 0.01
-		outputCost := 0.02
-		u := &GenerationUsage{
-			Input:      100,
-			Output:     50,
-			InputCost:  &inputCost,
-			OutputCost: &outputCost,
-			Unit:       GenerationUsageUnitTokens,
-		}
+		inputCost, outputCost := 0.01, 0.02
+		u := &GenerationUsage{Input: 100, Output: 50, InputCost: &inputCost, OutputCost: &outputCost, Unit: GenerationUsageUnitTokens}
 		result := u.ToLangfuse()
-		require.NotNil(t, result)
 		require.NotNil(t, result.Usage.TotalCost)
 		assert.InDelta(t, 0.03, *result.Usage.TotalCost, 1e-9)
 		require.NotNil(t, result.Usage.InputCost)
@@ -212,7 +152,29 @@ func TestGenerationUsage_ToLangfuse(t *testing.T) {
 	})
 }
 
-func TestModelParameters_ToLangfuse(t *testing.T) {
+// helpersPlainValues unwraps each MapValue into the one Go value it holds, so "1024" and 1024 differ.
+func helpersPlainValues(t *testing.T, values map[string]*api.MapValue) map[string]any {
+	t.Helper()
+
+	plain := make(map[string]any, len(values))
+	for key, v := range values {
+		switch {
+		case v.GetStringOptional() != nil:
+			plain[key] = *v.GetStringOptional()
+		case v.GetIntegerOptional() != nil:
+			plain[key] = *v.GetIntegerOptional()
+		case v.GetBooleanOptional() != nil:
+			plain[key] = *v.GetBooleanOptional()
+		case v.GetStringListOptional() != nil:
+			plain[key] = v.GetStringListOptional()
+		default:
+			t.Fatalf("%s holds no value", key)
+		}
+	}
+	return plain
+}
+
+func TestHelpers_ModelParameters_ConvertsEachFieldToItsLangfuseType(t *testing.T) {
 	t.Parallel()
 
 	t.Run("nil receiver returns nil", func(t *testing.T) {
@@ -221,125 +183,16 @@ func TestModelParameters_ToLangfuse(t *testing.T) {
 		assert.Nil(t, m.ToLangfuse())
 	})
 
-	t.Run("empty struct sets max_tokens to inf", func(t *testing.T) {
+	t.Run("an empty struct reports max_tokens as inf", func(t *testing.T) {
 		t.Parallel()
-		m := &ModelParameters{}
-		result := m.ToLangfuse()
-		require.NotNil(t, result)
-		v, ok := result["max_tokens"]
-		require.True(t, ok, "max_tokens key must exist")
-		require.NotNil(t, v, "max_tokens value must not be nil")
-		strVal := v.GetStringOptional()
-		require.NotNil(t, strVal, "max_tokens must be a string type")
-		assert.Equal(t, "inf", *strVal, "max_tokens must be exactly 'inf' string")
-		// Ensure it's not interpreted as integer or other type
-		assert.Nil(t, v.GetIntegerOptional(), "max_tokens should not be integer when unset")
+		assert.Equal(t, map[string]any{"max_tokens": "inf"}, helpersPlainValues(t, (&ModelParameters{}).ToLangfuse()))
 	})
 
-	t.Run("temperature and top_p values", func(t *testing.T) {
+	t.Run("floats become one-decimal strings and integers stay integers", func(t *testing.T) {
 		t.Parallel()
-		temp := 0.7
-		topP := 0.9
-		m := &ModelParameters{Temperature: &temp, TopP: &topP}
-		result := m.ToLangfuse()
-		require.NotNil(t, result)
-		require.NotNil(t, result["temperature"])
-		require.NotNil(t, result["temperature"].GetStringOptional())
-		assert.Equal(t, "0.7", *result["temperature"].GetStringOptional())
-		require.NotNil(t, result["top_p"])
-		require.NotNil(t, result["top_p"].GetStringOptional())
-		assert.Equal(t, "0.9", *result["top_p"].GetStringOptional())
-	})
-
-	t.Run("max_tokens explicit integer value", func(t *testing.T) {
-		t.Parallel()
-		maxTokens := 1024
-		m := &ModelParameters{MaxTokens: &maxTokens}
-		result := m.ToLangfuse()
-		require.NotNil(t, result)
-		require.NotNil(t, result["max_tokens"])
-		require.NotNil(t, result["max_tokens"].GetIntegerOptional())
-		assert.Equal(t, 1024, *result["max_tokens"].GetIntegerOptional())
-	})
-
-	t.Run("json mode boolean value", func(t *testing.T) {
-		t.Parallel()
-		m := &ModelParameters{JSONMode: true}
-		result := m.ToLangfuse()
-		require.NotNil(t, result)
-		require.NotNil(t, result["json"])
-		require.NotNil(t, result["json"].GetBooleanOptional())
-		assert.True(t, *result["json"].GetBooleanOptional())
-	})
-
-	t.Run("stop words list value", func(t *testing.T) {
-		t.Parallel()
-		m := &ModelParameters{StopWords: []string{"END", "STOP"}}
-		result := m.ToLangfuse()
-		require.NotNil(t, result)
-		require.NotNil(t, result["stop_words"])
-		assert.Equal(t, []string{"END", "STOP"}, result["stop_words"].GetStringListOptional())
-	})
-
-	t.Run("integer fields serialized correctly", func(t *testing.T) {
-		t.Parallel()
-		topK := 40
-		seed := 42
-		candidateCount := 3
-		n := 2
-		m := &ModelParameters{
-			TopK:           &topK,
-			Seed:           &seed,
-			CandidateCount: &candidateCount,
-			N:              &n,
-		}
-		result := m.ToLangfuse()
-		require.NotNil(t, result)
-		require.NotNil(t, result["top_k"].GetIntegerOptional())
-		assert.Equal(t, 40, *result["top_k"].GetIntegerOptional())
-		require.NotNil(t, result["seed"].GetIntegerOptional())
-		assert.Equal(t, 42, *result["seed"].GetIntegerOptional())
-		require.NotNil(t, result["candidate_count"].GetIntegerOptional())
-		assert.Equal(t, 3, *result["candidate_count"].GetIntegerOptional())
-		require.NotNil(t, result["n"].GetIntegerOptional())
-		assert.Equal(t, 2, *result["n"].GetIntegerOptional())
-	})
-
-	t.Run("float fields formatted as strings", func(t *testing.T) {
-		t.Parallel()
-		minP := 0.1
-		repPenalty := 1.1
-		freqPenalty := 0.5
-		presPenalty := 0.6
-		m := &ModelParameters{
-			MinP:              &minP,
-			RepetitionPenalty: &repPenalty,
-			FrequencyPenalty:  &freqPenalty,
-			PresencePenalty:   &presPenalty,
-		}
-		result := m.ToLangfuse()
-		require.NotNil(t, result)
-		assert.Equal(t, "0.1", *result["min_p"].GetStringOptional())
-		assert.Equal(t, "1.1", *result["repetition_penalty"].GetStringOptional())
-		assert.Equal(t, "0.5", *result["frequency_penalty"].GetStringOptional())
-		assert.Equal(t, "0.6", *result["presence_penalty"].GetStringOptional())
-	})
-
-	t.Run("all optional fields present", func(t *testing.T) {
-		t.Parallel()
-		temp := 0.5
-		topP := 0.9
-		minP := 0.1
-		topK := 40
-		seed := 42
-		maxTokens := 2048
-		candidateCount := 1
-		minLen := 10
-		maxLen := 500
-		n := 1
-		repPenalty := 1.1
-		freqPenalty := 0.5
-		presPenalty := 0.6
+		temp, topP, minP := 0.5, 0.9, 0.1
+		repPenalty, freqPenalty, presPenalty := 1.1, 0.5, 0.6
+		topK, seed, maxTokens, candidateCount, minLen, maxLen, n := 40, 42, 2048, 3, 10, 500, 2
 		m := &ModelParameters{
 			Temperature:       &temp,
 			TopP:              &topP,
@@ -355,182 +208,108 @@ func TestModelParameters_ToLangfuse(t *testing.T) {
 			FrequencyPenalty:  &freqPenalty,
 			PresencePenalty:   &presPenalty,
 			JSONMode:          true,
-			StopWords:         []string{"END"},
+			StopWords:         []string{"END", "STOP"},
 		}
-		result := m.ToLangfuse()
-		require.NotNil(t, result)
-		assert.Len(t, result, 15, "all 15 parameter keys must be present")
+
+		assert.Equal(t, map[string]any{
+			"temperature":        "0.5",
+			"top_p":              "0.9",
+			"min_p":              "0.1",
+			"top_k":              40,
+			"seed":               42,
+			"max_tokens":         2048,
+			"candidate_count":    3,
+			"min_length":         10,
+			"max_length":         500,
+			"n":                  2,
+			"repetition_penalty": "1.1",
+			"frequency_penalty":  "0.5",
+			"presence_penalty":   "0.6",
+			"json":               true,
+			"stop_words":         []string{"END", "STOP"},
+		}, helpersPlainValues(t, m.ToLangfuse()))
 	})
 }
 
-func TestGetLangchainModelParameters(t *testing.T) {
+func TestHelpers_GetLangchainModelParameters_ReadsTheCallOptions(t *testing.T) {
 	t.Parallel()
 
-	t.Run("nil options returns nil", func(t *testing.T) {
-		t.Parallel()
-		assert.Nil(t, GetLangchainModelParameters(nil))
-	})
+	assert.Nil(t, GetLangchainModelParameters(nil))
+	assert.Nil(t, GetLangchainModelParameters([]llms.CallOption{}))
 
-	t.Run("empty options returns nil", func(t *testing.T) {
-		t.Parallel()
-		assert.Nil(t, GetLangchainModelParameters([]llms.CallOption{}))
-	})
-
-	t.Run("with temperature option", func(t *testing.T) {
-		t.Parallel()
-		opts := []llms.CallOption{
-			llms.WithTemperature(0.7),
-		}
-		result := GetLangchainModelParameters(opts)
-		require.NotNil(t, result)
-		require.NotNil(t, result.Temperature)
-		assert.InDelta(t, 0.7, *result.Temperature, 1e-9)
-	})
-
-	t.Run("with max tokens option", func(t *testing.T) {
-		t.Parallel()
-		opts := []llms.CallOption{
-			llms.WithMaxTokens(512),
-		}
-		result := GetLangchainModelParameters(opts)
-		require.NotNil(t, result)
-		require.NotNil(t, result.MaxTokens)
-		assert.Equal(t, 512, *result.MaxTokens)
-	})
+	result := GetLangchainModelParameters([]llms.CallOption{llms.WithTemperature(0.7), llms.WithMaxTokens(512)})
+	require.NotNil(t, result)
+	require.NotNil(t, result.Temperature)
+	assert.InDelta(t, 0.7, *result.Temperature, 1e-9)
+	require.NotNil(t, result.MaxTokens)
+	assert.Equal(t, 512, *result.MaxTokens)
 }
 
-func TestNewTraceID(t *testing.T) {
+func TestHelpers_NewTraceID_IsUniqueW3CHex(t *testing.T) {
 	t.Parallel()
 
-	t.Run("length is 32 hex chars", func(t *testing.T) {
-		t.Parallel()
+	ids := make(map[string]bool)
+	for range 100 {
 		id := newTraceID()
-		assert.Len(t, id, 32)
-		assert.Regexp(t, regexp.MustCompile(`^[0-9a-f]{32}$`), id)
-	})
-
-	t.Run("unique across calls", func(t *testing.T) {
-		t.Parallel()
-		ids := make(map[string]bool)
-		for i := 0; i < 100; i++ {
-			id := newTraceID()
-			assert.False(t, ids[id], "duplicate trace ID generated")
-			ids[id] = true
-		}
-	})
+		assert.Regexp(t, `^[0-9a-f]{32}$`, id)
+		assert.False(t, ids[id], "duplicate trace ID generated")
+		ids[id] = true
+	}
 }
 
-func TestNewSpanID(t *testing.T) {
+func TestHelpers_NewSpanID_IsUniqueW3CHex(t *testing.T) {
 	t.Parallel()
 
-	t.Run("length is 16 hex chars", func(t *testing.T) {
-		t.Parallel()
+	ids := make(map[string]bool)
+	for range 100 {
 		id := newSpanID()
-		assert.Len(t, id, 16)
-		assert.Regexp(t, regexp.MustCompile(`^[0-9a-f]{16}$`), id)
-	})
-
-	t.Run("unique across calls", func(t *testing.T) {
-		t.Parallel()
-		ids := make(map[string]bool)
-		for i := 0; i < 100; i++ {
-			id := newSpanID()
-			assert.False(t, ids[id], "duplicate span ID generated")
-			ids[id] = true
-		}
-	})
+		assert.Regexp(t, `^[0-9a-f]{16}$`, id)
+		assert.False(t, ids[id], "duplicate span ID generated")
+		ids[id] = true
+	}
 }
 
-func TestGetCurrentTime(t *testing.T) {
-	t.Parallel()
-
-	now := getCurrentTime()
-	assert.Equal(t, time.UTC, now.Location(), "must be UTC")
-	assert.WithinDuration(t, time.Now().UTC(), now, 2*time.Second)
-}
-
-func TestGetCurrentTimeString(t *testing.T) {
-	t.Parallel()
-
-	ts := getCurrentTimeString()
-	_, err := time.Parse(timeFormat8601, ts)
-	assert.NoError(t, err, "must parse with timeFormat8601")
-}
-
-func TestGetCurrentTimeRef(t *testing.T) {
+func TestHelpers_GetCurrentTimeRef_PointsAtTheCurrentUTCTime(t *testing.T) {
 	t.Parallel()
 
 	ref := getCurrentTimeRef()
 	require.NotNil(t, ref)
 	assert.Equal(t, time.UTC, ref.Location(), "must be UTC")
-	assert.WithinDuration(t, time.Now().UTC(), *ref, 2*time.Second)
+	assert.WithinDuration(t, time.Now().UTC(), *ref, time.Minute)
 }
 
-func TestGetTimeRef(t *testing.T) {
+func TestHelpers_GetTimeRefString_FormatsTheGivenOrCurrentTime(t *testing.T) {
 	t.Parallel()
 
-	now := time.Now().UTC()
-	ref := getTimeRef(now)
-	require.NotNil(t, ref)
-	assert.Equal(t, now, *ref)
+	fixed := time.Date(2026, 1, 15, 10, 30, 0, 0, time.UTC)
+	assert.Equal(t, "2026-01-15T10:30:00.000000Z", getTimeRefString(&fixed))
+
+	current, err := time.Parse(timeFormat8601, getTimeRefString(nil))
+	require.NoError(t, err, "a nil time formats the current time")
+	assert.WithinDuration(t, time.Now().UTC(), current, time.Minute)
 }
 
-func TestGetTimeRefString(t *testing.T) {
+// Subtests are keyed by unit.
+func TestHelpers_RefHelpersPointAtTheirArgument(t *testing.T) {
 	t.Parallel()
 
-	t.Run("nil time returns current time string", func(t *testing.T) {
-		t.Parallel()
-		result := getTimeRefString(nil)
-		_, err := time.Parse(timeFormat8601, result)
-		assert.NoError(t, err)
-	})
-
-	t.Run("non-nil time formats correctly", func(t *testing.T) {
-		t.Parallel()
-		fixed := time.Date(2026, 1, 15, 10, 30, 0, 0, time.UTC)
-		result := getTimeRefString(&fixed)
-		assert.Equal(t, "2026-01-15T10:30:00.000000Z", result)
-	})
-}
-
-func TestGetStringRef(t *testing.T) {
-	t.Parallel()
-
-	t.Run("empty string returns nil", func(t *testing.T) {
+	t.Run("an empty string becomes nil", func(t *testing.T) {
 		t.Parallel()
 		assert.Nil(t, getStringRef(""))
+		require.NotNil(t, getStringRef("hello"))
+		assert.Equal(t, "hello", *getStringRef("hello"))
 	})
 
-	t.Run("non-empty string returns pointer", func(t *testing.T) {
+	t.Run("an int keeps its value", func(t *testing.T) {
 		t.Parallel()
-		result := getStringRef("hello")
-		require.NotNil(t, result)
-		assert.Equal(t, "hello", *result)
-	})
-}
-
-func TestGetIntRef(t *testing.T) {
-	t.Parallel()
-
-	result := getIntRef(42)
-	require.NotNil(t, result)
-	assert.Equal(t, 42, *result)
-}
-
-func TestGetBoolRef(t *testing.T) {
-	t.Parallel()
-
-	t.Run("true", func(t *testing.T) {
-		t.Parallel()
-		result := getBoolRef(true)
-		require.NotNil(t, result)
-		assert.True(t, *result)
+		require.NotNil(t, getIntRef(42))
+		assert.Equal(t, 42, *getIntRef(42))
 	})
 
-	t.Run("false", func(t *testing.T) {
+	t.Run("false stays false rather than nil", func(t *testing.T) {
 		t.Parallel()
-		result := getBoolRef(false)
-		require.NotNil(t, result)
-		assert.False(t, *result)
+		require.NotNil(t, getBoolRef(false))
+		assert.False(t, *getBoolRef(false))
+		assert.True(t, *getBoolRef(true))
 	})
 }

@@ -15,7 +15,7 @@ import (
 //go:embed config.yml models.yml
 var configFS embed.FS
 
-const KimiAgentModel = "kimi-k2.5"
+const KimiAgentModel = "kimi-k2.6"
 
 const KimiToolCallIDTemplate = "{f}:{r:1:d}"
 

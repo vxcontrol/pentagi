@@ -40,10 +40,8 @@ const inputGroupAddonVariants = cva(
         },
         variants: {
             align: {
-                'block-end':
-                    '[.border-t]:pt-3 order-last w-full justify-start px-3 pb-3 group-has-[>input]/input-group:pb-2.5',
-                'block-start':
-                    '[.border-b]:pb-3 order-first w-full justify-start px-3 pt-3 group-has-[>input]/input-group:pt-2.5',
+                'block-end': '[.border-t]:pt-3 order-last w-full justify-start px-3 pb-3',
+                'block-start': '[.border-b]:pb-3 order-first w-full justify-start px-3 pt-3',
                 'inline-end': 'order-last pr-3 has-[>button]:mr-[-0.4rem] has-[>kbd]:mr-[-0.35rem]',
                 'inline-start': 'order-first pl-3 has-[>button]:ml-[-0.45rem] has-[>kbd]:ml-[-0.35rem]',
             },

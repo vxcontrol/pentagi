@@ -74,42 +74,44 @@ func (p *AuthMiddleware) tryAuth(
 	}
 
 	if withFail && result != authResultOk {
-		if isRoutineAuthFailure(authErr) {
-			// An expired/absent/invalidated session or token hitting a protected
-			// endpoint is routine (e.g. a stale browser tab polling after
-			// logout/expiry, or a password change/DB reseed invalidating the
-			// stored hash), not an application error - log it quietly instead
-			// of at Error.
-			response.ErrorWithLevel(c, response.ErrAuthRequired, authErr, logrus.WarnLevel)
-		} else {
-			response.Error(c, response.ErrAuthRequired, authErr)
+		httpErr := response.ErrAuthRequired
+		if errors.Is(authErr, errAuthBackend) {
+			httpErr = response.ErrAuthUnavailable
 		}
+		response.ErrorWithLevel(c, httpErr, authErr, levelForAuthFailure(authErr))
 		return
+	}
+	if errors.Is(authErr, errAuthBackend) {
+		c.Set(authBackendFailureKey, authErr)
 	}
 	c.Next()
 }
 
-// isRoutineAuthFailure reports whether authErr represents an expected,
-// non-malicious session/token invalidation rather than a genuine application
-// error, so callers can log it at a quieter level.
-func isRoutineAuthFailure(authErr error) bool {
-	return errors.Is(authErr, errCookieClaimInvalid) ||
-		errors.Is(authErr, errSessionExpired) ||
-		errors.Is(authErr, errUserHashMismatch)
+const authBackendFailureKey = "authBackendFailure"
+
+// BackendFailure returns the error that kept TryAuth from checking the caller's
+// credentials, or nil when they were checked.
+func BackendFailure(c *gin.Context) error {
+	err, _ := c.Value(authBackendFailureKey).(error)
+	return err
 }
 
-// errCookieClaimInvalid is returned by tryUserCookieAuthentication when the
-// session cookie is present but missing one or more required claims (expired
-// or otherwise invalid session) - a routine, expected condition.
-//
-// errSessionExpired and errUserHashMismatch mark the same category of routine
-// session/token invalidation, just detected a bit later during validation: a
-// session past its TTL, or a stored hash that no longer matches the user
-// record (e.g. after a password change or a test database reseed).
+func levelForAuthFailure(authErr error) logrus.Level {
+	if errors.Is(authErr, errAuthBackend) {
+		return logrus.ErrorLevel
+	}
+
+	return logrus.WarnLevel
+}
+
+// errUserHashMismatch is ordinary rather than hostile: a password change or a
+// database reseed leaves live sessions holding the previous hash.
 var (
 	errCookieClaimInvalid = errors.New("cookie claim invalid")
 	errSessionExpired     = errors.New("session expired")
 	errUserHashMismatch   = errors.New("user hash mismatch")
+	errSessionRevoked     = errors.New("session revoked")
+	errAuthBackend        = errors.New("auth backend failure")
 )
 
 func (p *AuthMiddleware) tryUserCookieAuthentication(c *gin.Context) (authResult, error) {
@@ -131,8 +133,9 @@ func (p *AuthMiddleware) tryUserCookieAuthentication(c *gin.Context) (authResult
 	gtm := session.Get("gtm")
 	tid := session.Get("tid")
 	uname := session.Get("uname")
+	sgn := session.Get("sgn")
 
-	for _, attr := range []any{uid, rid, prm, exp, gtm, uname, uhash, tid} {
+	for _, attr := range []any{uid, rid, prm, exp, gtm, uname, uhash, tid, sgn} {
 		if attr == nil {
 			return authResultFail, errCookieClaimInvalid
 		}
@@ -155,12 +158,26 @@ func (p *AuthMiddleware) tryUserCookieAuthentication(c *gin.Context) (authResult
 	userID := uid.(uint64)
 	sessionHash := uhash.(string)
 
-	dbHash, userStatus, err := p.userCache.GetUserHash(userID)
+	sessionGeneration, ok := sgn.(uint64)
+	if !ok {
+		return authResultFail, errCookieClaimInvalid
+	}
+
+	user, err := p.userCache.GetUser(userID)
+	if err == nil && sessionGeneration > user.Generation {
+		p.userCache.Invalidate(userID)
+		user, err = p.userCache.GetUser(userID)
+	}
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return authResultFail, errors.New("user has been deleted")
 		}
-		return authResultFail, fmt.Errorf("error checking user status: %w", err)
+		return authResultFail, fmt.Errorf("%w: checking user status: %w", errAuthBackend, err)
+	}
+	dbHash, userStatus := user.Hash, user.Status
+
+	if sessionGeneration != user.Generation {
+		return authResultFail, errSessionRevoked
 	}
 
 	switch userStatus {
@@ -183,6 +200,7 @@ func (p *AuthMiddleware) tryUserCookieAuthentication(c *gin.Context) (authResult
 	c.Set("gtm", gtm.(int64))
 	c.Set("tid", tid.(string))
 	c.Set("uname", uname.(string))
+	c.Set("sgn", sessionGeneration)
 
 	if slices.Contains(prms, PrivilegeAutomation) {
 		c.Set("cpt", "automation")
@@ -224,7 +242,7 @@ func (p *AuthMiddleware) tryProtoTokenAuthentication(c *gin.Context) (authResult
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return authResultFail, errors.New("token not found in database")
 		}
-		return authResultFail, fmt.Errorf("error checking token status: %w", err)
+		return authResultFail, fmt.Errorf("%w: checking token status: %w", errAuthBackend, err)
 	}
 	if status != models.TokenStatusActive {
 		return authResultFail, errors.New("token has been revoked")
@@ -236,7 +254,7 @@ func (p *AuthMiddleware) tryProtoTokenAuthentication(c *gin.Context) (authResult
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return authResultFail, errors.New("user has been deleted")
 		}
-		return authResultFail, fmt.Errorf("error checking user status: %w", err)
+		return authResultFail, fmt.Errorf("%w: checking user status: %w", errAuthBackend, err)
 	}
 
 	if userStatus == models.UserStatusBlocked {

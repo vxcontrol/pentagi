@@ -10,6 +10,7 @@ import (
 	"pentagi/pkg/server/auth"
 	"pentagi/pkg/server/update"
 	"pentagi/pkg/templates"
+	"pentagi/pkg/timezone"
 
 	"github.com/sirupsen/logrus"
 	"github.com/vxcontrol/cloud/anonymizer"
@@ -31,4 +32,5 @@ type Resolver struct {
 	Knowledge       knowledge.KnowledgeStore
 	Replacer        anonymizer.Replacer
 	Updates         *update.Service
+	Timezones       *timezone.Catalog
 }

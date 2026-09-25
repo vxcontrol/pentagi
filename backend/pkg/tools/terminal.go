@@ -5,9 +5,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -23,6 +25,8 @@ import (
 
 // PrimaryTerminalNamePrefix is the prefix used for all primary terminal container names.
 const PrimaryTerminalNamePrefix = "pentagi-terminal-"
+
+var errContainerNotOperational = errors.New("container runtime is not operational")
 
 const (
 	maxExplicitExecCommandTimeout = 3 * time.Hour
@@ -108,10 +112,11 @@ func (t *terminal) wrapCommandResult(ctx context.Context, args json.RawMessage, 
 			}),
 		)
 
-		logrus.WithContext(ctx).WithError(err).WithFields(logrus.Fields{
-			"tool":   name,
-			"result": result[:min(len(result), 1000)],
-		}).Error("terminal tool failed")
+		logrus.WithContext(ctx).WithError(err).WithFields(
+			enrichLogrusFields(t.flowID, t.taskID, t.subtaskID, logrus.Fields{
+				"tool":   name,
+				"result": result[:min(len(result), 1000)],
+			})).Error("terminal tool failed")
 		return fmt.Sprintf("terminal tool '%s' handled with error: %v", name, err), nil
 	}
 	return result, nil
@@ -180,7 +185,8 @@ func (t *terminal) Handle(ctx context.Context, name string, args json.RawMessage
 			return t.wrapCommandResult(ctx, args, name, result, err)
 		default:
 			logger.Error("unknown file action")
-			return "", fmt.Errorf("unknown file action: %s", action.Action)
+			return "", fmt.Errorf("unknown file action %q: expected one of %s, %s or %s",
+				action.Action, ReadFile, WriteFile, EditFile)
 		}
 	default:
 		return "", fmt.Errorf("unknown tool: %s", name)
@@ -195,18 +201,14 @@ func (t *terminal) ExecCommand(
 ) (string, error) {
 	containerName := PrimaryTerminalName(t.tenantPrefix, t.flowID)
 
-	cmd := []string{
-		"sh",
-		"-c",
-		command,
+	cmd := docker.SandboxCommand(command)
+	if t.taskID != nil {
+		cmd = docker.FlowCommand(command)
 	}
 
-	isRunning, err := t.dockerClient.IsContainerRunning(ctx, t.containerLID)
+	err := t.requireRunningContainer(ctx)
 	if err != nil {
-		return "", fmt.Errorf("runtime verification failed: %w", err)
-	}
-	if !isRunning {
-		return "", fmt.Errorf("container runtime is not operational")
+		return "", err
 	}
 
 	if cwd == "" {
@@ -215,6 +217,7 @@ func (t *terminal) ExecCommand(
 
 	// Format command with working directory and ANSI styling
 	styledCommand := fmt.Sprintf("%s $ %s%s%s%s", cwd, ansiColorInputCmd, command, ansiColorReset, ansiLineTerminator)
+	// Logged before anything runs: a failed write stops the call, so an error means nothing ran and a retry cannot run it twice.
 	_, err = t.tlp.PutMsg(ctx, database.TermlogTypeStdin, styledCommand, t.containerID, t.taskID, t.subtaskID)
 	if err != nil {
 		return "", fmt.Errorf("failed to put terminal log (stdin): %w", err)
@@ -235,6 +238,7 @@ func (t *terminal) ExecCommand(
 
 	if detach {
 		resultChan := make(chan execResult, 1)
+		// The caller is often cancelled right after the start, a delegation timing out, and that must not kill the command.
 		detachedCtx := context.WithoutCancel(ctx)
 
 		go func() {
@@ -246,9 +250,6 @@ func (t *terminal) ExecCommand(
 		case result := <-resultChan:
 			if result.err != nil {
 				return "", fmt.Errorf("command failed: %w: %s", result.err, result.output)
-			}
-			if result.output == "" {
-				return "Command completed in background with exit code 0", nil
 			}
 			return result.output, nil
 		case <-time.After(defaultQuickCheckTimeout):
@@ -294,19 +295,39 @@ func (t *terminal) getExecResult(ctx context.Context, id string, timeout time.Du
 		// Wait for the copy goroutine to finish
 		<-errChan
 
+		partial := dst.String()
+
+		// What the command managed to print is the only record of it. The
+		// success path below writes its output to the terminal log; without the
+		// same write here the UI shows the command and nothing under it. The
+		// call's own context has already fired, so the write needs one that has
+		// not, the way the detached path does.
+		if partial != "" {
+			styled := fmt.Sprintf("%s%s%s%s", ansiColorSystemMsg, partial, ansiColorReset, ansiLineTerminator)
+			if _, err := t.tlp.PutMsg(context.WithoutCancel(ctx), database.TermlogTypeStdout,
+				styled, t.containerID, t.taskID, t.subtaskID); err != nil {
+				logrus.WithContext(ctx).WithError(err).Error("failed to put terminal log (timeout partial)")
+			}
+		}
+
 		suggestedTimeout := max(int(timeout.Seconds())-10, 10)
+
+		// The output stays inside the error text because that is the only
+		// channel wrapCommandResult forwards on the error branch; its `result`
+		// argument is used as a log field and then dropped. The cap is the
+		// pipeline's own, not the 500 bytes this used to keep -- the executor
+		// already summarizes a terminal result above DefaultResultSizeLimit.
 		return "", fmt.Errorf(
 			"command execution timeout (%v). Partial output: %s. "+
 				"HINT: If this is an interactive command (shell/REPL/listener), use detach=true. "+
 				"For long batch commands, wrap with shell timeout utility: 'timeout %d <command>' to ensure clean completion",
 			ctx.Err(),
-			truncateString(dst.String(), 500),
+			truncateString(partial, DefaultResultSizeLimit),
 			suggestedTimeout,
 		)
 	}
 
-	// wait for the exec process to finish
-	_, err = t.dockerClient.ContainerExecInspect(ctx, id)
+	inspect, err := t.dockerClient.ContainerExecInspect(ctx, id)
 	if err != nil {
 		return "", fmt.Errorf("failed to inspect exec process: %w", err)
 	}
@@ -316,19 +337,68 @@ func (t *terminal) getExecResult(ctx context.Context, id string, timeout time.Du
 	styledOutput := fmt.Sprintf("%s%s%s%s", ansiColorSystemMsg, results, ansiColorReset, ansiLineTerminator)
 	_, err = t.tlp.PutMsg(ctx, database.TermlogTypeStdout, styledOutput, t.containerID, t.taskID, t.subtaskID)
 	if err != nil {
-		return "", fmt.Errorf("failed to put terminal log (stdout): %w", err)
+		logrus.WithContext(ctx).WithError(err).Error("failed to put terminal log (stdout)")
 	}
 
 	if results == "" {
-		results = "Command completed successfully with exit code 0. No output produced (silent success)"
+		results = "[no output]"
+	}
+	results = fmt.Sprintf("%s\n[exit code: %d]", results, inspect.ExitCode)
+
+	if inspect.ExitCode > 128 && errors.Is(t.requireRunningContainer(ctx), errContainerNotOperational) {
+		results += "\n[interrupted: the sandbox container stopped]"
 	}
 
 	return results, nil
 }
 
-func (t *terminal) ReadFile(ctx context.Context, flowID int64, path string) (string, error) {
+func (t *terminal) requireRunningContainer(ctx context.Context) error {
+	isRunning, err := t.dockerClient.IsContainerRunning(ctx, t.containerLID)
+	if err != nil {
+		return fmt.Errorf("runtime verification failed: %w", err)
+	}
+	if isRunning {
+		if err := t.tlp.ContainerRunning(ctx, t.containerID, t.taskID, t.subtaskID); err != nil {
+			t.logReconcileFailure(ctx, err, "failed to record the sandbox as running again")
+		}
+		return nil
+	}
+
+	if err := t.tlp.ContainerNotRunning(ctx, t.containerID, t.taskID, t.subtaskID); err != nil {
+		t.logReconcileFailure(ctx, err, "failed to record the sandbox as not running")
+	}
+
+	return errContainerNotOperational
+}
+
+func (t *terminal) logReconcileFailure(ctx context.Context, err error, msg string) {
+	logrus.WithContext(ctx).
+		WithError(err).
+		WithFields(enrichLogrusFields(t.flowID, t.taskID, t.subtaskID, nil)).
+		Warn(msg)
+}
+
+var shellExpansion = regexp.MustCompile("\\$\\(|\\$\\{|`|\\$[A-Za-z_][A-Za-z0-9_]*")
+
+func validateFilePath(path string) error {
 	if path == "" {
-		return "", fmt.Errorf("path is required and cannot be empty")
+		return fmt.Errorf("path is required and cannot be empty: give an absolute path such as /work/notes.txt")
+	}
+
+	if token := shellExpansion.FindString(path); token != "" {
+		return fmt.Errorf(
+			"path must be a literal filename, but it contains %q: this field is not run through a shell, "+
+				"so the expression is taken as part of the name. Use the terminal tool to resolve it "+
+				"first, then pass the result here",
+			token)
+	}
+
+	return nil
+}
+
+func (t *terminal) ReadFile(ctx context.Context, flowID int64, path string) (string, error) {
+	if err := validateFilePath(path); err != nil {
+		return "", err
 	}
 
 	cwd := docker.WorkFolderPathInContainer
@@ -363,12 +433,9 @@ func (t *terminal) ReadFile(ctx context.Context, flowID int64, path string) (str
 func (t *terminal) readFileFromContainer(ctx context.Context, flowID int64, path string) (string, error) {
 	containerName := PrimaryTerminalName(t.tenantPrefix, flowID)
 
-	isRunning, err := t.dockerClient.IsContainerRunning(ctx, t.containerLID)
+	err := t.requireRunningContainer(ctx)
 	if err != nil {
-		return "", fmt.Errorf("runtime verification failed: %w", err)
-	}
-	if !isRunning {
-		return "", fmt.Errorf("container runtime is not operational")
+		return "", err
 	}
 
 	reader, stats, err := t.dockerClient.CopyFromContainer(ctx, containerName, path)
@@ -394,11 +461,8 @@ func (t *terminal) readFileFromContainer(ctx context.Context, flowID int64, path
 
 		if stats.Mode.IsDir() {
 			buffer.WriteString("--------------------------------------------------\n")
-			buffer.WriteString(
-				fmt.Sprintf("'%s' file content (with size %d bytes) shown below:\n",
-					tarHeader.Name, tarHeader.Size,
-				),
-			)
+			fmt.Fprintf(&buffer, "'%s' file content (with size %d bytes) shown below:\n",
+				tarHeader.Name, tarHeader.Size)
 		}
 
 		const maxReadFileSize int64 = 100 * 1024 * 1024 // 100 MB limit
@@ -409,12 +473,15 @@ func (t *terminal) readFileFromContainer(ctx context.Context, flowID int64, path
 			return "", fmt.Errorf("file '%s' has invalid size %d", tarHeader.Name, tarHeader.Size)
 		}
 
-		var fileContent = make([]byte, tarHeader.Size)
-		_, err = tarReader.Read(fileContent)
-		if err != nil && err != io.EOF {
+		// Copied rather than read into a full-size buffer. tar.Reader.Read
+		// returns whatever the underlying HTTP body has to hand -- typically far
+		// less than the whole entry -- and the previous code discarded that count
+		// and appended the entire buffer, so everything past the first chunk
+		// arrived as NUL bytes. EditFile reads through here and writes the
+		// result back, which committed that padding to the file.
+		if _, err := io.CopyN(&buffer, tarReader, tarHeader.Size); err != nil && err != io.EOF {
 			return "", fmt.Errorf("failed to read file '%s' content: %w", tarHeader.Name, err)
 		}
-		buffer.Write(fileContent)
 
 		if stats.Mode.IsDir() {
 			buffer.WriteString("\n\n")
@@ -425,8 +492,8 @@ func (t *terminal) readFileFromContainer(ctx context.Context, flowID int64, path
 }
 
 func (t *terminal) WriteFile(ctx context.Context, flowID int64, content string, path string) (string, error) {
-	if path == "" {
-		return "", fmt.Errorf("path is required and cannot be empty")
+	if err := validateFilePath(path); err != nil {
+		return "", err
 	}
 
 	if err := t.writeFileToContainer(ctx, flowID, path, content); err != nil {
@@ -438,7 +505,7 @@ func (t *terminal) WriteFile(ctx context.Context, flowID int64, content string, 
 	styledMsg := fmt.Sprintf("%s%s%s%s", ansiColorSystemMsg, successMsg, ansiColorReset, ansiLineTerminator)
 	_, err := t.tlp.PutMsg(ctx, database.TermlogTypeStdin, styledMsg, t.containerID, t.taskID, t.subtaskID)
 	if err != nil {
-		return "", fmt.Errorf("failed to put terminal log (write file cmd): %w", err)
+		logrus.WithContext(ctx).WithError(err).Error("failed to put terminal log (write file cmd)")
 	}
 
 	return fmt.Sprintf("Successfully wrote %d bytes to %s", len(content), path), nil
@@ -450,12 +517,9 @@ func (t *terminal) WriteFile(ctx context.Context, flowID int64, content string, 
 func (t *terminal) writeFileToContainer(ctx context.Context, flowID int64, path, content string) error {
 	containerName := PrimaryTerminalName(t.tenantPrefix, flowID)
 
-	isRunning, err := t.dockerClient.IsContainerRunning(ctx, t.containerLID)
+	err := t.requireRunningContainer(ctx)
 	if err != nil {
-		return fmt.Errorf("container runtime check failed: %w", err)
-	}
-	if !isRunning {
-		return fmt.Errorf("target container is not operational")
+		return err
 	}
 
 	// Docker SDK requires TAR format for file transfer
@@ -496,12 +560,12 @@ func (t *terminal) writeFileToContainer(ctx context.Context, flowID int64, path,
 }
 
 // EditFile applies a unified diff to the file at path: it reads the current
-// content, applies the diff to it entirely in memory (see applyUnifiedDiff),
+// content, applies the diff to it entirely in memory (see ApplyUnifiedDiff),
 // and only if every hunk applied cleanly writes the result back - a diff
 // that doesn't fully apply leaves the file untouched.
 func (t *terminal) EditFile(ctx context.Context, flowID int64, path, diffText string) (string, error) {
-	if path == "" {
-		return "", fmt.Errorf("path is required and cannot be empty")
+	if err := validateFilePath(path); err != nil {
+		return "", err
 	}
 	if strings.TrimSpace(diffText) == "" {
 		return "", fmt.Errorf("diff is required and cannot be empty")
@@ -524,7 +588,7 @@ func (t *terminal) EditFile(ctx context.Context, flowID int64, path, diffText st
 	successMsg := fmt.Sprintf("Applied %d diff hunk(s) to %s (%d -> %d bytes)", hunksApplied, path, len(current), len(newContent))
 	styledMsg := fmt.Sprintf("%s%s%s%s", ansiColorSystemMsg, successMsg, ansiColorReset, ansiLineTerminator)
 	if _, err := t.tlp.PutMsg(ctx, database.TermlogTypeStdin, styledMsg, t.containerID, t.taskID, t.subtaskID); err != nil {
-		return "", fmt.Errorf("failed to put terminal log (edit file cmd): %w", err)
+		logrus.WithContext(ctx).WithError(err).Error("failed to put terminal log (edit file cmd)")
 	}
 
 	return successMsg, nil

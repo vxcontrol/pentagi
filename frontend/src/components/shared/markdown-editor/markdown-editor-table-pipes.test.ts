@@ -1,11 +1,17 @@
 import { Editor } from '@tiptap/core';
 import { describe, expect, it } from 'vitest';
 
+import { GROWTH_IF_QUADRATIC, slowdownWhenInputQuadruples } from '@/test-utils/cost-growth';
+
 import { createMarkdownExtensions } from './markdown-editor-extensions';
 import { escapeTablePipes } from './markdown-editor-table-pipes';
 import { roundTrip, setupEditorJsdom } from './markdown-editor-test-setup';
 
 setupEditorJsdom();
+
+const plainRow = (tokenLength: number) => `| a | b |\n| --- | --- |\n| ${'a'.repeat(tokenLength)} | z |`;
+const phantomCellRow = (tokenLength: number) => `| a | b |\n| --- | --- |\n| ${'a'.repeat(tokenLength)} | y | z |`;
+const delimiterLikeLine = (spaceRun: number) => `x|y\n${'-'.repeat(50)}${' '.repeat(spaceRun)}z\n`;
 
 describe('escapeTablePipes — pure pre-lex pipe protection', () => {
     it('escapes a pipe inside a code span in a body row', () => {
@@ -154,13 +160,20 @@ describe('table cell with a pipe inside a URL — content survives load and conv
         expect(escapeTablePipes(table)).toBe(table);
     });
 
-    it('scans a table row with a long non-URL token in linear time (URL escaping ReDoS guard)', () => {
-        const evil = `| a | b |\n| --- | --- |\n| ${'a'.repeat(120000)} | z |`;
-        const started = performance.now();
+    it('scans a long non-URL token linearly on a row the cell-count guard skips', () => {
+        const row = plainRow(120_000);
 
-        escapeTablePipes(evil);
+        expect(escapeTablePipes(row)).toBe(row);
+        expect(slowdownWhenInputQuadruples(plainRow, escapeTablePipes, 120_000)).toBeLessThan(GROWTH_IF_QUADRATIC / 2);
+    });
 
-        expect(performance.now() - started).toBeLessThan(100);
+    it('scans a long non-URL token linearly on a row whose extra cell drives the URL pass', () => {
+        const row = phantomCellRow(120_000);
+
+        expect(escapeTablePipes(row)).toBe(row);
+        expect(slowdownWhenInputQuadruples(phantomCellRow, escapeTablePipes, 120_000)).toBeLessThan(
+            GROWTH_IF_QUADRATIC / 2,
+        );
     });
 
     it('keeps the URL and the trailing cell on round-trip, and converges', () => {
@@ -243,12 +256,12 @@ describe('CRLF line endings — tables still protected', () => {
 
 describe('TABLE_DELIMITER_LINE is linear (ReDoS guard)', () => {
     it('scans a crafted delimiter-looking line with a long trailing space run in linear time', () => {
-        const evil = `x|y\n${'-'.repeat(50)}${' '.repeat(60000)}z\n`;
-        const started = performance.now();
+        const line = delimiterLikeLine(120_000);
 
-        escapeTablePipes(evil);
-
-        expect(performance.now() - started).toBeLessThan(100);
+        expect(escapeTablePipes(line)).toBe(line);
+        expect(slowdownWhenInputQuadruples(delimiterLikeLine, escapeTablePipes, 120_000)).toBeLessThan(
+            GROWTH_IF_QUADRATIC / 2,
+        );
     });
 });
 

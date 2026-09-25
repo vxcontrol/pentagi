@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"pentagi/pkg/database"
+	"pentagi/pkg/database/knowledge/limits"
 	"pentagi/pkg/graph/model"
 	obs "pentagi/pkg/observability"
 	"pentagi/pkg/observability/langfuse"
@@ -25,6 +26,7 @@ const (
 	codeVectorStoreThreshold   = 0.2
 	codeVectorStoreResultLimit = 3
 	codeVectorStoreDefaultType = "code"
+	codeVectorStoreDefaultLang = CodeLang("text")
 	codeNotFoundMessage        = "nothing found in code samples store and you need to store it after figure out this case"
 )
 
@@ -186,9 +188,9 @@ func (c *code) Handle(ctx context.Context, name string, args json.RawMessage) (s
 				langfuse.WithScoreName("code_search_result"),
 				langfuse.WithScoreFloatValue(float64(doc.Score)),
 			)
-			buffer.WriteString(fmt.Sprintf("# Document %d Match score: %f\n\n", i+1, doc.Score))
-			buffer.WriteString(fmt.Sprintf("## Original Code Question\n\n%s\n\n", doc.Metadata["question"]))
-			buffer.WriteString(fmt.Sprintf("## Original Code Description\n\n%s\n\n", doc.Metadata["description"]))
+			fmt.Fprintf(&buffer, "# Document %d Match score: %f\n\n", i+1, doc.Score)
+			fmt.Fprintf(&buffer, "## Original Code Question\n\n%s\n\n", doc.Metadata["question"])
+			fmt.Fprintf(&buffer, "## Original Code Description\n\n%s\n\n", doc.Metadata["description"])
 			buffer.WriteString("## Content\n\n")
 			buffer.WriteString(doc.PageContent)
 			buffer.WriteString("\n\n")
@@ -200,7 +202,7 @@ func (c *code) Handle(ctx context.Context, name string, args json.RawMessage) (s
 				logger.WithError(err).Error("failed to marshal filters")
 				return "", fmt.Errorf("failed to marshal filters: %w", err)
 			}
-			queriesText := strings.Join(action.Questions, "\n--------------------------------\n")
+			queriesText := c.replacer.ReplaceString(strings.Join(action.Questions, "\n--------------------------------\n"))
 			_, _ = c.vslp.PutLog(
 				ctx,
 				agentCtx.ParentAgentType,
@@ -223,14 +225,19 @@ func (c *code) Handle(ctx context.Context, name string, args json.RawMessage) (s
 			return "", fmt.Errorf("failed to unmarshal %s store code action arguments: %w", name, err)
 		}
 
-		renderedCode := c.renderCode(action.Explanation, action.Lang, action.Code)
+		action.Question = limits.FillBlankQuestion(action.Question, action.Description, "Untitled code snippet")
+		if strings.TrimSpace(action.Lang.String()) == "" {
+			action.Lang = codeVectorStoreDefaultLang
+		}
+
+		renderedCode := c.renderCode(action.Explanation, action.Lang.String(), action.Code)
 
 		// Anonymize before anything else so all downstream paths (including error
 		// branches that emit langfuse events) only ever expose the anonymized form.
 		var (
-			anonymizedCode        = c.replacer.ReplaceString(renderedCode)
-			anonymizedQuestion    = c.replacer.ReplaceString(action.Question)
-			anonymizedDescription = c.replacer.ReplaceString(action.Description)
+			anonymizedCode        = boundedContent(c.replacer, renderedCode)
+			anonymizedQuestion    = limits.TruncateToLimit(c.replacer.ReplaceString(action.Question), limits.MaxQuestionLen)
+			anonymizedDescription = limits.TruncateToLimit(c.replacer.ReplaceString(action.Description), limits.MaxDescriptionLen)
 		)
 
 		eventMetadata := map[string]any{
@@ -336,7 +343,7 @@ func (c *code) Handle(ctx context.Context, name string, args json.RawMessage) (s
 		)...)
 
 		if c.knp != nil {
-			codeLang := action.Lang
+			codeLang := action.Lang.String()
 			for _, id := range ids {
 				knDoc := &model.KnowledgeDocument{
 					ID:          id,
@@ -380,9 +387,9 @@ func (c *code) Handle(ctx context.Context, name string, args json.RawMessage) (s
 				agentCtx.ParentAgentType,
 				agentCtx.CurrentAgentType,
 				filtersData,
-				action.Question,
+				anonymizedQuestion,
 				database.VecstoreActionTypeStore,
-				renderedCode,
+				anonymizedCode,
 				c.taskID,
 				c.subtaskID,
 			)

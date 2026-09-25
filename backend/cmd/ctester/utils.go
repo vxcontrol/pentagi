@@ -12,10 +12,12 @@ func TruncateString(s string, maxLength int) string {
 	s = strings.ReplaceAll(s, "\n", " ")
 	s = strings.ReplaceAll(s, "\r", " ")
 	s = strings.ReplaceAll(s, "\t", " ")
-	if len(s) <= maxLength {
+	runes := []rune(s)
+	if len(runes) <= maxLength {
 		return s
 	}
-	return s[:maxLength-3] + "..."
+
+	return string(runes[:maxLength-3]) + "..."
 }
 
 // EscapeMarkdown escapes special characters in markdown
@@ -46,7 +48,7 @@ func EscapeMarkdown(text string) string {
 
 	result := text
 	for _, r := range replacements {
-		result = strings.Replace(result, r.from, r.to, -1)
+		result = strings.ReplaceAll(result, r.from, r.to)
 	}
 
 	return result

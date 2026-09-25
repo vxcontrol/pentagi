@@ -1,16 +1,19 @@
 package services
 
 import (
-	"bytes"
 	"encoding/json"
-	"errors"
 	"net/http"
 	"net/http/httptest"
+	"slices"
+	"strings"
 	"testing"
 
 	"pentagi/pkg/server/auth"
 	"pentagi/pkg/server/models"
+	"pentagi/pkg/server/oauth"
 
+	"github.com/gin-contrib/sessions"
+	"github.com/gin-contrib/sessions/cookie"
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/sqlite"
@@ -19,537 +22,497 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-func TestCreateUser_CreatesUserPreferences(t *testing.T) {
-	db := setupTestDB(t)
-	defer db.Close()
-
-	userCache := auth.NewUserCache(db)
-	service := NewUserService(db, userCache)
-
+// usersCall runs one user handler for the caller the way the router hands it a request.
+func usersCall(handler gin.HandlerFunc, uid, rid uint64, privs []string, body string) *httptest.ResponseRecorder {
 	gin.SetMode(gin.TestMode)
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
-
-	// Set up context with admin permissions
-	c.Set("uid", uint64(1))
-	c.Set("rid", uint64(1))
-	c.Set("uhash", "testhash1")
-	c.Set("prm", []string{"users.create"})
-
-	// Create request body
-	userRequest := models.UserPassword{
-		User: models.User{
-			Mail:   "newuser@test.com",
-			Name:   "New User",
-			RoleID: 2,
-			Status: models.UserStatusActive,
-			Type:   models.UserTypeLocal,
-		},
-		Password: "SecurePass123!",
-	}
-
-	body, err := json.Marshal(userRequest)
-	require.NoError(t, err)
-
-	c.Request, _ = http.NewRequest("POST", "/users/", bytes.NewBuffer(body))
+	c.Set("uid", uid)
+	c.Set("rid", rid)
+	c.Set("prm", privs)
+	c.Request = httptest.NewRequest(http.MethodPost, "/users/", strings.NewReader(body))
 	c.Request.Header.Set("Content-Type", "application/json")
 
-	// Call the handler
-	service.CreateUser(c)
+	handler(c)
 
-	// Check response status
-	assert.Equal(t, http.StatusCreated, w.Code, "Expected HTTP 201 Created")
-
-	// Verify user was created
-	var createdUser models.User
-	err = db.Where("mail = ?", "newuser@test.com").First(&createdUser).Error
-	require.NoError(t, err, "User should be created in database")
-	assert.Equal(t, "New User", createdUser.Name)
-	assert.Equal(t, uint64(2), createdUser.RoleID)
-
-	// Verify user_preferences was created
-	var userPrefs models.UserPreferences
-	err = db.Where("user_id = ?", createdUser.ID).First(&userPrefs).Error
-	require.NoError(t, err, "User preferences should be created in database")
-	assert.Equal(t, createdUser.ID, userPrefs.UserID)
-	assert.NotNil(t, userPrefs.Preferences.FavoriteFlows)
-	assert.Equal(t, 0, len(userPrefs.Preferences.FavoriteFlows), "FavoriteFlows should be empty array")
+	return w
 }
 
-func TestCreateUser_RollbackOnPreferencesError(t *testing.T) {
-	db := setupTestDB(t)
-	defer db.Close()
+func TestUsers_CreateUser_StoresTheUserWithItsPreferencesOrNothing(t *testing.T) {
+	const newUser = `{"mail":"newuser@test.com","name":"New User","role_id":2,"status":"active","type":"local",` +
+		`"password":"SecurePass123!"}`
+	create := []string{"users.create"}
 
-	// Drop user_preferences table to simulate error
-	db.Exec("DROP TABLE user_preferences")
-
-	userCache := auth.NewUserCache(db)
-	service := NewUserService(db, userCache)
-
-	gin.SetMode(gin.TestMode)
-	w := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(w)
-
-	c.Set("uid", uint64(1))
-	c.Set("rid", uint64(1))
-	c.Set("uhash", "testhash1")
-	c.Set("prm", []string{"users.create"})
-
-	userRequest := models.UserPassword{
-		User: models.User{
-			Mail:   "failuser@test.com",
-			Name:   "Fail User",
-			RoleID: 2,
-			Status: models.UserStatusActive,
-			Type:   models.UserTypeLocal,
-		},
-		Password: "SecurePass123!",
-	}
-
-	body, err := json.Marshal(userRequest)
-	require.NoError(t, err)
-
-	c.Request, _ = http.NewRequest("POST", "/users/", bytes.NewBuffer(body))
-	c.Request.Header.Set("Content-Type", "application/json")
-
-	service.CreateUser(c)
-
-	// Should return error
-	assert.Equal(t, http.StatusInternalServerError, w.Code, "Expected HTTP 500 on preferences creation error")
-
-	// Verify user was NOT created (transaction rolled back)
-	var user models.User
-	err = db.Where("mail = ?", "failuser@test.com").First(&user).Error
-	assert.Error(t, err, "User should not exist due to transaction rollback")
-	assert.Equal(t, gorm.ErrRecordNotFound, err)
-}
-
-func TestCreateUser_InvalidPermissions(t *testing.T) {
-	db := setupTestDB(t)
-	defer db.Close()
-
-	userCache := auth.NewUserCache(db)
-	service := NewUserService(db, userCache)
-
-	gin.SetMode(gin.TestMode)
-	w := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(w)
-
-	// Set up context WITHOUT users.create permission
-	c.Set("uid", uint64(2))
-	c.Set("rid", uint64(2))
-	c.Set("uhash", "testhash2")
-	c.Set("prm", []string{"flows.view"})
-
-	userRequest := models.UserPassword{
-		User: models.User{
-			Mail:   "unauthorized@test.com",
-			Name:   "Unauthorized User",
-			RoleID: 2,
-			Status: models.UserStatusActive,
-			Type:   models.UserTypeLocal,
-		},
-		Password: "SecurePass123!",
-	}
-
-	body, err := json.Marshal(userRequest)
-	require.NoError(t, err)
-
-	c.Request, _ = http.NewRequest("POST", "/users/", bytes.NewBuffer(body))
-	c.Request.Header.Set("Content-Type", "application/json")
-
-	service.CreateUser(c)
-
-	// Should return forbidden
-	assert.Equal(t, http.StatusForbidden, w.Code, "Expected HTTP 403 Forbidden")
-
-	// Verify user was NOT created
-	var user models.User
-	err = db.Where("mail = ?", "unauthorized@test.com").First(&user).Error
-	assert.Error(t, err, "User should not be created")
-}
-
-func TestCreateUser_MultipleUsers(t *testing.T) {
-	db := setupTestDB(t)
-	defer db.Close()
-
-	userCache := auth.NewUserCache(db)
-	service := NewUserService(db, userCache)
-
-	testCases := []struct {
-		name     string
-		mail     string
-		username string
-		roleID   uint64
+	for _, tc := range []struct {
+		name      string
+		prepare   func(db *gorm.DB)
+		privs     []string
+		body      string
+		mail      string
+		wantCode  int
+		wantUsers int
+		wantName  string
 	}{
 		{
-			name:     "create first user",
-			mail:     "newuser1@test.com",
-			username: "User One",
-			roleID:   2,
+			name:      "a new user",
+			privs:     create,
+			body:      newUser,
+			mail:      "newuser@test.com",
+			wantCode:  http.StatusCreated,
+			wantUsers: 1,
+			wantName:  "New User",
 		},
 		{
-			name:     "create second user",
-			mail:     "newuser2@test.com",
-			username: "User Two",
-			roleID:   2,
+			name:  "a body that names a session generation",
+			privs: create,
+			body: `{"mail":"pinned@test.com","name":"Pinned","role_id":2,"status":"active","type":"local",` +
+				`"password":"SecurePass123!","session_generation":9223372036854775807}`,
+			mail:      "pinned@test.com",
+			wantCode:  http.StatusCreated,
+			wantUsers: 1,
+			wantName:  "Pinned",
 		},
 		{
-			name:     "create third user",
-			mail:     "newuser3@test.com",
-			username: "User Three",
-			roleID:   2,
+			name:     "a preferences insert that fails rolls the user back",
+			prepare:  func(db *gorm.DB) { db.Exec("DROP TABLE user_preferences") },
+			privs:    create,
+			body:     newUser,
+			mail:     "newuser@test.com",
+			wantCode: http.StatusInternalServerError,
 		},
-	}
-
-	for _, tc := range testCases {
+		{
+			name:     "a caller without users.create",
+			privs:    []string{"flows.view"},
+			body:     newUser,
+			mail:     "newuser@test.com",
+			wantCode: http.StatusForbidden,
+		},
+		{
+			name:     "a malformed body",
+			privs:    create,
+			body:     "{invalid json",
+			wantCode: http.StatusBadRequest,
+		},
+		{
+			name:  "an email another user holds",
+			privs: create,
+			body: `{"mail":"user1@test.com","name":"Second User","role_id":2,"status":"active","type":"local",` +
+				`"password":"AnotherPass456!"}`,
+			mail:      "user1@test.com",
+			wantCode:  http.StatusInternalServerError,
+			wantUsers: 1,
+		},
+	} {
 		t.Run(tc.name, func(t *testing.T) {
-			gin.SetMode(gin.TestMode)
-			w := httptest.NewRecorder()
-			c, _ := gin.CreateTestContext(w)
+			db := setupTestDB(t)
+			defer db.Close()
+			if tc.prepare != nil {
+				tc.prepare(db)
+			}
+			service := NewUserService(db, auth.NewUserCache(db), "/api/v1", 4*60*60)
 
-			c.Set("uid", uint64(1))
-			c.Set("rid", uint64(1))
-			c.Set("uhash", "testhash1")
-			c.Set("prm", []string{"users.create"})
+			w := usersCall(service.CreateUser, 1, 1, tc.privs, tc.body)
 
-			userRequest := models.UserPassword{
-				User: models.User{
-					Mail:   tc.mail,
-					Name:   tc.username,
-					RoleID: tc.roleID,
-					Status: models.UserStatusActive,
-					Type:   models.UserTypeLocal,
-				},
-				Password: "SecurePass123!",
+			require.Equal(t, tc.wantCode, w.Code, w.Body.String())
+			var count int
+			require.NoError(t, db.Model(&models.User{}).Where("mail = ?", tc.mail).Count(&count).Error)
+			assert.Equal(t, tc.wantUsers, count, "a refused create leaves no row, and a taken email keeps one")
+			if tc.wantCode != http.StatusCreated {
+				return
 			}
 
-			body, err := json.Marshal(userRequest)
-			require.NoError(t, err)
-
-			c.Request, _ = http.NewRequest("POST", "/users/", bytes.NewBuffer(body))
-			c.Request.Header.Set("Content-Type", "application/json")
-
-			service.CreateUser(c)
-
-			assert.Equal(t, http.StatusCreated, w.Code, "Expected HTTP 201 Created")
-
-			// Verify both user and preferences were created
-			var user models.User
-			err = db.Where("mail = ?", tc.mail).First(&user).Error
-			require.NoError(t, err)
+			var created models.User
+			require.NoError(t, db.Where("mail = ?", tc.mail).First(&created).Error)
+			assert.Equal(t, tc.wantName, created.Name)
+			assert.Equal(t, uint64(2), created.RoleID)
+			assert.Equal(t, uint64(1), created.SessionGeneration,
+				"a generation at the top of bigint can never be moved, so the account's sessions could never be revoked")
+			assert.NotContains(t, w.Body.String(), "session_generation", "the generation is not part of the API")
 
 			var prefs models.UserPreferences
-			err = db.Where("user_id = ?", user.ID).First(&prefs).Error
-			require.NoError(t, err)
-			assert.Equal(t, user.ID, prefs.UserID)
+			require.NoError(t, db.Where("user_id = ?", created.ID).First(&prefs).Error,
+				"the preferences row is created with the user")
+			assert.NotNil(t, prefs.Preferences.FavoriteFlows)
+			assert.Empty(t, prefs.Preferences.FavoriteFlows)
 		})
 	}
-
-	// Verify all users and preferences exist
-	var userCount int
-	db.Model(&models.User{}).Where("mail LIKE ?", "newuser%@test.com").Count(&userCount)
-	assert.Equal(t, 3, userCount, "Should have 3 newly created users")
-
-	var prefsCount int
-	db.Model(&models.UserPreferences{}).Count(&prefsCount)
-	assert.Equal(t, 5, prefsCount, "Should have 5 user preferences total (2 initial + 3 created)")
 }
 
-func TestCreateUser_InvalidJSON(t *testing.T) {
+func TestUsers_ChangeEmailCurrentUser_ChangesOnlyToAFreeValidAddressUnderTheRightPassword(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()
 
-	userCache := auth.NewUserCache(db)
-	service := NewUserService(db, userCache)
-
-	gin.SetMode(gin.TestMode)
-	w := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(w)
-
-	c.Set("uid", uint64(1))
-	c.Set("rid", uint64(1))
-	c.Set("uhash", "testhash1")
-	c.Set("prm", []string{"users.create"})
-
-	// Invalid JSON
-	c.Request, _ = http.NewRequest("POST", "/users/", bytes.NewBufferString("{invalid json"))
-	c.Request.Header.Set("Content-Type", "application/json")
-
-	service.CreateUser(c)
-
-	assert.Equal(t, http.StatusBadRequest, w.Code, "Expected HTTP 400 Bad Request")
-}
-
-func TestCreateUser_DuplicateEmail(t *testing.T) {
-	db := setupTestDB(t)
-	defer db.Close()
-
-	userCache := auth.NewUserCache(db)
-	service := NewUserService(db, userCache)
-
-	// Create first user
-	gin.SetMode(gin.TestMode)
-	w1 := httptest.NewRecorder()
-	c1, _ := gin.CreateTestContext(w1)
-
-	c1.Set("uid", uint64(1))
-	c1.Set("rid", uint64(1))
-	c1.Set("uhash", "testhash1")
-	c1.Set("prm", []string{"users.create"})
-
-	userRequest := models.UserPassword{
-		User: models.User{
-			Mail:   "duplicate@test.com",
-			Name:   "First User",
-			RoleID: 2,
-			Status: models.UserStatusActive,
-			Type:   models.UserTypeLocal,
-		},
-		Password: "SecurePass123!",
-	}
-
-	body, err := json.Marshal(userRequest)
-	require.NoError(t, err)
-
-	c1.Request, _ = http.NewRequest("POST", "/users/", bytes.NewBuffer(body))
-	c1.Request.Header.Set("Content-Type", "application/json")
-
-	service.CreateUser(c1)
-	assert.Equal(t, http.StatusCreated, w1.Code)
-
-	// Try to create second user with same email
-	w2 := httptest.NewRecorder()
-	c2, _ := gin.CreateTestContext(w2)
-
-	c2.Set("uid", uint64(1))
-	c2.Set("rid", uint64(1))
-	c2.Set("uhash", "testhash1")
-	c2.Set("prm", []string{"users.create"})
-
-	userRequest2 := models.UserPassword{
-		User: models.User{
-			Mail:   "duplicate@test.com", // Same email
-			Name:   "Second User",
-			RoleID: 2,
-			Status: models.UserStatusActive,
-			Type:   models.UserTypeLocal,
-		},
-		Password: "AnotherPass456!",
-	}
-
-	body2, err := json.Marshal(userRequest2)
-	require.NoError(t, err)
-
-	c2.Request, _ = http.NewRequest("POST", "/users/", bytes.NewBuffer(body2))
-	c2.Request.Header.Set("Content-Type", "application/json")
-
-	service.CreateUser(c2)
-
-	// Should fail due to unique constraint
-	assert.Equal(t, http.StatusInternalServerError, w2.Code, "Expected error on duplicate email")
-
-	// Verify only one user exists
-	var count int
-	db.Model(&models.User{}).Where("mail = ?", "duplicate@test.com").Count(&count)
-	assert.Equal(t, 1, count, "Should have only one user with this email")
-}
-
-func TestChangeEmailCurrentUser(t *testing.T) {
-	db := setupTestDB(t)
-	defer db.Close()
-
-	// Hash password for user 1
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte("SecurePass123!"), bcrypt.DefaultCost)
 	require.NoError(t, err)
-	err = db.Model(&models.User{}).Where("id = 1").Updates(map[string]interface{}{
+	require.NoError(t, db.Model(&models.User{}).Where("id = 1").Updates(map[string]any{
 		"password": string(hashedPassword),
 		"hash":     "11111111111111111111111111111111",
-		"provider": "github",
-	}).Error
-	require.NoError(t, err)
+	}).Error)
 
-	userCache := auth.NewUserCache(db)
-	service := NewUserService(db, userCache)
+	service := NewUserService(db, auth.NewUserCache(db), "/api/v1", 4*60*60)
+	github := "github"
 
-	testCases := []struct {
+	for _, tc := range []struct {
 		name          string
 		requestBody   string
-		uid           uint64
 		expectedCode  int
-		checkResult   func(t *testing.T, db *gorm.DB)
 		errorContains string
+		wantMail      string
+		wantProvider  *string
 	}{
 		{
-			name:         "successful email change",
+			name:         "a free address under the right password",
 			requestBody:  `{"current_password": "SecurePass123!", "mail": "newemail@test.com"}`,
-			uid:          1,
 			expectedCode: http.StatusOK,
-			checkResult: func(t *testing.T, db *gorm.DB) {
-				var user models.User
-				err := db.Where("id = 1").First(&user).Error
-				require.NoError(t, err)
-				assert.Equal(t, "newemail@test.com", user.Mail)
-				assert.Nil(t, user.Provider, "email change clears the now-stale OAuth provider link")
-			},
+			wantMail:     "newemail@test.com",
 		},
 		{
-			name:         "mixed-case email is stored as entered (consistent with login and OAuth)",
+			name:         "a mixed-case address is stored as entered, as login and OAuth read it",
 			requestBody:  `{"current_password": "SecurePass123!", "mail": "Mixed.Case@Example.com"}`,
-			uid:          1,
 			expectedCode: http.StatusOK,
-			checkResult: func(t *testing.T, db *gorm.DB) {
-				var user models.User
-				require.NoError(t, db.Where("id = 1").First(&user).Error)
-				assert.Equal(t, "Mixed.Case@Example.com", user.Mail)
-			},
+			wantMail:     "Mixed.Case@Example.com",
 		},
 		{
-			name:          "invalid password",
+			name:          "a wrong current password",
 			requestBody:   `{"current_password": "WrongPassword!", "mail": "another@test.com"}`,
-			uid:           1,
 			expectedCode:  http.StatusForbidden,
 			errorContains: "invalid current password",
+			wantMail:      "user1@test.com",
+			wantProvider:  &github,
 		},
 		{
-			name:          "email already exists",
+			name:          "an address another user holds",
 			requestBody:   `{"current_password": "SecurePass123!", "mail": "user2@test.com"}`,
-			uid:           1,
 			expectedCode:  http.StatusConflict,
 			errorContains: "email already exists",
+			wantMail:      "user1@test.com",
+			wantProvider:  &github,
 		},
 		{
-			name:          "invalid email format",
+			name:          "an address that is not an email",
 			requestBody:   `{"current_password": "SecurePass123!", "mail": "invalid-email"}`,
-			uid:           1,
 			expectedCode:  http.StatusBadRequest,
 			errorContains: "failed to validate user email",
+			wantMail:      "user1@test.com",
+			wantProvider:  &github,
 		},
 		{
-			name:          "rejects a bare UUID (vmail escape hatch closed for user-set email)",
+			name:          "a bare uuid, which only the system may use as a mail",
 			requestBody:   `{"current_password": "SecurePass123!", "mail": "550e8400-e29b-41d4-a716-446655440000"}`,
-			uid:           1,
 			expectedCode:  http.StatusBadRequest,
 			errorContains: "failed to validate user email",
+			wantMail:      "user1@test.com",
+			wantProvider:  &github,
 		},
 		{
-			name:          "rejects the admin sentinel for user-set email",
+			name:          "the admin sentinel",
 			requestBody:   `{"current_password": "SecurePass123!", "mail": "admin"}`,
-			uid:           1,
 			expectedCode:  http.StatusBadRequest,
 			errorContains: "failed to validate user email",
+			wantMail:      "user1@test.com",
+			wantProvider:  &github,
 		},
-	}
-
-	for _, tc := range testCases {
+	} {
 		t.Run(tc.name, func(t *testing.T) {
-			gin.SetMode(gin.TestMode)
-			w := httptest.NewRecorder()
-			c, _ := gin.CreateTestContext(w)
+			require.NoError(t, db.Model(&models.User{}).Where("id = 1").Updates(map[string]any{
+				"mail":     "user1@test.com",
+				"provider": github,
+			}).Error)
 
-			c.Set("uid", tc.uid)
-			c.Set("rid", uint64(2))
-			c.Set("uhash", "11111111111111111111111111111111")
-			c.Set("prm", []string{})
-
-			c.Request, _ = http.NewRequest("PUT", "/user/email", bytes.NewBufferString(tc.requestBody))
-			c.Request.Header.Set("Content-Type", "application/json")
-
-			service.ChangeEmailCurrentUser(c)
+			w := usersCall(service.ChangeEmailCurrentUser, 1, 2, []string{}, tc.requestBody)
 
 			assert.Equal(t, tc.expectedCode, w.Code)
+			assert.Contains(t, w.Body.String(), tc.errorContains)
 
-			if tc.checkResult != nil {
-				tc.checkResult(t, db)
-			}
-
-			if tc.errorContains != "" {
-				assert.Contains(t, w.Body.String(), tc.errorContains)
-			}
+			var user models.User
+			require.NoError(t, db.Where("id = 1").First(&user).Error)
+			assert.Equal(t, tc.wantMail, user.Mail)
+			assert.Equal(t, tc.wantProvider, user.Provider, "only a completed change clears the now-stale OAuth provider link")
 		})
 	}
 }
 
-func TestChangeNameCurrentUser(t *testing.T) {
+func TestUsers_ChangeNameCurrentUser_RenamesAnExistingUserToANonEmptyName(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()
 
-	userCache := auth.NewUserCache(db)
-	service := NewUserService(db, userCache)
+	service := NewUserService(db, auth.NewUserCache(db), "/api/v1", 4*60*60)
 
-	testCases := []struct {
+	for _, tc := range []struct {
 		name          string
 		requestBody   string
 		uid           uint64
 		expectedCode  int
-		checkResult   func(t *testing.T, db *gorm.DB)
+		checkResult   func(t *testing.T)
 		errorContains string
 	}{
 		{
-			name:         "successful name change",
+			name:         "a new name for an existing user",
 			requestBody:  `{"name": "Renamed User"}`,
 			uid:          1,
 			expectedCode: http.StatusOK,
-			checkResult: func(t *testing.T, db *gorm.DB) {
+			checkResult: func(t *testing.T) {
 				var user models.User
 				require.NoError(t, db.Where("id = 1").First(&user).Error)
 				assert.Equal(t, "Renamed User", user.Name)
 			},
 		},
 		{
-			name:          "nonexistent user",
+			name:          "a user that does not exist",
 			requestBody:   `{"name": "Ghost"}`,
 			uid:           999,
 			expectedCode:  http.StatusNotFound,
 			errorContains: "Users.NotFound",
-			checkResult: func(t *testing.T, db *gorm.DB) {
+			checkResult: func(t *testing.T) {
 				var count int
 				require.NoError(t, db.Model(&models.User{}).Where("name = ?", "Ghost").Count(&count).Error)
 				assert.Equal(t, 0, count, "no row is created or touched for a missing user")
 			},
 		},
 		{
-			name:          "empty name",
+			name:          "an empty name",
 			requestBody:   `{"name": ""}`,
 			uid:           1,
 			expectedCode:  http.StatusBadRequest,
 			errorContains: "failed to validate user name",
 		},
-	}
-
-	for _, tc := range testCases {
+	} {
 		t.Run(tc.name, func(t *testing.T) {
-			gin.SetMode(gin.TestMode)
-			w := httptest.NewRecorder()
-			c, _ := gin.CreateTestContext(w)
-
-			c.Set("uid", tc.uid)
-			c.Set("rid", uint64(2))
-			c.Set("uhash", "11111111111111111111111111111111")
-			c.Set("prm", []string{})
-
-			c.Request, _ = http.NewRequest("PUT", "/user/name", bytes.NewBufferString(tc.requestBody))
-			c.Request.Header.Set("Content-Type", "application/json")
-
-			service.ChangeNameCurrentUser(c)
+			w := usersCall(service.ChangeNameCurrentUser, tc.uid, 2, []string{}, tc.requestBody)
 
 			assert.Equal(t, tc.expectedCode, w.Code)
-
 			if tc.checkResult != nil {
-				tc.checkResult(t, db)
+				tc.checkResult(t)
 			}
-
-			if tc.errorContains != "" {
-				assert.Contains(t, w.Body.String(), tc.errorContains)
-			}
+			assert.Contains(t, w.Body.String(), tc.errorContains)
 		})
 	}
 }
 
-func TestIsUniqueViolation(t *testing.T) {
-	assert.True(t, isUniqueViolation(errors.New(`pq: duplicate key value violates unique constraint "users_mail_unique"`)))
-	assert.True(t, isUniqueViolation(errors.New("pq: error 23505")))
-	assert.True(t, isUniqueViolation(errors.New("UNIQUE constraint failed: users.mail")), "sqlite phrasing is matched case-insensitively")
-	assert.False(t, isUniqueViolation(errors.New("connection refused")))
-	assert.False(t, isUniqueViolation(nil))
+const nextAccountPassword = "NextAccountPass2!"
+
+type passwordHarness struct {
+	engine  *gin.Engine
+	db      *gorm.DB
+	refuse  *bool
+	cookies []*http.Cookie
+	hash    string
+}
+
+func newPasswordHarness(t *testing.T) *passwordHarness {
+	t.Helper()
+
+	db := setupTestDB(t)
+	t.Cleanup(func() { db.Close() })
+	seedLocalUser(t, db, "known@corp.com")
+
+	refuse := false
+	gin.SetMode(gin.TestMode)
+	userCache := auth.NewUserCache(db)
+	authSvc := NewAuthService(AuthServiceConfig{BaseURL: "/", SessionTimeout: 3600}, db, map[string]oauth.OAuthClient{}, userCache)
+	userSvc := NewUserService(db, userCache, "/", 3600)
+	signedIn := auth.NewAuthMiddleware("/", "test", auth.NewTokenCache(db), userCache).AuthUserRequired
+
+	engine := gin.New()
+	require.NoError(t, engine.SetTrustedProxies(nil))
+	engine.Use(sessions.Sessions("pentagi", cookie.NewStore([]byte("test-secret"))))
+	overfill := func(c *gin.Context) {
+		if refuse {
+			// Past securecookie's 4096-byte limit, so the handler's Save fails to encode.
+			sessions.Default(c).Set("pad", strings.Repeat("x", 5000))
+		}
+	}
+	engine.POST("/auth/login", authSvc.AuthLogin)
+	engine.PUT("/user/password", signedIn, overfill, userSvc.ChangePasswordCurrentUser)
+	engine.PUT("/users/:hash", signedIn, overfill, userSvc.PatchUser)
+	engine.GET("/private", signedIn, func(c *gin.Context) { c.Status(http.StatusOK) })
+	engine.GET("/sgn", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"sgn": sessions.Default(c).Get("sgn")}) })
+
+	h := &passwordHarness{engine: engine, db: db, refuse: &refuse}
+	h.cookies = h.login(t, "known@corp.com")
+
+	var row struct{ Hash string }
+	require.NoError(t, db.Raw("SELECT hash FROM users WHERE mail = ?", "known@corp.com").Scan(&row).Error)
+	h.hash = row.Hash
+
+	return h
+}
+
+func (h *passwordHarness) login(t *testing.T, mail string) []*http.Cookie {
+	t.Helper()
+
+	body, err := json.Marshal(map[string]string{"mail": mail, "password": knownAccountPassword})
+	require.NoError(t, err)
+
+	h.cookies = nil
+	rec := h.do(t, http.MethodPost, "/auth/login", string(body))
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	return rec.Result().Cookies()
+}
+
+func (h *passwordHarness) privateStatus(t *testing.T, cookies []*http.Cookie) int {
+	t.Helper()
+
+	saved := h.cookies
+	defer func() { h.cookies = saved }()
+	h.cookies = cookies
+
+	return h.do(t, http.MethodGet, "/private", "").Code
+}
+
+func (h *passwordHarness) do(t *testing.T, method, target, body string) *httptest.ResponseRecorder {
+	t.Helper()
+
+	req := httptest.NewRequest(method, target, strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.RemoteAddr = "10.0.0.1:54321"
+	for _, c := range h.cookies {
+		req.AddCookie(c)
+	}
+
+	rec := httptest.NewRecorder()
+	h.engine.ServeHTTP(rec, req)
+
+	return rec
+}
+
+func (h *passwordHarness) state(t *testing.T) (generation uint64, password string) {
+	t.Helper()
+
+	var row struct {
+		SessionGeneration uint64
+		Password          string
+	}
+	require.NoError(t, h.db.Raw("SELECT session_generation, password FROM users WHERE mail = ?", "known@corp.com").
+		Scan(&row).Error)
+
+	return row.SessionGeneration, row.Password
+}
+
+func (h *passwordHarness) cookieGeneration(t *testing.T, fresh []*http.Cookie) uint64 {
+	t.Helper()
+
+	byName := map[string]*http.Cookie{}
+	for _, c := range append(h.cookies, fresh...) {
+		byName[c.Name] = c
+	}
+	h.cookies = h.cookies[:0]
+	for _, c := range byName {
+		h.cookies = append(h.cookies, c)
+	}
+	rec := h.do(t, http.MethodGet, "/sgn", "")
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var body struct{ Sgn uint64 }
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+
+	return body.Sgn
+}
+
+func (h *passwordHarness) changeThroughTheForm(t *testing.T) *httptest.ResponseRecorder {
+	return h.do(t, http.MethodPut, "/user/password",
+		`{"current_password":"`+knownAccountPassword+`","password":"`+nextAccountPassword+
+			`","confirm_password":"`+nextAccountPassword+`"}`)
+}
+
+func (h *passwordHarness) changeThroughTheEditor(t *testing.T) *httptest.ResponseRecorder {
+	return h.do(t, http.MethodPut, "/users/"+h.hash,
+		`{"hash":"`+h.hash+`","type":"local","mail":"known@corp.com","name":"Known","status":"active",`+
+			`"role_id":2,"password":"`+nextAccountPassword+`"}`)
+}
+
+// usersPasswordDoors are the handlers that reach changePassword for the account's own password.
+var usersPasswordDoors = []struct {
+	name   string
+	change func(*passwordHarness, *testing.T) *httptest.ResponseRecorder
+}{
+	{"through the password form", (*passwordHarness).changeThroughTheForm},
+	{"through the user editor", (*passwordHarness).changeThroughTheEditor},
+}
+
+func TestUsers_ChangePassword_EndsOtherSessionsAndKeepsTheCaller(t *testing.T) {
+	for _, door := range usersPasswordDoors {
+		t.Run(door.name, func(t *testing.T) {
+			h := newPasswordHarness(t)
+			before, _ := h.state(t)
+			stolen := slices.Clone(h.cookies)
+
+			rec := door.change(h, t)
+			require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+
+			after, _ := h.state(t)
+			assert.Equal(t, before+1, after, "the other sessions have to end")
+			assert.Equal(t, after, h.cookieGeneration(t, rec.Result().Cookies()),
+				"the caller's own cookie has to carry the new generation, or the next request is refused")
+			assert.NotEqual(t, http.StatusOK, h.privateStatus(t, stolen), "a cookie from before the change is refused at once")
+			assert.Equal(t, http.StatusOK, h.privateStatus(t, h.cookies), "the caller stays signed in")
+		})
+	}
+}
+
+func TestUsers_ChangePassword_KeepsAnAdministratorResettingAnotherAccountSignedIn(t *testing.T) {
+	h := newPasswordHarness(t)
+	seedLocalAccount(t, h.db, "boss.admin@corp.com", 1)
+	before, _ := h.state(t)
+
+	h.cookies = h.login(t, "boss.admin@corp.com")
+	rec := h.changeThroughTheEditor(t)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+
+	after, _ := h.state(t)
+	assert.Equal(t, before+1, after, "the user's sessions end")
+	h.cookieGeneration(t, rec.Result().Cookies())
+	assert.Equal(t, http.StatusOK, h.privateStatus(t, h.cookies),
+		"the administrator's cookie is not stamped with the other account's generation")
+}
+
+func TestUsers_ChangePassword_ChangesNothingWhenAStepFails(t *testing.T) {
+	for _, fault := range []struct {
+		name   string
+		inject func(t *testing.T, h *passwordHarness)
+	}{
+		{
+			name:   "the caller's cookie cannot be re-stamped",
+			inject: func(_ *testing.T, h *passwordHarness) { *h.refuse = true },
+		},
+		{
+			name: "the other sessions cannot be ended",
+			inject: func(t *testing.T, h *passwordHarness) {
+				require.NoError(t, h.db.Exec("CREATE TRIGGER refuse_generation BEFORE UPDATE OF session_generation ON users "+
+					"BEGIN SELECT RAISE(FAIL, 'generation locked'); END").Error)
+			},
+		},
+		{
+			name: "the commit is refused",
+			inject: func(t *testing.T, h *passwordHarness) {
+				for _, stmt := range []string{
+					"PRAGMA foreign_keys = ON",
+					"CREATE TABLE generation_parent (id INTEGER PRIMARY KEY)",
+					"CREATE TABLE generation_guard (generation INTEGER REFERENCES generation_parent(id) DEFERRABLE INITIALLY DEFERRED)",
+					"CREATE TRIGGER fail_at_commit AFTER UPDATE OF session_generation ON users " +
+						"BEGIN INSERT INTO generation_guard (generation) VALUES (NEW.session_generation); END",
+				} {
+					require.NoError(t, h.db.Exec(stmt).Error, stmt)
+				}
+			},
+		},
+	} {
+		for _, door := range usersPasswordDoors {
+			t.Run(fault.name+", "+door.name, func(t *testing.T) {
+				h := newPasswordHarness(t)
+				beforeGeneration, beforePassword := h.state(t)
+				fault.inject(t, h)
+
+				rec := door.change(h, t)
+
+				assert.Equal(t, http.StatusInternalServerError, rec.Code)
+				afterGeneration, afterPassword := h.state(t)
+				assert.Equal(t, beforeGeneration, afterGeneration, "the other sessions are left as they were")
+				assert.Equal(t, beforePassword, afterPassword, "a new password without ended sessions leaves a stolen cookie working")
+				assert.Equal(t, beforeGeneration, h.cookieGeneration(t, rec.Result().Cookies()),
+					"a cookie ahead of the row is refused on the next request")
+			})
+		}
+	}
 }

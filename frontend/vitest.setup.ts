@@ -1,7 +1,11 @@
 import '@testing-library/jest-dom/vitest';
 
-import { cleanup } from '@testing-library/react';
+import { cleanup, configure } from '@testing-library/react';
 import { afterEach } from 'vitest';
+
+// Product markup carries `data-slot`, the shadcn anatomy attribute, and never `data-testid`.
+// Pointing the query at it means a stub that reaches for `data-testid` stops being found.
+configure({ testIdAttribute: 'data-slot' });
 
 // jsdom doesn't implement `Element.prototype.scrollIntoView` — components
 // that call it from effects (e.g. roving-focus + scroll into view) crash in

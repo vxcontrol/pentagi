@@ -2,6 +2,7 @@ package models
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -92,10 +93,43 @@ func (m *AIAgentsSettingsFormModel) BuildForm() tea.Cmd {
 			locale.ToolsAIAgentsSettingTaskPlanningDesc,
 			cfg.AgentPlanningStepEnabled,
 		),
+		m.createSelectField(
+			"llm_fallback_provider",
+			locale.ToolsAIAgentsSettingLLMFallbackProvider,
+			locale.ToolsAIAgentsSettingLLMFallbackProviderDesc,
+			cfg.LLMFallbackProvider,
+			llmFallbackProviders,
+		),
 	}
 
 	m.SetFormFields(fields)
 	return fields[0].Input.Focus()
+}
+
+// llmFallbackProviders lists the provider ids accepted by LLM_FALLBACK_PROVIDER,
+// offered as suggestions on the fallback field.
+var llmFallbackProviders = []string{
+	"openai", "anthropic", "gemini", "bedrock", "ollama", "custom",
+	"deepseek", "glm", "kimi", "qwen", "minimax", "mistral", "xai",
+}
+
+func (m *AIAgentsSettingsFormModel) createSelectField(
+	key, title, description string, envVar loader.EnvVar, options []string,
+) FormField {
+	input := NewTextInput(m.GetStyles(), m.GetWindow(), envVar)
+	input.ShowSuggestions = true
+	input.SetSuggestions(options)
+
+	return FormField{
+		Key:         key,
+		Title:       title,
+		Description: description,
+		Required:    false,
+		Masked:      false,
+		Input:       input,
+		Value:       input.Value(),
+		Suggestions: options,
+	}
 }
 
 func (m *AIAgentsSettingsFormModel) createBooleanField(key, title, description string, envVar loader.EnvVar) FormField {
@@ -230,6 +264,9 @@ func (m *AIAgentsSettingsFormModel) GetCurrentConfiguration() string {
 	// task planning
 	displayBoolean(cfg.AgentPlanningStepEnabled, locale.ToolsAIAgentsSettingTaskPlanning)
 
+	// fallback provider
+	displayInteger(cfg.LLMFallbackProvider, locale.ToolsAIAgentsSettingLLMFallbackProvider)
+
 	return strings.Join(sections, "\n")
 }
 
@@ -255,7 +292,7 @@ func (m *AIAgentsSettingsFormModel) GetHelpContent() string {
 
 func (m *AIAgentsSettingsFormModel) HandleSave() error {
 	fields := m.GetFormFields()
-	if len(fields) != 8 {
+	if len(fields) != 9 {
 		return fmt.Errorf("unexpected number of fields: %d", len(fields))
 	}
 
@@ -269,6 +306,7 @@ func (m *AIAgentsSettingsFormModel) HandleSave() error {
 		MaxGeneralAgentToolCalls:       cur.MaxGeneralAgentToolCalls,
 		MaxLimitedAgentToolCalls:       cur.MaxLimitedAgentToolCalls,
 		AgentPlanningStepEnabled:       cur.AgentPlanningStepEnabled,
+		LLMFallbackProvider:            cur.LLMFallbackProvider,
 	}
 
 	// validate and set each field
@@ -328,6 +366,13 @@ func (m *AIAgentsSettingsFormModel) HandleSave() error {
 			}
 			newCfg.AgentPlanningStepEnabled.Value = value
 
+		case "llm_fallback_provider":
+			if value != "" && !slices.Contains(llmFallbackProviders, value) {
+				return fmt.Errorf("invalid LLM fallback provider: %s (must be one of %s)",
+					value, strings.Join(llmFallbackProviders, ", "))
+			}
+			newCfg.LLMFallbackProvider.Value = value
+
 		default:
 			return fmt.Errorf("unknown field key at index %d: %s", i, field.Key)
 		}
@@ -376,6 +421,10 @@ func (m *AIAgentsSettingsFormModel) HandleReset() {
 	if len(fields) >= 8 {
 		fields[7].Input.SetValue(cfg.AgentPlanningStepEnabled.Value)
 		fields[7].Value = fields[7].Input.Value()
+	}
+	if len(fields) >= 9 {
+		fields[8].Input.SetValue(cfg.LLMFallbackProvider.Value)
+		fields[8].Value = fields[8].Input.Value()
 	}
 
 	m.SetFormFields(fields)

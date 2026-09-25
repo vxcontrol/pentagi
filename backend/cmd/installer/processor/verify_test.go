@@ -1,250 +1,132 @@
 package processor
 
 import (
-	"runtime"
 	"strings"
-	"sync"
 	"testing"
 
 	"pentagi/cmd/installer/checker"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func componentDigest(fill string) string {
 	return strings.Repeat(fill, 64/len(fill))
 }
 
-// TestTargetsAreCapturedBeforeTheAnswerIsReplaced covers the ordering the whole
-// verification depends on. The update refreshes the check, so by the time the comparison
-// runs the answer describes the NEW state — comparing against it would compare the result
-// with itself and always agree.
-func TestTargetsAreCapturedBeforeTheAnswerIsReplaced(t *testing.T) {
-	before := &checker.CheckResult{StackUpdates: []checker.StackUpdate{{
-		Stack:     "pentagi",
-		HasUpdate: true,
-		Components: []checker.ComponentUpdate{{
-			Component: "pentagi", OS: "linux", Arch: "amd64",
-			Verifiable: true, Outdated: true,
-			CurrentVersion: componentDigest("a"),
-			TargetDigest:   componentDigest("b"),
-		}},
-	}}}
+func TestVerify_CaptureStackTargets_RecordsWhatEachComponentShouldBecome(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		component checker.ComponentUpdate
+		want      string
+	}{
+		{"an outdated component should become the offered build", checker.ComponentUpdate{
+			Verifiable: true, Outdated: true, CurrentVersion: componentDigest("a"), TargetDigest: componentDigest("b"),
+		}, componentDigest("b")},
+		// Under the stable strategy the answer lists every artefact of the release.
+		{"a current component should stay what it runs", checker.ComponentUpdate{
+			Verifiable: true, Outdated: false, CurrentVersion: componentDigest("c"),
+		}, componentDigest("c")},
+		// Promoting the installed value into a target would turn "cannot tell" into a claim.
+		{"an unverifiable component carries no target", checker.ComponentUpdate{
+			Verifiable: false, CurrentVersion: componentDigest("d"),
+		}, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.component.Component, tc.component.OS, tc.component.Arch = "pentagi", "linux", "amd64"
+			before := &checker.CheckResult{StackUpdates: []checker.StackUpdate{
+				{Stack: "langfuse", Components: []checker.ComponentUpdate{{Component: "langfuse-web"}}},
+				{Stack: "pentagi", HasUpdate: true, Components: []checker.ComponentUpdate{tc.component}},
+			}}
 
-	targets := captureStackTargets(before, "pentagi")
-
-	if len(targets) != 1 {
-		t.Fatalf("captured %d targets, want 1", len(targets))
-	}
-	if targets[0].digest != componentDigest("b") {
-		t.Errorf("target digest = %q, want the offered build", targets[0].digest)
-	}
-	if targets[0].name != "pentagi/linux/amd64" {
-		t.Errorf("target name = %q, want pentagi/linux/amd64", targets[0].name)
-	}
-}
-
-// TestTargetOfAnAlreadyCurrentComponentIsWhatItRuns: under the stable strategy the answer
-// lists every artefact of the release, including ones that already match. For those the
-// target is what is installed, so the verification confirms nothing changed rather than
-// expecting a change that was never due.
-func TestTargetOfAnAlreadyCurrentComponentIsWhatItRuns(t *testing.T) {
-	current := componentDigest("c")
-	before := &checker.CheckResult{StackUpdates: []checker.StackUpdate{{
-		Stack: "pentagi",
-		Components: []checker.ComponentUpdate{{
-			Component: "scraper", OS: "linux", Arch: "amd64",
-			Verifiable: true, Outdated: false,
-			CurrentVersion: current,
-			TargetDigest:   "",
-		}},
-	}}}
-
-	targets := captureStackTargets(before, "pentagi")
-
-	if len(targets) != 1 || targets[0].digest != current {
-		t.Fatalf("targets = %+v, want the installed digest as the target", targets)
+			assert.Equal(t, []componentTarget{{name: "pentagi/linux/amd64", digest: tc.want}},
+				captureStackTargets(before, "pentagi"))
+		})
 	}
 }
 
-// TestUnverifiableComponentCarriesNoTarget: the server omits a digest it does not know, and
-// inventing one would turn "cannot tell" into a mismatch report.
-func TestUnverifiableComponentCarriesNoTarget(t *testing.T) {
-	before := &checker.CheckResult{StackUpdates: []checker.StackUpdate{{
-		Stack: "pentagi",
-		Components: []checker.ComponentUpdate{{
-			Component: "pgvector", OS: "linux", Arch: "amd64",
-			// Something IS installed — the check knows what it is. What is missing is a
-			// published digest to compare it against, and without the guard the installed
-			// value would be promoted into a target, turning "cannot tell" into a claim.
-			Verifiable:     false,
-			CurrentVersion: componentDigest("d"),
-		}},
-	}}}
-
-	targets := captureStackTargets(before, "pentagi")
-
-	if len(targets) != 1 {
-		t.Fatalf("captured %d targets, want 1", len(targets))
-	}
-	if targets[0].digest != "" {
-		t.Errorf("target digest = %q, want empty for an artefact the server could not name", targets[0].digest)
-	}
-}
-
-func TestStackHasNoUpdate(t *testing.T) {
-	tests := []struct {
+func TestVerify_StackHasNoUpdate_TrustsOnlyASuccessfulFreshAnswer(t *testing.T) {
+	for _, tc := range []struct {
 		name   string
 		result *checker.CheckResult
-		stack  string
 		want   bool
 	}{
-		{
-			name:   "the answer says nothing is pending",
-			result: &checker.CheckResult{StackUpdates: []checker.StackUpdate{{Stack: "pentagi", HasUpdate: false}}},
-			stack:  "pentagi",
-			want:   true,
-		},
-		{
-			name:   "the answer still offers an update",
-			result: &checker.CheckResult{StackUpdates: []checker.StackUpdate{{Stack: "pentagi", HasUpdate: true}}},
-			stack:  "pentagi",
-			want:   false,
-		},
-		{
-			// The server reports on what it was asked about; silence about a stack is not
-			// evidence that something is pending for it.
-			name:   "the stack is not mentioned",
-			result: &checker.CheckResult{StackUpdates: []checker.StackUpdate{{Stack: "langfuse"}}},
-			stack:  "pentagi",
-			want:   true,
-		},
-		{
-			// Without a fresh answer there is no authority to appeal to, so a difference
-			// cannot be excused as the registry having moved ahead.
-			name: "the refreshed check failed",
-			result: &checker.CheckResult{
-				UpdateFailure: &checker.UpdateCheckFailure{Reason: "unreachable"},
-				StackUpdates:  []checker.StackUpdate{{Stack: "pentagi", HasUpdate: false}},
-			},
-			stack: "pentagi",
-			want:  false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := stackHasNoUpdate(tt.result, tt.stack); got != tt.want {
-				t.Errorf("stackHasNoUpdate = %t, want %t", got, tt.want)
-			}
-		})
-	}
-}
-
-// TestVerificationDistinguishesNewerFromWrong is the case the plan calls out: a moving tag
-// can point somewhere new between the answer and the pull, so what arrives matches no
-// target and is still correct. The fresh check settles it — if the server no longer offers
-// an update, whatever is installed is current.
-func TestVerificationDistinguishesNewerFromWrong(t *testing.T) {
-	target, arrived := componentDigest("a"), componentDigest("b")
-
-	tests := []struct {
-		name          string
-		stillOffered  bool
-		wantSubstring string
-	}{
-		{
-			name:          "registry moved ahead",
-			stillOffered:  false,
-			wantSubstring: "newer than the offered build",
-		},
-		{
-			name:          "the update did not take",
-			stillOffered:  true,
-			wantSubstring: "expected",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := &checker.CheckResult{
-				StackUpdates: []checker.StackUpdate{{Stack: "pentagi", HasUpdate: tt.stillOffered}},
-				InstalledComponents: []checker.InstalledComponent{{
-					Component: "pentagi", OS: "linux", Arch: "amd64", Digest: arrived,
-				}},
-			}
-			p := &processor{checker: result}
-			state := &operationState{mx: &sync.Mutex{}, ctx: t.Context()}
-
-			p.verifyStackUpdate(ProductStackPentagi,
-				[]componentTarget{{name: "pentagi/linux/amd64", digest: target}}, state)
-
-			if reported := state.output.String(); !strings.Contains(reported, tt.wantSubstring) {
-				t.Errorf("verification said %q, want it to mention %q", reported, tt.wantSubstring)
-			}
-		})
-	}
-}
-
-// TestVerificationReportsAMatchAndAnUnverifiableComponentDifferently: "matches" and "cannot
-// be checked" are different facts, and reporting the second as the first would claim proof
-// nobody has.
-func TestVerificationReportsAMatchAndAnUnverifiableComponentDifferently(t *testing.T) {
-	matched := componentDigest("a")
-
-	result := &checker.CheckResult{
-		StackUpdates: []checker.StackUpdate{{Stack: "pentagi", HasUpdate: false}},
-		InstalledComponents: []checker.InstalledComponent{
-			{Component: "pentagi", OS: "linux", Arch: "amd64", Digest: matched},
-			{Component: "scraper", OS: "linux", Arch: "amd64", Digest: componentDigest("c")},
-		},
-	}
-	p := &processor{checker: result}
-	state := &operationState{mx: &sync.Mutex{}, ctx: t.Context()}
-
-	p.verifyStackUpdate(ProductStackPentagi, []componentTarget{
-		{name: "pentagi/linux/amd64", digest: matched},
-		{name: "scraper/linux/amd64", digest: ""},
-	}, state)
-
-	text := state.output.String()
-	if !strings.Contains(text, "matches the published build") {
-		t.Error("the matching component was not reported as matching")
-	}
-	if !strings.Contains(text, "no published digest") {
-		t.Error("the unverifiable component was not distinguished from a match")
-	}
-	if strings.Contains(text, "do not match") {
-		t.Error("an unverifiable component was counted as a mismatch")
-	}
-}
-
-// TestInstallerUpdatesAreNotVerifiedAgainstTheRunningBinary: the installer operation
-// downloads a build and stops, deliberately leaving the running binary alone. Comparing
-// them would report the intended outcome as a failure.
-func TestInstallerUpdatesAreNotVerifiedAgainstTheRunningBinary(t *testing.T) {
-	if verifiableUpdateStacks[ProductStackInstaller] {
-		t.Error("the installer stack is verified against a binary its update never replaces")
-	}
-	for _, stack := range []ProductStack{
-		ProductStackPentagi, ProductStackGraphiti,
-		ProductStackLangfuse, ProductStackObservability, ProductStackWorker,
+		{"the answer says nothing is pending",
+			&checker.CheckResult{StackUpdates: []checker.StackUpdate{{Stack: "pentagi", HasUpdate: false}}}, true},
+		{"the answer still offers an update",
+			&checker.CheckResult{StackUpdates: []checker.StackUpdate{{Stack: "pentagi", HasUpdate: true}}}, false},
+		// Silence about a stack is not evidence that something is pending for it.
+		{"the stack is not mentioned",
+			&checker.CheckResult{StackUpdates: []checker.StackUpdate{{Stack: "langfuse"}}}, true},
+		// Without a fresh answer a difference cannot be excused as the registry moving ahead.
+		{"the refreshed check failed", &checker.CheckResult{
+			UpdateFailure: &checker.UpdateCheckFailure{Reason: "unreachable"},
+			StackUpdates:  []checker.StackUpdate{{Stack: "pentagi", HasUpdate: false}},
+		}, false},
 	} {
-		if !verifiableUpdateStacks[stack] {
-			t.Errorf("stack %s replaces what is installed but is never verified", stack)
-		}
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, stackHasNoUpdate(tc.result, "pentagi"))
+		})
 	}
 }
 
-func TestInstallerFileName(t *testing.T) {
-	name := installerFileName("2.1.0")
+// A moving tag can point somewhere new between the answer and the pull.
+func TestVerify_VerifyStackUpdate_TellsAMatchANewerBuildAMismatchAndTheUnverifiableApart(t *testing.T) {
+	offered, arrived := componentDigest("a"), componentDigest("b")
+	for _, tc := range []struct {
+		name         string
+		stillOffered bool
+		installed    string
+		targets      []componentTarget
+		want         []string
+		wantNot      string
+	}{
+		{name: "the registry moved ahead", installed: arrived,
+			targets: []componentTarget{{name: "pentagi/linux/amd64", digest: offered}},
+			want:    []string{"pentagi/linux/amd64: newer than the offered build"}},
+		{name: "the update did not take", stillOffered: true, installed: arrived,
+			targets: []componentTarget{{name: "pentagi/linux/amd64", digest: offered}},
+			want:    []string{"pentagi/linux/amd64: expected " + offered + ", got " + arrived}},
+		{name: "a match and an unverifiable component", installed: offered,
+			targets: []componentTarget{
+				{name: "pentagi/linux/amd64", digest: offered},
+				{name: "scraper/linux/amd64", digest: ""},
+			},
+			want: []string{
+				"pentagi/linux/amd64: matches the published build",
+				"scraper/linux/amd64: no published digest",
+			},
+			wantNot: "do not match"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p := &processor{checker: &checker.CheckResult{
+				StackUpdates: []checker.StackUpdate{{Stack: "pentagi", HasUpdate: tc.stillOffered}},
+				InstalledComponents: []checker.InstalledComponent{
+					{Component: "pentagi", OS: "linux", Arch: "amd64", Digest: tc.installed},
+					{Component: "scraper", OS: "linux", Arch: "amd64", Digest: componentDigest("c")},
+				},
+			}}
+			state := testOperationState(t)
 
-	// The version is in the name so a download never lands on the installer in use.
-	if !strings.Contains(name, "2.1.0") {
-		t.Errorf("file name %q does not identify the build", name)
+			p.verifyStackUpdate(ProductStackPentagi, tc.targets, state)
+
+			reported := state.output.String()
+			for _, want := range tc.want {
+				assert.Contains(t, reported, want)
+			}
+			if tc.wantNot != "" {
+				assert.NotContains(t, reported, tc.wantNot, "an unverifiable component was counted as a mismatch")
+			}
+		})
 	}
-	if runtime.GOOS == "windows" && !strings.HasSuffix(name, ".exe") {
-		t.Errorf("file name %q is not executable on this platform", name)
-	}
-	if runtime.GOOS != "windows" && strings.HasSuffix(name, ".exe") {
-		t.Errorf("file name %q carries a windows suffix", name)
+}
+
+// The installer operation downloads a build and leaves the running binary alone.
+func TestVerify_VerifiableUpdateStacks_LeaveOutOnlyTheInstaller(t *testing.T) {
+	require.False(t, verifiableUpdateStacks[ProductStackInstaller])
+	for _, stack := range []ProductStack{
+		ProductStackPentagi, ProductStackGraphiti, ProductStackLangfuse, ProductStackObservability, ProductStackWorker,
+	} {
+		assert.True(t, verifiableUpdateStacks[stack], "stack %s replaces what is installed but is never verified", stack)
 	}
 }

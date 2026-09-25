@@ -64,7 +64,7 @@ RETURNING *;
 -- name: UpdateAssistantStatus :one
 UPDATE assistants
 SET status = $1
-WHERE id = $2
+WHERE id = $2 AND deleted_at IS NULL
 RETURNING *;
 
 -- name: UpdateAssistantTitle :one

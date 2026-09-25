@@ -4,6 +4,7 @@ import { ArrowLeft, FileText, Key, Plug, Settings as SettingsIcon, User } from '
 import { useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 
+import { VersionPanel } from '@/components/shared/version-panel';
 import {
     Sidebar,
     SidebarContent,
@@ -15,7 +16,6 @@ import {
     SidebarMenuButton,
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
-import { VersionBadge } from '@/features/version/version-badge';
 import { routes } from '@/lib/routes';
 import { getSafeReturnUrl } from '@/lib/utils/auth';
 
@@ -67,13 +67,16 @@ export function SettingsSidebar() {
         <Sidebar collapsible="icon">
             <SidebarHeader>
                 <SidebarMenu>
-                    <SidebarMenuItem className="flex items-center gap-2">
-                        <div className="flex aspect-square size-8 items-center justify-center">
-                            <SettingsIcon className="size-6" />
-                        </div>
-                        <div className="grid flex-1 text-left leading-tight">
-                            <span className="truncate font-semibold">Settings</span>
-                        </div>
+                    <SidebarMenuItem>
+                        <VersionPanel
+                            icon={
+                                <SettingsIcon
+                                    className="size-8"
+                                    strokeWidth={4 / 3}
+                                />
+                            }
+                            title="Settings"
+                        />
                     </SidebarMenuItem>
                 </SidebarMenu>
             </SidebarHeader>
@@ -92,9 +95,6 @@ export function SettingsSidebar() {
                 </SidebarGroup>
             </SidebarContent>
             <SidebarFooter>
-                <div className="flex items-center px-1 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0">
-                    <VersionBadge showProductName />
-                </div>
                 <SidebarMenuButton asChild>
                     <NavLink to={returnUrl}>
                         <ArrowLeft />

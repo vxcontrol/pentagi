@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"slices"
 	"strconv"
@@ -24,6 +25,8 @@ const (
 	defaultSearchThreshold = float32(0.2)
 	manualDocumentFlag     = "manual"
 )
+
+var ErrInvalidDocument = errors.New("invalid knowledge document")
 
 // PublisherFactory creates a per-user KnowledgePublisher.
 // Matches subscriptions.SubscriptionsController.NewKnowledgePublisher signature.
@@ -107,7 +110,7 @@ type knowledgeMeta struct {
 	CodeLang    string `json:"code_lang,omitempty"`
 	PartSize    int    `json:"part_size,omitempty"`
 	TotalSize   int    `json:"total_size,omitempty"`
-	Manual      bool   `json:"manual,omitempty"`
+	Manual      bool   `json:"manual,omitempty"` // set by CreateDocument, never by an agent's store tool
 }
 
 func parseMeta(raw string) knowledgeMeta {
@@ -193,11 +196,11 @@ func metaToModelDoc(id, content string, meta knowledgeMeta) *model.KnowledgeDocu
 		doc.Description = &d
 	}
 	if meta.GuideType != "" {
-		gt := model.KnowledgeGuideType(meta.GuideType)
+		gt := canonicalGuideType(meta.GuideType)
 		doc.GuideType = &gt
 	}
 	if meta.AnswerType != "" {
-		at := model.KnowledgeAnswerType(meta.AnswerType)
+		at := canonicalAnswerType(meta.AnswerType)
 		doc.AnswerType = &at
 	}
 	if meta.CodeLang != "" {
@@ -232,13 +235,6 @@ func applyGoFilters(docs []*model.KnowledgeDocument, filter *model.KnowledgeFilt
 		result = append(result, doc)
 	}
 	return result
-}
-
-func (ks *knowledgeStore) requireStore() error {
-	if ks.store == nil {
-		return fmt.Errorf("knowledge: embedding provider is not configured")
-	}
-	return nil
 }
 
 func (ks *knowledgeStore) requireEmbedder() error {
@@ -459,6 +455,25 @@ func passesSearchFilter(doc *model.KnowledgeDocument, filter *model.KnowledgeFil
 
 // ---- CreateDocument ---------------------------------------------------------
 
+func requireSubType(meta knowledgeMeta) error {
+	var subType, field string
+
+	switch model.KnowledgeDocType(meta.DocType) {
+	case model.KnowledgeDocTypeAnswer:
+		subType, field = meta.AnswerType, "answer type"
+	case model.KnowledgeDocTypeGuide:
+		subType, field = meta.GuideType, "guide type"
+	case model.KnowledgeDocTypeCode:
+		subType, field = meta.CodeLang, "code language"
+	}
+
+	if field != "" && strings.TrimSpace(subType) == "" {
+		return fmt.Errorf("%w: %s document requires %s", ErrInvalidDocument, meta.DocType, field)
+	}
+
+	return nil
+}
+
 func (ks *knowledgeStore) CreateDocument(ctx context.Context, userID int64, input model.CreateKnowledgeDocumentInput) (*model.KnowledgeDocument, error) {
 	if err := ks.requireEmbedder(); err != nil {
 		return nil, err
@@ -481,6 +496,10 @@ func (ks *knowledgeStore) CreateDocument(ctx context.Context, userID int64, inpu
 	}
 	if input.CodeLang != nil {
 		meta.CodeLang = *input.CodeLang
+	}
+
+	if err := requireSubType(meta); err != nil {
+		return nil, err
 	}
 
 	content := strings.TrimSpace(input.Content)
@@ -661,6 +680,10 @@ func (ks *knowledgeStore) doUpdate(ctx context.Context, userID int64, id string,
 		meta.DocType = newDocType
 	}
 
+	if err := requireSubType(meta); err != nil {
+		return nil, err
+	}
+
 	deltaContentLen := len(content) - len(existing.Content)
 	if existing.PartSize <= 0 {
 		meta.PartSize = len(content)
@@ -740,37 +763,20 @@ func (ks *knowledgeStore) DeleteUserDocument(ctx context.Context, userID int64, 
 
 // ---- helpers ----------------------------------------------------------------
 
-// metaToMap converts knowledgeMeta to the map[string]any format used by
-// langchaingo's schema.Document.Metadata / pgvector cmetadata.
-func metaToMap(m knowledgeMeta) map[string]any {
-	mp := map[string]any{
-		"doc_type":         m.DocType,
-		"user_id":          m.UserID,
-		"question":         m.Question,
-		"part_size":        m.PartSize,
-		"total_size":       m.TotalSize,
-		manualDocumentFlag: m.Manual,
+func canonicalGuideType(stored string) model.KnowledgeGuideType {
+	guideType := model.KnowledgeGuideType(strings.ToLower(strings.TrimSpace(stored)))
+	if !guideType.IsValid() {
+		return model.KnowledgeGuideTypeOther
 	}
-	if m.Description != "" {
-		mp["description"] = m.Description
+
+	return guideType
+}
+
+func canonicalAnswerType(stored string) model.KnowledgeAnswerType {
+	answerType := model.KnowledgeAnswerType(strings.ToLower(strings.TrimSpace(stored)))
+	if !answerType.IsValid() {
+		return model.KnowledgeAnswerTypeOther
 	}
-	if m.GuideType != "" {
-		mp["guide_type"] = m.GuideType
-	}
-	if m.AnswerType != "" {
-		mp["answer_type"] = m.AnswerType
-	}
-	if m.CodeLang != "" {
-		mp["code_lang"] = m.CodeLang
-	}
-	if m.FlowID != nil {
-		mp["flow_id"] = *m.FlowID
-	}
-	if m.TaskID != nil {
-		mp["task_id"] = *m.TaskID
-	}
-	if m.SubtaskID != nil {
-		mp["subtask_id"] = *m.SubtaskID
-	}
-	return mp
+
+	return answerType
 }

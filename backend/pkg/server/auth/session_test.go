@@ -1,61 +1,36 @@
-package auth_test
+package auth
 
 import (
-	"pentagi/pkg/server/auth"
+	"encoding/hex"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func TestMakeJWTSigningKey(t *testing.T) {
-	salt1 := "test_salt_1"
-	salt2 := "test_salt_2"
+// Literals from an independent PBKDF2: a changed derivation signs out every issued token and cookie.
+func TestSession_MakeJWTSigningKey_DerivesAStableKeyPerSaltApartFromTheCookieKeys(t *testing.T) {
+	for range 2 {
+		assert.Equal(t, "30c8728cb80e76b834425f8ef8afc62557dd94f7906a28c06c317fed9a8b4de5",
+			hex.EncodeToString(MakeJWTSigningKey("kat_salt")), "derived first, then served from the cache")
+	}
 
-	// Test that key is generated
-	key1 := auth.MakeJWTSigningKey(salt1)
-	assert.NotNil(t, key1)
-	assert.Len(t, key1, 32, "JWT signing key should be 32 bytes (256 bits)")
+	other := MakeJWTSigningKey("another_salt")
+	assert.Len(t, other, 32)
+	assert.NotEqual(t, MakeJWTSigningKey("kat_salt"), other)
 
-	// Test that same salt produces same key (cached)
-	key1Again := auth.MakeJWTSigningKey(salt1)
-	assert.Equal(t, key1, key1Again, "Same salt should produce same key from cache")
-
-	// Test that different salts produce different keys
-	key2 := auth.MakeJWTSigningKey(salt2)
-	assert.NotEqual(t, key1, key2, "Different salts should produce different keys")
-	assert.Len(t, key2, 32, "JWT signing key should be 32 bytes (256 bits)")
-
-	// Verify consistency for salt2
-	key2Again := auth.MakeJWTSigningKey(salt2)
-	assert.Equal(t, key2, key2Again, "Same salt should produce same key from cache")
+	cookieKeys := MakeCookieStoreKey("kat_salt")
+	assert.NotEqual(t, MakeJWTSigningKey("kat_salt"), cookieKeys[0])
+	assert.NotEqual(t, MakeJWTSigningKey("kat_salt"), cookieKeys[1])
 }
 
-func TestMakeCookieStoreKey(t *testing.T) {
-	salt := "test_salt"
-
-	// Test that keys are generated
-	keys := auth.MakeCookieStoreKey(salt)
-	assert.NotNil(t, keys)
-	assert.Len(t, keys, 2, "Should return auth and encryption keys")
-
-	// Test that auth key is 64 bytes (SHA512)
-	assert.Len(t, keys[0], 64, "Auth key should be 64 bytes")
-
-	// Test that encryption key is 32 bytes (SHA256)
-	assert.Len(t, keys[1], 32, "Encryption key should be 32 bytes")
-
-	// Test consistency
-	keysAgain := auth.MakeCookieStoreKey(salt)
-	assert.Equal(t, keys, keysAgain, "Same salt should produce same keys")
-}
-
-func TestMakeJWTSigningKeyDifferentFromCookieKey(t *testing.T) {
-	salt := "test_salt"
-
-	jwtKey := auth.MakeJWTSigningKey(salt)
-	cookieKeys := auth.MakeCookieStoreKey(salt)
-
-	// JWT signing key should be different from both cookie keys
-	assert.NotEqual(t, jwtKey, cookieKeys[0], "JWT key should differ from cookie auth key")
-	assert.NotEqual(t, jwtKey, cookieKeys[1], "JWT key should differ from cookie encryption key")
+func TestSession_MakeCookieStoreKey_DerivesAStableAuthAndEncryptionKey(t *testing.T) {
+	for range 2 {
+		keys := MakeCookieStoreKey("kat_salt")
+		require.Len(t, keys, 2)
+		require.Len(t, keys[0], 64)
+		require.Len(t, keys[1], 32)
+		assert.Equal(t, "82db383af22e5e9744541f50404e1b77", hex.EncodeToString(keys[0][:16]))
+		assert.Equal(t, "3d8abedc0cb244d2e3ad59e7d5f125d8", hex.EncodeToString(keys[1][:16]))
+	}
 }

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -94,7 +95,13 @@ func parseFlags(args []string) Config {
 		fmt.Fprintf(os.Stderr, "  %s -v                 # Show version\n", name)
 	}
 
-	flagSet.Parse(args)
+	if err := flagSet.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			os.Exit(0)
+		}
+		os.Exit(2)
+	}
+
 	return config
 }
 

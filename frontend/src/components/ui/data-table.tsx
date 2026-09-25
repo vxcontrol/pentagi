@@ -58,6 +58,7 @@ import { useEffectAfterMount } from '@/hooks/use-effect-after-mount';
 import { useLatestRef } from '@/hooks/use-latest-ref';
 import { usePageStorageKeys } from '@/hooks/use-page-storage-keys';
 import { useWindowVirtualList } from '@/hooks/use-window-virtual-list';
+import { clamp } from '@/lib/clamp';
 import { migrateLegacyTableState, updateTableState } from '@/lib/table-state';
 import { matchesTextFilter } from '@/lib/text-filter';
 import { cn } from '@/lib/utils';
@@ -119,6 +120,7 @@ interface DataTableProps<TData, TValue = unknown> {
      *   supported and will misposition rows.
      */
     isVirtualized?: boolean;
+    label: string;
     onColumnVisibilityChange?: (visibility: VisibilityState) => void;
     onFilterChange?: (value: string) => void;
     onPageChange?: (pageIndex: number, options?: { replace?: boolean }) => void;
@@ -315,6 +317,7 @@ function DataTable<TData, TValue = unknown>({
     initialPageSize = 10,
     initialSorting = [],
     isVirtualized = false,
+    label,
     onColumnVisibilityChange,
     onFilterChange,
     onPageChange,
@@ -649,7 +652,7 @@ function DataTable<TData, TValue = unknown>({
     // page-size bump to "All" while we were on a high page. Derive a clamped
     // view for the display values so the user never sees "Page 999 of 31",
     // and reconcile the source of truth via the effect below.
-    const safePageIndex = pageCount > 0 ? Math.min(Math.max(0, pagination.pageIndex), pageCount - 1) : 0;
+    const safePageIndex = pageCount > 0 ? clamp(0, pagination.pageIndex, pageCount - 1) : 0;
     const rangeStart = totalRows > 0 ? safePageIndex * pagination.pageSize + 1 : 0;
     const rangeEnd = Math.min((safePageIndex + 1) * pagination.pageSize, totalRows);
 
@@ -773,7 +776,10 @@ function DataTable<TData, TValue = unknown>({
                 </DropdownMenu>
             </div>
             <div className="rounded-md border">
-                <Table aria-rowcount={isVirtualizationActive ? rows.length + 1 : undefined}>
+                <Table
+                    aria-label={label}
+                    aria-rowcount={isVirtualizationActive ? rows.length + 1 : undefined}
+                >
                     <TableHeader>
                         {table.getHeaderGroups().map((headerGroup) => (
                             <TableRow

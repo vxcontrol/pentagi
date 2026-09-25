@@ -3,6 +3,7 @@ import { toast } from 'sonner';
 
 import type { UserResourceFragmentFragment } from '@/graphql/types';
 
+import { pluralizeItems } from '@/components/shared/file-manager';
 import { api, getApiErrorMessage, unwrapApiResponse } from '@/lib/axios';
 import { validateUploadBatch } from '@/lib/upload-validation';
 
@@ -13,7 +14,6 @@ import {
     RESOURCES_API_PATH,
 } from './resources-constants';
 import { restResourceEntryToFragment, type RestResourceList } from './resources-rest';
-import { pluralizeItems } from './resources-utils';
 
 interface UploadOptions {
     /** Virtual directory path inside the user's library. Empty/undefined uploads to root. */
