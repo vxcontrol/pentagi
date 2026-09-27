@@ -23,12 +23,15 @@ const passwordChangeSchema = z
             })
             .refine(
                 (password) => {
-                    if (password.length > 15) {
+                    // count code points, as the backend does, rather than UTF-16 units
+                    const length = Array.from(password).length;
+
+                    if (length > 15) {
                         return true;
                     }
 
                     return (
-                        password.length >= 8 &&
+                        length >= 8 &&
                         /[0-9]/.test(password) &&
                         /[a-z]/.test(password) &&
                         /[A-Z]/.test(password) &&
