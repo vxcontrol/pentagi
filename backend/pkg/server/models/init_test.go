@@ -1,6 +1,7 @@
 package models
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -32,6 +33,10 @@ func TestStrongPasswordValidator(t *testing.T) {
 		{"8 chars no lowercase", "PASS1!AB", true},
 		{"8 chars no special", "Pass1abc", true},
 		{"empty password", "", true},
+		{"16 non-ascii chars", strings.Repeat("ñ", 16), false},
+		{"8 non-ascii chars (16 bytes) still need requirements", strings.Repeat("ñ", 8), true},
+		{"8 chars with requirements incl. non-ascii", "Pa1!ñbcd", false},
+		{"7 chars with requirements (8 bytes)", "Pa1!ñbc", true},
 	}
 
 	for _, tt := range tests {

@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"regexp"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/go-playground/validator/v10"
 	"github.com/xeipuuv/gojsonschema"
@@ -76,7 +77,11 @@ func strongPasswordValidatorString() validator.Func {
 		switch field.Kind() {
 		case reflect.String:
 			password := fl.Field().String()
-			return len(password) > 15 || (len(password) >= 8 &&
+			// the policy is expressed in characters, so count code points rather
+			// than bytes: otherwise a multibyte password passes with fewer characters
+			// than the frontend (which counts characters) allows
+			length := utf8.RuneCountInString(password)
+			return length > 15 || (length >= 8 &&
 				numberRegex.MatchString(password) &&
 				alphaLRegex.MatchString(password) &&
 				alphaURegex.MatchString(password) &&
