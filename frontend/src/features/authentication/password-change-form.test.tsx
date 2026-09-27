@@ -58,6 +58,22 @@ describe('PasswordChangeForm', () => {
         });
     });
 
+    it('counts characters, not UTF-16 units, so 8 emoji do not pass as a 16-character password', async () => {
+        const user = userEvent.setup();
+        const onSuccess = vi.fn();
+        render(<PasswordChangeForm onSuccess={onSuccess} />);
+
+        const password = '😀'.repeat(8);
+        await user.type(screen.getByPlaceholderText('Enter your current password'), 'Oldpass0!');
+        await user.type(screen.getByPlaceholderText('Enter your new password'), password);
+        await user.type(screen.getByPlaceholderText('Confirm your new password'), password);
+        await user.click(screen.getByRole('button', { name: 'Update Password' }));
+
+        expect(await screen.findByText(/Password must be either longer than 15 characters/)).toBeInTheDocument();
+        expect(put).not.toHaveBeenCalled();
+        expect(onSuccess).not.toHaveBeenCalled();
+    });
+
     it('renders Skip only with onSkip, and puts submit before skip in the vertical layout', () => {
         const { rerender } = render(<PasswordChangeForm />);
         expect(screen.queryByRole('button', { name: 'Skip for now' })).not.toBeInTheDocument();

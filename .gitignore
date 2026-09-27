@@ -1,6 +1,4 @@
 .DS_Store
-.env
-.env.*
 .state
 !.env.example
 !backend/cmd/installer/files/links/.env
@@ -38,3 +36,4 @@ data/*
 # OS
 Thumbs.db
 
+config.bat
