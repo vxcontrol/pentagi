@@ -47,7 +47,7 @@
         "@react-pdf/renderer": "^4.5.1",
         "@tanstack/react-table": "^8.21.3",
         "@tanstack/react-virtual": "^3.14.3",
-        "@tiptap/core": "^3.27.1",
+        "@tiptap/core": "^3.30.5",
         "@tiptap/extension-code-block-lowlight": "^3.27.1",
         "@tiptap/extension-image": "^3.27.1",
         "@tiptap/extension-list": "^3.27.1",
@@ -126,7 +126,7 @@
         "eslint-plugin-react": "^7.37.5",
         "eslint-plugin-react-hooks": "^7.1.1",
         "jsdom": "^29.1.1",
-        "postcss": "^8.5.15",
+        "postcss": "^8.5.23",
         "prettier": "^3.8.4",
         "prettier-plugin-tailwindcss": "^0.8.0",
         "tailwindcss": "^4.3.1",
@@ -135,7 +135,7 @@
         "vite": "^8.0.16",
         "vite-plugin-html": "^3.2.2",
         "vite-tsconfig-paths": "^6.1.1",
-        "vitest": "^4.1.9",
+        "vitest": "^5.0.2",
         "ws": "^8.21.1"
     },
     "packageManager": "pnpm@11.8.0"
