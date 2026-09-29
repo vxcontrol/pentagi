@@ -3,6 +3,7 @@ package searchers
 import (
 	"context"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -352,5 +353,86 @@ func TestGoogleHandle_SendsAPIKeyThroughProxy(t *testing.T) {
 	}
 	if !strings.Contains(got, "https://example.com") {
 		t.Errorf("result missing expected URL: %q", got)
+	}
+}
+
+func TestGoogleEndpoint(t *testing.T) {
+	tests := []struct {
+		name string
+		url  string
+		want string
+	}{
+		{"empty uses Google default", "", ""},
+		{"whitespace uses Google default", "   ", ""},
+		{"base URL gets trailing slash", "https://search.example.com", "https://search.example.com/"},
+		{"base URL with trailing slash", "https://search.example.com/", "https://search.example.com/"},
+		{"full API URL is trimmed to base", "https://search.example.com/customsearch/v1", "https://search.example.com/"},
+		{"full API URL with trailing slash", "https://search.example.com/customsearch/v1/", "https://search.example.com/"},
+		{"base URL with path prefix", "https://example.com/cse", "https://example.com/cse/"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			g := &google{cfg: &config.Config{GoogleCSEURL: tt.url}}
+			if got := g.endpoint(); got != tt.want {
+				t.Errorf("endpoint() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+
+	t.Run("nil config", func(t *testing.T) {
+		g := &google{}
+		if got := g.endpoint(); got != "" {
+			t.Errorf("endpoint() = %q, want empty", got)
+		}
+	})
+}
+
+func TestGoogleNewSearchService_DefaultBasePath(t *testing.T) {
+	g := &google{cfg: testGoogleConfig()}
+
+	svc, err := g.newSearchService(t.Context())
+	if err != nil {
+		t.Fatalf("newSearchService() unexpected error: %v", err)
+	}
+	if svc.BasePath != "https://customsearch.googleapis.com/" {
+		t.Errorf("BasePath = %q, want Google's default", svc.BasePath)
+	}
+}
+
+func TestGoogleHandle_CustomEndpoint(t *testing.T) {
+	var gotPath, gotKey, gotCX, gotQ string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		gotKey = r.URL.Query().Get("key")
+		gotCX = r.URL.Query().Get("cx")
+		gotQ = r.URL.Query().Get("q")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"items":[{"title":"Compat Doc","link":"https://compat.example.com","snippet":"from compatible endpoint"}]}`))
+	}))
+	defer srv.Close()
+
+	// Both spellings of the setting should reach the same path.
+	for _, setting := range []string{srv.URL, srv.URL + "/customsearch/v1"} {
+		t.Run(setting, func(t *testing.T) {
+			gotPath, gotKey, gotCX, gotQ = "", "", "", ""
+			cfg := testGoogleConfig()
+			cfg.GoogleCSEURL = setting
+			g := NewGoogle(cfg)
+
+			got, err := g.Handle(t.Context(), Request{Query: "hello world", MaxResults: 3})
+			if err != nil {
+				t.Fatalf("Handle() unexpected error: %v", err)
+			}
+			if gotPath != "/customsearch/v1" {
+				t.Errorf("request path = %q, want /customsearch/v1", gotPath)
+			}
+			if gotKey != testGoogleAPIKey || gotCX != testGoogleCXKey || gotQ != "hello world" {
+				t.Errorf("request params key=%q cx=%q q=%q, want key/cx from config and the query", gotKey, gotCX, gotQ)
+			}
+			if !strings.Contains(got, "https://compat.example.com") || !strings.Contains(got, "Compat Doc") {
+				t.Errorf("result not parsed from custom endpoint: %q", got)
+			}
+		})
 	}
 }

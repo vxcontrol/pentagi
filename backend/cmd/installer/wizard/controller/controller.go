@@ -1672,6 +1672,7 @@ type SearchEnginesConfig struct {
 	GoogleAPIKey      loader.EnvVar // GOOGLE_API_KEY
 	GoogleCXKey       loader.EnvVar // GOOGLE_CX_KEY
 	GoogleLRKey       loader.EnvVar // GOOGLE_LR_KEY
+	GoogleCSEURL      loader.EnvVar // GOOGLE_CSE_URL
 
 	// duckduckgo extra settings
 	DuckDuckGoRegion     loader.EnvVar // DUCKDUCKGO_REGION
@@ -1715,6 +1716,7 @@ func (c *controller) GetSearchEnginesConfig() *SearchEnginesConfig {
 	googleAPIKey, _ := c.GetVar("GOOGLE_API_KEY")
 	googleCXKey, _ := c.GetVar("GOOGLE_CX_KEY")
 	googleLRKey, _ := c.GetVar("GOOGLE_LR_KEY")
+	googleCSEURL, _ := c.GetVar("GOOGLE_CSE_URL")
 	perplexityModel, _ := c.GetVar("PERPLEXITY_MODEL")
 	perplexityContextSize, _ := c.GetVar("PERPLEXITY_CONTEXT_SIZE")
 	searxngURL, _ := c.GetVar("SEARXNG_URL")
@@ -1743,6 +1745,7 @@ func (c *controller) GetSearchEnginesConfig() *SearchEnginesConfig {
 		GoogleAPIKey:                  googleAPIKey,
 		GoogleCXKey:                   googleCXKey,
 		GoogleLRKey:                   googleLRKey,
+		GoogleCSEURL:                  googleCSEURL,
 		SearxngURL:                    searxngURL,
 		SearxngCategories:             searxngCategories,
 		SearxngLanguage:               searxngLanguage,
@@ -1846,6 +1849,9 @@ func (c *controller) UpdateSearchEnginesConfig(config *SearchEnginesConfig) erro
 	if err := c.SetVar("GOOGLE_LR_KEY", config.GoogleLRKey.Value); err != nil {
 		return fmt.Errorf("failed to set GOOGLE_LR_KEY: %w", err)
 	}
+	if err := c.SetVar("GOOGLE_CSE_URL", config.GoogleCSEURL.Value); err != nil {
+		return fmt.Errorf("failed to set GOOGLE_CSE_URL: %w", err)
+	}
 	if err := c.SetVar("SEARXNG_URL", config.SearxngURL.Value); err != nil {
 		return fmt.Errorf("failed to set SEARXNG_URL: %w", err)
 	}
@@ -1896,6 +1902,7 @@ func (c *controller) ResetSearchEnginesConfig() *SearchEnginesConfig {
 		"GOOGLE_API_KEY",
 		"GOOGLE_CX_KEY",
 		"GOOGLE_LR_KEY",
+		"GOOGLE_CSE_URL",
 		"SEARXNG_URL",
 		"SEARXNG_CATEGORIES",
 		"SEARXNG_LANGUAGE",
@@ -2434,6 +2441,7 @@ func (c *controller) getVariableDescription(varName string) string {
 		"GOOGLE_API_KEY":        locale.EnvDesc_GOOGLE_API_KEY,
 		"GOOGLE_CX_KEY":         locale.EnvDesc_GOOGLE_CX_KEY,
 		"GOOGLE_LR_KEY":         locale.EnvDesc_GOOGLE_LR_KEY,
+		"GOOGLE_CSE_URL":        locale.EnvDesc_GOOGLE_CSE_URL,
 
 		"PERPLEXITY_MODEL":        locale.EnvDesc_PERPLEXITY_MODEL,
 		"PERPLEXITY_CONTEXT_SIZE": locale.EnvDesc_PERPLEXITY_CONTEXT_SIZE,
@@ -2657,6 +2665,7 @@ var criticalVariables = map[string]bool{
 	"GOOGLE_API_KEY":          true,
 	"GOOGLE_CX_KEY":           true,
 	"GOOGLE_LR_KEY":           true,
+	"GOOGLE_CSE_URL":          true,
 	"SEARXNG_URL":             true,
 	"SEARXNG_CATEGORIES":      true,
 	"SEARXNG_LANGUAGE":        true,

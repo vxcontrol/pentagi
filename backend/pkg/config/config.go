@@ -174,6 +174,9 @@ type Config struct {
 	GoogleAPIKey string `env:"GOOGLE_API_KEY"`
 	GoogleCXKey  string `env:"GOOGLE_CX_KEY"`
 	GoogleLRKey  string `env:"GOOGLE_LR_KEY" envDefault:"lang_en"`
+	// Optional base URL of a Custom Search JSON API-compatible endpoint.
+	// Empty means Google's default (https://customsearch.googleapis.com/).
+	GoogleCSEURL string `env:"GOOGLE_CSE_URL"`
 
 	// === OAuth Provider: Google ===
 	OAuthGoogleClientID     string `env:"OAUTH_GOOGLE_CLIENT_ID"`
