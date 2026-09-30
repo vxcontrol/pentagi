@@ -26,6 +26,7 @@
 - [How to Use PentAGI After Login](#how-to-use-pentagi-after-login)
 - [API Access](#api-access)
   - [LLM Provider Configuration](#custom-llm-provider-configuration)
+    - [Azure OpenAI](#using-azure-openai)
     - [Ollama](#ollama-provider-configuration)
     - [OpenAI](#openai-provider-configuration)
     - [Anthropic](#anthropic-provider-configuration)
@@ -77,7 +78,7 @@ You can watch the video **PentAGI overview**:
 - Persistent Storage. All commands and outputs are stored in PostgreSQL with [pgvector](https://hub.docker.com/r/vxcontrol/pgvector) extension.
 - Scalable Architecture. Microservices-based design supporting horizontal scaling.
 - Self-Hosted Solution. Complete control over your deployment and data.
-- Flexible Authentication. Support for 10+ LLM providers ([OpenAI](https://platform.openai.com/), [Anthropic](https://www.anthropic.com/), [Google AI/Gemini](https://ai.google.dev/), [AWS Bedrock](https://aws.amazon.com/bedrock/), [Ollama](https://ollama.com/), [DeepSeek](https://www.deepseek.com/en/), [GLM](https://z.ai/), [Kimi](https://platform.moonshot.ai/), [Qwen](https://www.alibabacloud.com/en/), [MiniMax](https://www.minimax.io/), [Mistral](https://mistral.ai/), [xAI](https://x.ai/), Custom) plus aggregators ([OpenRouter](https://openrouter.ai/), [DeepInfra](https://deepinfra.com/), [Atlas Cloud](https://www.atlascloud.ai/), [OpenCode Go plan](https://opencode.ai/en/go)). For production local deployments, see our [vLLM + Qwen3.5-27B-FP8 guide](examples/guides/vllm-qwen35-27b-fp8.md).
+- Flexible Authentication. Support for 10+ LLM providers ([OpenAI](https://platform.openai.com/), [Anthropic](https://www.anthropic.com/), [Google AI/Gemini](https://ai.google.dev/), [AWS Bedrock](https://aws.amazon.com/bedrock/), [Ollama](https://ollama.com/), [DeepSeek](https://www.deepseek.com/en/), [GLM](https://z.ai/), [Kimi](https://platform.moonshot.ai/), [Qwen](https://www.alibabacloud.com/en/), [MiniMax](https://www.minimax.io/), [Mistral](https://mistral.ai/), [xAI](https://x.ai/), Custom for any OpenAI-compatible endpoint including [Azure OpenAI](#using-azure-openai)) plus aggregators ([OpenRouter](https://openrouter.ai/), [DeepInfra](https://deepinfra.com/), [Atlas Cloud](https://www.atlascloud.ai/), [OpenCode Go plan](https://opencode.ai/en/go)). For production local deployments, see our [vLLM + Qwen3.5-27B-FP8 guide](examples/guides/vllm-qwen35-27b-fp8.md).
 - API Token Authentication. Secure Bearer token system for programmatic access to REST and GraphQL APIs.
 - Quick Deployment. Easy setup through [Docker Compose](https://docs.docker.com/compose/) with comprehensive environment configuration.
 
@@ -1438,14 +1439,16 @@ When using custom LLM providers with the `LLM_SERVER_*` variables, you can fine-
 > [!TIP]
 > For production-grade local deployments, consider using **vLLM** with **Qwen3.5-27B-FP8** for optimal performance. See our [comprehensive deployment guide](examples/guides/vllm-qwen35-27b-fp8.md) which includes hardware requirements, configuration templates ([thinking mode](examples/configs/vllm-qwen3.5-27b-fp8.provider.yml) and [non-thinking mode](examples/configs/vllm-qwen3.5-27b-fp8-no-think.provider.yml)), and performance benchmarks showing 13K TPS prompt processing on 4× RTX 5090 GPUs.
 
-| Variable                        | Default | Description                                                                             |
-| ------------------------------- | ------- | --------------------------------------------------------------------------------------- |
-| `LLM_SERVER_URL`                |         | Base URL for the custom LLM API endpoint                                                |
-| `LLM_SERVER_KEY`                |         | API key for the custom LLM provider                                                     |
-| `LLM_SERVER_MODEL`              |         | Default model to use (can be overridden in provider config)                             |
-| `LLM_SERVER_CONFIG_PATH`        |         | Path to the YAML configuration file for agent-specific models                           |
-| `LLM_SERVER_PROVIDER`           |         | Provider name prefix for model names (e.g., `openrouter`, `deepseek` for LiteLLM proxy) |
-| `LLM_SERVER_PRESERVE_REASONING` | `false` | Preserve reasoning content in multi-turn conversations (required by some providers)     |
+| Variable                        | Default      | Description                                                                                                        |
+| ------------------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------ |
+| `LLM_SERVER_URL`                |              | Base URL for the custom LLM API endpoint                                                                           |
+| `LLM_SERVER_KEY`                |              | API key for the custom LLM provider                                                                                |
+| `LLM_SERVER_MODEL`              |              | Default model to use (can be overridden in provider config)                                                        |
+| `LLM_SERVER_CONFIG_PATH`        |              | Path to the YAML configuration file for agent-specific models                                                      |
+| `LLM_SERVER_PROVIDER`           |              | Provider name prefix for model names (e.g., `openrouter`, `deepseek` for LiteLLM proxy)                            |
+| `LLM_SERVER_PRESERVE_REASONING` | `false`      | Preserve reasoning content in multi-turn conversations (required by some providers)                                |
+| `LLM_SERVER_API_TYPE`           |              | `azure` or `azure_ad` for an Azure OpenAI deployment, empty for a plain endpoint; see [Using Azure OpenAI](#using-azure-openai) |
+| `LLM_SERVER_API_VERSION`        | `2024-10-21` | The `api-version` Azure requires; ignored by a plain endpoint                                                      |
 
 The `LLM_SERVER_PROVIDER` setting is particularly useful when using **LiteLLM proxy**, which adds a provider prefix to model names. For example, when connecting to Moonshot API through LiteLLM, models like `kimi-2.5` become `moonshot/kimi-2.5`. By setting `LLM_SERVER_PROVIDER=moonshot`, you can use the same provider configuration file for both direct API access and LiteLLM proxy access without modifications.
 
@@ -1454,6 +1457,38 @@ The `LLM_SERVER_PRESERVE_REASONING` setting controls whether reasoning content i
 - `true`: Reasoning content is preserved and sent in subsequent API calls
 
 This setting is required by some LLM providers (e.g., Moonshot) that return errors like "thinking is enabled but reasoning_content is missing in assistant tool call message" when reasoning content is not included in multi-turn conversations. Enable this setting if your provider requires reasoning content to be preserved.
+
+#### Using Azure OpenAI
+
+The custom provider calls Azure OpenAI deployments directly:
+
+```bash
+LLM_SERVER_URL=https://<resource>.openai.azure.com  # the Endpoint from the resource's Keys and Endpoint page, without an /openai path
+LLM_SERVER_KEY=your_azure_openai_api_key            # KEY 1 or KEY 2 from the same page
+LLM_SERVER_API_TYPE=azure                           # the api-key header and deployment URLs
+LLM_SERVER_API_VERSION=2024-10-21                   # the default; a newer version works as well
+LLM_SERVER_MODEL=                                   # Leave empty, models are specified in the config
+LLM_SERVER_CONFIG_PATH=/opt/pentagi/conf/azure-openai.provider.yml
+```
+
+Azure addresses a **deployment**, not a model: PentAGI calls `<LLM_SERVER_URL>/openai/deployments/<model>/chat/completions?api-version=<version>`, so every `model:` in the provider config must be the name of a deployment in your resource, and `LLM_SERVER_PROVIDER` must stay empty, because its prefix would become part of the deployment name. The bundled [`azure-openai.provider.yml`](examples/configs/azure-openai.provider.yml) expects deployments named after their models: `gpt-4.1`, `gpt-4.1-mini` and `o4-mini`. If yours are named differently, copy the file, change the `model:` values, and mount your copy:
+
+```bash
+PENTAGI_LLM_SERVER_CONFIG_PATH=/path/on/host/my-azure.provider.yml  # mounted at /opt/pentagi/conf/custom.provider.yml
+LLM_SERVER_CONFIG_PATH=/opt/pentagi/conf/custom.provider.yml
+```
+
+After `docker compose up -d`, check the deployments before running a flow. Without `-config`, `ctester` tests the file `LLM_SERVER_CONFIG_PATH` names, the bundled one or your copy; the bundled configuration's own run is in [`examples/tests/azure-openai-report.md`](examples/tests/azure-openai-report.md):
+
+```bash
+docker exec -it pentagi /opt/pentagi/bin/ctester
+```
+
+- PentAGI does not read a model catalogue from Azure, so it knows no context window for a deployment and does not compact agent chains to fit one.
+- `LLM_SERVER_API_TYPE=azure_ad` sends `LLM_SERVER_KEY` as a Microsoft Entra ID bearer token instead of an API key. PentAGI does not refresh it, and Entra tokens expire after about an hour, so use an API key for anything longer.
+- Azure's OpenAI-compatible [v1 API](https://learn.microsoft.com/en-us/azure/foundry/openai/api-version-lifecycle) works as a plain endpoint too: set `LLM_SERVER_URL=https://<resource>.openai.azure.com/openai/v1` and leave `LLM_SERVER_API_TYPE` empty; `model:` is still the deployment name.
+- The installer's custom provider form has **API Type** and **API Version** fields for the same two settings.
+- Embeddings are configured separately through `EMBEDDING_*` and have no Azure mode; `LLM_SERVER_API_TYPE` does not apply to them.
 
 #### Troubleshooting: tool-call (function-call) parser errors
 
@@ -2788,10 +2823,14 @@ NEO4J_PASSWORD=replace_with_a_strong_password
 NEO4J_URI=bolt://neo4j:7687
 ```
 
-Download the optional compose file when installing manually, then start both stacks:
+Download the optional compose file and the Neo4j settings with the APOC plugin Graphiti needs when installing manually, then start both stacks:
 
 ```bash
 curl -O https://raw.githubusercontent.com/vxcontrol/pentagi/master/docker-compose-graphiti.yml
+mkdir -p neo4j/conf neo4j/plugins
+for f in conf/neo4j.conf conf/apoc.conf plugins/apoc-5.26.19-core.jar; do
+  curl -fsSL -o "neo4j/$f" "https://raw.githubusercontent.com/vxcontrol/pentagi/master/examples/neo4j/$f"
+done
 docker compose -f docker-compose.yml -f docker-compose-graphiti.yml up -d
 ```
 
@@ -2914,7 +2953,7 @@ The installer copies [`examples/neo4j`](examples/neo4j) beside the installation 
 NEO4J_DIR=./neo4j
 ```
 
-`NEO4J_DIR` may point directly to `./examples/neo4j` for development. Both `conf/` and `plugins/` are mounted read-only; the stack still starts on Neo4j's built-in defaults (without APOC) if the directory is absent, since Docker creates an empty one automatically. Do not duplicate any `NEO4J_*` variable from the table above inside `conf/neo4j.conf` — the Neo4j Docker entrypoint always strips a matching line from the mounted file and re-appends the environment variable's value, so a duplicated setting in the file would be silently ignored.
+`NEO4J_DIR` may point directly to `./examples/neo4j` for development. Both `conf/` and `plugins/` are mounted read-only; the stack still starts on Neo4j's built-in defaults (without APOC) if the directory is absent, since Docker creates an empty one automatically — but Graphiti writes relationships through APOC, so its graph then stays empty while PentAGI logs no error. Do not duplicate any `NEO4J_*` variable from the table above inside `conf/neo4j.conf` — the Neo4j Docker entrypoint always strips a matching line from the mounted file and re-appends the environment variable's value, so a duplicated setting in the file would be silently ignored.
 
 The bundled stack currently wires Neo4j only. The Graphiti image contains FalkorDB support, but using it requires a separately configured deployment because the stock compose file does not expose `GRAPHITI_GRAPH_BACKEND` or `FALKORDB_*`.
 
@@ -3373,6 +3412,9 @@ docker exec -it pentagi /opt/pentagi/bin/ctester -type bedrock
 
 # Test with Custom OpenAI configuration
 docker exec -it pentagi /opt/pentagi/bin/ctester -config /opt/pentagi/conf/custom-openai.provider.yml
+
+# Test with Azure OpenAI configuration (needs LLM_SERVER_API_TYPE=azure, see Using Azure OpenAI)
+docker exec -it pentagi /opt/pentagi/bin/ctester -config /opt/pentagi/conf/azure-openai.provider.yml
 
 # Test with Ollama configuration (local inference)
 docker exec -it pentagi /opt/pentagi/bin/ctester -config /opt/pentagi/conf/ollama-llama318b.provider.yml

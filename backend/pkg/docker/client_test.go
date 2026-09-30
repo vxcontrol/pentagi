@@ -236,7 +236,7 @@ func listingFrame(streamID byte, payload string) []byte {
 
 func TestClient_IsContainerRunning_ReportsRunningUntilTheContainerIsRemoved(t *testing.T) {
 	dc := newDaemonClient(t)
-	containerID := startProbeSandbox(t, dc, probeImage, 0)
+	containerID := startProbeSandbox(t, dc, probeImage)
 
 	running, err := dc.IsContainerRunning(t.Context(), containerID)
 	require.NoError(t, err)
@@ -846,7 +846,7 @@ func TestClient_KillFlowCommands_SkipsASandboxThatIsNotRunning(t *testing.T) {
 
 	for name, stop := range tests {
 		t.Run(name, func(t *testing.T) {
-			containerID := startProbeSandbox(t, dc, probeImage, 0)
+			containerID := startProbeSandbox(t, dc, probeImage)
 			require.NoError(t, stop(t.Context(), containerID))
 
 			require.NoError(t, dc.KillFlowCommands(t.Context(), containerID))
@@ -864,7 +864,7 @@ func TestClient_KillFlowCommands_FinishesTheSweepAfterTheCallerGivesUp(t *testin
 
 	for name, giveUpAfter := range tests {
 		t.Run(name, func(t *testing.T) {
-			containerID := startProbeSandbox(t, dc, probeImage, 0)
+			containerID := startProbeSandbox(t, dc, probeImage)
 			startInSandbox(t, dc, containerID, FlowCommand(`trap "" TERM; while :; do sleep 1; done`), false)
 			dockerWaitForCommand(t, dc, containerID, "do sleep 1")
 
@@ -919,7 +919,7 @@ func TestClient_KillFlowCommands_SweepsAnUnhealthySandbox(t *testing.T) {
 
 func TestClient_KillFlowCommands_RunsTheShellFoundOnThePath(t *testing.T) {
 	dc := newDaemonClient(t)
-	containerID := startProbeSandbox(t, dc, probeImage, 0)
+	containerID := startProbeSandbox(t, dc, probeImage)
 
 	runInSandbox(t, dc, containerID, `mv /bin/sh /usr/local/bin/sh`)
 	startInSandbox(t, dc, containerID, FlowCommand(`sleep 921`), false)
@@ -932,7 +932,7 @@ func TestClient_KillFlowCommands_RunsTheShellFoundOnThePath(t *testing.T) {
 
 func TestClient_KillFlowCommands_ReportsASweepThatCannotRun(t *testing.T) {
 	dc := newDaemonClient(t)
-	containerID := startProbeSandbox(t, dc, probeImage, 0)
+	containerID := startProbeSandbox(t, dc, probeImage)
 
 	runInSandbox(t, dc, containerID, `rm /bin/sh`)
 

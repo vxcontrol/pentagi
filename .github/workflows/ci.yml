@@ -152,7 +152,8 @@ jobs:
           TAG_COMMIT=$(git rev-list -n 1 "$LATEST_TAG" 2>/dev/null || echo "")
 
           if [ "$CURRENT_COMMIT" != "$TAG_COMMIT" ]; then
-            PACKAGE_REV=$(git rev-parse --short HEAD)
+            # Fixed width, as in scripts/version.sh: --short widens with the size of the clone.
+            PACKAGE_REV=$(printf '%s' "$CURRENT_COMMIT" | cut -c1-7)
           else
             PACKAGE_REV=""
           fi
@@ -204,7 +205,8 @@ jobs:
 
           # Set revision only if current commit differs from tag commit
           if [ "$CURRENT_COMMIT" != "$TAG_COMMIT" ]; then
-            PACKAGE_REV=$(git rev-parse --short HEAD)
+            # Fixed width, as in scripts/version.sh: --short widens with the size of the clone.
+            PACKAGE_REV=$(printf '%s' "$CURRENT_COMMIT" | cut -c1-7)
             echo "revision=${PACKAGE_REV}" >> $GITHUB_OUTPUT
             echo "is_release=false" >> $GITHUB_OUTPUT
             echo "Building development version: ${VERSION}-${PACKAGE_REV}"

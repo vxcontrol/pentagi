@@ -686,7 +686,10 @@ func (s *UserService) PatchUser(c *gin.Context) {
 			return db.Where("hash = ? AND id = ?", hash, uid)
 		}
 	}
-	if !slices.Contains(privs, "users.edit") && uhash != hash {
+	// Without users.edit only the caller's own record is editable, and not its
+	// password: /user/password asks for the current one, so a stolen cookie
+	// alone cannot take the account over.
+	if !slices.Contains(privs, "users.edit") && (uhash != hash || user.Password != "") {
 		logger.FromContext(c).Errorf("error filtering user role permissions: permission not found")
 		response.Error(c, response.ErrNotPermitted, nil)
 		return

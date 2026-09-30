@@ -26,7 +26,9 @@ TAG_COMMIT=$(git rev-list -n 1 "$LATEST_TAG" 2>/dev/null || echo "")
 
 # Set revision only if current commit differs from tag commit
 if [ -n "$CURRENT_COMMIT" ] && [ "$CURRENT_COMMIT" != "$TAG_COMMIT" ]; then
-    PACKAGE_REV=$(git rev-parse --short HEAD)
+    # A fixed width, not --short: git widens the abbreviation with the size of the clone,
+    # so CI and a developer checkout would stamp the same commit with different revisions.
+    PACKAGE_REV=$(printf '%s' "$CURRENT_COMMIT" | cut -c1-7)
 else
     PACKAGE_REV=""
 fi

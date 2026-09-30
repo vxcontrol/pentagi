@@ -28,7 +28,8 @@ $tagCommit = git rev-list -n 1 $latestTag 2>$null
 
 # Set revision only if current commit differs from tag commit
 if ($currentCommit -and ($currentCommit -ne $tagCommit)) {
-    $env:PACKAGE_REV = git rev-parse --short HEAD
+    # A fixed width, not --short: git widens the abbreviation with the size of the clone.
+    $env:PACKAGE_REV = $currentCommit.Substring(0, 7)
     $buildType = "development"
 } else {
     $env:PACKAGE_REV = ""

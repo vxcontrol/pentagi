@@ -65,6 +65,15 @@ func TestPrompter_NewUserPrompter_OverlaysTheUsersPromptsOnTheDefaults(t *testin
 			prompts:     []database.Prompt{{Type: database.PromptTypePrimaryAgent, Prompt: ""}},
 			wantDefault: []templates.PromptType{templates.PromptTypePrimaryAgent},
 		},
+		{
+			name: "an override using a variable the backend no longer provides",
+			prompts: []database.Prompt{
+				{Type: database.PromptTypeSearcher, Prompt: "Search with {{.GoogleToolName}}"},
+				{Type: database.PromptTypeCoder, Prompt: "custom coder"},
+			},
+			wantCustom:  map[templates.PromptType]string{templates.PromptTypeCoder: "custom coder"},
+			wantDefault: []templates.PromptType{templates.PromptTypeSearcher},
+		},
 		{name: "a database that cannot be read", dbErr: dbErr},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

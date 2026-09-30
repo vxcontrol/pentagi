@@ -299,12 +299,12 @@ type passwordHarness struct {
 	hash    string
 }
 
-func newPasswordHarness(t *testing.T) *passwordHarness {
+func newPasswordHarness(t *testing.T, roleID int) *passwordHarness {
 	t.Helper()
 
 	db := setupTestDB(t)
 	t.Cleanup(func() { db.Close() })
-	seedLocalUser(t, db, "known@corp.com")
+	seedLocalAccount(t, db, "known@corp.com", roleID)
 
 	refuse := false
 	gin.SetMode(gin.TestMode)
@@ -425,16 +425,17 @@ func (h *passwordHarness) changeThroughTheEditor(t *testing.T) *httptest.Respons
 // usersPasswordDoors are the handlers that reach changePassword for the account's own password.
 var usersPasswordDoors = []struct {
 	name   string
+	role   int
 	change func(*passwordHarness, *testing.T) *httptest.ResponseRecorder
 }{
-	{"through the password form", (*passwordHarness).changeThroughTheForm},
-	{"through the user editor", (*passwordHarness).changeThroughTheEditor},
+	{"a user through the password form", 2, (*passwordHarness).changeThroughTheForm},
+	{"an administrator through the user editor", 1, (*passwordHarness).changeThroughTheEditor},
 }
 
 func TestUsers_ChangePassword_EndsOtherSessionsAndKeepsTheCaller(t *testing.T) {
 	for _, door := range usersPasswordDoors {
 		t.Run(door.name, func(t *testing.T) {
-			h := newPasswordHarness(t)
+			h := newPasswordHarness(t, door.role)
 			before, _ := h.state(t)
 			stolen := slices.Clone(h.cookies)
 
@@ -451,20 +452,34 @@ func TestUsers_ChangePassword_EndsOtherSessionsAndKeepsTheCaller(t *testing.T) {
 	}
 }
 
-func TestUsers_ChangePassword_KeepsAnAdministratorResettingAnotherAccountSignedIn(t *testing.T) {
-	h := newPasswordHarness(t)
-	seedLocalAccount(t, h.db, "boss.admin@corp.com", 1)
-	before, _ := h.state(t)
+func TestUsers_ChangePassword_ThroughTheEditorTakesUsersEdit(t *testing.T) {
+	t.Run("an administrator resetting another account stays signed in", func(t *testing.T) {
+		h := newPasswordHarness(t, 2)
+		seedLocalAccount(t, h.db, "boss.admin@corp.com", 1)
+		before, _ := h.state(t)
 
-	h.cookies = h.login(t, "boss.admin@corp.com")
-	rec := h.changeThroughTheEditor(t)
-	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+		h.cookies = h.login(t, "boss.admin@corp.com")
+		rec := h.changeThroughTheEditor(t)
+		require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 
-	after, _ := h.state(t)
-	assert.Equal(t, before+1, after, "the user's sessions end")
-	h.cookieGeneration(t, rec.Result().Cookies())
-	assert.Equal(t, http.StatusOK, h.privateStatus(t, h.cookies),
-		"the administrator's cookie is not stamped with the other account's generation")
+		after, _ := h.state(t)
+		assert.Equal(t, before+1, after, "the user's sessions end")
+		h.cookieGeneration(t, rec.Result().Cookies())
+		assert.Equal(t, http.StatusOK, h.privateStatus(t, h.cookies),
+			"the administrator's cookie is not stamped with the other account's generation")
+	})
+
+	t.Run("a user cannot set their own password without the current one", func(t *testing.T) {
+		h := newPasswordHarness(t, 2)
+		beforeGeneration, beforePassword := h.state(t)
+
+		rec := h.changeThroughTheEditor(t)
+
+		assert.Equal(t, http.StatusForbidden, rec.Code, rec.Body.String())
+		afterGeneration, afterPassword := h.state(t)
+		assert.Equal(t, beforeGeneration, afterGeneration)
+		assert.Equal(t, beforePassword, afterPassword)
+	})
 }
 
 func TestUsers_ChangePassword_ChangesNothingWhenAStepFails(t *testing.T) {
@@ -500,7 +515,7 @@ func TestUsers_ChangePassword_ChangesNothingWhenAStepFails(t *testing.T) {
 	} {
 		for _, door := range usersPasswordDoors {
 			t.Run(fault.name+", "+door.name, func(t *testing.T) {
-				h := newPasswordHarness(t)
+				h := newPasswordHarness(t, door.role)
 				beforeGeneration, beforePassword := h.state(t)
 				fault.inject(t, h)
 

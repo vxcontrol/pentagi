@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/client"
 	"github.com/stretchr/testify/require"
 )
@@ -92,7 +93,7 @@ func TestFlowCommands_FlowCommand_StopEndsItsCommandsAndNothingElse(t *testing.T
 
 	for name, image := range images {
 		t.Run(name, func(t *testing.T) {
-			containerID := startProbeSandbox(t, dc, image, 0)
+			containerID := startProbeSandbox(t, dc, image)
 
 			for _, flow := range flowCommands {
 				startInSandbox(t, dc, containerID, FlowCommand(flow.command), flow.tty)
@@ -149,7 +150,7 @@ func TestFlowCommands_WrapperAndSweepRunAtThePidsLimit(t *testing.T) {
 	const pidsLimit = 32
 
 	dc := newDaemonClient(t)
-	containerID := startProbeSandbox(t, dc, probeImage, pidsLimit)
+	containerID := startProbeSandbox(t, dc, probeImage)
 
 	putSandboxFile(t, dc, containerID, "sweep.sh", killFlowCommandsScript)
 	startInSandbox(t, dc, containerID, []string{"sh", "-c", "sleep 906"}, true)
@@ -186,6 +187,13 @@ exec tail -f /dev/null`}, false)
 		return strings.Count(commands, "sleep600") == 8 && strings.Contains(commands, "sleep906") &&
 			strings.Count(commands, "while [ ! -e /tmp/go-") == len(runners)+2
 	}, 15*time.Second, 100*time.Millisecond, "the probe commands never started")
+
+	// Set only now: each exec's runc init counts its threads against pids.max while it starts.
+	limit := int64(pidsLimit)
+	_, err := dc.client.ContainerUpdate(t.Context(), containerID, client.ContainerUpdateOptions{
+		Resources: &container.Resources{PidsLimit: &limit},
+	})
+	require.NoError(t, err)
 
 	fire := func(trigger string, done func() bool, failure string) {
 		putSandboxFile(t, dc, containerID, trigger, "")
@@ -236,7 +244,7 @@ func TestFlowCommands_BackgroundCommandsOutliveTheTerminalThatStartedThem(t *tes
 
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
-			containerID := startProbeSandbox(t, dc, probeImage, 0)
+			containerID := startProbeSandbox(t, dc, probeImage)
 
 			select {
 			case err := <-startInSandbox(t, dc, containerID, tc.launch(tc.command+` >/dev/null 2>&1 &`), true):

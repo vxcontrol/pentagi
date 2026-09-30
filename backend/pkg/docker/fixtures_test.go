@@ -45,15 +45,10 @@ func newDaemonClient(t *testing.T) *dockerClient {
 	return &dockerClient{client: cli, logger: logger}
 }
 
-func startProbeSandbox(t *testing.T, dc *dockerClient, image string, pidsLimit int64) string {
+func startProbeSandbox(t *testing.T, dc *dockerClient, image string) string {
 	t.Helper()
 
-	hostConfig := &container.HostConfig{}
-	if pidsLimit > 0 {
-		hostConfig.PidsLimit = &pidsLimit
-	}
-
-	return startSandbox(t, dc, &container.Config{Image: image}, hostConfig)
+	return startSandbox(t, dc, &container.Config{Image: image}, &container.HostConfig{})
 }
 
 func startSandbox(t *testing.T, dc *dockerClient, config *container.Config, hostConfig *container.HostConfig) string {

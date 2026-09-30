@@ -30,6 +30,10 @@ func NewMainMenuHandler(c controller.Controller, s styles.Styles, w window.Windo
 // ListScreenHandler interface implementation
 
 func (h *MainMenuHandler) LoadItems() []ListItem {
+	checker := h.controller.GetChecker()
+	// Updates are offered only inside Maintenance, so its entry carries their highlight.
+	hasUpdates := checker.CanUpdateWorker() || checker.CanUpdateAll() || checker.CanUpdateInstaller()
+
 	items := []ListItem{
 		{ID: LLMProvidersScreen},
 		{ID: EmbedderFormScreen},
@@ -39,7 +43,7 @@ func (h *MainMenuHandler) LoadItems() []ListItem {
 		{ID: ServerSettingsScreen},
 		{ID: ApplyChangesScreen, Highlighted: true},
 		{ID: InstallPentagiScreen, Highlighted: true},
-		{ID: MaintenanceScreen},
+		{ID: MaintenanceScreen, Highlighted: hasUpdates},
 	}
 
 	// filter out disabled items

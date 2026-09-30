@@ -177,10 +177,11 @@ services:
       - langfuse-network
 
   minio:
-    image: ${MINIO_IMAGE:-minio/minio:RELEASE.2025-07-23T15-54-02Z}
+    image: ${MINIO_IMAGE:-cgr.dev/chainguard/minio:latest}
     restart: unless-stopped
     container_name: langfuse-minio
     hostname: langfuse-minio
+    user: "0:0"
     command: server /data --console-address ":9001" --address ":9000" --json
     environment:
       MINIO_ROOT_USER: ${LANGFUSE_S3_ACCESS_KEY_ID:-minio}

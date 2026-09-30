@@ -6,6 +6,9 @@ import (
 
 	"pentagi/pkg/database"
 	"pentagi/pkg/templates"
+	"pentagi/pkg/templates/validator"
+
+	"github.com/sirupsen/logrus"
 )
 
 // newUserPrompter loads the user's custom prompts from the database and
@@ -30,9 +33,9 @@ func newUserPrompter(ctx context.Context, db database.Querier, userID int64) (te
 // buildUserPrompter is the pure merge step extracted from newUserPrompter so
 // it can be unit-tested without a database fake or filesystem access. It
 // mutates the supplied defaults map by overlaying each non-empty user
-// override on top, then returns a Prompter backed by that map. Callers must
-// pass a fresh map (e.g., from templates.LoadDefaultPromptsMap) so the
-// embedded defaults are not modified.
+// override that still validates, then returns a Prompter backed by that map.
+// Callers must pass a fresh map (e.g., from templates.LoadDefaultPromptsMap)
+// so the embedded defaults are not modified.
 func buildUserPrompter(defaults templates.PromptsMap, userPrompts []database.Prompt) templates.Prompter {
 	for _, p := range userPrompts {
 		if p.Prompt == "" {
@@ -43,7 +46,18 @@ func buildUserPrompter(defaults templates.PromptsMap, userPrompts []database.Pro
 			// ErrTemplateNotFound deep inside agent rendering.
 			continue
 		}
-		defaults[templates.PromptType(p.Type)] = p.Prompt
+
+		// Validation runs only on save, so an override written before a variable
+		// was removed still loads, and text/template renders the missing key as
+		// "<no value>" without an error — the agent would be pointed at a tool
+		// that does not exist.
+		promptType := templates.PromptType(p.Type)
+		if err := validator.ValidatePrompt(promptType, p.Prompt); err != nil {
+			logrus.WithError(err).WithField("prompt_type", p.Type).
+				Warn("custom prompt no longer validates, using the default")
+			continue
+		}
+		defaults[promptType] = p.Prompt
 	}
 
 	return templates.NewFlowPrompter(defaults)

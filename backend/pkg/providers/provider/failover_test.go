@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"pentagi/pkg/providers/pconfig"
+	"pentagi/pkg/templates"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -66,6 +67,10 @@ func (f *fakeProvider) CallWithExtraOptions(
 	return f.chainAnswer(chain)
 }
 
+func (f *fakeProvider) GetToolCallIDTemplate(ctx context.Context, _ templates.Prompter) (string, error) {
+	return f.Call(ctx, pconfig.OptionsTypeSimple, "hi")
+}
+
 func failoverContent(resp *llms.ContentResponse, err error) (string, error) {
 	if err != nil {
 		return "", err
@@ -73,7 +78,7 @@ func failoverContent(resp *llms.ContentResponse, err error) (string, error) {
 	return resp.Choices[0].Content, nil
 }
 
-// failoverPaths drives the four calling methods with the same input.
+// failoverPaths drives every method that reaches the model with the same input.
 var failoverPaths = []struct {
 	name string
 	call func(ctx context.Context, prv Provider) (string, error)
@@ -92,6 +97,9 @@ var failoverPaths = []struct {
 	{"a chain with extra options", func(ctx context.Context, prv Provider) (string, error) {
 		return failoverContent(prv.CallWithExtraOptions(ctx, pconfig.OptionsTypeSimple,
 			[]llms.MessageContent{llms.TextParts(llms.ChatMessageTypeHuman, "hi")}, nil, nil))
+	}},
+	{"the tool call id template", func(ctx context.Context, prv Provider) (string, error) {
+		return prv.GetToolCallIDTemplate(ctx, nil)
 	}},
 }
 
