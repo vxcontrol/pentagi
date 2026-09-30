@@ -47,7 +47,7 @@
         "@react-pdf/renderer": "^4.5.1",
         "@tanstack/react-table": "^8.21.3",
         "@tanstack/react-virtual": "^3.14.3",
-        "@tiptap/core": "^3.27.1",
+        "@tiptap/core": "^3.30.5",
         "@tiptap/extension-code-block-lowlight": "^3.27.1",
         "@tiptap/extension-image": "^3.27.1",
         "@tiptap/extension-list": "^3.27.1",
