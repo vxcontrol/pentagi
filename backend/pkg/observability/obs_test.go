@@ -3,7 +3,9 @@ package observability
 import (
 	"context"
 	"errors"
+	"io"
 	"net"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -11,10 +13,15 @@ import (
 	"pentagi/pkg/config"
 	"pentagi/pkg/observability/langfuse"
 
+	"github.com/sirupsen/logrus"
+	"go.opentelemetry.io/otel/attribute"
 	otellog "go.opentelemetry.io/otel/log"
 	otelloggernoop "go.opentelemetry.io/otel/log/noop"
 	otelmetric "go.opentelemetry.io/otel/metric"
 	otelmetricnoop "go.opentelemetry.io/otel/metric/noop"
+	sdklog "go.opentelemetry.io/otel/sdk/log"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	oteltrace "go.opentelemetry.io/otel/trace"
 	oteltracenoop "go.opentelemetry.io/otel/trace/noop"
 	collogsv1 "go.opentelemetry.io/proto/otlp/collector/logs/v1"
@@ -219,4 +226,99 @@ func TestObserverDrain_ReturnsWithinDeadlineWhenSinkBlocks(t *testing.T) {
 	if err == nil {
 		t.Fatal("Drain should report the deadline was hit while a sink was blocked")
 	}
+}
+
+type recordingLogExporter struct {
+	mu      sync.Mutex
+	records []sdklog.Record
+}
+
+func (r *recordingLogExporter) Export(ctx context.Context, records []sdklog.Record) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, record := range records {
+		r.records = append(r.records, record.Clone())
+	}
+	return nil
+}
+func (r *recordingLogExporter) Shutdown(context.Context) error   { return nil }
+func (r *recordingLogExporter) ForceFlush(context.Context) error { return nil }
+
+func TestObs_Fire_ExportsAFieldToTheLogRecordAndTheSpanEvent(t *testing.T) {
+	type namedString string
+
+	for name, tc := range map[string]struct {
+		value any
+		log   attribute.Value
+		span  attribute.Value
+	}{
+		"a string": {"s", attribute.StringValue("s"), attribute.StringValue("s")},
+		"an int slice": {[]int{1, 2},
+			attribute.SliceValue(attribute.Int64Value(1), attribute.Int64Value(2)), attribute.IntSliceValue([]int{1, 2})},
+		"an int array": {[2]int{1, 2},
+			attribute.SliceValue(attribute.Int64Value(1), attribute.Int64Value(2)), attribute.IntSliceValue([]int{1, 2})},
+		"a string array": {[2]string{"a", "b"},
+			attribute.SliceValue(attribute.StringValue("a"), attribute.StringValue("b")), attribute.StringSliceValue([]string{"a", "b"})},
+		"a slice of a named string type": {[]namedString{"a"},
+			attribute.SliceValue(attribute.StringValue("a")), attribute.StringSliceValue([]string{"a"})},
+	} {
+		t.Run(name, func(t *testing.T) {
+			logs := &recordingLogExporter{}
+			spans := tracetest.NewSpanRecorder()
+			obs := &observer{
+				levels: logrus.AllLevels,
+				logger: sdklog.NewLoggerProvider(sdklog.WithProcessor(sdklog.NewSimpleProcessor(logs))).Logger("test"),
+				tracer: sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(spans)).Tracer("test"),
+			}
+			logger := logrus.New()
+			logger.SetOutput(io.Discard)
+			logger.AddHook(obs)
+
+			logger.WithField("value", tc.value).Info("probe")
+
+			if len(logs.records) != 1 {
+				t.Fatalf("exported %d log records, want 1", len(logs.records))
+			}
+			var logged []attribute.Value
+			logs.records[0].WalkAttributes(func(kv attribute.KeyValue) bool {
+				if kv.Key == "value" {
+					logged = append(logged, kv.Value)
+				}
+				return true
+			})
+			if len(logged) != 1 || !sameValue(logged[0], tc.log) {
+				t.Errorf("log record attribute = %v, want %v", jsonValues(logged), jsonValues([]attribute.Value{tc.log}))
+			}
+
+			ended := spans.Ended()
+			if len(ended) != 1 || len(ended[0].Events()) != 1 {
+				t.Fatalf("want one ended span with one event, got %d spans", len(ended))
+			}
+			var evented []attribute.Value
+			for _, kv := range ended[0].Events()[0].Attributes {
+				if kv.Key == "log.value" {
+					evented = append(evented, kv.Value)
+				}
+			}
+			if len(evented) != 1 || !sameValue(evented[0], tc.span) {
+				t.Errorf("span event attribute = %v, want %v", jsonValues(evented), jsonValues([]attribute.Value{tc.span}))
+			}
+		})
+	}
+}
+
+func sameValue(a, b attribute.Value) bool {
+	return jsonValues([]attribute.Value{a}) == jsonValues([]attribute.Value{b})
+}
+
+func jsonValues(values []attribute.Value) string {
+	var out string
+	for _, v := range values {
+		b, _ := v.MarshalJSON()
+		out += string(b)
+	}
+	return out
 }
