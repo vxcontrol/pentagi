@@ -10,7 +10,9 @@
 
 [![Discord](https://img.shields.io/badge/Discord-7289DA?logo=discord&logoColor=white)](https://discord.gg/2xrMh7qX6m)⠀[![Telegram](https://img.shields.io/badge/Telegram-2CA5E0?logo=telegram&logoColor=white)](https://t.me/+Ka9i6CNwe71hMWQy)
 
-<a href="https://trendshift.io/repositories/15161" target="_blank"><img src="https://trendshift.io/api/badge/repositories/15161" alt="vxcontrol%2Fpentagi | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
+<a href="https://trendshift.io/repositories/15161?utm_source=repository-badge&amp;utm_medium=badge&amp;utm_campaign=badge-repository-15161" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/repositories/15161" alt="vxcontrol%2Fpentagi | Trendshift" width="250" height="55"/></a> <a href="https://trendshift.io/repositories/15161?utm_source=trendshift-badge&amp;utm_medium=badge&amp;utm_campaign=badge-trendshift-15161" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/trendshift/repositories/15161/daily" alt="vxcontrol%2Fpentagi | Trendshift" width="250" height="55"/></a>
+
+<a href="https://trendshift.io/repositories/15161?utm_source=trendshift-badge&amp;utm_medium=badge&amp;utm_campaign=badge-trendshift-15161" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/trendshift/repositories/15161/daily?language=Go" alt="vxcontrol%2Fpentagi | Trendshift" width="250" height="55"/></a> <a href="https://trendshift.io/repositories/15161?utm_source=trendshift-badge&amp;utm_medium=badge&amp;utm_campaign=badge-trendshift-15161" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/trendshift/repositories/15161/weekly?language=Go" alt="vxcontrol%2Fpentagi | Trendshift" width="250" height="55"/></a> <a href="https://trendshift.io/repositories/15161?utm_source=trendshift-badge&amp;utm_medium=badge&amp;utm_campaign=badge-trendshift-15161" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/trendshift/repositories/15161/monthly?language=Go" alt="vxcontrol%2Fpentagi | Trendshift" width="250" height="55"/></a>
 
 </div>
 
