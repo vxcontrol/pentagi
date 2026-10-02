@@ -1,0 +1,114 @@
+# Cheaper Inference provider configuration (OpenAI-compatible LLM gateway).
+# Use via the custom LLM endpoint:
+#   LLM_SERVER_URL=https://api.cheaperinference.com/v1
+#   LLM_SERVER_KEY=ci_live_...
+#   LLM_SERVER_CONFIG_PATH=/opt/pentagi/conf/cheaperinference.provider.yml
+# Model IDs are bare (e.g. gpt-5.4, claude-sonnet-5). Prices are in USD per 1M tokens
+# and are indicative - see https://cheaperinference.com/markets for current prices.
+
+simple:
+  model: "gpt-5.4-mini"
+  n: 1
+  max_tokens: 4000
+  price:
+    input: 0.525
+    output: 3.15
+
+simple_json:
+  model: "gpt-5.4-mini"
+  n: 1
+  max_tokens: 4000
+  json: true
+  price:
+    input: 0.525
+    output: 3.15
+
+primary_agent:
+  model: "gpt-5.4"
+  n: 1
+  max_tokens: 6000
+  price:
+    input: 1.75
+    output: 10.5
+
+assistant:
+  model: "gpt-5.4"
+  n: 1
+  max_tokens: 6000
+  price:
+    input: 1.75
+    output: 10.5
+
+generator:
+  model: "claude-sonnet-5"
+  n: 1
+  max_tokens: 12000
+  price:
+    input: 1.4
+    output: 7.0
+
+refiner:
+  model: "gpt-5.4"
+  n: 1
+  max_tokens: 10000
+  price:
+    input: 1.75
+    output: 10.5
+
+adviser:
+  model: "gpt-5.4"
+  n: 1
+  max_tokens: 6000
+  reasoning:
+    effort: high
+  price:
+    input: 1.75
+    output: 10.5
+
+reflector:
+  model: "gpt-5.4-mini"
+  n: 1
+  max_tokens: 4000
+  price:
+    input: 0.525
+    output: 3.15
+
+searcher:
+  model: "gpt-5.4-mini"
+  n: 1
+  max_tokens: 4000
+  price:
+    input: 0.525
+    output: 3.15
+
+enricher:
+  model: "gpt-5.4-mini"
+  n: 1
+  max_tokens: 6000
+  price:
+    input: 0.525
+    output: 3.15
+
+coder:
+  model: "claude-sonnet-5"
+  n: 1
+  max_tokens: 8000
+  price:
+    input: 1.4
+    output: 7.0
+
+installer:
+  model: "gpt-5.4-mini"
+  n: 1
+  max_tokens: 4000
+  price:
+    input: 0.525
+    output: 3.15
+
+pentester:
+  model: "gpt-5.4"
+  n: 1
+  max_tokens: 6000
+  price:
+    input: 1.75
+    output: 10.5
