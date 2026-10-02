@@ -3,6 +3,7 @@ package controller
 import (
 	"cmp"
 	"fmt"
+	"maps"
 	"net/url"
 	"slices"
 	"sort"
@@ -16,14 +17,15 @@ import (
 )
 
 const (
-	EmbeddedLLMConfigsPath   = "providers-configs"
-	DefaultDockerCertPath    = "/opt/pentagi/docker/ssl"
-	DefaultCustomConfigsPath = "/opt/pentagi/conf/custom.provider.yml"
-	DefaultOllamaConfigsPath = "/opt/pentagi/conf/ollama.provider.yml"
-	DefaultLLMConfigsPath    = "/opt/pentagi/conf/"
-	DefaultScraperBaseURL    = "https://scraper/"
-	DefaultScraperDomain     = "scraper"
-	DefaultScraperSchema     = "https"
+	EmbeddedLLMConfigsPath    = "providers-configs"
+	DefaultDockerCertPath     = "/opt/pentagi/docker/ssl"
+	DefaultCustomConfigsPath  = "/opt/pentagi/conf/custom.provider.yml"
+	DefaultOllamaConfigsPath  = "/opt/pentagi/conf/ollama.provider.yml"
+	DefaultBedrockConfigsPath = "/opt/pentagi/conf/bedrock.provider.yml"
+	DefaultLLMConfigsPath     = "/opt/pentagi/conf/"
+	DefaultScraperBaseURL     = "https://scraper/"
+	DefaultScraperDomain      = "scraper"
+	DefaultScraperSchema      = "https"
 )
 
 type Controller interface {
@@ -153,13 +155,12 @@ type LLMProviderConfig struct {
 	APIKey  loader.EnvVar // OPEN_AI_KEY | ANTHROPIC_API_KEY | GEMINI_API_KEY | LLM_SERVER_KEY | OLLAMA_SERVER_API_KEY | <prefix>_API_KEY of openAICompatDoors
 	Model   loader.EnvVar // LLM_SERVER_MODEL
 	// AWS Bedrock specific fields
-	DefaultAuth   loader.EnvVar // BEDROCK_DEFAULT_AUTH
-	BearerToken   loader.EnvVar // BEDROCK_BEARER_TOKEN
-	AccessKey     loader.EnvVar // BEDROCK_ACCESS_KEY_ID
-	SecretKey     loader.EnvVar // BEDROCK_SECRET_ACCESS_KEY
-	SessionToken  loader.EnvVar // BEDROCK_SESSION_TOKEN
-	Region        loader.EnvVar // BEDROCK_REGION
-	BedrockConfig loader.EnvVar // BEDROCK_CONFIG_PATH
+	DefaultAuth  loader.EnvVar // BEDROCK_DEFAULT_AUTH
+	BearerToken  loader.EnvVar // BEDROCK_BEARER_TOKEN
+	AccessKey    loader.EnvVar // BEDROCK_ACCESS_KEY_ID
+	SecretKey    loader.EnvVar // BEDROCK_SECRET_ACCESS_KEY
+	SessionToken loader.EnvVar // BEDROCK_SESSION_TOKEN
+	Region       loader.EnvVar // BEDROCK_REGION
 	// Anthropic federated (enterprise) auth fields
 	AnthropicOrganizationID    loader.EnvVar // ANTHROPIC_ORGANIZATION_ID
 	AnthropicWorkspaceID       loader.EnvVar // ANTHROPIC_WORKSPACE_ID
@@ -167,9 +168,9 @@ type LLMProviderConfig struct {
 	AnthropicIdentityToken     loader.EnvVar // ANTHROPIC_IDENTITY_TOKEN
 	AnthropicIdentityTokenFile loader.EnvVar // ANTHROPIC_IDENTITY_TOKEN_FILE
 	AnthropicFederationRuleID  loader.EnvVar // ANTHROPIC_FEDERATION_RULE_ID
-	// Ollama and Custom specific fields
-	ConfigPath        loader.EnvVar // OLLAMA_SERVER_CONFIG_PATH | LLM_SERVER_CONFIG_PATH
-	HostConfigPath    loader.EnvVar // PENTAGI_OLLAMA_SERVER_CONFIG_PATH | PENTAGI_LLM_SERVER_CONFIG_PATH
+	// Bedrock, Ollama and Custom specific fields
+	ConfigPath        loader.EnvVar // BEDROCK_CONFIG_PATH | OLLAMA_SERVER_CONFIG_PATH | LLM_SERVER_CONFIG_PATH
+	HostConfigPath    loader.EnvVar // PENTAGI_BEDROCK_CONFIG_PATH | PENTAGI_OLLAMA_SERVER_CONFIG_PATH | PENTAGI_LLM_SERVER_CONFIG_PATH
 	PreserveReasoning loader.EnvVar // LLM_SERVER_PRESERVE_REASONING
 	APIType           loader.EnvVar // LLM_SERVER_API_TYPE
 	APIVersion        loader.EnvVar // LLM_SERVER_API_VERSION
@@ -187,11 +188,32 @@ type LLMProviderConfig struct {
 	EmbeddedLLMConfigsPath []string
 }
 
+// llmConfigMountPaths are where docker-compose.yml mounts a provider config from the host:
+// the file PENTAGI_<X>_CONFIG_PATH names, or ./example.<provider>.provider.yml beside the
+// compose file when that variable is empty. What stands there is the host's file and not
+// one the image ships, so none of them is offered as embedded, whatever examples/configs
+// holds under the same name.
+var llmConfigMountPaths = map[string]string{
+	"custom":  DefaultCustomConfigsPath,
+	"ollama":  DefaultOllamaConfigsPath,
+	"bedrock": DefaultBedrockConfigsPath,
+}
+
+// LLMConfigMountPath is where the provider's config is mounted in the container, or empty
+// for a provider that takes none.
+func LLMConfigMountPath(providerID string) string {
+	return llmConfigMountPaths[providerID]
+}
+
 func GetEmbeddedLLMConfigsPath(files files.Files) []string {
 	providersConfigsPath := make([]string, 0)
+	mountPaths := slices.Collect(maps.Values(llmConfigMountPaths))
 	if confFiles, err := files.List(EmbeddedLLMConfigsPath); err == nil {
 		for _, confFile := range confFiles {
 			confPath := DefaultLLMConfigsPath + strings.TrimPrefix(confFile, EmbeddedLLMConfigsPath+"/")
+			if slices.Contains(mountPaths, confPath) {
+				continue
+			}
 			providersConfigsPath = append(providersConfigsPath, confPath)
 		}
 		sort.Strings(providersConfigsPath)
@@ -293,7 +315,9 @@ func (c *controller) GetLLMProviderConfig(providerID string) *LLMProviderConfig 
 		providerConfig.SecretKey, _ = c.GetVar("BEDROCK_SECRET_ACCESS_KEY")
 		providerConfig.SessionToken, _ = c.GetVar("BEDROCK_SESSION_TOKEN")
 		providerConfig.BaseURL, _ = c.GetVar("BEDROCK_SERVER_URL")
-		providerConfig.BedrockConfig, _ = c.GetVar("BEDROCK_CONFIG_PATH")
+		providerConfig.ConfigPath, _ = c.GetVar("BEDROCK_CONFIG_PATH")
+		providerConfig.HostConfigPath, _ = c.GetVar("PENTAGI_BEDROCK_CONFIG_PATH")
+		providerConfig.showConfigPath(LLMConfigMountPath("bedrock"))
 		// Configured if any of three auth methods is set: DefaultAuth, BearerToken, or AccessKey+SecretKey
 		providerConfig.Configured = providerConfig.DefaultAuth.Value == "true" ||
 			providerConfig.BearerToken.Value != "" ||
@@ -305,9 +329,7 @@ func (c *controller) GetLLMProviderConfig(providerID string) *LLMProviderConfig 
 		providerConfig.APIKey, _ = c.GetVar("OLLAMA_SERVER_API_KEY")
 		providerConfig.ConfigPath, _ = c.GetVar("OLLAMA_SERVER_CONFIG_PATH")
 		providerConfig.HostConfigPath, _ = c.GetVar("PENTAGI_OLLAMA_SERVER_CONFIG_PATH")
-		if slices.Contains(providersConfigsPath, providerConfig.ConfigPath.Value) {
-			providerConfig.HostConfigPath.Value = providerConfig.ConfigPath.Value
-		}
+		providerConfig.showConfigPath(LLMConfigMountPath("ollama"))
 		providerConfig.Model, _ = c.GetVar("OLLAMA_SERVER_MODEL")
 		providerConfig.PullTimeout, _ = c.GetVar("OLLAMA_SERVER_PULL_MODELS_TIMEOUT")
 		providerConfig.PullEnabled, _ = c.GetVar("OLLAMA_SERVER_PULL_MODELS_ENABLED")
@@ -321,9 +343,7 @@ func (c *controller) GetLLMProviderConfig(providerID string) *LLMProviderConfig 
 		providerConfig.Model, _ = c.GetVar("LLM_SERVER_MODEL")
 		providerConfig.ConfigPath, _ = c.GetVar("LLM_SERVER_CONFIG_PATH")
 		providerConfig.HostConfigPath, _ = c.GetVar("PENTAGI_LLM_SERVER_CONFIG_PATH")
-		if slices.Contains(providersConfigsPath, providerConfig.ConfigPath.Value) {
-			providerConfig.HostConfigPath.Value = providerConfig.ConfigPath.Value
-		}
+		providerConfig.showConfigPath(LLMConfigMountPath("custom"))
 		providerConfig.PreserveReasoning, _ = c.GetVar("LLM_SERVER_PRESERVE_REASONING")
 		providerConfig.APIType, _ = c.GetVar("LLM_SERVER_API_TYPE")
 		providerConfig.APIVersion, _ = c.GetVar("LLM_SERVER_API_VERSION")
@@ -412,8 +432,8 @@ func (c *controller) UpdateLLMProviderConfig(providerID string, config *LLMProvi
 		if err := c.SetVar(config.BaseURL.Name, config.BaseURL.Value); err != nil {
 			return fmt.Errorf("failed to set %s: %w", config.BaseURL.Name, err)
 		}
-		if err := c.SetVar(config.BedrockConfig.Name, config.BedrockConfig.Value); err != nil {
-			return fmt.Errorf("failed to set %s: %w", config.BedrockConfig.Name, err)
+		if err := c.setLLMConfigPaths(config, LLMConfigMountPath("bedrock")); err != nil {
+			return err
 		}
 
 	case "ollama":
@@ -436,22 +456,8 @@ func (c *controller) UpdateLLMProviderConfig(providerID string, config *LLMProvi
 			return fmt.Errorf("failed to set %s: %w", config.LoadModelsEnabled.Name, err)
 		}
 
-		var containerPath, hostPath string
-		if config.HostConfigPath.Value != "" {
-			if slices.Contains(config.EmbeddedLLMConfigsPath, config.HostConfigPath.Value) {
-				containerPath = config.HostConfigPath.Value
-				hostPath = ""
-			} else {
-				containerPath = DefaultOllamaConfigsPath
-				hostPath = config.HostConfigPath.Value
-			}
-		}
-
-		if err := c.SetVar(config.ConfigPath.Name, containerPath); err != nil {
-			return fmt.Errorf("failed to set %s: %w", config.ConfigPath.Name, err)
-		}
-		if err := c.SetVar(config.HostConfigPath.Name, hostPath); err != nil {
-			return fmt.Errorf("failed to set %s: %w", config.HostConfigPath.Name, err)
+		if err := c.setLLMConfigPaths(config, LLMConfigMountPath("ollama")); err != nil {
+			return err
 		}
 
 	case "custom":
@@ -477,23 +483,45 @@ func (c *controller) UpdateLLMProviderConfig(providerID string, config *LLMProvi
 			return fmt.Errorf("failed to set %s: %w", config.ProviderName.Name, err)
 		}
 
-		var containerPath, hostPath string
-		if config.HostConfigPath.Value != "" {
-			if slices.Contains(config.EmbeddedLLMConfigsPath, config.HostConfigPath.Value) {
-				containerPath = config.HostConfigPath.Value
-				hostPath = ""
-			} else {
-				containerPath = DefaultCustomConfigsPath
-				hostPath = config.HostConfigPath.Value
-			}
+		if err := c.setLLMConfigPaths(config, LLMConfigMountPath("custom")); err != nil {
+			return err
 		}
+	}
 
-		if err := c.SetVar(config.ConfigPath.Name, containerPath); err != nil {
-			return fmt.Errorf("failed to set %s: %w", config.ConfigPath.Name, err)
-		}
-		if err := c.SetVar(config.HostConfigPath.Name, hostPath); err != nil {
-			return fmt.Errorf("failed to set %s: %w", config.HostConfigPath.Name, err)
-		}
+	return nil
+}
+
+// showConfigPath puts into HostConfigPath the one path the form shows for the two
+// variables: a path in the container when the backend reads a config the image ships or
+// the file compose mounts at mountPath by default, the file on the host otherwise.
+func (config *LLMProviderConfig) showConfigPath(mountPath string) {
+	inContainer := config.ConfigPath.Value
+	switch {
+	case slices.Contains(config.EmbeddedLLMConfigsPath, inContainer):
+		config.HostConfigPath.Value = inContainer
+	case inContainer == mountPath && config.HostConfigPath.Value == "":
+		config.HostConfigPath.Value = mountPath
+	}
+}
+
+// setLLMConfigPaths is showConfigPath read backwards: a path in the container is named to
+// the backend as it is with the host variable cleared, any other path is a file on the
+// host, mounted at mountPath.
+func (c *controller) setLLMConfigPaths(config *LLMProviderConfig, mountPath string) error {
+	var containerPath, hostPath string
+	switch typed := config.HostConfigPath.Value; {
+	case typed == "":
+	case typed == mountPath || slices.Contains(config.EmbeddedLLMConfigsPath, typed):
+		containerPath = typed
+	default:
+		containerPath, hostPath = mountPath, typed
+	}
+
+	if err := c.SetVar(config.ConfigPath.Name, containerPath); err != nil {
+		return fmt.Errorf("failed to set %s: %w", config.ConfigPath.Name, err)
+	}
+	if err := c.SetVar(config.HostConfigPath.Name, hostPath); err != nil {
+		return fmt.Errorf("failed to set %s: %w", config.HostConfigPath.Name, err)
 	}
 
 	return nil
@@ -523,6 +551,7 @@ func (c *controller) ResetLLMProviderConfig(providerID string) map[string]*LLMPr
 			"BEDROCK_DEFAULT_AUTH", "BEDROCK_BEARER_TOKEN",
 			"BEDROCK_ACCESS_KEY_ID", "BEDROCK_SECRET_ACCESS_KEY", "BEDROCK_SESSION_TOKEN",
 			"BEDROCK_REGION", "BEDROCK_SERVER_URL", "BEDROCK_CONFIG_PATH",
+			"PENTAGI_BEDROCK_CONFIG_PATH",
 		}
 	case "ollama":
 		vars = []string{
@@ -2562,6 +2591,7 @@ func (c *controller) getVariableDescription(varName string) string {
 		"PENTAGI_DATA_DIR":                  locale.EnvDesc_PENTAGI_DATA_DIR,
 		"PENTAGI_DOCKER_SOCKET":             locale.EnvDesc_PENTAGI_DOCKER_SOCKET,
 		"PENTAGI_DOCKER_CERT_PATH":          locale.EnvDesc_PENTAGI_DOCKER_CERT_PATH,
+		"PENTAGI_BEDROCK_CONFIG_PATH":       locale.EnvDesc_PENTAGI_BEDROCK_CONFIG_PATH,
 		"PENTAGI_LLM_SERVER_CONFIG_PATH":    locale.EnvDesc_PENTAGI_LLM_SERVER_CONFIG_PATH,
 		"PENTAGI_OLLAMA_SERVER_CONFIG_PATH": locale.EnvDesc_PENTAGI_OLLAMA_SERVER_CONFIG_PATH,
 		"DATABASE_EXTENSIONS_SCHEMA":        locale.EnvDesc_DATABASE_EXTENSIONS_SCHEMA,
@@ -2770,6 +2800,7 @@ var criticalVariables = map[string]bool{
 	"SEARXNG_TIMEOUT":         true,
 
 	// mounting custom LLM server config into pentagi container changes volume mapping
+	"PENTAGI_BEDROCK_CONFIG_PATH":       true,
 	"PENTAGI_LLM_SERVER_CONFIG_PATH":    true,
 	"PENTAGI_OLLAMA_SERVER_CONFIG_PATH": true,
 

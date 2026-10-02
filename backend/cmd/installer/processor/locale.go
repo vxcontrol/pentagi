@@ -43,6 +43,7 @@ const (
 	MsgStackIntegrityVerified           = "Stack %s integrity verified"
 	MsgUpdatingExistingFile             = "Updating existing file: %s"
 	MsgCreatingMissingFile              = "Creating missing file: %s"
+	MsgMissingFileNotCreated            = "Missing file %s was not created: %s"
 	MsgFileIntegrityValid               = "File integrity valid: %s"
 	MsgSkippingModifiedFile             = "Skipping modified files: %s"
 	MsgDirectoryCheckedWithModified     = "Directory checked with modified files present: %s"

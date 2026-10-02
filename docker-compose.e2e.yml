@@ -64,6 +64,13 @@ services:
       - COOKIE_SIGNING_SALT=e2e-throwaway-salt
       # Sandbox ports come from this base, and every instance owns [base, base+2000).
       - DOCKER_PORTS_BASE=30000
+    # The base file mounts ./example.*.provider.yml, which an installed stack has
+    # beside its compose file and a checkout does not: Docker would create each of
+    # them as a directory in the repository root.
+    volumes:
+      - ./examples/configs/custom-openai.provider.yml:/opt/pentagi/conf/custom.provider.yml
+      - ./examples/configs/ollama-llama318b-instruct.provider.yml:/opt/pentagi/conf/ollama.provider.yml
+      - ./examples/configs/bedrock.provider.yml:/opt/pentagi/conf/bedrock.provider.yml
     # The base service has no healthcheck, so `up --wait` would return before
     # goose migrations finish and the API serves. The runtime image is alpine —
     # probe with busybox wget, not curl.

@@ -136,7 +136,7 @@ func (m *LLMProviderFormModel) BuildForm() tea.Cmd {
 		fields = append(fields, m.createSecretKeyField(config))
 		fields = append(fields, m.createSessionTokenField(config))
 		fields = append(fields, m.createBaseURLField(config))
-		fields = append(fields, m.createBedrockConfigField(config))
+		fields = append(fields, m.createConfigPathField(config))
 
 	case LLMProviderOllama:
 		fields = append(fields, m.createBaseURLField(config))
@@ -207,21 +207,6 @@ func (m *LLMProviderFormModel) createAnthropicField(
 		Description: description,
 		Required:    false,
 		Masked:      masked,
-		Input:       input,
-		Value:       input.Value(),
-	}
-}
-
-func (m *LLMProviderFormModel) createBedrockConfigField(config *controller.LLMProviderConfig) FormField {
-	input := NewTextInput(m.GetStyles(), m.GetWindow(), config.BedrockConfig)
-	input.Placeholder = "/opt/pentagi/conf/bedrock.yml"
-
-	return FormField{
-		Key:         "bedrock_config",
-		Title:       locale.LLMFormFieldBedrockConfig,
-		Description: locale.LLMFormBedrockConfigDesc,
-		Required:    false,
-		Masked:      false,
 		Input:       input,
 		Value:       input.Value(),
 	}
@@ -330,8 +315,11 @@ func (m *LLMProviderFormModel) createModelField(config *controller.LLMProviderCo
 func (m *LLMProviderFormModel) createConfigPathField(config *controller.LLMProviderConfig) FormField {
 	input := NewTextInput(m.GetStyles(), m.GetWindow(), config.HostConfigPath)
 	if config.HostConfigPath.Default == "" {
-		input.Placeholder = "/opt/pentagi/conf/config.yml"
+		input.Placeholder = controller.LLMConfigMountPath(string(m.providerID))
 	}
+	// the path shown may come from the container variable while the host one is not in
+	// the env file at all, and an input takes its value only from a variable that is
+	input.SetValue(config.HostConfigPath.Value)
 
 	return FormField{
 		Key:         "config_path",
@@ -642,9 +630,9 @@ func (m *LLMProviderFormModel) GetCurrentConfiguration() string {
 			sections = append(sections, fmt.Sprintf("• %s: %s",
 				locale.LLMFormFieldBaseURL, m.GetStyles().Info.Render(locale.StatusConfigured)))
 		}
-		if config.BedrockConfig.Value != "" {
+		if config.HostConfigPath.Value != "" {
 			sections = append(sections, fmt.Sprintf("• %s: %s",
-				locale.LLMFormFieldBedrockConfig, m.GetStyles().Info.Render(config.BedrockConfig.Value)))
+				locale.LLMFormFieldConfigPath, m.GetStyles().Info.Render(config.HostConfigPath.Value)))
 		}
 
 	case LLMProviderOllama:
@@ -784,7 +772,6 @@ func (m *LLMProviderFormModel) HandleSave() error {
 		SecretKey:                  config.SecretKey,
 		SessionToken:               config.SessionToken,
 		Region:                     config.Region,
-		BedrockConfig:              config.BedrockConfig,
 		AnthropicOrganizationID:    config.AnthropicOrganizationID,
 		AnthropicWorkspaceID:       config.AnthropicWorkspaceID,
 		AnthropicServiceAccountID:  config.AnthropicServiceAccountID,
@@ -824,8 +811,6 @@ func (m *LLMProviderFormModel) HandleSave() error {
 			newConfig.AnthropicIdentityTokenFile.Value = value
 		case "anthropic_federation_rule_id":
 			newConfig.AnthropicFederationRuleID.Value = value
-		case "bedrock_config":
-			newConfig.BedrockConfig.Value = value
 		case "model":
 			newConfig.Model.Value = value
 		case "default_auth":
@@ -850,8 +835,10 @@ func (m *LLMProviderFormModel) HandleSave() error {
 			// User edits HostConfigPath, ConfigPath is auto-generated on save
 			// validate config path if provided (skip validation for embedded configs)
 			if value != "" {
-				// embedded configs don't need validation (they're inside the docker image)
-				isEmbedded := slices.Contains(newConfig.EmbeddedLLMConfigsPath, value)
+				// embedded configs don't need validation (they're inside the docker image),
+				// and neither does the path the default example is mounted at
+				isEmbedded := slices.Contains(newConfig.EmbeddedLLMConfigsPath, value) ||
+					value == controller.LLMConfigMountPath(string(m.providerID))
 
 				// only validate custom (non-embedded) configs on host filesystem
 				if !isEmbedded {

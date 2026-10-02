@@ -3,6 +3,7 @@ package controller
 import (
 	"os"
 	"path/filepath"
+	"regexp"
 	"testing"
 
 	"pentagi/cmd/installer/checker"
@@ -207,5 +208,118 @@ func TestController_CompatDoorVariablesAreDescribedMaskedAndCritical(t *testing.
 			assert.True(t, c.isCriticalVariable(name), "changing %s does not restart the service", name)
 		}
 		assert.True(t, c.isVariableMasked(door.prefix+"_API_KEY"), "%s_API_KEY is shown in clear", door.prefix)
+	}
+}
+
+// The form holds one path; compose needs the file on the host and the path it is mounted at.
+func TestController_UpdateLLMProviderConfig_SplitsAConfigPathIntoItsHostAndContainerVariables(t *testing.T) {
+	onHost := filepath.Join(t.TempDir(), "my.provider.yml")
+	shipped, typed := "/opt/pentagi/conf/bedrock-glm-flash.provider.yml", func(path string) *string { return &path }
+	for _, provider := range []struct {
+		id, containerVar, hostVar, mountedAt string
+	}{
+		{"bedrock", "BEDROCK_CONFIG_PATH", "PENTAGI_BEDROCK_CONFIG_PATH", "/opt/pentagi/conf/bedrock.provider.yml"},
+		{"ollama", "OLLAMA_SERVER_CONFIG_PATH", "PENTAGI_OLLAMA_SERVER_CONFIG_PATH", "/opt/pentagi/conf/ollama.provider.yml"},
+		{"custom", "LLM_SERVER_CONFIG_PATH", "PENTAGI_LLM_SERVER_CONFIG_PATH", "/opt/pentagi/conf/custom.provider.yml"},
+	} {
+		for _, tc := range []struct {
+			name                    string
+			container, host         string  // what the env file holds first
+			typed                   *string // nil: the form is saved as it was shown
+			wantContainer, wantHost string
+			wantShown               string
+		}{
+			{name: "a file on the host is mounted",
+				container: provider.mountedAt, host: "/elsewhere/old.provider.yml", typed: typed(onHost),
+				wantContainer: provider.mountedAt, wantHost: onHost, wantShown: onHost},
+			{name: "a config the image ships is named as it is and the host variable is cleared",
+				container: provider.mountedAt, host: "/elsewhere/old.provider.yml", typed: typed(shipped),
+				wantContainer: shipped, wantShown: shipped},
+			{name: "the path the default example is mounted at is named as it is and the host variable is cleared",
+				container: shipped, host: "/elsewhere/old.provider.yml", typed: typed(provider.mountedAt),
+				wantContainer: provider.mountedAt, wantShown: provider.mountedAt},
+			{name: "an empty path clears both",
+				container: provider.mountedAt, host: "/elsewhere/old.provider.yml", typed: typed("")},
+			{name: "a mounted host file is kept by a save that does not touch the path",
+				container: provider.mountedAt, host: "/elsewhere/old.provider.yml",
+				wantContainer: provider.mountedAt, wantHost: "/elsewhere/old.provider.yml", wantShown: "/elsewhere/old.provider.yml"},
+			{name: "the default example is kept by a save that does not touch the path",
+				container:     provider.mountedAt,
+				wantContainer: provider.mountedAt, wantShown: provider.mountedAt},
+			{name: "a config the image ships is kept by a save that does not touch the path",
+				container: shipped, wantContainer: shipped, wantShown: shipped},
+		} {
+			t.Run(provider.id+": "+tc.name, func(t *testing.T) {
+				c, envPath := controllerOverExampleEnv(t)
+				require.NoError(t, c.SetVar(provider.containerVar, tc.container))
+				require.NoError(t, c.SetVar(provider.hostVar, tc.host))
+
+				cfg := c.GetLLMProviderConfig(provider.id)
+				if tc.typed != nil {
+					cfg.HostConfigPath.Value = *tc.typed
+				}
+				require.NoError(t, c.UpdateLLMProviderConfig(provider.id, cfg))
+				require.NoError(t, c.Commit())
+
+				saved := openController(t, envPath)
+				container, _ := saved.GetVar(provider.containerVar)
+				host, _ := saved.GetVar(provider.hostVar)
+				assert.Equal(t, tc.wantContainer, container.Value, provider.containerVar)
+				assert.Equal(t, tc.wantHost, host.Value, provider.hostVar)
+				assert.Equal(t, tc.wantShown, saved.GetLLMProviderConfig(provider.id).HostConfigPath.Value, "the path the form shows")
+
+				pending := saved.GetLLMProviderConfig(provider.id)
+				pending.HostConfigPath.Value = "/elsewhere/unsaved.provider.yml"
+				require.NoError(t, saved.UpdateLLMProviderConfig(provider.id, pending))
+				saved.ResetLLMProviderConfig(provider.id)
+				assert.Equal(t, tc.wantShown, saved.GetLLMProviderConfig(provider.id).HostConfigPath.Value,
+					"a reset left the unsaved path in place")
+			})
+		}
+	}
+}
+
+// A file baked at a path the compose file mounts over stops a host that mounts a directory there.
+func TestController_GetEmbeddedLLMConfigsPath_OffersExactlyTheConfigsTheImageShips(t *testing.T) {
+	dockerfile, err := os.ReadFile(filepath.Join("..", "..", "..", "..", "..", "Dockerfile"))
+	require.NoError(t, err)
+
+	var shipped []string
+	for _, match := range regexp.MustCompile(`(?m)^COPY examples/configs/(\S+\.provider\.yml) /opt/pentagi/conf/$`).
+		FindAllStringSubmatch(string(dockerfile), -1) {
+		shipped = append(shipped, "/opt/pentagi/conf/"+match[1])
+	}
+	require.Greater(t, len(shipped), 20, "the COPY lines of the Dockerfile stopped matching")
+
+	offered := GetEmbeddedLLMConfigsPath(files.NewFiles())
+	assert.ElementsMatch(t, shipped, offered, "every examples/configs file needs its COPY line in the Dockerfile, "+
+		"and the embedded files may be stale: go generate ./cmd/installer/files/")
+	for _, mounted := range []string{
+		"/opt/pentagi/conf/custom.provider.yml",
+		"/opt/pentagi/conf/ollama.provider.yml",
+		"/opt/pentagi/conf/bedrock.provider.yml",
+	} {
+		assert.NotContains(t, offered, mounted)
+	}
+}
+
+func TestController_GetApplyChangesConfig_DescribesAConfigPathChangeAndCallsItCritical(t *testing.T) {
+	for _, name := range []string{
+		"BEDROCK_CONFIG_PATH", "PENTAGI_BEDROCK_CONFIG_PATH",
+		"OLLAMA_SERVER_CONFIG_PATH", "PENTAGI_OLLAMA_SERVER_CONFIG_PATH",
+		"LLM_SERVER_CONFIG_PATH", "PENTAGI_LLM_SERVER_CONFIG_PATH",
+	} {
+		t.Run(name, func(t *testing.T) {
+			c, _ := controllerOverExampleEnv(t)
+			require.NoError(t, c.Commit())
+			require.False(t, c.GetApplyChangesConfig().HasCritical, "the example env is critical before anything changed")
+			require.NoError(t, c.SetVar(name, "/opt/pentagi/conf/bedrock-glm-flash.provider.yml"))
+
+			changes := c.GetApplyChangesConfig()
+			require.Len(t, changes.Changes, 1)
+			assert.Equal(t, name, changes.Changes[0].Variable)
+			assert.NotEqual(t, name, changes.Changes[0].Description, "the change is listed under the bare variable name")
+			assert.True(t, changes.HasCritical, "the change is not announced as one that restarts the service")
+		})
 	}
 }

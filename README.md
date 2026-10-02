@@ -658,7 +658,7 @@ The PentAGI web console already manages several settings areas after the server 
 
 The following configuration areas still need to be set on the server through environment variables, compose files, or mounted config files:
 
-- **LLM credentials and connection details**: API keys, endpoints, auth modes, and provider-specific connection settings for OpenAI, Anthropic, Bedrock, Ollama, custom providers, and similar backends; config-path settings apply only where supported, such as `OLLAMA_SERVER_CONFIG_PATH` and `LLM_SERVER_CONFIG_PATH`.
+- **LLM credentials and connection details**: API keys, endpoints, auth modes, and provider-specific connection settings for OpenAI, Anthropic, Bedrock, Ollama, custom providers, and similar backends; config-path settings apply only where supported, such as `OLLAMA_SERVER_CONFIG_PATH`, `LLM_SERVER_CONFIG_PATH`, and `BEDROCK_CONFIG_PATH`.
 - **Search provider credentials and options**: Settings such as `DUCKDUCKGO_*`, `GOOGLE_*`, `TAVILY_API_KEY`, `FIRECRAWL_API_*`, `TRAVERSAAL_API_KEY`, `PERPLEXITY_*`, `SEARXNG_*`, `SPLOITUS_ENABLED`, and the optional `WEB_SEARCH_INTERNAL_*` browser-analytics fallback settings.
 - **Third-party integrations**: Langfuse, Graphiti, and similar external services remain server-side configuration.
 - **MCP server management**: MCP settings pages are not currently exposed as a live web-console feature.
@@ -737,11 +737,12 @@ mkdir pentagi && cd pentagi
 curl -o .env https://raw.githubusercontent.com/vxcontrol/pentagi/master/.env.example
 ```
 
-3. Touch examples files (`example.custom.provider.yml`, `example.ollama.provider.yml`) or download it:
+3. Touch examples files (`example.custom.provider.yml`, `example.ollama.provider.yml`, `example.bedrock.provider.yml`) or download it. `docker-compose.yml` mounts each of them into the container, and Docker creates a directory in place of a mount source that does not exist:
 
 ```bash
 curl -o example.custom.provider.yml https://raw.githubusercontent.com/vxcontrol/pentagi/master/examples/configs/custom-openai.provider.yml
 curl -o example.ollama.provider.yml https://raw.githubusercontent.com/vxcontrol/pentagi/master/examples/configs/ollama-llama318b.provider.yml
+curl -o example.bedrock.provider.yml https://raw.githubusercontent.com/vxcontrol/pentagi/master/examples/configs/bedrock.provider.yml
 ```
 
 4. Fill in the required API keys in `.env` file.
@@ -2004,13 +2005,14 @@ By default the Bedrock provider uses a per-agent config and model catalog compil
 
 This is useful to expose a Bedrock model newer than the compiled-in catalog — for example Z.AI's `zai.glm-4.7-flash`. Use the exact Model ID from the model's AWS Bedrock detail page; add a `us.`/`eu.`/`apac.` inference-profile prefix only when that page marks the model as requiring cross-region inference (`zai.glm-4.7-flash` is In-Region, so it is used as-is, with no prefix).
 
-With Docker Compose, set the host-side mount source and the in-container path together:
+With Docker Compose the file is mounted from the host at `/opt/pentagi/conf/bedrock.provider.yml`. The default source is `./example.bedrock.provider.yml` beside `docker-compose.yml`, a copy of the built-in config ([`examples/configs/bedrock.provider.yml`](examples/configs/bedrock.provider.yml)) that the installer extracts, so editing it and pointing the backend at the mounted path is enough:
 
 ```bash
-# host file mounted into the container at /opt/pentagi/conf/bedrock.provider.yml
-PENTAGI_BEDROCK_CONFIG_PATH=./examples/configs/bedrock-glm-flash.provider.yml
 # tell the backend to read the mounted file
 BEDROCK_CONFIG_PATH=/opt/pentagi/conf/bedrock.provider.yml
+
+# optional: mount another file from the host instead of ./example.bedrock.provider.yml
+PENTAGI_BEDROCK_CONFIG_PATH=/path/on/host/my-bedrock.provider.yml
 ```
 
 #### Supported Models

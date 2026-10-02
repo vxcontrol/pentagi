@@ -941,7 +941,7 @@ func (m *Model) ensureFocusVisible() {
 
 **Provider Field Mapping**:
 - **OpenAI/Anthropic/Gemini**: Base URL + API Key
-- **AWS Bedrock**: Region + Authentication (Default Auth OR Bearer Token OR Access Key + Secret Key) + Session Token (optional) + Base URL (optional)
+- **AWS Bedrock**: Region + Authentication (Default Auth OR Bearer Token OR Access Key + Secret Key) + Session Token (optional) + Base URL (optional) + Config Path (optional)
 - **DeepSeek/GLM/Kimi/Qwen**: Base URL + API Key + Provider Name (optional, for LiteLLM)
 - **Ollama**: Base URL + API Key (optional, for cloud) + Model + Config Path + Pull/Load options
 - **Custom**: Base URL + API Key + Model + Config Path + Preserve Reasoning (boolean) + Provider Name
@@ -1279,7 +1279,7 @@ provider := ProviderInfo{
 
 #### **Provider-Specific Field Sets**
 - **OpenAI/Anthropic/Gemini**: Base URL + API Key
-- **AWS Bedrock**: Region + Authentication (Default Auth OR Bearer Token OR Access Key + Secret Key) + Session Token (optional) + Base URL (optional)
+- **AWS Bedrock**: Region + Authentication (Default Auth OR Bearer Token OR Access Key + Secret Key) + Session Token (optional) + Base URL (optional) + Config Path (optional)
   - **Default Auth**: Use AWS SDK credential chain (environment, EC2 role, ~/.aws/credentials) - highest priority
   - **Bearer Token**: Token-based authentication - priority over static credentials
   - **Static Credentials**: Access Key + Secret Key + Session Token (optional) - traditional IAM authentication

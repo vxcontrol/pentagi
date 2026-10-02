@@ -19,7 +19,7 @@ Processor package implements the operational engine for PentAGI installer operat
    - Handle embedded directory trees (observability) and compose files
    - YAML validation and automatic file recovery
    - Support deployment modes (embedded/external/disabled) for applicable stacks
-   - Excluded files policy for integrity verification (`filesToExcludeFromVerification`): presence ensured, content changes tolerated — service configs (`observability/otel/config.yml`, `observability/grafana/config/grafana.ini`), user-editable presets (`example.custom.provider.yml`, `example.ollama.provider.yml`, `neo4j/conf/neo4j.conf`, `neo4j/conf/apoc.conf`, `graphiti/{custom,gemini,litellm,openai}.yaml`) and both Jaeger storage plugin binaries
+   - Excluded files policy for integrity verification (`filesToExcludeFromVerification`): presence ensured, content changes tolerated — service configs (`observability/otel/config.yml`, `observability/grafana/config/grafana.ini`), user-editable presets (`example.custom.provider.yml`, `example.ollama.provider.yml`, `example.bedrock.provider.yml`, `neo4j/conf/neo4j.conf`, `neo4j/conf/apoc.conf`, `graphiti/{custom,gemini,litellm,openai}.yaml`) and both Jaeger storage plugin binaries
 
 2. **Docker Operations** (`docker.go`):
    - Worker and default image management with progress reporting

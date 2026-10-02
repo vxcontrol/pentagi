@@ -14,18 +14,29 @@ import (
 )
 
 const (
-	observabilityDirectory        = "observability"
-	graphitiConfigsDirectory      = "graphiti"
-	neo4jDirectory                = "neo4j"
-	pentagiExampleCustomConfigLLM = "example.custom.provider.yml"
-	pentagiExampleOllamaConfigLLM = "example.ollama.provider.yml"
+	observabilityDirectory         = "observability"
+	graphitiConfigsDirectory       = "graphiti"
+	neo4jDirectory                 = "neo4j"
+	pentagiExampleCustomConfigLLM  = "example.custom.provider.yml"
+	pentagiExampleOllamaConfigLLM  = "example.ollama.provider.yml"
+	pentagiExampleBedrockConfigLLM = "example.bedrock.provider.yml"
 )
+
+// pentagiExampleConfigs are the default sources of the provider config mounts in
+// docker-compose.yml. Each has to be on disk as a file before the stack starts:
+// Docker creates a directory in place of a bind-mount source that is missing.
+var pentagiExampleConfigs = []string{
+	pentagiExampleCustomConfigLLM,
+	pentagiExampleOllamaConfigLLM,
+	pentagiExampleBedrockConfigLLM,
+}
 
 var filesToExcludeFromVerification = []string{
 	"observability/otel/config.yml",
 	"observability/grafana/config/grafana.ini",
 	pentagiExampleCustomConfigLLM,
 	pentagiExampleOllamaConfigLLM,
+	pentagiExampleBedrockConfigLLM,
 	// user-editable Neo4j/APOC static settings: created once if missing, never
 	// overwritten afterwards, even when the user forces a files update
 	"neo4j/conf/neo4j.conf",
@@ -72,10 +83,11 @@ func (fs *fileSystemOperationsImpl) ensureStackIntegrity(ctx context.Context, st
 
 	switch stack {
 	case ProductStackPentagi:
-		errCompose := fs.ensureFileFromEmbed(composeFilePentagi, state)
-		errCustom := fs.ensureFileFromEmbed(pentagiExampleCustomConfigLLM, state)
-		errOllama := fs.ensureFileFromEmbed(pentagiExampleOllamaConfigLLM, state)
-		return errors.Join(errCompose, errCustom, errOllama)
+		errs := []error{fs.ensureFileFromEmbed(composeFilePentagi, state)}
+		for _, name := range pentagiExampleConfigs {
+			errs = append(errs, fs.ensureFileFromEmbed(name, state))
+		}
+		return errors.Join(errs...)
 
 	case ProductStackGraphiti:
 		errCompose := fs.ensureFileFromEmbed(composeFileGraphiti, state)
@@ -111,7 +123,11 @@ func (fs *fileSystemOperationsImpl) verifyStackIntegrity(ctx context.Context, st
 
 	switch stack {
 	case ProductStackPentagi:
-		return fs.verifyFileIntegrity(composeFilePentagi, state)
+		if err := fs.verifyFileIntegrity(composeFilePentagi, state); err != nil {
+			return err
+		}
+		fs.restoreExampleConfigs(state)
+		return nil
 
 	case ProductStackGraphiti:
 		if err := fs.verifyFileIntegrity(composeFileGraphiti, state); err != nil {
@@ -204,8 +220,9 @@ func (fs *fileSystemOperationsImpl) cleanupStackFiles(ctx context.Context, stack
 	switch stack {
 	case ProductStackPentagi:
 		filesToRemove = append(filesToRemove, filepath.Join(workingDir, composeFilePentagi))
-		filesToRemove = append(filesToRemove, filepath.Join(workingDir, pentagiExampleCustomConfigLLM))
-		filesToRemove = append(filesToRemove, filepath.Join(workingDir, pentagiExampleOllamaConfigLLM))
+		for _, name := range pentagiExampleConfigs {
+			filesToRemove = append(filesToRemove, filepath.Join(workingDir, name))
+		}
 
 	case ProductStackGraphiti:
 		filesToRemove = append(filesToRemove, filepath.Join(workingDir, composeFileGraphiti))
@@ -257,6 +274,26 @@ func (fs *fileSystemOperationsImpl) ensureFileFromEmbed(filename string, state *
 	}
 
 	return fs.processor.files.Copy(filename, workingDir, true)
+}
+
+// restoreExampleConfigs writes a provider example that is not on disk as a file,
+// which covers the directory Docker left in its place, and never touches one that
+// is, whatever state.force says: on a stack already extracted the examples are the
+// user's. A failure is logged and not returned: the stack starts without the file,
+// over the directory Docker makes for it.
+func (fs *fileSystemOperationsImpl) restoreExampleConfigs(state *operationState) {
+	workingDir := filepath.Dir(fs.processor.state.GetEnvPath())
+
+	for _, name := range pentagiExampleConfigs {
+		if fs.fileExists(filepath.Join(workingDir, name)) {
+			continue
+		}
+
+		fs.processor.appendLog(fmt.Sprintf(MsgCreatingMissingFile, name), ProductStackAll, state)
+		if err := fs.processor.files.Copy(name, workingDir, true); err != nil {
+			fs.processor.appendLog(fmt.Sprintf(MsgMissingFileNotCreated, name, err), ProductStackAll, state)
+		}
+	}
 }
 
 func (fs *fileSystemOperationsImpl) ensureDirectoryFromEmbed(dirname string, state *operationState) error {

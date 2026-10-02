@@ -1,10 +1,14 @@
 package processor
 
 import (
+	"context"
+	"errors"
 	"maps"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
+	"strings"
 	"testing"
 
 	"pentagi/cmd/installer/checker"
@@ -12,11 +16,15 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
 )
 
 // fsStackFiles are what each stack extracts into the working directory.
 var fsStackFiles = map[ProductStack][]string{
-	ProductStackPentagi:       {"docker-compose.yml", "example.custom.provider.yml", "example.ollama.provider.yml"},
+	ProductStackPentagi: {
+		"docker-compose.yml",
+		"example.custom.provider.yml", "example.ollama.provider.yml", "example.bedrock.provider.yml",
+	},
 	ProductStackGraphiti:      {"docker-compose-graphiti.yml", "graphiti", "neo4j"},
 	ProductStackLangfuse:      {"docker-compose-langfuse.yml"},
 	ProductStackObservability: {"docker-compose-observability.yml", "observability"},
@@ -82,17 +90,11 @@ func TestFs_VerifyStackIntegrity_RestoresEveryMissingFileItVerifies(t *testing.T
 		want    []string
 		wantErr string
 	}{
-		{"pentagi verifies its compose file only", ProductStackPentagi, []string{"docker-compose.yml"}, ""},
+		{"pentagi with its provider examples", ProductStackPentagi, fsStackFiles[ProductStackPentagi], ""},
 		{"langfuse has its compose file only", ProductStackLangfuse, []string{"docker-compose-langfuse.yml"}, ""},
 		{"observability with its directory", ProductStackObservability, fsStackFiles[ProductStackObservability], ""},
-		{"compose covers every stack", ProductStackCompose, []string{
-			"docker-compose.yml", "docker-compose-graphiti.yml", "graphiti", "neo4j",
-			"docker-compose-langfuse.yml", "docker-compose-observability.yml", "observability",
-		}, ""},
-		{"all covers every stack", ProductStackAll, []string{
-			"docker-compose.yml", "docker-compose-graphiti.yml", "graphiti", "neo4j",
-			"docker-compose-langfuse.yml", "docker-compose-observability.yml", "observability",
-		}, ""},
+		{"compose covers every stack", ProductStackCompose, fsEveryStackFile, ""},
+		{"all covers every stack", ProductStackAll, fsEveryStackFile, ""},
 		{"the worker has no files", ProductStackWorker, nil, "operation verify integrity not applicable for stack worker"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -104,6 +106,163 @@ func TestFs_VerifyStackIntegrity_RestoresEveryMissingFileItVerifies(t *testing.T
 				require.EqualError(t, err, tc.wantErr)
 			}
 			assert.Equal(t, tc.want, fsCopied(t, embedded, dir))
+		})
+	}
+}
+
+func TestFs_VerifyStackIntegrity_RestoresAProviderExampleThatIsNotAFile(t *testing.T) {
+	bedrock := "example.bedrock.provider.yml"
+	for _, tc := range []struct {
+		name        string
+		directories []string
+		missing     []string
+		force       bool
+		copyErr     error
+		want        []string
+		wantLog     string
+	}{
+		{name: "every example on disk is kept"},
+		{name: "a forced update overwrites the compose file and no example", force: true, want: []string{"docker-compose.yml"}},
+		{name: "a missing example is written", missing: []string{bedrock}, want: []string{bedrock}},
+		{name: "every directory in place of an example is replaced, in the order they are mounted",
+			directories: []string{bedrock, "example.custom.provider.yml"},
+			want:        []string{"example.custom.provider.yml", bedrock}},
+		{name: "an example that cannot be written is reported and does not fail the stack",
+			directories: []string{bedrock}, copyErr: errors.New("disk full"), want: []string{bedrock},
+			wantLog: "Missing file example.bedrock.provider.yml was not created: disk full"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ops, embedded, dir := fsOperations(t)
+			embedded.copyErr = tc.copyErr
+			for _, name := range fsStackFiles[ProductStackPentagi] {
+				switch {
+				case slices.Contains(tc.missing, name):
+				case slices.Contains(tc.directories, name):
+					require.NoError(t, os.Mkdir(filepath.Join(dir, name), 0o755))
+				default:
+					require.NoError(t, os.WriteFile(filepath.Join(dir, name), []byte("edited: true\n"), 0o644))
+				}
+			}
+			state := testOperationState(t)
+			state.force = tc.force
+
+			require.NoError(t, ops.verifyStackIntegrity(t.Context(), ProductStackPentagi, state))
+			assert.Equal(t, tc.want, fsCopied(t, embedded, dir))
+			if tc.wantLog != "" {
+				assert.Contains(t, state.output.String(), tc.wantLog)
+			}
+		})
+	}
+}
+
+// Over the embedded files and the compose files beside them: Docker creates a directory in
+// place of a file a compose file mounts and the stack does not extract.
+func TestFs_EnsureStackIntegrity_ExtractsEveryFileItsComposeFileMounts(t *testing.T) {
+	withDefault := regexp.MustCompile(`\$\{[A-Za-z0-9_]+:?-([^}]*)\}`)
+	for _, tc := range []struct {
+		stack       ProductStack
+		composeFile string
+		want        []string // every source beside the compose file, files and directories alike
+	}{
+		{ProductStackPentagi, "docker-compose.yml", []string{
+			"./docker-ssl",
+			"./example.bedrock.provider.yml", "./example.custom.provider.yml", "./example.ollama.provider.yml",
+		}},
+		{ProductStackGraphiti, "docker-compose-graphiti.yml", []string{
+			"./graphiti", "./neo4j/backups", "./neo4j/conf", "./neo4j/import", "./neo4j/logs",
+			"./neo4j/metrics", "./neo4j/plugins", "./neo4j/ssl",
+		}},
+		{ProductStackLangfuse, "docker-compose-langfuse.yml", nil},
+		{ProductStackObservability, "docker-compose-observability.yml", []string{
+			"./observability/clickhouse/prometheus.xml",
+			"./observability/grafana/config", "./observability/grafana/dashboards",
+			"./observability/jaeger", "./observability/loki/config.yml", "./observability/otel",
+		}},
+	} {
+		t.Run(string(tc.stack), func(t *testing.T) {
+			content, err := os.ReadFile(filepath.Join(repositoryRoot(t), tc.composeFile))
+			require.NoError(t, err)
+			var compose struct {
+				Services map[string]struct {
+					Volumes []any `yaml:"volumes"`
+				} `yaml:"services"`
+			}
+			require.NoError(t, yaml.Unmarshal(content, &compose))
+
+			var sources []string
+			for name, service := range compose.Services {
+				for _, volume := range service.Volumes {
+					spec, isShort := volume.(string)
+					require.True(t, isShort, "%s mounts %v in the long syntax, which this test does not read", name, volume)
+					source, _, _ := strings.Cut(withDefault.ReplaceAllString(spec, "$1"), ":")
+					if strings.HasPrefix(source, ".") && !slices.Contains(sources, source) {
+						sources = append(sources, source)
+					}
+				}
+			}
+			slices.Sort(sources)
+			require.Equal(t, tc.want, sources, "what %s mounts from beside it", tc.composeFile)
+
+			state := newMockState(t)
+			ops := newFileSystemOperations(&processor{state: state, files: files.NewFiles()})
+			require.NoError(t, ops.ensureStackIntegrity(t.Context(), tc.stack, testOperationState(t)),
+				"the embedded files may be stale: go generate ./cmd/installer/files/")
+
+			for _, source := range sources {
+				// a source without an extension is a directory, which Docker creates as one
+				if filepath.Ext(source) == "" {
+					continue
+				}
+				info, err := os.Stat(filepath.Join(filepath.Dir(state.envPath), source))
+				require.NoError(t, err, "%s mounts %s, which the stack does not extract", tc.composeFile, source)
+				assert.True(t, info.Mode().IsRegular(), "%s is extracted as %s", source, info.Mode())
+			}
+		})
+	}
+}
+
+// Over the embedded files themselves. Subtests are keyed by unit: both replace the directory
+// with the example, and only the verification of an extracted stack spares an edited example
+// from a forced update.
+func TestFs_ADirectoryInPlaceOfAProviderExampleBecomesTheExample(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		run        func(fileSystemOperations, context.Context, ProductStack, *operationState) error
+		wantCustom string
+	}{
+		{"ensureStackIntegrity", fileSystemOperations.ensureStackIntegrity, "the example"},
+		{"verifyStackIntegrity", fileSystemOperations.verifyStackIntegrity, "edited: true\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			embedded := files.NewFiles()
+			example := func(name string) string {
+				content, err := embedded.GetContent(name)
+				require.NoError(t, err, "the embedded files may be stale: go generate ./cmd/installer/files/")
+				require.NotEmpty(t, content)
+				return string(content)
+			}
+			state := newMockState(t)
+			dir := filepath.Dir(state.envPath)
+			ops := newFileSystemOperations(&processor{state: state, files: embedded})
+			require.NoError(t, os.WriteFile(filepath.Join(dir, "docker-compose.yml"), []byte("services: {}\n"), 0o644))
+			require.NoError(t, os.WriteFile(filepath.Join(dir, "example.custom.provider.yml"), []byte("edited: true\n"), 0o644))
+			require.NoError(t, os.Mkdir(filepath.Join(dir, "example.bedrock.provider.yml"), 0o755))
+			forced := testOperationState(t)
+			forced.force = true
+
+			require.NoError(t, tc.run(ops, t.Context(), ProductStackPentagi, forced))
+
+			for _, name := range []string{"example.bedrock.provider.yml", "example.ollama.provider.yml"} {
+				written, err := os.ReadFile(filepath.Join(dir, name))
+				require.NoError(t, err)
+				assert.Equal(t, example(name), string(written), name)
+			}
+			custom, err := os.ReadFile(filepath.Join(dir, "example.custom.provider.yml"))
+			require.NoError(t, err)
+			if tc.wantCustom == "the example" {
+				tc.wantCustom = example("example.custom.provider.yml")
+			}
+			assert.Equal(t, tc.wantCustom, string(custom))
 		})
 	}
 }
@@ -160,12 +319,15 @@ func TestFs_EnsureFileFromEmbed_CopiesOnlyWhatIsMissingUnlessForced(t *testing.T
 		{"a missing file is extracted", false, false, []string{"test.yml"}},
 		{"a file on disk is kept", true, false, nil},
 		{"a file on disk is overwritten when forced", true, true, []string{"test.yml"}},
+		{"a directory in its place is replaced", false, false, []string{"test.yml"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			ops, embedded, dir := fsOperations(t)
 			embedded.AddFile("test.yml", []byte("test content"))
 			if tc.onDisk {
 				require.NoError(t, os.WriteFile(filepath.Join(dir, "test.yml"), []byte("existing"), 0o644))
+			} else if strings.HasPrefix(tc.name, "a directory") {
+				require.NoError(t, os.Mkdir(filepath.Join(dir, "test.yml"), 0o755))
 			}
 			state := testOperationState(t)
 			state.force = tc.force

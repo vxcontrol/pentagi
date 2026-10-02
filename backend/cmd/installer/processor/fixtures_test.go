@@ -99,11 +99,13 @@ func (m *mockState) GetAllVars() map[string]loader.EnvVar { return m.vars }
 func (m *mockState) GetEnvPath() string                   { return m.envPath }
 
 // mockFiles implements files.Files: `lists` are embedded directories, `content` embedded
-// files, `statuses` what Check answers (OK when unset), and every Copy is recorded.
+// files, `statuses` what Check answers (OK when unset), and every Copy is recorded and
+// answers `copyErr`.
 type mockFiles struct {
 	content  map[string][]byte
 	statuses map[string]files.FileStatus
 	lists    map[string][]string
+	copyErr  error
 	copies   []struct {
 		Src, Dst string
 		Rewrite  bool
@@ -148,7 +150,7 @@ func (m *mockFiles) Copy(src, dst string, rewrite bool) error {
 		Src, Dst string
 		Rewrite  bool
 	}{Src: src, Dst: dst, Rewrite: rewrite})
-	return nil
+	return m.copyErr
 }
 
 func (m *mockFiles) Check(name string, workingDir string) files.FileStatus {

@@ -121,7 +121,7 @@ func (m *FormModel) ensureFocusVisible() {
 **Provider-Specific Field Sets:**
 
 - **OpenAI/Anthropic/Gemini**: Base URL + API Key
-- **AWS Bedrock**: Region + Default Auth OR Bearer Token OR (Access Key + Secret Key + Session Token) + Base URL
+- **AWS Bedrock**: Region + Default Auth OR Bearer Token OR (Access Key + Secret Key + Session Token) + Base URL + Config Path
 - **DeepSeek**: Base URL + API Key + Provider Name (for LiteLLM prefix, e.g., 'deepseek')
 - **GLM**: Base URL + API Key + Provider Name (for LiteLLM prefix, e.g., 'zai')
 - **Kimi**: Base URL + API Key + Provider Name (for LiteLLM prefix, e.g., 'moonshot')

@@ -69,6 +69,20 @@ func TestBedrock_DefaultProviderConfig_ReadsAnExternalFileInsteadOfTheEmbeddedOn
 	assert.Equal(t, "zai.glm-4.7-flash", prov.Model(pconfig.OptionsTypeSimple))
 }
 
+// The installer extracts the example as the file BEDROCK_CONFIG_PATH is mounted from, so
+// what a host starts editing is the assignment the binary runs without it.
+func TestBedrock_DefaultProviderConfig_IsWhatTheShippedExampleHolds(t *testing.T) {
+	t.Parallel()
+
+	example, err := os.ReadFile(filepath.Join("..", "..", "..", "..", "examples", "configs", "bedrock.provider.yml"))
+	require.NoError(t, err)
+	builtIn, err := configFS.ReadFile("config.yml")
+	require.NoError(t, err)
+
+	assert.Equal(t, string(builtIn), string(example),
+		"copy pkg/providers/bedrock/config.yml over examples/configs/bedrock.provider.yml")
+}
+
 func TestBedrock_DefaultModels_PricesEveryModelAndDatesItToItsBedrockLaunch(t *testing.T) {
 	t.Parallel()
 

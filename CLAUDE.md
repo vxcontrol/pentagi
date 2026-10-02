@@ -71,9 +71,10 @@ The application is a monorepo:
 
 ```bash
 go mod download                              # Install dependencies
-go generate ./cmd/installer/files/           # REQUIRED once per fresh clone: fs.go, fs_test.go and fs/ in
-                                             #   cmd/installer/files/ are generated and gitignored; the installer
-                                             #   tests fail without them
+go generate ./cmd/installer/files/           # REQUIRED once per fresh clone and again after a change under
+                                             #   cmd/installer/files/links or to a file linked there: fs.go,
+                                             #   fs_test.go and fs/ in cmd/installer/files/ are generated and
+                                             #   gitignored; the installer tests fail without them
 go build -trimpath -o pentagi ./cmd/pentagi  # Quick compile; the binary reports version "ce"
 go test ./...                                # Default test tier (see Testing)
 golangci-lint run --timeout=5m               # Lint — config backend/.golangci.yml (v2 schema); CI pins v2.12.2

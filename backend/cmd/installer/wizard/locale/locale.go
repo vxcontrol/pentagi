@@ -816,7 +816,7 @@ const (
 	LLMFormSessionTokenDesc       = "AWS Session Token for temporary credentials (optional, used with static credentials)"
 	LLMFormRegionDesc             = "AWS region for Bedrock service"
 	LLMFormModelDesc              = "Default model to use for this provider"
-	LLMFormConfigPathDesc         = "Path to configuration file (optional)"
+	LLMFormConfigPathDesc         = "Config file on this host, or a config inside the container from the suggestions (optional)"
 	LLMFormAPITypeDesc            = "Address convention: azure or azure_ad for an Azure OpenAI deployment, empty for a plain OpenAI-compatible endpoint"
 	LLMFormAPIVersionDesc         = "api-version an Azure deployment requires; ignored by a plain endpoint"
 	LLMFormPreserveReasoningDesc  = "Preserve reasoning content in multi-turn conversations (required by some providers)"
@@ -825,10 +825,6 @@ const (
 	LLMFormPullEnabledDesc        = "Automatically download required models on startup"
 	LLMFormLoadModelsEnabledDesc  = "Load available models list from Ollama server"
 	LLMFormOllamaAPIKeyDesc       = "Ollama Cloud API key (optional, leave empty for local Ollama server)"
-
-	// Bedrock config file
-	LLMFormFieldBedrockConfig = "Config Path"
-	LLMFormBedrockConfigDesc  = "Path to an AWS Bedrock config file on the host (optional)"
 
 	// Anthropic authentication mode (API key vs federated / enterprise)
 	LLMAnthropicAuthModeTitle       = "Authentication"
@@ -2533,7 +2529,7 @@ const (
 	EnvDesc_BEDROCK_SESSION_TOKEN             = "AWS Bedrock Session Token"
 	EnvDesc_BEDROCK_REGION                    = "AWS Bedrock Region"
 	EnvDesc_BEDROCK_SERVER_URL                = "AWS Bedrock Custom Endpoint URL"
-	EnvDesc_BEDROCK_CONFIG_PATH               = "AWS Bedrock Config Path"
+	EnvDesc_BEDROCK_CONFIG_PATH               = "AWS Bedrock Container Config Path"
 	EnvDesc_OLLAMA_SERVER_URL                 = "Ollama Server URL"
 	EnvDesc_OLLAMA_SERVER_API_KEY             = "Ollama Server API Key (Cloud)"
 	EnvDesc_OLLAMA_SERVER_MODEL               = "Ollama Default Model"
@@ -2691,6 +2687,7 @@ const (
 	EnvDesc_PENTAGI_DATA_DIR                  = "PentAGI Data Directory"
 	EnvDesc_PENTAGI_DOCKER_SOCKET             = "Mount Docker Socket Path"
 	EnvDesc_PENTAGI_DOCKER_CERT_PATH          = "Mount Docker Certificate Path"
+	EnvDesc_PENTAGI_BEDROCK_CONFIG_PATH       = "AWS Bedrock Host Config Path"
 	EnvDesc_PENTAGI_LLM_SERVER_CONFIG_PATH    = "Custom LLM Host Config Path"
 	EnvDesc_PENTAGI_OLLAMA_SERVER_CONFIG_PATH = "Ollama Host Config Path"
 

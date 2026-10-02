@@ -423,6 +423,9 @@ func (h *defaultCheckHandler) GatherPentagiInfo(ctx context.Context, c *CheckRes
 
 	envDir := filepath.Dir(h.appState.GetEnvPath())
 	dockerComposeFile := filepath.Join(envDir, DockerComposeFile)
+	// The bedrock example is deliberately not asked for: a stack extracted without it
+	// would count as not extracted, and extraction overwrites the examples the user
+	// edited when the update is forced. Verification of an extracted stack writes it.
 	c.PentagiExtracted = checkFileExists(dockerComposeFile) &&
 		checkFileExists(ExampleCustomConfigLLMFile) &&
 		checkFileExists(ExampleOllamaConfigLLMFile)

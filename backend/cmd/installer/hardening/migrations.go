@@ -34,36 +34,23 @@ func DoMigrateSettings(s state.State) error {
 
 	configsPath := controller.GetEmbeddedLLMConfigsPath(files.NewFiles())
 
-	// migration from LLM_SERVER_CONFIG_PATH to PENTAGI_LLM_SERVER_CONFIG_PATH
-	llmServerConfigPathVar, exists := s.GetVar("LLM_SERVER_CONFIG_PATH")
-	llmServerConfigPath := llmServerConfigPathVar.Value
-	isEmbeddedCustomConfig := slices.Contains(configsPath, llmServerConfigPath) ||
-		llmServerConfigPath == controller.DefaultCustomConfigsPath
-	if exists && !isEmbeddedCustomConfig && llmServerConfigPath != "" {
-		exists = checkPathInHostFS(llmServerConfigPath, file)
-	}
-	if exists && !isEmbeddedCustomConfig && llmServerConfigPath != "" {
-		if err := s.SetVar("PENTAGI_LLM_SERVER_CONFIG_PATH", llmServerConfigPath); err != nil {
+	// A provider config variable that names a file on the host becomes the mount source,
+	// and the variable itself the path that file is mounted at in the container.
+	for _, config := range []struct{ variable, mountedPath string }{
+		{"LLM_SERVER_CONFIG_PATH", controller.DefaultCustomConfigsPath},
+		{"OLLAMA_SERVER_CONFIG_PATH", controller.DefaultOllamaConfigsPath},
+		{"BEDROCK_CONFIG_PATH", controller.DefaultBedrockConfigsPath},
+	} {
+		configPathVar, exists := s.GetVar(config.variable)
+		configPath := configPathVar.Value
+		isInContainer := slices.Contains(configsPath, configPath) || configPath == config.mountedPath
+		if !exists || isInContainer || configPath == "" || !checkPathInHostFS(configPath, file) {
+			continue
+		}
+		if err := s.SetVar("PENTAGI_"+config.variable, configPath); err != nil {
 			return err
 		}
-		if err := s.SetVar("LLM_SERVER_CONFIG_PATH", controller.DefaultCustomConfigsPath); err != nil {
-			return err
-		}
-	}
-
-	// migration from OLLAMA_SERVER_CONFIG_PATH to PENTAGI_OLLAMA_SERVER_CONFIG_PATH
-	ollamaServerConfigPathVar, exists := s.GetVar("OLLAMA_SERVER_CONFIG_PATH")
-	ollamaServerConfigPath := ollamaServerConfigPathVar.Value
-	isEmbeddedOllamaConfig := slices.Contains(configsPath, ollamaServerConfigPath) ||
-		ollamaServerConfigPath == controller.DefaultOllamaConfigsPath
-	if exists && !isEmbeddedOllamaConfig && ollamaServerConfigPath != "" {
-		exists = checkPathInHostFS(ollamaServerConfigPath, file)
-	}
-	if exists && !isEmbeddedOllamaConfig && ollamaServerConfigPath != "" {
-		if err := s.SetVar("PENTAGI_OLLAMA_SERVER_CONFIG_PATH", ollamaServerConfigPath); err != nil {
-			return err
-		}
-		if err := s.SetVar("OLLAMA_SERVER_CONFIG_PATH", controller.DefaultOllamaConfigsPath); err != nil {
+		if err := s.SetVar(config.variable, config.mountedPath); err != nil {
 			return err
 		}
 	}
